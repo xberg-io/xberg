@@ -63,20 +63,11 @@ impl OcrBackendRegistry {
         {
             use crate::ocr::tesseract_backend::TesseractBackend;
             tracing::info!("Initializing Tesseract OCR backend");
-            match TesseractBackend::new() {
-                Ok(backend) => {
-                    self.register(Arc::new(backend)).unwrap_or_else(|e| {
-                        tracing::warn!("Failed to register Tesseract backend: {e}");
-                    });
-                    tracing::info!("Tesseract OCR backend registered successfully");
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        "Tesseract OCR backend unavailable: {e}. \
-                         Check TESSDATA_PREFIX and tessdata file permissions."
-                    );
-                }
-            }
+            let backend = TesseractBackend::new();
+            self.register(Arc::new(backend)).unwrap_or_else(|e| {
+                tracing::warn!("Failed to register Tesseract backend: {e}");
+            });
+            tracing::info!("Tesseract OCR backend registered successfully");
         }
 
         #[cfg(all(feature = "ocr-wasm", not(feature = "ocr")))]
@@ -426,6 +417,19 @@ mod tests {
         assert_eq!(
             restored, expected,
             "register_defaults should restore the same built-in backends"
+        );
+    }
+
+    #[test]
+    fn test_registry_construction_does_not_eagerly_allocate_tesseract() {
+        // Directly construct a TesseractBackend to verify deferred allocation.
+        // The processor should not be allocated until first use.
+        use crate::ocr::tesseract_backend::TesseractBackend;
+
+        let backend = TesseractBackend::new();
+        assert!(
+            !backend.processor_is_initialized(),
+            "TesseractBackend::new() should not eagerly allocate the processor"
         );
     }
 

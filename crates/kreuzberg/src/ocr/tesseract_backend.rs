@@ -10,9 +10,10 @@ use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
 use crate::types::ExtractionResult;
 use ahash::AHashMap;
 use async_trait::async_trait;
+use once_cell::sync::OnceCell;
 use std::borrow::Cow;
 use std::path::Path;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use crate::ocr::types::TesseractConfig as InternalTesseractConfig;
 
@@ -24,23 +25,49 @@ use crate::ocr::types::TesseractConfig as InternalTesseractConfig;
 /// # Thread Safety
 ///
 /// Uses Arc for shared ownership and is thread-safe (Send + Sync).
+///
+/// # Lazy Initialization
+///
+/// The native Tesseract/Leptonica FFI handle is allocated on first use,
+/// not at backend construction. This allows the registry to be built without
+/// triggering expensive native initialization.
 #[cfg_attr(alef, alef(skip))]
 pub struct TesseractBackend {
-    processor: Arc<OcrProcessor>,
-    available_languages: OnceLock<Vec<String>>,
+    processor: OnceCell<Arc<OcrProcessor>>,
+    available_languages: OnceCell<Vec<String>>,
 }
 
 impl TesseractBackend {
-    /// Create a new Tesseract backend with default cache directory.
-    pub(crate) fn new() -> Result<Self> {
-        let processor = OcrProcessor::new(None).map_err(|e| crate::KreuzbergError::Ocr {
-            message: format!("Failed to create Tesseract processor: {}", e),
-            source: Some(Box::new(e)),
-        })?;
-        Ok(Self {
-            processor: Arc::new(processor),
-            available_languages: OnceLock::new(),
-        })
+    /// Create a new Tesseract backend wrapper (infallible).
+    ///
+    /// The actual FFI handle is allocated lazily on first use via
+    /// `processor()`.
+    pub(crate) fn new() -> Self {
+        Self {
+            processor: OnceCell::new(),
+            available_languages: OnceCell::new(),
+        }
+    }
+
+    /// Get or initialize the Tesseract processor.
+    ///
+    /// Allocates the native FFI handle on first call; subsequent calls reuse
+    /// the cached processor.
+    fn processor(&self) -> Result<&Arc<OcrProcessor>> {
+        self.processor
+            .get_or_try_init(|| {
+                OcrProcessor::new(None)
+                    .map(Arc::new)
+                    .map_err(|e| crate::KreuzbergError::Ocr {
+                        message: format!("Failed to create Tesseract processor: {}", e),
+                        source: Some(Box::new(e)),
+                    })
+            })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn processor_is_initialized(&self) -> bool {
+        self.processor.get().is_some()
     }
 
     /// Convert public API TesseractConfig to internal TesseractConfig.
@@ -99,7 +126,7 @@ impl TesseractBackend {
 
     /// Get cached available languages, lazily querying Tesseract if needed.
     ///
-    /// Uses `OnceLock` to ensure the Tesseract API is only queried once.
+    /// Uses `OnceCell` to ensure the Tesseract API is only queried once.
     /// Falls back to hardcoded language list if dynamic querying fails.
     fn get_cached_languages(&self) -> &[String] {
         self.available_languages
@@ -151,7 +178,7 @@ impl TesseractBackend {
 
 impl Default for TesseractBackend {
     fn default() -> Self {
-        Self::new().unwrap()
+        Self::new()
     }
 }
 
@@ -169,10 +196,14 @@ impl Plugin for TesseractBackend {
     }
 
     fn shutdown(&self) -> Result<()> {
-        self.processor.clear_cache().map_err(|e| crate::KreuzbergError::Plugin {
-            message: format!("Failed to clear Tesseract cache: {}", e),
-            plugin_name: "tesseract".to_string(),
-        })
+        if let Some(processor) = self.processor.get() {
+            processor.clear_cache().map_err(|e| crate::KreuzbergError::Plugin {
+                message: format!("Failed to clear Tesseract cache: {}", e),
+                plugin_name: "tesseract".to_string(),
+            })
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -184,7 +215,7 @@ impl OcrBackend for TesseractBackend {
         let tess_config_clone = tess_config.clone();
         let output_format = config.output_format.clone();
 
-        let processor = Arc::clone(&self.processor);
+        let processor = Arc::clone(self.processor()?);
         let image_bytes = image_bytes.to_vec();
 
         let ocr_result = tokio::task::spawn_blocking(move || {
@@ -280,7 +311,7 @@ impl OcrBackend for TesseractBackend {
         let tess_config_clone = tess_config.clone();
         let output_format = config.output_format.clone();
 
-        let processor = Arc::clone(&self.processor);
+        let processor = Arc::clone(self.processor()?);
         let path_str = path.to_string_lossy().to_string();
 
         let ocr_result = tokio::task::spawn_blocking(move || {
@@ -395,12 +426,12 @@ mod tests {
     #[test]
     fn test_tesseract_backend_creation() {
         let backend = TesseractBackend::new();
-        assert!(backend.is_ok());
+        assert!(!backend.processor_is_initialized());
     }
 
     #[test]
     fn test_tesseract_backend_plugin_interface() {
-        let backend = TesseractBackend::new().unwrap();
+        let backend = TesseractBackend::new();
         assert_eq!(backend.name(), "tesseract");
         assert!(!backend.version().is_empty());
         assert!(backend.initialize().is_ok());
@@ -408,13 +439,13 @@ mod tests {
 
     #[test]
     fn test_tesseract_backend_type() {
-        let backend = TesseractBackend::new().unwrap();
+        let backend = TesseractBackend::new();
         assert_eq!(backend.backend_type(), OcrBackendType::Tesseract);
     }
 
     #[test]
     fn test_tesseract_backend_supports_language() {
-        let backend = TesseractBackend::new().unwrap();
+        let backend = TesseractBackend::new();
         // English should always be available
         assert!(backend.supports_language("eng"));
         // Invalid language codes should return false
@@ -424,13 +455,13 @@ mod tests {
 
     #[test]
     fn test_tesseract_backend_supports_table_detection() {
-        let backend = TesseractBackend::new().unwrap();
+        let backend = TesseractBackend::new();
         assert!(backend.supports_table_detection());
     }
 
     #[test]
     fn test_tesseract_backend_supported_languages() {
-        let backend = TesseractBackend::new().unwrap();
+        let backend = TesseractBackend::new();
         let languages = backend.supported_languages();
         // English should always be available
         assert!(languages.contains(&"eng".to_string()));
@@ -440,7 +471,7 @@ mod tests {
 
     #[test]
     fn test_config_to_tesseract_with_none() {
-        let backend = TesseractBackend::new().unwrap();
+        let backend = TesseractBackend::new();
         let ocr_config = OcrConfig {
             backend: "tesseract".to_string(),
             language: "deu".to_string(),
@@ -454,7 +485,7 @@ mod tests {
 
     #[test]
     fn test_config_to_tesseract_with_some() {
-        let backend = TesseractBackend::new().unwrap();
+        let backend = TesseractBackend::new();
         let custom_tess_config = crate::types::TesseractConfig {
             language: "fra".to_string(),
             psm: 6,
@@ -483,7 +514,7 @@ mod tests {
 
     #[test]
     fn test_config_conversion_with_new_fields() {
-        let backend = TesseractBackend::new().unwrap();
+        let backend = TesseractBackend::new();
 
         let preprocessing = crate::types::ImagePreprocessingConfig {
             target_dpi: 600,
@@ -545,5 +576,16 @@ mod tests {
         assert_eq!(internal_config.psm, 6u8);
         assert_eq!(internal_config.oem, 3u8);
         assert_eq!(internal_config.table_column_threshold, 100u32);
+    }
+
+    #[test]
+    fn tesseract_backend_does_not_eagerly_allocate_processor() {
+        // Constructing TesseractBackend should not allocate the native Tesseract/Leptonica
+        // handle. The processor is allocated lazily on first use.
+        let backend = TesseractBackend::new();
+        assert!(
+            !backend.processor_is_initialized(),
+            "TesseractBackend::new() should not eagerly allocate the processor"
+        );
     }
 }
