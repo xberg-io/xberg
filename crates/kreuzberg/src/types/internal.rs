@@ -207,6 +207,12 @@ pub struct InternalDocument {
     /// directly to `ExtractionResult.revisions`.
     pub revisions: Option<Vec<crate::types::revisions::DocumentRevision>>,
 
+    /// PDF form fields extracted from AcroForm or XFA-based forms.
+    ///
+    /// Set by the PDF extractor when `pdf_options.extract_form_fields = true`.
+    /// `derive_extraction_result` transfers this directly to `ExtractionResult.form_fields`.
+    pub form_fields: Vec<crate::types::PdfFormField>,
+
     /// When `true`, image OCR results are rendered as plain text without the
     /// `![...](...)` markdown placeholder. Set by the pipeline from
     /// `ImageExtractionConfig.ocr_text_only`.
@@ -233,6 +239,7 @@ impl From<crate::types::extraction::ExtractionResult> for InternalDocument {
         doc.tables = result.tables;
         doc.images = result.images.unwrap_or_default();
         doc.revisions = result.revisions;
+        doc.form_fields = result.form_fields;
         doc.pre_rendered_content = if result.content.is_empty() {
             None
         } else {
@@ -273,6 +280,7 @@ impl InternalDocument {
             revisions: None,
             ocr_text_only: false,
             append_ocr_text: false,
+            form_fields: Vec::new(),
         }
     }
 

@@ -2,9 +2,10 @@
 //!
 //! Provides text extraction,
 //! metadata parsing, annotation extraction, image extraction, table detection,
-//! and font metrics for heading hierarchy detection.
+//! form field extraction, and font metrics for heading hierarchy detection.
 
 pub(crate) mod annotations;
+pub(crate) mod forms;
 pub(crate) mod hierarchy;
 pub(crate) mod images;
 pub(crate) mod metadata;

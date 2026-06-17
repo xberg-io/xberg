@@ -45,7 +45,10 @@ pub(crate) fn extract_annotations(doc: &mut OxideDocument) -> Vec<PdfAnnotation>
         };
 
         for annot in page_annotations {
-            // Skip Widget (form field) and Popup annotations
+            // Skip Widget (form field) and Popup annotations.
+            // Widget annotations represent form field UI elements; the actual form fields
+            // are extracted separately via the forms module (pdf/oxide/forms.rs) which
+            // accesses the AcroForm dictionary directly, so they are not duplicated here.
             if matches!(
                 annot.subtype_enum,
                 pdf_oxide::AnnotationSubtype::Widget | pdf_oxide::AnnotationSubtype::Popup

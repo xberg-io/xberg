@@ -202,6 +202,7 @@ impl PdfExtractor {
             _has_font_encoding_issues,
             pdf_annotations,
             mut extracted_images,
+            pdf_form_fields,
         ) = extract_all_from_oxide_document(
             content,
             config,
@@ -609,6 +610,10 @@ impl PdfExtractor {
             std::borrow::Cow::Borrowed("extraction_method"),
             serde_json::Value::String(extraction_method.as_str().to_string()),
         );
+
+        // Transfer form fields directly to InternalDocument carrier field
+        // so derive_extraction_result can move them via std::mem::take
+        doc.form_fields = pdf_form_fields;
 
         // When using the structured doc, tables are already interleaved by the assembly pipeline.
         // Only add tables separately for the flat-text fallback path.
@@ -2349,5 +2354,156 @@ mod tests {
                 img.page_number,
             );
         }
+    }
+
+    /// Tests form field extraction from a PDF.
+    /// Uses an existing test PDF rather than creating one programmatically.
+    /// This is a simple smoke test to verify that form field extraction works
+    /// and doesn't panic or crash the extraction pipeline.
+    /// TODO: Add a real fillable PDF fixture if one is available.
+    /// Path to the vendored fillable-form fixture (AcroForm with text, button,
+    /// and choice fields).
+    #[cfg(feature = "pdf")]
+    fn form_test_document() -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../test_documents/vendored/pdfium-render/form-test.pdf")
+    }
+
+    /// End-to-end: a real AcroForm PDF yields populated, correctly-typed
+    /// `form_fields` on the extractor's `InternalDocument` carrier.
+    #[tokio::test]
+    #[cfg(feature = "pdf")]
+    async fn test_form_field_extraction_enabled() {
+        let content = std::fs::read(form_test_document()).expect("read form-test.pdf fixture");
+
+        let config = crate::core::config::ExtractionConfig {
+            pdf_options: Some(crate::core::config::pdf::PdfConfig {
+                extract_form_fields: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let internal_doc = PdfExtractor::new()
+            .extract_bytes(&content, "application/pdf", &config)
+            .await
+            .expect("extraction must not fail");
+
+        // The fixture is a rich AcroForm; extraction must surface many fields.
+        assert!(
+            !internal_doc.form_fields.is_empty(),
+            "AcroForm PDF must yield form fields, got none"
+        );
+        // Every field must carry a non-empty fully-qualified name.
+        assert!(
+            internal_doc.form_fields.iter().all(|f| !f.full_name.is_empty()),
+            "every extracted field must have a full_name"
+        );
+        // The fixture contains text fields; at least one must map to Text.
+        assert!(
+            internal_doc
+                .form_fields
+                .iter()
+                .any(|f| f.field_type == crate::types::FormFieldType::Text),
+            "fixture has text fields; at least one must map to FormFieldType::Text"
+        );
+    }
+
+    /// With `extract_form_fields = false`, the same AcroForm PDF yields no fields.
+    #[tokio::test]
+    #[cfg(feature = "pdf")]
+    async fn test_form_field_extraction_disabled() {
+        let content = std::fs::read(form_test_document()).expect("read form-test.pdf fixture");
+
+        let config = crate::core::config::ExtractionConfig {
+            pdf_options: Some(crate::core::config::pdf::PdfConfig {
+                extract_form_fields: false,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let internal_doc = PdfExtractor::new()
+            .extract_bytes(&content, "application/pdf", &config)
+            .await
+            .expect("extraction must not fail");
+
+        assert!(
+            internal_doc.form_fields.is_empty(),
+            "form fields must be empty when extract_form_fields is disabled"
+        );
+    }
+
+    /// Tests that form fields are properly extracted and carried through the pipeline
+    /// using the InternalDocument.form_fields carrier (not metadata.additional).
+    /// This test manually constructs an InternalDocument with form_fields to verify
+    /// the carrier pattern works end-to-end, without relying on a complex PDF fixture.
+    #[test]
+    #[cfg(feature = "pdf")]
+    fn test_form_fields_carrier_via_internal_document() {
+        let mut doc = InternalDocument::new("pdf");
+        doc.mime_type = "application/pdf".to_string();
+
+        // Manually populate form_fields as the PDF extractor would
+        doc.form_fields = vec![crate::types::PdfFormField {
+            name: "full_name".to_string(),
+            full_name: "form.full_name".to_string(),
+            field_type: crate::types::FormFieldType::Text,
+            value: Some("Ada Lovelace".to_string()),
+            default_value: Some("Default Name".to_string()),
+            flags: 0,
+            page: None,
+            bbox: None,
+            max_length: None,
+            tooltip: None,
+        }];
+
+        // Verify form_fields are in the carrier
+        assert_eq!(doc.form_fields.len(), 1);
+        let field = &doc.form_fields[0];
+        assert_eq!(field.name, "full_name");
+        assert_eq!(field.value, Some("Ada Lovelace".to_string()));
+        assert_eq!(field.field_type, crate::types::FormFieldType::Text);
+
+        // Verify metadata.additional does NOT contain the old _pdf_form_fields key
+        assert!(
+            doc.metadata.additional.get("_pdf_form_fields").is_none(),
+            "metadata.additional should not contain _pdf_form_fields (leak check)"
+        );
+
+        // Convert to ExtractionResult through the pipeline to verify the carrier works
+        let result = crate::extraction::derive::derive_extraction_result(
+            doc,
+            false,
+            crate::core::config::OutputFormat::Plain,
+        );
+
+        // Verify form_fields were transferred via std::mem::take
+        assert_eq!(result.form_fields.len(), 1);
+        assert_eq!(result.form_fields[0].name, "full_name");
+        assert_eq!(result.form_fields[0].value, Some("Ada Lovelace".to_string()));
+    }
+
+    /// Tests that with form_fields extraction disabled, the result contains no form fields.
+    #[test]
+    #[cfg(feature = "pdf")]
+    fn test_form_fields_disabled_no_leak() {
+        let mut doc = InternalDocument::new("pdf");
+        doc.mime_type = "application/pdf".to_string();
+
+        // Ensure form_fields is empty (simulating extract_form_fields=false)
+        assert!(doc.form_fields.is_empty());
+
+        // Verify metadata.additional does NOT contain _pdf_form_fields
+        assert!(doc.metadata.additional.get("_pdf_form_fields").is_none());
+
+        // Convert to ExtractionResult and verify form_fields is empty
+        let result = crate::extraction::derive::derive_extraction_result(
+            doc,
+            false,
+            crate::core::config::OutputFormat::Plain,
+        );
+
+        assert!(result.form_fields.is_empty());
     }
 }

@@ -19,7 +19,8 @@ pub(crate) type PdfExtractionPhaseResult = (
     Option<crate::types::internal::InternalDocument>, // pre-rendered structured doc (when output_format == Markdown/Djot/Html)
     bool,                                             // has_font_encoding_issues (unicode map errors detected)
     Option<Vec<PdfAnnotation>>,                       // extracted annotations (when extract_annotations is enabled)
-    Option<Vec<crate::types::ExtractedImage>>, // extracted images (when extract_images or ocr_inline_images is enabled)
+    Option<Vec<crate::types::ExtractedImage>>,       // extracted images (when extract_images or ocr_inline_images is enabled)
+    Vec<crate::types::PdfFormField>,                 // extracted form fields (when extract_form_fields is enabled)
 );
 
 /// Extract text, metadata, tables, and annotations from a PDF document using the pdf_oxide backend.
@@ -240,6 +241,13 @@ pub(crate) fn extract_all_from_oxide_document(
 
     let has_font_encoding_issues = false;
 
+    // --- Form fields (AcroForm / XFA) ---
+    let form_fields = if config.pdf_options.as_ref().is_none_or(|opts| opts.extract_form_fields) {
+        crate::pdf::oxide::forms::extract_form_fields(&doc)
+    } else {
+        Vec::new()
+    };
+
     Ok((
         pdf_metadata,
         native_text,
@@ -250,6 +258,7 @@ pub(crate) fn extract_all_from_oxide_document(
         has_font_encoding_issues,
         annotations,
         images,
+        form_fields,
     ))
 }
 
