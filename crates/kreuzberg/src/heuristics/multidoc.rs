@@ -19,7 +19,7 @@
 //! | Function | When to use |
 //! |----------|-------------|
 //! | [`detect_boundaries`] | Low-level: caller already has [`MultidocInput`] + [`PageSignals`] |
-//! | [`boundaries_from_extraction_result`] | High-level: derive signals from an [`ExtractionResult`] |
+//! | [`boundaries_from_extraction_result`] | High-level: derive signals from an [`ExtractionResult`](crate::types::ExtractionResult) |
 //! | [`PageSignals::from_page_text`] | Helper: build signals from plain page text |
 
 use std::collections::HashSet;
@@ -280,7 +280,7 @@ fn detect_signature_block(text: &str) -> bool {
     })
 }
 
-/// Derive document boundaries from an already-produced [`ExtractionResult`].
+/// Derive document boundaries from an already-produced [`ExtractionResult`](crate::types::ExtractionResult).
 ///
 /// Builds a [`MultidocInput`] from `result.pages` (one [`PageSignals`] per
 /// [`crate::types::PageContent`] entry), then delegates to [`detect_boundaries`].

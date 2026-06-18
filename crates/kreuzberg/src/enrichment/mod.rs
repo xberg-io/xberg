@@ -21,7 +21,7 @@
 //! **`EnrichResult::entities` uses `Vec<Entity>` instead of `serde_json::Value`.**
 //! The cloud stores entities as an opaque JSON blob because it serialises through
 //! MessagePack without a common schema. The OSS library already defines a
-//! well-typed [`Entity`] / [`EntityCategory`] hierarchy in `crates/kreuzberg/src/types/entity.rs`;
+//! well-typed [`Entity`](crate::types::entity::Entity) / [`EntityCategory`](crate::types::entity::EntityCategory) hierarchy in `crates/kreuzberg/src/types/entity.rs`;
 //! using it here gives consumers a typed API without a lossy round-trip through
 //! `serde_json::Value`.
 //!

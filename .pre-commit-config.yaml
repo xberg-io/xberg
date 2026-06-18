@@ -138,6 +138,11 @@ repos:
       - packages/java/checkstyle.properties
       exclude: ^(\.mvn/wrapper/|e2e/|tools/e2e-generator/e2e/|crates/kreuzberg-wasm/e2e/|packages/java/src/)
     - id: pmd
+      # Benchmark harness scripts are auxiliary tooling, not shipped code. The
+      # Java subprocess runner deliberately catches Error/Throwable to emit a
+      # clean failure record before exiting, which trips PMD's
+      # AvoidCatchingGenericException — not a concern for a benchmark driver.
+      exclude: ^tools/benchmark-harness/scripts/
     - id: cpd
     - id: java-verify
       files: ^packages/java/

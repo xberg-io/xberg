@@ -39,8 +39,11 @@ env:
   # Mobile feature subsets (Android drops ORT-requiring features) leave some
   # functions only used in the full-feature graph; -A dead_code keeps the
   # cross-compile check honest about other classes of warnings without choking
-  # on these.
-  RUSTFLAGS: "-D warnings -A dead_code -A unpredictable-function-pointer-comparisons -A mismatched-lifetime-syntaxes"
+  # on these. -A unexpected_cfgs: the kreuzberg-ffi crate's auto-derived feature
+  # list omits a few core features (structured/enrichment/heuristics/presets)
+  # that its generated cfg-guards still reference, so the reduced android-target
+  # graph trips unexpected_cfgs on feature names that simply aren't declared.
+  RUSTFLAGS: "-D warnings -A dead_code -A unexpected_cfgs -A unpredictable-function-pointer-comparisons -A mismatched-lifetime-syntaxes"
 
 permissions:
   contents: read
@@ -63,9 +66,9 @@ jobs:
           use-sccache: "true"
       - uses: kreuzberg-dev/actions/setup-android-ndk@v1
       - name: cargo ndk check kreuzberg-dart
-        run: cargo ndk --target ${{ matrix.abi }} --platform 21 -- check -p kreuzberg-dart
+        run: cargo ndk --target ${{ matrix.abi }} --platform 21 -- check -p kreuzberg-dart --no-default-features --features android-target
       - name: cargo ndk check kreuzberg-ffi
-        run: cargo ndk --target ${{ matrix.abi }} --platform 21 -- check -p kreuzberg-ffi
+        run: cargo ndk --target ${{ matrix.abi }} --platform 21 -- check -p kreuzberg-ffi --no-default-features --features android-target
 
   ios-check:
     name: iOS cargo check (${{ matrix.target }})

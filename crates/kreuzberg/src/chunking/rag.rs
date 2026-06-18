@@ -60,7 +60,7 @@ use crate::error::Result;
 /// Delegates to [`chunk_text`] using the caller's config (defaulting to
 /// `ChunkerType::Markdown` when the config uses the default `Text` type, so that
 /// heading hierarchy is resolved).  After chunking, derives
-/// [`ChunkMetadata::heading_path`] from each chunk's `heading_context`.
+/// [`ChunkMetadata::heading_path`](crate::types::ChunkMetadata::heading_path) from each chunk's `heading_context`.
 ///
 /// # Arguments
 ///

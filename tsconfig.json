@@ -38,9 +38,8 @@
 	},
 	"files": [],
 	"references": [
-		{ "path": "./crates/kreuzberg-node" },
-		{ "path": "./crates/kreuzberg-wasm" },
-		{ "path": "./packages/typescript/core" },
-		{ "path": "./e2e/wasm-workers" }
+		{ "path": "./packages/node" },
+		{ "path": "./e2e/node" },
+		{ "path": "./e2e/wasm" }
 	]
 }
