@@ -13,6 +13,7 @@
 !crates/kreuzberg-cli/
 !crates/kreuzberg-tesseract/
 !crates/kreuzberg-paddle-ocr/
+!crates/kreuzberg-candle-ocr/
 !crates/kreuzberg-ffi/
 !crates/kreuzberg-libheif/
 !crates/kreuzberg-py/
