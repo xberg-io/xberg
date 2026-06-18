@@ -112,7 +112,10 @@ repos:
     - id: ruff
     - id: mypy
       files: ^(lib|src|kreuzberg|tools)/.*\.py$
-      exclude: e2e/|tests/|scripts/
+      # python_baselines are standalone OCR-library reference scripts that import
+      # optional, uninstalled ML deps (transformers/paddlex/paddleocr) — mypy
+      # cannot resolve them in CI, same rationale as the excluded scripts/ dir.
+      exclude: e2e/|tests/|scripts/|tools/benchmark-harness/python_baselines/
     - id: pydocstyle
       files: ^packages/python/.*\.py$
       exclude: ^packages/python/(tests/|.*_native\.py$)

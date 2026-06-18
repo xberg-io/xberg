@@ -200,7 +200,6 @@ public final class KreuzbergExtractJava {
     }
 
     ExtractionConfig benchConfig = buildBenchmarkConfig(ocrEnabled);
-    long start = System.nanoTime();
     List<String> jsonResults = new ArrayList<>();
     for (Path path : paths) {
       long fileStart = System.nanoTime();
@@ -219,7 +218,6 @@ public final class KreuzbergExtractJava {
             + "\",\"_extraction_time_ms\":" + fileMs + ",\"_ocr_used\":false}");
       }
     }
-    double totalMs = (System.nanoTime() - start) / NANOS_IN_MILLISECOND;
 
     if (debug) {
       debugLog("Batch extraction completed", String.valueOf(jsonResults.size()) + " results");
