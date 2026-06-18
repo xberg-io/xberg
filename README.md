@@ -85,9 +85,18 @@
   <a href="https://docs.kreuzberg.dev/demo.html">
     <img height="22" src="https://img.shields.io/badge/Live%20Demo-Open-007ec6?logo=webassembly&logoColor=white" alt="Live Demo">
   </a>
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/stargazers">
+    <img height="22" src="https://img.shields.io/github/stars/kreuzberg-dev/kreuzberg?style=social" alt="GitHub Stars">
+  </a>
 </div>
 
 Extract text, metadata, transcripts, and code intelligence from 96 file formats and 306 programming languages at native speeds without needing a GPU.
+
+<div align="center">
+
+**If Kreuzberg saves you time, please [⭐ star it on GitHub](https://github.com/kreuzberg-dev/kreuzberg/stargazers) — every star helps more developers find this project.**
+
+</div>
 
 ## Key Features
 
