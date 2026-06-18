@@ -72,7 +72,7 @@ pub async fn complete_with_json_schema(
     let text = response
         .choices
         .first()
-        .and_then(|c| c.message.content.as_deref())
+        .and_then(|c| c.message.content.as_ref().and_then(|m| m.as_text()))
         .ok_or_else(|| {
             crate::KreuzbergError::parsing(format!(
                 "LLM JSON-schema response ({source}) returned no content (model={}, {} choices)",
@@ -81,7 +81,7 @@ pub async fn complete_with_json_schema(
             ))
         })?;
 
-    let cleaned = strip_markdown_fence(text);
+    let cleaned = strip_markdown_fence(&text);
     let value = serde_json::from_str(cleaned).map_err(|e| {
         crate::KreuzbergError::parsing(format!(
             "LLM JSON-schema response ({source}) returned invalid JSON (model={}): {e}\nRaw response: {}",
@@ -220,7 +220,7 @@ pub(crate) async fn extract_structured(
     let text = response
         .choices
         .first()
-        .and_then(|c| c.message.content.as_deref())
+        .and_then(|c| c.message.content.as_ref().and_then(|m| m.as_text()))
         .ok_or_else(|| {
             crate::KreuzbergError::parsing(format!(
                 "LLM structured extraction returned no content (model={}, {} choices)",

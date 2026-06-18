@@ -40,7 +40,7 @@ impl SchemaCompliance {
 /// Input signals for confidence scoring.
 ///
 /// Caller fills these from the extraction result and the LLM response.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct ConfidenceSignals {
     /// Fraction of pages with usable text in `[0, 1]`.
     pub text_coverage: f32,
@@ -86,7 +86,7 @@ impl ConfidenceSignals {
 /// Tunable weights for the confidence scoring formula.
 ///
 /// Defaults picked by inspection; callers tune them via config.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct ConfidenceWeights {
     /// Weight assigned to `text_coverage`. Default 0.30.
     pub text_coverage: f32,

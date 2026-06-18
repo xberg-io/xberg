@@ -1188,15 +1188,26 @@ mod tests {
 
         // Verify server tier resolves to server path
         let server_det = manager.ensure_v2_det_model("server").unwrap();
-        assert!(server_det.ends_with("server"), "Server det path should end with 'server', got {:?}", server_det);
+        assert!(
+            server_det.ends_with("server"),
+            "Server det path should end with 'server', got {:?}",
+            server_det
+        );
         assert!(server_det.join("model.onnx").exists());
 
         // Verify mobile tier resolves to mobile path
         let mobile_det = manager.ensure_v2_det_model("mobile").unwrap();
-        assert!(mobile_det.ends_with("mobile"), "Mobile det path should end with 'mobile', got {:?}", mobile_det);
+        assert!(
+            mobile_det.ends_with("mobile"),
+            "Mobile det path should end with 'mobile', got {:?}",
+            mobile_det
+        );
         assert!(mobile_det.join("model.onnx").exists());
 
         // Verify server and mobile det paths are different
-        assert_ne!(server_det, mobile_det, "Server and mobile det model paths should differ");
+        assert_ne!(
+            server_det, mobile_det,
+            "Server and mobile det model paths should differ"
+        );
     }
 }

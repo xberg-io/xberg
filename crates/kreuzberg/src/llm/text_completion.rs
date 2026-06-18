@@ -49,7 +49,7 @@ pub async fn complete_text(
     let text = response
         .choices
         .first()
-        .and_then(|c| c.message.content.as_deref())
+        .and_then(|c| c.message.content.as_ref().and_then(|m| m.as_text()))
         .map(|s| s.trim().to_string())
         .ok_or_else(|| {
             crate::KreuzbergError::parsing(format!(

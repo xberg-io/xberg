@@ -25,7 +25,7 @@ pub mod registry;
 pub mod resolve;
 pub mod types;
 
-pub use loader::LoadError;
+pub use loader::{LoadError, MetaSchema};
 pub use registry::Registry;
 pub use resolve::{ResolveError, ResolvedPreset, resolve};
 pub use types::{CallMode, MergeMode, Preset, PresetCategory, PresetSample, PresetSummary};

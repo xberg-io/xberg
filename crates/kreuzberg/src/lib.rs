@@ -110,8 +110,12 @@ pub mod heuristics;
 
 #[cfg(feature = "heuristics")]
 pub use heuristics::{
-    BoundaryReason, DocumentBoundary, MultidocInput, MultidocThresholds, PageSignals,
-    boundaries_from_extraction_result, detect_boundaries,
+    BoundaryReason, ChunkInfo, ChunkPlan, ChunkingDecision, ChunkingReason, ConfidenceSignals, ConfidenceWeights,
+    DocumentBoundary, DocumentMetadata, HeuristicsConfig, HeuristicsError, MultidocInput, MultidocThresholds,
+    NoChunkingReason, PageRange, PageSignals, StructuredCallMode, StructuredInput, StructuredThresholds,
+    UserChunkConfig, analyze_document, analyze_with_user_chunks, boundaries_from_extraction_result,
+    calculate_chunk_plan, calculate_plan_from_overrides, check_format_limits, choose_call_mode, detect_boundaries,
+    score_confidence,
 };
 
 #[cfg(feature = "presets")]
@@ -217,7 +221,8 @@ pub use extractors::security::SecurityLimits;
 // ── Presets — format + registry + resolver ───────────────────────────────────
 #[cfg(feature = "presets")]
 pub use presets::{
-    LoadError, Preset, PresetCategory, PresetSample, PresetSummary, Registry, ResolveError, ResolvedPreset, resolve,
+    LoadError, MetaSchema, Preset, PresetCategory, PresetSample, PresetSummary, Registry, ResolveError, ResolvedPreset,
+    resolve,
 };
 // `CallMode` and `MergeMode` are re-exported unconditionally from `core::config` above —
 // they live in `core::config::llm` (always compiled), not behind the `presets` feature.

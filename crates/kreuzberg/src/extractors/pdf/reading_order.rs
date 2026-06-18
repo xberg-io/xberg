@@ -669,8 +669,8 @@ mod tests {
     fn test_config_default_reading_order_is_false() {
         // Verify that the default PdfConfig has reading_order disabled
         let pdf_config = crate::core::config::PdfConfig::default();
-        assert_eq!(
-            pdf_config.reading_order, false,
+        assert!(
+            !pdf_config.reading_order,
             "Default reading_order must be false for backward compatibility"
         );
     }

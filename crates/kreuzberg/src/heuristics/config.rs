@@ -7,12 +7,13 @@
 //! config wrapper and populate the appropriate fields.
 
 use crate::heuristics::error::{HeuristicsError, Result};
+use serde::{Deserialize, Serialize};
 
 /// Configuration for document chunking and analysis heuristics.
 ///
 /// Every threshold is a public field so callers can override any subset via
 /// struct-update syntax: `HeuristicsConfig { text_layer_threshold: 0.5, ..Default::default() }`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HeuristicsConfig {
     /// Enable PDF text-layer detection heuristics.
     ///

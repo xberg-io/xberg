@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 
 use crate::presets::types::{CallMode, MergeMode, Preset};
+use serde::{Deserialize, Serialize};
 
 /// Errors produced while resolving a preset against caller overrides.
 #[derive(Debug, thiserror::Error)]
@@ -14,7 +15,7 @@ pub enum ResolveError {
 
 /// A preset merged with caller-supplied overrides (custom schema, prompt suffix,
 /// context map). Output is what the pipeline orchestrator consumes.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResolvedPreset {
     /// Source preset identifier.
     pub id: String,

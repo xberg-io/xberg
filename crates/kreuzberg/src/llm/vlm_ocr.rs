@@ -163,9 +163,8 @@ pub(crate) async fn vlm_ocr(
     let text = response
         .choices
         .first()
-        .and_then(|choice| choice.message.content.as_deref())
-        .ok_or_else(|| crate::KreuzbergError::ocr(format!("VLM OCR returned no content (model={})", config.model)))?
-        .to_string();
+        .and_then(|choice| choice.message.content.as_ref().and_then(|m| m.as_text()))
+        .ok_or_else(|| crate::KreuzbergError::ocr(format!("VLM OCR returned no content (model={})", config.model)))?;
 
     Ok((text, usage))
 }

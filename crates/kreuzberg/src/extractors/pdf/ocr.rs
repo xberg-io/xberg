@@ -2720,9 +2720,11 @@ Buffers:           50000 kB
     #[test]
     fn test_inject_layout_config_handles_non_object_backend_options() {
         use crate::core::config::LayoutDetectionConfig;
-        let mut ocr_config = crate::core::config::OcrConfig::default();
         // Set backend_options to a non-object value (e.g., a string)
-        ocr_config.backend_options = Some(serde_json::json!("invalid"));
+        let ocr_config = crate::core::config::OcrConfig {
+            backend_options: Some(serde_json::json!("invalid")),
+            ..Default::default()
+        };
 
         let extraction_config = ExtractionConfig {
             layout: Some(LayoutDetectionConfig {

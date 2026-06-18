@@ -7,7 +7,7 @@ use crate::heuristics::config::HeuristicsConfig;
 use serde::{Deserialize, Serialize};
 
 /// The chunking decision made by the analyzer.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ChunkingDecision {
     /// Process without chunking (small file, text layer detected, etc.)
     NoChunking {
@@ -92,7 +92,7 @@ pub enum ChunkingReason {
 }
 
 /// Complete chunking plan for a document.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChunkPlan {
     /// Total number of chunks.
     pub total_chunks: u32,

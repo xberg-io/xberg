@@ -334,7 +334,10 @@ mod tests {
             .filter_map(Result::ok)
             .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
             .collect();
-        assert!(leftovers.is_empty(), "no .tmp staging files should remain, found {leftovers:?}");
+        assert!(
+            leftovers.is_empty(),
+            "no .tmp staging files should remain, found {leftovers:?}"
+        );
     }
 
     #[test]
@@ -355,7 +358,10 @@ mod tests {
             .filter_map(Result::ok)
             .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
             .collect();
-        assert!(leftovers.is_empty(), "staging temp must be cleaned up on failure, found {leftovers:?}");
+        assert!(
+            leftovers.is_empty(),
+            "staging temp must be cleaned up on failure, found {leftovers:?}"
+        );
     }
 
     #[test]

@@ -14,10 +14,11 @@ use crate::heuristics::config::HeuristicsConfig;
 use crate::heuristics::decision::{ChunkingDecision, NoChunkingReason, PageRange};
 use crate::heuristics::error::Result;
 use crate::heuristics::thresholds::{calculate_chunk_plan, calculate_plan_from_overrides};
+use serde::{Deserialize, Serialize};
 use tracing::{debug, info, instrument};
 
 /// Metadata about a document for analysis.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentMetadata {
     /// MIME type of the document.
     pub mime_type: String,
@@ -34,7 +35,7 @@ pub struct DocumentMetadata {
 }
 
 /// User-provided chunk configuration.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct UserChunkConfig {
     /// User-specified page ranges (overrides automatic chunking).
     pub page_ranges: Option<Vec<PageRange>>,

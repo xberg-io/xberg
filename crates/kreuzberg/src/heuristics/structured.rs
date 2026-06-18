@@ -43,7 +43,7 @@ pub enum StructuredCallMode {
 /// All fields derive from a prior kreuzberg extraction — no double-work.
 /// This is a plain DTO; it intentionally has no dependency on internal
 /// kreuzberg extraction types so it can be constructed from any source.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StructuredInput {
     /// MIME type, canonicalised to lowercase by the caller.
     pub mime_type: String,
@@ -74,7 +74,7 @@ pub struct StructuredInput {
 ///     ..StructuredThresholds::default()
 /// };
 /// ```
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct StructuredThresholds {
     /// PDFs with `text_coverage` strictly below this are treated as scanned.

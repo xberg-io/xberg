@@ -92,7 +92,7 @@ pub(crate) async fn call(
     // ── Assemble messages ────────────────────────────────────────────────────
     let messages = vec![
         Message::System(SystemMessage {
-            content: request.system_prompt,
+            content: request.system_prompt.into(),
             name: None,
         }),
         Message::User(UserMessage {
@@ -139,7 +139,7 @@ pub(crate) async fn call(
     let text = response
         .choices
         .first()
-        .and_then(|c| c.message.content.as_deref())
+        .and_then(|c| c.message.content.as_ref().and_then(|m| m.as_text()))
         .ok_or_else(|| {
             super::StructuredError::Vision(format!(
                 "vision response missing message content (model={}, {} choices)",
@@ -148,7 +148,7 @@ pub(crate) async fn call(
             ))
         })?;
 
-    let content: serde_json::Value = serde_json::from_str(text).map_err(|e| {
+    let content: serde_json::Value = serde_json::from_str(&text).map_err(|e| {
         super::StructuredError::Vision(format!(
             "vision response did not parse as valid JSON (model={}): {e}",
             request.model
