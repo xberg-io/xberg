@@ -1,6 +1,6 @@
 {
   "name": "@kreuzberg/node-linux-arm64-gnu",
-  "version": "5.0.0-rc.22",
+  "version": "5.0.0-rc.23",
   "license": "Elastic-2.0",
   "repository": {
     "type": "git",

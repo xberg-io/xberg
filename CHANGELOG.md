@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.0-rc.23] - 2026-06-18
+
+### Changed
+
+- **deps**: bump `liter-llm` to 1.7.0 (the `UserContent`/`AssistantContent` enum API — message content now accessed via `as_text()` rather than `Deref`), `itertools` 0.15, plus `getrandom`, `html-to-markdown-rs`, `pdf_oxide`, and `tree-sitter-language-pack` to their released versions. Heuristics and presets DTOs gain `Serialize`/`Deserialize` for binding parity.
+- **alef**: bump `alef_version` to 0.25.44 and regenerate all bindings. Picks up the JNI marshalling fixes (`Option<&[u8]>` as_deref, `&BTreeMap` request maps, request-map byte-slice/`PathBuf` conversion) and the swift `token_counter_noop` unit-return clippy fix, plus the `android-target` aggregate feature on the ffi/dart binding crates.
+
 ### Removed
 
 - Orphan `docs/reference/api-gleam.md` left behind by `dc268c1c0e chore: drop Gleam binding entirely`. CI Docs `task docs:build:strict` aborted on 8 `unresolved link reference` warnings from this file (e.g. `[\`BatchFileItem\`]`, `[0.0, 1.0]`, `["<https://example.com">]` patterns the strict link checker reads as broken markdown references). The Gleam binding itself was removed earlier; this is just nav cleanup.

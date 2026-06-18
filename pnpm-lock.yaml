@@ -35,19 +35,6 @@ importers:
       '@napi-rs/cli':
         specifier: ^3.6.2
         version: 3.7.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@22.19.21)
-    optionalDependencies:
-      '@kreuzberg/node-darwin-arm64':
-        specifier: 5.0.0-rc.22
-        version: 5.0.0-rc.22
-      '@kreuzberg/node-linux-arm64-gnu':
-        specifier: 5.0.0-rc.22
-        version: 5.0.0-rc.22
-      '@kreuzberg/node-linux-x64-gnu':
-        specifier: 5.0.0-rc.22
-        version: 5.0.0-rc.22
-      '@kreuzberg/node-win32-x64-msvc':
-        specifier: 5.0.0-rc.22
-        version: 5.0.0-rc.22
 
   crates/kreuzberg-wasm: {}
 
@@ -418,32 +405,6 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
-
-  '@kreuzberg/node-darwin-arm64@5.0.0-rc.22':
-    resolution: {integrity: sha512-KpUTxVfuVWl0rhcp1C05z2/iZozX0Uk1npZWXwDyqfTaZFegoFKRSuaZ5I4HFpB5VPDu2NBYgkE7H4mFgpxwOQ==}
-    engines: {node: '>= 18'}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@kreuzberg/node-linux-arm64-gnu@5.0.0-rc.22':
-    resolution: {integrity: sha512-23cAD0JCv+w5s1KJWMZxHKZ4M3VfuP2kFgdazgm+i1f+zn9R24OUVLPZ0nU9kGnV1eQ4pzqFIuHajtF2Pzf7hA==}
-    engines: {node: '>= 18'}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-
-  '@kreuzberg/node-linux-x64-gnu@5.0.0-rc.22':
-    resolution: {integrity: sha512-gqqFdAwB28KJur9gksiy7/l2sSJySshsEVk2JSMYISpJ8M+sWVh/Mne40rIvxozueIWcxdqW2HHZ4nfmgvCjXg==}
-    engines: {node: '>= 18'}
-    cpu: [x64]
-    os: [linux]
-    libc: [glibc]
-
-  '@kreuzberg/node-win32-x64-msvc@5.0.0-rc.22':
-    resolution: {integrity: sha512-TALhnEYDW0nDWEbf7egdHGrg8GRwLSjlKRoJYHQ7mgKJWU/5RiaJp5mS6jth6xEc2iBOHpImQlaif6oGdNdmCA==}
-    engines: {node: '>= 18'}
-    cpu: [x64]
-    os: [win32]
 
   '@napi-rs/cli@3.7.1':
     resolution: {integrity: sha512-7FkcxJ70SqpsYnyjaYwLVpkP3Xoyd8YkT5g7DevuEvSY7mzpLSva8oSQNENHiQ1T0GMLnae1X46KmiNIu5OXDw==}
@@ -2019,18 +1980,6 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
-
-  '@kreuzberg/node-darwin-arm64@5.0.0-rc.22':
-    optional: true
-
-  '@kreuzberg/node-linux-arm64-gnu@5.0.0-rc.22':
-    optional: true
-
-  '@kreuzberg/node-linux-x64-gnu@5.0.0-rc.22':
-    optional: true
-
-  '@kreuzberg/node-win32-x64-msvc@5.0.0-rc.22':
-    optional: true
 
   '@napi-rs/cli@3.7.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@22.19.21)':
     dependencies:
