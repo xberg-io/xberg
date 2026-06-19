@@ -1638,4 +1638,41 @@ mod tests {
             "header must appear exactly once, not be duplicated"
         );
     }
+
+    #[test]
+    fn table_repeat_header_with_overlap_prepends_header_to_continuation_chunks() {
+        // With overlap > 0, continuation chunks start with rows from the tail of the
+        // previous chunk. The is_table_continuation check still fires correctly because
+        // those rows start with `|` and the second line is also a data row (no separator).
+        let markdown = make_large_table(40);
+        let config = ChunkingConfig {
+            max_characters: 300,
+            overlap: 50,
+            trim: true,
+            chunker_type: ChunkerType::Markdown,
+            table_chunking: TableChunkingMode::RepeatHeader,
+            ..Default::default()
+        };
+        let result = chunk_text(&markdown, &config, None).unwrap();
+        assert!(
+            result.chunks.len() > 2,
+            "table must split into multiple chunks with overlap"
+        );
+        // Every chunk that starts with `|` (table content) must have a separator on its
+        // second non-empty line — either it's the header chunk itself, or the header was
+        // injected into a continuation chunk.
+        for chunk in &result.chunks {
+            let lines: Vec<&str> = chunk.content.lines().filter(|l| !l.is_empty()).collect();
+            if lines.first().is_some_and(|l| l.starts_with('|')) {
+                let second_line_is_separator = lines
+                    .get(1)
+                    .is_some_and(|l| l.chars().all(|c| matches!(c, '|' | '-' | ' ')));
+                assert!(
+                    second_line_is_separator,
+                    "table chunk must have separator on 2nd line; got:\n{}",
+                    chunk.content
+                );
+            }
+        }
+    }
 }

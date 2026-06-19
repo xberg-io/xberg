@@ -891,4 +891,10 @@ mod tests {
         let resolved = config.resolve_preset();
         assert!(resolved.embedding.is_none(), "no-preset path must not touch embedding");
     }
+
+    #[test]
+    fn table_chunking_mode_defaults_to_split_when_field_absent() {
+        let c: ChunkingConfig = serde_json::from_str("{}").unwrap();
+        assert_eq!(c.table_chunking, TableChunkingMode::Split);
+    }
 }
