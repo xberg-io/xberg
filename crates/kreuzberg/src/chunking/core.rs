@@ -1675,4 +1675,28 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn table_repeat_header_oversized_header_does_not_panic() {
+        // When the header row itself exceeds max_characters it becomes its own chunk.
+        // inject_table_headers will prepend it to continuation chunks, producing chunks
+        // larger than max_characters. This is documented accepted behaviour — the
+        // invariant is no panic and no data loss, not size capping.
+        let wide_cols: String =
+            (0..20).map(|i| format!("| Column {i:02} ")).collect::<String>() + "|";
+        let separator: String = (0..20).map(|_| "|----------").collect::<String>() + "|";
+        let row: String = (0..20).map(|i| format!("| value  {i:02} ")).collect::<String>() + "|";
+        let rows: String = (0..20).map(|_| format!("{row}\n")).collect::<String>();
+        let markdown = format!("{wide_cols}\n{separator}\n{rows}");
+        let config = ChunkingConfig {
+            max_characters: 50,
+            overlap: 0,
+            trim: true,
+            chunker_type: ChunkerType::Markdown,
+            table_chunking: TableChunkingMode::RepeatHeader,
+            ..Default::default()
+        };
+        let result = chunk_text(&markdown, &config, None).unwrap();
+        assert!(!result.chunks.is_empty(), "must produce chunks even with oversized header");
+    }
 }
