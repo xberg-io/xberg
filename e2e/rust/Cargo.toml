@@ -7,7 +7,7 @@
 
 [package]
 name = "kreuzberg-e2e-rust"
-version = "5.0.0-rc.23"
+version = "5.0.0-rc.24"
 edition = "2021"
 license = "MIT"
 publish = false

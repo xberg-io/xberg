@@ -1,6 +1,6 @@
 [package]
 name = "kreuzberg-dart"
-version = "5.0.0-rc.23"
+version = "5.0.0-rc.24"
 edition = "2024"
 license = "Elastic-2.0"
 

@@ -4,7 +4,7 @@ requires = [ "maturin>=1,<2" ]
 
 [project]
 name = "kreuzberg"
-version = "5.0.0rc23"
+version = "5.0.0rc24"
 description = "High-performance document intelligence library"
 keywords = [ "document", "extraction", "ocr", "pdf", "text" ]
 license = "Elastic-2.0"

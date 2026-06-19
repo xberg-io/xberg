@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.0-rc.24] - 2026-06-19
+
 ### Changed
 
 - **deps**: upgrade dependencies to latest — `liter-llm` 1.7.1, `html-to-markdown-rs` 3.6.15, `tree-sitter-language-pack` 1.9.1, `bitvec` 1.1, plus refreshed `Cargo.lock`, `pnpm-lock.yaml`, and `uv.lock`.

@@ -1,7 +1,7 @@
 PATH
   remote: ../../packages/ruby
   specs:
-    kreuzberg (5.0.0.pre.rc.23)
+    kreuzberg (5.0.0.pre.rc.24)
       rb_sys (>= 0.9, < 0.9.128)
       sorbet-runtime (~> 0.5)
 
@@ -88,7 +88,7 @@ CHECKSUMS
   faraday (2.14.2) sha256=73ccb9994a9e8648f010e32eca2ae82e41c57860aa10932cda29418b9e0223ad
   faraday-net_http (3.4.2) sha256=f147758260d3526939bf57ecf911682f94926a3666502e24c69992765875906c
   json (2.19.5) sha256=218a18553e4801d579ca7e0f5bc72bafd776d7397238a1fb4e74db5b0a812c59
-  kreuzberg (5.0.0.pre.rc.23)
+  kreuzberg (5.0.0.pre.rc.24)
   language_server-protocol (3.17.0.5) sha256=fd1e39a51a28bf3eec959379985a72e296e9f9acfce46f6a79d31ca8760803cc
   lint_roller (1.1.0) sha256=2c0c845b632a7d172cb849cc90c1bce937a28c5c8ccccb50dfd46a485003cc87
   logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203

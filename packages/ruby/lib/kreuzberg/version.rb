@@ -6,5 +6,5 @@
 
 module Kreuzberg
   ## The version string for this package.
-  VERSION = "5.0.0.pre.rc.23"
+  VERSION = "5.0.0.pre.rc.24"
 end

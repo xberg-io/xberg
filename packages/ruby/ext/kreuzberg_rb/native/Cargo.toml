@@ -1,6 +1,6 @@
 [package]
 name = "kreuzberg-rb"
-version = "5.0.0-rc.23"
+version = "5.0.0-rc.24"
 edition = "2024"
 license = "Elastic-2.0"
 description = "High-performance document intelligence library"

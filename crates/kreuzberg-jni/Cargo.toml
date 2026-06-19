@@ -24,6 +24,6 @@ crate-type = ["cdylib"]
 base64 = "0.22"
 futures-util = "0.3"
 jni = "0.22"
-kreuzberg = { version = "5.0.0-rc.23", path = "../kreuzberg", features = ["full"] }
+kreuzberg = { version = "5.0.0-rc.24", path = "../kreuzberg", features = ["full"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }

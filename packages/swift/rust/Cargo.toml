@@ -2,7 +2,7 @@
 # alef:hash:a54f64851961a3fb236133a70906c9b22add934583f1997edc3fadb1fb89ff4d
 [package]
 name = "kreuzberg-swift"
-version = "5.0.0-rc.23"
+version = "5.0.0-rc.24"
 edition = "2024"
 license = "Elastic-2.0"
 
@@ -77,7 +77,7 @@ swift-bridge = "0.1.59"
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros"] }
 
 [target.'cfg(not(any(target_os = "ios", target_os = "android", target_os = "windows")))'.dependencies]
-kreuzberg = { version = "5.0.0-rc.23", path = "../../../crates/kreuzberg", features = [
+kreuzberg = { version = "5.0.0-rc.24", path = "../../../crates/kreuzberg", features = [
     "pdf",
     "excel",
     "office",
@@ -125,13 +125,13 @@ kreuzberg = { version = "5.0.0-rc.23", path = "../../../crates/kreuzberg", featu
 ] }
 
 [target.'cfg(target_os = "ios")'.dependencies]
-kreuzberg = { version = "5.0.0-rc.23", path = "../../../crates/kreuzberg", features = ["android-target"], default-features = false }
+kreuzberg = { version = "5.0.0-rc.24", path = "../../../crates/kreuzberg", features = ["android-target"], default-features = false }
 
 [target.'cfg(target_os = "android")'.dependencies]
-kreuzberg = { version = "5.0.0-rc.23", path = "../../../crates/kreuzberg", features = ["android-target"], default-features = false }
+kreuzberg = { version = "5.0.0-rc.24", path = "../../../crates/kreuzberg", features = ["android-target"], default-features = false }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-kreuzberg = { version = "5.0.0-rc.23", path = "../../../crates/kreuzberg", features = ["windows-target"], default-features = false }
+kreuzberg = { version = "5.0.0-rc.24", path = "../../../crates/kreuzberg", features = ["windows-target"], default-features = false }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

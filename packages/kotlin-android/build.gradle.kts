@@ -151,7 +151,7 @@ mavenPublishing {
     coordinates(
         groupId = "dev.kreuzberg",
         artifactId = "kreuzberg-android",
-        version = "5.0.0-rc.23",
+        version = "5.0.0-rc.24",
     )
 
     pom {
