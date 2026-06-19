@@ -610,7 +610,7 @@ pub fn derive_extraction_result(
     //    over reconstructing from element-level page numbers.
     let raw_pages = doc.prebuilt_pages.take().or_else(|| build_pages(&doc));
     // Apply the requested output format to per-page content. Must run while doc still
-    // owns its elements (before derive_document_structure_inner moves them). Issue #1094.
+    // owns its elements (before derive_document_structure_inner moves them).
     let pages = apply_page_content_format(raw_pages, &doc, &output_format);
     // Prefer pre-built OCR elements stored directly by the extractor (e.g. image OCR
     // via inject_ocr_elements_from_vec was replaced by prebuilt_ocr_elements to avoid
@@ -807,8 +807,7 @@ fn apply_page_content_format(
 
     // Build a map from page number → element indices. Elements with page == None
     // are not page-tracked and belong to no specific page.
-    let mut elements_by_page: std::collections::BTreeMap<u32, Vec<usize>> =
-        std::collections::BTreeMap::new();
+    let mut elements_by_page: std::collections::BTreeMap<u32, Vec<usize>> = std::collections::BTreeMap::new();
     for (idx, elem) in doc.elements.iter().enumerate() {
         if let Some(page_num) = elem.page {
             elements_by_page.entry(page_num).or_default().push(idx);
@@ -838,13 +837,13 @@ fn apply_page_content_format(
             let mut table_remap: ahash::AHashMap<u32, u32> = ahash::AHashMap::new();
             let mut sub_tables: Vec<Table> = Vec::new();
             for &i in elem_indices {
-                if let ElementKind::Table { table_index } = doc.elements[i].kind {
-                    if !table_remap.contains_key(&table_index) {
-                        let new_idx = sub_tables.len() as u32;
-                        table_remap.insert(table_index, new_idx);
-                        if let Some(t) = doc.tables.get(table_index as usize) {
-                            sub_tables.push(t.clone());
-                        }
+                if let ElementKind::Table { table_index } = doc.elements[i].kind
+                    && !table_remap.contains_key(&table_index)
+                {
+                    let new_idx = sub_tables.len() as u32;
+                    table_remap.insert(table_index, new_idx);
+                    if let Some(t) = doc.tables.get(table_index as usize) {
+                        sub_tables.push(t.clone());
                     }
                 }
             }
@@ -853,10 +852,10 @@ fn apply_page_content_format(
                 .iter()
                 .map(|&i| {
                     let mut elem = doc.elements[i].clone();
-                    if let ElementKind::Table { ref mut table_index } = elem.kind {
-                        if let Some(&new_idx) = table_remap.get(table_index) {
-                            *table_index = new_idx;
-                        }
+                    if let ElementKind::Table { ref mut table_index } = elem.kind
+                        && let Some(&new_idx) = table_remap.get(table_index)
+                    {
+                        *table_index = new_idx;
                     }
                     elem
                 })
@@ -1200,10 +1199,6 @@ mod tests {
         assert_eq!(result.extraction_method, None);
     }
 
-    // -----------------------------------------------------------------------
-    // Issue #1094: page content must respect output_format
-    // -----------------------------------------------------------------------
-
     /// Pages with a heading element must render `# Heading` when output_format=Markdown.
     ///
     /// Before the fix, `PageContent.content` always contained raw element text ("Introduction"),
@@ -1441,8 +1436,7 @@ mod tests {
         let pages = result.pages.expect("pages must be populated");
         assert_eq!(pages.len(), 1);
         assert_eq!(
-            pages[0].content,
-            "Native PDF page content.",
+            pages[0].content, "Native PDF page content.",
             "prebuilt content must not be overwritten when no elements are page-tagged, got: {:?}",
             pages[0].content,
         );
@@ -1502,8 +1496,7 @@ mod tests {
 
         let p2 = pages.iter().find(|p| p.page_number == 2).expect("page 2");
         assert_eq!(
-            p2.content,
-            "Page 2 native content.",
+            p2.content, "Page 2 native content.",
             "page with no matching elements must keep its original content, got: {:?}",
             p2.content,
         );
@@ -1546,7 +1539,9 @@ mod tests {
             result.content,
         );
         // Per-page content is NOT JSON — it stays as raw extracted text.
-        let pages = result.pages.expect("pages must be populated when elements have page numbers");
+        let pages = result
+            .pages
+            .expect("pages must be populated when elements have page numbers");
         assert_eq!(pages.len(), 1);
         assert!(
             !pages[0].content.starts_with('{'),
