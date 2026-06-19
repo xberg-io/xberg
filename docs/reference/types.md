@@ -54,6 +54,7 @@ This is the main result type returned by all extraction functions.
 | `llm_usage` | `Vec<LlmUsage>` | `vec!\[\]` | LLM token usage and cost data for all LLM calls made during this extraction. Contains one entry per LLM call. Multiple entries are produced when VLM OCR, structured extraction, or LLM embeddings run during the same extraction. `None` when no LLM was used. |
 | `entities` | `Vec<Entity>` | `vec!\[\]` | Named entities detected in `content` by the NER post-processor. `None` when no NER backend is configured. Populated by the gline-rs ONNX backend or the LLM-driven backend (see `crates/kreuzberg/src/text/ner/`). |
 | `summary` | `Option<DocumentSummary>` | `Default::default()` | Summary of `content` produced by the summarisation post-processor. `None` when summarisation is not configured. Populated by the TextRank extractive backend (deterministic, no external service) or by the liter-llm-driven abstractive backend. |
+| `extraction_confidence` | `Option<ExtractionConfidence>` | `Default::default()` | Confidence score computed by the heuristics pipeline. Populated when the `heuristics` feature is enabled and confidence scoring has been performed.  Combines text-coverage, OCR aggregate confidence, and schema-compliance into a single `\[0, 1\]` value. `None` when confidence scoring is not configured or the feature is absent. |
 | `translation` | `Option<Translation>` | `Default::default()` | Translation of `content` produced by the translation post-processor. `None` when translation is not configured. |
 | `page_classifications` | `Vec<PageClassification>` | `vec!\[\]` | Per-page classifications produced by the page-classification post-processor. `None` when classification is not configured. |
 | `redaction_report` | `Option<RedactionReport>` | `Default::default()` | Audit report of redactions applied by the redaction post-processor. The redaction processor rewrites `content`, `formatted_content`, every chunk's text, and the textual fields of `entities` / `summary` / `translation` / `page_classifications` in place. This report describes what was found and how it was replaced. `None` when redaction is not configured. |
@@ -234,7 +235,7 @@ Configuration for the VLM captioning post-processor.
 |-------|------|---------|-------------|
 | `llm` | `LlmConfig` | — | LLM configuration used for the VLM call. |
 | `prompt` | `Option<String>` | `None` | Optional custom caption prompt. `None` uses the default `RegionKind::Caption` prompt that ships with `crate::llm::region_extractor`. |
-| `min_image_area` | `u32` | `/* serde(default) */` | Skip images whose `width * height` is below this threshold (in pixels). Default `1_000` filters out icons and decorations. |
+| `min_image_area` | `u32` | `serde(default = "default_min_image_area")` | Skip images whose `width * height` is below this threshold (in pixels). Default `1_000` filters out icons and decorations. |
 
 ---
 
@@ -509,7 +510,7 @@ returning structured data that conforms to the schema.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `schema` | `serde_json::Value` | — | JSON Schema defining the desired output structure. |
-| `schema_name` | `String` | `/* serde(default) */` | Schema name passed to the LLM's structured output mode. |
+| `schema_name` | `String` | `serde(default = "default_schema_name")` | Schema name passed to the LLM's structured output mode. |
 | `schema_description` | `Option<String>` | `/* serde(default) */` | Optional schema description for the LLM. |
 | `strict` | `bool` | `/* serde(default) */` | Enable strict mode — output must exactly match the schema. |
 | `prompt` | `Option<String>` | `/* serde(default) */` | Custom Jinja2 extraction prompt template. When `None`, a default template is used. Available template variables: - `{{ content }}` — The extracted document text. - `{{ schema }}` — The JSON schema as a formatted string. - `{{ schema_name }}` — The schema name. - `{{ schema_description }}` — The schema description (may be empty). |
@@ -1989,8 +1990,8 @@ Individual grid cell with position and span metadata.
 | `content` | `String` | — | Cell text content. |
 | `row` | `u32` | — | Zero-indexed row position. |
 | `col` | `u32` | — | Zero-indexed column position. |
-| `row_span` | `u32` | `/* serde(default) */` | Number of rows this cell spans. |
-| `col_span` | `u32` | `/* serde(default) */` | Number of columns this cell spans. |
+| `row_span` | `u32` | `serde(default = "default_span")` | Number of rows this cell spans. |
+| `col_span` | `u32` | `serde(default = "default_span")` | Number of columns this cell spans. |
 | `is_header` | `bool` | `/* serde(default) */` | Whether this is a header cell. |
 | `bbox` | `Option<BoundingBox>` | `None` | Bounding box for this cell (if available). |
 
@@ -2105,7 +2106,7 @@ A single backend stage in the OCR pipeline.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `backend` | `String` | — | Backend name: "tesseract", "paddleocr", "easyocr", or a custom registered name. |
-| `priority` | `u32` | `/* serde(default) */` | Priority weight (higher = tried first). Stages are sorted by priority descending. |
+| `priority` | `u32` | `serde(default = "default_priority")` | Priority weight (higher = tried first). Stages are sorted by priority descending. |
 | `language` | `Option<String>` | `/* serde(default) */` | Language override for this stage (None = use parent OcrConfig.language). |
 | `tesseract_config` | `Option<TesseractConfig>` | `/* serde(default) */` | Tesseract-specific config override for this stage. |
 | `paddle_ocr_config` | `Option<serde_json::Value>` | `/* serde(default) */` | PaddleOCR-specific config for this stage. |
@@ -2126,7 +2127,7 @@ metacharacters themselves). Case-insensitive by default — set
 |-------|------|---------|-------------|
 | `label` | `String` | — | Custom category label surfaced in `RedactionFinding::category`. |
 | `value` | `String` | — | Literal value to match. Regex metacharacters are escaped automatically. |
-| `case_sensitive` | `bool` | `/* serde(default) */` | When `true`, match the value as-is; otherwise match ASCII-case-insensitively. |
+| `case_sensitive` | `bool` | `serde(default = "default_case_sensitive")` | When `true`, match the value as-is; otherwise match ASCII-case-insensitively. |
 
 ---
 
@@ -2142,7 +2143,7 @@ sensitivity is encoded in the pattern via the `(?i)` inline flag when
 |-------|------|---------|-------------|
 | `label` | `String` | — | Custom category label surfaced in `RedactionFinding::category`. |
 | `pattern` | `String` | — | Regex pattern (Rust `regex` crate dialect — no look-around). |
-| `case_sensitive` | `bool` | `/* serde(default) */` | When `true`, match case-sensitively; otherwise prepend `(?i)` to the regex. |
+| `case_sensitive` | `bool` | `serde(default = "default_case_sensitive")` | When `true`, match case-sensitively; otherwise prepend `(?i)` to the regex. |
 
 ---
 

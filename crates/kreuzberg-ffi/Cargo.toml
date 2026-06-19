@@ -24,7 +24,7 @@ ignored = ["ahash", "serde_json", "tokio", "async-trait"]
 crate-type = ["cdylib", "staticlib", "rlib"]
 
 [features]
-default = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "reranker", "reranker-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "api-types", "mcp", "liter-llm", "quality", "svg", "transcription", "transcription-types", "classification", "captioning", "ner-onnx", "ner-llm", "diff", "redaction"]
+default = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "reranker", "reranker-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "api-types", "mcp", "liter-llm", "quality", "svg", "transcription", "transcription-types", "classification", "captioning", "ner-onnx", "ner-llm", "diff", "redaction", "enrichment", "heuristics", "presets", "structured"]
 full = ["kreuzberg/full"]
 pdf = ["kreuzberg/pdf"]
 ocr = ["kreuzberg/ocr"]
@@ -63,7 +63,11 @@ ner-onnx = ["kreuzberg/ner-onnx"]
 ner-llm = ["kreuzberg/ner-llm"]
 diff = ["kreuzberg/diff"]
 redaction = ["kreuzberg/redaction"]
-android-target = ["kreuzberg/android-target", "api", "api-types", "archives", "auto-rotate-types", "captioning", "chunking", "classification", "diff", "email", "embedding-presets", "html", "keywords-rake", "keywords-yake", "language-detection", "layout-types", "liter-llm", "mcp", "ner-llm", "ocr", "office", "paddle-ocr-types", "pdf", "quality", "redaction", "reranker-presets", "stopwords", "svg", "tokio-runtime", "transcription-types", "tree-sitter"]
+enrichment = ["kreuzberg/enrichment"]
+heuristics = ["kreuzberg/heuristics"]
+presets = ["kreuzberg/presets"]
+structured = ["kreuzberg/structured"]
+android-target = ["kreuzberg/android-target", "api", "api-types", "archives", "auto-rotate-types", "captioning", "chunking", "classification", "diff", "email", "embedding-presets", "enrichment", "heuristics", "html", "keywords-rake", "keywords-yake", "language-detection", "layout-types", "liter-llm", "mcp", "ner-llm", "ocr", "office", "paddle-ocr-types", "pdf", "presets", "quality", "redaction", "reranker-presets", "stopwords", "structured", "svg", "tokio-runtime", "transcription-types", "tree-sitter"]
 
 [dependencies]
 ahash = "0.8"
@@ -72,7 +76,7 @@ serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios", target_os = "windows")))'.dependencies]
-kreuzberg = { path = "../kreuzberg", version = "5.0.0-rc.24", features = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "reranker", "reranker-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "api-types", "mcp", "liter-llm", "quality", "svg", "transcription", "transcription-types", "classification", "captioning", "ner-onnx", "ner-llm", "diff", "redaction"] }
+kreuzberg = { path = "../kreuzberg", version = "5.0.0-rc.24", features = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "reranker", "reranker-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "api-types", "mcp", "liter-llm", "quality", "svg", "transcription", "transcription-types", "classification", "captioning", "ner-onnx", "ner-llm", "diff", "redaction", "enrichment", "heuristics", "presets", "structured"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 kreuzberg = { path = "../kreuzberg", version = "5.0.0-rc.24", features = ["android-target"] }

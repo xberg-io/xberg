@@ -112,7 +112,7 @@ pub mod heuristics;
 pub use heuristics::{
     BoundaryReason, ChunkInfo, ChunkPlan, ChunkingDecision, ChunkingReason, ConfidenceSignals, ConfidenceWeights,
     DocumentBoundary, DocumentMetadata, HeuristicsConfig, HeuristicsError, MultidocInput, MultidocThresholds,
-    NoChunkingReason, PageRange, PageSignals, StructuredCallMode, StructuredInput, StructuredThresholds,
+    NoChunkingReason, PageRange, PageSignals, SchemaCompliance, StructuredCallMode, StructuredInput, StructuredThresholds,
     UserChunkConfig, analyze_document, analyze_with_user_chunks, boundaries_from_extraction_result,
     calculate_chunk_plan, calculate_plan_from_overrides, check_format_limits, choose_call_mode, detect_boundaries,
     score_confidence,
@@ -230,11 +230,12 @@ pub use presets::{
 #[cfg(feature = "quality")]
 pub use text::{ReductionLevel, TokenReductionConfig};
 
-#[cfg(all(
-    feature = "ner-llm",
-    not(target_arch = "wasm32"),
-    not(all(target_os = "android", target_arch = "x86_64"))
-))]
+// `ner-llm` is liter-llm (HTTP) + pure-Rust `ner`; it has no ORT dependency, so it
+// is enabled on the x86_64 Android emulator via `android-target`. The real
+// `LlmBackend` must therefore be re-exported wherever the feature is on — gating it
+// out for android x86_64 left the symbol undefined (the `not(feature = "ner-llm")`
+// stub below is also excluded when the feature is on), breaking the Dart FRB dispatch.
+#[cfg(all(feature = "ner-llm", not(target_arch = "wasm32")))]
 pub use text::ner::llm::LlmBackend;
 
 // Re-export the NerBackend trait at crate root so consumers (e.g. the alef-generated

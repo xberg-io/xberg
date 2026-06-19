@@ -666,6 +666,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ExcelMetadata dco_decode_box_autoadd_excel_metadata(dynamic raw);
 
   @protected
+  ExtractionConfidence dco_decode_box_autoadd_extraction_confidence(
+    dynamic raw,
+  );
+
+  @protected
   ExtractionConfig dco_decode_box_autoadd_extraction_config(dynamic raw);
 
   @protected
@@ -1650,6 +1655,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ErrorMetadata? dco_decode_opt_box_autoadd_error_metadata(dynamic raw);
+
+  @protected
+  ExtractionConfidence? dco_decode_opt_box_autoadd_extraction_confidence(
+    dynamic raw,
+  );
 
   @protected
   ExtractionMethod? dco_decode_opt_box_autoadd_extraction_method(dynamic raw);
@@ -2753,6 +2763,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ExcelMetadata sse_decode_box_autoadd_excel_metadata(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ExtractionConfidence sse_decode_box_autoadd_extraction_confidence(
     SseDeserializer deserializer,
   );
 
@@ -3983,6 +3998,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ErrorMetadata? sse_decode_opt_box_autoadd_error_metadata(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ExtractionConfidence? sse_decode_opt_box_autoadd_extraction_confidence(
     SseDeserializer deserializer,
   );
 
@@ -5472,6 +5492,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_excel_metadata(
     ExcelMetadata self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_extraction_confidence(
+    ExtractionConfidence self,
     SseSerializer serializer,
   );
 
@@ -7074,6 +7100,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_error_metadata(
     ErrorMetadata? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_extraction_confidence(
+    ExtractionConfidence? self,
     SseSerializer serializer,
   );
 

@@ -42,7 +42,6 @@ permissions:
 jobs:
   prepare:
     name: Prepare metadata
-    if: ${{ github.event_name != 'release' || !github.event.release.prerelease }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -55,6 +54,7 @@ jobs:
       checkout_ref: ${{ steps.meta.outputs.checkout_ref }}
       target_sha: ${{ steps.meta.outputs.target_sha }}
       is_tag: ${{ steps.meta.outputs.is_tag }}
+      is_prerelease: ${{ steps.meta.outputs.is_prerelease }}
       release_docker: ${{ steps.meta.outputs.release_docker }}
     steps:
       - name: Checkout code (default)
@@ -228,7 +228,7 @@ jobs:
           images: ${{ matrix.image }}
           tags: |
             type=raw,value=${{ needs.prepare.outputs.version }}${{ matrix.tag_suffix }}
-            type=raw,value=${{ matrix.extra_tag }}
+            type=raw,value=${{ matrix.extra_tag }},enable=${{ needs.prepare.outputs.is_prerelease != 'true' }}
 
       - name: Build and push image
         if: ${{ needs.prepare.outputs.dry_run != 'true' && (needs.prepare.outputs.force_republish == 'true' || (matrix.variant == 'core' && needs.check-docker.outputs.core_exists != 'true') || (matrix.variant == 'full' && needs.check-docker.outputs.full_exists != 'true') || (matrix.variant == 'cli' && needs.check-docker.outputs.cli_exists != 'true')) }}

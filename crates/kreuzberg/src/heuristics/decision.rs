@@ -24,7 +24,7 @@ pub enum ChunkingDecision {
 }
 
 /// Reason for not chunking a document.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub enum NoChunkingReason {
     /// File is below size threshold.
     SmallFile {
@@ -53,6 +53,7 @@ pub enum NoChunkingReason {
         mime_type: String,
     },
     /// Chunking is disabled by configuration.
+    #[default]
     ChunkingDisabled,
     /// Force OCR is disabled and text extraction is fast.
     FastTextExtraction,
@@ -104,6 +105,23 @@ pub struct ChunkPlan {
     pub use_disk_processing: bool,
     /// Reason for chunking.
     pub reason: ChunkingReason,
+}
+
+impl Default for ChunkPlan {
+    /// An empty plan (no chunks). The `reason` is a placeholder since an empty plan
+    /// has no chunking rationale; callers always overwrite it when a real plan is built.
+    fn default() -> Self {
+        Self {
+            total_chunks: 0,
+            chunks: Vec::new(),
+            total_estimated_time_ms: 0,
+            use_disk_processing: false,
+            reason: ChunkingReason::LargeFile {
+                size_bytes: 0,
+                threshold_bytes: 0,
+            },
+        }
+    }
 }
 
 /// Information about a single chunk.

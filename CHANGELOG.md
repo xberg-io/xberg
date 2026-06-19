@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **alef**: bump `alef_version` to 0.25.49 and regenerate all bindings. Picks up the FFI `Option<&[u8]>` optional-bytes param conversion (`analyze_document` documentBytes), trait-flagged method delegation on `Arc<Mutex<T>>` opaques (`Registry::get`), and the pyo3/napi data-enum `Default` gating.
+- **alef.toml**: add `enrichment`, `heuristics`, `presets`, and `structured` to the global `features` list so the FFI and Python binding crates compile the newly-wired heuristics/presets/structured/enrichment surface (resolves ~214 `unexpected cfg condition value` errors).
+
+### Fixed
+
+- **heuristics/diff**: derive `Default` on `ExtractionDiff`, `EmbeddedChanges`, and `NoChunkingReason`, and add an empty-plan `Default` for `ChunkPlan`. The generated Python (`#[serde(skip)]` DTO fields) and Node (data-enum binding→core conversion) bindings require these payload types to be `Default`-constructible; without them the binding crates failed to compile (`EmbeddedChanges`/`ExtractionDiff`/`NoChunkingReason`/`ChunkPlan: Default` not satisfied).
+- **ci(publish)**: add `kreuzberg-candle-ocr` to the crates.io publish set and its existence gate. It is a new workspace member and path-dependency of `kreuzberg`, so `cargo publish kreuzberg` fails unless it is published first.
+
 ## [5.0.0-rc.24] - 2026-06-19
 
 ### Changed

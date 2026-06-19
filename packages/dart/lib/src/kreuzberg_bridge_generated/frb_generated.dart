@@ -13395,6 +13395,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ExtractionConfidence dco_decode_box_autoadd_extraction_confidence(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_extraction_confidence(raw);
+  }
+
+  @protected
   ExtractionConfig dco_decode_box_autoadd_extraction_config(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_extraction_config(raw);
@@ -14982,8 +14990,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ExtractionResult dco_decode_extraction_result(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 31)
-      throw Exception('unexpected arr length: expect 31 but see ${arr.length}');
+    if (arr.length != 32)
+      throw Exception('unexpected arr length: expect 32 but see ${arr.length}');
     return ExtractionResult(
       content: dco_decode_String(arr[0]),
       mimeType: dco_decode_String(arr[1]),
@@ -15010,12 +15018,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       llmUsage: dco_decode_opt_list_llm_usage(arr[22]),
       entities: dco_decode_opt_list_entity(arr[23]),
       summary: dco_decode_opt_box_autoadd_document_summary(arr[24]),
-      translation: dco_decode_opt_box_autoadd_translation(arr[25]),
-      pageClassifications: dco_decode_opt_list_page_classification(arr[26]),
-      redactionReport: dco_decode_opt_box_autoadd_redaction_report(arr[27]),
-      formulas: dco_decode_list_formula(arr[28]),
-      formFields: dco_decode_list_pdf_form_field(arr[29]),
-      formattedContent: dco_decode_opt_String(arr[30]),
+      extractionConfidence: dco_decode_opt_box_autoadd_extraction_confidence(
+        arr[25],
+      ),
+      translation: dco_decode_opt_box_autoadd_translation(arr[26]),
+      pageClassifications: dco_decode_opt_list_page_classification(arr[27]),
+      redactionReport: dco_decode_opt_box_autoadd_redaction_report(arr[28]),
+      formulas: dco_decode_list_formula(arr[29]),
+      formFields: dco_decode_list_pdf_form_field(arr[30]),
+      formattedContent: dco_decode_opt_String(arr[31]),
     );
   }
 
@@ -16848,6 +16859,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ErrorMetadata? dco_decode_opt_box_autoadd_error_metadata(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_error_metadata(raw);
+  }
+
+  @protected
+  ExtractionConfidence? dco_decode_opt_box_autoadd_extraction_confidence(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_extraction_confidence(raw);
   }
 
   @protected
@@ -19891,6 +19912,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ExtractionConfidence sse_decode_box_autoadd_extraction_confidence(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_extraction_confidence(deserializer));
+  }
+
+  @protected
   ExtractionConfig sse_decode_box_autoadd_extraction_config(
     SseDeserializer deserializer,
   ) {
@@ -21824,6 +21853,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_llmUsage = sse_decode_opt_list_llm_usage(deserializer);
     var var_entities = sse_decode_opt_list_entity(deserializer);
     var var_summary = sse_decode_opt_box_autoadd_document_summary(deserializer);
+    var var_extractionConfidence =
+        sse_decode_opt_box_autoadd_extraction_confidence(deserializer);
     var var_translation = sse_decode_opt_box_autoadd_translation(deserializer);
     var var_pageClassifications = sse_decode_opt_list_page_classification(
       deserializer,
@@ -21860,6 +21891,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       llmUsage: var_llmUsage,
       entities: var_entities,
       summary: var_summary,
+      extractionConfidence: var_extractionConfidence,
       translation: var_translation,
       pageClassifications: var_pageClassifications,
       redactionReport: var_redactionReport,
@@ -24580,6 +24612,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_error_metadata(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  ExtractionConfidence? sse_decode_opt_box_autoadd_extraction_confidence(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_extraction_confidence(deserializer));
     } else {
       return null;
     }
@@ -28621,6 +28666,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_extraction_confidence(
+    ExtractionConfidence self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_extraction_confidence(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_extraction_config(
     ExtractionConfig self,
     SseSerializer serializer,
@@ -30261,6 +30315,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_list_llm_usage(self.llmUsage, serializer);
     sse_encode_opt_list_entity(self.entities, serializer);
     sse_encode_opt_box_autoadd_document_summary(self.summary, serializer);
+    sse_encode_opt_box_autoadd_extraction_confidence(
+      self.extractionConfidence,
+      serializer,
+    );
     sse_encode_opt_box_autoadd_translation(self.translation, serializer);
     sse_encode_opt_list_page_classification(
       self.pageClassifications,
@@ -32532,6 +32590,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_error_metadata(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_extraction_confidence(
+    ExtractionConfidence? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_extraction_confidence(self, serializer);
     }
   }
 

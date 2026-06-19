@@ -9764,6 +9764,7 @@ const _: fn() = || {
         let _: Option<Vec<crate::LlmUsage>> = ExtractionResult.llm_usage;
         let _: Option<Vec<crate::Entity>> = ExtractionResult.entities;
         let _: Option<crate::DocumentSummary> = ExtractionResult.summary;
+        let _: Option<crate::ExtractionConfidence> = ExtractionResult.extraction_confidence;
         let _: Option<crate::Translation> = ExtractionResult.translation;
         let _: Option<Vec<crate::PageClassification>> = ExtractionResult.page_classifications;
         let _: Option<crate::RedactionReport> = ExtractionResult.redaction_report;
@@ -13839,6 +13840,7 @@ impl SseDecode for crate::ExtractionResult {
         let mut var_llmUsage = <Option<Vec<crate::LlmUsage>>>::sse_decode(deserializer);
         let mut var_entities = <Option<Vec<crate::Entity>>>::sse_decode(deserializer);
         let mut var_summary = <Option<crate::DocumentSummary>>::sse_decode(deserializer);
+        let mut var_extractionConfidence = <Option<crate::ExtractionConfidence>>::sse_decode(deserializer);
         let mut var_translation = <Option<crate::Translation>>::sse_decode(deserializer);
         let mut var_pageClassifications = <Option<Vec<crate::PageClassification>>>::sse_decode(deserializer);
         let mut var_redactionReport = <Option<crate::RedactionReport>>::sse_decode(deserializer);
@@ -13871,6 +13873,7 @@ impl SseDecode for crate::ExtractionResult {
             llm_usage: var_llmUsage,
             entities: var_entities,
             summary: var_summary,
+            extraction_confidence: var_extractionConfidence,
             translation: var_translation,
             page_classifications: var_pageClassifications,
             redaction_report: var_redactionReport,
@@ -16693,6 +16696,17 @@ impl SseDecode for Option<crate::ErrorMetadata> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<crate::ErrorMetadata>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::ExtractionConfidence> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::ExtractionConfidence>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -21791,6 +21805,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::ExtractionResult> {
             self.0.llm_usage.into_into_dart().into_dart(),
             self.0.entities.into_into_dart().into_dart(),
             self.0.summary.into_into_dart().into_dart(),
+            self.0.extraction_confidence.into_into_dart().into_dart(),
             self.0.translation.into_into_dart().into_dart(),
             self.0.page_classifications.into_into_dart().into_dart(),
             self.0.redaction_report.into_into_dart().into_dart(),
@@ -26965,6 +26980,7 @@ impl SseEncode for crate::ExtractionResult {
         <Option<Vec<crate::LlmUsage>>>::sse_encode(self.llm_usage, serializer);
         <Option<Vec<crate::Entity>>>::sse_encode(self.entities, serializer);
         <Option<crate::DocumentSummary>>::sse_encode(self.summary, serializer);
+        <Option<crate::ExtractionConfidence>>::sse_encode(self.extraction_confidence, serializer);
         <Option<crate::Translation>>::sse_encode(self.translation, serializer);
         <Option<Vec<crate::PageClassification>>>::sse_encode(self.page_classifications, serializer);
         <Option<crate::RedactionReport>>::sse_encode(self.redaction_report, serializer);
@@ -29242,6 +29258,16 @@ impl SseEncode for Option<crate::ErrorMetadata> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::ErrorMetadata>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::ExtractionConfidence> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::ExtractionConfidence>::sse_encode(value, serializer);
         }
     }
 }

@@ -4036,7 +4036,6 @@ ExtractionConfidence <- new.env(parent = emptyenv())
 HeuristicsConfig <- new.env(parent = emptyenv())
 HeuristicsConfig$default <- function() .Call("wrap__HeuristicsConfig__default", PACKAGE = "kreuzberg")
 HeuristicsConfig$validate <- function(self) .Call("wrap__HeuristicsConfig__validate", self, PACKAGE = "kreuzberg")
-HeuristicsConfig$test_config <- function() .Call("wrap__HeuristicsConfig__test_config", PACKAGE = "kreuzberg")
 HeuristicsConfig$from_json <- function(json) {
   .Call("wrap__HeuristicsConfig__from_json", json, PACKAGE = "kreuzberg")
 }

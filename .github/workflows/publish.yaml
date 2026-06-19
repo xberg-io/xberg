@@ -258,6 +258,7 @@ jobs:
       kreuzberg_exists: ${{ steps.check.outputs.exists }}
       tesseract_exists: ${{ steps.check.outputs.tesseract_exists }}
       paddle_exists: ${{ steps.check.outputs.paddle_exists }}
+      candle_exists: ${{ steps.check.outputs.candle_exists }}
       cli_exists: ${{ steps.check.outputs.cli_exists }}
       all_exist: ${{ steps.derive.outputs.all_exist }}
     steps:
@@ -270,6 +271,7 @@ jobs:
           extra-packages: |
             tesseract_exists=kreuzberg-tesseract
             paddle_exists=kreuzberg-paddle-ocr
+            candle_exists=kreuzberg-candle-ocr
             cli_exists=kreuzberg-cli
 
       - id: derive
@@ -279,6 +281,7 @@ jobs:
           if [[ "${{ steps.check.outputs.exists }}" == "true" \
             && "${{ steps.check.outputs.tesseract_exists }}" == "true" \
             && "${{ steps.check.outputs.paddle_exists }}" == "true" \
+            && "${{ steps.check.outputs.candle_exists }}" == "true" \
             && "${{ steps.check.outputs.cli_exists }}" == "true" ]]; then
             echo "all_exist=true" >> "$GITHUB_OUTPUT"
           else
@@ -1754,7 +1757,7 @@ jobs:
 
       - uses: kreuzberg-dev/actions/publish-crates@v1
         with:
-          crates: kreuzberg-libheif kreuzberg-tesseract kreuzberg-paddle-ocr kreuzberg kreuzberg-cli
+          crates: kreuzberg-libheif kreuzberg-tesseract kreuzberg-paddle-ocr kreuzberg-candle-ocr kreuzberg kreuzberg-cli
           version: ${{ needs.prepare.outputs.version }}
           dry-run: ${{ needs.prepare.outputs.dry_run }}
 

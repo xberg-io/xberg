@@ -8103,6 +8103,13 @@ char *kreuzberg_extraction_result_entities(const KREUZBERGExtractionResult *ptr)
 KREUZBERGDocumentSummary *kreuzberg_extraction_result_summary(const KREUZBERGExtractionResult *ptr);
 
 /**
+ * Get the `extraction_confidence` field from a `ExtractionResult`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+KREUZBERGExtractionConfidence *kreuzberg_extraction_result_extraction_confidence(const KREUZBERGExtractionResult *ptr);
+
+/**
  * Get the `translation` field from a `ExtractionResult`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
@@ -14002,13 +14009,6 @@ KREUZBERGHeuristicsConfig *kreuzberg_heuristics_config_default(void);
  * freed with the appropriate free function.
  */
 int32_t kreuzberg_heuristics_config_validate(const KREUZBERGHeuristicsConfig *this_);
-
-/**
- * Create a configuration suitable for unit tests (smaller thresholds).
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
- * freed with the appropriate free function.
- */
-KREUZBERGHeuristicsConfig *kreuzberg_heuristics_config_test_config(void);
 
 /**
  * Create a `ChunkPlan` from a JSON string. Returns null on failure.

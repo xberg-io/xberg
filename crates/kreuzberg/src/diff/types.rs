@@ -42,7 +42,7 @@ impl Default for DiffOptions {
 }
 
 /// The complete diff between two `ExtractionResult` values.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
 pub struct ExtractionDiff {
     /// Unified-diff hunks for the `content` field.
@@ -103,7 +103,7 @@ pub struct TableDiff {
 }
 
 /// Changes to embedded archive children between two results.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
 pub struct EmbeddedChanges {
     /// Children present in `b` but not in `a` (matched by `path`).

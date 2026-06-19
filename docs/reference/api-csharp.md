@@ -2069,7 +2069,7 @@ Same as `extract_structured_json`.
 
 **Returns:**
 
-JSON-serialised `List<``StructuredOutput``>` (a JSON array) on success.
+JSON-serialised `List<StructuredOutput>` (a JSON array) on success.
 
 **Errors:**
 
@@ -2781,7 +2781,7 @@ Configuration for the VLM captioning post-processor.
 |-------|------|---------|-------------|
 | `Llm` | `LlmConfig` | — | LLM configuration used for the VLM call. |
 | `Prompt` | `string?` | `null` | Optional custom caption prompt. `null` uses the default `RegionKind.Caption` prompt that ships with `crate.llm.region_extractor`. |
-| `MinImageArea` | `uint` | `/* serde(default) */` | Skip images whose `width * height` is below this threshold (in pixels). Default `1_000` filters out icons and decorations. |
+| `MinImageArea` | `uint` | `serde(default = "default_min_image_area")` | Skip images whose `width * height` is below this threshold (in pixels). Default `1_000` filters out icons and decorations. |
 
 ---
 
@@ -4395,6 +4395,7 @@ This is the main result type returned by all extraction functions.
 | `LlmUsage` | `List<LlmUsage>?` | `new List<LlmUsage>()` | LLM token usage and cost data for all LLM calls made during this extraction. Contains one entry per LLM call. Multiple entries are produced when VLM OCR, structured extraction, or LLM embeddings run during the same extraction. `null` when no LLM was used. |
 | `Entities` | `List<Entity>?` | `new List<Entity>()` | Named entities detected in `content` by the NER post-processor. `null` when no NER backend is configured. Populated by the gline-rs ONNX backend or the LLM-driven backend (see `crates/kreuzberg/src/text/ner/`). |
 | `Summary` | `DocumentSummary?` | `null` | Summary of `content` produced by the summarisation post-processor. `null` when summarisation is not configured. Populated by the TextRank extractive backend (deterministic, no external service) or by the liter-llm-driven abstractive backend. |
+| `ExtractionConfidence` | `ExtractionConfidence?` | `null` | Confidence score computed by the heuristics pipeline. Populated when the `heuristics` feature is enabled and confidence scoring has been performed.  Combines text-coverage, OCR aggregate confidence, and schema-compliance into a single `\[0, 1\]` value. `null` when confidence scoring is not configured or the feature is absent. |
 | `Translation` | `Translation?` | `null` | Translation of `content` produced by the translation post-processor. `null` when translation is not configured. |
 | `PageClassifications` | `List<PageClassification>?` | `new List<PageClassification>()` | Per-page classifications produced by the page-classification post-processor. `null` when classification is not configured. |
 | `RedactionReport` | `RedactionReport?` | `null` | Audit report of redactions applied by the redaction post-processor. The redaction processor rewrites `content`, `formatted_content`, every chunk's text, and the textual fields of `entities` / `summary` / `translation` / `page_classifications` in place. This report describes what was found and how it was replaced. `null` when redaction is not configured. |
@@ -4544,8 +4545,8 @@ Individual grid cell with position and span metadata.
 | `Content` | `string` | — | Cell text content. |
 | `Row` | `uint` | — | Zero-indexed row position. |
 | `Col` | `uint` | — | Zero-indexed column position. |
-| `RowSpan` | `uint` | `/* serde(default) */` | Number of rows this cell spans. |
-| `ColSpan` | `uint` | `/* serde(default) */` | Number of columns this cell spans. |
+| `RowSpan` | `uint` | `serde(default = "default_span")` | Number of rows this cell spans. |
+| `ColSpan` | `uint` | `serde(default = "default_span")` | Number of columns this cell spans. |
 | `IsHeader` | `bool` | `/* serde(default) */` | Whether this is a header cell. |
 | `Bbox` | `BoundingBox?` | `null` | Bounding box for this cell (if available). |
 
@@ -4654,24 +4655,6 @@ instance.Validate();
 **Returns:** No return value.
 
 **Errors:** Throws `Error`.
-
-###### TestConfig()
-
-Create a configuration suitable for unit tests (smaller thresholds).
-
-**Signature:**
-
-```csharp
-public HeuristicsConfig TestConfig()
-```
-
-**Example:**
-
-```csharp
-var result = HeuristicsConfig.TestConfig();
-```
-
-**Returns:** `HeuristicsConfig`
 
 ---
 
@@ -5815,7 +5798,7 @@ A single backend stage in the OCR pipeline.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `Backend` | `string` | — | Backend name: "tesseract", "paddleocr", "easyocr", or a custom registered name. |
-| `Priority` | `uint` | `/* serde(default) */` | Priority weight (higher = tried first). Stages are sorted by priority descending. |
+| `Priority` | `uint` | `serde(default = "default_priority")` | Priority weight (higher = tried first). Stages are sorted by priority descending. |
 | `Language` | `string?` | `/* serde(default) */` | Language override for this stage (None = use parent OcrConfig.language). |
 | `TesseractConfig` | `TesseractConfig?` | `/* serde(default) */` | Tesseract-specific config override for this stage. |
 | `PaddleOcrConfig` | `object?` | `/* serde(default) */` | PaddleOCR-specific config for this stage. |
@@ -7297,7 +7280,7 @@ sensitivity is encoded in the pattern via the `(?i)` inline flag when
 |-------|------|---------|-------------|
 | `Label` | `string` | — | Custom category label surfaced in `RedactionFinding.category`. |
 | `Pattern` | `string` | — | Regex pattern (Rust `regex` crate dialect — no look-around). |
-| `CaseSensitive` | `bool` | `/* serde(default) */` | When `true`, match case-sensitively; otherwise prepend `(?i)` to the regex. |
+| `CaseSensitive` | `bool` | `serde(default = "default_case_sensitive")` | When `true`, match case-sensitively; otherwise prepend `(?i)` to the regex. |
 
 ##### Methods
 
@@ -7356,7 +7339,7 @@ metacharacters themselves). Case-insensitive by default — set
 |-------|------|---------|-------------|
 | `Label` | `string` | — | Custom category label surfaced in `RedactionFinding.category`. |
 | `Value` | `string` | — | Literal value to match. Regex metacharacters are escaped automatically. |
-| `CaseSensitive` | `bool` | `/* serde(default) */` | When `true`, match the value as-is; otherwise match ASCII-case-insensitively. |
+| `CaseSensitive` | `bool` | `serde(default = "default_case_sensitive")` | When `true`, match the value as-is; otherwise match ASCII-case-insensitively. |
 
 ##### Methods
 
@@ -8085,7 +8068,7 @@ returning structured data that conforms to the schema.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `Schema` | `object` | — | JSON Schema defining the desired output structure. |
-| `SchemaName` | `string` | `/* serde(default) */` | Schema name passed to the LLM's structured output mode. |
+| `SchemaName` | `string` | `serde(default = "default_schema_name")` | Schema name passed to the LLM's structured output mode. |
 | `SchemaDescription` | `string?` | `/* serde(default) */` | Optional schema description for the LLM. |
 | `Strict` | `bool` | `/* serde(default) */` | Enable strict mode — output must exactly match the schema. |
 | `Prompt` | `string?` | `/* serde(default) */` | Custom Jinja2 extraction prompt template. When `null`, a default template is used. Available template variables: - `{{ content }}` — The extracted document text. - `{{ schema }}` — The JSON schema as a formatted string. - `{{ schema_name }}` — The schema name. - `{{ schema_description }}` — The schema description (may be empty). |

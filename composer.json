@@ -1,47 +1,41 @@
 {
-	"name": "kreuzberg-dev/kreuzberg",
-	"description": "High-performance document intelligence library",
-	"license": "Elastic-2.0",
-	"type": "php-ext",
-	"require": {
-		"php": ">=8.2"
-	},
-	"require-dev": {
-		"phpstan/phpstan": "^2.1",
-		"friendsofphp/php-cs-fixer": "^3.95",
-		"phpunit/phpunit": "^13.1"
-	},
-	"autoload": {
-		"psr-4": {
-			"Kreuzberg\\": "packages/php/src/"
-		}
-	},
-	"scripts": {
-		"phpstan": "php -d detect_unicode=0 vendor/bin/phpstan --configuration=phpstan.neon --memory-limit=512M",
-		"format": "php vendor/bin/php-cs-fixer fix --quiet",
-		"format:check": "php vendor/bin/php-cs-fixer fix --dry-run --quiet",
-		"test": "php vendor/bin/phpunit",
-		"lint": "@phpstan",
-		"lint:fix": "php vendor/bin/php-cs-fixer fix --quiet && php -d detect_unicode=0 vendor/bin/phpstan --configuration=phpstan.neon --memory-limit=512M"
-	},
-	"php-ext": {
-		"extension-name": "kreuzberg",
-		"support-zts": true,
-		"support-nts": true,
-		"download-url-method": "pre-packaged-binary"
-	},
-	"keywords": [
-		"document",
-		"extraction",
-		"ocr",
-		"pdf",
-		"text"
-	],
-	"extra": {
-		"pie": {
-			"binary": {
-				"url-template": "https://github.com/kreuzberg-dev/kreuzberg/releases/download/{Version}/php_kreuzberg-{Version}_php{PhpVersion}-{Arch}-{OSLower}-{Libc}-{TSMode}.tgz"
-			}
-		}
-	}
+  "name": "kreuzberg-dev/kreuzberg",
+  "description": "High-performance document intelligence library",
+  "license": "Elastic-2.0",
+  "type": "php-ext",
+  "require": {
+    "php": ">=8.2"
+  },
+  "require-dev": {
+    "phpstan/phpstan": "^2.1",
+    "friendsofphp/php-cs-fixer": "^3.95",
+    "phpunit/phpunit": "^13.1"
+  },
+  "autoload": {
+    "psr-4": {
+      "Kreuzberg\\": "packages/php/src/"
+    }
+  },
+  "scripts": {
+    "phpstan": "php -d detect_unicode=0 vendor/bin/phpstan --configuration=phpstan.neon --memory-limit=512M",
+    "format": "php vendor/bin/php-cs-fixer fix --quiet",
+    "format:check": "php vendor/bin/php-cs-fixer fix --dry-run --quiet",
+    "test": "php vendor/bin/phpunit",
+    "lint": "@phpstan",
+    "lint:fix": "php vendor/bin/php-cs-fixer fix --quiet && php -d detect_unicode=0 vendor/bin/phpstan --configuration=phpstan.neon --memory-limit=512M"
+  },
+  "php-ext": {
+    "extension-name": "kreuzberg",
+    "support-zts": true,
+    "support-nts": true,
+    "download-url-method": "pre-packaged-binary"
+  },
+  "keywords": ["document", "extraction", "ocr", "pdf", "text"],
+  "extra": {
+    "pie": {
+      "binary": {
+        "url-template": "https://github.com/kreuzberg-dev/kreuzberg/releases/download/{Version}/php_kreuzberg-{Version}_php{PhpVersion}-{Arch}-{OSLower}-{Libc}-{TSMode}.tgz"
+      }
+    }
+  }
 }

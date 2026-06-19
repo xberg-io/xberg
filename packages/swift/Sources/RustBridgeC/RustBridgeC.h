@@ -2,7 +2,7 @@
 #define RUST_BRIDGE_C_H
 
 // Placeholder header for the RustBridgeC SwiftPM target.
-// Run `cargo build -p kreuzberg-swift` and re-run `alef all` to populate.
+// Run `cargo build -p kreuzberg-swift` and re-run `alef generate` to populate.
 // The typedefs below are the minimum required for SwiftBridgeCore.swift
 // to compile before the full cargo build has been run.
 

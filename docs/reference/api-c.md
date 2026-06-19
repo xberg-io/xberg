@@ -2069,7 +2069,7 @@ Same as `extract_structured_json`.
 
 **Returns:**
 
-JSON-serialised `const ``StructuredOutput``*` (a JSON array) on success.
+JSON-serialised `const StructuredOutput*` (a JSON array) on success.
 
 **Errors:**
 
@@ -2781,7 +2781,7 @@ Configuration for the VLM captioning post-processor.
 |-------|------|---------|-------------|
 | `llm` | `KreuzbergLlmConfig` | — | LLM configuration used for the VLM call. |
 | `prompt` | `const char**` | `NULL` | Optional custom caption prompt. `NULL` uses the default `RegionKind.Caption` prompt that ships with `crate.llm.region_extractor`. |
-| `min_image_area` | `uint32_t` | `/* serde(default) */` | Skip images whose `width * height` is below this threshold (in pixels). Default `1_000` filters out icons and decorations. |
+| `min_image_area` | `uint32_t` | `serde(default = "default_min_image_area")` | Skip images whose `width * height` is below this threshold (in pixels). Default `1_000` filters out icons and decorations. |
 
 ---
 
@@ -4395,6 +4395,7 @@ This is the main result type returned by all extraction functions.
 | `llm_usage` | `KreuzbergLlmUsage**` | `NULL` | LLM token usage and cost data for all LLM calls made during this extraction. Contains one entry per LLM call. Multiple entries are produced when VLM OCR, structured extraction, or LLM embeddings run during the same extraction. `NULL` when no LLM was used. |
 | `entities` | `KreuzbergEntity**` | `NULL` | Named entities detected in `content` by the NER post-processor. `NULL` when no NER backend is configured. Populated by the gline-rs ONNX backend or the LLM-driven backend (see `crates/kreuzberg/src/text/ner/`). |
 | `summary` | `KreuzbergDocumentSummary*` | `NULL` | Summary of `content` produced by the summarisation post-processor. `NULL` when summarisation is not configured. Populated by the TextRank extractive backend (deterministic, no external service) or by the liter-llm-driven abstractive backend. |
+| `extraction_confidence` | `KreuzbergExtractionConfidence*` | `NULL` | Confidence score computed by the heuristics pipeline. Populated when the `heuristics` feature is enabled and confidence scoring has been performed.  Combines text-coverage, OCR aggregate confidence, and schema-compliance into a single `\[0, 1\]` value. `NULL` when confidence scoring is not configured or the feature is absent. |
 | `translation` | `KreuzbergTranslation*` | `NULL` | Translation of `content` produced by the translation post-processor. `NULL` when translation is not configured. |
 | `page_classifications` | `KreuzbergPageClassification**` | `NULL` | Per-page classifications produced by the page-classification post-processor. `NULL` when classification is not configured. |
 | `redaction_report` | `KreuzbergRedactionReport*` | `NULL` | Audit report of redactions applied by the redaction post-processor. The redaction processor rewrites `content`, `formatted_content`, every chunk's text, and the textual fields of `entities` / `summary` / `translation` / `page_classifications` in place. This report describes what was found and how it was replaced. `NULL` when redaction is not configured. |
@@ -4544,8 +4545,8 @@ Individual grid cell with position and span metadata.
 | `content` | `const char*` | — | Cell text content. |
 | `row` | `uint32_t` | — | Zero-indexed row position. |
 | `col` | `uint32_t` | — | Zero-indexed column position. |
-| `row_span` | `uint32_t` | `/* serde(default) */` | Number of rows this cell spans. |
-| `col_span` | `uint32_t` | `/* serde(default) */` | Number of columns this cell spans. |
+| `row_span` | `uint32_t` | `serde(default = "default_span")` | Number of rows this cell spans. |
+| `col_span` | `uint32_t` | `serde(default = "default_span")` | Number of columns this cell spans. |
 | `is_header` | `bool` | `/* serde(default) */` | Whether this is a header cell. |
 | `bbox` | `KreuzbergBoundingBox*` | `NULL` | Bounding box for this cell (if available). |
 
@@ -4654,24 +4655,6 @@ kreuzberg_validate(instance);
 **Returns:** No return value.
 
 **Errors:** Returns `NULL` on error.
-
-###### kreuzberg_test_config()
-
-Create a configuration suitable for unit tests (smaller thresholds).
-
-**Signature:**
-
-```c
-KreuzbergHeuristicsConfig kreuzberg_test_config();
-```
-
-**Example:**
-
-```c
-KreuzbergHeuristicsConfig *result = kreuzberg_test_config();
-```
-
-**Returns:** `KreuzbergHeuristicsConfig`
 
 ---
 
@@ -5815,7 +5798,7 @@ A single backend stage in the OCR pipeline.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `backend` | `const char*` | — | Backend name: "tesseract", "paddleocr", "easyocr", or a custom registered name. |
-| `priority` | `uint32_t` | `/* serde(default) */` | Priority weight (higher = tried first). Stages are sorted by priority descending. |
+| `priority` | `uint32_t` | `serde(default = "default_priority")` | Priority weight (higher = tried first). Stages are sorted by priority descending. |
 | `language` | `const char**` | `/* serde(default) */` | Language override for this stage (None = use parent OcrConfig.language). |
 | `tesseract_config` | `KreuzbergTesseractConfig*` | `/* serde(default) */` | Tesseract-specific config override for this stage. |
 | `paddle_ocr_config` | `void**` | `/* serde(default) */` | PaddleOCR-specific config for this stage. |
@@ -7297,7 +7280,7 @@ sensitivity is encoded in the pattern via the `(?i)` inline flag when
 |-------|------|---------|-------------|
 | `label` | `const char*` | — | Custom category label surfaced in `RedactionFinding.category`. |
 | `pattern` | `const char*` | — | Regex pattern (Rust `regex` crate dialect — no look-around). |
-| `case_sensitive` | `bool` | `/* serde(default) */` | When `true`, match case-sensitively; otherwise prepend `(?i)` to the regex. |
+| `case_sensitive` | `bool` | `serde(default = "default_case_sensitive")` | When `true`, match case-sensitively; otherwise prepend `(?i)` to the regex. |
 
 ##### Methods
 
@@ -7356,7 +7339,7 @@ metacharacters themselves). Case-insensitive by default — set
 |-------|------|---------|-------------|
 | `label` | `const char*` | — | Custom category label surfaced in `RedactionFinding.category`. |
 | `value` | `const char*` | — | Literal value to match. Regex metacharacters are escaped automatically. |
-| `case_sensitive` | `bool` | `/* serde(default) */` | When `true`, match the value as-is; otherwise match ASCII-case-insensitively. |
+| `case_sensitive` | `bool` | `serde(default = "default_case_sensitive")` | When `true`, match the value as-is; otherwise match ASCII-case-insensitively. |
 
 ##### Methods
 
@@ -8085,7 +8068,7 @@ returning structured data that conforms to the schema.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `schema` | `void*` | — | JSON Schema defining the desired output structure. |
-| `schema_name` | `const char*` | `/* serde(default) */` | Schema name passed to the LLM's structured output mode. |
+| `schema_name` | `const char*` | `serde(default = "default_schema_name")` | Schema name passed to the LLM's structured output mode. |
 | `schema_description` | `const char**` | `/* serde(default) */` | Optional schema description for the LLM. |
 | `strict` | `bool` | `/* serde(default) */` | Enable strict mode — output must exactly match the schema. |
 | `prompt` | `const char**` | `/* serde(default) */` | Custom Jinja2 extraction prompt template. When `NULL`, a default template is used. Available template variables: - `{{ content }}` — The extracted document text. - `{{ schema }}` — The JSON schema as a formatted string. - `{{ schema_name }}` — The schema name. - `{{ schema_description }}` — The schema description (may be empty). |
