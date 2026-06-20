@@ -2,7 +2,7 @@
 title: "Swift API Reference"
 ---
 
-## Swift API Reference <span class="version-badge">v5.0.0-rc.24</span>
+## Swift API Reference <span class="version-badge">v5.0.0-rc.25</span>
 
 ### Functions
 
@@ -2662,13 +2662,32 @@ Complete chunking plan for a document.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `totalChunks` | `UInt32` | — | Total number of chunks. |
-| `chunks` | `\[ChunkInfo\]` | — | Individual chunk information. |
-| `totalEstimatedTimeMs` | `UInt64` | — | Estimated total processing time in milliseconds. |
-| `useDiskProcessing` | `Bool` | — | Whether to use disk-based processing for large files. |
-| `reason` | `ChunkingReason` | — | Reason for chunking. |
+| `totalChunks` | `UInt32` | `0` | Total number of chunks. |
+| `chunks` | `\[ChunkInfo\]` | `\[\]` | Individual chunk information. |
+| `totalEstimatedTimeMs` | `UInt64` | `0` | Estimated total processing time in milliseconds. |
+| `useDiskProcessing` | `Bool` | `false` | Whether to use disk-based processing for large files. |
+| `reason` | `ChunkingReason` | `ChunkingReason.LargeFile` | Reason for chunking. |
 
 ##### Methods
+
+###### default()
+
+An empty plan (no chunks). The `reason` is a placeholder since an empty plan
+has no chunking rationale; callers always overwrite it when a real plan is built.
+
+**Signature:**
+
+```swift
+public static func default() -> ChunkPlan
+```
+
+**Example:**
+
+```swift
+let result = ChunkPlan.default()
+```
+
+**Returns:** `ChunkPlan`
 
 ###### totalPages()
 
@@ -3636,9 +3655,9 @@ Changes to embedded archive children between two results.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `added` | `\[ArchiveEntry\]` | — | Children present in `b` but not in `a` (matched by `path`). |
-| `removed` | `\[ArchiveEntry\]` | — | Children present in `a` but not in `b` (matched by `path`). |
-| `changed` | `\[EmbeddedDiff\]` | — | Children present in both but with differing content (matched by `path`). Each entry holds the diff of the nested `ExtractionResult`. |
+| `added` | `\[ArchiveEntry\]` | `\[\]` | Children present in `b` but not in `a` (matched by `path`). |
+| `removed` | `\[ArchiveEntry\]` | `\[\]` | Children present in `a` but not in `b` (matched by `path`). |
+| `changed` | `\[EmbeddedDiff\]` | `\[\]` | Children present in both but with differing content (matched by `path`). Each entry holds the diff of the nested `ExtractionResult`. |
 
 ---
 
@@ -4143,10 +4162,10 @@ The complete diff between two `ExtractionResult` values.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `contentDiff` | `\[DiffHunk\]` | — | Unified-diff hunks for the `content` field. Empty when the content is identical. |
-| `tablesAdded` | `\[Table\]` | — | Tables present in `b` but not in `a` (by index position, excess right-side tables). |
-| `tablesRemoved` | `\[Table\]` | — | Tables present in `a` but not in `b` (by index position, excess left-side tables). |
-| `tablesChanged` | `\[TableDiff\]` | — | Cell-level changes for table pairs that share the same index and dimensions. |
+| `contentDiff` | `\[DiffHunk\]` | `\[\]` | Unified-diff hunks for the `content` field. Empty when the content is identical. |
+| `tablesAdded` | `\[Table\]` | `\[\]` | Tables present in `b` but not in `a` (by index position, excess right-side tables). |
+| `tablesRemoved` | `\[Table\]` | `\[\]` | Tables present in `a` but not in `b` (by index position, excess left-side tables). |
+| `tablesChanged` | `\[TableDiff\]` | `\[\]` | Cell-level changes for table pairs that share the same index and dimensions. |
 | `metadataChanged` | `String` | — | Metadata difference, encoded as a JSON object with three top-level keys: `added` (keys present in `b` but not `a`), `removed` (keys present in `a` but not `b`), and `changed` (keys whose values differ — each entry is `{ "from": <value-in-a>, "to": <value-in-b> }`). This is NOT RFC 6902 JSON Patch — we deliberately chose a flatter shape to avoid pulling in a json-patch crate. If you need RFC 6902 semantics (with JSON Pointer paths) feed `a.metadata` and `b.metadata` to your preferred json-patch impl directly. |
 | `embeddedChanges` | `EmbeddedChanges` | — | Changes to embedded archive children. |
 

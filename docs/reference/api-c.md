@@ -2,7 +2,7 @@
 title: "C API Reference"
 ---
 
-## C API Reference <span class="version-badge">v5.0.0-rc.24</span>
+## C API Reference <span class="version-badge">v5.0.0-rc.25</span>
 
 ### Functions
 
@@ -2872,13 +2872,32 @@ Complete chunking plan for a document.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `total_chunks` | `uint32_t` | — | Total number of chunks. |
-| `chunks` | `KreuzbergChunkInfo*` | — | Individual chunk information. |
-| `total_estimated_time_ms` | `uint64_t` | — | Estimated total processing time in milliseconds. |
-| `use_disk_processing` | `bool` | — | Whether to use disk-based processing for large files. |
-| `reason` | `KreuzbergChunkingReason` | — | Reason for chunking. |
+| `total_chunks` | `uint32_t` | `0` | Total number of chunks. |
+| `chunks` | `KreuzbergChunkInfo*` | `NULL` | Individual chunk information. |
+| `total_estimated_time_ms` | `uint64_t` | `0` | Estimated total processing time in milliseconds. |
+| `use_disk_processing` | `bool` | `false` | Whether to use disk-based processing for large files. |
+| `reason` | `KreuzbergChunkingReason` | `KREUZBERG_KREUZBERG_LARGE_FILE` | Reason for chunking. |
 
 ##### Methods
+
+###### kreuzberg_default()
+
+An empty plan (no chunks). The `reason` is a placeholder since an empty plan
+has no chunking rationale; callers always overwrite it when a real plan is built.
+
+**Signature:**
+
+```c
+KreuzbergChunkPlan kreuzberg_default();
+```
+
+**Example:**
+
+```c
+KreuzbergChunkPlan *result = kreuzberg_default();
+```
+
+**Returns:** `KreuzbergChunkPlan`
 
 ###### kreuzberg_total_pages()
 
@@ -3846,9 +3865,9 @@ Changes to embedded archive children between two results.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `added` | `KreuzbergArchiveEntry*` | — | Children present in `b` but not in `a` (matched by `path`). |
-| `removed` | `KreuzbergArchiveEntry*` | — | Children present in `a` but not in `b` (matched by `path`). |
-| `changed` | `KreuzbergEmbeddedDiff*` | — | Children present in both but with differing content (matched by `path`). Each entry holds the diff of the nested `ExtractionResult`. |
+| `added` | `KreuzbergArchiveEntry*` | `NULL` | Children present in `b` but not in `a` (matched by `path`). |
+| `removed` | `KreuzbergArchiveEntry*` | `NULL` | Children present in `a` but not in `b` (matched by `path`). |
+| `changed` | `KreuzbergEmbeddedDiff*` | `NULL` | Children present in both but with differing content (matched by `path`). Each entry holds the diff of the nested `ExtractionResult`. |
 
 ---
 
@@ -4353,10 +4372,10 @@ The complete diff between two `ExtractionResult` values.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `content_diff` | `KreuzbergDiffHunk*` | — | Unified-diff hunks for the `content` field. Empty when the content is identical. |
-| `tables_added` | `KreuzbergTable*` | — | Tables present in `b` but not in `a` (by index position, excess right-side tables). |
-| `tables_removed` | `KreuzbergTable*` | — | Tables present in `a` but not in `b` (by index position, excess left-side tables). |
-| `tables_changed` | `KreuzbergTableDiff*` | — | Cell-level changes for table pairs that share the same index and dimensions. |
+| `content_diff` | `KreuzbergDiffHunk*` | `NULL` | Unified-diff hunks for the `content` field. Empty when the content is identical. |
+| `tables_added` | `KreuzbergTable*` | `NULL` | Tables present in `b` but not in `a` (by index position, excess right-side tables). |
+| `tables_removed` | `KreuzbergTable*` | `NULL` | Tables present in `a` but not in `b` (by index position, excess left-side tables). |
+| `tables_changed` | `KreuzbergTableDiff*` | `NULL` | Cell-level changes for table pairs that share the same index and dimensions. |
 | `metadata_changed` | `void*` | — | Metadata difference, encoded as a JSON object with three top-level keys: `added` (keys present in `b` but not `a`), `removed` (keys present in `a` but not `b`), and `changed` (keys whose values differ — each entry is `{ "from": <value-in-a>, "to": <value-in-b> }`). This is NOT RFC 6902 JSON Patch — we deliberately chose a flatter shape to avoid pulling in a json-patch crate. If you need RFC 6902 semantics (with JSON Pointer paths) feed `a.metadata` and `b.metadata` to your preferred json-patch impl directly. |
 | `embedded_changes` | `KreuzbergEmbeddedChanges` | — | Changes to embedded archive children. |
 

@@ -5,7 +5,6 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("com.android.library") version "9.2.0"
-    kotlin("android") version "2.4.0"
 }
 
 group = "dev.kreuzberg"

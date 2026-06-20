@@ -1,6 +1,6 @@
 .{
     .name = .kreuzberg,
-    .version = "5.0.0-rc.24",
+    .version = "5.0.0-rc.25",
     .fingerprint = 0xf6a543a8c47292b6,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{},

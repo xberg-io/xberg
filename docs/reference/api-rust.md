@@ -2,7 +2,7 @@
 title: "Rust API Reference"
 ---
 
-## Rust API Reference <span class="version-badge">v5.0.0-rc.24</span>
+## Rust API Reference <span class="version-badge">v5.0.0-rc.25</span>
 
 ### Functions
 
@@ -3185,13 +3185,32 @@ Complete chunking plan for a document.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `total_chunks` | `u32` | — | Total number of chunks. |
-| `chunks` | `Vec<ChunkInfo>` | — | Individual chunk information. |
-| `total_estimated_time_ms` | `u64` | — | Estimated total processing time in milliseconds. |
-| `use_disk_processing` | `bool` | — | Whether to use disk-based processing for large files. |
-| `reason` | `ChunkingReason` | — | Reason for chunking. |
+| `total_chunks` | `u32` | `0` | Total number of chunks. |
+| `chunks` | `Vec<ChunkInfo>` | `vec!\[\]` | Individual chunk information. |
+| `total_estimated_time_ms` | `u64` | `0` | Estimated total processing time in milliseconds. |
+| `use_disk_processing` | `bool` | `false` | Whether to use disk-based processing for large files. |
+| `reason` | `ChunkingReason` | `ChunkingReason::LargeFile` | Reason for chunking. |
 
 ##### Methods
+
+###### default()
+
+An empty plan (no chunks). The `reason` is a placeholder since an empty plan
+has no chunking rationale; callers always overwrite it when a real plan is built.
+
+**Signature:**
+
+```rust
+pub fn default() -> ChunkPlan
+```
+
+**Example:**
+
+```rust
+let result = ChunkPlan::default();
+```
+
+**Returns:** `ChunkPlan`
 
 ###### total_pages()
 
@@ -4184,9 +4203,9 @@ Changes to embedded archive children between two results.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `added` | `Vec<ArchiveEntry>` | — | Children present in `b` but not in `a` (matched by `path`). |
-| `removed` | `Vec<ArchiveEntry>` | — | Children present in `a` but not in `b` (matched by `path`). |
-| `changed` | `Vec<EmbeddedDiff>` | — | Children present in both but with differing content (matched by `path`). Each entry holds the diff of the nested `ExtractionResult`. |
+| `added` | `Vec<ArchiveEntry>` | `vec!\[\]` | Children present in `b` but not in `a` (matched by `path`). |
+| `removed` | `Vec<ArchiveEntry>` | `vec!\[\]` | Children present in `a` but not in `b` (matched by `path`). |
+| `changed` | `Vec<EmbeddedDiff>` | `vec!\[\]` | Children present in both but with differing content (matched by `path`). Each entry holds the diff of the nested `ExtractionResult`. |
 
 ---
 
@@ -4694,10 +4713,10 @@ The complete diff between two `ExtractionResult` values.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `content_diff` | `Vec<DiffHunk>` | — | Unified-diff hunks for the `content` field. Empty when the content is identical. |
-| `tables_added` | `Vec<Table>` | — | Tables present in `b` but not in `a` (by index position, excess right-side tables). |
-| `tables_removed` | `Vec<Table>` | — | Tables present in `a` but not in `b` (by index position, excess left-side tables). |
-| `tables_changed` | `Vec<TableDiff>` | — | Cell-level changes for table pairs that share the same index and dimensions. |
+| `content_diff` | `Vec<DiffHunk>` | `vec!\[\]` | Unified-diff hunks for the `content` field. Empty when the content is identical. |
+| `tables_added` | `Vec<Table>` | `vec!\[\]` | Tables present in `b` but not in `a` (by index position, excess right-side tables). |
+| `tables_removed` | `Vec<Table>` | `vec!\[\]` | Tables present in `a` but not in `b` (by index position, excess left-side tables). |
+| `tables_changed` | `Vec<TableDiff>` | `vec!\[\]` | Cell-level changes for table pairs that share the same index and dimensions. |
 | `metadata_changed` | `serde_json::Value` | — | Metadata difference, encoded as a JSON object with three top-level keys: `added` (keys present in `b` but not `a`), `removed` (keys present in `a` but not `b`), and `changed` (keys whose values differ — each entry is `{ "from": <value-in-a>, "to": <value-in-b> }`). This is NOT RFC 6902 JSON Patch — we deliberately chose a flatter shape to avoid pulling in a json-patch crate. If you need RFC 6902 semantics (with JSON Pointer paths) feed `a.metadata` and `b.metadata` to your preferred json-patch impl directly. |
 | `embedded_changes` | `EmbeddedChanges` | — | Changes to embedded archive children. |
 

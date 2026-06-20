@@ -112,10 +112,10 @@ pub mod heuristics;
 pub use heuristics::{
     BoundaryReason, ChunkInfo, ChunkPlan, ChunkingDecision, ChunkingReason, ConfidenceSignals, ConfidenceWeights,
     DocumentBoundary, DocumentMetadata, HeuristicsConfig, HeuristicsError, MultidocInput, MultidocThresholds,
-    NoChunkingReason, PageRange, PageSignals, SchemaCompliance, StructuredCallMode, StructuredInput, StructuredThresholds,
-    UserChunkConfig, analyze_document, analyze_with_user_chunks, boundaries_from_extraction_result,
-    calculate_chunk_plan, calculate_plan_from_overrides, check_format_limits, choose_call_mode, detect_boundaries,
-    score_confidence,
+    NoChunkingReason, PageRange, PageSignals, SchemaCompliance, StructuredCallMode, StructuredInput,
+    StructuredThresholds, UserChunkConfig, analyze_document, analyze_with_user_chunks,
+    boundaries_from_extraction_result, calculate_chunk_plan, calculate_plan_from_overrides, check_format_limits,
+    choose_call_mode, detect_boundaries, score_confidence,
 };
 
 #[cfg(feature = "presets")]

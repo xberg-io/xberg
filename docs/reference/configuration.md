@@ -1461,6 +1461,33 @@ Options controlling how two `ExtractionResult` values are compared.
 
 ---
 
+### ExtractionDiff
+
+The complete diff between two `ExtractionResult` values.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `content_diff` | `list\[DiffHunk\]` | `\[\]` | Unified-diff hunks for the `content` field. Empty when the content is identical. |
+| `tables_added` | `list\[Table\]` | `\[\]` | Tables present in `b` but not in `a` (by index position, excess right-side tables). |
+| `tables_removed` | `list\[Table\]` | `\[\]` | Tables present in `a` but not in `b` (by index position, excess left-side tables). |
+| `tables_changed` | `list\[TableDiff\]` | `\[\]` | Cell-level changes for table pairs that share the same index and dimensions. |
+| `metadata_changed` | `dict\[str, Any\]` | — | Metadata difference, encoded as a JSON object with three top-level keys: `added` (keys present in `b` but not `a`), `removed` (keys present in `a` but not `b`), and `changed` (keys whose values differ — each entry is `{ "from": <value-in-a>, "to": <value-in-b> }`). This is NOT RFC 6902 JSON Patch — we deliberately chose a flatter shape to avoid pulling in a json-patch crate. If you need RFC 6902 semantics (with JSON Pointer paths) feed `a.metadata` and `b.metadata` to your preferred json-patch impl directly. |
+| `embedded_changes` | `EmbeddedChanges` | — | Changes to embedded archive children. |
+
+---
+
+### EmbeddedChanges
+
+Changes to embedded archive children between two results.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `added` | `list\[ArchiveEntry\]` | `\[\]` | Children present in `b` but not in `a` (matched by `path`). |
+| `removed` | `list\[ArchiveEntry\]` | `\[\]` | Children present in `a` but not in `b` (matched by `path`). |
+| `changed` | `list\[EmbeddedDiff\]` | `\[\]` | Children present in both but with differing content (matched by `path`). Each entry holds the diff of the nested `ExtractionResult`. |
+
+---
+
 ### YakeParams
 
 YAKE-specific parameters.
@@ -1572,6 +1599,20 @@ struct-update syntax: `HeuristicsConfig { text_layer_threshold: 0.5, ..the defau
 | `max_xlsx_sheet_count` | `int` | `200` | Maximum sheet count allowed in an XLSX workbook. Workbooks beyond this are rejected pre-extraction to avoid OOM / abusive billing inflation. Default: 200. |
 | `max_xlsx_workbook_cells` | `int` | `5000000` | Maximum cell count (sheets × rows × columns approximation) in an XLSX workbook. Default: 5 000 000 (≈ 200 sheets × 25 k cells). |
 | `max_pptx_embedded_count` | `int` | `50` | Maximum number of OLE-embedded objects extractable from a single PPTX or DOCX. Protects against zip-bomb-style nested-document abuse. Default: 50. |
+
+---
+
+### ChunkPlan
+
+Complete chunking plan for a document.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `total_chunks` | `int` | `0` | Total number of chunks. |
+| `chunks` | `list\[ChunkInfo\]` | `\[\]` | Individual chunk information. |
+| `total_estimated_time_ms` | `int` | `0` | Estimated total processing time in milliseconds. |
+| `use_disk_processing` | `bool` | `False` | Whether to use disk-based processing for large files. |
+| `reason` | `ChunkingReason` | `ChunkingReason.LARGE_FILE` | Reason for chunking. |
 
 ---
 
@@ -1720,6 +1761,19 @@ Type of text chunker to use.
 | `Markdown` | `markdown` | Markdown-aware splitter that preserves heading and code-block boundaries. |
 | `Yaml` | `yaml` | YAML-aware splitter that creates one chunk per top-level key. |
 | `Semantic` | `semantic` | Topic-aware chunker that splits at embedding-based topic shifts. |
+
+---
+
+#### ChunkingReason
+
+Reason for chunking a document.
+
+| Variant | Description |
+|---------|-------------|
+| `LargeFile` | File exceeds size threshold. — Fields: `size_bytes`: `u64`, `threshold_bytes`: `u64` |
+| `ManyPages` | Document has many pages. — Fields: `page_count`: `u32`, `threshold`: `u32` |
+| `OcrRequired` | PDF requires OCR and is large. — Fields: `page_count`: `u32`, `force_ocr`: `bool` |
+| `LargeAndManyPages` | Both size and page count exceed thresholds. — Fields: `size_bytes`: `u64`, `page_count`: `u32` |
 
 ---
 

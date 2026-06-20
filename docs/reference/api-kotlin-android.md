@@ -2,7 +2,7 @@
 title: "Kotlin (Android) API Reference"
 ---
 
-## Kotlin (Android) API Reference <span class="version-badge">v5.0.0-rc.24</span>
+## Kotlin (Android) API Reference <span class="version-badge">v5.0.0-rc.25</span>
 
 ### Functions
 
@@ -2868,13 +2868,33 @@ Complete chunking plan for a document.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `totalChunks` | `Int` | — | Total number of chunks. |
-| `chunks` | `List<ChunkInfo>` | — | Individual chunk information. |
-| `totalEstimatedTimeMs` | `Long` | — | Estimated total processing time in milliseconds. |
-| `useDiskProcessing` | `Boolean` | — | Whether to use disk-based processing for large files. |
-| `reason` | `ChunkingReason` | — | Reason for chunking. |
+| `totalChunks` | `Int` | `0` | Total number of chunks. |
+| `chunks` | `List<ChunkInfo>` | `\[\]` | Individual chunk information. |
+| `totalEstimatedTimeMs` | `Long` | `0` | Estimated total processing time in milliseconds. |
+| `useDiskProcessing` | `Boolean` | `false` | Whether to use disk-based processing for large files. |
+| `reason` | `ChunkingReason` | `ChunkingReason.LargeFile` | Reason for chunking. |
 
 ##### Methods
+
+###### default()
+
+An empty plan (no chunks). The `reason` is a placeholder since an empty plan
+has no chunking rationale; callers always overwrite it when a real plan is built.
+
+**Signature:**
+
+```kotlin
+@JvmStatic
+fun default(): ChunkPlan
+```
+
+**Example:**
+
+```kotlin
+val result = ChunkPlan.default()
+```
+
+**Returns:** `ChunkPlan`
 
 ###### totalPages()
 
@@ -3850,9 +3870,9 @@ Changes to embedded archive children between two results.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `added` | `List<ArchiveEntry>` | — | Children present in `b` but not in `a` (matched by `path`). |
-| `removed` | `List<ArchiveEntry>` | — | Children present in `a` but not in `b` (matched by `path`). |
-| `changed` | `List<EmbeddedDiff>` | — | Children present in both but with differing content (matched by `path`). Each entry holds the diff of the nested `ExtractionResult`. |
+| `added` | `List<ArchiveEntry>` | `\[\]` | Children present in `b` but not in `a` (matched by `path`). |
+| `removed` | `List<ArchiveEntry>` | `\[\]` | Children present in `a` but not in `b` (matched by `path`). |
+| `changed` | `List<EmbeddedDiff>` | `\[\]` | Children present in both but with differing content (matched by `path`). Each entry holds the diff of the nested `ExtractionResult`. |
 
 ---
 
@@ -4360,10 +4380,10 @@ The complete diff between two `ExtractionResult` values.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `contentDiff` | `List<DiffHunk>` | — | Unified-diff hunks for the `content` field. Empty when the content is identical. |
-| `tablesAdded` | `List<Table>` | — | Tables present in `b` but not in `a` (by index position, excess right-side tables). |
-| `tablesRemoved` | `List<Table>` | — | Tables present in `a` but not in `b` (by index position, excess left-side tables). |
-| `tablesChanged` | `List<TableDiff>` | — | Cell-level changes for table pairs that share the same index and dimensions. |
+| `contentDiff` | `List<DiffHunk>` | `\[\]` | Unified-diff hunks for the `content` field. Empty when the content is identical. |
+| `tablesAdded` | `List<Table>` | `\[\]` | Tables present in `b` but not in `a` (by index position, excess right-side tables). |
+| `tablesRemoved` | `List<Table>` | `\[\]` | Tables present in `a` but not in `b` (by index position, excess left-side tables). |
+| `tablesChanged` | `List<TableDiff>` | `\[\]` | Cell-level changes for table pairs that share the same index and dimensions. |
 | `metadataChanged` | `Any` | — | Metadata difference, encoded as a JSON object with three top-level keys: `added` (keys present in `b` but not `a`), `removed` (keys present in `a` but not `b`), and `changed` (keys whose values differ — each entry is `{ "from": <value-in-a>, "to": <value-in-b> }`). This is NOT RFC 6902 JSON Patch — we deliberately chose a flatter shape to avoid pulling in a json-patch crate. If you need RFC 6902 semantics (with JSON Pointer paths) feed `a.metadata` and `b.metadata` to your preferred json-patch impl directly. |
 | `embeddedChanges` | `EmbeddedChanges` | — | Changes to embedded archive children. |
 

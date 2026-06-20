@@ -104,7 +104,7 @@ Extract text, tables, images, metadata, and code intelligence from 96 file forma
 Add to your `Package.swift` dependencies:
 
 ```swift
-.package(url: "https://github.com/kreuzberg-dev/kreuzberg.git", from: "5.0.0-rc.24"),
+.package(url: "https://github.com/kreuzberg-dev/kreuzberg.git", from: "5.0.0-rc.25"),
 ```
 
 Then add the product to the relevant target:

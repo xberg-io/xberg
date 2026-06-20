@@ -2,7 +2,7 @@
 title: "Go API Reference"
 ---
 
-## Go API Reference <span class="version-badge">v5.0.0-rc.24</span>
+## Go API Reference <span class="version-badge">v5.0.0-rc.25</span>
 
 ### Functions
 
@@ -3017,13 +3017,32 @@ Complete chunking plan for a document.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `TotalChunks` | `uint32` | — | Total number of chunks. |
-| `Chunks` | `\[\]ChunkInfo` | — | Individual chunk information. |
-| `TotalEstimatedTimeMs` | `uint64` | — | Estimated total processing time in milliseconds. |
-| `UseDiskProcessing` | `bool` | — | Whether to use disk-based processing for large files. |
-| `Reason` | `ChunkingReason` | — | Reason for chunking. |
+| `TotalChunks` | `uint32` | `0` | Total number of chunks. |
+| `Chunks` | `\[\]ChunkInfo` | `nil` | Individual chunk information. |
+| `TotalEstimatedTimeMs` | `uint64` | `0` | Estimated total processing time in milliseconds. |
+| `UseDiskProcessing` | `bool` | `false` | Whether to use disk-based processing for large files. |
+| `Reason` | `ChunkingReason` | `ChunkingReason.LargeFile` | Reason for chunking. |
 
 ##### Methods
+
+###### Default()
+
+An empty plan (no chunks). The `reason` is a placeholder since an empty plan
+has no chunking rationale; callers always overwrite it when a real plan is built.
+
+**Signature:**
+
+```go
+func (o *ChunkPlan) Default() ChunkPlan
+```
+
+**Example:**
+
+```go
+result := ChunkPlan.Default()
+```
+
+**Returns:** `ChunkPlan`
 
 ###### TotalPages()
 
@@ -3997,9 +4016,9 @@ Changes to embedded archive children between two results.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `Added` | `\[\]ArchiveEntry` | — | Children present in `b` but not in `a` (matched by `path`). |
-| `Removed` | `\[\]ArchiveEntry` | — | Children present in `a` but not in `b` (matched by `path`). |
-| `Changed` | `\[\]EmbeddedDiff` | — | Children present in both but with differing content (matched by `path`). Each entry holds the diff of the nested `ExtractionResult`. |
+| `Added` | `\[\]ArchiveEntry` | `nil` | Children present in `b` but not in `a` (matched by `path`). |
+| `Removed` | `\[\]ArchiveEntry` | `nil` | Children present in `a` but not in `b` (matched by `path`). |
+| `Changed` | `\[\]EmbeddedDiff` | `nil` | Children present in both but with differing content (matched by `path`). Each entry holds the diff of the nested `ExtractionResult`. |
 
 ---
 
@@ -4507,10 +4526,10 @@ The complete diff between two `ExtractionResult` values.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `ContentDiff` | `\[\]DiffHunk` | — | Unified-diff hunks for the `content` field. Empty when the content is identical. |
-| `TablesAdded` | `\[\]Table` | — | Tables present in `b` but not in `a` (by index position, excess right-side tables). |
-| `TablesRemoved` | `\[\]Table` | — | Tables present in `a` but not in `b` (by index position, excess left-side tables). |
-| `TablesChanged` | `\[\]TableDiff` | — | Cell-level changes for table pairs that share the same index and dimensions. |
+| `ContentDiff` | `\[\]DiffHunk` | `nil` | Unified-diff hunks for the `content` field. Empty when the content is identical. |
+| `TablesAdded` | `\[\]Table` | `nil` | Tables present in `b` but not in `a` (by index position, excess right-side tables). |
+| `TablesRemoved` | `\[\]Table` | `nil` | Tables present in `a` but not in `b` (by index position, excess left-side tables). |
+| `TablesChanged` | `\[\]TableDiff` | `nil` | Cell-level changes for table pairs that share the same index and dimensions. |
 | `MetadataChanged` | `interface{}` | — | Metadata difference, encoded as a JSON object with three top-level keys: `added` (keys present in `b` but not `a`), `removed` (keys present in `a` but not `b`), and `changed` (keys whose values differ — each entry is `{ "from": <value-in-a>, "to": <value-in-b> }`). This is NOT RFC 6902 JSON Patch — we deliberately chose a flatter shape to avoid pulling in a json-patch crate. If you need RFC 6902 semantics (with JSON Pointer paths) feed `a.metadata` and `b.metadata` to your preferred json-patch impl directly. |
 | `EmbeddedChanges` | `EmbeddedChanges` | — | Changes to embedded archive children. |
 

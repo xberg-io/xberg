@@ -1310,6 +1310,33 @@ Options controlling how two `ExtractionResult` values are compared.
 
 ---
 
+#### ExtractionDiff
+
+The complete diff between two `ExtractionResult` values.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `content_diff` | `Vec<DiffHunk>` | `vec!\[\]` | Unified-diff hunks for the `content` field. Empty when the content is identical. |
+| `tables_added` | `Vec<Table>` | `vec!\[\]` | Tables present in `b` but not in `a` (by index position, excess right-side tables). |
+| `tables_removed` | `Vec<Table>` | `vec!\[\]` | Tables present in `a` but not in `b` (by index position, excess left-side tables). |
+| `tables_changed` | `Vec<TableDiff>` | `vec!\[\]` | Cell-level changes for table pairs that share the same index and dimensions. |
+| `metadata_changed` | `serde_json::Value` | — | Metadata difference, encoded as a JSON object with three top-level keys: `added` (keys present in `b` but not `a`), `removed` (keys present in `a` but not `b`), and `changed` (keys whose values differ — each entry is `{ "from": <value-in-a>, "to": <value-in-b> }`). This is NOT RFC 6902 JSON Patch — we deliberately chose a flatter shape to avoid pulling in a json-patch crate. If you need RFC 6902 semantics (with JSON Pointer paths) feed `a.metadata` and `b.metadata` to your preferred json-patch impl directly. |
+| `embedded_changes` | `EmbeddedChanges` | — | Changes to embedded archive children. |
+
+---
+
+#### EmbeddedChanges
+
+Changes to embedded archive children between two results.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `added` | `Vec<ArchiveEntry>` | `vec!\[\]` | Children present in `b` but not in `a` (matched by `path`). |
+| `removed` | `Vec<ArchiveEntry>` | `vec!\[\]` | Children present in `a` but not in `b` (matched by `path`). |
+| `changed` | `Vec<EmbeddedDiff>` | `vec!\[\]` | Children present in both but with differing content (matched by `path`). Each entry holds the diff of the nested `ExtractionResult`. |
+
+---
+
 #### YakeParams
 
 YAKE-specific parameters.
@@ -1407,6 +1434,20 @@ struct-update syntax: `HeuristicsConfig { text_layer_threshold: 0.5, ..the defau
 | `max_xlsx_sheet_count` | `u32` | `200` | Maximum sheet count allowed in an XLSX workbook. Workbooks beyond this are rejected pre-extraction to avoid OOM / abusive billing inflation. Default: 200. |
 | `max_xlsx_workbook_cells` | `u64` | `5000000` | Maximum cell count (sheets × rows × columns approximation) in an XLSX workbook. Default: 5 000 000 (≈ 200 sheets × 25 k cells). |
 | `max_pptx_embedded_count` | `u32` | `50` | Maximum number of OLE-embedded objects extractable from a single PPTX or DOCX. Protects against zip-bomb-style nested-document abuse. Default: 50. |
+
+---
+
+#### ChunkPlan
+
+Complete chunking plan for a document.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `total_chunks` | `u32` | `0` | Total number of chunks. |
+| `chunks` | `Vec<ChunkInfo>` | `vec!\[\]` | Individual chunk information. |
+| `total_estimated_time_ms` | `u64` | `0` | Estimated total processing time in milliseconds. |
+| `use_disk_processing` | `bool` | `false` | Whether to use disk-based processing for large files. |
+| `reason` | `ChunkingReason` | `ChunkingReason::LargeFile` | Reason for chunking. |
 
 ---
 
@@ -3110,21 +3151,6 @@ MIME type detection response.
 
 ---
 
-#### ExtractionDiff
-
-The complete diff between two `ExtractionResult` values.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `content_diff` | `Vec<DiffHunk>` | — | Unified-diff hunks for the `content` field. Empty when the content is identical. |
-| `tables_added` | `Vec<Table>` | — | Tables present in `b` but not in `a` (by index position, excess right-side tables). |
-| `tables_removed` | `Vec<Table>` | — | Tables present in `a` but not in `b` (by index position, excess left-side tables). |
-| `tables_changed` | `Vec<TableDiff>` | — | Cell-level changes for table pairs that share the same index and dimensions. |
-| `metadata_changed` | `serde_json::Value` | — | Metadata difference, encoded as a JSON object with three top-level keys: `added` (keys present in `b` but not `a`), `removed` (keys present in `a` but not `b`), and `changed` (keys whose values differ — each entry is `{ "from": <value-in-a>, "to": <value-in-b> }`). This is NOT RFC 6902 JSON Patch — we deliberately chose a flatter shape to avoid pulling in a json-patch crate. If you need RFC 6902 semantics (with JSON Pointer paths) feed `a.metadata` and `b.metadata` to your preferred json-patch impl directly. |
-| `embedded_changes` | `EmbeddedChanges` | — | Changes to embedded archive children. |
-
----
-
 #### DiffHunk
 
 A single contiguous hunk in a unified diff.
@@ -3136,18 +3162,6 @@ A single contiguous hunk in a unified diff.
 | `to_line` | `usize` | — | Starting line number in the new content (0-indexed). |
 | `to_count` | `usize` | — | Number of lines from the new content in this hunk. |
 | `lines` | `Vec<DiffLine>` | — | Lines that make up this hunk. |
-
----
-
-#### EmbeddedChanges
-
-Changes to embedded archive children between two results.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `added` | `Vec<ArchiveEntry>` | — | Children present in `b` but not in `a` (matched by `path`). |
-| `removed` | `Vec<ArchiveEntry>` | — | Children present in `a` but not in `b` (matched by `path`). |
-| `changed` | `Vec<EmbeddedDiff>` | — | Children present in both but with differing content (matched by `path`). Each entry holds the diff of the nested `ExtractionResult`. |
 
 ---
 
@@ -3262,20 +3276,6 @@ so the weighted sum still totals 1.0.
 | `ocr_aggregate` | `Option<f32>` | `None` | Mean OCR per-element recognition confidence when OCR ran; `None` when it did not. |
 | `schema_compliance` | `SchemaCompliance` | — | Whether the merged output validates against the preset schema. |
 | `combined` | `f32` | — | Weighted blend in `\[0, 1\]`.  The value compared against the fallback threshold. |
-
----
-
-#### ChunkPlan
-
-Complete chunking plan for a document.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `total_chunks` | `u32` | — | Total number of chunks. |
-| `chunks` | `Vec<ChunkInfo>` | — | Individual chunk information. |
-| `total_estimated_time_ms` | `u64` | — | Estimated total processing time in milliseconds. |
-| `use_disk_processing` | `bool` | — | Whether to use disk-based processing for large files. |
-| `reason` | `ChunkingReason` | — | Reason for chunking. |
 
 ---
 

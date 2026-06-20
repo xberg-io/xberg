@@ -1,6 +1,6 @@
 [package]
 name = "kreuzberg-node"
-version = "5.0.0-rc.24"
+version = "5.0.0-rc.25"
 edition = "2024"
 license = "Elastic-2.0"
 description = "High-performance document intelligence library"
@@ -60,7 +60,7 @@ xml = ["kreuzberg/xml"]
 
 [dependencies]
 async-trait = "0.1"
-kreuzberg = { version = "5.0.0-rc.24", path = "../kreuzberg", features = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "reranker", "reranker-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "api-types", "mcp", "liter-llm", "quality", "svg", "transcription", "transcription-types", "classification", "captioning", "ner-onnx", "ner-llm", "diff", "redaction", "enrichment", "heuristics", "presets", "structured"] }
+kreuzberg = { version = "5.0.0-rc.25", path = "../kreuzberg", features = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "reranker", "reranker-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "api-types", "mcp", "liter-llm", "quality", "svg", "transcription", "transcription-types", "classification", "captioning", "ner-onnx", "ner-llm", "diff", "redaction", "enrichment", "heuristics", "presets", "structured"] }
 napi = { version = "3", features = ["async", "serde-json"] }
 napi-derive = "3"
 serde = { version = "1", features = ["derive"] }

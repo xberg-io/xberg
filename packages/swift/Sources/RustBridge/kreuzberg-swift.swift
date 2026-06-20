@@ -16742,6 +16742,11 @@ public class ExtractionDiff: ExtractionDiffRefMut {
         }
     }
 }
+extension ExtractionDiff {
+    public convenience init<GenericIntoRustString: IntoRustString>(_ content_diff: RustVec<DiffHunk>, _ tables_added: RustVec<Table>, _ tables_removed: RustVec<Table>, _ tables_changed: RustVec<TableDiff>, _ metadata_changed: GenericIntoRustString, _ embedded_changes: EmbeddedChanges) {
+        self.init(ptr: __swift_bridge__$ExtractionDiff$new({ let val = content_diff; val.isOwned = false; return val.ptr }(), { let val = tables_added; val.isOwned = false; return val.ptr }(), { let val = tables_removed; val.isOwned = false; return val.ptr }(), { let val = tables_changed; val.isOwned = false; return val.ptr }(), { let rustString = metadata_changed.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), {embedded_changes.isOwned = false; return embedded_changes.ptr;}()))
+    }
+}
 public class ExtractionDiffRefMut: ExtractionDiffRef {
     public override init(ptr: UnsafeMutableRawPointer) {
         super.init(ptr: ptr)
@@ -17024,6 +17029,11 @@ public class EmbeddedChanges: EmbeddedChangesRefMut {
         if isOwned {
             __swift_bridge__$EmbeddedChanges$_free(ptr)
         }
+    }
+}
+extension EmbeddedChanges {
+    public convenience init(_ added: RustVec<ArchiveEntry>, _ removed: RustVec<ArchiveEntry>, _ changed: RustVec<EmbeddedDiff>) {
+        self.init(ptr: __swift_bridge__$EmbeddedChanges$new({ let val = added; val.isOwned = false; return val.ptr }(), { let val = removed; val.isOwned = false; return val.ptr }(), { let val = changed; val.isOwned = false; return val.ptr }()))
     }
 }
 public class EmbeddedChangesRefMut: EmbeddedChangesRef {

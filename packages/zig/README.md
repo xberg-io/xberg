@@ -104,7 +104,7 @@ Extract text, tables, images, metadata, and code intelligence from 96 file forma
 Fetch the package and pin it in `build.zig.zon`:
 
 ```bash
-zig fetch --save https://github.com/kreuzberg-dev/kreuzberg/archive/refs/tags/v5.0.0-rc.24.tar.gz
+zig fetch --save https://github.com/kreuzberg-dev/kreuzberg/archive/refs/tags/v5.0.0-rc.25.tar.gz
 ```
 
 Then wire it into `build.zig`:

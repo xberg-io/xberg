@@ -175,7 +175,7 @@ packages:
       path: "../../packages/dart"
       relative: true
     source: path
-    version: "5.0.0-rc.24"
+    version: "5.0.0-rc.25"
   logging:
     dependency: transitive
     description:

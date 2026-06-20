@@ -2,7 +2,7 @@
 title: "C# API Reference"
 ---
 
-## C# API Reference <span class="version-badge">v5.0.0-rc.24</span>
+## C# API Reference <span class="version-badge">v5.0.0-rc.25</span>
 
 ### Functions
 
@@ -2872,13 +2872,32 @@ Complete chunking plan for a document.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `TotalChunks` | `uint` | — | Total number of chunks. |
-| `Chunks` | `List<ChunkInfo>` | — | Individual chunk information. |
-| `TotalEstimatedTimeMs` | `ulong` | — | Estimated total processing time in milliseconds. |
-| `UseDiskProcessing` | `bool` | — | Whether to use disk-based processing for large files. |
-| `Reason` | `ChunkingReason` | — | Reason for chunking. |
+| `TotalChunks` | `uint` | `0` | Total number of chunks. |
+| `Chunks` | `List<ChunkInfo>` | `new List<ChunkInfo>()` | Individual chunk information. |
+| `TotalEstimatedTimeMs` | `ulong` | `0` | Estimated total processing time in milliseconds. |
+| `UseDiskProcessing` | `bool` | `false` | Whether to use disk-based processing for large files. |
+| `Reason` | `ChunkingReason` | `ChunkingReason.LargeFile` | Reason for chunking. |
 
 ##### Methods
+
+###### CreateDefault()
+
+An empty plan (no chunks). The `reason` is a placeholder since an empty plan
+has no chunking rationale; callers always overwrite it when a real plan is built.
+
+**Signature:**
+
+```csharp
+public ChunkPlan CreateDefault()
+```
+
+**Example:**
+
+```csharp
+var result = ChunkPlan.CreateDefault();
+```
+
+**Returns:** `ChunkPlan`
 
 ###### TotalPages()
 
@@ -3846,9 +3865,9 @@ Changes to embedded archive children between two results.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `Added` | `List<ArchiveEntry>` | — | Children present in `b` but not in `a` (matched by `path`). |
-| `Removed` | `List<ArchiveEntry>` | — | Children present in `a` but not in `b` (matched by `path`). |
-| `Changed` | `List<EmbeddedDiff>` | — | Children present in both but with differing content (matched by `path`). Each entry holds the diff of the nested `ExtractionResult`. |
+| `Added` | `List<ArchiveEntry>` | `new List<ArchiveEntry>()` | Children present in `b` but not in `a` (matched by `path`). |
+| `Removed` | `List<ArchiveEntry>` | `new List<ArchiveEntry>()` | Children present in `a` but not in `b` (matched by `path`). |
+| `Changed` | `List<EmbeddedDiff>` | `new List<EmbeddedDiff>()` | Children present in both but with differing content (matched by `path`). Each entry holds the diff of the nested `ExtractionResult`. |
 
 ---
 
@@ -4353,10 +4372,10 @@ The complete diff between two `ExtractionResult` values.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `ContentDiff` | `List<DiffHunk>` | — | Unified-diff hunks for the `content` field. Empty when the content is identical. |
-| `TablesAdded` | `List<Table>` | — | Tables present in `b` but not in `a` (by index position, excess right-side tables). |
-| `TablesRemoved` | `List<Table>` | — | Tables present in `a` but not in `b` (by index position, excess left-side tables). |
-| `TablesChanged` | `List<TableDiff>` | — | Cell-level changes for table pairs that share the same index and dimensions. |
+| `ContentDiff` | `List<DiffHunk>` | `new List<DiffHunk>()` | Unified-diff hunks for the `content` field. Empty when the content is identical. |
+| `TablesAdded` | `List<Table>` | `new List<Table>()` | Tables present in `b` but not in `a` (by index position, excess right-side tables). |
+| `TablesRemoved` | `List<Table>` | `new List<Table>()` | Tables present in `a` but not in `b` (by index position, excess left-side tables). |
+| `TablesChanged` | `List<TableDiff>` | `new List<TableDiff>()` | Cell-level changes for table pairs that share the same index and dimensions. |
 | `MetadataChanged` | `object` | — | Metadata difference, encoded as a JSON object with three top-level keys: `added` (keys present in `b` but not `a`), `removed` (keys present in `a` but not `b`), and `changed` (keys whose values differ — each entry is `{ "from": <value-in-a>, "to": <value-in-b> }`). This is NOT RFC 6902 JSON Patch — we deliberately chose a flatter shape to avoid pulling in a json-patch crate. If you need RFC 6902 semantics (with JSON Pointer paths) feed `a.metadata` and `b.metadata` to your preferred json-patch impl directly. |
 | `EmbeddedChanges` | `EmbeddedChanges` | — | Changes to embedded archive children. |
 

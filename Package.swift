@@ -33,7 +33,7 @@ let package = Package(
     // sibling RustBridge target below and link against this binary.
     .binaryTarget(
       name: "RustBridgeBinary",
-      url: "https://github.com/kreuzberg-dev/kreuzberg/releases/download/v5.0.0-rc.24/Kreuzberg-rs.artifactbundle.zip",
+      url: "https://github.com/kreuzberg-dev/kreuzberg/releases/download/v5.0.0-rc.25/Kreuzberg-rs.artifactbundle.zip",
       checksum: "__ALEF_SWIFT_CHECKSUM__"
     ),
     // RustBridge: Swift wrapper module owning the swift-bridge generated
