@@ -31,6 +31,14 @@ OCR (Tesseract, PaddleOCR, EasyOCR, and VLM across 143 vision providers), Whispe
 
 96 file formats across 8 categories — Office documents, images (OCR-enabled), web and structured data, email, archives, academic, and audio/video — plus code intelligence for 306 programming languages. See the [format reference](https://docs.kreuzberg.dev/reference/formats/) for the complete list.
 
+<div align="center">
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/stargazers">
+    <img src="docs/assets/star.gif" alt="Star Kreuzberg on GitHub" width="640">
+  </a>
+</div>
+
+<p align="center"><strong>⭐ Star this repo to show your support — it helps others discover Kreuzberg.</strong></p>
+
 ## Quick Start
 
 ### Language Packages

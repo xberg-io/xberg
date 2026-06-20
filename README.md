@@ -72,12 +72,6 @@
   </a>
 </div>
 
-<div align="center" style="margin: 24px 0 0;">
-  <a href="https://kreuzberg.dev">
-    <img alt="Kreuzberg" src="https://github.com/user-attachments/assets/419fc06c-8313-4324-b159-4b4d3cfce5c0" />
-  </a>
-</div>
-
 <div align="center" style="display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin: 28px 0 24px;">
   <a href="https://discord.gg/xt9WY3GnKR">
     <img height="22" src="https://img.shields.io/badge/Discord-Chat-007ec6?logo=discord&logoColor=white" alt="Join Discord">
@@ -118,6 +112,14 @@ OCR (Tesseract, PaddleOCR, EasyOCR, and VLM across 143 vision providers), Whispe
 ### Supported Formats
 
 96 file formats across 8 categories — Office documents, images (OCR-enabled), web and structured data, email, archives, academic, and audio/video — plus code intelligence for 306 programming languages. See the [format reference](https://docs.kreuzberg.dev/reference/formats/) for the complete list.
+
+<div align="center">
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/stargazers">
+    <img src="docs/assets/star.gif" alt="Star Kreuzberg on GitHub" width="640">
+  </a>
+</div>
+
+<p align="center"><strong>⭐ Star this repo to show your support — it helps others discover Kreuzberg.</strong></p>
 
 ## Quick Start
 
