@@ -5538,13 +5538,8 @@ class ExtractedImage {
   /// `Some(vec![])` when detection ran but found nothing.
   final List<QrCode>? qrCodes;
 
-  /// Base64-encoded representation of `data`, populated when
-  /// `ImageExtractionConfig::include_data_base64` is `true`.
-  ///
-  /// When present this field holds `base64::STANDARD.encode(&data)`. Both `data`
-  /// and `data_base64` are always in sync — `data_base64` is never set without
-  /// `data` also being present. JSON-only clients that cannot consume integer-array
-  /// bytes should enable this flag and read `data_base64` instead of `data`.
+  /// Base64-encoded copy of `data`; populated when `ImageExtractionConfig::include_data_base64`
+  /// is `true`. Omitted from JSON by default; use instead of `data` in JSON-only clients.
   final String? dataBase64;
 
   const ExtractedImage({

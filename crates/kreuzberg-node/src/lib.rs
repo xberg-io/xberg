@@ -3368,13 +3368,8 @@ pub struct JsExtractedImage {
     #[napi(js_name = "qrCodes")]
     #[serde(rename = "qrCodes")]
     pub qr_codes: Option<Vec<JsQrCode>>,
-    /// Base64-encoded representation of `data`, populated when
-    /// `ImageExtractionConfig.include_data_base64` is `true`.
-    ///
-    /// When present this field holds `base64.STANDARD.encode(&data)`. Both `data`
-    /// and `data_base64` are always in sync — `data_base64` is never set without
-    /// `data` also being present. JSON-only clients that cannot consume integer-array
-    /// bytes should enable this flag and read `data_base64` instead of `data`.
+    /// Base64-encoded copy of `data`; populated when `ImageExtractionConfig.include_data_base64`
+    /// is `true`. Omitted from JSON by default; use instead of `data` in JSON-only clients.
     #[napi(js_name = "dataBase64")]
     #[serde(rename = "dataBase64")]
     pub data_base64: Option<String>,

@@ -1180,3 +1180,77 @@ async fn test_pdf_run_fallback_not_suppressed_without_images_config() {
         "RunFallback must be suppressed when images.run_ocr_on_images=true"
     );
 }
+
+#[tokio::test]
+#[serial]
+async fn pipeline_populates_data_base64_when_opted_in() {
+    use base64::Engine as _;
+    use crate::core::config::extraction::ImageExtractionConfig;
+    use crate::types::ExtractedImage;
+    use std::borrow::Cow;
+
+    let raw = b"fake-png-bytes";
+    let mut doc = make_doc("text", "text/plain");
+    doc.images.push(ExtractedImage {
+        data: bytes::Bytes::from_static(raw),
+        format: Cow::Borrowed("png"),
+        ..Default::default()
+    });
+
+    let config = ExtractionConfig {
+        images: Some(ImageExtractionConfig {
+            include_data_base64: true,
+            ..Default::default()
+        }),
+        postprocessor: Some(crate::core::config::PostProcessorConfig {
+            enabled: false,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    let result = run_pipeline(doc, &config).await.unwrap();
+    let images = result.images.as_ref().expect("images must be present");
+    assert_eq!(images.len(), 1);
+    let expected = base64::engine::general_purpose::STANDARD.encode(raw);
+    assert_eq!(
+        images[0].data_base64.as_deref(),
+        Some(expected.as_str()),
+        "data_base64 must equal base64(data) when opted in"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn pipeline_omits_data_base64_when_not_opted_in() {
+    use crate::core::config::extraction::ImageExtractionConfig;
+    use crate::types::ExtractedImage;
+    use std::borrow::Cow;
+
+    let mut doc = make_doc("text", "text/plain");
+    doc.images.push(ExtractedImage {
+        data: bytes::Bytes::from_static(b"fake-png-bytes"),
+        format: Cow::Borrowed("png"),
+        ..Default::default()
+    });
+
+    let config = ExtractionConfig {
+        images: Some(ImageExtractionConfig {
+            include_data_base64: false,
+            ..Default::default()
+        }),
+        postprocessor: Some(crate::core::config::PostProcessorConfig {
+            enabled: false,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    let result = run_pipeline(doc, &config).await.unwrap();
+    let images = result.images.as_ref().expect("images must be present");
+    assert_eq!(images.len(), 1);
+    assert!(
+        images[0].data_base64.is_none(),
+        "data_base64 must be None when include_data_base64 is false"
+    );
+}
