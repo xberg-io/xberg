@@ -14,7 +14,7 @@ repos:
     stages:
     - commit-msg
 - repo: https://github.com/kreuzberg-dev/pre-commit-hooks
-  rev: v2.2.0
+  rev: v2.3.0
   hooks:
     # Alef verification
     - id: alef-verify
@@ -65,6 +65,7 @@ repos:
 
     # Linters and checks
     - id: ai-rulez-generate
+    - id: ai-rulez-validate
 
     - id: check-merge-conflict
     - id: check-added-large-files
@@ -94,6 +95,7 @@ repos:
       args:
       - -x
       exclude: ^(test_apps/kotlin_android|packages/kotlin-android)/gradlew$
+    - id: hadolint
 
     - id: markdownlint-rumdl-strict
       # Strict 120-char hard limit (incl. code blocks + tables) is too aggressive
