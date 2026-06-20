@@ -43,6 +43,7 @@ __pycache__/
 .hypothesis/
 .coverage
 .coverage*
+.e2e-logs/
 htmlcov/
 share/python-wheels/
 prompt_template.egg-info/
@@ -143,6 +144,7 @@ packages/*/TestResults/
 
 # IDE / Editor
 .idea/
+*.iml
 .vscode/
 .run/
 .DS_store
