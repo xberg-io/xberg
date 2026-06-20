@@ -466,6 +466,8 @@ jobs:
           # PyO3 abi3-py310 → one wheel per platform covers Python 3.10+.
           cibw-build: "cp310-*"
           upload-artifact: "false"
+          # kreuzberg links libheif-sys, so opt in to the in-container libheif build.
+          build-libheif: "true"
           # AlmaLinux 8 base ships OpenSSL 1.1.1 (CentOS 7 base of manylinux2014
           # ships 1.0.2k which openssl-sys 0.9.115+ rejects).
           manylinux-x86_64-image: "manylinux_2_28"
