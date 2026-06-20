@@ -1,7 +1,7 @@
 {
   "name": "kreuzberg-cli",
-  "version": "0.1.0",
-  "description": "CLI proxy for kreuzberg \u2014 downloads and runs the native kreuzberg binary from GitHub releases.",
+  "version": "0.0.1",
+  "description": "CLI proxy for kreuzberg — downloads and runs the native kreuzberg binary from GitHub releases.",
   "type": "module",
   "license": "MIT",
   "author": "Na'aman Hirschfeld",
@@ -12,9 +12,6 @@
   },
   "bin": {
     "kreuzberg": "./bin/kreuzberg.js"
-  },
-  "scripts": {
-    "postinstall": "node install.js"
   },
   "files": [
     "bin/",
