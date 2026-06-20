@@ -1284,10 +1284,11 @@ fn test_include_page_rasters_emits_warning_on_document_level_ocr_bypass() {
     );
 }
 
-/// Regression test for #1077: PDFs containing ImageData::Raw images (non-DCT embedded
-/// images common in Acrobat Sign / Word exports) must extract without "image dimension
-/// probe failed" errors. Raw pixel buffers are re-encoded to PNG so they are probeable
-/// by load_image_for_ocr, extract_image_metadata, and VLM pipelines.
+/// Regression test for #1077: PDFs containing embedded images (common in Acrobat Sign /
+/// Word exports) must extract without "image dimension probe failed" errors. Every image
+/// must be probeable by load_image_for_ocr, extract_image_metadata, and VLM pipelines —
+/// raw pixel buffers are re-encoded to PNG, DCT images pass through as JPEG, and no image
+/// may escape as a headerless buffer with an undeterminable format.
 ///
 /// Fixture: user_reports/mp_axmp_rec_en.pdf — the original bug reproducer.
 #[test]
@@ -1325,25 +1326,31 @@ fn test_regression_1077_raw_pdf_images_re_encoded_as_png() {
         "mp_axmp_rec_en.pdf must yield at least one extracted image"
     );
 
-    // At least one image must carry format="png" — that is the re-encoded Raw image.
-    // Before the fix, raw images were stored as headerless pixel dumps; after the fix
-    // they are PNG-encoded and probeable.
-    let png_images: Vec<_> = images.iter().filter(|img| img.format == "png").collect();
-    assert!(
-        !png_images.is_empty(),
-        "at least one image must have format=\"png\" (re-encoded from Raw pixel data); \
-         got formats: {:?}",
-        images.iter().map(|i| i.format.as_ref()).collect::<Vec<_>>()
-    );
-
-    // Every png-format image must start with the PNG magic bytes.
-    for img in &png_images {
+    // The #1077 guarantee is that no image escapes as a headerless, unprobeable buffer:
+    // every extracted image must carry a real, determinable format whose magic bytes match
+    // its declared `format`. Raw pixel buffers are re-encoded to PNG; DCT-embedded images
+    // are passed through as JPEG (pdf_oxide >= 0.3.66 returns these directly rather than as
+    // ImageData::Raw). A "raw" format or a format/magic-byte mismatch is the regression.
+    for img in images.iter() {
+        let magic = &img.data[..8.min(img.data.len())];
+        let magic_matches = match img.format.as_ref() {
+            "png" => img.data.starts_with(b"\x89PNG\r\n\x1a\n"),
+            "jpeg" => img.data.starts_with(b"\xff\xd8\xff"),
+            "gif" => img.data.starts_with(b"GIF8"),
+            "tiff" => img.data.starts_with(b"II") || img.data.starts_with(b"MM"),
+            "bmp" => img.data.starts_with(b"BM"),
+            "webp" => img.data.len() >= 12 && &img.data[0..4] == b"RIFF" && &img.data[8..12] == b"WEBP",
+            other => panic!(
+                "image at index {} has non-probeable format {other:?} (the #1077 regression: \
+                 headerless/unrecognized image buffer); first 8 bytes: {magic:02x?}",
+                img.image_index
+            ),
+        };
         assert!(
-            img.data.starts_with(b"\x89PNG"),
-            "image at index {} has format=\"png\" but data does not start with PNG magic bytes; \
-             first 4 bytes: {:02x?}",
-            img.image_index,
-            &img.data[..4.min(img.data.len())]
+            magic_matches,
+            "image at index {} declares format={:?} but data does not start with the matching \
+             magic bytes; first 8 bytes: {magic:02x?}",
+            img.image_index, img.format
         );
     }
 }

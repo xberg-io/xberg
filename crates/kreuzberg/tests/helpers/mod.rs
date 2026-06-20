@@ -113,7 +113,7 @@ pub fn test_config_with_ocr() -> kreuzberg::core::config::ExtractionConfig {
     ExtractionConfig {
         ocr: Some(OcrConfig {
             backend: "tesseract".to_string(),
-            language: "eng".to_string(),
+            language: vec!["eng".to_string()],
             ..Default::default()
         }),
         force_ocr: false,
