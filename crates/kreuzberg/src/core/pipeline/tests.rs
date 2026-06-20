@@ -1139,6 +1139,94 @@ mod output_format_pass_tests {
     }
 }
 
+/// Unit tests for `apply_data_base64_pass`.
+///
+/// Directly exercises the private pass without going through the full extractor,
+/// mirroring the approach used by `output_format_pass_tests` above.
+mod data_base64_pass_tests {
+    use std::borrow::Cow;
+
+    use base64::Engine as _;
+    use bytes::Bytes;
+
+    use crate::core::config::extraction::ImageExtractionConfig;
+    use crate::types::{ExtractedImage, ExtractionResult};
+
+    use super::apply_data_base64_pass;
+
+    fn make_image(data: Bytes) -> ExtractedImage {
+        ExtractedImage {
+            data,
+            format: Cow::Borrowed("png"),
+            ..Default::default()
+        }
+    }
+
+    /// When `include_data_base64` is `true` every image's `data_base64` must be
+    /// `Some(base64::STANDARD.encode(image.data))`.
+    #[test]
+    fn include_data_base64_true_encodes_all_images() {
+        let first_bytes = Bytes::from_static(b"\x89PNG\r\n\x1a\n");
+        let second_bytes = Bytes::from_static(b"\xff\xd8\xff");
+
+        let mut result = ExtractionResult {
+            images: Some(vec![
+                make_image(first_bytes.clone()),
+                make_image(second_bytes.clone()),
+            ]),
+            ..Default::default()
+        };
+
+        let cfg = ImageExtractionConfig {
+            include_data_base64: true,
+            ..Default::default()
+        };
+
+        apply_data_base64_pass(&mut result, &cfg);
+
+        let images = result.images.as_ref().expect("images must be present");
+        assert_eq!(
+            images[0].data_base64,
+            Some(base64::engine::general_purpose::STANDARD.encode(&first_bytes)),
+            "first image data_base64 must be the STANDARD-encoded bytes"
+        );
+        assert_eq!(
+            images[1].data_base64,
+            Some(base64::engine::general_purpose::STANDARD.encode(&second_bytes)),
+            "second image data_base64 must be the STANDARD-encoded bytes"
+        );
+    }
+
+    /// When `include_data_base64` is `false` (the default) no image must have
+    /// its `data_base64` field populated.
+    #[test]
+    fn include_data_base64_false_leaves_field_none() {
+        let mut result = ExtractionResult {
+            images: Some(vec![
+                make_image(Bytes::from_static(b"\x89PNG\r\n\x1a\n")),
+                make_image(Bytes::from_static(b"\xff\xd8\xff")),
+            ]),
+            ..Default::default()
+        };
+
+        let cfg = ImageExtractionConfig {
+            include_data_base64: false,
+            ..Default::default()
+        };
+
+        apply_data_base64_pass(&mut result, &cfg);
+
+        let images = result.images.as_ref().expect("images must be present");
+        for (idx, image) in images.iter().enumerate() {
+            assert_eq!(
+                image.data_base64,
+                None,
+                "image[{idx}].data_base64 must remain None when include_data_base64 is false"
+            );
+        }
+    }
+}
+
 #[tokio::test]
 #[serial]
 async fn test_pdf_run_fallback_not_suppressed_without_images_config() {
