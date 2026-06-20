@@ -335,16 +335,71 @@ Extract comprehensive metadata from all supported formats: authors, titles, crea
 
 ## AI Coding Assistants
 
-Install the Kreuzberg plugin from the [`kreuzberg-dev/plugins`](https://github.com/kreuzberg-dev/plugins) marketplace:
+Install the Kreuzberg plugin from the [`kreuzberg-dev/plugins`](https://github.com/kreuzberg-dev/plugins) marketplace. It ships the Kreuzberg agent skills (extraction APIs, OCR backends, configuration, language conventions) and works with every major coding agent — expand your harness below.
+
+<details open>
+<summary><strong>Claude Code</strong></summary>
 
 ```text
 /plugin marketplace add kreuzberg-dev/plugins
 /plugin install kreuzberg@kreuzberg
 ```
+</details>
 
-Works with Claude Code, Codex, Cursor, Gemini CLI, Factory Droid, GitHub Copilot CLI, and opencode. See [the marketplace README](https://github.com/kreuzberg-dev/plugins) for harness-specific install instructions.
+<details>
+<summary><strong>Codex CLI</strong></summary>
 
-The plugin ships the Kreuzberg agent skill — previously distributed from the in-tree `skills/` directory — and teaches assistants the extraction APIs, configuration fields, OCR backends, and language-specific conventions.
+```text
+/plugins add https://github.com/kreuzberg-dev/plugins
+```
+
+Then search for `kreuzberg` and select **Install Plugin**.
+</details>
+
+<details>
+<summary><strong>Cursor</strong></summary>
+
+Settings → Plugins → Add from URL → `https://github.com/kreuzberg-dev/plugins`, then select **kreuzberg**.
+</details>
+
+<details>
+<summary><strong>Gemini CLI</strong></summary>
+
+```text
+gemini extensions install https://github.com/kreuzberg-dev/plugins
+```
+</details>
+
+<details>
+<summary><strong>Factory Droid</strong></summary>
+
+```text
+droid plugin marketplace add https://github.com/kreuzberg-dev/plugins
+droid plugin install kreuzberg@kreuzberg
+```
+</details>
+
+<details>
+<summary><strong>GitHub Copilot CLI</strong></summary>
+
+```text
+copilot plugin marketplace add https://github.com/kreuzberg-dev/plugins
+copilot plugin install kreuzberg@kreuzberg
+```
+</details>
+
+<details>
+<summary><strong>opencode</strong></summary>
+
+Add the package to `opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["@kreuzberg/opencode-kreuzberg"]
+}
+```
+</details>
 
 ## Documentation
 
