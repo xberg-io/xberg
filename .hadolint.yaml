@@ -1,0 +1,17 @@
+# hadolint configuration
+# DL3008/DL3018: version-pinning apt/apk packages is intentionally not done —
+#   the build images track distro security updates and pinned versions are
+#   routinely garbage-collected from upstream mirrors, breaking reproducible builds.
+# DL4006: the Alpine images run busybox `ash`, where `set -o pipefail` is the
+#   default-safe behaviour and the explicit SHELL directive is unnecessary.
+# DL3003: `cd` inside a single RUN is intentional for ephemeral source builds
+#   (libheif, the Elixir NIF) — WORKDIR would leak the directory into later layers.
+# SC2016: the `$ORIGIN` patchelf rpath must stay literal — single quotes are correct.
+# SC2012: `ls` of the musl loader glob runs over a controlled, single-match path.
+ignored:
+    - DL3008
+    - DL3018
+    - DL4006
+    - DL3003
+    - SC2016
+    - SC2012
