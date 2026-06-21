@@ -1081,6 +1081,11 @@ jobs:
         with:
           crate-name: kreuzberg-ffi
           abis: ${{ matrix.abi }}
+          # Android uses the no-ORT feature set: ort-sys has no prebuilt for
+          # x86_64-linux-android and the dep is android-target for all Android
+          # arches (see kreuzberg-ffi Cargo.toml). Mirrors ci-mobile.yaml.
+          features: android-target
+          no-default-features: "true"
       - uses: actions/upload-artifact@v7
         with:
           name: kotlin-android-${{ matrix.abi }}
@@ -1333,6 +1338,11 @@ jobs:
         with:
           crate-name: kreuzberg-dart
           abis: ${{ matrix.abi }}
+          # Android uses the no-ORT feature set: ort-sys has no prebuilt for
+          # x86_64-linux-android and the dep is android-target for all Android
+          # arches (see kreuzberg-dart Cargo.toml). Mirrors ci-mobile.yaml.
+          features: android-target
+          no-default-features: "true"
       - uses: actions/upload-artifact@v7
         with:
           name: dart-android-${{ matrix.abi }}
