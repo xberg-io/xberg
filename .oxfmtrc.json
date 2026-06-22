@@ -13,7 +13,8 @@
 		"**/node_modules/**",
 		"**/pkg/**",
 		"**/.next/**",
-		"**/*.min.js"
+		"**/*.min.js",
+		"**/testdata/**"
 	],
 	"overrides": [
 		{

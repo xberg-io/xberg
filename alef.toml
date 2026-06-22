@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.25.59"
+alef_version = "0.26.0"
 languages = [
   "python",
   "node",
@@ -4043,6 +4043,14 @@ path = "../../crates/kreuzberg-wasm/pkg/nodejs"
 python = "ruff check --fix {dir} && ruff format {dir}"
 go = "gofmt -w {dir}"
 rust = "(cd {dir} && cargo fmt --all)"
+
+# The Zig e2e harness links kreuzberg-ffi, which is built with `--features all`
+# and therefore pulls in libheif. On strict-linker targets (notably aarch64)
+# the FFI's undefined libheif symbols cannot be resolved unless the e2e build
+# links libheif explicitly. libheif is installed to /usr/local/lib by the CI
+# install-system-deps action.
+[crates.e2e.extra_system_libs]
+zig = ["heif"]
 
 [crates.e2e.fields]
 chunks_have_content = "chunks_have_content"

@@ -109,6 +109,12 @@ ist = "ist"
 ein = "ein"
 runner-gpu-l4 = "runner-gpu-l4"
 l4 = "l4"
+# alef C-binding local naming: `c`-prefixed FFI locals (e.g. ccustomPrompt from customPrompt)
+ccustom = "ccustom"
+# Jackson databind package segment (com.fasterxml.jackson.databind.ser.std.StdSerializer)
+ser = "ser"
+# RAKE keyword algorithm (Go lowercases the leading letter: "rAKE-specific")
+AKE = "AKE"
 
 [default.extend-identifiers]
 # Allow these identifiers in code
@@ -141,6 +147,8 @@ extend-exclude = [
   "**/stopwords/",
   # Test data (hOCR samples, etc.)
   "**/test_data/",
+  # Test data fixtures (e.g. tokenizer.json vocab with subword tokens)
+  "**/testdata/",
   # Patch files (upstream diffs)
   "**/*.diff",
   "**/*.patch",

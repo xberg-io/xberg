@@ -18,6 +18,7 @@ pub fn build(b: *std.Build) void {
     kreuzberg_module.addLibraryPath(.{ .cwd_relative = ffi_path });
     kreuzberg_module.addIncludePath(.{ .cwd_relative = ffi_include });
     kreuzberg_module.linkSystemLibrary("kreuzberg_ffi", .{});
+    kreuzberg_module.linkSystemLibrary("heif", .{});
     kreuzberg_module.addRPath(.{ .cwd_relative = ffi_path_abs });
 
     const async_module = b.createModule(.{

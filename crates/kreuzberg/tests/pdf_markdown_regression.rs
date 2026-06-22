@@ -337,24 +337,24 @@ const PDFIUM_KNOWN_REGRESSIONS: &[&str] = &[
     "pr-138-example", // requires pdf_oxide legacy-crypto feature (R=4 PDF)
     // F1 quality regressions vs calibrated floor (md / plain F1; recovered docs removed at pdf_oxide 0.3.66):
     "right_to_left_02",                       // md 0.423 < 0.43 (RTL drift — pdf_oxide #484)
-    "right_to_left_03",                       // md 0.122 < 0.31 (RTL: pdf_oxide CID/Type0 decode drops ~92% of body; #484)
-    "hello_structure",                        // md 0.778 < 0.93
-    "issue-336-example",                      // md 0.522 < 0.74
-    "issue-466-example",                      // md 0.833 / plain 0.806 < 0.93
-    "issue-53-example",                       // md 0.843 / plain 0.694 < 0.90
-    "issue-987-test",                         // md 0.400 / plain 0.000 < 0.93
-    "la-precinct-bulletin-2014-p1",           // md 0.834 / plain 0.658 < 0.90
-    "pr-88-example",                          // md 0.793 < 0.85
-    "SPARSE-2024-INV-1234_borderless_table",  // md 0.874 < 0.89
+    "right_to_left_03",  // md 0.122 < 0.31 (RTL: pdf_oxide CID/Type0 decode drops ~92% of body; #484)
+    "hello_structure",   // md 0.778 < 0.93
+    "issue-336-example", // md 0.522 < 0.74
+    "issue-466-example", // md 0.833 / plain 0.806 < 0.93
+    "issue-53-example",  // md 0.843 / plain 0.694 < 0.90
+    "issue-987-test",    // md 0.400 / plain 0.000 < 0.93
+    "la-precinct-bulletin-2014-p1", // md 0.834 / plain 0.658 < 0.90
+    "pr-88-example",     // md 0.793 < 0.85
+    "SPARSE-2024-INV-1234_borderless_table", // md 0.874 < 0.89
     "WARN-Report-for-7-1-2015-to-03-25-2016", // plain 0.669 < 0.83
-    "nougat_005",                             // plain 0.333 < 0.74
-    "nougat_018",                             // md 0.740 < 0.84
-    "nougat_039",                             // md 0.684 < 0.83
-    "nougat_040",                             // md 0.765 < 0.81
-    "pdfa_014",                               // md 0.684 < 0.83
-    "pdfa_015",                               // md 0.765 < 0.81
-    "pdfa_036",                               // md 0.639 < 0.83
-    "pdfa_044",                               // md 0.646 / plain 0.720 < 0.85
+    "nougat_005",        // plain 0.333 < 0.74
+    "nougat_018",        // md 0.740 < 0.84
+    "nougat_039",        // md 0.684 < 0.83
+    "nougat_040",        // md 0.765 < 0.81
+    "pdfa_014",          // md 0.684 < 0.83
+    "pdfa_015",          // md 0.765 < 0.81
+    "pdfa_036",          // md 0.639 < 0.83
+    "pdfa_044",          // md 0.646 / plain 0.720 < 0.85
     // OSS v5 post-processor regression — added 2026-06-02.
     // After wiring `register_builtin()` for NER / redaction / summarisation /
     // translation / page-classification / captions / QR codes, the rotated NICS
