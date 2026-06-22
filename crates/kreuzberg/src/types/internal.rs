@@ -440,6 +440,7 @@ impl InternalElement {
         feature = "quality",
         feature = "chunking"
     ))]
+    #[allow(dead_code)] // callers live behind ocr/office/pdf/etc, not chunking alone
     pub(crate) fn with_page(mut self, page: u32) -> Self {
         self.page = Some(page);
         self

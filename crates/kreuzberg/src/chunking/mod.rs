@@ -77,7 +77,9 @@ pub(crate) use core::chunk_text_with_heading_source;
 pub use processor::ChunkingProcessor;
 pub use rag::chunk_for_rag;
 #[cfg(feature = "chunking-tokenizers")]
-pub use tokenizer_cache::{DEFAULT_COUNT_TOKENS_MODEL, count_tokens};
+pub use tokenizer_cache::{
+    DEFAULT_COUNT_TOKENS_MODEL, TokenizerSource, count_tokens, preload_tokenizer, try_count_tokens,
+};
 
 use crate::error::Result;
 
