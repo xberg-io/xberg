@@ -33,6 +33,9 @@
 mod errors;
 mod format;
 mod params;
+pub(crate) mod prompts;
+pub(crate) mod resources;
+pub(crate) mod schema;
 mod server;
 
 // Re-export public API for backward compatibility

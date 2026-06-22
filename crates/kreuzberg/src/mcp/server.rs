@@ -6,7 +6,11 @@ use crate::ExtractionConfig;
 use crate::service::{ExtractionRequest, ExtractionServiceBuilder};
 use rmcp::{
     ServerHandler, ServiceExt,
-    handler::server::{router::tool::ToolRouter, wrapper::Parameters},
+    handler::server::{
+        prompt::PromptContext,
+        router::{prompt::PromptRouter, tool::ToolRouter},
+        wrapper::Parameters,
+    },
     model::*,
     tool, tool_handler, tool_router,
     transport::stdio,
@@ -25,6 +29,8 @@ use rmcp::transport::streamable_http_server::{StreamableHttpService, session::lo
 #[cfg_attr(alef, alef(skip))]
 pub struct KreuzbergMcp {
     tool_router: ToolRouter<KreuzbergMcp>,
+    /// Prompt router for the three guided-workflow prompts.
+    prompt_router: PromptRouter<KreuzbergMcp>,
     /// Default extraction configuration loaded from config file via discovery
     default_config: std::sync::Arc<ExtractionConfig>,
     /// Tower service for extraction requests with tracing and metrics layers.
@@ -45,6 +51,7 @@ impl Clone for KreuzbergMcp {
             .clone();
         Self {
             tool_router: self.tool_router.clone(),
+            prompt_router: self.prompt_router.clone(),
             default_config: self.default_config.clone(),
             extraction_service: std::sync::Mutex::new(svc),
         }
@@ -86,6 +93,7 @@ impl KreuzbergMcp {
 
         Self {
             tool_router: Self::tool_router(),
+            prompt_router: super::prompts::build_prompt_router(),
             default_config: std::sync::Arc::new(config),
             extraction_service: std::sync::Mutex::new(extraction_service),
         }
@@ -101,7 +109,9 @@ impl KreuzbergMcp {
     /// a Tokio runtime. Using sync wrappers would cause a nested runtime panic.
     #[tool(
         description = "Extract content from a file by path. Supports PDFs, Word, Excel, images (with OCR), HTML, and more.",
-        annotations(title = "Extract File", read_only_hint = true, idempotent_hint = true)
+        annotations(title = "Extract File", read_only_hint = true, idempotent_hint = true),
+        output_schema = rmcp::handler::server::common::schema_for_output::<super::schema::ExtractionOutput>()
+            .expect("ExtractionOutput schema must be valid")
     )]
     async fn extract_file(
         &self,
@@ -132,7 +142,10 @@ impl KreuzbergMcp {
         let result = svc.call(request).await.map_err(map_kreuzberg_error_to_mcp)?;
 
         let response = format_extraction_result_for_wire(&result, use_toon);
-        Ok(CallToolResult::success(vec![Content::text(response)]))
+        let dto = build_extraction_output(&result);
+        let mut tool_result = CallToolResult::success(vec![Content::text(response)]);
+        tool_result.structured_content = serde_json::to_value(&dto).ok();
+        Ok(tool_result)
     }
 
     /// Extract content from base64-encoded bytes.
@@ -144,7 +157,9 @@ impl KreuzbergMcp {
     /// a Tokio runtime. Using sync wrappers would cause a nested runtime panic.
     #[tool(
         description = "Extract content from base64-encoded file data. Returns extracted text, metadata, and tables.",
-        annotations(title = "Extract Bytes", read_only_hint = true, idempotent_hint = true)
+        annotations(title = "Extract Bytes", read_only_hint = true, idempotent_hint = true),
+        output_schema = rmcp::handler::server::common::schema_for_output::<super::schema::ExtractionOutput>()
+            .expect("ExtractionOutput schema must be valid")
     )]
     async fn extract_bytes(
         &self,
@@ -179,7 +194,10 @@ impl KreuzbergMcp {
         let result = svc.call(request).await.map_err(map_kreuzberg_error_to_mcp)?;
 
         let response = format_extraction_result_for_wire(&result, use_toon);
-        Ok(CallToolResult::success(vec![Content::text(response)]))
+        let dto = build_extraction_output(&result);
+        let mut tool_result = CallToolResult::success(vec![Content::text(response)]);
+        tool_result.structured_content = serde_json::to_value(&dto).ok();
+        Ok(tool_result)
     }
 
     /// Extract content from multiple files in parallel.
@@ -191,7 +209,9 @@ impl KreuzbergMcp {
     /// a Tokio runtime. Using sync wrappers would cause a nested runtime panic.
     #[tool(
         description = "Extract content from multiple files in parallel. Returns results for all files.",
-        annotations(title = "Batch Extract Files", read_only_hint = true, idempotent_hint = true)
+        annotations(title = "Batch Extract Files", read_only_hint = true, idempotent_hint = true),
+        output_schema = rmcp::handler::server::common::schema_for_output::<super::schema::BatchExtractionOutput>()
+            .expect("BatchExtractionOutput schema must be valid")
     )]
     async fn batch_extract_files(
         &self,
@@ -271,7 +291,9 @@ impl KreuzbergMcp {
     /// This tool identifies the file format, useful for determining which extractor to use.
     #[tool(
         description = "Detect the MIME type of a file. Returns the detected MIME type string.",
-        annotations(title = "Detect MIME Type", read_only_hint = true, idempotent_hint = true)
+        annotations(title = "Detect MIME Type", read_only_hint = true, idempotent_hint = true),
+        output_schema = rmcp::handler::server::common::schema_for_output::<super::schema::DetectMimeTypeOutput>()
+            .expect("DetectMimeTypeOutput schema must be valid")
     )]
     fn detect_mime_type(
         &self,
@@ -283,7 +305,12 @@ impl KreuzbergMcp {
         let mime_type =
             detect_mime_type(params.path.clone(), params.use_content).map_err(map_kreuzberg_error_to_mcp)?;
 
-        Ok(CallToolResult::success(vec![Content::text(mime_type)]))
+        let dto = super::schema::DetectMimeTypeOutput {
+            mime_type: mime_type.clone(),
+        };
+        let mut tool_result = CallToolResult::success(vec![Content::text(mime_type)]);
+        tool_result.structured_content = serde_json::to_value(&dto).ok();
+        Ok(tool_result)
     }
 
     /// Get cache statistics.
@@ -291,7 +318,9 @@ impl KreuzbergMcp {
     /// This tool returns statistics about the cache including total files, size, and disk space.
     #[tool(
         description = "Get cache statistics including total files, size, and available disk space.",
-        annotations(title = "Cache Stats", read_only_hint = true, idempotent_hint = true)
+        annotations(title = "Cache Stats", read_only_hint = true, idempotent_hint = true),
+        output_schema = rmcp::handler::server::common::schema_for_output::<super::schema::CacheStatsOutput>()
+            .expect("CacheStatsOutput schema must be valid")
     )]
     fn cache_stats(
         &self,
@@ -321,7 +350,15 @@ impl KreuzbergMcp {
             stats.newest_file_age_days
         );
 
-        Ok(CallToolResult::success(vec![Content::text(response)]))
+        let dto = super::schema::CacheStatsOutput {
+            directory: cache_dir.to_string_lossy().into_owned(),
+            total_files: stats.total_files as u64,
+            total_size_mb: stats.total_size_mb,
+            available_space_mb: stats.available_space_mb,
+        };
+        let mut tool_result = CallToolResult::success(vec![Content::text(response)]);
+        tool_result.structured_content = serde_json::to_value(&dto).ok();
+        Ok(tool_result)
     }
 
     /// List all supported document formats.
@@ -329,7 +366,9 @@ impl KreuzbergMcp {
     /// This tool returns all file extensions and MIME types that Kreuzberg can process.
     #[tool(
         description = "List all supported document formats with their file extensions and MIME types.",
-        annotations(title = "List Formats", read_only_hint = true, idempotent_hint = true)
+        annotations(title = "List Formats", read_only_hint = true, idempotent_hint = true),
+        output_schema = rmcp::handler::server::common::schema_for_output::<super::schema::ListFormatsOutput>()
+            .expect("ListFormatsOutput schema must be valid")
     )]
     fn list_formats(
         &self,
@@ -337,7 +376,15 @@ impl KreuzbergMcp {
     ) -> Result<CallToolResult, rmcp::ErrorData> {
         let formats = crate::core::mime::list_supported_formats();
         let response = serde_json::to_string_pretty(&formats).unwrap_or_default();
-        Ok(CallToolResult::success(vec![Content::text(response)]))
+        let dto = super::schema::ListFormatsOutput {
+            formats: formats
+                .into_iter()
+                .map(|f| serde_json::to_value(f).unwrap_or_default())
+                .collect(),
+        };
+        let mut tool_result = CallToolResult::success(vec![Content::text(response)]);
+        tool_result.structured_content = serde_json::to_value(&dto).ok();
+        Ok(tool_result)
     }
 
     /// Clear the cache.
@@ -377,19 +424,22 @@ impl KreuzbergMcp {
     /// Returns the current version of the Kreuzberg library.
     #[tool(
         description = "Get the current Kreuzberg library version.",
-        annotations(title = "Get Version", read_only_hint = true, idempotent_hint = true)
+        annotations(title = "Get Version", read_only_hint = true, idempotent_hint = true),
+        output_schema = rmcp::handler::server::common::schema_for_output::<super::schema::VersionOutput>()
+            .expect("VersionOutput schema must be valid")
     )]
     fn get_version(
         &self,
         Parameters(_): Parameters<super::params::EmptyParams>,
     ) -> Result<CallToolResult, rmcp::ErrorData> {
-        let response = serde_json::json!({
-            "version": env!("CARGO_PKG_VERSION"),
-        });
-
-        Ok(CallToolResult::success(vec![Content::text(
-            serde_json::to_string_pretty(&response).unwrap_or_default(),
-        )]))
+        let version = env!("CARGO_PKG_VERSION");
+        let dto = super::schema::VersionOutput {
+            version: version.to_string(),
+        };
+        let response = serde_json::to_string_pretty(&dto).unwrap_or_default();
+        let mut tool_result = CallToolResult::success(vec![Content::text(response)]);
+        tool_result.structured_content = serde_json::to_value(&dto).ok();
+        Ok(tool_result)
     }
 
     /// Get model manifest with expected model files and checksums.
@@ -398,7 +448,9 @@ impl KreuzbergMcp {
     /// their sizes and SHA256 checksums.
     #[tool(
         description = "Get model manifest listing expected model files, sizes, and SHA256 checksums.",
-        annotations(title = "Cache Manifest", read_only_hint = true, idempotent_hint = true)
+        annotations(title = "Cache Manifest", read_only_hint = true, idempotent_hint = true),
+        output_schema = rmcp::handler::server::common::schema_for_output::<super::schema::CacheManifestOutput>()
+            .expect("CacheManifestOutput schema must be valid")
     )]
     fn cache_manifest(
         &self,
@@ -429,16 +481,16 @@ impl KreuzbergMcp {
             .sum();
         let version = env!("CARGO_PKG_VERSION");
 
-        let response = serde_json::json!({
-            "kreuzberg_version": version,
-            "total_size_bytes": total_size_bytes,
-            "model_count": entries.len(),
-            "models": entries,
-        });
-
-        Ok(CallToolResult::success(vec![Content::text(
-            serde_json::to_string_pretty(&response).unwrap_or_default(),
-        )]))
+        let dto = super::schema::CacheManifestOutput {
+            kreuzberg_version: version.to_string(),
+            model_count: entries.len(),
+            total_size_bytes,
+            models: entries,
+        };
+        let response = serde_json::to_string_pretty(&dto).unwrap_or_default();
+        let mut tool_result = CallToolResult::success(vec![Content::text(response)]);
+        tool_result.structured_content = serde_json::to_value(&dto).ok();
+        Ok(tool_result)
     }
 
     /// Download and cache model files.
@@ -574,7 +626,9 @@ impl KreuzbergMcp {
             read_only_hint = true,
             idempotent_hint = true,
             open_world_hint = true
-        )
+        ),
+        output_schema = rmcp::handler::server::common::schema_for_output::<super::schema::EmbedTextOutput>()
+            .expect("EmbedTextOutput schema must be valid")
     )]
     fn embed_text(
         &self,
@@ -595,7 +649,9 @@ impl KreuzbergMcp {
             read_only_hint = true,
             idempotent_hint = false,
             open_world_hint = true
-        )
+        ),
+        output_schema = rmcp::handler::server::common::schema_for_output::<super::schema::ExtractStructuredOutput>()
+            .expect("ExtractStructuredOutput schema must be valid")
     )]
     async fn extract_structured(
         &self,
@@ -611,7 +667,9 @@ impl KreuzbergMcp {
     /// Requires the `chunking` feature to be enabled.
     #[tool(
         description = "Split text into chunks with configurable size and overlap. Supports 'text', 'markdown', 'yaml', and 'semantic' chunker types.",
-        annotations(title = "Chunk Text", read_only_hint = true, idempotent_hint = true)
+        annotations(title = "Chunk Text", read_only_hint = true, idempotent_hint = true),
+        output_schema = rmcp::handler::server::common::schema_for_output::<super::schema::ChunkTextOutput>()
+            .expect("ChunkTextOutput schema must be valid")
     )]
     fn chunk_text(
         &self,
@@ -624,6 +682,124 @@ impl KreuzbergMcp {
 /// Resolve the cache base directory.
 fn resolve_cache_base() -> std::path::PathBuf {
     crate::cache_dir::resolve_cache_base()
+}
+
+/// Build an [`ExtractionOutput`] DTO from a core [`ExtractionResult`].
+fn build_extraction_output(result: &crate::types::ExtractionResult) -> super::schema::ExtractionOutput {
+    // Metadata is a typed struct, not a map. Serialize to JSON then flatten
+    // scalar fields to String for a portable key-value representation.
+    let metadata: std::collections::HashMap<String, String> =
+        if let Ok(serde_json::Value::Object(map)) = serde_json::to_value(&result.metadata) {
+            map.into_iter()
+                .filter_map(|(k, v)| {
+                    let s = match &v {
+                        serde_json::Value::String(s) => Some(s.clone()),
+                        serde_json::Value::Bool(b) => Some(b.to_string()),
+                        serde_json::Value::Number(n) => Some(n.to_string()),
+                        _ => None,
+                    };
+                    s.map(|val| (k, val))
+                })
+                .collect()
+        } else {
+            std::collections::HashMap::new()
+        };
+    let tables: Vec<serde_json::Value> = result
+        .tables
+        .iter()
+        .map(|t| serde_json::to_value(t).unwrap_or_default())
+        .collect();
+    let detected_languages = result.detected_languages.clone().unwrap_or_default();
+    super::schema::ExtractionOutput {
+        text: result.content.clone(),
+        mime_type: Some(result.mime_type.as_ref().to_string()),
+        metadata,
+        tables,
+        detected_languages,
+    }
+}
+
+/// Handle completion requests for prompt arguments and resource URIs.
+fn complete_impl(request: CompleteRequestParams) -> Result<CompleteResult, rmcp::ErrorData> {
+    use rmcp::model::{CompletionInfo, Reference};
+
+    let arg_name = &request.argument.name;
+    let arg_value = &request.argument.value;
+
+    let candidates: Vec<String> = match &request.r#ref {
+        Reference::Prompt(prompt_ref) => {
+            match (prompt_ref.name.as_str(), arg_name.as_str()) {
+                // OCR language completions for extract_with_ocr
+                (_, "languages") => complete_ocr_languages(arg_value),
+                // Embedding preset completions for semantic_search
+                (_, "preset") => complete_embedding_presets(arg_value),
+                // Chunker type completions for semantic_search
+                (_, "chunker_type") => complete_chunker_types(arg_value),
+                // output_format for extract_document
+                (_, "output_format") => complete_output_formats(arg_value),
+                _ => vec![],
+            }
+        }
+        Reference::Resource(_) => vec![],
+    };
+
+    let completion = CompletionInfo::with_all_values(candidates).unwrap_or_else(|_| CompletionInfo {
+        values: vec![],
+        total: Some(0),
+        has_more: Some(false),
+    });
+    Ok(CompleteResult::new(completion))
+}
+
+/// Return OCR language code completions filtered by the given prefix.
+fn complete_ocr_languages(prefix: &str) -> Vec<String> {
+    let all = [
+        "afr", "amh", "ara", "asm", "aze", "bel", "ben", "bod", "bos", "bul", "cat", "ceb", "ces", "chi_sim",
+        "chi_tra", "chr", "cos", "cym", "dan", "deu", "div", "dzo", "ell", "eng", "enm", "epo", "est", "eus", "fao",
+        "fas", "fil", "fin", "fra", "frm", "gle", "glg", "grc", "guj", "hat", "heb", "hin", "hrv", "hun", "hye", "iku",
+        "ind", "isl", "ita", "ita_old", "jav", "jpn", "kan", "kat", "kaz", "khm", "kir", "kor", "kur", "lao", "lat",
+        "lav", "lit", "ltz", "mal", "mar", "mkd", "mlt", "mon", "mri", "msa", "mya", "nep", "nor", "oci", "ori", "pan",
+        "pol", "por", "pus", "ron", "rus", "san", "sin", "slk", "slv", "snd", "spa", "spa_old", "sqi", "srp", "swa",
+        "swe", "syr", "tam", "tat", "tel", "tgk", "tgl", "tha", "tir", "ton", "tur", "uig", "ukr", "urd", "uzb", "vie",
+        "yid", "yor",
+    ];
+    // The value may be a comma-separated list; complete the last segment.
+    let last = prefix.split(',').next_back().unwrap_or(prefix).trim();
+    all.iter()
+        .filter(|lang| lang.starts_with(last))
+        .map(|s| s.to_string())
+        .take(20)
+        .collect()
+}
+
+/// Return embedding preset completions filtered by prefix.
+fn complete_embedding_presets(prefix: &str) -> Vec<String> {
+    let presets = ["speed", "balanced", "quality"];
+    presets
+        .iter()
+        .filter(|p| p.starts_with(prefix))
+        .map(|s| s.to_string())
+        .collect()
+}
+
+/// Return chunker type completions filtered by prefix.
+fn complete_chunker_types(prefix: &str) -> Vec<String> {
+    let types = ["text", "markdown", "yaml", "semantic"];
+    types
+        .iter()
+        .filter(|t| t.starts_with(prefix))
+        .map(|s| s.to_string())
+        .collect()
+}
+
+/// Return output format completions filtered by prefix.
+fn complete_output_formats(prefix: &str) -> Vec<String> {
+    let formats = ["json", "toon"];
+    formats
+        .iter()
+        .filter(|f| f.starts_with(prefix))
+        .map(|s| s.to_string())
+        .collect()
 }
 
 /// Structured extraction implementation when liter-llm feature is enabled.
@@ -669,15 +845,15 @@ async fn extract_structured_impl(
         .await
         .map_err(map_kreuzberg_error_to_mcp)?;
 
-    let response = serde_json::json!({
-        "structured_output": structured_output,
-        "content": result.content,
-        "mime_type": result.mime_type.as_ref(),
-    });
-
-    Ok(CallToolResult::success(vec![Content::text(
-        serde_json::to_string_pretty(&response).unwrap_or_default(),
-    )]))
+    let dto = super::schema::ExtractStructuredOutput {
+        structured_output: structured_output.clone(),
+        content: result.content.clone(),
+        mime_type: Some(result.mime_type.as_ref().to_string()),
+    };
+    let response = serde_json::to_string_pretty(&dto).unwrap_or_default();
+    let mut tool_result = CallToolResult::success(vec![Content::text(response)]);
+    tool_result.structured_content = serde_json::to_value(&dto).ok();
+    Ok(tool_result)
 }
 
 /// Structured extraction implementation when liter-llm feature is disabled.
@@ -788,17 +964,18 @@ fn embed_text_impl(params: super::params::EmbedTextParams) -> Result<CallToolRes
         crate::embeddings::embed_texts(&params.texts, &config).map_err(super::errors::map_kreuzberg_error_to_mcp)?;
 
     let dimensions = embeddings.first().map(|e| e.len()).unwrap_or(0);
+    let count = params.texts.len();
 
-    let response = serde_json::json!({
-        "embeddings": embeddings,
-        "model": model_name,
-        "dimensions": dimensions,
-        "count": params.texts.len(),
-    });
-
-    Ok(CallToolResult::success(vec![Content::text(
-        serde_json::to_string_pretty(&response).unwrap_or_default(),
-    )]))
+    let dto = super::schema::EmbedTextOutput {
+        embeddings: embeddings.clone(),
+        model: model_name.clone(),
+        dimensions,
+        count,
+    };
+    let response = serde_json::to_string_pretty(&dto).unwrap_or_default();
+    let mut tool_result = CallToolResult::success(vec![Content::text(response)]);
+    tool_result.structured_content = serde_json::to_value(&dto).ok();
+    Ok(tool_result)
 }
 
 /// Embed text implementation when embeddings feature is disabled.
@@ -867,28 +1044,24 @@ fn chunk_text_impl(params: super::params::ChunkTextParams) -> Result<CallToolRes
 
     let result = chunk_text(&params.text, &config, None).map_err(super::errors::map_kreuzberg_error_to_mcp)?;
 
-    let response = serde_json::json!({
-        "chunk_count": result.chunk_count,
-        "input_size_bytes": params.text.len(),
-        "config": {
-            "max_characters": config.max_characters,
-            "overlap": config.overlap,
-            "chunker_type": format!("{:?}", config.chunker_type).to_lowercase(),
-        },
-        "chunks": result.chunks.iter().map(|c| {
-            serde_json::json!({
-                "content": c.content,
-                "byte_start": c.metadata.byte_start,
-                "byte_end": c.metadata.byte_end,
-                "chunk_index": c.metadata.chunk_index,
-                "total_chunks": c.metadata.total_chunks,
-            })
-        }).collect::<Vec<_>>(),
-    });
+    let chunk_items: Vec<super::schema::ChunkItem> = result
+        .chunks
+        .iter()
+        .map(|c| super::schema::ChunkItem {
+            content: c.content.clone(),
+            chunk_index: c.metadata.chunk_index,
+            total_chunks: c.metadata.total_chunks,
+        })
+        .collect();
 
-    Ok(CallToolResult::success(vec![Content::text(
-        serde_json::to_string_pretty(&response).unwrap_or_default(),
-    )]))
+    let dto = super::schema::ChunkTextOutput {
+        chunk_count: result.chunk_count,
+        chunks: chunk_items,
+    };
+    let response = serde_json::to_string_pretty(&dto).unwrap_or_default();
+    let mut tool_result = CallToolResult::success(vec![Content::text(response)]);
+    tool_result.structured_content = serde_json::to_value(&dto).ok();
+    Ok(tool_result)
 }
 
 /// Chunk text implementation when chunking feature is disabled.
@@ -903,8 +1076,12 @@ fn chunk_text_impl(_params: super::params::ChunkTextParams) -> Result<CallToolRe
 #[tool_handler]
 impl ServerHandler for KreuzbergMcp {
     fn get_info(&self) -> ServerInfo {
-        let mut capabilities = ServerCapabilities::default();
-        capabilities.tools = Some(ToolsCapability::default());
+        let capabilities = ServerCapabilities::builder()
+            .enable_tools()
+            .enable_resources()
+            .enable_prompts()
+            .enable_completions()
+            .build();
 
         let server_info = Implementation::new("kreuzberg-mcp", env!("CARGO_PKG_VERSION"))
             .with_title("Kreuzberg Document Intelligence MCP Server")
@@ -921,6 +1098,68 @@ impl ServerHandler for KreuzbergMcp {
                  for scanned documents, force_ocr=true to always use OCR even if text extraction \
                  succeeds. Use disable_ocr=true to skip OCR entirely (images return metadata only).",
             )
+    }
+
+    fn list_resources(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: rmcp::service::RequestContext<rmcp::service::RoleServer>,
+    ) -> impl std::future::Future<Output = Result<ListResourcesResult, rmcp::ErrorData>> + rmcp::service::MaybeSendFuture + '_
+    {
+        std::future::ready(Ok(super::resources::list_resources()))
+    }
+
+    fn list_resource_templates(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: rmcp::service::RequestContext<rmcp::service::RoleServer>,
+    ) -> impl std::future::Future<Output = Result<ListResourceTemplatesResult, rmcp::ErrorData>>
+    + rmcp::service::MaybeSendFuture
+    + '_ {
+        std::future::ready(Ok(super::resources::list_resource_templates()))
+    }
+
+    fn read_resource(
+        &self,
+        request: ReadResourceRequestParams,
+        _context: rmcp::service::RequestContext<rmcp::service::RoleServer>,
+    ) -> impl std::future::Future<Output = Result<ReadResourceResult, rmcp::ErrorData>> + rmcp::service::MaybeSendFuture + '_
+    {
+        std::future::ready(super::resources::read_resource(&request.uri))
+    }
+
+    fn list_prompts(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: rmcp::service::RequestContext<rmcp::service::RoleServer>,
+    ) -> impl std::future::Future<Output = Result<ListPromptsResult, rmcp::ErrorData>> + rmcp::service::MaybeSendFuture + '_
+    {
+        let prompts = self.prompt_router.list_all();
+        std::future::ready(Ok(ListPromptsResult {
+            prompts,
+            next_cursor: None,
+            meta: None,
+        }))
+    }
+
+    fn get_prompt(
+        &self,
+        request: GetPromptRequestParams,
+        context: rmcp::service::RequestContext<rmcp::service::RoleServer>,
+    ) -> impl std::future::Future<Output = Result<GetPromptResult, rmcp::ErrorData>> + rmcp::service::MaybeSendFuture + '_
+    {
+        let pr = self.prompt_router.clone();
+        let pc = PromptContext::new(self, request.name, request.arguments, context);
+        async move { pr.get_prompt(pc).await }
+    }
+
+    fn complete(
+        &self,
+        request: CompleteRequestParams,
+        _context: rmcp::service::RequestContext<rmcp::service::RoleServer>,
+    ) -> impl std::future::Future<Output = Result<CompleteResult, rmcp::ErrorData>> + rmcp::service::MaybeSendFuture + '_
+    {
+        std::future::ready(complete_impl(request))
     }
 }
 
@@ -1438,6 +1677,13 @@ mod tests {
         } else {
             panic!("Expected content in result");
         }
+        // Verify structured_content is also present
+        assert!(
+            call_result.structured_content.is_some(),
+            "get_version should have structured_content"
+        );
+        let sc = call_result.structured_content.unwrap();
+        assert_eq!(sc["version"], env!("CARGO_PKG_VERSION"));
     }
 
     #[test]
@@ -1463,6 +1709,11 @@ mod tests {
         } else {
             panic!("Expected content in result");
         }
+        // Verify structured_content is also present
+        assert!(
+            call_result.structured_content.is_some(),
+            "cache_manifest should have structured_content"
+        );
     }
 
     #[cfg(feature = "chunking")]
@@ -1593,5 +1844,117 @@ mod tests {
             "Expected bounds error, got: {}",
             err.message
         );
+    }
+
+    // --- New tests for capabilities, resources, prompts, completions, output_schema ---
+
+    #[test]
+    fn test_capabilities_declare_resources_prompts_completions() {
+        let server = KreuzbergMcp::with_config(ExtractionConfig::default());
+        let info = server.get_info();
+        assert!(
+            info.capabilities.resources.is_some(),
+            "resources capability should be declared"
+        );
+        assert!(
+            info.capabilities.prompts.is_some(),
+            "prompts capability should be declared"
+        );
+        assert!(
+            info.capabilities.completions.is_some(),
+            "completions capability should be declared"
+        );
+        assert!(info.capabilities.tools.is_some(), "tools capability should be declared");
+    }
+
+    #[tokio::test]
+    async fn test_output_schema_present_on_structured_tools() {
+        let router = KreuzbergMcp::tool_router();
+        let tools = router.list_all();
+        let structured_tools = [
+            "extract_file",
+            "extract_bytes",
+            "detect_mime_type",
+            "get_version",
+            "list_formats",
+            "cache_stats",
+            "cache_manifest",
+            "chunk_text",
+            "embed_text",
+        ];
+        for name in structured_tools {
+            let tool = tools
+                .iter()
+                .find(|t| t.name == name)
+                .unwrap_or_else(|| panic!("tool '{}' not found", name));
+            assert!(
+                tool.output_schema.is_some(),
+                "tool '{}' should have output_schema",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn test_list_resources_returns_expected_uris() {
+        let result = crate::mcp::resources::list_resources();
+        let uris: Vec<&str> = result.resources.iter().map(|r| r.uri.as_str()).collect();
+        assert!(uris.contains(&"kreuzberg://formats"), "formats resource missing");
+        assert!(uris.contains(&"kreuzberg://models"), "models resource missing");
+        assert!(
+            uris.contains(&"kreuzberg://languages/ocr"),
+            "ocr languages resource missing"
+        );
+    }
+
+    #[test]
+    fn test_read_resource_formats_roundtrip() {
+        let result =
+            crate::mcp::resources::read_resource("kreuzberg://formats").expect("formats resource should be readable");
+        assert!(!result.contents.is_empty());
+        if let ResourceContents::TextResourceContents { text, .. } = &result.contents[0] {
+            let _: serde_json::Value = serde_json::from_str(text).expect("formats should be valid JSON");
+        } else {
+            panic!("Expected TextResourceContents");
+        }
+    }
+
+    #[test]
+    fn test_list_prompts_returns_workflows() {
+        let server = KreuzbergMcp::with_config(ExtractionConfig::default());
+        let prompts = server.prompt_router.list_all();
+        let names: Vec<&str> = prompts.iter().map(|p| p.name.as_str()).collect();
+        assert!(names.contains(&"extract_document"), "extract_document prompt missing");
+        assert!(names.contains(&"extract_with_ocr"), "extract_with_ocr prompt missing");
+        assert!(names.contains(&"semantic_search"), "semantic_search prompt missing");
+    }
+
+    #[test]
+    fn test_complete_ocr_language_by_prefix() {
+        // "en" prefix should match "eng"
+        let candidates = complete_ocr_languages("en");
+        assert!(!candidates.is_empty(), "should return candidates for prefix 'en'");
+        assert!(
+            candidates.iter().any(|c| c == "eng"),
+            "eng should be in completions for prefix 'en'"
+        );
+    }
+
+    #[test]
+    fn test_complete_embedding_presets() {
+        let candidates = complete_embedding_presets("b");
+        assert_eq!(candidates, vec!["balanced"]);
+    }
+
+    #[test]
+    fn test_complete_chunker_types_empty_prefix_returns_all() {
+        let candidates = complete_chunker_types("");
+        assert_eq!(candidates.len(), 4);
+    }
+
+    #[test]
+    fn test_complete_output_formats() {
+        let candidates = complete_output_formats("j");
+        assert_eq!(candidates, vec!["json"]);
     }
 }
