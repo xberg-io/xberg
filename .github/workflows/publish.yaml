@@ -1498,6 +1498,9 @@ jobs:
           artifact-name: KreuzbergSwift
           include-macos-x86_64: "false"
           include-ios-x86_64: "false"
+          # Statically vendor OpenSSL for the Linux artifactbundle targets.
+          # (No longer hardcoded in the shared action — pass it explicitly.)
+          linux-features: kreuzberg/openssl-vendored
       - uses: actions/upload-artifact@v7
         with:
           name: swift-artifactbundle
