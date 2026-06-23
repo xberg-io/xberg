@@ -309,13 +309,66 @@ fn get_tika_jar_path() -> Result<PathBuf> {
     )))
 }
 
+/// Helper to ensure TikaExtract.class is compiled
+/// Compiles TikaExtract.java if .class file doesn't exist, and returns the directory containing the class
+fn ensure_tika_extract_compiled(java_path: &PathBuf, tika_jar_path: &PathBuf) -> Result<PathBuf> {
+    let script_path = get_script_path("TikaExtract.java")?;
+
+    // Create a temp directory for compiled classes if it doesn't exist
+    let compile_dir = PathBuf::from("target").join("tika-extract-classes");
+    std::fs::create_dir_all(&compile_dir)
+        .map_err(|e| crate::Error::Config(format!("Failed to create compile directory: {}", e)))?;
+
+    let class_path = compile_dir.join("dev").join("kreuzberg").join("benchmark").join("TikaExtract.class");
+
+    // Only compile if the class file doesn't exist
+    if !class_path.exists() {
+        let output = std::process::Command::new(java_path)
+            .arg("-version")
+            .output()
+            .map_err(|e| crate::Error::Config(format!("Failed to check Java version: {}", e)))?;
+
+        if !output.status.success() {
+            return Err(crate::Error::Config("Java is not properly installed".to_string()));
+        }
+
+        let compile_output = std::process::Command::new("javac")
+            .arg("-cp")
+            .arg(tika_jar_path)
+            .arg("-d")
+            .arg(&compile_dir)
+            .arg(&script_path)
+            .output()
+            .map_err(|e| crate::Error::Config(format!("Failed to compile TikaExtract.java: {}", e)))?;
+
+        if !compile_output.status.success() {
+            let stderr = String::from_utf8_lossy(&compile_output.stderr);
+            return Err(crate::Error::Config(format!(
+                "TikaExtract.java compilation failed: {}",
+                stderr
+            )));
+        }
+    }
+
+    Ok(compile_dir)
+}
+
 /// Creates a subprocess adapter for Apache Tika (persistent server mode)
 ///
-/// Uses Tika via wrapper script approach for extraction.
+/// Uses Tika via compiled Java class approach for extraction.
 pub fn create_tika_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
     let jar_path = get_tika_jar_path()?;
-    let script_path = get_script_path("TikaExtract.java")?;
     let command = find_java()?;
+    let compile_dir = ensure_tika_extract_compiled(&command, &jar_path)?;
+
+    // Build classpath: compiled classes directory + tika-app JAR
+    // Use the platform-appropriate path separator
+    let classpath = format!(
+        "{}{}{}",
+        compile_dir.display(),
+        std::path::MAIN_SEPARATOR,
+        jar_path.display()
+    );
 
     let args = vec![
         "-server".to_string(),
@@ -323,8 +376,8 @@ pub fn create_tika_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
         "-Xmx2g".to_string(),
         "-XX:+UseG1GC".to_string(),
         "-cp".to_string(),
-        jar_path.to_string_lossy().to_string(),
-        script_path.to_string_lossy().to_string(),
+        classpath,
+        "dev.kreuzberg.benchmark.TikaExtract".to_string(),
         ocr_flag(ocr_enabled),
         "sync".to_string(),
     ];
