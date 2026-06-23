@@ -82,4 +82,8 @@ RUN apk add --no-cache libgcc && \
 
 COPY --from=builder /build/kreuzberg /usr/local/bin/kreuzberg
 
+LABEL org.opencontainers.image.source="https://github.com/kreuzberg-dev/kreuzberg"
+LABEL org.opencontainers.image.description="Kreuzberg document intelligence - CLI variant"
+LABEL org.opencontainers.image.licenses="Elastic-2.0"
+
 ENTRYPOINT ["kreuzberg"]

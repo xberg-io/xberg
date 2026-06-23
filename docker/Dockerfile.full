@@ -84,7 +84,7 @@ FROM debian:trixie-slim
 # OCI labels for container metadata
 LABEL org.opencontainers.image.source="https://github.com/kreuzberg-dev/kreuzberg"
 LABEL org.opencontainers.image.description="Kreuzberg document intelligence - full variant"
-LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.licenses="Elastic-2.0"
 
 WORKDIR /app
 
