@@ -88,6 +88,7 @@ impl Default for RerankerConfig {
 /// Since v5.0.0.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[cfg_attr(alef, alef(string_shorthand(variant = "Preset", field = "name")))]
 pub enum RerankerModelType {
     /// Use a preset cross-encoder model (recommended).
     Preset {

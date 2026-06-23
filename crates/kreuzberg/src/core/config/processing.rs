@@ -391,6 +391,7 @@ impl Default for EmbeddingConfig {
 /// Embedding model types supported by Kreuzberg.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[cfg_attr(alef, alef(string_shorthand(variant = "Preset", field = "name")))]
 pub enum EmbeddingModelType {
     /// Use a preset model configuration (recommended)
     Preset {
