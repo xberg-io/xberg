@@ -1,20 +1,29 @@
 version: "3"
 internal: true
 
+# kotlin-android has no managed lockfile. Dependency versions are pinned
+# directly in the alef-generated packages/kotlin-android/build.gradle.kts and
+# are bumped by regenerating with updated versions in the upstream
+# alef-backend-kotlin-android — NOT via a gradle command. Running
+# `gradlew dependencyUpdates` / `useLatestVersions` would (a) require the
+# ben-manes versions plugin that is not part of the generated template and
+# (b) rewrite a generated file (pulling pre-release versions), all of which is
+# wiped on the next `alef all` regen. So update/upgrade are intentional no-ops,
+# matching `[crates.update.kotlin_android]` in alef.toml.
+
 tasks:
   update:
-    desc: "Update Kotlin/Android dependencies within major versions (gradlew dependencyUpdates)"
+    desc: "Update Kotlin/Android dependencies (no-op — versions pinned by alef regen)"
     silent: false
     cmds:
       - cmd: |
-          cd packages/kotlin-android && ./gradlew dependencyUpdates
+          echo 'kotlin-android: no-op (versions pinned by alef regen)'
         ignore_error: false
 
   upgrade:
-    desc: "Upgrade Kotlin/Android dependencies to latest including breaking changes (gradlew useLatestVersions)"
+    desc: "Upgrade Kotlin/Android dependencies (no-op — versions pinned by alef regen)"
     silent: false
     cmds:
       - cmd: |
-          test -f packages/kotlin-android/gradlew || { echo "Kotlin-Android gradlew not found, skipping upgrade"; exit 0; }
-          cd packages/kotlin-android && ./gradlew useLatestVersions
+          echo 'kotlin-android: no-op (versions pinned by alef regen)'
         ignore_error: false
