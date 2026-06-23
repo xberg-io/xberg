@@ -736,10 +736,6 @@ zip = { version = ">=7.0.0", optional = true, default-features = false, features
 ] }
 
 [target.'cfg(all(not(target_os = "windows"), not(target_arch = "wasm32")))'.dependencies]
-# native-tls makes hf-hub's Agent use TlsProvider::NativeTls, which trusts the OS certificate store
-# and honors SSL_CERT_FILE/SSL_CERT_DIR (OpenSSL on Linux). Without it hf-hub pins rustls + static
-# webpki-roots, breaking downloads behind corporate TLS-MITM proxies (#1146).
-hf-hub = { version = "0.5", default-features = false, features = ["ureq", "native-tls"], optional = true }
 # Candle-based VLM OCR backends - pure-Rust transformer inference, not on WASM yet.
 # Note: candle-core unconditionally links platform-specific deps (cudarc on Linux, metal-kernels on macOS).
 # To avoid conflicts during feature unification, GPU features (candle-cuda/metal/mkl/accelerate) should
@@ -752,9 +748,24 @@ pprof = { version = "0.15.0", features = ["flamegraph"], optional = true }
 # Enable tokenizers `http` feature on native targets so model downloads work via hf-hub.
 # Wasm builds get tokenizers without `http` to avoid hf-hub → ureq 2.12.1 → rustls 0.23 (wasm-incompat).
 tokenizers = { version = "0.23", default-features = false, features = ["http", "fancy-regex"], optional = true }
-# Force ureq (transitive dep via hf-hub, and direct downloads) to native-tls so it trusts the OS
-# certificate store and honors SSL_CERT_FILE/SSL_CERT_DIR (#1146).
+
+# Desktop / server hosts (Linux + macOS, NOT Android): native-tls makes hf-hub's Agent use
+# TlsProvider::NativeTls and forces ureq (direct downloads + the tree-sitter-language-pack `download`
+# path) onto native-tls, so both trust the OS certificate store and honor SSL_CERT_FILE/SSL_CERT_DIR
+# (OpenSSL on Linux). This satisfies corporate TLS-MITM proxies (#1146). native-tls is excluded on
+# Android because openssl-sys cannot cross-compile in the NDK (see the Android block below).
+[target.'cfg(all(not(target_os = "windows"), not(target_arch = "wasm32"), not(target_os = "android")))'.dependencies]
+hf-hub = { version = "0.5", default-features = false, features = ["ureq", "native-tls"], optional = true }
 ureq = { version = "3.3", default-features = false, features = ["native-tls", "json"], optional = true }
+
+# Android: native-tls would pull openssl-sys, which has no working NDK cross-compile (no target
+# sysroot). Feature-unification means a single native-tls ureq dep drags OpenSSL onto every ureq
+# consumer (including tree-sitter-language-pack's `download`). Use ring-backed rustls + webpki-roots
+# instead — it cross-compiles cleanly. Corporate-CA trust (#1146) is a desktop/server concern; mobile
+# apps ship their own trust configuration.
+[target.'cfg(target_os = "android")'.dependencies]
+hf-hub = { version = "0.5", default-features = false, features = ["ureq"], optional = true }
+ureq = { version = "3.3", default-features = false, features = ["rustls", "json"], optional = true }
 
 # Use native-tls on Windows to avoid aws-lc-sys CMake build issues with MinGW
 [target.'cfg(all(target_os = "windows", not(target_arch = "wasm32")))'.dependencies]
