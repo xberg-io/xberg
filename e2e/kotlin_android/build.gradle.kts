@@ -4,7 +4,7 @@ import java.util.zip.ZipFile
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    id("com.android.library") version "9.2.0"
+    id("com.android.library") version "9.2.1"
 }
 
 group = "dev.kreuzberg"

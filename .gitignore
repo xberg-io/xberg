@@ -322,3 +322,5 @@ packages/r/src/*.o
 .github/copilot-instructions.md
 .github/skills/
 # END ai-rulez
+.bench-rc32/
+build-output-musl-node/

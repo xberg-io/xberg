@@ -1,6 +1,6 @@
 [package]
 name = "kreuzberg-ffi"
-version = "5.0.0-rc.32"
+version = "5.0.0-rc.33"
 edition = "2021"
 license = "Elastic-2.0"
 description = "High-performance document intelligence library"
@@ -77,16 +77,16 @@ serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios", target_os = "windows")))'.dependencies]
-kreuzberg = { path = "../kreuzberg", version = "5.0.0-rc.32", features = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "reranker", "reranker-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "api-types", "mcp", "liter-llm", "quality", "svg", "transcription", "transcription-types", "classification", "captioning", "ner-onnx", "ner-llm", "diff", "markdown-footnotes", "redaction", "enrichment", "heuristics", "presets", "structured"] }
+kreuzberg = { path = "../kreuzberg", version = "5.0.0-rc.33", features = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "reranker", "reranker-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "api-types", "mcp", "liter-llm", "quality", "svg", "transcription", "transcription-types", "classification", "captioning", "ner-onnx", "ner-llm", "diff", "markdown-footnotes", "redaction", "enrichment", "heuristics", "presets", "structured"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
-kreuzberg = { path = "../kreuzberg", version = "5.0.0-rc.32", features = ["android-target"] }
+kreuzberg = { path = "../kreuzberg", version = "5.0.0-rc.33", features = ["android-target"] }
 
 [target.'cfg(target_os = "ios")'.dependencies]
-kreuzberg = { path = "../kreuzberg", version = "5.0.0-rc.32", features = ["android-target"] }
+kreuzberg = { path = "../kreuzberg", version = "5.0.0-rc.33", features = ["android-target"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-kreuzberg = { path = "../kreuzberg", version = "5.0.0-rc.32", features = ["windows-target"] }
+kreuzberg = { path = "../kreuzberg", version = "5.0.0-rc.33", features = ["windows-target"] }
 
 
 [build-dependencies]

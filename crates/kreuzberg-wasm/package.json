@@ -1,6 +1,6 @@
 {
   "name": "@kreuzberg/wasm",
-  "version": "5.0.0-rc.32",
+  "version": "5.0.0-rc.33",
   "private": false,
   "description": "High-performance document intelligence library",
   "license": "Elastic-2.0",

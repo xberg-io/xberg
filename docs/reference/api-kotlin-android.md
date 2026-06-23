@@ -2,7 +2,7 @@
 title: "Kotlin (Android) API Reference"
 ---
 
-## Kotlin (Android) API Reference <span class="version-badge">v5.0.0-rc.32</span>
+## Kotlin (Android) API Reference <span class="version-badge">v5.0.0-rc.33</span>
 
 ### Functions
 

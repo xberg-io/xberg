@@ -31,9 +31,9 @@
         <dependency>
             <groupId>dev.kreuzberg</groupId>
             <artifactId>kreuzberg</artifactId>
-            <version>5.0.0-rc.32</version>
+            <version>5.0.0-rc.33</version>
             <scope>system</scope>
-            <systemPath>${project.basedir}/../../packages/java/target/kreuzberg-5.0.0-rc.32.jar</systemPath>
+            <systemPath>${project.basedir}/../../packages/java/target/kreuzberg-5.0.0-rc.33.jar</systemPath>
         </dependency>
 
         <dependency>

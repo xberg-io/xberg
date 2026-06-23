@@ -3,7 +3,7 @@ module github.com/kreuzberg-dev/kreuzberg/v5/e2e
 go 1.26
 
 require (
-	github.com/kreuzberg-dev/kreuzberg/v5 v5.0.0-rc.32
+	github.com/kreuzberg-dev/kreuzberg/v5 v5.0.0-rc.33
 	github.com/stretchr/testify v1.11.1
 )
 

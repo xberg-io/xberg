@@ -3,10 +3,10 @@
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>Kreuzberg</RootNamespace>
     <PackageId>Kreuzberg</PackageId>
-    <Version>5.0.0-rc.32</Version>
+    <Version>5.0.0-rc.33</Version>
     <AssemblyVersion>5.0.0.0</AssemblyVersion>
     <FileVersion>5.0.0.0</FileVersion>
-    <InformationalVersion>5.0.0-rc.32</InformationalVersion>
+    <InformationalVersion>5.0.0-rc.33</InformationalVersion>
     <Description>High-performance document intelligence library</Description>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <RepositoryUrl>https://github.com/kreuzberg-dev/kreuzberg</RepositoryUrl>

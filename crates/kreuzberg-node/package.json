@@ -1,6 +1,6 @@
 {
   "name": "@kreuzberg/node",
-  "version": "5.0.0-rc.32",
+  "version": "5.0.0-rc.33",
   "description": "High-performance document intelligence library",
   "license": "Elastic-2.0",
   "repository": {
@@ -18,14 +18,14 @@
   },
   "files": ["index.js", "index.d.ts", "*.node"],
   "optionalDependencies": {
-    "@kreuzberg/node-linux-x64-gnu": "5.0.0-rc.32",
-    "@kreuzberg/node-linux-arm64-gnu": "5.0.0-rc.32",
-    "@kreuzberg/node-linux-x64-musl": "5.0.0-rc.32",
-    "@kreuzberg/node-linux-arm64-musl": "5.0.0-rc.32",
-    "@kreuzberg/node-darwin-x64": "5.0.0-rc.32",
-    "@kreuzberg/node-darwin-arm64": "5.0.0-rc.32",
-    "@kreuzberg/node-win32-x64-msvc": "5.0.0-rc.32",
-    "@kreuzberg/node-win32-arm64-msvc": "5.0.0-rc.32"
+    "@kreuzberg/node-linux-x64-gnu": "5.0.0-rc.33",
+    "@kreuzberg/node-linux-arm64-gnu": "5.0.0-rc.33",
+    "@kreuzberg/node-linux-x64-musl": "5.0.0-rc.33",
+    "@kreuzberg/node-linux-arm64-musl": "5.0.0-rc.33",
+    "@kreuzberg/node-darwin-x64": "5.0.0-rc.33",
+    "@kreuzberg/node-darwin-arm64": "5.0.0-rc.33",
+    "@kreuzberg/node-win32-x64-msvc": "5.0.0-rc.33",
+    "@kreuzberg/node-win32-arm64-msvc": "5.0.0-rc.33"
   },
   "napi": {
     "packageName": "@kreuzberg/node",

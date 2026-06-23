@@ -4,7 +4,7 @@ defmodule Kreuzberg.MixProject do
   def project do
     [
       app: :kreuzberg,
-      version: "5.0.0-rc.32",
+      version: "5.0.0-rc.33",
       elixir: "~> 1.14",
       elixirc_paths: ["lib", Path.expand("../../packages/elixir/native/kreuzberg_nif/src", __DIR__)],
       rustler_crates: [
