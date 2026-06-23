@@ -129,6 +129,40 @@ pub fn render_pdf_page_to_png(
     Ok(rendered.data)
 }
 
+/// Count the pages in a PDF without rendering any of them.
+///
+/// Opens the document and returns its page count from the PDF structure. No page
+/// is rasterized, so this is cheap relative to `render_pdf_page_to_png` — use it
+/// when you only need the count (e.g. to drive a render loop over the pages).
+///
+/// # Arguments
+///
+/// * `pdf_bytes` - Raw PDF file bytes
+/// * `password` - Optional password for encrypted PDFs
+///
+/// # Errors
+///
+/// Returns `KreuzbergError::Parsing` if the PDF cannot be opened, authenticated,
+/// or its page count read.
+pub fn pdf_page_count(pdf_bytes: &[u8], password: Option<&str>) -> Result<usize> {
+    let doc = pdf_oxide::PdfDocument::from_bytes(pdf_bytes.to_vec()).map_err(|e| KreuzbergError::Parsing {
+        message: format!("Failed to open PDF: {e}"),
+        source: None,
+    })?;
+
+    if let Some(pwd) = password {
+        doc.authenticate(pwd.as_bytes()).map_err(|e| KreuzbergError::Parsing {
+            message: format!("Failed to authenticate PDF: {e}"),
+            source: None,
+        })?;
+    }
+
+    doc.page_count().map_err(|e| KreuzbergError::Parsing {
+        message: format!("Failed to read page count: {e}"),
+        source: None,
+    })
+}
+
 /// Build a minimal valid single-page PDF with the given MediaBox (in points).
 /// Used to test the wide-page / extreme-dimension safeguard in the renderer.
 /// Note: the generated PDF has no content stream or /Resources. It is sufficient
@@ -197,6 +231,22 @@ mod tests {
             res.is_ok(),
             "wide page render should succeed thanks to safeguard, got: {:?}",
             res.err()
+        );
+    }
+
+    #[test]
+    fn test_pdf_page_count_single_page() {
+        let pdf = build_minimal_pdf_with_mediabox(612.0, 792.0);
+        let count = pdf_page_count(&pdf, None).expect("page count should succeed for a valid PDF");
+        assert_eq!(count, 1, "minimal single-page PDF must report 1 page");
+    }
+
+    #[test]
+    fn test_pdf_page_count_invalid_pdf_errors() {
+        let err = pdf_page_count(b"not a pdf", None).expect_err("invalid PDF bytes must error");
+        assert!(
+            matches!(err, KreuzbergError::Parsing { .. }),
+            "expected a Parsing error, got: {err:?}"
         );
     }
 }

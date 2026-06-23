@@ -447,7 +447,7 @@ pub fn detect_mime_type(path: String, check_exists: bool) -> crate::Result<Strin
 
 // ── PDF Rendering ─────────────────────────────────────────────────────────────
 #[cfg(feature = "pdf")]
-pub use pdf::render::render_pdf_page_to_png;
+pub use pdf::render::{pdf_page_count, render_pdf_page_to_png};
 
 // ── Plugin Lifecycle — public API ────────────────────────────────────────────
 // Alef extracts plugin-lifecycle fns via the `plugins::{trait_snake}::` alias modules
