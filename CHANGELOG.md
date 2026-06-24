@@ -34,6 +34,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dart forced republish re-assembles the bundle.** `assemble-dart-bundle` and `dart-package` lacked
   the `force_republish` escape hatch the other dart jobs have, so a forced republish ran against a
   stale/missing artifact. (`.github/workflows/publish.yaml`)
+- **PHP 8.5 extension is now built.** The `php-extension` matrix added `8.5` (the Windows leg already
+  uses the `vs17` compiler it needs), so PHP 8.5 users get a precompiled extension.
+- **Node main package waits for its platform sub-packages to index.** `publish-node` now
+  `wait-for-package`s on `@kreuzberg/node-linux-{x64,arm64}-gnu` before publishing the main package,
+  closing the window where `npm install @kreuzberg/node` could fail on unresolved optionalDependencies.
+- **crates.io idempotency now covers `kreuzberg-libheif`.** `check-cratesio` checked five crates but
+  `publish-crates` publishes six; `all_exist` now includes libheif so a libheif-only-missing version
+  is not skipped.
+- **`release-finalize` now gates on the Swift manifest job**, and Elixir checksum generation passes
+  `nif-versions: "2.16,2.17"` to cover both built NIF APIs. RubyGems publish runs `gem update --system`
+  before OIDC credential configuration.
 
 ### Added
 

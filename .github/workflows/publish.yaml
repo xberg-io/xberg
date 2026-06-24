@@ -259,6 +259,7 @@ jobs:
       tesseract_exists: ${{ steps.check.outputs.tesseract_exists }}
       paddle_exists: ${{ steps.check.outputs.paddle_exists }}
       candle_exists: ${{ steps.check.outputs.candle_exists }}
+      libheif_exists: ${{ steps.check.outputs.libheif_exists }}
       cli_exists: ${{ steps.check.outputs.cli_exists }}
       all_exist: ${{ steps.derive.outputs.all_exist }}
     steps:
@@ -272,6 +273,7 @@ jobs:
             tesseract_exists=kreuzberg-tesseract
             paddle_exists=kreuzberg-paddle-ocr
             candle_exists=kreuzberg-candle-ocr
+            libheif_exists=kreuzberg-libheif
             cli_exists=kreuzberg-cli
 
       - id: derive
@@ -282,6 +284,7 @@ jobs:
             && "${{ steps.check.outputs.tesseract_exists }}" == "true" \
             && "${{ steps.check.outputs.paddle_exists }}" == "true" \
             && "${{ steps.check.outputs.candle_exists }}" == "true" \
+            && "${{ steps.check.outputs.libheif_exists }}" == "true" \
             && "${{ steps.check.outputs.cli_exists }}" == "true" ]]; then
             echo "all_exist=true" >> "$GITHUB_OUTPUT"
           else
@@ -800,7 +803,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: ["8.2", "8.3", "8.4"]
+        php: ["8.2", "8.3", "8.4", "8.5"]
         platform:
           - { os: ubuntu-latest, label: linux-x86_64, target: x86_64-unknown-linux-gnu }
           - { os: ubuntu-24.04-arm, label: linux-arm64, target: aarch64-unknown-linux-gnu }
@@ -2067,19 +2070,22 @@ jobs:
         with:
           pattern: rubygems-*
           path: dist
-          # NOTE: do NOT merge-multiple here. Every matrix runner builds the
-          # source-platform gem (`ext.platform = "ruby"`), so all three artifacts
-          # carry the identical basename `kreuzberg-<version>.gem`. Merging them
-          # into one directory overwrites/truncates the file mid-extraction,
-          # producing a corrupt archive that fails `gem spec` with "invalid gem
-          # structure". Keeping each artifact in its own `dist/rubygems-<label>/`
-          # subdir avoids the collision; publish-rubygems globs recursively and
-          # dedupes identical gems via its already-published guard.
+          # Keep each artifact in its own `dist/rubygems-<label>/` subdir (no
+          # merge-multiple): the canonical linux-x86_64 builder also ships the
+          # fallback source gem `kreuzberg-<version>.gem`, whose basename would
+          # collide across runners under merge-multiple. publish-rubygems globs
+          # recursively and dedupes via its already-published guard, so the
+          # per-platform gems and the single source gem all publish.
 
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.3"
           bundler-cache: false
+
+      # Trusted publishing (OIDC) needs a recent RubyGems; the runner's bundled
+      # version can be too old for `configure-rubygems-credentials`.
+      - name: Update RubyGems for OIDC trusted publishing
+        run: gem update --system
 
       - uses: rubygems/configure-rubygems-credentials@v2.0.0
 
@@ -2163,6 +2169,28 @@ jobs:
           provenance: "true"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # Wait for the platform sub-packages to be resolvable on npm before
+      # publishing the main package, whose optionalDependencies reference them.
+      # Without this the main package can land before its platform deps index,
+      # leaving a window where `npm install @kreuzberg/node` fails.
+      - name: Wait for npm indexing (node-linux-x64-gnu)
+        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        uses: kreuzberg-dev/actions/wait-for-package@v1
+        with:
+          registry: npm
+          package: "@kreuzberg/node-linux-x64-gnu"
+          version: ${{ needs.prepare.outputs.version }}
+          max-attempts: "60"
+
+      - name: Wait for npm indexing (node-linux-arm64-gnu)
+        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        uses: kreuzberg-dev/actions/wait-for-package@v1
+        with:
+          registry: npm
+          package: "@kreuzberg/node-linux-arm64-gnu"
+          version: ${{ needs.prepare.outputs.version }}
+          max-attempts: "60"
 
       - name: Publish main @kreuzberg/node package
         uses: kreuzberg-dev/actions/publish-npm@v1
@@ -2419,6 +2447,9 @@ jobs:
           tag: ${{ needs.prepare.outputs.tag }}
           version: ${{ needs.prepare.outputs.version }}
           lib-name: kreuzberg_nif
+          # elixir-natives builds NIF API 2.16 AND 2.17; include both so the
+          # checksum file covers every uploaded artifact.
+          nif-versions: "2.16,2.17"
           targets: x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu,x86_64-unknown-linux-musl,aarch64-unknown-linux-musl,aarch64-apple-darwin,x86_64-pc-windows-msvc
           output-path: packages/elixir/checksum-Elixir.Kreuzberg.Native.exs
 
@@ -2841,6 +2872,7 @@ jobs:
     needs:
       - prepare
       - finalize-github-release-after-uploads
+      - update-swift-package-manifest
       - publish-crates
       - publish-pypi
       - publish-rubygems
