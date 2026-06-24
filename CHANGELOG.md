@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Moved repository to [kreuzberg-dev](https://github.com/kreuzberg-dev/langchain-kreuzberg) organization
+- Moved repository to [kreuzberg-dev](https://github.com/xberg-io/langchain-kreuzberg) organization
 - Updated copyright to Kreuzberg.dev
 - Production-ready release
 
@@ -51,7 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Full `ExtractionConfig` override for advanced configuration
 - Type annotations and `py.typed` marker for static analysis
 
-[1.0.2]: https://github.com/kreuzberg-dev/langchain-kreuzberg/releases/tag/v1.0.2
-[1.0.1]: https://github.com/kreuzberg-dev/langchain-kreuzberg/releases/tag/v1.0.1
-[1.0.0]: https://github.com/kreuzberg-dev/langchain-kreuzberg/releases/tag/v1.0.0
-[0.1.0]: https://github.com/kreuzberg-dev/langchain-kreuzberg/releases/tag/v0.1.0
+[1.0.2]: https://github.com/xberg-io/langchain-kreuzberg/releases/tag/v1.0.2
+[1.0.1]: https://github.com/xberg-io/langchain-kreuzberg/releases/tag/v1.0.1
+[1.0.0]: https://github.com/xberg-io/langchain-kreuzberg/releases/tag/v1.0.0
+[0.1.0]: https://github.com/xberg-io/langchain-kreuzberg/releases/tag/v0.1.0

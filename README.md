@@ -10,14 +10,14 @@
   <a href="https://pypi.org/project/langchain-kreuzberg/">
     <img src="https://img.shields.io/pypi/dm/langchain-kreuzberg" alt="Downloads">
   </a>
-  <a href="https://github.com/kreuzberg-dev/langchain-kreuzberg/actions/workflows/ci.yaml">
-    <img src="https://github.com/kreuzberg-dev/langchain-kreuzberg/actions/workflows/ci.yaml/badge.svg" alt="CI">
+  <a href="https://github.com/xberg-io/langchain-kreuzberg/actions/workflows/ci.yaml">
+    <img src="https://github.com/xberg-io/langchain-kreuzberg/actions/workflows/ci.yaml/badge.svg" alt="CI">
   </a>
-  <a href="https://github.com/kreuzberg-dev/langchain-kreuzberg/blob/main/LICENSE">
+  <a href="https://github.com/xberg-io/langchain-kreuzberg/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License">
   </a>
-  <a href="https://github.com/kreuzberg-dev/kreuzberg">
-    <img src="https://img.shields.io/github/stars/kreuzberg-dev/kreuzberg?style=flat&label=Kreuzberg&color=007ec6" alt="Kreuzberg">
+  <a href="https://github.com/xberg-io/kreuzberg">
+    <img src="https://img.shields.io/github/stars/xberg-io/kreuzberg?style=flat&label=Kreuzberg&color=007ec6" alt="Kreuzberg">
   </a>
   <a href="https://docs.kreuzberg.dev">
     <img src="https://img.shields.io/badge/docs-kreuzberg.dev-blue" alt="Documentation">
@@ -34,7 +34,7 @@
 
 ## Overview
 
-**langchain-kreuzberg** is a LangChain document loader that wraps [Kreuzberg](https://github.com/kreuzberg-dev/kreuzberg)'s extraction API. It supports 90+ file formats out of the box, provides true async extraction powered by Rust's tokio runtime, and produces LangChain `Document` objects enriched with rich metadata including detected languages, quality scores, and extracted keywords.
+**langchain-kreuzberg** is a LangChain document loader that wraps [Kreuzberg](https://github.com/xberg-io/kreuzberg)'s extraction API. It supports 90+ file formats out of the box, provides true async extraction powered by Rust's tokio runtime, and produces LangChain `Document` objects enriched with rich metadata including detected languages, quality scores, and extracted keywords.
 
 ## Installation
 
@@ -195,7 +195,7 @@ All parameters are keyword-only.
 | `data` | `bytes \| None` | `None` | Raw bytes to extract text from. Mutually exclusive with `file_path`. |
 | `mime_type` | `str \| None` | `None` | MIME type hint. Required when using `data`, optional for `file_path`. |
 | `glob` | `str \| None` | `None` | Glob pattern for directory loading. |
-| `config` | `ExtractionConfig \| None` | `None` | Kreuzberg `ExtractionConfig` for controlling extraction behavior (output format, OCR settings, page splitting, etc.). See the [Kreuzberg repository](https://github.com/kreuzberg-dev/kreuzberg) for all options. |
+| `config` | `ExtractionConfig \| None` | `None` | Kreuzberg `ExtractionConfig` for controlling extraction behavior (output format, OCR settings, page splitting, etc.). See the [Kreuzberg repository](https://github.com/xberg-io/kreuzberg) for all options. |
 
 #### Methods
 
@@ -236,7 +236,7 @@ Additional metadata fields from Kreuzberg's document-level metadata are flattene
 
 ## Supported Formats
 
-Kreuzberg supports 90+ file formats including PDF, DOCX, images (via OCR), spreadsheets, presentations, HTML, Markdown, and many more. For the full and up-to-date list of supported formats, see the [Kreuzberg repository](https://github.com/kreuzberg-dev/kreuzberg).
+Kreuzberg supports 90+ file formats including PDF, DOCX, images (via OCR), spreadsheets, presentations, HTML, Markdown, and many more. For the full and up-to-date list of supported formats, see the [Kreuzberg repository](https://github.com/xberg-io/kreuzberg).
 
 ## Contributing
 
@@ -244,7 +244,7 @@ This project uses [uv](https://docs.astral.sh/uv/) for dependency management.
 
 ```bash
 # Clone the repository
-git clone https://github.com/kreuzberg-dev/langchain-kreuzberg.git
+git clone https://github.com/xberg-io/langchain-kreuzberg.git
 cd langchain-kreuzberg
 
 # Install dependencies (including dev group)

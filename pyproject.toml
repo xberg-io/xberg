@@ -67,11 +67,11 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/kreuzberg-dev/langchain-kreuzberg"
+Homepage = "https://github.com/xberg-io/langchain-kreuzberg"
 Documentation = "https://docs.kreuzberg.dev"
-Repository = "https://github.com/kreuzberg-dev/langchain-kreuzberg"
-Issues = "https://github.com/kreuzberg-dev/langchain-kreuzberg/issues"
-Kreuzberg = "https://github.com/kreuzberg-dev/kreuzberg"
+Repository = "https://github.com/xberg-io/langchain-kreuzberg"
+Issues = "https://github.com/xberg-io/langchain-kreuzberg/issues"
+Kreuzberg = "https://github.com/xberg-io/kreuzberg"
 
 [tool.ruff]
 target-version = "py310"

@@ -2,7 +2,7 @@ name: Documentation Issue
 description: Report missing, unclear, or incorrect documentation
 title: "docs: "
 labels: ["documentation"]
-projects: ["kreuzberg-dev/1"]
+projects: ["xberg-io/1"]
 body:
   - type: textarea
     id: what
