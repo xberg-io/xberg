@@ -19552,6 +19552,23 @@ int32_t kreuzberg_render_pdf_page_to_png(const uint8_t *pdf_bytes,
                                          uintptr_t *out_cap);
 
 /**
+ * Count the pages in a PDF without rendering any of them.
+ *
+ * Opens the document and returns its page count from the PDF structure. No page
+ * is rasterized, so this is cheap relative to `render_pdf_page_to_png` â use it
+ * when you only need the count (e.g. to drive a render loop over the pages).
+ * \param pdf_bytes Raw PDF file bytes
+ * \param password Optional password for encrypted PDFs
+ * \note Returns `KreuzbergError::Parsing` if the PDF cannot be opened, authenticated,
+ * or its page count read.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
+ * freed with the appropriate free function.
+ */
+uintptr_t kreuzberg_pdf_page_count(const uint8_t *pdf_bytes,
+                                   uintptr_t pdf_bytes_len,
+                                   const char *password);
+
+/**
  * Caption a single image from bytes.
  * \param image_bytes The image data.
  * \param llm_config LLM configuration for the VLM call.

@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    kreuzberg (5.0.0.pre.rc.32)
+    kreuzberg (5.0.0.pre.rc.34)
       rb_sys (>= 0.9, < 0.9.128)
       sorbet-runtime (~> 0.5)
 
@@ -189,7 +189,7 @@ CHECKSUMS
   fileutils (1.8.0) sha256=8c6b1df54e2540bdb2f39258f08af78853aa70bad52b4d394bbc6424593c6e02
   i18n (1.15.2) sha256=00f9eb62412fe593b2a65a97daa75300d37abb8f7202ec748e94b6d46a9dd1b5
   json (2.20.0) sha256=9362bc6e55a952b056abf9167cf053358181c904cb70cd6eee0808ea830fc32b
-  kreuzberg (5.0.0.pre.rc.32)
+  kreuzberg (5.0.0.pre.rc.34)
   language_server-protocol (3.17.0.5) sha256=fd1e39a51a28bf3eec959379985a72e296e9f9acfce46f6a79d31ca8760803cc
   lint_roller (1.1.0) sha256=2c0c845b632a7d172cb849cc90c1bce937a28c5c8ccccb50dfd46a485003cc87
   listen (3.10.0) sha256=c6e182db62143aeccc2e1960033bebe7445309c7272061979bb098d03760c9d2

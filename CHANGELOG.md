@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **build/linux-openssl**: the gnu Linux release artifacts (CLI, Go/Java/C#/Dart/C FFI, Elixir NIF) now **vendor OpenSSL from source** on the glibc-2.28 `cargo-zigbuild` path. With the 2.28 floor active, `openssl-sys` compiles under `zigcc` — invoked with only `-I /usr/include`, so it misses the Debian/Ubuntu multiarch header dir (`/usr/include/<triple>/openssl/opensslconf.h`) and failed every gnu zigbuild job after rc.32 with `fatal error: 'openssl/opensslconf.h' file not found`. The build actions gained a `linux-features` input (kreuzberg-dev/actions v1.8.88) that appends `--features kreuzberg/openssl-vendored` only on that path; the unified `openssl-sys` flips to its `vendored` feature, building OpenSSL from source with no system headers — also yielding a self-contained binary with no runtime `libssl` dependency. musl/macOS/Windows artifacts are unchanged. Reproduced and validated locally in an `ubuntu:22.04` container.
+- **build/node-musl**: the Alpine musl Node binding build sets `CC_/CXX_<target>=gcc/g++` so `cc-rs` (used by `ring`, tesseract) finds a compiler on napi-rs's cross path. It previously failed with `error occurred in cc-rs: failed to find tool "aarch64-linux-musl-gcc"` — the cargo `*_LINKER` vars were set but `cc-rs` resolves the *compiler* via its own per-target `CC_`/`CXX_` lookup. (`docker/Dockerfile.musl-node`)
 - **Ruby gem now ships precompiled platform binaries.** `ruby-gem` only ran `rake build`, emitting a
   source-only gem on every matrix leg, so `gem install kreuzberg` compiled the native extension from
   source for every consumer. It now runs `rake compile && rake build` to produce platform-tagged gems
@@ -48,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **CLI `xberg` alias + offline `kreuzberg-cli` PyPI wheels.** The standalone CLI is now also installed as `xberg` (a shorter alias) across every channel: the `kreuzberg-cli` PyPI/npm proxies expose both `kreuzberg` and `xberg` console scripts, `scripts/install.sh` and the Homebrew formula symlink `xberg` → `kreuzberg`. Additionally, `pip install kreuzberg-cli` / `uv tool install kreuzberg-cli` now resolves a **platform-specific wheel with the native binary bundled** (built per-target in CI via a hatchling build hook that injects the matching `kreuzberg-cli-<triple>` release binary and tags the wheel `manylinux_2_28`/`musllinux_1_2`/`macosx`/`win_amd64`), so the CLI is ready instantly and offline — no first-run GitHub download. The pure-Python sdist keeps the runtime-download fallback for unknown platforms. (`cli-proxy/pypi/`, `cli-proxy/npm/`, `scripts/install.sh`, `.github/workflows/publish.yaml`)
 - **Swift publish now substitutes the XCFramework checksum and creates the `release/swift/<version>`
   branch.** The publish workflow built and uploaded the artifactbundle but never substituted
   `__ALEF_SWIFT_CHECKSUM__` in `Package.swift` or created the branch the alef-generated Swift
