@@ -699,10 +699,16 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: wasm-bundle
+          # pkg/ holds the wasm-pack output that package.json's main/module/types
+          # point at (pkg/nodejs/…, pkg/web/…); it MUST ship in the artifact or the
+          # published @kreuzberg/wasm tarball has missing entry points. package.json
+          # is included so the publish job uses the build-stamped manifest.
           path: |
             crates/kreuzberg-wasm/dist/**
             crates/kreuzberg-wasm/dist-node/**
             crates/kreuzberg-wasm/dist-web/**
+            crates/kreuzberg-wasm/pkg/**
+            crates/kreuzberg-wasm/package.json
           retention-days: 14
 
   ruby-gem:
@@ -748,11 +754,33 @@ jobs:
         with:
           package-dir: packages/ruby
 
-      - name: Package gem
-        # Inline: rake build emits the .gem under pkg/; no shared action wraps it.
+      - name: Package platform gem
+        # `rake compile` builds the native extension for this runner's platform;
+        # rake-compiler then tags the `rake build` gem with the current platform
+        # (e.g. -x86_64-linux), alongside the fallback source gem. Without the
+        # compile, `rake build` emits a source-only gem that forces every consumer
+        # to compile from source on `gem install`.
         working-directory: packages/ruby
-        run: bundle exec rake build
+        run: |
+          bundle exec rake compile
+          bundle exec rake build
         shell: bash
+
+      - name: Drop source gem on non-canonical builders
+        if: ${{ matrix.label != 'linux-x86_64' }}
+        # Only the canonical linux-x86_64 builder ships the fallback source gem;
+        # other runners emit byte-different source gems that collide under
+        # publish-rubygems' merge-multiple. Keep only platform-tagged gems here.
+        shell: bash
+        run: |
+          shopt -s nullglob
+          for f in packages/ruby/pkg/*.gem; do
+            base="$(basename "$f")"
+            case "$base" in
+              *-x86_64-linux.gem|*-aarch64-linux.gem|*-arm64-darwin.gem) ;;
+              *) echo "Removing non-canonical source gem $base"; rm -f "$f" ;;
+            esac
+          done
 
       - uses: actions/upload-artifact@v7
         with:
@@ -873,6 +901,9 @@ jobs:
           # release target. Docker images already build with `--features all`.
           extra-cargo-args: --features mcp,mcp-http,api
           glibc-version: "2.28"
+          # zigcc misses the Debian multiarch OpenSSL headers, so vendor OpenSSL
+          # from source on the gnu-zigbuild path (no-op on macOS/Windows).
+          linux-features: kreuzberg/openssl-vendored
 
       - name: Package CLI artifact
         # Inline: archive layout (.tar.gz on Unix, .zip on Windows) varies per
@@ -993,6 +1024,8 @@ jobs:
           archive-name: kreuzberg-go-${{ matrix.platform }}.tar.gz
           output-dir: dist/go-ffi
           glibc-version: "2.28"
+          # Vendor OpenSSL on the gnu-zigbuild path (zigcc misses multiarch headers).
+          linux-features: kreuzberg/openssl-vendored
 
       - uses: actions/upload-artifact@v7
         with:
@@ -1042,6 +1075,7 @@ jobs:
           crate-name: kreuzberg-ffi
           target: ${{ matrix.target }}
           glibc-version: ${{ contains(matrix.target, '-linux-gnu') && '2.28' || '' }}
+          linux-features: ${{ contains(matrix.target, '-linux-gnu') && 'kreuzberg/openssl-vendored' || '' }}
 
       - name: Stage C FFI distribution
         # Inline: bundle library + header + LICENSE into a single tarball
@@ -1111,6 +1145,7 @@ jobs:
           lib-name: kreuzberg_ffi
           classifier: ${{ matrix.classifier }}
           glibc-version: ${{ contains(matrix.target, '-linux-gnu') && '2.28' || '' }}
+          linux-features: ${{ contains(matrix.target, '-linux-gnu') && 'kreuzberg/openssl-vendored' || '' }}
 
       - uses: actions/upload-artifact@v7
         with:
@@ -1242,6 +1277,7 @@ jobs:
           lib-name: kreuzberg_ffi
           rid: ${{ matrix.rid }}
           glibc-version: ${{ contains(matrix.target, '-linux-gnu') && '2.28' || '' }}
+          linux-features: ${{ contains(matrix.target, '-linux-gnu') && 'kreuzberg/openssl-vendored' || '' }}
 
       - uses: actions/upload-artifact@v7
         with:
@@ -1371,6 +1407,7 @@ jobs:
           nif-version: ${{ needs.prepare.outputs.version }}
           nif-api-version: ${{ matrix.nif }}
           glibc-version: ${{ contains(matrix.target, '-linux-gnu') && '2.28' || '' }}
+          linux-features: ${{ contains(matrix.target, '-linux-gnu') && 'kreuzberg/openssl-vendored' || '' }}
 
       - uses: actions/upload-artifact@v7
         with:
@@ -1560,13 +1597,17 @@ jobs:
           # after it), so bake the whole subcommand into BUILD_CMD.
           BUILD_CMD="cargo build"
           TARGET_ARG="$TARGET"
+          FEATURES_ARGS=()
           # Use zigbuild for linux-gnu targets to set glibc floor to 2.28
           if [[ "$TARGET" == *"-linux-gnu" ]]; then
             BUILD_CMD="cargo zigbuild"
             TARGET_ARG="${TARGET}.2.28"
+            # zigcc misses the Debian multiarch OpenSSL headers, so vendor OpenSSL
+            # from source on the gnu-zigbuild path (sidesteps opensslconf.h not found).
+            FEATURES_ARGS=(--features kreuzberg/openssl-vendored)
             echo "[publish] glibc floor: 2.28 (target: ${TARGET_ARG})"
           fi
-          ${BUILD_CMD} --locked -p kreuzberg-dart --release --target "${TARGET_ARG}"
+          ${BUILD_CMD} --locked -p kreuzberg-dart --release --target "${TARGET_ARG}" "${FEATURES_ARGS[@]}"
       - name: Stage native library
         shell: bash
         env:
@@ -1585,7 +1626,7 @@ jobs:
   dart-package:
     name: Build Dart package
     needs: [prepare, check-pub]
-    if: ${{ needs.prepare.outputs.release_dart == 'true' && needs.check-pub.outputs.exists != 'true' }}
+    if: ${{ needs.prepare.outputs.release_dart == 'true' && (needs.check-pub.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -1756,8 +1797,8 @@ jobs:
 
   upload-cli-release:
     name: Upload CLI binaries to GitHub Release
-    needs: [prepare, cli-binaries]
-    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.cli-binaries.result == 'success' }}
+    needs: [prepare, cli-binaries, cli-binaries-musl]
+    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.cli-binaries.result == 'success' && needs.cli-binaries-musl.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/create-github-app-token@v2
@@ -2119,6 +2160,7 @@ jobs:
           packages-dir: crates/kreuzberg-node/npm
           npm-tag: ${{ needs.prepare.outputs.npm_tag }}
           dry-run: ${{ needs.prepare.outputs.dry_run }}
+          provenance: "true"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -2128,6 +2170,7 @@ jobs:
           package-dir: crates/kreuzberg-node
           npm-tag: ${{ needs.prepare.outputs.npm_tag }}
           dry-run: ${{ needs.prepare.outputs.dry_run }}
+          provenance: "true"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -2160,6 +2203,7 @@ jobs:
           package-dir: crates/kreuzberg-wasm
           npm-tag: ${{ needs.prepare.outputs.npm_tag }}
           dry-run: ${{ needs.prepare.outputs.dry_run }}
+          provenance: "true"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -2406,7 +2450,7 @@ jobs:
         dart-server-natives,
         check-pub,
       ]
-    if: ${{ needs.prepare.outputs.release_dart == 'true' && needs.prepare.outputs.is_tag == 'true' && needs.check-pub.outputs.exists != 'true' }}
+    if: ${{ needs.prepare.outputs.release_dart == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-pub.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v8
@@ -2518,7 +2562,9 @@ jobs:
 
   publish-zig:
     name: Publish Zig package metadata
-    needs: [prepare, finalize-github-release-after-uploads, check-zig]
+    # Depend on c-ffi-libraries so the per-target FFI artifacts are available
+    # for `multi-platform-ffi-dir` bundling into the published Zig tarball.
+    needs: [prepare, finalize-github-release-after-uploads, check-zig, c-ffi-libraries]
     if: ${{ needs.prepare.outputs.release_zig == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-zig.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true') }}
     runs-on: ubuntu-latest
     steps:
@@ -2534,6 +2580,52 @@ jobs:
           ref: ${{ needs.prepare.outputs.ref }}
           submodules: recursive
 
+      # Download the per-target C FFI artifacts produced by c-ffi-libraries and
+      # lay them out as ffi-artifacts/<zig-rid>/<libfile> + a shared
+      # ffi-artifacts/include/ for publish-zig multi-platform bundling. Without
+      # this the published tarball ships no libs, yet packages/zig/build.zig is
+      # rewritten to link bundled lib/+include/ — so `zig fetch` consumers fail.
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: c-ffi-*
+          path: dist/c-ffi-downloaded
+          merge-multiple: false
+
+      - name: Lay out FFI artifacts for multi-platform Zig bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          # kreuzberg c-ffi tarballs are named by platform label (no version):
+          # kreuzberg-ffi-<platform>.tar.gz, each containing <stage>/lib/* and
+          # <stage>/include/*.h. Map each platform to the publish-zig RID layout.
+          declare -A RID_FOR=(
+            ["linux-x86_64"]="linux-x64"
+            ["linux-aarch64"]="linux-arm64"
+            ["macos-arm64"]="osx-arm64"
+            ["windows-x86_64"]="win-x64"
+          )
+          out="ffi-artifacts"
+          mkdir -p "$out/include"
+          for art in dist/c-ffi-downloaded/*/kreuzberg-ffi-*.tar.gz; do
+            [ -f "$art" ] || continue
+            platform="$(basename "$art" .tar.gz)"
+            platform="${platform#kreuzberg-ffi-}"
+            rid="${RID_FOR[$platform]:-}"
+            if [ -z "$rid" ]; then
+              echo "::warning::Unknown C FFI platform '$platform' — skipping"
+              continue
+            fi
+            tmp="$(mktemp -d)"
+            tar -xzf "$art" -C "$tmp"
+            stage_root="$(find "$tmp" -maxdepth 1 -mindepth 1 -type d | head -1)"
+            mkdir -p "$out/$rid"
+            cp "$stage_root"/lib/* "$out/$rid/"
+            cp "$stage_root"/include/*.h "$out/include/" 2>/dev/null || true
+            rm -rf "$tmp"
+          done
+          ls -la "$out"
+          for d in "$out"/*/; do echo "--- $d ---"; ls -la "$d"; done
+
       - uses: kreuzberg-dev/actions/publish-zig@v1
         with:
           working-directory: packages/zig
@@ -2545,7 +2637,14 @@ jobs:
           # fetches `kreuzberg-zig-v{version}.tar.gz` → 404 + consumer
           # build.zig.zon TODO hash.
           package-name: kreuzberg-zig
+          # Bundle the per-target FFI libraries + header into the published
+          # tarball so consumers can `zig fetch --save` and link without
+          # downloading anything else.
+          multi-platform-ffi-dir: ffi-artifacts
+          module-name: kreuzberg
+          ffi-lib-name: kreuzberg_ffi
           update-release-notes: "true"
+          update-existing: "true"
           dry-run: ${{ needs.prepare.outputs.dry_run }}
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}

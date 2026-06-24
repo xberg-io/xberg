@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Ruby gem now ships precompiled platform binaries.** `ruby-gem` only ran `rake build`, emitting a
+  source-only gem on every matrix leg, so `gem install kreuzberg` compiled the native extension from
+  source for every consumer. It now runs `rake compile && rake build` to produce platform-tagged gems
+  (`-x86_64-linux`, `-aarch64-linux`, `-arm64-darwin`) and drops the duplicate source gem on
+  non-canonical builders. (`.github/workflows/publish.yaml`)
+- **Zig package now bundles the per-platform FFI libraries.** `publish-zig` shipped a tarball whose
+  `build.zig` links bundled `lib/`+`include/`, but the pipeline never included them, breaking
+  `zig fetch` consumers. It now depends on `c-ffi-libraries`, lays the per-target libs out by RID, and
+  passes `multi-platform-ffi-dir`/`module-name`/`ffi-lib-name`/`update-existing` to `publish-zig`.
+  (`.github/workflows/publish.yaml`)
+- **WASM package now publishes its `pkg/` entry points.** The `wasm-bundle` artifact omitted
+  `crates/kreuzberg-wasm/pkg/**`, yet `package.json` `main`/`module`/`types` point under `pkg/`, so the
+  published `@kreuzberg/wasm` tarball was missing its entry points. `pkg/**` + `package.json` are now
+  included. (`.github/workflows/publish.yaml`)
+- **npm provenance restored.** The main `@kreuzberg/node` package, its platform sub-packages, and the
+  WASM package now publish with `provenance: "true"` (previously only the CLI proxy did).
+  (`.github/workflows/publish.yaml`)
+- **CLI release no longer races/skips musl binaries.** `upload-cli-release` depended only on
+  `cli-binaries`, so the musl tarballs could be uploaded before they existed or dropped on a musl
+  failure; it now also needs `cli-binaries-musl`. (`.github/workflows/publish.yaml`)
+- **Dart forced republish re-assembles the bundle.** `assemble-dart-bundle` and `dart-package` lacked
+  the `force_republish` escape hatch the other dart jobs have, so a forced republish ran against a
+  stale/missing artifact. (`.github/workflows/publish.yaml`)
+
 ### Added
 
 - **Swift publish now substitutes the XCFramework checksum and creates the `release/swift/<version>`
