@@ -1,72 +1,46 @@
-//! Pure-Rust rendering of image-only PDF pages.
+//! Direct rendering of image-only pages.
 //!
-//! pdf_oxide's rasterizer has no JPEG 2000 decoder: `extract_image_from_xobject`
-//! returns `UnsupportedFilter` for `/JPXDecode`, so the rasterizer drops the image
-//! and the page comes out blank. Scanned PDFs that store each page as a full-page
-//! JPEG 2000 image therefore rasterize to white, and every OCR backend extracts
-//! nothing (issue #1158).
-//!
-//! kreuzberg already bundles pure-Rust decoders for these formats
-//! (`hayro-jpeg2000`, `hayro-jbig2`) for standalone image extraction. This module
-//! reuses them, via [`crate::extraction::image::load_image_for_ocr`], to render an
-//! image-only page directly from its image XObject — bypassing the rasterizer for
-//! exactly the pages pdf_oxide cannot handle.
-//!
-//! Scope: the page must be image-composable — its drawing dominated by a single
-//! full-page image XObject (the scanned-page case). pdf_oxide keeps doing all page
-//! composition (CTM, masks, vector, text); this module only substitutes the
-//! image-decode step pdf_oxide lacks. Pages mixing such an image with significant
-//! vector/text content are recovered best-effort (dominant image only); perfectly
-//! compositing them would mean re-implementing pdf_oxide's rasterizer.
+//! pdf_oxide has no JPEG 2000 decoder, so it drops `/JPXDecode` image XObjects and
+//! rasterizes the page blank (#1158). For a page whose content is a single
+//! full-page image, we decode that image directly via the in-tree decoders
+//! ([`crate::extraction::image::load_image_for_ocr`]) instead. pdf_oxide still
+//! handles every other page (vector, text, multi-image composition).
 
 use image::DynamicImage;
 use pdf_oxide::PdfDocument;
 use pdf_oxide::object::Object;
 
-/// Image filters pdf_oxide's rasterizer cannot decode: it errors and drops the
-/// image, blanking the page. Mirrors pdf_oxide's own `image_has_unsupported_filter`
-/// gate in `rendering/separation_renderer.rs` (JPEG 2000 — no pure-Rust decoder is
-/// bundled in pdf_oxide). `J2` is the ISO 32000 abbreviation for `JPXDecode`.
+/// Image filters pdf_oxide's rasterizer errors on (dropping the image, blanking
+/// the page). Mirrors pdf_oxide's `image_has_unsupported_filter`; `J2` is the
+/// ISO 32000 abbreviation for `JPXDecode`.
 const RENDERER_UNSUPPORTED_FILTERS: &[&str] = &["JPXDecode", "J2"];
 
-/// An image XObject discovered on a page, with the metadata needed to decide
-/// whether and how to decode it ourselves.
 struct PageImage {
-    /// Raw (encoded) stream bytes. For `/JPXDecode` these are the JPEG 2000
-    /// codestream verbatim, which is exactly what the JP2 decoder consumes.
+    /// Raw stream bytes. For `/JPXDecode` this is the JPEG 2000 codestream.
     raw: bytes::Bytes,
-    /// `/Filter` chain names in array order.
-    filters: Vec<String>,
-    /// Pixel area (`/Width` * `/Height`), used to pick the dominant image.
+    /// Whether `/Filter` includes a filter pdf_oxide can't rasterize.
+    unsupported_filter: bool,
+    /// `/Width` * `/Height`, used to pick the dominant image.
     area: i128,
 }
 
-impl PageImage {
-    fn has_unsupported_filter(&self) -> bool {
-        self.filters
-            .iter()
-            .any(|f| RENDERER_UNSUPPORTED_FILTERS.contains(&f.as_str()))
+/// Whether `/Filter` (a `Name` or an `Array` of `Name`s) contains a filter
+/// pdf_oxide can't rasterize.
+fn has_unsupported_filter(dict: &std::collections::HashMap<String, Object>) -> bool {
+    let Some(filter) = dict.get("Filter") else {
+        return false;
+    };
+    if let Some(name) = filter.as_name() {
+        return RENDERER_UNSUPPORTED_FILTERS.contains(&name);
     }
+    filter.as_array().is_some_and(|arr| {
+        arr.iter()
+            .filter_map(Object::as_name)
+            .any(|n| RENDERER_UNSUPPORTED_FILTERS.contains(&n))
+    })
 }
 
-/// Read the `/Filter` entry (a `Name` or an `Array` of `Name`s) as a list of
-/// filter names, in order.
-fn read_filters(dict: &std::collections::HashMap<String, Object>) -> Vec<String> {
-    match dict.get("Filter") {
-        Some(f) => {
-            if let Some(name) = f.as_name() {
-                vec![name.to_string()]
-            } else if let Some(arr) = f.as_array() {
-                arr.iter().filter_map(|o| o.as_name().map(str::to_string)).collect()
-            } else {
-                Vec::new()
-            }
-        }
-        None => Vec::new(),
-    }
-}
-
-/// Read a dictionary integer entry (e.g. `/Width`), tolerating a `Real` value.
+/// Read an integer dictionary entry, tolerating a `Real`.
 fn read_dim(dict: &std::collections::HashMap<String, Object>, key: &str) -> i128 {
     match dict.get(key) {
         Some(Object::Integer(i)) => *i as i128,
@@ -75,20 +49,14 @@ fn read_dim(dict: &std::collections::HashMap<String, Object>, key: &str) -> i128
     }
 }
 
-/// Collect every image XObject directly referenced by the page's resource
-/// dictionary, with the metadata needed to decide whether to decode it ourselves.
-///
-/// Inline images (`BI`/`EI`) and images nested inside Form XObjects are not
-/// covered — those are rare for the scanned-page case this module targets, and a
-/// page that needs them simply falls through to pdf_oxide's rasterizer.
+/// Image XObjects referenced directly by the page's resource dictionary. Inline
+/// images and images nested in Form XObjects are not covered; such pages fall
+/// through to pdf_oxide's rasterizer.
 fn collect_page_images(doc: &PdfDocument, page_index: usize) -> Vec<PageImage> {
     let resources = match doc.get_page_resources(page_index) {
         Ok(r) => r,
         Err(e) => {
-            tracing::debug!(
-                page = page_index + 1,
-                "image-only render: get_page_resources failed: {e}"
-            );
+            tracing::debug!(page = page_index + 1, "get_page_resources failed: {e}");
             return Vec::new();
         }
     };
@@ -99,7 +67,7 @@ fn collect_page_images(doc: &PdfDocument, page_index: usize) -> Vec<PageImage> {
         return Vec::new();
     };
 
-    // The /XObject value may be an indirect reference to the dictionary.
+    // /XObject may be an indirect reference to the dictionary.
     let xobj_owned;
     let xobj_obj = if let Some(r) = xobj_entry.as_reference() {
         match doc.load_object(r) {
@@ -108,10 +76,7 @@ fn collect_page_images(doc: &PdfDocument, page_index: usize) -> Vec<PageImage> {
                 &xobj_owned
             }
             Err(e) => {
-                tracing::debug!(
-                    page = page_index + 1,
-                    "image-only render: load XObject dict failed: {e}"
-                );
+                tracing::debug!(page = page_index + 1, "load XObject dict failed: {e}");
                 return Vec::new();
             }
         }
@@ -122,7 +87,7 @@ fn collect_page_images(doc: &PdfDocument, page_index: usize) -> Vec<PageImage> {
         return Vec::new();
     };
 
-    // Deterministic order so the "dominant image" choice is stable across runs.
+    // Sorted so the dominant-image choice is stable across runs.
     let mut names: Vec<&String> = xobj_dict.keys().collect();
     names.sort();
 
@@ -149,13 +114,11 @@ fn collect_page_images(doc: &PdfDocument, page_index: usize) -> Vec<PageImage> {
         if dict.get("Subtype").and_then(Object::as_name) != Some("Image") {
             continue;
         }
-        // The raw stream bytes are the encoded image data. For /JPXDecode this is
-        // the JPEG 2000 codestream; pdf_oxide could not turn it into pixels.
         let Object::Stream { data, .. } = xobj else { continue };
 
         images.push(PageImage {
             raw: data.clone(),
-            filters: read_filters(dict),
+            unsupported_filter: has_unsupported_filter(dict),
             area: read_dim(dict, "Width") * read_dim(dict, "Height"),
         });
     }
@@ -163,20 +126,16 @@ fn collect_page_images(doc: &PdfDocument, page_index: usize) -> Vec<PageImage> {
     images
 }
 
-/// Render an image-only page directly from its dominant image XObject, using
-/// kreuzberg's pure-Rust decoders.
+/// Decode an image-only page's dominant image XObject directly.
 ///
-/// `require_unsupported_filter` selects the trigger:
-/// - `true` — proactive path: only fires when the dominant image uses a filter
-///   pdf_oxide cannot rasterize (JPEG 2000). Call this *before* rasterizing to skip
-///   a render that pdf_oxide would blank.
-/// - `false` — safety-net path: fires for any image-only page. Call this *after* a
-///   blank pdf_oxide render to recover an image pdf_oxide silently dropped.
+/// With `require_unsupported_filter` true (the proactive path), only fires when an
+/// image uses a filter pdf_oxide can't rasterize (JPEG 2000) — call it before
+/// rasterizing. With false (the safety net), fires for any image-only page — call
+/// it after a blank render to recover a dropped image.
 ///
-/// Returns `None` when the page has no usable image, the trigger condition is not
-/// met, or no image could be decoded. A decode failure on a page that does carry an
-/// unsupported-filter image is logged at `warn`, so the blank page never passes
-/// silently to OCR.
+/// `None` when the page has no usable image, the trigger isn't met, or decoding
+/// fails. A decode failure on a page that does carry an unsupported-filter image is
+/// logged at `warn` so the blank never reaches OCR silently.
 pub(crate) fn render_image_only_page(
     doc: &PdfDocument,
     page_index: usize,
@@ -187,13 +146,11 @@ pub(crate) fn render_image_only_page(
         return None;
     }
 
-    let has_unsupported = images.iter().any(PageImage::has_unsupported_filter);
+    let has_unsupported = images.iter().any(|img| img.unsupported_filter);
     if require_unsupported_filter && !has_unsupported {
         return None;
     }
 
-    // The dominant image is the largest by pixel area — for a scanned page that is
-    // the full-page scan. Ties resolve to the first in deterministic name order.
     let dominant = images.iter().max_by_key(|img| img.area)?;
 
     match crate::extraction::image::load_image_for_ocr(dominant.raw.as_ref()) {
@@ -202,25 +159,23 @@ pub(crate) fn render_image_only_page(
                 tracing::debug!(
                     page = page_index + 1,
                     image_count = images.len(),
-                    "image-only render: page has multiple images; rendered the largest one"
+                    "rendered the largest of multiple page images"
                 );
             }
             Some(img)
         }
+        // Warn only when pdf_oxide genuinely couldn't render the page; otherwise its
+        // normal rasterization is correct and this is just a safety-net miss.
+        Err(e) if has_unsupported => {
+            tracing::warn!(
+                page = page_index + 1,
+                "page image uses a filter pdf_oxide cannot rasterize (e.g. JPEG 2000) and could not be \
+                 decoded; the page may be blank: {e}"
+            );
+            None
+        }
         Err(e) => {
-            // Only escalate to a warning when pdf_oxide genuinely could not render
-            // this page (it carries an unsupported-filter image). Otherwise the
-            // caller's normal rasterization is the right result and this is just a
-            // safety-net miss.
-            if has_unsupported {
-                tracing::warn!(
-                    page = page_index + 1,
-                    "page image uses a filter pdf_oxide cannot rasterize (e.g. JPEG 2000) and could \
-                     not be decoded for rendering/OCR; the page may be blank: {e}"
-                );
-            } else {
-                tracing::debug!(page = page_index + 1, "image-only render: decode failed: {e}");
-            }
+            tracing::debug!(page = page_index + 1, "image-only decode failed: {e}");
             None
         }
     }

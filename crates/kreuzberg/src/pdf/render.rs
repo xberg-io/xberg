@@ -120,19 +120,15 @@ pub fn render_pdf_page_to_png(
     }
 
     let render_dpi = dpi.unwrap_or(150).max(1) as u32;
-    // Use the safeguarded path (wide-page fix) plus the image-only-page fast path
-    // (JPEG 2000 pages pdf_oxide cannot rasterize). See `render_page_png`.
     let (png, _w, _h) = render_page_png(&doc, page_index, render_dpi)?;
     Ok(png)
 }
 
-/// Render a page to PNG bytes for raster consumers, returning `(png, width, height)`.
+/// Render a page to PNG bytes, returning `(png, width, height)`.
 ///
-/// Fast path: image-only pages whose dominant image uses a filter pdf_oxide cannot
-/// rasterize (JPEG 2000 / `/JPXDecode`) are decoded directly via the in-tree decoder
-/// set (see [`crate::pdf::oxide::image_page`]) instead of rasterizing to a blank
-/// page. All other pages rasterize through pdf_oxide exactly as before, with no
-/// extra decode/encode work.
+/// Image-only pages whose dominant image uses a filter pdf_oxide can't rasterize
+/// (JPEG 2000) are decoded directly (see [`crate::pdf::oxide::image_page`]); every
+/// other page rasterizes through pdf_oxide with no extra work.
 #[cfg(feature = "pdf")]
 pub(crate) fn render_page_png(
     doc: &pdf_oxide::PdfDocument,
@@ -154,13 +150,9 @@ pub(crate) fn render_page_png(
 
 /// Render a page to a `DynamicImage` for the OCR / layout pipelines.
 ///
-/// Combines two recoveries for pages pdf_oxide cannot rasterize:
-/// 1. Proactive: an image-only page whose dominant image uses an unsupported filter
-///    (JPEG 2000) is decoded directly, skipping a render that would come back blank.
-/// 2. Safety net: if pdf_oxide renders an image-bearing page blank anyway (an image
-///    it silently dropped), retry the direct decode before handing OCR a blank page.
-///
-/// Normal pages rasterize through pdf_oxide unchanged.
+/// Decodes an image-only page's unsupported-filter image directly (proactive), and
+/// if pdf_oxide renders an image-bearing page blank anyway, retries the direct
+/// decode before handing OCR a blank page (safety net). Normal pages are unchanged.
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(crate) fn render_page_dynamic_image(
     doc: &pdf_oxide::PdfDocument,
@@ -217,20 +209,16 @@ fn is_effectively_blank(img: &image::DynamicImage) -> bool {
         return true;
     }
     // ~64 samples per axis: enough to catch any real content, negligible cost.
-    let step_x = (w / 64).max(1);
-    let step_y = (h / 64).max(1);
-    let mut y = 0;
-    while y < h {
-        let mut x = 0;
-        while x < w {
+    let step_x = (w / 64).max(1) as usize;
+    let step_y = (h / 64).max(1) as usize;
+    for y in (0..h).step_by(step_y) {
+        for x in (0..w).step_by(step_x) {
             let px = img.get_pixel(x, y);
             // Opaque and not near-white on any channel => real content.
             if px[3] > 10 && (px[0] < 250 || px[1] < 250 || px[2] < 250) {
                 return false;
             }
-            x += step_x;
         }
-        y += step_y;
     }
     true
 }
