@@ -392,17 +392,9 @@ pub(crate) fn render_selected_pages_for_ocr(
             );
             continue;
         }
-        let rendered = crate::pdf::render::render_page_with_safeguards(&doc, idx, 150).map_err(|e| {
-            crate::KreuzbergError::Parsing {
-                message: format!("Failed to render PDF page {}: {}", idx + 1, e),
-                source: None,
-            }
-        })?;
-        // rendered.data is PNG-encoded; decode back to DynamicImage for OCR.
-        let img = image::load_from_memory(&rendered.data).map_err(|e| crate::KreuzbergError::Parsing {
-            message: format!("Failed to decode rendered page {}: {}", idx + 1, e),
-            source: None,
-        })?;
+        // Renders via pdf_oxide, with the image-only-page fast path / safety net for
+        // pages pdf_oxide cannot rasterize (JPEG 2000 scans — see render.rs).
+        let img = crate::pdf::render::render_page_dynamic_image(&doc, idx, 150)?;
         images.push((idx, img));
     }
 
@@ -913,15 +905,10 @@ pub(crate) async fn extract_with_ocr(
                 let mut batch_encoded: Vec<(usize, Arc<Vec<u8>>, u32, u32)> =
                     Vec::with_capacity(batch_end - batch_start);
                 for i in batch_start..batch_end {
-                    let rendered = crate::pdf::render::render_page_with_safeguards(&doc, i, 150).map_err(|e| {
-                        crate::KreuzbergError::Parsing {
-                            message: format!("Failed to render page {} for OCR: {:?}", i, e),
-                            source: None,
-                        }
-                    })?;
-                    // rendered.data is PNG-encoded; width and height are available directly.
-                    batch_encoded.push((i, Arc::new(rendered.data), rendered.width, rendered.height));
-                    // `rendered` is dropped here after extracting the fields.
+                    // render_page_png returns PNG bytes + dims, with the image-only-page
+                    // fast path for JPEG 2000 scans pdf_oxide cannot rasterize (see render.rs).
+                    let (data, width, height) = crate::pdf::render::render_page_png(&doc, i, 150)?;
+                    batch_encoded.push((i, Arc::new(data), width, height));
                 }
                 batch_encoded
             };

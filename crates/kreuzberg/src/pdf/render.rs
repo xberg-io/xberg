@@ -120,13 +120,118 @@ pub fn render_pdf_page_to_png(
     }
 
     let render_dpi = dpi.unwrap_or(150).max(1) as u32;
-    // Use the safeguarded path so public API also benefits from the wide-page fix.
-    let rendered = render_page_with_safeguards(&doc, page_index, render_dpi).map_err(|e| KreuzbergError::Parsing {
-        message: format!("Failed to render page {page_index}: {e}"),
+    // Use the safeguarded path (wide-page fix) plus the image-only-page fast path
+    // (JPEG 2000 pages pdf_oxide cannot rasterize). See `render_page_png`.
+    let (png, _w, _h) = render_page_png(&doc, page_index, render_dpi)?;
+    Ok(png)
+}
+
+/// Render a page to PNG bytes for raster consumers, returning `(png, width, height)`.
+///
+/// Fast path: image-only pages whose dominant image uses a filter pdf_oxide cannot
+/// rasterize (JPEG 2000 / `/JPXDecode`) are decoded directly via the in-tree decoder
+/// set (see [`crate::pdf::oxide::image_page`]) instead of rasterizing to a blank
+/// page. All other pages rasterize through pdf_oxide exactly as before, with no
+/// extra decode/encode work.
+#[cfg(feature = "pdf")]
+pub(crate) fn render_page_png(
+    doc: &pdf_oxide::PdfDocument,
+    page_index: usize,
+    base_dpi: u32,
+) -> Result<(Vec<u8>, u32, u32)> {
+    #[cfg(feature = "ocr")]
+    {
+        if let Some(img) = crate::pdf::oxide::image_page::render_image_only_page(doc, page_index, true) {
+            return encode_dynamic_image_to_png(&img);
+        }
+    }
+    let rendered = render_page_with_safeguards(doc, page_index, base_dpi).map_err(|e| KreuzbergError::Parsing {
+        message: format!("Failed to render page {}: {e}", page_index + 1),
         source: None,
     })?;
+    Ok((rendered.data, rendered.width, rendered.height))
+}
 
-    Ok(rendered.data)
+/// Render a page to a `DynamicImage` for the OCR / layout pipelines.
+///
+/// Combines two recoveries for pages pdf_oxide cannot rasterize:
+/// 1. Proactive: an image-only page whose dominant image uses an unsupported filter
+///    (JPEG 2000) is decoded directly, skipping a render that would come back blank.
+/// 2. Safety net: if pdf_oxide renders an image-bearing page blank anyway (an image
+///    it silently dropped), retry the direct decode before handing OCR a blank page.
+///
+/// Normal pages rasterize through pdf_oxide unchanged.
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+pub(crate) fn render_page_dynamic_image(
+    doc: &pdf_oxide::PdfDocument,
+    page_index: usize,
+    base_dpi: u32,
+) -> Result<image::DynamicImage> {
+    #[cfg(feature = "ocr")]
+    {
+        if let Some(img) = crate::pdf::oxide::image_page::render_image_only_page(doc, page_index, true) {
+            return Ok(img);
+        }
+    }
+    let rendered = render_page_with_safeguards(doc, page_index, base_dpi).map_err(|e| KreuzbergError::Parsing {
+        message: format!("Failed to render page {}: {e}", page_index + 1),
+        source: None,
+    })?;
+    let img = image::load_from_memory(&rendered.data).map_err(|e| KreuzbergError::Parsing {
+        message: format!("Failed to decode rendered page {}: {e}", page_index + 1),
+        source: None,
+    })?;
+    #[cfg(feature = "ocr")]
+    {
+        if is_effectively_blank(&img)
+            && let Some(recovered) = crate::pdf::oxide::image_page::render_image_only_page(doc, page_index, false)
+        {
+            return Ok(recovered);
+        }
+    }
+    Ok(img)
+}
+
+/// PNG-encode a recovered page image, returning `(png, width, height)`.
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+pub(crate) fn encode_dynamic_image_to_png(img: &image::DynamicImage) -> Result<(Vec<u8>, u32, u32)> {
+    let (w, h) = (img.width(), img.height());
+    let mut buf = std::io::Cursor::new(Vec::new());
+    img.write_to(&mut buf, image::ImageFormat::Png).map_err(|e| KreuzbergError::Parsing {
+        message: format!("Failed to PNG-encode recovered page image: {e}"),
+        source: None,
+    })?;
+    Ok((buf.into_inner(), w, h))
+}
+
+/// Whether a rendered page is effectively blank (uniform near-white or fully
+/// transparent). Used to trigger the image-only-page safety net. Samples a coarse
+/// grid rather than every pixel so the check stays cheap for full-resolution scans.
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn is_effectively_blank(img: &image::DynamicImage) -> bool {
+    use image::GenericImageView;
+
+    let (w, h) = img.dimensions();
+    if w == 0 || h == 0 {
+        return true;
+    }
+    // ~64 samples per axis: enough to catch any real content, negligible cost.
+    let step_x = (w / 64).max(1);
+    let step_y = (h / 64).max(1);
+    let mut y = 0;
+    while y < h {
+        let mut x = 0;
+        while x < w {
+            let px = img.get_pixel(x, y);
+            // Opaque and not near-white on any channel => real content.
+            if px[3] > 10 && (px[0] < 250 || px[1] < 250 || px[2] < 250) {
+                return false;
+            }
+            x += step_x;
+        }
+        y += step_y;
+    }
+    true
 }
 
 /// Count the pages in a PDF without rendering any of them.

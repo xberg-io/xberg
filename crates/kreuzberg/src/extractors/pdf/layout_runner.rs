@@ -73,21 +73,11 @@ pub(super) fn run_layout_for_pdf_pages(
             .map(|(llx, lly, urx, ury)| ((urx - llx).abs(), (ury - lly).abs()))
             .unwrap_or((612.0, 792.0)); // Letter fallback
 
-        let rendered = crate::pdf::render::render_page_with_safeguards(&doc, page_idx, 150).map_err(|e| {
-            KreuzbergError::Parsing {
-                message: format!("layout runner: failed to render page {}: {e}", page_idx + 1),
-                source: None,
-            }
-        })?;
-
-        // Decode to DynamicImage, convert to RGB immediately, then drop DynamicImage
-        // so its pixel buffer is freed before processing the next page.
-        let rgb = image::load_from_memory(&rendered.data)
-            .map_err(|e| KreuzbergError::Parsing {
-                message: format!("layout runner: failed to decode page {} PNG: {e}", page_idx + 1),
-                source: None,
-            })?
-            .into_rgb8();
+        // Render via pdf_oxide, with the image-only-page fast path / safety net for
+        // pages pdf_oxide cannot rasterize (JPEG 2000 scans — see render.rs). Convert
+        // to RGB immediately and drop the DynamicImage so its pixel buffer is freed
+        // before processing the next page.
+        let rgb = crate::pdf::render::render_page_dynamic_image(&doc, page_idx, 150)?.into_rgb8();
 
         page_data.push((page_width_pts, page_height_pts, rgb));
     }

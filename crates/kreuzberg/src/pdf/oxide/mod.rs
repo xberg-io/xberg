@@ -7,6 +7,10 @@
 pub(crate) mod annotations;
 pub(crate) mod forms;
 pub(crate) mod hierarchy;
+/// Pure-Rust rendering of image-only pages whose image uses a filter pdf_oxide
+/// cannot rasterize (JPEG 2000). Requires a JPEG 2000 decoder (`ocr` feature).
+#[cfg(feature = "ocr")]
+pub(crate) mod image_page;
 pub(crate) mod images;
 pub(crate) mod metadata;
 pub(crate) mod table;
