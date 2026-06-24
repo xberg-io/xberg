@@ -68,7 +68,7 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/xberg-io/langchain-kreuzberg"
-Documentation = "https://docs.kreuzberg.dev"
+Documentation = "https://docs.xberg.io"
 Repository = "https://github.com/xberg-io/langchain-kreuzberg"
 Issues = "https://github.com/xberg-io/langchain-kreuzberg/issues"
 Kreuzberg = "https://github.com/xberg-io/kreuzberg"

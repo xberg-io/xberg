@@ -19,8 +19,8 @@
   <a href="https://github.com/xberg-io/kreuzberg">
     <img src="https://img.shields.io/github/stars/xberg-io/kreuzberg?style=flat&label=Kreuzberg&color=007ec6" alt="Kreuzberg">
   </a>
-  <a href="https://docs.kreuzberg.dev">
-    <img src="https://img.shields.io/badge/docs-kreuzberg.dev-blue" alt="Documentation">
+  <a href="https://docs.xberg.io">
+    <img src="https://img.shields.io/badge/docs-xberg.io-blue" alt="Documentation">
   </a>
 </div>
 
