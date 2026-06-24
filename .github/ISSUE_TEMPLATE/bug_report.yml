@@ -2,7 +2,7 @@ name: Bug Report
 description: Report a bug or unexpected behavior
 title: "bug: "
 labels: ["bug"]
-projects: ["kreuzberg-dev/1"]
+projects: ["xberg-io/1"]
 body:
   - type: textarea
     id: description

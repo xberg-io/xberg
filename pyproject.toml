@@ -55,10 +55,10 @@ dependencies = [
   "typing-extensions>=4; python_version<'3.11'",
 ]
 urls.Documentation = "https://docs.kreuzberg.dev"
-urls.Homepage = "https://github.com/kreuzberg-dev/kreuzberg-surrealdb"
-urls.Issues = "https://github.com/kreuzberg-dev/kreuzberg-surrealdb/issues"
-urls.Kreuzberg = "https://github.com/kreuzberg-dev/kreuzberg"
-urls.Repository = "https://github.com/kreuzberg-dev/kreuzberg-surrealdb"
+urls.Homepage = "https://github.com/xberg-io/kreuzberg-surrealdb"
+urls.Issues = "https://github.com/xberg-io/kreuzberg-surrealdb/issues"
+urls.Kreuzberg = "https://github.com/xberg-io/kreuzberg"
+urls.Repository = "https://github.com/xberg-io/kreuzberg-surrealdb"
 urls.SurrealDB = "https://surrealdb.com"
 
 [dependency-groups]

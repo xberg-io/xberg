@@ -2,7 +2,7 @@ name: Feature Request
 description: Suggest a new feature or improvement
 title: "feat: "
 labels: ["enhancement"]
-projects: ["kreuzberg-dev/1"]
+projects: ["xberg-io/1"]
 body:
   - type: textarea
     id: what

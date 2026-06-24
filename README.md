@@ -3,7 +3,7 @@
 <div align="center" style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 20px 0;">
   <a href="https://pypi.org/project/kreuzberg-surrealdb/"><img src="https://img.shields.io/pypi/v/kreuzberg-surrealdb?label=kreuzberg-surrealdb&color=007ec6" alt="PyPI version"></a>
   <a href="https://pypi.org/project/kreuzberg-surrealdb/"><img src="https://img.shields.io/pypi/pyversions/kreuzberg-surrealdb?color=007ec6" alt="Python versions"></a>
-  <a href="https://github.com/kreuzberg-dev/kreuzberg-surrealdb/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License"></a>
+  <a href="https://github.com/xberg-io/kreuzberg-surrealdb/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License"></a>
   <a href="https://docs.kreuzberg.dev"><img src="https://img.shields.io/badge/docs-kreuzberg.dev-blue" alt="Docs"></a>
 </div>
 
@@ -17,7 +17,7 @@
 
 Kreuzberg-to-SurrealDB connector for document ingestion pipelines.
 
-Bridges [Kreuzberg](https://github.com/kreuzberg-dev/kreuzberg) extraction into [SurrealDB](https://surrealdb.com/) — handles schema generation, content deduplication, chunk storage, and index configuration.
+Bridges [Kreuzberg](https://github.com/xberg-io/kreuzberg) extraction into [SurrealDB](https://surrealdb.com/) — handles schema generation, content deduplication, chunk storage, and index configuration.
 
 ## Features
 
@@ -252,7 +252,7 @@ await pipeline.setup_schema()
 await pipeline.ingest_file("scanned_report.pdf")
 ```
 
-See [kreuzberg's documentation](https://github.com/kreuzberg-dev/kreuzberg) for the full `ExtractionConfig` API.
+See [kreuzberg's documentation](https://github.com/xberg-io/kreuzberg) for the full `ExtractionConfig` API.
 
 ## Ingestion Methods
 
