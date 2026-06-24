@@ -355,3 +355,121 @@ mod tests {
         );
     }
 }
+
+/// Build a minimal single-page PDF whose only content is one full-page image
+/// XObject encoded with `/JPXDecode` (JPEG 2000). pdf_oxide cannot rasterize such a
+/// page (it has no JPEG 2000 decoder), so this reproduces the #1158 blank-page bug.
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+fn build_minimal_pdf_with_jpx_image(jp2: &[u8], w: u32, h: u32) -> Vec<u8> {
+    let mut buf = Vec::<u8>::new();
+    let mut offsets = [0usize; 6]; // indices 1..=5
+
+    buf.extend_from_slice(b"%PDF-1.5\n");
+
+    offsets[1] = buf.len();
+    buf.extend_from_slice(b"1 0 obj\n<</Type /Catalog /Pages 2 0 R>>\nendobj\n");
+
+    offsets[2] = buf.len();
+    buf.extend_from_slice(b"2 0 obj\n<</Type /Pages /Kids [3 0 R] /Count 1>>\nendobj\n");
+
+    offsets[3] = buf.len();
+    buf.extend_from_slice(
+        format!(
+            "3 0 obj\n<</Type /Page /Parent 2 0 R /MediaBox [0 0 {w} {h}] \
+             /Resources <</XObject <</Im0 4 0 R>>>> /Contents 5 0 R>>\nendobj\n"
+        )
+        .as_bytes(),
+    );
+
+    // Image XObject: raw JPEG 2000 codestream under /JPXDecode.
+    offsets[4] = buf.len();
+    buf.extend_from_slice(
+        format!(
+            "4 0 obj\n<</Type /XObject /Subtype /Image /Width {w} /Height {h} \
+             /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /JPXDecode /Length {}>>\nstream\n",
+            jp2.len()
+        )
+        .as_bytes(),
+    );
+    buf.extend_from_slice(jp2);
+    buf.extend_from_slice(b"\nendstream\nendobj\n");
+
+    // Content stream draws the image scaled to the page box.
+    let content = format!("q {w} 0 0 {h} 0 0 cm /Im0 Do Q\n");
+    offsets[5] = buf.len();
+    buf.extend_from_slice(
+        format!("5 0 obj\n<</Length {}>>\nstream\n{content}endstream\nendobj\n", content.len()).as_bytes(),
+    );
+
+    let xref_offset = buf.len();
+    buf.extend_from_slice(b"xref\n0 6\n");
+    buf.extend_from_slice(b"0000000000 65535 f \n");
+    for offset in &offsets[1..=5] {
+        buf.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+    }
+    buf.extend_from_slice(
+        format!("trailer\n<</Size 6 /Root 1 0 R>>\nstartxref\n{xref_offset}\n%%EOF\n").as_bytes(),
+    );
+
+    buf
+}
+
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+mod jpx_tests {
+    use super::*;
+
+    /// A small tracked JPEG 2000 fixture (decodes to a dark logo, so any correct
+    /// render is far from blank white).
+    fn jp2_fixture() -> Vec<u8> {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../test_documents/images/rust-logo-512x512-blk.jp2");
+        std::fs::read(&path).unwrap_or_else(|e| panic!("jp2 fixture {} missing: {e}", path.display()))
+    }
+
+    /// The #1158 repro: a full-page JPEG 2000 page must render with real content
+    /// through the public API, not a blank white bitmap.
+    #[test]
+    fn jpx_page_renders_non_blank_via_public_api() {
+        let pdf = build_minimal_pdf_with_jpx_image(&jp2_fixture(), 512, 512);
+        let png = render_pdf_page_to_png(&pdf, 0, Some(150), None).expect("JPEG 2000 page should render");
+        let luma = image::load_from_memory(&png).expect("output is a valid image").to_luma8();
+        let min = luma.iter().copied().min().unwrap_or(255);
+        let max = luma.iter().copied().max().unwrap_or(255);
+        assert!(
+            min != 255 || max != 255,
+            "JPEG 2000 page rendered blank white (min={min}, max={max}); pdf_oxide dropped the image and recovery did not fire"
+        );
+    }
+
+    /// The proactive path fires for the unsupported (JPEG 2000) filter and decodes
+    /// the page image directly.
+    #[test]
+    fn render_image_only_page_recovers_jpx() {
+        let pdf = build_minimal_pdf_with_jpx_image(&jp2_fixture(), 512, 512);
+        let doc = pdf_oxide::PdfDocument::from_bytes(pdf).expect("doc opens");
+        let img = crate::pdf::oxide::image_page::render_image_only_page(&doc, 0, true)
+            .expect("proactive recovery should decode the JPEG 2000 page image");
+        assert!(img.width() > 0 && img.height() > 0);
+    }
+
+    /// A page with no image XObject must never trigger recovery, under either
+    /// trigger, so normal vector/text pages are untouched.
+    #[test]
+    fn render_image_only_page_skips_non_image_page() {
+        let pdf = build_minimal_pdf_with_mediabox(612.0, 792.0);
+        let doc = pdf_oxide::PdfDocument::from_bytes(pdf).expect("doc opens");
+        assert!(crate::pdf::oxide::image_page::render_image_only_page(&doc, 0, true).is_none());
+        assert!(crate::pdf::oxide::image_page::render_image_only_page(&doc, 0, false).is_none());
+    }
+
+    /// Parity with the removed `PdfPageIterator`: `pdf_page_count` +
+    /// `render_pdf_page_to_png` together cover page-count and per-page rasterization
+    /// (what lilbee's `rasterize_pdf` relied on), including for JPEG 2000 scans.
+    #[test]
+    fn page_count_and_render_cover_page_iterator_usage() {
+        let pdf = build_minimal_pdf_with_jpx_image(&jp2_fixture(), 512, 512);
+        assert_eq!(pdf_page_count(&pdf, None).expect("page count"), 1);
+        let png = render_pdf_page_to_png(&pdf, 0, Some(150), None).expect("render");
+        assert!(!png.is_empty(), "per-page PNG must not be empty");
+    }
+}
