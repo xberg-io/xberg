@@ -54,7 +54,7 @@ dependencies = [
   "surrealdb>=1.0.8",
   "typing-extensions>=4; python_version<'3.11'",
 ]
-urls.Documentation = "https://docs.kreuzberg.dev"
+urls.Documentation = "https://docs.xberg.io"
 urls.Homepage = "https://github.com/xberg-io/kreuzberg-surrealdb"
 urls.Issues = "https://github.com/xberg-io/kreuzberg-surrealdb/issues"
 urls.Kreuzberg = "https://github.com/xberg-io/kreuzberg"

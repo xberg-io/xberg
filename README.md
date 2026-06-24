@@ -4,7 +4,7 @@
   <a href="https://pypi.org/project/kreuzberg-surrealdb/"><img src="https://img.shields.io/pypi/v/kreuzberg-surrealdb?label=kreuzberg-surrealdb&color=007ec6" alt="PyPI version"></a>
   <a href="https://pypi.org/project/kreuzberg-surrealdb/"><img src="https://img.shields.io/pypi/pyversions/kreuzberg-surrealdb?color=007ec6" alt="Python versions"></a>
   <a href="https://github.com/xberg-io/kreuzberg-surrealdb/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License"></a>
-  <a href="https://docs.kreuzberg.dev"><img src="https://img.shields.io/badge/docs-kreuzberg.dev-blue" alt="Docs"></a>
+  <a href="https://docs.xberg.io"><img src="https://img.shields.io/badge/docs-xberg.io-blue" alt="Docs"></a>
 </div>
 
 <img width="3384" height="573" alt="Kreuzberg Banner" src="https://github.com/user-attachments/assets/1b6c6ad7-3b6d-4171-b1c9-f2026cc9deb8" />
