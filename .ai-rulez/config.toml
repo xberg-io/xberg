@@ -2,14 +2,14 @@
 # Documentation: https://github.com/Goldziher/ai-rulez
 
 version = '4.0'
-name = 'llama-index-kreuzberg'
-description = 'LlamaIndex document reader integration for kreuzberg'
+name = 'llama-index-xberg'
+description = 'LlamaIndex document reader integration for xberg'
 gitignore = true
 presets = ['claude', 'codex', 'copilot', 'cursor', 'antigravity']
 builtins = ['python', 'default-commands']
 
 [[includes]]
-name = 'kreuzberg-core'
+name = 'xberg-core'
 source = 'https://github.com/xberg-io/ai-rulez.git'
 path = 'modules/core'
 merge_strategy = 'local-override'

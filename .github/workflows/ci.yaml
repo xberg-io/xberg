@@ -37,8 +37,8 @@ jobs:
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         package:
-          - readers/llama-index-readers-kreuzberg
-          - node_parsers/llama-index-node-parser-kreuzberg
+          - readers/llama-index-readers-xberg
+          - node_parsers/llama-index-node-parser-xberg
     steps:
       - uses: actions/checkout@v6
 

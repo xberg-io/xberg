@@ -12,16 +12,16 @@ jobs:
       id-token: write
     environment:
       name: pypi
-      url: https://pypi.org/p/llama-index-node-parser-kreuzberg
+      url: https://pypi.org/p/llama-index-node-parser-xberg
     steps:
       - uses: actions/checkout@v6
 
       - uses: astral-sh/setup-uv@v7
 
       - name: Build package
-        run: cd node_parsers/llama-index-node-parser-kreuzberg && uv build
+        run: cd node_parsers/llama-index-node-parser-xberg && uv build
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: node_parsers/llama-index-node-parser-kreuzberg/dist/
+          packages-dir: node_parsers/llama-index-node-parser-xberg/dist/

@@ -1,5 +1,0 @@
-This is a sample text document for testing langchain-kreuzberg.
-
-It contains multiple paragraphs to verify text extraction works correctly.
-
-The loader should extract this content and populate metadata fields appropriately.

@@ -8,11 +8,11 @@ This repo contains **two independently-published PyPI packages**, not one.
 
 ## Packages
 
-- `readers/llama-index-readers-kreuzberg/` — PyPI: `llama-index-readers-kreuzberg`
-  - `KreuzbergReader` at `llama_index.readers.kreuzberg`
-  - Depends on `kreuzberg` and `llama-index-core>=0.13,<0.15`
-- `node_parsers/llama-index-node-parser-kreuzberg/` — PyPI: `llama-index-node-parser-kreuzberg`
-  - `KreuzbergNodeParser` at `llama_index.node_parser.kreuzberg`
+- `readers/llama-index-readers-xberg/` — PyPI: `llama-index-readers-xberg`
+  - `XbergReader` at `llama_index.readers.xberg`
+  - Depends on `xberg` and `llama-index-core>=0.13,<0.15`
+- `node_parsers/llama-index-node-parser-xberg/` — PyPI: `llama-index-node-parser-xberg`
+  - `XbergNodeParser` at `llama_index.node_parser.xberg`
   - Depends only on `llama-index-core>=0.13,<0.15`
 
 ## Root `pyproject.toml`
@@ -23,8 +23,8 @@ This repo contains **two independently-published PyPI packages**, not one.
 
 ## Running Tests
 
-- Run from sub-package directory: `cd readers/llama-index-readers-kreuzberg && pytest`
-- Or: `cd node_parsers/llama-index-node-parser-kreuzberg && pytest`
+- Run from sub-package directory: `cd readers/llama-index-readers-xberg && pytest`
+- Or: `cd node_parsers/llama-index-node-parser-xberg && pytest`
 - Do NOT run `pytest` from repo root
 
 ## Publishing
