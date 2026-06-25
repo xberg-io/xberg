@@ -243,6 +243,15 @@ Use provider-hosted embedding models when you need to match your vector database
       --text "Hello world"
     ```
 
+!!! note "Python: pass the LLM model as a dict"
+
+    The typed `EmbeddingModelType.llm(LlmConfig(...))` constructor currently rejects the
+    public `xberg.LlmConfig` class. Until that is fixed
+    ([#1165](https://github.com/xberg-io/xberg/issues/1165)), specify the model as a dict —
+    `EmbeddingConfig(model={"type": "llm", "llm": {"model": "..."}})` — as shown above. The
+    nested `llm` dict accepts the same fields as `LlmConfig` (`model`, `api_key`, `base_url`,
+    `timeout_secs`, `max_retries`, `temperature`, `max_tokens`).
+
 ### Available Models
 
 | Model                                    | Dimensions | Provider |
