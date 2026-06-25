@@ -1,0 +1,18 @@
+{
+	"id": "embed_texts_shorthand_preset",
+	"category": "embed_extra",
+	"description": "Batch embed texts with a bare preset name (string_shorthand)",
+	"tags": ["embedding", "batch", "string_shorthand"],
+	"call": "embed_texts",
+	"input": {
+		"texts": ["Hello", "World"],
+		"config": {
+			"model": "balanced"
+		}
+	},
+	"assertions": [{ "type": "not_error" }],
+	"skip": {
+		"languages": ["rust", "node", "go", "elixir", "wasm", "java", "csharp", "php", "r", "dart", "kotlin_android", "swift", "zig", "homebrew"],
+		"reason": "string_shorthand (a bare preset name for the model field) is implemented for the pyo3 and magnus backends in alef 0.28.0; other backends require the explicit { type, name } form"
+	}
+}
