@@ -31,7 +31,7 @@
 //! # Ok(())
 //! # }
 //! ```
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use crate::text::utf8_validation;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
@@ -338,8 +338,8 @@ fn is_text_field(key: &str, custom_patterns: &[String]) -> bool {
 /// # }
 /// ```
 pub(crate) fn parse_jsonl(data: &[u8], config: Option<JsonExtractionConfig>) -> Result<StructuredDataResult> {
-    let text = utf8_validation::from_utf8(data)
-        .map_err(|e| XbergError::parsing(format!("Invalid UTF-8 in JSONL: {}", e)))?;
+    let text =
+        utf8_validation::from_utf8(data).map_err(|e| XbergError::parsing(format!("Invalid UTF-8 in JSONL: {}", e)))?;
 
     let config = config.unwrap_or_default();
     let line_count_estimate = memchr::memchr_iter(b'\n', data).count().saturating_add(1);
@@ -375,11 +375,11 @@ pub(crate) fn parse_jsonl(data: &[u8], config: Option<JsonExtractionConfig>) -> 
 }
 
 pub(crate) fn parse_yaml(data: &[u8]) -> Result<StructuredDataResult> {
-    let yaml_str = utf8_validation::from_utf8(data)
-        .map_err(|e| XbergError::parsing(format!("Invalid UTF-8 in YAML: {}", e)))?;
+    let yaml_str =
+        utf8_validation::from_utf8(data).map_err(|e| XbergError::parsing(format!("Invalid UTF-8 in YAML: {}", e)))?;
 
-    let value: serde_json::Value = serde_yaml_ng::from_str(yaml_str)
-        .map_err(|e| XbergError::parsing(format!("Failed to parse YAML: {}", e)))?;
+    let value: serde_json::Value =
+        serde_yaml_ng::from_str(yaml_str).map_err(|e| XbergError::parsing(format!("Failed to parse YAML: {}", e)))?;
 
     let mut metadata = HashMap::new();
     let mut text_fields = Vec::new();
@@ -456,8 +456,8 @@ fn extract_from_value(
 }
 
 pub(crate) fn parse_toml(data: &[u8]) -> Result<StructuredDataResult> {
-    let toml_str = utf8_validation::from_utf8(data)
-        .map_err(|e| XbergError::parsing(format!("Invalid UTF-8 in TOML: {}", e)))?;
+    let toml_str =
+        utf8_validation::from_utf8(data).map_err(|e| XbergError::parsing(format!("Invalid UTF-8 in TOML: {}", e)))?;
 
     let value: toml::Value =
         toml::from_str(toml_str).map_err(|e| XbergError::parsing(format!("Failed to parse TOML: {}", e)))?;

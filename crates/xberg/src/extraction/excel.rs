@@ -33,7 +33,7 @@ use std::fmt::Write as FmtWrite;
 use std::io::{Cursor, Read, Seek};
 use std::path::Path;
 
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use crate::extraction::capacity;
 use crate::types::revisions::{DocumentRevision, RevisionDelta, RevisionKind};
 use crate::types::{ExcelSheet, ExcelWorkbook};
@@ -155,8 +155,8 @@ pub(crate) fn read_excel_bytes(data: &[u8], file_extension: &str) -> Result<Exce
         // Standard XLSX-format files: propagate errors
         ".xlsx" | ".xlsm" | ".xltm" => {
             let cursor = Cursor::new(data);
-            let workbook = calamine::Xlsx::new(cursor)
-                .map_err(|e| XbergError::parsing(format!("Failed to parse XLSX: {}", e)))?;
+            let workbook =
+                calamine::Xlsx::new(cursor).map_err(|e| XbergError::parsing(format!("Failed to parse XLSX: {}", e)))?;
             let mut result = process_xlsx_workbook(workbook, office_metadata)?;
             result.revisions = extract_xlsx_revisions_from_bytes(data);
             Ok(result)
@@ -179,8 +179,8 @@ pub(crate) fn read_excel_bytes(data: &[u8], file_extension: &str) -> Result<Exce
         // Standard XLS format: propagate errors
         ".xls" => {
             let cursor = Cursor::new(data);
-            let workbook = calamine::Xls::new(cursor)
-                .map_err(|e| XbergError::parsing(format!("Failed to parse XLS: {}", e)))?;
+            let workbook =
+                calamine::Xls::new(cursor).map_err(|e| XbergError::parsing(format!("Failed to parse XLS: {}", e)))?;
             process_workbook(workbook, office_metadata)
         }
         // Exotic format: .xla (legacy add-in) - may not contain proper workbook data
@@ -201,15 +201,15 @@ pub(crate) fn read_excel_bytes(data: &[u8], file_extension: &str) -> Result<Exce
         // Standard XLSB format (binary spreadsheet): propagate errors
         ".xlsb" => {
             let cursor = Cursor::new(data);
-            let workbook = calamine::Xlsb::new(cursor)
-                .map_err(|e| XbergError::parsing(format!("Failed to parse XLSB: {}", e)))?;
+            let workbook =
+                calamine::Xlsb::new(cursor).map_err(|e| XbergError::parsing(format!("Failed to parse XLSB: {}", e)))?;
             process_workbook(workbook, office_metadata)
         }
         // Standard OpenDocument format
         ".ods" => {
             let cursor = Cursor::new(data);
-            let workbook = calamine::Ods::new(cursor)
-                .map_err(|e| XbergError::parsing(format!("Failed to parse ODS: {}", e)))?;
+            let workbook =
+                calamine::Ods::new(cursor).map_err(|e| XbergError::parsing(format!("Failed to parse ODS: {}", e)))?;
             process_workbook(workbook, office_metadata)
         }
         _ => Err(XbergError::parsing(format!(

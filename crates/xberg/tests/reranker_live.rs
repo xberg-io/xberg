@@ -28,9 +28,9 @@
 
 use std::path::PathBuf;
 
+use serde::Deserialize;
 use xberg::core::config::RerankerModelType;
 use xberg::{RerankerConfig, get_reranker_preset, rerank_async};
-use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 struct FixtureSuite {
@@ -76,10 +76,7 @@ fn pick_suites<'a>(suites: &'a [FixtureSuite], preset_languages: &[&str]) -> Vec
         .collect()
 }
 
-async fn run_preset_inference(
-    preset_name: &str,
-    suite: &FixtureSuite,
-) -> xberg::Result<Vec<xberg::RerankedDocument>> {
+async fn run_preset_inference(preset_name: &str, suite: &FixtureSuite) -> xberg::Result<Vec<xberg::RerankedDocument>> {
     let config = RerankerConfig {
         model: RerankerModelType::Preset {
             name: preset_name.to_string(),

@@ -11,10 +11,10 @@
 mod helpers;
 
 use helpers::{get_test_file_path, test_documents_available};
-use xberg::core::config::{ExtractionConfig, OutputFormat};
-use xberg::extract_file_sync;
 use std::collections::HashMap;
 use std::path::Path;
+use xberg::core::config::{ExtractionConfig, OutputFormat};
+use xberg::extract_file_sync;
 
 // ============================================================================
 // Text stripping helpers

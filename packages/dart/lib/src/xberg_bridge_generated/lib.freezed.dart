@@ -10309,7 +10309,7 @@ class RerankerModelType_Custom extends RerankerModelType {
   const RerankerModelType_Custom({required this.modelId, required this.modelFile, required final  List<String> additionalFiles, required this.maxLength}): _additionalFiles = additionalFiles,super._();
   
 
-/// HuggingFace model repository ID (e.g. "cross-encoder/ms-marco-MiniLM-L-6-v2").
+/// HuggingFace model repository ID (e.g. "cross-encoder/ms-marco-MiniLM-L6-v2").
  final  String modelId;
 /// Path to the ONNX file within the repo.
 ///

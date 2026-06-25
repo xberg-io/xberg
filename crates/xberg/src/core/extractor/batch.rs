@@ -10,7 +10,7 @@ use crate::core::config::BatchFileItem;
 use crate::core::config::ExtractionConfig;
 use crate::core::config::extraction::FileExtractionConfig;
 use crate::types::ExtractionResult;
-use crate::{XbergError, Result};
+use crate::{Result, XbergError};
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Instant;

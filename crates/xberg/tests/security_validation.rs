@@ -7,10 +7,10 @@
 //! - Malformed inputs (invalid MIME, encoding)
 //! - PDF-specific attacks (malicious JS, weak encryption)
 
-use xberg::core::config::ExtractionConfig;
-use xberg::core::extractor::{extract_bytes_sync, extract_file_sync};
 use std::io::Write;
 use tempfile::NamedTempFile;
+use xberg::core::config::ExtractionConfig;
+use xberg::core::extractor::{extract_bytes_sync, extract_file_sync};
 
 fn trim_trailing_newlines(value: &str) -> &str {
     value.trim_end_matches(['\n', '\r'])

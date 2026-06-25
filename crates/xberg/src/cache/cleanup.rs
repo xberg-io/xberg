@@ -1,6 +1,6 @@
 //! Cache cleanup operations for managing cache size and age.
 
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use std::fs;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};

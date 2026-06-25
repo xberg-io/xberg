@@ -5,7 +5,7 @@
 //!
 //! Supports Word 97, 2000, XP, and 2003 (.doc) files.
 
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use std::io::Cursor;
 
 /// Result of DOC text extraction.

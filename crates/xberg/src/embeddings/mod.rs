@@ -658,10 +658,7 @@ fn get_or_init_engine(
             .map_err(|panic_payload| {
                 let panic_msg = panic_to_string(panic_payload);
                 if looks_like_ort_error(&panic_msg) {
-                    crate::XbergError::MissingDependency(format!(
-                        "ONNX Runtime - {}",
-                        onnx_runtime_install_message()
-                    ))
+                    crate::XbergError::MissingDependency(format!("ONNX Runtime - {}", onnx_runtime_install_message()))
                 } else {
                     crate::XbergError::embedding(format!("Model download panicked: {panic_msg}"))
                 }

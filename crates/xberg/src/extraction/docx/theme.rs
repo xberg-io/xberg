@@ -4,7 +4,7 @@
 //! This module provides access to document theme colors and fonts that can be
 //! referenced from styles and other content.
 
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use crate::extraction::ooxml_constants::DRAWINGML_NAMESPACE;
 
 // --- Types ---

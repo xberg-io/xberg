@@ -27,7 +27,7 @@
 use bytes::Bytes;
 use encoding_rs::Encoding;
 
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use crate::text::utf8_validation;
 use crate::types::{EmailAttachment, EmailExtractionResult};
 use mail_parser::MimeHeaders;
@@ -465,9 +465,7 @@ pub(crate) fn parse_msg_content(data: &[u8], fallback_codepage: Option<u32>) -> 
             padded = pad_cfb_to_fat_size(data);
             if std::ptr::eq(padded.as_ref(), data) {
                 // Padding didn't help – propagate original error.
-                return Err(XbergError::parsing(format!(
-                    "Failed to parse MSG file: {_first_err}"
-                )));
+                return Err(XbergError::parsing(format!("Failed to parse MSG file: {_first_err}")));
             }
             &padded
         }

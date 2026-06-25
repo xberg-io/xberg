@@ -3,14 +3,21 @@
 Detect named entities (people, organisations, locations, dates, money amounts, emails, phones, URLs, plus caller-supplied custom labels) in extracted text. Result populates `ExtractionResult.entities`.
 
 !!! Note "Feature gate"
-    The result types ship in the `ner` Cargo feature (included in `no-ort-target`, `wasm-target`, `android-target`, and `full`). Choose a backend: `ner-onnx` (kreuzberg-gliner-rs ONNX) or `ner-llm` (liter-llm).
+    The result types ship in the `ner` Cargo feature (included in `no-ort-target`, `wasm-target`, `android-target`, and `full`). Choose a backend: `ner-onnx` (`xberg-gliner` ONNX) or `ner-llm` (liter-llm).
 
 ## Backends
 
 | Backend | Cargo feature | When to use | Status |
 |---|---|---|---|
-| `Onnx` (kreuzberg-gliner-rs) | `ner-onnx` | High throughput, local inference, deterministic | Available. |
+| `Onnx` (`xberg-gliner`) | `ner-onnx` | High throughput, local inference, deterministic | Available. |
 | `Llm` (liter-llm) | `ner-llm` | Domain-specific zero-shot labels, any of 143 providers | Available today. |
+
+The ONNX backend downloads supported Xberg GLiNER aliases and catalog ids from
+`xberg-io/gliner-models`. The runtime consumes exported ONNX artifacts and
+tokenizer files; it does not load arbitrary source PyTorch model repositories.
+If the artifact repository is private or not publicly readable, authenticate
+with Hugging Face using credentials supported by `hf-hub` before warming the
+cache or running inference.
 
 ## When to Use
 
@@ -47,7 +54,7 @@ Detect named entities (people, organisations, locations, dates, money amounts, e
 
 ## Custom Labels (Zero-Shot)
 
-Pass arbitrary labels via `NerConfig.custom_labels`. The LLM backend folds each label into the structured-output schema; the ONNX backend (when available) uses GLiNER's native zero-shot inference.
+Pass arbitrary labels via `NerConfig.custom_labels`. The LLM backend folds each label into the structured-output schema; the ONNX backend uses GLiNER's native zero-shot inference.
 
 === "Python"
 

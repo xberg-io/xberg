@@ -6,14 +6,14 @@
 #![cfg(feature = "ocr")]
 
 use async_trait::async_trait;
+use serial_test::serial;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use xberg::core::config::{ExtractionConfig, OcrConfig};
 use xberg::plugins::registry::get_ocr_backend_registry;
 use xberg::plugins::{OcrBackend, OcrBackendType, Plugin};
 use xberg::types::{ExtractionResult, Metadata};
-use xberg::{XbergError, Result, extract_file_sync};
-use serial_test::serial;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use xberg::{Result, XbergError, extract_file_sync};
 
 struct BackendRegistryGuard;
 

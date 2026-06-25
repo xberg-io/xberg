@@ -3,7 +3,7 @@
 //! This module provides functionality to override server configuration values
 //! using environment variables. All settings can be overridden at runtime.
 
-use crate::{XbergError, Result};
+use crate::{Result, XbergError};
 
 /// Apply environment variable overrides to a ServerConfig.
 ///

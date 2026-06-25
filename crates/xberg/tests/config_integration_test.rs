@@ -5,9 +5,9 @@
 
 #![cfg(feature = "api")]
 
-use xberg::ServerConfig;
 use std::fs;
 use tempfile::tempdir;
+use xberg::ServerConfig;
 
 // Helper function to cleanup environment variables
 #[allow(unsafe_code)]
@@ -126,10 +126,7 @@ fn test_env_only_configuration() {
 
     set_env("XBERG_HOST", "0.0.0.0");
     set_env("XBERG_PORT", "3000");
-    set_env(
-        "XBERG_CORS_ORIGINS",
-        "https://api.example.com, https://app.example.com",
-    );
+    set_env("XBERG_CORS_ORIGINS", "https://api.example.com, https://app.example.com");
 
     // Create default config
     let mut config = ServerConfig::default();

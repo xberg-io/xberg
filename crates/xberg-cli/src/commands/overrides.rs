@@ -5,9 +5,7 @@
 //! `apply()` to layer these overrides onto an `ExtractionConfig`.
 
 use anyhow::{Context as _, Result, bail};
-use xberg::{
-    ChunkingConfig, ExecutionProviderType, ExtractionConfig, LanguageDetectionConfig, LlmConfig, OcrConfig,
-};
+use xberg::{ChunkingConfig, ExecutionProviderType, ExtractionConfig, LanguageDetectionConfig, LlmConfig, OcrConfig};
 
 use crate::ContentOutputFormatArg;
 
@@ -876,10 +874,7 @@ pub(crate) fn resolve_llm_api_key(cli_api_key: Option<&str>) -> Option<String> {
     if let Ok(value) = std::env::var("XBERG_LLM_API_KEY")
         && !value.is_empty()
     {
-        tracing::info!(
-            source = "xberg_env",
-            "Resolved LLM API key from XBERG_LLM_API_KEY"
-        );
+        tracing::info!(source = "xberg_env", "Resolved LLM API key from XBERG_LLM_API_KEY");
         return Some(value);
     }
     // Source is either "config" (when a slot already had a key — handled by

@@ -4,9 +4,9 @@
 //! identical results to the Rust core library. It ensures that users get
 //! consistent behavior whether using the CLI, SDK, or MCP interfaces.
 
+use serde_json::json;
 use xberg::core::config::ExtractionConfig;
 use xberg::core::config::OutputFormat;
-use serde_json::json;
 
 #[test]
 fn test_cli_config_json_flag_basic_parsing() {

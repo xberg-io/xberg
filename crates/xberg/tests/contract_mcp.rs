@@ -4,9 +4,9 @@
 //! produces identical JSON to the Rust core library when parsing configuration.
 //! This ensures that MCP users get the same configuration behavior as CLI and SDK users.
 
+use serde_json::json;
 use xberg::core::config::ExtractionConfig;
 use xberg::core::config::OutputFormat;
-use serde_json::json;
 
 #[test]
 fn test_mcp_basic_config_json_matches_rust_core() {

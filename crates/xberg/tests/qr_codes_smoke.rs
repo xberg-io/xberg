@@ -16,10 +16,10 @@ use std::io::Cursor;
 use async_trait::async_trait;
 use bytes::Bytes;
 use image::{ExtendedColorType, ImageEncoder, Luma};
+use qrcode::QrCode;
 use xberg::core::config::ExtractionConfig;
 use xberg::plugins::PostProcessor;
 use xberg::types::{ExtractedImage, ExtractionResult};
-use qrcode::QrCode;
 
 const PAYLOAD: &str = "https://xberg.io/hello-world";
 

@@ -26,7 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Go:** module `github.com/xberg-io/xberg` with **no `/vN` suffix** (v1); the binding now lives at
     `packages/go/` (the `packages/go/{v4,v5}` layout is removed).
   - **Docs:** new docs at `docs.xberg.io`; the frozen v4 site remains at `docs.xberg.io`.
-  - The `kreuzberg-gliner-rs` / `kreuzberg-orp` fork dependencies keep their names (out of scope).
+- **ner-onnx**: vendored the stripped span-mode GLiNER runtime as `xberg-gliner`,
+  replaced the ORP pipeline wrapper with direct `ort` session management, and moved
+  runtime model downloads to the xberg-managed `xberg-io/gliner-models` artifact
+  repository. The public `ner-onnx` feature and NER config shape are unchanged.
 
 ## [5.0.0-rc.36] - 2026-06-24
 

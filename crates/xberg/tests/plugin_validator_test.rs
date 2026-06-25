@@ -4,14 +4,14 @@
 //! error handling, and cleanup with real file extraction.
 
 use async_trait::async_trait;
+use serial_test::serial;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use xberg::core::config::ExtractionConfig;
 use xberg::plugins::registry::get_validator_registry;
 use xberg::plugins::{Plugin, Validator};
 use xberg::types::ExtractionResult;
-use xberg::{XbergError, Result, extract_file_sync};
-use serial_test::serial;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use xberg::{Result, XbergError, extract_file_sync};
 
 struct MinLengthValidator {
     name: String,
@@ -197,9 +197,7 @@ impl Plugin for FailingValidator {
 #[async_trait]
 impl Validator for FailingValidator {
     async fn validate(&self, _result: &ExtractionResult, _config: &ExtractionConfig) -> Result<()> {
-        Err(XbergError::validation(
-            "Validation intentionally failed".to_string(),
-        ))
+        Err(XbergError::validation("Validation intentionally failed".to_string()))
     }
 }
 

@@ -16,9 +16,9 @@
 
 #![cfg(all(feature = "pdf", feature = "layout-detection", not(target_arch = "wasm32")))]
 
+use std::path::PathBuf;
 use xberg::core::config::{ExtractionConfig, OutputFormat, PdfConfig};
 use xberg::extract_bytes_sync;
-use std::path::PathBuf;
 
 /// Helper: check if layout-detection tests are enabled via env var
 fn should_run_layout_tests() -> bool {

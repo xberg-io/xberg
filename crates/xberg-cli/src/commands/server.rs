@@ -41,10 +41,7 @@ pub fn serve_command(
     }
 
     // Log the final configuration for debugging
-    tracing::info!(
-        "Starting Xberg API server on http://{}",
-        server_config.listen_addr()
-    );
+    tracing::info!("Starting Xberg API server on http://{}", server_config.listen_addr());
 
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(xberg::api::serve_with_server_config(

@@ -5,7 +5,7 @@
 
 use ahash::AHashMap;
 
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use crate::extraction::ooxml_constants::WORDPROCESSINGML_NAMESPACE;
 // --- Types ---
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import platform
+import subprocess
 import sys
 from pathlib import Path
 
@@ -34,8 +35,6 @@ def main() -> None:
     """Resolve the native binary (bundled or downloaded) and exec it with forwarded argv."""
     bundled = _find_bundled_binary()
     if bundled:
-        import subprocess
-
         completed = subprocess.run([bundled, *sys.argv[1:]], check=False)
         sys.exit(completed.returncode)
 

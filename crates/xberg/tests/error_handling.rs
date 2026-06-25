@@ -3,10 +3,10 @@
 //! Tests for corrupted files, edge cases, and invalid inputs.
 //! Validates that the system handles errors gracefully without panics.
 
-use xberg::core::config::ExtractionConfig;
-use xberg::core::extractor::{extract_bytes, extract_file};
 use std::io::Write;
 use tempfile::NamedTempFile;
+use xberg::core::config::ExtractionConfig;
+use xberg::core::extractor::{extract_bytes, extract_file};
 
 mod helpers;
 
@@ -100,8 +100,7 @@ async fn test_corrupted_image() {
         }
         Err(error) => {
             assert!(
-                matches!(error, xberg::XbergError::Parsing { .. })
-                    || matches!(error, xberg::XbergError::Ocr { .. }),
+                matches!(error, xberg::XbergError::Parsing { .. }) || matches!(error, xberg::XbergError::Ocr { .. }),
                 "Corrupted image error should be Parsing or OCR type, got: {:?}",
                 error
             );
@@ -285,8 +284,7 @@ async fn test_nonexistent_file() {
 
     let error = result.unwrap_err();
     assert!(
-        matches!(error, xberg::XbergError::Io(_))
-            || matches!(error, xberg::XbergError::Validation { .. }),
+        matches!(error, xberg::XbergError::Io(_)) || matches!(error, xberg::XbergError::Validation { .. }),
         "Should be IO or Validation error for nonexistent file, got: {:?}",
         error
     );

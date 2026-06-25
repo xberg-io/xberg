@@ -14,9 +14,9 @@
 
 mod helpers;
 
+use std::path::Path;
 use xberg::core::config::{ContentFilterConfig, ExtractionConfig, OutputFormat};
 use xberg::core::extractor::extract_file_sync;
-use std::path::Path;
 
 /// Helper: extract a file synchronously and return the content string.
 fn extract_md(path: &Path, config: ExtractionConfig) -> String {

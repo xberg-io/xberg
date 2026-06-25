@@ -4,8 +4,8 @@
 //! or discovering them automatically in the project directory.
 
 use anyhow::{Context, Result};
-use xberg::ExtractionConfig;
 use std::path::PathBuf;
+use xberg::ExtractionConfig;
 
 /// Loads extraction configuration from a file or discovers it automatically.
 ///

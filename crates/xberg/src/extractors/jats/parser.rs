@@ -48,10 +48,7 @@ pub(super) fn extract_text_content(reader: &mut Reader<&[u8]>, budget: &mut Secu
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(crate::error::XbergError::parsing(format!(
-                    "XML parsing error: {}",
-                    e
-                )));
+                return Err(crate::error::XbergError::parsing(format!("XML parsing error: {}", e)));
             }
             _ => {}
         }
@@ -195,10 +192,7 @@ pub(super) fn extract_citation_text(reader: &mut Reader<&[u8]>, budget: &mut Sec
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(crate::error::XbergError::parsing(format!(
-                    "XML parsing error: {}",
-                    e
-                )));
+                return Err(crate::error::XbergError::parsing(format!("XML parsing error: {}", e)));
             }
             _ => {}
         }

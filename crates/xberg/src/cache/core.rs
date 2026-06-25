@@ -10,7 +10,7 @@
 //! susceptible to lock poisoning, making the API infallible and avoiding
 //! `XbergError::LockPoisoned` error paths for these fields.
 
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use ahash::AHashSet;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -343,8 +343,7 @@ impl GenericCache {
 
         let cache_path = self.get_cache_path(cache_key, namespace);
 
-        fs::write(&cache_path, &data)
-            .map_err(|e| XbergError::cache(format!("Failed to write cache file: {}", e)))?;
+        fs::write(&cache_path, &data).map_err(|e| XbergError::cache(format!("Failed to write cache file: {}", e)))?;
 
         self.save_metadata(cache_key, source_file, namespace, ttl_secs);
 
@@ -433,8 +432,8 @@ impl GenericCache {
         let mut removed_count = 0;
         let mut removed_size = 0.0;
 
-        let read_dir = fs::read_dir(dir_path)
-            .map_err(|e| XbergError::cache(format!("Failed to read cache directory: {}", e)))?;
+        let read_dir =
+            fs::read_dir(dir_path).map_err(|e| XbergError::cache(format!("Failed to read cache directory: {}", e)))?;
 
         for entry in read_dir {
             let entry = match entry {

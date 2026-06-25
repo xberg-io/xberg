@@ -20,10 +20,10 @@
 mod helpers;
 
 use helpers::*;
-use xberg::core::config::{ExtractionConfig, OutputFormat};
-use xberg::extract_file_sync;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use xberg::core::config::{ExtractionConfig, OutputFormat};
+use xberg::extract_file_sync;
 
 // ═══════════════════════════════════════════════════════════════════
 // Scoring utilities

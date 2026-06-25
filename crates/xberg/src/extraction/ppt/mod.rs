@@ -5,7 +5,7 @@
 //!
 //! Supports PowerPoint 97, 2000, XP, and 2003 (.ppt) files.
 
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use std::io::Cursor;
 
 /// Result of PPT text extraction.

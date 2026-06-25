@@ -107,10 +107,10 @@ async fn run_captioning_against_pdf(model: &str, api_key: String) {
 /// iteration, llm_usage append) is covered without spending an API call.
 #[tokio::test]
 async fn captioning_post_processor_is_noop_without_images() {
+    use std::borrow::Cow;
     use xberg::plugins::PostProcessor;
     use xberg::plugins::processor::builtin::captioning::CaptioningProcessor;
     use xberg::types::ExtractionResult;
-    use std::borrow::Cow;
 
     let cfg = ExtractionConfig {
         captioning: Some(CaptioningConfig {
@@ -151,10 +151,10 @@ async fn captioning_post_processor_is_noop_without_images() {
 #[tokio::test]
 async fn captioning_post_processor_tolerates_vlm_failure() {
     use bytes::Bytes;
+    use std::borrow::Cow;
     use xberg::plugins::PostProcessor;
     use xberg::plugins::processor::builtin::captioning::CaptioningProcessor;
     use xberg::types::{ExtractedImage, ExtractionResult};
-    use std::borrow::Cow;
 
     let cfg = ExtractionConfig {
         captioning: Some(CaptioningConfig {

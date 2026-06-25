@@ -4,7 +4,7 @@
 //! For large files (> 1 MiB) on non-WASM platforms, memory-mapped I/O is used to avoid
 //! heap-allocating the entire file contents, reducing memory pressure and syscall overhead.
 
-use crate::{XbergError, Result};
+use crate::{Result, XbergError};
 use std::path::Path;
 
 /// Size threshold above which memory-mapped I/O is preferred over `read()`.
@@ -108,9 +108,7 @@ pub(crate) fn open_file_bytes(path: &Path) -> Result<FileBytes> {
 /// Returns `XbergError::Io` for I/O errors (these always bubble up).
 #[cfg(feature = "tokio-runtime")]
 pub(crate) async fn read_file_async(path: impl AsRef<Path>) -> Result<Vec<u8>> {
-    tokio::fs::read(path.as_ref())
-        .await
-        .map_err(crate::XbergError::from)
+    tokio::fs::read(path.as_ref()).await.map_err(crate::XbergError::from)
 }
 
 /// Read a file synchronously.

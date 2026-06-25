@@ -74,9 +74,9 @@ use commands::{
     load_config, manifest_command, stats_command, validate_batch_paths, validate_chunk_params, validate_file_exists,
     validate_output_dir, warm_command,
 };
-use xberg::{OutputFormat as ContentOutputFormat, detect_mime_type};
 use serde_json::json;
 use std::path::PathBuf;
+use xberg::{OutputFormat as ContentOutputFormat, detect_mime_type};
 
 /// Xberg document intelligence CLI
 #[derive(Parser)]
@@ -440,17 +440,21 @@ enum CacheCommands {
         format: WireFormat,
     },
 
-    /// Download all models eagerly
+    /// Download model artifacts eagerly
     ///
-    /// Downloads all PaddleOCR and layout detection models for all supported
-    /// languages. Unlike normal operation which downloads lazily on first use,
-    /// this ensures all models are present in the cache directory.
+    /// Downloads model artifacts for offline/container use. Unlike normal
+    /// operation which downloads lazily on first use, this ensures selected
+    /// models are present in the cache directory.
     ///
     /// Use --all-embeddings to also download all 4 embedding model presets,
     /// or `--embedding-model <preset>` to download a specific one.
     ///
     /// By default, only the core layout models (rtdetr + tatr) are downloaded.
     /// Use --all-table-models to also download SLANeXT variants (~730MB).
+    ///
+    /// Use --ner to download the default GLiNER NER model, --ner-model <MODEL>
+    /// for a specific GLiNER alias/catalog id, or --all-ner-models for every
+    /// known GLiNER NER model.
     Warm {
         /// Cache directory (default: .xberg in current directory, or XBERG_CACHE_DIR)
         #[arg(short, long)]
@@ -487,12 +491,12 @@ enum CacheCommands {
         #[arg(long, value_name = "LANGUAGES", value_delimiter = ',')]
         grammars: Option<Vec<String>>,
 
-        /// Download the default GLiNER NER model (urchade/gliner_multi-v2.1)
+        /// Download the default xberg GLiNER NER model alias
         #[cfg(feature = "ner-onnx")]
         #[arg(long)]
         ner: bool,
 
-        /// Download a specific GLiNER NER model by HuggingFace repo id
+        /// Download a specific xberg GLiNER NER model alias or catalog id
         #[cfg(feature = "ner-onnx")]
         #[arg(long, value_name = "MODEL")]
         ner_model: Option<String>,
@@ -844,14 +848,13 @@ fn main() -> Result<()> {
                     all_grammars,
                     grammar_groups,
                     grammars,
+                    #[cfg(feature = "ner-onnx")]
+                    ner,
+                    #[cfg(feature = "ner-onnx")]
+                    ner_model,
+                    #[cfg(feature = "ner-onnx")]
+                    all_ner_models,
                 )?;
-                #[cfg(feature = "ner-onnx")]
-                {
-                    let ner_models: Vec<String> = ner_model.into_iter().collect();
-                    if ner || !ner_models.is_empty() || all_ner_models {
-                        commands::ner::download_command(ner, ner_models, all_ner_models, cache_dir, format)?;
-                    }
-                }
             }
         },
 

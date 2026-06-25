@@ -17,12 +17,12 @@
 
 #![cfg(feature = "office")]
 
+use std::fs;
+use std::path::PathBuf;
 use xberg::core::config::ExtractionConfig;
 use xberg::extraction::derive::derive_extraction_result;
 use xberg::extractors::latex::LatexExtractor;
 use xberg::plugins::DocumentExtractor;
-use std::fs;
-use std::path::PathBuf;
 
 /// Helper to get absolute path to test documents
 fn test_file_path(filename: &str) -> PathBuf {

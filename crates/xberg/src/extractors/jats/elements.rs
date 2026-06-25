@@ -274,10 +274,7 @@ pub(super) fn extract_jats_all_in_one(content: &str) -> Result<(JatsMetadataExtr
                                 }
                                 Ok(Event::Eof) => break,
                                 Err(e) => {
-                                    return Err(crate::error::XbergError::parsing(format!(
-                                        "XML parsing error: {}",
-                                        e
-                                    )));
+                                    return Err(crate::error::XbergError::parsing(format!("XML parsing error: {}", e)));
                                 }
                                 _ => {}
                             }
@@ -418,10 +415,7 @@ pub(super) fn extract_jats_all_in_one(content: &str) -> Result<(JatsMetadataExtr
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(crate::error::XbergError::parsing(format!(
-                    "XML parsing error: {}",
-                    e
-                )));
+                return Err(crate::error::XbergError::parsing(format!("XML parsing error: {}", e)));
             }
             _ => {}
         }

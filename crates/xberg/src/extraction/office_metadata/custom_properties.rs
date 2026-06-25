@@ -2,7 +2,7 @@
 //!
 //! Extracts user-defined custom metadata from Office Open XML documents.
 
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::io::Read;

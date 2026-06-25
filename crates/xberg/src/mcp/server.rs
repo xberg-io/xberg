@@ -302,8 +302,7 @@ impl XbergMcp {
         use super::errors::map_xberg_error_to_mcp;
         use crate::detect_mime_type;
 
-        let mime_type =
-            detect_mime_type(params.path.clone(), params.use_content).map_err(map_xberg_error_to_mcp)?;
+        let mime_type = detect_mime_type(params.path.clone(), params.use_content).map_err(map_xberg_error_to_mcp)?;
 
         let dto = super::schema::DetectMimeTypeOutput {
             mime_type: mime_type.clone(),
@@ -475,6 +474,14 @@ impl XbergMcp {
             }
         }
 
+        #[cfg(feature = "ner-onnx")]
+        {
+            let manifest = crate::text::ner::manifest();
+            for entry in manifest {
+                entries.push(serde_json::to_value(&entry).unwrap_or_default());
+            }
+        }
+
         let total_size_bytes: u64 = entries
             .iter()
             .filter_map(|e| e.get("size_bytes").and_then(|v| v.as_u64()))
@@ -495,10 +502,10 @@ impl XbergMcp {
 
     /// Download and cache model files.
     ///
-    /// Eagerly downloads model files (OCR, layout detection, embeddings)
+    /// Eagerly downloads model files (OCR, layout detection, embeddings, NER)
     /// so they are available for offline use.
     #[tool(
-        description = "Download and cache model files for offline use. Optionally download embedding models.",
+        description = "Download and cache model files for offline use. Optionally download embedding and GLiNER NER models.",
         annotations(
             title = "Cache Warm",
             read_only_hint = false,
@@ -517,6 +524,14 @@ impl XbergMcp {
         {
             return Err(rmcp::ErrorData::invalid_params(
                 "Field 'embedding_model' must not be empty. Omit the field or provide a valid preset name.".to_string(),
+                None,
+            ));
+        }
+        if let Some(ref name) = params.ner_model
+            && name.trim().is_empty()
+        {
+            return Err(rmcp::ErrorData::invalid_params(
+                "Field 'ner_model' must not be empty. Omit the field or provide a valid model name.".to_string(),
                 None,
             ));
         }
@@ -598,6 +613,40 @@ impl XbergMcp {
             if params.all_embeddings || params.embedding_model.is_some() {
                 return Err(rmcp::ErrorData::invalid_params(
                     "Embedding model warming requires the 'embeddings' feature to be enabled".to_string(),
+                    None,
+                ));
+            }
+        }
+
+        #[cfg(feature = "ner-onnx")]
+        {
+            if params.ner || params.all_ner_models || params.ner_model.is_some() {
+                let models_to_warm: Vec<String> = if params.all_ner_models {
+                    crate::text::ner::known_models().iter().map(|s| s.to_string()).collect()
+                } else if let Some(ref name) = params.ner_model {
+                    vec![name.clone()]
+                } else {
+                    vec![crate::text::ner::default_model_name().to_string()]
+                };
+
+                let ner_dir = cache_base.join("ner");
+                for model in &models_to_warm {
+                    let path = crate::text::ner::download_model(model, Some(ner_dir.clone())).map_err(|e| {
+                        rmcp::ErrorData::internal_error(
+                            format!("Failed to download NER model '{}': {}", model, e),
+                            None,
+                        )
+                    })?;
+                    downloaded.push(format!("ner gliner ({model}) -> {}", path.display()));
+                }
+            }
+        }
+
+        #[cfg(not(feature = "ner-onnx"))]
+        {
+            if params.ner || params.all_ner_models || params.ner_model.is_some() {
+                return Err(rmcp::ErrorData::invalid_params(
+                    "NER model warming requires the 'ner-onnx' feature to be enabled".to_string(),
                     None,
                 ));
             }
@@ -1440,10 +1489,7 @@ mod tests {
             Some("Xberg Document Intelligence MCP Server".to_string())
         );
         assert_eq!(info.server_info.version, env!("CARGO_PKG_VERSION"));
-        assert_eq!(
-            info.server_info.website_url,
-            Some("https://docs.xberg.io".to_string())
-        );
+        assert_eq!(info.server_info.website_url, Some("https://docs.xberg.io".to_string()));
         assert!(info.instructions.is_some());
         assert!(info.capabilities.tools.is_some());
     }

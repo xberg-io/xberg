@@ -7,14 +7,14 @@
 //! - Error handling and edge cases
 
 use async_trait::async_trait;
+use std::path::Path;
+use std::sync::Arc;
 use xberg::core::config::ExtractionConfig;
 use xberg::plugins::registry::{DocumentExtractorRegistry, ValidatorRegistry};
 use xberg::plugins::{DocumentExtractor, Plugin, Validator};
 use xberg::types::ExtractionResult;
 use xberg::types::internal::{ElementKind, InternalDocument, InternalElement};
-use xberg::{XbergError, Result};
-use std::path::Path;
-use std::sync::Arc;
+use xberg::{Result, XbergError};
 
 struct MockValidator {
     name: String,

@@ -79,12 +79,11 @@ fn get_or_init_engine(
         preference = ?preference,
         "Initialising PaddleOCR-VL engine (cold start)"
     );
-    let new_engine = PaddleOcrVlEngine::new(model_path, task, candle_device, DType::F32).map_err(|e| {
-        crate::XbergError::Ocr {
+    let new_engine =
+        PaddleOcrVlEngine::new(model_path, task, candle_device, DType::F32).map_err(|e| crate::XbergError::Ocr {
             message: format!("PaddleOCR-VL engine initialisation failed: {e}"),
             source: Some(Box::new(e)),
-        }
-    })?;
+        })?;
     let new_engine = Arc::new(Mutex::new(new_engine));
 
     let mut pool = ENGINE_POOL.write();

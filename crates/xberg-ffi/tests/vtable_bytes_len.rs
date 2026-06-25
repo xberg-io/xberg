@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
 /// Regression tests: vtable Bytes params carry companion length
 ///
 /// The alef vtable generator previously emitted only `*const u8` for `&[u8]`
@@ -12,10 +13,8 @@
 /// Per-test state is passed via `user_data` — no global statics — so tests
 /// are independent and can run in parallel without interfering.
 use xberg_ffi::{
-    XbergDocumentExtractorBridge, XbergDocumentExtractorVTable, XbergOcrBackendBridge,
-    XbergOcrBackendVTable,
+    XbergDocumentExtractorBridge, XbergDocumentExtractorVTable, XbergOcrBackendBridge, XbergOcrBackendVTable,
 };
-use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
 
 // ── Per-test callback state ───────────────────────────────────────────────
 
@@ -115,9 +114,7 @@ async fn ocr_backend_vtable_process_image_passes_full_length_with_embedded_nuls(
     let bridge = unsafe { XbergOcrBackendBridge::new("test-ocr-stub".to_string(), vtable, state_ptr) };
 
     use xberg::OcrBackend;
-    let _ = bridge
-        .process_image(&image_bytes, &xberg::OcrConfig::default())
-        .await;
+    let _ = bridge.process_image(&image_bytes, &xberg::OcrConfig::default()).await;
 
     assert_eq!(
         state.received_len.load(Ordering::SeqCst),
@@ -193,11 +190,7 @@ fn image_kind_page_raster_is_10_and_unknown_is_11() {
         10,
         "PageRaster == 10"
     );
-    assert_eq!(
-        unsafe { xberg_ffi::xberg_image_kind_from_i32(11) },
-        11,
-        "Unknown == 11"
-    );
+    assert_eq!(unsafe { xberg_ffi::xberg_image_kind_from_i32(11) }, 11, "Unknown == 11");
     // Old Unknown value must now resolve to PageRaster, not Unknown.
     assert_ne!(
         unsafe { xberg_ffi::xberg_image_kind_from_i32(10) },

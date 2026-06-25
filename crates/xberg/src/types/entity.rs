@@ -2,7 +2,7 @@
 //!
 //! Produced by the NER post-processor (`crates/xberg/src/text/ner/`) and
 //! attached to [`ExtractionResult::entities`](super::extraction::ExtractionResult::entities).
-//! Backends (gline-rs ONNX, LLM-driven) share a common `NerBackend`
+//! Backends (`xberg-gliner` ONNX, LLM-driven) share a common `NerBackend`
 //! trait so the redaction post-processor can consume the same entity stream.
 
 use serde::{Deserialize, Serialize};

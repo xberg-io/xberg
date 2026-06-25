@@ -16,9 +16,9 @@
 
 #![cfg(feature = "office")]
 
+use std::path::PathBuf;
 use xberg::core::config::ExtractionConfig;
 use xberg::core::extractor::extract_bytes;
-use std::path::PathBuf;
 
 /// Helper to resolve workspace root and construct test file paths
 fn get_test_orgmode_path(filename: &str) -> PathBuf {

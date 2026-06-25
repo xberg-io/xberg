@@ -694,14 +694,13 @@ impl ModelManager {
 
     /// Ensures a v2 recognition model is cached and returns resolved paths.
     fn ensure_v2_rec_model(&self, model_key: &str) -> Result<ResolvedRecModel, XbergError> {
-        let definition =
-            V2_REC_MODELS
-                .iter()
-                .find(|d| d.model_key == model_key)
-                .ok_or_else(|| XbergError::Plugin {
-                    message: format!("Unknown v2 rec model key: {model_key}"),
-                    plugin_name: "paddle-ocr".to_string(),
-                })?;
+        let definition = V2_REC_MODELS
+            .iter()
+            .find(|d| d.model_key == model_key)
+            .ok_or_else(|| XbergError::Plugin {
+                message: format!("Unknown v2 rec model key: {model_key}"),
+                plugin_name: "paddle-ocr".to_string(),
+            })?;
 
         let rec_dir = self.cache_dir.join("v2").join("rec").join(model_key);
         let model_file = rec_dir.join("model.onnx");

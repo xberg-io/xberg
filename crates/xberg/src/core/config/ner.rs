@@ -20,8 +20,7 @@ pub struct NerConfig {
     #[serde(default)]
     pub categories: Vec<EntityCategory>,
     /// Override the default model — only used by [`NerBackendKind::Onnx`].
-    /// `None` lets the backend pick its pinned default
-    /// (`urchade/gliner_multi-v2.1` for gline-rs).
+    /// `None` lets the backend pick its pinned default xberg GLiNER model alias.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     /// Optional LLM configuration — only used by [`NerBackendKind::Llm`]. Token usage
@@ -30,8 +29,8 @@ pub struct NerConfig {
     pub llm: Option<super::llm::LlmConfig>,
     /// Arbitrary user-supplied entity labels for zero-shot detection.
     ///
-    /// gline-rs natively supports zero-shot inference over caller-supplied labels —
-    /// this is the primary value of GLiNER. The LLM backend also honours these
+    /// `xberg-gliner` natively supports zero-shot inference over caller-supplied
+    /// labels. The LLM backend also honours these
     /// labels by including them in the structured-output schema. Custom labels
     /// surface as [`EntityCategory::Custom`] in the resulting `Entity` stream.
     ///
@@ -46,8 +45,8 @@ pub struct NerConfig {
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum NerBackendKind {
-    /// gline-rs ONNX inference. Requires `ner-onnx` feature. Models download lazily from
-    /// HuggingFace via `model_download::hf_download`.
+    /// `xberg-gliner` ONNX inference. Requires `ner-onnx` feature. Models
+    /// download lazily from `xberg-io/gliner-models`.
     #[default]
     Onnx,
     /// liter-llm zero-shot NER via structured-output prompts. Requires `ner-llm`

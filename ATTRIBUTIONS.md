@@ -1,6 +1,6 @@
 # Attributions
 
-This document acknowledges the sources of test documents and baseline data used in the Xberg project.
+This document acknowledges sources of vendored code, runtime artifacts, test documents, and baseline data used in the Xberg project.
 
 ## Pandoc Test Suite
 
@@ -102,6 +102,39 @@ DOCX XML parser vendored into `crates/xberg/src/extraction/docx/parser.rs`:
   - Fixed `Paragraph::to_text()` joining text runs without whitespace (#359)
   - Adapted to xberg's `quick-xml` v0.39 and `zip` v7.x APIs
   - Removed file-path based APIs (only bytes/reader needed)
+
+---
+
+## xberg-gliner
+
+Span-mode GLiNER preprocessing, prompt construction, tensor construction, and decoding logic vendored into
+`crates/xberg-gliner/`:
+
+- **Source lineage**: `gline-rs` / `kreuzberg-gliner-rs`
+- **Source URLs**: <https://github.com/fbilhaut/gline-rs>, <https://github.com/xberg-io/gline-rs-fork>
+- **Source crate/version**: `kreuzberg-gliner-rs` 0.2.1, forked from `gline-rs`
+- **License**: Apache-2.0
+- **Author**: Frédérik Bilhaut
+- **Usage**: Local ONNX named-entity recognition backend for xberg
+- **Scope**: Span-mode text splitting, zero-shot prompt construction, Hugging Face tokenizer adapter, GLiNER tensor construction, logits decoding, and greedy overlap filtering
+- **Excluded**: ORP pipeline code, examples, CSV helpers, relation extraction, token-mode runtime, memory profiling, and generic pipeline abstractions
+- **Modifications**:
+  - Adapted crate identity to `xberg-gliner`
+  - Removed ORP dependency and replaced the pipeline wrapper with direct `ort` session creation and synchronized inference
+  - Integrated with xberg's model catalog/cache and `xberg-io/gliner-models` artifact layout
+  - Added focused unit tests for validation, splitting, prompt construction, tensor shapes, decoding, and overlap filtering
+
+## GLiNER Models
+
+GLiNER ONNX runtime artifacts consumed by xberg are exported and governed through `xberg-io/gliner-models`.
+Their source model lineage is the `gliner-community` Hugging Face organization.
+
+- **Upstream source**: <https://huggingface.co/gliner-community>
+- **Runtime artifact repository**: <https://huggingface.co/xberg-io/gliner-models>
+- **Default license**: Apache-2.0 unless a model manifest declares otherwise
+- **Original GLiNER authors**: Urchade Zaratiana, Nadi Tomeh, Pierre Holat, Thierry Charnois
+- **Usage**: ONNX weights, tokenizer files, manifests, checksums, and notices for xberg NER
+- **Policy**: Model weights are not committed to this repository; verified artifacts are downloaded into the xberg model cache
 
 ---
 

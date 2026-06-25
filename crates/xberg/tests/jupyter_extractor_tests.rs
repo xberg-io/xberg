@@ -10,9 +10,9 @@
 //! Each test notebook is extracted and compared against Pandoc's markdown output
 //! to ensure correct content extraction and transformation.
 
+use std::{fs, path::PathBuf};
 use xberg::core::config::ExtractionConfig;
 use xberg::core::extractor::extract_bytes;
-use std::{fs, path::PathBuf};
 
 mod helpers;
 

@@ -8,11 +8,11 @@
 
 #![cfg(feature = "office")]
 
+use std::path::PathBuf;
 use xberg::core::config::ExtractionConfig;
 use xberg::extraction::derive::derive_extraction_result;
 use xberg::extractors::EpubExtractor;
 use xberg::plugins::DocumentExtractor;
-use std::path::PathBuf;
 
 /// Helper to resolve workspace root and construct test file paths
 fn get_test_epub_path(filename: &str) -> PathBuf {

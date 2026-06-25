@@ -6,11 +6,11 @@
 //! 3. Configuration types maintain consistency across different formats
 //! 4. No configuration fields are accidentally hidden or lost
 
+use serde_json::json;
 use xberg::core::config::ExtractionConfig;
 use xberg::core::config::OutputFormat;
 #[cfg(feature = "tree-sitter")]
 use xberg::core::config::{TreeSitterConfig, TreeSitterProcessConfig};
-use serde_json::json;
 
 #[test]
 fn test_extraction_config_serialization_includes_all_fields() {

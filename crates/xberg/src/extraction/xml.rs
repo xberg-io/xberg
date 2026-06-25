@@ -28,7 +28,7 @@
 //! # Ok(())
 //! # }
 //! ```
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use crate::extractors::security::{SecurityBudget, SecurityLimits};
 use crate::types::XmlExtractionResult;
 use ahash::AHashSet;

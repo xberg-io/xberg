@@ -480,6 +480,15 @@ pub struct WarmRequest {
     /// Specific embedding model preset to download
     #[serde(skip_serializing_if = "Option::is_none")]
     pub embedding_model: Option<String>,
+    /// Download the default GLiNER NER model
+    #[serde(default)]
+    pub ner: bool,
+    /// Download every known GLiNER NER model
+    #[serde(default)]
+    pub all_ner_models: bool,
+    /// Specific GLiNER NER model alias or catalog id to download
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ner_model: Option<String>,
 }
 
 /// Cache warm response.

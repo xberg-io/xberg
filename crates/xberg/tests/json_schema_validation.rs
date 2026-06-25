@@ -2,10 +2,10 @@
 //! defined in `docs/schemas/document-content.schema.json`.
 
 use bytes::Bytes;
+use std::borrow::Cow;
 use xberg::rendering::render_json;
 use xberg::types::extraction::ExtractedImage;
 use xberg::types::internal_builder::InternalDocumentBuilder;
-use std::borrow::Cow;
 
 /// Load the JSON Schema once and return the parsed value.
 fn load_schema() -> serde_json::Value {

@@ -14,9 +14,9 @@
 
 #![cfg(feature = "office")]
 
+use std::{fs, path::PathBuf};
 use xberg::core::config::ExtractionConfig;
 use xberg::core::extractor::extract_bytes;
-use std::{fs, path::PathBuf};
 
 fn typst_fixture(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

@@ -10,6 +10,7 @@
 //! These tests ensure production workloads with high concurrency work correctly.
 
 use async_trait::async_trait;
+use std::sync::Arc;
 use xberg::Result;
 use xberg::core::config::{ExtractionConfig, PostProcessorConfig};
 use xberg::core::extractor::{batch_extract_bytes, extract_bytes};
@@ -18,15 +19,14 @@ use xberg::internal::{ElementKind, InternalDocument, InternalElement};
 use xberg::plugins::registry::{get_document_extractor_registry, get_post_processor_registry};
 use xberg::plugins::{Plugin, PostProcessor, ProcessingStage};
 use xberg::types::ExtractionResult;
-use std::sync::Arc;
 
 #[cfg(feature = "ocr")]
 use xberg::core::config::OcrConfig;
 
-#[cfg(feature = "ocr")]
-use xberg::core::extractor::extract_file_sync;
 use std::time::Duration;
 use tokio::time::timeout;
+#[cfg(feature = "ocr")]
+use xberg::core::extractor::extract_file_sync;
 
 mod helpers;
 

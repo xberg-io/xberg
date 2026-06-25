@@ -1,8 +1,8 @@
 //! Integration tests for image path resolution in markup extractors.
 
+use std::path::PathBuf;
 use xberg::ExtractionConfig;
 use xberg::ImageExtractionConfig;
-use std::path::PathBuf;
 
 fn fixtures_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/path_resolution/fixtures")
@@ -40,9 +40,7 @@ async fn test_markdown_bytes_no_resolution() {
     let path = fixtures_dir().join("markdown_with_images.md");
     let content = std::fs::read(&path).unwrap();
     let config = config_with_images();
-    let result = xberg::extract_bytes(&content, "text/markdown", &config)
-        .await
-        .unwrap();
+    let result = xberg::extract_bytes(&content, "text/markdown", &config).await.unwrap();
 
     // extract_bytes has no file path context, so no image resolution should happen
     let image_count = result.images.as_ref().map_or(0, |imgs| imgs.len());
@@ -65,9 +63,7 @@ async fn test_latex_resolves_images() {
 async fn test_rst_resolves_images() {
     let path = fixtures_dir().join("rst_with_images.rst");
     let config = config_with_images();
-    let result = xberg::extract_file(&path, Some("text/x-rst"), &config)
-        .await
-        .unwrap();
+    let result = xberg::extract_file(&path, Some("text/x-rst"), &config).await.unwrap();
 
     let images = result.images.as_ref().expect("should have images");
     assert_eq!(images.len(), 2, "expected 2 resolved images, got {}", images.len());
@@ -78,9 +74,7 @@ async fn test_rst_resolves_images() {
 async fn test_orgmode_resolves_images() {
     let path = fixtures_dir().join("orgmode_with_images.org");
     let config = config_with_images();
-    let result = xberg::extract_file(&path, Some("text/x-org"), &config)
-        .await
-        .unwrap();
+    let result = xberg::extract_file(&path, Some("text/x-org"), &config).await.unwrap();
 
     let images = result.images.as_ref().expect("should have images");
     assert_eq!(images.len(), 2, "expected 2 resolved images, got {}", images.len());
@@ -103,9 +97,7 @@ async fn test_typst_resolves_images() {
 async fn test_djot_resolves_images() {
     let path = fixtures_dir().join("djot_with_images.djot");
     let config = config_with_images();
-    let result = xberg::extract_file(&path, Some("text/djot"), &config)
-        .await
-        .unwrap();
+    let result = xberg::extract_file(&path, Some("text/djot"), &config).await.unwrap();
 
     let images = result.images.as_ref().expect("should have images");
     assert_eq!(images.len(), 2, "expected 2 resolved images, got {}", images.len());

@@ -22,7 +22,7 @@ use crate::types::OcrRotation;
 use crate::types::{OcrBoundingGeometry, OcrConfidence, OcrElement, OcrElementLevel};
 
 #[cfg(feature = "paddle-ocr")]
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 
 #[cfg(feature = "paddle-ocr")]
 use xberg_paddle_ocr::TextBlock;

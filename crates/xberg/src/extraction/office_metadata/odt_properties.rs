@@ -2,7 +2,7 @@
 //!
 //! Extracts metadata from OpenDocument Text files following the OASIS OpenDocument standard.
 
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use std::io::Read;
 use zip::ZipArchive;
 

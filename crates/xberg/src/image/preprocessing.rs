@@ -1,4 +1,4 @@
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use crate::types::{ImageDpiConfig as ExtractionConfig, ImagePreprocessingMetadata};
 use image::{DynamicImage, ImageBuffer, Rgb};
 

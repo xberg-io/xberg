@@ -5,7 +5,7 @@
 
 use roxmltree::{Document, Node};
 
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use crate::text::utf8_validation;
 
 use super::elements::{
@@ -19,8 +19,7 @@ pub(super) fn parse_slide_xml(xml_data: &[u8]) -> Result<Vec<SlideElement>> {
     let xml_str = utf8_validation::from_utf8(xml_data)
         .map_err(|_| XbergError::parsing("Invalid UTF-8 in slide XML".to_string()))?;
 
-    let doc =
-        Document::parse(xml_str).map_err(|e| XbergError::parsing(format!("Failed to parse slide XML: {}", e)))?;
+    let doc = Document::parse(xml_str).map_err(|e| XbergError::parsing(format!("Failed to parse slide XML: {}", e)))?;
 
     let root = doc.root_element();
     let ns = root.tag_name().namespace();
@@ -444,8 +443,7 @@ pub(super) fn parse_slide_rels(rels_data: &[u8]) -> Result<SlideRels> {
     let xml_str = utf8_validation::from_utf8(rels_data)
         .map_err(|e| XbergError::parsing(format!("Invalid UTF-8 in rels XML: {}", e)))?;
 
-    let doc =
-        Document::parse(xml_str).map_err(|e| XbergError::parsing(format!("Failed to parse rels XML: {}", e)))?;
+    let doc = Document::parse(xml_str).map_err(|e| XbergError::parsing(format!("Failed to parse rels XML: {}", e)))?;
 
     let mut images = Vec::new();
     let mut hyperlinks = Vec::new();

@@ -4,6 +4,8 @@
 //! and cross-registry interactions for all 4 plugin types.
 
 use async_trait::async_trait;
+use std::borrow::Cow;
+use std::sync::Arc;
 use xberg::core::config::ExtractionConfig;
 use xberg::plugins::registry::{
     DocumentExtractorRegistry, OcrBackendRegistry, PostProcessorRegistry, ValidatorRegistry,
@@ -11,9 +13,7 @@ use xberg::plugins::registry::{
 use xberg::plugins::{DocumentExtractor, Plugin, PostProcessor, ProcessingStage, Validator};
 use xberg::types::ExtractionResult;
 use xberg::types::internal::{ElementKind, InternalDocument, InternalElement};
-use xberg::{XbergError, Result};
-use std::borrow::Cow;
-use std::sync::Arc;
+use xberg::{Result, XbergError};
 
 struct FailingExtractor {
     name: String,

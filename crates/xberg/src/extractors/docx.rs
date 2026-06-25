@@ -1060,9 +1060,8 @@ impl DocumentExtractor for DocxExtractor {
                 tokio::task::spawn_blocking(move || -> crate::error::Result<_> {
                     let _guard = span.entered();
                     let cursor = Cursor::new(content_owned);
-                    zip::ZipArchive::new(cursor).map_err(|e| {
-                        crate::error::XbergError::parsing(format!("Failed to open ZIP archive: {}", e))
-                    })
+                    zip::ZipArchive::new(cursor)
+                        .map_err(|e| crate::error::XbergError::parsing(format!("Failed to open ZIP archive: {}", e)))
                 })
                 .await
                 .map_err(|e| crate::error::XbergError::parsing(format!("Task join error: {}", e)))??

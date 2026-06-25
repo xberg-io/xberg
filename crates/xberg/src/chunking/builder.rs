@@ -4,7 +4,7 @@
 //! including overlap calculation, offset tracking, and metadata assembly.
 
 use crate::chunking::text_splitter::{Characters, ChunkCapacity, ChunkConfig};
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use crate::types::{Chunk, ChunkMetadata, HeadingContext, PageBoundary};
 
 use super::boundaries::calculate_page_range;

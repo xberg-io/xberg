@@ -143,11 +143,9 @@ impl DocOrientationDetector {
                 plugin_name: "auto-rotate".to_string(),
             })?;
 
-        crate::model_download::verify_sha256(&cached_path, SHA256, "doc_ori").map_err(|e| {
-            XbergError::Validation {
-                message: e,
-                source: None,
-            }
+        crate::model_download::verify_sha256(&cached_path, SHA256, "doc_ori").map_err(|e| XbergError::Validation {
+            message: e,
+            source: None,
         })?;
 
         fs::copy(&cached_path, &model_file).map_err(|e| XbergError::Plugin {

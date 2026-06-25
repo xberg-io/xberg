@@ -12,7 +12,7 @@
 
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
 use crate::{
-    XbergError, Result,
+    Result, XbergError,
     core::config::{ExtractionConfig, layout::LayoutDetectionConfig},
     extractors::pdf::layout_hints::pixel_detection_to_layout_hints_pdf_space,
     pdf::structure::types::{LayoutHint, PageLayoutResult},
@@ -73,12 +73,11 @@ pub(super) fn run_layout_for_pdf_pages(
             .map(|(llx, lly, urx, ury)| ((urx - llx).abs(), (ury - lly).abs()))
             .unwrap_or((612.0, 792.0)); // Letter fallback
 
-        let rendered = crate::pdf::render::render_page_with_safeguards(&doc, page_idx, 150).map_err(|e| {
-            XbergError::Parsing {
+        let rendered =
+            crate::pdf::render::render_page_with_safeguards(&doc, page_idx, 150).map_err(|e| XbergError::Parsing {
                 message: format!("layout runner: failed to render page {}: {e}", page_idx + 1),
                 source: None,
-            }
-        })?;
+            })?;
 
         // Decode to DynamicImage, convert to RGB immediately, then drop DynamicImage
         // so its pixel buffer is freed before processing the next page.
@@ -105,9 +104,7 @@ pub(super) fn run_layout_for_pdf_pages(
         }
         Err(e) => {
             crate::layout::return_engine(engine);
-            return Err(XbergError::Other(format!(
-                "layout runner: batch detection failed: {e}"
-            )));
+            return Err(XbergError::Other(format!("layout runner: batch detection failed: {e}")));
         }
     };
 

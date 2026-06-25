@@ -6,16 +6,16 @@
 //! IMPORTANT: These tests use a global registry and must run serially to avoid interference.
 
 use async_trait::async_trait;
+use serial_test::serial;
+use std::borrow::Cow;
+use std::sync::Arc;
 use xberg::core::config::{ExtractionConfig, PostProcessorConfig};
 use xberg::core::pipeline::{clear_processor_cache, run_pipeline};
 use xberg::internal::{ElementKind, InternalDocument, InternalElement};
 use xberg::plugins::registry::get_post_processor_registry;
 use xberg::plugins::{Plugin, PostProcessor, ProcessingStage};
 use xberg::types::ExtractionResult;
-use xberg::{XbergError, Result};
-use serial_test::serial;
-use std::borrow::Cow;
-use std::sync::Arc;
+use xberg::{Result, XbergError};
 
 /// Helper: build a minimal `InternalDocument` whose derived content equals `text`.
 fn mock_doc(text: &str) -> InternalDocument {

@@ -4754,6 +4754,7 @@ LayoutClass  <- function() list() |> structure(class = "LayoutClass")
 ChunkSizing <- new.env(parent = emptyenv())
 ChunkSizing$default <- function() .Call("wrap__ChunkSizing__default", PACKAGE = "xberg")
 ChunkSizing$from_json <- function(json) .Call("wrap__ChunkSizing__from_json", json, PACKAGE = "xberg")
+ChunkSizing$tokenizer <- function(model, cache_dir) .Call("wrap__ChunkSizing___factory_tokenizer", model, cache_dir, PACKAGE = "xberg")
 #' @export
 `$.ChunkSizing` <- function(self, name) {
   func <- ChunkSizing[[name]]
@@ -4770,6 +4771,10 @@ ChunkSizing$from_json <- function(json) .Call("wrap__ChunkSizing__from_json", js
 EmbeddingModelType <- new.env(parent = emptyenv())
 EmbeddingModelType$default <- function() .Call("wrap__EmbeddingModelType__default", PACKAGE = "xberg")
 EmbeddingModelType$from_json <- function(json) .Call("wrap__EmbeddingModelType__from_json", json, PACKAGE = "xberg")
+EmbeddingModelType$preset <- function(name) .Call("wrap__EmbeddingModelType___factory_preset", name, PACKAGE = "xberg")
+EmbeddingModelType$custom <- function(model_id, dimensions) .Call("wrap__EmbeddingModelType___factory_custom", model_id, dimensions, PACKAGE = "xberg")
+EmbeddingModelType$llm <- function(llm) .Call("wrap__EmbeddingModelType___factory_llm", llm, PACKAGE = "xberg")
+EmbeddingModelType$plugin <- function(name) .Call("wrap__EmbeddingModelType___factory_plugin", name, PACKAGE = "xberg")
 #' @export
 `$.EmbeddingModelType` <- function(self, name) {
   func <- EmbeddingModelType[[name]]
@@ -4788,6 +4793,10 @@ EmbeddingModelType$from_json <- function(json) .Call("wrap__EmbeddingModelType__
 RerankerModelType <- new.env(parent = emptyenv())
 RerankerModelType$default <- function() .Call("wrap__RerankerModelType__default", PACKAGE = "xberg")
 RerankerModelType$from_json <- function(json) .Call("wrap__RerankerModelType__from_json", json, PACKAGE = "xberg")
+RerankerModelType$preset <- function(name) .Call("wrap__RerankerModelType___factory_preset", name, PACKAGE = "xberg")
+RerankerModelType$custom <- function(model_id, model_file, additional_files, max_length) .Call("wrap__RerankerModelType___factory_custom", model_id, model_file, additional_files, max_length, PACKAGE = "xberg")
+RerankerModelType$llm <- function(llm) .Call("wrap__RerankerModelType___factory_llm", llm, PACKAGE = "xberg")
+RerankerModelType$plugin <- function(name) .Call("wrap__RerankerModelType___factory_plugin", name, PACKAGE = "xberg")
 #' @export
 `$.RerankerModelType` <- function(self, name) {
   func <- RerankerModelType[[name]]
@@ -4807,6 +4816,22 @@ RerankerModelType$from_json <- function(json) .Call("wrap__RerankerModelType__fr
 NodeContent <- new.env(parent = emptyenv())
 NodeContent$default <- function() .Call("wrap__NodeContent__default", PACKAGE = "xberg")
 NodeContent$from_json <- function(json) .Call("wrap__NodeContent__from_json", json, PACKAGE = "xberg")
+NodeContent$title <- function(text) .Call("wrap__NodeContent___factory_title", text, PACKAGE = "xberg")
+NodeContent$heading <- function(level, text) .Call("wrap__NodeContent___factory_heading", level, text, PACKAGE = "xberg")
+NodeContent$paragraph <- function(text) .Call("wrap__NodeContent___factory_paragraph", text, PACKAGE = "xberg")
+NodeContent$list <- function(ordered) .Call("wrap__NodeContent___factory_list", ordered, PACKAGE = "xberg")
+NodeContent$list_item <- function(text) .Call("wrap__NodeContent___factory_list_item", text, PACKAGE = "xberg")
+NodeContent$table <- function(grid) .Call("wrap__NodeContent___factory_table", grid, PACKAGE = "xberg")
+NodeContent$image <- function(description, image_index, src) .Call("wrap__NodeContent___factory_image", description, image_index, src, PACKAGE = "xberg")
+NodeContent$code <- function(text, language) .Call("wrap__NodeContent___factory_code", text, language, PACKAGE = "xberg")
+NodeContent$formula <- function(text) .Call("wrap__NodeContent___factory_formula", text, PACKAGE = "xberg")
+NodeContent$footnote <- function(text) .Call("wrap__NodeContent___factory_footnote", text, PACKAGE = "xberg")
+NodeContent$group <- function(label, heading_level, heading_text) .Call("wrap__NodeContent___factory_group", label, heading_level, heading_text, PACKAGE = "xberg")
+NodeContent$slide <- function(number, title) .Call("wrap__NodeContent___factory_slide", number, title, PACKAGE = "xberg")
+NodeContent$definition_item <- function(term, definition) .Call("wrap__NodeContent___factory_definition_item", term, definition, PACKAGE = "xberg")
+NodeContent$citation <- function(key, text) .Call("wrap__NodeContent___factory_citation", key, text, PACKAGE = "xberg")
+NodeContent$admonition <- function(kind, title) .Call("wrap__NodeContent___factory_admonition", kind, title, PACKAGE = "xberg")
+NodeContent$raw_block <- function(format, content) .Call("wrap__NodeContent___factory_raw_block", format, content, PACKAGE = "xberg")
 #' @export
 `$.NodeContent` <- function(self, name) {
   func <- NodeContent[[name]]
@@ -4823,6 +4848,10 @@ NodeContent$from_json <- function(json) .Call("wrap__NodeContent__from_json", js
 AnnotationKind <- new.env(parent = emptyenv())
 AnnotationKind$default <- function() .Call("wrap__AnnotationKind__default", PACKAGE = "xberg")
 AnnotationKind$from_json <- function(json) .Call("wrap__AnnotationKind__from_json", json, PACKAGE = "xberg")
+AnnotationKind$link <- function(url, title) .Call("wrap__AnnotationKind___factory_link", url, title, PACKAGE = "xberg")
+AnnotationKind$color <- function(value) .Call("wrap__AnnotationKind___factory_color", value, PACKAGE = "xberg")
+AnnotationKind$font_size <- function(value) .Call("wrap__AnnotationKind___factory_font_size", value, PACKAGE = "xberg")
+AnnotationKind$custom <- function(name, value) .Call("wrap__AnnotationKind___factory_custom", name, value, PACKAGE = "xberg")
 #' @export
 `$.AnnotationKind` <- function(self, name) {
   func <- AnnotationKind[[name]]
@@ -4842,6 +4871,7 @@ AnnotationKind$from_json <- function(json) .Call("wrap__AnnotationKind__from_jso
 OcrBoundingGeometry <- new.env(parent = emptyenv())
 OcrBoundingGeometry$default <- function() .Call("wrap__OcrBoundingGeometry__default", PACKAGE = "xberg")
 OcrBoundingGeometry$from_json <- function(json) .Call("wrap__OcrBoundingGeometry__from_json", json, PACKAGE = "xberg")
+OcrBoundingGeometry$rectangle <- function(left, top, width, height) .Call("wrap__OcrBoundingGeometry___factory_rectangle", left, top, width, height, PACKAGE = "xberg")
 #' @export
 `$.OcrBoundingGeometry` <- function(self, name) {
   func <- OcrBoundingGeometry[[name]]
@@ -4858,6 +4888,11 @@ OcrBoundingGeometry$from_json <- function(json) .Call("wrap__OcrBoundingGeometry
 RevisionAnchor <- new.env(parent = emptyenv())
 RevisionAnchor$default <- function() .Call("wrap__RevisionAnchor__default", PACKAGE = "xberg")
 RevisionAnchor$from_json <- function(json) .Call("wrap__RevisionAnchor__from_json", json, PACKAGE = "xberg")
+RevisionAnchor$paragraph <- function(index) .Call("wrap__RevisionAnchor___factory_paragraph", index, PACKAGE = "xberg")
+RevisionAnchor$table_cell <- function(row, col, table_index) .Call("wrap__RevisionAnchor___factory_table_cell", row, col, table_index, PACKAGE = "xberg")
+RevisionAnchor$page <- function(index) .Call("wrap__RevisionAnchor___factory_page", index, PACKAGE = "xberg")
+RevisionAnchor$slide <- function(index) .Call("wrap__RevisionAnchor___factory_slide", index, PACKAGE = "xberg")
+RevisionAnchor$sheet <- function(index, name) .Call("wrap__RevisionAnchor___factory_sheet", index, name, PACKAGE = "xberg")
 #' @export
 `$.RevisionAnchor` <- function(self, name) {
   func <- RevisionAnchor[[name]]
@@ -4874,6 +4909,10 @@ RevisionAnchor$from_json <- function(json) .Call("wrap__RevisionAnchor__from_jso
 NoChunkingReason <- new.env(parent = emptyenv())
 NoChunkingReason$default <- function() .Call("wrap__NoChunkingReason__default", PACKAGE = "xberg")
 NoChunkingReason$from_json <- function(json) .Call("wrap__NoChunkingReason__from_json", json, PACKAGE = "xberg")
+NoChunkingReason$small_file <- function(size_bytes, threshold_bytes) .Call("wrap__NoChunkingReason___factory_small_file", size_bytes, threshold_bytes, PACKAGE = "xberg")
+NoChunkingReason$few_pages <- function(page_count, threshold) .Call("wrap__NoChunkingReason___factory_few_pages", page_count, threshold, PACKAGE = "xberg")
+NoChunkingReason$text_layer_detected <- function(text_coverage, avg_chars_per_page) .Call("wrap__NoChunkingReason___factory_text_layer_detected", text_coverage, avg_chars_per_page, PACKAGE = "xberg")
+NoChunkingReason$format_not_chunkable <- function(mime_type) .Call("wrap__NoChunkingReason___factory_format_not_chunkable", mime_type, PACKAGE = "xberg")
 #' @export
 `$.NoChunkingReason` <- function(self, name) {
   func <- NoChunkingReason[[name]]
@@ -4890,6 +4929,10 @@ NoChunkingReason$from_json <- function(json) .Call("wrap__NoChunkingReason__from
 ChunkingReason <- new.env(parent = emptyenv())
 ChunkingReason$default <- function() .Call("wrap__ChunkingReason__default", PACKAGE = "xberg")
 ChunkingReason$from_json <- function(json) .Call("wrap__ChunkingReason__from_json", json, PACKAGE = "xberg")
+ChunkingReason$large_file <- function(size_bytes, threshold_bytes) .Call("wrap__ChunkingReason___factory_large_file", size_bytes, threshold_bytes, PACKAGE = "xberg")
+ChunkingReason$many_pages <- function(page_count, threshold) .Call("wrap__ChunkingReason___factory_many_pages", page_count, threshold, PACKAGE = "xberg")
+ChunkingReason$ocr_required <- function(page_count, force_ocr) .Call("wrap__ChunkingReason___factory_ocr_required", page_count, force_ocr, PACKAGE = "xberg")
+ChunkingReason$large_and_many_pages <- function(size_bytes, page_count) .Call("wrap__ChunkingReason___factory_large_and_many_pages", size_bytes, page_count, PACKAGE = "xberg")
 #' @export
 `$.ChunkingReason` <- function(self, name) {
   func <- ChunkingReason[[name]]

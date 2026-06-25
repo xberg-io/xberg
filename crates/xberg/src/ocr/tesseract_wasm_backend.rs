@@ -18,11 +18,11 @@ use crate::core::config::OcrConfig;
 use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
 use crate::types::{ExtractionResult, FormatMetadata, Metadata, OcrMetadata};
 use async_trait::async_trait;
-use xberg_tesseract::{Pix, TesseractAPI};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Mutex;
+use xberg_tesseract::{Pix, TesseractAPI};
 
 /// Default OCR engine mode: LSTM only (mode 1). Matches the `OEM_LSTM_ONLY`
 /// constant from Tesseract's `tesseract/publictypes.h`. LSTM is the only

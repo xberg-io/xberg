@@ -16,9 +16,9 @@
 
 #![cfg(feature = "office")]
 
+use std::path::{Path, PathBuf};
 use xberg::core::config::ExtractionConfig;
 use xberg::core::extractor::extract_file;
-use std::path::{Path, PathBuf};
 
 mod helpers;
 

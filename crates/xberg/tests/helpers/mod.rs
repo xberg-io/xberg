@@ -5,8 +5,8 @@
 
 #![allow(dead_code)]
 
-use xberg::types::ExtractionResult;
 use std::path::PathBuf;
+use xberg::types::ExtractionResult;
 
 /// Get the test_documents directory path.
 ///

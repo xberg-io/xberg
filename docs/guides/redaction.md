@@ -92,7 +92,7 @@ To redact names, organisations, and locations, attach a `NerConfig`:
 
     --8<-- "snippets/python/redaction/with_ner.md"
 
-Choose the NER backend per the [NER guide](ner.md). The LLM backend works today; the gline-rs ONNX backend is pending an upstream `ort` bump.
+Choose the NER backend per the [NER guide](ner.md). The LLM backend can call provider-hosted models; the `xberg-gliner` ONNX backend runs locally with exported artifacts from `xberg-io/gliner-models`. Private or non-public artifacts require Hugging Face credentials supported by `hf-hub`.
 
 ## Output Shape
 

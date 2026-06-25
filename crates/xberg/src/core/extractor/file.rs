@@ -6,9 +6,9 @@
 //! - File validation and reading
 //! - Extraction pipeline orchestration
 
+use crate::Result;
 #[cfg(not(feature = "office"))]
 use crate::XbergError;
-use crate::Result;
 use crate::core::config::ExtractionConfig;
 use crate::core::mime::{LEGACY_POWERPOINT_MIME_TYPE, LEGACY_WORD_MIME_TYPE};
 use crate::types::ExtractionResult;

@@ -768,11 +768,10 @@ pub(crate) async fn extract_with_ocr(
     {
         #[cfg(feature = "pdf")]
         {
-            let doc =
-                pdf_oxide::PdfDocument::from_bytes(bytes.to_vec()).map_err(|e| crate::XbergError::Parsing {
-                    message: format!("Failed to open PDF for OCR streaming: {:?}", e),
-                    source: None,
-                })?;
+            let doc = pdf_oxide::PdfDocument::from_bytes(bytes.to_vec()).map_err(|e| crate::XbergError::Parsing {
+                message: format!("Failed to open PDF for OCR streaming: {:?}", e),
+                source: None,
+            })?;
             lazy_pdf_page_count = doc.page_count().map_err(|e| crate::XbergError::Parsing {
                 message: format!("Failed to get document page count: {:?}", e),
                 source: None,
@@ -900,12 +899,11 @@ pub(crate) async fn extract_with_ocr(
                     message: "PDF content is required for OCR rendering but was not provided".to_string(),
                     source: None,
                 })?;
-                let doc = pdf_oxide::PdfDocument::from_bytes(pdf_bytes.to_vec()).map_err(|e| {
-                    crate::XbergError::Parsing {
+                let doc =
+                    pdf_oxide::PdfDocument::from_bytes(pdf_bytes.to_vec()).map_err(|e| crate::XbergError::Parsing {
                         message: format!("Failed to open PDF for OCR batch rendering: {:?}", e),
                         source: None,
-                    }
-                })?;
+                    })?;
                 // Use the safeguarded renderer (see render.rs). This prevents hard
                 // failures on the exact class of inputs reported in #1078 (single-page
                 // very wide vector-heavy PDFs) when force_ocr + VLM (or other ocr-pipeline

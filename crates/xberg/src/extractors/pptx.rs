@@ -365,9 +365,7 @@ impl DocumentExtractor for PptxExtractor {
                         crate::extraction::pptx::extract_pptx_from_bytes(&content_owned, &options)
                     })
                     .await
-                    .map_err(|e| {
-                        crate::error::XbergError::parsing(format!("PPTX extraction task failed: {}", e))
-                    })??
+                    .map_err(|e| crate::error::XbergError::parsing(format!("PPTX extraction task failed: {}", e)))??
                 } else {
                     let options = crate::extraction::pptx::PptxExtractionOptions {
                         extract_images,

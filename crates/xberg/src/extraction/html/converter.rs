@@ -4,7 +4,7 @@ use super::stack_management::check_wasm_size_limit;
 #[cfg(not(target_arch = "wasm32"))]
 use super::stack_management::{html_requires_large_stack, run_on_dedicated_stack};
 use crate::core::config::OutputFormat as XbergOutputFormat;
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use crate::types::HtmlMetadata;
 use html_to_markdown_rs::types::TableData;
 use html_to_markdown_rs::{ConversionOptions, InlineImage, OutputFormat as LibOutputFormat, convert as convert_html};
@@ -17,9 +17,7 @@ pub(crate) fn map_output_format(format: XbergOutputFormat) -> LibOutputFormat {
         XbergOutputFormat::Plain => LibOutputFormat::Plain,
         // Html and Structured default to Markdown for HTML conversions
         // Structured output includes the converted content plus full element metadata
-        XbergOutputFormat::Html | XbergOutputFormat::Json | XbergOutputFormat::Structured => {
-            LibOutputFormat::Markdown
-        }
+        XbergOutputFormat::Html | XbergOutputFormat::Json | XbergOutputFormat::Structured => LibOutputFormat::Markdown,
         XbergOutputFormat::Custom(_) => LibOutputFormat::Markdown,
     }
 }
@@ -162,8 +160,8 @@ fn convert_single_pass(
     Vec<TableData>,
     Option<html_to_markdown_rs::types::DocumentStructure>,
 )> {
-    let result = convert_html(html, Some(options))
-        .map_err(|e| XbergError::parsing(format!("HTML conversion failed: {}", e)))?;
+    let result =
+        convert_html(html, Some(options)).map_err(|e| XbergError::parsing(format!("HTML conversion failed: {}", e)))?;
 
     let metadata = {
         let m = HtmlMetadata::from(result.metadata.clone());

@@ -4,7 +4,7 @@
 //! Supports plain TAR as well as compressed variants (TAR.GZ, TAR.BZ2).
 
 use super::{ArchiveEntry, ArchiveMetadata, TEXT_EXTENSIONS};
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use crate::extractors::security::SecurityLimits;
 use ahash::AHashMap;
 use std::io::{Cursor, Read};
@@ -115,8 +115,7 @@ pub(crate) fn extract_tar_text_content(bytes: &[u8], limits: &SecurityLimits) ->
         .map_err(|e| XbergError::parsing(format!("Failed to read TAR archive: {}", e)))?;
 
     for entry_result in entries {
-        let mut entry =
-            entry_result.map_err(|e| XbergError::parsing(format!("Failed to read TAR entry: {}", e)))?;
+        let mut entry = entry_result.map_err(|e| XbergError::parsing(format!("Failed to read TAR entry: {}", e)))?;
 
         file_count += 1;
         if file_count > limits.max_files_in_archive {
@@ -178,8 +177,7 @@ pub(crate) fn extract_tar_file_bytes(bytes: &[u8], limits: &SecurityLimits) -> R
         .map_err(|e| XbergError::parsing(format!("Failed to read TAR archive: {}", e)))?;
 
     for entry_result in entries {
-        let mut entry =
-            entry_result.map_err(|e| XbergError::parsing(format!("Failed to read TAR entry: {}", e)))?;
+        let mut entry = entry_result.map_err(|e| XbergError::parsing(format!("Failed to read TAR entry: {}", e)))?;
 
         file_count += 1;
         if file_count > limits.max_files_in_archive {

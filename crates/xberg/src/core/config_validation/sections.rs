@@ -4,7 +4,7 @@
 //! and their specific parameters. Each function validates a specific aspect of
 //! the configuration and returns detailed error messages when validation fails.
 
-use crate::{XbergError, Result};
+use crate::{Result, XbergError};
 
 /// Valid binarization methods for image preprocessing.
 #[cfg(test)]

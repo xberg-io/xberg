@@ -6,7 +6,7 @@
 //! pulls in the C `libheif` dependency via `xberg-libheif`.
 
 #[cfg(feature = "heic")]
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 
 /// Detect a HEIF-family container (HEIC / HEIF / AVIF / HEICS / AVCS) by
 /// sniffing the `ftyp` box brand at offset 4..8 with one of the known major

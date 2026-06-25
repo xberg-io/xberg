@@ -76,13 +76,6 @@ anyhow = { workspace = true }
 base64 = { workspace = true }
 clap = { workspace = true }
 clap_complete = "4.6"
-xberg = { workspace = true, features = [
-    "formats",
-    "analysis",
-    "tokio-runtime",
-    "simd-utf8",
-    "cli",
-] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_toon_format = { workspace = true }
@@ -94,6 +87,13 @@ tree-sitter-language-pack = { workspace = true, features = [
     "download",
     "serde",
 ], optional = true }
+xberg = { workspace = true, features = [
+    "formats",
+    "analysis",
+    "tokio-runtime",
+    "simd-utf8",
+    "cli",
+] }
 
 [dev-dependencies]
 bytes = { workspace = true }

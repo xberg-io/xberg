@@ -9,9 +9,9 @@
 
 #![cfg(feature = "office")]
 
-use xberg::{ExtractionConfig, ImageExtractionConfig, extract_file};
 use std::io::Write;
 use tempfile::NamedTempFile;
+use xberg::{ExtractionConfig, ImageExtractionConfig, extract_file};
 use zip::CompressionMethod;
 use zip::write::{FileOptions, ZipWriter};
 

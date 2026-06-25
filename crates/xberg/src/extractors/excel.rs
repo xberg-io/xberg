@@ -407,9 +407,7 @@ impl DocumentExtractor for ExcelExtractor {
                         crate::extraction::excel::read_excel_bytes(&content_owned, &extension_owned)
                     })
                     .await
-                    .map_err(|e| {
-                        crate::error::XbergError::parsing(format!("Excel extraction task failed: {}", e))
-                    })??
+                    .map_err(|e| crate::error::XbergError::parsing(format!("Excel extraction task failed: {}", e)))??
                 } else {
                     crate::extraction::excel::read_excel_bytes(content, extension)?
                 }

@@ -20,7 +20,7 @@ pub use renderer::RendererRegistry;
 pub use reranker::RerankerBackendRegistry;
 pub use validator::ValidatorRegistry;
 
-use crate::{XbergError, Result};
+use crate::{Result, XbergError};
 use parking_lot::RwLock;
 use std::sync::Arc;
 use std::sync::LazyLock;

@@ -57,8 +57,8 @@ pub fn clear_validators() -> crate::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::XbergError;
     use crate::Result;
+    use crate::XbergError;
     use crate::core::config::ExtractionConfig;
     use crate::plugins::Plugin;
     use crate::types::ExtractionResult;

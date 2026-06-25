@@ -88,10 +88,7 @@ def main() -> None:
         raise SystemExit(f"No wheels found in {wheel_dir}")
 
     identity = (
-        args.identity
-        or os.environ.get("MACOS_CODESIGN_IDENTITY")
-        or os.environ.get("XBERG_CODESIGN_IDENTITY")
-        or "-"
+        args.identity or os.environ.get("MACOS_CODESIGN_IDENTITY") or os.environ.get("XBERG_CODESIGN_IDENTITY") or "-"
     )
 
     for wheel_path in wheel_files:

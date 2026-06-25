@@ -4,16 +4,16 @@
 //! error handling, and cleanup with real file extraction.
 
 use async_trait::async_trait;
+use serial_test::serial;
+use std::borrow::Cow;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use xberg::core::config::ExtractionConfig;
 use xberg::core::pipeline::clear_processor_cache;
 use xberg::plugins::registry::get_post_processor_registry;
 use xberg::plugins::{Plugin, PostProcessor, ProcessingStage};
 use xberg::types::ExtractionResult;
-use xberg::{XbergError, Result, extract_file_sync};
-use serial_test::serial;
-use std::borrow::Cow;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use xberg::{Result, XbergError, extract_file_sync};
 
 struct AppendTextProcessor {
     name: String,

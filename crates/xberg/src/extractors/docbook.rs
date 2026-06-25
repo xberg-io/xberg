@@ -352,10 +352,7 @@ fn build_docbook_internal_document(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(crate::error::XbergError::parsing(format!(
-                    "XML parsing error: {}",
-                    e
-                )));
+                return Err(crate::error::XbergError::parsing(format!("XML parsing error: {}", e)));
             }
             _ => {}
         }
@@ -638,10 +635,7 @@ fn parse_docbook_single_pass(content: &str, plain: bool, budget: &mut SecurityBu
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(crate::error::XbergError::parsing(format!(
-                    "XML parsing error: {}",
-                    e
-                )));
+                return Err(crate::error::XbergError::parsing(format!("XML parsing error: {}", e)));
             }
             _ => {}
         }
@@ -799,10 +793,7 @@ fn extract_element_text_with_inline(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(crate::error::XbergError::parsing(format!(
-                    "XML parsing error: {}",
-                    e
-                )));
+                return Err(crate::error::XbergError::parsing(format!("XML parsing error: {}", e)));
             }
             _ => {}
         }
@@ -871,10 +862,7 @@ fn extract_figure_with_caption(reader: &mut Reader<&[u8]>, budget: &mut Security
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(crate::error::XbergError::parsing(format!(
-                    "XML parsing error: {}",
-                    e
-                )));
+                return Err(crate::error::XbergError::parsing(format!("XML parsing error: {}", e)));
             }
             _ => {}
         }
@@ -1044,10 +1032,7 @@ fn extract_para_with_annotations(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(crate::error::XbergError::parsing(format!(
-                    "XML parsing error: {}",
-                    e
-                )));
+                return Err(crate::error::XbergError::parsing(format!("XML parsing error: {}", e)));
             }
             _ => {}
         }
@@ -1107,10 +1092,7 @@ fn extract_element_text(reader: &mut Reader<&[u8]>, budget: &mut SecurityBudget)
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(crate::error::XbergError::parsing(format!(
-                    "XML parsing error: {}",
-                    e
-                )));
+                return Err(crate::error::XbergError::parsing(format!("XML parsing error: {}", e)));
             }
             _ => {}
         }

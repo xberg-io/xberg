@@ -417,11 +417,7 @@ async fn main() -> Result<()> {
             use benchmark_harness::adapters::create_xberg_adapter;
 
             let mut xberg_count = 0;
-            let pipelines = [
-                XbergPipeline::Baseline,
-                XbergPipeline::Layout,
-                XbergPipeline::PaddleOcr,
-            ];
+            let pipelines = [XbergPipeline::Baseline, XbergPipeline::Layout, XbergPipeline::PaddleOcr];
             let formats = [OutputFormat::Markdown, OutputFormat::Plaintext];
 
             for pipeline in &pipelines {
@@ -470,10 +466,7 @@ async fn main() -> Result<()> {
             } else {
                 frameworks.iter().filter(|f| f.contains("xberg")).count()
             };
-            eprintln!(
-                "[adapter] Xberg CLI: {}/{} available",
-                xberg_count, total_requested
-            );
+            eprintln!("[adapter] Xberg CLI: {}/{} available", xberg_count, total_requested);
 
             // Skip third-party frameworks in batch mode — they don't have batch APIs,
             // so benchmarking them sequentially alongside xberg's real batch is not apples-to-apples.
@@ -500,10 +493,7 @@ async fn main() -> Result<()> {
                 "[adapter] Open source extraction frameworks: {}/7 available",
                 external_count
             );
-            eprintln!(
-                "[adapter] Total adapters: {} available",
-                xberg_count + external_count
-            );
+            eprintln!("[adapter] Total adapters: {} available", xberg_count + external_count);
 
             // Track which requested frameworks failed to initialize
             // NOTE: This check must run AFTER all adapters (xberg + external) are registered

@@ -19,9 +19,9 @@
 mod helpers;
 
 use helpers::*;
+use std::collections::HashMap;
 use xberg::core::config::{ExtractionConfig, OcrConfig};
 use xberg::extract_file_sync;
-use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 struct TokenScores {

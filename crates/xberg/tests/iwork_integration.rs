@@ -5,8 +5,8 @@
 
 #[cfg(feature = "iwork")]
 mod iwork_tests {
-    use xberg::core::config::ExtractionConfig;
     use std::path::PathBuf;
+    use xberg::core::config::ExtractionConfig;
 
     fn test_doc_path(name: &str) -> PathBuf {
         let manifest = env!("CARGO_MANIFEST_DIR");

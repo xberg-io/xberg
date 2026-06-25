@@ -10,7 +10,7 @@ use zip::ZipArchive;
 
 use super::elements::Slide;
 use super::image_handling::get_full_image_path;
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 
 pub(super) struct PptxContainer<R: Read + Seek> {
     pub(super) archive: ZipArchive<R>,
@@ -124,10 +124,7 @@ impl<R: Read + Seek> PptxContainer<R> {
             Ok(f) => f,
             Err(zip::result::ZipError::Io(io_err)) => return Err(io_err.into()), // Bubble up IO errors ~keep
             Err(e) => {
-                return Err(XbergError::parsing(format!(
-                    "Failed to read file from archive: {}",
-                    e
-                )));
+                return Err(XbergError::parsing(format!("Failed to read file from archive: {}", e)));
             }
         };
         let mut contents = Vec::new();

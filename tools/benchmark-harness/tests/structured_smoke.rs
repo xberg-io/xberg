@@ -19,8 +19,8 @@ use std::path::PathBuf;
 
 use benchmark_harness::datasets::{Split, StructuredFixture};
 use benchmark_harness::json_quality;
-use xberg::core::config::{ExtractionConfig, LlmConfig, StructuredExtractionConfig};
 use serde_json::{Value, json};
+use xberg::core::config::{ExtractionConfig, LlmConfig, StructuredExtractionConfig};
 
 fn require_env(var: &str) -> Option<String> {
     let _ = dotenvy::dotenv();

@@ -35,12 +35,55 @@ _TAG_MAP = {
 }
 
 
+def _safe_destination(root: Path, member_name: str) -> Path:
+    """Resolve an archive member path and require it to stay under root."""
+    root = root.resolve()
+    target = (root / member_name.replace("\\", "/")).resolve(strict=False)
+    if target != root and not target.is_relative_to(root):
+        raise RuntimeError(f"archive member escapes extraction directory: {member_name}")
+    return target
+
+
+def _extract_zip_bounded(archive: Path, extract_dir: Path) -> None:
+    """Extract zip entries after bounding each destination path."""
+    with zipfile.ZipFile(archive) as zf:
+        for member in zf.infolist():
+            target = _safe_destination(extract_dir, member.filename)
+            if member.is_dir():
+                target.mkdir(parents=True, exist_ok=True)
+                continue
+
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with zf.open(member) as source, target.open("wb") as destination:
+                shutil.copyfileobj(source, destination)
+
+
+def _extract_tar_bounded(archive: Path, extract_dir: Path) -> None:
+    """Extract regular tar entries after bounding each destination path."""
+    with tarfile.open(archive, "r:gz") as tf:
+        for member in tf.getmembers():
+            target = _safe_destination(extract_dir, member.name)
+            if member.isdir():
+                target.mkdir(parents=True, exist_ok=True)
+                continue
+            if not member.isfile():
+                raise RuntimeError(f"unsupported archive member type: {member.name}")
+
+            target.parent.mkdir(parents=True, exist_ok=True)
+            source = tf.extractfile(member)
+            if source is None:
+                raise RuntimeError(f"could not read archive member: {member.name}")
+            with source, target.open("wb") as destination:
+                shutil.copyfileobj(source, destination)
+
+
 class CustomBuildHook(BuildHookInterface):
     """Inject the matching native binary into a platform-tagged wheel."""
 
     PLUGIN_NAME = "custom"
 
     def initialize(self, version: str, build_data: dict) -> None:  # noqa: ARG002
+        """Bundle a staged native binary when building a targeted wheel."""
         target = os.environ.get("XBERG_CLI_TARGET", "").strip()
         if not target:
             # sdist build or unbundled wheel: leave a pure, download-at-runtime package.
@@ -89,11 +132,9 @@ class CustomBuildHook(BuildHookInterface):
         extract_dir.mkdir(parents=True, exist_ok=True)
 
         if str(archive).lower().endswith(".zip"):
-            with zipfile.ZipFile(archive) as zf:
-                zf.extractall(extract_dir)
+            _extract_zip_bounded(archive, extract_dir)
         else:
-            with tarfile.open(archive, "r:gz") as tf:
-                tf.extractall(extract_dir)
+            _extract_tar_bounded(archive, extract_dir)
 
         for candidate in extract_dir.rglob(binary_name):
             if candidate.is_file():

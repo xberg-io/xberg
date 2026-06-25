@@ -11,9 +11,9 @@
 
 mod helpers;
 
+use std::path::Path;
 use xberg::core::config::{ExtractionConfig, ImageExtractionConfig, OutputFormat};
 use xberg::core::extractor::extract_file_sync;
-use std::path::Path;
 
 fn extract_md(path: &Path, config: ExtractionConfig) -> String {
     if !path.exists() {

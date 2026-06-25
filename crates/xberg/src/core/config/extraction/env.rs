@@ -3,7 +3,7 @@
 //! This module provides functionality to apply environment variable overrides
 //! to extraction configuration, allowing runtime configuration changes.
 
-use crate::{XbergError, Result};
+use crate::{Result, XbergError};
 
 use super::super::ocr::OcrConfig;
 use super::super::processing::ChunkingConfig;

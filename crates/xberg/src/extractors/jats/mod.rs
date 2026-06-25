@@ -164,10 +164,7 @@ fn extract_para_with_annotations_jats(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(crate::error::XbergError::parsing(format!(
-                    "XML parsing error: {}",
-                    e
-                )));
+                return Err(crate::error::XbergError::parsing(format!("XML parsing error: {}", e)));
             }
             _ => {}
         }
@@ -409,10 +406,7 @@ fn build_jats_internal_document(content: &str, budget: &mut SecurityBudget) -> c
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(crate::error::XbergError::parsing(format!(
-                    "XML parsing error: {}",
-                    e
-                )));
+                return Err(crate::error::XbergError::parsing(format!("XML parsing error: {}", e)));
             }
             _ => {}
         }

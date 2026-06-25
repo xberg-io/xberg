@@ -5,10 +5,10 @@
 
 #![cfg(feature = "archives")]
 
-use xberg::core::config::ExtractionConfig;
-use xberg::core::extractor::{extract_bytes, extract_bytes_sync};
 use std::io::{Cursor, Write};
 use tar::Builder as TarBuilder;
+use xberg::core::config::ExtractionConfig;
+use xberg::core::extractor::{extract_bytes, extract_bytes_sync};
 use zip::write::{FileOptions, ZipWriter};
 
 mod helpers;

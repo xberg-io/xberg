@@ -4,12 +4,12 @@
 //! or multiple documents with customizable extraction configurations.
 
 use anyhow::{Context, Result};
+use std::path::{Path, PathBuf};
+use std::time::Instant;
 use xberg::{
     BatchFileItem, ExtractedImage, ExtractionConfig, ExtractionResult, FileExtractionConfig, batch_extract_files_sync,
     extract_file_sync,
 };
-use std::path::{Path, PathBuf};
-use std::time::Instant;
 
 use crate::{
     WireFormat,
@@ -219,9 +219,9 @@ fn run_batch_sync(
 mod tests {
     use super::*;
     use bytes::Bytes;
-    use xberg::ExtractedImage;
     use std::borrow::Cow;
     use tempfile::tempdir;
+    use xberg::ExtractedImage;
 
     fn make_image(index: u32, format: &'static str, data: &[u8]) -> ExtractedImage {
         ExtractedImage {

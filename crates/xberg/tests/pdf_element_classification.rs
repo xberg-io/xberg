@@ -1,6 +1,6 @@
+use std::path::Path;
 use xberg::types::{ElementType, ResultFormat};
 use xberg::{ExtractionConfig, OutputFormat, extract_bytes_sync};
-use std::path::Path;
 
 /// Verifies that numbered chapter headings in an untagged ReportLab PDF are
 /// classified as Heading/Title, not ListItem (#961).

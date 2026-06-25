@@ -1,4 +1,4 @@
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use crate::stopwords::STOPWORDS;
 use crate::text::token_reduction::config::TokenReductionConfig;
 use ahash::{AHashMap, AHashSet};

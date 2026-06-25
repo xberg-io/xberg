@@ -1,7 +1,7 @@
 #![cfg(feature = "office")]
 
-use xberg::core::config::{ExtractionConfig, OutputFormat};
 use std::path::PathBuf;
+use xberg::core::config::{ExtractionConfig, OutputFormat};
 
 /// Helper to get absolute path to test documents
 fn test_file_path(filename: &str) -> PathBuf {

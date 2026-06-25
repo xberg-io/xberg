@@ -3,14 +3,14 @@
 //! These tests verify the end-to-end behavior of the extraction pipeline,
 //! config loading, MIME detection, and batch processing.
 
+use std::fs::{self, File};
+use std::io::Write;
+use tempfile::tempdir;
 use xberg::core::mime::validate_mime_type;
 use xberg::{
     ExtractionConfig, batch_extract_bytes, batch_extract_bytes_sync, batch_extract_files, batch_extract_files_sync,
     detect_mime_type, extract_bytes, extract_bytes_sync, extract_file, extract_file_sync,
 };
-use std::fs::{self, File};
-use std::io::Write;
-use tempfile::tempdir;
 
 fn trim_trailing_newlines(value: &str) -> &str {
     value.trim_end_matches(['\n', '\r'])
@@ -441,10 +441,7 @@ async fn test_unsupported_mime_type_error() {
     let result = extract_bytes(b"test", "application/x-xberg-test-unsupported", &config).await;
 
     assert!(result.is_err());
-    assert!(matches!(
-        result.unwrap_err(),
-        xberg::XbergError::UnsupportedFormat(_)
-    ));
+    assert!(matches!(result.unwrap_err(), xberg::XbergError::UnsupportedFormat(_)));
 }
 
 /// Test pipeline execution (currently stub, will be expanded in Phase 2).

@@ -1150,6 +1150,16 @@ pub(crate) async fn cache_manifest_handler() -> Json<ManifestResponse> {
         );
     }
 
+    #[cfg(feature = "ner-onnx")]
+    {
+        models.extend(crate::text::ner::manifest().into_iter().map(|e| ManifestEntryResponse {
+            relative_path: e.relative_path,
+            sha256: e.sha256,
+            size_bytes: e.size_bytes,
+            source_url: e.source_url,
+        }));
+    }
+
     let total_size_bytes: u64 = models.iter().map(|e| e.size_bytes).sum();
     let model_count = models.len();
 
@@ -1171,7 +1181,8 @@ pub(crate) async fn cache_manifest_handler() -> Json<ManifestResponse> {
 /// # Errors
 ///
 /// Returns `ApiError::Internal` if model downloading fails.
-/// Returns `ApiError::Validation` if an unknown embedding preset is requested.
+/// Returns `ApiError::Validation` if an unknown embedding preset is requested
+/// or a requested model-warming feature is not enabled.
 #[utoipa::path(
     post,
     path = "/cache/warm",
@@ -1179,7 +1190,7 @@ pub(crate) async fn cache_manifest_handler() -> Json<ManifestResponse> {
     request_body = WarmRequest,
     responses(
         (status = 200, description = "Models warmed", body = WarmResponse),
-        (status = 400, description = "Bad request - unknown or empty embedding model", body = crate::api::types::ErrorResponse),
+        (status = 400, description = "Bad request - unknown or empty model name, or requested warmer feature is unavailable", body = crate::api::types::ErrorResponse),
         (status = 422, description = "Unprocessable entity - invalid JSON body", body = crate::api::types::ErrorResponse),
         (status = 500, description = "Internal server error", body = crate::api::types::ErrorResponse),
         (status = 502, description = "Bad gateway - upstream model download failed", body = crate::api::types::ErrorResponse),
@@ -1193,6 +1204,13 @@ pub(crate) async fn cache_warm_handler(JsonApi(request): JsonApi<WarmRequest>) -
     {
         return Err(ApiError::validation(crate::error::XbergError::validation(
             "Field 'embedding_model' must not be empty. Omit the field or provide a valid preset name.",
+        )));
+    }
+    if let Some(ref name) = request.ner_model
+        && name.trim().is_empty()
+    {
+        return Err(ApiError::validation(crate::error::XbergError::validation(
+            "Field 'ner_model' must not be empty. Omit the field or provide a valid model name.",
         )));
     }
 
@@ -1276,6 +1294,39 @@ pub(crate) async fn cache_warm_handler(JsonApi(request): JsonApi<WarmRequest>) -
         if request.all_embeddings || request.embedding_model.is_some() {
             return Err(ApiError::validation(crate::error::XbergError::validation(
                 "Embedding model warming requires the 'embeddings' feature to be enabled",
+            )));
+        }
+    }
+
+    #[cfg(feature = "ner-onnx")]
+    {
+        if request.ner || request.all_ner_models || request.ner_model.is_some() {
+            let models_to_warm: Vec<String> = if request.all_ner_models {
+                crate::text::ner::known_models().iter().map(|s| s.to_string()).collect()
+            } else if let Some(ref name) = request.ner_model {
+                vec![name.clone()]
+            } else {
+                vec![crate::text::ner::default_model_name().to_string()]
+            };
+
+            let ner_dir = cache_base.join("ner");
+            for model in &models_to_warm {
+                let path = crate::text::ner::download_model(model, Some(ner_dir.clone())).map_err(|e| {
+                    ApiError::bad_gateway(crate::error::XbergError::Other(format!(
+                        "Failed to download NER model '{}': {}",
+                        model, e
+                    )))
+                })?;
+                downloaded.push(format!("ner gliner ({model}) -> {}", path.display()));
+            }
+        }
+    }
+
+    #[cfg(not(feature = "ner-onnx"))]
+    {
+        if request.ner || request.all_ner_models || request.ner_model.is_some() {
+            return Err(ApiError::validation(crate::error::XbergError::MissingDependency(
+                "NER model warming requires the 'ner-onnx' feature to be enabled".to_string(),
             )));
         }
     }
@@ -1397,9 +1448,7 @@ pub(crate) async fn extract_async_handler(
                 "extraction service unavailable".into(),
                 super::jobs::now_rfc3339(),
             );
-            ApiError::internal(crate::error::XbergError::Other(
-                "extraction service unavailable".into(),
-            ))
+            ApiError::internal(crate::error::XbergError::Other("extraction service unavailable".into()))
         })?
         .clone();
 
@@ -1653,6 +1702,59 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_cache_warm_handler_empty_ner_model_returns_400() {
+        let app = test_router();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/cache/warm")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"ner_model": ""}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let error_msg = json["message"].as_str().unwrap_or("");
+        assert!(
+            error_msg.contains("ner_model") && error_msg.contains("must not be empty"),
+            "Expected empty ner_model validation error, got: {}",
+            error_msg
+        );
+    }
+
+    #[cfg(not(feature = "ner-onnx"))]
+    #[tokio::test]
+    async fn test_cache_warm_handler_ner_request_without_feature_returns_400() {
+        let app = test_router();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/cache/warm")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"ner": true}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let error_msg = json["message"].as_str().unwrap_or("");
+        assert!(
+            error_msg.contains("ner-onnx"),
+            "Expected missing ner-onnx validation error, got: {}",
+            error_msg
+        );
     }
 
     #[cfg(feature = "embeddings")]

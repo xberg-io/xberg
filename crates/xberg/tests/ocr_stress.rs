@@ -19,13 +19,13 @@
 
 #![cfg(all(feature = "ocr", any()))]
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Instant;
 use xberg::core::config::{ExtractionConfig, OcrConfig};
 use xberg::core::extractor::extract_file_sync;
 use xberg::ocr::processor::OcrProcessor;
 use xberg::ocr::types::TesseractConfig;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Instant;
 
 mod helpers;
 

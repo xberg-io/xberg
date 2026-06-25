@@ -15,7 +15,7 @@ pub mod table;
 pub mod theme;
 
 #[cfg(test)]
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 #[cfg(test)]
 use crate::extraction::capacity;
 #[cfg(test)]

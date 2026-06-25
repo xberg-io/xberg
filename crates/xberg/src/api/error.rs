@@ -158,7 +158,12 @@ impl ApiError {
     /// Create a bad gateway error (502).
     ///
     /// Use when an upstream service (e.g., model download from HuggingFace) fails.
-    #[cfg(any(feature = "paddle-ocr", feature = "layout-detection", feature = "embeddings"))]
+    #[cfg(any(
+        feature = "paddle-ocr",
+        feature = "layout-detection",
+        feature = "embeddings",
+        feature = "ner-onnx"
+    ))]
     #[cfg_attr(alef, alef(skip))]
     pub(crate) fn bad_gateway(error: XbergError) -> Self {
         Self::new(StatusCode::BAD_GATEWAY, error)

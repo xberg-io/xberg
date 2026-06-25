@@ -4,11 +4,11 @@
 
 #![cfg(feature = "office")]
 
+use std::io::{Cursor, Write};
 use xberg::core::config::{ExtractionConfig, OutputFormat};
 use xberg::extractors::EpubExtractor;
 use xberg::plugins::DocumentExtractor;
 use xberg::types::internal::{ElementKind, InternalDocument};
-use std::io::{Cursor, Write};
 use zip::write::FileOptions;
 
 fn content(document: &InternalDocument) -> String {

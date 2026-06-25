@@ -1,6 +1,6 @@
 use criterion::{Criterion, criterion_group, criterion_main};
-use xberg::text::quality::calculate_quality_score;
 use std::hint::black_box;
+use xberg::text::quality::calculate_quality_score;
 
 // ~1 KiB of typical paragraph text — no script or style content.
 fn corpus_clean_1kib() -> String {

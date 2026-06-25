@@ -5,10 +5,10 @@
 //! - discover() for searching parent directories
 //! - Error handling for invalid configs
 
-use xberg::XbergError;
-use xberg::core::config::ExtractionConfig;
 use std::fs;
 use tempfile::TempDir;
+use xberg::XbergError;
+use xberg::core::config::ExtractionConfig;
 
 /// Test loading config from TOML file.
 #[test]

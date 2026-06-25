@@ -1087,8 +1087,8 @@ const result = await classifyDocument([], new PageClassificationConfig());
 
 Eagerly download a NER model into the xberg cache.
 
-`name` is a HuggingFace repo id (e.g. `urchade/gliner_multi-v2.1`). The
-CLI flag `xberg warm --ner` delegates here.
+`name` is a supported xberg GLiNER alias or catalog id. The CLI flag
+`xberg cache warm --ner` delegates here.
 
 **Signature:**
 
@@ -4732,7 +4732,7 @@ This is the main result type returned by all extraction functions.
 | `structuredOutput` | `unknown \| null` | `null` | Structured extraction output from LLM-based JSON schema extraction. When `structured_extraction` is configured in `ExtractionConfig`, the extracted document content is sent to a VLM with the provided JSON schema. The response is parsed and stored here as a JSON value matching the schema. |
 | `codeIntelligence` | `unknown \| null` | `null` | Code intelligence results from tree-sitter analysis. Populated when extracting source code files with the `tree-sitter` feature. Contains metrics, structural analysis, imports/exports, comments, docstrings, symbols, diagnostics, and optionally chunked code segments. Stored as an opaque JSON value so that all language bindings (Go, Java, C#, …) can deserialize it as a raw JSON object rather than a typed struct. The underlying type is `tree_sitter_language_pack.ProcessResult`. |
 | `llmUsage` | `Array<LlmUsage> \| null` | `\[\]` | LLM token usage and cost data for all LLM calls made during this extraction. Contains one entry per LLM call. Multiple entries are produced when VLM OCR, structured extraction, or LLM embeddings run during the same extraction. `null` when no LLM was used. |
-| `entities` | `Array<Entity> \| null` | `\[\]` | Named entities detected in `content` by the NER post-processor. `null` when no NER backend is configured. Populated by the gline-rs ONNX backend or the LLM-driven backend (see `crates/xberg/src/text/ner/`). |
+| `entities` | `Array<Entity> \| null` | `\[\]` | Named entities detected in `content` by the NER post-processor. `null` when no NER backend is configured. Populated by the `xberg-gliner` ONNX backend or the LLM-driven backend (see `crates/xberg/src/text/ner/`). |
 | `summary` | `DocumentSummary \| null` | `null` | Summary of `content` produced by the summarisation post-processor. `null` when summarisation is not configured. Populated by the TextRank extractive backend (deterministic, no external service) or by the liter-llm-driven abstractive backend. |
 | `extractionConfidence` | `ExtractionConfidence \| null` | `null` | Confidence score computed by the heuristics pipeline. Populated when the `heuristics` feature is enabled and confidence scoring has been performed.  Combines text-coverage, OCR aggregate confidence, and schema-compliance into a single `\[0, 1\]` value. `null` when confidence scoring is not configured or the feature is absent. |
 | `translation` | `Translation \| null` | `null` | Translation of `content` produced by the translation post-processor. `null` when translation is not configured. |
@@ -5806,9 +5806,9 @@ Configuration for the NER post-processor.
 |-------|------|---------|-------------|
 | `backend` | `NerBackendKind` | `NerBackendKind.Onnx` | Backend that runs the entity detection. |
 | `categories` | `Array<EntityCategory>` | `\[\]` | Entity categories to detect. Defaults to a sensible PERSON/ORG/LOCATION/EMAIL set when empty. |
-| `model` | `string \| null` | `null` | Override the default model — only used by `NerBackendKind.Onnx`. `null` lets the backend pick its pinned default (`urchade/gliner_multi-v2.1` for gline-rs). |
+| `model` | `string \| null` | `null` | Override the default model — only used by `NerBackendKind.Onnx`. `null` lets the backend pick its pinned default xberg GLiNER model alias. |
 | `llm` | `LlmConfig \| null` | `null` | Optional LLM configuration — only used by `NerBackendKind.Llm`. Token usage for LLM backends is recorded in `ExtractionResult.llm_usage`. |
-| `customLabels` | `Array<string>` | `\[\]` | Arbitrary user-supplied entity labels for zero-shot detection. gline-rs natively supports zero-shot inference over caller-supplied labels — this is the primary value of GLiNER. The LLM backend also honours these labels by including them in the structured-output schema. Custom labels surface as `EntityCategory.Custom` in the resulting `Entity` stream. Use this when you need domain-specific entity types (e.g. `"Treatment"`, `"Product"`, `"Vessel"`) without forking GLiNER's taxonomy. |
+| `customLabels` | `Array<string>` | `\[\]` | Arbitrary user-supplied entity labels for zero-shot detection. `xberg-gliner` natively supports zero-shot inference over caller-supplied labels. The LLM backend also honours these labels by including them in the structured-output schema. Custom labels surface as `EntityCategory.Custom` in the resulting `Entity` stream. Use this when you need domain-specific entity types (e.g. `"Treatment"`, `"Product"`, `"Vessel"`) without forking GLiNER's taxonomy. |
 
 ---
 
@@ -9415,7 +9415,7 @@ NER backend selector.
 
 | Value | Description |
 |-------|-------------|
-| `Onnx` | gline-rs ONNX inference. Requires `ner-onnx` feature. Models download lazily from HuggingFace via `model_download.hf_download`. |
+| `Onnx` | `xberg-gliner` ONNX inference. Requires `ner-onnx` feature. Models download lazily from `xberg-io/gliner-models`. |
 | `Llm` | liter-llm zero-shot NER via structured-output prompts. Requires `ner-llm` feature. Useful when domain-specific categories outstrip the ONNX taxonomy. |
 
 ---

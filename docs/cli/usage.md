@@ -963,7 +963,7 @@ xberg cache clear --format json
 
 ### Warm Model Cache
 
-Pre-download ML models (PaddleOCR, layout detection) for offline use — useful for containerized deployments.
+Pre-download ML models (PaddleOCR, layout detection, embeddings, NER) for offline use — useful for containerized deployments.
 
 Default cache directories:
 
@@ -972,6 +972,11 @@ Default cache directories:
 - **Windows**: `%LOCALAPPDATA%/xberg/{module}`
 
 Override with `XBERG_CACHE_DIR` or `--cache-dir`.
+
+NER warming downloads exported GLiNER artifacts from `xberg-io/gliner-models`,
+not arbitrary GLiNER source repositories. If that Hugging Face repository is
+private or not publicly readable, configure credentials supported by `hf-hub`
+first.
 
 ```bash title="Terminal"
 # Download all OCR and layout models eagerly
@@ -985,6 +990,12 @@ xberg cache warm --all-embeddings
 
 # Download a specific embedding model preset
 xberg cache warm --embedding-model balanced
+
+# Download the default GLiNER NER model alias
+xberg cache warm --ner
+
+# Download a specific xberg GLiNER alias or catalog id
+xberg cache warm --ner-model fast
 
 # Output download results as JSON
 xberg cache warm --format json

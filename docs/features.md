@@ -416,7 +416,7 @@ Customize the prompts sent to LLMs with Minijinja templates. Available variables
 
 !!! Info "Available by v5.0"
 
-**Named-Entity Recognition** -- Detect people, organisations, locations, dates, money, percentages, emails, phones, URLs, and caller-supplied zero-shot labels via gline-rs (ONNX) or any liter-llm provider. Results populate `ExtractionResult.entities`. See the [NER Guide](guides/ner.md).
+**Named-Entity Recognition** -- Detect people, organisations, locations, dates, money, percentages, emails, phones, URLs, and caller-supplied zero-shot labels via `xberg-gliner` (ONNX artifacts from `xberg-io/gliner-models`) or any liter-llm provider. Results populate `ExtractionResult.entities`. See the [NER Guide](guides/ner.md).
 
 **Redaction & Anonymisation** -- Late-stage post-processor that rewrites `content`, `formatted_content`, chunks, entities, summary, translation, and page classifications. Pattern engine covers emails, phones, SSNs, credit cards, IBANs, IP addresses, SWIFT/BIC, postal codes, dates of birth; pair with NER for PERSON / ORGANIZATION / LOCATION. Strategies: mask, hash, token-replace, drop. Caller can supply literal terms and regex patterns. See the [Redaction Guide](guides/redaction.md).
 

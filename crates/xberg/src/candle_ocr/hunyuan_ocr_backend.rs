@@ -76,12 +76,11 @@ fn get_or_init_engine(model_path: &str, preference: DevicePreference, dtype: DTy
         "Initialising Hunyuan-OCR engine (cold start)"
     );
 
-    let new_engine = HunyuanOCREngine::init(model_path, Some(&candle_device), Some(dtype)).map_err(|e| {
-        crate::XbergError::Ocr {
+    let new_engine =
+        HunyuanOCREngine::init(model_path, Some(&candle_device), Some(dtype)).map_err(|e| crate::XbergError::Ocr {
             message: format!("Hunyuan-OCR engine initialisation failed: {e}"),
             source: Some(Box::new(e)),
-        }
-    })?;
+        })?;
     let new_engine = Arc::new(parking_lot::Mutex::new(new_engine));
 
     let mut pool = ENGINE_POOL.write();

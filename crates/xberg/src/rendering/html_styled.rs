@@ -14,8 +14,8 @@ use std::sync::Arc;
 
 use v_htmlescape::escape_string;
 
-use crate::XbergError;
 use crate::Result;
+use crate::XbergError;
 use crate::core::config::html_output::{HtmlOutputConfig, HtmlTheme};
 use crate::plugins::{Plugin, Renderer};
 use crate::rendering::common::{NestingKind, RenderState, render_annotated_text_with_plain};

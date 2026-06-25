@@ -9,9 +9,9 @@
 
 #![cfg(all(feature = "classification", feature = "liter-llm", not(target_os = "windows")))]
 
+use std::borrow::Cow;
 use xberg::core::config::{LlmConfig, PageClassificationConfig};
 use xberg::types::ExtractionResult;
-use std::borrow::Cow;
 
 fn init() {
     let _ = dotenvy::dotenv();

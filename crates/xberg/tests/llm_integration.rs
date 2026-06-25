@@ -18,8 +18,8 @@
 
 #![cfg(feature = "liter-llm")]
 
-use xberg::core::config::{ExtractionConfig, LlmConfig, OcrConfig, StructuredExtractionConfig, VlmFallbackPolicy};
 use serde_json::json;
+use xberg::core::config::{ExtractionConfig, LlmConfig, OcrConfig, StructuredExtractionConfig, VlmFallbackPolicy};
 
 const MEMO_PDF: &str = "../../test_documents/pdf/fake_memo.pdf";
 const HELLO_PNG: &str = "../../test_documents/images/test_hello_world.png";

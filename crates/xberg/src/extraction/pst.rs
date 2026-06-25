@@ -25,7 +25,7 @@
 //! # }
 //! ```
 
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use crate::types::{EmailAttachment, EmailExtractionResult, ProcessingWarning};
 use std::borrow::Cow;
 use std::collections::HashMap;

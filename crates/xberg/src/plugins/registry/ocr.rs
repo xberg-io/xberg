@@ -1,8 +1,8 @@
 //! OCR backend registry.
 
+use crate::Result;
 #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
 use crate::XbergError;
-use crate::Result;
 use crate::plugins::OcrBackend;
 use ahash::AHashMap;
 use std::sync::Arc;

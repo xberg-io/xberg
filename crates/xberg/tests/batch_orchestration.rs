@@ -7,9 +7,9 @@
 //! - File I/O optimization
 //! - Resource utilization (CPU cores)
 
+use std::time::{Duration, Instant};
 use xberg::core::config::ExtractionConfig;
 use xberg::core::extractor::{batch_extract_bytes, batch_extract_files};
-use std::time::{Duration, Instant};
 
 #[cfg(feature = "ocr")]
 use xberg::core::config::OcrConfig;

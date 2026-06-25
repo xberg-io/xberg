@@ -6,7 +6,7 @@
 use crate::core::config::ExtractionConfig;
 use crate::plugins::ProcessingStage;
 use crate::types::{ExtractionResult, ProcessingWarning};
-use crate::{XbergError, Result};
+use crate::{Result, XbergError};
 use std::borrow::Cow;
 #[cfg(feature = "otel")]
 use std::time::Instant;

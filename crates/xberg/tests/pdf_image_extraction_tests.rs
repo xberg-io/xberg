@@ -5,9 +5,9 @@
 
 #![cfg(feature = "pdf")]
 
+use std::path::PathBuf;
 use xberg::core::config::{ExtractionConfig, OutputFormat};
 use xberg::core::extractor::extract_file;
-use std::path::PathBuf;
 
 mod helpers;
 
@@ -567,8 +567,8 @@ fn test_chunk_image_indices_are_valid_when_images_extracted() {
 ///   remaining cost requires a count-limited API upstream.
 #[test]
 fn test_max_images_per_page_cap_respected_in_output() {
-    use xberg::core::config::ImageExtractionConfig;
     use std::collections::HashMap;
+    use xberg::core::config::ImageExtractionConfig;
 
     let path = test_documents_dir().join("pdf/installatiehandleiding_kombi_kompakt_hr.pdf");
     if !path.exists() {
@@ -1195,12 +1195,12 @@ fn test_include_page_rasters_no_warning_on_out_of_range_pages() {
 #[cfg(feature = "ocr")]
 #[test]
 fn test_include_page_rasters_emits_warning_on_document_level_ocr_bypass() {
+    use std::path::Path;
+    use std::sync::Arc;
     use xberg::core::config::{ImageExtractionConfig, OcrConfig};
     use xberg::core::extractor::extract_file;
     use xberg::plugins::{OcrBackend, OcrBackendType, Plugin};
     use xberg::types::ExtractionResult;
-    use std::path::Path;
-    use std::sync::Arc;
 
     let pdf_path = test_documents_dir().join("pdf/fake_memo.pdf");
     if !pdf_path.exists() {

@@ -13,9 +13,9 @@
 //! The tests are designed to FAIL initially, exposing real bugs that need fixing.
 //! They compare extracted output against Pandoc baseline outputs for behavioral parity.
 
+use std::{fs, path::PathBuf};
 use xberg::core::config::ExtractionConfig;
 use xberg::core::extractor::extract_bytes;
-use std::{fs, path::PathBuf};
 
 fn typst_doc_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../test_documents/typst")

@@ -322,13 +322,10 @@ fn apply_reading_order_reordering(
 ) -> Result<String> {
     use crate::extractors::pdf::reading_order;
 
-    let page_count = doc
-        .doc
-        .page_count()
-        .map_err(|e| crate::error::XbergError::Parsing {
-            message: format!("reading-order reordering: failed to get page count: {e}"),
-            source: None,
-        })?;
+    let page_count = doc.doc.page_count().map_err(|e| crate::error::XbergError::Parsing {
+        message: format!("reading-order reordering: failed to get page count: {e}"),
+        source: None,
+    })?;
 
     if layout_hints_per_page.len() != page_count {
         return Err(crate::error::XbergError::Parsing {

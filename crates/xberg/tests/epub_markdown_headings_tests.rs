@@ -7,11 +7,11 @@
 
 #![cfg(feature = "office")]
 
+use std::io::{Cursor, Write};
 use xberg::core::config::{ExtractionConfig, OutputFormat};
 use xberg::extraction::derive::derive_extraction_result;
 use xberg::extractors::EpubExtractor;
 use xberg::plugins::DocumentExtractor;
-use std::io::{Cursor, Write};
 use zip::write::FileOptions;
 
 fn build_minimal_epub_bytes() -> Vec<u8> {

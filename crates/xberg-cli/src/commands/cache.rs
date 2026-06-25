@@ -4,11 +4,30 @@
 //! clearing, manifest generation, and model warming.
 
 use anyhow::{Context, Result};
-use xberg::cache;
 use serde_json::json;
 use std::path::PathBuf;
+use xberg::cache;
 
 use crate::{WireFormat, style};
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct CacheManifestEntry {
+    relative_path: String,
+    sha256: String,
+    size_bytes: u64,
+    source_url: String,
+}
+
+impl CacheManifestEntry {
+    fn new(relative_path: String, sha256: String, size_bytes: u64, source_url: String) -> Self {
+        Self {
+            relative_path,
+            sha256,
+            size_bytes,
+            source_url,
+        }
+    }
+}
 
 /// Execute cache stats command
 pub fn stats_command(cache_dir: Option<PathBuf>, format: WireFormat) -> Result<()> {
@@ -139,38 +158,51 @@ pub fn manifest_command(format: WireFormat) -> Result<()> {
     // type inference — `e.size_bytes` on the closure further down then
     // fails compilation with E0282. Bail with a clear error instead so
     // (or similar minimal configurations) succeeds.
-    #[cfg(not(any(feature = "paddle-ocr", feature = "layout-detection")))]
+    #[cfg(not(any(feature = "paddle-ocr", feature = "layout-detection", feature = "ner-onnx")))]
     {
         let _ = format;
         anyhow::bail!(
             "manifest command unavailable: build xberg-cli with at least one of \
-             --features \"paddle-ocr\" or --features \"layout-detection\""
+             --features \"paddle-ocr\", \"layout-detection\", or \"ner-onnx\""
         );
     }
 
-    #[cfg(any(feature = "paddle-ocr", feature = "layout-detection"))]
+    #[cfg(any(feature = "paddle-ocr", feature = "layout-detection", feature = "ner-onnx"))]
     {
         manifest_command_inner(format)
     }
 }
 
-#[cfg(any(feature = "paddle-ocr", feature = "layout-detection"))]
+#[cfg(any(feature = "paddle-ocr", feature = "layout-detection", feature = "ner-onnx"))]
 fn manifest_command_inner(format: WireFormat) -> Result<()> {
-    let mut entries = Vec::new();
+    let mut entries: Vec<CacheManifestEntry> = Vec::new();
 
     #[cfg(feature = "paddle-ocr")]
     {
-        entries.extend(xberg::paddle_ocr::ModelManager::manifest());
+        entries.extend(xberg::paddle_ocr::ModelManager::manifest().into_iter().map(|entry| {
+            CacheManifestEntry::new(entry.relative_path, entry.sha256, entry.size_bytes, entry.source_url)
+        }));
     }
 
     #[cfg(feature = "layout-detection")]
     {
-        entries.extend(xberg::layout::LayoutModelManager::manifest());
+        entries.extend(xberg::layout::LayoutModelManager::manifest().into_iter().map(|entry| {
+            CacheManifestEntry::new(entry.relative_path, entry.sha256, entry.size_bytes, entry.source_url)
+        }));
     }
 
     #[cfg(feature = "paddle-ocr")]
     {
-        entries.extend(xberg::ocr::TessdataManager::manifest());
+        entries.extend(xberg::ocr::TessdataManager::manifest().into_iter().map(|entry| {
+            CacheManifestEntry::new(entry.relative_path, entry.sha256, entry.size_bytes, entry.source_url)
+        }));
+    }
+
+    #[cfg(feature = "ner-onnx")]
+    {
+        entries.extend(xberg::text::ner::manifest().into_iter().map(|entry| {
+            CacheManifestEntry::new(entry.relative_path, entry.sha256, entry.size_bytes, entry.source_url)
+        }));
     }
 
     let total_size_bytes: u64 = entries.iter().map(|e| e.size_bytes).sum();
@@ -259,6 +291,9 @@ pub fn warm_command(
     all_grammars: bool,
     grammar_groups: Option<Vec<String>>,
     grammars: Option<Vec<String>>,
+    #[cfg(feature = "ner-onnx")] ner: bool,
+    #[cfg(feature = "ner-onnx")] ner_model: Option<String>,
+    #[cfg(feature = "ner-onnx")] all_ner_models: bool,
 ) -> Result<()> {
     let cache_base = resolve_cache_base(cache_dir);
 
@@ -403,6 +438,21 @@ pub fn warm_command(
     {
         if all_grammars || grammar_groups.is_some() || grammars.is_some() {
             anyhow::bail!("Tree-sitter grammar warming requires the 'tree-sitter' feature to be enabled");
+        }
+    }
+
+    #[cfg(feature = "ner-onnx")]
+    {
+        let ner_models: Vec<String> = ner_model.into_iter().collect();
+        if ner || !ner_models.is_empty() || all_ner_models {
+            let to_download = crate::commands::ner::select_models(ner, ner_models, all_ner_models)?;
+            let ner_cache_dir = cache_base.join("ner");
+            downloaded.extend(
+                crate::commands::ner::download_models(&to_download, Some(ner_cache_dir))
+                    .context("Failed to download GLiNER NER models")?
+                    .into_iter()
+                    .map(|entry| format!("ner gliner ({entry})")),
+            );
         }
     }
 

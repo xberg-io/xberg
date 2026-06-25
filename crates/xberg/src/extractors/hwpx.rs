@@ -194,8 +194,8 @@ impl DocumentExtractor for HwpxExtractor {
         }
 
         let cursor = Cursor::new(content);
-        let mut archive = zip::ZipArchive::new(cursor)
-            .map_err(|e| crate::XbergError::parsing(format!("invalid HWPX zip: {e}")))?;
+        let mut archive =
+            zip::ZipArchive::new(cursor).map_err(|e| crate::XbergError::parsing(format!("invalid HWPX zip: {e}")))?;
         ZipBombValidator::new(limits)
             .validate(&mut archive)
             .map_err(|e| crate::XbergError::validation(e.to_string()))?;

@@ -99,6 +99,14 @@ pub fn read_resource(uri: &str) -> Result<ReadResourceResult, ErrorData> {
                 }
             }
 
+            #[cfg(feature = "ner-onnx")]
+            {
+                let manifest = crate::text::ner::manifest();
+                for entry in manifest {
+                    entries.push(serde_json::to_value(&entry).unwrap_or_default());
+                }
+            }
+
             let payload = serde_json::json!({
                 "xberg_version": env!("CARGO_PKG_VERSION"),
                 "models": entries,

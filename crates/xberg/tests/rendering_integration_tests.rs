@@ -48,10 +48,7 @@ fn build_rich_document() -> xberg::types::internal::InternalDocument {
 }
 
 /// Derive an `ExtractionResult` from a document in the given format.
-fn derive(
-    doc: xberg::types::internal::InternalDocument,
-    format: OutputFormat,
-) -> xberg::types::ExtractionResult {
+fn derive(doc: xberg::types::internal::InternalDocument, format: OutputFormat) -> xberg::types::ExtractionResult {
     derive_extraction_result(doc, false, format)
 }
 

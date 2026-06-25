@@ -3,9 +3,9 @@
 //! Tests for MIME type detection from file extensions and content.
 //! Validates detection accuracy, mismatch handling, and error cases.
 
-use xberg::core::mime::{detect_mime_type, validate_mime_type};
 use std::io::Write;
 use tempfile::NamedTempFile;
+use xberg::core::mime::{detect_mime_type, validate_mime_type};
 
 mod helpers;
 

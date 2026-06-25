@@ -3,7 +3,7 @@
 //! Provides functions for extracting metadata and text content from ZIP archives.
 
 use super::{ArchiveEntry, ArchiveMetadata, TEXT_EXTENSIONS};
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use crate::extractors::security::SecurityLimits;
 use ahash::AHashMap;
 use std::io::{Cursor, Read};

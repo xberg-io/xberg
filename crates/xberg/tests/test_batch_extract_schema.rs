@@ -1,7 +1,7 @@
 #![cfg(feature = "mcp")]
 
-use xberg::mcp::BatchExtractFilesParams;
 use rmcp::schemars::schema_for;
+use xberg::mcp::BatchExtractFilesParams;
 
 #[test]
 fn test_file_configs_items_is_object_not_boolean() {

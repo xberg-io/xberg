@@ -1,15 +1,8 @@
-//! Smoke test for the gline-rs ONNX NER backend.
+//! Smoke test for the `xberg-gliner` ONNX NER backend.
 //!
-//! The default model `urchade/gliner_multi-v2.1` (~100MB) downloads on first
-//! run, which makes this test slow and network-dependent. It is marked
-//! `#[ignore]` so it does not run in CI by default; the body is deterministic
-//! when invoked with `cargo test --features ner-onnx --test ner_smoke -- --ignored`.
-//!
-//! NOTE: Today the inference path returns `MissingDependency` because the
-//! upstream `gline-rs` crate pins `ort = "=2.0.0-rc.9"` while xberg uses
-//! `2.0.0-rc.12`. Once the upstream version skew is resolved, this test
-//! verifies entity detection on a canonical sentence. Until then, the test
-//! still exercises the model download path (asserts a non-zero file size).
+//! The default `xberg-io/gliner-models` alias downloads ONNX weights and a
+//! tokenizer on first run, which makes this test slow and network-dependent.
+//! It is marked `#[ignore]` so it does not run in CI by default.
 
 #![cfg(feature = "ner-onnx")]
 
@@ -39,31 +32,28 @@ async fn detects_person_org_location_in_canonical_sentence() {
         EntityCategory::Location,
     ];
 
-    let result = backend.detect(text, &categories).await;
-    match result {
-        Ok(entities) => {
-            // When inference runs we expect at least Person + Organization + Location.
-            assert!(entities.iter().any(|e| e.category == EntityCategory::Person));
-            assert!(entities.iter().any(|e| e.category == EntityCategory::Organization));
-            assert!(entities.iter().any(|e| e.category == EntityCategory::Location));
-        }
-        Err(xberg::XbergError::MissingDependency(msg)) => {
-            // Current state: gline-rs upstream version skew prevents inference.
-            assert!(
-                msg.contains("gline-rs") || msg.contains("upstream"),
-                "MissingDependency should mention the upstream blocker, got: {msg}"
-            );
-        }
-        Err(other) => panic!("unexpected error: {other:?}"),
-    }
+    let entities = backend
+        .detect(text, &categories)
+        .await
+        .expect("entity detection succeeds");
+
+    assert!(entities.iter().any(|entity| entity.category == EntityCategory::Person));
+    assert!(
+        entities
+            .iter()
+            .any(|entity| entity.category == EntityCategory::Organization)
+    );
+    assert!(
+        entities
+            .iter()
+            .any(|entity| entity.category == EntityCategory::Location)
+    );
 }
 
 /// Verifies that `NerConfig::custom_labels` participates in backend dispatch.
 ///
-/// Even with the gline-rs upstream blocker in place the test must compile and
-/// run: the backend must accept the call and either succeed (when the LLM is
-/// configured) or fail with `MissingDependency` (when neither feature is
-/// available at runtime). Both outcomes prove the wiring exists.
+/// The backend must accept custom labels and route them through the GLiNER
+/// zero-shot input path.
 #[tokio::test]
 async fn custom_labels_route_through_backend() {
     use xberg::core::config::ner::NerConfig;
@@ -91,15 +81,7 @@ async fn custom_labels_route_through_backend() {
         .detect_with_custom(text, &cfg.categories, &cfg.custom_labels)
         .await;
     match result {
-        Ok(_entities) => {
-            // Inference unexpectedly online — accept whatever it returns.
-        }
-        Err(xberg::XbergError::MissingDependency(msg)) => {
-            assert!(
-                msg.contains("gline-rs") || msg.contains("upstream"),
-                "MissingDependency should mention the upstream blocker, got: {msg}"
-            );
-        }
+        Ok(_entities) => {}
         Err(other) => panic!("unexpected error: {other:?}"),
     }
 }

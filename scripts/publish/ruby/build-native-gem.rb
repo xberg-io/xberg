@@ -16,6 +16,7 @@ require 'fileutils'
 
 platform = ARGV[0] or abort "Usage: #{$PROGRAM_NAME} <platform>"
 
+# @return [Array<String>] Supported Ruby platform identifiers.
 VALID_PLATFORMS = %w[x86_64-linux aarch64-linux arm64-darwin].freeze
 unless VALID_PLATFORMS.include?(platform)
   abort "ERROR: Invalid platform '#{platform}'. Valid: #{VALID_PLATFORMS.join(', ')}"

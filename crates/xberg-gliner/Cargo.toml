@@ -15,6 +15,11 @@ categories = ["text-processing"]
 name = "xberg_gliner"
 path = "src/lib.rs"
 
+[features]
+default = ["ort-bundled"]
+ort-bundled = ["ort/download-binaries", "ort/tls-rustls"]
+ort-dynamic = ["ort/load-dynamic"]
+
 [dependencies]
 ndarray = "0.17"
 ort = { workspace = true, features = ["ndarray"] }

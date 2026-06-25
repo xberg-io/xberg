@@ -4,7 +4,7 @@
 //! extraction request using the xberg OTel metric instruments.
 
 use crate::types::ExtractionResult;
-use crate::{XbergError, Result};
+use crate::{Result, XbergError};
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};

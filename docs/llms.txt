@@ -29,7 +29,7 @@ Xberg provides async/sync APIs, text chunking, language detection, keyword extra
 - [Keyword Extraction](https://docs.xberg.io/guides/keywords/): YAKE and RAKE keyword extraction
 - [Advanced Features](https://docs.xberg.io/guides/advanced/): Advanced usage patterns
 - [Audio and Video Transcription](https://docs.xberg.io/guides/transcription/): Whisper ONNX transcription for MP3, M4A, WAV, WebM, and MP4 audio tracks
-- [Named-Entity Recognition](https://docs.xberg.io/guides/ner/): Detect people, organisations, locations, and caller-supplied zero-shot labels via gline-rs or LLM
+- [Named-Entity Recognition](https://docs.xberg.io/guides/ner/): Detect people, organisations, locations, and zero-shot labels via xberg-gliner artifacts from xberg-io/gliner-models or LLM
 - [Reranking](https://docs.xberg.io/guides/reranking/): Cross-encoder document reranking for RAG retrieval
 - [Redaction & Anonymisation](https://docs.xberg.io/guides/redaction/): Strip PII from extracted text with the pattern engine plus optional NER backend
 - [Document Summarisation](https://docs.xberg.io/guides/summarization/): Extractive TextRank (local) or LLM abstractive summaries

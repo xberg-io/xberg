@@ -5,7 +5,7 @@
 //! when boundaries are created from language bindings or external sources, particularly
 //! with multibyte UTF-8 characters (emoji, CJK characters, combining marks, etc.).
 
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use crate::types::PageBoundary;
 use bitvec::prelude::*;
 

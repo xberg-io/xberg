@@ -51,7 +51,7 @@ pub(crate) use core_properties::extract_core_properties;
 pub(crate) use custom_properties::extract_custom_properties;
 pub(crate) use odt_properties::extract_odt_properties;
 
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use roxmltree::Node;
 use std::io::Read;
 use zip::ZipArchive;

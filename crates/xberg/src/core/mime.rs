@@ -6,7 +6,7 @@
 //! Format information is centralized in the [`FORMATS`] registry. All extension-to-MIME
 //! mappings and supported MIME type validation are derived from this single source of truth.
 
-use crate::{XbergError, Result};
+use crate::{Result, XbergError};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -661,10 +661,7 @@ pub fn detect_mime_type(path: impl AsRef<Path>, check_exists: bool) -> Result<St
     }
 
     if let Some(ext) = extension {
-        return Err(XbergError::UnsupportedFormat(format!(
-            "Unknown extension: .{}",
-            ext
-        )));
+        return Err(XbergError::UnsupportedFormat(format!("Unknown extension: .{}", ext)));
     }
 
     Err(XbergError::validation(format!(

@@ -5,7 +5,7 @@
 //! configuration values are consistent and compatible with each other.
 
 #[cfg(test)]
-use crate::{XbergError, Result};
+use crate::{Result, XbergError};
 
 #[cfg(test)]
 pub(crate) fn validate_port(port: u32) -> Result<()> {

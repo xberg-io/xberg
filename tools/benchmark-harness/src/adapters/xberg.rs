@@ -8,7 +8,7 @@
 use crate::{
     adapters::subprocess::SubprocessAdapter,
     error::Result,
-    types::{XbergPipeline, OutputFormat},
+    types::{OutputFormat, XbergPipeline},
 };
 use std::path::PathBuf;
 use which::which;

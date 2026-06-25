@@ -2,7 +2,7 @@
 //!
 //! Extracts format-specific metadata from Office Open XML documents.
 
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use roxmltree::Node;
 use std::io::Read;
 use zip::ZipArchive;

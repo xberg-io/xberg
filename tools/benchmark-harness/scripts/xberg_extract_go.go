@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	kz "github.com/xberg-io/xberg/packages/go"
+	kz "github.com/xberg-io/xberg"
 )
 
 var debugEnabled = os.Getenv("XBERG_BENCHMARK_DEBUG") != ""
@@ -144,12 +144,14 @@ func determineOcrUsed(meta map[string]any, ocrEnabled bool) bool {
 
 func boolPtr(v bool) *bool { return &v }
 
-func createConfig(ocrEnabled bool, forceOCR bool) *kz.ExtractionConfig {
-	config := &kz.ExtractionConfig{
+func createConfig(ocrEnabled bool, forceOCR bool) kz.ExtractionConfig {
+	config := kz.ExtractionConfig{
 		UseCache: boolPtr(false),
 	}
 	if ocrEnabled || forceOCR {
-		config.Ocr = &kz.OCRConfig{}
+		config.Ocr = &kz.OcrConfig{
+			Enabled: boolPtr(true),
+		}
 	}
 	return config
 }
@@ -177,7 +179,7 @@ func runServer(ocrEnabled bool) {
 		}
 
 		start := time.Now()
-		result, err := kz.ExtractFileSync(absPath, config)
+		result, err := kz.ExtractFileSync(absPath, nil, config)
 		if err != nil {
 			debug("Extraction failed for %s: %v", absPath, err)
 			mustEncodeError(err, ocrEnabled)
@@ -221,7 +223,7 @@ func extractSync(path string, ocrEnabled bool) (*payload, error) {
 	debug("Resolved absolute path: %s", absPath)
 
 	config := createConfig(ocrEnabled, false)
-	result, err := kz.ExtractFileSync(absPath, config)
+	result, err := kz.ExtractFileSync(absPath, nil, config)
 	if err != nil {
 		debug("ExtractFileSync failed: %v", err)
 		return nil, err
@@ -246,19 +248,19 @@ func extractBatch(paths []string, ocrEnabled bool) (any, error) {
 	start := time.Now()
 	debug("BatchExtractFilesSync called with %d files", len(paths))
 
-	absPaths := make([]string, len(paths))
+	items := make([]kz.BatchFileItem, len(paths))
 	for i, path := range paths {
 		absPath, err := filepath.Abs(path)
 		if err != nil {
 			debug("filepath.Abs failed for %s: %v", path, err)
 			return nil, fmt.Errorf("failed to resolve path %s: %w", path, err)
 		}
-		absPaths[i] = absPath
+		items[i] = kz.BatchFileItem{Path: absPath}
 		debug("Resolved path %d: %s -> %s", i, path, absPath)
 	}
 
 	config := createConfig(ocrEnabled, false)
-	results, err := kz.BatchExtractFilesSync(absPaths, config)
+	results, err := kz.BatchExtractFilesSync(items, config)
 	if err != nil {
 		debug("BatchExtractFilesSync failed: %v", err)
 		return nil, err
@@ -283,9 +285,6 @@ func extractBatch(paths []string, ocrEnabled bool) (any, error) {
 	out := make([]*payload, 0, len(results))
 	perMs := totalMs / float64(max(len(results), 1))
 	for _, item := range results {
-		if item == nil {
-			continue
-		}
 		meta, err := metadataMap(item.Metadata)
 		if err != nil {
 			return nil, err

@@ -4,7 +4,7 @@
 //! extraction results and stores them in metadata.
 
 use crate::plugins::{Plugin, PostProcessor, ProcessingStage};
-use crate::{ExtractionConfig, ExtractionResult, XbergError, Result};
+use crate::{ExtractionConfig, ExtractionResult, Result, XbergError};
 use async_trait::async_trait;
 
 /// Post-processor that extracts keywords from document content.

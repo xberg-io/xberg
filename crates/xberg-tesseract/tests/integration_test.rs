@@ -1,5 +1,5 @@
-use xberg_tesseract::TesseractAPI;
 use std::path::{Path, PathBuf};
+use xberg_tesseract::TesseractAPI;
 
 fn get_default_tessdata_dir() -> PathBuf {
     if cfg!(target_os = "macos") {

@@ -83,9 +83,8 @@ fn load_tokenizer(source: &TokenizerSource<'_>) -> crate::Result<tokenizers::Tok
     match source {
         TokenizerSource::Pretrained(model) => tokenizers::Tokenizer::from_pretrained(model, None)
             .map_err(|e| XbergError::validation(format!("Failed to load tokenizer '{model}': {e}"))),
-        TokenizerSource::File(path) => tokenizers::Tokenizer::from_file(path).map_err(|e| {
-            XbergError::validation(format!("Failed to load tokenizer from '{}': {e}", path.display()))
-        }),
+        TokenizerSource::File(path) => tokenizers::Tokenizer::from_file(path)
+            .map_err(|e| XbergError::validation(format!("Failed to load tokenizer from '{}': {e}", path.display()))),
         TokenizerSource::Bytes(b) => tokenizers::Tokenizer::from_bytes(b)
             .map_err(|e| XbergError::validation(format!("Failed to parse tokenizer from bytes: {e}"))),
     }

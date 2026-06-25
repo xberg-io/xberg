@@ -21,11 +21,11 @@ use crate::ocr::types::BatchItemResult;
 use crate::ocr::types::TesseractConfig;
 use crate::types::internal::{ElementKind, InternalDocument};
 use crate::types::{OcrExtractionResult, OcrTable, OcrTableBoundingBox};
-use xberg_tesseract::{TessPageSegMode, TessPolyBlockType, TesseractAPI};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
+use xberg_tesseract::{TessPageSegMode, TessPolyBlockType, TesseractAPI};
 
 /// Cached Tesseract API state, stored per-thread to avoid reloading tessdata (~100MB) for each image.
 struct CachedApi {

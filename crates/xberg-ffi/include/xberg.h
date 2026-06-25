@@ -18770,8 +18770,8 @@ uintptr_t xberg_classify_document_len(const char *_pages,
 /**
  * Eagerly download a NER model into the xberg cache.
  *
- * `name` is a HuggingFace repo id (e.g. `urchade/gliner_multi-v2.1`). The
- * CLI flag `xberg warm --ner` delegates here.
+ * `name` is a supported xberg GLiNER alias or catalog id. The CLI flag
+ * `xberg cache warm --ner` delegates here.
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
  * freed with the appropriate free function.
  */

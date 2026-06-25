@@ -2,7 +2,7 @@
 //!
 //! Extracts Dublin Core metadata from Office Open XML documents.
 
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use std::io::Read;
 use zip::ZipArchive;
 

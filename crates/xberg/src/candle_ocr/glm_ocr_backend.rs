@@ -554,13 +554,10 @@ async fn process_paired(
             source: Some(Box::new(e)),
         })?;
 
-        let detections = layout_model
-            .lock()
-            .detect(&img)
-            .map_err(|e| crate::XbergError::Ocr {
-                message: format!("GLM-OCR paired: layout detection failed: {e}"),
-                source: Some(Box::new(e)),
-            })?;
+        let detections = layout_model.lock().detect(&img).map_err(|e| crate::XbergError::Ocr {
+            message: format!("GLM-OCR paired: layout detection failed: {e}"),
+            source: Some(Box::new(e)),
+        })?;
 
         // Sort detections in reading order (top-to-bottom, left-to-right).
         let mut sorted = detections;

@@ -2,11 +2,11 @@
 
 #![cfg(feature = "xml")]
 
+use std::path::PathBuf;
 use xberg::core::config::ExtractionConfig;
 use xberg::extraction::derive::derive_extraction_result;
 use xberg::plugins::{DocumentExtractor, Plugin};
 use xberg::types::ExtractionResult;
-use std::path::PathBuf;
 
 /// Helper to get absolute path to test documents
 fn test_file_path(filename: &str) -> PathBuf {

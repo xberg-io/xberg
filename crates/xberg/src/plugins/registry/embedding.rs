@@ -6,7 +6,7 @@
 //! downloading an ONNX model from HuggingFace.
 
 use crate::plugins::EmbeddingBackend;
-use crate::{XbergError, Result};
+use crate::{Result, XbergError};
 use ahash::AHashMap;
 use std::sync::Arc;
 
@@ -227,10 +227,7 @@ mod tests {
             name: String::new(),
             dimensions: 384,
         });
-        assert!(matches!(
-            registry.register(backend),
-            Err(XbergError::Validation { .. })
-        ));
+        assert!(matches!(registry.register(backend), Err(XbergError::Validation { .. })));
     }
 
     #[test]
@@ -240,10 +237,7 @@ mod tests {
             name: "has spaces".to_string(),
             dimensions: 384,
         });
-        assert!(matches!(
-            registry.register(backend),
-            Err(XbergError::Validation { .. })
-        ));
+        assert!(matches!(registry.register(backend), Err(XbergError::Validation { .. })));
     }
 
     #[test]
@@ -253,10 +247,7 @@ mod tests {
             name: "zero-dim".to_string(),
             dimensions: 0,
         });
-        assert!(matches!(
-            registry.register(backend),
-            Err(XbergError::Validation { .. })
-        ));
+        assert!(matches!(registry.register(backend), Err(XbergError::Validation { .. })));
     }
 
     #[test]

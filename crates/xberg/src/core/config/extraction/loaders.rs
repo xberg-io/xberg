@@ -3,7 +3,7 @@
 //! This module provides methods for loading extraction configuration from
 //! TOML, YAML, and JSON files.
 
-use crate::{XbergError, Result};
+use crate::{Result, XbergError};
 use std::path::Path;
 
 use super::core::ExtractionConfig;

@@ -260,8 +260,8 @@ pub struct ExtractionResult {
 
     /// Named entities detected in `content` by the NER post-processor.
     ///
-    /// `None` when no NER backend is configured. Populated by the gline-rs ONNX
-    /// backend or the LLM-driven backend (see `crates/xberg/src/text/ner/`).
+    /// `None` when no NER backend is configured. Populated by the `xberg-gliner`
+    /// ONNX backend or the LLM-driven backend (see `crates/xberg/src/text/ner/`).
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub entities: Option<Vec<super::entity::Entity>>,

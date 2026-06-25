@@ -184,7 +184,7 @@ pub mod captioning;
 // NOTE: `CancellationToken` is intentionally NOT re-exported here.
 // It is an `Arc<AtomicBool>` wrapper that does not cross FFI cleanly.
 // Internal callers and FFI shims should reach it via `xberg::cancellation::CancellationToken`.
-pub use error::{XbergError, Result};
+pub use error::{Result, XbergError};
 pub use types::*;
 
 // Office metadata types are nested under `extraction::office_metadata::*` but

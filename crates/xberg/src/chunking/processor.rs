@@ -6,7 +6,7 @@
 use crate::chunking::config::{ChunkerType, ChunkingConfig};
 use crate::plugins::{Plugin, PostProcessor, ProcessingStage};
 use crate::types::Metadata;
-use crate::{ExtractionConfig, ExtractionResult, XbergError, Result};
+use crate::{ExtractionConfig, ExtractionResult, Result, XbergError};
 use async_trait::async_trait;
 
 /// Post-processor that chunks text in document content.

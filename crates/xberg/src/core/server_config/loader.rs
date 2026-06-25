@@ -3,7 +3,7 @@
 //! This module provides functionality to load server configuration from various
 //! file formats (TOML, YAML, JSON) with support for both flat and nested formats.
 
-use crate::{XbergError, Result};
+use crate::{Result, XbergError};
 use serde::Deserialize;
 use std::path::Path;
 

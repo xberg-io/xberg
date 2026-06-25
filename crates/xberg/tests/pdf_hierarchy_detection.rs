@@ -5,9 +5,9 @@
 
 #![cfg(feature = "pdf")]
 
+use std::path::Path;
 use xberg::core::config::{ExtractionConfig, HierarchyConfig, PageConfig, PdfConfig};
 use xberg::extract_bytes;
-use std::path::Path;
 
 // Note: All tests must run serially because Pdfium can only be initialized once.
 // Using tokio::test with single_threaded doesn't work well, so we use the serial_test crate.

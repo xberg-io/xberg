@@ -3,7 +3,7 @@
 //! This module provides functions for extracting metadata and EXIF data from images,
 //! including support for multi-frame TIFF files.
 
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use crate::extraction::exif::extract_exif_data;
 #[cfg(feature = "heic")]
 use crate::extraction::heif::decode_heic_to_png;
@@ -349,8 +349,7 @@ pub(crate) fn load_image_for_ocr(image_bytes: &[u8]) -> Result<image::DynamicIma
     } else if is_jbig2(image_bytes) {
         decode_jbig2_to_gray(image_bytes).map(image::DynamicImage::ImageLuma8)
     } else {
-        image::load_from_memory(image_bytes)
-            .map_err(|e| XbergError::parsing(format!("Failed to decode image: {}", e)))
+        image::load_from_memory(image_bytes).map_err(|e| XbergError::parsing(format!("Failed to decode image: {}", e)))
     }
 }
 
@@ -422,10 +421,7 @@ pub(crate) fn extract_image_metadata(bytes: &[u8]) -> Result<ExtractedImageMetad
                 exif_data,
             })
         }
-        Err(decode_err) => Err(XbergError::parsing(format!(
-            "Failed to decode image: {}",
-            decode_err
-        ))),
+        Err(decode_err) => Err(XbergError::parsing(format!("Failed to decode image: {}", decode_err))),
     }
 }
 

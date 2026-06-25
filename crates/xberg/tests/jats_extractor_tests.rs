@@ -9,11 +9,11 @@
 
 #[cfg(all(test, feature = "xml"))]
 mod jats_extractor_tests {
+    use std::path::PathBuf;
     use xberg::core::config::ExtractionConfig;
     use xberg::extraction::derive::derive_extraction_result;
     use xberg::extractors::JatsExtractor;
     use xberg::plugins::{DocumentExtractor, Plugin};
-    use std::path::PathBuf;
 
     fn jats_fixture(name: &str) -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -84,11 +84,8 @@ mod jats_extractor_tests {
             .await;
 
         assert!(doc_result.is_ok());
-        let extraction = derive_extraction_result(
-            doc_result.expect("Operation failed"),
-            false,
-            xberg::OutputFormat::Plain,
-        );
+        let extraction =
+            derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
 
         assert!(extraction.content.contains("Effects of Caffeine"));
         assert!(extraction.content.contains("Introduction"));
@@ -149,11 +146,8 @@ mod jats_extractor_tests {
             .await;
 
         assert!(doc_result.is_ok());
-        let extraction = derive_extraction_result(
-            doc_result.expect("Operation failed"),
-            false,
-            xberg::OutputFormat::Plain,
-        );
+        let extraction =
+            derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
 
         let subject = extraction.metadata.subject.expect("Operation failed");
         assert!(subject.contains("Alpha"));
@@ -210,11 +204,8 @@ mod jats_extractor_tests {
             .await;
 
         assert!(doc_result.is_ok());
-        let extraction = derive_extraction_result(
-            doc_result.expect("Operation failed"),
-            false,
-            xberg::OutputFormat::Plain,
-        );
+        let extraction =
+            derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
 
         assert!(extraction.content.contains("Introduction"));
         assert!(extraction.content.contains("Methods"));
@@ -286,11 +277,8 @@ mod jats_extractor_tests {
             .await;
 
         assert!(doc_result.is_ok());
-        let extraction = derive_extraction_result(
-            doc_result.expect("Operation failed"),
-            false,
-            xberg::OutputFormat::Plain,
-        );
+        let extraction =
+            derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
 
         assert_eq!(extraction.tables.len(), 1);
         let table = &extraction.tables[0];
@@ -344,11 +332,8 @@ mod jats_extractor_tests {
             .await;
 
         assert!(doc_result.is_ok());
-        let extraction = derive_extraction_result(
-            doc_result.expect("Operation failed"),
-            false,
-            xberg::OutputFormat::Plain,
-        );
+        let extraction =
+            derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
 
         assert_eq!(extraction.tables.len(), 2);
         assert_eq!(extraction.tables[0].cells[0].len(), 2);
@@ -411,11 +396,8 @@ mod jats_extractor_tests {
             .await;
 
         assert!(doc_result.is_ok());
-        let extraction = derive_extraction_result(
-            doc_result.expect("Operation failed"),
-            false,
-            xberg::OutputFormat::Plain,
-        );
+        let extraction =
+            derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
 
         assert!(extraction.content.contains("Previous research"));
         assert!(extraction.content.contains("Other studies"));
@@ -454,11 +436,8 @@ mod jats_extractor_tests {
             .await;
 
         assert!(doc_result.is_ok());
-        let extraction = derive_extraction_result(
-            doc_result.expect("Operation failed"),
-            false,
-            xberg::OutputFormat::Plain,
-        );
+        let extraction =
+            derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
 
         let subject = extraction.metadata.subject.expect("Operation failed");
         assert!(subject.contains("background") || subject.contains("Background") || subject.contains("Abstract"));
@@ -486,11 +465,8 @@ mod jats_extractor_tests {
             .await;
 
         assert!(doc_result.is_ok());
-        let extraction = derive_extraction_result(
-            doc_result.expect("Operation failed"),
-            false,
-            xberg::OutputFormat::Plain,
-        );
+        let extraction =
+            derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
 
         assert!(extraction.metadata.subject.is_some());
     }
@@ -519,11 +495,8 @@ mod jats_extractor_tests {
             .await;
 
         assert!(doc_result.is_ok());
-        let extraction = derive_extraction_result(
-            doc_result.expect("Operation failed"),
-            false,
-            xberg::OutputFormat::Plain,
-        );
+        let extraction =
+            derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
 
         assert!(extraction.metadata.created_at.is_some());
     }
@@ -548,11 +521,8 @@ mod jats_extractor_tests {
             .await;
 
         assert!(doc_result.is_ok());
-        let extraction = derive_extraction_result(
-            doc_result.expect("Operation failed"),
-            false,
-            xberg::OutputFormat::Plain,
-        );
+        let extraction =
+            derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
         assert!(extraction.content.is_empty() || extraction.content.trim().is_empty());
     }
 
@@ -619,11 +589,8 @@ mod jats_extractor_tests {
             .await;
 
         assert!(doc_result.is_ok());
-        let extraction = derive_extraction_result(
-            doc_result.expect("Operation failed"),
-            false,
-            xberg::OutputFormat::Plain,
-        );
+        let extraction =
+            derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
 
         assert!(extraction.content.contains("First paragraph"));
         assert!(extraction.content.contains("Second paragraph"));
@@ -656,11 +623,8 @@ mod jats_extractor_tests {
             .await;
 
         assert!(doc_result.is_ok());
-        let extraction = derive_extraction_result(
-            doc_result.expect("Operation failed"),
-            false,
-            xberg::OutputFormat::Plain,
-        );
+        let extraction =
+            derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
 
         let subject = extraction.metadata.subject.expect("Operation failed");
         assert!(subject.contains("keyword") || subject.contains("Keyword"));
@@ -679,11 +643,8 @@ mod jats_extractor_tests {
                 .await;
 
             assert!(doc_result.is_ok());
-            let extraction = derive_extraction_result(
-                doc_result.expect("Operation failed"),
-                false,
-                xberg::OutputFormat::Plain,
-            );
+            let extraction =
+                derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
 
             assert!(!extraction.content.is_empty());
             assert!(extraction.metadata.subject.is_some());

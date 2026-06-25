@@ -31,9 +31,9 @@
 #![cfg(feature = "office")]
 #![allow(clippy::doc_suspicious_footnotes)]
 
+use std::path::PathBuf;
 use xberg::core::config::ExtractionConfig;
 use xberg::core::extractor::extract_file;
-use std::path::PathBuf;
 
 mod helpers;
 

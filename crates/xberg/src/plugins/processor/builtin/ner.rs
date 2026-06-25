@@ -84,8 +84,7 @@ fn make_backend(config: &NerConfig) -> Result<Arc<dyn NerBackend>> {
         NerBackendKind::Onnx => {
             #[cfg(feature = "ner-onnx")]
             {
-                let backend = crate::text::ner::gline::GlineBackend::new(config.model.as_deref())?;
-                Ok(Arc::new(backend))
+                Ok(crate::text::ner::gline::get_or_init_backend(config.model.as_deref())?)
             }
             #[cfg(not(feature = "ner-onnx"))]
             {

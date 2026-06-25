@@ -19,7 +19,7 @@ use crate::transcription::model::{WhisperModelPaths, ensure_whisper_model};
 use crate::transcription::tags::AudioTags;
 use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
 use crate::types::metadata::{AudioMetadata, FormatMetadata};
-use crate::{XbergError, Result};
+use crate::{Result, XbergError};
 use async_trait::async_trait;
 use tokio::task;
 

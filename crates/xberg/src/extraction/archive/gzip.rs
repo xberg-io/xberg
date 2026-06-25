@@ -8,7 +8,7 @@
 //! to the TAR extraction functions.
 
 use super::{ArchiveEntry, ArchiveMetadata};
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use crate::extractors::security::SecurityLimits;
 use ahash::AHashMap;
 use flate2::read::GzDecoder;

@@ -95,6 +95,15 @@ pub struct CacheWarmParams {
     /// Specific embedding preset name to download (e.g. "balanced", "speed", "quality")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub embedding_model: Option<String>,
+    /// Download the default GLiNER NER model
+    #[serde(default)]
+    pub ner: bool,
+    /// Download every known GLiNER NER model
+    #[serde(default)]
+    pub all_ner_models: bool,
+    /// Specific GLiNER NER model alias or catalog id to download
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ner_model: Option<String>,
 }
 
 /// Request parameters for embedding generation.
@@ -361,14 +370,26 @@ mod tests {
         let params: CacheWarmParams = serde_json::from_str(json).unwrap();
         assert!(!params.all_embeddings);
         assert!(params.embedding_model.is_none());
+        assert!(!params.ner);
+        assert!(!params.all_ner_models);
+        assert!(params.ner_model.is_none());
     }
 
     #[test]
     fn test_cache_warm_params_with_values() {
-        let json = r#"{"all_embeddings": true, "embedding_model": "balanced"}"#;
+        let json = r#"{
+            "all_embeddings": true,
+            "embedding_model": "balanced",
+            "ner": true,
+            "all_ner_models": true,
+            "ner_model": "gliner_small-v2.5"
+        }"#;
         let params: CacheWarmParams = serde_json::from_str(json).unwrap();
         assert!(params.all_embeddings);
         assert_eq!(params.embedding_model.as_deref(), Some("balanced"));
+        assert!(params.ner);
+        assert!(params.all_ner_models);
+        assert_eq!(params.ner_model.as_deref(), Some("gliner_small-v2.5"));
     }
 
     #[test]

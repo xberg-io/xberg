@@ -1,4 +1,4 @@
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use fast_image_resize::{FilterType, PixelType, ResizeAlg, ResizeOptions, Resizer, images::Image as FirImage};
 use image::{DynamicImage, ImageBuffer, Rgb};
 

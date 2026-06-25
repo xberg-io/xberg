@@ -9,7 +9,7 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'lib.freezed.dart';
 
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `CaptioningEnrichmentConfig`, `ClassificationEnrichmentConfig`, `DocumentExtractorDartCallbacks`, `EmbeddingBackendDartCallbacks`, `OcrBackendDartCallbacks`, `PostProcessorDartCallbacks`, `RendererDartCallbacks`, `RerankerBackendDartCallbacks`, `ValidatorDartCallbacks`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `can_handle`, `dimensions`, `embed`, `emits_structured_markdown`, `estimated_duration_ms`, `extract_bytes`, `extract_file`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `priority`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render`, `rerank`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages`, `supported_mime_types`, `supports_document_processing`, `supports_language`, `supports_table_detection`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`, `version`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `can_handle`, `clone`, `dimensions`, `embed`, `emits_structured_markdown`, `estimated_duration_ms`, `extract_bytes`, `extract_file`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `priority`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render`, `rerank`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages`, `supported_mime_types`, `supports_document_processing`, `supports_language`, `supports_table_detection`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`, `version`
 
 /// Extract content from a byte array.
 ///
@@ -378,8 +378,8 @@ Future<List<ClassificationLabel>> classifyDocument({
 
 /// Eagerly download a NER model into the xberg cache.
 ///
-/// `name` is a HuggingFace repo id (e.g. `urchade/gliner_multi-v2.1`). The
-/// CLI flag `xberg warm --ner` delegates here.
+/// `name` is a supported xberg GLiNER alias or catalog id. The CLI flag
+/// `xberg cache warm --ner` delegates here.
 Future<String> downloadModel({required String name, String? cacheDir}) =>
     RustLib.instance.api.crateDownloadModel(name: name, cacheDir: cacheDir);
 
@@ -6507,8 +6507,8 @@ class ExtractionResult {
 
   /// Named entities detected in `content` by the NER post-processor.
   ///
-  /// `None` when no NER backend is configured. Populated by the gline-rs ONNX
-  /// backend or the LLM-driven backend (see `crates/xberg/src/text/ner/`).
+  /// `None` when no NER backend is configured. Populated by the `xberg-gliner`
+  /// ONNX backend or the LLM-driven backend (see `crates/xberg/src/text/ner/`).
   final List<Entity>? entities;
 
   /// Summary of `content` produced by the summarisation post-processor.
@@ -9225,8 +9225,8 @@ class MultidocThresholds {
 
 /// NER backend selector.
 enum NerBackendKind {
-  /// gline-rs ONNX inference. Requires `ner-onnx` feature. Models download lazily from
-  /// HuggingFace via `model_download::hf_download`.
+  /// `xberg-gliner` ONNX inference. Requires `ner-onnx` feature. Models
+  /// download lazily from `xberg-io/gliner-models`.
   onnx,
 
   /// liter-llm zero-shot NER via structured-output prompts. Requires `ner-llm`
@@ -9244,8 +9244,7 @@ class NerConfig {
   final List<EntityCategory> categories;
 
   /// Override the default model — only used by [`NerBackendKind::Onnx`].
-  /// `None` lets the backend pick its pinned default
-  /// (`urchade/gliner_multi-v2.1` for gline-rs).
+  /// `None` lets the backend pick its pinned default xberg GLiNER model alias.
   final String? model;
 
   /// Optional LLM configuration — only used by [`NerBackendKind::Llm`]. Token usage
@@ -9254,8 +9253,8 @@ class NerConfig {
 
   /// Arbitrary user-supplied entity labels for zero-shot detection.
   ///
-  /// gline-rs natively supports zero-shot inference over caller-supplied labels —
-  /// this is the primary value of GLiNER. The LLM backend also honours these
+  /// `xberg-gliner` natively supports zero-shot inference over caller-supplied
+  /// labels. The LLM backend also honours these
   /// labels by including them in the structured-output schema. Custom labels
   /// surface as [`EntityCategory::Custom`] in the resulting `Entity` stream.
   ///
@@ -12595,7 +12594,7 @@ sealed class RerankerModelType with _$RerankerModelType {
 
   /// Use a custom ONNX cross-encoder from HuggingFace.
   const factory RerankerModelType.custom({
-    /// HuggingFace model repository ID (e.g. "cross-encoder/ms-marco-MiniLM-L-6-v2").
+    /// HuggingFace model repository ID (e.g. "cross-encoder/ms-marco-MiniLM-L6-v2").
     required String modelId,
 
     /// Path to the ONNX file within the repo.

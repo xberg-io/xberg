@@ -3,7 +3,7 @@
 //! This module provides functions to track which pages text chunks span,
 //! enabling accurate page-level metadata for document processing.
 
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 use crate::types::PageBoundary;
 
 /// Validates the consistency and correctness of page boundaries.

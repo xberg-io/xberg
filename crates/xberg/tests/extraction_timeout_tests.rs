@@ -1,9 +1,9 @@
 //! Regression tests for #830: extraction_timeout_secs silently ignored in single-file paths.
 
+use std::time::Instant;
 use xberg::XbergError;
 use xberg::core::config::ExtractionConfig;
 use xberg::core::extractor::{extract_bytes, extract_file};
-use std::time::Instant;
 
 /// A timeout of 0 seconds should fire immediately, before any real work is done.
 /// We use plain-text content so the test doesn't require external binaries (Tesseract, PDF extractor).

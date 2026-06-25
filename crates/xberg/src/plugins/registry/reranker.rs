@@ -8,7 +8,7 @@
 //! Since v5.0.0.
 
 use crate::plugins::RerankerBackend;
-use crate::{XbergError, Result};
+use crate::{Result, XbergError};
 use ahash::AHashMap;
 use std::sync::Arc;
 
@@ -207,10 +207,7 @@ mod tests {
     fn rejects_empty_name() {
         let mut registry = RerankerBackendRegistry::new();
         let backend = Arc::new(MockRerankerBackend { name: String::new() });
-        assert!(matches!(
-            registry.register(backend),
-            Err(XbergError::Validation { .. })
-        ));
+        assert!(matches!(registry.register(backend), Err(XbergError::Validation { .. })));
     }
 
     #[test]
@@ -219,10 +216,7 @@ mod tests {
         let backend = Arc::new(MockRerankerBackend {
             name: "has spaces".to_string(),
         });
-        assert!(matches!(
-            registry.register(backend),
-            Err(XbergError::Validation { .. })
-        ));
+        assert!(matches!(registry.register(backend), Err(XbergError::Validation { .. })));
     }
 
     #[test]

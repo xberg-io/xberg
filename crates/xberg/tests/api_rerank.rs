@@ -13,7 +13,7 @@ use tower::ServiceExt;
 
 use async_trait::async_trait;
 use xberg::{
-    ExtractionConfig, XbergError, Result,
+    ExtractionConfig, Result, XbergError,
     api::{RerankResponse, create_router},
     plugins::{Plugin, RerankerBackend, register_reranker_backend, unregister_reranker_backend},
 };

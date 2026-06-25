@@ -5,13 +5,21 @@
 require 'json'
 require 'time'
 
+# @return [Boolean] Whether benchmark debug logging is enabled.
 DEBUG = ENV.fetch('XBERG_BENCHMARK_DEBUG', 'false') == 'true'
 
+# Log a debug message when benchmark debugging is enabled.
+#
+# @param message [String] Message to write to stderr.
+# @return [void]
 def debug_log(message)
   return unless DEBUG
   warn "[DEBUG] #{Time.now.iso8601(3)} - #{message}"
 end
 
+# Return the current process peak memory estimate.
+#
+# @return [Integer] Peak memory in bytes, or zero when unavailable.
 def peak_memory_bytes
   if File.exist?('/proc/self/status')
     match = File.read('/proc/self/status').match(/VmRSS:\s+(\d+)/)
@@ -65,6 +73,10 @@ debug_log "=== Initialization Complete ===" if DEBUG
 # Determine if OCR was actually used based on extraction result metadata.
 # Mirrors the native Rust adapter logic: OCR is used when format_type is "ocr",
 # or when format_type is "image"/"pdf" and OCR was enabled in config.
+#
+# @param metadata [Hash, nil] Extraction metadata from xberg.
+# @param ocr_enabled [Boolean] Whether OCR was enabled for the request.
+# @return [Boolean] Whether OCR was used.
 def determine_ocr_used(metadata, ocr_enabled)
   format_type = metadata&.dig('format_type') || metadata&.dig(:format_type) || ''
   return true if format_type == 'ocr'
@@ -73,6 +85,10 @@ def determine_ocr_used(metadata, ocr_enabled)
   false
 end
 
+# Parse a server-mode input line.
+#
+# @param line [String] JSON request or plain file path.
+# @return [Array(String, Boolean)] File path and force-OCR flag.
 def parse_request(line)
   stripped = line.strip
   if stripped.start_with?('{')
@@ -86,6 +102,11 @@ def parse_request(line)
   [stripped, false]
 end
 
+# Extract one file through the synchronous Ruby binding.
+#
+# @param file_path [String] File path to extract.
+# @param config [Hash] Extraction config.
+# @return [Hash] JSON-serializable extraction payload.
 def extract_sync(file_path, config = {})
   debug_log "=== SYNC EXTRACTION START ==="
   debug_log "Input: file_path=#{file_path}"
@@ -132,6 +153,11 @@ rescue StandardError => e
   raise
 end
 
+# Extract one or more files through the batch Ruby binding.
+#
+# @param file_paths [Array<String>] File paths to extract.
+# @param config [Hash] Extraction config.
+# @return [Array<Hash>] JSON-serializable extraction payloads.
 def extract_batch(file_paths, config = {})
   debug_log "=== BATCH EXTRACTION START ==="
   debug_log "Input: #{file_paths.length} files"
@@ -182,6 +208,10 @@ rescue StandardError => e
   raise
 end
 
+# Run persistent server mode over stdin/stdout.
+#
+# @param ocr_enabled [Boolean] Whether OCR is enabled by default.
+# @return [void]
 def extract_server(ocr_enabled)
   debug_log "=== SERVER MODE START ==="
 
@@ -229,6 +259,9 @@ def extract_server(ocr_enabled)
   debug_log "=== SERVER MODE END ==="
 end
 
+# Run the benchmark extraction CLI.
+#
+# @return [void]
 def main
   debug_log "Ruby script started"
   debug_log "ARGV: #{ARGV.inspect}"

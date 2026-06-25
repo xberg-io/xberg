@@ -67,7 +67,7 @@ image = { version = "0.25.10", default-features = false }
 itertools = "0.15"
 js-sys = "0.3"
 xberg = { path = "./crates/xberg", version = "1.0.0-rc.1", default-features = false }
-xberg-gliner = { path = "./crates/xberg-gliner", version = "1.0.0-rc.1" }
+xberg-gliner = { path = "./crates/xberg-gliner", version = "1.0.0-rc.1", default-features = false }
 
 lazy_static = "1.5.0"
 libc = "0.2.186"

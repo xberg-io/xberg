@@ -25,7 +25,7 @@ pub trait NerBackend: Send + Sync {
     /// passed `EntityCategory::Custom(label)` in `categories`. The default
     /// implementation forwards to [`detect`](Self::detect) after appending each
     /// custom label as a `Custom` category — backends that can do something
-    /// smarter (e.g. gline-rs's native multi-label zero-shot inference) should
+    /// smarter (e.g. `xberg-gliner` native multi-label zero-shot inference) should
     /// override this method.
     async fn detect_with_custom(
         &self,

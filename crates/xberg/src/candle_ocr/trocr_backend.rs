@@ -196,12 +196,10 @@ impl OcrBackend for TrocrBackend {
             let engine = get_or_init_engine(variant, device)?;
 
             // Process image through encoder-decoder pipeline
-            let output = engine
-                .process_image(&image_bytes)
-                .map_err(|e| crate::XbergError::Ocr {
-                    message: format!("TrOCR inference failed: {}", e),
-                    source: Some(Box::new(e)),
-                })?;
+            let output = engine.process_image(&image_bytes).map_err(|e| crate::XbergError::Ocr {
+                message: format!("TrOCR inference failed: {}", e),
+                source: Some(Box::new(e)),
+            })?;
 
             Ok::<String, crate::XbergError>(output.content)
         })

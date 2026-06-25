@@ -10,8 +10,9 @@
 //! Backends implement the [`NerBackend`] trait. Two are bundled:
 //!
 //! - [`gline::GlineBackend`] under `#[cfg(feature = "ner-onnx")]` — local ONNX
-//!   inference via the upstream `gline-rs` crate. Models download lazily from
-//!   HuggingFace via [`crate::model_download`].
+//!   inference via `xberg-gliner`. Models download lazily from the
+//!   `xberg-io/gliner-models` Hugging Face repository via
+//!   [`crate::model_download`].
 //! - [`llm::LlmBackend`] under `#[cfg(feature = "ner-llm")]` — liter-llm with a
 //!   structured-output schema. Used when categories outstrip the ONNX taxonomy.
 
@@ -32,8 +33,8 @@ use std::path::PathBuf;
 
 /// Eagerly download a NER model into the xberg cache.
 ///
-/// `name` is a HuggingFace repo id (e.g. `urchade/gliner_multi-v2.1`). The
-/// CLI flag `xberg warm --ner` delegates here.
+/// `name` is a supported xberg GLiNER alias or catalog id. The CLI flag
+/// `xberg cache warm --ner` delegates here.
 #[cfg(feature = "ner-onnx")]
 pub fn download_model(name: &str, cache_dir: Option<PathBuf>) -> crate::Result<PathBuf> {
     gline::download_model(name, cache_dir)
@@ -49,7 +50,7 @@ pub fn download_model(_name: &str, _cache_dir: Option<PathBuf>) -> crate::Result
 /// Pinned default NER model identifier.
 #[cfg(feature = "ner-onnx")]
 pub fn default_model_name() -> &'static str {
-    gline::DEFAULT_MODEL_REPO
+    gline::DEFAULT_MODEL_NAME
 }
 
 #[cfg(not(feature = "ner-onnx"))]
@@ -66,6 +67,13 @@ pub fn known_models() -> &'static [&'static str] {
 #[cfg(not(feature = "ner-onnx"))]
 pub fn known_models() -> &'static [&'static str] {
     &[]
+}
+
+/// Expected GLiNER cache artifacts for manifest tooling.
+#[cfg(feature = "ner-onnx")]
+#[cfg_attr(alef, alef(skip))]
+pub fn manifest() -> Vec<gline::GlinerManifestEntry> {
+    gline::manifest()
 }
 
 /// Detect named entities in the given text using the provided backend.

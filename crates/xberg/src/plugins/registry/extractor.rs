@@ -1,7 +1,7 @@
 //! Document extractor registry implementation.
 
 use crate::plugins::DocumentExtractor;
-use crate::{XbergError, Result};
+use crate::{Result, XbergError};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 #[cfg_attr(alef, alef(skip))]

@@ -937,8 +937,7 @@ mod tests {
         );
         assert_eq!(image.format.as_ref(), "heif");
         // Verify the output is parseable as HEIF.
-        let context =
-            xberg_libheif::HeifContext::read_from_bytes(&image.data).expect("output should be valid HEIF");
+        let context = xberg_libheif::HeifContext::read_from_bytes(&image.data).expect("output should be valid HEIF");
         let handle = context.primary_image_handle().expect("should have primary image");
         assert_eq!(handle.width(), 4);
         assert_eq!(handle.height(), 4);

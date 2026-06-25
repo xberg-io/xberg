@@ -232,8 +232,7 @@ fn test_extraction_config_serialization_for_mcp() {
     let json = serde_json::to_value(&config).expect("Failed to serialize");
 
     // Verify it round-trips
-    let restored: xberg::core::config::ExtractionConfig =
-        serde_json::from_value(json).expect("Failed to deserialize");
+    let restored: xberg::core::config::ExtractionConfig = serde_json::from_value(json).expect("Failed to deserialize");
 
     assert_eq!(config.force_ocr, restored.force_ocr);
     assert_eq!(config.output_format, restored.output_format);
@@ -354,10 +353,7 @@ fn test_mcp_config_overrides() {
         // Verify request config overrides defaults
         assert_eq!(parsed_config.force_ocr, true);
         assert_eq!(parsed_config.use_cache, false);
-        assert_eq!(
-            parsed_config.output_format,
-            xberg::core::config::OutputFormat::Markdown
-        );
+        assert_eq!(parsed_config.output_format, xberg::core::config::OutputFormat::Markdown);
     }
 }
 
@@ -676,8 +672,7 @@ fn test_mcp_validate_zero_concurrent() {
         "max_concurrent_extractions": 0,
     });
 
-    let config: xberg::core::config::ExtractionConfig =
-        serde_json::from_value(config_json).expect("Failed to parse");
+    let config: xberg::core::config::ExtractionConfig = serde_json::from_value(config_json).expect("Failed to parse");
 
     // The config accepted the value; MCP server should validate semantically
     assert_eq!(config.max_concurrent_extractions, Some(0));
@@ -841,8 +836,7 @@ fn test_mcp_api_consistency_all_formats() {
             "output_format": format_str,
         });
 
-        let parsed: xberg::core::config::ExtractionConfig =
-            serde_json::from_value(config).expect("Failed to parse");
+        let parsed: xberg::core::config::ExtractionConfig = serde_json::from_value(config).expect("Failed to parse");
 
         // Verify format is consistent
         let serialized = serde_json::to_value(&parsed).expect("Failed to serialize");

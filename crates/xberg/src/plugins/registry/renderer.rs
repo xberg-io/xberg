@@ -2,7 +2,7 @@
 
 use crate::plugins::{Plugin, Renderer};
 use crate::types::internal::InternalDocument;
-use crate::{XbergError, Result};
+use crate::{Result, XbergError};
 use ahash::AHashMap;
 use std::sync::Arc;
 

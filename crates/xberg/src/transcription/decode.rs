@@ -4,8 +4,8 @@
 //! intentionally small and focused — the only job is "give me clean PCM or
 //! a clear error".
 
-use crate::XbergError;
 use crate::Result;
+use crate::XbergError;
 
 /// The canonical PCM format that all transcription engines receive.
 #[cfg_attr(alef, alef(skip))]
@@ -99,9 +99,7 @@ pub fn decode_audio_to_pcm(bytes: &[u8], max_bytes: Option<u64>) -> Result<PcmAu
                 continue;
             }
             Err(e) => {
-                return Err(XbergError::transcription(format!(
-                    "error reading audio packet: {e}"
-                )));
+                return Err(XbergError::transcription(format!("error reading audio packet: {e}")));
             }
         };
 

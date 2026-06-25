@@ -4,8 +4,8 @@
 //! outputs the structured result parsed from the document.
 
 use anyhow::{Context, Result};
-use xberg::{LlmConfig, StructuredExtractionConfig, extract_file_sync};
 use std::path::PathBuf;
+use xberg::{LlmConfig, StructuredExtractionConfig, extract_file_sync};
 
 use crate::WireFormat;
 

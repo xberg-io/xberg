@@ -4,8 +4,8 @@
 //! so tooling (such as the benchmark harness) can read timing information without
 //! parsing stderr or running a separate profiling tool.
 
-use xberg::ExtractionResult;
 use serde::Serialize;
+use xberg::ExtractionResult;
 
 /// Single-file extraction result with wall-clock timing.
 ///

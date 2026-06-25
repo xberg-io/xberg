@@ -1228,23 +1228,9 @@ mod tests {
     #[test]
     fn test_aggregate_new_format() {
         let results = vec![
-            create_test_result(
-                "xberg-sync",
-                "pdf",
-                OcrStatus::NotUsed,
-                100,
-                1_000_000.0,
-                10_000_000,
-            ),
+            create_test_result("xberg-sync", "pdf", OcrStatus::NotUsed, 100, 1_000_000.0, 10_000_000),
             create_test_result("xberg-sync", "pdf", OcrStatus::Used, 200, 500_000.0, 20_000_000),
-            create_test_result(
-                "xberg-batch",
-                "docx",
-                OcrStatus::NotUsed,
-                150,
-                750_000.0,
-                15_000_000,
-            ),
+            create_test_result("xberg-batch", "docx", OcrStatus::NotUsed, 150, 750_000.0, 15_000_000),
         ];
 
         let aggregated = aggregate_new_format(&results);
@@ -1591,24 +1577,10 @@ mod tests {
     #[test]
     fn test_aggregate_new_format_extraction_duration_preserved() {
         // Test: aggregate_new_format preserves extraction_duration statistics
-        let mut result1 = create_test_result(
-            "xberg-sync",
-            "pdf",
-            OcrStatus::NotUsed,
-            100,
-            1_000_000.0,
-            10_000_000,
-        );
+        let mut result1 = create_test_result("xberg-sync", "pdf", OcrStatus::NotUsed, 100, 1_000_000.0, 10_000_000);
         result1.extraction_duration = Some(Duration::from_millis(80));
 
-        let mut result2 = create_test_result(
-            "xberg-sync",
-            "pdf",
-            OcrStatus::NotUsed,
-            150,
-            1_000_000.0,
-            10_000_000,
-        );
+        let mut result2 = create_test_result("xberg-sync", "pdf", OcrStatus::NotUsed, 150, 1_000_000.0, 10_000_000);
         result2.extraction_duration = Some(Duration::from_millis(120));
 
         let results = vec![result1, result2];

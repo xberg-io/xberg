@@ -4,7 +4,7 @@
 
 use crate::plugins::DocumentExtractor;
 use crate::types::{ErrorMetadata, ExtractionResult, Metadata};
-use crate::{XbergError, Result};
+use crate::{Result, XbergError};
 use std::borrow::Cow;
 use std::sync::Arc;
 

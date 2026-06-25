@@ -12,9 +12,9 @@
 
 #![cfg(feature = "office")]
 
+use std::path::PathBuf;
 use xberg::core::config::ExtractionConfig;
 use xberg::core::extractor::extract_bytes;
-use std::path::PathBuf;
 
 mod helpers;
 

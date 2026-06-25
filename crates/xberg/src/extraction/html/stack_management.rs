@@ -5,7 +5,7 @@
 //! On WASM, stack size is limited and cannot be increased, so size limits are enforced.
 //! On native platforms, dedicated threads with larger stacks are used for large HTML.
 
-use crate::error::{XbergError, Result};
+use crate::error::{Result, XbergError};
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::{any::Any, thread};

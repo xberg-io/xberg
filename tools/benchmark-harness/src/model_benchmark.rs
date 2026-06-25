@@ -5,9 +5,9 @@
 
 use crate::Result;
 use crate::corpus::{self, CorpusFilter};
-use xberg::core::config::layout::TableModel;
 use std::path::PathBuf;
 use std::time::Instant;
+use xberg::core::config::layout::TableModel;
 
 fn parse_table_model(s: &str) -> TableModel {
     match s {
