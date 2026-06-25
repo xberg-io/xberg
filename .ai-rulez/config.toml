@@ -2,14 +2,14 @@
 # Documentation: https://github.com/Goldziher/ai-rulez
 
 version = '4.0'
-name = 'kreuzberg-crewai'
-description = 'CrewAI tool integration for kreuzberg document extraction'
+name = 'xberg-crewai'
+description = 'CrewAI tool integration for xberg document extraction'
 gitignore = true
 presets = ['claude', 'codex', 'copilot', 'cursor', 'antigravity']
 builtins = ['python', 'default-commands']
 
 [[includes]]
-name = 'kreuzberg-core'
+name = 'xberg-core'
 source = 'https://github.com/xberg-io/ai-rulez.git'
 path = 'modules/core'
 merge_strategy = 'local-override'

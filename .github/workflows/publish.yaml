@@ -12,7 +12,7 @@ jobs:
       id-token: write
     environment:
       name: pypi
-      url: https://pypi.org/p/kreuzberg-crewai
+      url: https://pypi.org/p/xberg-crewai
     steps:
       - uses: actions/checkout@v6
 

@@ -10,7 +10,7 @@ build/
 .ruff_cache/
 .venv/
 .env
-.kreuzberg/
+.xberg/
 uv.lock
 
 

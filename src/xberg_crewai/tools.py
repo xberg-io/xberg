@@ -1,14 +1,14 @@
-"""Kreuzberg document extraction tools for CrewAI agents."""
+"""Xberg document extraction tools for CrewAI agents."""
 
 from typing import Literal
 
 from crewai.tools import BaseTool
-from kreuzberg import ExtractionConfig, extract_file_sync
+from xberg import ExtractionConfig, extract_file_sync
 from pydantic import BaseModel, Field
 
 
 class ExtractInput(BaseModel):
-    """Input schema for KreuzbergExtractTool."""
+    """Input schema for XbergExtractTool."""
 
     file_path: str = Field(..., description="Path to the document file to extract text from")
     output_format: Literal["plain", "markdown", "html"] = Field(
@@ -18,12 +18,12 @@ class ExtractInput(BaseModel):
 
 
 class MetadataInput(BaseModel):
-    """Input schema for KreuzbergExtractMetadataTool."""
+    """Input schema for XbergExtractMetadataTool."""
 
     file_path: str = Field(..., description="Path to the document file to extract metadata from")
 
 
-class KreuzbergExtractTool(BaseTool):
+class XbergExtractTool(BaseTool):
     """Extract text content from a document file.
 
     Supports 88+ formats including PDF, DOCX, XLSX, HTML, images with OCR, and more.
@@ -45,7 +45,7 @@ class KreuzbergExtractTool(BaseTool):
         return content
 
 
-class KreuzbergExtractMetadataTool(BaseTool):
+class XbergExtractMetadataTool(BaseTool):
     """Extract metadata from a document file.
 
     Returns metadata such as title, authors, dates, page count, and format-specific

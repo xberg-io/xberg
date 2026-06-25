@@ -3,15 +3,15 @@ build-backend = "hatchling.build"
 requires = [ "hatchling" ]
 
 [project]
-name = "kreuzberg-crewai"
+name = "xberg-crewai"
 version = "0.1.0"
-description = "Kreuzberg document extraction tool for CrewAI agents"
+description = "Xberg document extraction tool for CrewAI agents"
 readme = "README.md"
 keywords = [
   "ai",
   "crewai",
   "document-extraction",
-  "kreuzberg",
+  "xberg",
   "ocr",
   "pdf",
   "text-extraction",
@@ -22,7 +22,7 @@ maintainers = [
   { name = "Varun Tandon", email = "varun@xberg.io" },
 ]
 authors = [
-  { name = "Kreuzberg.dev", email = "contact@xberg.io" },
+  { name = "Xberg.dev", email = "contact@xberg.io" },
 ]
 requires-python = ">=3.10"
 classifiers = [
@@ -42,11 +42,11 @@ classifiers = [
 ]
 dependencies = [
   "crewai>=1",
-  "kreuzberg>=4.4.6",
+  "xberg>=1.0.0",
 ]
 urls.Changelog = "https://github.com/xberg-io/xberg-crewai/blob/main/CHANGELOG.md"
 urls.Homepage = "https://github.com/xberg-io/xberg-crewai"
-urls.Kreuzberg = "https://github.com/xberg-io/kreuzberg"
+urls.Xberg = "https://github.com/xberg-io/xberg"
 urls.Repository = "https://github.com/xberg-io/xberg-crewai"
 
 [dependency-groups]
@@ -60,13 +60,13 @@ dev = [
 
 [tool.hatch]
 build.targets.sdist.include = [
-  "src/kreuzberg_crewai",
+  "src/xberg_crewai",
   "CHANGELOG.md",
   "LICENSE",
   "README.md",
   "pyproject.toml",
 ]
-build.targets.wheel.packages = [ "src/kreuzberg_crewai" ]
+build.targets.wheel.packages = [ "src/xberg_crewai" ]
 
 [tool.ruff]
 target-version = "py310"
@@ -94,5 +94,5 @@ strict = true
 ini_options.testpaths = [ "tests" ]
 
 [tool.coverage]
-run.source = [ "kreuzberg_crewai" ]
+run.source = [ "xberg_crewai" ]
 report.fail_under = 80
