@@ -110,7 +110,7 @@ Xberg is the document intelligence core in the [Xberg.io](https://xberg.io) ecos
 
   Managed extraction API with SDKs, dashboards, and observability.
 
-- :material-spider-web:{ .lg .middle } **[kreuzcrawl](https://docs.kreuzcrawl.xberg.io)**
+- :material-spider-web:{ .lg .middle } **[crawlberg](https://docs.crawlberg.xberg.io)**
 
   Web crawling and scraping with HTML to Markdown and headless-Chrome fallback.
 

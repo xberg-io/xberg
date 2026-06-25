@@ -73,7 +73,7 @@ Xberg provides async/sync APIs, text chunking, language detection, keyword extra
 ## Xberg Ecosystem
 
 - [Xberg Enterprise](https://enterprise.xberg.io): Managed extraction API with SDKs, dashboards, and observability
-- [kreuzcrawl](https://docs.kreuzcrawl.xberg.io): Web crawling and scraping with HTML to Markdown and headless-Chrome fallback
+- [crawlberg](https://docs.crawlberg.xberg.io): Web crawling and scraping with HTML to Markdown and headless-Chrome fallback
 - [html-to-markdown](https://docs.html-to-markdown.xberg.io): Fast, lossless HTML to Markdown engine
 - [liter-llm](https://docs.liter-llm.xberg.io): Universal LLM API client with native bindings for 14 languages and 143 providers
 - [tree-sitter-language-pack](https://docs.tree-sitter-language-pack.xberg.io): Tree-sitter grammars and code-intelligence primitives

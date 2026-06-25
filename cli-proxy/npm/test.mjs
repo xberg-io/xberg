@@ -50,7 +50,7 @@ test("selectArchiveName prefers a bin-name/cli archive among survivors", () => {
 
 test("selectArchiveName returns null when only non-CLI artifacts exist", () => {
 	const names = [
-		"kreuzcrawl-ffi-v0.3.0-aarch64-apple-darwin.tar.gz",
+		"crawlberg-ffi-v0.3.0-aarch64-apple-darwin.tar.gz",
 		"libfoo-nif-2.17-aarch64-apple-darwin.so.tar.gz",
 	];
 	assert.equal(selectArchiveName(names, TRIPLE), null);

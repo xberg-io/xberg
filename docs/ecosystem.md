@@ -6,4 +6,4 @@ Xberg is an open-source document intelligence framework with a Rust core and bin
 - **[html-to-markdown](https://docs.html-to-markdown.xberg.io/)** — a high-performance, CommonMark-compliant HTML → Markdown converter.
 - **[liter-llm](https://docs.liter-llm.xberg.io/)** — a universal LLM API client for 143 providers, with bindings across languages.
 - **[tree-sitter-language-pack](https://docs.tree-sitter-language-pack.xberg.io/)** — 306 tree-sitter parsers with code intelligence and chunking.
-- **[Kreuzcrawl](https://docs.kreuzcrawl.xberg.io/)** — a high-performance web crawling engine with bindings for 11 languages.
+- **[Crawlberg](https://docs.crawlberg.xberg.io/)** — a high-performance web crawling engine with bindings for 11 languages.
