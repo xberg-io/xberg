@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Any, cast
 
-from kreuzberg import (
+from xberg import (
     ChunkingConfig,
     EmbeddingConfig,
     EmbeddingModelType,
@@ -13,17 +13,17 @@ from kreuzberg import (
 )
 from surrealdb import RecordID
 
-from kreuzberg_surrealdb._base import (
+from xberg_surrealdb._base import (
     AsyncSurrealQueryable,
     BaseIngester,
     _check_insert_result,
     _content_hash,
     _map_result_to_doc,
 )
-from kreuzberg_surrealdb.schema import build_pipeline_schema
+from xberg_surrealdb.schema import build_pipeline_schema
 
 if TYPE_CHECKING:
-    from kreuzberg_surrealdb.types import ChunkRecord
+    from xberg_surrealdb.types import ChunkRecord
 
 
 class DocumentPipeline(BaseIngester):
@@ -48,7 +48,7 @@ class DocumentPipeline(BaseIngester):
             table: Name of the documents table.
             insert_batch_size: Max records per INSERT IGNORE batch.
             chunk_table: Name of the chunks table.
-            config: Optional Kreuzberg ExtractionConfig. If it includes a
+            config: Optional Xberg ExtractionConfig. If it includes a
                 ChunkingConfig, the chunking parameters are preserved and only
                 the embedding config is injected.
             embed: Whether to generate embeddings for vector search.
@@ -168,7 +168,7 @@ class DocumentPipeline(BaseIngester):
         making the entire pipeline idempotent and resilient to partial failures.
 
         Args:
-            result: The extraction result from Kreuzberg, including chunks.
+            result: The extraction result from Xberg, including chunks.
             source: Identifier for the document origin (e.g. file path).
 
         """
@@ -214,7 +214,7 @@ class DocumentPipeline(BaseIngester):
                 _check_insert_result(res, context="chunk insertion")
 
     async def embed_query(self, query: str) -> list[float]:
-        """Embed a query string using kreuzberg's extraction pipeline.
+        """Embed a query string using xberg's extraction pipeline.
 
         Args:
             query: The text to embed.
@@ -223,7 +223,7 @@ class DocumentPipeline(BaseIngester):
             The embedding vector as a list of floats.
 
         Raises:
-            RuntimeError: If Kreuzberg returns no embedding for the query.
+            RuntimeError: If Xberg returns no embedding for the query.
 
         """
         result = await extract_bytes(query.encode(), "text/plain", config=self._config)

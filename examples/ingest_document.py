@@ -18,7 +18,7 @@ from typing import Any
 
 from surrealdb import AsyncSurreal
 
-from kreuzberg_surrealdb import DocumentConnector
+from xberg_surrealdb import DocumentConnector
 
 
 def _print_doc(doc: dict[str, Any]) -> None:

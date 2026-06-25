@@ -18,7 +18,7 @@ from pathlib import Path
 
 from surrealdb import AsyncSurreal
 
-from kreuzberg_surrealdb import DocumentPipeline
+from xberg_surrealdb import DocumentPipeline
 
 SEPARATOR = "─" * 60
 

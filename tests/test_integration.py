@@ -16,8 +16,8 @@ from unittest.mock import AsyncMock
 import pytest
 from surrealdb import AsyncSurreal
 
-from kreuzberg_surrealdb import AsyncSurrealQueryable, DocumentConnector, DocumentPipeline
-from kreuzberg_surrealdb.exceptions import SchemaNotInitializedError
+from xberg_surrealdb import AsyncSurrealQueryable, DocumentConnector, DocumentPipeline
+from xberg_surrealdb.exceptions import SchemaNotInitializedError
 from tests.conftest import FIXTURES_DIR
 
 pytestmark = pytest.mark.integration
@@ -408,8 +408,8 @@ async def test_pipeline_hybrid_rrf_via_client(server_db: AsyncSurrealQueryable, 
 
 
 async def test_fast_preset_produces_384_dim_embeddings(tmp_path: Path) -> None:
-    """Verify the 'fast' preset produces 384-dim embeddings via real kreuzberg extraction."""
-    from kreuzberg import extract_file
+    """Verify the 'fast' preset produces 384-dim embeddings via real xberg extraction."""
+    from xberg import extract_file
 
     mock_client = AsyncMock(spec=AsyncSurrealQueryable)
     sample = tmp_path / "sample.txt"
@@ -426,7 +426,7 @@ async def test_fast_preset_produces_384_dim_embeddings(tmp_path: Path) -> None:
 
 async def test_fast_preset_embed_query_produces_384_dim() -> None:
     """Verify the 'fast' preset can embed a query string with correct dimensions."""
-    from kreuzberg import extract_bytes
+    from xberg import extract_bytes
 
     mock_client = AsyncMock(spec=AsyncSurrealQueryable)
     pipeline = DocumentPipeline(db=mock_client, embed=True, embedding_model="fast")

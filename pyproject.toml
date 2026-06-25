@@ -3,10 +3,10 @@ build-backend = "hatchling.build"
 requires = [ "hatchling" ]
 
 [project]
-name = "kreuzberg-surrealdb"
+name = "xberg-surrealdb"
 version = "0.2.0"
 description = """\
-  Kreuzberg-to-SurrealDB connector for document ingestion pipelines — schema management, content deduplication, \
+  Xberg-to-SurrealDB connector for document ingestion pipelines — schema management, content deduplication, \
   chunk storage, and index configuration\
   """
 readme = "README.md"
@@ -17,7 +17,7 @@ keywords = [
   "embeddings",
   "graph-database",
   "hybrid-search",
-  "kreuzberg",
+  "xberg",
   "llm",
   "nlp",
   "ocr",
@@ -28,7 +28,7 @@ keywords = [
   "vector-search",
 ]
 license = "MIT"
-authors = [ { name = "Kreuzberg.dev", email = "admin@xberg.io" } ]
+authors = [ { name = "Xberg.dev", email = "admin@xberg.io" } ]
 requires-python = ">=3.10"
 classifiers = [
   "Development Status :: 4 - Beta",
@@ -50,14 +50,14 @@ classifiers = [
 ]
 dependencies = [
   "anyio>=4",
-  "kreuzberg>=4.4.6",
+  "xberg>=1.0.0",
   "surrealdb>=1.0.8",
   "typing-extensions>=4; python_version<'3.11'",
 ]
 urls.Documentation = "https://docs.xberg.io"
 urls.Homepage = "https://github.com/xberg-io/xberg-surrealdb"
 urls.Issues = "https://github.com/xberg-io/xberg-surrealdb/issues"
-urls.Kreuzberg = "https://github.com/xberg-io/kreuzberg"
+urls.Xberg = "https://github.com/xberg-io/xberg"
 urls.Repository = "https://github.com/xberg-io/xberg-surrealdb"
 urls.SurrealDB = "https://surrealdb.com"
 
@@ -73,13 +73,13 @@ dev = [
 
 [tool.hatch]
 build.targets.sdist.include = [
-  "src/kreuzberg_surrealdb",
+  "src/xberg_surrealdb",
   "CHANGELOG.md",
   "LICENSE",
   "README.md",
   "pyproject.toml",
 ]
-build.targets.wheel.packages = [ "src/kreuzberg_surrealdb" ]
+build.targets.wheel.packages = [ "src/xberg_surrealdb" ]
 
 [tool.ruff]
 target-version = "py310"
@@ -98,8 +98,8 @@ lint.per-file-ignores."examples/**" = [
   "S106",
   "T201"
 ]
-lint.per-file-ignores."src/kreuzberg_surrealdb/ingester.py" = [ "S608" ]
-lint.per-file-ignores."src/kreuzberg_surrealdb/schema.py" = [ "S608" ]
+lint.per-file-ignores."src/xberg_surrealdb/ingester.py" = [ "S608" ]
+lint.per-file-ignores."src/xberg_surrealdb/schema.py" = [ "S608" ]
 lint.per-file-ignores."tests/**" = [
   "ANN",
   "D",
@@ -128,5 +128,5 @@ ini_options.asyncio_mode = "auto"
 ini_options.markers = [ "integration: tests requiring a live SurrealDB instance (no mocks, slower)" ]
 
 [tool.coverage]
-run.source = [ "kreuzberg_surrealdb" ]
+run.source = [ "xberg_surrealdb" ]
 report.fail_under = 80

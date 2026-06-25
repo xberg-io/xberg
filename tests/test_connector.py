@@ -4,10 +4,10 @@ import hashlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from kreuzberg import ExtractionConfig
+from xberg import ExtractionConfig
 
-from kreuzberg_surrealdb.connector import DocumentConnector
-from kreuzberg_surrealdb.exceptions import IngestionError, SchemaNotInitializedError
+from xberg_surrealdb.connector import DocumentConnector
+from xberg_surrealdb.exceptions import IngestionError, SchemaNotInitializedError
 
 
 def test_analyzer_name(mock_client: AsyncMock) -> None:
@@ -25,7 +25,7 @@ def test_table_property(mock_client: AsyncMock) -> None:
     assert connector.table == "my_docs"
 
 
-@patch("kreuzberg_surrealdb.connector.build_connector_schema")
+@patch("xberg_surrealdb.connector.build_connector_schema")
 async def test_connector_setup_schema_forwards_params(
     mock_build: MagicMock,
     mock_client: AsyncMock,
@@ -51,7 +51,7 @@ async def test_connector_setup_schema_forwards_params(
     mock_client.query.assert_any_call("STMT2;")
 
 
-@patch("kreuzberg_surrealdb._base.extract_file")
+@patch("xberg_surrealdb._base.extract_file")
 async def test_ingest_file(
     mock_extract: MagicMock,
     connector: DocumentConnector,
@@ -71,7 +71,7 @@ async def test_ingest_file(
     assert records[0]["content"] == sample_extraction_result.content
 
 
-@patch("kreuzberg_surrealdb._base.extract_file")
+@patch("xberg_surrealdb._base.extract_file")
 async def test_ingest_file_passes_custom_config(
     mock_extract: MagicMock,
     mock_client: AsyncMock,
@@ -89,7 +89,7 @@ async def test_ingest_file_passes_custom_config(
     mock_extract.assert_called_once_with("/tmp/test.pdf", config=user_config)
 
 
-@patch("kreuzberg_surrealdb._base.extract_bytes")
+@patch("xberg_surrealdb._base.extract_bytes")
 async def test_ingest_bytes(
     mock_extract: MagicMock,
     connector: DocumentConnector,
@@ -105,7 +105,7 @@ async def test_ingest_bytes(
     assert records[0]["source"] == "api://response"
 
 
-@patch("kreuzberg_surrealdb._base.extract_file")
+@patch("xberg_surrealdb._base.extract_file")
 async def test_content_hash_computed(
     mock_extract: MagicMock,
     connector: DocumentConnector,
@@ -121,7 +121,7 @@ async def test_content_hash_computed(
     assert records[0]["content_hash"] == expected_hash
 
 
-@patch("kreuzberg_surrealdb._base.extract_file")
+@patch("xberg_surrealdb._base.extract_file")
 async def test_metadata_fields_mapped(
     mock_extract: MagicMock,
     connector: DocumentConnector,
@@ -141,7 +141,7 @@ async def test_metadata_fields_mapped(
     assert doc["keywords"] == ["test"]
 
 
-@patch("kreuzberg_surrealdb._base.extract_file")
+@patch("xberg_surrealdb._base.extract_file")
 async def test_connector_ingest_files_processes_all_paths(
     mock_extract: MagicMock,
     connector: DocumentConnector,
@@ -160,7 +160,7 @@ async def test_connector_ingest_files_processes_all_paths(
     assert mock_client.query.call_count == 3
 
 
-@patch("kreuzberg_surrealdb._base.extract_file")
+@patch("xberg_surrealdb._base.extract_file")
 async def test_connector_raises_on_silent_insert_error(
     mock_extract: MagicMock,
     connector: DocumentConnector,

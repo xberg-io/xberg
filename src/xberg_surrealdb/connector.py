@@ -2,10 +2,10 @@
 
 from typing import Any, cast
 
-from kreuzberg import ExtractionResult
+from xberg import ExtractionResult
 
-from kreuzberg_surrealdb._base import BaseIngester, _check_insert_result, _map_result_to_doc
-from kreuzberg_surrealdb.schema import build_connector_schema
+from xberg_surrealdb._base import BaseIngester, _check_insert_result, _map_result_to_doc
+from xberg_surrealdb.schema import build_connector_schema
 
 
 class DocumentConnector(BaseIngester):
@@ -47,7 +47,7 @@ class DocumentConnector(BaseIngester):
         """Process a single extraction result.
 
         Args:
-            result: The extraction result from Kreuzberg.
+            result: The extraction result from Xberg.
             source: Identifier for the document origin (e.g. file path).
 
         """

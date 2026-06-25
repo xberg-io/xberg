@@ -8,11 +8,11 @@ from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 from anyio import Path as AsyncPath
-from kreuzberg import ExtractionConfig, ExtractionResult, extract_bytes, extract_file
+from xberg import ExtractionConfig, ExtractionResult, extract_bytes, extract_file
 from surrealdb import RecordID, Value
 
-from kreuzberg_surrealdb.exceptions import DimensionMismatchError, IngestionError, SchemaNotInitializedError
-from kreuzberg_surrealdb.types import DocumentRecord
+from xberg_surrealdb.exceptions import DimensionMismatchError, IngestionError, SchemaNotInitializedError
+from xberg_surrealdb.types import DocumentRecord
 
 
 @runtime_checkable
@@ -60,7 +60,7 @@ def _map_result_to_doc(result: ExtractionResult, source: str, table: str) -> Doc
     """Map an ExtractionResult to a SurrealDB document record.
 
     Args:
-        result: The extraction result from Kreuzberg.
+        result: The extraction result from Xberg.
         source: Identifier for the document origin (e.g. file path).
         table: SurrealDB table name, used to build the deterministic RecordID.
 
@@ -157,7 +157,7 @@ class BaseIngester(ABC):
         Args:
             db: An active SurrealDB async connection.
             table: Name of the documents table.
-            config: Optional Kreuzberg ExtractionConfig for extraction tuning.
+            config: Optional Xberg ExtractionConfig for extraction tuning.
 
         """
         self._client = db
@@ -185,7 +185,7 @@ class BaseIngester(ABC):
         """Process a single extraction result.
 
         Args:
-            result: The extraction result from Kreuzberg.
+            result: The extraction result from Xberg.
             source: Identifier for the document origin (e.g., file path).
 
         """

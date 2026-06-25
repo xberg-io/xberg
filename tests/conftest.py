@@ -4,11 +4,11 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from kreuzberg import Chunk, ExtractionResult
+from xberg import Chunk, ExtractionResult
 
-from kreuzberg_surrealdb import AsyncSurrealQueryable
-from kreuzberg_surrealdb.connector import DocumentConnector
-from kreuzberg_surrealdb.pipeline import DocumentPipeline
+from xberg_surrealdb import AsyncSurrealQueryable
+from xberg_surrealdb.connector import DocumentConnector
+from xberg_surrealdb.pipeline import DocumentPipeline
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 

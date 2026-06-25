@@ -4,9 +4,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from kreuzberg import ExtractionResult
+from xberg import ExtractionResult
 
-from kreuzberg_surrealdb._base import (
+from xberg_surrealdb._base import (
     _collect_files,
     _content_hash,
     _map_result_to_doc,

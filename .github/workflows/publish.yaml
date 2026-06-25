@@ -12,7 +12,7 @@ jobs:
       id-token: write
     environment:
       name: pypi
-      url: https://pypi.org/p/kreuzberg-surrealdb
+      url: https://pypi.org/p/xberg-surrealdb
     steps:
       - uses: actions/checkout@v6
 

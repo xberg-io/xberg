@@ -3,11 +3,11 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from kreuzberg import Chunk, ExtractionResult
+from xberg import Chunk, ExtractionResult
 
-from kreuzberg_surrealdb._base import _check_insert_result
-from kreuzberg_surrealdb.exceptions import DimensionMismatchError, IngestionError, SchemaNotInitializedError
-from kreuzberg_surrealdb.pipeline import DocumentPipeline
+from xberg_surrealdb._base import _check_insert_result
+from xberg_surrealdb.exceptions import DimensionMismatchError, IngestionError, SchemaNotInitializedError
+from xberg_surrealdb.pipeline import DocumentPipeline
 
 
 def test_pipeline_defaults(mock_client: AsyncMock) -> None:
@@ -28,7 +28,7 @@ def test_pipeline_invalid_embedding_preset(mock_client: AsyncMock) -> None:
 
 
 def test_pipeline_embedding_model_type_direct(mock_client: AsyncMock) -> None:
-    from kreuzberg import EmbeddingModelType
+    from xberg import EmbeddingModelType
 
     model = EmbeddingModelType.preset("BGEBaseENV15")
     pipeline = DocumentPipeline(db=mock_client, embedding_model=model, embedding_dimensions=768)
@@ -36,7 +36,7 @@ def test_pipeline_embedding_model_type_direct(mock_client: AsyncMock) -> None:
 
 
 def test_pipeline_embedding_model_type_requires_dimensions(mock_client: AsyncMock) -> None:
-    from kreuzberg import EmbeddingModelType
+    from xberg import EmbeddingModelType
 
     model = EmbeddingModelType.preset("BGEBaseENV15")
     with pytest.raises(ValueError, match="embedding_dimensions is required"):
@@ -72,7 +72,7 @@ def test_pipeline_embed_false_no_embedding(mock_client: AsyncMock) -> None:
 
 
 def test_pipeline_user_extraction_config_gets_chunking(mock_client: AsyncMock) -> None:
-    from kreuzberg import ExtractionConfig
+    from xberg import ExtractionConfig
 
     user_config = ExtractionConfig()
     pipeline = DocumentPipeline(db=mock_client, config=user_config)
@@ -83,7 +83,7 @@ def test_pipeline_user_extraction_config_gets_chunking(mock_client: AsyncMock) -
 
 
 def test_pipeline_preserves_user_chunking_params(mock_client: AsyncMock) -> None:
-    from kreuzberg import ChunkingConfig, ExtractionConfig
+    from xberg import ChunkingConfig, ExtractionConfig
 
     user_config = ExtractionConfig(
         chunking=ChunkingConfig(max_chars=512, max_overlap=100),
@@ -97,7 +97,7 @@ def test_pipeline_preserves_user_chunking_params(mock_client: AsyncMock) -> None
 
 
 def test_pipeline_preserves_user_chunking_params_embed_false(mock_client: AsyncMock) -> None:
-    from kreuzberg import ChunkingConfig, ExtractionConfig
+    from xberg import ChunkingConfig, ExtractionConfig
 
     user_config = ExtractionConfig(
         chunking=ChunkingConfig(max_chars=256),
@@ -110,7 +110,7 @@ def test_pipeline_preserves_user_chunking_params_embed_false(mock_client: AsyncM
     assert pipeline._config.chunking.embedding is None
 
 
-@patch("kreuzberg_surrealdb.pipeline.build_pipeline_schema")
+@patch("xberg_surrealdb.pipeline.build_pipeline_schema")
 async def test_pipeline_setup_schema_forwards_params(
     mock_build: MagicMock,
     mock_client: AsyncMock,
@@ -143,7 +143,7 @@ async def test_pipeline_setup_schema_forwards_params(
     assert mock_client.query.call_count == 3
 
 
-@patch("kreuzberg_surrealdb._base.extract_file")
+@patch("xberg_surrealdb._base.extract_file")
 async def test_pipeline_chunk_without_metadata(
     mock_extract: MagicMock,
     pipeline: DocumentPipeline,
@@ -173,7 +173,7 @@ async def test_pipeline_chunk_without_metadata(
     assert rec["chunk_index"] == 0
 
 
-@patch("kreuzberg_surrealdb._base.extract_file")
+@patch("xberg_surrealdb._base.extract_file")
 async def test_pipeline_ingest_file_no_chunks_skips_chunk_insert(
     mock_extract: MagicMock,
     pipeline: DocumentPipeline,
@@ -189,7 +189,7 @@ async def test_pipeline_ingest_file_no_chunks_skips_chunk_insert(
     assert "INSERT IGNORE INTO documents" in mock_client.query.call_args[0][0]
 
 
-@patch("kreuzberg_surrealdb._base.extract_file")
+@patch("xberg_surrealdb._base.extract_file")
 async def test_pipeline_chunk_batch_splitting(
     mock_extract: MagicMock,
     mock_client: AsyncMock,
@@ -231,7 +231,7 @@ def test_check_insert_result_raises_on_generic_string_error() -> None:
         _check_insert_result(result, context="test")
 
 
-@patch("kreuzberg_surrealdb._base.extract_file")
+@patch("xberg_surrealdb._base.extract_file")
 async def test_pipeline_raises_on_chunk_dimension_mismatch(
     mock_extract: MagicMock,
     pipeline: DocumentPipeline,
@@ -252,7 +252,7 @@ async def test_pipeline_raises_on_chunk_dimension_mismatch(
         await pipeline.ingest_file("/tmp/test.pdf")
 
 
-@patch("kreuzberg_surrealdb.pipeline.extract_bytes")
+@patch("xberg_surrealdb.pipeline.extract_bytes")
 async def test_embed_query_raises_on_empty_chunks(mock_extract: MagicMock, mock_client: AsyncMock) -> None:
     mock_result = MagicMock(spec=ExtractionResult)
     mock_result.chunks = []
@@ -264,7 +264,7 @@ async def test_embed_query_raises_on_empty_chunks(mock_extract: MagicMock, mock_
         await pipeline.embed_query("test query")
 
 
-@patch("kreuzberg_surrealdb.pipeline.extract_bytes")
+@patch("xberg_surrealdb.pipeline.extract_bytes")
 async def test_embed_query_raises_on_none_embedding(mock_extract: MagicMock, mock_client: AsyncMock) -> None:
     mock_chunk = MagicMock(spec=Chunk)
     mock_chunk.embedding = None
@@ -278,7 +278,7 @@ async def test_embed_query_raises_on_none_embedding(mock_extract: MagicMock, moc
         await pipeline.embed_query("test query")
 
 
-@patch("kreuzberg_surrealdb.pipeline.extract_bytes")
+@patch("xberg_surrealdb.pipeline.extract_bytes")
 async def test_embed_query_returns_embedding(mock_extract: MagicMock, mock_client: AsyncMock) -> None:
     """embed_query() success path returns the embedding vector from the first chunk."""
     expected = [0.1, 0.2, 0.3]

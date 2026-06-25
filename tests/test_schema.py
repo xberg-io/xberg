@@ -1,6 +1,6 @@
 """Tests for schema DDL generation."""
 
-from kreuzberg_surrealdb.schema import (
+from xberg_surrealdb.schema import (
     build_connector_schema,
     build_document_schema,
     build_pipeline_schema,
