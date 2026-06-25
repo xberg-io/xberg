@@ -1,6 +1,7 @@
 {
-	"name": "xberg",
-	"version": "4.10.0-rc.15",
+	"name": "@xberg/node-tsproject",
+	"version": "1.0.0-rc.1",
+	"private": true,
 	"description": "High-performance document intelligence library",
 	"keywords": [
 		"document",
