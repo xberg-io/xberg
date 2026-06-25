@@ -28,7 +28,7 @@ keywords = [
   "vector-search",
 ]
 license = "MIT"
-authors = [ { name = "Kreuzberg.dev", email = "admin@kreuzberg.dev" } ]
+authors = [ { name = "Kreuzberg.dev", email = "admin@xberg.io" } ]
 requires-python = ">=3.10"
 classifiers = [
   "Development Status :: 4 - Beta",
