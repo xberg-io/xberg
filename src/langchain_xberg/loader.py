@@ -1,13 +1,13 @@
-"""Kreuzberg document loader for LangChain."""
+"""Xberg document loader for LangChain."""
 
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from typing import Any
 
-from kreuzberg import (
+from xberg import (
     ExtractionConfig,
     ExtractionResult,
-    KreuzbergError,
+    XbergError,
     batch_extract_files,
     batch_extract_files_sync,
     extract_bytes,
@@ -19,46 +19,46 @@ from langchain_core.document_loaders import BaseLoader
 from langchain_core.documents import Document
 
 
-class KreuzbergLoader(BaseLoader):
-    """Load documents using Kreuzberg, supporting 88+ file formats with true async.
+class XbergLoader(BaseLoader):
+    """Load documents using Xberg, supporting 88+ file formats with true async.
 
-    Kreuzberg is a Rust-powered document intelligence library. This loader wraps its
+    Xberg is a Rust-powered document intelligence library. This loader wraps its
     extraction API to provide LangChain-compatible Documents with rich metadata.
 
     Examples:
         Load a single file:
-            >>> loader = KreuzbergLoader(file_path="document.pdf")
+            >>> loader = XbergLoader(file_path="document.pdf")
             >>> docs = loader.load()
 
         Load multiple files:
-            >>> loader = KreuzbergLoader(file_path=["a.pdf", "b.docx", "c.txt"])
+            >>> loader = XbergLoader(file_path=["a.pdf", "b.docx", "c.txt"])
             >>> docs = loader.load()
 
         Load from bytes:
-            >>> loader = KreuzbergLoader(data=raw_bytes, mime_type="application/pdf")
+            >>> loader = XbergLoader(data=raw_bytes, mime_type="application/pdf")
             >>> docs = loader.load()
 
         Load a directory:
-            >>> loader = KreuzbergLoader(file_path="./docs/", glob="**/*.pdf")
+            >>> loader = XbergLoader(file_path="./docs/", glob="**/*.pdf")
             >>> docs = loader.load()
 
         Per-page splitting:
-            >>> from kreuzberg import ExtractionConfig, PageConfig
+            >>> from xberg import ExtractionConfig, PageConfig
             >>> config = ExtractionConfig(pages=PageConfig(extract_pages=True))
-            >>> loader = KreuzbergLoader(file_path="document.pdf", config=config)
+            >>> loader = XbergLoader(file_path="document.pdf", config=config)
             >>> docs = loader.load()  # One Document per page
 
         OCR a scanned document:
-            >>> from kreuzberg import ExtractionConfig, OcrConfig
+            >>> from xberg import ExtractionConfig, OcrConfig
             >>> config = ExtractionConfig(
             ...     force_ocr=True,
             ...     ocr=OcrConfig(backend="tesseract", language="eng"),
             ... )
-            >>> loader = KreuzbergLoader(file_path="scan.pdf", config=config)
+            >>> loader = XbergLoader(file_path="scan.pdf", config=config)
             >>> docs = loader.load()
 
         Async loading:
-            >>> loader = KreuzbergLoader(file_path="document.pdf")
+            >>> loader = XbergLoader(file_path="document.pdf")
             >>> docs = await loader.aload()
 
     """
@@ -72,14 +72,14 @@ class KreuzbergLoader(BaseLoader):
         glob: str | None = None,
         config: ExtractionConfig | None = None,
     ) -> None:
-        """Initialize the KreuzbergLoader.
+        """Initialize the XbergLoader.
 
         Args:
             file_path: File path, list of file paths, or directory path to load.
             data: Raw bytes to extract text from. Mutually exclusive with file_path.
             mime_type: MIME type hint. Required when using data, optional for file_path.
             glob: Glob pattern for directory mode. Defaults to None (matches all files).
-            config: Kreuzberg ExtractionConfig for controlling extraction behavior
+            config: Xberg ExtractionConfig for controlling extraction behavior
                 (output format, OCR settings, page splitting, etc.).
                 Defaults to ExtractionConfig() if not provided.
 
@@ -130,7 +130,7 @@ class KreuzbergLoader(BaseLoader):
         """Build a flat metadata dict from an ExtractionResult."""
         metadata: dict[str, Any] = {}
 
-        # Flatten Kreuzberg metadata (a TypedDict / plain dict)
+        # Flatten Xberg metadata (a TypedDict / plain dict)
         if isinstance(result.metadata, dict):
             metadata.update({k: v for k, v in result.metadata.items() if v is not None})
 
@@ -188,7 +188,7 @@ class KreuzbergLoader(BaseLoader):
         for page in result.pages:
             page_metadata = {**base_metadata}
 
-            # Page-specific fields (Kreuzberg uses 1-indexed, LangChain uses 0-indexed)
+            # Page-specific fields (Xberg uses 1-indexed, LangChain uses 0-indexed)
             page_number: int = page["page_number"]
             page_metadata["page"] = page_number - 1
             if page.get("is_blank") is not None:
@@ -226,16 +226,16 @@ class KreuzbergLoader(BaseLoader):
 
     @staticmethod
     def _check_batch_result(result: ExtractionResult, path: Path) -> None:
-        """Raise KreuzbergError if a batch result represents an extraction failure.
+        """Raise XbergError if a batch result represents an extraction failure.
 
-        Kreuzberg v4.x batch extraction embeds per-file errors as metadata["error"] dicts
+        Xberg v4.x batch extraction embeds per-file errors as metadata["error"] dicts
         rather than raising exceptions, to allow partial batch success.
         """
         error = result.metadata.get("error") if isinstance(result.metadata, dict) else None
         if error is not None:
             error_message = error.get("message", result.content) if isinstance(error, dict) else result.content
             msg = f"Failed to extract '{path}': {error_message}"
-            raise KreuzbergError(msg)
+            raise XbergError(msg)
 
     def lazy_load(self) -> Iterator[Document]:
         """Load documents lazily, yielding one Document at a time.
@@ -256,7 +256,7 @@ class KreuzbergLoader(BaseLoader):
             assert isinstance(path, Path)  # noqa: S101
             try:
                 result = extract_file_sync(path, mime_type=self._mime_type, config=config)
-            except KreuzbergError as exc:
+            except XbergError as exc:
                 msg = f"Failed to extract '{path}': {exc}"
                 raise type(exc)(msg) from exc
             yield from self._result_to_documents(result, str(path))
@@ -272,7 +272,7 @@ class KreuzbergLoader(BaseLoader):
     async def alazy_load(self) -> AsyncIterator[Document]:
         """Load documents asynchronously, yielding one Document at a time.
 
-        Uses Kreuzberg's native async extraction backed by Rust's tokio runtime.
+        Uses Xberg's native async extraction backed by Rust's tokio runtime.
 
         Yields:
             Document objects with extracted text and metadata.
@@ -291,7 +291,7 @@ class KreuzbergLoader(BaseLoader):
             assert isinstance(path, Path)  # noqa: S101
             try:
                 result = await extract_file(path, mime_type=self._mime_type, config=config)
-            except KreuzbergError as exc:
+            except XbergError as exc:
                 msg = f"Failed to extract '{path}': {exc}"
                 raise type(exc)(msg) from exc
             for doc in self._result_to_documents(result, str(path)):

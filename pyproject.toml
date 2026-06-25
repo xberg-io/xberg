@@ -3,11 +3,11 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/langchain_kreuzberg"]
+packages = ["src/langchain_xberg"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "src/langchain_kreuzberg",
+    "src/langchain_xberg",
     "CHANGELOG.md",
     "LICENSE",
     "README.md",
@@ -15,15 +15,15 @@ include = [
 ]
 
 [project]
-name = "langchain-kreuzberg"
+name = "langchain-xberg"
 version = "1.0.2"
-description = "Kreuzberg document loader for LangChain — extract text from 88+ file formats with true async and rich metadata"
+description = "Xberg document loader for LangChain — extract text from 88+ file formats with true async and rich metadata"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
-authors = [{ name = "Kreuzberg.dev", email = "admin@xberg.io" }]
+authors = [{ name = "Xberg.dev", email = "admin@xberg.io" }]
 keywords = [
-    "kreuzberg",
+    "xberg",
     "langchain",
     "document-loader",
     "text-extraction",
@@ -53,7 +53,7 @@ classifiers = [
 ]
 dependencies = [
     "langchain-core>=1.0,<2.0",
-    "kreuzberg>=4.4.6",
+    "xberg>=1.0.0",
 ]
 
 [dependency-groups]
@@ -71,7 +71,7 @@ Homepage = "https://github.com/xberg-io/langchain-xberg"
 Documentation = "https://docs.xberg.io"
 Repository = "https://github.com/xberg-io/langchain-xberg"
 Issues = "https://github.com/xberg-io/langchain-xberg/issues"
-Kreuzberg = "https://github.com/xberg-io/kreuzberg"
+Xberg = "https://github.com/xberg-io/xberg"
 
 [tool.ruff]
 target-version = "py310"
@@ -94,7 +94,7 @@ asyncio_mode = "auto"
 markers = ["integration: real file extraction tests (no mocks, slower)"]
 
 [tool.coverage.run]
-source = ["langchain_kreuzberg"]
+source = ["langchain_xberg"]
 
 [tool.coverage.report]
 fail_under = 80

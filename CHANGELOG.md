@@ -9,27 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Bumped minimum kreuzberg version from `>=4.3.0` to `>=4.4.6`, bringing major extraction quality improvements and new format support
-- Loader now supports 88+ formats. Thanks to kreuzberg!
+- Bumped minimum xberg version from `>=4.3.0` to `>=4.4.6`, bringing major extraction quality improvements and new format support
+- Loader now supports 88+ formats. Thanks to xberg!
 
 ## [1.0.1] - 2026-03-04
 
 ### Fixed
 
-- Batch error detection now correctly checks `metadata["error"]` instead of `not result.metadata`, which never triggered in kreuzberg v4.x (metadata always contains `extraction_duration_ms`)
+- Batch error detection now correctly checks `metadata["error"]` instead of `not result.metadata`, which never triggered in xberg v4.x (metadata always contains `extraction_duration_ms`)
 - `ProcessingWarning` objects in batch results are now serialized as `{source, message}` dicts instead of `str()` coercion, preserving structured data
 
 ## [1.0.0] - 2026-02-24
 
 ### Changed
 
-- Moved repository to [kreuzberg-dev](https://github.com/xberg-io/langchain-xberg) organization
-- Updated copyright to Kreuzberg.dev
+- Moved repository to [xberg-dev](https://github.com/xberg-io/langchain-xberg) organization
+- Updated copyright to Xberg.dev
 - Production-ready release
 
 ### Added
 
-- Kreuzberg logo and centralized badge layout in README
+- Xberg logo and centralized badge layout in README
 - PyPI metadata: keywords, classifiers, documentation URL
 - `CHANGELOG.md` included in sdist
 
@@ -37,8 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `KreuzbergLoader` class extending `langchain_core.document_loaders.BaseLoader`
-- Support for 75+ file formats via Kreuzberg extraction API
+- `XbergLoader` class extending `langchain_core.document_loaders.BaseLoader`
+- Support for 75+ file formats via Xberg extraction API
 - Synchronous loading via `load()` and `lazy_load()` methods
 - Native async loading via `aload()` and `alazy_load()` backed by Rust's tokio runtime
 - File path input supporting single files, lists of files, and directories with glob patterns

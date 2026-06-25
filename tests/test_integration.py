@@ -1,12 +1,12 @@
-"""Integration tests — real kreuzberg extraction, no mocking."""
+"""Integration tests — real xberg extraction, no mocking."""
 
 from pathlib import Path
 
 import pytest
-from kreuzberg import KreuzbergError
+from xberg import XbergError
 from langchain_core.documents import Document
 
-from langchain_kreuzberg import KreuzbergLoader
+from langchain_xberg import XbergLoader
 
 pytestmark = pytest.mark.integration
 
@@ -34,7 +34,7 @@ def _assert_valid_documents(
 
 
 def test_load_txt() -> None:
-    loader = KreuzbergLoader(file_path=FIXTURES / "sample.txt")
+    loader = XbergLoader(file_path=FIXTURES / "sample.txt")
     docs = loader.load()
 
     _assert_valid_documents(docs, expected_source="sample.txt")
@@ -42,21 +42,21 @@ def test_load_txt() -> None:
 
 
 def test_load_pdf() -> None:
-    loader = KreuzbergLoader(file_path=FIXTURES / "sample.pdf")
+    loader = XbergLoader(file_path=FIXTURES / "sample.pdf")
     docs = loader.load()
 
     _assert_valid_documents(docs, expected_source="sample.pdf")
 
 
 def test_load_docx() -> None:
-    loader = KreuzbergLoader(file_path=FIXTURES / "sample.docx")
+    loader = XbergLoader(file_path=FIXTURES / "sample.docx")
     docs = loader.load()
 
     _assert_valid_documents(docs, expected_source="sample.docx")
 
 
 def test_load_html() -> None:
-    loader = KreuzbergLoader(file_path=FIXTURES / "sample.html")
+    loader = XbergLoader(file_path=FIXTURES / "sample.html")
     docs = loader.load()
 
     _assert_valid_documents(docs, expected_source="sample.html")
@@ -68,7 +68,7 @@ def test_load_html() -> None:
 
 def test_load_bytes() -> None:
     data = b"Hello from bytes extraction test."
-    loader = KreuzbergLoader(data=data, mime_type="text/plain")
+    loader = XbergLoader(data=data, mime_type="text/plain")
     docs = loader.load()
 
     _assert_valid_documents(docs, expected_source="bytes://")
@@ -79,7 +79,7 @@ def test_load_bytes() -> None:
 
 
 def test_load_directory() -> None:
-    loader = KreuzbergLoader(file_path=FIXTURES)
+    loader = XbergLoader(file_path=FIXTURES)
     docs = loader.load()
 
     # fixtures/ has sample.txt, sample.html, sample.pdf, sample.docx
@@ -88,7 +88,7 @@ def test_load_directory() -> None:
 
 def test_load_multiple_file_paths() -> None:
     paths: list[str | Path] = [FIXTURES / "sample.txt", FIXTURES / "sample.html"]
-    loader = KreuzbergLoader(file_path=paths)
+    loader = XbergLoader(file_path=paths)
     docs = loader.load()
 
     _assert_valid_documents(docs, min_count=2)
@@ -101,7 +101,7 @@ def test_load_multiple_file_paths() -> None:
 
 
 def test_lazy_load_yields_documents() -> None:
-    loader = KreuzbergLoader(file_path=FIXTURES / "sample.txt")
+    loader = XbergLoader(file_path=FIXTURES / "sample.txt")
     result = loader.lazy_load()
 
     assert hasattr(result, "__next__")
@@ -113,14 +113,14 @@ def test_lazy_load_yields_documents() -> None:
 
 
 async def test_async_load_single_file() -> None:
-    loader = KreuzbergLoader(file_path=FIXTURES / "sample.txt")
+    loader = XbergLoader(file_path=FIXTURES / "sample.txt")
     docs = await loader.aload()
 
     _assert_valid_documents(docs, expected_source="sample.txt")
 
 
 async def test_async_load_directory() -> None:
-    loader = KreuzbergLoader(file_path=FIXTURES)
+    loader = XbergLoader(file_path=FIXTURES)
     docs: list[Document] = []
     async for doc in loader.alazy_load():
         docs.append(doc)
@@ -132,7 +132,7 @@ async def test_async_load_directory() -> None:
 
 
 def test_nonexistent_file_raises() -> None:
-    loader = KreuzbergLoader(file_path="/tmp/does_not_exist_kreuzberg_test.pdf")  # noqa: S108
+    loader = XbergLoader(file_path="/tmp/does_not_exist_xberg_test.pdf")  # noqa: S108
 
-    with pytest.raises((KreuzbergError, OSError), match="does_not_exist"):
+    with pytest.raises((XbergError, OSError), match="does_not_exist"):
         loader.load()

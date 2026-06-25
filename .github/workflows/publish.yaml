@@ -12,7 +12,7 @@ jobs:
       id-token: write
     environment:
       name: pypi
-      url: https://pypi.org/p/langchain-kreuzberg
+      url: https://pypi.org/p/langchain-xberg
     steps:
       - uses: actions/checkout@v6
 

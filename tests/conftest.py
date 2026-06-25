@@ -1,4 +1,4 @@
-"""Shared test fixtures for langchain-kreuzberg."""
+"""Shared test fixtures for langchain-xberg."""
 
 from pathlib import Path
 from typing import Any
