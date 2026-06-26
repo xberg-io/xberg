@@ -21,7 +21,6 @@ Version source of truth: root `Cargo.toml` `[workspace.package] version`.
 ## Out-of-workspace bindings (`packages/`)
 
 - `packages/python/` — PyPI (maturin + PyO3)
-- `packages/typescript/` — npm type declarations
 - `packages/ruby/` — RubyGems (Magnus); native ext compiled by `rake`
 - `packages/php/` — Composer (ext-php-rs)
 - `packages/go/` — Go module; cgo over xberg-ffi

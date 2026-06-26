@@ -78,14 +78,11 @@ RUST_LOG=debug uv run pytest tests/ -v
 
 ### Node.js
 
-TypeScript bindings are in `packages/typescript/`:
+The Node.js binding (`@xberg-io/xberg`) is built from `crates/xberg-node/`:
 
 ```bash title="Terminal"
 task node:build:dev
 task node:test
-
-cd packages/typescript
-pnpm test -- --testPathPattern="extract"
 ```
 
 ### Everything Else
