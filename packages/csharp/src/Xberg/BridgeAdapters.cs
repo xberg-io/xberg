@@ -17,6 +17,7 @@ namespace Xberg;
 // - _OcrBackendBridgeAdapter → "csharp-bridge-ocr_backend-adapter"
 // - _PostProcessorBridgeAdapter → "csharp-bridge-post_processor-adapter"
 // - _ValidatorBridgeAdapter → "csharp-bridge-validator-adapter"
+// - _DocumentExtractorBridgeAdapter → "csharp-bridge-document_extractor-adapter"
 // - _EmbeddingBackendBridgeAdapter → "csharp-bridge-embedding_backend-adapter"
 // - _RendererBridgeAdapter → "csharp-bridge-renderer-adapter"
 // - _RerankerBackendBridgeAdapter → "csharp-bridge-reranker_backend-adapter"
@@ -54,13 +55,13 @@ public sealed class _OcrBackendBridgeAdapter : IOcrBackend
     // MARK: - Trait methods
 
     /// <summary></summary>
-    public ExtractionResult ProcessImage(byte[] ImageBytes, OcrConfig Config)
+    public ExtractedDocument ProcessImage(byte[] ImageBytes, OcrConfig Config)
     {
         return _impl.ProcessImage(ImageBytes, Config);
     }
 
     /// <summary></summary>
-    public ExtractionResult ProcessImageFile(string Path, OcrConfig Config)
+    public ExtractedDocument ProcessImageFile(string Path, OcrConfig Config)
     {
         return _impl.ProcessImageFile(Path, Config);
     }
@@ -87,7 +88,7 @@ public sealed class _OcrBackendBridgeAdapter : IOcrBackend
     public bool EmitsStructuredMarkdown => _impl.EmitsStructuredMarkdown;
 
     /// <summary></summary>
-    public ExtractionResult ProcessDocument(string Path, OcrConfig Config)
+    public ExtractedDocument ProcessDocument(string Path, OcrConfig Config)
     {
         return _impl.ProcessDocument(Path, Config);
     }
@@ -125,7 +126,7 @@ public sealed class _PostProcessorBridgeAdapter : IPostProcessor
     // MARK: - Trait methods
 
     /// <summary></summary>
-    public void Process(ExtractionResult Result, ExtractionConfig Config)
+    public void Process(ExtractedDocument Result, ExtractionConfig Config)
     {
         _impl.Process(Result, Config);
     }
@@ -134,13 +135,13 @@ public sealed class _PostProcessorBridgeAdapter : IPostProcessor
     public ProcessingStage ProcessingStage => _impl.ProcessingStage;
 
     /// <summary></summary>
-    public bool ShouldProcess(ExtractionResult Result, ExtractionConfig Config)
+    public bool ShouldProcess(ExtractedDocument Result, ExtractionConfig Config)
     {
         return _impl.ShouldProcess(Result, Config);
     }
 
     /// <summary></summary>
-    public ulong EstimatedDurationMs(ExtractionResult Result)
+    public ulong EstimatedDurationMs(ExtractedDocument Result)
     {
         return _impl.EstimatedDurationMs(Result);
     }
@@ -181,19 +182,69 @@ public sealed class _ValidatorBridgeAdapter : IValidator
     // MARK: - Trait methods
 
     /// <summary></summary>
-    public void Validate(ExtractionResult Result, ExtractionConfig Config)
+    public void Validate(ExtractedDocument Result, ExtractionConfig Config)
     {
         _impl.Validate(Result, Config);
     }
 
     /// <summary></summary>
-    public bool ShouldValidate(ExtractionResult Result, ExtractionConfig Config)
+    public bool ShouldValidate(ExtractedDocument Result, ExtractionConfig Config)
     {
         return _impl.ShouldValidate(Result, Config);
     }
 
     /// <summary></summary>
     public int Priority => _impl.Priority;
+
+}
+
+/// <summary>
+/// Adapter bridge for DocumentExtractor trait implementation.
+/// Wraps a user-provided IDocumentExtractor implementation and delegates all method calls.
+/// </summary>
+public sealed class _DocumentExtractorBridgeAdapter : IDocumentExtractor
+{
+    private readonly IDocumentExtractor _impl;
+
+    /// <summary>Create an adapter around a user-provided DocumentExtractor implementation.</summary>
+    public _DocumentExtractorBridgeAdapter(IDocumentExtractor impl)
+    {
+        _impl = impl ?? throw new ArgumentNullException(nameof(impl));
+    }
+
+    // MARK: - Plugin lifecycle (if present)
+
+    /// <summary>Get the plugin name.</summary>
+    public string Name => _impl.Name;
+
+    /// <summary>Get the plugin version.</summary>
+    public string Version => _impl.Version;
+
+    /// <summary>Initialize the plugin.</summary>
+    public void Initialize() => _impl.Initialize();
+
+    /// <summary>Shut down the plugin.</summary>
+    public void Shutdown() => _impl.Shutdown();
+
+    // MARK: - Trait methods
+
+    /// <summary></summary>
+    public ExtractedDocument Extract(ExtractInput Input, ExtractionConfig Config)
+    {
+        return _impl.Extract(Input, Config);
+    }
+
+    /// <summary></summary>
+    public List<string> SupportedMimeTypes => _impl.SupportedMimeTypes;
+
+    /// <summary></summary>
+    public int Priority => _impl.Priority;
+
+    /// <summary></summary>
+    public bool CanHandle(string Path, string MimeType)
+    {
+        return _impl.CanHandle(Path, MimeType);
+    }
 
 }
 
@@ -269,9 +320,9 @@ public sealed class _RendererBridgeAdapter : IRenderer
     // MARK: - Trait methods
 
     /// <summary></summary>
-    public string Render(string Doc)
+    public string RenderResult(ExtractedDocument Result)
     {
-        return _impl.Render(Doc);
+        return _impl.RenderResult(Result);
     }
 
 }

@@ -34,7 +34,7 @@ public final class PostProcessorAdapter implements IPostProcessor {
     }
 
     @Override
-    public void process(ExtractionResult result, ExtractionConfig config) throws Exception {
+    public void process(ExtractedDocument result, ExtractionConfig config) throws Exception {
         impl.process(result, config);
     }
 
@@ -44,12 +44,12 @@ public final class PostProcessorAdapter implements IPostProcessor {
     }
 
     @Override
-    public boolean should_process(ExtractionResult _result, ExtractionConfig _config) throws Exception {
+    public boolean should_process(ExtractedDocument _result, ExtractionConfig _config) throws Exception {
         return impl.should_process(_result, _config);
     }
 
     @Override
-    public long estimated_duration_ms(ExtractionResult _result) throws Exception {
+    public long estimated_duration_ms(ExtractedDocument _result) throws Exception {
         return impl.estimated_duration_ms(_result);
     }
 

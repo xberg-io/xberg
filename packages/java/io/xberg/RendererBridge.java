@@ -63,7 +63,7 @@ public final class RendererBridge implements AutoCloseable {
         initStubVersion(1L * ValueLayout.ADDRESS.byteSize());
         initStubInitialize(2L * ValueLayout.ADDRESS.byteSize());
         initStubShutdown(3L * ValueLayout.ADDRESS.byteSize());
-        initStubRender(4L * ValueLayout.ADDRESS.byteSize());
+        initStubRenderResult(4L * ValueLayout.ADDRESS.byteSize());
         initStubFreeString(5L * ValueLayout.ADDRESS.byteSize());
         initStubFreeUserData(6L * ValueLayout.ADDRESS.byteSize());
     }
@@ -100,8 +100,8 @@ public final class RendererBridge implements AutoCloseable {
         vtable.set(ValueLayout.ADDRESS, offset, stubShutdown);
     }
 
-    private void initStubRender(long offset) throws ReflectiveOperationException {
-        var stubRender = LINKER.upcallStub(LOOKUP.bind(this, "handleRender",
+    private void initStubRenderResult(long offset) throws ReflectiveOperationException {
+        var stubRenderResult = LINKER.upcallStub(LOOKUP.bind(this, "handleRenderResult",
             MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class, MemorySegment.class)),
             FunctionDescriptor.of(
                 ValueLayout.JAVA_LONG,
@@ -111,7 +111,7 @@ public final class RendererBridge implements AutoCloseable {
                 ValueLayout.ADDRESS
             ),
             arena);
-        vtable.set(ValueLayout.ADDRESS, offset, stubRender);
+        vtable.set(ValueLayout.ADDRESS, offset, stubRenderResult);
     }
 
     private void initStubFreeString(long offset) throws ReflectiveOperationException {
@@ -161,10 +161,11 @@ public final class RendererBridge implements AutoCloseable {
         } catch (Throwable e) { return 1; }
     }
 
-    private int handleRender(MemorySegment userData, MemorySegment doc_in, MemorySegment outResult, MemorySegment outError) {
+    private int handleRenderResult(MemorySegment userData, MemorySegment result_in, MemorySegment outResult, MemorySegment outError) {
         try {
-            String doc = doc_in.reinterpret(Long.MAX_VALUE).getString(0);
-            String result = impl.render(doc);
+            String result_json = result_in.reinterpret(Long.MAX_VALUE).getString(0);
+            ExtractedDocument result = JSON.readValue(result_json, ExtractedDocument.class);
+            String result = impl.render_result(result);
             MemorySegment jsonCs = arena.allocateFrom(result);
             outResult.set(ValueLayout.ADDRESS, 0, jsonCs);
             return 0;
@@ -202,7 +203,7 @@ public final class RendererBridge implements AutoCloseable {
             try (var nameArena = Arena.ofShared()) {
                 var nameCs = nameArena.allocateFrom(impl.name());
                 MemorySegment outErr = nameArena.allocate(ValueLayout.ADDRESS);
-                int rc = (int) NativeLib.XBERG_REGISTER_RENDERER.invoke(nameCs, bridge.vtableSegment(), MemorySegment.NULL, outErr);
+                int rc = (int) (long) NativeLib.XBERG_REGISTER_RENDERER.invoke(nameCs, bridge.vtableSegment(), MemorySegment.NULL, outErr);
                 if (rc != 0) {
                     MemorySegment errPtr = outErr.get(ValueLayout.ADDRESS, 0);
                     String msg = errPtr.equals(MemorySegment.NULL) ? "registration failed (rc=" + rc + ")" : readNativeString(errPtr);
@@ -226,7 +227,7 @@ public final class RendererBridge implements AutoCloseable {
             try (var nameArena = Arena.ofShared()) {
                 var nameCs = nameArena.allocateFrom(name);
                 MemorySegment outErr = nameArena.allocate(ValueLayout.ADDRESS);
-                int rc = (int) NativeLib.XBERG_UNREGISTER_RENDERER.invoke(nameCs, outErr);
+                int rc = (int) (long) NativeLib.XBERG_UNREGISTER_RENDERER.invoke(nameCs, outErr);
                 if (rc != 0) {
                     MemorySegment errPtr = outErr.get(ValueLayout.ADDRESS, 0);
                     String msg = errPtr.equals(MemorySegment.NULL)
@@ -250,7 +251,7 @@ public final class RendererBridge implements AutoCloseable {
         try {
             try (var arena = Arena.ofShared()) {
                 MemorySegment outErr = arena.allocate(ValueLayout.ADDRESS);
-                int rc = (int) NativeLib.XBERG_CLEAR_RENDERER.invoke(outErr);
+                int rc = (int) (long) NativeLib.XBERG_CLEAR_RENDERER.invoke(outErr);
                 if (rc != 0) {
                     MemorySegment errPtr = outErr.get(ValueLayout.ADDRESS, 0);
                     String msg = errPtr.equals(MemorySegment.NULL)

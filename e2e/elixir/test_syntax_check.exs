@@ -2,7 +2,7 @@ unless Code.ensure_loaded?(E2e.TestStubs.TestStubRegisterDocumentExtractorTraitB
 defmodule E2e.TestStubs.TestStubRegisterDocumentExtractorTraitBridge do
   def name, do: "test-extractor"
   def initialize, do: :ok
-  def extract_bytes(content, mime_type, config), do: {:ok, %{}}
+  def extract(input, config), do: {:ok, %{}}
   def supported_mime_types, do: []
 end
 end

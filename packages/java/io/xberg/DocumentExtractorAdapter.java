@@ -36,13 +36,8 @@ public final class DocumentExtractorAdapter implements IDocumentExtractor {
     }
 
     @Override
-    public String extract_bytes(byte[] content, String mime_type, ExtractionConfig config) throws Exception {
-        return impl.extract_bytes(content, mime_type, config);
-    }
-
-    @Override
-    public String extract_file(java.nio.file.Path path, String mime_type, ExtractionConfig config) throws Exception {
-        return impl.extract_file(path, mime_type, config);
+    public ExtractedDocument extract(ExtractInput input, ExtractionConfig config) throws Exception {
+        return impl.extract(input, config);
     }
 
     @Override

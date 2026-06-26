@@ -28,9 +28,8 @@ public final class DocumentExtractorBridge implements AutoCloseable {
     private static final ConcurrentHashMap<String, DocumentExtractorBridge>
             DOCUMENT_EXTRACTOR_BRIDGES = new ConcurrentHashMap<>();
 
-    // C vtable: 11 fields (4 plugin methods + 5 trait methods + free_string + free_user_data)
+    // C vtable: 10 fields (4 plugin methods + 4 trait methods + free_string + free_user_data)
     private static final MemoryLayout VTABLE_LAYOUT = MemoryLayout.structLayout(
-            ValueLayout.ADDRESS,
             ValueLayout.ADDRESS,
             ValueLayout.ADDRESS,
             ValueLayout.ADDRESS,
@@ -68,13 +67,12 @@ public final class DocumentExtractorBridge implements AutoCloseable {
         initStubVersion(1L * ValueLayout.ADDRESS.byteSize());
         initStubInitialize(2L * ValueLayout.ADDRESS.byteSize());
         initStubShutdown(3L * ValueLayout.ADDRESS.byteSize());
-        initStubExtractBytes(4L * ValueLayout.ADDRESS.byteSize());
-        initStubExtractFile(5L * ValueLayout.ADDRESS.byteSize());
-        initStubSupportedMimeTypes(6L * ValueLayout.ADDRESS.byteSize());
-        initStubPriority(7L * ValueLayout.ADDRESS.byteSize());
-        initStubCanHandle(8L * ValueLayout.ADDRESS.byteSize());
-        initStubFreeString(9L * ValueLayout.ADDRESS.byteSize());
-        initStubFreeUserData(10L * ValueLayout.ADDRESS.byteSize());
+        initStubExtract(4L * ValueLayout.ADDRESS.byteSize());
+        initStubSupportedMimeTypes(5L * ValueLayout.ADDRESS.byteSize());
+        initStubPriority(6L * ValueLayout.ADDRESS.byteSize());
+        initStubCanHandle(7L * ValueLayout.ADDRESS.byteSize());
+        initStubFreeString(8L * ValueLayout.ADDRESS.byteSize());
+        initStubFreeUserData(9L * ValueLayout.ADDRESS.byteSize());
     }
 
     private void initStubName(long offset) throws ReflectiveOperationException {
@@ -109,37 +107,10 @@ public final class DocumentExtractorBridge implements AutoCloseable {
         vtable.set(ValueLayout.ADDRESS, offset, stubShutdown);
     }
 
-    private void initStubExtractBytes(long offset) throws ReflectiveOperationException {
-        var stubExtractBytes = LINKER.upcallStub(LOOKUP.bind(this, "handleExtractBytes",
+    private void initStubExtract(long offset) throws ReflectiveOperationException {
+        var stubExtract = LINKER.upcallStub(LOOKUP.bind(this, "handleExtract",
             MethodType.methodType(
                 int.class,
-                MemorySegment.class,
-                MemorySegment.class,
-                long.class,
-                MemorySegment.class,
-                MemorySegment.class,
-                MemorySegment.class,
-                MemorySegment.class
-            )),
-            FunctionDescriptor.of(
-                ValueLayout.JAVA_LONG,
-                ValueLayout.ADDRESS,
-                ValueLayout.ADDRESS,
-                ValueLayout.JAVA_LONG,
-                ValueLayout.ADDRESS,
-                ValueLayout.ADDRESS,
-                ValueLayout.ADDRESS,
-                ValueLayout.ADDRESS
-            ),
-            arena);
-        vtable.set(ValueLayout.ADDRESS, offset, stubExtractBytes);
-    }
-
-    private void initStubExtractFile(long offset) throws ReflectiveOperationException {
-        var stubExtractFile = LINKER.upcallStub(LOOKUP.bind(this, "handleExtractFile",
-            MethodType.methodType(
-                int.class,
-                MemorySegment.class,
                 MemorySegment.class,
                 MemorySegment.class,
                 MemorySegment.class,
@@ -152,11 +123,10 @@ public final class DocumentExtractorBridge implements AutoCloseable {
                 ValueLayout.ADDRESS,
                 ValueLayout.ADDRESS,
                 ValueLayout.ADDRESS,
-                ValueLayout.ADDRESS,
                 ValueLayout.ADDRESS
             ),
             arena);
-        vtable.set(ValueLayout.ADDRESS, offset, stubExtractFile);
+        vtable.set(ValueLayout.ADDRESS, offset, stubExtract);
     }
 
     private void initStubSupportedMimeTypes(long offset) throws ReflectiveOperationException {
@@ -244,45 +214,21 @@ public final class DocumentExtractorBridge implements AutoCloseable {
         } catch (Throwable e) { return 1; }
     }
 
-    private int handleExtractBytes(
+    private int handleExtract(
         MemorySegment userData,
-        MemorySegment content_in,
-        long contentLen,
-        MemorySegment mime_type_in,
+        MemorySegment input_in,
         MemorySegment config_in,
         MemorySegment outResult,
         MemorySegment outError
     ) {
         try {
-            byte[] content = content_in.reinterpret(contentLen).toArray(ValueLayout.JAVA_BYTE);
-            String mime_type = mime_type_in.reinterpret(Long.MAX_VALUE).getString(0);
+            String input_json = input_in.reinterpret(Long.MAX_VALUE).getString(0);
+            ExtractInput input = JSON.readValue(input_json, ExtractInput.class);
             String config_json = config_in.reinterpret(Long.MAX_VALUE).getString(0);
             ExtractionConfig config = JSON.readValue(config_json, ExtractionConfig.class);
-            String result = impl.extract_bytes(content, mime_type, config);
-            MemorySegment jsonCs = arena.allocateFrom(result);
-            outResult.set(ValueLayout.ADDRESS, 0, jsonCs);
-            return 0;
-        } catch (Throwable e) {
-            writeError(outError, e);
-            return 1;
-        }
-    }
-
-    private int handleExtractFile(
-        MemorySegment userData,
-        MemorySegment path_in,
-        MemorySegment mime_type_in,
-        MemorySegment config_in,
-        MemorySegment outResult,
-        MemorySegment outError
-    ) {
-        try {
-            java.nio.file.Path path = java.nio.file.Paths.get(path_in.reinterpret(Long.MAX_VALUE).getString(0));
-            String mime_type = mime_type_in.reinterpret(Long.MAX_VALUE).getString(0);
-            String config_json = config_in.reinterpret(Long.MAX_VALUE).getString(0);
-            ExtractionConfig config = JSON.readValue(config_json, ExtractionConfig.class);
-            String result = impl.extract_file(path, mime_type, config);
-            MemorySegment jsonCs = arena.allocateFrom(result);
+            ExtractedDocument result = impl.extract(input, config);
+            String json = JSON.writeValueAsString(result);
+            MemorySegment jsonCs = arena.allocateFrom(json);
             outResult.set(ValueLayout.ADDRESS, 0, jsonCs);
             return 0;
         } catch (Throwable e) {
@@ -366,7 +312,7 @@ public final class DocumentExtractorBridge implements AutoCloseable {
             try (var nameArena = Arena.ofShared()) {
                 var nameCs = nameArena.allocateFrom(impl.name());
                 MemorySegment outErr = nameArena.allocate(ValueLayout.ADDRESS);
-                int rc = (int) NativeLib.XBERG_REGISTER_DOCUMENT_EXTRACTOR.invoke(
+                int rc = (int) (long) NativeLib.XBERG_REGISTER_DOCUMENT_EXTRACTOR.invoke(
                     nameCs,
                     bridge.vtableSegment(),
                     MemorySegment.NULL,
@@ -395,7 +341,7 @@ public final class DocumentExtractorBridge implements AutoCloseable {
             try (var nameArena = Arena.ofShared()) {
                 var nameCs = nameArena.allocateFrom(name);
                 MemorySegment outErr = nameArena.allocate(ValueLayout.ADDRESS);
-                int rc = (int) NativeLib.XBERG_UNREGISTER_DOCUMENT_EXTRACTOR.invoke(nameCs, outErr);
+                int rc = (int) (long) NativeLib.XBERG_UNREGISTER_DOCUMENT_EXTRACTOR.invoke(nameCs, outErr);
                 if (rc != 0) {
                     MemorySegment errPtr = outErr.get(ValueLayout.ADDRESS, 0);
                     String msg = errPtr.equals(MemorySegment.NULL)
@@ -419,7 +365,7 @@ public final class DocumentExtractorBridge implements AutoCloseable {
         try {
             try (var arena = Arena.ofShared()) {
                 MemorySegment outErr = arena.allocate(ValueLayout.ADDRESS);
-                int rc = (int) NativeLib.XBERG_CLEAR_DOCUMENT_EXTRACTOR.invoke(outErr);
+                int rc = (int) (long) NativeLib.XBERG_CLEAR_DOCUMENT_EXTRACTOR.invoke(outErr);
                 if (rc != 0) {
                     MemorySegment errPtr = outErr.get(ValueLayout.ADDRESS, 0);
                     String msg = errPtr.equals(MemorySegment.NULL)

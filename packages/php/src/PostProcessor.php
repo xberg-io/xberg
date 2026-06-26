@@ -17,11 +17,11 @@ interface PostProcessor
      * Process an extraction result.
      *
 
-     * @param ExtractionResult $result
+     * @param ExtractedDocument $result
      * @param ExtractionConfig $config
      * @return mixed Return value from the plugin method
      */
-    public function process(ExtractionResult $result, ExtractionConfig $config): mixed;
+    public function process(ExtractedDocument $result, ExtractionConfig $config): mixed;
 
     /**
      * Get the processing stage for this post-processor.
@@ -35,20 +35,20 @@ interface PostProcessor
      * Optional: Check if this processor should run for a given result.
      *
 
-     * @param ExtractionResult $_result
+     * @param ExtractedDocument $_result
      * @param ExtractionConfig $_config
      * @return bool Return value from the plugin method
      */
-    public function should_process(ExtractionResult $_result, ExtractionConfig $_config): bool;
+    public function should_process(ExtractedDocument $_result, ExtractionConfig $_config): bool;
 
     /**
      * Optional: Estimate processing time in milliseconds.
      *
 
-     * @param ExtractionResult $_result
+     * @param ExtractedDocument $_result
      * @return int Return value from the plugin method
      */
-    public function estimated_duration_ms(ExtractionResult $_result): int;
+    public function estimated_duration_ms(ExtractedDocument $_result): int;
 
     /**
      * Execution priority within the processing stage.

@@ -14,12 +14,12 @@ interface Renderer
 {
 
     /**
-     * Render an `InternalDocument` to the output format.
+     * Binding-safe rendering entry point for foreign-language plugin bridges.
      *
 
-     * @param mixed $doc
+     * @param ExtractedDocument $result
      * @return string Return value from the plugin method
      */
-    public function render(mixed $doc): string;
+    public function render_result(ExtractedDocument $result): string;
 
 }

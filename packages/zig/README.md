@@ -86,7 +86,7 @@ Extract text, tables, images, metadata, and code intelligence from 96 file forma
 
 - **Document intelligence core** — extract text, tables, images, metadata, entities, keywords, code intelligence, and transcripts in builds that enable transcription.
 - **Format coverage** — PDF, Office, images, HTML/XML, email, archives, notebooks, citations, scientific formats, plain text, and audio/video formats in builds that enable transcription.
-- **OCR choices** — Tesseract, PaddleOCR, EasyOCR where supported, VLM OCR through liter-llm, and plugin hooks for custom backends.
+- **OCR choices** — Tesseract, PaddleOCR, Candle where supported, VLM OCR through liter-llm, and plugin hooks for custom backends.
 - **Same engine as every binding** — Rust, Python, Node.js, Go, Java, PHP, Ruby, .NET, Elixir, R, WASM, Kotlin Android, Swift, Dart, Zig, and C FFI share the same Rust implementation.
 - **Zig package** — wrapper over the C FFI with explicit memory ownership.
 
@@ -163,10 +163,11 @@ pub fn main() !void {
         \\}
     ;
 
-    const result_json = try xberg.extract_sync("scanned.pdf", null, config_json);
-    defer std.heap.c_allocator.free(result_json);
+    const input_json = "{\"kind\":\"uri\",\"uri\":\"scanned.pdf\"}";
+    const output_json = try xberg.extract(input_json, config_json);
+    defer std.heap.c_allocator.free(output_json);
 
-    const owned = try allocator.dupe(u8, result_json);
+    const owned = try allocator.dupe(u8, output_json);
     defer allocator.free(owned);
 
     const stdout = std.io.getStdOut().writer();
@@ -352,10 +353,11 @@ pub fn main() !void {
         \\}
     ;
 
-    const result_json = try xberg.extract_sync("scanned.pdf", null, config_json);
-    defer std.heap.c_allocator.free(result_json);
+    const input_json = "{\"kind\":\"uri\",\"uri\":\"scanned.pdf\"}";
+    const output_json = try xberg.extract(input_json, config_json);
+    defer std.heap.c_allocator.free(output_json);
 
-    const owned = try allocator.dupe(u8, result_json);
+    const owned = try allocator.dupe(u8, output_json);
     defer allocator.free(owned);
 
     const stdout = std.io.getStdOut().writer();

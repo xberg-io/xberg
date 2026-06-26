@@ -85,7 +85,7 @@ Extract text, tables, images, metadata, and code intelligence from 96 file forma
 ## What This Package Provides
 
 - **Ruby-native extraction** — idiomatic Ruby objects over the shared Rust document engine.
-- **Structured results** — text, tables, images, metadata, language detection, chunks, and warnings.
+- **Structured results** — an `ExtractionResult` envelope with `ExtractedDocument` items, errors, and summary counts.
 - **OCR support** — Tesseract and PaddleOCR through the same configuration model as other bindings.
 - **Cross-binding parity** — output matches the Python, Node.js, Go, Java, .NET, PHP, Elixir, R, Dart, Swift, Zig, WASM, and C FFI packages.
 
@@ -116,21 +116,12 @@ gem install xberg
 ```ruby
 require 'xberg'
 
-# Simple synchronous extraction
-result = Xberg.extract(Xberg::ExtractInput.file("document.pdf"))
-puts result.content
-```
+input = Xberg::ExtractInput.new(kind: "uri", uri: "document.pdf")
+output = Xberg.extract(input, Xberg::ExtractionConfig.new)
+document = output.results.first
 
-### Async Extraction
-
-```ruby
-require 'xberg'
-
-# Using Fiber for concurrency (Ruby 3.0+)
-Fiber.new do
-  result = Xberg.extract(Xberg::ExtractInput.file("document.pdf"))
-  puts result.content
-end.resume
+puts document.content
+puts "Results: #{output.summary.results}"
 ```
 
 ### Batch Processing
@@ -138,16 +129,22 @@ end.resume
 ```ruby
 require 'xberg'
 
+bytes = File.binread("doc3.txt")
 inputs = [
-  Xberg::ExtractInput.file("doc1.pdf"),
-  Xberg::ExtractInput.file("doc2.docx"),
-  Xberg::ExtractInput.file("doc3.xlsx"),
+  Xberg::ExtractInput.new(kind: "uri", uri: "doc1.pdf"),
+  Xberg::ExtractInput.new(kind: "uri", uri: "doc2.docx"),
+  Xberg::ExtractInput.new(
+    kind: "bytes",
+    bytes: bytes,
+    mime_type: "text/plain",
+    filename: "doc3.txt"
+  ),
 ]
 
-results = Xberg.extract_batch(inputs)
+output = Xberg.extract_batch(inputs, Xberg::ExtractionConfig.new)
 
-results.each do |result|
-  puts "Content length: #{result.content.length}"
+output.results.each do |document|
+  puts "Content length: #{document.content.length}"
 end
 ```
 
@@ -165,8 +162,11 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract("document.pdf", config: config)
-puts result.content
+input = Xberg::ExtractInput.new(kind: "uri", uri: "document.pdf")
+output = Xberg.extract(input, config)
+document = output.results.first
+
+puts document.content
 ```
 
 ## OCR Support
@@ -187,8 +187,11 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract("scanned.pdf", config: config)
-puts result.content
+input = Xberg::ExtractInput.new(kind: "uri", uri: "scanned.pdf")
+output = Xberg.extract(input, config)
+document = output.results.first
+
+puts document.content
 ```
 
 ## Table Extraction
@@ -205,9 +208,11 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract("invoice.pdf", config: config)
+input = Xberg::ExtractInput.new(kind: "uri", uri: "invoice.pdf")
+output = Xberg.extract(input, config)
+document = output.results.first
 
-result.tables.each_with_index do |table, index|
+document.tables.each_with_index do |table, index|
   puts "Table #{index}:"
   puts table.markdown
 end
@@ -218,22 +223,20 @@ end
 ```ruby
 require 'xberg'
 
-result = Xberg.extract("document.pdf")
+input = Xberg::ExtractInput.new(kind: "uri", uri: "document.pdf")
+output = Xberg.extract(input, Xberg::ExtractionConfig.new)
+document = output.results.first
 
-# PDF metadata
-if result.metadata[:pdf]
-  pdf_meta = result.metadata[:pdf]
-  puts "Title: #{pdf_meta[:title]}"
-  puts "Author: #{pdf_meta[:author]}"
-  puts "Pages: #{pdf_meta[:page_count]}"
+metadata = document.metadata
+puts "Title: #{metadata.title}" if metadata&.title
+if metadata&.authors
+  puts "Authors: #{metadata.authors.join(', ')}"
 end
 
-# Detected languages
-puts "Languages: #{result.detected_languages}"
+puts "Languages: #{document.detected_languages}"
 
-# Images
-if result.images
-  puts "Images found: #{result.images.count}"
+if document.images
+  puts "Images found: #{document.images.count}"
 end
 ```
 
@@ -249,10 +252,12 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract("long_document.pdf", config: config)
+input = Xberg::ExtractInput.new(kind: "uri", uri: "long_document.pdf")
+output = Xberg.extract(input, config)
+document = output.results.first
 
-result.chunks.each_with_index do |chunk, index|
-  puts "Chunk #{index}: #{chunk.length} characters"
+document.chunks.each_with_index do |chunk, index|
+  puts "Chunk #{index}: #{chunk.content.length} characters"
 end
 ```
 
@@ -267,8 +272,11 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract("protected.pdf", config: config)
-puts result.content
+input = Xberg::ExtractInput.new(kind: "uri", uri: "protected.pdf")
+output = Xberg.extract(input, config)
+document = output.results.first
+
+puts document.content
 ```
 
 ## Language Detection
@@ -282,18 +290,21 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract("multilingual.pdf", config: config)
-puts "Detected languages: #{result.detected_languages}"
+input = Xberg::ExtractInput.new(kind: "uri", uri: "multilingual.pdf")
+output = Xberg.extract(input, config)
+document = output.results.first
+
+puts "Detected languages: #{document.detected_languages}"
 ```
 
 ## API Reference
 
 ### Main Methods
 
-- `Xberg.extract(input, config: nil)` – Extract one `ExtractInput`
-- `Xberg.extract_batch(inputs, config: nil)` – Batch processing
-- `Xberg::ExtractInput.file(path, mime_type: nil, **overrides)` – File path input
-- `Xberg::ExtractInput.bytes(data, mime_type:, **overrides)` – In-memory bytes input
+- `Xberg.extract(input, config)` – Extract one URI or bytes input.
+- `Xberg.extract_batch(inputs, config)` – Extract multiple URI or bytes inputs.
+- `Xberg::ExtractInput.new(kind: "uri", uri: "document.pdf")` – Local path, `file://`, or HTTP(S) URI input.
+- `Xberg::ExtractInput.new(kind: "bytes", bytes: data, mime_type: "application/pdf")` – In-memory bytes input.
 
 ### Configuration Classes
 
@@ -304,14 +315,12 @@ puts "Detected languages: #{result.detected_languages}"
 - `PdfConfig` – PDF-specific options
 - `LanguageDetectionConfig` – Language detection settings
 
-### Result Object
+### Result Types
 
-- `content` – Extracted text
-- `metadata` – File metadata as Hash
-- `tables` – Array of ExtractedTable objects
-- `detected_languages` – Array of language codes
-- `chunks` – Array of text chunks
-- `images` – Array of extracted images (if enabled)
+- `ExtractionResult` – Envelope with `results`, `errors`, and `summary`.
+- `ExtractedDocument` – Per-document item at `output.results.first` with content, metadata, tables, and chunks.
+- `Table` – Table with `cells`, `markdown`, and `page_number`.
+- `Metadata` – Typed document metadata.
 
 ## System Requirements
 
@@ -404,9 +413,12 @@ require 'pathname'
 
 Dir.glob("documents/*.pdf").each do |file|
   puts "Processing: #{file}"
-  result = Xberg.extract(file)
-  puts "  Content length: #{result.content.length}"
-  puts "  Language: #{result.detected_languages}"
+  input = Xberg::ExtractInput.new(kind: "uri", uri: file)
+  output = Xberg.extract(input, Xberg::ExtractionConfig.new)
+  document = output.results.first
+
+  puts "  Content length: #{document.content.length}"
+  puts "  Language: #{document.detected_languages}"
 end
 ```
 
@@ -416,11 +428,13 @@ end
 require 'xberg'
 require 'json'
 
-result = Xberg.extract("data.pdf")
+input = Xberg::ExtractInput.new(kind: "uri", uri: "data.pdf")
+output = Xberg.extract(input, Xberg::ExtractionConfig.new)
+document = output.results.first
 
 # Parse content as JSON (if applicable)
 begin
-  data = JSON.parse(result.content)
+  data = JSON.parse(document.content)
   puts "Parsed data: #{data}"
 rescue JSON::ParserError
   puts "Content is not JSON"
@@ -438,9 +452,11 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract("document.pdf", config: config)
+input = Xberg::ExtractInput.new(kind: "uri", uri: "document.pdf")
+output = Xberg.extract(input, config)
+document = output.results.first
 
-result.images&.each_with_index do |image, index|
+document.images&.each_with_index do |image, index|
   File.write("image_#{index}.png", image.data)
 end
 ```

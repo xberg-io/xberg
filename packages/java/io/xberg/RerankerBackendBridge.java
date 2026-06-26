@@ -220,7 +220,12 @@ public final class RerankerBackendBridge implements AutoCloseable {
             try (var nameArena = Arena.ofShared()) {
                 var nameCs = nameArena.allocateFrom(impl.name());
                 MemorySegment outErr = nameArena.allocate(ValueLayout.ADDRESS);
-                int rc = (int) NativeLib.XBERG_REGISTER_RERANKER_BACKEND.invoke(nameCs, bridge.vtableSegment(), MemorySegment.NULL, outErr);
+                int rc = (int) (long) NativeLib.XBERG_REGISTER_RERANKER_BACKEND.invoke(
+                    nameCs,
+                    bridge.vtableSegment(),
+                    MemorySegment.NULL,
+                    outErr
+                );
                 if (rc != 0) {
                     MemorySegment errPtr = outErr.get(ValueLayout.ADDRESS, 0);
                     String msg = errPtr.equals(MemorySegment.NULL) ? "registration failed (rc=" + rc + ")" : readNativeString(errPtr);
@@ -244,7 +249,7 @@ public final class RerankerBackendBridge implements AutoCloseable {
             try (var nameArena = Arena.ofShared()) {
                 var nameCs = nameArena.allocateFrom(name);
                 MemorySegment outErr = nameArena.allocate(ValueLayout.ADDRESS);
-                int rc = (int) NativeLib.XBERG_UNREGISTER_RERANKER_BACKEND.invoke(nameCs, outErr);
+                int rc = (int) (long) NativeLib.XBERG_UNREGISTER_RERANKER_BACKEND.invoke(nameCs, outErr);
                 if (rc != 0) {
                     MemorySegment errPtr = outErr.get(ValueLayout.ADDRESS, 0);
                     String msg = errPtr.equals(MemorySegment.NULL)
@@ -268,7 +273,7 @@ public final class RerankerBackendBridge implements AutoCloseable {
         try {
             try (var arena = Arena.ofShared()) {
                 MemorySegment outErr = arena.allocate(ValueLayout.ADDRESS);
-                int rc = (int) NativeLib.XBERG_CLEAR_RERANKER_BACKEND.invoke(outErr);
+                int rc = (int) (long) NativeLib.XBERG_CLEAR_RERANKER_BACKEND.invoke(outErr);
                 if (rc != 0) {
                     MemorySegment errPtr = outErr.get(ValueLayout.ADDRESS, 0);
                     String msg = errPtr.equals(MemorySegment.NULL)

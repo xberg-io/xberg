@@ -86,7 +86,7 @@ Extract text, tables, images, metadata, and code intelligence from 96 file forma
 
 - **Document intelligence core** — extract text, tables, images, metadata, entities, keywords, code intelligence, and transcripts in builds that enable transcription.
 - **Format coverage** — PDF, Office, images, HTML/XML, email, archives, notebooks, citations, scientific formats, plain text, and audio/video formats in builds that enable transcription.
-- **OCR choices** — Tesseract, PaddleOCR, EasyOCR where supported, VLM OCR through liter-llm, and plugin hooks for custom backends.
+- **OCR choices** — Tesseract, PaddleOCR, Candle where supported, VLM OCR through liter-llm, and plugin hooks for custom backends.
 - **Same engine as every binding** — Rust, Python, Node.js, Go, Java, PHP, Ruby, .NET, Elixir, R, WASM, Kotlin Android, Swift, Dart, Zig, and C FFI share the same Rust implementation.
 - **Node-first TypeScript API** — NAPI-RS package with typed options/results and async extraction.
 
@@ -117,14 +117,14 @@ Pre-built binaries available for:
 Extract text, metadata, and structure from any supported document format:
 
 ```typescript title="TypeScript"
-import { extractSync } from "@xberg-io/xberg";
+import { extract } from "@xberg-io/xberg";
 
 const config = {
   useCache: true,
   enableQualityProcessing: true,
 };
 
-const result = extractSync("document.pdf", null, config);
+const result = extract("document.pdf", null, config);
 
 console.log(result.content);
 console.log(`MIME Type: ${result.mimeType}`);
@@ -158,9 +158,9 @@ console.log(result.content);
 #### Table Extraction
 
 ```typescript title="TypeScript"
-import { extractSync } from "xberg";
+import { extract } from "xberg";
 
-const result = extractSync("document.pdf");
+const result = extract("document.pdf");
 
 result.tables?.forEach((table) => {
   console.log(`Table with ${table.cells?.length ?? 0} rows`);

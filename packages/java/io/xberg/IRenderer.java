@@ -21,5 +21,5 @@ public interface IRenderer {
     /** Shut down the plugin. */
     default void shutdown() throws Exception {}
 
-/** render. */    String render(String doc) throws Exception;
+/** render_result. */    String render_result(ExtractedDocument result) throws Exception;
 }

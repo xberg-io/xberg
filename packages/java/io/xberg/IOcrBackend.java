@@ -22,9 +22,9 @@ public interface IOcrBackend {
     /** Shut down the plugin. */
     default void shutdown() throws Exception {}
 
-/** process_image. */    ExtractionResult process_image(byte[] image_bytes, OcrConfig config) throws Exception;
+/** process_image. */    ExtractedDocument process_image(byte[] image_bytes, OcrConfig config) throws Exception;
 
-/** process_image_file. */    ExtractionResult process_image_file(java.nio.file.Path path, OcrConfig config) throws Exception;
+/** process_image_file. */    ExtractedDocument process_image_file(java.nio.file.Path path, OcrConfig config) throws Exception;
 
 /** supports_language. */    boolean supports_language(String lang) throws Exception;
 
@@ -38,5 +38,5 @@ public interface IOcrBackend {
 
 /** emits_structured_markdown. */    boolean emits_structured_markdown() throws Exception;
 
-/** process_document. */    ExtractionResult process_document(java.nio.file.Path _path, OcrConfig _config) throws Exception;
+/** process_document. */    ExtractedDocument process_document(java.nio.file.Path _path, OcrConfig _config) throws Exception;
 }

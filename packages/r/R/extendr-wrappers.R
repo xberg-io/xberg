@@ -11,36 +11,15 @@ NULL
 #' Extract content from a single bytes or URI input
 #' @param input ExtractInput object (list with class attribute).
 #' @param config ExtractionConfig object (list with class attribute).
-#' @return ExtractionOutput object (list with class attribute).
+#' @return ExtractionResult object (list with class attribute).
 #' @export
 extract <- function(input = ExtractInput$default(), config = ExtractionConfig$default()) .Call("wrap__extract", input, config, PACKAGE = "xberg")
 #' Extract content from multiple bytes or URI inputs
 #' @param inputs List of extractinput object (list with class attribute).
 #' @param config ExtractionConfig object (list with class attribute).
-#' @return ExtractionOutput object (list with class attribute).
+#' @return ExtractionResult object (list with class attribute).
 #' @export
 extract_batch <- function(inputs, config = ExtractionConfig$default()) .Call("wrap__extract_batch", inputs, config, PACKAGE = "xberg")
-#' Detect MIME type from raw file bytes
-#'
-#' Uses magic byte signatures to detect file type from content.
-#' Falls back to `infer` crate for comprehensive detection.
-#'
-#' For ZIP-based files, inspects contents to distinguish Office Open XML
-#' formats (DOCX, XLSX, PPTX) from plain ZIP archives.
-#' @param content Raw file bytes.
-#' @return The detected MIME type string.
-#'
-#' @section Errors:
-#' Returns `XbergError::UnsupportedFormat` if MIME type cannot be determined.
-#' @export
-detect_mime_type_from_bytes <- function(content) .Call("wrap__detect_mime_type_from_bytes", content, PACKAGE = "xberg")
-#' Get file extensions for a given MIME type
-#'
-#' Returns all known file extensions that map to the specified MIME type.
-#' @param mime_type The MIME type to look up.
-#' @return A vector of file extensions (without leading dot) for the MIME type.
-#' @export
-get_extensions_for_mime <- function(mime_type) .Call("wrap__get_extensions_for_mime", mime_type, PACKAGE = "xberg")
 #' List all supported document formats
 #'
 #' Returns every file extension Xberg recognizes together with its
@@ -59,22 +38,16 @@ list_supported_formats <- function() .Call("wrap__list_supported_formats", PACKA
 #' @return List of character string.
 #' @export
 list_embedding_backends <- function() .Call("wrap__list_embedding_backends", PACKAGE = "xberg")
+#' List names of all registered document extractors
+#' @return List of character string.
+#' @export
+list_document_extractors <- function() .Call("wrap__list_document_extractors", PACKAGE = "xberg")
 #' List all registered OCR backends
 #'
 #' Returns the names of all OCR backends currently registered in the global registry.
 #' @return A vector of OCR backend names.
 #' @export
 list_ocr_backends <- function() .Call("wrap__list_ocr_backends", PACKAGE = "xberg")
-#' Register every built-in post-processor enabled by the active feature set
-#'
-#' This is the single entry point that callers (including
-#' `register_default_post_processors`) use to populate the global
-#' post-processor registry with the in-tree built-ins. Each submodule's own
-#' `register` function is gated by its feature flag so this aggregate stays
-#' safe to call on any target.
-#' @return Invisible NULL.
-#' @export
-register_builtin <- function() .Call("wrap__register_builtin", PACKAGE = "xberg")
 #' List all registered post-processor names
 #'
 #' Returns a vector of all post-processor names currently registered in the
@@ -103,110 +76,21 @@ list_reranker_backends <- function() .Call("wrap__list_reranker_backends", PACKA
 #' @return List of character string.
 #' @export
 list_validators <- function() .Call("wrap__list_validators", PACKAGE = "xberg")
-#' Run page classification against an extraction result
-#'
-#' Mutates `result.page_classifications` with one entry per non-empty page and
-#' appends every LLM call's usage to `result.llm_usage`.
-#' @param result ExtractionResult object (list with class attribute).
-#' @param config PageClassificationConfig object (list with class attribute).
-#' @return Invisible NULL.
-#'
-#' @section Errors:
-#' Returns the first error encountered when rendering the prompt or calling the
-#' LLM. Partially produced classifications are discarded so callers do not see
-#' a half-populated vector.
-#' @export
-classify_pages <- function(result = ExtractionResult$default(), config) .Call("wrap__classify_pages", result, config, PACKAGE = "xberg")
-#' Classify a single piece of text without requiring an `ExtractionResult`
-#'
-#' Use this when the caller already has plain text (e.g. a RAG ingest pipeline
-#' receiving documents off a queue) and wants a label list back without
-#' manufacturing extractor-side metadata.
-#' @param text Character string.
-#' @param config PageClassificationConfig object (list with class attribute).
-#' @return List of classificationlabel object (list with class attribute).
-#'
-#' @section Errors:
-#' Same as [`classify_pages`]: a validation error when `config.labels` is empty,
-#' or any error returned by prompt rendering or the underlying LLM call.
-#' @export
-classify_text <- function(text, config) .Call("wrap__classify_text", text, config, PACKAGE = "xberg")
-#' Download a NER model into the xberg cache
-#' @param _name Character string.
-#' @param _cache_dir File path as character string.
-#' @return File path as character string.
-#' @export
-download_model <- function(name, cache_dir = NULL) .Call("wrap__download_model", name, cache_dir, PACKAGE = "xberg")
-#' Default NER model identifier
-#' @return Character string.
-#' @export
-default_model_name <- function() .Call("wrap__default_model_name", PACKAGE = "xberg")
-#' All NER models xberg knows about
-#' @return List of character string.
-#' @export
-known_models <- function() .Call("wrap__known_models", PACKAGE = "xberg")
-#' Run pattern redaction (and optional NER-driven redaction) over `result` and
-#'
-#' rewrite every textual field. Populates `result.redaction_report`.
-#' @param result ExtractionResult object (list with class attribute).
-#' @param config RedactionConfig object (list with class attribute).
-#' @return Invisible NULL.
-#' @export
-redact <- function(result = ExtractionResult$default(), config = RedactionConfig$default()) .Call("wrap__redact", result, config, PACKAGE = "xberg")
-#' Score and return the top-N sentences from `text`, joined in original order
-#'
-#' `language` is an ISO 639 (or locale) code used to pick a stopword list;
-#' pass `None` (or an unknown code) to fall back to English.
-#' `max_tokens` bounds the summary length by whitespace-separated tokens;
-#' `None` falls back to [`DEFAULT_MAX_TOKENS`].
-#' @param text Character string.
-#' @param language Character string.
-#' @param max_tokens Integer.
-#' @return Optional character string. Defaults to NULL.
-#' @export
-summarize <- function(text, language = NULL, max_tokens = NULL) .Call("wrap__summarize", text, language, max_tokens, PACKAGE = "xberg")
-#' Count whitespace-separated tokens (used for token-budget bookkeeping by
-#'
-#' callers).
-#' @param text Character string.
-#' @return Integer.
-#' @export
-token_count <- function(text) .Call("wrap__token_count", text, PACKAGE = "xberg")
-#' Translate the extraction result in place
-#'
-#' Populates `result.translation` with the translated `content`, optionally the
-#' translated `formatted_content` (when `preserve_markup = true`), and rewrites
-#' every chunk's `content` field. Every LLM call's usage is appended to
-#' `result.llm_usage`.
-#' @param result ExtractionResult object (list with class attribute).
-#' @param config TranslationConfig object (list with class attribute).
-#' @return Invisible NULL.
-#' @export
-translate_result <- function(result = ExtractionResult$default(), config) .Call("wrap__translate_result", result, config, PACKAGE = "xberg")
-#' Detect the MIME type of a file at the given path
-#'
-#' Uses the file extension and optionally the file content to determine the MIME type.
-#' Set `check_exists` to `true` to verify the file exists before detection.
-#' @param path Character string.
-#' @param check_exists Logical (TRUE/FALSE).
-#' @return Character string.
-#' @export
-detect_mime_type <- function(path, check_exists) .Call("wrap__detect_mime_type", path, check_exists, PACKAGE = "xberg")
 #' register_ocr_backend
 #'
 #' Register an R-side plugin implementation. Pass a named list whose entries
 #' implement the trait's required methods (e.g. `list(name = function() "my", ...)`).
 #'
 #' The backend must implement the following methods (named entries in `r_backend`):
-#'   \item{ `process_image(image_bytes: raw, config: OcrConfig (native object)) -> ExtractionResult` }
-#'   \item{ `process_image_file(path: character, config: OcrConfig (native object)) -> ExtractionResult` }
+#'   \item{ `process_image(image_bytes: raw, config: OcrConfig (native object)) -> ExtractedDocument` }
+#'   \item{ `process_image_file(path: character, config: OcrConfig (native object)) -> ExtractedDocument` }
 #'   \item{ `supports_language(lang: character) -> numeric` }
 #'   \item{ `backend_type() -> OcrBackendType` }
 #'   \item{ `supported_languages() -> list of character` }
 #'   \item{ `supports_table_detection() -> numeric` }
 #'   \item{ `supports_document_processing() -> numeric` }
 #'   \item{ `emits_structured_markdown() -> numeric` }
-#'   \item{ `process_document(path: character, config: OcrConfig (native object)) -> ExtractionResult` }
+#'   \item{ `process_document(path: character, config: OcrConfig (native object)) -> ExtractedDocument` }
 #'
 #' Each method receiving a known struct argument is handed the native binding object
 #' (an external pointer with `$field` accessors), not a JSON string. Other arguments
@@ -241,10 +125,10 @@ clear_ocr_backends <- function() .Call("wrap__clear_ocr_backends", PACKAGE = "xb
 #' implement the trait's required methods (e.g. `list(name = function() "my", ...)`).
 #'
 #' The backend must implement the following methods (named entries in `r_backend`):
-#'   \item{ `process(result: ExtractionResult, config: ExtractionConfig (native object)) -> void` }
+#'   \item{ `process(result: ExtractedDocument, config: ExtractionConfig (native object)) -> void` }
 #'   \item{ `processing_stage() -> ProcessingStage` }
-#'   \item{ `should_process(result: ExtractionResult, config: ExtractionConfig (native object)) -> numeric` }
-#'   \item{ `estimated_duration_ms(result: ExtractionResult) -> numeric` }
+#'   \item{ `should_process(result: ExtractedDocument, config: ExtractionConfig (native object)) -> numeric` }
+#'   \item{ `estimated_duration_ms(result: ExtractedDocument) -> numeric` }
 #'   \item{ `priority() -> numeric` }
 #'
 #' Each method receiving a known struct argument is handed the native binding object
@@ -280,8 +164,8 @@ clear_post_processors <- function() .Call("wrap__clear_post_processors", PACKAGE
 #' implement the trait's required methods (e.g. `list(name = function() "my", ...)`).
 #'
 #' The backend must implement the following methods (named entries in `r_backend`):
-#'   \item{ `validate(result: ExtractionResult, config: ExtractionConfig (native object)) -> void` }
-#'   \item{ `should_validate(result: ExtractionResult, config: ExtractionConfig (native object)) -> numeric` }
+#'   \item{ `validate(result: ExtractedDocument, config: ExtractionConfig (native object)) -> void` }
+#'   \item{ `should_validate(result: ExtractedDocument, config: ExtractionConfig (native object)) -> numeric` }
 #'   \item{ `priority() -> numeric` }
 #'
 #' Each method receiving a known struct argument is handed the native binding object
@@ -311,6 +195,44 @@ unregister_validator <- function(name) .Call("wrap__unregister_validator", name,
 #' @return Invisible NULL on success; raises an R error on failure.
 #' @export
 clear_validators <- function() .Call("wrap__clear_validators", PACKAGE = "xberg")
+#' register_document_extractor
+#'
+#' Register an R-side plugin implementation. Pass a named list whose entries
+#' implement the trait's required methods (e.g. `list(name = function() "my", ...)`).
+#'
+#' The backend must implement the following methods (named entries in `r_backend`):
+#'   \item{ `extract(input: ExtractInput (native object), config: ExtractionConfig (native object)) -> ExtractedDocument` }
+#'   \item{ `supported_mime_types() -> list of character` }
+#'   \item{ `priority() -> numeric` }
+#'   \item{ `can_handle(path: character, mime_type: character) -> numeric` }
+#'
+#' Each method receiving a known struct argument is handed the native binding object
+#' (an external pointer with `$field` accessors), not a JSON string. Other arguments
+#' (enums, opaque handles) arrive as JSON strings. A method may return either the native
+#' binding object (an external pointer, for representable struct return types) or a
+#' JSON-encoded string (e.g. via `jsonlite::toJSON`); other return shapes use a JSON string.
+#'
+#' @param r_backend Named list of R closures implementing the trait surface.
+#'
+#' @return Invisible NULL on success; raises an R error on failure.
+#' @export
+register_document_extractor <- function(r_backend) .Call("wrap__register_document_extractor", r_backend, PACKAGE = "xberg")
+#' unregister_document_extractor
+#'
+#' Unregister a previously registered plugin by name.
+#'
+#' @param name Plugin name string as returned by the backend's `name()` method.
+#'
+#' @return Invisible NULL on success; raises an R error on failure.
+#' @export
+unregister_document_extractor <- function(name) .Call("wrap__unregister_document_extractor", name, PACKAGE = "xberg")
+#' clear_document_extractors
+#'
+#' Remove every registered plugin of this type. Typically used in test teardown.
+#'
+#' @return Invisible NULL on success; raises an R error on failure.
+#' @export
+clear_document_extractors <- function() .Call("wrap__clear_document_extractors", PACKAGE = "xberg")
 #' register_embedding_backend
 #'
 #' Register an R-side plugin implementation. Pass a named list whose entries
@@ -353,7 +275,7 @@ clear_embedding_backends <- function() .Call("wrap__clear_embedding_backends", P
 #' implement the trait's required methods (e.g. `list(name = function() "my", ...)`).
 #'
 #' The backend must implement the following methods (named entries in `r_backend`):
-#'   \item{ `render(doc: InternalDocument) -> character` }
+#'   \item{ `render_result(result: ExtractedDocument) -> character` }
 #'
 #' Each method receiving a known struct argument is handed the native binding object
 #' (an external pointer with `$field` accessors), not a JSON string. Other arguments
@@ -637,6 +559,7 @@ needs_image_processing.ExtractionConfig <- function(x, ...) x$needs_image_proces
 #' @field pages Override page extraction for this file.
 #' @field keywords Override keyword extraction for this file.
 #' @field postprocessor Override post-processor for this file.
+#' @field html_output Override styled HTML output configuration for this file.
 #' @field result_format Override result format for this file.
 #' @field output_format Override output content format for this file.
 #' @field include_document_structure Override document structure output for this file.
@@ -645,6 +568,14 @@ needs_image_processing.ExtractionConfig <- function(x, ...) x$needs_image_proces
 #' @field timeout_secs Override per-file extraction timeout in seconds.
 #' @field tree_sitter Override tree-sitter configuration for this file.
 #' @field structured_extraction Override structured extraction configuration for this file.
+#' @field url Override URL ingestion and crawl configuration for this file.
+#' @field ner Override named-entity recognition configuration for this file.
+#' @field redaction Override redaction configuration for this file.
+#' @field summarization Override summarization configuration for this file.
+#' @field translation Override translation configuration for this file.
+#' @field page_classification Override per-page classification configuration for this file.
+#' @field captioning Override VLM captioning configuration for this file.
+#' @field qr_codes Override QR-code detection for this file.
 #' @export
 FileExtractionConfig <- new.env(parent = emptyenv())
 FileExtractionConfig$from_json <- function(json) {
@@ -696,8 +627,8 @@ SvgOptions$from_json <- function(json) {
 #' @export
 ExtractInput <- new.env(parent = emptyenv())
 ExtractInput$default <- function() .Call("wrap__ExtractInput__default", PACKAGE = "xberg")
-ExtractInput$bytes <- function(bytes, mime_type, filename) .Call("wrap__ExtractInput__bytes", bytes, mime_type, filename, PACKAGE = "xberg")
-ExtractInput$uri <- function(uri) .Call("wrap__ExtractInput__uri", uri, PACKAGE = "xberg")
+ExtractInput$from_bytes <- function(bytes, mime_type, filename) .Call("wrap__ExtractInput__from_bytes", bytes, mime_type, filename, PACKAGE = "xberg")
+ExtractInput$from_uri <- function(uri) .Call("wrap__ExtractInput__from_uri", uri, PACKAGE = "xberg")
 ExtractInput$from_json <- function(json) {
   .Call("wrap__ExtractInput__from_json", json, PACKAGE = "xberg")
 }
@@ -712,7 +643,7 @@ ExtractInput$from_json <- function(json) {
 }
 #' @export
 `[[.ExtractInput` <- `$.ExtractInput`
-#' Non-fatal per-input extraction error captured by [`ExtractionOutput`]
+#' Non-fatal per-input extraction error captured by [`ExtractionResult`]
 #' @field index Input index in the original request.
 #' @field code Stable numeric error code.
 #' @field error_type Stable snake_case error kind.
@@ -1018,7 +949,7 @@ OcrQualityThresholds$from_json <- function(json) {
 #' @export
 `[[.OcrQualityThresholds` <- `$.OcrQualityThresholds`
 #' A single backend stage in the OCR pipeline
-#' @field backend Backend name: "tesseract", "paddleocr", "easyocr", or a custom registered name.
+#' @field backend Backend name: "tesseract", "paddleocr", "paddle-ocr", "vlm", or a custom registered name.
 #' @field priority Priority weight (higher = tried first). Stages are sorted by priority descending.
 #' @field language Language override for this stage (None = use parent OcrConfig.language). Accepts either a single
 #' @field tesseract_config Tesseract-specific config override for this stage.
@@ -1040,7 +971,7 @@ OcrPipelineStage <- new.env(parent = emptyenv())
 `[[.OcrPipelineStage` <- `$.OcrPipelineStage`
 #' OCR configuration
 #' @field enabled Whether OCR is enabled.
-#' @field backend OCR backend: tesseract, easyocr, paddleocr
+#' @field backend OCR backend: tesseract, paddleocr, paddle-ocr, or vlm
 #' @field language Language code(s) for OCR recognition. Accepts either a single language code ("eng") or a list
 #' @field tesseract_config Tesseract-specific configuration (optional)
 #' @field output_format Output format for OCR results (optional, for format conversion)
@@ -1080,7 +1011,7 @@ OcrConfig$from_json <- function(json) {
 #'
 #' Page range tracking in chunk metadata (first_page/last_page) is automatically enabled
 #' when page boundaries are available and chunking is configured.
-#' @field extract_pages Extract pages as separate array (ExtractionResult.pages)
+#' @field extract_pages Extract pages as separate array (ExtractedDocument.pages)
 #' @field insert_page_markers Insert page markers in main content string
 #' @field marker_format Page marker format (use {page_num} placeholder) Default: "\n\n<!-- PAGE {page_num} -->\n\n"
 #' @export
@@ -1111,7 +1042,7 @@ PageConfig$from_json <- function(json) {
 #' @field bottom_margin_fraction Bottom margin fraction (0.0–1.0) of page height to exclude footers/page numbers.
 #' @field allow_single_column_tables Allow single-column pseudo tables in extraction results.
 #' @field ocr_inline_images Perform OCR on inline images extracted from PDF pages and attach the recognized text to
-#' @field extract_form_fields Extract AcroForm and XFA form fields into `ExtractionResult.form_fields`.
+#' @field extract_form_fields Extract AcroForm and XFA form fields into `ExtractedDocument.form_fields`.
 #' @field reading_order Reorder extracted text by layout-detected reading order.
 #' @export
 PdfConfig <- new.env(parent = emptyenv())
@@ -1740,20 +1671,6 @@ TokenReductionConfig$from_json <- function(json) {
 }
 #' @export
 `[[.TokenReductionConfig` <- `$.TokenReductionConfig`
-#' Liter-llm-backed NER backend
-#' @export
-LlmBackend <- new.env(parent = emptyenv())
-#' @export
-`$.LlmBackend` <- function(self, name) {
-  func <- LlmBackend[[name]]
-  if (identical(names(formals(func))[1], "self")) {
-    function(...) func(self, ...)
-  } else {
-    func
-  }
-}
-#' @export
-`[[.LlmBackend` <- `$.LlmBackend`
 #' One detected PII span in the input text
 #' @field start Inclusive byte-offset start of the match in the source text.
 #' @field end Exclusive byte-offset end of the match.
@@ -2015,8 +1932,8 @@ TextAnnotation <- new.env(parent = emptyenv())
 #' A single named entity detected in the extracted text
 #' @field category Canonical category the entity belongs to (PERSON, ORG, LOCATION, etc.).
 #' @field text Raw mention text exactly as it appeared in the source.
-#' @field start Byte-offset span in `ExtractionResult::content` where the mention starts.
-#' @field end Byte-offset span in `ExtractionResult::content` where the mention ends (exclusive).
+#' @field start Byte-offset span in `ExtractedDocument::content` where the mention starts.
+#' @field end Byte-offset span in `ExtractedDocument::content` where the mention ends (exclusive).
 #' @field confidence Backend-reported confidence in `[0.0, 1.0]`. `None` when the backend does not expose confidence
 #' @export
 Entity <- new.env(parent = emptyenv())
@@ -2034,7 +1951,7 @@ Entity <- new.env(parent = emptyenv())
 #' A single file extracted from an archive
 #'
 #' When archives (ZIP, TAR, 7Z, GZIP) are extracted with recursive extraction
-#' enabled, each processable file produces its own full `ExtractionResult`.
+#' enabled, each processable file produces its own full `ExtractedDocument`.
 #' @field path Archive-relative file path (e.g. "folder/document.pdf").
 #' @field mime_type Detected MIME type of the file.
 #' @field result Full extraction result for this file.
@@ -2146,7 +2063,7 @@ HeadingLevel <- new.env(parent = emptyenv())
 #' @field last_page Last page number this chunk spans (1-indexed, equal to first_page for single-page chunks).
 #' @field heading_context Heading context when using Markdown chunker.
 #' @field heading_path Flattened heading trail from document root to this chunk's section.
-#' @field image_indices Indices into `ExtractionResult.images` for images on pages covered by this chunk.
+#' @field image_indices Indices into `ExtractedDocument.images` for images on pages covered by this chunk.
 #' @export
 ChunkMetadata <- new.env(parent = emptyenv())
 #' @export
@@ -2415,7 +2332,7 @@ ImagePreprocessingMetadata <- new.env(parent = emptyenv())
 #' Populated by the layout-guided formula pipeline: regions classified as
 #' `LayoutClass::Formula` are routed to the formula OCR task, which returns the
 #' LaTeX source for the region. The field is always present on
-#' [`ExtractionResult`](super::extraction::ExtractionResult) but only populated
+#' [`ExtractedDocument`](super::extraction::ExtractedDocument) but only populated
 #' when the `layout-detection` feature is active and the document contains
 #' formula regions.
 #' @field latex LaTeX source of the recognized formula, without surrounding `$$` delimiters.
@@ -3136,8 +3053,8 @@ QrBoundingBox <- new.env(parent = emptyenv())
 #' @export
 `[[.QrBoundingBox` <- `$.QrBoundingBox`
 #' One redaction event: which span was rewritten, why, and with what
-#' @field start Byte-offset start in the original (pre-redaction) `ExtractionResult::content`.
-#' @field end Byte-offset end (exclusive) in the original `ExtractionResult::content`.
+#' @field start Byte-offset start in the original (pre-redaction) `ExtractedDocument::content`.
+#' @field end Byte-offset end (exclusive) in the original `ExtractedDocument::content`.
 #' @field category PII category that fired this redaction.
 #' @field strategy Strategy applied to this finding (mask, hash, token-replace, drop).
 #' @field replacement_token String that replaced the original mention. Always present; for `Drop` the replacement is
@@ -3180,7 +3097,7 @@ CellChange <- new.env(parent = emptyenv())
 #'
 #' Populated by per-format extractors that understand change-tracking metadata
 #' (DOCX `w:ins`/`w:del`/`w:rPrChange`, ODT `text:change-*`, …). Every
-#' extractor defaults to `ExtractionResult.revisions = None` until a
+#' extractor defaults to `ExtractedDocument.revisions = None` until a
 #' format-specific implementation is added.
 #' @field revision_id Format-specific revision identifier.
 #' @field author Display name of the author who made this change, when available.
@@ -3240,13 +3157,13 @@ TableCell <- new.env(parent = emptyenv())
 `[[.TableCell` <- `$.TableCell`
 #' Translation of the extracted content
 #'
-#' Holds the translated rendition of `ExtractionResult::content` and (when
+#' Holds the translated rendition of `ExtractedDocument::content` and (when
 #' `preserve_markup` was requested) the translated `formatted_content`. Chunks
-#' are translated in place inside `ExtractionResult::chunks[*].content` rather
+#' are translated in place inside `ExtractedDocument::chunks[*].content` rather
 #' than duplicated here.
 #' @field target_lang BCP-47 language tag the translation was produced into (e.g. `"de"`, `"fr-CA"`).
 #' @field source_lang BCP-47 source language. `None` when the translation backend was asked to detect.
-#' @field content Translated plain-text body. Matches the shape of `ExtractionResult::content`.
+#' @field content Translated plain-text body. Matches the shape of `ExtractedDocument::content`.
 #' @field formatted_content Translated markup body (Markdown / HTML / etc.) when `preserve_markup` was enabled on the
 #' @export
 Translation <- new.env(parent = emptyenv())
@@ -3299,7 +3216,7 @@ DetectResponse <- new.env(parent = emptyenv())
 }
 #' @export
 `[[.DetectResponse` <- `$.DetectResponse`
-#' Options controlling how two `ExtractionResult` values are compared
+#' Options controlling how two `ExtractedDocument` values are compared
 #' @field include_metadata Include metadata changes in the diff. Default: `true`.
 #' @field include_embedded Include embedded-children changes in the diff. Default: `true`.
 #' @field max_content_chars Truncate content to this many characters before diffing.
@@ -3355,34 +3272,6 @@ EmbeddedDiff <- new.env(parent = emptyenv())
 }
 #' @export
 `[[.EmbeddedDiff` <- `$.EmbeddedDiff`
-#' Preset configurations for common RAG use cases
-#'
-#' Each preset combines chunk size, overlap, and embedding model
-#' to provide an optimized configuration for specific scenarios.
-#'
-#' All string fields are owned `String` for FFI compatibility — instances
-#' are safe to clone and pass across language boundaries.
-#' @field name Short identifier for this preset (e.g. `"balanced"`, `"fast"`, `"quality"`).
-#' @field chunk_size Target chunk size in characters.
-#' @field overlap Overlap between consecutive chunks in characters.
-#' @field model_repo HuggingFace repository name for the model.
-#' @field pooling Pooling strategy: "cls" or "mean".
-#' @field model_file Path to the ONNX model file within the repo.
-#' @field dimensions Embedding vector dimension produced by this model.
-#' @field description Human-readable description of the preset's intended use case.
-#' @export
-EmbeddingPreset <- new.env(parent = emptyenv())
-#' @export
-`$.EmbeddingPreset` <- function(self, name) {
-  func <- EmbeddingPreset[[name]]
-  if (identical(names(formals(func))[1], "self")) {
-    function(...) func(self, ...)
-  } else {
-    func
-  }
-}
-#' @export
-`[[.EmbeddingPreset` <- `$.EmbeddingPreset`
 #' A single document returned by the reranker, with its position in the input and score
 #'
 #' `index` maps back to the caller's original document list, so metadata arrays
@@ -3405,31 +3294,6 @@ RerankedDocument <- new.env(parent = emptyenv())
 }
 #' @export
 `[[.RerankedDocument` <- `$.RerankedDocument`
-#' Metadata for a bundled reranker preset
-#'
-#' All string fields are owned `String` for FFI compatibility — instances are
-#' safe to clone and pass across language boundaries.
-#'
-#' Since v5.0.0.
-#' @field name Short identifier (catalog name, e.g. `"bge-reranker-base"`).
-#' @field model_repo HuggingFace repository name for the model.
-#' @field model_file Path to the ONNX model file within the repo.
-#' @field additional_files Sibling files that must be downloaded alongside `model_file`.
-#' @field max_length Maximum token sequence length the model supports.
-#' @field description Human-readable description of the preset's intended use case.
-#' @export
-RerankerPreset <- new.env(parent = emptyenv())
-#' @export
-`$.RerankerPreset` <- function(self, name) {
-  func <- RerankerPreset[[name]]
-  if (identical(names(formals(func))[1], "self")) {
-    function(...) func(self, ...)
-  } else {
-    func
-  }
-}
-#' @export
-`[[.RerankerPreset` <- `$.RerankerPreset`
 #' YAKE-specific parameters
 #' @field window_size Window size for co-occurrence analysis (default: 2).
 #' @export
@@ -3550,51 +3414,6 @@ DocumentMetadata <- new.env(parent = emptyenv())
 }
 #' @export
 `[[.DocumentMetadata` <- `$.DocumentMetadata`
-#' Input signals for confidence scoring
-#'
-#' Caller fills these from the extraction result and the LLM response.
-#' @field text_coverage Fraction of pages with usable text in `[0, 1]`.
-#' @field ocr_aggregate Mean OCR per-element recognition confidence; `None` when OCR did not run.
-#' @field schema_compliance Schema-validation result of the merged output.
-#' @export
-ConfidenceSignals <- new.env(parent = emptyenv())
-#' @export
-`$.ConfidenceSignals` <- function(self, name) {
-  func <- ConfidenceSignals[[name]]
-  if (identical(names(formals(func))[1], "self")) {
-    function(...) func(self, ...)
-  } else {
-    func
-  }
-}
-#' @export
-`[[.ConfidenceSignals` <- `$.ConfidenceSignals`
-#' Tunable weights for the confidence scoring formula
-#'
-#' Defaults picked by inspection; callers tune them via config.
-#' @field text_coverage Weight assigned to `text_coverage`. Default 0.30.
-#' @field ocr_aggregate Weight assigned to `ocr_aggregate` when OCR ran.
-#' @field schema_compliance Weight assigned to `schema_compliance`. Default 0.40.
-#' @export
-ConfidenceWeights <- new.env(parent = emptyenv())
-ConfidenceWeights$default <- function() .Call("wrap__ConfidenceWeights__default", PACKAGE = "xberg")
-ConfidenceWeights$is_normalized <- function(self) .Call("wrap__ConfidenceWeights__is_normalized", self, PACKAGE = "xberg")
-ConfidenceWeights$from_json <- function(json) {
-  .Call("wrap__ConfidenceWeights__from_json", json, PACKAGE = "xberg")
-}
-#' @export
-`$.ConfidenceWeights` <- function(self, name) {
-  func <- ConfidenceWeights[[name]]
-  if (identical(names(formals(func))[1], "self")) {
-    function(...) func(self, ...)
-  } else {
-    func
-  }
-}
-#' @export
-`[[.ConfidenceWeights` <- `$.ConfidenceWeights`
-#' @export
-is_normalized.ConfidenceWeights <- function(x, ...) x$is_normalized(...)
 #' Combined confidence on `[0, 1]`
 #'
 #' When OCR did not run, the `ocr_aggregate` weight folds into `text_coverage`
@@ -3748,66 +3567,6 @@ MultidocThresholds$from_json <- function(json) {
 }
 #' @export
 `[[.MultidocThresholds` <- `$.MultidocThresholds`
-#' Signals consumed by the call-mode heuristic
-#'
-#' All fields derive from a prior xberg extraction — no double-work.
-#' This is a plain DTO; it intentionally has no dependency on internal
-#' xberg extraction types so it can be constructed from any source.
-#' @field mime_type MIME type, canonicalised to lowercase by the caller.
-#' @field page_count Number of pages in the document.
-#' @field text_coverage Fraction of pages with a real text layer (0.0..=1.0).
-#' @field avg_chars_per_page Average extracted characters per page.
-#' @field embedded_image_count Count of embedded images (figures, photos, signatures) discovered.
-#' @field user_force_vision When `true`, promote the result to at least [`StructuredCallMode::TextPlusVision`].
-#' @export
-StructuredInput <- new.env(parent = emptyenv())
-#' @export
-`$.StructuredInput` <- function(self, name) {
-  func <- StructuredInput[[name]]
-  if (identical(names(formals(func))[1], "self")) {
-    function(...) func(self, ...)
-  } else {
-    func
-  }
-}
-#' @export
-`[[.StructuredInput` <- `$.StructuredInput`
-#' Thresholds for the structured-extraction call-mode heuristic
-#'
-#' All defaults are **conservative starting points**.  Deployments should
-#' measure their own document corpus and override via their own config;
-#' these values are chosen to be safe-by-default, not to be optimal for
-#' any particular workload.
-#'
-#' Construct custom thresholds with struct-update syntax:
-#' ```rust
-#' use xberg::heuristics::StructuredThresholds;
-#' let t = StructuredThresholds {
-#'     enable_vision_fallback: true,
-#'     ..StructuredThresholds::default()
-#' };
-#' ```
-#' @field scan_max_coverage PDFs with `text_coverage` strictly below this are treated as scanned.
-#' @field digital_min_coverage PDFs with `text_coverage` at or above this AND zero embedded images route to
-#' @field docx_text_min_density DOCX / HTML / text documents with `avg_chars_per_page` above this route to
-#' @field enable_vision_fallback When `true`, emit [`StructuredCallMode::TextOnlyWithVisionFallback`] instead of
-#' @export
-StructuredThresholds <- new.env(parent = emptyenv())
-StructuredThresholds$default <- function() .Call("wrap__StructuredThresholds__default", PACKAGE = "xberg")
-StructuredThresholds$from_json <- function(json) {
-  .Call("wrap__StructuredThresholds__from_json", json, PACKAGE = "xberg")
-}
-#' @export
-`$.StructuredThresholds` <- function(self, name) {
-  func <- StructuredThresholds[[name]]
-  if (identical(names(formals(func))[1], "self")) {
-    function(...) func(self, ...)
-  } else {
-    func
-  }
-}
-#' @export
-`[[.StructuredThresholds` <- `$.StructuredThresholds`
 #' Compiled meta-schema validator over `preset.schema.json`
 #' @export
 MetaSchema <- new.env(parent = emptyenv())
@@ -4132,46 +3891,10 @@ PdfMetadata$from_json <- function(json) {
 }
 #' @export
 `[[.PdfMetadata` <- `$.PdfMetadata`
-#' Classification enrichment knob: how to label the document
-#' @field config Label set and LLM settings for the classification stage.
-#' @export
-ClassificationEnrichmentConfig <- new.env(parent = emptyenv())
-#' @export
-`$.ClassificationEnrichmentConfig` <- function(self, name) {
-  func <- ClassificationEnrichmentConfig[[name]]
-  if (identical(names(formals(func))[1], "self")) {
-    function(...) func(self, ...)
-  } else {
-    func
-  }
-}
-#' @export
-`[[.ClassificationEnrichmentConfig` <- `$.ClassificationEnrichmentConfig`
-#' Captioning enrichment knob: which LLM to use for image captions
-#'
-#' The enrichment stage calls `caption_image` for every
-#' image in `ExtractionResult::images` that has non-empty `data`. Images with
-#' empty byte data (e.g. reference-only images populated via `source_path`) are
-#' skipped rather than forwarded to the VLM.
-#' @field config LLM / VLM configuration forwarded verbatim to each `caption_image` call.
-#' @field custom_prompt Optional custom prompt override forwarded to every `caption_image` call. `None` uses the
-#' @export
-CaptioningEnrichmentConfig <- new.env(parent = emptyenv())
-#' @export
-`$.CaptioningEnrichmentConfig` <- function(self, name) {
-  func <- CaptioningEnrichmentConfig[[name]]
-  if (identical(names(formals(func))[1], "self")) {
-    function(...) func(self, ...)
-  } else {
-    func
-  }
-}
-#' @export
-`[[.CaptioningEnrichmentConfig` <- `$.CaptioningEnrichmentConfig`
 #' Target format for re-encoding extracted images
 #'
 #' Controls whether and how extracted images are normalised to a uniform
-#' container format before being returned in `ExtractionResult.images`.
+#' container format before being returned in `ExtractedDocument.images`.
 #' The default (`Native`) preserves the format produced by each extractor
 #' without any additional encode pass.
 #'
@@ -4204,7 +3927,7 @@ ImageOutputFormat <- new.env(parent = emptyenv())
 `[[.ImageOutputFormat` <- `$.ImageOutputFormat`
 #' Output format for extraction results
 #'
-#' Controls the format of the `content` field in `ExtractionResult`.
+#' Controls the format of the `content` field in `ExtractedDocument`.
 #' When set to `Markdown`, `Djot`, or `Html`, the output uses that format.
 #' `Plain` returns the raw extracted text.
 #' `Structured` returns JSON with full OCR element data including bounding
@@ -4720,13 +4443,6 @@ SchemaCompliance  <- function() list() |> structure(class = "SchemaCompliance")
 #' @return A BoundaryReason enum value
 #' @export
 BoundaryReason  <- function() list() |> structure(class = "BoundaryReason")
-#' Create a StructuredCallMode enum value
-#'
-#' Returns the default StructuredCallMode variant.
-#'
-#' @return A StructuredCallMode enum value
-#' @export
-StructuredCallMode  <- function() list() |> structure(class = "StructuredCallMode")
 #' Create a PresetCategory enum value
 #'
 #' Returns the default PresetCategory variant.
@@ -4960,8 +4676,6 @@ cors_allows_all <- function(x, ...) UseMethod("cors_allows_all")
 extend_from_dir <- function(x, ...) UseMethod("extend_from_dir")
 #' @export
 is_empty <- function(x, ...) UseMethod("is_empty")
-#' @export
-is_normalized <- function(x, ...) UseMethod("is_normalized")
 #' @export
 is_origin_allowed <- function(x, ...) UseMethod("is_origin_allowed")
 #' @export

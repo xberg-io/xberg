@@ -7852,7 +7852,7 @@ class NodeContent_Image extends NodeContent {
 
 /// Optional alt text or caption describing the image.
  final  String description;
-/// Index into the parent `ExtractionResult::images` list.
+/// Index into the parent `ExtractedDocument::images` list.
  final  PlatformInt64 imageIndex;
 /// Source URL or path of the image (from `<img src="...">` or `![](src)`).
  final  String src;

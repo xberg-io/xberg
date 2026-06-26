@@ -8,48 +8,20 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'lib.freezed.dart';
 
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `CaptioningEnrichmentConfig`, `ClassificationEnrichmentConfig`, `EmbeddingBackendDartCallbacks`, `OcrBackendDartCallbacks`, `PostProcessorDartCallbacks`, `RendererDartCallbacks`, `RerankerBackendDartCallbacks`, `ValidatorDartCallbacks`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `clone`, `dimensions`, `embed`, `emits_structured_markdown`, `estimated_duration_ms`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render`, `rerank`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages`, `supports_document_processing`, `supports_language`, `supports_table_detection`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `DocumentExtractorDartCallbacks`, `EmbeddingBackendDartCallbacks`, `OcrBackendDartCallbacks`, `PostProcessorDartCallbacks`, `RendererDartCallbacks`, `RerankerBackendDartCallbacks`, `ValidatorDartCallbacks`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `can_handle`, `dimensions`, `embed`, `emits_structured_markdown`, `estimated_duration_ms`, `extract`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `priority`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render_result`, `rerank`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages`, `supported_mime_types`, `supports_document_processing`, `supports_language`, `supports_table_detection`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`, `version`
 
 /// Extract content from a single bytes or URI input.
-Future<ExtractionOutput> extract({
+Future<ExtractionResult> extract({
   required ExtractInput input,
   required ExtractionConfig config,
 }) => RustLib.instance.api.crateExtract(input: input, config: config);
 
 /// Extract content from multiple bytes or URI inputs.
-Future<ExtractionOutput> extractBatch({
+Future<ExtractionResult> extractBatch({
   required List<ExtractInput> inputs,
   required ExtractionConfig config,
 }) => RustLib.instance.api.crateExtractBatch(inputs: inputs, config: config);
-
-/// Detect MIME type from raw file bytes.
-///
-/// Uses magic byte signatures to detect file type from content.
-/// Falls back to `infer` crate for comprehensive detection.
-///
-/// For ZIP-based files, inspects contents to distinguish Office Open XML
-/// formats (DOCX, XLSX, PPTX) from plain ZIP archives.
-///
-/// **Returns:**
-///
-/// The detected MIME type string.
-///
-/// **Errors:**
-///
-/// Returns `XbergError.UnsupportedFormat` if MIME type cannot be determined.
-Future<String> detectMimeTypeFromBytes({required List<int> content}) =>
-    RustLib.instance.api.crateDetectMimeTypeFromBytes(content: content);
-
-/// Get file extensions for a given MIME type.
-///
-/// Returns all known file extensions that map to the specified MIME type.
-///
-/// **Returns:**
-///
-/// A vector of file extensions (without leading dot) for the MIME type.
-Future<List<String>> getExtensionsForMime({required String mimeType}) =>
-    RustLib.instance.api.crateGetExtensionsForMime(mimeType: mimeType);
 
 /// List all supported document formats.
 ///
@@ -66,38 +38,43 @@ Future<List<String>> getExtensionsForMime({required String mimeType}) =>
 Future<List<SupportedFormat>> listSupportedFormats() =>
     RustLib.instance.api.crateListSupportedFormats();
 
-/// Detect QR codes in the bytes of an `ExtractedImage`.
-///
-/// `format_hint` is currently unused — the `image` crate auto-detects the
-/// container format from magic bytes — but the parameter is retained so future
-/// backends (e.g. a WebP-via-`webp-decoder` variant) can use it without an API
-/// break.
-///
-/// Returns an empty listtor on any of:
-///
-/// - Empty input.
-/// - Image-decode failure.
-/// - No QR grids detected.
-/// - All detected grids fail to decode.
-///
-/// Successfully decoded QR codes carry their payload, a confidence of `1.0`
-/// (rqrr does not expose per-grid confidence; a successful decode is treated
-/// as high-confidence by convention), and the pixel-space bounding box derived
-/// from the four corner points of the grid.
-Future<List<QrCode>> detectQrCodes({
-  required List<int> imageBytes,
-  String? formatHint,
-}) => RustLib.instance.api.crateDetectQrCodes(
-  imageBytes: imageBytes,
-  formatHint: formatHint,
-);
-
 /// List the names of all registered embedding backends.
 ///
 /// Used by `xberg-cli`, the api/mcp endpoints, and generated language
 /// bindings.
 Future<List<String>> listEmbeddingBackends() =>
     RustLib.instance.api.crateListEmbeddingBackends();
+
+/// Register a document extractor with the global registry.
+///
+/// The extractor is keyed by `name` and indexed for
+/// every MIME type returned by
+/// `supported_mime_types`.
+///
+/// **Errors:**
+///
+/// - `Validation` if the plugin name is empty or
+///   contains whitespace.
+///
+/// - Any error returned by the extractor's `initialize()` method.
+Future<void> registerDocumentExtractor({
+  required DocumentExtractor extractor,
+}) => RustLib.instance.api.crateRegisterDocumentExtractor(extractor: extractor);
+
+/// Unregister a document extractor by name.
+///
+/// Removes the extractor from the global registry and calls its `shutdown()`
+/// method. No-op if no extractor with that name is registered.
+///
+/// **Errors:**
+///
+/// - Any error returned by the extractor's `shutdown()` method.
+Future<void> unregisterDocumentExtractor({required String name}) =>
+    RustLib.instance.api.crateUnregisterDocumentExtractor(name: name);
+
+/// List names of all registered document extractors.
+Future<List<String>> listDocumentExtractors() =>
+    RustLib.instance.api.crateListDocumentExtractors();
 
 /// List all registered OCR backends.
 ///
@@ -108,15 +85,6 @@ Future<List<String>> listEmbeddingBackends() =>
 /// A vector of OCR backend names.
 Future<List<String>> listOcrBackends() =>
     RustLib.instance.api.crateListOcrBackends();
-
-/// Register every built-in post-processor enabled by the active feature set.
-///
-/// This is the single entry point that callers (including
-/// `register_default_post_processors`) use to populate the global
-/// post-processor registry with the in-tree built-ins. Each submodule's own
-/// `register` function is gated by its feature flag so this aggregate stays
-/// safe to call on any target.
-Future<void> registerBuiltin() => RustLib.instance.api.crateRegisterBuiltin();
 
 /// List all registered post-processor names.
 ///
@@ -129,6 +97,29 @@ Future<void> registerBuiltin() => RustLib.instance.api.crateRegisterBuiltin();
 /// - `Err(...)` if the registry lock is poisoned
 Future<List<String>> listPostProcessors() =>
     RustLib.instance.api.crateListPostProcessors();
+
+/// Register a renderer plugin with the global registry.
+///
+/// The renderer's format name is taken from `Plugin.name`. Registering a
+/// renderer with a name that already exists replaces the previous renderer
+/// for that format.
+///
+/// # Note on `Result` return type
+///
+/// Returns `Result<()>` for cross-language API symmetry required by the alef
+/// trait-bridge codegen. The underlying `parking_lot.RwLock` cannot be
+/// poisoned (parking_lot provides no poisoning semantics), so this function
+/// never returns `Err` in practice.
+Future<void> registerRenderer({required Renderer renderer}) =>
+    RustLib.instance.api.crateRegisterRenderer(renderer: renderer);
+
+/// Unregister a renderer by format name.
+///
+/// **Errors:**
+///
+/// Returns an error if the registry lock is poisoned.
+Future<void> unregisterRenderer({required String name}) =>
+    RustLib.instance.api.crateUnregisterRenderer(name: name);
 
 /// List names of all registered renderers.
 ///
@@ -151,158 +142,6 @@ Future<List<String>> listRerankerBackends() =>
 Future<List<String>> listValidators() =>
     RustLib.instance.api.crateListValidators();
 
-/// Run page classification against an extraction result.
-///
-/// Mutates `result.page_classifications` with one entry per non-empty page and
-/// appends every LLM call's usage to `result.llm_usage`.
-///
-/// **Errors:**
-///
-/// Returns the first error encountered when rendering the prompt or calling the
-/// LLM. Partially produced classifications are discarded so callers do not see
-/// a half-populated vector.
-Future<void> classifyPages({
-  required ExtractionResult result,
-  required PageClassificationConfig config,
-}) => RustLib.instance.api.crateClassifyPages(result: result, config: config);
-
-/// Classify a single piece of text without requiring an `ExtractionResult`.
-///
-/// Use this when the caller already has plain text (e.g. a RAG ingest pipeline
-/// receiving documents off a queue) and wants a label list back without
-/// manufacturing extractor-side metadata.
-///
-/// **Errors:**
-///
-/// Same as `classify_pages`: a validation error when `config.labels` is empty,
-/// or any error returned by prompt rendering or the underlying LLM call.
-Future<List<ClassificationLabel>> classifyText({
-  required String text,
-  required PageClassificationConfig config,
-}) => RustLib.instance.api.crateClassifyText(text: text, config: config);
-
-/// Classify a single document (as multiple pages or a single text block).
-///
-/// Aggregates classifications across all pages in the provided text, returning
-/// a combined label set that represents the document as a whole.
-///
-///   using the configured LLM, and results are aggregated.
-///
-/// - `config` - Classification configuration including labels and LLM settings.
-///
-/// **Returns:**
-///
-/// A vector of `ClassificationLabel` entries representing the document's overall classification.
-///
-/// **Errors:**
-///
-/// Returns an error if `config.labels` is empty or if LLM calls fail.
-Future<List<ClassificationLabel>> classifyDocument({
-  required List<String> pages,
-  required PageClassificationConfig config,
-}) => RustLib.instance.api.crateClassifyDocument(pages: pages, config: config);
-
-/// Eagerly download a NER model into the xberg cache.
-///
-/// `name` is a supported xberg GLiNER alias or catalog id. The CLI flag
-/// `xberg cache warm --ner` delegates here.
-Future<String> downloadModel({required String name, String? cacheDir}) =>
-    RustLib.instance.api.crateDownloadModel(name: name, cacheDir: cacheDir);
-
-/// Pinned default NER model identifier.
-Future<String> defaultModelName() =>
-    RustLib.instance.api.crateDefaultModelName();
-
-/// All NER models xberg knows about (used by `--all-ner-models`).
-Future<List<String>> knownModels() => RustLib.instance.api.crateKnownModels();
-
-/// Run pattern redaction (and optional NER-driven redaction) over `result` and
-/// rewrite every textual field. Populates `result.redaction_report`.
-Future<void> redact({
-  required ExtractionResult result,
-  required RedactionConfig config,
-}) => RustLib.instance.api.crateRedact(result: result, config: config);
-
-/// Find all US Social Security Number spans in `text` (format: NNN-NN-NNNN).
-Future<List<PatternMatch>> findAll({required String text}) =>
-    RustLib.instance.api.crateFindAll(text: text);
-
-/// Scan `text` for every PII category in `categories` and return all matches
-/// in source-byte order.
-///
-/// When `categories` is empty every supported regex-detectable category fires.
-/// Person / Organization / Location are *not* covered by the pattern engine —
-/// they must be supplied by a NER backend through the redaction engine.
-Future<List<PatternMatch>> scanText({
-  required String text,
-  required List<PiiCategory> categories,
-}) => RustLib.instance.api.crateScanText(text: text, categories: categories);
-
-/// Score and return the top-N sentences from `text`, joined in original order.
-///
-/// `language` is an ISO 639 (or locale) code used to pick a stopword list;
-/// pass `null` (or an unknown code) to fall back to English.
-/// `max_tokens` bounds the summary length by whitespace-separated tokens;
-/// `null` falls back to `DEFAULT_MAX_TOKENS`.
-Future<String?> summarize({
-  required String text,
-  String? language,
-  PlatformInt64? maxTokens,
-}) => RustLib.instance.api.crateSummarize(
-  text: text,
-  language: language,
-  maxTokens: maxTokens,
-);
-
-/// Count whitespace-separated tokens (used for token-budget bookkeeping by
-/// callers).
-Future<PlatformInt64> tokenCount({required String text}) =>
-    RustLib.instance.api.crateTokenCount(text: text);
-
-/// Translate the extraction result in place.
-///
-/// Populates `result.translation` with the translated `content`, optionally the
-/// translated `formatted_content` (when `preserve_markup = true`), and rewrites
-/// every chunk's `content` field. Every LLM call's usage is appended to
-/// `result.llm_usage`.
-Future<void> translateResult({
-  required ExtractionResult result,
-  required TranslationConfig config,
-}) => RustLib.instance.api.crateTranslateResult(result: result, config: config);
-
-/// Find all footnote anchor references in markdown text.
-///
-/// Returns a vector of footnote anchors (`[^label]` use-sites), including byte offsets.
-/// Footnote definitions (`[^label]: ...`) are NOT included in the results.
-///
-/// **Returns:**
-///
-/// A vector of `FootnoteAnchor` entries, each with the label and byte offset.
-Future<List<FootnoteAnchor>> findFootnoteAnchors({required String markdown}) =>
-    RustLib.instance.api.crateFindFootnoteAnchors(markdown: markdown);
-
-/// Parse footnote definitions from markdown text.
-///
-/// Returns a vector of footnote definitions found in the markdown.
-/// Handles multi-line definitions with continuation/indented lines (CommonMark format).
-///
-/// **Returns:**
-///
-/// A vector of `FootnoteDefinition` entries, each with label, content, and byte offset.
-Future<List<FootnoteDefinition>> parseFootnoteDefinitions({
-  required String markdown,
-}) => RustLib.instance.api.crateParseFootnoteDefinitions(markdown: markdown);
-
-/// Find inference markers in markdown text.
-///
-/// Returns byte offsets of every `[*inference*]` marker found in the text.
-///
-/// **Returns:**
-///
-/// A vector of byte offsets where inference markers appear.
-Future<Int64List> findInferenceMarkers({required String markdown}) =>
-    RustLib.instance.api.crateFindInferenceMarkers(markdown: markdown);
-
 /// Find unmarked claims in markdown text.
 ///
 /// Returns lines that assert a claim but carry neither a footnote citation anchor (`[^...]`)
@@ -317,20 +156,6 @@ Future<Int64List> findInferenceMarkers({required String markdown}) =>
 /// A vector of trimmed line text strings for unmarked claims.
 Future<List<String>> findUnmarkedClaims({required String markdown}) =>
     RustLib.instance.api.crateFindUnmarkedClaims(markdown: markdown);
-
-/// Parse the structured citation block from markdown.
-///
-/// Extracts citations from the block after a `---` thematic break followed by
-/// `<!-- citations ... -->` comment. Parses each entry as:
-/// `[^srcN]: <source>, <optional-locator>, excerpt: "<text>"`
-///
-/// Returns parsed citations with source, optional locator, and optional excerpt.
-///
-/// **Returns:**
-///
-/// A vector of `Citation` entries parsed from the citation block.
-Future<List<Citation>> parseCitations({required String markdown}) =>
-    RustLib.instance.api.crateParseCitations(markdown: markdown);
 
 /// Verify that an excerpt appears verbatim in source text.
 ///
@@ -348,518 +173,6 @@ Future<bool> verifyExcerpt({
   excerpt: excerpt,
   sourceText: sourceText,
 );
-
-/// Chunk text for RAG retrieval, ensuring every chunk carries a `heading_path`.
-///
-/// Delegates to `chunk_text` using the caller's config (defaulting to
-/// `ChunkerType.Markdown` when the config uses the default `Text` type, so that
-/// heading hierarchy is resolved).  After chunking, derives
-/// `ChunkMetadata.heading_path` from each chunk's `heading_context`.
-///
-///   underlying splitter; use `ChunkerType.Markdown` for documents with ATX
-///   headings.
-///
-/// **Returns:**
-///
-/// A `ChunkingResult` where every chunk's `heading_path` is populated from its
-/// `heading_context` (empty when the chunk is not under any heading).
-///
-/// **Errors:**
-///
-/// Propagates any error from the underlying chunker (e.g. invalid overlap).
-Future<ChunkingResult> chunkForRag({
-  required String text,
-  required ChunkingConfig config,
-}) => RustLib.instance.api.crateChunkForRag(text: text, config: config);
-
-/// Compare two extraction results and return a structured diff.
-///
-/// The comparison is purely structural — no I/O, no side effects. All fields
-/// of `ExtractionDiff` are populated according to the provided `DiffOptions`.
-Future<ExtractionDiff> compare({
-  required ExtractionResult a,
-  required ExtractionResult b,
-  required DiffOptions opts,
-}) => RustLib.instance.api.crateCompare(a: a, b: b, opts: opts);
-
-/// Extract content from a pre-cropped image region using a VLM.
-///
-/// The caller is responsible for cropping the page image to the region's bounding
-/// box before calling this function. The `image_bytes` parameter must contain the
-/// raw bytes of the **cropped** region image (JPEG, PNG, WebP, etc.).
-///
-/// **Returns:**
-///
-/// Extracted Markdown text from the VLM, or an error if the VLM call fails.
-///
-/// **Errors:**
-///
-/// - `Ocr` if the VLM call fails or returns no content.
-/// - `MissingDependency` if the liter-llm client cannot
-///   be initialised.
-Future<String> extractRegionWithVlm({
-  required List<int> imageBytes,
-  required String imageMime,
-  required RegionKind regionKind,
-  required LlmConfig llmConfig,
-  String? customPrompt,
-}) => RustLib.instance.api.crateExtractRegionWithVlm(
-  imageBytes: imageBytes,
-  imageMime: imageMime,
-  regionKind: regionKind,
-  llmConfig: llmConfig,
-  customPrompt: customPrompt,
-);
-
-/// Rerank documents asynchronously.
-///
-/// Async counterpart to `rerank`. Offloads blocking ONNX inference to a
-/// dedicated blocking thread pool via Tokio's `spawn_blocking`, keeping the
-/// async executor free.
-///
-/// Since v5.0.
-Future<List<RerankedDocument>> rerankAsync({
-  required String query,
-  required List<String> documents,
-  required RerankerConfig config,
-}) => RustLib.instance.api.crateRerankAsync(
-  query: query,
-  documents: documents,
-  config: config,
-);
-
-/// Extract keywords from text using the specified algorithm.
-///
-/// This is the unified entry point for keyword extraction. The algorithm
-/// used is determined by `config.algorithm`.
-///
-/// **Returns:**
-///
-/// A vector of keywords sorted by relevance (highest score first).
-///
-/// **Errors:**
-///
-/// Returns an error if:
-///
-/// - The specified algorithm feature is not enabled
-/// - Keyword extraction fails
-Future<List<Keyword>> extractKeywords({
-  required String text,
-  required KeywordConfig config,
-}) => RustLib.instance.api.crateExtractKeywords(text: text, config: config);
-
-/// Analyze a document and determine the optimal chunking strategy.
-///
-/// Decision logic (in priority order):
-///
-/// 1. If user provides `disable_chunking` → no chunking
-/// 2. If user provides page_ranges → use user overrides
-/// 3. If chunking is not enabled → no chunking
-/// 4. If format doesn't support chunking → no chunking
-/// 5. If file is small (below both thresholds) and not force_chunking → no chunking
-/// 6. If PDF has a substantial text layer AND !force_ocr → no chunking
-///    *(only when `heuristics-pdf` feature is enabled; otherwise skipped)*
-///
-/// 7. Otherwise → chunk the document
-///
-/// **Errors:**
-///
-/// Returns an error only when the `heuristics-pdf` feature is active and
-/// the PDF text-layer analysis itself returns a hard error.  In all other
-/// cases the function returns a `ChunkingDecision`.
-Future<ChunkingDecision> analyzeDocument({
-  required DocumentMetadata metadata,
-  required HeuristicsConfig config,
-  Uint8List? documentBytes,
-}) => RustLib.instance.api.crateAnalyzeDocument(
-  metadata: metadata,
-  config: config,
-  documentBytes: documentBytes,
-);
-
-/// Analyze a document with user-specified chunk ranges.
-///
-/// Creates a chunk plan based on user-provided page ranges.
-Future<ChunkingDecision> analyzeWithUserChunks({
-  required List<PageRange> userRanges,
-  required PlatformInt64 totalPages,
-  required PlatformInt64 sizeBytes,
-  required HeuristicsConfig config,
-}) => RustLib.instance.api.crateAnalyzeWithUserChunks(
-  userRanges: userRanges,
-  totalPages: totalPages,
-  sizeBytes: sizeBytes,
-  config: config,
-);
-
-/// Score a `ConfidenceSignals` triple into an `ExtractionConfidence` using
-/// the supplied weights.
-///
-/// When `signals.ocr_aggregate` is `null`, the OCR weight folds into
-/// `text_coverage` so the weighted sum still totals 1.0.
-Future<ExtractionConfidence> scoreConfidence({
-  required ConfidenceSignals signals,
-  required ConfidenceWeights weights,
-}) => RustLib.instance.api.crateScoreConfidence(
-  signals: signals,
-  weights: weights,
-);
-
-/// Decision returned for pre-extraction rejection based on XLSX/PPTX-specific
-/// resource bounds. Returns `Some(reason)` to reject; `null` to proceed.
-///
-/// Callers must provide counts from a pre-extraction peek (e.g. parsing
-/// `xl/workbook.xml` for sheet count).
-Future<String?> checkFormatLimits({
-  required String mimeType,
-  PlatformInt64? sheetCount,
-  PlatformInt64? workbookCells,
-  PlatformInt64? embeddedCount,
-  required HeuristicsConfig config,
-}) => RustLib.instance.api.crateCheckFormatLimits(
-  mimeType: mimeType,
-  sheetCount: sheetCount,
-  workbookCells: workbookCells,
-  embeddedCount: embeddedCount,
-  config: config,
-);
-
-/// Derive document boundaries from an already-produced `ExtractionResult`.
-///
-/// Builds a `MultidocInput` from `result.pages` (one `PageSignals` per
-/// `PageContent` entry), then delegates to `detect_boundaries`.
-///
-/// # Fallback behaviour
-///
-/// - If `result.pages` is `null` or empty the whole document is treated as a
-///   single document: returns `[Start(1), End(1)]`, matching the contract of
-///   `detect_boundaries` for a one-page input.
-///
-/// # Text density
-///
-/// `PageContent` does not carry a pre-computed density score.
-/// This function approximates density as
-/// `non_whitespace_chars / total_chars` (clamped to `[0.0, 1.0]`), which is a
-/// reasonable proxy for how text-dense a page is relative to itself.  Pass a
-/// custom `MultidocInput` to `detect_boundaries` directly when you need a
-/// higher-fidelity density measurement (e.g. chars-per-pt² from a PDF extractor).
-Future<List<DocumentBoundary>> boundariesFromExtractionResult({
-  required ExtractionResult result,
-  required MultidocThresholds thresholds,
-}) => RustLib.instance.api.crateBoundariesFromExtractionResult(
-  result: result,
-  thresholds: thresholds,
-);
-
-/// Detect document boundaries in a multi-document PDF.
-///
-/// Returns a list of detected boundaries, always including implicit boundaries
-/// at start (page 1) and end (page_count).  Boundaries are returned in ascending
-/// order of `start_page`.
-///
-/// **Returns:**
-///
-/// Ordered list of document boundaries.
-Future<List<DocumentBoundary>> detectBoundaries({
-  required MultidocInput input,
-  required MultidocThresholds thresholds,
-}) => RustLib.instance.api.crateDetectBoundaries(
-  input: input,
-  thresholds: thresholds,
-);
-
-/// Decide which call mode best fits this document.
-///
-/// Rules applied in order:
-///
-/// 1. `image/*` → `StructuredCallMode.VisionOnly` (no text layer to start from).
-/// 2. `application/pdf` → `StructuredCallMode.TextOnly` regardless of
-///    `text_coverage` or embedded image count.  Xberg's OCR + text-layer
-///    extraction produces text for scanned PDFs; the orchestrator's
-///    post-call confidence gate handles any vision escalation actually needed.
-///
-/// 3. DOCX / `text/html` / `text/*` / `application/json` / `application/xml` /
-///    `application/rtf` with `avg_chars_per_page > docx_text_min_density`
-///    → `StructuredCallMode.TextOnly`.
-///
-/// 4. Anything else → `StructuredCallMode.Skip`.
-///
-/// After rule selection two post-rule promotions apply (in order):
-///
-/// - `user_force_vision` promotes `TextOnly` → `TextPlusVision`
-///   (`Skip` stays `Skip` — caller meant to opt out).
-///
-/// - `enable_vision_fallback` promotes `TextOnly` →
-///   `TextOnlyWithVisionFallback` (does **not** upgrade `TextPlusVision` or
-///   `Skip`).
-Future<StructuredCallMode> chooseCallMode({
-  required StructuredInput input,
-  required StructuredThresholds t,
-}) => RustLib.instance.api.crateChooseCallMode(input: input, t: t);
-
-/// Calculate a chunking plan for a document.
-///
-/// **Returns:**
-///
-/// A `ChunkPlan` with optimal chunk boundaries.
-Future<ChunkPlan> calculateChunkPlan({
-  required PlatformInt64 pageCount,
-  required PlatformInt64 sizeBytes,
-  required bool needsOcr,
-  required HeuristicsConfig config,
-}) => RustLib.instance.api.crateCalculateChunkPlan(
-  pageCount: pageCount,
-  sizeBytes: sizeBytes,
-  needsOcr: needsOcr,
-  config: config,
-);
-
-/// Calculate a chunk plan from user-specified page ranges.
-///
-/// Validates and processes user overrides into a proper chunk plan.
-Future<ChunkPlan> calculatePlanFromOverrides({
-  required List<PageRange> userChunks,
-  required PlatformInt64 totalPages,
-  required PlatformInt64 sizeBytes,
-  required HeuristicsConfig config,
-}) => RustLib.instance.api.crateCalculatePlanFromOverrides(
-  userChunks: userChunks,
-  totalPages: totalPages,
-  sizeBytes: sizeBytes,
-  config: config,
-);
-
-/// Stable sha256 fingerprint of `raw`, formatted as `sha256:<hex>`.
-Future<String> fingerprint({required List<int> raw}) =>
-    RustLib.instance.api.crateFingerprint(raw: raw);
-
-/// Resolve `(preset, custom_schema_override, context)` into a `ResolvedPreset`.
-///
-/// - `custom_schema` overrides `preset.schema` when set.
-/// - `context` substitutes `{{key}}` tokens in `preset.context_template`; the
-///   rendered string is appended to `system_prompt` so the model sees it.
-Future<ResolvedPreset> resolve({
-  required Preset preset,
-  String? customSchema,
-  required Map<String, String> context,
-}) => RustLib.instance.api.crateResolve(
-  preset: preset,
-  customSchema: customSchema,
-  context: context,
-);
-
-/// Extract structured JSON from a document using JSON-encoded preset spec and options.
-///
-/// This is the synchronous JSON-in / JSON-out entry point suitable for FFI and
-/// language-binding call paths.
-///
-///   `cache`).  Pass `"{}"` to use all defaults.
-///
-/// **Returns:**
-///
-/// JSON-serialised `StructuredOutput` on success.
-///
-/// **Errors:**
-///
-/// Returns `Validation` when either JSON argument is
-/// malformed.  All other failures from the underlying
-/// `extract_structured_sync` call are mapped onto `XbergError`
-/// via `From<StructuredError>`.
-Future<String> extractStructuredJson({
-  required List<int> bytes,
-  required String mime,
-  required String presetSpecJson,
-  required String optionsJson,
-}) => RustLib.instance.api.crateExtractStructuredJson(
-  bytes: bytes,
-  mime: mime,
-  presetSpecJson: presetSpecJson,
-  optionsJson: optionsJson,
-);
-
-/// Split a multi-document PDF and extract structured JSON from each segment,
-/// returning a JSON array of `StructuredOutput` objects.
-///
-/// Non-PDF documents are passed through as a single-element array.
-///
-/// Same as `extract_structured_json`.
-///
-/// **Returns:**
-///
-/// JSON-serialised `List<StructuredOutput>` (a JSON array) on success.
-///
-/// **Errors:**
-///
-/// Returns `Validation` when either JSON argument is
-/// malformed.  All other failures from the underlying
-/// `split_and_extract_sync` call are mapped onto `XbergError`
-/// via `From<StructuredError>`.
-Future<String> splitAndExtractJson({
-  required List<int> bytes,
-  required String mime,
-  required String presetSpecJson,
-  required String optionsJson,
-}) => RustLib.instance.api.crateSplitAndExtractJson(
-  bytes: bytes,
-  mime: mime,
-  presetSpecJson: presetSpecJson,
-  optionsJson: optionsJson,
-);
-
-/// Render a single PDF page to PNG bytes.
-///
-/// Returns raw PNG-encoded bytes for the specified page at the given DPI.
-/// Uses pdf_oxide with tiny-skia for pure-Rust rendering.
-///
-/// For pages with extreme dimensions (very wide vector diagrams, etc.) the
-/// effective DPI may be automatically reduced to avoid rasterizer failure.
-/// A warning is logged when this happens.
-///
-/// **Errors:**
-///
-/// Returns `XbergError.Parsing` if the PDF cannot be opened, authenticated,
-/// or rendered, or if `page_index` is out of range.
-Future<Uint8List> renderPdfPageToPng({
-  required List<int> pdfBytes,
-  required PlatformInt64 pageIndex,
-  PlatformInt64? dpi,
-  String? password,
-}) => RustLib.instance.api.crateRenderPdfPageToPng(
-  pdfBytes: pdfBytes,
-  pageIndex: pageIndex,
-  dpi: dpi,
-  password: password,
-);
-
-/// Count the pages in a PDF without rendering any of them.
-///
-/// Opens the document and returns its page count from the PDF structure. No page
-/// is rasterized, so this is cheap relative to `render_pdf_page_to_png` — use it
-/// when you only need the count (e.g. to drive a render loop over the pages).
-///
-/// **Errors:**
-///
-/// Returns `XbergError.Parsing` if the PDF cannot be opened, authenticated,
-/// or its page count read.
-Future<PlatformInt64> pdfPageCount({
-  required List<int> pdfBytes,
-  String? password,
-}) => RustLib.instance.api.cratePdfPageCount(
-  pdfBytes: pdfBytes,
-  password: password,
-);
-
-/// Caption a single image from bytes.
-///
-///   `RegionKind.Caption` prompt when `null`.
-///
-/// **Returns:**
-///
-/// The generated caption text.
-///
-/// **Errors:**
-///
-/// Returns an error if the VLM call fails or if image format detection fails.
-Future<String> captionImage({
-  required List<int> imageBytes,
-  required LlmConfig llmConfig,
-  String? customPrompt,
-}) => RustLib.instance.api.crateCaptionImage(
-  imageBytes: imageBytes,
-  llmConfig: llmConfig,
-  customPrompt: customPrompt,
-);
-
-/// Caption a single image from a file path.
-///
-///   `RegionKind.Caption` prompt when `null`.
-///
-/// **Returns:**
-///
-/// The generated caption text.
-///
-/// **Errors:**
-///
-/// Returns an error if the file cannot be read, if image format detection fails,
-/// or if the VLM call fails.
-Future<String> captionImageFile({
-  required String path,
-  required LlmConfig llmConfig,
-  String? customPrompt,
-}) => RustLib.instance.api.crateCaptionImageFile(
-  path: path,
-  llmConfig: llmConfig,
-  customPrompt: customPrompt,
-);
-
-/// Detect the MIME type of a file at the given path.
-///
-/// Uses the file extension and optionally the file content to determine the MIME type.
-/// Set `check_exists` to `true` to verify the file exists before detection.
-Future<String> detectMimeType({
-  required String path,
-  required bool checkExists,
-}) => RustLib.instance.api.crateDetectMimeType(
-  path: path,
-  checkExists: checkExists,
-);
-
-Future<List<Float64List>> embedTextsAsync({
-  required List<String> texts,
-  required EmbeddingConfig config,
-}) => RustLib.instance.api.crateEmbedTextsAsync(texts: texts, config: config);
-
-/// Get an embedding preset by name.
-///
-/// Returns `null` if no preset with the given name exists. Returns an owned
-/// clone so the value is safe to pass across FFI boundaries.
-Future<EmbeddingPreset?> getEmbeddingPreset({required String name}) =>
-    RustLib.instance.api.crateGetEmbeddingPreset(name: name);
-
-/// List the names of all available embedding presets.
-///
-/// Returns owned `String`s so the values are safe to pass across FFI boundaries.
-Future<List<String>> listEmbeddingPresets() =>
-    RustLib.instance.api.crateListEmbeddingPresets();
-
-/// Rerank a list of documents by relevance to a query.
-///
-/// Returns documents sorted descending by score. Applies `top_k` truncation if
-/// configured.
-///
-/// **Errors:**
-///
-/// - `XbergError.Validation` if `query` is empty or blank.
-/// - `XbergError.MissingDependency` if ONNX Runtime is not installed (ONNX path).
-/// - `XbergError.Reranking` if the preset is unknown or model download fails.
-///
-/// Since v5.0.
-Future<List<RerankedDocument>> rerank({
-  required String query,
-  required List<String> documents,
-  required RerankerConfig config,
-}) => RustLib.instance.api.crateRerank(
-  query: query,
-  documents: documents,
-  config: config,
-);
-
-/// Get a reranker preset by name.
-///
-/// Returns `null` if no preset with the given name exists. Returns an owned
-/// clone so the value is safe to pass across FFI boundaries.
-///
-/// Since v5.0.
-Future<RerankerPreset?> getRerankerPreset({required String name}) =>
-    RustLib.instance.api.crateGetRerankerPreset(name: name);
-
-/// List the names of all available reranker presets.
-///
-/// Returns owned `String`s so the values are safe to pass across FFI boundaries.
-///
-/// Since v5.0.
-Future<List<String>> listRerankerPresets() =>
-    RustLib.instance.api.crateListRerankerPresets();
 
 Future<CacheStats> createCacheStatsFromJson({required String json}) =>
     RustLib.instance.api.crateCreateCacheStatsFromJson(json: json);
@@ -907,9 +220,9 @@ Future<ExtractionSummary> createExtractionSummaryFromJson({
   required String json,
 }) => RustLib.instance.api.crateCreateExtractionSummaryFromJson(json: json);
 
-Future<ExtractionOutput> createExtractionOutputFromJson({
+Future<ExtractionResult> createExtractionResultFromJson({
   required String json,
-}) => RustLib.instance.api.crateCreateExtractionOutputFromJson(json: json);
+}) => RustLib.instance.api.crateCreateExtractionResultFromJson(json: json);
 
 Future<UrlExtractionConfig> createUrlExtractionConfigFromJson({
   required String json,
@@ -1116,9 +429,9 @@ Future<TextAnnotation> createTextAnnotationFromJson({required String json}) =>
 Future<Entity> createEntityFromJson({required String json}) =>
     RustLib.instance.api.crateCreateEntityFromJson(json: json);
 
-Future<ExtractionResult> createExtractionResultFromJson({
+Future<ExtractedDocument> createExtractedDocumentFromJson({
   required String json,
-}) => RustLib.instance.api.crateCreateExtractionResultFromJson(json: json);
+}) => RustLib.instance.api.crateCreateExtractedDocumentFromJson(json: json);
 
 Future<ArchiveEntry> createArchiveEntryFromJson({required String json}) =>
     RustLib.instance.api.crateCreateArchiveEntryFromJson(json: json);
@@ -1374,9 +687,6 @@ Future<ExtractedUri> createExtractedUriFromJson({required String json}) =>
 Future<DetectResponse> createDetectResponseFromJson({required String json}) =>
     RustLib.instance.api.crateCreateDetectResponseFromJson(json: json);
 
-Future<ChunkingResult> createChunkingResultFromJson({required String json}) =>
-    RustLib.instance.api.crateCreateChunkingResultFromJson(json: json);
-
 Future<DiffOptions> createDiffOptionsFromJson({required String json}) =>
     RustLib.instance.api.crateCreateDiffOptionsFromJson(json: json);
 
@@ -1395,15 +705,9 @@ Future<EmbeddedChanges> createEmbeddedChangesFromJson({required String json}) =>
 Future<EmbeddedDiff> createEmbeddedDiffFromJson({required String json}) =>
     RustLib.instance.api.crateCreateEmbeddedDiffFromJson(json: json);
 
-Future<EmbeddingPreset> createEmbeddingPresetFromJson({required String json}) =>
-    RustLib.instance.api.crateCreateEmbeddingPresetFromJson(json: json);
-
 Future<RerankedDocument> createRerankedDocumentFromJson({
   required String json,
 }) => RustLib.instance.api.crateCreateRerankedDocumentFromJson(json: json);
-
-Future<RerankerPreset> createRerankerPresetFromJson({required String json}) =>
-    RustLib.instance.api.crateCreateRerankerPresetFromJson(json: json);
 
 Future<YakeParams> createYakeParamsFromJson({required String json}) =>
     RustLib.instance.api.crateCreateYakeParamsFromJson(json: json);
@@ -1429,14 +733,6 @@ Future<DocumentMetadata> createDocumentMetadataFromJson({
 
 Future<UserChunkConfig> createUserChunkConfigFromJson({required String json}) =>
     RustLib.instance.api.crateCreateUserChunkConfigFromJson(json: json);
-
-Future<ConfidenceSignals> createConfidenceSignalsFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateConfidenceSignalsFromJson(json: json);
-
-Future<ConfidenceWeights> createConfidenceWeightsFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateConfidenceWeightsFromJson(json: json);
 
 Future<ExtractionConfidence> createExtractionConfidenceFromJson({
   required String json,
@@ -1468,13 +764,6 @@ Future<DocumentBoundary> createDocumentBoundaryFromJson({
 Future<MultidocThresholds> createMultidocThresholdsFromJson({
   required String json,
 }) => RustLib.instance.api.crateCreateMultidocThresholdsFromJson(json: json);
-
-Future<StructuredInput> createStructuredInputFromJson({required String json}) =>
-    RustLib.instance.api.crateCreateStructuredInputFromJson(json: json);
-
-Future<StructuredThresholds> createStructuredThresholdsFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateStructuredThresholdsFromJson(json: json);
 
 Future<ResolvedPreset> createResolvedPresetFromJson({required String json}) =>
     RustLib.instance.api.crateCreateResolvedPresetFromJson(json: json);
@@ -1527,9 +816,9 @@ Future<PdfMetadata> createPdfMetadataFromJson({required String json}) =>
 Future<OcrBackendDartImpl> createOcrBackendDartImpl({
   required String pluginName,
   required String pluginVersion,
-  required FutureOr<ExtractionResult> Function(Uint8List, OcrConfig)
+  required FutureOr<ExtractedDocument> Function(Uint8List, OcrConfig)
   processImage,
-  required FutureOr<ExtractionResult> Function(String, OcrConfig)
+  required FutureOr<ExtractedDocument> Function(String, OcrConfig)
   processImageFile,
   required FutureOr<bool> Function(String) supportsLanguage,
   required FutureOr<OcrBackendType> Function() backendType,
@@ -1537,7 +826,7 @@ Future<OcrBackendDartImpl> createOcrBackendDartImpl({
   required FutureOr<bool> Function() supportsTableDetection,
   required FutureOr<bool> Function() supportsDocumentProcessing,
   required FutureOr<bool> Function() emitsStructuredMarkdown,
-  required FutureOr<ExtractionResult> Function(String, OcrConfig)
+  required FutureOr<ExtractedDocument> Function(String, OcrConfig)
   processDocument,
 }) => RustLib.instance.api.crateCreateOcrBackendDartImpl(
   pluginName: pluginName,
@@ -1581,11 +870,11 @@ Future<void> clearOcrBackends() => RustLib.instance.api.crateClearOcrBackends();
 Future<PostProcessorDartImpl> createPostProcessorDartImpl({
   required String pluginName,
   required String pluginVersion,
-  required FutureOr<void> Function(ExtractionResult, ExtractionConfig) process,
+  required FutureOr<void> Function(ExtractedDocument, ExtractionConfig) process,
   required FutureOr<ProcessingStage> Function() processingStage,
-  required FutureOr<bool> Function(ExtractionResult, ExtractionConfig)
+  required FutureOr<bool> Function(ExtractedDocument, ExtractionConfig)
   shouldProcess,
-  required FutureOr<PlatformInt64> Function(ExtractionResult)
+  required FutureOr<PlatformInt64> Function(ExtractedDocument)
   estimatedDurationMs,
   required FutureOr<PlatformInt64> Function() priority,
 }) => RustLib.instance.api.crateCreatePostProcessorDartImpl(
@@ -1627,8 +916,9 @@ Future<void> clearPostProcessors() =>
 Future<ValidatorDartImpl> createValidatorDartImpl({
   required String pluginName,
   required String pluginVersion,
-  required FutureOr<void> Function(ExtractionResult, ExtractionConfig) validate,
-  required FutureOr<bool> Function(ExtractionResult, ExtractionConfig)
+  required FutureOr<void> Function(ExtractedDocument, ExtractionConfig)
+  validate,
+  required FutureOr<bool> Function(ExtractedDocument, ExtractionConfig)
   shouldValidate,
   required FutureOr<PlatformInt64> Function() priority,
 }) => RustLib.instance.api.crateCreateValidatorDartImpl(
@@ -1655,6 +945,36 @@ Future<void> unregisterValidator({required String name}) =>
 /// Clear all registered `Validator` plugins.
 /// Removes every plugin from `xberg::plugins::registry::get_validator_registry()` and stringifies any host error.
 Future<void> clearValidators() => RustLib.instance.api.crateClearValidators();
+
+/// Construct a `DocumentExtractorDartImpl` from Dart callback closures.
+/// FRB synthesises a Dart-callable function type for each closure parameter,
+/// which is the whole point of taking them as `impl Fn(...) -> DartFnFuture<R>`
+/// parameters rather than storing them as `Box<dyn Fn(...)>` fields on an opaque
+/// struct (FRB v2 silently drops factories that return opaque structs whose fields
+/// it cannot bridge). The returned wrapper holds an `Arc<dyn Trait + Send + Sync>`
+/// whose backing object carries the supplied callbacks privately.
+/// `plugin_name` and `plugin_version` are required for the Plugin super-trait.
+Future<DocumentExtractorDartImpl> createDocumentExtractorDartImpl({
+  required String pluginName,
+  required String pluginVersion,
+  required FutureOr<ExtractedDocument> Function(ExtractInput, ExtractionConfig)
+  extract,
+  required FutureOr<List<String>> Function() supportedMimeTypes,
+  required FutureOr<PlatformInt64> Function() priority,
+  required FutureOr<bool> Function(String, String) canHandle,
+}) => RustLib.instance.api.crateCreateDocumentExtractorDartImpl(
+  pluginName: pluginName,
+  pluginVersion: pluginVersion,
+  extract: extract,
+  supportedMimeTypes: supportedMimeTypes,
+  priority: priority,
+  canHandle: canHandle,
+);
+
+/// Clear all registered `DocumentExtractor` plugins.
+/// Removes every plugin from `xberg::plugins::registry::get_document_extractor_registry()` and stringifies any host error.
+Future<void> clearDocumentExtractors() =>
+    RustLib.instance.api.crateClearDocumentExtractors();
 
 /// Construct a `EmbeddingBackendDartImpl` from Dart callback closures.
 /// FRB synthesises a Dart-callable function type for each closure parameter,
@@ -1706,25 +1026,12 @@ Future<void> clearEmbeddingBackends() =>
 Future<RendererDartImpl> createRendererDartImpl({
   required String pluginName,
   required String pluginVersion,
-  required FutureOr<String> Function(InternalDocumentBridge) render,
+  required FutureOr<String> Function(ExtractedDocument) renderResult,
 }) => RustLib.instance.api.crateCreateRendererDartImpl(
   pluginName: pluginName,
   pluginVersion: pluginVersion,
-  render: render,
+  renderResult: renderResult,
 );
-
-/// Register a Dart implementation as a `Renderer` plugin.
-///
-/// Forwards the `Arc<dyn Renderer>` wrapped by `RendererDartImpl` to
-/// `xberg::plugins::registry::get_renderer_registry()`. Errors from the host registry are stringified
-/// for FRB transport.
-Future<void> registerRenderer({required RendererDartImpl impl}) =>
-    RustLib.instance.api.crateRegisterRenderer(impl: impl);
-
-/// Unregister a previously-registered `Renderer` plugin by name.
-/// Removes the plugin from `xberg::plugins::registry::get_renderer_registry()` and stringifies any host error.
-Future<void> unregisterRenderer({required String name}) =>
-    RustLib.instance.api.crateUnregisterRenderer(name: name);
 
 /// Clear all registered `Renderer` plugins.
 /// Removes every plugin from `xberg::plugins::registry::get_renderer_registry()` and stringifies any host error.
@@ -1766,6 +1073,9 @@ Future<void> unregisterRerankerBackend({required String name}) =>
 Future<void> clearRerankerBackends() =>
     RustLib.instance.api.crateClearRerankerBackends();
 
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner< Arc < dyn DocumentExtractor + Send + Sync >>>
+abstract class ArcDocumentExtractor implements RustOpaqueInterface {}
+
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner< Arc < dyn EmbeddingBackend + Send + Sync >>>
 abstract class ArcEmbeddingBackend implements RustOpaqueInterface {}
 
@@ -1784,29 +1094,21 @@ abstract class ArcRerankerBackend implements RustOpaqueInterface {}
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner< Arc < dyn Validator + Send + Sync >>>
 abstract class ArcValidator implements RustOpaqueInterface {}
 
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DocumentExtractor>>
+abstract class DocumentExtractor implements RustOpaqueInterface {}
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DocumentExtractorDartImpl>>
+abstract class DocumentExtractorDartImpl implements RustOpaqueInterface {
+  ArcDocumentExtractor get field0;
+
+  set field0(ArcDocumentExtractor field0);
+}
+
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<EmbeddingBackendDartImpl>>
 abstract class EmbeddingBackendDartImpl implements RustOpaqueInterface {
   ArcEmbeddingBackend get field0;
 
   set field0(ArcEmbeddingBackend field0);
-}
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<LlmBackend>>
-abstract class LlmBackend implements RustOpaqueInterface {
-  Future<List<Entity>> detect({
-    required String text,
-    required List<EntityCategory> categories,
-  });
-
-  Future<List<Entity>> detectWithCustom({
-    required String text,
-    required List<EntityCategory> categories,
-    required List<String> customLabels,
-  });
-
-  // HINT: Make it `#[frb(sync)]` to let it become the default constructor of Dart class.
-  static Future<LlmBackend> newInstance({required LlmConfig config}) =>
-      RustLib.instance.api.crateLlmBackendNew(config: config);
 }
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<MetaSchema>>
@@ -1856,6 +1158,9 @@ abstract class Registry implements RustOpaqueInterface {
 
   Future<List<PresetSummary>> summaries();
 }
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Renderer>>
+abstract class Renderer implements RustOpaqueInterface {}
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<RendererDartImpl>>
 abstract class RendererDartImpl implements RustOpaqueInterface {
@@ -1987,7 +1292,7 @@ sealed class AnnotationKind with _$AnnotationKind {
 /// A single file extracted from an archive.
 ///
 /// When archives (ZIP, TAR, 7Z, GZIP) are extracted with recursive extraction
-/// enabled, each processable file produces its own full `ExtractionResult`.
+/// enabled, each processable file produces its own full `ExtractedDocument`.
 class ArchiveEntry {
   /// Archive-relative file path (e.g. "folder/document.pdf").
   final String path;
@@ -1996,7 +1301,7 @@ class ArchiveEntry {
   final String mimeType;
 
   /// Full extraction result for this file.
-  final ExtractionResult result;
+  final ExtractedDocument result;
 
   const ArchiveEntry({
     required this.path,
@@ -2350,9 +1655,8 @@ class CacheStats {
 /// How a structured-extraction preset is dispatched to the model.
 ///
 /// This is the preset-facing call mode (the `preferred_call_mode` field of a
-/// `Preset`). The richer runtime decision enum used by the
-/// structured pipeline — which adds `Skip` and `TextOnlyWithVisionFallback` —
-/// lives in `crate::heuristics::structured::StructuredCallMode`; this 3-variant
+/// `Preset`). The structured pipeline has a richer
+/// runtime-only decision enum with skip and fallback states; this 3-variant
 /// type is the stable, serializable surface presets and bindings depend on.
 enum CallMode {
   /// Use the extracted text only.
@@ -2559,7 +1863,7 @@ class ChunkMetadata {
   /// callers to walk the nested [`HeadingContext`] structure.
   final List<String> headingPath;
 
-  /// Indices into `ExtractionResult.images` for images on pages covered by this chunk.
+  /// Indices into `ExtractedDocument.images` for images on pages covered by this chunk.
   ///
   /// Contains zero-based indices into the top-level `images` collection for every
   /// image whose `page_number` falls within `[first_page, last_page]`.
@@ -2930,30 +2234,6 @@ sealed class ChunkingReason with _$ChunkingReason {
   }) = ChunkingReason_LargeAndManyPages;
 }
 
-/// Result of a text chunking operation.
-///
-/// Contains the generated chunks and metadata about the chunking.
-class ChunkingResult {
-  /// List of text chunks
-  final List<Chunk> chunks;
-
-  /// Total number of chunks generated
-  final PlatformInt64 chunkCount;
-
-  const ChunkingResult({required this.chunks, required this.chunkCount});
-
-  @override
-  int get hashCode => chunks.hashCode ^ chunkCount.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is ChunkingResult &&
-          runtimeType == other.runtimeType &&
-          chunks == other.chunks &&
-          chunkCount == other.chunkCount;
-}
-
 /// A structured citation from a citation block.
 ///
 /// Parsed from entries like:
@@ -3070,7 +2350,7 @@ class ClassificationLabel {
 /// Content rendering mode for code extraction.
 ///
 /// Controls how extracted code content is represented in the `content` field
-/// of `ExtractionResult`.
+/// of `ExtractedDocument`.
 enum CodeContentMode {
   /// Use TSLP semantic chunks as content (default).
   chunks,
@@ -3080,74 +2360,6 @@ enum CodeContentMode {
 
   /// Emit function/class headings + docstrings (no code bodies).
   structure,
-}
-
-/// Input signals for confidence scoring.
-///
-/// Caller fills these from the extraction result and the LLM response.
-class ConfidenceSignals {
-  /// Fraction of pages with usable text in `[0, 1]`.
-  final double textCoverage;
-
-  /// Mean OCR per-element recognition confidence; `None` when OCR did not run.
-  final double? ocrAggregate;
-
-  /// Schema-validation result of the merged output.
-  final SchemaCompliance schemaCompliance;
-
-  const ConfidenceSignals({
-    required this.textCoverage,
-    this.ocrAggregate,
-    required this.schemaCompliance,
-  });
-
-  @override
-  int get hashCode =>
-      textCoverage.hashCode ^ ocrAggregate.hashCode ^ schemaCompliance.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is ConfidenceSignals &&
-          runtimeType == other.runtimeType &&
-          textCoverage == other.textCoverage &&
-          ocrAggregate == other.ocrAggregate &&
-          schemaCompliance == other.schemaCompliance;
-}
-
-/// Tunable weights for the confidence scoring formula.
-///
-/// Defaults picked by inspection; callers tune them via config.
-class ConfidenceWeights {
-  /// Weight assigned to `text_coverage`. Default 0.30.
-  final double textCoverage;
-
-  /// Weight assigned to `ocr_aggregate` when OCR ran.
-  ///
-  /// Default 0.30 — folds into `text_coverage` weight when OCR did not run.
-  final double ocrAggregate;
-
-  /// Weight assigned to `schema_compliance`. Default 0.40.
-  final double schemaCompliance;
-
-  const ConfidenceWeights({
-    required this.textCoverage,
-    required this.ocrAggregate,
-    required this.schemaCompliance,
-  });
-
-  @override
-  int get hashCode =>
-      textCoverage.hashCode ^ ocrAggregate.hashCode ^ schemaCompliance.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is ConfidenceWeights &&
-          runtimeType == other.runtimeType &&
-          textCoverage == other.textCoverage &&
-          ocrAggregate == other.ocrAggregate &&
-          schemaCompliance == other.schemaCompliance;
 }
 
 /// Cross-extractor content filtering configuration.
@@ -3588,7 +2800,7 @@ sealed class DiffLine with _$DiffLine {
   const factory DiffLine.removed({required String field0}) = DiffLine_Removed;
 }
 
-/// Options controlling how two `ExtractionResult` values are compared.
+/// Options controlling how two `ExtractedDocument` values are compared.
 class DiffOptions {
   /// Include metadata changes in the diff. Default: `true`.
   final bool includeMetadata;
@@ -3949,7 +3161,7 @@ class DocumentRelationship {
 ///
 /// Populated by per-format extractors that understand change-tracking metadata
 /// (DOCX `w:ins`/`w:del`/`w:rPrChange`, ODT `text:change-*`, …). Every
-/// extractor defaults to `ExtractionResult.revisions = None` until a
+/// extractor defaults to `ExtractedDocument.revisions = None` until a
 /// format-specific implementation is added.
 class DocumentRevision {
   /// Format-specific revision identifier.
@@ -4628,7 +3840,7 @@ class EmbeddedChanges {
 
   /// Children present in both but with differing content (matched by `path`).
   ///
-  /// Each entry holds the diff of the nested `ExtractionResult`.
+  /// Each entry holds the diff of the nested `ExtractedDocument`.
   final List<EmbeddedDiff> changed;
 
   const EmbeddedChanges({
@@ -4843,75 +4055,6 @@ sealed class EmbeddingModelType with _$EmbeddingModelType {
   }) = EmbeddingModelType_Plugin;
 }
 
-/// Preset configurations for common RAG use cases.
-///
-/// Each preset combines chunk size, overlap, and embedding model
-/// to provide an optimized configuration for specific scenarios.
-///
-/// All string fields are owned `String` for FFI compatibility — instances
-/// are safe to clone and pass across language boundaries.
-class EmbeddingPreset {
-  /// Short identifier for this preset (e.g. `"balanced"`, `"fast"`, `"quality"`).
-  final String name;
-
-  /// Target chunk size in characters.
-  final PlatformInt64 chunkSize;
-
-  /// Overlap between consecutive chunks in characters.
-  final PlatformInt64 overlap;
-
-  /// HuggingFace repository name for the model.
-  final String modelRepo;
-
-  /// Pooling strategy: "cls" or "mean".
-  final String pooling;
-
-  /// Path to the ONNX model file within the repo.
-  final String modelFile;
-
-  /// Embedding vector dimension produced by this model.
-  final PlatformInt64 dimensions;
-
-  /// Human-readable description of the preset's intended use case.
-  final String description;
-
-  const EmbeddingPreset({
-    required this.name,
-    required this.chunkSize,
-    required this.overlap,
-    required this.modelRepo,
-    required this.pooling,
-    required this.modelFile,
-    required this.dimensions,
-    required this.description,
-  });
-
-  @override
-  int get hashCode =>
-      name.hashCode ^
-      chunkSize.hashCode ^
-      overlap.hashCode ^
-      modelRepo.hashCode ^
-      pooling.hashCode ^
-      modelFile.hashCode ^
-      dimensions.hashCode ^
-      description.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is EmbeddingPreset &&
-          runtimeType == other.runtimeType &&
-          name == other.name &&
-          chunkSize == other.chunkSize &&
-          overlap == other.overlap &&
-          modelRepo == other.modelRepo &&
-          pooling == other.pooling &&
-          modelFile == other.modelFile &&
-          dimensions == other.dimensions &&
-          description == other.description;
-}
-
 /// Which enrichment passes to run on a piece of text.
 ///
 /// All fields default to `false` / empty so callers can opt in precisely.
@@ -5048,10 +4191,10 @@ class Entity {
   /// Raw mention text exactly as it appeared in the source.
   final String text;
 
-  /// Byte-offset span in `ExtractionResult::content` where the mention starts.
+  /// Byte-offset span in `ExtractedDocument::content` where the mention starts.
   final PlatformInt64 start;
 
-  /// Byte-offset span in `ExtractionResult::content` where the mention ends (exclusive).
+  /// Byte-offset span in `ExtractedDocument::content` where the mention ends (exclusive).
   final PlatformInt64 end;
 
   /// Backend-reported confidence in `[0.0, 1.0]`. `None` when the backend does not
@@ -5400,6 +4543,352 @@ enum ExtractInputKind {
   uri,
 }
 
+/// Document extracted by the core extraction pipeline.
+///
+/// `extract` and `extract_batch` return an `ExtractionResult` envelope whose
+/// `results` field contains these per-document payloads.
+class ExtractedDocument {
+  /// Plain-text representation of the extracted document content.
+  final String content;
+
+  /// MIME type of the source document (e.g. `"application/pdf"`).
+  final String mimeType;
+
+  /// Document-level metadata (author, title, dates, format-specific fields).
+  final Metadata metadata;
+
+  /// Extraction strategy used to produce the returned text.
+  ///
+  /// Populated when the extractor can reliably distinguish native text extraction,
+  /// OCR-only extraction, or mixed native/OCR output.
+  final ExtractionMethod? extractionMethod;
+
+  /// Tables extracted from the document, each with structured cell data.
+  final List<Table> tables;
+
+  /// ISO 639-1 language codes detected in the document content.
+  final List<String>? detectedLanguages;
+
+  /// Text chunks when chunking is enabled.
+  ///
+  /// When chunking configuration is provided, the content is split into
+  /// overlapping chunks for efficient processing. Each chunk contains the text,
+  /// optional embeddings (if enabled), and metadata about its position.
+  final List<Chunk>? chunks;
+
+  /// Extracted images from the document.
+  ///
+  /// When image extraction is enabled via `ImageExtractionConfig`, this field
+  /// contains all images found in the document with their raw data and metadata.
+  /// Each image may optionally contain a nested `ocr_result` if OCR was performed.
+  final List<ExtractedImage>? images;
+
+  /// Per-page content when page extraction is enabled.
+  ///
+  /// When page extraction is configured, the document is split into per-page content
+  /// with tables and images mapped to their respective pages.
+  final List<PageContent>? pages;
+
+  /// Semantic elements when element-based result format is enabled.
+  ///
+  /// When result_format is set to ElementBased, this field contains semantic
+  /// elements with type classification, unique identifiers, and metadata for
+  /// Unstructured-compatible element-based processing.
+  final List<Element>? elements;
+
+  /// Rich Djot content structure (when extracting Djot documents).
+  ///
+  /// When extracting Djot documents with structured extraction enabled,
+  /// this field contains the full semantic structure including:
+  /// - Block-level elements with nesting
+  /// - Inline formatting with attributes
+  /// - Links, images, footnotes
+  /// - Math expressions
+  /// - Complete attribute information
+  ///
+  /// The `content` field still contains plain text for backward compatibility.
+  ///
+  /// Always `None` for non-Djot documents.
+  final DjotContent? djotContent;
+
+  /// OCR elements with full spatial and confidence metadata.
+  ///
+  /// When OCR is performed with element extraction enabled, this field contains
+  /// the structured representation of detected text including:
+  /// - Bounding geometry (rectangles or quadrilaterals)
+  /// - Confidence scores (detection and recognition)
+  /// - Rotation information
+  /// - Hierarchical relationships (Tesseract only)
+  ///
+  /// This field preserves all metadata that would otherwise be lost when
+  /// converting to plain text or markdown output formats.
+  ///
+  /// Only populated when `OcrElementConfig.include_elements` is true.
+  final List<OcrElement>? ocrElements;
+
+  /// Structured document tree (when document structure extraction is enabled).
+  ///
+  /// When `include_document_structure` is true in `ExtractionConfig`, this field
+  /// contains the full hierarchical representation of the document including:
+  /// - Heading-driven section nesting
+  /// - Table grids with cell-level metadata
+  /// - Content layer classification (body, header, footer, footnote)
+  /// - Inline text annotations (formatting, links)
+  /// - Bounding boxes and page numbers
+  ///
+  /// Independent of `result_format` — can be combined with Unified or ElementBased.
+  final DocumentStructure? document;
+
+  /// Extracted keywords when keyword extraction is enabled.
+  ///
+  /// When keyword extraction (RAKE or YAKE) is configured, this field contains
+  /// the extracted keywords with scores, algorithm info, and position data.
+  /// Previously stored in `metadata.additional["keywords"]`.
+  final List<Keyword>? extractedKeywords;
+
+  /// Document quality score from quality analysis.
+  ///
+  /// A value between 0.0 and 1.0 indicating the overall text quality.
+  /// Previously stored in `metadata.additional["quality_score"]`.
+  final double? qualityScore;
+
+  /// Non-fatal warnings collected during processing pipeline stages.
+  ///
+  /// Captures errors from optional pipeline features (embedding, chunking,
+  /// language detection, output formatting) that don't prevent extraction
+  /// but may indicate degraded results.
+  /// Previously stored as individual keys in `metadata.additional`.
+  final List<ProcessingWarning> processingWarnings;
+
+  /// PDF annotations extracted from the document.
+  ///
+  /// When annotation extraction is enabled via `PdfConfig::extract_annotations`,
+  /// this field contains text notes, highlights, links, stamps, and other
+  /// annotations found in PDF documents.
+  final List<PdfAnnotation>? annotations;
+
+  /// Nested extraction results from archive contents.
+  ///
+  /// When extracting archives, each processable file inside produces its own
+  /// full extraction result. Set to `None` for non-archive formats.
+  /// Use `max_archive_depth` in config to control recursion depth.
+  final List<ArchiveEntry>? children;
+
+  /// URIs/links discovered during document extraction.
+  ///
+  /// Contains hyperlinks, image references, citations, email addresses, and
+  /// other URI-like references found in the document. Always extracted when
+  /// present in the source document.
+  final List<ExtractedUri>? uris;
+
+  /// Tracked changes embedded in the source document.
+  ///
+  /// Populated by per-format extractors that understand change-tracking
+  /// metadata (DOCX `w:ins`/`w:del`/`w:rPrChange`, ODT `text:change-*`,
+  /// …). Every extractor defaults to `None` until its format-specific
+  /// implementation is added. Extractors that do populate this field follow
+  /// the "accepted-changes" convention: inserted text is present in
+  /// `content`, deleted text is absent — the revision list is the separate
+  /// audit trail.
+  final List<DocumentRevision>? revisions;
+
+  /// Structured extraction output from LLM-based JSON schema extraction.
+  ///
+  /// When `structured_extraction` is configured in `ExtractionConfig`, the
+  /// extracted document content is sent to a VLM with the provided JSON schema.
+  /// The response is parsed and stored here as a JSON value matching the schema.
+  final String? structuredOutput;
+
+  /// Code intelligence results from tree-sitter analysis.
+  ///
+  /// Populated when extracting source code files with the `tree-sitter` feature.
+  /// Contains metrics, structural analysis, imports/exports, comments,
+  /// docstrings, symbols, diagnostics, and optionally chunked code segments.
+  ///
+  /// Stored as an opaque JSON value so that all language bindings (Go, Java,
+  /// C#, …) can deserialize it as a raw JSON object rather than a typed struct.
+  /// The underlying type is `tree_sitter_language_pack::ProcessResult`.
+  final String? codeIntelligence;
+
+  /// LLM token usage and cost data for all LLM calls made during this extraction.
+  ///
+  /// Contains one entry per LLM call. Multiple entries are produced when
+  /// VLM OCR, structured extraction, or LLM embeddings run during
+  /// the same extraction.
+  ///
+  /// `None` when no LLM was used.
+  final List<LlmUsage>? llmUsage;
+
+  /// Named entities detected in `content` by the NER post-processor.
+  ///
+  /// `None` when no NER backend is configured. Populated by the `xberg-gliner`
+  /// ONNX backend or the LLM-driven backend (see `crates/xberg/src/text/ner/`).
+  final List<Entity>? entities;
+
+  /// Summary of `content` produced by the summarisation post-processor.
+  ///
+  /// `None` when summarisation is not configured. Populated by the TextRank
+  /// extractive backend (deterministic, no external service) or by the
+  /// liter-llm-driven abstractive backend.
+  final DocumentSummary? summary;
+
+  /// Confidence score computed by the heuristics pipeline.
+  ///
+  /// Populated when the `heuristics` feature is enabled and confidence
+  /// scoring has been performed.  Combines text-coverage, OCR aggregate
+  /// confidence, and schema-compliance into a single `[0, 1]` value.
+  ///
+  /// `None` when confidence scoring is not configured or the feature is
+  /// absent.
+  final ExtractionConfidence? extractionConfidence;
+
+  /// Translation of `content` produced by the translation post-processor.
+  ///
+  /// `None` when translation is not configured.
+  final Translation? translation;
+
+  /// Per-page classifications produced by the page-classification post-processor.
+  ///
+  /// `None` when classification is not configured.
+  final List<PageClassification>? pageClassifications;
+
+  /// Audit report of redactions applied by the redaction post-processor.
+  ///
+  /// The redaction processor rewrites `content`, `formatted_content`, every
+  /// chunk's text, and the textual fields of `entities` / `summary` / `translation` /
+  /// `page_classifications` in place. This report describes what was found and how it
+  /// was replaced. `None` when redaction is not configured.
+  final RedactionReport? redactionReport;
+
+  /// Mathematical formulas recognized in the document.
+  ///
+  /// Populated by the layout-guided formula pipeline when the
+  /// `layout-detection` feature is enabled and the document contains regions
+  /// classified as formulas. Empty otherwise.
+  final List<Formula> formulas;
+
+  /// Form fields extracted from a PDF's AcroForm or XFA structure.
+  ///
+  /// Populated by the PDF extractor when `PdfConfig::extract_form_fields` is
+  /// enabled (default) and the document is a fillable form. Empty otherwise.
+  final List<PdfFormField> formFields;
+
+  /// Pre-rendered content in the requested output format.
+  ///
+  /// Populated during `derive_extraction_result` before tree derivation consumes
+  /// element data. `apply_output_format` swaps this into `content` at the end
+  /// of the pipeline, after post-processors have operated on plain text.
+  final String? formattedContent;
+
+  const ExtractedDocument({
+    required this.content,
+    required this.mimeType,
+    required this.metadata,
+    this.extractionMethod,
+    required this.tables,
+    this.detectedLanguages,
+    this.chunks,
+    this.images,
+    this.pages,
+    this.elements,
+    this.djotContent,
+    this.ocrElements,
+    this.document,
+    this.extractedKeywords,
+    this.qualityScore,
+    required this.processingWarnings,
+    this.annotations,
+    this.children,
+    this.uris,
+    this.revisions,
+    this.structuredOutput,
+    this.codeIntelligence,
+    this.llmUsage,
+    this.entities,
+    this.summary,
+    this.extractionConfidence,
+    this.translation,
+    this.pageClassifications,
+    this.redactionReport,
+    required this.formulas,
+    required this.formFields,
+    this.formattedContent,
+  });
+
+  @override
+  int get hashCode =>
+      content.hashCode ^
+      mimeType.hashCode ^
+      metadata.hashCode ^
+      extractionMethod.hashCode ^
+      tables.hashCode ^
+      detectedLanguages.hashCode ^
+      chunks.hashCode ^
+      images.hashCode ^
+      pages.hashCode ^
+      elements.hashCode ^
+      djotContent.hashCode ^
+      ocrElements.hashCode ^
+      document.hashCode ^
+      extractedKeywords.hashCode ^
+      qualityScore.hashCode ^
+      processingWarnings.hashCode ^
+      annotations.hashCode ^
+      children.hashCode ^
+      uris.hashCode ^
+      revisions.hashCode ^
+      structuredOutput.hashCode ^
+      codeIntelligence.hashCode ^
+      llmUsage.hashCode ^
+      entities.hashCode ^
+      summary.hashCode ^
+      extractionConfidence.hashCode ^
+      translation.hashCode ^
+      pageClassifications.hashCode ^
+      redactionReport.hashCode ^
+      formulas.hashCode ^
+      formFields.hashCode ^
+      formattedContent.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ExtractedDocument &&
+          runtimeType == other.runtimeType &&
+          content == other.content &&
+          mimeType == other.mimeType &&
+          metadata == other.metadata &&
+          extractionMethod == other.extractionMethod &&
+          tables == other.tables &&
+          detectedLanguages == other.detectedLanguages &&
+          chunks == other.chunks &&
+          images == other.images &&
+          pages == other.pages &&
+          elements == other.elements &&
+          djotContent == other.djotContent &&
+          ocrElements == other.ocrElements &&
+          document == other.document &&
+          extractedKeywords == other.extractedKeywords &&
+          qualityScore == other.qualityScore &&
+          processingWarnings == other.processingWarnings &&
+          annotations == other.annotations &&
+          children == other.children &&
+          uris == other.uris &&
+          revisions == other.revisions &&
+          structuredOutput == other.structuredOutput &&
+          codeIntelligence == other.codeIntelligence &&
+          llmUsage == other.llmUsage &&
+          entities == other.entities &&
+          summary == other.summary &&
+          extractionConfidence == other.extractionConfidence &&
+          translation == other.translation &&
+          pageClassifications == other.pageClassifications &&
+          redactionReport == other.redactionReport &&
+          formulas == other.formulas &&
+          formFields == other.formFields &&
+          formattedContent == other.formattedContent;
+}
+
 /// Extracted image from a document.
 ///
 /// Contains raw image data, metadata, and optional nested OCR results.
@@ -5442,7 +4931,7 @@ class ExtractedImage {
   ///
   /// When OCR is performed on this image, the result is embedded here
   /// rather than in a separate collection, making the relationship explicit.
-  final ExtractionResult? ocrResult;
+  final ExtractedDocument? ocrResult;
 
   /// Bounding box of the image on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top).
   /// Only populated for PDF-extracted images when position data is available from the PDF extractor.
@@ -5819,7 +5308,7 @@ class ExtractionConfig {
 
   /// Enable structured document tree output.
   ///
-  /// When true, populates the `document` field on `ExtractionResult` with a
+  /// When true, populates the `document` field on `ExtractedDocument` with a
   /// hierarchical `DocumentStructure` containing heading-driven section nesting,
   /// table grids, content layer classification, and inline annotations.
   ///
@@ -5870,28 +5359,28 @@ class ExtractionConfig {
   ///
   /// When set, the extracted document content is sent to an LLM with the
   /// provided JSON schema. The structured response is stored in
-  /// `ExtractionResult::structured_output`.
+  /// `ExtractedDocument::structured_output`.
   final StructuredExtractionConfig? structuredExtraction;
 
   /// Named-entity recognition configuration. When set, the NER post-processor runs at
-  /// the Middle stage and populates `ExtractionResult::entities`.
+  /// the Middle stage and populates `ExtractedDocument::entities`.
   final NerConfig? ner;
 
   /// Redaction / anonymisation configuration. When set, the redaction post-processor
-  /// runs at the Late stage and rewrites every textual field in `ExtractionResult`,
-  /// emitting an audit trail in `ExtractionResult::redaction_report`.
+  /// runs at the Late stage and rewrites every textual field in `ExtractedDocument`,
+  /// emitting an audit trail in `ExtractedDocument::redaction_report`.
   final RedactionConfig? redaction;
 
   /// Summarisation configuration. When set, the summarisation post-processor runs at
-  /// the Middle stage and populates `ExtractionResult::summary`.
+  /// the Middle stage and populates `ExtractedDocument::summary`.
   final SummarizationConfig? summarization;
 
   /// Translation configuration. When set, the translation post-processor runs at the
-  /// Middle stage and populates `ExtractionResult::translation`.
+  /// Middle stage and populates `ExtractedDocument::translation`.
   final TranslationConfig? translation;
 
   /// Per-page classification configuration. When set, the classification post-processor
-  /// runs at the Middle stage and populates `ExtractionResult::page_classifications`.
+  /// runs at the Middle stage and populates `ExtractedDocument::page_classifications`.
   final PageClassificationConfig? pageClassification;
 
   /// VLM captioning configuration for extracted images. When set, the captioning
@@ -6039,7 +5528,7 @@ class ExtractionConfig {
           qrCodes == other.qrCodes;
 }
 
-/// The complete diff between two `ExtractionResult` values.
+/// The complete diff between two `ExtractedDocument` values.
 class ExtractionDiff {
   /// Unified-diff hunks for the `content` field.
   ///
@@ -6100,7 +5589,7 @@ class ExtractionDiff {
           embeddedChanges == other.embeddedChanges;
 }
 
-/// Non-fatal per-input extraction error captured by [`ExtractionOutput`].
+/// Non-fatal per-input extraction error captured by [`ExtractionResult`].
 class ExtractionErrorItem {
   /// Input index in the original request.
   final PlatformInt64 index;
@@ -6157,10 +5646,10 @@ enum ExtractionMethod {
   mixed,
 }
 
-/// Unified extraction output envelope.
-class ExtractionOutput {
-  /// Extraction results in discovery order.
-  final List<ExtractionResult> results;
+/// Unified extraction result envelope.
+class ExtractionResult {
+  /// Extracted documents in discovery order.
+  final List<ExtractedDocument> results;
 
   /// Non-fatal per-input errors.
   final List<ExtractionErrorItem> errors;
@@ -6177,7 +5666,7 @@ class ExtractionOutput {
   /// Unique normalized URLs discovered by crawls.
   final List<String> crawlUniqueNormalizedUrls;
 
-  const ExtractionOutput({
+  const ExtractionResult({
     required this.results,
     required this.errors,
     required this.summary,
@@ -6198,7 +5687,7 @@ class ExtractionOutput {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is ExtractionOutput &&
+      other is ExtractionResult &&
           runtimeType == other.runtimeType &&
           results == other.results &&
           errors == other.errors &&
@@ -6206,351 +5695,6 @@ class ExtractionOutput {
           crawlFinalUrls == other.crawlFinalUrls &&
           crawlRedirectCount == other.crawlRedirectCount &&
           crawlUniqueNormalizedUrls == other.crawlUniqueNormalizedUrls;
-}
-
-/// General extraction result used by the core extraction API.
-///
-/// This is the main result type returned by all extraction functions.
-class ExtractionResult {
-  /// Plain-text representation of the extracted document content.
-  final String content;
-
-  /// MIME type of the source document (e.g. `"application/pdf"`).
-  final String mimeType;
-
-  /// Document-level metadata (author, title, dates, format-specific fields).
-  final Metadata metadata;
-
-  /// Extraction strategy used to produce the returned text.
-  ///
-  /// Populated when the extractor can reliably distinguish native text extraction,
-  /// OCR-only extraction, or mixed native/OCR output.
-  final ExtractionMethod? extractionMethod;
-
-  /// Tables extracted from the document, each with structured cell data.
-  final List<Table> tables;
-
-  /// ISO 639-1 language codes detected in the document content.
-  final List<String>? detectedLanguages;
-
-  /// Text chunks when chunking is enabled.
-  ///
-  /// When chunking configuration is provided, the content is split into
-  /// overlapping chunks for efficient processing. Each chunk contains the text,
-  /// optional embeddings (if enabled), and metadata about its position.
-  final List<Chunk>? chunks;
-
-  /// Extracted images from the document.
-  ///
-  /// When image extraction is enabled via `ImageExtractionConfig`, this field
-  /// contains all images found in the document with their raw data and metadata.
-  /// Each image may optionally contain a nested `ocr_result` if OCR was performed.
-  final List<ExtractedImage>? images;
-
-  /// Per-page content when page extraction is enabled.
-  ///
-  /// When page extraction is configured, the document is split into per-page content
-  /// with tables and images mapped to their respective pages.
-  final List<PageContent>? pages;
-
-  /// Semantic elements when element-based result format is enabled.
-  ///
-  /// When result_format is set to ElementBased, this field contains semantic
-  /// elements with type classification, unique identifiers, and metadata for
-  /// Unstructured-compatible element-based processing.
-  final List<Element>? elements;
-
-  /// Rich Djot content structure (when extracting Djot documents).
-  ///
-  /// When extracting Djot documents with structured extraction enabled,
-  /// this field contains the full semantic structure including:
-  /// - Block-level elements with nesting
-  /// - Inline formatting with attributes
-  /// - Links, images, footnotes
-  /// - Math expressions
-  /// - Complete attribute information
-  ///
-  /// The `content` field still contains plain text for backward compatibility.
-  ///
-  /// Always `None` for non-Djot documents.
-  final DjotContent? djotContent;
-
-  /// OCR elements with full spatial and confidence metadata.
-  ///
-  /// When OCR is performed with element extraction enabled, this field contains
-  /// the structured representation of detected text including:
-  /// - Bounding geometry (rectangles or quadrilaterals)
-  /// - Confidence scores (detection and recognition)
-  /// - Rotation information
-  /// - Hierarchical relationships (Tesseract only)
-  ///
-  /// This field preserves all metadata that would otherwise be lost when
-  /// converting to plain text or markdown output formats.
-  ///
-  /// Only populated when `OcrElementConfig.include_elements` is true.
-  final List<OcrElement>? ocrElements;
-
-  /// Structured document tree (when document structure extraction is enabled).
-  ///
-  /// When `include_document_structure` is true in `ExtractionConfig`, this field
-  /// contains the full hierarchical representation of the document including:
-  /// - Heading-driven section nesting
-  /// - Table grids with cell-level metadata
-  /// - Content layer classification (body, header, footer, footnote)
-  /// - Inline text annotations (formatting, links)
-  /// - Bounding boxes and page numbers
-  ///
-  /// Independent of `result_format` — can be combined with Unified or ElementBased.
-  final DocumentStructure? document;
-
-  /// Extracted keywords when keyword extraction is enabled.
-  ///
-  /// When keyword extraction (RAKE or YAKE) is configured, this field contains
-  /// the extracted keywords with scores, algorithm info, and position data.
-  /// Previously stored in `metadata.additional["keywords"]`.
-  final List<Keyword>? extractedKeywords;
-
-  /// Document quality score from quality analysis.
-  ///
-  /// A value between 0.0 and 1.0 indicating the overall text quality.
-  /// Previously stored in `metadata.additional["quality_score"]`.
-  final double? qualityScore;
-
-  /// Non-fatal warnings collected during processing pipeline stages.
-  ///
-  /// Captures errors from optional pipeline features (embedding, chunking,
-  /// language detection, output formatting) that don't prevent extraction
-  /// but may indicate degraded results.
-  /// Previously stored as individual keys in `metadata.additional`.
-  final List<ProcessingWarning> processingWarnings;
-
-  /// PDF annotations extracted from the document.
-  ///
-  /// When annotation extraction is enabled via `PdfConfig::extract_annotations`,
-  /// this field contains text notes, highlights, links, stamps, and other
-  /// annotations found in PDF documents.
-  final List<PdfAnnotation>? annotations;
-
-  /// Nested extraction results from archive contents.
-  ///
-  /// When extracting archives, each processable file inside produces its own
-  /// full extraction result. Set to `None` for non-archive formats.
-  /// Use `max_archive_depth` in config to control recursion depth.
-  final List<ArchiveEntry>? children;
-
-  /// URIs/links discovered during document extraction.
-  ///
-  /// Contains hyperlinks, image references, citations, email addresses, and
-  /// other URI-like references found in the document. Always extracted when
-  /// present in the source document.
-  final List<ExtractedUri>? uris;
-
-  /// Tracked changes embedded in the source document.
-  ///
-  /// Populated by per-format extractors that understand change-tracking
-  /// metadata (DOCX `w:ins`/`w:del`/`w:rPrChange`, ODT `text:change-*`,
-  /// …). Every extractor defaults to `None` until its format-specific
-  /// implementation is added. Extractors that do populate this field follow
-  /// the "accepted-changes" convention: inserted text is present in
-  /// `content`, deleted text is absent — the revision list is the separate
-  /// audit trail.
-  final List<DocumentRevision>? revisions;
-
-  /// Structured extraction output from LLM-based JSON schema extraction.
-  ///
-  /// When `structured_extraction` is configured in `ExtractionConfig`, the
-  /// extracted document content is sent to a VLM with the provided JSON schema.
-  /// The response is parsed and stored here as a JSON value matching the schema.
-  final String? structuredOutput;
-
-  /// Code intelligence results from tree-sitter analysis.
-  ///
-  /// Populated when extracting source code files with the `tree-sitter` feature.
-  /// Contains metrics, structural analysis, imports/exports, comments,
-  /// docstrings, symbols, diagnostics, and optionally chunked code segments.
-  ///
-  /// Stored as an opaque JSON value so that all language bindings (Go, Java,
-  /// C#, …) can deserialize it as a raw JSON object rather than a typed struct.
-  /// The underlying type is `tree_sitter_language_pack::ProcessResult`.
-  final String? codeIntelligence;
-
-  /// LLM token usage and cost data for all LLM calls made during this extraction.
-  ///
-  /// Contains one entry per LLM call. Multiple entries are produced when
-  /// VLM OCR, structured extraction, or LLM embeddings run during
-  /// the same extraction.
-  ///
-  /// `None` when no LLM was used.
-  final List<LlmUsage>? llmUsage;
-
-  /// Named entities detected in `content` by the NER post-processor.
-  ///
-  /// `None` when no NER backend is configured. Populated by the `xberg-gliner`
-  /// ONNX backend or the LLM-driven backend (see `crates/xberg/src/text/ner/`).
-  final List<Entity>? entities;
-
-  /// Summary of `content` produced by the summarisation post-processor.
-  ///
-  /// `None` when summarisation is not configured. Populated by the TextRank
-  /// extractive backend (deterministic, no external service) or by the
-  /// liter-llm-driven abstractive backend.
-  final DocumentSummary? summary;
-
-  /// Confidence score computed by the heuristics pipeline.
-  ///
-  /// Populated when the `heuristics` feature is enabled and confidence
-  /// scoring has been performed.  Combines text-coverage, OCR aggregate
-  /// confidence, and schema-compliance into a single `[0, 1]` value.
-  ///
-  /// `None` when confidence scoring is not configured or the feature is
-  /// absent.
-  final ExtractionConfidence? extractionConfidence;
-
-  /// Translation of `content` produced by the translation post-processor.
-  ///
-  /// `None` when translation is not configured.
-  final Translation? translation;
-
-  /// Per-page classifications produced by the page-classification post-processor.
-  ///
-  /// `None` when classification is not configured.
-  final List<PageClassification>? pageClassifications;
-
-  /// Audit report of redactions applied by the redaction post-processor.
-  ///
-  /// The redaction processor rewrites `content`, `formatted_content`, every
-  /// chunk's text, and the textual fields of `entities` / `summary` / `translation` /
-  /// `page_classifications` in place. This report describes what was found and how it
-  /// was replaced. `None` when redaction is not configured.
-  final RedactionReport? redactionReport;
-
-  /// Mathematical formulas recognized in the document.
-  ///
-  /// Populated by the layout-guided formula pipeline when the
-  /// `layout-detection` feature is enabled and the document contains regions
-  /// classified as formulas. Empty otherwise.
-  final List<Formula> formulas;
-
-  /// Form fields extracted from a PDF's AcroForm or XFA structure.
-  ///
-  /// Populated by the PDF extractor when `PdfConfig::extract_form_fields` is
-  /// enabled (default) and the document is a fillable form. Empty otherwise.
-  final List<PdfFormField> formFields;
-
-  /// Pre-rendered content in the requested output format.
-  ///
-  /// Populated during `derive_extraction_result` before tree derivation consumes
-  /// element data. `apply_output_format` swaps this into `content` at the end
-  /// of the pipeline, after post-processors have operated on plain text.
-  final String? formattedContent;
-
-  const ExtractionResult({
-    required this.content,
-    required this.mimeType,
-    required this.metadata,
-    this.extractionMethod,
-    required this.tables,
-    this.detectedLanguages,
-    this.chunks,
-    this.images,
-    this.pages,
-    this.elements,
-    this.djotContent,
-    this.ocrElements,
-    this.document,
-    this.extractedKeywords,
-    this.qualityScore,
-    required this.processingWarnings,
-    this.annotations,
-    this.children,
-    this.uris,
-    this.revisions,
-    this.structuredOutput,
-    this.codeIntelligence,
-    this.llmUsage,
-    this.entities,
-    this.summary,
-    this.extractionConfidence,
-    this.translation,
-    this.pageClassifications,
-    this.redactionReport,
-    required this.formulas,
-    required this.formFields,
-    this.formattedContent,
-  });
-
-  @override
-  int get hashCode =>
-      content.hashCode ^
-      mimeType.hashCode ^
-      metadata.hashCode ^
-      extractionMethod.hashCode ^
-      tables.hashCode ^
-      detectedLanguages.hashCode ^
-      chunks.hashCode ^
-      images.hashCode ^
-      pages.hashCode ^
-      elements.hashCode ^
-      djotContent.hashCode ^
-      ocrElements.hashCode ^
-      document.hashCode ^
-      extractedKeywords.hashCode ^
-      qualityScore.hashCode ^
-      processingWarnings.hashCode ^
-      annotations.hashCode ^
-      children.hashCode ^
-      uris.hashCode ^
-      revisions.hashCode ^
-      structuredOutput.hashCode ^
-      codeIntelligence.hashCode ^
-      llmUsage.hashCode ^
-      entities.hashCode ^
-      summary.hashCode ^
-      extractionConfidence.hashCode ^
-      translation.hashCode ^
-      pageClassifications.hashCode ^
-      redactionReport.hashCode ^
-      formulas.hashCode ^
-      formFields.hashCode ^
-      formattedContent.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is ExtractionResult &&
-          runtimeType == other.runtimeType &&
-          content == other.content &&
-          mimeType == other.mimeType &&
-          metadata == other.metadata &&
-          extractionMethod == other.extractionMethod &&
-          tables == other.tables &&
-          detectedLanguages == other.detectedLanguages &&
-          chunks == other.chunks &&
-          images == other.images &&
-          pages == other.pages &&
-          elements == other.elements &&
-          djotContent == other.djotContent &&
-          ocrElements == other.ocrElements &&
-          document == other.document &&
-          extractedKeywords == other.extractedKeywords &&
-          qualityScore == other.qualityScore &&
-          processingWarnings == other.processingWarnings &&
-          annotations == other.annotations &&
-          children == other.children &&
-          uris == other.uris &&
-          revisions == other.revisions &&
-          structuredOutput == other.structuredOutput &&
-          codeIntelligence == other.codeIntelligence &&
-          llmUsage == other.llmUsage &&
-          entities == other.entities &&
-          summary == other.summary &&
-          extractionConfidence == other.extractionConfidence &&
-          translation == other.translation &&
-          pageClassifications == other.pageClassifications &&
-          redactionReport == other.redactionReport &&
-          formulas == other.formulas &&
-          formFields == other.formFields &&
-          formattedContent == other.formattedContent;
 }
 
 /// Summary for a unified extraction call.
@@ -6704,6 +5848,9 @@ class FileExtractionConfig {
   /// Override post-processor for this file.
   final PostProcessorConfig? postprocessor;
 
+  /// Override styled HTML output configuration for this file.
+  final HtmlOutputConfig? htmlOutput;
+
   /// Override result format for this file.
   final ResultFormat? resultFormat;
 
@@ -6736,6 +5883,30 @@ class FileExtractionConfig {
   /// and the response is parsed according to the provided schema.
   final StructuredExtractionConfig? structuredExtraction;
 
+  /// Override URL ingestion and crawl configuration for this file.
+  final UrlExtractionConfig? url;
+
+  /// Override named-entity recognition configuration for this file.
+  final NerConfig? ner;
+
+  /// Override redaction configuration for this file.
+  final RedactionConfig? redaction;
+
+  /// Override summarization configuration for this file.
+  final SummarizationConfig? summarization;
+
+  /// Override translation configuration for this file.
+  final TranslationConfig? translation;
+
+  /// Override per-page classification configuration for this file.
+  final PageClassificationConfig? pageClassification;
+
+  /// Override VLM captioning configuration for this file.
+  final CaptioningConfig? captioning;
+
+  /// Override QR-code detection for this file.
+  final bool? qrCodes;
+
   const FileExtractionConfig({
     this.enableQualityProcessing,
     this.ocr,
@@ -6751,6 +5922,7 @@ class FileExtractionConfig {
     this.pages,
     this.keywords,
     this.postprocessor,
+    this.htmlOutput,
     this.resultFormat,
     this.outputFormat,
     this.includeDocumentStructure,
@@ -6759,6 +5931,14 @@ class FileExtractionConfig {
     this.timeoutSecs,
     this.treeSitter,
     this.structuredExtraction,
+    this.url,
+    this.ner,
+    this.redaction,
+    this.summarization,
+    this.translation,
+    this.pageClassification,
+    this.captioning,
+    this.qrCodes,
   });
 
   @override
@@ -6777,6 +5957,7 @@ class FileExtractionConfig {
       pages.hashCode ^
       keywords.hashCode ^
       postprocessor.hashCode ^
+      htmlOutput.hashCode ^
       resultFormat.hashCode ^
       outputFormat.hashCode ^
       includeDocumentStructure.hashCode ^
@@ -6784,7 +5965,15 @@ class FileExtractionConfig {
       transcription.hashCode ^
       timeoutSecs.hashCode ^
       treeSitter.hashCode ^
-      structuredExtraction.hashCode;
+      structuredExtraction.hashCode ^
+      url.hashCode ^
+      ner.hashCode ^
+      redaction.hashCode ^
+      summarization.hashCode ^
+      translation.hashCode ^
+      pageClassification.hashCode ^
+      captioning.hashCode ^
+      qrCodes.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -6805,6 +5994,7 @@ class FileExtractionConfig {
           pages == other.pages &&
           keywords == other.keywords &&
           postprocessor == other.postprocessor &&
+          htmlOutput == other.htmlOutput &&
           resultFormat == other.resultFormat &&
           outputFormat == other.outputFormat &&
           includeDocumentStructure == other.includeDocumentStructure &&
@@ -6812,7 +6002,15 @@ class FileExtractionConfig {
           transcription == other.transcription &&
           timeoutSecs == other.timeoutSecs &&
           treeSitter == other.treeSitter &&
-          structuredExtraction == other.structuredExtraction;
+          structuredExtraction == other.structuredExtraction &&
+          url == other.url &&
+          ner == other.ner &&
+          redaction == other.redaction &&
+          summarization == other.summarization &&
+          translation == other.translation &&
+          pageClassification == other.pageClassification &&
+          captioning == other.captioning &&
+          qrCodes == other.qrCodes;
 }
 
 /// Footnote in Djot.
@@ -7027,7 +6225,7 @@ sealed class FormatMetadata with _$FormatMetadata {
       FormatMetadata_Audio;
 
   /// Code (tree-sitter analyzable source). The structured analysis result is exposed
-  /// via `ExtractionResult::code_intelligence`; this variant only tags the format.
+  /// via `ExtractedDocument::code_intelligence`; this variant only tags the format.
   const factory FormatMetadata.code() = FormatMetadata_Code;
 }
 
@@ -7089,7 +6287,7 @@ class FormattedBlock {
 /// Populated by the layout-guided formula pipeline: regions classified as
 /// `LayoutClass::Formula` are routed to the formula OCR task, which returns the
 /// LaTeX source for the region. The field is always present on
-/// [`ExtractionResult`](super::extraction::ExtractionResult) but only populated
+/// [`ExtractedDocument`](super::extraction::ExtractedDocument) but only populated
 /// when the `layout-detection` feature is active and the document contains
 /// formula regions.
 class Formula {
@@ -7734,12 +6932,12 @@ class ImageExtractionConfig {
   final bool classify;
 
   /// When `true`, full-page renders produced during OCR preprocessing are captured
-  /// and returned as `ImageKind::PageRaster` entries in `ExtractionResult.images`.
+  /// and returned as `ImageKind::PageRaster` entries in `ExtractedDocument.images`.
   ///
   /// **PDF + OCR only.** No rasters are captured for non-PDF inputs or when the
   /// document-level OCR bypass is active (whole-document backend). When OCR is
   /// enabled and this flag is set but the active backend skips per-page rendering,
-  /// a `ProcessingWarning` is emitted in `ExtractionResult.processing_warnings`.
+  /// a `ProcessingWarning` is emitted in `ExtractedDocument.processing_warnings`.
   ///
   /// Defaults to `false`. Enable when downstream consumers need page thumbnails
   /// (e.g. citation previews, visual grounding).
@@ -8244,24 +7442,6 @@ enum InlineType {
 
   /// Named symbol or emoji shortcode.
   symbol,
-}
-
-/// Opaque JSON carrier for Rust's excluded `InternalDocument` trait-bridge contract.
-/// Dart code should pass this value back to Alef-generated bridge APIs.
-class InternalDocumentBridge {
-  final String json;
-
-  const InternalDocumentBridge({required this.json});
-
-  @override
-  int get hashCode => json.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is InternalDocumentBridge &&
-          runtimeType == other.runtimeType &&
-          json == other.json;
 }
 
 /// JATS (Journal Article Tag Suite) metadata.
@@ -9176,7 +8356,7 @@ class NerConfig {
   final String? model;
 
   /// Optional LLM configuration — only used by [`NerBackendKind::Llm`]. Token usage
-  /// for LLM backends is recorded in `ExtractionResult::llm_usage`.
+  /// for LLM backends is recorded in `ExtractedDocument::llm_usage`.
   final LlmConfig? llm;
 
   /// Arbitrary user-supplied entity labels for zero-shot detection.
@@ -9312,7 +8492,7 @@ sealed class NodeContent with _$NodeContent {
     /// Optional alt text or caption describing the image.
     required String description,
 
-    /// Index into the parent `ExtractionResult::images` list.
+    /// Index into the parent `ExtractedDocument::images` list.
     required PlatformInt64 imageIndex,
 
     /// Source URL or path of the image (from `<img src="...">` or `![](src)`).
@@ -9423,9 +8603,6 @@ enum OcrBackendType {
   /// Tesseract OCR (native Rust binding)
   tesseract,
 
-  /// EasyOCR (Python-based, via FFI)
-  easyOcr,
-
   /// PaddleOCR (Python-based, via FFI)
   paddleOcr,
 
@@ -9504,7 +8681,7 @@ class OcrConfig {
   /// Defaults to `true`. When `false`, all other OCR settings are ignored.
   final bool enabled;
 
-  /// OCR backend: tesseract, easyocr, paddleocr
+  /// OCR backend: tesseract, paddleocr, paddle-ocr, or vlm
   final String backend;
 
   /// Language code(s) for OCR recognition.
@@ -9754,7 +8931,7 @@ class OcrElement {
 class OcrElementConfig {
   /// Whether to include OCR elements in the extraction result.
   ///
-  /// When true, the `ocr_elements` field in `ExtractionResult` will be populated.
+  /// When true, the `ocr_elements` field in `ExtractedDocument` will be populated.
   final bool includeElements;
 
   /// Minimum hierarchical level to include.
@@ -9949,7 +9126,7 @@ class OcrPipelineConfig {
 
 /// A single backend stage in the OCR pipeline.
 class OcrPipelineStage {
-  /// Backend name: "tesseract", "paddleocr", "easyocr", or a custom registered name.
+  /// Backend name: "tesseract", "paddleocr", "paddle-ocr", "vlm", or a custom registered name.
   final String backend;
 
   /// Priority weight (higher = tried first). Stages are sorted by priority descending.
@@ -10559,7 +9736,7 @@ class PageClassificationConfig {
 /// Page range tracking in chunk metadata (first_page/last_page) is automatically enabled
 /// when page boundaries are available and chunking is configured.
 class PageConfig {
-  /// Extract pages as separate array (ExtractionResult.pages)
+  /// Extract pages as separate array (ExtractedDocument.pages)
   final bool extractPages;
 
   /// Insert page markers in main content string
@@ -10618,7 +9795,7 @@ class PageContent {
   /// Arc semantics in-memory for zero-copy sharing.
   final List<Table> tables;
 
-  /// Indices into `ExtractionResult.images` for images found on this page.
+  /// Indices into `ExtractedDocument.images` for images found on this page.
   ///
   /// Each value is a zero-based index into the top-level `images` collection.
   /// Only populated when `extract_images = true` in the extraction config.
@@ -10761,7 +9938,7 @@ class PageInfo {
   ///
   /// Indicates the presence of vector-drawn content such as charts, diagrams,
   /// or geometric shapes (e.g., from Adobe InDesign, LaTeX TikZ). These are
-  /// invisible to `ExtractionResult.images` since they are not embedded as raster
+  /// invisible to `ExtractedDocument.images` since they are not embedded as raster
   /// XObjects. Set to `true` when path count exceeds a heuristic threshold,
   /// signaling that downstream consumers may want to rasterize the page to
   /// capture this content.
@@ -11088,7 +10265,7 @@ class PdfConfig {
   /// the whole extraction). Default: `false`.
   final bool ocrInlineImages;
 
-  /// Extract AcroForm and XFA form fields into `ExtractionResult.form_fields`.
+  /// Extract AcroForm and XFA form fields into `ExtractedDocument.form_fields`.
   ///
   /// When `true` (default), reads the document's interactive form structure
   /// (field names, types, values, widget geometry). Cheap and strictly
@@ -12165,10 +11342,10 @@ class RedactionConfig {
 
 /// One redaction event: which span was rewritten, why, and with what.
 class RedactionFinding {
-  /// Byte-offset start in the original (pre-redaction) `ExtractionResult::content`.
+  /// Byte-offset start in the original (pre-redaction) `ExtractedDocument::content`.
   final PlatformInt64 start;
 
-  /// Byte-offset end (exclusive) in the original `ExtractionResult::content`.
+  /// Byte-offset end (exclusive) in the original `ExtractedDocument::content`.
   final PlatformInt64 end;
 
   /// PII category that fired this redaction.
@@ -12573,66 +11750,6 @@ sealed class RerankerModelType with _$RerankerModelType {
   }) = RerankerModelType_Plugin;
 }
 
-/// Metadata for a bundled reranker preset.
-///
-/// All string fields are owned `String` for FFI compatibility — instances are
-/// safe to clone and pass across language boundaries.
-///
-/// Since v5.0.0.
-class RerankerPreset {
-  /// Short identifier (catalog name, e.g. `"bge-reranker-base"`).
-  final String name;
-
-  /// HuggingFace repository name for the model.
-  final String modelRepo;
-
-  /// Path to the ONNX model file within the repo.
-  final String modelFile;
-
-  /// Sibling files that must be downloaded alongside `model_file`.
-  ///
-  /// Empty for most presets. Used by repos that split the weight blob —
-  /// e.g. `rozgo/bge-reranker-v2-m3` ships the model in `model.onnx` plus a
-  /// co-located `model.onnx.data` payload.
-  final List<String> additionalFiles;
-
-  /// Maximum token sequence length the model supports.
-  final PlatformInt64 maxLength;
-
-  /// Human-readable description of the preset's intended use case.
-  final String description;
-
-  const RerankerPreset({
-    required this.name,
-    required this.modelRepo,
-    required this.modelFile,
-    required this.additionalFiles,
-    required this.maxLength,
-    required this.description,
-  });
-
-  @override
-  int get hashCode =>
-      name.hashCode ^
-      modelRepo.hashCode ^
-      modelFile.hashCode ^
-      additionalFiles.hashCode ^
-      maxLength.hashCode ^
-      description.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is RerankerPreset &&
-          runtimeType == other.runtimeType &&
-          name == other.name &&
-          modelRepo == other.modelRepo &&
-          modelFile == other.modelFile &&
-          additionalFiles == other.additionalFiles &&
-          maxLength == other.maxLength &&
-          description == other.description;
-}
-
 /// Errors produced while resolving a preset against caller overrides.
 enum ResolveError {
   /// A custom schema override was supplied but is not a JSON object.
@@ -12959,29 +12076,6 @@ class ServerConfig {
           maxMultipartFieldBytes == other.maxMultipartFieldBytes;
 }
 
-/// Outcome of the structured-extraction call-mode heuristic.
-///
-/// **Distinct from `crate::core::config::CallMode`** which has three variants
-/// and governs extraction-engine behaviour.  This enum governs whether and how
-/// an already-extracted document is sent to an LLM structured-extraction
-/// pipeline.
-enum StructuredCallMode {
-  /// Document is unsupported or not worth invoking the pipeline.
-  skip,
-
-  /// Send extracted text only; no vision model call.
-  textOnly,
-
-  /// Send page rasters only; no extracted text payload.
-  visionOnly,
-
-  /// Fuse extracted text with page rasters in a single multimodal call.
-  textPlusVision,
-
-  /// Try text-only first; escalate to vision on low confidence score.
-  textOnlyWithVisionFallback,
-}
-
 /// Structured data (Schema.org, microdata, RDFa) block.
 class StructuredData {
   /// Type of structured data
@@ -13141,131 +12235,6 @@ class StructuredExtractionConfig {
           llm == other.llm;
 }
 
-/// Signals consumed by the call-mode heuristic.
-///
-/// All fields derive from a prior xberg extraction — no double-work.
-/// This is a plain DTO; it intentionally has no dependency on internal
-/// xberg extraction types so it can be constructed from any source.
-class StructuredInput {
-  /// MIME type, canonicalised to lowercase by the caller.
-  final String mimeType;
-
-  /// Number of pages in the document.
-  final PlatformInt64 pageCount;
-
-  /// Fraction of pages with a real text layer (0.0..=1.0).
-  final double textCoverage;
-
-  /// Average extracted characters per page.
-  final double avgCharsPerPage;
-
-  /// Count of embedded images (figures, photos, signatures) discovered.
-  final PlatformInt64 embeddedImageCount;
-
-  /// When `true`, promote the result to at least [`StructuredCallMode::TextPlusVision`].
-  final bool userForceVision;
-
-  const StructuredInput({
-    required this.mimeType,
-    required this.pageCount,
-    required this.textCoverage,
-    required this.avgCharsPerPage,
-    required this.embeddedImageCount,
-    required this.userForceVision,
-  });
-
-  @override
-  int get hashCode =>
-      mimeType.hashCode ^
-      pageCount.hashCode ^
-      textCoverage.hashCode ^
-      avgCharsPerPage.hashCode ^
-      embeddedImageCount.hashCode ^
-      userForceVision.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is StructuredInput &&
-          runtimeType == other.runtimeType &&
-          mimeType == other.mimeType &&
-          pageCount == other.pageCount &&
-          textCoverage == other.textCoverage &&
-          avgCharsPerPage == other.avgCharsPerPage &&
-          embeddedImageCount == other.embeddedImageCount &&
-          userForceVision == other.userForceVision;
-}
-
-/// Thresholds for the structured-extraction call-mode heuristic.
-///
-/// All defaults are **conservative starting points**.  Deployments should
-/// measure their own document corpus and override via their own config;
-/// these values are chosen to be safe-by-default, not to be optimal for
-/// any particular workload.
-///
-/// Construct custom thresholds with struct-update syntax:
-/// ```rust
-/// use xberg::heuristics::StructuredThresholds;
-/// let t = StructuredThresholds {
-///     enable_vision_fallback: true,
-///     ..StructuredThresholds::default()
-/// };
-/// ```
-class StructuredThresholds {
-  /// PDFs with `text_coverage` strictly below this are treated as scanned.
-  ///
-  /// **Conservative default: 0.10** — deployments override via their own
-  /// config after measuring their document corpus.
-  final double scanMaxCoverage;
-
-  /// PDFs with `text_coverage` at or above this AND zero embedded images
-  /// route to [`StructuredCallMode::TextOnly`].
-  ///
-  /// **Conservative default: 0.90** — deployments override via their own
-  /// config after measuring their document corpus.
-  final double digitalMinCoverage;
-
-  /// DOCX / HTML / text documents with `avg_chars_per_page` above this
-  /// route to [`StructuredCallMode::TextOnly`].
-  ///
-  /// **Conservative default: 200.0** — deployments override via their own
-  /// config after measuring their document corpus.
-  final double docxTextMinDensity;
-
-  /// When `true`, emit [`StructuredCallMode::TextOnlyWithVisionFallback`]
-  /// instead of [`StructuredCallMode::TextOnly`] so the orchestrator can
-  /// escalate to vision on low confidence.
-  ///
-  /// **Conservative default: `false`** — must be explicitly enabled per
-  /// deployment after bench validation; deployments override via their own
-  /// config.
-  final bool enableVisionFallback;
-
-  const StructuredThresholds({
-    required this.scanMaxCoverage,
-    required this.digitalMinCoverage,
-    required this.docxTextMinDensity,
-    required this.enableVisionFallback,
-  });
-
-  @override
-  int get hashCode =>
-      scanMaxCoverage.hashCode ^
-      digitalMinCoverage.hashCode ^
-      docxTextMinDensity.hashCode ^
-      enableVisionFallback.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is StructuredThresholds &&
-          runtimeType == other.runtimeType &&
-          scanMaxCoverage == other.scanMaxCoverage &&
-          digitalMinCoverage == other.digitalMinCoverage &&
-          docxTextMinDensity == other.docxTextMinDensity &&
-          enableVisionFallback == other.enableVisionFallback;
-}
-
 /// Configuration for the summarisation post-processor.
 class SummarizationConfig {
   /// Summarisation strategy.
@@ -13301,7 +12270,7 @@ enum SummaryStrategy {
 
   /// Abstractive summary produced by liter-llm. Requires `liter-llm` feature and
   /// a configured `LlmConfig`. Token usage is captured in
-  /// [`ExtractionResult::llm_usage`](super::extraction::ExtractionResult::llm_usage).
+  /// [`ExtractedDocument::llm_usage`](super::extraction::ExtractedDocument::llm_usage).
   abstractive,
 }
 
@@ -14081,9 +13050,9 @@ class TranscriptionConfig {
 
 /// Translation of the extracted content.
 ///
-/// Holds the translated rendition of `ExtractionResult::content` and (when
+/// Holds the translated rendition of `ExtractedDocument::content` and (when
 /// `preserve_markup` was requested) the translated `formatted_content`. Chunks
-/// are translated in place inside `ExtractionResult::chunks[*].content` rather
+/// are translated in place inside `ExtractedDocument::chunks[*].content` rather
 /// than duplicated here.
 class Translation {
   /// BCP-47 language tag the translation was produced into (e.g. `"de"`, `"fr-CA"`).
@@ -14092,7 +13061,7 @@ class Translation {
   /// BCP-47 source language. `None` when the translation backend was asked to detect.
   final String? sourceLang;
 
-  /// Translated plain-text body. Matches the shape of `ExtractionResult::content`.
+  /// Translated plain-text body. Matches the shape of `ExtractedDocument::content`.
   final String content;
 
   /// Translated markup body (Markdown / HTML / etc.) when `preserve_markup` was

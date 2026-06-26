@@ -9,17 +9,17 @@
  *
  * A DocumentExtractor bridge object must expose:
  *   name(): string
- *   extract_bytes(content, mimeType, configJson): string   (JSON InternalDocument)
- *   supported_mime_types(): string[]
+ *   extract(input, config): ExtractionResult
+ *   supportedMimeTypes(): string[]
  *
  * A Renderer bridge object must expose:
  *   name(): string
- *   render(docJson): string
+ *   render(result): string
  */
 
 import { describe, it, expect } from "vitest";
-import { extractSync, listDocumentExtractors, listRenderers } from "@xberg-io/xberg";
-import type { ExtractInput } from "@xberg-io/xberg";
+import { extract, listDocumentExtractors, listRenderers } from "@xberg-io/xberg";
+import type { ExtractInput, ExtractionConfig, ExtractionResult } from "@xberg-io/xberg";
 
 // The register/unregister/clear functions are exported by the native module but
 // not re-typed in the public TypeScript wrapper.  Import the native binding
@@ -64,15 +64,10 @@ function makeExtractor(name: string, mimeType = "application/x-test"): object {
 			/* no-op */
 		},
 		supportedMimeTypes: (): string[] => [mimeType],
-		extractBytes: (_content: Uint8Array, _mimeType: string, _configJson: string): string =>
-			JSON.stringify({
-				source_format: "plain",
-				mime_type: "text/plain",
-				elements: [],
-				relationships: [],
-				images: [],
-				tables: [],
-			}),
+		extract: async (input: ExtractInput, _config: ExtractionConfig): Promise<ExtractionResult> => ({
+			content: input.bytes ? new TextDecoder().decode(input.bytes) : "",
+			mimeType: input.mimeType ?? "text/plain",
+		}),
 	};
 }
 
@@ -137,7 +132,7 @@ describe("plugins: document extractor registry", () => {
 
 		// Must not throw; falls back to the built-in plain-text extractor.
 		const encoded = new TextEncoder().encode("hello world");
-		const result = extractSync({ bytes: encoded, kind: "bytes", mimeType: "text/plain" } as ExtractInput);
+		const result = await extract({ bytes: encoded, kind: "bytes", mimeType: "text/plain" } as ExtractInput);
 		expect(result.results?.length).toBe(1);
 	});
 });

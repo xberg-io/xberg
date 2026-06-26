@@ -34,8 +34,8 @@ public final class RendererAdapter implements IRenderer {
     }
 
     @Override
-    public String render(String doc) throws Exception {
-        return impl.render(doc);
+    public String render_result(ExtractedDocument result) throws Exception {
+        return impl.render_result(result);
     }
 
 

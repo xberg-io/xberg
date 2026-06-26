@@ -86,7 +86,7 @@ Extract text, tables, images, metadata, and code intelligence from 96 file forma
 
 - **Document intelligence core** — extract text, tables, images, metadata, entities, keywords, code intelligence, and transcripts in builds that enable transcription.
 - **Format coverage** — PDF, Office, images, HTML/XML, email, archives, notebooks, citations, scientific formats, plain text, and audio/video formats in builds that enable transcription.
-- **OCR choices** — Tesseract, PaddleOCR, EasyOCR where supported, VLM OCR through liter-llm, and plugin hooks for custom backends.
+- **OCR choices** — Tesseract, PaddleOCR, Candle where supported, VLM OCR through liter-llm, and plugin hooks for custom backends.
 - **Same engine as every binding** — Rust, Python, Node.js, Go, Java, PHP, Ruby, .NET, Elixir, R, WASM, Kotlin Android, Swift, Dart, Zig, and C FFI share the same Rust implementation.
 - **BEAM package** — Rustler NIF binding for OTP pipelines.
 
@@ -127,8 +127,9 @@ Extract text, metadata, and structure from any supported document format:
 # Basic document extraction workflow
 # Load file -> extract -> access results
 
-{:ok, result} = Xberg.extract("document.pdf")
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "document.pdf"}, nil)
 
+result = List.first(output.results)
 IO.puts("Extracted Content:")
 IO.puts(result.content)
 
@@ -154,8 +155,9 @@ config = %ExtractionConfig{
   ocr: %{"enabled" => true, "backend" => "tesseract"}
 }
 
-{:ok, result} = Xberg.extract("scanned_document.pdf", nil, config)
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "scanned_document.pdf"}, config)
 
+result = List.first(output.results)
 content = result.content
 IO.puts("OCR Extracted content:")
 IO.puts(content)
@@ -181,7 +183,7 @@ inputs = [
   }
 ]
 
-{:ok, output} = Xberg.extract_batch_async(inputs: inputs)
+{:ok, output} = Xberg.extract_batch(inputs, nil)
 
 Enum.each(output.results, fn result ->
   IO.puts(result.content)
@@ -320,8 +322,9 @@ config = %ExtractionConfig{
   ocr: %{"enabled" => true, "backend" => "tesseract"}
 }
 
-{:ok, result} = Xberg.extract("scanned_document.pdf", nil, config)
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "scanned_document.pdf"}, config)
 
+result = List.first(output.results)
 content = result.content
 IO.puts("OCR Extracted content:")
 IO.puts(content)
@@ -445,7 +448,7 @@ inputs = [
   }
 ]
 
-{:ok, output} = Xberg.extract_batch_async(inputs: inputs)
+{:ok, output} = Xberg.extract_batch(inputs, nil)
 
 Enum.each(output.results, fn result ->
   IO.puts(result.content)

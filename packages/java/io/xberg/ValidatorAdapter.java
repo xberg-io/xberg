@@ -34,12 +34,12 @@ public final class ValidatorAdapter implements IValidator {
     }
 
     @Override
-    public void validate(ExtractionResult result, ExtractionConfig config) throws Exception {
+    public void validate(ExtractedDocument result, ExtractionConfig config) throws Exception {
         impl.validate(result, config);
     }
 
     @Override
-    public boolean should_validate(ExtractionResult _result, ExtractionConfig _config) throws Exception {
+    public boolean should_validate(ExtractedDocument _result, ExtractionConfig _config) throws Exception {
         return impl.should_validate(_result, _config);
     }
 

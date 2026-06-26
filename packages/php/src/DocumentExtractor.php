@@ -14,26 +14,14 @@ interface DocumentExtractor
 {
 
     /**
-     * Extract content from a byte array.
+     * Binding-safe extraction entry point for foreign-language plugin bridges.
      *
 
-     * @param mixed $content
-     * @param string $mime_type
+     * @param ExtractInput $input
      * @param ExtractionConfig $config
-     * @return mixed Return value from the plugin method
+     * @return ExtractedDocument Return value from the plugin method
      */
-    public function extract_bytes(mixed $content, string $mime_type, ExtractionConfig $config): mixed;
-
-    /**
-     * Extract content from a file.
-     *
-
-     * @param mixed $path
-     * @param string $mime_type
-     * @param ExtractionConfig $config
-     * @return mixed Return value from the plugin method
-     */
-    public function extract_file(mixed $path, string $mime_type, ExtractionConfig $config): mixed;
+    public function extract(ExtractInput $input, ExtractionConfig $config): ExtractedDocument;
 
     /**
      * Get the list of MIME types supported by this extractor.

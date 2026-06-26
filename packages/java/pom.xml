@@ -93,8 +93,8 @@
 
     <build>
         <!-- The alef Java backend emits source files at the package root
-             (e.g. packages/java/dev/<group>/<artifact>/Foo.java), not under
-             the Maven-default `src/main/java/` layout. Point sourceDirectory
+             (e.g. packages/java/io/<group>/<artifact>/Foo.java), not
+             under the Maven-default `src/main/java/` layout. Point sourceDirectory
              at the package root so `mvn package` finds them. -->
         <sourceDirectory>${project.basedir}</sourceDirectory>
         <resources>
@@ -204,10 +204,10 @@
                          source-archive include of everything under basedir
                          pulls in target/ as well (which contains the archive
                          being assembled — "A zip file cannot include itself").
-                         Restrict to the alef-emitted dev/ subtree and any
-                         conventional `src/main/java/` overlay. -->
+                         Restrict to the alef-emitted io/ subtree and
+                         any conventional `src/main/java/` overlay. -->
                     <includes>
-                        <include>dev/**/*.java</include>
+                        <include>io/**/*.java</include>
                         <include>src/main/java/**/*.java</include>
                     </includes>
                 </configuration>

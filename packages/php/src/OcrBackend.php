@@ -19,9 +19,9 @@ interface OcrBackend
 
      * @param mixed $image_bytes
      * @param OcrConfig $config
-     * @return ExtractionResult Return value from the plugin method
+     * @return ExtractedDocument Return value from the plugin method
      */
-    public function process_image(mixed $image_bytes, OcrConfig $config): ExtractionResult;
+    public function process_image(mixed $image_bytes, OcrConfig $config): ExtractedDocument;
 
     /**
      * Process a file and extract text via OCR.
@@ -29,9 +29,9 @@ interface OcrBackend
 
      * @param mixed $path
      * @param OcrConfig $config
-     * @return ExtractionResult Return value from the plugin method
+     * @return ExtractedDocument Return value from the plugin method
      */
-    public function process_image_file(mixed $path, OcrConfig $config): ExtractionResult;
+    public function process_image_file(mixed $path, OcrConfig $config): ExtractedDocument;
 
     /**
      * Check if this backend supports a given language code.
@@ -88,8 +88,8 @@ interface OcrBackend
 
      * @param mixed $_path
      * @param OcrConfig $_config
-     * @return ExtractionResult Return value from the plugin method
+     * @return ExtractedDocument Return value from the plugin method
      */
-    public function process_document(mixed $_path, OcrConfig $_config): ExtractionResult;
+    public function process_document(mixed $_path, OcrConfig $_config): ExtractedDocument;
 
 }

@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.29.1"
+alef_version = "0.29.3"
 languages = [
   "python",
   "node",
@@ -59,6 +59,12 @@ package_metadata = true
 public_api = true
 
 [workspace.generate_overrides.wasm]
+async_wrappers = false
+
+[workspace.generate_overrides.java]
+async_wrappers = false
+
+[workspace.generate_overrides.kotlin_android]
 async_wrappers = false
 
 [workspace.format]
@@ -142,8 +148,6 @@ sources = [
   "crates/xberg/src/keywords/mod.rs",
   "crates/xberg/src/chunking/mod.rs",
   "crates/xberg/src/text/markdown_footnotes/mod.rs",
-  # RAG chunker composer (chunk_for_rag — re-exported from chunking/mod.rs)
-  "crates/xberg/src/chunking/rag.rs",
   "crates/xberg/src/embeddings/mod.rs",
   "crates/xberg/src/language_detection/mod.rs",
   "crates/xberg/src/cache/core.rs",
@@ -152,12 +156,8 @@ sources = [
   "crates/xberg/src/presets/resolve.rs",
   # Heuristics structured analysis (re-exported as module from lib.rs)
   "crates/xberg/src/heuristics/structured.rs",
-  # Structured-extraction JSON binding entry points (re-exported from lib.rs).
-  # Only the FFI-safe JSON-string bridge is exposed; the async engine,
-  # StructuredOptions (Arc<dyn VisionCallCache>) and liter-llm types stay internal.
-  "crates/xberg/src/structured/bindings.rs",
   # Unified extraction functions (re-exported from lib.rs)
-  "crates/xberg/src/core/extractor/unified.rs",
+  "crates/xberg/src/core/extract/mod.rs",
   # PDF rendering (render_pdf_page_to_png — re-exported from lib.rs)
   "crates/xberg/src/pdf/render.rs",
   # PdfMetadata — referenced in types/metadata.rs as Pdf(PdfMetadata) variant
@@ -173,6 +173,11 @@ sources = [
   "crates/xberg/src/paddle_ocr/mod.rs",
   # OCR backend registry operations (register/unregister/list/clear)
   "crates/xberg/src/plugins/ocr.rs",
+  # Document extractor trait bridge and registry operations.
+  # Bridge-facing trait methods use public ExtractionResult DTOs; InternalDocument
+  # methods are skipped in source and remain Rust-only.
+  "crates/xberg/src/plugins/extractor/trait.rs",
+  "crates/xberg/src/plugins/extractor/mod.rs",
   # Renderer trait and registry operations
   "crates/xberg/src/plugins/renderer.rs",
   # Validator registry operations
@@ -246,6 +251,7 @@ exclude_functions = [
 ]
 reexported_types = [
   "ExtractionResult",
+  "ExtractedDocument",
   "ExtractionDiff",
 ]
 
@@ -458,12 +464,75 @@ visitor_callbacks = false
 # variant with two fields and cannot be built via `From<String>`, so we
 # provide the literal here. The placeholder local `msg` carries the message.
 plugin_error_constructor = "xberg::XbergError::Plugin { message: msg, plugin_name: String::new() }"
+exclude_types = [
+  "LlmBackend",
+]
 exclude_functions = [
   "calculate_quality_score",
   "count_tokens",
   "find_all",
   "scan_text",
   "embed_texts",
+  "apply_strategy",
+  "analyze_document",
+  "analyze_with_user_chunks",
+  "boundaries_from_extraction_result",
+  "calculate_chunk_plan",
+  "calculate_plan_from_overrides",
+  "caption_image",
+  "caption_image_file",
+  "caption_images",
+  "check_format_limits",
+  "choose_call_mode",
+  "classify_document",
+  "classify_one",
+  "classify_pages",
+  "classify_text",
+  "chunk_for_rag",
+  "compare",
+  "default_model_name",
+  "detect_boundaries",
+  "detect_entities",
+  "detect_mime_type",
+  "detect_mime_type_from_bytes",
+  "detect_qr_codes",
+  "download_model",
+  "embed_texts_async",
+  "enrich",
+  "extract_keywords",
+  "extract_region_with_vlm",
+  "extract_region_with_vlm_usage",
+  "extract_structured",
+  "extract_structured_sync",
+  "extract_structured_json",
+  "fingerprint",
+  "get_embedding_preset",
+  "get_extensions_for_mime",
+  "get_reranker_preset",
+  "known_models",
+  "list_embedding_presets",
+  "list_reranker_presets",
+  "parse_citations",
+  "parse_footnote_definitions",
+  "pdf_page_count",
+  "redact",
+  "register_document_extractor",
+  "register_builtin",
+  "render_pdf_page_to_png",
+  "register_renderer",
+  "rerank",
+  "rerank_async",
+  "resolve",
+  "score_confidence",
+  "split_and_extract",
+  "split_and_extract_sync",
+  "split_and_extract_json",
+  "summarize",
+  "summarize_with_llm",
+  "token_count",
+  "translate_result",
+  "unregister_document_extractor",
+  "unregister_renderer",
 ]
 
 # Android (any arch). Cross-compiling libheif-sys + ORT to NDK targets is
@@ -502,8 +571,69 @@ exclude_functions = [
   "calculate_quality_score",
   "count_tokens",
   "embed_texts",
+  "apply_strategy",
+  "analyze_document",
+  "analyze_with_user_chunks",
+  "boundaries_from_extraction_result",
+  "calculate_chunk_plan",
+  "calculate_plan_from_overrides",
+  "caption_image",
+  "caption_image_file",
+  "caption_images",
+  "check_format_limits",
+  "choose_call_mode",
+  "classify_document",
+  "classify_one",
+  "classify_pages",
+  "classify_text",
+  "chunk_for_rag",
+  "compare",
+  "default_model_name",
+  "detect_boundaries",
+  "detect_entities",
+  "detect_mime_type",
+  "detect_mime_type_from_bytes",
+  "detect_qr_codes",
+  "download_model",
+  "embed_texts_async",
+  "enrich",
+  "extract_keywords",
+  "extract_region_with_vlm",
+  "extract_region_with_vlm_usage",
+  "extract_structured",
+  "extract_structured_sync",
+  "extract_structured_json",
+  "fingerprint",
+  "get_embedding_preset",
+  "get_extensions_for_mime",
+  "get_reranker_preset",
+  "known_models",
+  "list_embedding_presets",
+  "list_reranker_presets",
+  "parse_citations",
+  "parse_footnote_definitions",
+  "pdf_page_count",
+  "redact",
+  "register_builtin",
+  "render_pdf_page_to_png",
+  "rerank",
+  "rerank_async",
+  "resolve",
+  "score_confidence",
+  "split_and_extract",
+  "split_and_extract_sync",
+  "split_and_extract_json",
+  "summarize",
+  "summarize_with_llm",
+  "token_count",
+  "translate_result",
+  "register_document_extractor",
+  "unregister_document_extractor",
+  "register_renderer",
+  "unregister_renderer",
 ]
 exclude_types = [
+  "LlmBackend",
   # Internal DTO used only at the FFI boundary (JSON-marshalled). Generated
   # Go bindings don't surface this type to consumers, so trait-bridge stubs
   # must substitute it with json.RawMessage / []byte.
@@ -682,6 +812,11 @@ exclude_types = [
   # Not exposed in the Kotlin Android interface — methods that would reference it use String instead.
   "InternalDocument",
 ]
+exclude_fields = [
+  "ExtractedDocument.ocr_internal_document",
+  "ExtractedDocument.internal_document",
+  "OcrExtractionResult.internal_document",
+]
 exclude_functions = [
   # embed_texts_async creates naming conflict with suspend wrapper of embed_texts.
   # Callers should use embedTextsAsync (suspend) from embed_texts instead.
@@ -788,6 +923,7 @@ features = [
 exclude_types = [
   # Internal DTO type used by plugin trait-bridges; marshalled as JSON strings at FFI boundary
   "InternalDocument",
+  "LlmBackend",
   # alef 0.25.19 drops the `#[cfg(any(feature = "keywords-yake", feature = "keywords-rake"))]`
   # extern blocks that declared `KeywordConfig`, `Keyword`, `YakeParams`, and `RakeParams`,
   # but leaves the references to them in fields/getters intact. swift-bridge then fails to
@@ -800,11 +936,12 @@ exclude_types = [
   "KeywordAlgorithm",
 ]
 exclude_fields = [
-  "ExtractionResult.ocr_internal_document",
+  "ExtractedDocument.ocr_internal_document",
+  "ExtractedDocument.internal_document",
   "OcrExtractionResult.internal_document",
   "ExtractionConfig.keywords",
   "FileExtractionConfig.keywords",
-  "ExtractionResult.extracted_keywords",
+  "ExtractedDocument.extracted_keywords",
 ]
 exclude_functions = [
   "calculate_quality_score",
@@ -822,6 +959,14 @@ exclude_functions = [
   # alef swift backend can suppress cfg-gated stub fns.
   "embed_texts_async",
   "rerank_async",
+  # Trait-bridge registration emits SwiftDocumentExtractorBox/SwiftRendererBox
+  # adapters. The raw Rust lifecycle fns take Arc<dyn Trait> wrappers that
+  # swift-bridge cannot declare as ordinary extern types and duplicate the
+  # bridge functions.
+  "register_document_extractor",
+  "unregister_document_extractor",
+  "register_renderer",
+  "unregister_renderer",
 ]
 
 # iOS: libheif-sys + ORT do not cross-compile to the iOS SDK, so the
@@ -928,6 +1073,8 @@ types = [
   # The type is not a direct API parameter in any binding function — NER is
   # invoked via detect_entities()/redact() which accept NerConfig/RedactionConfig.
   "GlineBackend",
+  "LlmBackend",
+  "xberg::text::ner::llm::LlmBackend",
 
   # Segment<'a> is an internal semantic-chunking type with a lifetime-bound
   # &'a str field. Alef cannot generate a From impl for lifetime-parameterised
@@ -958,6 +1105,27 @@ types = [
   "xberg::enrich::EnrichedResult",
   "NerEnrichmentConfig",
   "xberg::enrich::NerEnrichmentConfig",
+  "ClassificationEnrichmentConfig",
+  "xberg::enrich::ClassificationEnrichmentConfig",
+  "CaptioningEnrichmentConfig",
+  "xberg::enrich::CaptioningEnrichmentConfig",
+
+  # Standalone helper DTOs that remain Rust-only for v1 bindings. The
+  # extraction pipeline exposes their effects through ExtractionResult and
+  # ExtractionConfig, not through separate binding helper APIs.
+  "ChunkingResult",
+  "ConfidenceSignals",
+  "ConfidenceWeights",
+  "EmbeddingPreset",
+  "RerankerPreset",
+  "StructuredInput",
+  "StructuredThresholds",
+  "StructuredCallMode",
+  "StructuredOptions",
+  "StructuredOutput",
+  "StructuredError",
+  "PresetSpec",
+  "VisionConfig",
 
   # ClassifyContext<'a> has a lifetime-bound &'a str field plus a bare
   # `Value` field that alef cannot prove is `serde_json::Value`. Internal
@@ -972,10 +1140,6 @@ types = [
   "BatchBytesItem",
   "BatchFileItem",
 
-  # Document extractor plugins remain Rust-only because the trait shape uses
-  # file/bytes-specific methods that are no longer part of the public binding
-  # API surface.
-  "DocumentExtractor",
   "SyncExtractor",
 ]
 methods = [
@@ -1041,21 +1205,77 @@ functions = [
   # adapter to call `iter().map(Vec::as_slice).collect::<Vec<_>>()` first.
   # caption_image() (single image) covers the common case; multi-image
   # callers can loop client-side until alef gains slice-of-slice conversion.
+  "caption_image",
+  "caption_image_file",
   "caption_images",
+
+  # Capability helpers stay Rust-only while the v1 binding surface is narrowed
+  # to extract/extract_batch plus plugin trait bridges.
+  "classify_document",
+  "classify_pages",
+  "classify_text",
+  "chunk_for_rag",
+  "embed_texts",
+  "embed_texts_async",
+  "get_embedding_preset",
+  "list_embedding_presets",
+  "rerank",
+  "rerank_async",
+  "get_reranker_preset",
+  "list_reranker_presets",
 
   # enrich() takes &EnrichmentConfig and returns EnrichedResult — both
   # excluded above pending NerBackend trait_bridge and serde derives.
   "enrich",
 
-  # Structured-extraction typed entry points take `PresetSpec` (a boxed-preset
-  # tuple enum) and `StructuredOptions` (carries `Arc<dyn VisionCallCache>`),
-  # neither of which crosses FFI. The binding surface is the JSON-string bridge
-  # (`extract_structured_json` / `split_and_extract_json`); the async variants
-  # are unbindable regardless.
+  # Structured-extraction typed and JSON helpers stay Rust-only while the v1
+  # binding surface is narrowed to ExtractInput plus extract/extract_batch.
   "extract_structured",
   "extract_structured_sync",
+  "extract_structured_json",
   "split_and_extract",
   "split_and_extract_sync",
+  "split_and_extract_json",
+
+  # Standalone Rust-only utilities/capabilities. The binding surface exposes
+  # extraction through extract/extract_batch, while these remain available to
+  # Rust callers or internal pipeline stages.
+  "analyze_document",
+  "analyze_with_user_chunks",
+  "boundaries_from_extraction_result",
+  "calculate_chunk_plan",
+  "calculate_plan_from_overrides",
+  "check_format_limits",
+  "choose_call_mode",
+  "detect_boundaries",
+  "score_confidence",
+  "compare",
+  "detect_mime_type",
+  "detect_mime_type_from_bytes",
+  "get_extensions_for_mime",
+  "extract_keywords",
+  "extract_region_with_vlm",
+  "extract_region_with_vlm_usage",
+  "pdf_page_count",
+  "render_pdf_page_to_png",
+  "redact",
+  "summarize",
+  "summarize_with_llm",
+  "translate_result",
+  "find_footnote_anchors",
+  "find_inference_markers",
+  "parse_citations",
+  "parse_footnote_definitions",
+  "detect_qr_codes",
+  "download_model",
+  "find_all",
+  "scan_text",
+  "token_count",
+  "default_model_name",
+  "fingerprint",
+  "known_models",
+  "register_builtin",
+  "resolve",
 
   # Legacy extraction entry points kept only as internal implementation helpers.
   # The v1 public extraction surface is ExtractInput plus extract/extract_batch.
@@ -1070,11 +1290,6 @@ functions = [
   "batch_extract_files",
   "batch_extract_files_sync",
 
-  # Document extractor plugin registry is Rust-only for v1 bindings.
-  "list_document_extractors",
-  "register_document_extractor",
-  "unregister_document_extractor",
-  "clear_document_extractors",
 ]
 
 [crates.lint.python]
@@ -1313,6 +1528,16 @@ languages = [
   "homebrew",
 ]
 fields_optional = [
+  "results[0].metadata.format",
+  "results[0].metadata.format.excel",
+  "results[0].metadata.format.excel.sheet_count",
+  "results[0].metadata.format.excel.sheet_names",
+  "results[0].metadata.output_format",
+  "results[0].elements",
+  "results[0].document",
+  "results[0].extracted_keywords",
+  "results[0].quality_score",
+  "results[0].summary",
   "metadata.format",
   "metadata.format.excel",
   "metadata.format.excel.sheet_count",
@@ -1342,14 +1567,17 @@ fields_optional = [
   "extracted_keywords",
   "quality_score",
   "annotations",
-  "summary",
   "translation",
   "page_classifications",
   "redaction_report",
   "formatted_content",
 ]
 fields_array = [
+  "results",
   "tables",
+  "results[0].elements",
+  "results[0].document.nodes",
+  "results[0].extracted_keywords",
   "chunks",
   "images",
   "pages",
@@ -1360,6 +1588,7 @@ fields_array = [
   "annotations",
   "processing_warnings",
   "metadata.sheet_names",
+  "results[0].metadata.format.excel.sheet_names",
   "metadata.format.excel.sheet_names",
   "document.node_types",
 ]
@@ -1368,8 +1597,21 @@ fields_array = [
 # avoid string-only assertion helpers (e.g. `.Trim()`, `String.trim/1`) and
 # compare against the serde-wire string form instead.
 fields_enum = [
-  "summary.strategy",
+  "results[0].summary.strategy",
 ]
+# Xberg's public extraction calls return an `ExtractionResult` envelope.
+# The PHP and Rust e2e codegens use this both to validate assertion paths
+# and to derive the root return type — the unique TypeDef whose field names
+# are a superset of this list.
+result_fields = [
+  "results",
+  "errors",
+  "summary",
+  "crawl_final_urls",
+  "crawl_redirect_count",
+  "crawl_unique_normalized_urls",
+]
+
 # Xberg's `ExtractionResult` exposes every result field as a `pub <field>:`
 # struct field. The Rust e2e renderer in alef uses `fields_method_calls` to
 # decide whether to append `()` after the accessor. Most paths stay as plain
@@ -1379,47 +1621,8 @@ fields_enum = [
 # their own accessor shape via per-language backend conventions and do not
 # consult this set.
 fields_method_calls = [
+  "results[0].metadata.format.excel",
   "metadata.format.excel",
-]
-# result_fields enumerates root-type fields of the call's return value
-# (`ExtractionResult`). The PHP and Rust e2e codegens use this both to
-# validate assertion paths and to derive the root type — the unique TypeDef
-# whose field names are a superset of this list. Every entry MUST actually
-# exist on `ExtractionResult`. The previous `result` entry was a stale alias
-# that collides with `result_var = "result"` and broke `derive_root_type`
-# (no type has a literal `result` field), forcing PHP getter classification
-# to fall through to the global bare-name union and emit
-# `$result->getContent()` instead of `$result->content`.
-result_fields = [
-  "content",
-  "mime_type",
-  "metadata",
-  "extraction_method",
-  "tables",
-  "detected_languages",
-  "chunks",
-  "images",
-  "pages",
-  "elements",
-  "djot_content",
-  "ocr_elements",
-  "document",
-  "extracted_keywords",
-  "quality_score",
-  "processing_warnings",
-  "annotations",
-  "children",
-  "uris",
-  "revisions",
-  "structured_output",
-  "code_intelligence",
-  "llm_usage",
-  "entities",
-  "summary",
-  "translation",
-  "page_classifications",
-  "redaction_report",
-  "formatted_content",
 ]
 
 [crates.e2e.call]
@@ -1541,115 +1744,6 @@ options_type = "ExtractionConfig"
 [crates.e2e.calls.extract.overrides.r]
 options_type = "ExtractionConfig"
 
-[crates.e2e.calls.render_html.overrides.python]
-result_is_simple = true
-arg_name_map = { doc = "html" }
-
-[crates.e2e.calls.render_markdown.overrides.python]
-result_is_simple = true
-arg_name_map = { doc = "html" }
-
-[crates.e2e.calls.render_djot.overrides.python]
-result_is_simple = true
-arg_name_map = { doc = "html" }
-
-[crates.e2e.calls.render_json.overrides.python]
-result_is_simple = true
-arg_name_map = { doc = "html" }
-
-[crates.e2e.calls.render_plain.overrides.python]
-result_is_simple = true
-arg_name_map = { doc = "html" }
-
-[crates.e2e.calls.djot_to_html.overrides.python]
-result_is_simple = true
-arg_name_map = { djot = "djot_source" }
-
-[crates.e2e.calls.chunk_text.overrides.wasm]
-options_type = "WasmChunkingConfig"
-
-[crates.e2e.calls.chunk_text.overrides.rust]
-extra_args = ["None"]
-
-[crates.e2e.calls.chunk_text.overrides.node]
-options_type = "JsChunkingConfig"
-
-[crates.e2e.calls.chunk_text.overrides.csharp]
-options_type = "ChunkingConfig"
-extra_args = ["null"]
-
-[crates.e2e.calls.chunk_text.overrides.java]
-options_type = "ChunkingConfig"
-
-[crates.e2e.calls.chunk_semantic.overrides.wasm]
-options_type = "WasmChunkingConfig"
-
-[crates.e2e.calls.chunk_semantic.overrides.rust]
-extra_args = ["None"]
-
-[crates.e2e.calls.chunk_semantic.overrides.node]
-options_type = "JsChunkingConfig"
-
-[crates.e2e.calls.chunk_semantic.overrides.csharp]
-options_type = "ChunkingConfig"
-extra_args = ["null"]
-
-[crates.e2e.calls.chunk_semantic.overrides.java]
-options_type = "ChunkingConfig"
-
-[crates.e2e.calls.chunk_texts_batch.overrides.node]
-options_type = "JsChunkingConfig"
-
-[crates.e2e.calls.chunk_texts_batch.overrides.csharp]
-options_type = "ChunkingConfig"
-
-[crates.e2e.calls.chunk_texts_batch.overrides.java]
-options_type = "ChunkingConfig"
-
-[crates.e2e.calls.detect_languages.overrides.go]
-options_type = "LanguageDetectionConfig"
-
-[crates.e2e.calls.detect_languages.overrides.node]
-options_type = "JsLanguageDetectionConfig"
-
-[crates.e2e.calls.detect_languages.overrides.csharp]
-options_type = "LanguageDetectionConfig"
-
-[crates.e2e.calls.detect_languages.overrides.java]
-options_type = "LanguageDetectionConfig"
-
-[crates.e2e.calls.detect_mime_type_from_bytes]
-function = "detect_mime_type_from_bytes"
-module = "xberg"
-async = false
-returns_result = true
-result_is_simple = true
-args = [{ name = "content", field = "input.data", type = "bytes" }]
-
-[crates.e2e.calls.detect_mime_type_from_bytes.overrides.swift]
-# Swift uses labeled parameters; content is named
-
-[crates.e2e.calls.validate_chunking_params.overrides.python]
-arg_name_map = { max_characters = "max_chars", overlap = "max_overlap" }
-
-[crates.e2e.calls.normalize_whitespace.overrides.python]
-result_is_simple = true
-arg_name_map = { text = "s" }
-
-[crates.e2e.calls.dedup_text.overrides.go]
-result_is_array = true
-result_is_simple = true
-returns_result = true
-
-[crates.e2e.calls.get_extensions_for_mime]
-result_is_array = true
-result_is_simple = true
-function = "get_extensions_for_mime"
-module = "xberg"
-async = false
-returns_result = true
-args = [{ name = "mime_type", field = "input.mime_type", type = "string" }]
-
 [crates.e2e.calls.list_supported_formats]
 result_is_simple = true
 result_is_array = true
@@ -1689,146 +1783,6 @@ options_type = "ExtractionConfig"
 [crates.e2e.calls.extract_batch.overrides.zig]
 function = "extract_batch"
 result_is_json_struct = true
-
-[crates.e2e.calls.reduce_tokens.overrides.go]
-result_is_simple = true
-options_type = "TokenReductionConfig"
-
-[crates.e2e.calls.reduce_tokens.overrides.node]
-result_is_simple = true
-options_type = "JsTokenReductionConfig"
-
-[crates.e2e.calls.reduce_tokens.overrides.csharp]
-result_is_simple = true
-options_type = "TokenReductionConfig"
-
-[crates.e2e.calls.reduce_tokens.overrides.python]
-result_is_simple = true
-options_type = "TokenReductionConfig"
-
-[crates.e2e.calls.reduce_tokens.overrides.java]
-result_is_simple = true
-options_type = "TokenReductionConfig"
-
-[crates.e2e.calls.serialize_to_toon.overrides.node]
-result_is_simple = true
-options_type = "ExtractionConfig"
-
-[crates.e2e.calls.serialize_to_toon.overrides.csharp]
-result_is_simple = true
-options_type = "ExtractionConfig"
-
-[crates.e2e.calls.serialize_to_json.overrides.node]
-result_is_simple = true
-options_type = "ExtractionConfig"
-
-[crates.e2e.calls.serialize_to_json.overrides.csharp]
-result_is_simple = true
-options_type = "ExtractionConfig"
-
-[crates.e2e.calls.detect_or_validate.overrides.go]
-returns_result = true
-
-[crates.e2e.calls.embed_texts]
-result_is_simple = true
-result_is_array = true
-function = "embed_texts"
-module = "xberg"
-async = false
-returns_result = true
-skip_languages = ["wasm"]
-options_type = "EmbeddingConfig"
-args = [
-  { name = "texts", field = "input.texts", type = "json_object", owned = true, element_type = "String" },
-  { name = "config", field = "input.config", type = "json_object", optional = true },
-]
-
-# Python excludes sync embed_texts; redirect to async variant
-[crates.e2e.calls.embed_texts.overrides.python]
-function = "embed_texts_async"
-async = true
-result_is_simple = true
-result_is_array = true
-options_type = "EmbeddingConfig"
-
-# Ruby excludes sync embed_texts; redirect to async variant
-[crates.e2e.calls.embed_texts.overrides.ruby]
-function = "embed_texts_async"
-async = true
-result_is_simple = true
-result_is_array = true
-
-# Elixir excludes sync embed_texts; redirect to async variant
-[crates.e2e.calls.embed_texts.overrides.elixir]
-function = "embed_texts_async"
-async = true
-result_is_simple = true
-result_is_array = true
-
-# Go excludes sync embed_texts; redirect to async variant (EmbedTextsAsync in Go)
-[crates.e2e.calls.embed_texts.overrides.go]
-function = "EmbedTextsAsync"
-async = true
-result_is_simple = true
-result_is_array = true
-options_type = "EmbeddingConfig"
-
-# Java excludes sync embed_texts; redirect to async variant
-[crates.e2e.calls.embed_texts.overrides.java]
-function = "embedTextsAsync"
-async = true
-result_is_simple = true
-options_type = "EmbeddingConfig"
-
-# Swift excludes sync embed_texts; redirect to async variant
-[crates.e2e.calls.embed_texts.overrides.swift]
-function = "embedTextsAsync"
-async = true
-options_type = "EmbeddingConfig"
-
-# Dart excludes sync embed_texts; redirect to async variant
-[crates.e2e.calls.embed_texts.overrides.dart]
-function = "embedTextsAsync"
-async = true
-result_is_simple = true
-options_type = "EmbeddingConfig"
-
-# Zig excludes sync embed_texts; redirect to async variant
-[crates.e2e.calls.embed_texts.overrides.zig]
-function = "embed_texts_async"
-async = true
-result_is_json_struct = true
-
-# R excludes sync embed_texts; redirect to async variant
-[crates.e2e.calls.embed_texts.overrides.r]
-function = "embed_texts_async"
-async = true
-result_is_simple = true
-result_is_array = true
-
-# Csharp excludes sync embed_texts; redirect to async variant
-[crates.e2e.calls.embed_texts.overrides.csharp]
-function = "EmbedTextsAsync"
-async = true
-result_is_simple = true
-options_type = "EmbeddingConfig"
-nested_types = { embedding_model = "EmbeddingModelType" }
-
-# Node only exposes the async variant embedTextsAsync (NAPI-RS sync functions are
-# only generated for non-async functions; the suspend wrapper is the public API).
-[crates.e2e.calls.embed_texts.overrides.node]
-function = "embedTextsAsync"
-module = "@xberg-io/xberg"
-async = true
-result_is_simple = true
-result_is_array = true
-
-# PHP extension only exposes embedTextsAsync; the embedTexts wrapper delegates to
-# XbergApi::embedTexts which does not exist in the native extension.
-[crates.e2e.calls.embed_texts.overrides.php]
-function = "embedTextsAsync"
-result_is_simple = true
-options_type = "EmbeddingConfig"
 
 [crates.e2e.calls.list_ocr_backends]
 result_is_simple = true
@@ -3000,148 +2954,6 @@ class = "RerankerBackendBridge"
 
 # ── rerank call ───────────────────────────────────────────────────────────────
 
-[crates.e2e.calls.rerank]
-result_is_simple = true
-result_is_array = true
-function = "rerank"
-module = "xberg"
-async = false
-returns_result = true
-skip_languages = ["wasm"]
-options_type = "RerankerConfig"
-args = [
-  { name = "query", field = "input.query", type = "string", owned = true },
-  { name = "documents", field = "input.documents", type = "json_object", owned = true, element_type = "String" },
-  { name = "config", field = "input.config", type = "json_object", optional = true },
-]
-nested_types = { reranker = "RerankerConfig", reranker_model = "RerankerModelType" }
-
-# Python excludes sync rerank; redirect to async variant
-[crates.e2e.calls.rerank.overrides.python]
-function = "rerank_async"
-async = true
-result_is_simple = true
-result_is_array = true
-options_type = "RerankerConfig"
-
-# Ruby excludes sync rerank; redirect to async variant
-[crates.e2e.calls.rerank.overrides.ruby]
-function = "rerank_async"
-async = true
-result_is_simple = true
-result_is_array = true
-
-# Elixir excludes sync rerank; redirect to async variant
-[crates.e2e.calls.rerank.overrides.elixir]
-function = "rerank_async"
-async = true
-result_is_simple = true
-result_is_array = true
-
-# Go excludes sync rerank; redirect to async variant
-[crates.e2e.calls.rerank.overrides.go]
-function = "RerankAsync"
-async = true
-result_is_simple = true
-result_is_array = true
-options_type = "RerankerConfig"
-
-# Java excludes sync rerank; redirect to async variant
-[crates.e2e.calls.rerank.overrides.java]
-function = "rerankAsync"
-async = true
-result_is_simple = true
-options_type = "RerankerConfig"
-
-# Swift excludes sync rerank; redirect to async variant
-[crates.e2e.calls.rerank.overrides.swift]
-function = "rerankAsync"
-async = true
-options_type = "RerankerConfig"
-
-# Dart excludes sync rerank; redirect to async variant
-[crates.e2e.calls.rerank.overrides.dart]
-function = "rerankAsync"
-async = true
-result_is_simple = true
-options_type = "RerankerConfig"
-
-# Zig excludes sync rerank; redirect to async variant
-[crates.e2e.calls.rerank.overrides.zig]
-function = "rerank_async"
-async = true
-result_is_json_struct = true
-
-# R excludes sync rerank; redirect to async variant
-[crates.e2e.calls.rerank.overrides.r]
-function = "rerank_async"
-async = true
-result_is_simple = true
-result_is_array = true
-
-# Csharp excludes sync rerank; redirect to async variant
-[crates.e2e.calls.rerank.overrides.csharp]
-function = "RerankAsync"
-async = true
-result_is_simple = true
-options_type = "RerankerConfig"
-nested_types = { reranker_model = "RerankerModelType" }
-
-# Node only exposes the async variant rerankAsync (NAPI-RS sync functions are
-# only generated for non-async functions; the suspend wrapper is the public API).
-[crates.e2e.calls.rerank.overrides.node]
-function = "rerankAsync"
-module = "@xberg-io/xberg"
-async = true
-result_is_simple = true
-result_is_array = true
-
-# PHP extension only exposes rerankAsync
-[crates.e2e.calls.rerank.overrides.php]
-function = "rerankAsync"
-result_is_simple = true
-options_type = "RerankerConfig"
-
-[crates.e2e.calls.rerank_async]
-result_is_simple = true
-result_is_array = true
-function = "rerank_async"
-module = "xberg"
-async = true
-returns_result = true
-skip_languages = ["wasm", "swift"]
-options_type = "RerankerConfig"
-args = [
-  { name = "query", field = "input.query", type = "string", owned = true },
-  { name = "documents", field = "input.documents", type = "json_object", owned = true, element_type = "String" },
-  { name = "config", field = "input.config", type = "json_object", optional = true },
-]
-nested_types = { reranker = "RerankerConfig", reranker_model = "RerankerModelType" }
-
-[crates.e2e.calls.rerank_async.overrides.csharp]
-result_is_simple = true
-options_type = "RerankerConfig"
-nested_types = { reranker_model = "RerankerModelType" }
-
-[crates.e2e.calls.rerank_async.overrides.java]
-result_is_simple = true
-options_type = "RerankerConfig"
-
-[crates.e2e.calls.rerank_async.overrides.go]
-result_is_simple = true
-result_is_array = true
-options_type = "RerankerConfig"
-
-[crates.e2e.calls.rerank_async.overrides.php]
-result_is_simple = true
-
-[crates.e2e.calls.rerank_async.overrides.dart]
-result_is_simple = true
-options_type = "RerankerConfig"
-
-[crates.e2e.calls.rerank_async.overrides.swift]
-options_type = "RerankerConfig"
-
 [crates.e2e.calls.register_renderer]
 # Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
 result_is_simple = true
@@ -3357,220 +3169,8 @@ module = "xberg"
 function = "clearAll"
 class = "RendererBridge"
 
-[crates.e2e.calls.embed_texts_async]
-result_is_simple = true
-result_is_array = true
-function = "embed_texts_async"
-module = "xberg"
-async = true
-returns_result = true
-skip_languages = ["wasm", "swift"]
-options_type = "EmbeddingConfig"
-args = [
-  { name = "texts", field = "input.texts", type = "json_object", owned = true, element_type = "String" },
-  { name = "config", field = "input.config", type = "json_object", optional = true },
-]
-
-[crates.e2e.calls.embed_texts_async.overrides.csharp]
-result_is_simple = true
-options_type = "EmbeddingConfig"
-nested_types = { embedding_model = "EmbeddingModelType" }
-
-[crates.e2e.calls.embed_texts_async.overrides.java]
-result_is_simple = true
-options_type = "EmbeddingConfig"
-
-[crates.e2e.calls.embed_texts_async.overrides.go]
-result_is_simple = true
-result_is_array = true
-options_type = "EmbeddingConfig"
-
-[crates.e2e.calls.embed_texts_async.overrides.php]
-result_is_simple = true
-
-[crates.e2e.calls.embed_texts_async.overrides.dart]
-result_is_simple = true
-options_type = "EmbeddingConfig"
-
-[crates.e2e.calls.embed_texts_async.overrides.swift]
-options_type = "EmbeddingConfig"
-
-[crates.e2e.calls.get_embedding_preset]
-result_is_simple = true
-result_is_option = true
-function = "get_embedding_preset"
-module = "xberg"
-async = false
-returns_result = false
-args = [{ name = "name", field = "input.preset_name", type = "string" }]
-
-[crates.e2e.calls.list_embedding_presets]
-result_is_simple = true
-result_is_array = true
-function = "list_embedding_presets"
-module = "xberg"
-async = false
-returns_result = false
-args = []
-
-[crates.e2e.calls.detect_mime_type]
-result_is_simple = true
-function = "detect_mime_type"
-module = "xberg"
-async = false
-returns_result = true
-args = [
-  { name = "path", field = "input.path", type = "string" },
-  { name = "check_exists", field = "input.check_exists", type = "bool", optional = true },
-]
-
-[crates.e2e.calls.render_pdf_page_to_png]
-result_is_bytes = true
-result_is_simple = true
-function = "render_pdf_page_to_png"
-module = "xberg"
-async = false
-returns_result = true
-skip_languages = ["wasm"]
-args = [
-  { name = "pdf_bytes", field = "input.pdf_bytes", type = "bytes" },
-  { name = "page_index", field = "input.page_index", type = "int" },
-]
-
-[crates.e2e.calls.render_pdf_page_to_png.overrides.rust]
-result_is_bytes = true
-result_is_simple = true
-extra_args = ["None", "None"]
-
-[crates.e2e.calls.render_pdf_page_to_png.overrides.csharp]
-result_is_bytes = true
-result_is_simple = true
-extra_args = ["null", "null"]
-
-[crates.e2e.calls.render_pdf_page_to_png.overrides.go]
-result_is_bytes = true
-result_is_simple = true
-result_is_array = true
-extra_args = ["nil", "nil"]
-
-[crates.e2e.calls.render_pdf_page_to_png.overrides.java]
-result_is_bytes = true
-result_is_simple = true
-extra_args = ["null", "null"]
-
-[crates.e2e.calls.render_pdf_page_to_png.overrides.zig]
-result_is_bytes = true
-result_is_simple = true
-extra_args = ["null", "null"]
-
-[crates.e2e.calls.render_pdf_page_to_png.overrides.r]
-result_is_bytes = true
-result_is_simple = true
-extra_args = ["NULL", "NULL"]
-
-[crates.e2e.calls.render_pdf_page_to_png.overrides.swift]
-result_is_bytes = true
-result_is_simple = true
-extra_args = ["dpi: nil", "password: nil"]
-
-[crates.e2e.calls.bold.overrides.python]
-function = "bold"
-
-[crates.e2e.calls.italic.overrides.python]
-function = "italic"
-
-[crates.e2e.calls.link.overrides.python]
-function = "link"
-
-[crates.e2e.calls.code_markup.overrides.python]
-function = "code_markup"
-
-[crates.e2e.calls.strikethrough.overrides.python]
-function = "strikethrough"
-
-[crates.e2e.calls.underline.overrides.python]
-function = "underline"
-
-[crates.e2e.calls.classify_uri.overrides.python]
-function = "classify_uri"
-
-[crates.e2e.calls.clean_extracted_text.overrides.python]
-function = "clean_extracted_text"
-
-[crates.e2e.calls.escape_html_entities.overrides.python]
-function = "escape_html_entities"
-
-[crates.e2e.calls.fix_mojibake.overrides.python]
-function = "fix_mojibake"
-
-[crates.e2e.calls.is_valid_utf8.overrides.python]
-function = "is_valid_utf8"
-
-[crates.e2e.calls.convert_html_to_markdown.overrides.python]
-function = "convert_html_to_markdown"
-
-[crates.e2e.calls.generate_cache_key.overrides.python]
-function = "generate_cache_key"
-
-[crates.e2e.calls.validate_cache_key.overrides.python]
-function = "validate_cache_key"
-
-[crates.e2e.calls.detect_image_format.overrides.python]
-function = "detect_image_format"
-
-[crates.e2e.calls.is_valid_format_field.overrides.python]
-function = "is_valid_format_field"
-
-[crates.e2e.calls.normalize_vec.overrides.python]
-function = "normalize_vec"
-
 [crates.e2e.calls.list_supported_formats.overrides.python]
 function = "list_supported_formats"
-
-[crates.e2e.calls.validate_confidence_fn.overrides.python]
-function = "validate_confidence_fn"
-
-[crates.e2e.calls.validate_port.overrides.python]
-function = "validate_port"
-
-[crates.e2e.calls.validate_output_format_fn.overrides.python]
-function = "validate_output_format_fn"
-
-[crates.e2e.calls.validate_mime_type.overrides.python]
-function = "validate_mime_type"
-
-[crates.e2e.calls.validate_tesseract_oem.overrides.python]
-function = "validate_tesseract_oem"
-
-[crates.e2e.calls.validate_tesseract_psm.overrides.python]
-function = "validate_tesseract_psm"
-
-[crates.e2e.calls.validate_token_reduction_level.overrides.python]
-function = "validate_token_reduction_level"
-
-[crates.e2e.calls.validate_language_code.overrides.python]
-function = "validate_language_code"
-
-[crates.e2e.calls.validate_ocr_backend.overrides.python]
-function = "validate_ocr_backend"
-
-[crates.e2e.calls.validate_binarization_method.overrides.python]
-function = "validate_binarization_method"
-
-[crates.e2e.calls.validate_host.overrides.python]
-function = "validate_host"
-
-[crates.e2e.calls.extract_doc_text.overrides.python]
-function = "extract_doc_text"
-
-[crates.e2e.calls.extract_email_content.overrides.python]
-function = "extract_email_content"
-
-[crates.e2e.calls.extract_pptx_from_bytes.overrides.python]
-function = "extract_pptx_from_bytes"
-
-[crates.e2e.calls.extract_text_from_pdf.overrides.python]
-function = "extract_text_from_pdf"
 
 [crates.e2e.packages.rust]
 path = "../../crates/xberg"
@@ -3727,10 +3327,10 @@ name = "Python"
 package_name = "xberg"
 badge_url = "https://img.shields.io/pypi/v/xberg?label=Python&color=007ec6"
 docs_url = "https://xberg.io/"
-description = "Extract text, tables, images, metadata, and code intelligence from 96 file formats and 306 programming languages including PDF, Office documents, images, and audio/video transcripts where native transcription is available. Native Python bindings with async/await support, multiple OCR backends (Tesseract, EasyOCR, PaddleOCR), and extensible plugin system."
+description = "Extract text, tables, images, metadata, and code intelligence from 96 file formats and 306 programming languages including PDF, Office documents, images, and audio/video transcripts where native transcription is available. Native Python bindings with async/await support, multiple OCR backends (Tesseract, PaddleOCR), and extensible plugin system."
 package_manager = ["pip"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
-ocr_backends = ["tesseract", "easyocr", "paddleocr"]
+ocr_backends = ["tesseract", "paddleocr"]
 optional_sections = ["async_vs_sync_performance", "ocr_backends", "system_requirements"]
 snippets = { basic_extraction = "getting-started/basic_usage.md", async_extraction = "getting-started/extract.md", batch_processing = "getting-started/extract_with_ocr.md", ocr_configuration = "getting-started/hello_world.md", table_extraction = "getting-started/read_content.md" }
 
@@ -3945,6 +3545,14 @@ registry_getter = "xberg::plugins::registry::get_validator_registry"
 register_fn = "register_validator"
 unregister_fn = "unregister_validator"
 clear_fn = "clear_validators"
+
+[[crates.trait_bridges]]
+trait_name = "DocumentExtractor"
+super_trait = "xberg::plugins::Plugin"
+registry_getter = "xberg::plugins::registry::get_document_extractor_registry"
+register_fn = "register_document_extractor"
+unregister_fn = "unregister_document_extractor"
+clear_fn = "clear_document_extractors"
 
 [[crates.trait_bridges]]
 trait_name = "EmbeddingBackend"

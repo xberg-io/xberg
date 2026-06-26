@@ -1,6 +1,4 @@
-// swift-format-ignore-file
 import RustBridgeC
-
 import Foundation
 
 extension RustString {
@@ -23,12 +21,12 @@ extension RustStr {
         return String(bytes: bytes, encoding: .utf8)!
     }
 }
-extension RustStr: @retroactive Identifiable {
+extension RustStr: Identifiable {
     public var id: String {
         self.toString()
     }
 }
-extension RustStr: @retroactive Equatable {
+extension RustStr: Equatable {
     public static func == (lhs: RustStr, rhs: RustStr) -> Bool {
         return __swift_bridge__$RustStr$partial_eq(lhs, rhs);
     }

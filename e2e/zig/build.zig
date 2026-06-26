@@ -95,7 +95,6 @@ pub fn build(b: *std.Build) void {
     });
     async_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
     const async_run = b.addRunArtifact(async_tests);
-    async_run.setCwd(b.path("../../test_documents"));
     async_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
     if (mock_server_url) |_url| {
         async_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);
@@ -125,7 +124,6 @@ pub fn build(b: *std.Build) void {
     });
     batch_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
     const batch_run = b.addRunArtifact(batch_tests);
-    batch_run.setCwd(b.path("../../test_documents"));
     batch_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
     if (mock_server_url) |_url| {
         batch_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);
@@ -156,7 +154,6 @@ pub fn build(b: *std.Build) void {
     });
     contract_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
     const contract_run = b.addRunArtifact(contract_tests);
-    contract_run.setCwd(b.path("../../test_documents"));
     contract_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
     if (mock_server_url) |_url| {
         contract_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);
@@ -173,130 +170,6 @@ pub fn build(b: *std.Build) void {
     contract_run.step.dependOn(&batch_run.step);
     test_step.dependOn(&contract_run.step);
 
-    const detection_module = b.createModule(.{
-        .root_source_file = b.path("src/detection_test.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    detection_module.addImport("xberg", xberg_module);
-    const detection_tests = b.addTest(.{
-        .name = "detection_test",
-        .root_module = detection_module,
-        .use_llvm = true,
-    });
-    detection_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
-    const detection_run = b.addRunArtifact(detection_tests);
-    detection_run.setCwd(b.path("../../test_documents"));
-    detection_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
-    if (mock_server_url) |_url| {
-        detection_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);
-    }
-    if (mock_servers_json) |_json| {
-        detection_run.setEnvironmentVariable("MOCK_SERVERS", _json);
-    }
-    {
-        var _it = mock_servers_map.iterator();
-        while (_it.next()) |_entry| {
-            detection_run.setEnvironmentVariable(_entry.key_ptr.*, _entry.value_ptr.*);
-        }
-    }
-    detection_run.step.dependOn(&contract_run.step);
-    test_step.dependOn(&detection_run.step);
-
-    const document_extractor_management_module = b.createModule(.{
-        .root_source_file = b.path("src/document_extractor_management_test.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    document_extractor_management_module.addImport("xberg", xberg_module);
-    const document_extractor_management_tests = b.addTest(.{
-        .name = "document_extractor_management_test",
-        .root_module = document_extractor_management_module,
-        .use_llvm = true,
-    });
-    document_extractor_management_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
-    const document_extractor_management_run = b.addRunArtifact(document_extractor_management_tests);
-    document_extractor_management_run.setCwd(b.path("../../test_documents"));
-    document_extractor_management_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
-    if (mock_server_url) |_url| {
-        document_extractor_management_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);
-    }
-    if (mock_servers_json) |_json| {
-        document_extractor_management_run.setEnvironmentVariable("MOCK_SERVERS", _json);
-    }
-    {
-        var _it = mock_servers_map.iterator();
-        while (_it.next()) |_entry| {
-            document_extractor_management_run.setEnvironmentVariable(_entry.key_ptr.*, _entry.value_ptr.*);
-        }
-    }
-    document_extractor_management_run.step.dependOn(&detection_run.step);
-    test_step.dependOn(&document_extractor_management_run.step);
-
-    const embed_async_pending_module = b.createModule(.{
-        .root_source_file = b.path("src/embed_async_pending_test.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    embed_async_pending_module.addImport("xberg", xberg_module);
-    const embed_async_pending_tests = b.addTest(.{
-        .name = "embed_async_pending_test",
-        .root_module = embed_async_pending_module,
-        .use_llvm = true,
-    });
-    embed_async_pending_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
-    const embed_async_pending_run = b.addRunArtifact(embed_async_pending_tests);
-    embed_async_pending_run.setCwd(b.path("../../test_documents"));
-    embed_async_pending_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
-    if (mock_server_url) |_url| {
-        embed_async_pending_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);
-    }
-    if (mock_servers_json) |_json| {
-        embed_async_pending_run.setEnvironmentVariable("MOCK_SERVERS", _json);
-    }
-    {
-        var _it = mock_servers_map.iterator();
-        while (_it.next()) |_entry| {
-            embed_async_pending_run.setEnvironmentVariable(_entry.key_ptr.*, _entry.value_ptr.*);
-        }
-    }
-    embed_async_pending_run.step.dependOn(&document_extractor_management_run.step);
-    test_step.dependOn(&embed_async_pending_run.step);
-
-    const embed_extra_module = b.createModule(.{
-        .root_source_file = b.path("src/embed_extra_test.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    embed_extra_module.addImport("xberg", xberg_module);
-    const embed_extra_tests = b.addTest(.{
-        .name = "embed_extra_test",
-        .root_module = embed_extra_module,
-        .use_llvm = true,
-    });
-    embed_extra_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
-    const embed_extra_run = b.addRunArtifact(embed_extra_tests);
-    embed_extra_run.setCwd(b.path("../../test_documents"));
-    embed_extra_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
-    if (mock_server_url) |_url| {
-        embed_extra_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);
-    }
-    if (mock_servers_json) |_json| {
-        embed_extra_run.setEnvironmentVariable("MOCK_SERVERS", _json);
-    }
-    {
-        var _it = mock_servers_map.iterator();
-        while (_it.next()) |_entry| {
-            embed_extra_run.setEnvironmentVariable(_entry.key_ptr.*, _entry.value_ptr.*);
-        }
-    }
-    embed_extra_run.step.dependOn(&embed_async_pending_run.step);
-    test_step.dependOn(&embed_extra_run.step);
-
     const embedding_backend_management_module = b.createModule(.{
         .root_source_file = b.path("src/embedding_backend_management_test.zig"),
         .target = target,
@@ -311,7 +184,6 @@ pub fn build(b: *std.Build) void {
     });
     embedding_backend_management_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
     const embedding_backend_management_run = b.addRunArtifact(embedding_backend_management_tests);
-    embedding_backend_management_run.setCwd(b.path("../../test_documents"));
     embedding_backend_management_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
     if (mock_server_url) |_url| {
         embedding_backend_management_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);
@@ -325,39 +197,8 @@ pub fn build(b: *std.Build) void {
             embedding_backend_management_run.setEnvironmentVariable(_entry.key_ptr.*, _entry.value_ptr.*);
         }
     }
-    embedding_backend_management_run.step.dependOn(&embed_extra_run.step);
+    embedding_backend_management_run.step.dependOn(&contract_run.step);
     test_step.dependOn(&embedding_backend_management_run.step);
-
-    const embeddings_module = b.createModule(.{
-        .root_source_file = b.path("src/embeddings_test.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    embeddings_module.addImport("xberg", xberg_module);
-    const embeddings_tests = b.addTest(.{
-        .name = "embeddings_test",
-        .root_module = embeddings_module,
-        .use_llvm = true,
-    });
-    embeddings_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
-    const embeddings_run = b.addRunArtifact(embeddings_tests);
-    embeddings_run.setCwd(b.path("../../test_documents"));
-    embeddings_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
-    if (mock_server_url) |_url| {
-        embeddings_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);
-    }
-    if (mock_servers_json) |_json| {
-        embeddings_run.setEnvironmentVariable("MOCK_SERVERS", _json);
-    }
-    {
-        var _it = mock_servers_map.iterator();
-        while (_it.next()) |_entry| {
-            embeddings_run.setEnvironmentVariable(_entry.key_ptr.*, _entry.value_ptr.*);
-        }
-    }
-    embeddings_run.step.dependOn(&embedding_backend_management_run.step);
-    test_step.dependOn(&embeddings_run.step);
 
     const error_module = b.createModule(.{
         .root_source_file = b.path("src/error_test.zig"),
@@ -373,7 +214,6 @@ pub fn build(b: *std.Build) void {
     });
     error_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
     const error_run = b.addRunArtifact(error_tests);
-    error_run.setCwd(b.path("../../test_documents"));
     error_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
     if (mock_server_url) |_url| {
         error_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);
@@ -387,7 +227,7 @@ pub fn build(b: *std.Build) void {
             error_run.setEnvironmentVariable(_entry.key_ptr.*, _entry.value_ptr.*);
         }
     }
-    error_run.step.dependOn(&embeddings_run.step);
+    error_run.step.dependOn(&embedding_backend_management_run.step);
     test_step.dependOn(&error_run.step);
 
     const format_specific_module = b.createModule(.{
@@ -404,7 +244,6 @@ pub fn build(b: *std.Build) void {
     });
     format_specific_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
     const format_specific_run = b.addRunArtifact(format_specific_tests);
-    format_specific_run.setCwd(b.path("../../test_documents"));
     format_specific_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
     if (mock_server_url) |_url| {
         format_specific_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);
@@ -421,37 +260,6 @@ pub fn build(b: *std.Build) void {
     format_specific_run.step.dependOn(&error_run.step);
     test_step.dependOn(&format_specific_run.step);
 
-    const mime_utilities_module = b.createModule(.{
-        .root_source_file = b.path("src/mime_utilities_test.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    mime_utilities_module.addImport("xberg", xberg_module);
-    const mime_utilities_tests = b.addTest(.{
-        .name = "mime_utilities_test",
-        .root_module = mime_utilities_module,
-        .use_llvm = true,
-    });
-    mime_utilities_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
-    const mime_utilities_run = b.addRunArtifact(mime_utilities_tests);
-    mime_utilities_run.setCwd(b.path("../../test_documents"));
-    mime_utilities_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
-    if (mock_server_url) |_url| {
-        mime_utilities_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);
-    }
-    if (mock_servers_json) |_json| {
-        mime_utilities_run.setEnvironmentVariable("MOCK_SERVERS", _json);
-    }
-    {
-        var _it = mock_servers_map.iterator();
-        while (_it.next()) |_entry| {
-            mime_utilities_run.setEnvironmentVariable(_entry.key_ptr.*, _entry.value_ptr.*);
-        }
-    }
-    mime_utilities_run.step.dependOn(&format_specific_run.step);
-    test_step.dependOn(&mime_utilities_run.step);
-
     const ocr_backend_management_module = b.createModule(.{
         .root_source_file = b.path("src/ocr_backend_management_test.zig"),
         .target = target,
@@ -466,7 +274,6 @@ pub fn build(b: *std.Build) void {
     });
     ocr_backend_management_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
     const ocr_backend_management_run = b.addRunArtifact(ocr_backend_management_tests);
-    ocr_backend_management_run.setCwd(b.path("../../test_documents"));
     ocr_backend_management_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
     if (mock_server_url) |_url| {
         ocr_backend_management_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);
@@ -480,39 +287,8 @@ pub fn build(b: *std.Build) void {
             ocr_backend_management_run.setEnvironmentVariable(_entry.key_ptr.*, _entry.value_ptr.*);
         }
     }
-    ocr_backend_management_run.step.dependOn(&mime_utilities_run.step);
+    ocr_backend_management_run.step.dependOn(&format_specific_run.step);
     test_step.dependOn(&ocr_backend_management_run.step);
-
-    const pdf_module = b.createModule(.{
-        .root_source_file = b.path("src/pdf_test.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    pdf_module.addImport("xberg", xberg_module);
-    const pdf_tests = b.addTest(.{
-        .name = "pdf_test",
-        .root_module = pdf_module,
-        .use_llvm = true,
-    });
-    pdf_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
-    const pdf_run = b.addRunArtifact(pdf_tests);
-    pdf_run.setCwd(b.path("../../test_documents"));
-    pdf_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
-    if (mock_server_url) |_url| {
-        pdf_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);
-    }
-    if (mock_servers_json) |_json| {
-        pdf_run.setEnvironmentVariable("MOCK_SERVERS", _json);
-    }
-    {
-        var _it = mock_servers_map.iterator();
-        while (_it.next()) |_entry| {
-            pdf_run.setEnvironmentVariable(_entry.key_ptr.*, _entry.value_ptr.*);
-        }
-    }
-    pdf_run.step.dependOn(&ocr_backend_management_run.step);
-    test_step.dependOn(&pdf_run.step);
 
     const plugin_api_module = b.createModule(.{
         .root_source_file = b.path("src/plugin_api_test.zig"),
@@ -528,7 +304,6 @@ pub fn build(b: *std.Build) void {
     });
     plugin_api_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
     const plugin_api_run = b.addRunArtifact(plugin_api_tests);
-    plugin_api_run.setCwd(b.path("../../test_documents"));
     plugin_api_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
     if (mock_server_url) |_url| {
         plugin_api_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);
@@ -542,7 +317,7 @@ pub fn build(b: *std.Build) void {
             plugin_api_run.setEnvironmentVariable(_entry.key_ptr.*, _entry.value_ptr.*);
         }
     }
-    plugin_api_run.step.dependOn(&pdf_run.step);
+    plugin_api_run.step.dependOn(&ocr_backend_management_run.step);
     test_step.dependOn(&plugin_api_run.step);
 
     const post_processor_management_module = b.createModule(.{
@@ -559,7 +334,6 @@ pub fn build(b: *std.Build) void {
     });
     post_processor_management_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
     const post_processor_management_run = b.addRunArtifact(post_processor_management_tests);
-    post_processor_management_run.setCwd(b.path("../../test_documents"));
     post_processor_management_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
     if (mock_server_url) |_url| {
         post_processor_management_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);
@@ -590,7 +364,6 @@ pub fn build(b: *std.Build) void {
     });
     registry_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
     const registry_run = b.addRunArtifact(registry_tests);
-    registry_run.setCwd(b.path("../../test_documents"));
     registry_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
     if (mock_server_url) |_url| {
         registry_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);
@@ -607,37 +380,6 @@ pub fn build(b: *std.Build) void {
     registry_run.step.dependOn(&post_processor_management_run.step);
     test_step.dependOn(&registry_run.step);
 
-    const registry_operations_module = b.createModule(.{
-        .root_source_file = b.path("src/registry_operations_test.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    registry_operations_module.addImport("xberg", xberg_module);
-    const registry_operations_tests = b.addTest(.{
-        .name = "registry_operations_test",
-        .root_module = registry_operations_module,
-        .use_llvm = true,
-    });
-    registry_operations_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
-    const registry_operations_run = b.addRunArtifact(registry_operations_tests);
-    registry_operations_run.setCwd(b.path("../../test_documents"));
-    registry_operations_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
-    if (mock_server_url) |_url| {
-        registry_operations_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);
-    }
-    if (mock_servers_json) |_json| {
-        registry_operations_run.setEnvironmentVariable("MOCK_SERVERS", _json);
-    }
-    {
-        var _it = mock_servers_map.iterator();
-        while (_it.next()) |_entry| {
-            registry_operations_run.setEnvironmentVariable(_entry.key_ptr.*, _entry.value_ptr.*);
-        }
-    }
-    registry_operations_run.step.dependOn(&registry_run.step);
-    test_step.dependOn(&registry_operations_run.step);
-
     const renderer_management_module = b.createModule(.{
         .root_source_file = b.path("src/renderer_management_test.zig"),
         .target = target,
@@ -652,7 +394,6 @@ pub fn build(b: *std.Build) void {
     });
     renderer_management_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
     const renderer_management_run = b.addRunArtifact(renderer_management_tests);
-    renderer_management_run.setCwd(b.path("../../test_documents"));
     renderer_management_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
     if (mock_server_url) |_url| {
         renderer_management_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);
@@ -666,70 +407,8 @@ pub fn build(b: *std.Build) void {
             renderer_management_run.setEnvironmentVariable(_entry.key_ptr.*, _entry.value_ptr.*);
         }
     }
-    renderer_management_run.step.dependOn(&registry_operations_run.step);
+    renderer_management_run.step.dependOn(&registry_run.step);
     test_step.dependOn(&renderer_management_run.step);
-
-    const rerank_module = b.createModule(.{
-        .root_source_file = b.path("src/rerank_test.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    rerank_module.addImport("xberg", xberg_module);
-    const rerank_tests = b.addTest(.{
-        .name = "rerank_test",
-        .root_module = rerank_module,
-        .use_llvm = true,
-    });
-    rerank_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
-    const rerank_run = b.addRunArtifact(rerank_tests);
-    rerank_run.setCwd(b.path("../../test_documents"));
-    rerank_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
-    if (mock_server_url) |_url| {
-        rerank_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);
-    }
-    if (mock_servers_json) |_json| {
-        rerank_run.setEnvironmentVariable("MOCK_SERVERS", _json);
-    }
-    {
-        var _it = mock_servers_map.iterator();
-        while (_it.next()) |_entry| {
-            rerank_run.setEnvironmentVariable(_entry.key_ptr.*, _entry.value_ptr.*);
-        }
-    }
-    rerank_run.step.dependOn(&renderer_management_run.step);
-    test_step.dependOn(&rerank_run.step);
-
-    const rerank_async_pending_module = b.createModule(.{
-        .root_source_file = b.path("src/rerank_async_pending_test.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    rerank_async_pending_module.addImport("xberg", xberg_module);
-    const rerank_async_pending_tests = b.addTest(.{
-        .name = "rerank_async_pending_test",
-        .root_module = rerank_async_pending_module,
-        .use_llvm = true,
-    });
-    rerank_async_pending_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
-    const rerank_async_pending_run = b.addRunArtifact(rerank_async_pending_tests);
-    rerank_async_pending_run.setCwd(b.path("../../test_documents"));
-    rerank_async_pending_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
-    if (mock_server_url) |_url| {
-        rerank_async_pending_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);
-    }
-    if (mock_servers_json) |_json| {
-        rerank_async_pending_run.setEnvironmentVariable("MOCK_SERVERS", _json);
-    }
-    {
-        var _it = mock_servers_map.iterator();
-        while (_it.next()) |_entry| {
-            rerank_async_pending_run.setEnvironmentVariable(_entry.key_ptr.*, _entry.value_ptr.*);
-        }
-    }
-    rerank_async_pending_run.step.dependOn(&rerank_run.step);
-    test_step.dependOn(&rerank_async_pending_run.step);
 
     const reranker_backend_management_module = b.createModule(.{
         .root_source_file = b.path("src/reranker_backend_management_test.zig"),
@@ -745,7 +424,6 @@ pub fn build(b: *std.Build) void {
     });
     reranker_backend_management_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
     const reranker_backend_management_run = b.addRunArtifact(reranker_backend_management_tests);
-    reranker_backend_management_run.setCwd(b.path("../../test_documents"));
     reranker_backend_management_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
     if (mock_server_url) |_url| {
         reranker_backend_management_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);
@@ -759,7 +437,7 @@ pub fn build(b: *std.Build) void {
             reranker_backend_management_run.setEnvironmentVariable(_entry.key_ptr.*, _entry.value_ptr.*);
         }
     }
-    reranker_backend_management_run.step.dependOn(&rerank_async_pending_run.step);
+    reranker_backend_management_run.step.dependOn(&renderer_management_run.step);
     test_step.dependOn(&reranker_backend_management_run.step);
 
     const smoke_module = b.createModule(.{
@@ -776,7 +454,6 @@ pub fn build(b: *std.Build) void {
     });
     smoke_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
     const smoke_run = b.addRunArtifact(smoke_tests);
-    smoke_run.setCwd(b.path("../../test_documents"));
     smoke_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
     if (mock_server_url) |_url| {
         smoke_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);
@@ -807,7 +484,6 @@ pub fn build(b: *std.Build) void {
     });
     summarization_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
     const summarization_run = b.addRunArtifact(summarization_tests);
-    summarization_run.setCwd(b.path("../../test_documents"));
     summarization_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
     if (mock_server_url) |_url| {
         summarization_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);
@@ -838,7 +514,6 @@ pub fn build(b: *std.Build) void {
     });
     url_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
     const url_run = b.addRunArtifact(url_tests);
-    url_run.setCwd(b.path("../../test_documents"));
     url_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
     if (mock_server_url) |_url| {
         url_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);
@@ -869,7 +544,6 @@ pub fn build(b: *std.Build) void {
     });
     validator_management_tests.root_module.addRPath(.{ .cwd_relative = ffi_path_abs });
     const validator_management_run = b.addRunArtifact(validator_management_tests);
-    validator_management_run.setCwd(b.path("../../test_documents"));
     validator_management_run.setEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
     if (mock_server_url) |_url| {
         validator_management_run.setEnvironmentVariable("MOCK_SERVER_URL", _url);

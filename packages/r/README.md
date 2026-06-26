@@ -86,7 +86,7 @@ Extract text, tables, images, metadata, and code intelligence from 96 file forma
 
 - **Document intelligence core** — extract text, tables, images, metadata, entities, keywords, code intelligence, and transcripts in builds that enable transcription.
 - **Format coverage** — PDF, Office, images, HTML/XML, email, archives, notebooks, citations, scientific formats, plain text, and audio/video formats in builds that enable transcription.
-- **OCR choices** — Tesseract, PaddleOCR, EasyOCR where supported, VLM OCR through liter-llm, and plugin hooks for custom backends.
+- **OCR choices** — Tesseract, PaddleOCR, Candle where supported, VLM OCR through liter-llm, and plugin hooks for custom backends.
 - **Same engine as every binding** — Rust, Python, Node.js, Go, Java, PHP, Ruby, .NET, Elixir, R, WASM, Kotlin Android, Swift, Dart, Zig, and C FFI share the same Rust implementation.
 - **R package** — data workflow binding with data-frame-friendly extracted structures.
 
@@ -116,7 +116,13 @@ Extract text, metadata, and structure from any supported document format:
 library(xberg)
 
 # Extract text from a PDF file
-result <- extract_sync("document.pdf")
+input <- list(kind = "uri", uri = "document.pdf")
+json <- extract(
+  input = ExtractInput$from_json(jsonlite::toJSON(input, auto_unbox = TRUE)),
+  config = ExtractionConfig$default()
+)
+output <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+result <- output$results[[1]]
 cat(result$content)
 ```
 
@@ -132,15 +138,18 @@ Most use cases benefit from configuration to control extraction behavior:
 library(xberg)
 
 # Configure Tesseract OCR
-config <- list(
+config <- ExtractionConfig$from_json(jsonlite::toJSON(list(
   force_ocr = TRUE,
   ocr = list(backend = "tesseract", language = "eng")
-)
-
+), auto_unbox = TRUE))
 # Extract text from a scanned image
-json <- extract_sync("scan.png", "image/png", config)
-result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
-
+input <- list(kind = "uri", uri = "scan.png", mime_type = "image/png")
+json <- extract(
+  input = ExtractInput$from_json(jsonlite::toJSON(input, auto_unbox = TRUE)),
+  config = config
+)
+output <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+result <- output$results[[1]]
 cat(sprintf("Extracted %d characters\n", nchar(result$content)))
 cat("Content preview:\n")
 cat(substr(result$content, 1, 200))
@@ -156,18 +165,21 @@ See [Configuration Guide](https://docs.xberg.io/guides/configuration/) for table
 library(xberg)
 
 # Configure OCR settings via a plain list mirroring the config JSON.
-config <- list(
+config <- ExtractionConfig$from_json(jsonlite::toJSON(list(
   force_ocr = TRUE,
   ocr = list(
     backend = "tesseract",
     language = "eng"
   )
-)
-
+), auto_unbox = TRUE))
 # Extract an image file with OCR enabled
-json <- extract_sync("image.png", "image/png", config)
-result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
-
+input <- list(kind = "uri", uri = "image.png", mime_type = "image/png")
+json <- extract(
+  input = ExtractInput$from_json(jsonlite::toJSON(input, auto_unbox = TRUE)),
+  config = config
+)
+output <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+result <- output$results[[1]]
 cat("Extracted text from image:\n")
 cat(result$content)
 ```
@@ -298,15 +310,18 @@ Xberg supports multiple OCR backends for extracting text from scanned documents 
 library(xberg)
 
 # Configure Tesseract OCR
-config <- list(
+config <- ExtractionConfig$from_json(jsonlite::toJSON(list(
   force_ocr = TRUE,
   ocr = list(backend = "tesseract", language = "eng")
-)
-
+), auto_unbox = TRUE))
 # Extract text from a scanned image
-json <- extract_sync("scan.png", "image/png", config)
-result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
-
+input <- list(kind = "uri", uri = "scan.png", mime_type = "image/png")
+json <- extract(
+  input = ExtractInput$from_json(jsonlite::toJSON(input, auto_unbox = TRUE)),
+  config = config
+)
+output <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+result <- output$results[[1]]
 cat(sprintf("Extracted %d characters\n", nchar(result$content)))
 cat("Content preview:\n")
 cat(substr(result$content, 1, 200))
@@ -332,18 +347,21 @@ Process multiple documents efficiently:
 library(xberg)
 
 # Configure OCR settings via a plain list mirroring the config JSON.
-config <- list(
+config <- ExtractionConfig$from_json(jsonlite::toJSON(list(
   force_ocr = TRUE,
   ocr = list(
     backend = "tesseract",
     language = "eng"
   )
-)
-
+), auto_unbox = TRUE))
 # Extract an image file with OCR enabled
-json <- extract_sync("image.png", "image/png", config)
-result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
-
+input <- list(kind = "uri", uri = "image.png", mime_type = "image/png")
+json <- extract(
+  input = ExtractInput$from_json(jsonlite::toJSON(input, auto_unbox = TRUE)),
+  config = config
+)
+output <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+result <- output$results[[1]]
 cat("Extracted text from image:\n")
 cat(result$content)
 ```
