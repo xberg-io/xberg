@@ -1231,6 +1231,17 @@ fn is_all_languages(lang: &str) -> bool {
 /// languages and returns a new config with the resolved language string.
 /// Otherwise returns `None`, indicating the original config should be used as-is.
 fn resolve_config_language(config: &TesseractConfig) -> Result<Option<TesseractConfig>, OcrError> {
+    // An empty or whitespace-only language would otherwise be split into [""] and sent to
+    // `resolve_tessdata_path`, which tries to materialize a language pack named "" and fails
+    // with a confusing "Failed to download language pack ''" error before the empty-language
+    // guard in `validate_language_and_traineddata` runs. Default to English here so every
+    // processor caller is protected, not just those that go through the `OcrBackend` layer.
+    // Matches the documented `OcrConfig` default and the WASM Tesseract backend.
+    if config.language.trim().is_empty() {
+        let mut resolved_config = config.clone();
+        resolved_config.language = "eng".to_string();
+        return Ok(Some(resolved_config));
+    }
     if is_all_languages(&config.language) {
         // For "all" wildcard, resolve tessdata for English as a bootstrap language
         let bootstrap_langs = vec!["eng".to_string()];
@@ -1458,6 +1469,21 @@ mod tests {
         };
         let resolved = resolve_config_language(&config).unwrap();
         assert!(resolved.is_none(), "non-wildcard should return None (no clone)");
+    }
+
+    #[test]
+    fn test_resolve_config_language_defaults_empty_to_eng() {
+        // A processor caller that bypasses the OcrBackend layer (e.g. a hand-built
+        // TesseractConfig) with an empty language must still resolve to English rather than
+        // failing on a language pack named "".
+        let config = TesseractConfig {
+            language: String::new(),
+            ..TesseractConfig::default()
+        };
+        let resolved = resolve_config_language(&config)
+            .unwrap()
+            .expect("empty language should resolve to a default");
+        assert_eq!(resolved.language, "eng");
     }
 
     #[test]
