@@ -13,7 +13,7 @@ repos:
     stages:
     - commit-msg
 - repo: https://github.com/xberg-io/pre-commit-hooks
-  rev: v1.2.3
+  rev: v3.0.0
   hooks:
   - id: ai-rulez-generate
   - id: trailing-whitespace
