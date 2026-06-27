@@ -1,4 +1,5 @@
 ```java title="Java"
+import io.xberg.ExtractInput;
 import io.xberg.ExtractionConfig;
 import io.xberg.ExtractionResult;
 import io.xberg.ExtractedDocument;
@@ -6,7 +7,6 @@ import io.xberg.Xberg;
 import io.xberg.LlmConfig;
 import io.xberg.StructuredExtractionConfig;
 
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -40,7 +40,7 @@ public class StructuredExtractionExample {
             .withStructuredExtraction(java.util.Optional.of(structured))
             .build();
 
-        ExtractionResult output = Xberg.extract(Path.of("paper.pdf"), config);
+        ExtractionResult output = Xberg.extract(ExtractInput.fromUri("paper.pdf"), config);
 
         ExtractedDocument result = output.results().get(0);
         System.out.println(result.structuredOutput());

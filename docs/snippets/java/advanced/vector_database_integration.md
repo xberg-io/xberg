@@ -1,5 +1,6 @@
 ```java title="Java"
 import io.xberg.Xberg;
+import io.xberg.ExtractInput;
 import io.xberg.ExtractionResult;
 import io.xberg.ExtractedDocument;
 import io.xberg.ExtractionConfig;
@@ -31,13 +32,14 @@ public class VectorDatabaseIntegration {
                 .build())
             .build();
 
-        ExtractionResult output = Xberg.extract(documentPath, config);
+        ExtractionResult output = Xberg.extract(ExtractInput.fromUri(documentPath), config);
 
         ExtractedDocument result = output.results().get(0);
         List<Object> chunks = result.getChunks() != null ? result.getChunks() : List.of();
 
         List<VectorRecord> vectorRecords = new java.util.ArrayList<>();
         for (int index = 0; index < chunks.size(); index++) {
+            Object chunk = chunks.get(index);
             VectorRecord record = new VectorRecord();
             record.id = documentId + "_chunk_" + index;
             record.metadata = new HashMap<>();
@@ -45,7 +47,7 @@ public class VectorDatabaseIntegration {
             record.metadata.put("chunk_index", String.valueOf(index));
 
             if (chunk instanceof java.util.Map) {
-                Map<String, Object> chunkMap = (Map<String, Object>) chunks.get(index);
+                Map<String, Object> chunkMap = (Map<String, Object>) chunk;
                 record.content = (String) chunkMap.get("content");
                 record.embedding = (float[]) chunkMap.get("embedding");
                 record.metadata.put("content_length", String.valueOf(record.content.length()));

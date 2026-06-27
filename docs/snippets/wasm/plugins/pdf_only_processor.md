@@ -3,34 +3,34 @@
 Register a post-processor that only processes PDF documents and filters others.
 
 ```typescript title="WASM"
-import init, { registerPostProcessor, extract } from "xberg-wasm";
+import init, { extract, registerPostProcessor } from "xberg-wasm";
 
 await init();
 
 // Define a PDF-only post-processor
 const pdfOnlyProcessor = {
   processingStage: () => "post-extraction",
-  process: (extractionResult) => {
+  process: (document) => {
     // Check if this is a PDF extraction
     const isPdf =
-      extractionResult.metadata?.mimeType === "application/pdf" ||
-      extractionResult.metadata?.source?.endsWith(".pdf");
+      document.mimeType === "application/pdf" ||
+      document.metadata?.source?.endsWith(".pdf");
 
     if (!isPdf) {
       // Skip processing for non-PDF documents
-      return extractionResult;
+      return document;
     }
 
     // Apply PDF-specific processing
     const processed = {
-      ...extractionResult,
+      ...document,
       metadata: {
-        ...extractionResult.metadata,
+        ...document.metadata,
         pdfProcessed: true,
-        pageCount: extractionResult.metadata?.pageCount || 1,
+        pageCount: document.metadata?.pageCount || 1,
       },
       // Normalize text for PDFs
-      text: (extractionResult.text || "")
+      content: (document.content || "")
         .replace(/\n{3,}/g, "\n\n") // Remove excessive line breaks
         .trim(),
     };
@@ -63,7 +63,8 @@ const testDocs = [
 ];
 
 for (const doc of testDocs) {
-  const result = await extract(doc.bytes, doc.type, {});
+  const output = await extract({ kind: "bytes", bytes: doc.bytes, mimeType: doc.type }, {});
+  const result = output.results[0];
   console.log(`${doc.type}: PDF-specific processing applied:`, result.metadata?.pdfProcessed);
 }
 ```
