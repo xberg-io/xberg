@@ -1,6 +1,6 @@
 ```rust title="Rust"
 use xberg::{
-    extract_file_sync, ExtractionConfig, ImagePreprocessingConfig, OcrConfig, TesseractConfig,
+    extract_sync, ExtractionConfig, ImagePreprocessingConfig, OcrConfig, TesseractConfig,
 };
 
 fn main() -> xberg::Result<()> {
@@ -26,7 +26,7 @@ fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract_file_sync("document.pdf", None, &config)?;
+    let result = extract_sync("document.pdf", None, &config)?;
     println!("content length: {}", result.content.len());
     Ok(())
 }

@@ -9,7 +9,7 @@ config = %ExtractionConfig{
   force_ocr: false
 }
 
-{:ok, result} = Xberg.extract_file("document.pdf", nil, config)
+{:ok, result} = Xberg.extract("document.pdf", nil, config)
 
 IO.puts("Content length: #{byte_size(result.content)} characters")
 IO.puts("Detected languages: #{inspect(result.detected_languages)}")

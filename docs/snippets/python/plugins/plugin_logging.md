@@ -16,7 +16,7 @@ class MyPlugin:
     def shutdown(self) -> None:
         logger.info(f"Shutting down plugin: {self.name()}")
 
-    def extract_bytes(
+    def extract(
         self, content: bytes, mime_type: str, config: dict
     ) -> dict:
         logger.info(f"Extracting {mime_type} ({len(content)} bytes)")

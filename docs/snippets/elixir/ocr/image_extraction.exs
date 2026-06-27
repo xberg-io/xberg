@@ -24,7 +24,7 @@ defmodule ImageExtractor do
       use_cache: true
     }
 
-    case Xberg.extract_file(file_path, nil, config) do
+    case Xberg.extract(file_path, nil, config) do
       {:ok, result} ->
         {:ok, result.images || []}
 

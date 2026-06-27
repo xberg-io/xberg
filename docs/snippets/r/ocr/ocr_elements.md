@@ -10,7 +10,7 @@ config <- list(
   )
 )
 
-json <- extract_file_sync("scanned.pdf", "application/pdf", config)
+json <- extract_sync("scanned.pdf", "application/pdf", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 if (!is.null(result$ocr_elements)) {

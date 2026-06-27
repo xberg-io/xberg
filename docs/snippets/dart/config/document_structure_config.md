@@ -14,7 +14,7 @@ Future<void> main() async {
     useLayoutForMarkdown: false,
   );
 
-  final result = await XbergBridge.extractFile('document.pdf', null, config);
+  final result = await XbergBridge.extract('document.pdf', null, config);
   final document = result.document;
   if (document != null) {
     print('Document nodes: ${document.nodes.length}');

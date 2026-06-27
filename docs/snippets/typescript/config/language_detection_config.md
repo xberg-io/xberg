@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-import { extractFile } from "@xberg/node";
+import { extract } from "@xberg-io/xberg";
 
 const config = {
   languageDetection: {
@@ -9,7 +9,7 @@ const config = {
   },
 };
 
-const result = await extractFile("document.pdf", null, config);
+const result = await extract("document.pdf", null, config);
 if (result.detectedLanguages) {
   console.log(`Detected languages: ${result.detectedLanguages.join(", ")}`);
 }

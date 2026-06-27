@@ -28,7 +28,7 @@ public class Main {
                 .enableQualityProcessing(true)
                 .build();
 
-            ExtractionResult result = Xberg.extractFile("document.pdf", config);
+            ExtractionResult result = Xberg.extract("document.pdf", config);
 
             if (!result.getDetectedLanguages().isEmpty()) {
                 System.out.println("Languages: " + result.getDetectedLanguages());

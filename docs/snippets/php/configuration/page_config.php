@@ -25,7 +25,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('report.pdf');
+$result = $xberg->extract('report.pdf');
 
 echo "Content with page markers:\n";
 echo str_repeat('=', 60) . "\n";
@@ -39,7 +39,7 @@ $pageConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($pageConfig);
-$result = $xberg->extractFile('multi_page.pdf');
+$result = $xberg->extract('multi_page.pdf');
 
 foreach ($result->pages ?? [] as $page) {
     echo "Page {$page->pageNumber}:\n";
@@ -58,7 +58,7 @@ $customConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($customConfig);
-$result = $xberg->extractFile('document.pdf');
+$result = $xberg->extract('document.pdf');
 
 $pages = preg_split('/={10} PAGE \d+ ={10}/', $result->content);
 echo "Split into " . count($pages) . " sections\n";
@@ -68,7 +68,7 @@ $allPagesConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($allPagesConfig);
-$result = $xberg->extractFile('large_doc.pdf');
+$result = $xberg->extract('large_doc.pdf');
 
 $selectedPages = array_filter(
     $result->pages ?? [],

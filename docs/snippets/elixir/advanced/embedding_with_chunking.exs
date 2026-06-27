@@ -4,7 +4,7 @@ config = %Xberg.ExtractionConfig{
   embeddings: %{"enabled" => true}
 }
 
-{:ok, result} = Xberg.extract_file("document.pdf", nil, config)
+{:ok, result} = Xberg.extract("document.pdf", nil, config)
 
 # Process chunks with embeddings for semantic search
 embedded_chunks = result.chunks

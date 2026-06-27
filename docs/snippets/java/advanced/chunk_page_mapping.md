@@ -16,7 +16,7 @@ ExtractionConfig config = ExtractionConfig.builder()
         .build()))
     .build();
 
-var result = Xberg.extractFileSync(Path.of("document.pdf"), config);
+var result = Xberg.extractSync(Path.of("document.pdf"), config);
 
 if (result.chunks() != null) {
     for (var chunk : result.chunks()) {

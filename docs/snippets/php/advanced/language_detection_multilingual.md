@@ -14,7 +14,7 @@ $config = new ExtractionConfig(
     )
 );
 
-$result = Xberg::extractFileSync('multilingual_document.pdf', null, $config);
+$result = Xberg::extractSync('multilingual_document.pdf', null, $config);
 
 echo "Detected languages: ";
 $languages = $result->getDetectedLanguages();

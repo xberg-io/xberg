@@ -65,7 +65,7 @@ class Program
                 EnableQualityProcessing = true
             };
 
-            var result = XbergLib.ExtractFileSync("document.pdf", config);
+            var result = XbergLib.ExtractSync("document.pdf", config);
 
             Console.WriteLine("Validation passed");
             Console.WriteLine($"Content length: {result.Content.Length}");

@@ -1,9 +1,0 @@
-{
-	"id": "async_extract_bytes_empty_mime",
-	"category": "async",
-	"description": "extract_bytes empty MIME async",
-	"tags": ["async", "error"],
-	"call": "extract_bytes",
-	"input": { "data": "text/plain.txt", "mime_type": "", "config": {} },
-	"assertions": [{ "type": "error" }]
-}

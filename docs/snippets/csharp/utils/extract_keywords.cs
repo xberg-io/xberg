@@ -14,7 +14,7 @@ var config = new ExtractionConfig
     }
 };
 
-var result = XbergLib.ExtractFileSync("research_paper.pdf", config);
+var result = XbergLib.ExtractSync("research_paper.pdf", config);
 
 Console.WriteLine("Extracted Keywords:");
 if (result.Metadata.Keywords != null)
@@ -39,7 +39,7 @@ var tfidfConfig = new ExtractionConfig
     }
 };
 
-var tfidfResult = XbergLib.ExtractFileSync("document.pdf", tfidfConfig);
+var tfidfResult = XbergLib.ExtractSync("document.pdf", tfidfConfig);
 
 Console.WriteLine("\nTF-IDF Keywords:");
 if (tfidfResult.Metadata.Keywords != null)

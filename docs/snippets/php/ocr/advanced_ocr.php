@@ -30,7 +30,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('financial_report_scan.pdf');
+$result = $xberg->extract('financial_report_scan.pdf');
 
 echo "OCR with Table Detection:\n";
 echo str_repeat('=', 60) . "\n";
@@ -53,7 +53,7 @@ $invoiceConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($invoiceConfig);
-$result = $xberg->extractFile('invoice_scan.pdf');
+$result = $xberg->extract('invoice_scan.pdf');
 
 echo "Invoice OCR (numbers only):\n";
 echo str_repeat('=', 60) . "\n";
@@ -77,7 +77,7 @@ $preprocessedConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($preprocessedConfig);
-$result = $xberg->extractFile('poor_quality_scan.pdf');
+$result = $xberg->extract('poor_quality_scan.pdf');
 
 echo "OCR with Image Preprocessing:\n";
 echo str_repeat('=', 60) . "\n";
@@ -115,7 +115,7 @@ if (file_exists($testFile)) {
 
         $xberg = new Xberg($config);
         $start = microtime(true);
-        $result = $xberg->extractFile($testFile);
+        $result = $xberg->extract($testFile);
         $elapsed = microtime(true) - $start;
 
         echo "PSM $psm - {$psmModes[$psm]}:\n";
@@ -140,7 +140,7 @@ $singleColumnConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($singleColumnConfig);
-$result = $xberg->extractFile('book_scan.pdf');
+$result = $xberg->extract('book_scan.pdf');
 
 echo "Single-column OCR:\n";
 echo $result->content . "\n\n";
@@ -161,7 +161,7 @@ $sparseConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($sparseConfig);
-$result = $xberg->extractFile('receipt.jpg');
+$result = $xberg->extract('receipt.jpg');
 
 echo "Sparse text OCR (receipt):\n";
 echo str_repeat('=', 60) . "\n";
@@ -187,7 +187,7 @@ $highAccuracyConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($highAccuracyConfig);
-$result = $xberg->extractFile('legal_document_scan.pdf');
+$result = $xberg->extract('legal_document_scan.pdf');
 
 echo "High-accuracy OCR:\n";
 echo "Characters: " . strlen($result->content) . "\n";

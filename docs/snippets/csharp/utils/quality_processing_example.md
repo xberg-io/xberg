@@ -2,7 +2,7 @@
 using Xberg;
 
 var config = new ExtractionConfig { EnableQualityProcessing = true };
-var result = await XbergLib.ExtractFile("scanned_document.pdf", null, config);
+var result = await XbergLib.Extract("scanned_document.pdf", null, config);
 
 var qualityScore = result.QualityScore ?? 0.0;
 

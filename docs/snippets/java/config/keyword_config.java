@@ -22,7 +22,7 @@ public class KeywordConfigExample {
                 .build())
             .build();
 
-        ExtractionResult result = Xberg.extractFile("document.pdf", config);
+        ExtractionResult result = Xberg.extract("document.pdf", config);
         System.out.println("Keywords: " + result.getKeywords());
     }
 
@@ -43,7 +43,7 @@ public class KeywordConfigExample {
                 .build())
             .build();
 
-        ExtractionResult result = Xberg.extractFile("document.pdf", config);
+        ExtractionResult result = Xberg.extract("document.pdf", config);
         System.out.println("Keywords: " + result.getKeywords());
     }
 
@@ -65,7 +65,7 @@ public class KeywordConfigExample {
                 .build())
             .build();
 
-        ExtractionResult result = Xberg.extractFile("document.pdf", config);
+        ExtractionResult result = Xberg.extract("document.pdf", config);
         System.out.println("Keywords: " + result.getKeywords());
     }
 

@@ -14,8 +14,8 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 use Xberg\Xberg;
 use Xberg\Config\ExtractionConfig;
-use function Xberg\batch_extract_files;
-use function Xberg\batch_extract_bytes;
+use function Xberg\extract_batch;
+use function Xberg\extract_batch;
 
 $files = [
     'document1.pdf',
@@ -30,7 +30,7 @@ if (!empty($files)) {
     echo "Processing " . count($files) . " files in batch...\n\n";
 
     $start = microtime(true);
-    $results = batch_extract_files($files);
+    $results = extract_batch($files);
     $elapsed = microtime(true) - $start;
 
     echo "Batch extraction completed in " . number_format($elapsed, 3) . " seconds\n";
@@ -57,7 +57,7 @@ if (!empty($pdfFiles)) {
     echo "Processing " . count($pdfFiles) . " PDF files...\n";
 
     $start = microtime(true);
-    $results = $xberg->batchExtractFiles($pdfFiles, $config);
+    $results = $xberg->extractBatch($pdfFiles, $config);
     $elapsed = microtime(true) - $start;
 
     echo "Completed in " . number_format($elapsed, 2) . " seconds\n";
@@ -83,7 +83,7 @@ $uploadedFiles = [
 $dataList = array_column($uploadedFiles, 'data');
 $mimeTypes = array_column($uploadedFiles, 'mime');
 
-$results = batch_extract_bytes($dataList, $mimeTypes);
+$results = extract_batch($dataList, $mimeTypes);
 
 echo "\nProcessed " . count($results) . " files from memory\n";
 
@@ -112,7 +112,7 @@ function processDirectory(string $dir, Xberg $xberg): array
 
     foreach ($batches as $batchIndex => $batch) {
         echo "Processing batch " . ($batchIndex + 1) . "/" . count($batches) . "...\n";
-        $batchResults = $xberg->batchExtractFiles($batch);
+        $batchResults = $xberg->extractBatch($batch);
         $results = array_merge($results, $batchResults);
     }
 
@@ -129,7 +129,7 @@ if (is_dir($directory)) {
 $mixedFiles = ['valid.pdf', 'nonexistent.pdf', 'another.docx'];
 
 try {
-    $results = batch_extract_files($mixedFiles);
+    $results = extract_batch($mixedFiles);
 } catch (\Xberg\Exceptions\XbergException $e) {
     echo "Batch processing error: " . $e->getMessage() . "\n";
 }
@@ -146,7 +146,7 @@ foreach ($batches as $index => $batch) {
     echo sprintf("\rProgress: %.1f%% [%d/%d batches]",
         $progress, $index + 1, count($batches));
 
-    $results = $xberg->batchExtractFiles($batch);
+    $results = $xberg->extractBatch($batch);
     $totalProcessed += count($results);
 }
 

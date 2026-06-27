@@ -6,7 +6,7 @@ import java.util.Map;
 
 public class BasicUsage {
     public static void main(String[] args) throws IOException {
-        ExtractionResult result = Xberg.extractFile("document.pdf");
+        ExtractionResult result = Xberg.extract("document.pdf");
 
         System.out.println("Content:");
         System.out.println(result.getContent());

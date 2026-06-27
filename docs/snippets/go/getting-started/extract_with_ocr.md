@@ -18,7 +18,7 @@ func main() {
 		Ocr: ocrConfig,
 	}
 
-	result, err := xberg.ExtractFileSync("scanned.pdf", nil, config)
+	result, err := xberg.ExtractSync("scanned.pdf", nil, config)
 	if err != nil {
 		log.Fatalf("extract failed: %v", err)
 	}

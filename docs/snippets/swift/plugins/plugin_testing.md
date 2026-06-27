@@ -39,7 +39,7 @@ let configJson = "{\"use_cache\": false}"
 let config = try extractionConfigFromJson(configJson)
 
 // Extract a document; the validator runs automatically during extraction
-let result = try extractFile(path: "test.txt", mimeType: "text/plain", config: config)
+let result = try extract(path: "test.txt", mimeType: "text/plain", config: config)
 
 // The validator's validate() method is invoked in-pipeline.
 // If it rejects, the extraction throws an error.

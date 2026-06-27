@@ -2,6 +2,7 @@
 //!
 //! This module provides parallel extraction capabilities for processing
 //! multiple files or byte arrays concurrently with automatic resource management.
+#![allow(dead_code)]
 
 #[cfg(feature = "tokio-runtime")]
 use crate::core::config::BatchBytesItem;
@@ -201,7 +202,7 @@ fn resolve_config(base: &ExtractionConfig, file_config: &Option<FileExtractionCo
         extraction.batch_size = items.len(),
     )
 ))]
-pub async fn batch_extract_files(
+pub(crate) async fn batch_extract_files(
     items: Vec<BatchFileItem>,
     config: &ExtractionConfig,
 ) -> Result<Vec<ExtractionResult>> {
@@ -296,7 +297,7 @@ pub async fn batch_extract_files(
         extraction.batch_size = items.len(),
     )
 ))]
-pub async fn batch_extract_bytes(
+pub(crate) async fn batch_extract_bytes(
     items: Vec<BatchBytesItem>,
     config: &ExtractionConfig,
 ) -> Result<Vec<ExtractionResult>> {

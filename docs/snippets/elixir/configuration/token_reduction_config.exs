@@ -16,7 +16,7 @@ config = %ExtractionConfig{
   use_cache: true
 }
 
-{:ok, result} = Xberg.extract_file("large_document.pdf", nil, config)
+{:ok, result} = Xberg.extract("large_document.pdf", nil, config)
 
 IO.puts("Token Reduction Configuration Applied:")
 IO.puts("Token Reduction Enabled: true")

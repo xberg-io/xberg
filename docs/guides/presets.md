@@ -1,7 +1,5 @@
 # Presets
 
-<span class="version-badge new">v5.0</span>
-
 Presets define structured extraction schemas with system prompts, merge strategies, and call-mode hints for the LLM pipeline.
 
 ## Overview
@@ -14,7 +12,7 @@ A preset encapsulates the configuration needed to extract structured data from a
 - **Call mode** — Whether to extract from text only, vision only, or both.
 - **Citations** — Whether the prompt asks the model to emit field citations (page, bbox).
 
-The OSS library ships exactly one preset (`generic_document`) as a synthetic example. Downstream consumers (Xberg Enterprise, internal applications) load additional presets at runtime via `Registry::extend_from_dir`.
+The OSS library ships exactly one preset (`generic_document`) as a synthetic example. Downstream applications load additional presets at runtime via `Registry::extend_from_dir`.
 
 ## Loading Presets
 
@@ -174,7 +172,7 @@ Preset functionality is behind the `presets` feature. Enable it in `Cargo.toml`:
 
 ```toml
 [dependencies]
-xberg = { version = "5.0", features = ["presets"] }
+xberg = { version = "1.0", features = ["presets"] }
 ```
 
 ## Best Practices

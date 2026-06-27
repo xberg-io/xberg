@@ -29,7 +29,7 @@ Use vision-language models as an OCR backend by rendering document pages as imag
 === "Rust"
 
     ```rust title="Rust"
-    use xberg::{extract_file, ExtractionConfig, OcrConfig, LlmConfig};
+    use xberg::{extract, ExtractionConfig, OcrConfig, LlmConfig};
 
     let config = ExtractionConfig {
         force_ocr: true,
@@ -43,7 +43,7 @@ Use vision-language models as an OCR backend by rendering document pages as imag
         }),
         ..Default::default()
     };
-    let result = extract_file("scan.pdf", None, &config).await?;
+    let result = extract("scan.pdf", None, &config).await?;
     ```
 
 === "CLI"
@@ -204,7 +204,7 @@ Use provider-hosted embedding models when you need to match your vector database
 === "TypeScript"
 
     ```typescript title="TypeScript"
-    import { embedSync } from '@xberg/node';
+    import { embedSync } from '@xberg-io/xberg';
 
     const embeddings = embedSync(['Hello world'], {
       model: {
@@ -291,7 +291,7 @@ provider routing; point to your local server without needing an API key.
       --text "Hello world"
     ```
 
-=== "Python" ```python from Xberg import extract_file, ExtractionConfig, StructuredExtractionConfig, LlmConfig
+=== "Python" ```python from Xberg import extract, ExtractionConfig, StructuredExtractionConfig, LlmConfig
 
     config = ExtractionConfig(
         structured_extraction=StructuredExtractionConfig(
@@ -299,7 +299,7 @@ provider routing; point to your local server without needing an API key.
             llm=LlmConfig(model="ollama/llama3.2"),  # No api_key needed
         ),
     )
-    result = await extract_file("doc.pdf", config=config)
+    result = await extract("doc.pdf", config=config)
     ```
 
 === "TOML Config" ```toml [structured_extraction.llm] model = "ollama/llama3.2"
@@ -318,7 +318,7 @@ Every LLM call made during extraction is tracked in the `llm_usage` field of `Ex
 === "Python"
 
     ```python
-    result = await extract_file("document.pdf", config)
+    result = await extract("document.pdf", config)
     if result.get("llm_usage"):
         for usage in result["llm_usage"]:
             print(f"{usage['source']}: {usage['input_tokens']} in, {usage['output_tokens']} out, ${usage['estimated_cost']:.4f}")
@@ -336,7 +336,7 @@ Every LLM call made during extraction is tracked in the `llm_usage` field of `Ex
 === "Rust"
 
     ```rust
-    let result = extract_file("document.pdf", &config).await?;
+    let result = extract("document.pdf", &config).await?;
     if let Some(usages) = &result.llm_usage {
         for usage in usages {
             println!("{}: {} in, {} out", usage.source, usage.input_tokens.unwrap_or(0), usage.output_tokens.unwrap_or(0));

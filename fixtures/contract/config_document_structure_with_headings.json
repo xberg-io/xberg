@@ -1,32 +1,38 @@
 {
 	"id": "config_document_structure_with_headings",
 	"description": "Tests document structure with DOCX heading-driven nesting",
-	"tags": ["contract", "document_structure"],
-	"call": "extract_file_sync",
+	"tags": [
+		"contract",
+		"document_structure"
+	],
+	"call": "extract",
 	"input": {
-		"path": "docx/fake.docx",
-		"config": {
-			"include_document_structure": true
-		}
+		"kind": "uri",
+		"uri": "docx/fake.docx"
 	},
 	"assertions": [
 		{
 			"type": "equals",
-			"field": "mime_type",
+			"field": "results.0.mime_type",
 			"value": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 		},
 		{
 			"type": "not_empty",
-			"field": "document"
+			"field": "results.0.document"
 		},
 		{
 			"type": "count_min",
-			"field": "document.nodes",
+			"field": "results.0.document.nodes",
 			"value": 1
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
-		"reason": "WASM cannot access filesystem; use extractBytes with file content instead"
+		"languages": [
+			"wasm"
+		],
+		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
+	},
+	"config": {
+		"include_document_structure": true
 	}
 }

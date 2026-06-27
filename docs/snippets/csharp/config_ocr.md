@@ -11,6 +11,6 @@ var config = new ExtractionConfig
     }
 };
 
-var result = await XbergLib.ExtractFileAsync("document.pdf", config);
+var result = await XbergLib.ExtractAsync("document.pdf", config);
 Console.WriteLine(result.Content);
 ```

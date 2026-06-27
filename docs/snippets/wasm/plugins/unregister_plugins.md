@@ -30,7 +30,7 @@ await init();
 
 // Example: register a custom document extractor
 const extractor = {
-  extractBytes: async (bytes, mimeType, config) => {
+  extract: async (bytes, mimeType, config) => {
     return JSON.stringify({ text: "test", page_count: 1 });
   },
   supportedMimeTypes: () => JSON.stringify(["application/x-test"]),

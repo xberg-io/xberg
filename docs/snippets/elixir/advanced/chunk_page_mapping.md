@@ -7,7 +7,7 @@ config_json = Jason.encode!(%{
   }
 })
 
-{:ok, result} = Xberg.extract_file_sync("document.pdf", "application/pdf", config_json)
+{:ok, result} = Xberg.extract_sync("document.pdf", "application/pdf", config_json)
 
 # Map chunks to their source pages
 chunks_with_pages = result.chunks

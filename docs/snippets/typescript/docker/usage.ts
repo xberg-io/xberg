@@ -30,7 +30,7 @@ class DockerXbergClient {
     console.log(`Container started on http://localhost:${this.apiPort}`);
   }
 
-  async extractFile(filePath: string): Promise<string> {
+  async extract(filePath: string): Promise<string> {
     const fileContent = readFileSync(filePath);
     const form = new FormData();
     form.append("file", fileContent, basename(filePath));
@@ -57,7 +57,7 @@ class DockerXbergClient {
     await dockerClient.startContainer();
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    const content = await dockerClient.extractFile("document.pdf");
+    const content = await dockerClient.extract("document.pdf");
     console.log(`Extracted content:\n${content}`);
   } finally {
     await dockerClient.stopContainer();

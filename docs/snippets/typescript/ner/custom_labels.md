@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-const result = await extractFile("contract.pdf", {
+const result = await extract("contract.pdf", {
     ner: {
         backend: "llm",
         llm: { model: "openai/gpt-4o-mini" },

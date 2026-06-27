@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.28.1"
+alef_version = "0.29.1"
 languages = [
   "python",
   "node",
@@ -65,7 +65,7 @@ async_wrappers = false
 enabled = false
 
 # Disable the default format_generated pass for node (pnpm dlx oxfmt .) which runs
-# from the repo root and chokes on vendored HTML fixtures and Helm chart YAML.
+# from the repo root and chokes on vendored HTML fixtures and deployment YAML.
 # Post-generation formatting is handled by [crates.lint.node] format command instead.
 [workspace.format_overrides.node]
 enabled = false
@@ -156,9 +156,8 @@ sources = [
   # Only the FFI-safe JSON-string bridge is exposed; the async engine,
   # StructuredOptions (Arc<dyn VisionCallCache>) and liter-llm types stay internal.
   "crates/xberg/src/structured/bindings.rs",
-  # Batch extraction functions (re-exported from lib.rs)
-  "crates/xberg/src/core/extractor/mod.rs",
-  "crates/xberg/src/core/extractor/sync.rs",
+  # Unified extraction functions (re-exported from lib.rs)
+  "crates/xberg/src/core/extractor/unified.rs",
   # PDF rendering (render_pdf_page_to_png — re-exported from lib.rs)
   "crates/xberg/src/pdf/render.rs",
   # PdfMetadata — referenced in types/metadata.rs as Pdf(PdfMetadata) variant
@@ -172,8 +171,6 @@ sources = [
   # OCR/PaddleOCR types (re-exported from lib.rs)
   "crates/xberg/src/ocr/types.rs",
   "crates/xberg/src/paddle_ocr/mod.rs",
-  # Plugin registry operations (list_document_extractors etc.)
-  "crates/xberg/src/plugins/extractor/mod.rs",
   # OCR backend registry operations (register/unregister/list/clear)
   "crates/xberg/src/plugins/ocr.rs",
   # Renderer trait and registry operations
@@ -232,6 +229,7 @@ features = [
   "heuristics",
   "presets",
   "structured",
+  "url-ingestion",
 ]
 
 [crates.python]
@@ -262,7 +260,7 @@ features = ["windows-target"]
 default_features = false
 
 [crates.node]
-package_name = "@xberg/node"
+package_name = "@xberg-io/xberg"
 exclude_types = [
   # Opaque Arc<Mutex<T>> types — codegen doesn't generate .lock() calls for methods
   "StreamReader",
@@ -360,7 +358,7 @@ features = ["windows-target"]
 default_features = false
 
 [crates.wasm]
-package_name = "@xberg/wasm"
+package_name = "@xberg-io/xberg-wasm"
 exclude_types = [
   # ORT/runtime-only types not available in the wasm-target feature set
   "OcrFallbackDecision",
@@ -368,8 +366,6 @@ exclude_types = [
   "OcrCacheStats",
   "TessdataManager",
   "PageLayoutResult",
-  # MCP parameter types not compatible with wasm-bindgen (Option<JsValue> fields)
-  "BatchExtractFilesParams",
 ]
 exclude_functions = [
   # paddle-ocr / layout-detection / embeddings / auto-rotate
@@ -970,6 +966,17 @@ types = [
   # public entry points.
   "ClassifyContext",
   "xberg::text::classification::page_classifier::ClassifyContext",
+
+  # Legacy extraction DTOs kept only for internal helpers. The v1 public
+  # extraction surface is ExtractInput plus extract/extract_batch.
+  "BatchBytesItem",
+  "BatchFileItem",
+
+  # Document extractor plugins remain Rust-only because the trait shape uses
+  # file/bytes-specific methods that are no longer part of the public binding
+  # API surface.
+  "DocumentExtractor",
+  "SyncExtractor",
 ]
 methods = [
   # From<T> trait impls — auto-emitted by derive/trait-bridge
@@ -1049,6 +1056,25 @@ functions = [
   "extract_structured_sync",
   "split_and_extract",
   "split_and_extract_sync",
+
+  # Legacy extraction entry points kept only as internal implementation helpers.
+  # The v1 public extraction surface is ExtractInput plus extract/extract_batch.
+  "extract_sync",
+  "extract_batch_sync",
+  "extract_bytes",
+  "extract_bytes_sync",
+  "extract_file",
+  "extract_file_sync",
+  "batch_extract_bytes",
+  "batch_extract_bytes_sync",
+  "batch_extract_files",
+  "batch_extract_files_sync",
+
+  # Document extractor plugin registry is Rust-only for v1 bindings.
+  "list_document_extractors",
+  "register_document_extractor",
+  "unregister_document_extractor",
+  "clear_document_extractors",
 ]
 
 [crates.lint.python]
@@ -1397,53 +1423,51 @@ result_fields = [
 ]
 
 [crates.e2e.call]
-function = "extract_file"
+function = "extract"
 module = "xberg"
 result_var = "result"
 async = true
 returns_result = true
 args = [
-  { name = "path", field = "input.path", type = "file_path" },
-  { name = "mime_type", field = "input.mime_type", type = "string", optional = true },
-  { name = "config", field = "input.config", type = "json_object", optional = true },
+  { name = "input", field = "input", type = "json_object", owned = true, go_type = "ExtractInput", element_type = "ExtractInput" },
+  { name = "config", field = "config", type = "json_object", optional = true },
 ]
 
 [crates.e2e.call.overrides.rust]
 crate_name = "xberg"
-function = "extract_file"
+function = "extract"
 
 [crates.e2e.call.overrides.python]
 module = "xberg"
-function = "extract_file"
+function = "extract"
 options_type = "ExtractionConfig"
 
 [crates.e2e.call.overrides.node]
 module = "xberg"
-function = "extractFile"
+function = "extract"
 options_type = "ExtractionConfig"
-arg_order = ["path", "config", "mime_type"]
 result_enum_fields = { outputFormat = "OutputFormat", "metadata.format" = "FormatMetadata" }
 
 [crates.e2e.call.overrides.go]
 module = "github.com/xberg-io/xberg"
-function = "ExtractFile"
+function = "Extract"
 alias = "xberg"
 options_type = "ExtractionConfig"
 
 [crates.e2e.call.overrides.java]
 class = "io.xberg.Xberg"
-function = "extractFile"
+function = "extract"
 options_type = "ExtractionConfig"
 enum_fields = { outputFormat = "OutputFormat" }
 
 [crates.e2e.call.overrides.kotlin]
 class = "Xberg"
-function = "extractFile"
+function = "extract"
 options_type = "ExtractionConfig"
 
 [crates.e2e.call.overrides.csharp]
 class = "XbergLib"
-function = "ExtractFile"
+function = "Extract"
 options_type = "ExtractionConfig"
 json_object_types = { chunking = "ChunkingConfig", ocr = "OcrConfig", images = "ImageExtractionConfig", html_output = "HtmlOutputConfig", language_detection = "LanguageDetectionConfig", postprocessor = "PostProcessorConfig", acceleration = "AccelerationConfig", email = "EmailConfig", pages = "PageConfig", pdf_options = "PdfConfig", layout = "LayoutDetectionConfig", tree_sitter = "TreeSitterConfig", structured_extraction = "StructuredExtractionConfig", content_filter = "ContentFilterConfig", token_reduction = "TokenReductionOptions" }
 nested_types = { model = "EmbeddingModelType", embedding = "EmbeddingConfig", keywords = "KeywordConfig", pages = "PageConfig", securityLimits = "SecurityLimits", treeSitter = "TreeSitterConfig" }
@@ -1465,27 +1489,23 @@ unnamed_arg_indices = [0, 1, 2]
 
 [crates.e2e.call.overrides.php]
 class = "Xberg\\Xberg"
-function = "extractFile"
+function = "extract"
 options_type = "ExtractionConfig"
 
 [crates.e2e.call.overrides.r]
-function = "extract_file"
+function = "extract"
 options_type = "ExtractionConfig"
 
 [crates.e2e.call.overrides.zig]
-function = "extract_file_sync"
-async = false
+function = "extract"
 result_is_json_struct = true
 
 [crates.e2e.call.overrides.dart]
-# Dart reads files to bytes before passing to Rust; use extractBytes (bytes+mime)
-# instead of extractFile (path string). The file_path arg type generates readAsBytesSync().
-function = "extractBytes"
-arg_name_map = { path = "content" }
+function = "extract"
 options_type = "ExtractionConfig"
 
-[crates.e2e.calls.extract_file]
-function = "extract_file"
+[crates.e2e.calls.extract]
+function = "extract"
 module = "xberg"
 async = true
 returns_result = true
@@ -1495,156 +1515,31 @@ returns_result = true
 # `range over stream` / `ChatCompletionChunk` codegen.
 streaming = false
 args = [
-  { name = "path", field = "input.path", type = "file_path" },
-  { name = "mime_type", field = "input.mime_type", type = "string", optional = true },
-  { name = "config", field = "input.config", type = "json_object", optional = true },
+  { name = "input", field = "input", type = "json_object", owned = true, go_type = "ExtractInput", element_type = "ExtractInput" },
+  { name = "config", field = "config", type = "json_object", optional = true },
 ]
 
-[crates.e2e.calls.extract_file.overrides.dart]
-# Dart can pass file paths through FRB as plain strings. The dart e2e generator
-# routes source-code paths (e.g. `code/hello.py`) through extractFile so
-# CodeExtractor's path-based extension detection runs; everything else is
-# remapped to extractBytes automatically.
+[crates.e2e.calls.extract.overrides.dart]
 async = true
 options_type = "ExtractionConfig"
 
-[crates.e2e.calls.extract_file.overrides.swift]
-# Xberg.extractFile(_:_:_:) is async; matching the base call's async=true
-# keeps the generated tests' async/await usage consistent regardless of
-# whether the fixture has an explicit "call": "extract_file" or relies on
-# the default route (which always uses the base [crates.e2e.call]).
-unnamed_arg_indices = [0, 1, 2]
+[crates.e2e.calls.extract.overrides.swift]
+unnamed_arg_indices = [0, 1]
 
-[crates.e2e.calls.extract_file.overrides.zig]
-# Zig binding has no async runtime; redirect to the sync variant and parse JSON.
-function = "extract_file_sync"
-async = false
+[crates.e2e.calls.extract.overrides.zig]
+function = "extract"
 result_is_json_struct = true
 
-[crates.e2e.calls.extract_file.overrides.php]
-# PHP facade exposes the async variant under the bare name (`extractFile`);
-# the codegen emits it automatically — no override needed.
-
-[crates.e2e.calls.extract_file.overrides.r]
-options_type = "ExtractionConfig"
-
-[crates.e2e.calls.extract_bytes]
-function = "extract_bytes"
-module = "xberg"
-async = true
-returns_result = true
-streaming = false
-args = [
-  { name = "content", field = "input.data", type = "bytes" },
-  { name = "mime_type", field = "input.mime_type", type = "string" },
-  { name = "config", field = "input.config", type = "json_object", optional = true },
-]
-
-[crates.e2e.calls.extract_bytes.overrides.csharp]
+[crates.e2e.calls.extract.overrides.csharp]
 options_type = "ExtractionConfig"
 options_via = "from_json"
 json_object_types = { chunking = "ChunkingConfig", ocr = "OcrConfig", images = "ImageExtractionConfig", html_output = "HtmlOutputConfig", language_detection = "LanguageDetectionConfig", postprocessor = "PostProcessorConfig", acceleration = "AccelerationConfig", email = "EmailConfig", pages = "PageConfig", pdf_options = "PdfConfig", layout = "LayoutDetectionConfig", tree_sitter = "TreeSitterConfig", structured_extraction = "StructuredExtractionConfig", content_filter = "ContentFilterConfig", token_reduction = "TokenReductionOptions" }
 
-[crates.e2e.calls.extract_bytes.overrides.swift]
-unnamed_arg_indices = [0, 1, 2]
-
-[crates.e2e.calls.extract_bytes.overrides.python]
-arg_name_map = { data = "content" }
+[crates.e2e.calls.extract.overrides.python]
 options_type = "ExtractionConfig"
 
-[crates.e2e.calls.extract_bytes.overrides.r]
-arg_name_map = { data = "content" }
-
-[crates.e2e.calls.extract_bytes.overrides.elixir]
-# Rustler facade for extract_bytes_async uses positional default style:
-# func(content, mime_type, config \\ nil), not keyword opts.
-# Don't emit keyword form for config arg.
-
-[crates.e2e.calls.extract_bytes.overrides.php]
-# PHP facade exposes the async variant under the bare name (`extractBytes`);
-# the codegen emits it automatically — no override needed.
-
-[crates.e2e.calls.extract_bytes.overrides.dart]
+[crates.e2e.calls.extract.overrides.r]
 options_type = "ExtractionConfig"
-
-[crates.e2e.calls.extract_bytes.overrides.zig]
-function = "extract_bytes_sync"
-async = false
-result_is_json_struct = true
-
-[crates.e2e.calls.extract_file_sync]
-function = "extract_file_sync"
-module = "xberg"
-async = false
-returns_result = true
-streaming = false
-skip_languages = ["wasm"]
-args = [
-  { name = "path", field = "input.path", type = "file_path" },
-  { name = "mime_type", field = "input.mime_type", type = "string", optional = true },
-  { name = "config", field = "input.config", type = "json_object", optional = true },
-]
-
-[crates.e2e.calls.extract_file_sync.overrides.node]
-options_type = "ExtractionConfig"
-arg_order = ["path", "config", "mime_type"]
-
-[crates.e2e.calls.extract_file_sync.overrides.csharp]
-options_type = "ExtractionConfig"
-options_via = "from_json"
-json_object_types = { chunking = "ChunkingConfig", ocr = "OcrConfig", images = "ImageExtractionConfig", html_output = "HtmlOutputConfig", language_detection = "LanguageDetectionConfig", postprocessor = "PostProcessorConfig", acceleration = "AccelerationConfig", email = "EmailConfig", pages = "PageConfig", pdf_options = "PdfConfig", layout = "LayoutDetectionConfig", tree_sitter = "TreeSitterConfig", structured_extraction = "StructuredExtractionConfig", content_filter = "ContentFilterConfig", token_reduction = "TokenReductionOptions" }
-
-[crates.e2e.calls.extract_file_sync.overrides.swift]
-unnamed_arg_indices = [0, 1, 2]
-
-[crates.e2e.calls.extract_file_sync.overrides.zig]
-function = "extract_file_sync"
-async = false
-result_is_json_struct = true
-
-[crates.e2e.calls.extract_file_sync.overrides.dart]
-# Dart can pass file paths through FRB as plain strings — extractFileSync(path,
-# mimeType?, config) is the supported facade. The dart e2e generator detects
-# `text/x-source-code` paths (e.g. `code/hello.py`) and keeps the path-based call
-# so CodeExtractor's extract_file (extension-based language detection) runs.
-# For everything else the generator remaps to extractBytesSync.
-async = false
-options_type = "ExtractionConfig"
-
-[crates.e2e.calls.extract_bytes_sync]
-function = "extract_bytes_sync"
-module = "xberg"
-async = false
-returns_result = true
-streaming = false
-skip_languages = ["wasm"]
-args = [
-  { name = "content", field = "input.data", type = "bytes" },
-  { name = "mime_type", field = "input.mime_type", type = "string" },
-  { name = "config", field = "input.config", type = "json_object", optional = true },
-]
-
-[crates.e2e.calls.extract_bytes_sync.overrides.csharp]
-options_type = "ExtractionConfig"
-json_object_types = { chunking = "ChunkingConfig", ocr = "OcrConfig", images = "ImageExtractionConfig", html_output = "HtmlOutputConfig", language_detection = "LanguageDetectionConfig", postprocessor = "PostProcessorConfig", acceleration = "AccelerationConfig", email = "EmailConfig", pages = "PageConfig", pdf_options = "PdfConfig", layout = "LayoutDetectionConfig", tree_sitter = "TreeSitterConfig", structured_extraction = "StructuredExtractionConfig", content_filter = "ContentFilterConfig", token_reduction = "TokenReductionOptions" }
-
-[crates.e2e.calls.extract_bytes_sync.overrides.python]
-arg_name_map = { data = "content" }
-options_type = "ExtractionConfig"
-
-[crates.e2e.calls.extract_bytes_sync.overrides.r]
-arg_name_map = { data = "content" }
-
-[crates.e2e.calls.extract_bytes_sync.overrides.swift]
-unnamed_arg_indices = [0, 1, 2]
-
-[crates.e2e.calls.extract_bytes_sync.overrides.dart]
-options_type = "ExtractionConfig"
-
-[crates.e2e.calls.extract_bytes_sync.overrides.zig]
-function = "extract_bytes_sync"
-async = false
-result_is_json_struct = true
 
 [crates.e2e.calls.render_html.overrides.python]
 result_is_simple = true
@@ -1764,78 +1659,36 @@ async = false
 returns_result = false
 args = []
 
-[crates.e2e.calls.batch_extract_files]
-function = "batch_extract_files"
+[crates.e2e.calls.extract_batch]
+function = "extract_batch"
 module = "xberg"
 async = true
 returns_result = true
-result_is_vec = true
 skip_languages = ["wasm"]
 args = [
-  { name = "paths", field = "input.paths", type = "json_object", owned = true, go_type = "BatchFileItem", element_type = "BatchFileItem" },
-  { name = "config", field = "input.config", type = "json_object", optional = true },
+  { name = "inputs", field = "input.inputs", type = "json_object", owned = true, go_type = "ExtractInput", element_type = "ExtractInput" },
+  { name = "config", field = "config", type = "json_object", optional = true },
 ]
 
-[crates.e2e.calls.batch_extract_files.overrides.csharp]
-result_is_vec = true
+[crates.e2e.calls.extract_batch.overrides.csharp]
 options_type = "ExtractionConfig"
 
-[crates.e2e.calls.batch_extract_files.overrides.java]
-result_is_vec = true
+[crates.e2e.calls.extract_batch.overrides.java]
 options_type = "ExtractionConfig"
 enum_fields = { outputFormat = "OutputFormat" }
 
-[crates.e2e.calls.batch_extract_files.overrides.python]
-result_is_vec = true
-arg_name_map = { paths = "items" }
+[crates.e2e.calls.extract_batch.overrides.python]
 options_type = "ExtractionConfig"
 
-[crates.e2e.calls.batch_extract_files.overrides.r]
-arg_name_map = { paths = "items" }
-
-[crates.e2e.calls.batch_extract_files.overrides.php]
-# PHP facade exposes the async variant under the bare name (`batchExtractFiles`).
-
-[crates.e2e.calls.batch_extract_files.overrides.swift]
-arg_name_map = { paths = "items" }
+[crates.e2e.calls.extract_batch.overrides.r]
 options_type = "ExtractionConfig"
 
-[crates.e2e.calls.batch_extract_files.overrides.zig]
-function = "batch_extract_files_sync"
-async = false
-
-[crates.e2e.calls.batch_extract_files_sync]
-function = "batch_extract_files_sync"
-module = "xberg"
-async = false
-returns_result = true
-result_is_vec = true
-skip_languages = ["wasm"]
-args = [
-  { name = "paths", field = "input.paths", type = "json_object", owned = true, go_type = "BatchFileItem", element_type = "BatchFileItem" },
-  { name = "config", field = "input.config", type = "json_object", optional = true },
-]
-
-[crates.e2e.calls.batch_extract_files_sync.overrides.csharp]
-result_is_vec = true
+[crates.e2e.calls.extract_batch.overrides.swift]
 options_type = "ExtractionConfig"
 
-[crates.e2e.calls.batch_extract_files_sync.overrides.java]
-result_is_vec = true
-options_type = "ExtractionConfig"
-enum_fields = { outputFormat = "OutputFormat" }
-
-[crates.e2e.calls.batch_extract_files_sync.overrides.python]
-result_is_vec = true
-arg_name_map = { paths = "items" }
-options_type = "ExtractionConfig"
-
-[crates.e2e.calls.batch_extract_files_sync.overrides.r]
-arg_name_map = { paths = "items" }
-
-[crates.e2e.calls.batch_extract_files_sync.overrides.swift]
-arg_name_map = { paths = "items" }
-options_type = "ExtractionConfig"
+[crates.e2e.calls.extract_batch.overrides.zig]
+function = "extract_batch"
+result_is_json_struct = true
 
 [crates.e2e.calls.reduce_tokens.overrides.go]
 result_is_simple = true
@@ -1965,7 +1818,7 @@ nested_types = { embedding_model = "EmbeddingModelType" }
 # only generated for non-async functions; the suspend wrapper is the public API).
 [crates.e2e.calls.embed_texts.overrides.node]
 function = "embedTextsAsync"
-module = "@xberg/node"
+module = "@xberg-io/xberg"
 async = true
 result_is_simple = true
 result_is_array = true
@@ -1976,72 +1829,6 @@ result_is_array = true
 function = "embedTextsAsync"
 result_is_simple = true
 options_type = "EmbeddingConfig"
-
-[crates.e2e.calls.batch_extract_bytes]
-function = "batch_extract_bytes"
-module = "xberg"
-async = true
-returns_result = true
-result_is_vec = true
-skip_languages = ["wasm"]
-args = [
-  { name = "items", field = "input.items", type = "json_object", owned = true, go_type = "BatchBytesItem", element_type = "BatchBytesItem" },
-  { name = "config", field = "input.config", type = "json_object", optional = true },
-]
-
-[crates.e2e.calls.batch_extract_bytes.overrides.csharp]
-result_is_vec = true
-options_type = "ExtractionConfig"
-
-[crates.e2e.calls.batch_extract_bytes.overrides.java]
-result_is_vec = true
-options_type = "ExtractionConfig"
-enum_fields = { outputFormat = "OutputFormat" }
-
-[crates.e2e.calls.batch_extract_bytes.overrides.php]
-# PHP facade exposes the async variant under the bare name (`batchExtractBytes`).
-
-[crates.e2e.calls.batch_extract_bytes.overrides.swift]
-options_type = "ExtractionConfig"
-
-[crates.e2e.calls.batch_extract_bytes.overrides.zig]
-function = "batch_extract_bytes_sync"
-async = false
-
-[crates.e2e.calls.batch_extract_bytes_sync]
-function = "batch_extract_bytes_sync"
-module = "xberg"
-async = false
-returns_result = true
-result_is_vec = true
-skip_languages = ["wasm"]
-args = [
-  { name = "items", field = "input.items", type = "json_object", owned = true, go_type = "BatchBytesItem", element_type = "BatchBytesItem" },
-  { name = "config", field = "input.config", type = "json_object", optional = true },
-]
-
-[crates.e2e.calls.batch_extract_bytes_sync.overrides.csharp]
-result_is_vec = true
-options_type = "ExtractionConfig"
-
-[crates.e2e.calls.batch_extract_bytes_sync.overrides.java]
-result_is_vec = true
-options_type = "ExtractionConfig"
-enum_fields = { outputFormat = "OutputFormat" }
-
-[crates.e2e.calls.batch_extract_bytes_sync.overrides.swift]
-options_type = "ExtractionConfig"
-
-[crates.e2e.calls.list_document_extractors]
-result_is_simple = true
-function = "list_document_extractors"
-module = "xberg"
-async = false
-args = []
-
-[crates.e2e.calls.list_document_extractors.overrides.go]
-result_is_simple = true
-returns_result = true
 
 [crates.e2e.calls.list_ocr_backends]
 result_is_simple = true
@@ -3304,7 +3091,7 @@ nested_types = { reranker_model = "RerankerModelType" }
 # only generated for non-async functions; the suspend wrapper is the public API).
 [crates.e2e.calls.rerank.overrides.node]
 function = "rerankAsync"
-module = "@xberg/node"
+module = "@xberg-io/xberg"
 async = true
 result_is_simple = true
 result_is_array = true
@@ -3354,221 +3141,6 @@ options_type = "RerankerConfig"
 
 [crates.e2e.calls.rerank_async.overrides.swift]
 options_type = "RerankerConfig"
-
-[crates.e2e.calls.register_document_extractor]
-# Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
-result_is_simple = true
-function = ""
-module = ""
-async = false
-returns_result = false
-returns_void = true
-args = []
-
-[crates.e2e.calls.register_document_extractor.overrides.python]
-function = "register_document_extractor"
-module = "xberg"
-
-[crates.e2e.calls.register_document_extractor.overrides.rust]
-function = "register_document_extractor"
-module = "xberg"
-
-[crates.e2e.calls.register_document_extractor.overrides.node]
-function = "registerDocumentExtractor"
-module = "xberg"
-
-[crates.e2e.calls.register_document_extractor.overrides.go]
-function = "RegisterDocumentExtractor"
-module = "xberg"
-
-[crates.e2e.calls.register_document_extractor.overrides.ruby]
-function = "register_document_extractor"
-module = "Xberg"
-
-[crates.e2e.calls.register_document_extractor.overrides.php]
-function = "registerDocumentExtractor"
-module = "Xberg"
-
-[crates.e2e.calls.register_document_extractor.overrides.java]
-function = "registerDocumentExtractor"
-module = "io.xberg.Xberg"
-
-[crates.e2e.calls.register_document_extractor.overrides.csharp]
-function = "RegisterDocumentExtractor"
-module = "Xberg"
-
-
-[crates.e2e.calls.register_document_extractor.overrides.swift]
-function = "registerDocumentExtractor"
-module = "Xberg"
-
-[crates.e2e.calls.register_document_extractor.overrides.dart]
-function = "registerDocumentExtractor"
-module = "xberg"
-
-[crates.e2e.calls.register_document_extractor.overrides.wasm]
-function = "registerDocumentExtractor"
-module = "xberg"
-
-[crates.e2e.calls.register_document_extractor.overrides.r]
-function = "register_document_extractor"
-module = "xberg"
-arg_name_map = { extractor = "r_backend" }
-
-[crates.e2e.calls.register_document_extractor.overrides.elixir]
-function = "register_document_extractor"
-module = "Xberg"
-
-[crates.e2e.calls.register_document_extractor.overrides.zig]
-function = "register_document_extractor"
-module = "xberg"
-returns_result = false
-
-[crates.e2e.calls.register_document_extractor.overrides.kotlin_android]
-function = "register"
-class = "DocumentExtractorBridge"
-
-[crates.e2e.calls.unregister_document_extractor]
-# Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
-result_is_simple = true
-function = ""
-module = ""
-async = false
-returns_result = false
-returns_void = true
-args = [{ name = "name", field = "input.name", type = "string" }]
-
-[crates.e2e.calls.unregister_document_extractor.overrides.python]
-function = "unregister_document_extractor"
-module = "xberg"
-
-[crates.e2e.calls.unregister_document_extractor.overrides.rust]
-function = "unregister_document_extractor"
-module = "xberg"
-
-[crates.e2e.calls.unregister_document_extractor.overrides.node]
-function = "unregisterDocumentExtractor"
-module = "xberg"
-
-[crates.e2e.calls.unregister_document_extractor.overrides.go]
-function = "UnregisterDocumentExtractor"
-module = "xberg"
-
-[crates.e2e.calls.unregister_document_extractor.overrides.ruby]
-function = "unregister_document_extractor"
-module = "Xberg"
-
-[crates.e2e.calls.unregister_document_extractor.overrides.php]
-function = "unregisterDocumentExtractor"
-module = "Xberg"
-
-[crates.e2e.calls.unregister_document_extractor.overrides.java]
-function = "unregisterDocumentExtractor"
-module = "io.xberg.Xberg"
-
-[crates.e2e.calls.unregister_document_extractor.overrides.csharp]
-function = "UnregisterDocumentExtractor"
-module = "Xberg"
-
-
-[crates.e2e.calls.unregister_document_extractor.overrides.swift]
-function = "unregisterDocumentExtractor"
-module = "Xberg"
-
-[crates.e2e.calls.unregister_document_extractor.overrides.dart]
-function = "unregisterDocumentExtractor"
-module = "xberg"
-
-[crates.e2e.calls.unregister_document_extractor.overrides.wasm]
-function = "unregisterDocumentExtractor"
-module = "xberg"
-
-[crates.e2e.calls.unregister_document_extractor.overrides.r]
-function = "unregister_document_extractor"
-module = "xberg"
-
-[crates.e2e.calls.unregister_document_extractor.overrides.elixir]
-function = "unregister_document_extractor"
-module = "Xberg"
-
-[crates.e2e.calls.unregister_document_extractor.overrides.zig]
-function = "unregister_document_extractor"
-module = "xberg"
-
-[crates.e2e.calls.unregister_document_extractor.overrides.kotlin_android]
-function = "unregister"
-class = "DocumentExtractorBridge"
-
-[crates.e2e.calls.clear_document_extractors]
-# Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
-result_is_simple = true
-function = ""
-module = ""
-async = false
-returns_result = false
-returns_void = true
-args = []
-
-[crates.e2e.calls.clear_document_extractors.overrides.python]
-function = "clear_document_extractors"
-module = "xberg"
-
-[crates.e2e.calls.clear_document_extractors.overrides.rust]
-function = "clear_document_extractors"
-module = "xberg"
-
-[crates.e2e.calls.clear_document_extractors.overrides.node]
-function = "clearDocumentExtractors"
-module = "xberg"
-
-[crates.e2e.calls.clear_document_extractors.overrides.go]
-function = "ClearDocumentExtractors"
-module = "xberg"
-
-[crates.e2e.calls.clear_document_extractors.overrides.ruby]
-function = "clear_document_extractors"
-module = "Xberg"
-
-[crates.e2e.calls.clear_document_extractors.overrides.php]
-function = "clearDocumentExtractors"
-module = "Xberg"
-
-[crates.e2e.calls.clear_document_extractors.overrides.java]
-function = "clearDocumentExtractors"
-module = "io.xberg.Xberg"
-
-[crates.e2e.calls.clear_document_extractors.overrides.csharp]
-function = "ClearDocumentExtractors"
-module = "Xberg"
-
-
-[crates.e2e.calls.clear_document_extractors.overrides.swift]
-function = "clearDocumentExtractors"
-module = "Xberg"
-
-[crates.e2e.calls.clear_document_extractors.overrides.dart]
-function = "clearDocumentExtractors"
-module = "xberg"
-
-[crates.e2e.calls.clear_document_extractors.overrides.wasm]
-function = "clearDocumentExtractors"
-module = "xberg"
-
-[crates.e2e.calls.clear_document_extractors.overrides.r]
-function = "clear_document_extractors"
-module = "xberg"
-
-[crates.e2e.calls.clear_document_extractors.overrides.elixir]
-function = "clear_document_extractors"
-module = "Xberg"
-
-[crates.e2e.calls.clear_document_extractors.overrides.zig]
-function = "clear_document_extractors"
-module = "xberg"
-
-[crates.e2e.calls.clear_document_extractors.overrides.kotlin_android]
-function = "clearAll"
-class = "DocumentExtractorBridge"
 
 [crates.e2e.calls.register_renderer]
 # Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
@@ -4008,7 +3580,7 @@ name = "xberg"
 path = "../../packages/python"
 
 [crates.e2e.packages.node]
-name = "@xberg/node"
+name = "@xberg-io/xberg"
 path = "../../crates/xberg-node"
 
 [crates.e2e.packages.go]
@@ -4064,8 +3636,13 @@ hash = "xberg-1.0.0-rc.1-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 # cannot satisfy at import time. The `pkg/nodejs/` variant inlines those
 # imports as `require()` calls handled by wasm-bindgen's Node loader.
 [crates.e2e.packages.wasm]
-name = "@xberg/wasm"
+name = "@xberg-io/xberg-wasm"
 path = "../../crates/xberg-wasm/pkg/nodejs"
+
+# URL e2e fixtures use Alef's loopback mock-server. Xberg URL extraction delegates to
+# crawlberg, whose default SSRF policy rejects private networks unless this is set.
+[crates.e2e.env]
+CRAWLBERG_ALLOW_PRIVATE_NETWORK = "true"
 
 [crates.e2e.format]
 python = "ruff check --fix {dir} && ruff format {dir}"
@@ -4142,7 +3719,7 @@ package_manager = ["cargo"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
 optional_sections = ["system_requirements", "ocr_backends"]
-snippets = { basic_extraction = "getting-started/basic_usage.md", async_extraction = "getting-started/extract_file.md", batch_processing = "getting-started/extract_with_ocr.md", ocr_configuration = "ocr/ocr_extraction.md", table_extraction = "api/tables.md" }
+snippets = { basic_extraction = "getting-started/basic_usage.md", async_extraction = "getting-started/extract.md", batch_processing = "getting-started/extract_with_ocr.md", ocr_configuration = "ocr/ocr_extraction.md", table_extraction = "api/tables.md" }
 
 [crates.readme.languages.python]
 template = "python.md"
@@ -4155,14 +3732,14 @@ package_manager = ["pip"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "easyocr", "paddleocr"]
 optional_sections = ["async_vs_sync_performance", "ocr_backends", "system_requirements"]
-snippets = { basic_extraction = "getting-started/basic_usage.md", async_extraction = "getting-started/extract_file.md", batch_processing = "getting-started/extract_with_ocr.md", ocr_configuration = "getting-started/hello_world.md", table_extraction = "getting-started/read_content.md" }
+snippets = { basic_extraction = "getting-started/basic_usage.md", async_extraction = "getting-started/extract.md", batch_processing = "getting-started/extract_with_ocr.md", ocr_configuration = "getting-started/hello_world.md", table_extraction = "getting-started/read_content.md" }
 
 [crates.readme.languages.typescript]
 template = "language_package.md"
 output_path = "crates/xberg-node/README.md"
 name = "TypeScript (Node.js)"
-package_name = "@xberg/node"
-badge_url = "https://img.shields.io/npm/v/@xberg/node?label=TypeScript&color=007ec6"
+package_name = "@xberg-io/xberg"
+badge_url = "https://img.shields.io/npm/v/@xberg-io/xberg?label=TypeScript&color=007ec6"
 docs_url = "https://xberg.io/"
 description = "Extract text, tables, images, metadata, and code intelligence from 96 file formats and 306 programming languages including PDF, Office documents, images, and audio/video transcripts where native transcription is available. Native NAPI-RS bindings for Node.js with superior performance, async/await support, and TypeScript type definitions."
 package_manager = ["pnpm"]
@@ -4174,7 +3751,7 @@ optional_sections = [
   "performance",
   "napi_implementation",
 ]
-snippets = { basic_extraction = "getting-started/basic_usage.md", async_extraction = "getting-started/extract_file_async.md", batch_processing = "getting-started/batch_extract_files_sync.md", ocr_configuration = "config/config_ocr.md", table_extraction = "api/tables.md", config_discovery = "config/config_discovery.md", worker_pool = "advanced/worker_pool.md" }
+snippets = { basic_extraction = "getting-started/basic_usage.md", async_extraction = "getting-started/extract.md", batch_processing = "getting-started/extract_batch.md", ocr_configuration = "config/config_ocr.md", table_extraction = "api/tables.md", config_discovery = "config/config_discovery.md", worker_pool = "advanced/worker_pool.md" }
 
 [crates.readme.languages.go]
 template = "go.md"
@@ -4188,7 +3765,7 @@ package_manager = ["go get"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
 optional_sections = ["system_requirements", "ffi_build_instructions"]
-snippets = { basic_extraction = "getting-started/basic_usage.md", async_extraction = "getting-started/extract_file.md", batch_processing = "getting-started/extract_with_ocr.md", ocr_configuration = "getting-started/hello_world.md" }
+snippets = { basic_extraction = "getting-started/basic_usage.md", async_extraction = "getting-started/extract.md", batch_processing = "getting-started/extract_with_ocr.md", ocr_configuration = "getting-started/hello_world.md" }
 
 [crates.readme.languages.java]
 template = "language_package.md"
@@ -4201,7 +3778,7 @@ package_manager = ["maven", "gradle"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
 optional_sections = ["maven_gradle_setup", "system_requirements"]
-snippets = { basic_extraction = "getting-started/basic_usage.md", async_extraction = "api/extract_file_async.md", batch_processing = "api/batch_extract_files_sync.md", ocr_configuration = "ocr/ocr_extraction.md", configuration = "config/config_basic.md" }
+snippets = { basic_extraction = "getting-started/basic_usage.md", async_extraction = "api/extract.md", batch_processing = "api/extract_batch.md", ocr_configuration = "ocr/ocr_extraction.md", configuration = "config/config_basic.md" }
 
 [crates.readme.languages.php]
 template = "language_package.md"
@@ -4227,7 +3804,7 @@ package_manager = ["rubygems", "bundler"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
 optional_sections = ["system_requirements", "development_setup"]
-snippets = { basic_extraction = "getting-started/basic_usage.md", async_extraction = "getting-started/extract_file.md", batch_processing = "getting-started/install_verify.md", ocr_configuration = "getting-started/extract_with_ocr.md" }
+snippets = { basic_extraction = "getting-started/basic_usage.md", async_extraction = "getting-started/extract.md", batch_processing = "getting-started/install_verify.md", ocr_configuration = "getting-started/extract_with_ocr.md" }
 
 [crates.readme.languages.csharp]
 template = "language_package.md"
@@ -4253,14 +3830,14 @@ package_manager = ["mix"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
 optional_sections = ["mix_installation", "async_with_tasks", "plugin_system"]
-snippets = { basic_extraction = "getting-started/basic_usage.exs", async_extraction = "getting-started/extract_file.exs", batch_processing = "core/batch_extract_files_sync.exs", ocr_configuration = "ocr/tesseract_basic.exs", plugin_system = "plugins/word_count_processor.exs" }
+snippets = { basic_extraction = "getting-started/basic_usage.exs", async_extraction = "getting-started/extract.exs", batch_processing = "core/extract_batch.exs", ocr_configuration = "ocr/tesseract_basic.exs", plugin_system = "plugins/word_count_processor.exs" }
 
 [crates.readme.languages.wasm]
 template = "language_package.md"
 output_path = "crates/xberg-wasm/README.md"
 name = "WebAssembly"
-package_name = "@xberg/wasm"
-badge_url = "https://img.shields.io/npm/v/@xberg/wasm?label=WASM&color=007ec6"
+package_name = "@xberg-io/xberg-wasm"
+badge_url = "https://img.shields.io/npm/v/@xberg-io/xberg-wasm?label=WASM&color=007ec6"
 docs_url = "https://xberg.io/"
 description = "Extract text, tables, images, metadata, and code intelligence from 96 file formats and 306 programming languages including PDF, Office documents, and images. WebAssembly bindings for browsers, Deno, and Cloudflare Workers with portable deployment and multi-threading support."
 package_manager = ["pnpm"]
@@ -4280,7 +3857,7 @@ package_manager = ["install.packages"]
 features = { ocr = true, async = false, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
 optional_sections = ["system_requirements"]
-snippets = { basic_extraction = "getting-started/basic_extraction.md", async_extraction = "getting-started/extract_file.md", batch_processing = "getting-started/extract_with_ocr.md", ocr_configuration = "ocr/ocr_extraction.md" }
+snippets = { basic_extraction = "getting-started/basic_extraction.md", async_extraction = "getting-started/extract.md", batch_processing = "getting-started/extract_with_ocr.md", ocr_configuration = "ocr/ocr_extraction.md" }
 
 [crates.readme.languages.ffi]
 template = "language_package.md"
@@ -4304,7 +3881,7 @@ package_manager = ["gradle", "maven"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
 optional_sections = ["system_requirements"]
-snippets = { basic_extraction = "api/extract_file_sync.md", async_extraction = "api/extract_file_async.md", batch_processing = "api/batch_extract_files_sync.md", ocr_configuration = "ocr/ocr_extraction.md" }
+snippets = { basic_extraction = "api/extract.md", async_extraction = "api/extract.md", batch_processing = "api/extract_batch.md", ocr_configuration = "ocr/ocr_extraction.md" }
 
 [crates.readme.languages.swift]
 template = "language_package.md"
@@ -4317,7 +3894,7 @@ package_manager = ["spm"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
 optional_sections = ["system_requirements"]
-snippets = { basic_extraction = "api/extract_file_sync.md", async_extraction = "api/extract_file_async.md", batch_processing = "api/batch_extract_files_sync.md", ocr_configuration = "ocr/ocr_extraction.md" }
+snippets = { basic_extraction = "api/extract.md", async_extraction = "api/extract.md", batch_processing = "api/extract_batch.md", ocr_configuration = "ocr/ocr_extraction.md" }
 
 [crates.readme.languages.dart]
 template = "language_package.md"
@@ -4330,7 +3907,7 @@ package_manager = ["pub"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
 optional_sections = ["system_requirements"]
-snippets = { basic_extraction = "api/extract_file_sync.md", async_extraction = "api/extract_file_async.md", batch_processing = "api/batch_extract_files_sync.md", ocr_configuration = "ocr/ocr_extraction.md" }
+snippets = { basic_extraction = "api/extract.md", async_extraction = "api/extract.md", batch_processing = "api/extract_batch.md", ocr_configuration = "ocr/ocr_extraction.md" }
 
 [crates.readme.languages.zig]
 template = "language_package.md"
@@ -4343,7 +3920,7 @@ package_manager = ["zig"]
 features = { ocr = true, async = false, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
 optional_sections = ["system_requirements"]
-snippets = { basic_extraction = "api/extract_file_sync.md", async_extraction = "api/extract_file_async.md", batch_processing = "api/batch_extract_files_sync.md", ocr_configuration = "ocr/ocr_extraction.md" }
+snippets = { basic_extraction = "api/extract.md", async_extraction = "api/extract.md", batch_processing = "api/extract_batch.md", ocr_configuration = "ocr/ocr_extraction.md" }
 
 [[crates.trait_bridges]]
 trait_name = "OcrBackend"
@@ -4376,18 +3953,6 @@ registry_getter = "xberg::plugins::registry::get_embedding_backend_registry"
 register_fn = "register_embedding_backend"
 unregister_fn = "unregister_embedding_backend"
 clear_fn = "clear_embedding_backends"
-
-[[crates.trait_bridges]]
-trait_name = "DocumentExtractor"
-super_trait = "xberg::plugins::Plugin"
-registry_getter = "xberg::plugins::registry::get_document_extractor_registry"
-register_fn = "register_document_extractor"
-unregister_fn = "unregister_document_extractor"
-clear_fn = "clear_document_extractors"
-# `as_sync_extractor` returns `Option<&dyn SyncExtractor>` — a trait-object reference that
-# cannot traverse the C FFI boundary. Skip it in the FFI vtable and let the default impl
-# (returns None) take over.
-ffi_skip_methods = ["as_sync_extractor"]
 
 [[crates.trait_bridges]]
 trait_name = "Renderer"

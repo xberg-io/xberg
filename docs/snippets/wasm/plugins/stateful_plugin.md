@@ -3,7 +3,7 @@
 Create a stateful post-processor that maintains state across multiple extraction calls.
 
 ```typescript title="WASM"
-import init, { registerPostProcessor, extractBytes } from "xberg-wasm";
+import init, { registerPostProcessor, extract } from "xberg-wasm";
 
 await init();
 
@@ -66,7 +66,7 @@ async function processMultipleDocs() {
 
   const results = [];
   for (const docBytes of docs) {
-    const result = await extractBytes(docBytes, "application/pdf", {});
+    const result = await extract(docBytes, "application/pdf", {});
     results.push(result);
   }
 

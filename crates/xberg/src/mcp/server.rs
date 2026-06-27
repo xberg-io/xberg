@@ -2,6 +2,7 @@
 //!
 //! This module provides the main MCP server struct and startup functions.
 
+use super::format::build_config;
 use crate::ExtractionConfig;
 use crate::service::{ExtractionRequest, ExtractionServiceBuilder};
 use rmcp::{
@@ -99,191 +100,70 @@ impl XbergMcp {
         }
     }
 
-    /// Extract content from a file.
-    ///
-    /// This tool extracts text, metadata, and tables from documents in various formats
-    /// including PDFs, Word documents, Excel spreadsheets, images (with OCR), and more.
-    ///
-    /// Note: The `async` parameter is accepted for API compatibility but ignored.
-    /// Extraction always runs asynchronously since the MCP server operates within
-    /// a Tokio runtime. Using sync wrappers would cause a nested runtime panic.
+    /// Extract content from bytes or a URI.
     #[tool(
-        description = "Extract content from a file by path. Supports PDFs, Word, Excel, images (with OCR), HTML, and more.",
-        annotations(title = "Extract File", read_only_hint = true, idempotent_hint = true),
+        description = "Extract content from bytes, a local path, file:// URI, remote document URL, or website URL.",
+        annotations(title = "Extract", read_only_hint = true, idempotent_hint = true, open_world_hint = true),
         output_schema = rmcp::handler::server::common::schema_for_output::<super::schema::ExtractionOutput>()
             .expect("ExtractionOutput schema must be valid")
     )]
-    async fn extract_file(
+    async fn extract(
         &self,
-        Parameters(params): Parameters<super::params::ExtractFileParams>,
+        Parameters(params): Parameters<super::params::ExtractParams>,
     ) -> Result<CallToolResult, rmcp::ErrorData> {
         use super::errors::map_xberg_error_to_mcp;
-        use super::format::{build_config, format_extraction_result_for_wire};
-        use tower::Service;
 
         let use_toon = params
             .response_format
             .as_deref()
             .is_some_and(|f| f.eq_ignore_ascii_case("toon"));
 
-        let config =
+        let mut config =
             build_config(&self.default_config, params.config).map_err(|e| rmcp::ErrorData::invalid_params(e, None))?;
+        apply_pdf_password(&mut config, params.pdf_password)?;
+        let input = parse_extract_input(params.input)?;
 
-        let request = match params.mime_type {
-            Some(ref mime) => ExtractionRequest::file_with_mime(&params.path, mime, config),
-            None => ExtractionRequest::file(&params.path, config),
-        };
-
-        let mut svc = self
-            .extraction_service
-            .lock()
-            .expect("extraction service lock poisoned")
-            .clone();
-        let result = svc.call(request).await.map_err(map_xberg_error_to_mcp)?;
-
-        let response = format_extraction_result_for_wire(&result, use_toon);
-        let dto = build_extraction_output(&result);
+        let output = crate::extract(input, &config).await.map_err(map_xberg_error_to_mcp)?;
+        let response = format_extraction_output_for_wire(&output, use_toon);
         let mut tool_result = CallToolResult::success(vec![Content::text(response)]);
-        tool_result.structured_content = serde_json::to_value(&dto).ok();
+        tool_result.structured_content = serde_json::to_value(&output).ok();
         Ok(tool_result)
     }
 
-    /// Extract content from base64-encoded bytes.
-    ///
-    /// This tool extracts text, metadata, and tables from base64-encoded document data.
-    ///
-    /// Note: The `async` parameter is accepted for API compatibility but ignored.
-    /// Extraction always runs asynchronously since the MCP server operates within
-    /// a Tokio runtime. Using sync wrappers would cause a nested runtime panic.
+    /// Extract content from multiple bytes or URI inputs.
     #[tool(
-        description = "Extract content from base64-encoded file data. Returns extracted text, metadata, and tables.",
-        annotations(title = "Extract Bytes", read_only_hint = true, idempotent_hint = true),
+        description = "Extract content from multiple bytes, local paths, file:// URIs, remote document URLs, or website URLs.",
+        annotations(title = "Extract Batch", read_only_hint = true, idempotent_hint = true, open_world_hint = true),
         output_schema = rmcp::handler::server::common::schema_for_output::<super::schema::ExtractionOutput>()
             .expect("ExtractionOutput schema must be valid")
     )]
-    async fn extract_bytes(
+    async fn extract_batch(
         &self,
-        Parameters(params): Parameters<super::params::ExtractBytesParams>,
+        Parameters(params): Parameters<super::params::ExtractBatchParams>,
     ) -> Result<CallToolResult, rmcp::ErrorData> {
         use super::errors::map_xberg_error_to_mcp;
-        use super::format::{build_config, format_extraction_result_for_wire};
-        use base64::prelude::*;
-        use tower::Service;
 
         let use_toon = params
             .response_format
             .as_deref()
             .is_some_and(|f| f.eq_ignore_ascii_case("toon"));
 
-        let bytes = BASE64_STANDARD
-            .decode(&params.data)
-            .map_err(|e| rmcp::ErrorData::invalid_params(format!("Invalid base64: {}", e), None))?;
-
-        let config =
+        let mut config =
             build_config(&self.default_config, params.config).map_err(|e| rmcp::ErrorData::invalid_params(e, None))?;
+        apply_pdf_password(&mut config, params.pdf_password)?;
+        let inputs = params
+            .inputs
+            .into_iter()
+            .map(parse_extract_input)
+            .collect::<Result<Vec<_>, _>>()?;
 
-        let mime_type = params.mime_type.as_deref().unwrap_or("");
-
-        let request = ExtractionRequest::bytes(bytes, mime_type, config);
-
-        let mut svc = self
-            .extraction_service
-            .lock()
-            .expect("extraction service lock poisoned")
-            .clone();
-        let result = svc.call(request).await.map_err(map_xberg_error_to_mcp)?;
-
-        let response = format_extraction_result_for_wire(&result, use_toon);
-        let dto = build_extraction_output(&result);
-        let mut tool_result = CallToolResult::success(vec![Content::text(response)]);
-        tool_result.structured_content = serde_json::to_value(&dto).ok();
-        Ok(tool_result)
-    }
-
-    /// Extract content from multiple files in parallel.
-    ///
-    /// This tool efficiently processes multiple documents simultaneously, useful for batch operations.
-    ///
-    /// Note: The `async` parameter is accepted for API compatibility but ignored.
-    /// Extraction always runs asynchronously since the MCP server operates within
-    /// a Tokio runtime. Using sync wrappers would cause a nested runtime panic.
-    #[tool(
-        description = "Extract content from multiple files in parallel. Returns results for all files.",
-        annotations(title = "Batch Extract Files", read_only_hint = true, idempotent_hint = true),
-        output_schema = rmcp::handler::server::common::schema_for_output::<super::schema::BatchExtractionOutput>()
-            .expect("BatchExtractionOutput schema must be valid")
-    )]
-    async fn batch_extract_files(
-        &self,
-        Parameters(params): Parameters<super::params::BatchExtractFilesParams>,
-    ) -> Result<CallToolResult, rmcp::ErrorData> {
-        use super::errors::map_xberg_error_to_mcp;
-        use super::format::build_config;
-        use crate::BatchFileItem;
-        use crate::batch_extract_files;
-
-        if params.paths.is_empty() {
-            return Err(rmcp::ErrorData::invalid_params("paths array must not be empty", None));
-        }
-
-        let config =
-            build_config(&self.default_config, params.config).map_err(|e| rmcp::ErrorData::invalid_params(e, None))?;
-
-        let items: Vec<BatchFileItem> = if let Some(file_configs) = params.file_configs {
-            if file_configs.len() != params.paths.len() {
-                return Err(rmcp::ErrorData::invalid_params(
-                    format!(
-                        "file_configs length ({}) must match paths length ({})",
-                        file_configs.len(),
-                        params.paths.len()
-                    ),
-                    None,
-                ));
-            }
-
-            params
-                .paths
-                .iter()
-                .zip(file_configs.into_iter())
-                .map(|(path, fc)| {
-                    let file_config = fc
-                        .map(serde_json::from_value::<crate::FileExtractionConfig>)
-                        .transpose()
-                        .map_err(|e| {
-                            rmcp::ErrorData::invalid_params(format!("Failed to parse file config: {}", e), None)
-                        })?;
-                    Ok(BatchFileItem {
-                        path: std::path::PathBuf::from(path),
-                        config: file_config,
-                    })
-                })
-                .collect::<Result<Vec<_>, rmcp::ErrorData>>()?
-        } else {
-            params
-                .paths
-                .iter()
-                .map(|p| BatchFileItem {
-                    path: std::path::PathBuf::from(p),
-                    config: None,
-                })
-                .collect()
-        };
-
-        let use_toon = params
-            .response_format
-            .as_deref()
-            .is_some_and(|f| f.eq_ignore_ascii_case("toon"));
-
-        let results = batch_extract_files(items, &config)
+        let output = crate::extract_batch(inputs, &config)
             .await
             .map_err(map_xberg_error_to_mcp)?;
-
-        let response = if use_toon {
-            serde_toon::to_string(&results).unwrap_or_default()
-        } else {
-            serde_json::to_string_pretty(&results).unwrap_or_default()
-        };
-        Ok(CallToolResult::success(vec![Content::text(response)]))
+        let response = format_extraction_output_for_wire(&output, use_toon);
+        let mut tool_result = CallToolResult::success(vec![Content::text(response)]);
+        tool_result.structured_content = serde_json::to_value(&output).ok();
+        Ok(tool_result)
     }
 
     /// Detect the MIME type of a file.
@@ -733,38 +613,49 @@ fn resolve_cache_base() -> std::path::PathBuf {
     crate::cache_dir::resolve_cache_base()
 }
 
-/// Build an [`ExtractionOutput`] DTO from a core [`ExtractionResult`].
-fn build_extraction_output(result: &crate::types::ExtractionResult) -> super::schema::ExtractionOutput {
-    // Metadata is a typed struct, not a map. Serialize to JSON then flatten
-    // scalar fields to String for a portable key-value representation.
-    let metadata: std::collections::HashMap<String, String> =
-        if let Ok(serde_json::Value::Object(map)) = serde_json::to_value(&result.metadata) {
-            map.into_iter()
-                .filter_map(|(k, v)| {
-                    let s = match &v {
-                        serde_json::Value::String(s) => Some(s.clone()),
-                        serde_json::Value::Bool(b) => Some(b.to_string()),
-                        serde_json::Value::Number(n) => Some(n.to_string()),
-                        _ => None,
-                    };
-                    s.map(|val| (k, val))
-                })
-                .collect()
-        } else {
-            std::collections::HashMap::new()
-        };
-    let tables: Vec<serde_json::Value> = result
-        .tables
-        .iter()
-        .map(|t| serde_json::to_value(t).unwrap_or_default())
-        .collect();
-    let detected_languages = result.detected_languages.clone().unwrap_or_default();
-    super::schema::ExtractionOutput {
-        text: result.content.clone(),
-        mime_type: Some(result.mime_type.as_ref().to_string()),
-        metadata,
-        tables,
-        detected_languages,
+fn parse_extract_input(value: serde_json::Value) -> Result<crate::ExtractInput, rmcp::ErrorData> {
+    serde_json::from_value::<crate::ExtractInput>(value)
+        .map_err(|error| rmcp::ErrorData::invalid_params(format!("Invalid ExtractInput: {error}"), None))
+}
+
+fn format_extraction_output_for_wire(output: &crate::ExtractionOutput, use_toon: bool) -> String {
+    if use_toon {
+        serde_toon::to_string(output).unwrap_or_else(|error| {
+            tracing::error!(%error, "Failed to serialize extraction output to TOON, falling back to JSON");
+            serde_json::to_string_pretty(output).unwrap_or_default()
+        })
+    } else {
+        serde_json::to_string_pretty(output).unwrap_or_default()
+    }
+}
+
+fn apply_pdf_password(config: &mut ExtractionConfig, password: Option<String>) -> Result<(), rmcp::ErrorData> {
+    let Some(password) = password else {
+        return Ok(());
+    };
+    if password.is_empty() {
+        return Err(rmcp::ErrorData::invalid_params(
+            "pdf_password must not be empty when set".to_string(),
+            None,
+        ));
+    }
+
+    #[cfg(feature = "pdf")]
+    {
+        let pdf_options = config
+            .pdf_options
+            .get_or_insert_with(crate::core::config::pdf::PdfConfig::default);
+        pdf_options.passwords.get_or_insert_with(Vec::new).push(password);
+        Ok(())
+    }
+
+    #[cfg(not(feature = "pdf"))]
+    {
+        let _ = config;
+        Err(rmcp::ErrorData::invalid_params(
+            "pdf_password requires the 'pdf' feature to be enabled".to_string(),
+            None,
+        ))
     }
 }
 
@@ -858,7 +749,6 @@ async fn extract_structured_impl(
     params: super::params::ExtractStructuredParams,
 ) -> Result<CallToolResult, rmcp::ErrorData> {
     use super::errors::map_xberg_error_to_mcp;
-    use super::format::build_config;
     use tower::Service;
 
     let config = build_config(&mcp.default_config, None).map_err(|e| rmcp::ErrorData::invalid_params(e, None))?;
@@ -1427,9 +1317,8 @@ mod tests {
     #[tokio::test]
     async fn test_tool_router_has_routes() {
         let router = XbergMcp::tool_router();
-        assert!(router.has_route("extract_file"));
-        assert!(router.has_route("extract_bytes"));
-        assert!(router.has_route("batch_extract_files"));
+        assert!(router.has_route("extract"));
+        assert!(router.has_route("extract_batch"));
         assert!(router.has_route("detect_mime_type"));
         assert!(router.has_route("list_formats"));
         assert!(router.has_route("cache_stats"));
@@ -1558,9 +1447,8 @@ mod tests {
         let router = XbergMcp::tool_router();
 
         let expected_tools = vec![
-            "extract_file",
-            "extract_bytes",
-            "batch_extract_files",
+            "extract",
+            "extract_batch",
             "detect_mime_type",
             "list_formats",
             "cache_stats",
@@ -1583,7 +1471,7 @@ mod tests {
         let router = XbergMcp::tool_router();
         let tools = router.list_all();
 
-        assert_eq!(tools.len(), 13, "Expected 13 tools, found {}", tools.len());
+        assert_eq!(tools.len(), 12, "Expected 12 tools, found {}", tools.len());
     }
 
     #[tokio::test]
@@ -1617,11 +1505,8 @@ mod tests {
                 .unwrap_or_else(|| panic!("tool '{name}' should have annotations"))
         };
 
-        // Local, side-effect-free extraction/info tools: read-only, idempotent, closed-world.
+        // Local, side-effect-free info tools: read-only, idempotent, closed-world.
         for name in [
-            "extract_file",
-            "extract_bytes",
-            "batch_extract_files",
             "detect_mime_type",
             "cache_stats",
             "list_formats",
@@ -1633,6 +1518,13 @@ mod tests {
             assert_eq!(a.read_only_hint, Some(true), "{name} should be read-only");
             assert_eq!(a.idempotent_hint, Some(true), "{name} should be idempotent");
             assert_ne!(a.open_world_hint, Some(true), "{name} should be closed-world");
+        }
+
+        for name in ["extract", "extract_batch"] {
+            let a = annotations_for(name);
+            assert_eq!(a.read_only_hint, Some(true), "{name} should be read-only");
+            assert_eq!(a.idempotent_hint, Some(true), "{name} should be idempotent");
+            assert_eq!(a.open_world_hint, Some(true), "{name} may fetch URLs");
         }
 
         // Destructive cache deletion: explicitly not read-only.
@@ -1674,18 +1566,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_extract_file_tool_has_correct_schema() {
+    async fn test_extract_tool_has_correct_schema() {
         let router = XbergMcp::tool_router();
         let tools = router.list_all();
 
-        let extract_file_tool = tools
+        let extract_tool = tools
             .iter()
-            .find(|t| t.name == "extract_file")
-            .expect("extract_file tool should exist");
+            .find(|t| t.name == "extract")
+            .expect("extract tool should exist");
 
-        assert!(extract_file_tool.description.is_some());
+        assert!(extract_tool.description.is_some());
 
-        assert!(!extract_file_tool.input_schema.is_empty());
+        assert!(!extract_tool.input_schema.is_empty());
     }
 
     #[tokio::test]
@@ -1874,27 +1766,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_batch_extract_files_empty_paths_returns_error() {
+    async fn test_extract_batch_empty_inputs_returns_empty_envelope() {
         let server = XbergMcp::with_config(ExtractionConfig::default());
-        let params = crate::mcp::params::BatchExtractFilesParams {
-            paths: vec![],
+        let params = crate::mcp::params::ExtractBatchParams {
+            inputs: vec![],
             config: None,
             pdf_password: None,
-            file_configs: None,
             response_format: None,
         };
 
         let result = server
-            .batch_extract_files(rmcp::handler::server::wrapper::Parameters(params))
+            .extract_batch(rmcp::handler::server::wrapper::Parameters(params))
             .await;
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert_eq!(err.code.0, -32602);
-        assert!(
-            err.message.contains("paths array must not be empty"),
-            "Expected empty paths error, got: {}",
-            err.message
-        );
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        let structured = result.structured_content.expect("structured content should exist");
+        assert_eq!(structured["summary"]["inputs"], 0);
+        assert_eq!(structured["summary"]["results"], 0);
+        assert_eq!(structured["summary"]["errors"], 0);
     }
 
     #[test]
@@ -1967,8 +1856,8 @@ mod tests {
         let router = XbergMcp::tool_router();
         let tools = router.list_all();
         let structured_tools = [
-            "extract_file",
-            "extract_bytes",
+            "extract",
+            "extract_batch",
             "detect_mime_type",
             "get_version",
             "list_formats",

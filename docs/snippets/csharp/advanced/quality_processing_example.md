@@ -6,7 +6,7 @@ var config = new ExtractionConfig
     EnableQualityProcessing = true
 };
 
-var result = XbergLib.ExtractFile(
+var result = XbergLib.Extract(
     "scanned_document.pdf",
     config
 );

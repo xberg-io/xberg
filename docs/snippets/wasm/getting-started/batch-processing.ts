@@ -1,4 +1,4 @@
-import { extractBytes, initWasm } from "@xberg/wasm";
+import { extract, initWasm } from "@xberg-io/xberg-wasm";
 
 interface DocumentJob {
   name: string;
@@ -20,7 +20,7 @@ async function _processBatch(documents: DocumentJob[], concurrency: number = 3) 
         if (!doc) break;
 
         try {
-          const result = await extractBytes(doc.bytes, doc.mimeType);
+          const result = await extract(doc.bytes, doc.mimeType);
           results[doc.name] = result.content;
         } catch (error) {
           console.error(`Failed to process ${doc.name}:`, error);

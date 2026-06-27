@@ -17,7 +17,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('scanned_document.pdf');
+$result = $xberg->extract('scanned_document.pdf');
 
 echo "Extracted Text:\n";
 echo str_repeat('=', 60) . "\n";
@@ -30,7 +30,7 @@ echo "Tables found: " . count($result->tables) . "\n";
 
 // Extract from image
 if (file_exists('scanned_image.png')) {
-    $imageResult = $xberg->extractFile('scanned_image.png');
+    $imageResult = $xberg->extract('scanned_image.png');
     echo "\nImage OCR Results:\n";
     echo $imageResult->content . "\n";
 }

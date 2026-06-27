@@ -30,7 +30,7 @@ public final class Usage {
     System.out.println("Container started on http://localhost:" + apiPort);
   }
 
-  public String extractFile(String filePath) throws IOException {
+  public String extract(String filePath) throws IOException {
     byte[] fileBytes = Files.readAllBytes(Paths.get(filePath));
     String fileName = Paths.get(filePath).getFileName().toString();
 
@@ -76,7 +76,7 @@ public final class Usage {
       docker.startContainer("xberg:latest");
       Thread.sleep(2000);
 
-      String content = docker.extractFile("document.pdf");
+      String content = docker.extract("document.pdf");
       System.out.println("Extracted content:\n" + content);
     } finally {
       docker.stopContainer();

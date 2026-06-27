@@ -25,10 +25,10 @@ Code intelligence is enabled by default when the `tree-sitter` feature flag is a
 === "Rust"
 
     ```rust title="basic.rs"
-    use xberg::{extract_file_sync, ExtractionConfig};
+    use xberg::{extract, ExtractionConfig};
 
     let config = ExtractionConfig::default();
-    let result = extract_file_sync("app.py", None, &config)?;
+    let result = extract("app.py", None, &config)?;
 
     // The content field has the raw source text
     println!("{}", result.content);
@@ -47,7 +47,7 @@ Code intelligence is enabled by default when the `tree-sitter` feature flag is a
     import xberg
 
     config = xberg.ExtractionConfig()
-    result = xberg.extract_file_sync("app.py", config=config)
+    result = xberg.extract("app.py", config=config)
 
     # The content field has the raw source text
     print(result.content)
@@ -63,7 +63,7 @@ Code intelligence is enabled by default when the `tree-sitter` feature flag is a
 === "TypeScript"
 
     ```typescript title="basic.ts"
-    import { extractFileSync } from "@xberg/node";
+    import { extractFileSync } from "@xberg-io/xberg";
 
     const result = extractFileSync("app.ts");
 
@@ -142,7 +142,7 @@ Use `TreeSitterConfig` to control which analysis features are enabled. Set `enab
 === "TypeScript"
 
     ```typescript title="config.ts"
-    import { ExtractionConfig } from "@xberg/node";
+    import { ExtractionConfig } from "@xberg-io/xberg";
 
     const config: ExtractionConfig = {
       treeSitter: {
@@ -193,7 +193,7 @@ config = xberg.ExtractionConfig(
     tree_sitter={"process": {"chunk_max_size": 2048}}
 )
 
-result = xberg.extract_file_sync("large_module.py", config=config)
+result = xberg.extract("large_module.py", config=config)
 
 fmt = result.metadata.get("format")
 if fmt and fmt.get("format_type") == "code":
@@ -215,8 +215,8 @@ if fmt and fmt.get("format_type") == "code":
 
 Xberg detects the programming language in two ways:
 
-1. **File extension** (fast path) -- when using `extract_file`, the extension is matched against 248 known language extensions
-2. **Shebang line** (fallback) -- when using `extract_bytes` or when the extension is ambiguous, the first line is checked for `#!/usr/bin/env python`, `#!/bin/bash`, and so on.
+1. **File extension** (fast path) -- when using `extract`, the extension is matched against 248 known language extensions
+2. **Shebang line** (fallback) -- when using `extract` or when the extension is ambiguous, the first line is checked for `#!/usr/bin/env python`, `#!/bin/bash`, and so on.
 
 If neither method identifies the language, extraction returns an `UnsupportedFormat` error.
 

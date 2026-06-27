@@ -1,7 +1,7 @@
 ```r title="R"
 library(xberg)
 
-result <- extract_file_sync("document.pdf")
+result <- extract_sync("document.pdf")
 
 cat("Language Detection Results:\n\n")
 

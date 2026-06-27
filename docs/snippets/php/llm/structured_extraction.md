@@ -46,7 +46,7 @@ $config = new ExtractionConfig();
 $config->structured_extraction = $structured;
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('paper.pdf');
+$result = $xberg->extract('paper.pdf');
 
 if ($result->structured_output !== null) {
     echo $result->structured_output, "\n";

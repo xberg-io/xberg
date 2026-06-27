@@ -19,7 +19,7 @@ Future<void> main() async {
     useLayoutForMarkdown: false,
   );
 
-  final result = await XbergBridge.extractFile('multilingual_document.pdf', null, config);
+  final result = await XbergBridge.extract('multilingual_document.pdf', null, config);
   print('Detected languages: ${result.detectedLanguages}');
 }
 ```

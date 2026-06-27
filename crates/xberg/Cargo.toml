@@ -364,6 +364,8 @@ qr-codes = ["dep:rqrr", "dep:image"] # Pure-Rust QR decoding via rqrr.
 svg = ["dep:resvg", "image-encode"]
 
 tower-service = ["dep:tower", "tokio-runtime"]
+url-ingestion = ["tokio-runtime", "dep:crawlberg", "crawlberg/native-runtime"]
+url-ingestion-browser = ["url-ingestion", "crawlberg/browser"]
 
 api-types = []
 api = [
@@ -540,6 +542,7 @@ full = [
     "formats",
     "analysis",
     "services",
+    "url-ingestion",
     "ocr",
     "paddle-ocr",
     "layout-detection",
@@ -568,9 +571,17 @@ full = [
     "heic",
 ]
 # Server deployment preset — formats + analysis + services + OCR.
-server = ["formats", "analysis", "services", "ocr", "paddle-ocr", "layout-detection"]
+server = [
+    "formats",
+    "analysis",
+    "services",
+    "url-ingestion",
+    "ocr",
+    "paddle-ocr",
+    "layout-detection",
+]
 # CLI-only features (thin gate for xberg-cli).
-cli = ["services", "chunking"]
+cli = ["services", "chunking", "url-ingestion"]
 
 [dependencies]
 ahash = { workspace = true }
@@ -598,6 +609,7 @@ cfb = { workspace = true, optional = true }
 chardetng = { version = "1.0.0", optional = true }
 chrono = { workspace = true, optional = true }
 comrak = { workspace = true }
+crawlberg = { workspace = true, optional = true }
 dbase = { workspace = true, optional = true }
 dirs = "6"
 either = { version = "1", optional = true }
@@ -726,6 +738,7 @@ tracing = { workspace = true }
 tracing-opentelemetry = { version = "0.33", optional = true }
 unhwp = { version = "0.5.1", default-features = false, features = ["hwpx"], optional = true }
 unicode-normalization = { version = "0.1.25", optional = true }
+url = { workspace = true }
 urlencoding = "2"
 utoipa = { version = "5.5", features = ["axum_extras"], optional = true }
 uuid = { version = "1", features = ["v4"], optional = true }

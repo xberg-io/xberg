@@ -3,7 +3,7 @@
 Register a post-processor that extracts and enriches extraction results with PDF metadata.
 
 ```typescript title="WASM"
-import init, { registerPostProcessor, extractBytes } from "xberg-wasm";
+import init, { registerPostProcessor, extract } from "xberg-wasm";
 
 await init();
 
@@ -42,7 +42,7 @@ const config = {
   chunking: null,
 };
 
-const result = await extractBytes(pdfBytes, "application/pdf", config);
+const result = await extract(pdfBytes, "application/pdf", config);
 console.log("Enriched metadata:", result.metadata);
 ```
 

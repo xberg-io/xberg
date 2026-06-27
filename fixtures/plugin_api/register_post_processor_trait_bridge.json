@@ -2,7 +2,9 @@
 	"id": "register_post_processor_trait_bridge",
 	"category": "plugin_api",
 	"description": "register_post_processor: trait bridge",
-	"tags": ["trait-bridge"],
+	"tags": [
+		"trait-bridge"
+	],
 	"call": "register_post_processor",
 	"input": {
 		"processor": {

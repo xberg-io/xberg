@@ -4,7 +4,7 @@ import Xberg
 import RustBridge
 
 let config = try extractionConfigFromJson("{}")
-let result = try extractFileSync("document.pdf", nil, config)
+let result = try extractSync("document.pdf", nil, config)
 
 let content = result.content().toString()
 let utf8 = Array(content.utf8)

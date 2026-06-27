@@ -7,4 +7,4 @@ var config = new ExtractionConfig
 };
 
 var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(30));
-var result = await XbergLib.ExtractFileAsync("document.pdf", config, cts.Token);
+var result = await XbergLib.ExtractAsync("document.pdf", config, cts.Token);

@@ -1,5 +1,5 @@
 ```typescript title="WASM"
-import init, { extractFile } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 
@@ -11,7 +11,7 @@ const config = {
   },
 };
 
-const result = await extractFile("research_paper.pdf", undefined, config);
+const result = await extract("research_paper.pdf", undefined, config);
 console.log(`Content length: ${result.content.length}`);
 console.log(`Keywords: ${JSON.stringify(result.metadata?.keywords ?? [])}`);
 ```

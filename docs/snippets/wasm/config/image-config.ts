@@ -1,5 +1,5 @@
-import type { ExtractionConfig } from "@xberg/wasm";
-import { extractBytes, initWasm } from "@xberg/wasm";
+import type { ExtractionConfig } from "@xberg-io/xberg-wasm";
+import { extract, initWasm } from "@xberg-io/xberg-wasm";
 
 async function extractImagesWithConfig() {
   await initWasm();
@@ -15,7 +15,7 @@ async function extractImagesWithConfig() {
     },
   };
 
-  const result = await extractBytes(bytes, "application/pdf", config);
+  const result = await extract(bytes, "application/pdf", config);
 
   if (result.images) {
     console.log(`Extracted ${result.images.length} images`);

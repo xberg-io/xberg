@@ -15,7 +15,7 @@ config <- list(
   )
 )
 
-json <- extract_file_sync("document.pdf", "application/pdf", config)
+json <- extract_sync("document.pdf", "application/pdf", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 # Each chunk has $content, $embedding, and $metadata. Pass these directly

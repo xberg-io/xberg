@@ -110,9 +110,9 @@ DOCX XML parser vendored into `crates/xberg/src/extraction/docx/parser.rs`:
 Span-mode GLiNER preprocessing, prompt construction, tensor construction, and decoding logic vendored into
 `crates/xberg-gliner/`:
 
-- **Source lineage**: `gline-rs` / `kreuzberg-gliner-rs`
+- **Source lineage**: `gline-rs` → `xberg-gliner`
 - **Source URLs**: <https://github.com/fbilhaut/gline-rs>, <https://github.com/xberg-io/gline-rs-fork>
-- **Source crate/version**: `kreuzberg-gliner-rs` 0.2.1, forked from `gline-rs`
+- **Source crate/version**: `xberg-gliner`, vendored from `gline-rs` 0.2.1 (fork at `xberg-io/gline-rs-fork`)
 - **License**: Apache-2.0
 - **Author**: Frédérik Bilhaut
 - **Usage**: Local ONNX named-entity recognition backend for xberg

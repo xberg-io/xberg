@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	result, err := xberg.ExtractFileSync("document.pdf", nil, xberg.ExtractionConfig{
+	result, err := xberg.ExtractSync("document.pdf", nil, xberg.ExtractionConfig{
 		Ocr: &xberg.OcrConfig{
 			Backend: "tesseract",
 		},

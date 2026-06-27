@@ -1,4 +1,4 @@
-Use Xberg::{extract_file_sync, ExtractionConfig, ChunkingConfig, PageConfig};
+Use Xberg::{extract_sync, ExtractionConfig, ChunkingConfig, PageConfig};
 
 Let config = ExtractionConfig {
 chunking: Some(ChunkingConfig {
@@ -13,7 +13,7 @@ extract_pages: true,
 ..Default::default()
 };
 
-Let result = extract_file_sync("document.pdf", None, &config)?;
+Let result = extract_sync("document.pdf", None, &config)?;
 
 If let Some(chunks) = result.chunks {
 for chunk in chunks {

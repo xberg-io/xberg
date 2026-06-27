@@ -33,7 +33,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('scanned.pdf');
+$result = $xberg->extract('scanned.pdf');
 
 echo "OCR with Image Preprocessing:\n";
 echo str_repeat('=', 60) . "\n";
@@ -61,7 +61,7 @@ $advancedConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($advancedConfig);
-$result = $xberg->extractFile('poor_quality_scan.pdf');
+$result = $xberg->extract('poor_quality_scan.pdf');
 
 echo "Advanced Preprocessing Results:\n";
 echo str_repeat('=', 60) . "\n";
@@ -130,7 +130,7 @@ foreach ($preprocessingProfiles as $profileName => $preprocessing) {
     $xberg = new Xberg($profileConfig);
 
     $startTime = microtime(true);
-    $result = $xberg->extractFile('sample_scan.pdf');
+    $result = $xberg->extract('sample_scan.pdf');
     $elapsedTime = microtime(true) - $startTime;
 
     echo ucfirst($profileName) . " profile:\n";

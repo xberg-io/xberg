@@ -11,7 +11,7 @@ import (
 func main() {
 	fmt.Println("Xberg CGO bindings loaded successfully")
 
-	result, err := xberg.ExtractFileSync("sample.pdf", nil)
+	result, err := xberg.ExtractSync("sample.pdf", nil)
 	if err != nil {
 		log.Fatalf("extract failed: %v", err)
 	}

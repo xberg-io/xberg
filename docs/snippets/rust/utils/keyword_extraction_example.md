@@ -1,5 +1,5 @@
 ```rust title="Rust"
-use xberg::{extract_file, ExtractionConfig, KeywordAlgorithm, KeywordConfig};
+use xberg::{extract, ExtractionConfig, KeywordAlgorithm, KeywordConfig};
 
 #[tokio::main]
 async fn main() -> xberg::Result<()> {
@@ -13,7 +13,7 @@ async fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract_file("research_paper.pdf", None, &config).await?;
+    let result = extract("research_paper.pdf", None, &config).await?;
 
     for kw in result.extracted_keywords.unwrap_or_default() {
         println!("{}: {:.3}", kw.text, kw.score);

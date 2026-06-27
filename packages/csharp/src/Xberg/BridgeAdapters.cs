@@ -18,7 +18,6 @@ namespace Xberg;
 // - _PostProcessorBridgeAdapter → "csharp-bridge-post_processor-adapter"
 // - _ValidatorBridgeAdapter → "csharp-bridge-validator-adapter"
 // - _EmbeddingBackendBridgeAdapter → "csharp-bridge-embedding_backend-adapter"
-// - _DocumentExtractorBridgeAdapter → "csharp-bridge-document_extractor-adapter"
 // - _RendererBridgeAdapter → "csharp-bridge-renderer-adapter"
 // - _RerankerBackendBridgeAdapter → "csharp-bridge-reranker_backend-adapter"
 //
@@ -235,62 +234,6 @@ public sealed class _EmbeddingBackendBridgeAdapter : IEmbeddingBackend
     public List<List<float>> Embed(List<string> Texts)
     {
         return _impl.Embed(Texts);
-    }
-
-}
-
-/// <summary>
-/// Adapter bridge for DocumentExtractor trait implementation.
-/// Wraps a user-provided IDocumentExtractor implementation and delegates all method calls.
-/// </summary>
-public sealed class _DocumentExtractorBridgeAdapter : IDocumentExtractor
-{
-    private readonly IDocumentExtractor _impl;
-
-    /// <summary>Create an adapter around a user-provided DocumentExtractor implementation.</summary>
-    public _DocumentExtractorBridgeAdapter(IDocumentExtractor impl)
-    {
-        _impl = impl ?? throw new ArgumentNullException(nameof(impl));
-    }
-
-    // MARK: - Plugin lifecycle (if present)
-
-    /// <summary>Get the plugin name.</summary>
-    public string Name => _impl.Name;
-
-    /// <summary>Get the plugin version.</summary>
-    public string Version => _impl.Version;
-
-    /// <summary>Initialize the plugin.</summary>
-    public void Initialize() => _impl.Initialize();
-
-    /// <summary>Shut down the plugin.</summary>
-    public void Shutdown() => _impl.Shutdown();
-
-    // MARK: - Trait methods
-
-    /// <summary></summary>
-    public string ExtractBytes(byte[] Content, string MimeType, ExtractionConfig Config)
-    {
-        return _impl.ExtractBytes(Content, MimeType, Config);
-    }
-
-    /// <summary></summary>
-    public string ExtractFile(string Path, string MimeType, ExtractionConfig Config)
-    {
-        return _impl.ExtractFile(Path, MimeType, Config);
-    }
-
-    /// <summary></summary>
-    public List<string> SupportedMimeTypes => _impl.SupportedMimeTypes;
-
-    /// <summary></summary>
-    public int Priority => _impl.Priority;
-
-    /// <summary></summary>
-    public bool CanHandle(string Path, string MimeType)
-    {
-        return _impl.CanHandle(Path, MimeType);
     }
 
 }

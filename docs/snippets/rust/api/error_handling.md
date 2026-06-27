@@ -1,9 +1,9 @@
 ```rust title="Rust"
-use xberg::{extract_file_sync, ExtractionConfig, XbergError};
+use xberg::{extract_sync, ExtractionConfig, XbergError};
 
 fn main() {
     let config = ExtractionConfig::default();
-    match extract_file_sync("document.pdf", None, &config) {
+    match extract_sync("document.pdf", None, &config) {
         Ok(result) => println!("{}", result.content),
         Err(XbergError::Io(e)) => eprintln!("File error: {e}"),
         Err(XbergError::UnsupportedFormat(mime)) => {

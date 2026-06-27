@@ -15,7 +15,7 @@ Future<void> main() async {
   );
 
   try {
-    final result = await XbergBridge.extractFile('document.pdf', null, config);
+    final result = await XbergBridge.extract('document.pdf', null, config);
     print('Extracted ${result.content.length} chars');
     print('MIME: ${result.mimeType}');
     if (result.detectedLanguages != null) {

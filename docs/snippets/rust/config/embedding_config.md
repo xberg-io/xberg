@@ -1,5 +1,5 @@
 ```rust title="Rust"
-use xberg::{extract_file, ExtractionConfig, ChunkingConfig, EmbeddingConfig, EmbeddingModelType};
+use xberg::{extract, ExtractionConfig, ChunkingConfig, EmbeddingConfig, EmbeddingModelType};
 
 #[tokio::main]
 async fn main() -> xberg::Result<()> {
@@ -21,7 +21,7 @@ async fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract_file("document.pdf", None::<&str>, &config).await?;
+    let result = extract("document.pdf", None::<&str>, &config).await?;
     println!("Chunks with embeddings: {}", result.chunks.as_ref().map(|c| c.len()).unwrap_or(0));
     Ok(())
 }

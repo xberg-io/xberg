@@ -4,8 +4,8 @@
 
 [![Rust](https://img.shields.io/crates/v/xberg?label=Rust&color=007ec6)](https://crates.io/crates/xberg)
 [![Python](https://img.shields.io/pypi/v/xberg?label=Python&color=007ec6)](https://pypi.org/project/xberg/)
-[![TypeScript](https://img.shields.io/npm/v/@xberg/node?label=TypeScript&color=007ec6)](https://www.npmjs.com/package/@xberg/node)
-[![WASM](https://img.shields.io/npm/v/@xberg/wasm?label=WASM&color=007ec6)](https://www.npmjs.com/package/@xberg/wasm)
+[![TypeScript](https://img.shields.io/npm/v/@xberg-io/xberg?label=TypeScript&color=007ec6)](https://www.npmjs.com/package/@xberg-io/xberg)
+[![WASM](https://img.shields.io/npm/v/@xberg-io/xberg-wasm?label=WASM&color=007ec6)](https://www.npmjs.com/package/@xberg-io/xberg-wasm)
 [![Ruby](https://img.shields.io/gem/v/xberg?label=Ruby&color=007ec6)](https://rubygems.org/gems/xberg)
 [![Java](https://img.shields.io/maven-central/v/io.xberg/xberg?label=Java&color=007ec6)](https://central.sonatype.com/artifact/io.xberg/xberg)
 [![Go](https://img.shields.io/github/v/tag/xberg-io/xberg?label=Go&color=007ec6)](https://github.com/xberg-io/xberg/tree/main/packages/go)
@@ -89,11 +89,12 @@ Without ONNX Runtime, embeddings will raise `MissingDependencyError` with instal
 ## Quick Start
 
 ```rust
-use xberg::{extract_file_sync, ExtractionConfig};
+use xberg::{extract, ExtractInput, ExtractionConfig};
 
-fn main() -> xberg::Result<()> {
+#[tokio::main]
+async fn main() -> xberg::Result<()> {
     let config = ExtractionConfig::default();
-    let result = extract_file_sync("document.pdf", None, &config)?;
+    let result = extract(ExtractInput::file("document.pdf"), &config).await?;
     println!("{}", result.content);
     Ok(())
 }
@@ -102,12 +103,12 @@ fn main() -> xberg::Result<()> {
 ### Async Extraction
 
 ```rust
-use xberg::{extract_file, ExtractionConfig};
+use xberg::{extract, ExtractInput, ExtractionConfig};
 
 #[tokio::main]
 async fn main() -> xberg::Result<()> {
     let config = ExtractionConfig::default();
-    let result = extract_file("document.pdf", None, &config).await?;
+    let result = extract(ExtractInput::file("document.pdf"), &config).await?;
     println!("{}", result.content);
     Ok(())
 }
@@ -116,13 +117,17 @@ async fn main() -> xberg::Result<()> {
 ### Batch Processing
 
 ```rust
-use xberg::{batch_extract_file, ExtractionConfig};
+use xberg::{extract_batch, ExtractInput, ExtractionConfig};
 
 #[tokio::main]
 async fn main() -> xberg::Result<()> {
     let config = ExtractionConfig::default();
-    let files = vec!["doc1.pdf", "doc2.pdf", "doc3.pdf"];
-    let results = batch_extract_file(&files, None, &config).await?;
+    let inputs = vec![
+        ExtractInput::file("doc1.pdf"),
+        ExtractInput::file("doc2.pdf"),
+        ExtractInput::file("doc3.pdf"),
+    ];
+    let results = extract_batch(inputs, &config).await?;
 
     for result in results {
         println!("{}", result.content);
@@ -134,9 +139,10 @@ async fn main() -> xberg::Result<()> {
 ## OCR with Table Extraction
 
 ```rust
-use xberg::{extract_file_sync, ExtractionConfig, OcrConfig, TesseractConfig};
+use xberg::{extract, ExtractInput, ExtractionConfig, OcrConfig, TesseractConfig};
 
-fn main() -> xberg::Result<()> {
+#[tokio::main]
+async fn main() -> xberg::Result<()> {
     let config = ExtractionConfig {
         ocr: Some(OcrConfig {
             backend: "tesseract".to_string(),
@@ -149,7 +155,7 @@ fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract_file_sync("invoice.pdf", None, &config)?;
+    let result = extract(ExtractInput::file("invoice.pdf"), &config).await?;
 
     for table in &result.tables {
         println!("{}", table.markdown);
@@ -161,9 +167,10 @@ fn main() -> xberg::Result<()> {
 ## Password-Protected PDFs
 
 ```rust
-use xberg::{extract_file_sync, ExtractionConfig, PdfConfig};
+use xberg::{extract, ExtractInput, ExtractionConfig, PdfConfig};
 
-fn main() -> xberg::Result<()> {
+#[tokio::main]
+async fn main() -> xberg::Result<()> {
     let config = ExtractionConfig {
         pdf_options: Some(PdfConfig {
             passwords: Some(vec!["password1".to_string(), "password2".to_string()]),
@@ -172,7 +179,7 @@ fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract_file_sync("protected.pdf", None, &config)?;
+    let result = extract(ExtractInput::file("protected.pdf"), &config).await?;
     Ok(())
 }
 ```
@@ -180,13 +187,14 @@ fn main() -> xberg::Result<()> {
 ## Extract from Bytes
 
 ```rust
-use xberg::{extract_bytes_sync, ExtractionConfig};
+use xberg::{extract, ExtractInput, ExtractionConfig};
 use std::fs;
 
-fn main() -> xberg::Result<()> {
+#[tokio::main]
+async fn main() -> xberg::Result<()> {
     let data = fs::read("document.pdf")?;
     let config = ExtractionConfig::default();
-    let result = extract_bytes_sync(&data, "application/pdf", &config)?;
+    let result = extract(ExtractInput::bytes(data, "application/pdf"), &config).await?;
     println!("{}", result.content);
     Ok(())
 }
@@ -199,7 +207,7 @@ Xberg integrates [tree-sitter-language-pack](https://docs.tree-sitter-language-p
 Code intelligence data is available via the `metadata.format` field as a `FormatMetadata::Code` variant containing a `ProcessResult`.
 
 ```rust
-use xberg::{extract_file_sync, ExtractionConfig, TreeSitterConfig, TreeSitterProcessConfig};
+use xberg::{extract, ExtractionConfig, TreeSitterConfig, TreeSitterProcessConfig};
 
 fn main() -> xberg::Result<()> {
     let config = ExtractionConfig {
@@ -217,7 +225,7 @@ fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract_file_sync("app.py", None, &config)?;
+    let result = extract("app.py", None, &config)?;
 
     // Access code intelligence from format metadata
     if let Some(xberg::types::FormatMetadata::Code(ref code)) = result.metadata.format {

@@ -19,7 +19,7 @@ public class CustomTextExtractor : IDocumentExtractor
         Console.WriteLine("Custom text extractor shut down");
     }
 
-    public ExtractionResult ExtractBytes(byte[] content, string mimeType, ExtractionConfig config)
+    public ExtractionResult Extract(byte[] content, string mimeType, ExtractionConfig config)
     {
         var text = System.Text.Encoding.UTF8.GetString(content);
 
@@ -31,10 +31,10 @@ public class CustomTextExtractor : IDocumentExtractor
         };
     }
 
-    public ExtractionResult ExtractFile(string path, string mimeType, ExtractionConfig config)
+    public ExtractionResult Extract(string path, string mimeType, ExtractionConfig config)
     {
         var content = System.IO.File.ReadAllBytes(path);
-        return ExtractBytes(content, mimeType, config);
+        return Extract(content, mimeType, config);
     }
 
     public string[] SupportedMimeTypes()

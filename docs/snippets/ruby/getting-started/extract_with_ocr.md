@@ -7,7 +7,7 @@ ocr_config = Xberg::OcrConfig.new(
 )
 
 config = Xberg::ExtractionConfig.new(ocr: ocr_config)
-result = Xberg.extract_file_sync('scanned.pdf', config: config)
+result = Xberg.extract_sync('scanned.pdf', config: config)
 
 puts "Extracted text from scanned document:"
 puts result.content

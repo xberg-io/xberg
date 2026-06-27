@@ -2,7 +2,11 @@
 	"id": "renderers_list",
 	"category": "renderer_management",
 	"description": "List all registered renderers",
-	"tags": ["renderer", "plugin_management", "list"],
+	"tags": [
+		"renderer",
+		"plugin_management",
+		"list"
+	],
 	"call": "list_renderers",
 	"assertions": [
 		{

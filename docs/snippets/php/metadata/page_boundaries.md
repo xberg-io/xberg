@@ -12,7 +12,7 @@ $config->pages = new PageConfig(
     markerFormat: "\n\n=== PAGE {page_num} ===\n\n"
 );
 
-$result = Xberg::extract_file_sync("document.pdf", null, $config);
+$result = Xberg::extract_sync("document.pdf", null, $config);
 
 // Content with inline page markers
 echo "Full content with markers:\n";

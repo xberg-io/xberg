@@ -1,7 +1,7 @@
 ```python title="Python"
 import asyncio
 from xberg import (
-    extract_file,
+    extract,
     ExtractionConfig,
     ChunkingConfig,
     EmbeddingConfig,
@@ -23,7 +23,7 @@ async def main() -> None:
             ),
         ),
     )
-    result = await extract_file("document.pdf", config=config)
+    result = await extract("document.pdf", config=config)
     quality = result.quality_score or 0
     print(f"Quality: {quality:.2f}")
     print(f"Languages: {result.detected_languages}")

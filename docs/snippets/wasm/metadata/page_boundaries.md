@@ -1,5 +1,5 @@
 ```typescript title="WASM"
-import init, { extractBytes } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 import { PageConfig, ExtractionConfig } from "xberg-wasm";
 
 await init();
@@ -13,7 +13,7 @@ const config = new ExtractionConfig({
   }),
 });
 
-const result = await extractBytes(fileBuffer, mimeType, config);
+const result = await extract(fileBuffer, mimeType, config);
 
 if (result.metadata && result.metadata.pages) {
   const pageStructure = result.metadata.pages;

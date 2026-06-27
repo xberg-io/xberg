@@ -17,7 +17,7 @@ config = %ExtractionConfig{
   use_cache: true
 }
 
-{:ok, result} = Xberg.extract_file("scanned_invoice.pdf", nil, config)
+{:ok, result} = Xberg.extract("scanned_invoice.pdf", nil, config)
 
 # Process the extracted content
 content = result.content

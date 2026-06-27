@@ -4,13 +4,13 @@
 declare(strict_types=1);
 
 use Xberg\Xberg;
-use function Xberg\batch_extract_files_async;
+use function Xberg\extract_batch_async;
 
 $xberg = new Xberg();
 
 // Async batch file extraction
 $files = ['doc1.pdf', 'doc2.docx', 'doc3.xlsx'];
-$deferred = $xberg->batchExtractFilesAsync($files);
+$deferred = $xberg->extractBatchAsync($files);
 
 // Do other work while extraction runs...
 processOtherTasks();
@@ -23,7 +23,7 @@ foreach ($results as $i => $result) {
 }
 
 // With timeout
-$deferred = $xberg->batchExtractFilesAsync($files);
+$deferred = $xberg->extractBatchAsync($files);
 $results = $deferred->waitBatch(10000); // 10 second timeout
 
 if ($results !== null) {
@@ -35,6 +35,6 @@ if ($results !== null) {
 }
 
 // Procedural API
-$deferred = batch_extract_files_async($files);
+$deferred = extract_batch_async($files);
 $results = $deferred->getResults();
 ```

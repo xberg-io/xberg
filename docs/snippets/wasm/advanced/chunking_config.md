@@ -1,5 +1,5 @@
 ```typescript title="WASM - Fixed-Size Chunks"
-import init, { extractBytes } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 
@@ -12,7 +12,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extractBytes(bytes, "application/pdf", config);
+const result = await extract(bytes, "application/pdf", config);
 
 result.chunks?.forEach((chunk, idx) => {
   console.log(`Chunk ${chunk.metadata?.chunkIndex}/${chunk.metadata?.totalChunks}`);
@@ -22,7 +22,7 @@ result.chunks?.forEach((chunk, idx) => {
 ```
 
 ```typescript title="WASM - Markdown-Aware Chunking"
-import init, { extractBytes } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 
@@ -35,7 +35,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extractBytes(bytes, "text/markdown", config);
+const result = await extract(bytes, "text/markdown", config);
 
 result.chunks?.forEach((chunk) => {
   // Content already includes heading context prepended
@@ -47,7 +47,7 @@ result.chunks?.forEach((chunk) => {
 ```
 
 ```typescript title="WASM - Semantic Chunking with Topic Threshold"
-import init, { extractBytes } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 
@@ -61,7 +61,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extractBytes(bytes, "text/markdown", config);
+const result = await extract(bytes, "text/markdown", config);
 
 console.log(`Generated ${result.chunks?.length} semantic chunks`);
 result.chunks?.forEach((chunk) => {

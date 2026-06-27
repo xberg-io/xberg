@@ -15,7 +15,7 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract_file_sync('document.pdf', config: config)
+result = Xberg.extract_sync('document.pdf', config: config)
 
 result.chunks.each_with_index do |chunk, i|
   if chunk.embedding

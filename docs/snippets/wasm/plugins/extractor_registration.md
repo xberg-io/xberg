@@ -7,7 +7,7 @@ import init, {
   registerDocumentExtractor,
   unregisterDocumentExtractor,
   listDocumentExtractors,
-  extractBytes,
+  extract,
 } from "xberg-wasm";
 
 await init();
@@ -16,7 +16,7 @@ await init();
 const customExtractor = {
   // Required: extract document bytes
   // Takes: (bytes: Uint8Array, mimeType: string, config: object) -> Promise<{text: string, ...}>
-  extractBytes: async (bytes, mimeType, config) => {
+  extract: async (bytes, mimeType, config) => {
     if (mimeType !== "application/x-custom") {
       throw new Error("Unsupported MIME type");
     }
@@ -52,7 +52,7 @@ console.log("Available extractors:", extractors);
 
 // Use the custom extractor via normal extraction
 const customBytes = new Uint8Array([0x00, 0x01, 0x02]);
-const result = await extractBytes(customBytes, "application/x-custom", {});
+const result = await extract(customBytes, "application/x-custom", {});
 console.log("Extraction result:", result);
 
 // Unregister when done
@@ -64,4 +64,4 @@ try {
 }
 ```
 
-The extractor object must implement `extractBytes` and `supportedMimeTypes` methods. Optional methods: `initialize()`, `shutdown()`, and `version()` for lifecycle management.
+The extractor object must implement `extract` and `supportedMimeTypes` methods. Optional methods: `initialize()`, `shutdown()`, and `version()` for lifecycle management.

@@ -36,7 +36,7 @@ node -e "
   fs.writeFileSync('xberg-node-pkg/package.json', JSON.stringify(pkg, null, 2) + '\n');
   const smokePkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
   smokePkg.dependencies ||= {};
-  smokePkg.dependencies['@xberg/node'] = 'file:./xberg-node-pkg';
+  smokePkg.dependencies['@xberg-io/xberg'] = 'file:./xberg-node-pkg';
   fs.writeFileSync('package.json', JSON.stringify(smokePkg, null, 2) + '\n');
 "
 

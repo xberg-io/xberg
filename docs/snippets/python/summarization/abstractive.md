@@ -1,6 +1,6 @@
 ```python title="Python"
 import asyncio
-from xberg import extract_file, ExtractionConfig, SummarizationConfig, LlmConfig
+from xberg import extract, ExtractionConfig, SummarizationConfig, LlmConfig
 
 async def main() -> None:
     config = ExtractionConfig(
@@ -10,7 +10,7 @@ async def main() -> None:
             llm=LlmConfig(model="openai/gpt-4o-mini"),
         ),
     )
-    result = await extract_file("report.pdf", config=config)
+    result = await extract("report.pdf", config=config)
     if result.summary:
         print(result.summary.text)
 

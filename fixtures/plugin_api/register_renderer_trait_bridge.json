@@ -2,7 +2,9 @@
 	"id": "register_renderer_trait_bridge",
 	"category": "plugin_api",
 	"description": "register_renderer: trait bridge",
-	"tags": ["trait-bridge"],
+	"tags": [
+		"trait-bridge"
+	],
 	"call": "register_renderer",
 	"input": {
 		"renderer": {

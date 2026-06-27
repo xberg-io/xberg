@@ -89,31 +89,22 @@ services:
       retries: 3
 ```
 
-### 3. Kubernetes Deployment
+### 3. Container Orchestrator Deployment
 
-Configure size limits in your Kubernetes deployment:
+Configure size limits in your container orchestrator:
 
-```yaml title="kubernetes-deployment.yaml"
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: xberg-api
-spec:
-  replicas: 3
-  template:
-    spec:
-      containers:
-        - name: xberg
-          image: ghcr.io/xberg-io/xberg:latest
-          env:
-            - name: XBERG_MAX_MULTIPART_FIELD_BYTES
-              value: "524288000"
-            - name: XBERG_CORS_ORIGINS
-              value: "https://myapp.com"
-          resources:
-            limits:
-              memory: "2Gi"
-              cpu: "2000m"
+```yaml title="container-orchestrator.yaml"
+services:
+  xberg-api:
+    image: ghcr.io/xberg-io/xberg:latest
+    replicas: 3
+    environment:
+      XBERG_MAX_MULTIPART_FIELD_BYTES: "524288000"
+      XBERG_CORS_ORIGINS: "https://myapp.com"
+    resources:
+      limits:
+        memory: "2Gi"
+        cpu: "2000m"
 ```
 
 ### 4. Programmatic Configuration
@@ -518,8 +509,8 @@ Validate file sizes before upload to provide better user experience:
    # Docker
    docker stats xberg-api
 
-   # Kubernetes
-   kubectl top pod xberg-api-xxxxx
+   # Container orchestrator
+   your-orchestrator top xberg-api
    ```
 
 ### Slow uploads

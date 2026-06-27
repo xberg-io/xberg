@@ -5,7 +5,7 @@ config = Xberg::ExtractionConfig.new(
   chunking: Xberg::ChunkingConfig.new(max_characters: 500, overlap: 50),
 )
 
-result = Xberg.extract_file_sync('document.pdf', config: config)
+result = Xberg.extract_sync('document.pdf', config: config)
 
 result.chunks&.each do |chunk|
   first = chunk.metadata.first_page

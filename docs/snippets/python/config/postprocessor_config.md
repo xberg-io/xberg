@@ -1,6 +1,6 @@
 ```python title="Python"
 import asyncio
-from xberg import ExtractionConfig, PostProcessorConfig, extract_file
+from xberg import ExtractionConfig, PostProcessorConfig, extract
 
 async def main() -> None:
     config: ExtractionConfig = ExtractionConfig(
@@ -9,7 +9,7 @@ async def main() -> None:
             enabled_processors=["deduplication"],
         )
     )
-    result = await extract_file("document.pdf", config=config)
+    result = await extract("document.pdf", config=config)
     print(f"Content: {result.content[:100]}")
 
 asyncio.run(main())

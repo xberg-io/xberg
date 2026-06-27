@@ -11,11 +11,11 @@
   <a href="https://pypi.org/project/xberg/">
     <img src="https://img.shields.io/pypi/v/xberg?label=Python&color=007ec6" alt="Python">
   </a>
-  <a href="https://www.npmjs.com/package/@xberg/node">
-    <img src="https://img.shields.io/npm/v/@xberg/node?label=Node.js&color=007ec6" alt="Node.js">
+  <a href="https://www.npmjs.com/package/@xberg-io/xberg">
+    <img src="https://img.shields.io/npm/v/@xberg-io/xberg?label=Node.js&color=007ec6" alt="Node.js">
   </a>
-  <a href="https://www.npmjs.com/package/@xberg/wasm">
-    <img src="https://img.shields.io/npm/v/@xberg/wasm?label=WASM&color=007ec6" alt="WASM">
+  <a href="https://www.npmjs.com/package/@xberg-io/xberg-wasm">
+    <img src="https://img.shields.io/npm/v/@xberg-io/xberg-wasm?label=WASM&color=007ec6" alt="WASM">
   </a>
   <a href="https://central.sonatype.com/artifact/io.xberg/xberg">
     <img src="https://img.shields.io/maven-central/v/io.xberg/xberg?label=Java&color=007ec6" alt="Java">
@@ -56,10 +56,6 @@
   <a href="https://github.com/xberg-io/xberg/pkgs/container/xberg">
     <img src="https://img.shields.io/badge/Docker-ghcr.io-007ec6?logo=docker&logoColor=white" alt="Docker">
   </a>
-  <a href="https://github.com/xberg-io/xberg/pkgs/container/charts%2Fxberg">
-    <img src="https://img.shields.io/badge/Helm-ghcr.io-007ec6?logo=helm&logoColor=white" alt="Helm">
-  </a>
-
   <!-- Project Info -->
   <a href="https://github.com/xberg-io/xberg/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/License-MIT-007ec6" alt="License">
@@ -99,11 +95,10 @@ Extract text, tables, images, metadata, and code intelligence from 96 file forma
 ### Package Installation
 
 ```bash
-pnpm add @xberg/node
+pnpm add @xberg-io/xberg
 ```
 
 ### System Requirements
-
 - **Node.js 22+** required (NAPI-RS native bindings)
 - Optional: [ONNX Runtime](https://github.com/microsoft/onnxruntime/releases) version 1.24+ for ORT-dependent inference features
 - Optional: [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for OCR functionality
@@ -111,7 +106,6 @@ pnpm add @xberg/node
 ### Platform Support
 
 Pre-built binaries available for:
-
 - macOS (arm64, x64)
 - Linux (x64)
 - Windows (x64)
@@ -123,14 +117,14 @@ Pre-built binaries available for:
 Extract text, metadata, and structure from any supported document format:
 
 ```typescript title="TypeScript"
-import { extractFileSync } from "@xberg/node";
+import { extractSync } from "@xberg-io/xberg";
 
 const config = {
   useCache: true,
   enableQualityProcessing: true,
 };
 
-const result = extractFileSync("document.pdf", null, config);
+const result = extractSync("document.pdf", null, config);
 
 console.log(result.content);
 console.log(`MIME Type: ${result.mimeType}`);
@@ -145,7 +139,7 @@ Most use cases benefit from configuration to control extraction behavior:
 **With OCR (for scanned documents):**
 
 ```typescript title="TypeScript"
-import { extractFile } from "@xberg/node";
+import { extract } from "@xberg-io/xberg";
 
 const config = {
   ocr: {
@@ -157,16 +151,16 @@ const config = {
   },
 };
 
-const result = await extractFile("document.pdf", null, config);
+const result = await extract("document.pdf", null, config);
 console.log(result.content);
 ```
 
 #### Table Extraction
 
 ```typescript title="TypeScript"
-import { extractFileSync } from "xberg";
+import { extractSync } from "xberg";
 
-const result = extractFileSync("document.pdf");
+const result = extractSync("document.pdf");
 
 result.tables?.forEach((table) => {
   console.log(`Table with ${table.cells?.length ?? 0} rows`);
@@ -178,14 +172,21 @@ result.tables?.forEach((table) => {
 #### Processing Multiple Files
 
 ```typescript title="TypeScript"
-import { batchExtractFilesSync } from "@xberg/node";
+import { ExtractInputKind, extractBatch } from "@xberg-io/xberg";
 
-const files = ["doc1.pdf", "doc2.docx", "doc3.pptx"];
-const results = batchExtractFilesSync(files);
+const output = await extractBatch([
+  { kind: ExtractInputKind.Uri, uri: "document.pdf" },
+  {
+    kind: ExtractInputKind.Bytes,
+    bytes: Buffer.from("Hello from memory"),
+    mimeType: "text/plain",
+    filename: "note.txt",
+  },
+]);
 
-results.forEach((result, i) => {
-  console.log(`File ${i + 1}: ${result.content.length} characters`);
-});
+for (const result of output.results) {
+  console.log(result.content.slice(0, 200));
+}
 ```
 
 #### Async Processing
@@ -193,25 +194,30 @@ results.forEach((result, i) => {
 For non-blocking document processing:
 
 ```typescript title="TypeScript"
-import { extractFile } from "@xberg/node";
+import { ExtractInputKind, extract } from "@xberg-io/xberg";
 
-const result = await extractFile("document.pdf");
-console.log(result.content);
+const output = await extract({
+  kind: ExtractInputKind.Uri,
+  uri: "document.pdf",
+});
+
+console.log(output.results[0].content);
+console.log(`Results: ${output.summary.results}`);
 ```
 
 #### Configuration Discovery
 
 ```typescript title="config_discovery.ts"
-import { ExtractionConfig, extractFile } from "@xberg/node";
+import { ExtractionConfig, extract } from "@xberg-io/xberg";
 
 const config = ExtractionConfig.discover();
 if (config) {
   console.log("Found configuration file");
-  const result = await extractFile("document.pdf", null, config);
+  const result = await extract("document.pdf", null, config);
   console.log(result.content);
 } else {
   console.log("No configuration file found, using defaults");
-  const result = await extractFile("document.pdf");
+  const result = await extract("document.pdf");
   console.log(result.content);
 }
 ```
@@ -221,24 +227,24 @@ if (config) {
 ```typescript title="worker_pool.ts"
 import {
   createWorkerPool,
-  extractFileInWorker,
-  batchExtractFilesInWorker,
+  extractInWorker,
+  extractBatchInWorker,
   closeWorkerPool,
-} from "@xberg/node";
+} from "@xberg-io/xberg";
 
 // Create a pool with 4 worker threads
 const pool = createWorkerPool(4);
 
 try {
   // Extract single file in worker
-  const result = await extractFileInWorker(pool, "document.pdf", null, {
+  const result = await extractInWorker(pool, "document.pdf", null, {
     useCache: true,
   });
   console.log(result.content);
 
   // Extract multiple files concurrently
   const files = ["doc1.pdf", "doc2.docx", "doc3.xlsx"];
-  const results = await batchExtractFilesInWorker(pool, files, {
+  const results = await extractBatchInWorker(pool, files, {
     useCache: true,
   });
 
@@ -252,14 +258,12 @@ try {
 ```
 
 **Performance Benefits:**
-
 - **Parallel Processing**: Multiple documents extracted simultaneously
 - **CPU Utilization**: Maximizes multi-core CPU usage for large batches
 - **Queue Management**: Automatically distributes work across available workers
 - **Resource Control**: Prevents thread exhaustion with configurable pool size
 
 **Best Practices:**
-
 - Use worker pools for batches of 10+ documents
 - Set pool size to number of CPU cores (default behavior)
 - Always close pools with `closeWorkerPool()` to prevent resource leaks
@@ -408,7 +412,7 @@ Xberg supports multiple OCR backends for extracting text from scanned documents 
 ### OCR Configuration Example
 
 ```typescript title="TypeScript"
-import { extractFile } from "@xberg/node";
+import { extract } from "@xberg-io/xberg";
 
 const config = {
   ocr: {
@@ -420,7 +424,7 @@ const config = {
   },
 };
 
-const result = await extractFile("document.pdf", null, config);
+const result = await extract("document.pdf", null, config);
 console.log(result.content);
 ```
 
@@ -429,10 +433,15 @@ console.log(result.content);
 This binding provides full async/await support for non-blocking document processing:
 
 ```typescript title="TypeScript"
-import { extractFile } from "@xberg/node";
+import { ExtractInputKind, extract } from "@xberg-io/xberg";
 
-const result = await extractFile("document.pdf");
-console.log(result.content);
+const output = await extract({
+  kind: ExtractInputKind.Uri,
+  uri: "document.pdf",
+});
+
+console.log(output.results[0].content);
+console.log(`Results: ${output.summary.results}`);
 ```
 
 ## Plugin System
@@ -452,14 +461,21 @@ Generate vector embeddings for extracted text using the built-in ONNX Runtime su
 Process multiple documents efficiently:
 
 ```typescript title="TypeScript"
-import { batchExtractFilesSync } from "@xberg/node";
+import { ExtractInputKind, extractBatch } from "@xberg-io/xberg";
 
-const files = ["doc1.pdf", "doc2.docx", "doc3.pptx"];
-const results = batchExtractFilesSync(files);
+const output = await extractBatch([
+  { kind: ExtractInputKind.Uri, uri: "document.pdf" },
+  {
+    kind: ExtractInputKind.Bytes,
+    bytes: Buffer.from("Hello from memory"),
+    mimeType: "text/plain",
+    filename: "note.txt",
+  },
+]);
 
-results.forEach((result, i) => {
-  console.log(`File ${i + 1}: ${result.content.length} characters`);
-});
+for (const result of output.results) {
+  console.log(result.content.slice(0, 200));
+}
 ```
 
 ## Configuration
@@ -480,7 +496,6 @@ Contributions are welcome! See [Contributing Guide](https://github.com/xberg-io/
 
 ## Part of Xberg.dev
 
-- [Xberg Enterprise](https://github.com/xberg-io/xberg-enterprise) — managed extraction API with SDKs, dashboards, and observability.
 - [crawlberg](https://github.com/xberg-io/crawlberg) — web crawling and scraping with HTML→Markdown and headless-Chrome fallback.
 - [html-to-markdown](https://github.com/xberg-io/html-to-markdown) — fast, lossless HTML→Markdown engine.
 - [liter-llm](https://github.com/xberg-io/liter-llm) — universal LLM API client with native bindings for 14 languages and 143 providers.

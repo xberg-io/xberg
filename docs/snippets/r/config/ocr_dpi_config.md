@@ -9,7 +9,7 @@ config <- list(
   ocr = list(backend = "tesseract", language = "eng")
 )
 
-json <- extract_file_sync("document.pdf", "application/pdf", config)
+json <- extract_sync("document.pdf", "application/pdf", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Characters extracted: %d\n", nchar(result$content)))

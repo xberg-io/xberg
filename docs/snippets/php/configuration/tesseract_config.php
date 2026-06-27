@@ -99,7 +99,7 @@ $config3 = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config3);
-$result = $xberg->extractFile('scanned_invoice.pdf');
+$result = $xberg->extract('scanned_invoice.pdf');
 
 echo "Table detection enabled\n";
 echo "Best for: Forms, invoices, spreadsheets, reports\n";

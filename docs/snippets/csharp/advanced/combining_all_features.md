@@ -40,7 +40,7 @@ async Task RunRagPipeline()
         },
     };
 
-    var result = await XbergLib.ExtractFileAsync("document.pdf", config);
+    var result = await XbergLib.ExtractAsync("document.pdf", config);
 
     Console.WriteLine($"Content length: {result.Content.Length} characters");
 

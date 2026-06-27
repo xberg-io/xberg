@@ -24,7 +24,7 @@ int main(void) {
     /* Returns a JSON array of ExtractionResult objects (one per input, in order),
      * or NULL on a system-level failure. Per-item errors are encoded inside
      * each result object's metadata (e.g. an "errors" array). */
-    char *results_json = xberg_batch_extract_files(items_json, config);
+    char *results_json = xberg_extract_batch(items_json, config);
     if (!results_json) {
         int32_t code = xberg_last_error_code();
         const char *message = xberg_last_error_context();

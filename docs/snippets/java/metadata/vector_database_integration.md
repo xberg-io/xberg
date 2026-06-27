@@ -12,7 +12,7 @@ ExtractionConfig config = ExtractionConfig.builder()
         .build())
     .build();
 
-ExtractionResult result = Xberg.extractFile("document.pdf", config);
+ExtractionResult result = Xberg.extract("document.pdf", config);
 
 System.out.println("Extracted content: " + result.getContent().length() + " characters");
 ```

@@ -18,12 +18,12 @@ config = Xberg::ExtractionConfig.new(
 xberg = Xberg::Client.new(config)
 
 puts "First extraction (will be cached)..."
-result1 = xberg.extract_file('document.pdf')
+result1 = xberg.extract('document.pdf')
 puts "  - Content length: #{result1.content.length}"
 puts "  - Cached: #{result1.metadata['was_cached']}"
 
 puts "\nSecond extraction (from cache)..."
-result2 = xberg.extract_file('document.pdf')
+result2 = xberg.extract('document.pdf')
 puts "  - Content length: #{result2.content.length}"
 puts "  - Cached: #{result2.metadata['was_cached']}"
 

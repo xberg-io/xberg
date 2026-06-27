@@ -1,5 +1,5 @@
-import type { ExtractionResult } from "@xberg/wasm";
-import { extractBytes, initWasm } from "@xberg/wasm";
+import type { ExtractionResult } from "@xberg-io/xberg-wasm";
+import { extract, initWasm } from "@xberg-io/xberg-wasm";
 
 interface ProcessingStep {
   name: string;
@@ -13,7 +13,7 @@ async function createExtractionPipeline(
 ) {
   await initWasm();
 
-  let result = await extractBytes(bytes, mimeType);
+  let result = await extract(bytes, mimeType);
 
   for (const step of steps) {
     console.log(`Executing step: ${step.name}`);

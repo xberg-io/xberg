@@ -31,7 +31,7 @@ int main(void) {
     }
 
     XBERGExtractionResult *result =
-        xberg_extract_file_sync("paper.pdf", NULL, config);
+        xberg_extract_sync("paper.pdf", NULL, config);
     if (!result) {
         fprintf(stderr, "extraction failed (code %d): %s\n",
                 xberg_last_error_code(),

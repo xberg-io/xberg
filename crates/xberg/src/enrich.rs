@@ -21,10 +21,11 @@
 //! # Example
 //!
 //! ```ignore
-//! use xberg::{ExtractionConfig, extract_file, enrich, EnrichmentConfig};
+//! use xberg::{ExtractInput, ExtractionConfig, extract, enrich, EnrichmentConfig};
 //!
 //! # async fn run() -> xberg::Result<()> {
-//! let extraction = extract_file("document.pdf", None, &ExtractionConfig::default()).await?;
+//! let output = extract(ExtractInput::uri("document.pdf"), &ExtractionConfig::default()).await?;
+//! let extraction = output.results.into_iter().next().expect("one input yields one result");
 //! let config = EnrichmentConfig::default();
 //! let enriched = enrich(extraction, &config).await?;
 //! assert!(enriched.entities.is_none()); // no NER config supplied
@@ -169,10 +170,11 @@ pub struct EnrichedResult {
 /// # Example
 ///
 /// ```ignore
-/// use xberg::{ExtractionConfig, extract_file, enrich, EnrichmentConfig};
+/// use xberg::{ExtractInput, ExtractionConfig, extract, enrich, EnrichmentConfig};
 ///
 /// # async fn run() -> xberg::Result<()> {
-/// let extraction = extract_file("report.pdf", None, &ExtractionConfig::default()).await?;
+/// let output = extract(ExtractInput::uri("report.pdf"), &ExtractionConfig::default()).await?;
+/// let extraction = output.results.into_iter().next().expect("one input yields one result");
 ///
 /// // Skip all stages — identity pass.
 /// let enriched = enrich(extraction, &EnrichmentConfig::default()).await?;

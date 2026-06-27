@@ -16,7 +16,7 @@ let configJson = """
 """
 
 let config = try extractionConfigFromJson(configJson)
-let result = try extractFileSync("scanned.pdf", nil, config)
+let result = try extractSync("scanned.pdf", nil, config)
 
 if let elements = result.ocr_elements() {
     for element in elements {

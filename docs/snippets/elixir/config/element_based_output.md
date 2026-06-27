@@ -5,7 +5,7 @@ config = %Xberg.ExtractionConfig{
 }
 
 # Extract document
-{:ok, result} = Xberg.extract_file_sync("document.pdf", config)
+{:ok, result} = Xberg.extract_sync("document.pdf", config)
 
 # Access elements
 Enum.each(result.elements, fn element ->

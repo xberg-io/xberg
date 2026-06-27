@@ -1,6 +1,6 @@
 ```python title="Python"
 import asyncio
-from xberg import ExtractionConfig, ChunkingConfig, extract_file
+from xberg import ExtractionConfig, ChunkingConfig, extract
 
 
 async def main() -> None:
@@ -10,7 +10,7 @@ async def main() -> None:
             overlap=200,
         )
     )
-    result = await extract_file("document.pdf", config=config)
+    result = await extract("document.pdf", config=config)
     for chunk in result.chunks or []:
         print(f"Length: {len(chunk.content)}")
 
@@ -20,14 +20,14 @@ asyncio.run(main())
 
 ```python title="Python - Semantic"
 import asyncio
-from xberg import ExtractionConfig, ChunkingConfig, extract_file
+from xberg import ExtractionConfig, ChunkingConfig, extract
 
 
 async def main() -> None:
     config: ExtractionConfig = ExtractionConfig(
         chunking=ChunkingConfig(chunker_type="semantic")
     )
-    result = await extract_file("document.pdf", config=config)
+    result = await extract("document.pdf", config=config)
     for chunk in result.chunks or []:
         print(f"Content: {chunk.content[:100]}...")
 
@@ -37,7 +37,7 @@ asyncio.run(main())
 
 ```python title="Python - Prepend Heading Context"
 import asyncio
-from xberg import ExtractionConfig, ChunkingConfig, extract_file
+from xberg import ExtractionConfig, ChunkingConfig, extract
 
 
 async def main() -> None:
@@ -49,7 +49,7 @@ async def main() -> None:
             prepend_heading_context=True,
         )
     )
-    result = await extract_file("document.md", config=config)
+    result = await extract("document.md", config=config)
     for chunk in result.chunks or []:
         # Each chunk's content is prefixed with its heading breadcrumb
         print(f"Content: {chunk.content[:100]}...")

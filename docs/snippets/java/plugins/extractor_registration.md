@@ -7,7 +7,7 @@ import java.io.IOException;
 public class CustomExtractorExample {
     public static void main(String[] args) {
         try {
-            ExtractionResult result = Xberg.extractFile("document.json");
+            ExtractionResult result = Xberg.extract("document.json");
             System.out.println("Extracted content length: " + result.getContent().length());
         } catch (IOException | XbergException e) {
             e.printStackTrace();

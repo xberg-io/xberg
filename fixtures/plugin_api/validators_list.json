@@ -2,7 +2,11 @@
 	"id": "validators_list",
 	"category": "validator_management",
 	"description": "List all registered validators",
-	"tags": ["validators", "plugin_management", "list"],
+	"tags": [
+		"validators",
+		"plugin_management",
+		"list"
+	],
 	"call": "list_validators",
 	"assertions": [
 		{

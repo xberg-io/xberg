@@ -1,5 +1,5 @@
 ```typescript title="WASM - Detect and Process Multilingual Content"
-import init, { extractBytes } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 
@@ -16,7 +16,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extractBytes(bytes, "application/pdf", config);
+const result = await extract(bytes, "application/pdf", config);
 
 interface MultilingualChunk {
   index: number;
@@ -67,7 +67,7 @@ chunksByLanguage.forEach((chunks, lang) => {
 ```
 
 ```typescript title="WASM - Language-Specific Text Processing"
-import init, { extractBytes } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 
@@ -80,7 +80,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extractBytes(bytes, "text/plain", config);
+const result = await extract(bytes, "text/plain", config);
 
 // Language-specific text normalization
 interface LanguageProcessor {
@@ -122,7 +122,7 @@ sentences.slice(0, 3).forEach((sent, idx) => {
 ```
 
 ```typescript title="WASM - Multilingual Chunking Strategy"
-import init, { extractBytes } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 
@@ -149,7 +149,7 @@ const languageDetectConfig = {
 };
 
 const bytes = new Uint8Array(buffer);
-const langResult = await extractBytes(bytes, "text/plain", languageDetectConfig);
+const langResult = await extract(bytes, "text/plain", languageDetectConfig);
 const detectedLang = langResult.metadata?.language || "en";
 
 // Re-extract with language-specific chunking
@@ -164,7 +164,7 @@ const finalConfig = {
   },
 };
 
-const finalResult = await extractBytes(bytes, "text/plain", finalConfig);
+const finalResult = await extract(bytes, "text/plain", finalConfig);
 console.log(`Language: ${detectedLang}`);
 console.log(`Chunking strategy: maxChars=${chunkConfig.maxChars}, overlap=${chunkConfig.overlap}`);
 console.log(`Generated ${finalResult.chunks?.length} chunks`);

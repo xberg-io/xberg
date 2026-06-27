@@ -16,7 +16,7 @@ var config = new ExtractionConfig
     },
 };
 
-var result = await XbergLib.ExtractFile("research_paper.pdf", null, config);
+var result = await XbergLib.Extract("research_paper.pdf", null, config);
 
 var chunksWithEmbeddings = new List<(string Preview, int Dimensions)>();
 foreach (var chunk in result.Chunks ?? new List<Chunk>())

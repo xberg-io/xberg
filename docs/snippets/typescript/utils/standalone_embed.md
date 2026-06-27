@@ -1,6 +1,6 @@
 ```typescript title="TypeScript"
-import { embed, embedSync } from "@xberg/node";
-import type { EmbeddingConfig } from "@xberg/node";
+import { embed, embedSync } from "@xberg-io/xberg";
+import type { EmbeddingConfig } from "@xberg-io/xberg";
 
 const config: EmbeddingConfig = {
   model: { type: "preset", name: "balanced" },

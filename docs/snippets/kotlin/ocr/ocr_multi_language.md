@@ -13,7 +13,7 @@ fun main() {
         .withOcr(Optional.of(ocr))
         .build()
 
-    val result = Xberg.extractFileSync(Paths.get("multilingual.pdf"), null, config)
+    val result = Xberg.extractSync(Paths.get("multilingual.pdf"), null, config)
     println(result.content())
 }
 ```

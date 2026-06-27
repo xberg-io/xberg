@@ -1,7 +1,7 @@
 ```python title="Python"
 import asyncio
 from xberg import (
-    extract_file,
+    extract,
     ExtractionConfig,
     OcrConfig,
     ChunkingConfig,
@@ -49,7 +49,7 @@ async def main() -> None:
         postprocessor=PostProcessorConfig(enabled=True),
     )
 
-    result = await extract_file("document.pdf", config=config)
+    result = await extract("document.pdf", config=config)
     print(f"Content: {result.content[:100]}")
     if result.detected_languages:
         print(f"Languages: {result.detected_languages}")

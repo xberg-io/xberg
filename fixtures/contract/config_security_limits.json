@@ -1,32 +1,42 @@
 {
 	"id": "config_security_limits",
 	"description": "Tests archive extraction with custom security limits",
-	"tags": ["contract", "config", "security"],
-	"call": "extract_file_sync",
+	"tags": [
+		"contract",
+		"config",
+		"security"
+	],
+	"call": "extract",
 	"input": {
-		"path": "archives/documents.zip",
-		"config": {
-			"security_limits": {
-				"max_archive_size": 104857600,
-				"max_compression_ratio": 50,
-				"max_files_in_archive": 100
-			}
-		}
+		"kind": "uri",
+		"uri": "archives/documents.zip"
 	},
 	"assertions": [
 		{
 			"type": "contains_any",
-			"field": "mime_type",
-			"values": ["application/zip", "application/x-zip-compressed"]
+			"field": "results.0.mime_type",
+			"values": [
+				"application/zip",
+				"application/x-zip-compressed"
+			]
 		},
 		{
 			"type": "min_length",
-			"field": "content",
+			"field": "results.0.content",
 			"value": 10
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
-		"reason": "WASM cannot access filesystem; use extractBytes with file content instead"
+		"languages": [
+			"wasm"
+		],
+		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
+	},
+	"config": {
+		"security_limits": {
+			"max_archive_size": 104857600,
+			"max_compression_ratio": 50,
+			"max_files_in_archive": 100
+		}
 	}
 }

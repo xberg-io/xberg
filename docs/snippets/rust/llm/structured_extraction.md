@@ -1,6 +1,6 @@
 ```rust title="Rust"
 use xberg::{
-    extract_file, ExtractionConfig, LlmConfig, StructuredExtractionConfig,
+    extract, ExtractionConfig, LlmConfig, StructuredExtractionConfig,
 };
 use serde_json::json;
 
@@ -28,7 +28,7 @@ async fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract_file("paper.pdf", None, &config).await?;
+    let result = extract("paper.pdf", None, &config).await?;
     if let Some(structured) = &result.structured_output {
         println!("{}", structured);
     }

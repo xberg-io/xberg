@@ -20,7 +20,7 @@ $config = new ExtractionConfig(
     )
 );
 
-$result = Xberg::extractFileSync('document.pdf', null, $config);
+$result = Xberg::extractSync('document.pdf', null, $config);
 
 echo "Chunks with embeddings: " . count($result->getChunks()) . "\n";
 ?>

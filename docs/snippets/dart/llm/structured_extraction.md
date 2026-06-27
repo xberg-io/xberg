@@ -38,7 +38,7 @@ Future<void> main() async {
     useLayoutForMarkdown: false,
   );
 
-  final result = await XbergBridge.extractFile('paper.pdf', null, config);
+  final result = await XbergBridge.extract('paper.pdf', null, config);
   final structured = result.structuredOutput;
   if (structured != null) {
     print(structured);

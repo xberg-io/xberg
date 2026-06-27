@@ -7,6 +7,6 @@ var config = new ExtractionConfig
     EnableQualityProcessing = true
 };
 
-var result = await XbergLib.ExtractFile("document.pdf", null, config);
+var result = await XbergLib.Extract("document.pdf", null, config);
 Console.WriteLine(result.Content);
 ```

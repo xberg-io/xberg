@@ -5,7 +5,7 @@ config <- list(
   chunking = list(max_characters = 1000L, overlap = 200L)
 )
 
-json <- extract_file_sync("document.pdf", "application/pdf", config)
+json <- extract_sync("document.pdf", "application/pdf", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Chunks produced: %d\n", length(result$chunks)))
@@ -26,7 +26,7 @@ config <- list(
   )
 )
 
-json <- extract_file_sync("document.md", "text/markdown", config)
+json <- extract_sync("document.md", "text/markdown", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 for (i in seq_len(min(3L, length(result$chunks)))) {

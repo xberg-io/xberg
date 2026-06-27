@@ -34,7 +34,7 @@ int main(void) {
 
     const char *request =
         "{\"method\":\"tools/call\","
-        "\"params\":{\"name\":\"extract_file\","
+        "\"params\":{\"name\":\"extract\","
         "\"arguments\":{\"path\":\"document.pdf\",\"async\":true}}}\n";
     if (write(request_pipe[1], request, strlen(request)) < 0) {
         perror("write");

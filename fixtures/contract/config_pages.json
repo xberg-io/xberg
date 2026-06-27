@@ -1,36 +1,44 @@
 {
 	"id": "config_pages",
 	"description": "Tests page extraction and page marker configuration",
-	"tags": ["contract", "config"],
-	"call": "extract_file_sync",
+	"tags": [
+		"contract",
+		"config"
+	],
+	"call": "extract",
 	"input": {
-		"path": "pdf/fake_memo.pdf",
-		"config": {
-			"pages": {
-				"extract_pages": true,
-				"insert_page_markers": true
-			}
-		}
+		"kind": "uri",
+		"uri": "pdf/fake_memo.pdf"
 	},
 	"assertions": [
 		{
 			"type": "equals",
-			"field": "mime_type",
+			"field": "results.0.mime_type",
 			"value": "application/pdf"
 		},
 		{
 			"type": "min_length",
-			"field": "content",
+			"field": "results.0.content",
 			"value": 10
 		},
 		{
 			"type": "contains_any",
-			"field": "content",
-			"values": ["PAGE"]
+			"field": "results.0.content",
+			"values": [
+				"PAGE"
+			]
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
-		"reason": "WASM cannot access filesystem; use extractBytes with file content instead"
+		"languages": [
+			"wasm"
+		],
+		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
+	},
+	"config": {
+		"pages": {
+			"extract_pages": true,
+			"insert_page_markers": true
+		}
 	}
 }

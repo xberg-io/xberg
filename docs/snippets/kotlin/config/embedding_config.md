@@ -21,7 +21,7 @@ fun main() {
         .withChunking(Optional.of(chunking))
         .build()
 
-    val result = Xberg.extractFileSync(Paths.get("document.pdf"), null, config)
+    val result = Xberg.extractSync(Paths.get("document.pdf"), null, config)
     println("Chunks with embeddings: ${result.chunks()?.size ?: 0}")
 }
 ```

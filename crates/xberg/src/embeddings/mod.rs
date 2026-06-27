@@ -40,7 +40,7 @@
 //! # Example
 //!
 //! ```rust,ignore
-//! use xberg::{extract_file, ExtractionConfig, ChunkingConfig, EmbeddingConfig};
+//! use xberg::{extract, ChunkingConfig, EmbeddingConfig, ExtractInput, ExtractionConfig};
 //!
 //! let config = ExtractionConfig {
 //!     chunking: Some(ChunkingConfig {
@@ -51,7 +51,8 @@
 //!     ..Default::default()
 //! };
 //!
-//! let result = extract_file("document.pdf", None, &config).await?;
+//! let output = extract(ExtractInput::uri("document.pdf"), &config).await?;
+//! let result = output.results.into_iter().next().expect("one input yields one result");
 //! for chunk in result.chunks.unwrap() {
 //!     if let Some(embedding) = chunk.embedding {
 //!         println!("Chunk has {} dimension embedding", embedding.len());

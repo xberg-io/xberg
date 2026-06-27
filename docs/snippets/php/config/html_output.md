@@ -13,7 +13,7 @@ $config = new ExtractionConfig(
     )
 );
 
-$result = Xberg::extractFileSync('document.pdf', null, $config);
+$result = Xberg::extractSync('document.pdf', null, $config);
 
 // Output HTML with kb-* CSS classes
 echo $result->getContent();

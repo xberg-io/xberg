@@ -8,7 +8,7 @@ config_json = Jason.encode!(%{
   }
 })
 
-{:ok, result} = Xberg.extract_file_sync("document.pdf", "application/pdf", config_json)
+{:ok, result} = Xberg.extract_sync("document.pdf", "application/pdf", config_json)
 
 # Prepare chunks for vector embedding and search
 chunks_for_embedding = result.chunks

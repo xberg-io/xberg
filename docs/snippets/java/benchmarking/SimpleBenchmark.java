@@ -20,7 +20,7 @@ public final class SimpleBenchmark {
     System.out.println("Sync extraction (" + numRuns + " runs):");
     long start = System.nanoTime();
     for (int i = 0; i < numRuns; i++) {
-      xberg.extractFile(filePath);
+      xberg.extract(filePath);
     }
     double syncDuration = (System.nanoTime() - start) / 1_000_000_000.0;
     double avgSync = syncDuration / numRuns;
@@ -30,7 +30,7 @@ public final class SimpleBenchmark {
     System.out.println("\nAsync extraction (" + numRuns + " parallel runs):");
     List<Callable<ExtractionResult>> tasks = new ArrayList<>();
     for (int i = 0; i < numRuns; i++) {
-      tasks.add(() -> xberg.extractFile(filePath));
+      tasks.add(() -> xberg.extract(filePath));
     }
 
     start = System.nanoTime();
@@ -47,13 +47,13 @@ public final class SimpleBenchmark {
 
     System.out.println("\nFirst extraction (populates cache)...");
     start = System.nanoTime();
-    xbergCached.extractFile(filePath);
+    xbergCached.extract(filePath);
     double firstDuration = (System.nanoTime() - start) / 1_000_000_000.0;
     System.out.println("  - Time: " + String.format("%.3f", firstDuration) + "s");
 
     System.out.println("Second extraction (from cache)...");
     start = System.nanoTime();
-    xbergCached.extractFile(filePath);
+    xbergCached.extract(filePath);
     double cachedDuration = (System.nanoTime() - start) / 1_000_000_000.0;
     System.out.println("  - Time: " + String.format("%.3f", cachedDuration) + "s");
     System.out.println("  - Cache speedup: " + String.format("%.1f", firstDuration / cachedDuration) + "x");

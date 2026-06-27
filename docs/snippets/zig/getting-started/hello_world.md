@@ -12,7 +12,7 @@ pub fn main() !void {
     try stdout.print("Hello from xberg-zig\n", .{});
 
     const config_json = "{}";
-    const result_json = try xberg.extract_file_sync("document.pdf", null, config_json);
+    const result_json = try xberg.extract_sync("document.pdf", null, config_json);
     defer std.heap.c_allocator.free(result_json);
 
     try stdout.print("{s}\n", .{result_json});

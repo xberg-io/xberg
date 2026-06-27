@@ -20,7 +20,7 @@ class Program
 
         try
         {
-            var result = await XbergLib.ExtractFileAsync(
+            var result = await XbergLib.ExtractAsync(
                 "document.pdf",
                 config
             ).ConfigureAwait(false);

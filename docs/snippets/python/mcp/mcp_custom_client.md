@@ -15,7 +15,7 @@ async def main() -> None:
             tool_names: list[str] = [t.name for t in tools.tools]
             print(f"Available tools: {tool_names}")
             result = await session.call_tool(
-                "extract_file", arguments={"path": "document.pdf", "async": True}
+                "extract", arguments={"path": "document.pdf", "async": True}
             )
             print(result)
 

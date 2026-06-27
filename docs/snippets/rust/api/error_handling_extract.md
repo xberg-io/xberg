@@ -1,9 +1,9 @@
 ```rust title="Rust"
-use xberg::{extract_bytes_sync, ExtractionConfig, XbergError, Result};
+use xberg::{extract_sync, ExtractionConfig, XbergError, Result};
 
 fn extract_text(bytes: &[u8], mime_type: &str) -> Result<String> {
     let config = ExtractionConfig::default();
-    let result = extract_bytes_sync(bytes, mime_type, &config)?;
+    let result = extract_sync(bytes, mime_type, &config)?;
     Ok(result.content)
 }
 

@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-import { extractFile } from "@xberg/node";
+import { extract } from "@xberg-io/xberg";
 
 const config = {
   chunking: {
@@ -12,7 +12,7 @@ const config = {
   },
 };
 
-const result = await extractFile("research_paper.pdf", null, config);
+const result = await extract("research_paper.pdf", null, config);
 
 for (const chunk of result.chunks ?? []) {
   console.log(`Chunk ${chunk.metadata.chunkIndex + 1}/${chunk.metadata.totalChunks}`);

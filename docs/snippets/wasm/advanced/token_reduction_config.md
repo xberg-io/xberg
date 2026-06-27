@@ -1,5 +1,5 @@
 ```typescript title="WASM - Token Reduction Configuration"
-import init, { extractBytes } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 
@@ -11,7 +11,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extractBytes(bytes, "application/pdf", config);
+const result = await extract(bytes, "application/pdf", config);
 
 console.log(`Original content: ${result.content.length} characters`);
 console.log(`Preview: ${result.content.substring(0, 100)}...`);
@@ -23,7 +23,7 @@ console.log(`Preview: ${result.content.substring(0, 100)}...`);
 ```
 
 ```typescript title="WASM - Token Reduction Modes"
-import init, { extractBytes } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 
@@ -47,7 +47,7 @@ async function compareTokenReductionModes(bytes: Uint8Array): Promise<TokenReduc
       },
     };
 
-    const result = await extractBytes(bytes, "application/pdf", config);
+    const result = await extract(bytes, "application/pdf", config);
     const originalSize = result.content.length;
     const reducedSize = result.content.split(/\s+/).length;
 

@@ -10,7 +10,7 @@ let configJson = """
 """
 
 let config = try extractionConfigFromJson(configJson)
-let result = try extractFileSync("document.pdf", nil, config)
+let result = try extractSync("document.pdf", nil, config)
 
 if let score = result.quality_score() {
     print(String(format: "Quality score: %.2f", score))

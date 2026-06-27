@@ -15,7 +15,7 @@ class CustomJsonExtractor:
     def priority(self) -> int:
         return 50
 
-    def extract_bytes(
+    def extract(
         self, content: bytes, mime_type: str, config: dict
     ) -> ExtractionResult:
         data: dict = json.loads(content)

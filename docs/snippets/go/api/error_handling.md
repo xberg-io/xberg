@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	result, err := xberg.ExtractFileSync("missing.pdf", nil, xberg.ExtractionConfig{})
+	result, err := xberg.ExtractSync("missing.pdf", nil, xberg.ExtractionConfig{})
 	if err != nil {
 		if errors.Is(err, xberg.ErrIo) {
 			log.Printf("file not found: %v", err)

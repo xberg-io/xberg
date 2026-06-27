@@ -2,7 +2,11 @@
 	"id": "detect_mime_bytes_pdf",
 	"category": "detection",
 	"description": "Detect PDF MIME type from bytes",
-	"tags": ["mime_detection", "bytes", "pdf"],
+	"tags": [
+		"mime_detection",
+		"bytes",
+		"pdf"
+	],
 	"call": "detect_mime_type_from_bytes",
 	"input": {
 		"data": "pdf/fake_memo.pdf"

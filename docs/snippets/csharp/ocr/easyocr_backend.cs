@@ -10,5 +10,5 @@ var config = new ExtractionConfig
     }
 };
 
-var result = XbergLib.ExtractFileSync("scanned.pdf", config);
+var result = XbergLib.ExtractSync("scanned.pdf", config);
 Console.WriteLine(result.Content);

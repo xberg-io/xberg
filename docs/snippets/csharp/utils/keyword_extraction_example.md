@@ -11,7 +11,7 @@ var config = new ExtractionConfig
     },
 };
 
-var result = await XbergLib.ExtractFile("research_paper.pdf", null, config);
+var result = await XbergLib.Extract("research_paper.pdf", null, config);
 
 foreach (var keyword in result.ExtractedKeywords ?? new List<Keyword>())
 {

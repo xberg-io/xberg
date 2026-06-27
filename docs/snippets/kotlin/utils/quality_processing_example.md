@@ -8,7 +8,7 @@ fun main() {
         .withEnableQualityProcessing(true)
         .build()
 
-    val result = Xberg.extractFileSync(Paths.get("scanned_document.pdf"), null, config)
+    val result = Xberg.extractSync(Paths.get("scanned_document.pdf"), null, config)
 
     val score = result.qualityScore()
     if (score != null) {

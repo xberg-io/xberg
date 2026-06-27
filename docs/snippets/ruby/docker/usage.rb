@@ -20,7 +20,7 @@ class DockerXbergClient
     puts "Container started on http://localhost:#{@api_port}"
   end
 
-  def extract_file(file_path)
+  def extract(file_path)
     file_content = File.read(file_path, mode: 'rb')
     boundary = "----WebKitFormBoundary#{SecureRandom.hex(16)}"
 
@@ -55,7 +55,7 @@ begin
   docker_client.start_container
   sleep(2)
 
-  content = docker_client.extract_file('document.pdf')
+  content = docker_client.extract('document.pdf')
   puts "Extracted content:\n#{content}"
 ensure
   docker_client.stop_container

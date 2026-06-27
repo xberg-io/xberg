@@ -16,7 +16,7 @@ use Xberg\Xberg;
 
 $xberg = new Xberg();
 
-$result = $xberg->extractFile('document.pdf');
+$result = $xberg->extract('document.pdf');
 
 echo "Extracted Content:\n";
 echo "==================\n";

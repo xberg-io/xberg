@@ -1,7 +1,7 @@
 Import io.xberg.\*;
 import java.nio.charset.StandardCharsets;
 
-var result = Xberg.extractFileSync("document.pdf");
+var result = Xberg.extractSync("document.pdf");
 
 If (result.metadata().pages() != null &&
 result.metadata().pages().boundaries() != null) {

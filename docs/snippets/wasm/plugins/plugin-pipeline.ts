@@ -1,5 +1,5 @@
-import type { ExtractionResult } from "@xberg/wasm";
-import { extractBytes, initWasm } from "@xberg/wasm";
+import type { ExtractionResult } from "@xberg-io/xberg-wasm";
+import { extract, initWasm } from "@xberg-io/xberg-wasm";
 
 interface Plugin {
   name: string;
@@ -38,7 +38,7 @@ async function executePipeline(
 ): Promise<ExtractionResult> {
   await initWasm();
 
-  let result = await extractBytes(bytes, mimeType);
+  let result = await extract(bytes, mimeType);
 
   for (const plugin of plugins) {
     console.log(`Executing plugin: ${plugin.name}`);

@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as readline from "node:readline";
 // Import from the local build path to avoid pnpm workspace resolution issues.
-// The @xberg/wasm package is resolved through pnpm's virtual store which
+// The @xberg-io/xberg-wasm package is resolved through pnpm's virtual store which
 // doesn't reliably provide the WASM binary and glue JS via import.meta.url.
 import {
 	type ExtractionConfig,

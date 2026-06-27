@@ -13,7 +13,7 @@ $config = new ExtractionConfig(
     )
 );
 
-$result = Xberg::extractFileSync('scanned.pdf', null, $config);
+$result = Xberg::extractSync('scanned.pdf', null, $config);
 
 echo "Content length: " . strlen($result->getContent()) . " characters\n";
 echo "Tables detected: " . count($result->getTables()) . "\n";

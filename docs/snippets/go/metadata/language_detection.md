@@ -10,7 +10,7 @@ import (
 func main() {
 	enabled := true
 	minConfidence := 0.9
-	result, err := xberg.ExtractFileSync("document.pdf", nil, xberg.ExtractionConfig{
+	result, err := xberg.ExtractSync("document.pdf", nil, xberg.ExtractionConfig{
 		LanguageDetection: &xberg.LanguageDetectionConfig{
 			Enabled:        &enabled,
 			MinConfidence:  &minConfidence,

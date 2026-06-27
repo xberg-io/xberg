@@ -1,23 +1,25 @@
 {
 	"id": "config_quality_enabled",
 	"description": "Tests quality scoring produces a score value in [0.0, 1.0]",
-	"tags": ["contract", "config", "quality"],
-	"call": "extract_file_sync",
+	"tags": [
+		"contract",
+		"config",
+		"quality"
+	],
+	"call": "extract",
 	"input": {
-		"path": "pdf/fake_memo.pdf",
-		"config": {
-			"enable_quality_processing": true
-		}
+		"kind": "uri",
+		"uri": "pdf/fake_memo.pdf"
 	},
 	"assertions": [
 		{
 			"type": "equals",
-			"field": "mime_type",
+			"field": "results.0.mime_type",
 			"value": "application/pdf"
 		},
 		{
 			"type": "min_length",
-			"field": "content",
+			"field": "results.0.content",
 			"value": 10
 		},
 		{
@@ -36,7 +38,12 @@
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
-		"reason": "WASM cannot access filesystem; use extractBytes with file content instead"
+		"languages": [
+			"wasm"
+		],
+		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
+	},
+	"config": {
+		"enable_quality_processing": true
 	}
 }

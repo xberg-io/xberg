@@ -57,6 +57,7 @@ chrono = "0.4"
 clap = { version = "4.6", features = ["derive", "color", "suggestions"] }
 comrak = { version = "0.52", default-features = false }
 console_error_panic_hook = "0.1"
+crawlberg = { path = "../crawlberg/crates/crawlberg", version = "1.0.0-rc.1", default-features = false }
 criterion = { version = "0.8", features = ["html_reports"] }
 dbase = "0.7"
 futures = "0.3"
@@ -110,7 +111,8 @@ tokio = { version = "1.52.3", features = [
 ] }
 toml = "1.1.2"
 tracing = "0.1"
-tree-sitter-language-pack = { version = "1.10.8", default-features = false, features = ["serde"] }
+tree-sitter-language-pack = { version = "1.10.9", default-features = false, features = ["serde"] }
+url = "2.5.8"
 wasm-bindgen = { version = "0.2", features = ["enable-interning"] }
 wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = [

@@ -24,7 +24,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('verbose_document.pdf');
+$result = $xberg->extract('verbose_document.pdf');
 
 echo "Token Reduction Example:\n";
 echo str_repeat('=', 60) . "\n";
@@ -82,7 +82,7 @@ foreach ($documents as $document) {
         continue;
     }
 
-    $result = $xberg->extractFile($document);
+    $result = $xberg->extract($document);
 
     $originalTokens = $result->metadata['original_token_count'] ?? 0;
     $reducedTokens = $result->metadata['token_count'] ?? 0;
@@ -123,7 +123,7 @@ function fitWithinTokenLimit(
         );
 
         $xbergWithMode = new Xberg($config);
-        $result = $xbergWithMode->extractFile($filePath);
+        $result = $xbergWithMode->extract($filePath);
 
         $tokens = $result->metadata['token_count'] ?? strlen($result->content);
 
@@ -145,7 +145,7 @@ function fitWithinTokenLimit(
     );
 
     $xbergWithMode = new Xberg($config);
-    $result = $xbergWithMode->extractFile($filePath);
+    $result = $xbergWithMode->extract($filePath);
     $tokens = $result->metadata['token_count'] ?? strlen($result->content);
 
     return [

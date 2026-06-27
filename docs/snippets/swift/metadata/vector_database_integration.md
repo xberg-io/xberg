@@ -26,7 +26,7 @@ let configJson = """
 
 let documentId = "doc_001"
 let config = try extractionConfigFromJson(configJson)
-let result = try extractFileSync("document.pdf", nil, config)
+let result = try extractSync("document.pdf", nil, config)
 
 var records: [VectorRecord] = []
 

@@ -2,7 +2,11 @@
 	"id": "mime_detect_bytes",
 	"category": "mime_utilities",
 	"description": "Detect MIME type from file bytes",
-	"tags": ["mime", "detection", "bytes"],
+	"tags": [
+		"mime",
+		"detection",
+		"bytes"
+	],
 	"call": "detect_mime_type_from_bytes",
 	"input": {
 		"data": "pdf/fake_memo.pdf"

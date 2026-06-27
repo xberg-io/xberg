@@ -1,6 +1,6 @@
 ```python title="Python"
 import asyncio
-from xberg import extract_file, ExtractionConfig, OcrConfig, LlmConfig
+from xberg import extract, ExtractionConfig, OcrConfig, LlmConfig
 
 async def main() -> None:
     config = ExtractionConfig(
@@ -10,7 +10,7 @@ async def main() -> None:
             vlm_config=LlmConfig(model="openai/gpt-4o-mini"),
         ),
     )
-    result = await extract_file("scan.pdf", config=config)
+    result = await extract("scan.pdf", config=config)
     print(result.content)
 
 asyncio.run(main())

@@ -1,7 +1,7 @@
 ```elixir title="Elixir"
 defmodule HelloWorld do
   def main do
-    case Xberg.extract_file_sync("document.pdf", nil, nil) do
+    case Xberg.extract_sync("document.pdf", nil, nil) do
       {:ok, result} ->
         IO.puts("Extraction succeeded!")
         IO.puts(result)

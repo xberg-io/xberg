@@ -1,5 +1,5 @@
 {
-  "name": "@xberg/wasm-e2e-wasm",
+  "name": "@xberg-io/xberg-wasm-e2e-wasm",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -7,7 +7,7 @@
     "test": "NODE_OPTIONS=--max-old-space-size=4096 vitest run"
   },
   "devDependencies": {
-    "@xberg/wasm": "file:../../crates/xberg-wasm/pkg/nodejs",
+    "@xberg-io/xberg-wasm": "file:../../crates/xberg-wasm/pkg/nodejs",
     "rollup": "^4.53.3",
     "vitest": "^4.1.5"
   }

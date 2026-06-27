@@ -4,7 +4,7 @@ const xberg = @import("xberg");
 
 pub fn main() !void {
     const config_json = "{}";
-    const result_json = xberg.extract_file_sync("document.pdf", null, config_json) catch |err| {
+    const result_json = xberg.extract_sync("document.pdf", null, config_json) catch |err| {
         const stderr = std.io.getStdErr().writer();
         switch (err) {
             error.Io => try stderr.print("File error\n", .{}),

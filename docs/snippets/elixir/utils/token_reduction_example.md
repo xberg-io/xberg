@@ -9,7 +9,7 @@ config_json =
     }
   })
 
-{:ok, json} = Xberg.extract_file_async("verbose_document.pdf", nil, config_json)
+{:ok, json} = Xberg.extract_async("verbose_document.pdf", nil, config_json)
 result = Jason.decode!(json)
 metadata = result["metadata"] || %{}
 

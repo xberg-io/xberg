@@ -63,7 +63,7 @@ When the `svg` feature is active and `output_format` is set to `Svg`:
 === "TypeScript"
 
     ```typescript
-    import { ExtractionConfig, ImageOutputFormat } from "@xberg/node";
+    import { ExtractionConfig, ImageOutputFormat } from "@xberg-io/xberg";
 
     const config: ExtractionConfig = {
       images: {
@@ -209,7 +209,7 @@ PDF coordinates use bottom-left origin in points (1/72 inch).
 
 ```python
 config = ExtractionConfig(result_format="element_based")
-result = extract_file_sync("document.pdf", config=config)
+result = extract("document.pdf", config=config)
 
 titles = [e for e in result.elements if e.element_type == "title"]
 tables = [e for e in result.elements if e.element_type == "table"]

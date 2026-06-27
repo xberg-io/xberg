@@ -14,7 +14,7 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 use Xberg\Xberg;
 use Xberg\Config\ExtractionConfig;
-use function Xberg\extract_file;
+use function Xberg\extract;
 use function Xberg\detect_mime_type_from_path;
 
 $formats = [
@@ -43,7 +43,7 @@ foreach ($formats as $type => $file) {
     $mimeType = detect_mime_type_from_path($file);
     echo "  MIME type: $mimeType\n";
 
-    $result = $xberg->extractFile($file);
+    $result = $xberg->extract($file);
 
     echo "  Content length: " . strlen($result->content) . " chars\n";
     echo "  Tables: " . count($result->tables) . "\n";
@@ -63,7 +63,7 @@ foreach ($mixedFiles as $file) {
         $byFormat[$extension] = [];
     }
 
-    $result = extract_file($file);
+    $result = extract($file);
     $byFormat[$extension][] = [
         'file' => basename($file),
         'mime' => $mimeType,
@@ -117,7 +117,7 @@ foreach ($mixedFiles as $file) {
 
     $config = $formatConfigs[$ext];
     $xberg = new Xberg($config);
-    $result = $xberg->extractFile($file);
+    $result = $xberg->extract($file);
 
     echo "Processed " . basename($file) . " with $ext config\n";
 }
@@ -131,7 +131,7 @@ function convertToMarkdown(string $inputFile): string
     );
 
     $xberg = new Xberg($config);
-    $result = $xberg->extractFile($inputFile);
+    $result = $xberg->extract($inputFile);
 
     $markdown = "# " . ($result->metadata->title ?? basename($inputFile)) . "\n\n";
 
@@ -166,7 +166,7 @@ foreach (['document.pdf', 'document.docx'] as $file) {
 
 function extractFromArchive(string $archiveFile): array
 {
-    $result = extract_file($archiveFile);
+    $result = extract($archiveFile);
 
     return [
         'archive' => basename($archiveFile),
@@ -205,7 +205,7 @@ class UniversalExtractor
     {
         $config = new ExtractionConfig(extractTables: true, extractImages: true);
         $xberg = new Xberg($config);
-        $result = $xberg->extractFile($file);
+        $result = $xberg->extract($file);
 
         return [
             'type' => 'PDF',
@@ -218,7 +218,7 @@ class UniversalExtractor
 
     private function handleDOCX(string $file, string $mimeType): array
     {
-        $result = $this->xberg->extractFile($file);
+        $result = $this->xberg->extract($file);
 
         return [
             'type' => 'Word Document',
@@ -232,7 +232,7 @@ class UniversalExtractor
     {
         $config = new ExtractionConfig(extractTables: true);
         $xberg = new Xberg($config);
-        $result = $xberg->extractFile($file);
+        $result = $xberg->extract($file);
 
         return [
             'type' => 'Excel Spreadsheet',
@@ -247,7 +247,7 @@ class UniversalExtractor
             ocr: new \Xberg\Config\OcrConfig(backend: 'tesseract', language: 'eng')
         );
         $xberg = new Xberg($config);
-        $result = $xberg->extractFile($file);
+        $result = $xberg->extract($file);
 
         return [
             'type' => 'Image (OCR)',
@@ -258,7 +258,7 @@ class UniversalExtractor
 
     private function handleGeneric(string $file, string $mimeType): array
     {
-        $result = $this->xberg->extractFile($file);
+        $result = $this->xberg->extract($file);
 
         return [
             'type' => 'Generic',

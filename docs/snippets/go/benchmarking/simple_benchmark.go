@@ -25,7 +25,7 @@ func main() {
 	fmt.Printf("Sync extraction (%d runs):\n", numRuns)
 	start := time.Now()
 	for i := 0; i < numRuns; i++ {
-		_, err := client.ExtractFile(filePath)
+		_, err := client.Extract(filePath)
 		if err != nil {
 			panic(err)
 		}
@@ -42,7 +42,7 @@ func main() {
 	for i := 0; i < numRuns; i++ {
 		go func() {
 			defer wg.Done()
-			_, err := client.ExtractFile(filePath)
+			_, err := client.Extract(filePath)
 			if err != nil {
 				panic(err)
 			}
@@ -65,7 +65,7 @@ func main() {
 
 	fmt.Println("\nFirst extraction (populates cache)...")
 	start = time.Now()
-	_, err = clientCached.ExtractFile(filePath)
+	_, err = clientCached.Extract(filePath)
 	if err != nil {
 		panic(err)
 	}
@@ -74,7 +74,7 @@ func main() {
 
 	fmt.Println("Second extraction (from cache)...")
 	start = time.Now()
-	_, err = clientCached.ExtractFile(filePath)
+	_, err = clientCached.Extract(filePath)
 	if err != nil {
 		panic(err)
 	}

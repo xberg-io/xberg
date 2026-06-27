@@ -1,5 +1,5 @@
 ```python title="Python"
-from xberg import extract_file_sync, extract_bytes_sync, ExtractionConfig
+from xberg import extract_sync, extract_sync, ExtractionConfig
 from xberg import (
     XbergError,
     ParsingError,
@@ -8,7 +8,7 @@ from xberg import (
 )
 
 try:
-    result = extract_file_sync("document.pdf")
+    result = extract_sync("document.pdf")
     print(f"Extracted {len(result.content)} characters")
 except FileNotFoundError as e:
     print(f"File not found: {e}")
@@ -22,7 +22,7 @@ except XbergError as e:
 try:
     config: ExtractionConfig = ExtractionConfig()
     pdf_bytes: bytes = b"%PDF-1.4\n"
-    result = extract_bytes_sync(pdf_bytes, "application/pdf", config)
+    result = extract_sync(pdf_bytes, "application/pdf", config)
     print(f"Extracted: {result.content[:100]}")
 except ValidationError as e:
     print(f"Invalid configuration: {e}")

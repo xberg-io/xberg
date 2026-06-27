@@ -24,7 +24,7 @@ public class MyPlugin
         _logger.LogInformation($"Shutting down plugin: {Name()}");
     }
 
-    public Dictionary<string, object> ExtractBytes(
+    public Dictionary<string, object> Extract(
         byte[] content, string mimeType, Dictionary<string, object> config)
     {
         _logger.LogInformation($"Extracting {mimeType} ({content.Length} bytes)");

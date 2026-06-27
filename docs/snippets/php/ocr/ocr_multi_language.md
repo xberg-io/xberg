@@ -18,7 +18,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('multilingual_document.pdf');
+$result = $xberg->extract('multilingual_document.pdf');
 
 echo "Multilingual OCR Results:\n";
 echo "Supported languages: English, French, German\n";
@@ -34,7 +34,7 @@ $autoDetectConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($autoDetectConfig);
-$result = $xberg->extractFile('european_document.pdf');
+$result = $xberg->extract('european_document.pdf');
 
 echo "European Language Document:\n";
 echo "Extracted " . strlen($result->content) . " characters\n";
@@ -49,7 +49,7 @@ $mixedConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($mixedConfig);
-$result = $xberg->extractFile('asian_document.pdf');
+$result = $xberg->extract('asian_document.pdf');
 
 echo "Multi-script Document:\n";
 echo "Characters extracted: " . mb_strlen($result->content) . "\n";

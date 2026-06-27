@@ -1,6 +1,6 @@
 ```python title="Python"
 import asyncio
-from xberg import extract_file, ExtractionConfig, OcrConfig, TesseractConfig
+from xberg import extract, ExtractionConfig, OcrConfig, TesseractConfig
 
 async def main() -> None:
     config = ExtractionConfig(
@@ -11,7 +11,7 @@ async def main() -> None:
             tesseract_config=TesseractConfig(psm=3)
         )
     )
-    result = await extract_file("scanned.pdf", config=config)
+    result = await extract("scanned.pdf", config=config)
     print(result.content)
     print(f"Detected Languages: {result.detected_languages}")
 

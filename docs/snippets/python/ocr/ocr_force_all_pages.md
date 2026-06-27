@@ -1,12 +1,12 @@
 ```python title="Python"
-from xberg import extract_file_sync, ExtractionConfig, OcrConfig
+from xberg import extract_sync, ExtractionConfig, OcrConfig
 
 config: ExtractionConfig = ExtractionConfig(
     ocr=OcrConfig(backend="tesseract"),
     force_ocr=True,
 )
 
-result = extract_file_sync("document.pdf", config=config)
+result = extract_sync("document.pdf", config=config)
 
 content: str = result.content
 preview: str = content[:100]

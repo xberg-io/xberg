@@ -17,7 +17,7 @@ fun main() {
         .withImages(Optional.of(images))
         .build()
 
-    val result = Xberg.extractFileSync(Paths.get("document.pdf"), null, config)
+    val result = Xberg.extractSync(Paths.get("document.pdf"), null, config)
     println("Extracted images: ${result.images()?.size ?: 0}")
 }
 ```

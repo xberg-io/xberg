@@ -27,7 +27,7 @@ func main() {
 		},
 	}
 
-	result, err := xberg.ExtractFileSync("document.pdf", config)
+	result, err := xberg.ExtractSync("document.pdf", config)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return

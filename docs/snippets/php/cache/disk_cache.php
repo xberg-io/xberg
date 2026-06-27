@@ -115,7 +115,7 @@ $start = microtime(true);
 $result = $cache->get($file, $config);
 
 if ($result === null) {
-    $result = $xberg->extractFile($file, config: $config);
+    $result = $xberg->extract($file, config: $config);
     $cache->set($file, $config, $result);
     echo "  Status: Extracted and cached\n";
 } else {
@@ -132,7 +132,7 @@ $start = microtime(true);
 $result = $cache->get($file, $config);
 
 if ($result === null) {
-    $result = $xberg->extractFile($file, config: $config);
+    $result = $xberg->extract($file, config: $config);
     $cache->set($file, $config, $result);
     echo "  Status: Extracted and cached\n";
 } else {
@@ -157,7 +157,7 @@ class CachedXberg
         private DiskCache $cache
     ) {}
 
-    public function extractFile(
+    public function extract(
         string $filePath,
         ?string $mimeType = null,
         ?ExtractionConfig $config = null
@@ -167,7 +167,7 @@ class CachedXberg
         $result = $this->cache->get($filePath, $config);
 
         if ($result === null) {
-            $result = $this->xberg->extractFile($filePath, $mimeType, $config);
+            $result = $this->xberg->extract($filePath, $mimeType, $config);
             $this->cache->set($filePath, $config, $result);
         }
 
@@ -198,7 +198,7 @@ foreach ($files as $file) {
     if (!file_exists($file)) continue;
 
     $start = microtime(true);
-    $result = $cachedXberg->extractFile($file);
+    $result = $cachedXberg->extract($file);
     $elapsed = microtime(true) - $start;
 
     echo "$file: " . number_format($elapsed, 4) . "s\n";

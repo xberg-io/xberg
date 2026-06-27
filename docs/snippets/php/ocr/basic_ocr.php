@@ -23,7 +23,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('scanned_document.pdf');
+$result = $xberg->extract('scanned_document.pdf');
 
 echo "OCR Extraction Results:\n";
 echo str_repeat('=', 60) . "\n";
@@ -37,7 +37,7 @@ $multilingualConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($multilingualConfig);
-$result = $xberg->extractFile('multilingual_scan.pdf');
+$result = $xberg->extract('multilingual_scan.pdf');
 
 echo "Multilingual OCR:\n";
 echo str_repeat('=', 60) . "\n";
@@ -57,7 +57,7 @@ foreach ($imageFormats as $format) {
     $file = "scan.$format";
     if (file_exists($file)) {
         echo "Processing $file...\n";
-        $result = $xberg->extractFile($file);
+        $result = $xberg->extract($file);
         echo "Extracted " . strlen($result->content) . " characters\n";
         echo "Preview: " . substr($result->content, 0, 100) . "...\n\n";
     }
@@ -86,26 +86,26 @@ foreach ($languages as $lang => $description) {
         );
 
         $xberg = new Xberg($config);
-        $result = $xberg->extractFile($file);
+        $result = $xberg->extract($file);
 
         echo "$description ($lang):\n";
         echo "  Characters extracted: " . mb_strlen($result->content) . "\n\n";
     }
 }
 
-use function Xberg\extract_file;
+use function Xberg\extract;
 
 $config = new ExtractionConfig(
     ocr: new OcrConfig(backend: 'tesseract', language: 'eng')
 );
 
-$result = extract_file('invoice_scan.pdf', config: $config);
+$result = extract('invoice_scan.pdf', config: $config);
 
 echo "Invoice OCR:\n";
 echo str_repeat('=', 60) . "\n";
 echo $result->content . "\n";
 
-$result = $xberg->extractFile('scanned.pdf');
+$result = $xberg->extract('scanned.pdf');
 
 $contentLength = strlen($result->content);
 $pageCount = $result->metadata->pageCount ?? 1;

@@ -5,9 +5,8 @@
 //!
 //! # Features
 //!
-//! - **extract_file**: Extract content from a file by path
-//! - **extract_bytes**: Extract content from base64-encoded bytes
-//! - **batch_extract_files**: Extract content from multiple files in parallel
+//! - **extract**: Extract content from bytes, local paths, file URIs, or URLs
+//! - **extract_batch**: Extract content from multiple bytes or URI inputs
 //! - **detect_mime_type**: Detect MIME type of a file
 //! - **cache_stats**: Get cache statistics
 //! - **cache_clear**: Clear the cache
@@ -52,6 +51,6 @@ pub use server::start_mcp_server_http_with_config;
 pub use server::start_mcp_server_with_config;
 
 pub use params::{
-    BatchExtractFilesParams, CacheWarmParams, ChunkTextParams, DetectMimeTypeParams, EmbedTextParams,
-    ExtractBytesParams, ExtractFileParams, ExtractStructuredParams,
+    CacheWarmParams, ChunkTextParams, DetectMimeTypeParams, EmbedTextParams, ExtractBatchParams, ExtractParams,
+    ExtractStructuredParams,
 };

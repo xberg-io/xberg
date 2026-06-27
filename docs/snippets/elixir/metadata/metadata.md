@@ -1,7 +1,7 @@
 ```elixir title="Elixir"
 config = Jason.encode!(%{})
 
-case Xberg.extract_file_sync("document.pdf", nil, config) do
+case Xberg.extract_sync("document.pdf", nil, config) do
   {:ok, result} ->
     with %{"metadata" => %{"pdf" => pdf_meta}} <- Jason.decode!(result) do
       case pdf_meta do
@@ -30,7 +30,7 @@ case Xberg.extract_file_sync("document.pdf", nil, config) do
     IO.puts("Error: #{reason}")
 end
 
-case Xberg.extract_file_sync("page.html", nil, config) do
+case Xberg.extract_sync("page.html", nil, config) do
   {:ok, result} ->
     with %{"metadata" => %{"html" => html_meta}} <- Jason.decode!(result) do
       case html_meta do

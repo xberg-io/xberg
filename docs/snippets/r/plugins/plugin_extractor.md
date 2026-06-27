@@ -19,7 +19,7 @@ custom_json_extractor <- function(path, mime_type) {
 
 register_document_extractor("custom-json-extractor", custom_json_extractor)
 
-result <- extract_file_sync("data.json", "application/json", NULL)
+result <- extract_sync("data.json", "application/json", NULL)
 
 cat(sprintf("Extracted %d characters from JSON\n", nchar(result$content)))
 ```

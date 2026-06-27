@@ -10,7 +10,7 @@ import (
 // The Go binding does not currently expose plugin OCR backend registration.
 // Use one of the built-in backends ("tesseract", "paddle-ocr", or VLM via "vlm").
 func main() {
-	result, err := xberg.ExtractFileSync("scanned.pdf", nil, xberg.ExtractionConfig{
+	result, err := xberg.ExtractSync("scanned.pdf", nil, xberg.ExtractionConfig{
 		Ocr: &xberg.OcrConfig{
 			Backend:  "tesseract",
 			Language: "eng",

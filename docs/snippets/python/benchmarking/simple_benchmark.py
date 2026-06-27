@@ -12,7 +12,7 @@ async def benchmark_extractions():
 
     start = time.perf_counter()
     for _ in range(num_runs):
-        result = xberg.extract_file(file_path)
+        result = xberg.extract(file_path)
     sync_duration = time.perf_counter() - start
     avg_sync = sync_duration / num_runs
 
@@ -21,7 +21,7 @@ async def benchmark_extractions():
     print(f"  - Average: {avg_sync:.3f}s per extraction")
 
     start = time.perf_counter()
-    tasks = [xberg.extract_file_async(file_path) for _ in range(num_runs)]
+    tasks = [xberg.extract_async(file_path) for _ in range(num_runs)]
     await asyncio.gather(*tasks)
     async_duration = time.perf_counter() - start
 
@@ -35,13 +35,13 @@ async def benchmark_extractions():
 
     print("\nFirst extraction (populates cache)...")
     start = time.perf_counter()
-    result1 = await xberg_cached.extract_file_async(file_path)
+    result1 = await xberg_cached.extract_async(file_path)
     first_duration = time.perf_counter() - start
     print(f"  - Time: {first_duration:.3f}s")
 
     print("Second extraction (from cache)...")
     start = time.perf_counter()
-    result2 = await xberg_cached.extract_file_async(file_path)
+    result2 = await xberg_cached.extract_async(file_path)
     cached_duration = time.perf_counter() - start
     print(f"  - Time: {cached_duration:.3f}s")
     print(f"  - Cache speedup: {first_duration / cached_duration:.1f}x")

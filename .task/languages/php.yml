@@ -7,7 +7,8 @@ tasks:
     silent: false
     cmds:
       - cmd: |
-          cd packages/php && composer update
+          command -v composer >/dev/null 2>&1 || { echo "Composer not found, skipping PHP update"; exit 0; }
+          composer update
         ignore_error: false
 
   upgrade:
@@ -16,5 +17,5 @@ tasks:
     cmds:
       - cmd: |
           command -v composer >/dev/null 2>&1 || { echo "Composer not found, skipping PHP upgrade"; exit 0; }
-          cd packages/php && composer update --with-all-dependencies
+          composer update --with-all-dependencies
         ignore_error: false

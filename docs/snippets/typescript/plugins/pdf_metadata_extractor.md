@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-import { registerPostProcessor, type ExtractionResult } from "@xberg/node";
+import { registerPostProcessor, type ExtractionResult } from "@xberg-io/xberg";
 
 class PdfMetadataExtractor {
   private processedCount: number = 0;

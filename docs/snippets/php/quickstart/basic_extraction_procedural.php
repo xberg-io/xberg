@@ -12,9 +12,9 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/vendor/autoload.php';
 
-use function Xberg\extract_file;
+use function Xberg\extract;
 
-$result = extract_file('document.pdf');
+$result = extract('document.pdf');
 
 echo "Extracted Text:\n";
 echo str_repeat('=', 50) . "\n";

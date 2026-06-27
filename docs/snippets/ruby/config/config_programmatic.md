@@ -14,6 +14,6 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract_file_sync("document.pdf", config)
+result = Xberg.extract_sync("document.pdf", config)
 puts "Content length: #{result.content.length}"
 ```

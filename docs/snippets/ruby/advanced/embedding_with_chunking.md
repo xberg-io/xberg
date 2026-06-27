@@ -17,7 +17,7 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract_file_sync('document.pdf', config: config)
+result = Xberg.extract_sync('document.pdf', config: config)
 
 chunks = result.chunks || []
 chunks.each_with_index do |chunk, idx|

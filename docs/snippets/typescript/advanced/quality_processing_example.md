@@ -1,11 +1,11 @@
 ```typescript title="TypeScript"
-import { extractFile } from "@xberg/node";
+import { extract } from "@xberg-io/xberg";
 
 const config = {
   enableQualityProcessing: true,
 };
 
-const result = await extractFile("scanned_document.pdf", null, config);
+const result = await extract("scanned_document.pdf", null, config);
 
 if (result.qualityScore !== null && result.qualityScore !== undefined) {
   if (result.qualityScore < 0.5) {

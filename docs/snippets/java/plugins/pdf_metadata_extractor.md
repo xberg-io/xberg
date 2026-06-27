@@ -38,7 +38,7 @@ public class PdfMetadataExtractorExample {
 
             logger.info("PDF metadata extractor initialized");
 
-            ExtractionResult result = Xberg.extractFile("document.pdf");
+            ExtractionResult result = Xberg.extract("document.pdf");
             System.out.println("PDF processed: " + result.getMetadata().get("pdf_processed"));
 
             logger.info("Processed " + processedCount.get() + " PDFs");

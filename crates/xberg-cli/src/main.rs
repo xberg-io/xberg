@@ -69,10 +69,10 @@ use commands::overrides::ExtractionOverrides;
 #[cfg(feature = "api")]
 use commands::serve_command;
 use commands::{
-    batch_command, chunk_command, clear_command, extract_command,
+    BatchInputFormat, ExtractInputSource, batch_command, chunk_command, clear_command, extract_command,
     extract_structured::{ExtractStructuredArgs, extract_structured_command},
-    load_config, manifest_command, stats_command, validate_batch_paths, validate_chunk_params, validate_file_exists,
-    validate_output_dir, warm_command,
+    load_batch_input_manifest, load_config, manifest_command, stats_command, uri_to_local_path, validate_batch_paths,
+    validate_chunk_params, validate_file_exists, validate_output_dir, warm_command,
 };
 use serde_json::json;
 use std::path::PathBuf;
@@ -95,8 +95,17 @@ struct Cli {
 enum Commands {
     /// Extract text from a document
     Extract {
-        /// Path to the document
-        path: PathBuf,
+        /// URI to the document. Local paths and file:// URIs are supported in this checkout.
+        #[arg(value_name = "URI", required_unless_present_any = ["url", "stdin"])]
+        uri: Option<String>,
+
+        /// HTTP(S) URL to extract.
+        #[arg(long, conflicts_with_all = ["uri", "stdin"])]
+        url: Option<String>,
+
+        /// Read document bytes from stdin.
+        #[arg(long, conflicts_with_all = ["uri", "url"])]
+        stdin: bool,
 
         /// Path to config file (TOML, YAML, or JSON). If not specified, searches for xberg.toml/yaml/json in current and parent directories.
         #[arg(short, long)]
@@ -181,6 +190,14 @@ enum Commands {
     Batch {
         /// Paths to documents
         paths: Vec<PathBuf>,
+
+        /// JSON or JSONL manifest containing batch inputs.
+        #[arg(long)]
+        input: Option<PathBuf>,
+
+        /// Format for --input.
+        #[arg(long, value_enum)]
+        input_format: Option<BatchInputFormat>,
 
         /// Path to config file (TOML, YAML, or JSON). If not specified, searches for xberg.toml/yaml/json in current and parent directories.
         #[arg(short, long)]
@@ -590,6 +607,73 @@ fn merge_json_into_config(
     xberg::core::config::merge::merge_config_json(base_config, &json_str).map_err(|e| anyhow::anyhow!("{}", e))
 }
 
+fn resolve_extract_input(uri: Option<String>, url: Option<String>, stdin: bool) -> Result<ExtractInputSource> {
+    match (uri, url, stdin) {
+        (Some(uri), None, false) => Ok(ExtractInputSource::Uri(uri)),
+        (None, Some(url), false) => Ok(ExtractInputSource::Uri(url)),
+        (None, None, true) => Ok(ExtractInputSource::Stdin),
+        _ => anyhow::bail!("Provide exactly one extraction input: URI, --url, or --stdin."),
+    }
+}
+
+fn validate_extract_input(input: &ExtractInputSource) -> Result<()> {
+    match input {
+        ExtractInputSource::Stdin => Ok(()),
+        ExtractInputSource::Uri(uri) => {
+            if is_remote_uri(uri) {
+                return Ok(());
+            }
+            let path = uri_to_local_path(uri)?;
+            validate_file_exists(&path)
+        }
+    }
+}
+
+fn resolve_batch_inputs(
+    paths: Vec<PathBuf>,
+    input: Option<PathBuf>,
+    input_format: Option<BatchInputFormat>,
+) -> Result<Vec<String>> {
+    let mut uris: Vec<String> = paths
+        .into_iter()
+        .map(|path| path.to_string_lossy().to_string())
+        .collect();
+
+    if let Some(input_path) = input {
+        let format = input_format.unwrap_or_else(|| infer_batch_input_format(&input_path));
+        uris.extend(load_batch_input_manifest(&input_path, format)?);
+    }
+
+    if uris.is_empty() {
+        anyhow::bail!("No files provided for batch extraction. Provide paths or --input.");
+    }
+
+    Ok(uris)
+}
+
+fn infer_batch_input_format(path: &std::path::Path) -> BatchInputFormat {
+    match path.extension().and_then(|ext| ext.to_str()) {
+        Some(ext) if ext.eq_ignore_ascii_case("jsonl") || ext.eq_ignore_ascii_case("ndjson") => BatchInputFormat::Jsonl,
+        _ => BatchInputFormat::Json,
+    }
+}
+
+fn validate_batch_input_uris(uris: &[String]) -> Result<()> {
+    let local_paths: Vec<PathBuf> = uris
+        .iter()
+        .filter(|uri| !is_remote_uri(uri))
+        .map(|uri| uri_to_local_path(uri))
+        .collect::<Result<Vec<_>>>()?;
+    if local_paths.is_empty() {
+        return Ok(());
+    }
+    validate_batch_paths(&local_paths)
+}
+
+fn is_remote_uri(uri: &str) -> bool {
+    uri.starts_with("http://") || uri.starts_with("https://")
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -602,7 +686,9 @@ fn main() -> Result<()> {
 
     match cli.command {
         Commands::Extract {
-            path,
+            uri,
+            url,
+            stdin,
             config: config_path,
             config_json,
             config_json_base64,
@@ -611,7 +697,8 @@ fn main() -> Result<()> {
             output_dir,
             overrides,
         } => {
-            validate_file_exists(&path)?;
+            let input = resolve_extract_input(uri, url, stdin)?;
+            validate_extract_input(&input)?;
             if let Some(ref dir) = output_dir {
                 validate_output_dir(dir)?;
             }
@@ -621,7 +708,7 @@ fn main() -> Result<()> {
             apply_json_overrides(&mut config, config_json, config_json_base64)?;
             overrides.apply(&mut config);
 
-            extract_command(path, config, mime_type, format, output_dir)?;
+            extract_command(input, config, mime_type, format, output_dir)?;
         }
 
         Commands::ExtractStructured {
@@ -652,6 +739,8 @@ fn main() -> Result<()> {
 
         Commands::Batch {
             paths,
+            input,
+            input_format,
             config: config_path,
             config_json,
             config_json_base64,
@@ -660,7 +749,8 @@ fn main() -> Result<()> {
             overrides,
             file_configs,
         } => {
-            validate_batch_paths(&paths)?;
+            let input_uris = resolve_batch_inputs(paths, input, input_format)?;
+            validate_batch_input_uris(&input_uris)?;
             if let Some(ref dir) = output_dir {
                 validate_output_dir(dir)?;
             }
@@ -684,7 +774,7 @@ fn main() -> Result<()> {
             } else {
                 None
             };
-            batch_command(paths, file_configs_map, config, format, output_dir)?;
+            batch_command(input_uris, file_configs_map, config, format, output_dir)?;
         }
 
         Commands::Detect { path, format } => {
@@ -919,11 +1009,16 @@ fn main() -> Result<()> {
                 "semantic" => chunking_config.chunker_type = xberg::ChunkerType::Semantic,
                 _ => chunking_config.chunker_type = xberg::ChunkerType::Text,
             }
+            #[cfg(feature = "chunking-tokenizers")]
             if let Some(ref tokenizer) = chunking_tokenizer {
                 chunking_config.sizing = xberg::ChunkSizing::Tokenizer {
                     model: tokenizer.clone(),
                     cache_dir: None,
                 };
+            }
+            #[cfg(not(feature = "chunking-tokenizers"))]
+            if chunking_tokenizer.is_some() {
+                anyhow::bail!("--chunking-tokenizer requires the chunking-tokenizers feature");
             }
             if topic_threshold.is_some() {
                 chunking_config.topic_threshold = topic_threshold;

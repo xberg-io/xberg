@@ -18,9 +18,8 @@ use super::types::{ImageExtractionConfig, LanguageDetectionConfig, TokenReductio
 /// Per-file extraction configuration overrides for batch processing.
 ///
 /// All fields are `Option<T>` — `None` means "use the batch-level default."
-/// This type is used with [`crate::batch_extract_files`] and
-/// [`crate::batch_extract_bytes`] to allow heterogeneous
-/// extraction settings within a single batch.
+/// This type is used by [`crate::ExtractInput::config`] and [`crate::extract_batch`]
+/// to allow heterogeneous extraction settings within a single batch.
 ///
 /// # Excluded Fields
 ///

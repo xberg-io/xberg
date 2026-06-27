@@ -2,26 +2,34 @@
 	"id": "smoke_json_basic",
 	"category": "smoke",
 	"description": "Smoke test: JSON file extraction",
-	"tags": ["smoke", "structured", "json"],
+	"tags": [
+		"smoke",
+		"structured",
+		"json"
+	],
 	"input": {
-		"path": "json/simple.json",
-		"mime_type": "application/json",
-		"config": {}
+		"kind": "uri",
+		"uri": "json/simple.json",
+		"mime_type": "application/json"
 	},
 	"assertions": [
 		{
 			"type": "equals",
-			"field": "mime_type",
+			"field": "results.0.mime_type",
 			"value": "application/json"
 		},
 		{
 			"type": "min_length",
-			"field": "content",
+			"field": "results.0.content",
 			"value": 5
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
-		"reason": "WASM cannot access filesystem; use extractBytes with file content instead"
-	}
+		"languages": [
+			"wasm"
+		],
+		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
+	},
+	"call": "extract",
+	"config": {}
 }

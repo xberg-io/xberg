@@ -5,7 +5,7 @@ use Xberg\Xberg;
 
 $config = new ExtractionConfig(includeDocumentStructure: true);
 
-$result = Xberg::extractFileSync('document.pdf', $config);
+$result = Xberg::extractSync('document.pdf', $config);
 
 if ($result->document !== null) {
     foreach ($result->document->nodes as $node) {

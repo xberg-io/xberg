@@ -78,14 +78,11 @@ RUST_LOG=debug uv run pytest tests/ -v
 
 ### Node.js
 
-TypeScript bindings are in `packages/typescript/`:
+The Node.js binding (`@xberg-io/xberg`) is built from `crates/xberg-node/`:
 
 ```bash title="Terminal"
 task node:build:dev
 task node:test
-
-cd packages/typescript
-pnpm test -- --testPathPattern="extract"
 ```
 
 ### Everything Else
@@ -106,7 +103,7 @@ task wasm:build && task wasm:test
 
 ### Testing the live browser demo
 
-The demo at `docs/demo.html` loads `@xberg/wasm` from a CDN. To test local changes against it, use:
+The demo at `docs/demo.html` loads `@xberg-io/xberg-wasm` from a CDN. To test local changes against it, use:
 
 ```bash title="Terminal"
 task demo:dev
@@ -233,7 +230,7 @@ Code examples in the docs aren't inline — they're pulled from `docs/snippets/`
 ```text
 docs/snippets/
 ├── python/           # Python examples
-│   ├── api/          #   extract_file, batch_extract, etc.
+│   ├── api/          #   extract, extract_batch, etc.
 │   ├── config/       #   ExtractionConfig, OcrConfig, etc.
 │   ├── ocr/          #   OCR backends
 │   ├── plugins/      #   Plugin implementations

@@ -1,11 +1,30 @@
 {
-  "id": "batch_bytes_invalid_mime",
-  "category": "batch",
-  "description": "batch_extract_bytes_sync invalid MIME",
-  "tags": ["batch", "error"],
-  "call": "batch_extract_bytes_sync",
-  "input": {
-    "items": [{ "content": [72, 101, 108, 108, 111], "mime_type": "application/x-nonexistent" }]
-  },
-  "assertions": [{ "type": "not_error" }]
+	"id": "batch_bytes_invalid_mime",
+	"category": "batch",
+	"description": "extract_batch invalid MIME",
+	"tags": [
+		"batch",
+		"error"
+	],
+	"call": "extract_batch",
+	"input": {
+		"inputs": [
+			{
+				"kind": "bytes",
+				"bytes": [
+					72,
+					101,
+					108,
+					108,
+					111
+				],
+				"mime_type": "application/x-nonexistent"
+			}
+		]
+	},
+	"assertions": [
+		{
+			"type": "not_error"
+		}
+	]
 }

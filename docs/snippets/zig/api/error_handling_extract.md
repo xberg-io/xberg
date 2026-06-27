@@ -4,7 +4,7 @@ const xberg = @import("xberg");
 
 fn extract_text(bytes: []const u8, mime_type: []const u8) ![]u8 {
     const config_json = "{}";
-    return xberg.extract_bytes_sync(bytes, mime_type, config_json);
+    return xberg.extract_sync(bytes, mime_type, config_json);
 }
 
 pub fn main() !void {

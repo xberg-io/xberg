@@ -1,4 +1,4 @@
-import { extractFromFile, initWasm } from "@xberg/wasm";
+import { extract, initWasm } from "@xberg-io/xberg-wasm";
 
 async function setupFileInput() {
   await initWasm();
@@ -10,7 +10,7 @@ async function setupFileInput() {
     if (!file) return;
 
     try {
-      const result = await extractFromFile(file);
+      const result = await extract(file);
       console.log("Extracted text:", result.content);
       displayResults(result);
     } catch (error) {

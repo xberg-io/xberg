@@ -1,5 +1,5 @@
-import type { ExtractionConfig } from "@xberg/wasm";
-import { extractBytes, initWasm } from "@xberg/wasm";
+import type { ExtractionConfig } from "@xberg-io/xberg-wasm";
+import { extract, initWasm } from "@xberg-io/xberg-wasm";
 
 async function extractWithChunking() {
   await initWasm();
@@ -24,7 +24,7 @@ async function extractWithChunking() {
     },
   };
 
-  const result = await extractBytes(bytes, "application/pdf", config);
+  const result = await extract(bytes, "application/pdf", config);
 
   if (result.chunks) {
     console.log(`Total chunks: ${result.chunks.length}`);
@@ -50,7 +50,7 @@ async function extractWithPrependHeadingContext() {
     },
   };
 
-  const result = await extractBytes(bytes, "text/markdown", config);
+  const result = await extract(bytes, "text/markdown", config);
 
   if (result.chunks) {
     console.log(`Total chunks: ${result.chunks.length}`);

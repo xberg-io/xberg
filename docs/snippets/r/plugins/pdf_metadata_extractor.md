@@ -15,7 +15,7 @@ extract_pdf_metadata <- function(result) {
 register_post_processor("pdf_metadata", extract_pdf_metadata)
 
 config <- list(postprocessor = list(enabled = TRUE))
-json <- extract_file_sync("document.pdf", "application/pdf", config)
+json <- extract_sync("document.pdf", "application/pdf", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Extraction complete: %d characters\n", nchar(result$content)))

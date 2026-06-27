@@ -1,7 +1,7 @@
 ```typescript title="TypeScript"
-import { extractFile } from '@xberg/node';
+import { extract } from '@xberg-io/xberg';
 
-const result = await extractFile("contract.pdf", {
+const result = await extract("contract.pdf", {
     redaction: {
         categories: ["email", "phone", "ssn", "credit_card", "iban"],
         strategy: "mask",

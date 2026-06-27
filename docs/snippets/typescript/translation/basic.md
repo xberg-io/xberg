@@ -1,7 +1,7 @@
 ```typescript title="TypeScript"
-import { extractFile } from '@xberg/node';
+import { extract } from '@xberg-io/xberg';
 
-const result = await extractFile("contract.pdf", {
+const result = await extract("contract.pdf", {
     translation: {
         targetLang: "de",
         llm: { model: "openai/gpt-4o-mini" },

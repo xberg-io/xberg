@@ -51,6 +51,7 @@ pub fn unregister_document_extractor(name: &str) -> crate::Result<()> {
 }
 
 /// List names of all registered document extractors.
+#[cfg_attr(alef, alef(skip))]
 pub fn list_document_extractors() -> crate::Result<Vec<String>> {
     use crate::plugins::registry::get_document_extractor_registry;
 
@@ -68,6 +69,7 @@ pub fn list_document_extractors() -> crate::Result<Vec<String>> {
 ///
 /// - Any error returned by an extractor's `shutdown()` method. The first error
 ///   encountered stops processing of remaining extractors.
+#[cfg_attr(alef, alef(skip))]
 pub fn clear_document_extractors() -> crate::Result<()> {
     use crate::plugins::registry::get_document_extractor_registry;
 

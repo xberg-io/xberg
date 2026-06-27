@@ -1,5 +1,5 @@
 ```rust title="simple_benchmark.rs"
-use xberg::{extract_file_sync, extract_file, ExtractionConfig};
+use xberg::{extract_sync, extract, ExtractionConfig};
 use std::time::Instant;
 
 #[tokio::main]
@@ -13,7 +13,7 @@ async fn main() -> xberg::Result<()> {
 
     let start = Instant::now();
     for _ in 0..num_runs {
-        let _ = extract_file_sync(file_path, None, &config)?;
+        let _ = extract_sync(file_path, None, &config)?;
     }
     let sync_duration = start.elapsed().as_secs_f64();
     let avg_sync = sync_duration / num_runs as f64;
@@ -25,7 +25,7 @@ async fn main() -> xberg::Result<()> {
     let start = Instant::now();
     let mut tasks = vec![];
     for _ in 0..num_runs {
-        tasks.push(extract_file(file_path, None, &config));
+        tasks.push(extract(file_path, None, &config));
     }
     let results = futures::future::join_all(tasks).await;
     for result in results {
@@ -45,13 +45,13 @@ async fn main() -> xberg::Result<()> {
 
     println!("\nFirst extraction (populates cache)...");
     let start = Instant::now();
-    let _result1 = extract_file_sync(file_path, None, &config_cached)?;
+    let _result1 = extract_sync(file_path, None, &config_cached)?;
     let first_duration = start.elapsed().as_secs_f64();
     println!("  - Time: {:.3}s", first_duration);
 
     println!("Second extraction (from cache)...");
     let start = Instant::now();
-    let _result2 = extract_file_sync(file_path, None, &config_cached)?;
+    let _result2 = extract_sync(file_path, None, &config_cached)?;
     let cached_duration = start.elapsed().as_secs_f64();
     println!("  - Time: {:.3}s", cached_duration);
     println!("  - Cache speedup: {:.1}x", first_duration / cached_duration);

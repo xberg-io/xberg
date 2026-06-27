@@ -22,7 +22,7 @@ quality_score_validator <- function(result) {
 register_validator("quality_score", quality_score_validator)
 
 config <- ExtractionConfig$default()
-json <- extract_file_sync("document.pdf", "application/pdf", config)
+json <- extract_sync("document.pdf", "application/pdf", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Validated extraction: %d characters\n", nchar(result$content)))

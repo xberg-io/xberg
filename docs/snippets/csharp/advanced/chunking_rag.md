@@ -24,7 +24,7 @@ class RagPipelineExample
 
         try
         {
-            var result = await XbergLib.ExtractFileAsync(
+            var result = await XbergLib.ExtractAsync(
                 "research_paper.pdf",
                 config
             ).ConfigureAwait(false);

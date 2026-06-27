@@ -137,7 +137,7 @@ import (
 )
 
 func main() {
-	result, err := v4.ExtractFileSync("document.pdf", nil)
+	result, err := v4.ExtractSync("document.pdf", nil)
 	if err != nil {
 		log.Fatalf("extract failed: %v", err)
 	}
@@ -169,7 +169,7 @@ data, err := os.ReadFile("slides.pptx")
 if err != nil {
 	log.Fatal(err)
 }
-result, err := v4.ExtractBytesSync(data, "application/vnd.openxmlformats-officedocument.presentationml.presentation", nil)
+result, err := v4.ExtractSync(data, "application/vnd.openxmlformats-officedocument.presentationml.presentation", nil)
 if err != nil {
 	log.Fatal(err)
 }
@@ -189,7 +189,7 @@ cfg := &v4.ExtractionConfig{
 		Language: &lang,
 	},
 }
-result, err := v4.ExtractFileSync("scanned.pdf", cfg)
+result, err := v4.ExtractSync("scanned.pdf", cfg)
 ```
 
 ### Async (context-aware) extraction
@@ -198,7 +198,7 @@ result, err := v4.ExtractFileSync("scanned.pdf", cfg)
 ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 defer cancel()
 
-result, err := v4.ExtractFile(ctx, "large.pdf", nil)
+result, err := v4.Extract(ctx, "large.pdf", nil)
 if err != nil {
 	log.Fatal(err)
 }
@@ -209,7 +209,7 @@ fmt.Println("Content length:", len(result.Content))
 
 ```go
 paths := []string{"doc1.pdf", "doc2.docx", "report.xlsx"}
-results, err := v4.BatchExtractFilesSync(paths, nil)
+results, err := v4.ExtractBatchSync(paths, nil)
 if err != nil {
 	log.Fatal(err)
 }
@@ -248,7 +248,7 @@ func init() {
 | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ld returned 1 exit status` or `undefined reference to 'html_to_markdown_...'` | The static library wasn't found. Make sure `CGO_LDFLAGS` points to the directory containing `libxberg_ffi.a`: `CGO_LDFLAGS="-L/path/to/lib -lxberg_ffi" go build`                                           |
 | `cannot find -lxberg_ffi`                                                  | The static library file is missing or in the wrong location. Download it from [GitHub Releases](https://github.com/xberg-io/xberg/releases) or build it yourself: `cargo build -p xberg-ffi --release` |
-| `undefined: v4.ExtractFile`                                                    | This function was removed in v4.1.0. Use `ExtractFileSync` and wrap in goroutine if needed (see migration guide)                                                                                                    |
+| `undefined: v4.Extract`                                                    | This function was removed in v4.1.0. Use `ExtractSync` and wrap in goroutine if needed (see migration guide)                                                                                                    |
 | `Missing dependency: tesseract`                                                | Install the OCR backend and ensure it is on `PATH`. Errors bubble up as `*v4.MissingDependencyError`.                                                                                                               |
 | `undefined: C.customValidator` during build                                    | Export the callback with `//export` in a `*_cgo.go` file before using it in `Register*` helpers.                                                                                                                    |
 | `Missing dependency: onnxruntime`                                              | Install ONNX Runtime at build time: `brew install onnxruntime` (macOS), `apt install libonnxruntime libonnxruntime-dev` (Linux), `scoop install onnxruntime` (Windows). Required for embeddings functionality.      |
@@ -264,7 +264,6 @@ Need help? Join the [Discord](https://discord.gg/xt9WY3GnKR) or open an issue wi
 
 ## Part of Xberg.dev
 
-- [Xberg Enterprise](https://github.com/xberg-io/xberg-enterprise) — managed extraction API with SDKs, dashboards, and observability.
 - [crawlberg](https://github.com/xberg-io/crawlberg) — web crawling and scraping with HTML→Markdown and headless-Chrome fallback.
 - [html-to-markdown](https://github.com/xberg-io/html-to-markdown) — fast, lossless HTML→Markdown engine.
 - [liter-llm](https://github.com/xberg-io/liter-llm) — universal LLM API client with native bindings for 14 languages and 143 providers.

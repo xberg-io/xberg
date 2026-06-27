@@ -44,7 +44,7 @@ final class XbergMcpService
      * @return array{content: string, mimeType: string, metadata: array<string, mixed>}
      * @throws GuzzleException
      */
-    public function extractFile(string $path, ?array $config = null): array
+    public function extract(string $path, ?array $config = null): array
     {
         $cacheKey = 'xberg_extract_' . md5($path . json_encode($config));
 
@@ -57,7 +57,7 @@ final class XbergMcpService
             try {
                 $response = $this->http->post('/tools/call', [
                     'json' => [
-                        'name' => 'extract_file',
+                        'name' => 'extract',
                         'arguments' => [
                             'path' => $path,
                             'config' => $config,
@@ -97,7 +97,7 @@ final class XbergMcpService
      * @return array<int, array{content: string, mimeType: string}>
      * @throws GuzzleException
      */
-    public function batchExtractFiles(array $paths, ?array $config = null): array
+    public function extractBatch(array $paths, ?array $config = null): array
     {
         $this->logger->info('Batch extracting files via MCP', [
             'count' => count($paths),
@@ -106,7 +106,7 @@ final class XbergMcpService
         try {
             $response = $this->http->post('/tools/call', [
                 'json' => [
-                    'name' => 'batch_extract_files',
+                    'name' => 'extract_batch',
                     'arguments' => [
                         'paths' => $paths,
                         'config' => $config,
@@ -177,7 +177,7 @@ final class DocumentController extends Controller
             'extractImages' => $validated['extract_images'] ?? false,
         ];
 
-        $result = $this->xberg->extractFile(
+        $result = $this->xberg->extract(
             $validated['file_path'],
             $config
         );
@@ -195,7 +195,7 @@ final class DocumentController extends Controller
             'file_paths.*' => 'required|string',
         ]);
 
-        $results = $this->xberg->batchExtractFiles($validated['file_paths']);
+        $results = $this->xberg->extractBatch($validated['file_paths']);
 
         return response()->json([
             'success' => true,

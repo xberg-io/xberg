@@ -25,7 +25,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('document.pdf');
+$result = $xberg->extract('document.pdf');
 
 echo "Extracted with images: " . count($result->images ?? []) . "\n";
 echo "Extracted with tables: " . count($result->tables) . "\n\n";
@@ -46,7 +46,7 @@ $advancedConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($advancedConfig);
-$result = $xberg->extractFile('complex_document.pdf');
+$result = $xberg->extract('complex_document.pdf');
 
 echo "Advanced extraction complete\n";
 echo "Content format: " . ($advancedConfig->outputFormat ?? 'plain') . "\n";
@@ -55,10 +55,10 @@ echo "Formatting preserved: " . ($advancedConfig->preserveFormatting ? 'Yes' : '
 $defaultConfig = new ExtractionConfig(extractTables: false);
 $xberg = new Xberg($defaultConfig);
 
-$result1 = $xberg->extractFile('doc1.pdf');
+$result1 = $xberg->extract('doc1.pdf');
 
 $overrideConfig = new ExtractionConfig(extractTables: true);
-$result2 = $xberg->extractFile('doc2.pdf', config: $overrideConfig);
+$result2 = $xberg->extract('doc2.pdf', config: $overrideConfig);
 
 echo "\nDoc1 tables: " . count($result1->tables) . "\n";
 echo "Doc2 tables: " . count($result2->tables) . "\n";

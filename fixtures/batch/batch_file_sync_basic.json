@@ -2,15 +2,21 @@
 	"id": "batch_file_sync_basic",
 	"category": "batch",
 	"description": "Extract text from multiple files synchronously",
-	"tags": ["batch", "sync", "multiple_files"],
-	"call": "batch_extract_files_sync",
+	"tags": [
+		"batch",
+		"sync",
+		"multiple_files"
+	],
+	"call": "extract_batch",
 	"input": {
-		"paths": [
+		"inputs": [
 			{
-				"path": "pdf/fake_memo.pdf"
+				"kind": "uri",
+				"uri": "pdf/fake_memo.pdf"
 			},
 			{
-				"path": "text/fake_text.txt"
+				"kind": "uri",
+				"uri": "text/fake_text.txt"
 			}
 		]
 	},
@@ -20,7 +26,9 @@
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
-		"reason": "WASM cannot access filesystem; use extractBytes with file content instead"
+		"languages": [
+			"wasm"
+		],
+		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	}
 }

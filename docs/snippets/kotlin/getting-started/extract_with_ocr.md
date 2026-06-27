@@ -14,7 +14,7 @@ fun main() {
         .withForceOcr(true)
         .build()
 
-    val result = io.xberg.Xberg.extractFileSync(Paths.get("scanned.pdf"), null, config)
+    val result = io.xberg.Xberg.extractSync(Paths.get("scanned.pdf"), null, config)
     println(result.content())
     result.detectedLanguages()?.let { println("Detected languages: $it") }
 }

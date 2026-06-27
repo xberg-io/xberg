@@ -8,7 +8,7 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract_file_sync('verbose_document.pdf', config: config)
+result = Xberg.extract_sync('verbose_document.pdf', config: config)
 
 # Check reduction statistics in metadata
 original_tokens = result.metadata['original_token_count']

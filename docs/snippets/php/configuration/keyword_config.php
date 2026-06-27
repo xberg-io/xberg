@@ -25,7 +25,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('article.pdf');
+$result = $xberg->extract('article.pdf');
 
 echo "Top Keywords:\n";
 echo str_repeat('=', 40) . "\n";
@@ -43,7 +43,7 @@ $detailedConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($detailedConfig);
-$result = $xberg->extractFile('research_paper.pdf');
+$result = $xberg->extract('research_paper.pdf');
 
 echo "Detailed keyword analysis:\n";
 echo "Total keywords: " . count($result->metadata->keywords ?? []) . "\n";
@@ -72,7 +72,7 @@ $allKeywords = [];
 foreach ($files as $file) {
     if (!file_exists($file)) continue;
 
-    $result = $xberg->extractFile($file);
+    $result = $xberg->extract($file);
     foreach ($result->metadata->keywords ?? [] as $keyword) {
         if (!isset($allKeywords[$keyword])) {
             $allKeywords[$keyword] = 0;

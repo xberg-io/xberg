@@ -21,7 +21,7 @@ public class WordCountExample {
         try {
             Xberg.registerPostProcessor("word-count", wordCount, 50);
 
-            ExtractionResult result = Xberg.extractFile("document.pdf");
+            ExtractionResult result = Xberg.extract("document.pdf");
             System.out.println("Word count: " + result.getMetadata().get("word_count"));
         } catch (IOException | XbergException e) {
             e.printStackTrace();

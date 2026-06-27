@@ -22,7 +22,7 @@ use Xberg\Exceptions\ValidationException;
 $xberg = new Xberg();
 
 try {
-    $result = $xberg->extractFile('document.pdf');
+    $result = $xberg->extract('document.pdf');
     echo "Extracted " . strlen($result->content) . " characters\n";
 } catch (ParsingException $e) {
     echo "Failed to parse document: " . $e->getMessage() . "\n";
@@ -45,7 +45,7 @@ try {
         throw new \RuntimeException('Failed to read file');
     }
 
-    $result = $xberg->extractBytes($pdfBytes, 'application/pdf', $config);
+    $result = $xberg->extract($pdfBytes, 'application/pdf', $config);
     echo "Extracted from bytes: " . substr($result->content, 0, 100) . "...\n";
 } catch (ValidationException $e) {
     echo "Invalid configuration or input: " . $e->getMessage() . "\n";
@@ -64,7 +64,7 @@ $failedExtractions = [];
 
 foreach ($files as $file) {
     try {
-        $result = $xberg->extractFile($file);
+        $result = $xberg->extract($file);
         $successfulExtractions[$file] = $result;
         echo "Success: $file\n";
     } catch (XbergException $e) {
@@ -89,7 +89,7 @@ function extractWithRetry(
 
     while ($attempt < $maxRetries) {
         try {
-            return $xberg->extractFile($file);
+            return $xberg->extract($file);
         } catch (OcrException $e) {
             $attempt++;
             if ($attempt >= $maxRetries) {

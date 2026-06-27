@@ -8,7 +8,7 @@ use Xberg\ChunkingConfig;
 
 $config = new ExtractionConfig();
 $config->setChunking(new ChunkingConfig());
-$result = Xberg::extractFileSync('document.pdf', null, $config);
+$result = Xberg::extractSync('document.pdf', null, $config);
 
 echo "Total content length: " . strlen($result->getContent()) . "\n";
 

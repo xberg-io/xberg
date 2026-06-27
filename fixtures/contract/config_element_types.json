@@ -1,28 +1,37 @@
 {
 	"id": "config_element_types",
 	"description": "Tests element-based result format with element type assertions on DOCX",
-	"tags": ["contract", "config", "result_format"],
-	"call": "extract_file_sync",
+	"tags": [
+		"contract",
+		"config",
+		"result_format"
+	],
+	"call": "extract",
 	"input": {
-		"path": "docx/unit_test_headers.docx",
-		"config": {
-			"result_format": "element_based"
-		}
+		"kind": "uri",
+		"uri": "docx/unit_test_headers.docx"
 	},
 	"assertions": [
 		{
 			"type": "contains_any",
-			"field": "mime_type",
-			"values": ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
+			"field": "results.0.mime_type",
+			"values": [
+				"application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+			]
 		},
 		{
 			"type": "count_min",
-			"field": "elements",
+			"field": "results.0.elements",
 			"value": 1
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
-		"reason": "WASM cannot access filesystem; use extractBytes with file content instead"
+		"languages": [
+			"wasm"
+		],
+		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
+	},
+	"config": {
+		"result_format": "element_based"
 	}
 }

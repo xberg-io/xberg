@@ -1,4 +1,4 @@
-import type { ChunkingConfig, EmbeddingConfig, ExtractionConfig } from "@xberg/node";
+import type { ChunkingConfig, EmbeddingConfig, ExtractionConfig } from "@xberg-io/xberg";
 
 // Example 1: Preset model (recommended)
 // Fast, balanced, or quality preset configurations optimized for common use cases.

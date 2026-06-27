@@ -1,12 +1,12 @@
 ```typescript title="TypeScript"
 import {
-  extractFile,
-  extractFileSync,
-  extractBytes,
-  extractBytesSync,
+  extract,
+  extractSync,
+  extract,
+  extractSync,
   type ExtractionResult,
   type ExtractionConfig,
-} from "@xberg/node";
+} from "@xberg-io/xberg";
 import * as readline from "node:readline";
 
 /**
@@ -98,7 +98,7 @@ class XbergMcpServer {
   }> {
     return [
       {
-        name: "extract_file",
+        name: "extract",
         description: "Extract content from a file by path",
         inputSchema: {
           type: "object",
@@ -114,7 +114,7 @@ class XbergMcpServer {
         },
       },
       {
-        name: "extract_bytes",
+        name: "extract",
         description: "Extract content from raw bytes",
         inputSchema: {
           type: "object",
@@ -137,28 +137,28 @@ class XbergMcpServer {
    * Call tool
    */
   private async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
-    if (name === "extract_file") {
+    if (name === "extract") {
       const path = args.path as string;
       const useAsync = (args.async as boolean) ?? true;
       const config = (args.config as ExtractionConfig) ?? this.config;
 
       if (useAsync) {
-        return extractFile(path, null, config);
+        return extract(path, null, config);
       } else {
-        return extractFileSync(path, null, config);
+        return extractSync(path, null, config);
       }
     }
 
-    if (name === "extract_bytes") {
+    if (name === "extract") {
       const data = Buffer.from(args.data as string, "base64");
       const mimeType = args.mimeType as string;
       const useAsync = (args.async as boolean) ?? true;
       const config = (args.config as ExtractionConfig) ?? this.config;
 
       if (useAsync) {
-        return extractBytes(data, mimeType, config);
+        return extract(data, mimeType, config);
       } else {
-        return extractBytesSync(data, mimeType, config);
+        return extractSync(data, mimeType, config);
       }
     }
 

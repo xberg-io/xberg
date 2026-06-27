@@ -1,5 +1,5 @@
 ```typescript title="WASM"
-import init, { extractBytes } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 
@@ -17,6 +17,6 @@ const config = {
   },
 };
 
-const result = await extractBytes(data, "application/pdf", config);
+const result = await extract(data, "application/pdf", config);
 console.log(`Hierarchy levels: ${result.hierarchy?.length || 0}`);
 ```

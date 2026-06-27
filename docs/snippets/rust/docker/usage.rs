@@ -39,7 +39,7 @@ impl DockerXbergClient {
         Ok(())
     }
 
-    async fn extract_file(&self, file_path: &str) -> Result<String> {
+    async fn extract(&self, file_path: &str) -> Result<String> {
         let file_bytes = fs::read(file_path)?;
         let file_part = multipart::Part::bytes(file_bytes)
             .file_name(file_path.to_string());
@@ -77,7 +77,7 @@ async fn main() -> Result<()> {
     docker_client.start_container("xberg:latest")?;
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
-    let content = docker_client.extract_file("document.pdf").await?;
+    let content = docker_client.extract("document.pdf").await?;
     println!("Extracted content:\n{}", content);
 
     docker_client.stop_container()?;

@@ -24,7 +24,7 @@ class Program
             EnableQualityProcessing = true
         };
 
-        var result = await XbergLib.ExtractFileAsync(filePath, config);
+        var result = await XbergLib.ExtractAsync(filePath, config);
 
         var contentChunks = ChunkContent(result.Content, chunkSize: 1000);
 
@@ -68,7 +68,7 @@ class Program
     static async IAsyncEnumerable<string> StreamExtractedChunksAsync(
         string filePath)
     {
-        var result = await XbergLib.ExtractFileAsync(filePath);
+        var result = await XbergLib.ExtractAsync(filePath);
 
         if (result.Chunks?.Any() == true)
         {

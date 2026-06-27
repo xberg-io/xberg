@@ -26,7 +26,7 @@ Future<void> main() async {
     useLayoutForMarkdown: false,
   );
 
-  final result = await XbergBridge.extractFile('scanned.pdf', null, config);
+  final result = await XbergBridge.extract('scanned.pdf', null, config);
   final elements = result.ocrElements ?? const <OcrElement>[];
   for (final element in elements) {
     print('Text: ${element.text}');

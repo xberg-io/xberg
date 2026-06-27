@@ -16,7 +16,7 @@ public class ExtractWithOCR {
             .ocr(ocrConfig)
             .build();
 
-        ExtractionResult result = Xberg.extractFile("scanned.pdf", config);
+        ExtractionResult result = Xberg.extract("scanned.pdf", config);
 
         System.out.println("Extracted text from scanned document:");
         System.out.println(result.getContent());

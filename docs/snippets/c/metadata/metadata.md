@@ -3,7 +3,7 @@
 #include <stdio.h>
 
 int main(void) {
-    struct CExtractionResult *result = xberg_extract_file_sync("document.pdf");
+    struct CExtractionResult *result = xberg_extract_sync("document.pdf");
     if (!result || !result->success) {
         fprintf(stderr, "Error: %s\n", xberg_get_error_details().message);
         return 1;

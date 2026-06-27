@@ -25,7 +25,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('document.pdf');
+$result = $xberg->extract('document.pdf');
 
 echo "Cloud OCR Results:\n";
 echo "Content length: " . strlen($result->content) . " characters\n";

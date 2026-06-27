@@ -19,7 +19,7 @@ public class McpCustomClient {
             Map<String, Object> request = Map.of(
                 "method", "tools/call",
                 "params", Map.of(
-                    "name", "extract_file",
+                    "name", "extract",
                     "arguments", Map.of("path", "document.pdf", "async", true)
                 )
             );

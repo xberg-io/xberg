@@ -1,5 +1,5 @@
 ```rust title="Rust"
-use xberg::{extract_file_sync, ExtractionConfig, PdfConfig, HierarchyConfig};
+use xberg::{extract_sync, ExtractionConfig, PdfConfig, HierarchyConfig};
 
 fn main() -> xberg::Result<()> {
     let config = ExtractionConfig {
@@ -12,7 +12,7 @@ fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract_file_sync("encrypted.pdf", None, &config)?;
+    let result = extract_sync("encrypted.pdf", None, &config)?;
     println!("Title: {:?}", result.metadata.title);
     println!("Authors: {:?}", result.metadata.authors);
     Ok(())

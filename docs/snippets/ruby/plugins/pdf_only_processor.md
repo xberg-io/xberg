@@ -17,6 +17,6 @@ config = Xberg::ExtractionConfig.new(
   postprocessor: { enabled: true }
 )
 
-result = Xberg.extract_file_sync('document.pdf', config: config)
+result = Xberg.extract_sync('document.pdf', config: config)
 puts "Metadata: #{result.metadata.inspect}"
 ```

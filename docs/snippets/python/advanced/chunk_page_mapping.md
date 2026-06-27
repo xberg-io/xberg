@@ -1,11 +1,11 @@
 ```python title="Python"
-from xberg import extract_file_sync, ExtractionConfig, ChunkingConfig
+from xberg import extract_sync, ExtractionConfig, ChunkingConfig
 
 config = ExtractionConfig(
     chunking=ChunkingConfig(max_characters=500, overlap=50),
 )
 
-result = extract_file_sync("document.pdf", config=config)
+result = extract_sync("document.pdf", config=config)
 
 if result.chunks:
     for chunk in result.chunks:

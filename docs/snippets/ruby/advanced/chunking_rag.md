@@ -16,7 +16,7 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract_file_sync('research_paper.pdf', config: config)
+result = Xberg.extract_sync('research_paper.pdf', config: config)
 
 vector_store = build_vector_store(result.chunks)
 query = 'machine learning optimization'

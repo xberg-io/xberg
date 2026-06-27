@@ -15,7 +15,7 @@ ExtractionConfig config = ExtractionConfig.builder()
         .build())
     .build();
 
-ExtractionResult result = Xberg.extractFile("research_paper.pdf", config);
+ExtractionResult result = Xberg.extract("research_paper.pdf", config);
 
 Map<String, Object> metadata = result.getMetadata() != null ? result.getMetadata() : Map.of();
 

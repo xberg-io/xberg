@@ -5,7 +5,7 @@ from xberg import (
     KeywordAlgorithm,
     YakeParams,
     RakeParams,
-    extract_file,
+    extract,
 )
 
 
@@ -24,7 +24,7 @@ async def basic_yake() -> None:
         )
     )
 
-    result = await extract_file("document.pdf", config=config)
+    result = await extract("document.pdf", config=config)
     print(f"Keywords: {result.keywords}")
 
 
@@ -45,7 +45,7 @@ async def advanced_yake() -> None:
         )
     )
 
-    result = await extract_file("document.pdf", config=config)
+    result = await extract("document.pdf", config=config)
     print(f"Keywords: {result.keywords}")
 
 
@@ -67,7 +67,7 @@ async def rake_config() -> None:
         )
     )
 
-    result = await extract_file("document.pdf", config=config)
+    result = await extract("document.pdf", config=config)
     print(f"Keywords: {result.keywords}")
 
 

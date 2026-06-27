@@ -9,6 +9,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+use crate::types::ExtractionResult;
+
 /// Target format for re-encoding extracted images.
 ///
 /// Controls whether and how extracted images are normalised to a uniform
@@ -128,12 +130,227 @@ impl Default for SvgOptions {
     }
 }
 
-/// Batch item for byte array extraction.
-///
-/// Used with [`crate::batch_extract_bytes`] and [`crate::batch_extract_bytes_sync`]
-/// to represent a single item in a batch extraction job.
+/// Source kind for [`ExtractInput`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum ExtractInputKind {
+    /// Raw in-memory bytes.
+    Bytes,
+    /// A filesystem path, `file://` URI, or HTTP(S) URL.
+    Uri,
+}
+
+/// Unified extraction input for all public extraction entry points.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BatchBytesItem {
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+#[serde(default)]
+pub struct ExtractInput {
+    /// Source kind. `bytes` requires `bytes`; `uri` requires `uri`.
+    pub kind: ExtractInputKind,
+    /// Raw bytes for `kind = "bytes"`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bytes: Option<Vec<u8>>,
+    /// Local path, `file://` URI, or HTTP(S) URL for `kind = "uri"`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uri: Option<String>,
+    /// MIME type hint.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mime_type: Option<String>,
+    /// Filename hint used for MIME detection and metadata.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filename: Option<String>,
+    /// Per-input extraction overrides.
+    #[cfg_attr(feature = "api", schema(value_type = Option<serde_json::Value>))]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub config: Option<super::FileExtractionConfig>,
+}
+
+impl Default for ExtractInput {
+    fn default() -> Self {
+        Self {
+            kind: ExtractInputKind::Uri,
+            bytes: None,
+            uri: None,
+            mime_type: None,
+            filename: None,
+            config: None,
+        }
+    }
+}
+
+impl ExtractInput {
+    /// Build a bytes input with a MIME type and optional filename hint.
+    pub fn bytes(bytes: impl Into<Vec<u8>>, mime_type: impl Into<String>, filename: Option<String>) -> Self {
+        Self {
+            kind: ExtractInputKind::Bytes,
+            bytes: Some(bytes.into()),
+            mime_type: Some(mime_type.into()),
+            filename,
+            ..Default::default()
+        }
+    }
+
+    /// Build a URI input from a local path, `file://` URI, or HTTP(S) URL.
+    pub fn uri(uri: impl Into<String>) -> Self {
+        Self {
+            kind: ExtractInputKind::Uri,
+            uri: Some(uri.into()),
+            ..Default::default()
+        }
+    }
+}
+
+/// Non-fatal per-input extraction error captured by [`ExtractionOutput`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+pub struct ExtractionErrorItem {
+    /// Input index in the original request.
+    pub index: usize,
+    /// Stable numeric error code.
+    pub code: u32,
+    /// Stable snake_case error kind.
+    pub error_type: String,
+    /// Best-effort source identifier.
+    pub source: String,
+    /// Error message.
+    pub message: String,
+}
+
+/// Summary for a unified extraction call.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+pub struct ExtractionSummary {
+    /// Number of inputs submitted by the caller.
+    pub inputs: usize,
+    /// Number of extraction results produced.
+    pub results: usize,
+    /// Number of per-input errors.
+    pub errors: usize,
+    /// Number of URI inputs that resolved to remote HTTP(S) URLs.
+    pub remote_urls: usize,
+    /// Number of HTML pages crawled or scraped.
+    pub pages_crawled: usize,
+    /// Number of downloaded non-HTML documents extracted from URLs.
+    pub documents_downloaded: usize,
+}
+
+/// Unified extraction output envelope.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+pub struct ExtractionOutput {
+    /// Extraction results in discovery order.
+    pub results: Vec<ExtractionResult>,
+    /// Non-fatal per-input errors.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub errors: Vec<ExtractionErrorItem>,
+    /// Aggregate counts for the operation.
+    pub summary: ExtractionSummary,
+    /// Final URLs reached after redirects during URL ingestion.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub crawl_final_urls: Vec<String>,
+    /// Total redirects followed while fetching or crawling URLs.
+    #[serde(default, skip_serializing_if = "crate::core::config::extraction::types::is_zero")]
+    pub crawl_redirect_count: usize,
+    /// Unique normalized URLs discovered by crawls.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub crawl_unique_normalized_urls: Vec<String>,
+}
+
+impl ExtractionOutput {
+    /// Build an output containing one successful result.
+    pub fn single(result: ExtractionResult) -> Self {
+        Self {
+            results: vec![result],
+            summary: ExtractionSummary {
+                inputs: 1,
+                results: 1,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    pub(crate) fn refresh_counts(&mut self) {
+        self.summary.results = self.results.len();
+        self.summary.errors = self.errors.len();
+    }
+}
+
+pub(crate) fn is_zero(value: &usize) -> bool {
+    *value == 0
+}
+
+/// URL extraction mode.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum UrlExtractionMode {
+    /// Classify HTTP(S) resources after fetch.
+    #[default]
+    Auto,
+    /// Treat the URI as a single remote document/page.
+    Document,
+    /// Crawl from the seed URI and extract discovered pages/documents.
+    Crawl,
+}
+
+/// URL ingestion and crawl configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+#[serde(default, deny_unknown_fields)]
+pub struct UrlExtractionConfig {
+    /// URL extraction mode.
+    pub mode: UrlExtractionMode,
+    /// Crawlberg crawl configuration used for HTTP(S) URL extraction.
+    #[cfg(feature = "url-ingestion")]
+    #[cfg_attr(feature = "api", schema(value_type = serde_json::Value))]
+    #[cfg_attr(alef, alef(skip))]
+    pub crawl: crawlberg::CrawlConfig,
+    /// Optional regex filter for document-discovered URLs.
+    pub document_url_pattern: Option<String>,
+    /// Maximum URLs to follow per extraction result.
+    pub max_document_urls_per_result: Option<u32>,
+    /// Maximum URLs followed across the whole extraction call.
+    pub max_total_urls: Option<u32>,
+    /// Allow bare local filesystem path inputs.
+    pub allow_local_file_inputs: bool,
+    /// Allow local `file://` URI inputs.
+    pub allow_file_uris: bool,
+}
+
+impl Default for UrlExtractionConfig {
+    fn default() -> Self {
+        Self {
+            mode: UrlExtractionMode::Auto,
+            #[cfg(feature = "url-ingestion")]
+            crawl: default_xberg_crawl_config(),
+            document_url_pattern: None,
+            max_document_urls_per_result: Some(100),
+            max_total_urls: Some(1_000),
+            allow_local_file_inputs: true,
+            allow_file_uris: true,
+        }
+    }
+}
+
+#[cfg(feature = "url-ingestion")]
+fn default_xberg_crawl_config() -> crawlberg::CrawlConfig {
+    crawlberg::CrawlConfig {
+        max_depth: Some(1),
+        max_pages: Some(100),
+        max_concurrent: Some(10),
+        respect_robots_txt: true,
+        soft_http_errors: true,
+        stay_on_domain: true,
+        allow_subdomains: true,
+        document_url_depth: Some(1),
+        ..Default::default()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct BatchBytesItem {
     /// The content bytes to extract from
     pub content: Vec<u8>,
 
@@ -145,12 +362,8 @@ pub struct BatchBytesItem {
     pub config: Option<super::FileExtractionConfig>,
 }
 
-/// Batch item for file extraction.
-///
-/// Used with [`crate::batch_extract_files`] and [`crate::batch_extract_files_sync`]
-/// to represent a single file in a batch extraction job.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BatchFileItem {
+pub(crate) struct BatchFileItem {
     /// Path to the file to extract from
     pub path: PathBuf,
 

@@ -9,7 +9,7 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract_file_sync('document.pdf', config: config)
+result = Xberg.extract_sync('document.pdf', config: config)
 
 if result.detected_languages&.any?
   puts "Detected Language: #{result.detected_languages.first}"

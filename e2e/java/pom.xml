@@ -187,6 +187,9 @@
                 <configuration>
                     <argLine>--enable-preview --enable-native-access=ALL-UNNAMED -Djava.library.path=${project.basedir}/../../target/release</argLine>
                     <workingDirectory>${project.basedir}/../../test_documents</workingDirectory>
+                    <environmentVariables>
+                        <CRAWLBERG_ALLOW_PRIVATE_NETWORK>true</CRAWLBERG_ALLOW_PRIVATE_NETWORK>
+                    </environmentVariables>
                 </configuration>
             </plugin>
         </plugins>

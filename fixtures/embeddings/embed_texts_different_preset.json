@@ -3,9 +3,14 @@
 	"category": "embeddings",
 	"description": "embed_texts: multilingual preset",
 	"call": "embed_texts",
-	"assertion_recipes": ["embeddings"],
+	"assertion_recipes": [
+		"embeddings"
+	],
 	"input": {
-		"texts": ["Hello world", "Test"],
+		"texts": [
+			"Hello world",
+			"Test"
+		],
 		"config": {
 			"model": {
 				"type": "preset",
@@ -24,6 +29,8 @@
 		}
 	],
 	"skip": {
-		"languages": ["wasm"]
+		"languages": [
+			"wasm"
+		]
 	}
 }

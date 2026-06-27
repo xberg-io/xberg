@@ -2,26 +2,34 @@
 	"id": "smoke_txt_basic",
 	"category": "smoke",
 	"description": "Smoke test: Plain text file",
-	"tags": ["smoke", "text", "plaintext"],
+	"tags": [
+		"smoke",
+		"text",
+		"plaintext"
+	],
 	"input": {
-		"path": "text/report.txt",
-		"mime_type": "text/plain",
-		"config": {}
+		"kind": "uri",
+		"uri": "text/report.txt",
+		"mime_type": "text/plain"
 	},
 	"assertions": [
 		{
 			"type": "equals",
-			"field": "mime_type",
+			"field": "results.0.mime_type",
 			"value": "text/plain"
 		},
 		{
 			"type": "min_length",
-			"field": "content",
+			"field": "results.0.content",
 			"value": 5
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
-		"reason": "WASM cannot access filesystem; use extractBytes with file content instead"
-	}
+		"languages": [
+			"wasm"
+		],
+		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
+	},
+	"call": "extract",
+	"config": {}
 }

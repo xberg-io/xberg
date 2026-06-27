@@ -8,7 +8,7 @@ config <- list(
 )
 
 # Extract text from a scanned image
-json <- extract_file_sync("scan.png", "image/png", config)
+json <- extract_sync("scan.png", "image/png", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Extracted %d characters\n", nchar(result$content)))

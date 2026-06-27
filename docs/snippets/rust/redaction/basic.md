@@ -1,7 +1,7 @@
 ```rust title="Rust"
 use std::collections::HashSet;
 use xberg::{
-    extract_file, ExtractionConfig, RedactionConfig, RedactionStrategy,
+    extract, ExtractionConfig, RedactionConfig, RedactionStrategy,
     types::redaction::PiiCategory,
 };
 
@@ -20,5 +20,5 @@ let config = ExtractionConfig {
     }),
     ..Default::default()
 };
-let result = extract_file("contract.pdf", None, &config).await?;
+let result = extract("contract.pdf", None, &config).await?;
 ```

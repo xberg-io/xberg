@@ -20,7 +20,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('scanned_document.pdf');
+$result = $xberg->extract('scanned_document.pdf');
 
 echo "Quality Processing Results:\n";
 echo str_repeat('=', 60) . "\n";
@@ -115,7 +115,7 @@ foreach ($documents as $document) {
         continue;
     }
 
-    $result = $xberg->extractFile($document);
+    $result = $xberg->extract($document);
     $score = $result->qualityScore ?? 0.0;
 
     $qualityResults[$document] = [

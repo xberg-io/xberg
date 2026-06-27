@@ -1,4 +1,4 @@
-import { extractBytes, initWasm } from "@xberg/wasm";
+import { extract, initWasm } from "@xberg-io/xberg-wasm";
 
 async function extractWithRetry(bytes: Uint8Array, mimeType: string, maxRetries: number = 3) {
   await initWasm();
@@ -8,7 +8,7 @@ async function extractWithRetry(bytes: Uint8Array, mimeType: string, maxRetries:
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`Extraction attempt ${attempt}/${maxRetries}`);
-      const result = await extractBytes(bytes, mimeType);
+      const result = await extract(bytes, mimeType);
       console.log("Extraction successful");
       return result;
     } catch (error) {

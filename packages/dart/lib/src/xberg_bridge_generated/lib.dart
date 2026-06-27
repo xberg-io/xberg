@@ -8,190 +8,20 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'lib.freezed.dart';
 
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `CaptioningEnrichmentConfig`, `ClassificationEnrichmentConfig`, `DocumentExtractorDartCallbacks`, `EmbeddingBackendDartCallbacks`, `OcrBackendDartCallbacks`, `PostProcessorDartCallbacks`, `RendererDartCallbacks`, `RerankerBackendDartCallbacks`, `ValidatorDartCallbacks`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `can_handle`, `clone`, `dimensions`, `embed`, `emits_structured_markdown`, `estimated_duration_ms`, `extract_bytes`, `extract_file`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `priority`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render`, `rerank`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages`, `supported_mime_types`, `supports_document_processing`, `supports_language`, `supports_table_detection`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`, `version`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `CaptioningEnrichmentConfig`, `ClassificationEnrichmentConfig`, `EmbeddingBackendDartCallbacks`, `OcrBackendDartCallbacks`, `PostProcessorDartCallbacks`, `RendererDartCallbacks`, `RerankerBackendDartCallbacks`, `ValidatorDartCallbacks`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `clone`, `dimensions`, `embed`, `emits_structured_markdown`, `estimated_duration_ms`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render`, `rerank`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages`, `supports_document_processing`, `supports_language`, `supports_table_detection`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`
 
-/// Extract content from a byte array.
-///
-/// This is the main entry point for in-memory extraction. It performs the following steps:
-///
-/// 1. Validate MIME type
-/// 2. Handle legacy format conversion if needed
-/// 3. Select appropriate extractor from registry
-/// 4. Extract content
-/// 5. Run post-processing pipeline
-///
-/// **Returns:**
-///
-/// An `ExtractionResult` containing the extracted content and metadata.
-///
-/// **Errors:**
-///
-/// Returns `XbergError.Validation` if MIME type is invalid.
-/// Returns `XbergError.UnsupportedFormat` if MIME type is not supported.
-Future<ExtractionResult> extractBytes({
-  required List<int> content,
-  required String mimeType,
+/// Extract content from a single bytes or URI input.
+Future<ExtractionOutput> extract({
+  required ExtractInput input,
   required ExtractionConfig config,
-}) => RustLib.instance.api.crateExtractBytes(
-  content: content,
-  mimeType: mimeType,
-  config: config,
-);
+}) => RustLib.instance.api.crateExtract(input: input, config: config);
 
-/// Extract content from a file.
-///
-/// This is the main entry point for file-based extraction. It performs the following steps:
-///
-/// 1. Check cache for existing result (if caching enabled)
-/// 2. Detect or validate MIME type
-/// 3. Select appropriate extractor from registry
-/// 4. Extract content
-/// 5. Run post-processing pipeline
-/// 6. Store result in cache (if caching enabled)
-///
-/// **Returns:**
-///
-/// An `ExtractionResult` containing the extracted content and metadata.
-///
-/// **Errors:**
-///
-/// Returns `XbergError.Io` if the file doesn't exist (NotFound) or for other file I/O errors.
-/// Returns `XbergError.UnsupportedFormat` if MIME type is not supported.
-Future<ExtractionResult> extractFile({
-  required String path,
-  String? mimeType,
+/// Extract content from multiple bytes or URI inputs.
+Future<ExtractionOutput> extractBatch({
+  required List<ExtractInput> inputs,
   required ExtractionConfig config,
-}) => RustLib.instance.api.crateExtractFile(
-  path: path,
-  mimeType: mimeType,
-  config: config,
-);
-
-/// Synchronous wrapper for `extract_file`.
-///
-/// This is a convenience function that blocks the current thread until extraction completes.
-/// For async code, use `extract_file` directly.
-///
-/// Uses the global Tokio runtime for 100x+ performance improvement over creating
-/// a new runtime per call. Always uses the global runtime to avoid nested runtime issues.
-///
-/// This function is only available with the `tokio-runtime` feature. For WASM targets,
-/// use a truly synchronous extraction approach instead.
-Future<ExtractionResult> extractFileSync({
-  required String path,
-  String? mimeType,
-  required ExtractionConfig config,
-}) => RustLib.instance.api.crateExtractFileSync(
-  path: path,
-  mimeType: mimeType,
-  config: config,
-);
-
-/// Synchronous wrapper for `extract_bytes`.
-///
-/// Uses the global Tokio runtime for 100x+ performance improvement over creating
-/// a new runtime per call.
-///
-/// With the `tokio-runtime` feature, this blocks the current thread using the global
-/// Tokio runtime. Without it (WASM), this calls a truly synchronous implementation.
-Future<ExtractionResult> extractBytesSync({
-  required List<int> content,
-  required String mimeType,
-  required ExtractionConfig config,
-}) => RustLib.instance.api.crateExtractBytesSync(
-  content: content,
-  mimeType: mimeType,
-  config: config,
-);
-
-/// Synchronous wrapper for `batch_extract_files`.
-///
-/// Uses the global Tokio runtime for optimal performance.
-/// Only available with `tokio-runtime` (WASM has no filesystem).
-Future<List<ExtractionResult>> batchExtractFilesSync({
-  required List<BatchFileItem> items,
-  required ExtractionConfig config,
-}) => RustLib.instance.api.crateBatchExtractFilesSync(
-  items: items,
-  config: config,
-);
-
-/// Synchronous wrapper for `batch_extract_bytes`.
-///
-/// Uses the global Tokio runtime for optimal performance.
-/// With the `tokio-runtime` feature, this blocks the current thread using the global
-/// Tokio runtime. Without it (WASM), this calls a truly synchronous implementation
-/// that iterates through items and calls `extract_bytes_sync()`.
-Future<List<ExtractionResult>> batchExtractBytesSync({
-  required List<BatchBytesItem> items,
-  required ExtractionConfig config,
-}) => RustLib.instance.api.crateBatchExtractBytesSync(
-  items: items,
-  config: config,
-);
-
-/// Extract content from multiple files concurrently.
-///
-/// This function processes multiple files in parallel, automatically managing
-/// concurrency to prevent resource exhaustion. The concurrency limit can be
-/// configured via `ExtractionConfig.max_concurrent_extractions` or defaults
-/// to `(num_cpus * 1.5).ceil()`.
-///
-/// Each file can optionally specify a `FileExtractionConfig` that overrides specific
-/// fields from the batch-level `config`. Pass `null` for a file to use the batch defaults.
-/// Batch-level settings like `max_concurrent_extractions` and `use_cache` are always
-/// taken from the batch-level `config`.
-///
-///   per-file configuration overrides.
-///
-/// - `config` - Batch-level extraction configuration (provides defaults and batch settings)
-///
-/// **Returns:**
-///
-/// A vector of `ExtractionResult` in the same order as the input items.
-///
-/// **Errors:**
-///
-/// Individual file errors are captured in the result metadata. System errors
-/// (IO, RuntimeError equivalents) will bubble up and fail the entire batch.
-///
-/// Simple usage with no per-file overrides:
-///
-///
-/// Per-file configuration overrides:
-Future<List<ExtractionResult>> batchExtractFiles({
-  required List<BatchFileItem> items,
-  required ExtractionConfig config,
-}) => RustLib.instance.api.crateBatchExtractFiles(items: items, config: config);
-
-/// Extract content from multiple byte arrays concurrently.
-///
-/// This function processes multiple byte arrays in parallel, automatically managing
-/// concurrency to prevent resource exhaustion. The concurrency limit can be
-/// configured via `ExtractionConfig.max_concurrent_extractions` or defaults
-/// to `(num_cpus * 1.5).ceil()`.
-///
-/// Each item can optionally specify a `FileExtractionConfig` that overrides specific
-/// fields from the batch-level `config`. Pass `null` as the config to use
-/// the batch-level defaults for that item.
-///
-///   MIME type, and optional per-item configuration overrides.
-///
-/// - `config` - Batch-level extraction configuration
-///
-/// **Returns:**
-///
-/// A vector of `ExtractionResult` in the same order as the input items.
-///
-/// Simple usage with no per-item overrides:
-///
-///
-/// Per-item configuration overrides:
-Future<List<ExtractionResult>> batchExtractBytes({
-  required List<BatchBytesItem> items,
-  required ExtractionConfig config,
-}) => RustLib.instance.api.crateBatchExtractBytes(items: items, config: config);
+}) => RustLib.instance.api.crateExtractBatch(inputs: inputs, config: config);
 
 /// Detect MIME type from raw file bytes.
 ///
@@ -268,10 +98,6 @@ Future<List<QrCode>> detectQrCodes({
 /// bindings.
 Future<List<String>> listEmbeddingBackends() =>
     RustLib.instance.api.crateListEmbeddingBackends();
-
-/// List names of all registered document extractors.
-Future<List<String>> listDocumentExtractors() =>
-    RustLib.instance.api.crateListDocumentExtractors();
 
 /// List all registered OCR backends.
 ///
@@ -1070,11 +896,24 @@ Future<FileExtractionConfig> createFileExtractionConfigFromJson({
 Future<SvgOptions> createSvgOptionsFromJson({required String json}) =>
     RustLib.instance.api.crateCreateSvgOptionsFromJson(json: json);
 
-Future<BatchBytesItem> createBatchBytesItemFromJson({required String json}) =>
-    RustLib.instance.api.crateCreateBatchBytesItemFromJson(json: json);
+Future<ExtractInput> createExtractInputFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateExtractInputFromJson(json: json);
 
-Future<BatchFileItem> createBatchFileItemFromJson({required String json}) =>
-    RustLib.instance.api.crateCreateBatchFileItemFromJson(json: json);
+Future<ExtractionErrorItem> createExtractionErrorItemFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateExtractionErrorItemFromJson(json: json);
+
+Future<ExtractionSummary> createExtractionSummaryFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateExtractionSummaryFromJson(json: json);
+
+Future<ExtractionOutput> createExtractionOutputFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateExtractionOutputFromJson(json: json);
+
+Future<UrlExtractionConfig> createUrlExtractionConfigFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateUrlExtractionConfigFromJson(json: json);
 
 Future<ImageExtractionConfig> createImageExtractionConfigFromJson({
   required String json,
@@ -1856,61 +1695,6 @@ Future<void> unregisterEmbeddingBackend({required String name}) =>
 Future<void> clearEmbeddingBackends() =>
     RustLib.instance.api.crateClearEmbeddingBackends();
 
-/// Construct a `DocumentExtractorDartImpl` from Dart callback closures.
-/// FRB synthesises a Dart-callable function type for each closure parameter,
-/// which is the whole point of taking them as `impl Fn(...) -> DartFnFuture<R>`
-/// parameters rather than storing them as `Box<dyn Fn(...)>` fields on an opaque
-/// struct (FRB v2 silently drops factories that return opaque structs whose fields
-/// it cannot bridge). The returned wrapper holds an `Arc<dyn Trait + Send + Sync>`
-/// whose backing object carries the supplied callbacks privately.
-/// `plugin_name` and `plugin_version` are required for the Plugin super-trait.
-Future<DocumentExtractorDartImpl> createDocumentExtractorDartImpl({
-  required String pluginName,
-  required String pluginVersion,
-  required FutureOr<InternalDocumentBridge> Function(
-    Uint8List,
-    String,
-    ExtractionConfig,
-  )
-  extractBytes,
-  required FutureOr<InternalDocumentBridge> Function(
-    String,
-    String,
-    ExtractionConfig,
-  )
-  extractFile,
-  required FutureOr<List<String>> Function() supportedMimeTypes,
-  required FutureOr<PlatformInt64> Function() priority,
-  required FutureOr<bool> Function(String, String) canHandle,
-}) => RustLib.instance.api.crateCreateDocumentExtractorDartImpl(
-  pluginName: pluginName,
-  pluginVersion: pluginVersion,
-  extractBytes: extractBytes,
-  extractFile: extractFile,
-  supportedMimeTypes: supportedMimeTypes,
-  priority: priority,
-  canHandle: canHandle,
-);
-
-/// Register a Dart implementation as a `DocumentExtractor` plugin.
-///
-/// Forwards the `Arc<dyn DocumentExtractor>` wrapped by `DocumentExtractorDartImpl` to
-/// `xberg::plugins::registry::get_document_extractor_registry()`. Errors from the host registry are stringified
-/// for FRB transport.
-Future<void> registerDocumentExtractor({
-  required DocumentExtractorDartImpl impl,
-}) => RustLib.instance.api.crateRegisterDocumentExtractor(impl: impl);
-
-/// Unregister a previously-registered `DocumentExtractor` plugin by name.
-/// Removes the plugin from `xberg::plugins::registry::get_document_extractor_registry()` and stringifies any host error.
-Future<void> unregisterDocumentExtractor({required String name}) =>
-    RustLib.instance.api.crateUnregisterDocumentExtractor(name: name);
-
-/// Clear all registered `DocumentExtractor` plugins.
-/// Removes every plugin from `xberg::plugins::registry::get_document_extractor_registry()` and stringifies any host error.
-Future<void> clearDocumentExtractors() =>
-    RustLib.instance.api.crateClearDocumentExtractors();
-
 /// Construct a `RendererDartImpl` from Dart callback closures.
 /// FRB synthesises a Dart-callable function type for each closure parameter,
 /// which is the whole point of taking them as `impl Fn(...) -> DartFnFuture<R>`
@@ -1982,9 +1766,6 @@ Future<void> unregisterRerankerBackend({required String name}) =>
 Future<void> clearRerankerBackends() =>
     RustLib.instance.api.crateClearRerankerBackends();
 
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner< Arc < dyn DocumentExtractor + Send + Sync >>>
-abstract class ArcDocumentExtractor implements RustOpaqueInterface {}
-
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner< Arc < dyn EmbeddingBackend + Send + Sync >>>
 abstract class ArcEmbeddingBackend implements RustOpaqueInterface {}
 
@@ -2002,13 +1783,6 @@ abstract class ArcRerankerBackend implements RustOpaqueInterface {}
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner< Arc < dyn Validator + Send + Sync >>>
 abstract class ArcValidator implements RustOpaqueInterface {}
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DocumentExtractorDartImpl>>
-abstract class DocumentExtractorDartImpl implements RustOpaqueInterface {
-  ArcDocumentExtractor get field0;
-
-  set field0(ArcDocumentExtractor field0);
-}
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<EmbeddingBackendDartImpl>>
 abstract class EmbeddingBackendDartImpl implements RustOpaqueInterface {
@@ -2377,64 +2151,6 @@ class BBox {
           y1 == other.y1 &&
           x2 == other.x2 &&
           y2 == other.y2;
-}
-
-/// Batch item for byte array extraction.
-///
-/// Used with `batch_extract_bytes` and `batch_extract_bytes_sync`
-/// to represent a single item in a batch extraction job.
-class BatchBytesItem {
-  /// The content bytes to extract from
-  final Uint8List content;
-
-  /// MIME type of the content (e.g., "application/pdf", "text/html")
-  final String mimeType;
-
-  /// Per-item configuration overrides (None uses batch-level defaults)
-  final FileExtractionConfig? config;
-
-  const BatchBytesItem({
-    required this.content,
-    required this.mimeType,
-    this.config,
-  });
-
-  @override
-  int get hashCode => content.hashCode ^ mimeType.hashCode ^ config.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is BatchBytesItem &&
-          runtimeType == other.runtimeType &&
-          content == other.content &&
-          mimeType == other.mimeType &&
-          config == other.config;
-}
-
-/// Batch item for file extraction.
-///
-/// Used with `batch_extract_files` and `batch_extract_files_sync`
-/// to represent a single file in a batch extraction job.
-class BatchFileItem {
-  /// Path to the file to extract from
-  final String path;
-
-  /// Per-file configuration overrides (None uses batch-level defaults)
-  final FileExtractionConfig? config;
-
-  const BatchFileItem({required this.path, this.config});
-
-  @override
-  int get hashCode => path.hashCode ^ config.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is BatchFileItem &&
-          runtimeType == other.runtimeType &&
-          path == other.path &&
-          config == other.config;
 }
 
 /// BibTeX bibliography metadata.
@@ -5624,6 +5340,66 @@ enum ExecutionProviderType {
   tensorRt,
 }
 
+/// Unified extraction input for all public extraction entry points.
+class ExtractInput {
+  /// Source kind. `bytes` requires `bytes`; `uri` requires `uri`.
+  final ExtractInputKind kind;
+
+  /// Raw bytes for `kind = "bytes"`.
+  final Uint8List? bytes;
+
+  /// Local path, `file://` URI, or HTTP(S) URL for `kind = "uri"`.
+  final String? uri;
+
+  /// MIME type hint.
+  final String? mimeType;
+
+  /// Filename hint used for MIME detection and metadata.
+  final String? filename;
+
+  /// Per-input extraction overrides.
+  final FileExtractionConfig? config;
+
+  const ExtractInput({
+    required this.kind,
+    this.bytes,
+    this.uri,
+    this.mimeType,
+    this.filename,
+    this.config,
+  });
+
+  @override
+  int get hashCode =>
+      kind.hashCode ^
+      bytes.hashCode ^
+      uri.hashCode ^
+      mimeType.hashCode ^
+      filename.hashCode ^
+      config.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ExtractInput &&
+          runtimeType == other.runtimeType &&
+          kind == other.kind &&
+          bytes == other.bytes &&
+          uri == other.uri &&
+          mimeType == other.mimeType &&
+          filename == other.filename &&
+          config == other.config;
+}
+
+/// Source kind for [`ExtractInput`].
+enum ExtractInputKind {
+  /// Raw in-memory bytes.
+  bytes,
+
+  /// A filesystem path, `file://` URI, or HTTP(S) URL.
+  uri,
+}
+
 /// Extracted image from a document.
 ///
 /// Contains raw image data, metadata, and optional nested OCR results.
@@ -6077,6 +5853,9 @@ class ExtractionConfig {
   /// that do not specify one. See `EmailConfig` for details.
   final EmailConfig? email;
 
+  /// URL ingestion and crawl configuration.
+  final UrlExtractionConfig url;
+
   /// Maximum recursion depth for archive extraction (default: 3).
   /// Set to 0 to disable recursive extraction (legacy behavior).
   final PlatformInt64 maxArchiveDepth;
@@ -6155,6 +5934,7 @@ class ExtractionConfig {
     this.cacheNamespace,
     this.cacheTtlSecs,
     this.email,
+    required this.url,
     required this.maxArchiveDepth,
     this.treeSitter,
     this.structuredExtraction,
@@ -6199,6 +5979,7 @@ class ExtractionConfig {
       cacheNamespace.hashCode ^
       cacheTtlSecs.hashCode ^
       email.hashCode ^
+      url.hashCode ^
       maxArchiveDepth.hashCode ^
       treeSitter.hashCode ^
       structuredExtraction.hashCode ^
@@ -6245,6 +6026,7 @@ class ExtractionConfig {
           cacheNamespace == other.cacheNamespace &&
           cacheTtlSecs == other.cacheTtlSecs &&
           email == other.email &&
+          url == other.url &&
           maxArchiveDepth == other.maxArchiveDepth &&
           treeSitter == other.treeSitter &&
           structuredExtraction == other.structuredExtraction &&
@@ -6318,6 +6100,51 @@ class ExtractionDiff {
           embeddedChanges == other.embeddedChanges;
 }
 
+/// Non-fatal per-input extraction error captured by [`ExtractionOutput`].
+class ExtractionErrorItem {
+  /// Input index in the original request.
+  final PlatformInt64 index;
+
+  /// Stable numeric error code.
+  final PlatformInt64 code;
+
+  /// Stable snake_case error kind.
+  final String errorType;
+
+  /// Best-effort source identifier.
+  final String source;
+
+  /// Error message.
+  final String message;
+
+  const ExtractionErrorItem({
+    required this.index,
+    required this.code,
+    required this.errorType,
+    required this.source,
+    required this.message,
+  });
+
+  @override
+  int get hashCode =>
+      index.hashCode ^
+      code.hashCode ^
+      errorType.hashCode ^
+      source.hashCode ^
+      message.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ExtractionErrorItem &&
+          runtimeType == other.runtimeType &&
+          index == other.index &&
+          code == other.code &&
+          errorType == other.errorType &&
+          source == other.source &&
+          message == other.message;
+}
+
 /// How the extracted text was produced.
 enum ExtractionMethod {
   /// Text extracted directly from the document's native format (no OCR).
@@ -6328,6 +6155,57 @@ enum ExtractionMethod {
 
   /// Text came from a combination of native extraction and OCR.
   mixed,
+}
+
+/// Unified extraction output envelope.
+class ExtractionOutput {
+  /// Extraction results in discovery order.
+  final List<ExtractionResult> results;
+
+  /// Non-fatal per-input errors.
+  final List<ExtractionErrorItem> errors;
+
+  /// Aggregate counts for the operation.
+  final ExtractionSummary summary;
+
+  /// Final URLs reached after redirects during URL ingestion.
+  final List<String> crawlFinalUrls;
+
+  /// Total redirects followed while fetching or crawling URLs.
+  final PlatformInt64 crawlRedirectCount;
+
+  /// Unique normalized URLs discovered by crawls.
+  final List<String> crawlUniqueNormalizedUrls;
+
+  const ExtractionOutput({
+    required this.results,
+    required this.errors,
+    required this.summary,
+    required this.crawlFinalUrls,
+    required this.crawlRedirectCount,
+    required this.crawlUniqueNormalizedUrls,
+  });
+
+  @override
+  int get hashCode =>
+      results.hashCode ^
+      errors.hashCode ^
+      summary.hashCode ^
+      crawlFinalUrls.hashCode ^
+      crawlRedirectCount.hashCode ^
+      crawlUniqueNormalizedUrls.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ExtractionOutput &&
+          runtimeType == other.runtimeType &&
+          results == other.results &&
+          errors == other.errors &&
+          summary == other.summary &&
+          crawlFinalUrls == other.crawlFinalUrls &&
+          crawlRedirectCount == other.crawlRedirectCount &&
+          crawlUniqueNormalizedUrls == other.crawlUniqueNormalizedUrls;
 }
 
 /// General extraction result used by the core extraction API.
@@ -6675,6 +6553,57 @@ class ExtractionResult {
           formattedContent == other.formattedContent;
 }
 
+/// Summary for a unified extraction call.
+class ExtractionSummary {
+  /// Number of inputs submitted by the caller.
+  final PlatformInt64 inputs;
+
+  /// Number of extraction results produced.
+  final PlatformInt64 results;
+
+  /// Number of per-input errors.
+  final PlatformInt64 errors;
+
+  /// Number of URI inputs that resolved to remote HTTP(S) URLs.
+  final PlatformInt64 remoteUrls;
+
+  /// Number of HTML pages crawled or scraped.
+  final PlatformInt64 pagesCrawled;
+
+  /// Number of downloaded non-HTML documents extracted from URLs.
+  final PlatformInt64 documentsDownloaded;
+
+  const ExtractionSummary({
+    required this.inputs,
+    required this.results,
+    required this.errors,
+    required this.remoteUrls,
+    required this.pagesCrawled,
+    required this.documentsDownloaded,
+  });
+
+  @override
+  int get hashCode =>
+      inputs.hashCode ^
+      results.hashCode ^
+      errors.hashCode ^
+      remoteUrls.hashCode ^
+      pagesCrawled.hashCode ^
+      documentsDownloaded.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ExtractionSummary &&
+          runtimeType == other.runtimeType &&
+          inputs == other.inputs &&
+          results == other.results &&
+          errors == other.errors &&
+          remoteUrls == other.remoteUrls &&
+          pagesCrawled == other.pagesCrawled &&
+          documentsDownloaded == other.documentsDownloaded;
+}
+
 /// FictionBook (FB2) metadata.
 class FictionBookMetadata {
   /// Genre tags as declared in the FB2 `<genre>` elements.
@@ -6709,9 +6638,8 @@ class FictionBookMetadata {
 /// Per-file extraction configuration overrides for batch processing.
 ///
 /// All fields are `Option<T>` — `None` means "use the batch-level default."
-/// This type is used with `batch_extract_files` and
-/// `batch_extract_bytes` to allow heterogeneous
-/// extraction settings within a single batch.
+/// This type is used by `config` and `extract_batch`
+/// to allow heterogeneous extraction settings within a single batch.
 ///
 /// # Excluded Fields
 ///
@@ -11707,7 +11635,7 @@ class PptxMetadata {
 /// Each preset is a JSON file under `src/presets/library/<id>/v1.json` that
 /// validates against the meta-schema in `src/presets/preset.schema.json`.
 ///
-/// The curated catalog is downstream (xberg-enterprise) and injects presets via
+/// Downstream catalog consumers can inject presets via
 /// `extend_from_dir`. The embedded OSS library
 /// ships only the `generic_document` toy preset.
 class Preset {
@@ -14391,6 +14319,69 @@ enum UriKind {
 
   /// An email address (`mailto:` link or bare email).
   email,
+}
+
+/// URL ingestion and crawl configuration.
+class UrlExtractionConfig {
+  /// URL extraction mode.
+  final UrlExtractionMode mode;
+
+  /// Optional regex filter for document-discovered URLs.
+  final String? documentUrlPattern;
+
+  /// Maximum URLs to follow per extraction result.
+  final PlatformInt64? maxDocumentUrlsPerResult;
+
+  /// Maximum URLs followed across the whole extraction call.
+  final PlatformInt64? maxTotalUrls;
+
+  /// Allow bare local filesystem path inputs.
+  final bool allowLocalFileInputs;
+
+  /// Allow local `file://` URI inputs.
+  final bool allowFileUris;
+
+  const UrlExtractionConfig({
+    required this.mode,
+    this.documentUrlPattern,
+    this.maxDocumentUrlsPerResult,
+    this.maxTotalUrls,
+    required this.allowLocalFileInputs,
+    required this.allowFileUris,
+  });
+
+  @override
+  int get hashCode =>
+      mode.hashCode ^
+      documentUrlPattern.hashCode ^
+      maxDocumentUrlsPerResult.hashCode ^
+      maxTotalUrls.hashCode ^
+      allowLocalFileInputs.hashCode ^
+      allowFileUris.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UrlExtractionConfig &&
+          runtimeType == other.runtimeType &&
+          mode == other.mode &&
+          documentUrlPattern == other.documentUrlPattern &&
+          maxDocumentUrlsPerResult == other.maxDocumentUrlsPerResult &&
+          maxTotalUrls == other.maxTotalUrls &&
+          allowLocalFileInputs == other.allowLocalFileInputs &&
+          allowFileUris == other.allowFileUris;
+}
+
+/// URL extraction mode.
+enum UrlExtractionMode {
+  /// Classify HTTP(S) resources after fetch.
+  auto,
+
+  /// Treat the URI as a single remote document/page.
+  document,
+
+  /// Crawl from the seed URI and extract discovered pages/documents.
+  crawl,
 }
 
 /// User-provided chunk configuration.

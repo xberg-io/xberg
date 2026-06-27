@@ -1,4 +1,4 @@
-import { extractBytes, initWasm } from "@xberg/wasm";
+import { extract, initWasm } from "@xberg-io/xberg-wasm";
 
 async function extractStreamingDocument(url: string) {
   await initWasm();
@@ -29,7 +29,7 @@ async function extractStreamingDocument(url: string) {
   }
 
   console.log("Document fully received, extracting...");
-  const result = await extractBytes(fullBuffer, "application/pdf");
+  const result = await extract(fullBuffer, "application/pdf");
 
   return result;
 }

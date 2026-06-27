@@ -4,7 +4,7 @@ import java.nio.file.Paths
 
 fun main() {
     val config = ExtractionConfig.builder().build()
-    val result = Xberg.extractFileSync(Paths.get("document.pdf"), null, config)
+    val result = Xberg.extractSync(Paths.get("document.pdf"), null, config)
 
     val tables = result.tables() ?: emptyList()
     for (table in tables) {

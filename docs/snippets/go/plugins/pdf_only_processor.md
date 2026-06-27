@@ -91,7 +91,7 @@ func main() {
 	}
 
 	for _, file := range files {
-		result, err := xberg.ExtractFileSync(file, nil)
+		result, err := xberg.ExtractSync(file, nil)
 		if err != nil {
 			log.Printf("Warning: extraction failed for %s: %v", file, err)
 			continue

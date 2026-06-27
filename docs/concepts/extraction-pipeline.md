@@ -260,7 +260,7 @@ The pipeline includes several optimizations that run automatically without confi
 - **Cache short-circuits** bypass every processing stage when a cached result exists
 - **Lazy OCR** avoids redundant OCR when the format extractor already produced usable text
 - **Streaming parsers** process XML, text, and archive files incrementally with constant memory
-- **Parallel batching** with `batch_extract_file` distributes files across all CPU cores via Tokio
+- **Parallel batching** with `extract_batch` distributes files across all CPU cores via Tokio
 - **Shared async runtime** reuses a single Tokio runtime across calls, avoiding repeated initialization
 
 ---

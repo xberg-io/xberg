@@ -26,7 +26,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('research_paper.pdf');
+$result = $xberg->extract('research_paper.pdf');
 
 echo "Keyword Extraction Results:\n";
 echo str_repeat('=', 60) . "\n";
@@ -76,7 +76,7 @@ foreach ($algorithms as $name => $algorithm) {
     );
 
     $xberg = new Xberg($algoConfig);
-    $result = $xberg->extractFile('article.pdf');
+    $result = $xberg->extract('article.pdf');
 
     $keywords = $result->metadata['keywords'] ?? [];
 
@@ -154,7 +154,7 @@ foreach ($documents as $document) {
         continue;
     }
 
-    $result = $xberg->extractFile($document);
+    $result = $xberg->extract($document);
     $keywords = $result->metadata['keywords'] ?? [];
 
     echo basename($document) . ":\n";
@@ -180,7 +180,7 @@ foreach ($documents as $document) {
         continue;
     }
 
-    $result = $xberg->extractFile($document);
+    $result = $xberg->extract($document);
     $keywords = $result->metadata['keywords'] ?? [];
 
     foreach ($keywords as $keyword) {

@@ -23,7 +23,7 @@ Future<void> main() async {
     maxArchiveDepth: 3,
   );
 
-  final result = await XbergBridge.extractFile('document.pdf', null, config);
+  final result = await XbergBridge.extract('document.pdf', null, config);
   print('Keywords: ${result.extractedKeywords}');
 }
 ```

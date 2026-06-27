@@ -4,7 +4,7 @@ from xberg import (
     ExtractionConfig,
     TokenReductionConfig,
     ReductionLevel,
-    extract_file,
+    extract,
 )
 
 
@@ -16,7 +16,7 @@ async def main() -> None:
         )
     )
 
-    result = await extract_file("verbose_document.pdf", config=config)
+    result = await extract("verbose_document.pdf", config=config)
 
     print(f"Reduced content length: {len(result.content)} chars")
 

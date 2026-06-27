@@ -13,7 +13,7 @@ fun main() {
         .withChunking(Optional.of(chunking))
         .build()
 
-    val result = Xberg.extractFileSync(Paths.get("document.pdf"), null, config)
+    val result = Xberg.extractSync(Paths.get("document.pdf"), null, config)
     val chunks = result.chunks().orEmpty()
     println("Chunks: ${chunks.size}")
     for (chunk in chunks) {
@@ -41,7 +41,7 @@ fun main() {
         .withChunking(Optional.of(chunking))
         .build()
 
-    val result = Xberg.extractFileSync(Paths.get("document.md"), null, config)
+    val result = Xberg.extractSync(Paths.get("document.md"), null, config)
     for (chunk in result.chunks().orEmpty()) {
         chunk.metadata()?.headingContext()?.let { ctx ->
             for (heading in ctx.headings()) {
@@ -71,7 +71,7 @@ fun main() {
         .withChunking(Optional.of(chunking))
         .build()
 
-    val result = Xberg.extractFileSync(Paths.get("document.md"), null, config)
+    val result = Xberg.extractSync(Paths.get("document.md"), null, config)
     for (chunk in result.chunks().orEmpty()) {
         // Each chunk's content is prefixed with its heading breadcrumb
         val text = chunk.content()

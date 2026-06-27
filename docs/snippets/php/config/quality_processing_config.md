@@ -10,7 +10,7 @@ $config = new ExtractionConfig(
     useCache: true
 );
 
-$result = Xberg::extractFileSync('document.pdf', null, $config);
+$result = Xberg::extractSync('document.pdf', null, $config);
 
 echo "Quality score: " . $result->getQualityScore() . "\n";
 if ($result->getProcessingTime()) {

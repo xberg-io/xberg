@@ -25,12 +25,12 @@ public final class DiskCache {
     Xberg xberg = new Xberg(config);
 
     System.out.println("First extraction (will be cached)...");
-    ExtractionResult result1 = xberg.extractFile("document.pdf");
+    ExtractionResult result1 = xberg.extract("document.pdf");
     System.out.println("  - Content length: " + result1.content().length());
     System.out.println("  - Cached: " + result1.metadata().wasCached());
 
     System.out.println("\nSecond extraction (from cache)...");
-    ExtractionResult result2 = xberg.extractFile("document.pdf");
+    ExtractionResult result2 = xberg.extract("document.pdf");
     System.out.println("  - Content length: " + result2.content().length());
     System.out.println("  - Cached: " + result2.metadata().wasCached());
 

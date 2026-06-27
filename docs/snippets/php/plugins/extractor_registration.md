@@ -20,7 +20,7 @@ class CustomJsonExtractor implements DocumentExtractor {
         // Cleanup resources
     }
 
-    public function extractBytes(string $content, string $mimeType, object $config): object {
+    public function extract(string $content, string $mimeType, object $config): object {
         $json = json_decode($content, true);
         $text = $this->extractTextFromJson($json);
 

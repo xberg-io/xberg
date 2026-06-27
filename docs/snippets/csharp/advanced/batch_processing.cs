@@ -24,13 +24,13 @@ class Program
 
             foreach (var filePath in filePaths)
             {
-                var result = await XbergLib.ExtractFileAsync(filePath, config);
+                var result = await XbergLib.ExtractAsync(filePath, config);
                 batchResults.Add(result);
                 Console.WriteLine($"Processed {filePath}: {result.Content.Length} chars");
             }
 
             var tasks = filePaths.Select(path =>
-                XbergLib.ExtractFileAsync(path, config)
+                XbergLib.ExtractAsync(path, config)
             ).ToArray();
 
             var results = await Task.WhenAll(tasks);

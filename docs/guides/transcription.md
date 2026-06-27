@@ -1,7 +1,7 @@
 # Audio and Video Transcription
 
 The `transcription` Cargo feature adds speech-to-text extraction for audio and
-video MIME types via Whisper ONNX models <span class="version-badge">v5.0</span>. Enable the feature and set a
+video MIME types via Whisper ONNX models. Enable the feature and set a
 `TranscriptionConfig` block in your `ExtractionConfig` to produce transcripts
 from audio and video files.
 
@@ -70,7 +70,7 @@ xberg = { version = "5", features = ["transcription"] }
 ### Async
 
 ```rust
-use xberg::extract_bytes;
+use xberg::extract;
 use xberg::core::config::ExtractionConfig;
 use xberg::core::config::transcription::{TranscriptionConfig, WhisperModel};
 
@@ -85,14 +85,14 @@ let config = ExtractionConfig {
 };
 
 let bytes = std::fs::read("recording.wav")?;
-let result = extract_bytes(&bytes, "audio/wav", &config).await?;
+let result = extract(&bytes, "audio/wav", &config).await?;
 println!("{}", result.content); // transcript
 ```
 
 ### Sync
 
 ```rust
-use xberg::extract_bytes_sync;
+use xberg::extract;
 use xberg::core::config::ExtractionConfig;
 use xberg::core::config::transcription::{TranscriptionConfig, WhisperModel};
 
@@ -106,7 +106,7 @@ let config = ExtractionConfig {
 };
 
 let bytes = std::fs::read("recording.mp3")?;
-let result = extract_bytes_sync(&bytes, "audio/mpeg", &config)?;
+let result = extract(&bytes, "audio/mpeg", &config)?;
 println!("{}", result.content);
 ```
 

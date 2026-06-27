@@ -29,7 +29,7 @@ $config1 = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config1);
-$result = $xberg->extractFile('document.pdf');
+$result = $xberg->extract('document.pdf');
 
 if ($result->chunks !== null) {
     foreach ($result->chunks as $i => $chunk) {
@@ -150,7 +150,7 @@ $config5 = new ExtractionConfig(
     )
 );
 
-$result5 = (new Xberg($config5))->extractFile('document.pdf');
+$result5 = (new Xberg($config5))->extract('document.pdf');
 
 if ($result5->chunks !== null) {
     echo "Processing " . count($result5->chunks) . " chunks with embeddings...\n\n";

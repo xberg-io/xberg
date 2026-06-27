@@ -135,7 +135,7 @@ func main() {
 
 	for _, file := range files {
 		log.Printf("Processing: %s", file)
-		result, err := xberg.ExtractFileSync(file, nil)
+		result, err := xberg.ExtractSync(file, nil)
 		if err != nil {
 			log.Printf("  Warning: extraction failed: %v", err)
 			continue

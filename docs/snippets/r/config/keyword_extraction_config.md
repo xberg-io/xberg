@@ -5,7 +5,7 @@ config <- list(
   keywords = list(enabled = TRUE)
 )
 
-json <- extract_file_sync("document.pdf", "application/pdf", config)
+json <- extract_sync("document.pdf", "application/pdf", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Extracted %d keywords\n", length(result$keywords)))

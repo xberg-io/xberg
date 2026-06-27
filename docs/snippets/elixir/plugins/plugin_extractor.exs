@@ -26,7 +26,7 @@ end
 Xberg.Plugin.register_post_processor(MyApp.WordCountProcessor)
 
 # Use with extraction
-{:ok, result} = Xberg.extract_file(
+{:ok, result} = Xberg.extract(
   "document.pdf",
   nil
 )

@@ -5,7 +5,7 @@ config <- list(
   chunking = list(max_characters = 1000L, overlap = 200L)
 )
 
-json <- extract_file_sync("document.pdf", "application/pdf", config)
+json <- extract_sync("document.pdf", "application/pdf", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Preparing %d chunks for embedding:\n", length(result$chunks)))

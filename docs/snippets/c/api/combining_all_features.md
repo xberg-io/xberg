@@ -23,7 +23,7 @@ int main(void) {
     }
 
     XBERGExtractionResult *result =
-        xberg_extract_file("document.pdf", NULL, config);
+        xberg_extract("document.pdf", NULL, config);
     if (!result) {
         int32_t code = xberg_last_error_code();
         const char *message = xberg_last_error_context();

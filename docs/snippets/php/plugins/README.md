@@ -86,7 +86,7 @@ function postProcessResult(ExtractionResult $result): ExtractionResult
 }
 
 $xberg = new Xberg();
-$result = $xberg->extractFile('document.pdf');
+$result = $xberg->extract('document.pdf');
 $processed = postProcessResult($result);
 ```
 
@@ -111,7 +111,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('scanned.pdf');
+$result = $xberg->extract('scanned.pdf');
 ```
 
 ### 3. Validate Results in PHP
@@ -137,7 +137,7 @@ function validateResult(ExtractionResult $result): void
     }
 }
 
-$result = $xberg->extractFile('document.pdf');
+$result = $xberg->extract('document.pdf');
 validateResult($result);
 ```
 
@@ -160,7 +160,7 @@ final class CustomXberg extends BaseXberg
         string $path,
         ?ExtractionConfig $config = null
     ): ExtractionResult {
-        $result = $this->extractFile($path, $config);
+        $result = $this->extract($path, $config);
 
         // Custom validation
         if (strlen($result->content) < 100) {
@@ -175,7 +175,7 @@ final class CustomXberg extends BaseXberg
         callable $transformer,
         ?ExtractionConfig $config = null
     ): ExtractionResult {
-        $result = $this->extractFile($path, $config);
+        $result = $this->extract($path, $config);
 
         // Custom transformation
         $transformedContent = $transformer($result->content);

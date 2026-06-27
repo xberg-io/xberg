@@ -1,5 +1,5 @@
 ```rust title="Rust"
-use xberg::{extract_file, ExtractionConfig, ChunkingConfig};
+use xberg::{extract, ExtractionConfig, ChunkingConfig};
 
 #[tokio::main]
 async fn main() -> xberg::Result<()> {
@@ -12,7 +12,7 @@ async fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract_file("document.pdf", None::<&str>, &config).await?;
+    let result = extract("document.pdf", None::<&str>, &config).await?;
     println!("Chunks: {}", result.chunks.len());
     for chunk in &result.chunks {
         println!("Length: {}", chunk.content.len());
@@ -22,7 +22,7 @@ async fn main() -> xberg::Result<()> {
 ```
 
 ```rust title="Rust - Markdown with Heading Context"
-use xberg::{extract_file, ExtractionConfig, ChunkingConfig, ChunkerType, ChunkSizing};
+use xberg::{extract, ExtractionConfig, ChunkingConfig, ChunkerType, ChunkSizing};
 
 #[tokio::main]
 async fn main() -> xberg::Result<()> {
@@ -40,7 +40,7 @@ async fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract_file("document.md", None::<&str>, &config).await?;
+    let result = extract("document.md", None::<&str>, &config).await?;
     for chunk in &result.chunks {
         if let Some(heading_context) = &chunk.metadata.heading_context {
             for heading in &heading_context.headings {
@@ -54,7 +54,7 @@ async fn main() -> xberg::Result<()> {
 ```
 
 ```rust title="Rust - Prepend Heading Context"
-use xberg::{extract_file, ExtractionConfig, ChunkingConfig, ChunkerType};
+use xberg::{extract, ExtractionConfig, ChunkingConfig, ChunkerType};
 
 #[tokio::main]
 async fn main() -> xberg::Result<()> {
@@ -69,7 +69,7 @@ async fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract_file("document.md", None::<&str>, &config).await?;
+    let result = extract("document.md", None::<&str>, &config).await?;
     for chunk in &result.chunks {
         // Each chunk's content is prefixed with its heading breadcrumb
         println!("Content: {}...", &chunk.content[..100.min(chunk.content.len())]);

@@ -2,7 +2,7 @@
 defmodule ReadContent do
   def process_extracted_content do
     # Extract content and iterate over lines
-    case Xberg.extract_file_sync("document.pdf", nil, nil) do
+    case Xberg.extract_sync("document.pdf", nil, nil) do
       {:ok, content} ->
         IO.puts("Processing extracted content:")
 

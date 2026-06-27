@@ -10,7 +10,7 @@ var config = new ExtractionConfig
     }
 };
 
-var result = await XbergLib.ExtractFile("document.pdf", null, config);
+var result = await XbergLib.Extract("document.pdf", null, config);
 Console.WriteLine($"Reduced content length: {result.Content.Length}");
 Console.WriteLine($"Content: {result.Content.Substring(0, Math.Min(100, result.Content.Length))}");
 ```

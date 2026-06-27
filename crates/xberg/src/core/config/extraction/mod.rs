@@ -20,9 +20,10 @@ pub use self::core::ExtractionConfig;
 pub use self::file_config::FileExtractionConfig;
 #[cfg(feature = "svg")]
 pub use self::types::SvgOptions;
+pub(crate) use self::types::{BatchBytesItem, BatchFileItem};
 pub use self::types::{
-    BatchBytesItem, BatchFileItem, ImageExtractionConfig, ImageOutputFormat, LanguageDetectionConfig,
-    TokenReductionOptions,
+    ExtractInput, ExtractInputKind, ExtractionErrorItem, ExtractionOutput, ExtractionSummary, ImageExtractionConfig,
+    ImageOutputFormat, LanguageDetectionConfig, TokenReductionOptions, UrlExtractionConfig, UrlExtractionMode,
 };
 
 #[cfg(test)]

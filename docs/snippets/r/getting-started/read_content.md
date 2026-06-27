@@ -2,7 +2,7 @@
 library(xberg)
 
 # Extract a document
-result <- extract_file_sync("document.docx")
+result <- extract_sync("document.docx")
 
 # Access core content fields
 cat(sprintf("MIME type: %s\n", mime_type(result)))

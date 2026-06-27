@@ -1,28 +1,35 @@
 {
 	"id": "config_extraction_timeout",
 	"description": "Tests that extraction_timeout_secs config field is accepted and does not affect fast extractions",
-	"tags": ["contract", "config", "timeout"],
-	"call": "extract_file_sync",
+	"tags": [
+		"contract",
+		"config",
+		"timeout"
+	],
+	"call": "extract",
 	"input": {
-		"path": "pdf/fake_memo.pdf",
-		"config": {
-			"extraction_timeout_secs": 300
-		}
+		"kind": "uri",
+		"uri": "pdf/fake_memo.pdf"
 	},
 	"assertions": [
 		{
 			"type": "equals",
-			"field": "mime_type",
+			"field": "results.0.mime_type",
 			"value": "application/pdf"
 		},
 		{
 			"type": "min_length",
-			"field": "content",
+			"field": "results.0.content",
 			"value": 10
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
-		"reason": "WASM cannot access filesystem; use extractBytes with file content instead"
+		"languages": [
+			"wasm"
+		],
+		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
+	},
+	"config": {
+		"extraction_timeout_secs": 300
 	}
 }

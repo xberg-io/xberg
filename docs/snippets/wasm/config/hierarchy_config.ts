@@ -24,7 +24,7 @@ const extractionConfigBasic: ExtractionConfig = {
 };
 
 // const xberg = new Xberg(extractionConfigBasic);
-// const result = await xberg.extractFile("document.pdf");
+// const result = await xberg.extract("document.pdf");
 
 // Example 2: Custom kClusters for minimal structure
 // Use 3 clusters for simpler hierarchy with minimal structure.
@@ -44,7 +44,7 @@ const _extractionConfigMinimal: ExtractionConfig = {
   pdfOptions: pdfConfigMinimal,
 };
 
-// const result = await xberg.extractFile("document.pdf");
+// const result = await xberg.extract("document.pdf");
 
 // Example 3: With OCR coverage threshold
 // Trigger OCR if less than 50% of text has font data.
@@ -64,7 +64,7 @@ const _extractionConfigOcr: ExtractionConfig = {
   pdfOptions: pdfConfigOcr,
 };
 
-// const result = await xberg.extractFile("document.pdf");
+// const result = await xberg.extract("document.pdf");
 
 // Integration with Xberg WASM instance
 async function _extractWithHierarchy(): Promise<void> {
@@ -73,7 +73,7 @@ async function _extractWithHierarchy(): Promise<void> {
 
   try {
     // Extract from file (requires file input or fetch)
-    const result = await xberg.extractFile("document.pdf");
+    const result = await xberg.extract("document.pdf");
     console.log("Extraction complete:", result);
   } catch (error) {
     console.error("Extraction failed:", error);

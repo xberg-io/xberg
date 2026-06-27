@@ -5,7 +5,7 @@ require 'xberg'
 config = Xberg::ExtractionConfig.new(output_format: 'element_based')
 
 # Extract document
-result = Xberg.extract_file_sync('document.pdf', config: config)
+result = Xberg.extract_sync('document.pdf', config: config)
 
 # Access elements
 result.elements.each do |element|

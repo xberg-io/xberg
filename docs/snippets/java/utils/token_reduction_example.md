@@ -11,7 +11,7 @@ ExtractionConfig config = ExtractionConfig.builder()
         .build())
     .build();
 
-ExtractionResult result = Xberg.extractFile("verbose_document.pdf", config);
+ExtractionResult result = Xberg.extract("verbose_document.pdf", config);
 
 Object originalTokens = result.getMetadata().get("original_token_count");
 Object reducedTokens = result.getMetadata().get("token_count");

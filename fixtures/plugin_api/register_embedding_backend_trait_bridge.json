@@ -2,7 +2,9 @@
 	"id": "register_embedding_backend_trait_bridge",
 	"category": "plugin_api",
 	"description": "register_embedding_backend: trait bridge",
-	"tags": ["trait-bridge"],
+	"tags": [
+		"trait-bridge"
+	],
 	"call": "register_embedding_backend",
 	"input": {
 		"backend": {

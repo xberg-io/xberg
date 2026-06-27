@@ -11,11 +11,11 @@
   <a href="https://pypi.org/project/xberg/">
     <img src="https://img.shields.io/pypi/v/xberg?label=Python&color=007ec6" alt="Python">
   </a>
-  <a href="https://www.npmjs.com/package/@xberg/node">
-    <img src="https://img.shields.io/npm/v/@xberg/node?label=Node.js&color=007ec6" alt="Node.js">
+  <a href="https://www.npmjs.com/package/@xberg-io/xberg">
+    <img src="https://img.shields.io/npm/v/@xberg-io/xberg?label=Node.js&color=007ec6" alt="Node.js">
   </a>
-  <a href="https://www.npmjs.com/package/@xberg/wasm">
-    <img src="https://img.shields.io/npm/v/@xberg/wasm?label=WASM&color=007ec6" alt="WASM">
+  <a href="https://www.npmjs.com/package/@xberg-io/xberg-wasm">
+    <img src="https://img.shields.io/npm/v/@xberg-io/xberg-wasm?label=WASM&color=007ec6" alt="WASM">
   </a>
   <a href="https://central.sonatype.com/artifact/io.xberg/xberg">
     <img src="https://img.shields.io/maven-central/v/io.xberg/xberg?label=Java&color=007ec6" alt="Java">
@@ -56,10 +56,6 @@
   <a href="https://github.com/xberg-io/xberg/pkgs/container/xberg">
     <img src="https://img.shields.io/badge/Docker-ghcr.io-007ec6?logo=docker&logoColor=white" alt="Docker">
   </a>
-  <a href="https://github.com/xberg-io/xberg/pkgs/container/charts%2Fxberg">
-    <img src="https://img.shields.io/badge/Helm-ghcr.io-007ec6?logo=helm&logoColor=white" alt="Helm">
-  </a>
-
   <!-- Project Info -->
   <a href="https://github.com/xberg-io/xberg/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/License-MIT-007ec6" alt="License">
@@ -115,7 +111,6 @@ exe.root_module.addImport("xberg", xberg_dep.module("xberg"));
 ```
 
 ### System Requirements
-
 - **Zig 0.16.0+** required (`minimum_zig_version` declared in `build.zig.zon`)
 - Links the C FFI surface from `xberg-ffi`; the build resolves the library via `linkSystemLibrary` against the consumer-provided search path
 - Optional: [ONNX Runtime](https://github.com/microsoft/onnxruntime/releases) version 1.24+ for ORT-dependent inference features
@@ -132,19 +127,13 @@ const std = @import("std");
 const xberg = @import("xberg");
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    const output_json = try xberg.extract(
+        "{\"kind\":\"uri\",\"uri\":\"document.pdf\"}",
+        "{}",
+    );
+    defer std.heap.c_allocator.free(output_json);
 
-    const config_json = "{}";
-    const result_json = try xberg.extract_file_sync("document.pdf", null, config_json);
-    defer std.heap.c_allocator.free(result_json);
-
-    const owned = try allocator.dupe(u8, result_json);
-    defer allocator.free(owned);
-
-    const stdout = std.io.getStdOut().writer();
-    try stdout.print("{s}\n", .{owned});
+    try std.io.getStdOut().writer().print("{s}\n", .{output_json});
 }
 ```
 
@@ -174,7 +163,7 @@ pub fn main() !void {
         \\}
     ;
 
-    const result_json = try xberg.extract_file_sync("scanned.pdf", null, config_json);
+    const result_json = try xberg.extract_sync("scanned.pdf", null, config_json);
     defer std.heap.c_allocator.free(result_json);
 
     const owned = try allocator.dupe(u8, result_json);
@@ -196,21 +185,17 @@ const std = @import("std");
 const xberg = @import("xberg");
 
 pub fn main() !void {
-    // Batch items are passed as a JSON-encoded array across the FFI boundary.
-    const items_json =
-        \\[
-        \\  {"path": "doc1.pdf", "config": null},
-        \\  {"path": "doc2.docx", "config": null},
-        \\  {"path": "report.pdf", "config": null}
-        \\]
-    ;
-    const config_json = "{}";
+    const inputs_json =
+        "["
+        ++ "{\"kind\":\"uri\",\"uri\":\"document.pdf\"},"
+        ++ "{\"kind\":\"bytes\",\"bytes\":[72,101,108,108,111],"
+        ++ "\"mime_type\":\"text/plain\",\"filename\":\"note.txt\"}"
+        ++ "]";
 
-    const results_json = try xberg.batch_extract_files_sync(items_json, config_json);
-    defer std.heap.c_allocator.free(results_json);
+    const output_json = try xberg.extract_batch(inputs_json, "{}");
+    defer std.heap.c_allocator.free(output_json);
 
-    const stdout = std.io.getStdOut().writer();
-    try stdout.print("{s}\n", .{results_json});
+    try std.io.getStdOut().writer().print("{s}\n", .{output_json});
 }
 ```
 
@@ -222,16 +207,14 @@ For non-blocking document processing:
 const std = @import("std");
 const xberg = @import("xberg");
 
-// Note: the Zig binding is sync-only. There is no `extract_file` async variant —
-// the FFI surface exposes blocking entry points that internally drive the global
-// Tokio runtime. Use `extract_file_sync` from any thread.
 pub fn main() !void {
-    const config_json = "{}";
-    const result_json = try xberg.extract_file_sync("document.pdf", null, config_json);
-    defer std.heap.c_allocator.free(result_json);
+    const output_json = try xberg.extract(
+        "{\"kind\":\"uri\",\"uri\":\"document.pdf\"}",
+        "{}",
+    );
+    defer std.heap.c_allocator.free(output_json);
 
-    const stdout = std.io.getStdOut().writer();
-    try stdout.print("{s}\n", .{result_json});
+    try std.io.getStdOut().writer().print("{s}\n", .{output_json});
 }
 ```
 
@@ -369,7 +352,7 @@ pub fn main() !void {
         \\}
     ;
 
-    const result_json = try xberg.extract_file_sync("scanned.pdf", null, config_json);
+    const result_json = try xberg.extract_sync("scanned.pdf", null, config_json);
     defer std.heap.c_allocator.free(result_json);
 
     const owned = try allocator.dupe(u8, result_json);
@@ -401,21 +384,17 @@ const std = @import("std");
 const xberg = @import("xberg");
 
 pub fn main() !void {
-    // Batch items are passed as a JSON-encoded array across the FFI boundary.
-    const items_json =
-        \\[
-        \\  {"path": "doc1.pdf", "config": null},
-        \\  {"path": "doc2.docx", "config": null},
-        \\  {"path": "report.pdf", "config": null}
-        \\]
-    ;
-    const config_json = "{}";
+    const inputs_json =
+        "["
+        ++ "{\"kind\":\"uri\",\"uri\":\"document.pdf\"},"
+        ++ "{\"kind\":\"bytes\",\"bytes\":[72,101,108,108,111],"
+        ++ "\"mime_type\":\"text/plain\",\"filename\":\"note.txt\"}"
+        ++ "]";
 
-    const results_json = try xberg.batch_extract_files_sync(items_json, config_json);
-    defer std.heap.c_allocator.free(results_json);
+    const output_json = try xberg.extract_batch(inputs_json, "{}");
+    defer std.heap.c_allocator.free(output_json);
 
-    const stdout = std.io.getStdOut().writer();
-    try stdout.print("{s}\n", .{results_json});
+    try std.io.getStdOut().writer().print("{s}\n", .{output_json});
 }
 ```
 
@@ -437,7 +416,6 @@ Contributions are welcome! See [Contributing Guide](https://github.com/xberg-io/
 
 ## Part of Xberg.dev
 
-- [Xberg Enterprise](https://github.com/xberg-io/xberg-enterprise) — managed extraction API with SDKs, dashboards, and observability.
 - [crawlberg](https://github.com/xberg-io/crawlberg) — web crawling and scraping with HTML→Markdown and headless-Chrome fallback.
 - [html-to-markdown](https://github.com/xberg-io/html-to-markdown) — fast, lossless HTML→Markdown engine.
 - [liter-llm](https://github.com/xberg-io/liter-llm) — universal LLM API client with native bindings for 14 languages and 143 providers.

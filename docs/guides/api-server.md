@@ -60,17 +60,25 @@ curl -F "files=@scanned.pdf" \
 ```
 
 ```json title="Response"
-[
-  {
-    "content": "Extracted text...",
-    "mime_type": "application/pdf",
-    "metadata": { "page_count": 10, "author": "John Doe" },
-    "tables": [],
-    "detected_languages": ["eng"],
-    "chunks": null,
-    "images": null
+{
+  "results": [
+    {
+      "content": "Extracted text...",
+      "mime_type": "application/pdf",
+      "metadata": { "page_count": 10, "author": "John Doe" },
+      "tables": [],
+      "detected_languages": ["eng"],
+      "chunks": null,
+      "images": null
+    }
+  ],
+  "errors": [],
+  "summary": {
+    "inputs": 1,
+    "results": 1,
+    "errors": 0
   }
-]
+}
 ```
 
 #### POST /embed
@@ -321,9 +329,8 @@ xberg mcp --config xberg.toml
 
 | Tool                  | Key parameters                                                                                                                                    | Description                                                               |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `extract_file`        | `path`                                                                                                                                            | Extract from file path                                                    |
-| `extract_bytes`       | `data` (base64)                                                                                                                                   | Extract from encoded bytes                                                |
-| `batch_extract_files` | `paths`                                                                                                                                           | Extract multiple files                                                    |
+| `extract`             | `input`                                                                                                                                           | Extract one `ExtractInput`                                                |
+| `extract_batch`       | `inputs`                                                                                                                                          | Extract multiple URI or byte inputs                                       |
 | `detect_mime_type`    | `path`                                                                                                                                            | Detect file format                                                        |
 | `list_formats`        | —                                                                                                                                                 | List supported formats                                                    |
 | `get_version`         | —                                                                                                                                                 | Library version                                                           |
@@ -335,7 +342,7 @@ xberg mcp --config xberg.toml
 | `chunk_text`          | `text`                                                                                                                                            | Split text                                                                |
 | `extract_structured`  | `path`, `schema`, `model`; optional `schema_name` (default `"extraction"`), `schema_description`, `prompt`, `api_key`, `strict` (default `false`) | Extract structured JSON via LLM |
 
-All tools accept an optional `config` object. `extract_file` and `extract_bytes` also accept `pdf_password`. `extract_structured` requires the server to be built with the `liter-llm` feature; see the row above for optional fields and defaults.
+All tools accept an optional `config` object. URI and byte payload details live in `ExtractInput` as `kind = "uri"` or `kind = "bytes"`. `extract_structured` requires the server to be built with the `liter-llm` feature; see the row above for optional fields and defaults.
 
 ### AI Agent Integration
 
@@ -388,4 +395,4 @@ All tools accept an optional `config` object. `extract_file` and `extract_bytes`
 
 ---
 
-For Docker and Kubernetes deployment, see [Docker Guide](docker.md) and [Kubernetes Guide](kubernetes.md).
+For container deployment, see the [Docker Guide](docker.md).

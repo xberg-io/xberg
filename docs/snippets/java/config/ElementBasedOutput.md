@@ -12,7 +12,7 @@ public class ElementBasedOutput {
         config.setOutputFormat(OutputFormat.ELEMENT_BASED);
 
         // Extract document
-        ExtractionResult result = Xberg.extractFileSync("document.pdf", config);
+        ExtractionResult result = Xberg.extractSync("document.pdf", config);
 
         // Access elements
         for (Element element : result.getElements()) {

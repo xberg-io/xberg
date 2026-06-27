@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-import { extractFile } from "@xberg/node";
+import { extract } from "@xberg-io/xberg";
 
 const config = {
   chunking: {
@@ -10,7 +10,7 @@ const config = {
   },
 };
 
-const result = await extractFile("document.pdf", null, config);
+const result = await extract("document.pdf", null, config);
 if (result.chunks && result.chunks.length > 0) {
   console.log(`Chunk embeddings: ${result.chunks[0].embedding?.length ?? 0} dimensions`);
 }

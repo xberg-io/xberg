@@ -1,9 +1,9 @@
 ```python title="Python"
 import asyncio
-from xberg import extract_file
+from xberg import extract
 
 async def main() -> None:
-    result = await extract_file("document.pdf")
+    result = await extract("document.pdf")
 
     content: str = result.content
     tables: int = len(result.tables)

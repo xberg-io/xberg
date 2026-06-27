@@ -1,5 +1,5 @@
 ```typescript title="WASM"
-import init, { extractFile } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 
@@ -22,7 +22,7 @@ const config = {
   },
 };
 
-const result = await extractFile("paper.pdf", undefined, config);
+const result = await extract("paper.pdf", undefined, config);
 console.log(result.structuredOutput);
 ```
 

@@ -20,7 +20,7 @@ ExtractionConfig config = ExtractionConfig.builder()
     .build();
 
 try {
-    ExtractionResult result = Xberg.extractFile("research_paper.pdf", config);
+    ExtractionResult result = Xberg.extract("research_paper.pdf", config);
 
     List<Object> chunks = result.getChunks() != null ? result.getChunks() : List.of();
     System.out.println("Found " + chunks.size() + " chunks for RAG pipeline");

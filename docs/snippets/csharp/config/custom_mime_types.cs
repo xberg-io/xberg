@@ -6,7 +6,7 @@ var config = new ExtractionConfig
     EnableQualityProcessing = true
 };
 
-var result = XbergLib.ExtractBytesSync(
+var result = XbergLib.ExtractSync(
     new BytesWithMime(fileBytes, "application/pdf"),
     config
 );

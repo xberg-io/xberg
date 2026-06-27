@@ -6,6 +6,6 @@ config_json = Jason.encode!(%{
   }
 })
 
-{:ok, result} = Xberg.extract_file_sync("multilingual.pdf", "application/pdf", config_json)
+{:ok, result} = Xberg.extract_sync("multilingual.pdf", "application/pdf", config_json)
 IO.puts(result.content)
 ```

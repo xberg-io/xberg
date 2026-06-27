@@ -18,7 +18,7 @@ config = %ExtractionConfig{
   force_ocr: false
 }
 
-{:ok, result} = Xberg.extract_file("scanned_document.pdf", nil, config)
+{:ok, result} = Xberg.extract("scanned_document.pdf", nil, config)
 
 IO.puts("OCR Configuration Applied:")
 IO.puts("Backend: tesseract")

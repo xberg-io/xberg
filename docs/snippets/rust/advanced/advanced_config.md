@@ -1,6 +1,6 @@
 ```rust title="Rust"
 use xberg::{
-    extract_file_sync, ChunkingConfig, ExtractionConfig, LanguageDetectionConfig, OcrConfig,
+    extract_sync, ChunkingConfig, ExtractionConfig, LanguageDetectionConfig, OcrConfig,
 };
 
 fn main() -> xberg::Result<()> {
@@ -29,7 +29,7 @@ fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract_file_sync("document.pdf", None, &config)?;
+    let result = extract_sync("document.pdf", None, &config)?;
 
     if let Some(chunks) = result.chunks {
         for chunk in chunks {

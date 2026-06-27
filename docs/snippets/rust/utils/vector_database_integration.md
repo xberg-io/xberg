@@ -1,5 +1,5 @@
 ```rust title="Rust"
-use xberg::{extract_file, ExtractionConfig, ChunkingConfig, EmbeddingConfig};
+use xberg::{extract, ExtractionConfig, ChunkingConfig, EmbeddingConfig};
 
 let config = ExtractionConfig {
     chunking: Some(ChunkingConfig {
@@ -15,7 +15,7 @@ let config = ExtractionConfig {
     ..Default::default()
 };
 
-let result = extract_file("document.pdf", None, &config).await?;
+let result = extract("document.pdf", None, &config).await?;
 
 if let Some(chunks) = result.chunks {
     for (i, chunk) in chunks.iter().enumerate() {

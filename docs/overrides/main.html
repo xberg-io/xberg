@@ -83,7 +83,12 @@
   content="{% if page and page.meta and page.meta.description %}{{ page.meta.description }}{% else %}{{ config.site_description }}{% endif %}"
 />
 <meta name="twitter:image" content="{{ config.site_url }}assets/og-image.png" />
-{% endblock %} {# Match Material: `.md-content` wraps article; `data-md-component="content"` stays
+{% endblock %}
+{% block announce %}
+<strong>Xberg v1.0</strong> — the next iteration of
+<a href="https://github.com/kreuzberg-dev/kreuzberg-v4-lts" target="_blank" rel="noopener">Kreuzberg</a>.
+{% endblock %}
+{# Match Material: `.md-content` wraps article; `data-md-component="content"` stays
 on the wrapper for theme JS. #} {% block container %}
 <div class="md-content" data-md-component="content">
   <article class="md-content__inner md-typeset">

@@ -63,7 +63,11 @@ use super::file::extract_bytes_with_extractor;
         { crate::telemetry::conventions::ERROR_MESSAGE } = tracing::field::Empty,
     )
 ))]
-pub async fn extract_bytes(content: &[u8], mime_type: &str, config: &ExtractionConfig) -> Result<ExtractionResult> {
+pub(crate) async fn extract_bytes(
+    content: &[u8],
+    mime_type: &str,
+    config: &ExtractionConfig,
+) -> Result<ExtractionResult> {
     use crate::core::mime;
 
     let extraction_future = async {

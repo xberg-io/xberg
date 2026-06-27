@@ -12,11 +12,11 @@ mcp_process = subprocess.Popen(
     stderr=subprocess.PIPE,
 )
 
-def extract_file(path: str) -> str:
+def extract(path: str) -> str:
     request: dict = {
         "method": "tools/call",
         "params": {
-            "name": "extract_file",
+            "name": "extract",
             "arguments": {"path": path, "async": True},
         },
     }
@@ -26,7 +26,7 @@ def extract_file(path: str) -> str:
     return json.loads(response)["result"]["content"]
 
 tools: list[Tool] = [
-    Tool(name="extract_document", func=extract_file, description="Extract")
+    Tool(name="extract_document", func=extract, description="Extract")
 ]
 
 llm = ChatOpenAI(temperature=0)

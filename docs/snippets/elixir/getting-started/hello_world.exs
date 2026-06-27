@@ -1,5 +1,5 @@
 ```elixir title="Elixir"
 # First Xberg program - extract text from a PDF
-{:ok, result} = Xberg.extract_file("document.pdf")
+{:ok, result} = Xberg.extract("document.pdf")
 IO.puts(result.content)
 ```

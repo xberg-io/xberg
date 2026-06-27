@@ -2,7 +2,12 @@
 	"id": "post_processors_clear",
 	"category": "post_processor_management",
 	"description": "Clear all post-processors and verify list is empty",
-	"tags": ["post_processors", "plugin_management", "clear", "trait-bridge"],
+	"tags": [
+		"post_processors",
+		"plugin_management",
+		"clear",
+		"trait-bridge"
+	],
 	"call": "clear_post_processors",
 	"assertions": [
 		{

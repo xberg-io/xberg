@@ -9,7 +9,7 @@ config = %ExtractionConfig{
   }
 }
 
-case Xberg.extract_file("article.pdf", nil, config) do
+case Xberg.extract("article.pdf", nil, config) do
   {:ok, result} ->
     IO.puts("=== Keyword Extraction ===\n")
 

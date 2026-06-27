@@ -1,7 +1,7 @@
 ```ruby title="Ruby"
 require 'xberg'
 
-result = Xberg.extract_file_sync('document.pdf')
+result = Xberg.extract_sync('document.pdf')
 
 puts "Content:"
 puts result.content

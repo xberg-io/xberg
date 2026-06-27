@@ -2,7 +2,12 @@
 	"id": "renderers_clear",
 	"category": "renderer_management",
 	"description": "Clear all renderers and verify list is empty",
-	"tags": ["renderer", "plugin_management", "clear", "trait-bridge"],
+	"tags": [
+		"renderer",
+		"plugin_management",
+		"clear",
+		"trait-bridge"
+	],
 	"call": "clear_renderers",
 	"assertions": [
 		{

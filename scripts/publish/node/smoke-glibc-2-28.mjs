@@ -1,4 +1,4 @@
-// Glibc-2.28 loadability smoke test for the @xberg/node prebuilds.
+// Glibc-2.28 loadability smoke test for the @xberg-io/xberg prebuilds.
 //
 // Runs inside redhat/ubi8 (glibc 2.28) against an extracted node-bindings-*.tar.gz.
 // Loads the .node directly via process.dlopen so this script has no

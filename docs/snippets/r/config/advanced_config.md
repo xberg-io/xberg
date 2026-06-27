@@ -9,7 +9,7 @@ config <- list(
   force_ocr = TRUE
 )
 
-json <- extract_file_sync("document.pdf", "application/pdf", config)
+json <- extract_sync("document.pdf", "application/pdf", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Format: %s\n", result$mime_type))

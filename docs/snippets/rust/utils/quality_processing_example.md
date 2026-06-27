@@ -1,5 +1,5 @@
 ```rust title="Rust"
-use xberg::{extract_file, ExtractionConfig};
+use xberg::{extract, ExtractionConfig};
 
 #[tokio::main]
 async fn main() -> xberg::Result<()> {
@@ -8,7 +8,7 @@ async fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract_file("scanned_document.pdf", None, &config).await?;
+    let result = extract("scanned_document.pdf", None, &config).await?;
     let quality_score = result.quality_score.unwrap_or(0.0);
 
     if quality_score < 0.5 {

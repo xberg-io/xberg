@@ -18,12 +18,13 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { extractBytesSync, listDocumentExtractors, listRenderers } from "@xberg/node";
+import { extractSync, listDocumentExtractors, listRenderers } from "@xberg-io/xberg";
+import type { ExtractInput } from "@xberg-io/xberg";
 
 // The register/unregister/clear functions are exported by the native module but
 // not re-typed in the public TypeScript wrapper.  Import the native binding
 // directly so we can reach the full API surface without 'any' sprawl.
-import xberg from "@xberg/node";
+import xberg from "@xberg-io/xberg";
 const native = xberg as unknown as Record<string, (...args: unknown[]) => unknown>;
 
 function registerDocumentExtractor(obj: unknown): void {
@@ -136,8 +137,8 @@ describe("plugins: document extractor registry", () => {
 
 		// Must not throw; falls back to the built-in plain-text extractor.
 		const encoded = new TextEncoder().encode("hello world");
-		const result = extractBytesSync(encoded, "text/plain", undefined);
-		expect(result).toBeDefined();
+		const result = extractSync({ bytes: encoded, kind: "bytes", mimeType: "text/plain" } as ExtractInput);
+		expect(result.results?.length).toBe(1);
 	});
 });
 

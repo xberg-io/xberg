@@ -15,7 +15,7 @@ def basic_yake
     )
   )
 
-  result = Xberg.extract_file('document.pdf', config: config)
+  result = Xberg.extract('document.pdf', config: config)
   puts "Keywords: #{result.keywords}"
 end
 
@@ -36,7 +36,7 @@ def advanced_yake
     )
   )
 
-  result = Xberg.extract_file('document.pdf', config: config)
+  result = Xberg.extract('document.pdf', config: config)
   puts "Keywords: #{result.keywords}"
 end
 
@@ -58,7 +58,7 @@ def rake_config
     )
   )
 
-  result = Xberg.extract_file('document.pdf', config: config)
+  result = Xberg.extract('document.pdf', config: config)
   puts "Keywords: #{result.keywords}"
 end
 

@@ -81,7 +81,7 @@ No SDK, no code — just your terminal.
   ***
 
   ```bash
-  npm install @xberg/node
+  npm install @xberg-io/xberg
   ```
 
   [API Reference](../reference/api-typescript.md){ .install-api-link }
@@ -92,7 +92,7 @@ No SDK, no code — just your terminal.
   ***
 
   ```bash
-  npm install @xberg/wasm
+  npm install @xberg-io/xberg-wasm
   ```
 
   [API Reference](../reference/api-wasm.md){ .install-api-link }
@@ -125,7 +125,7 @@ No SDK, no code — just your terminal.
   ***
 
   ```gradle
-  implementation 'io.xberg:xberg:5.0.0-rc.17'
+  implementation 'io.xberg:xberg:1.0.0-rc.1'
   ```
 
   [API Reference](../reference/api-java.md){ .install-api-link }
@@ -136,7 +136,7 @@ No SDK, no code — just your terminal.
   ***
 
   ```kotlin
-  implementation("io.xberg:xberg-android:5.0.0-rc.17")
+  implementation("io.xberg:xberg-android:1.0.0-rc.1")
   ```
 
   [API Reference](../reference/api-kotlin-android.md){ .install-api-link }
@@ -158,7 +158,7 @@ No SDK, no code — just your terminal.
   ***
 
   ```swift
-  .package(url: "https://github.com/xberg-io/xberg.git", from: "5.0.0-rc.17")
+  .package(url: "https://github.com/xberg-io/xberg.git", from: "1.0.0-rc.1")
   ```
 
   [API Reference](../reference/api-swift.md){ .install-api-link }
@@ -191,7 +191,7 @@ No SDK, no code — just your terminal.
   ***
 
   ```elixir
-  {:xberg, "~> 5.0.0-rc.17"}
+  {:xberg, "~> 1.0.0-rc.1"}
   ```
 
   [API Reference](../reference/api-elixir.md){ .install-api-link }
@@ -236,7 +236,7 @@ No SDK, no code — just your terminal.
   ***
 
   ```bash
-  zig fetch --save https://github.com/xberg-io/xberg/archive/refs/tags/v5.0.0-rc.17.tar.gz
+  zig fetch --save https://github.com/xberg-io/xberg/archive/refs/tags/v1.0.0-rc.1.tar.gz
   ```
 
   [API Reference](../reference/api-zig.md){ .install-api-link }
@@ -260,7 +260,7 @@ Only relevant if building from source or enabling OCR:
 
 PDF extraction uses pdf_oxide and has no external PDF runtime dependency.
 
-The Wasm package (`@xberg/wasm`) has **zero** system dependencies.
+The Wasm package (`@xberg-io/xberg-wasm`) has **zero** system dependencies.
 
 ### HEIF / HEIC / AVIF support { #heif--heic--avif-support }
 
@@ -311,8 +311,8 @@ Two npm packages target different runtimes:
 
 | Package           | Best for                           | Performance    |
 | ----------------- | ---------------------------------- | -------------- |
-| `@xberg/node` | Node.js, Bun — server-side apps    | Native (100%)  |
-| `@xberg/wasm` | Browsers, Deno, Cloudflare Workers | Wasm (~60-80%) |
+| `@xberg-io/xberg` | Node.js, Bun — server-side apps    | Native (100%)  |
+| `@xberg-io/xberg-wasm` | Browsers, Deno, Cloudflare Workers | Wasm (~60-80%) |
 
 Both work with **pnpm** (`pnpm add`) and **Yarn** (`yarn add`) as well.
 
@@ -328,7 +328,7 @@ Both work with **pnpm** (`pnpm add`) and **Yarn** (`yarn add`) as well.
 
     ```html
     <script type="module">
-      import { initWasm, extractFromFile } from "@xberg/wasm";
+      import { initWasm, extractFromFile } from "@xberg-io/xberg-wasm";
 
       await initWasm();
 
@@ -345,7 +345,7 @@ Both work with **pnpm** (`pnpm add`) and **Yarn** (`yarn add`) as well.
 ??? Note "Wasm — Deno"
 
     ```typescript
-    import { initWasm, extractFile } from "npm:@xberg/wasm";
+    import { initWasm, extractFile } from "npm:@xberg-io/xberg-wasm";
 
     await initWasm();
     const result = await extractFile("./document.pdf");
@@ -355,7 +355,7 @@ Both work with **pnpm** (`pnpm add`) and **Yarn** (`yarn add`) as well.
 ??? Note "Wasm — Cloudflare Workers"
 
     ```typescript
-    import { initWasm, extractBytes } from "@xberg/wasm";
+    import { initWasm, extractBytes } from "@xberg-io/xberg-wasm";
 
     export default {
       async fetch(request: Request): Promise<Response> {
@@ -391,14 +391,14 @@ Both work with **pnpm** (`pnpm add`) and **Yarn** (`yarn add`) as well.
     <dependency>
         <groupId>io.xberg</groupId>
         <artifactId>xberg</artifactId>
-        <version>5.0.0-rc.17</version>
+        <version>1.0.0-rc.1</version>
     </dependency>
     ```
 
 === "Gradle"
 
     ```gradle
-    implementation 'io.xberg:xberg:5.0.0-rc.17'
+    implementation 'io.xberg:xberg:1.0.0-rc.1'
     ```
 
 Requires Java 25+ (FFM/Panama API). Native libraries are bundled in the JAR.
@@ -410,7 +410,7 @@ Add to `mix.exs`:
 ```elixir
 def deps do
   [
-    {:xberg, "~> 5.0.0-rc.17"}
+    {:xberg, "~> 1.0.0-rc.1"}
   ]
 end
 ```

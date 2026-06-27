@@ -9,7 +9,7 @@ import (
 
 func main() {
 	preserve := true
-	result, err := xberg.ExtractFileSync("document.pdf", &xberg.ExtractionConfig{
+	result, err := xberg.ExtractSync("document.pdf", &xberg.ExtractionConfig{
 		TokenReduction: &xberg.TokenReductionConfig{
 			Mode:                  "moderate",
 			PreserveImportantWords: &preserve,

@@ -6,7 +6,7 @@ config_json = Jason.encode!(%{
   }
 })
 
-{:ok, result} = Xberg.extract_file_sync("verbose_document.pdf", "application/pdf", config_json)
+{:ok, result} = Xberg.extract_sync("verbose_document.pdf", "application/pdf", config_json)
 
 if result.original_token_count do
   IO.puts("Original tokens: #{result.original_token_count}")

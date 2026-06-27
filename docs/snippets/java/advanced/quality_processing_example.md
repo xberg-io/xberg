@@ -8,7 +8,7 @@ ExtractionConfig config = ExtractionConfig.builder()
     .enableQualityProcessing(true)
     .build();
 
-ExtractionResult result = Xberg.extractFile("scanned_document.pdf", config);
+ExtractionResult result = Xberg.extract("scanned_document.pdf", config);
 
 double qualityScore = result.getQualityScore() != null ? result.getQualityScore() : 0.0;
 

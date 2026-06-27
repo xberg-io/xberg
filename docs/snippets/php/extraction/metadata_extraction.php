@@ -13,9 +13,9 @@ declare(strict_types=1);
 require_once __DIR__ . '/vendor/autoload.php';
 
 use Xberg\Xberg;
-use function Xberg\extract_file;
+use function Xberg\extract;
 
-$result = extract_file('document.pdf');
+$result = extract('document.pdf');
 $metadata = $result->metadata;
 
 echo "Document Metadata:\n";
@@ -35,7 +35,7 @@ $files = glob('documents/*.{pdf,docx,xlsx}', GLOB_BRACE);
 $metadataCollection = [];
 
 foreach ($files as $file) {
-    $result = extract_file($file);
+    $result = extract($file);
     $metadataCollection[] = [
         'file' => basename($file),
         'title' => $result->metadata->title ?? 'Untitled',

@@ -7,7 +7,7 @@ config <- list(
   enable_quality_processing = TRUE
 )
 
-json <- extract_file_sync("scan.png", "image/png", config)
+json <- extract_sync("scan.png", "image/png", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Quality: %.2f, Length: %d\n",

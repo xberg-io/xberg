@@ -20,7 +20,7 @@ class CustomXmlExtractor implements DocumentExtractor {
         // Cleanup resources
     }
 
-    public function extractBytes(string $content, string $mimeType, object $config): object {
+    public function extract(string $content, string $mimeType, object $config): object {
         try {
             $xml = simplexml_load_string($content);
             $text = $this->extractTextFromXml($xml);

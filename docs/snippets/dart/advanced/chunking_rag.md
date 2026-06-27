@@ -28,7 +28,7 @@ Future<void> main() async {
     useLayoutForMarkdown: false,
   );
 
-  final result = await XbergBridge.extractFile('research_paper.pdf', null, config);
+  final result = await XbergBridge.extract('research_paper.pdf', null, config);
   final chunks = result.chunks ?? const [];
   for (final chunk in chunks) {
     final index = chunk.metadata.chunkIndex;

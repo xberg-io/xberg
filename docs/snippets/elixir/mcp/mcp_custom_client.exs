@@ -50,9 +50,9 @@ defmodule XbergMCPClient do
     * `:config` - Extraction configuration map
     * `:use_cache` - Enable result caching (default: false)
   """
-  @spec extract_file(Config.t(), String.t(), keyword()) ::
+  @spec extract(Config.t(), String.t(), keyword()) ::
           {:ok, map()} | {:error, String.t()}
-  def extract_file(config, file_path, opts \\ []) do
+  def extract(config, file_path, opts \\ []) do
     mime_type = Keyword.get(opts, :mime_type)
     extraction_config = Keyword.get(opts, :config)
     use_cache = Keyword.get(opts, :use_cache, false)
@@ -151,7 +151,7 @@ defmodule XbergMCPClient do
     results =
       file_paths
       |> Task.async_stream(fn path ->
-        extract_file(config, path, opts)
+        extract(config, path, opts)
       end)
       |> Stream.map(fn {:ok, result} -> result end)
       |> Enum.to_list()
@@ -278,7 +278,7 @@ end
 # Extract single document
 IO.puts("Extracting document...")
 
-case XbergMCPClient.extract_file(config, "document.pdf", use_cache: true) do
+case XbergMCPClient.extract(config, "document.pdf", use_cache: true) do
   {:ok, result} ->
     IO.puts("Success!")
     IO.puts("Content size: #{byte_size(result["content"])} bytes")

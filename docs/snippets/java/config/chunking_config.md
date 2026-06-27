@@ -25,7 +25,7 @@ ExtractionConfig config = ExtractionConfig.builder()
         .build())
     .build();
 
-ExtractionResult result = XbergClient.extractFile("document.md", config);
+ExtractionResult result = XbergClient.extract("document.md", config);
 
 result.getChunks().forEach(chunk -> {
     var headingContext = chunk.getMetadata().getHeadingContext();
@@ -51,7 +51,7 @@ ExtractionConfig config = ExtractionConfig.builder()
         .build())
     .build();
 
-ExtractionResult result = XbergClient.extractFile("document.md", config);
+ExtractionResult result = XbergClient.extract("document.md", config);
 
 result.getChunks().forEach(chunk -> {
     // Each chunk's content is prefixed with its heading breadcrumb

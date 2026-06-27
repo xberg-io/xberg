@@ -1,5 +1,5 @@
-import type { ExtractionConfig } from "@xberg/wasm";
-import { extractBytes, initWasm } from "@xberg/wasm";
+import type { ExtractionConfig } from "@xberg-io/xberg-wasm";
+import { extract, initWasm } from "@xberg-io/xberg-wasm";
 
 async function extractWithOcr() {
   await initWasm();
@@ -13,7 +13,7 @@ async function extractWithOcr() {
     },
   };
 
-  const result = await extractBytes(bytes, "application/pdf", config);
+  const result = await extract(bytes, "application/pdf", config);
 
   console.log("Extracted text from scanned document:");
   console.log(result.content);

@@ -14,8 +14,8 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 use Xberg\Xberg;
 use Xberg\Config\ExtractionConfig;
-use function Xberg\extract_file;
-use function Xberg\batch_extract_files;
+use function Xberg\extract;
+use function Xberg\extract_batch;
 
 function benchmark(callable $fn, string $label): void
 {
@@ -45,13 +45,13 @@ if (!empty($files)) {
     benchmark(function () use ($files) {
         $results = [];
         foreach ($files as $file) {
-            $results[] = extract_file($file);
+            $results[] = extract($file);
         }
         return $results;
     }, "Single file processing");
 
     benchmark(function () use ($files) {
-        return batch_extract_files($files);
+        return extract_batch($files);
     }, "Batch processing (parallel)");
 }
 
@@ -74,12 +74,12 @@ if (file_exists($testFile)) {
 
     benchmark(function () use ($testFile, $fastConfig) {
         $xberg = new Xberg($fastConfig);
-        return $xberg->extractFile($testFile);
+        return $xberg->extract($testFile);
     }, "Fast config (minimal features)");
 
     benchmark(function () use ($testFile, $standardConfig) {
         $xberg = new Xberg($standardConfig);
-        return $xberg->extractFile($testFile);
+        return $xberg->extract($testFile);
     }, "Standard config (all features)");
 }
 
@@ -93,7 +93,7 @@ function processLargeDocumentEfficiently(string $filePath): void
     );
 
     $xberg = new Xberg($config);
-    $result = $xberg->extractFile($filePath);
+    $result = $xberg->extract($filePath);
 
     echo "Processing large document page by page:\n";
 
@@ -123,7 +123,7 @@ function findOptimalBatchSize(array $files): int
         $startTime = microtime(true);
 
         foreach ($batches as $batch) {
-            batch_extract_files($batch);
+            extract_batch($batch);
         }
 
         $elapsed = microtime(true) - $startTime;
@@ -191,7 +191,7 @@ $monitor = new ResourceMonitor();
 $xberg = new Xberg();
 $monitor->checkpoint("Xberg initialized");
 
-$result = $xberg->extractFile('document.pdf');
+$result = $xberg->extract('document.pdf');
 $monitor->checkpoint("Document extracted");
 
 $words = str_word_count($result->content);
@@ -209,7 +209,7 @@ function processConcurrently(array $files, int $workers = 4): array
     $results = [];
 
     foreach ($chunks as $chunk) {
-        $chunkResults = batch_extract_files($chunk);
+        $chunkResults = extract_batch($chunk);
         $results = array_merge($results, $chunkResults);
     }
 
@@ -228,7 +228,7 @@ class CachedXberg
         $this->maxCacheSize = $maxCacheSize;
     }
 
-    public function extractFile(string $filePath): \Xberg\Types\ExtractionResult
+    public function extract(string $filePath): \Xberg\Types\ExtractionResult
     {
         $cacheKey = md5($filePath . filemtime($filePath));
 
@@ -236,7 +236,7 @@ class CachedXberg
             return $this->cache[$cacheKey];
         }
 
-        $result = $this->xberg->extractFile($filePath);
+        $result = $this->xberg->extract($filePath);
 
         if (count($this->cache) >= $this->maxCacheSize) {
             array_shift($this->cache); 
@@ -260,11 +260,11 @@ echo str_repeat('=', 60) . "\n";
 $file = 'document.pdf';
 if (file_exists($file)) {
     benchmark(function () use ($cachedXberg, $file) {
-        return $cachedXberg->extractFile($file);
+        return $cachedXberg->extract($file);
     }, "First extraction (uncached)");
 
     benchmark(function () use ($cachedXberg, $file) {
-        return $cachedXberg->extractFile($file);
+        return $cachedXberg->extract($file);
     }, "Second extraction (cached)");
 }
 

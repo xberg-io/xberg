@@ -2,7 +2,12 @@
 	"id": "mime_detect_image",
 	"category": "mime_utilities",
 	"description": "Detect MIME type from PNG image bytes",
-	"tags": ["mime", "detection", "image", "bytes"],
+	"tags": [
+		"mime",
+		"detection",
+		"image",
+		"bytes"
+	],
 	"call": "detect_mime_type_from_bytes",
 	"input": {
 		"data": "images/test_hello_world.png"

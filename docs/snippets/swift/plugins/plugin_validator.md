@@ -46,7 +46,7 @@ let config = ExtractionConfig(
     resultFormat: .unified,
     outputFormat: .markdown
 )
-let result = try extractFileSync(
+let result = try extractSync(
     path: "document.pdf",
     mimeType: nil,
     config: config

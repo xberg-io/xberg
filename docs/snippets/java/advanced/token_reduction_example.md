@@ -12,7 +12,7 @@ ExtractionConfig config = ExtractionConfig.builder()
         .build())
     .build();
 
-ExtractionResult result = Xberg.extractFile("verbose_document.pdf", config);
+ExtractionResult result = Xberg.extract("verbose_document.pdf", config);
 
 Map<String, Object> metadata = result.getMetadata() != null ? result.getMetadata() : Map.of();
 

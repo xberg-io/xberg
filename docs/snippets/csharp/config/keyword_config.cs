@@ -17,7 +17,7 @@ var basicYakeConfig = new ExtractionConfig
     }
 };
 
-var result = XbergLib.ExtractFileSync("document.pdf", basicYakeConfig);
+var result = XbergLib.ExtractSync("document.pdf", basicYakeConfig);
 Console.WriteLine($"Keywords: {string.Join(", ", result.Keywords)}");
 
 // Example 2: Advanced YAKE with custom parameters
@@ -39,7 +39,7 @@ var advancedYakeConfig = new ExtractionConfig
     }
 };
 
-result = XbergLib.ExtractFileSync("document.pdf", advancedYakeConfig);
+result = XbergLib.ExtractSync("document.pdf", advancedYakeConfig);
 Console.WriteLine($"Keywords: {string.Join(", ", result.Keywords)}");
 
 // Example 3: RAKE configuration
@@ -62,5 +62,5 @@ var rakeConfig = new ExtractionConfig
     }
 };
 
-result = XbergLib.ExtractFileSync("document.pdf", rakeConfig);
+result = XbergLib.ExtractSync("document.pdf", rakeConfig);
 Console.WriteLine($"Keywords: {string.Join(", ", result.Keywords)}");

@@ -1,11 +1,16 @@
 {
 	"id": "format_pptx",
 	"category": "format_specific",
-	"description": "PPTX presentation extraction using extract_file_sync",
-	"tags": ["format_specific", "pptx", "text_extraction"],
-	"call": "extract_file_sync",
+	"description": "PPTX presentation extraction using extract",
+	"tags": [
+		"format_specific",
+		"pptx",
+		"text_extraction"
+	],
+	"call": "extract",
 	"input": {
-		"path": "pptx/simple.pptx",
+		"kind": "uri",
+		"uri": "pptx/simple.pptx",
 		"mime_type": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 	},
 	"assertions": [
@@ -14,7 +19,9 @@
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
-		"reason": "WASM cannot access filesystem; use extractBytes with file content instead"
+		"languages": [
+			"wasm"
+		],
+		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	}
 }

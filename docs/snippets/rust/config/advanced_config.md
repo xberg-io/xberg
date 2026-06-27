@@ -1,5 +1,5 @@
 ```rust title="Rust"
-use xberg::{extract_file, ExtractionConfig, OcrConfig, ChunkingConfig, LanguageDetectionConfig, TokenReductionConfig, PostProcessorConfig, EmbeddingConfig, EmbeddingModelType};
+use xberg::{extract, ExtractionConfig, OcrConfig, ChunkingConfig, LanguageDetectionConfig, TokenReductionConfig, PostProcessorConfig, EmbeddingConfig, EmbeddingModelType};
 use xberg::keywords::{KeywordConfig, KeywordAlgorithm};
 
 #[tokio::main]
@@ -52,7 +52,7 @@ async fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract_file("document.pdf", None::<&str>, &config).await?;
+    let result = extract("document.pdf", None::<&str>, &config).await?;
     println!("Content: {}", result.content);
     if let Some(langs) = &result.detected_languages {
         println!("Languages: {:?}", langs);

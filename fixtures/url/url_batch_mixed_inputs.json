@@ -1,0 +1,102 @@
+{
+	"id": "url_batch_mixed_inputs",
+	"category": "url",
+	"description": "extract_batch: mixed bytes and URL inputs share one output envelope",
+	"tags": [
+		"url",
+		"batch"
+	],
+	"call": "extract_batch",
+	"args": [
+		{
+			"name": "inputs",
+			"field": "input.extract_inputs",
+			"type": "json_object",
+			"owned": true,
+			"go_type": "ExtractInput",
+			"element_type": "ExtractInput"
+		},
+		{
+			"name": "config",
+			"field": "config",
+			"type": "json_object",
+			"optional": true
+		}
+	],
+	"input": {
+		"mock_responses": [
+			{
+				"path": "/",
+				"method": "GET",
+				"status_code": 200,
+				"headers": {
+					"content-type": "text/plain; charset=utf-8"
+				},
+				"body_inline": "Batch URL document content.\n"
+			}
+		],
+		"extract_inputs": [
+			{
+				"kind": "uri",
+				"uri": "$mock_url"
+			},
+			{
+				"kind": "bytes",
+				"bytes": [
+					66,
+					97,
+					116,
+					99,
+					104,
+					32,
+					98,
+					121,
+					116,
+					101,
+					115,
+					32,
+					99,
+					111,
+					110,
+					116,
+					101,
+					110,
+					116
+				],
+				"mime_type": "text/plain",
+				"filename": "inline.txt"
+			}
+		]
+	},
+	"config": {
+		"url": {
+			"mode": "document"
+		}
+	},
+	"assertions": [
+		{
+			"type": "not_error"
+		},
+		{
+			"type": "count_min",
+			"field": "summary.results",
+			"value": 2
+		},
+		{
+			"type": "contains",
+			"field": "results.0.content",
+			"value": "Batch URL document content"
+		},
+		{
+			"type": "contains",
+			"field": "results.1.content",
+			"value": "Batch bytes content"
+		}
+	],
+	"skip": {
+		"languages": [
+			"wasm"
+		],
+		"reason": "WASM e2e does not enable URL ingestion"
+	}
+}

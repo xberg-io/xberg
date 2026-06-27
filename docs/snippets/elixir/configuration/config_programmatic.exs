@@ -37,7 +37,7 @@ end
 # Build configuration based on file type and requirements
 config = ConfigBuilder.build_config(:pdf, true)
 
-{:ok, result} = Xberg.extract_file("document.pdf", nil, config)
+{:ok, result} = Xberg.extract("document.pdf", nil, config)
 
 IO.puts("Dynamic configuration applied")
 IO.puts("Content: #{String.slice(result.content, 0..100)}")

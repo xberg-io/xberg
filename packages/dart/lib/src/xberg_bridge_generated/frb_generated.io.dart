@@ -19,10 +19,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   });
 
   CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_ArcDocumentExtractorPtr => wire
-      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynDocumentExtractorSendSyncPtr;
-
-  CrossPlatformFinalizerArg
   get rust_arc_decrement_strong_count_ArcEmbeddingBackendPtr => wire
       ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynEmbeddingBackendSendSyncPtr;
 
@@ -45,10 +41,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CrossPlatformFinalizerArg
   get rust_arc_decrement_strong_count_ArcValidatorPtr => wire
       ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynValidatorSendSyncPtr;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_DocumentExtractorDartImplPtr => wire
-      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImplPtr;
 
   CrossPlatformFinalizerArg
   get rust_arc_decrement_strong_count_EmbeddingBackendDartImplPtr => wire
@@ -94,12 +86,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnyhowException dco_decode_AnyhowException(dynamic raw);
 
   @protected
-  ArcDocumentExtractor
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynDocumentExtractorSendSync(
-    dynamic raw,
-  );
-
-  @protected
   ArcEmbeddingBackend
   dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynEmbeddingBackendSendSync(
     dynamic raw,
@@ -132,12 +118,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   ArcValidator
   dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynValidatorSendSync(
-    dynamic raw,
-  );
-
-  @protected
-  DocumentExtractorDartImpl
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
     dynamic raw,
   );
 
@@ -202,12 +182,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  DocumentExtractorDartImpl
-  dco_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
-    dynamic raw,
-  );
-
-  @protected
   EmbeddingBackendDartImpl
   dco_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
     dynamic raw,
@@ -246,12 +220,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   ValidatorDartImpl
   dco_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
-    dynamic raw,
-  );
-
-  @protected
-  DocumentExtractorDartImpl
-  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
     dynamic raw,
   );
 
@@ -312,18 +280,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   FutureOr<bool> Function(String)
   dco_decode_DartFn_Inputs_String_Output_bool_AnyhowException(dynamic raw);
-
-  @protected
-  FutureOr<bool> Function(String, String)
-  dco_decode_DartFn_Inputs_String_String_Output_bool_AnyhowException(
-    dynamic raw,
-  );
-
-  @protected
-  FutureOr<InternalDocumentBridge> Function(String, String, ExtractionConfig)
-  dco_decode_DartFn_Inputs_String_String_extraction_config_Output_internal_document_bridge_AnyhowException(
-    dynamic raw,
-  );
 
   @protected
   FutureOr<Float64List> Function(String, List<String>)
@@ -392,12 +348,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  FutureOr<InternalDocumentBridge> Function(Uint8List, String, ExtractionConfig)
-  dco_decode_DartFn_Inputs_list_prim_u_8_strict_String_extraction_config_Output_internal_document_bridge_AnyhowException(
-    dynamic raw,
-  );
-
-  @protected
   FutureOr<ExtractionResult> Function(Uint8List, OcrConfig)
   dco_decode_DartFn_Inputs_list_prim_u_8_strict_ocr_config_Output_extraction_result_AnyhowException(
     dynamic raw,
@@ -417,12 +367,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Map<String, Uint8List> dco_decode_Map_String_list_prim_u_8_strict_None(
-    dynamic raw,
-  );
-
-  @protected
-  ArcDocumentExtractor
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynDocumentExtractorSendSync(
     dynamic raw,
   );
 
@@ -459,12 +403,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   ArcValidator
   dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynValidatorSendSync(
-    dynamic raw,
-  );
-
-  @protected
-  DocumentExtractorDartImpl
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
     dynamic raw,
   );
 
@@ -548,12 +486,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BBox dco_decode_b_box(dynamic raw);
-
-  @protected
-  BatchBytesItem dco_decode_batch_bytes_item(dynamic raw);
-
-  @protected
-  BatchFileItem dco_decode_batch_file_item(dynamic raw);
 
   @protected
   BibtexMetadata dco_decode_bibtex_metadata(dynamic raw);
@@ -662,6 +594,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ExcelMetadata dco_decode_box_autoadd_excel_metadata(dynamic raw);
+
+  @protected
+  ExtractInput dco_decode_box_autoadd_extract_input(dynamic raw);
 
   @protected
   ExtractionConfidence dco_decode_box_autoadd_extraction_confidence(
@@ -1114,6 +1049,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ExecutionProviderType dco_decode_execution_provider_type(dynamic raw);
 
   @protected
+  ExtractInput dco_decode_extract_input(dynamic raw);
+
+  @protected
+  ExtractInputKind dco_decode_extract_input_kind(dynamic raw);
+
+  @protected
   ExtractedImage dco_decode_extracted_image(dynamic raw);
 
   @protected
@@ -1129,10 +1070,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ExtractionDiff dco_decode_extraction_diff(dynamic raw);
 
   @protected
+  ExtractionErrorItem dco_decode_extraction_error_item(dynamic raw);
+
+  @protected
   ExtractionMethod dco_decode_extraction_method(dynamic raw);
 
   @protected
+  ExtractionOutput dco_decode_extraction_output(dynamic raw);
+
+  @protected
   ExtractionResult dco_decode_extraction_result(dynamic raw);
+
+  @protected
+  ExtractionSummary dco_decode_extraction_summary(dynamic raw);
 
   @protected
   double dco_decode_f_64(dynamic raw);
@@ -1284,12 +1234,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ArchiveEntry> dco_decode_list_archive_entry(dynamic raw);
 
   @protected
-  List<BatchBytesItem> dco_decode_list_batch_bytes_item(dynamic raw);
-
-  @protected
-  List<BatchFileItem> dco_decode_list_batch_file_item(dynamic raw);
-
-  @protected
   List<CellChange> dco_decode_list_cell_change(dynamic raw);
 
   @protected
@@ -1353,10 +1297,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ExcelSheet> dco_decode_list_excel_sheet(dynamic raw);
 
   @protected
+  List<ExtractInput> dco_decode_list_extract_input(dynamic raw);
+
+  @protected
   List<ExtractedImage> dco_decode_list_extracted_image(dynamic raw);
 
   @protected
   List<ExtractedUri> dco_decode_list_extracted_uri(dynamic raw);
+
+  @protected
+  List<ExtractionErrorItem> dco_decode_list_extraction_error_item(dynamic raw);
 
   @protected
   List<ExtractionResult> dco_decode_list_extraction_result(dynamic raw);
@@ -2226,6 +2176,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UriKind dco_decode_uri_kind(dynamic raw);
 
   @protected
+  UrlExtractionConfig dco_decode_url_extraction_config(dynamic raw);
+
+  @protected
+  UrlExtractionMode dco_decode_url_extraction_mode(dynamic raw);
+
+  @protected
   UserChunkConfig dco_decode_user_chunk_config(dynamic raw);
 
   @protected
@@ -2257,12 +2213,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
-
-  @protected
-  ArcDocumentExtractor
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynDocumentExtractorSendSync(
-    SseDeserializer deserializer,
-  );
 
   @protected
   ArcEmbeddingBackend
@@ -2297,12 +2247,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   ArcValidator
   sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynValidatorSendSync(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  DocumentExtractorDartImpl
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
     SseDeserializer deserializer,
   );
 
@@ -2367,12 +2311,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  DocumentExtractorDartImpl
-  sse_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   EmbeddingBackendDartImpl
   sse_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
     SseDeserializer deserializer,
@@ -2411,12 +2349,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   ValidatorDartImpl
   sse_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  DocumentExtractorDartImpl
-  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
     SseDeserializer deserializer,
   );
 
@@ -2498,12 +2430,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  ArcDocumentExtractor
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynDocumentExtractorSendSync(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   ArcEmbeddingBackend
   sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynEmbeddingBackendSendSync(
     SseDeserializer deserializer,
@@ -2536,12 +2462,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   ArcValidator
   sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynValidatorSendSync(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  DocumentExtractorDartImpl
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
     SseDeserializer deserializer,
   );
 
@@ -2627,12 +2547,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BBox sse_decode_b_box(SseDeserializer deserializer);
-
-  @protected
-  BatchBytesItem sse_decode_batch_bytes_item(SseDeserializer deserializer);
-
-  @protected
-  BatchFileItem sse_decode_batch_file_item(SseDeserializer deserializer);
 
   @protected
   BibtexMetadata sse_decode_bibtex_metadata(SseDeserializer deserializer);
@@ -2785,6 +2699,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ExcelMetadata sse_decode_box_autoadd_excel_metadata(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ExtractInput sse_decode_box_autoadd_extract_input(
     SseDeserializer deserializer,
   );
 
@@ -3339,6 +3258,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ExtractInput sse_decode_extract_input(SseDeserializer deserializer);
+
+  @protected
+  ExtractInputKind sse_decode_extract_input_kind(SseDeserializer deserializer);
+
+  @protected
   ExtractedImage sse_decode_extracted_image(SseDeserializer deserializer);
 
   @protected
@@ -3356,10 +3281,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ExtractionDiff sse_decode_extraction_diff(SseDeserializer deserializer);
 
   @protected
+  ExtractionErrorItem sse_decode_extraction_error_item(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ExtractionMethod sse_decode_extraction_method(SseDeserializer deserializer);
 
   @protected
+  ExtractionOutput sse_decode_extraction_output(SseDeserializer deserializer);
+
+  @protected
   ExtractionResult sse_decode_extraction_result(SseDeserializer deserializer);
+
+  @protected
+  ExtractionSummary sse_decode_extraction_summary(SseDeserializer deserializer);
 
   @protected
   double sse_decode_f_64(SseDeserializer deserializer);
@@ -3533,16 +3469,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  List<BatchBytesItem> sse_decode_list_batch_bytes_item(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  List<BatchFileItem> sse_decode_list_batch_file_item(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   List<CellChange> sse_decode_list_cell_change(SseDeserializer deserializer);
 
   @protected
@@ -3626,12 +3552,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ExcelSheet> sse_decode_list_excel_sheet(SseDeserializer deserializer);
 
   @protected
+  List<ExtractInput> sse_decode_list_extract_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<ExtractedImage> sse_decode_list_extracted_image(
     SseDeserializer deserializer,
   );
 
   @protected
   List<ExtractedUri> sse_decode_list_extracted_uri(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<ExtractionErrorItem> sse_decode_list_extraction_error_item(
     SseDeserializer deserializer,
   );
 
@@ -4743,6 +4679,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UriKind sse_decode_uri_kind(SseDeserializer deserializer);
 
   @protected
+  UrlExtractionConfig sse_decode_url_extraction_config(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UrlExtractionMode sse_decode_url_extraction_mode(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   UserChunkConfig sse_decode_user_chunk_config(SseDeserializer deserializer);
 
   @protected
@@ -4786,13 +4732,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynDocumentExtractorSendSync(
-    ArcDocumentExtractor self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
   sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynEmbeddingBackendSendSync(
     ArcEmbeddingBackend self,
     SseSerializer serializer,
@@ -4830,13 +4769,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void
   sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynValidatorSendSync(
     ArcValidator self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
-    DocumentExtractorDartImpl self,
     SseSerializer serializer,
   );
 
@@ -4912,13 +4844,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
-  sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
-    DocumentExtractorDartImpl self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
   sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
     EmbeddingBackendDartImpl self,
     SseSerializer serializer,
@@ -4963,13 +4888,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void
   sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
     ValidatorDartImpl self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
-    DocumentExtractorDartImpl self,
     SseSerializer serializer,
   );
 
@@ -5039,20 +4957,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_DartFn_Inputs_String_Output_bool_AnyhowException(
     FutureOr<bool> Function(String) self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_DartFn_Inputs_String_String_Output_bool_AnyhowException(
-    FutureOr<bool> Function(String, String) self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_DartFn_Inputs_String_String_extraction_config_Output_internal_document_bridge_AnyhowException(
-    FutureOr<InternalDocumentBridge> Function(String, String, ExtractionConfig)
-    self,
     SseSerializer serializer,
   );
 
@@ -5136,18 +5040,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
-  sse_encode_DartFn_Inputs_list_prim_u_8_strict_String_extraction_config_Output_internal_document_bridge_AnyhowException(
-    FutureOr<InternalDocumentBridge> Function(
-      Uint8List,
-      String,
-      ExtractionConfig,
-    )
-    self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
   sse_encode_DartFn_Inputs_list_prim_u_8_strict_ocr_config_Output_extraction_result_AnyhowException(
     FutureOr<ExtractionResult> Function(Uint8List, OcrConfig) self,
     SseSerializer serializer,
@@ -5177,13 +5069,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_Map_String_list_prim_u_8_strict_None(
     Map<String, Uint8List> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynDocumentExtractorSendSync(
-    ArcDocumentExtractor self,
     SseSerializer serializer,
   );
 
@@ -5226,13 +5111,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void
   sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynValidatorSendSync(
     ArcValidator self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
-    DocumentExtractorDartImpl self,
     SseSerializer serializer,
   );
 
@@ -5335,15 +5213,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_b_box(BBox self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_batch_bytes_item(
-    BatchBytesItem self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_batch_file_item(BatchFileItem self, SseSerializer serializer);
 
   @protected
   void sse_encode_bibtex_metadata(
@@ -5546,6 +5415,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_excel_metadata(
     ExcelMetadata self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_extract_input(
+    ExtractInput self,
     SseSerializer serializer,
   );
 
@@ -6282,6 +6157,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_extract_input(ExtractInput self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_extract_input_kind(
+    ExtractInputKind self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_extracted_image(
     ExtractedImage self,
     SseSerializer serializer,
@@ -6309,14 +6193,32 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_extraction_error_item(
+    ExtractionErrorItem self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_extraction_method(
     ExtractionMethod self,
     SseSerializer serializer,
   );
 
   @protected
+  void sse_encode_extraction_output(
+    ExtractionOutput self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_extraction_result(
     ExtractionResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_extraction_summary(
+    ExtractionSummary self,
     SseSerializer serializer,
   );
 
@@ -6543,18 +6445,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_batch_bytes_item(
-    List<BatchBytesItem> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_batch_file_item(
-    List<BatchFileItem> self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_list_cell_change(
     List<CellChange> self,
     SseSerializer serializer,
@@ -6660,6 +6550,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_extract_input(
+    List<ExtractInput> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_extracted_image(
     List<ExtractedImage> self,
     SseSerializer serializer,
@@ -6668,6 +6564,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_extracted_uri(
     List<ExtractedUri> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_extraction_error_item(
+    List<ExtractionErrorItem> self,
     SseSerializer serializer,
   );
 
@@ -8082,6 +7984,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_uri_kind(UriKind self, SseSerializer serializer);
 
   @protected
+  void sse_encode_url_extraction_config(
+    UrlExtractionConfig self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_url_extraction_mode(
+    UrlExtractionMode self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_user_chunk_config(
     UserChunkConfig self,
     SseSerializer serializer,
@@ -8137,40 +8051,6 @@ class RustLibWire implements BaseWire {
   /// The symbols are looked up in [dynamicLibrary].
   RustLibWire(ffi.DynamicLibrary dynamicLibrary)
     : _lookup = dynamicLibrary.lookup;
-
-  void
-  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynDocumentExtractorSendSync(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynDocumentExtractorSendSync(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynDocumentExtractorSendSyncPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_xberg_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynDocumentExtractorSendSync',
-      );
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynDocumentExtractorSendSync =
-      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynDocumentExtractorSendSyncPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynDocumentExtractorSendSync(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynDocumentExtractorSendSync(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynDocumentExtractorSendSyncPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_xberg_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynDocumentExtractorSendSync',
-      );
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynDocumentExtractorSendSync =
-      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynDocumentExtractorSendSyncPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
 
   void
   rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynEmbeddingBackendSendSync(
@@ -8374,40 +8254,6 @@ class RustLibWire implements BaseWire {
       );
   late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynValidatorSendSync =
       _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcdynValidatorSendSyncPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImplPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_xberg_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl',
-      );
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl =
-      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImplPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImplPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_xberg_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl',
-      );
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl =
-      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImplPtr
           .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
 
   void

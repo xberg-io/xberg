@@ -23,7 +23,7 @@ class DockerXbergClient:
         )
         print(f"Container started on http://localhost:{self.port}")
 
-    async def extract_file(self, file_path: str) -> str:
+    async def extract(self, file_path: str) -> str:
         file_bytes = Path(file_path).read_bytes()
         files = {"file": (Path(file_path).name, file_bytes)}
 
@@ -47,7 +47,7 @@ async def main():
         import asyncio
         await asyncio.sleep(2)
 
-        content = await docker_client.extract_file("document.pdf")
+        content = await docker_client.extract("document.pdf")
         print(f"Extracted content:\n{content}")
     finally:
         docker_client.stop_container()

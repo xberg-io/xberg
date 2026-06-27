@@ -2,10 +2,17 @@
 	"id": "get_extensions_unknown_mime",
 	"category": "detection",
 	"description": "get_extensions unknown MIME",
-	"tags": ["mime_detection", "error"],
+	"tags": [
+		"mime_detection",
+		"error"
+	],
 	"call": "get_extensions_for_mime",
 	"input": {
 		"mime_type": "application/x-totally-unknown"
 	},
-	"assertions": [{ "type": "error" }]
+	"assertions": [
+		{
+			"type": "error"
+		}
+	]
 }

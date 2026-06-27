@@ -58,7 +58,7 @@ class Program
 
         try
         {
-            var result = XbergLib.ExtractFileSync("document.pdf");
+            var result = XbergLib.ExtractSync("document.pdf");
 
             if (result.Metadata.Additional != null)
             {

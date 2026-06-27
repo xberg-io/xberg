@@ -22,7 +22,7 @@ public class MinLengthValidatorExample {
         try {
             Xberg.registerValidator("min-length", minLengthValidator, 100);
 
-            ExtractionResult result = Xberg.extractFile("document.pdf");
+            ExtractionResult result = Xberg.extract("document.pdf");
             System.out.println("Validation passed!");
         } catch (ValidationException e) {
             System.err.println("Validation failed: " + e.getMessage());

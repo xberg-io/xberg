@@ -1,7 +1,7 @@
 ```rust title="Rust"
 use xberg::{
     ChunkingConfig, ChunkerType, ExtractionConfig, ImageExtractionConfig,
-    OcrConfig, OutputFormat, extract_file_sync,
+    OcrConfig, OutputFormat, extract_sync,
 };
 
 fn main() -> xberg::Result<()> {
@@ -35,7 +35,7 @@ fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract_file_sync("report.pdf", None, &config)?;
+    let result = extract_sync("report.pdf", None, &config)?;
 
     println!("Content ({} chars):", result.content.len());
     println!("{}", &result.content[..result.content.len().min(200)]);

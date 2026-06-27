@@ -25,7 +25,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('document.pdf');
+$result = $xberg->extract('document.pdf');
 
 echo "PDF extraction complete\n";
 echo "Images extracted: " . count($result->images ?? []) . "\n\n";
@@ -40,7 +40,7 @@ $highQualityConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($highQualityConfig);
-$result = $xberg->extractFile('presentation.pdf');
+$result = $xberg->extract('presentation.pdf');
 
 foreach ($result->images ?? [] as $image) {
     $filename = sprintf('image_%d_page_%d.%s',
@@ -62,7 +62,7 @@ $fastConfig = new ExtractionConfig(
 
 $xberg = new Xberg($fastConfig);
 $start = microtime(true);
-$result = $xberg->extractFile('large_document.pdf');
+$result = $xberg->extract('large_document.pdf');
 $elapsed = microtime(true) - $start;
 
 echo "\nFast extraction completed in " . number_format($elapsed, 3) . " seconds\n";

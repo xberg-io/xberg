@@ -2,7 +2,11 @@
 	"id": "post_processors_list",
 	"category": "post_processor_management",
 	"description": "List all registered post-processors",
-	"tags": ["post_processors", "plugin_management", "list"],
+	"tags": [
+		"post_processors",
+		"plugin_management",
+		"list"
+	],
 	"call": "list_post_processors",
 	"assertions": [
 		{

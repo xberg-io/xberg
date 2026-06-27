@@ -3,7 +3,7 @@ library(xberg)
 
 config <- list(enable_quality_processing = TRUE)
 
-json <- extract_file_sync("document.pdf", "application/pdf", config)
+json <- extract_sync("document.pdf", "application/pdf", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat("Quality Metrics:\n")

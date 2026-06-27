@@ -27,7 +27,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('scanned_document.pdf');
+$result = $xberg->extract('scanned_document.pdf');
 
 echo "Preprocessed OCR Results:\n";
 echo "Characters extracted: " . strlen($result->content) . "\n";

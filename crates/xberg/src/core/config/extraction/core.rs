@@ -12,7 +12,7 @@ use super::super::ocr::OcrConfig;
 use super::super::page::PageConfig;
 use super::super::processing::{ChunkingConfig, PostProcessorConfig};
 use super::file_config::FileExtractionConfig;
-use super::types::{ImageExtractionConfig, LanguageDetectionConfig, TokenReductionOptions};
+use super::types::{ImageExtractionConfig, LanguageDetectionConfig, TokenReductionOptions, UrlExtractionConfig};
 
 /// Main extraction configuration.
 ///
@@ -289,6 +289,10 @@ pub struct ExtractionConfig {
     #[cfg_attr(alef, alef(skip))]
     pub concurrency: Option<super::super::concurrency::ConcurrencyConfig>,
 
+    /// URL ingestion and crawl configuration.
+    #[serde(default)]
+    pub url: UrlExtractionConfig,
+
     /// Maximum recursion depth for archive extraction (default: 3).
     /// Set to 0 to disable recursive extraction (legacy behavior).
     #[serde(default = "default_archive_depth")]
@@ -409,6 +413,7 @@ impl Default for ExtractionConfig {
             cache_ttl_secs: None,
             email: None,
             concurrency: None,
+            url: UrlExtractionConfig::default(),
             max_archive_depth: default_archive_depth(),
             #[cfg(feature = "tree-sitter")]
             tree_sitter: None,

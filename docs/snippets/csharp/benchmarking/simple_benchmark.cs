@@ -25,16 +25,16 @@ public class XbergBenchmark
     }
 
     [Benchmark]
-    public void ExtractFileSync()
+    public void ExtractSync()
     {
-        var result = XbergLib.ExtractFileSync(_testFilePath, _config);
+        var result = XbergLib.ExtractSync(_testFilePath, _config);
         _ = result.Content.Length;
     }
 
     [Benchmark]
-    public async Task ExtractFileAsync()
+    public async Task ExtractAsync()
     {
-        var result = await XbergLib.ExtractFileAsync(_testFilePath, _config);
+        var result = await XbergLib.ExtractAsync(_testFilePath, _config);
         _ = result.Content.Length;
     }
 
@@ -51,7 +51,7 @@ public class XbergBenchmark
             }
         };
 
-        var result = await XbergLib.ExtractFileAsync(_testFilePath, ocrConfig);
+        var result = await XbergLib.ExtractAsync(_testFilePath, ocrConfig);
         _ = result.Content.Length;
     }
 
@@ -64,7 +64,7 @@ public class XbergBenchmark
             EnableQualityProcessing = true,
         };
 
-        var result = await XbergLib.ExtractFileAsync(_testFilePath, cacheConfig);
+        var result = await XbergLib.ExtractAsync(_testFilePath, cacheConfig);
         _ = result.Content.Length;
     }
 }
@@ -76,12 +76,12 @@ public class ManualBenchmark
         var filePath = "document.pdf";
         var config = new ExtractionConfig();
 
-        await XbergLib.ExtractFileAsync(filePath, config);
+        await XbergLib.ExtractAsync(filePath, config);
 
         var sw = Stopwatch.StartNew();
         for (int i = 0; i < 10; i++)
         {
-            XbergLib.ExtractFileSync(filePath, config);
+            XbergLib.ExtractSync(filePath, config);
         }
         sw.Stop();
         Console.WriteLine($"Sync extraction (10 runs): {sw.ElapsedMilliseconds}ms avg {sw.ElapsedMilliseconds / 10f}ms");
@@ -90,7 +90,7 @@ public class ManualBenchmark
         var tasks = new System.Collections.Generic.List<Task>();
         for (int i = 0; i < 10; i++)
         {
-            tasks.Add(XbergLib.ExtractFileAsync(filePath, config));
+            tasks.Add(XbergLib.ExtractAsync(filePath, config));
         }
         await Task.WhenAll(tasks);
         sw.Stop();

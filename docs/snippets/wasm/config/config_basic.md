@@ -1,5 +1,5 @@
 ```typescript title="WASM"
-import { initWasm, extractBytes } from "@xberg/wasm";
+import { initWasm, extract } from "@xberg-io/xberg-wasm";
 
 await initWasm();
 
@@ -14,6 +14,6 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extractBytes(bytes, "application/pdf", config);
+const result = await extract(bytes, "application/pdf", config);
 console.log(result.content);
 ```

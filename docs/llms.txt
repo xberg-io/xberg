@@ -38,7 +38,6 @@ Xberg provides async/sync APIs, text chunking, language detection, keyword extra
 - [VLM Image Captions](https://docs.xberg.io/guides/image-captions/): Caption every extracted image with a vision-capable LLM
 - [QR-Code Detection](https://docs.xberg.io/guides/qr-codes/): Pure-Rust QR decoding over extracted images
 - [Docker Deployment](https://docs.xberg.io/guides/docker/): Docker container deployment
-- [Kubernetes Deployment](https://docs.xberg.io/guides/kubernetes/): Kubernetes deployment guide
 - [API Server](https://docs.xberg.io/guides/api-server/): REST API server setup
 - [Creating Plugins](https://docs.xberg.io/guides/plugins/): Build custom extractor plugins
 - [AI Coding Assistants](https://docs.xberg.io/guides/agent-skills/): Install the plugin with `/plugin marketplace add xberg-io/plugins` then `/plugin install xberg@xberg` — ships agent skills plus an MCP server, works with Claude Code, Codex, Cursor, Gemini, Copilot, and opencode
@@ -72,7 +71,6 @@ Xberg provides async/sync APIs, text chunking, language detection, keyword extra
 
 ## Xberg Ecosystem
 
-- [Xberg Enterprise](https://enterprise.xberg.io): Managed extraction API with SDKs, dashboards, and observability
 - [crawlberg](https://docs.crawlberg.xberg.io): Web crawling and scraping with HTML to Markdown and headless-Chrome fallback
 - [html-to-markdown](https://docs.html-to-markdown.xberg.io): Fast, lossless HTML to Markdown engine
 - [liter-llm](https://docs.liter-llm.xberg.io): Universal LLM API client with native bindings for 14 languages and 143 providers
@@ -81,7 +79,6 @@ Xberg provides async/sync APIs, text chunking, language detection, keyword extra
 ## Migration
 
 - [From Unstructured](https://docs.xberg.io/migration/from-unstructured/): Migrate from the Unstructured library
-- [v5 Image Indices](https://docs.xberg.io/migration/v5.0-image-indices/): Update page and chunk image references to use `image_indices`
 
 ## Optional
 

@@ -20,7 +20,7 @@ var config = new ExtractionConfig
     }
 };
 
-var result = await Xberg.ExtractFileAsync("document.pdf", config);
+var result = await Xberg.ExtractAsync("document.pdf", config);
 
 var chunks = result.Chunks ?? new List<Chunk>();
 foreach (var (index, chunk) in chunks.WithIndex())

@@ -60,7 +60,7 @@ $imageConfig = new ImageExtractionConfig(
 );
 $config->setImages($imageConfig);
 
-$result = Xberg::extractFileSync('report.pdf', null, $config);
+$result = Xberg::extractSync('report.pdf', null, $config);
 
 echo "Content (" . strlen($result->getContent()) . " chars):\n";
 echo substr($result->getContent(), 0, 200) . "\n\n";

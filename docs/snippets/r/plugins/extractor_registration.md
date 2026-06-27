@@ -12,7 +12,7 @@ custom_extractor <- function(path, mime_type) {
 
 register_document_extractor("custom_format", custom_extractor)
 
-result <- extract_file_sync("custom_document.xyz", "application/custom", NULL)
+result <- extract_sync("custom_document.xyz", "application/custom", NULL)
 
 cat(sprintf("Custom extractor result:\n"))
 cat(sprintf("Content: %s\n", result$content))

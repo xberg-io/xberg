@@ -1,4 +1,4 @@
-import { extractBytes, fileToUint8Array, initWasm } from "@xberg/wasm";
+import { extract, fileToUint8Array, initWasm } from "@xberg-io/xberg-wasm";
 
 async function convertAndExtract(file: File) {
   await initWasm();
@@ -11,7 +11,7 @@ async function convertAndExtract(file: File) {
     const bytes = await fileToUint8Array(file);
     console.log(`Converted ${file.name} (${bytes.byteLength} bytes) to Uint8Array`);
 
-    const result = await extractBytes(bytes, file.type);
+    const result = await extract(bytes, file.type);
     return result;
   } catch (error) {
     console.error("Conversion failed:", error);

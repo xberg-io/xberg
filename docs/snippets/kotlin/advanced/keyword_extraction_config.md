@@ -16,7 +16,7 @@ fun main() {
         .withKeywords(Optional.of(keywords))
         .build()
 
-    val result = Xberg.extractFileSync(Paths.get("document.pdf"), null, config)
+    val result = Xberg.extractSync(Paths.get("document.pdf"), null, config)
     println("Keywords: ${result.extractedKeywords()}")
 }
 ```

@@ -1,8 +1,7 @@
 //! Preset format, registry, loader, and resolver.
 //!
-//! Ships the preset *format* + registry + loader + resolver. The curated
-//! catalog is downstream (xberg-enterprise) and injects additional presets via
-//! [`Registry::extend_from_dir`].
+//! Ships the preset *format* + registry + loader + resolver. Downstream
+//! catalog consumers can inject additional presets via [`Registry::extend_from_dir`].
 //!
 //! The embedded OSS library contains a single synthetic toy preset
 //! (`generic_document`) that exercises the full pipeline without shipping any

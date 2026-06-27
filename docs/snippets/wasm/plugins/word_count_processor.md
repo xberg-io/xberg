@@ -3,7 +3,7 @@
 Register a post-processor that computes word count and other text statistics.
 
 ```typescript title="WASM"
-import init, { registerPostProcessor, extractBytes } from "xberg-wasm";
+import init, { registerPostProcessor, extract } from "xberg-wasm";
 
 await init();
 
@@ -61,7 +61,7 @@ try {
 
 // Extract with word counting
 async function extractAndAnalyze(fileBytes, mimeType) {
-  const result = await extractBytes(fileBytes, mimeType, {});
+  const result = await extract(fileBytes, mimeType, {});
   const stats = result.metadata?.statistics;
 
   console.log("Text Analysis:", {

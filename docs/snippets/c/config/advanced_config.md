@@ -12,7 +12,7 @@ int main(void) {
     ExtractionConfig *config = xberg_config_builder_build(builder);
 
     struct CExtractionResult *result =
-        xberg_extract_file_sync_with_config("scan.pdf",
+        xberg_extract_sync_with_config("scan.pdf",
             xberg_config_to_json(config));
     if (result && result->success) {
         printf("%s\n", result->content);

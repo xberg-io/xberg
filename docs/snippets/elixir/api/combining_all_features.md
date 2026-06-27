@@ -26,7 +26,7 @@ defmodule Example do
       }
     })
 
-    case Xberg.extract_file_sync("report.pdf", nil, config_json) do
+    case Xberg.extract_sync("report.pdf", nil, config_json) do
       {:ok, result} ->
         IO.puts("Extraction successful")
         IO.puts("Content length: #{String.length(result)} chars")

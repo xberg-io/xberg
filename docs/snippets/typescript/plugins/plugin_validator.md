@@ -1,11 +1,11 @@
 ```ts title="TypeScript"
 import {
-  extractFileSync,
+  extractSync,
   registerValidator,
   unregisterValidator,
   ValidationError,
   type ExtractionResult,
-} from "@xberg/node";
+} from "@xberg-io/xberg";
 
 class MinLengthValidator {
   name = "min_length_validator";
@@ -20,7 +20,7 @@ class MinLengthValidator {
 
 registerValidator(new MinLengthValidator());
 
-const result = extractFileSync("document.pdf");
+const result = extractSync("document.pdf");
 console.log(`Validated content length: ${result.content.length}`);
 
 unregisterValidator("min_length_validator");

@@ -1,10 +1,10 @@
 ```python title="Document Structure Config (Python)"
-from xberg import extract_file_sync, ExtractionConfig
+from xberg import extract_sync, ExtractionConfig
 
 # Enable document structure output
 config = ExtractionConfig(include_document_structure=True)
 
-result = extract_file_sync("document.pdf", config=config)
+result = extract_sync("document.pdf", config=config)
 
 # Access the document tree
 if result.document:

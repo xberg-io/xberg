@@ -53,7 +53,7 @@ where
                     format!(
                         "Extract text and metadata from the document at: {path}\n\
                          Output format: {fmt}\n\
-                         Use the extract_file tool with path=\"{path}\" and \
+                         Use the extract tool with input={{\"kind\":\"uri\",\"uri\":\"{path}\"}} and \
                          response_format=\"{fmt}\"."
                     ),
                 )]))
@@ -107,8 +107,8 @@ where
                     PromptMessageRole::User,
                     format!(
                         "Extract content from {path} using OCR.\n\
-                         Use the extract_file tool with:\n\
-                         - path=\"{path}\"\n\
+                         Use the extract tool with:\n\
+                         - input={{\"kind\":\"uri\",\"uri\":\"{path}\"}}\n\
                          - config={{\"enable_ocr\":true,\"force_ocr\":{force_ocr_str},\
                            \"ocr\":{{\"language\":[{langs}]}}}}\n\
                          OCR languages: {languages}",
@@ -173,7 +173,7 @@ where
                     PromptMessageRole::User,
                     format!(
                         "Index {path} for semantic search:\n\
-                         1. Extract text: call extract_file with path=\"{path}\"\n\
+                         1. Extract text: call extract with input={{\"kind\":\"uri\",\"uri\":\"{path}\"}}\n\
                          2. Chunk text: call chunk_text with \
                             chunker_type=\"{chunker_type}\" and max_characters={max_characters}\n\
                          3. Embed chunks: call embed_text with preset=\"{preset}\" \

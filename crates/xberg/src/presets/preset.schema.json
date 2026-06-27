@@ -1,8 +1,8 @@
 {
 	"$schema": "https://json-schema.org/draft/2020-12/schema",
-	"$id": "https://enterprise.xberg.io/schemas/preset.schema.json",
-	"title": "Xberg Enterprise structured-extraction preset",
-	"description": "Meta-schema every preset file under crates/presets/library/ must satisfy. Defines the canonical preset format consumed by the worker pipeline and the frontend playground.",
+	"$id": "https://docs.xberg.io/schemas/preset.schema.json",
+	"title": "Xberg structured-extraction preset",
+	"description": "Meta-schema every preset file under crates/presets/library/ must satisfy. Defines the canonical preset format consumed by structured-extraction catalogs.",
 	"type": "object",
 	"additionalProperties": false,
 	"required": [

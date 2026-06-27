@@ -1,5 +1,5 @@
 ```rust title="Rust"
-use xberg::{extract_file, ExtractionConfig, CaptioningConfig, LlmConfig};
+use xberg::{extract, ExtractionConfig, CaptioningConfig, LlmConfig};
 
 let config = ExtractionConfig {
     captioning: Some(CaptioningConfig {
@@ -12,7 +12,7 @@ let config = ExtractionConfig {
     }),
     ..Default::default()
 };
-let result = extract_file("report.pdf", None, &config).await?;
+let result = extract("report.pdf", None, &config).await?;
 for image in &result.images {
     if let Some(caption) = &image.caption {
         println!("{caption}");

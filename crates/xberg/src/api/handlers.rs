@@ -1,11 +1,14 @@
 //! API request handlers.
 
-use axum::http::HeaderMap;
+use axum::body::to_bytes;
+use axum::extract::{FromRequest, Multipart, Request};
+use axum::http::{HeaderMap, StatusCode, header};
 use axum::{Json, extract::State, response::IntoResponse};
+use base64::{Engine as _, engine::general_purpose::STANDARD};
+use bytes::Bytes;
 
-use tower::Service;
-
-use crate::{BatchBytesItem, batch_extract_bytes, cache, service::ExtractionRequest};
+use crate::cache;
+use crate::core::config::{ExtractInput, ExtractInputKind};
 
 use std::sync::Arc;
 
@@ -18,6 +21,400 @@ use super::{
         WarmResponse,
     },
 };
+
+/// Unified extraction input accepted by `/extract` and `/extract-async`.
+#[derive(Debug, Clone)]
+enum ApiExtractInput {
+    Bytes {
+        data: Bytes,
+        mime_type: String,
+        file_name: Option<String>,
+    },
+    Uri {
+        uri: String,
+        mime_type: Option<String>,
+    },
+}
+
+impl ApiExtractInput {
+    fn into_core_input(self) -> ExtractInput {
+        match self {
+            Self::Bytes {
+                data,
+                mime_type,
+                file_name,
+            } => ExtractInput::bytes(data.to_vec(), mime_type, file_name),
+            Self::Uri { uri, mime_type } => ExtractInput {
+                kind: ExtractInputKind::Uri,
+                uri: Some(uri),
+                mime_type,
+                ..Default::default()
+            },
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct UnifiedExtractRequest {
+    inputs: Vec<ApiExtractInput>,
+    config: Option<crate::core::config::ExtractionConfig>,
+    output_format: Option<crate::core::config::OutputFormat>,
+    pdf_passwords: Vec<String>,
+    use_toon: bool,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct JsonUnifiedExtractRequest {
+    inputs: Vec<JsonExtractInput>,
+    #[serde(default)]
+    config: Option<crate::core::config::ExtractionConfig>,
+    #[serde(default)]
+    format: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(untagged)]
+enum JsonExtractInput {
+    Uri(String),
+    Object(JsonExtractInputObject),
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct JsonExtractInputObject {
+    #[serde(default)]
+    kind: Option<String>,
+    #[serde(default, rename = "type")]
+    input_type: Option<String>,
+    #[serde(default)]
+    uri: Option<String>,
+    #[serde(default)]
+    url: Option<String>,
+    #[serde(default)]
+    path: Option<String>,
+    #[serde(default)]
+    data: Option<String>,
+    #[serde(default)]
+    text: Option<String>,
+    #[serde(default)]
+    mime_type: Option<String>,
+    #[serde(default)]
+    filename: Option<String>,
+}
+
+impl<S> FromRequest<S> for UnifiedExtractRequest
+where
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let content_type = req
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or("");
+
+        if content_type.starts_with("multipart/form-data") {
+            parse_multipart_extract_request(req, state).await
+        } else if is_json_content_type(content_type) {
+            parse_json_extract_request(req).await
+        } else {
+            Err(ApiError::new(
+                StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                crate::error::XbergError::validation(
+                    "Expected Content-Type application/json or multipart/form-data for extraction",
+                ),
+            ))
+        }
+    }
+}
+
+fn is_json_content_type(content_type: &str) -> bool {
+    let lower = content_type.to_ascii_lowercase();
+    lower.starts_with("application/json") || lower.contains("+json")
+}
+
+async fn parse_json_extract_request(req: Request) -> Result<UnifiedExtractRequest, ApiError> {
+    let bytes = to_bytes(req.into_body(), usize::MAX).await.map_err(|_| {
+        ApiError::new(
+            StatusCode::BAD_REQUEST,
+            crate::error::XbergError::Other("Failed to read request body".to_string()),
+        )
+    })?;
+    let body: JsonUnifiedExtractRequest = serde_json::from_slice(&bytes).map_err(|e| {
+        ApiError::new(
+            StatusCode::BAD_REQUEST,
+            crate::error::XbergError::validation(format!("Invalid extraction request JSON: {e}")),
+        )
+    })?;
+
+    let inputs = body
+        .inputs
+        .into_iter()
+        .map(json_input_to_api_input)
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(UnifiedExtractRequest {
+        inputs,
+        config: body.config,
+        output_format: None,
+        pdf_passwords: Vec::new(),
+        use_toon: body
+            .format
+            .as_deref()
+            .is_some_and(|format| format.eq_ignore_ascii_case("toon")),
+    })
+}
+
+async fn parse_multipart_extract_request<S>(req: Request, state: &S) -> Result<UnifiedExtractRequest, ApiError>
+where
+    S: Send + Sync,
+{
+    let mut multipart = Multipart::from_request(req, state)
+        .await
+        .map_err(|rejection| ApiError {
+            status: StatusCode::BAD_REQUEST,
+            body: super::types::ErrorResponse {
+                error_type: "MultipartError".to_string(),
+                message: rejection.body_text(),
+                traceback: None,
+                status_code: StatusCode::BAD_REQUEST.as_u16(),
+            },
+        })?;
+
+    let mut inputs = Vec::new();
+    let mut config: Option<crate::core::config::ExtractionConfig> = None;
+    let mut output_format = None;
+    let mut pdf_passwords = Vec::new();
+    let mut use_toon = false;
+
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| ApiError::validation(crate::error::XbergError::validation(e.to_string())))?
+    {
+        let field_name = field.name().unwrap_or("").to_string();
+
+        match field_name.as_str() {
+            "file" | "files" => {
+                let file_name = field.file_name().map(|s| s.to_string());
+                let content_type = field.content_type().map(|s| s.to_string());
+                let data = field
+                    .bytes()
+                    .await
+                    .map_err(|e| ApiError::validation(crate::error::XbergError::validation(e.to_string())))?;
+                let mime_type = resolve_multipart_mime(content_type, file_name.as_deref());
+
+                inputs.push(ApiExtractInput::Bytes {
+                    data,
+                    mime_type,
+                    file_name,
+                });
+            }
+            "urls" => {
+                let urls = field
+                    .text()
+                    .await
+                    .map_err(|e| ApiError::validation(crate::error::XbergError::validation(e.to_string())))?;
+                inputs.extend(parse_urls_field(&urls)?);
+            }
+            "inputs" => {
+                let raw_inputs = field
+                    .text()
+                    .await
+                    .map_err(|e| ApiError::validation(crate::error::XbergError::validation(e.to_string())))?;
+                inputs.extend(parse_inputs_field(&raw_inputs)?);
+            }
+            "config" => {
+                let config_str = field
+                    .text()
+                    .await
+                    .map_err(|e| ApiError::validation(crate::error::XbergError::validation(e.to_string())))?;
+
+                config = Some(serde_json::from_str(&config_str).map_err(|e| {
+                    ApiError::validation(crate::error::XbergError::validation(format!(
+                        "Invalid extraction configuration: {}",
+                        e
+                    )))
+                })?);
+            }
+            "output_format" => {
+                let format_str = field
+                    .text()
+                    .await
+                    .map_err(|e| ApiError::validation(crate::error::XbergError::validation(e.to_string())))?;
+                output_format = Some(parse_output_format(&format_str)?);
+            }
+            "pdf_password" => {
+                let pwd = field
+                    .text()
+                    .await
+                    .map_err(|e| ApiError::validation(crate::error::XbergError::validation(e.to_string())))?;
+                pdf_passwords.push(pwd);
+            }
+            "format" => {
+                let format_str = field
+                    .text()
+                    .await
+                    .map_err(|e| ApiError::validation(crate::error::XbergError::validation(e.to_string())))?;
+                if format_str.eq_ignore_ascii_case("toon") {
+                    use_toon = true;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Ok(UnifiedExtractRequest {
+        inputs,
+        config,
+        output_format,
+        pdf_passwords,
+        use_toon,
+    })
+}
+
+fn resolve_multipart_mime(content_type: Option<String>, file_name: Option<&str>) -> String {
+    let mut mime_type = content_type.unwrap_or_else(|| crate::core::mime::OCTET_STREAM_MIME_TYPE.to_string());
+    if mime_type == crate::core::mime::OCTET_STREAM_MIME_TYPE
+        && let Some(name) = file_name
+        && let Ok(detected) = crate::core::mime::detect_mime_type(name, false)
+    {
+        mime_type = detected;
+    }
+    mime_type
+}
+
+fn parse_urls_field(raw: &str) -> Result<Vec<ApiExtractInput>, ApiError> {
+    let value: serde_json::Value = serde_json::from_str(raw).map_err(|e| {
+        ApiError::validation(crate::error::XbergError::validation(format!(
+            "Invalid urls field JSON: {e}"
+        )))
+    })?;
+
+    match value {
+        serde_json::Value::String(uri) => Ok(vec![ApiExtractInput::Uri { uri, mime_type: None }]),
+        serde_json::Value::Array(values) => values
+            .into_iter()
+            .map(|value| match value {
+                serde_json::Value::String(uri) => Ok(ApiExtractInput::Uri { uri, mime_type: None }),
+                _ => Err(ApiError::validation(crate::error::XbergError::validation(
+                    "urls field must be a JSON string or array of strings",
+                ))),
+            })
+            .collect(),
+        _ => Err(ApiError::validation(crate::error::XbergError::validation(
+            "urls field must be a JSON string or array of strings",
+        ))),
+    }
+}
+
+fn parse_inputs_field(raw: &str) -> Result<Vec<ApiExtractInput>, ApiError> {
+    let value: serde_json::Value = serde_json::from_str(raw).map_err(|e| {
+        ApiError::validation(crate::error::XbergError::validation(format!(
+            "Invalid inputs field JSON: {e}"
+        )))
+    })?;
+    let inputs: Vec<JsonExtractInput> = serde_json::from_value(match value {
+        serde_json::Value::Array(_) => value,
+        other => serde_json::Value::Array(vec![other]),
+    })
+    .map_err(|e| {
+        ApiError::validation(crate::error::XbergError::validation(format!(
+            "Invalid inputs field shape: {e}"
+        )))
+    })?;
+
+    inputs.into_iter().map(json_input_to_api_input).collect()
+}
+
+fn json_input_to_api_input(input: JsonExtractInput) -> Result<ApiExtractInput, ApiError> {
+    match input {
+        JsonExtractInput::Uri(uri) => Ok(ApiExtractInput::Uri { uri, mime_type: None }),
+        JsonExtractInput::Object(object) => object_to_api_input(object),
+    }
+}
+
+fn object_to_api_input(object: JsonExtractInputObject) -> Result<ApiExtractInput, ApiError> {
+    let kind = object.kind.or(object.input_type).map(|kind| kind.to_ascii_lowercase());
+
+    if matches!(kind.as_deref(), Some("bytes") | Some("base64")) || object.data.is_some() {
+        let data = object.data.ok_or_else(|| {
+            ApiError::validation(crate::error::XbergError::validation(
+                "bytes input requires a base64 data field",
+            ))
+        })?;
+        let decoded = STANDARD.decode(data).map_err(|e| {
+            ApiError::validation(crate::error::XbergError::validation(format!(
+                "Invalid base64 data field: {e}"
+            )))
+        })?;
+        return Ok(ApiExtractInput::Bytes {
+            data: Bytes::from(decoded),
+            mime_type: object
+                .mime_type
+                .unwrap_or_else(|| crate::core::mime::OCTET_STREAM_MIME_TYPE.to_string()),
+            file_name: object.filename,
+        });
+    }
+
+    if matches!(kind.as_deref(), Some("text")) || object.text.is_some() {
+        let text = object.text.ok_or_else(|| {
+            ApiError::validation(crate::error::XbergError::validation("text input requires a text field"))
+        })?;
+        return Ok(ApiExtractInput::Bytes {
+            data: Bytes::from(text),
+            mime_type: object.mime_type.unwrap_or_else(|| "text/plain".to_string()),
+            file_name: object.filename,
+        });
+    }
+
+    if let Some(uri) = object.uri.or(object.url).or(object.path) {
+        return Ok(ApiExtractInput::Uri {
+            uri,
+            mime_type: object.mime_type,
+        });
+    }
+
+    Err(ApiError::validation(crate::error::XbergError::validation(
+        "input must include one of uri, url, path, data, or text",
+    )))
+}
+
+fn parse_output_format(format_str: &str) -> Result<crate::core::config::OutputFormat, ApiError> {
+    let output_format = match format_str.to_lowercase().as_str() {
+        "plain" => crate::core::config::OutputFormat::Plain,
+        "markdown" => crate::core::config::OutputFormat::Markdown,
+        "djot" => crate::core::config::OutputFormat::Djot,
+        "html" => crate::core::config::OutputFormat::Html,
+        _ => {
+            return Err(ApiError::validation(crate::error::XbergError::validation(format!(
+                "Invalid output_format: '{}'. Valid values: 'plain', 'markdown', 'djot', 'html'",
+                format_str
+            ))));
+        }
+    };
+    Ok(output_format)
+}
+
+fn apply_multipart_config_fields(
+    config: &mut crate::core::config::ExtractionConfig,
+    output_format: Option<crate::core::config::OutputFormat>,
+    pdf_passwords: Vec<String>,
+) {
+    if let Some(output_format) = output_format {
+        config.output_format = output_format;
+    }
+    #[cfg(feature = "pdf")]
+    {
+        if !pdf_passwords.is_empty() {
+            let pdf_opts = config.pdf_options.get_or_insert_with(Default::default);
+            pdf_opts.passwords.get_or_insert_with(Vec::new).extend(pdf_passwords);
+        }
+    }
+    #[cfg(not(feature = "pdf"))]
+    let _ = pdf_passwords;
+}
 
 /// Health check endpoint handler.
 ///
@@ -98,7 +495,7 @@ fn toon_response(results: &ExtractResponse) -> Result<axum::response::Response<a
 /// - `format` (optional): Wire format for the response (`json` or `toon`, default: `json`).
 ///   Alternatively, set the `Accept: application/toon` header.
 ///
-/// Returns a list of extraction results, one per file.
+/// Returns an `ExtractionOutput` envelope with extraction results and summary counts.
 ///
 /// # Size Limits
 ///
@@ -118,7 +515,7 @@ fn toon_response(results: &ExtractResponse) -> Result<axum::response::Response<a
     tag = "extraction",
     request_body(content_type = "multipart/form-data"),
     responses(
-        (status = 200, description = "Extraction successful", body = ExtractResponse),
+        (status = 200, description = "Extraction successful", body = crate::core::config::ExtractionOutput),
         (status = 400, description = "Bad request", body = crate::api::types::ErrorResponse),
         (status = 413, description = "Payload too large", body = crate::api::types::ErrorResponse),
         (status = 500, description = "Internal server error", body = crate::api::types::ErrorResponse),
@@ -128,166 +525,79 @@ fn toon_response(results: &ExtractResponse) -> Result<axum::response::Response<a
     feature = "otel",
     tracing::instrument(
         name = "api.extract",
-        skip(state, headers, multipart),
+        skip(state, headers, request),
         fields(files_count = tracing::field::Empty)
     )
 )]
 pub(crate) async fn extract_handler(
     State(state): State<ApiState>,
     headers: HeaderMap,
-    MultipartApi(mut multipart): MultipartApi,
+    request: UnifiedExtractRequest,
 ) -> Result<axum::response::Response<axum::body::Body>, ApiError> {
-    let mut use_toon = wants_toon(&headers);
-    let mut files = Vec::new();
-    let mut config: Option<crate::core::config::ExtractionConfig> = None;
-
-    while let Some(field) = multipart
-        .next_field()
-        .await
-        .map_err(|e| ApiError::validation(crate::error::XbergError::validation(e.to_string())))?
-    {
-        let field_name = field.name().unwrap_or("").to_string();
-
-        match field_name.as_str() {
-            "files" => {
-                let file_name = field.file_name().map(|s| s.to_string());
-                let content_type = field.content_type().map(|s| s.to_string());
-                let data = field
-                    .bytes()
-                    .await
-                    .map_err(|e| ApiError::validation(crate::error::XbergError::validation(e.to_string())))?;
-
-                let mut mime_type =
-                    content_type.unwrap_or_else(|| crate::core::mime::OCTET_STREAM_MIME_TYPE.to_string());
-
-                // When the client sends a generic content type, try to detect from the filename
-                if mime_type == crate::core::mime::OCTET_STREAM_MIME_TYPE
-                    && let Some(ref name) = file_name
-                    && let Ok(detected) = crate::core::mime::detect_mime_type(name, false)
-                {
-                    mime_type = detected;
-                }
-
-                files.push((data.to_vec(), mime_type, file_name));
-            }
-            "config" => {
-                let config_str = field
-                    .text()
-                    .await
-                    .map_err(|e| ApiError::validation(crate::error::XbergError::validation(e.to_string())))?;
-
-                config = Some(serde_json::from_str(&config_str).map_err(|e| {
-                    ApiError::validation(crate::error::XbergError::validation(format!(
-                        "Invalid extraction configuration: {}",
-                        e
-                    )))
-                })?);
-            }
-            "output_format" => {
-                let format_str = field
-                    .text()
-                    .await
-                    .map_err(|e| ApiError::validation(crate::error::XbergError::validation(e.to_string())))?;
-
-                // Ensure config exists before modifying output_format
-                let cfg = config.get_or_insert_with(|| (*state.default_config).clone());
-                cfg.output_format = match format_str.to_lowercase().as_str() {
-                    "plain" => crate::core::config::OutputFormat::Plain,
-                    "markdown" => crate::core::config::OutputFormat::Markdown,
-                    "djot" => crate::core::config::OutputFormat::Djot,
-                    "html" => crate::core::config::OutputFormat::Html,
-                    _ => {
-                        return Err(ApiError::validation(crate::error::XbergError::validation(format!(
-                            "Invalid output_format: '{}'. Valid values: 'plain', 'markdown', 'djot', 'html'",
-                            format_str
-                        ))));
-                    }
-                };
-            }
-            "pdf_password" => {
-                let pwd = field
-                    .text()
-                    .await
-                    .map_err(|e| ApiError::validation(crate::error::XbergError::validation(e.to_string())))?;
-                #[cfg(feature = "pdf")]
-                {
-                    let cfg = config.get_or_insert_with(|| (*state.default_config).clone());
-                    let pdf_opts = cfg.pdf_options.get_or_insert_with(Default::default);
-                    pdf_opts.passwords.get_or_insert_with(Vec::new).push(pwd);
-                }
-                #[cfg(not(feature = "pdf"))]
-                let _ = pwd;
-            }
-            "format" => {
-                let format_str = field
-                    .text()
-                    .await
-                    .map_err(|e| ApiError::validation(crate::error::XbergError::validation(e.to_string())))?;
-                if format_str.eq_ignore_ascii_case("toon") {
-                    use_toon = true;
-                }
-            }
-            _ => {}
-        }
-    }
-
-    if files.is_empty() {
-        return Err(ApiError::validation(crate::error::XbergError::validation(
-            "No files provided for extraction",
-        )));
-    }
+    let use_toon = wants_toon(&headers) || request.use_toon;
 
     #[cfg(feature = "otel")]
-    tracing::Span::current().record("files_count", files.len());
+    tracing::Span::current().record("files_count", request.inputs.len());
 
-    // Use provided config or fall back to default from state
-    let final_config = config.as_ref().unwrap_or(&state.default_config);
-
-    let results = if files.len() == 1 {
-        let (data, mime_type, _file_name) = files
-            .into_iter()
-            .next()
-            .expect("files.len() == 1 guarantees one element exists");
-        let request = ExtractionRequest::bytes(data, mime_type, final_config.clone());
-        let mut svc = state
-            .extraction_service
-            .lock()
-            .expect("extraction service lock poisoned")
-            .clone();
-        let result = svc.call(request).await?;
-        vec![result]
-    } else {
-        let files_data: Vec<BatchBytesItem> = files
-            .into_iter()
-            .map(|(data, mime, _name)| BatchBytesItem {
-                content: data,
-                mime_type: mime,
-                config: None,
-            })
-            .collect();
-
-        #[cfg(feature = "otel")]
-        let batch_span = tracing::info_span!(
-            "xberg.service",
-            { crate::telemetry::conventions::OPERATION } = crate::telemetry::conventions::operations::BATCH_EXTRACT,
-            { crate::telemetry::conventions::BATCH_SIZE } = files_data.len(),
-        );
-        #[cfg(not(feature = "otel"))]
-        let batch_span = tracing::Span::none();
-
-        {
-            use tracing::Instrument;
-            batch_extract_bytes(files_data, final_config)
-                .instrument(batch_span)
-                .await?
-        }
-    };
+    let mut final_config = request.config.unwrap_or_else(|| (*state.default_config).clone());
+    apply_multipart_config_fields(&mut final_config, request.output_format, request.pdf_passwords);
+    enforce_api_uri_policy(&request.inputs)?;
+    apply_api_uri_policy_to_config(&mut final_config);
+    let results = extract_unified_inputs(request.inputs, final_config).await?;
 
     if use_toon {
         toon_response(&results)
     } else {
         Ok(Json(results).into_response())
     }
+}
+
+async fn extract_unified_inputs(
+    inputs: Vec<ApiExtractInput>,
+    config: crate::core::config::ExtractionConfig,
+) -> Result<ExtractResponse, ApiError> {
+    if inputs.is_empty() {
+        return Err(ApiError::validation(crate::error::XbergError::validation(
+            "No inputs provided for extraction",
+        )));
+    }
+
+    let inputs = inputs.into_iter().map(ApiExtractInput::into_core_input).collect();
+    crate::extract_batch(inputs, &config).await.map_err(ApiError::from)
+}
+
+fn enforce_api_uri_policy(inputs: &[ApiExtractInput]) -> Result<(), ApiError> {
+    if api_allows_local_uri_inputs() {
+        return Ok(());
+    }
+    for input in inputs {
+        if let ApiExtractInput::Uri { uri, .. } = input
+            && !is_remote_uri(uri)
+        {
+            return Err(ApiError::validation(crate::error::XbergError::validation(
+                "Local path and file:// URI extraction are disabled for the HTTP API. Set XBERG_API_ALLOW_LOCAL_URI_INPUTS=1 to enable server-side local URI access.",
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn apply_api_uri_policy_to_config(config: &mut crate::core::config::ExtractionConfig) {
+    if api_allows_local_uri_inputs() {
+        return;
+    }
+    config.url.allow_local_file_inputs = false;
+    config.url.allow_file_uris = false;
+}
+
+fn api_allows_local_uri_inputs() -> bool {
+    std::env::var("XBERG_API_ALLOW_LOCAL_URI_INPUTS")
+        .map(|value| matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
+        .unwrap_or(false)
+}
+
+fn is_remote_uri(uri: &str) -> bool {
+    uri.starts_with("http://") || uri.starts_with("https://")
 }
 
 /// Formats endpoint handler.
@@ -704,6 +1014,9 @@ pub(crate) async fn extract_structured_handler(
     State(state): State<ApiState>,
     MultipartApi(mut multipart): MultipartApi,
 ) -> Result<Json<super::types::StructuredExtractionResponse>, ApiError> {
+    use crate::service::ExtractionRequest;
+    use tower::Service;
+
     let mut file_data: Option<(Vec<u8>, String, Option<String>)> = None;
     let mut config: Option<crate::core::config::ExtractionConfig> = None;
     let mut schema: Option<serde_json::Value> = None;
@@ -1376,54 +1689,11 @@ fn resolve_cache_base() -> std::path::PathBuf {
 )]
 pub(crate) async fn extract_async_handler(
     State(state): State<ApiState>,
-    MultipartApi(mut multipart): MultipartApi,
+    request: UnifiedExtractRequest,
 ) -> Result<axum::response::Response, ApiError> {
-    let mut files: Vec<(Vec<u8>, String, Option<String>)> = Vec::new();
-    let mut config: Option<crate::core::config::ExtractionConfig> = None;
-
-    while let Some(field) = multipart
-        .next_field()
-        .await
-        .map_err(|e| ApiError::validation(crate::error::XbergError::validation(e.to_string())))?
-    {
-        let field_name = field.name().unwrap_or("").to_string();
-        match field_name.as_str() {
-            "files" => {
-                let file_name = field.file_name().map(|s| s.to_string());
-                let content_type = field.content_type().map(|s| s.to_string());
-                let data = field
-                    .bytes()
-                    .await
-                    .map_err(|e| ApiError::validation(crate::error::XbergError::validation(e.to_string())))?;
-                let mut mime_type =
-                    content_type.unwrap_or_else(|| crate::core::mime::OCTET_STREAM_MIME_TYPE.to_string());
-                if mime_type == crate::core::mime::OCTET_STREAM_MIME_TYPE
-                    && let Some(ref name) = file_name
-                    && let Ok(detected) = crate::core::mime::detect_mime_type(name, false)
-                {
-                    mime_type = detected;
-                }
-                files.push((data.to_vec(), mime_type, file_name));
-            }
-            "config" => {
-                let config_str = field
-                    .text()
-                    .await
-                    .map_err(|e| ApiError::validation(crate::error::XbergError::validation(e.to_string())))?;
-                config = Some(serde_json::from_str(&config_str).map_err(|e| {
-                    ApiError::validation(crate::error::XbergError::validation(format!(
-                        "Invalid extraction configuration: {}",
-                        e
-                    )))
-                })?);
-            }
-            _ => {}
-        }
-    }
-
-    if files.is_empty() {
+    if request.inputs.is_empty() {
         return Err(ApiError::validation(crate::error::XbergError::validation(
-            "No files provided",
+            "No inputs provided",
         )));
     }
 
@@ -1435,22 +1705,13 @@ pub(crate) async fn extract_async_handler(
     }
 
     let job_id = state.job_store.create_job();
-    let effective_config = config.unwrap_or_else(|| (*state.default_config).clone());
+    let mut effective_config = request.config.unwrap_or_else(|| (*state.default_config).clone());
+    apply_multipart_config_fields(&mut effective_config, request.output_format, request.pdf_passwords);
+    enforce_api_uri_policy(&request.inputs)?;
+    let inputs = request.inputs;
 
     let job_store = Arc::clone(&state.job_store);
     let job_id_bg = job_id.clone();
-    let mut svc = state
-        .extraction_service
-        .lock()
-        .map_err(|_| {
-            state.job_store.fail(
-                &job_id,
-                "extraction service unavailable".into(),
-                super::jobs::now_rfc3339(),
-            );
-            ApiError::internal(crate::error::XbergError::Other("extraction service unavailable".into()))
-        })?
-        .clone();
 
     tokio::spawn(async move {
         let store = job_store;
@@ -1463,17 +1724,9 @@ pub(crate) async fn extract_async_handler(
         let timeout_dur = std::time::Duration::from_secs(timeout_secs);
 
         let extraction_fut = async {
-            let mut results = Vec::with_capacity(files.len());
-            for (data, mime_type, _file_name) in files {
-                let req = crate::service::ExtractionRequest::bytes(data, &mime_type, effective_config.clone());
-                match svc.call(req).await {
-                    Ok(result) => results.push(result),
-                    Err(e) => {
-                        return Err(e.to_string());
-                    }
-                }
-            }
-
+            let results = extract_unified_inputs(inputs, effective_config)
+                .await
+                .map_err(|e| e.body.message)?;
             serde_json::to_value(&results).map_err(|e| format!("failed to serialize results: {e}"))
         };
 

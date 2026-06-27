@@ -10,7 +10,7 @@ var config = new ExtractionConfig
     ForceOcr = true
 };
 
-var result = XbergLib.ExtractFileSync("document.pdf", null, config);
+var result = XbergLib.ExtractSync("document.pdf", null, config);
 
 string content = result.Content;
 string preview = content.Length > 100 ? content[..100] : content;

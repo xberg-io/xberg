@@ -6,5 +6,5 @@ config = Xberg::ExtractionConfig.new(
   pdf: Xberg::PdfConfig.new(dpi: 300)
 )
 
-result = Xberg.extract_file_sync('scanned.pdf', config: config)
+result = Xberg.extract_sync('scanned.pdf', config: config)
 ```

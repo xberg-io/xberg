@@ -53,7 +53,7 @@ extractCommand.SetHandler(async (path, config, ocr, cache) =>
         Console.WriteLine($"  - Force OCR: {extractionConfig.ForceOcr}");
         Console.WriteLine($"  - Use Cache: {extractionConfig.UseCache}");
 
-        var result = await XbergLib.ExtractFileAsync(path, extractionConfig);
+        var result = await XbergLib.ExtractAsync(path, extractionConfig);
 
         Console.WriteLine($"\nExtraction complete:");
         Console.WriteLine($"  - Content length: {result.Content.Length}");

@@ -15,7 +15,7 @@ var config = new ExtractionConfig
     }
 };
 
-var result = XbergLib.ExtractFileSync("document.pdf", null, config);
+var result = XbergLib.ExtractSync("document.pdf", null, config);
 
 if (result.Chunks != null)
 {

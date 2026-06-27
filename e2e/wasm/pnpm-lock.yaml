@@ -8,7 +8,7 @@ importers:
 
   .:
     devDependencies:
-      '@xberg/wasm':
+      '@xberg-io/xberg-wasm':
         specifier: file:../../crates/xberg-wasm/pkg/nodejs
         version: xberg-wasm@file:../../crates/xberg-wasm/pkg/nodejs
       rollup:

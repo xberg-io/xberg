@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-import { listDocumentExtractors, unregisterDocumentExtractor } from "@xberg/node";
+import { listDocumentExtractors, unregisterDocumentExtractor } from "@xberg-io/xberg";
 
 /**
  * Note: Custom document extractors are not directly supported in TypeScript v4.0.

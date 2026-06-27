@@ -30,7 +30,7 @@ let configJson = """
 """
 
 let config = try extractionConfigFromJson(configJson)
-let result = try extractFileSync("report.pdf", nil, config)
+let result = try extractSync("report.pdf", nil, config)
 
 let content = result.content().toString()
 print("Content (\(content.count) chars):")

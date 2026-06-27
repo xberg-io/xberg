@@ -1,5 +1,5 @@
-import type { ExtractionResult } from "@xberg/wasm";
-import { extractFromFile, initWasm } from "@xberg/wasm";
+import type { ExtractionResult } from "@xberg-io/xberg-wasm";
+import { extract, initWasm } from "@xberg-io/xberg-wasm";
 
 async function _cacheResultInSessionStorage(file: File): Promise<ExtractionResult> {
   await initWasm();
@@ -13,7 +13,7 @@ async function _cacheResultInSessionStorage(file: File): Promise<ExtractionResul
   }
 
   console.log("Extracting and caching result");
-  const result = await extractFromFile(file);
+  const result = await extract(file);
 
   try {
     sessionStorage.setItem(cacheKey, JSON.stringify(result));

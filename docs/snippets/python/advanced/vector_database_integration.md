@@ -6,7 +6,7 @@ from xberg import (
     ChunkingConfig,
     EmbeddingConfig,
     EmbeddingModelType,
-    extract_file,
+    extract,
 )
 
 
@@ -34,7 +34,7 @@ async def extract_and_vectorize(
         )
     )
 
-    result = await extract_file(document_path, config=config)
+    result = await extract(document_path, config=config)
 
     records: list[VectorRecord] = []
     for index, chunk in enumerate(result.chunks or []):

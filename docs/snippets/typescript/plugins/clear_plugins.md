@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-import { clearOcrBackends, clearPostProcessors, clearValidators } from "@xberg/node";
+import { clearOcrBackends, clearPostProcessors, clearValidators } from "@xberg-io/xberg";
 
 clearOcrBackends();
 clearPostProcessors();

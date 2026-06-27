@@ -1,6 +1,6 @@
 ```python title="Python"
 from xberg import (
-    extract_file_sync,
+    extract_sync,
     ExtractionConfig,
     ImagePreprocessingConfig,
     OcrConfig,
@@ -23,7 +23,7 @@ config: ExtractionConfig = ExtractionConfig(
     )
 )
 
-result = extract_file_sync("document.pdf", config=config)
+result = extract_sync("document.pdf", config=config)
 
 print(f"Content length: {len(result.content)} characters")
 ```

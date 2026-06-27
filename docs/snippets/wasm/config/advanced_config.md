@@ -1,5 +1,5 @@
 ```typescript title="WASM"
-import { extractFromFile, initWasm } from "@xberg/wasm";
+import { extract, initWasm } from "@xberg-io/xberg-wasm";
 
 await initWasm();
 
@@ -20,7 +20,7 @@ const fileInput = document.getElementById("file") as HTMLInputElement;
 const file = fileInput.files?.[0];
 
 if (file) {
-  const result = await extractFromFile(file, file.type, config);
+  const result = await extract(file, file.type, config);
 
   if (result.chunks) {
     for (const chunk of result.chunks) {

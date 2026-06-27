@@ -1,7 +1,7 @@
 //! Text-enrichment data types (keywords / entities / labels).
 //!
 //! Infrastructure only: these are the request/result data shapes. The enrichment
-//! *models and prompts* live in downstream consumers (e.g. xberg-enterprise), not here.
+//! *models and prompts* live in downstream consumers, not here.
 //!
 //! # Types
 //!

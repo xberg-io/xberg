@@ -108,7 +108,7 @@ $config5 = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config5);
-$result = $xberg->extractFile('noisy_scan.pdf');
+$result = $xberg->extract('noisy_scan.pdf');
 
 echo "Denoising: Enabled\n";
 echo "Best for:\n";
@@ -254,7 +254,7 @@ $config10 = new ExtractionConfig(
     )
 );
 
-$result10 = (new Xberg($config10))->extractFile('poor_quality_scan.pdf');
+$result10 = (new Xberg($config10))->extract('poor_quality_scan.pdf');
 
 echo "Processing pipeline:\n";
 echo "1. Load image\n";

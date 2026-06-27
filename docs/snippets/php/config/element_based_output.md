@@ -8,7 +8,7 @@ $config = new ExtractionConfig();
 $config->setOutputFormat('element_based');
 
 // Extract document
-$result = Xberg::extractFileSync('document.pdf', $config);
+$result = Xberg::extractSync('document.pdf', $config);
 
 // Access elements
 foreach ($result->getElements() as $element) {

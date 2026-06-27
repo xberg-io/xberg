@@ -19,7 +19,7 @@ defmodule VectorIntegration do
       }
       |> Jason.encode!()
 
-    case Xberg.extract_file_sync(document_path, nil, config) do
+    case Xberg.extract_sync(document_path, nil, config) do
       {:ok, result} ->
         decoded = Jason.decode!(result)
 

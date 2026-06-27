@@ -8,7 +8,7 @@ config <- list(
 )
 
 # Extract from a multilingual document
-json <- extract_file_sync("multilingual.png", "image/png", config)
+json <- extract_sync("multilingual.png", "image/png", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Detected language: %s\n", result$detected_language))

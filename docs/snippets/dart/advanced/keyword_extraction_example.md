@@ -22,7 +22,7 @@ Future<void> main() async {
     maxArchiveDepth: 3,
   );
 
-  final result = await XbergBridge.extractFile('research_paper.pdf', null, config);
+  final result = await XbergBridge.extract('research_paper.pdf', null, config);
   final keywords = result.extractedKeywords;
   if (keywords != null) {
     for (final keyword in keywords) {

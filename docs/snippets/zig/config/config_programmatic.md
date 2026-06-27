@@ -30,7 +30,7 @@ pub fn main() !void {
     var buffer = std.ArrayList(u8).init(a);
     try std.json.stringify(config_value, .{}, buffer.writer());
 
-    const result_json = try xberg.extract_file_sync("document.pdf", null, buffer.items);
+    const result_json = try xberg.extract_sync("document.pdf", null, buffer.items);
     defer std.heap.c_allocator.free(result_json);
 
     const stdout = std.io.getStdOut().writer();

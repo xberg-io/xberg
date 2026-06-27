@@ -1,0 +1,40 @@
+{
+	"id": "api_extract_uri_async",
+	"description": "Tests async URI extraction API",
+	"tags": [
+		"contract",
+		"api"
+	],
+	"input": {
+		"kind": "uri",
+		"uri": "pdf/fake_memo.pdf"
+	},
+	"assertions": [
+		{
+			"type": "equals",
+			"field": "results.0.mime_type",
+			"value": "application/pdf"
+		},
+		{
+			"type": "min_length",
+			"field": "results.0.content",
+			"value": 10
+		},
+		{
+			"type": "contains_any",
+			"field": "results.0.content",
+			"values": [
+				"May 5, 2023",
+				"Mallori"
+			]
+		}
+	],
+	"skip": {
+		"languages": [
+			"wasm"
+		],
+		"reason": "WASM uses synchronous-only API; async extraction is not available on the wasm target"
+	},
+	"category": "contract",
+	"call": "extract"
+}

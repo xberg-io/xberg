@@ -18,7 +18,7 @@ int main(void) {
     const uint8_t *bytes = (const uint8_t *)json_payload;
     uintptr_t bytes_len = (uintptr_t)strlen(json_payload);
 
-    XBERGExtractionResult *result = xberg_extract_bytes_sync(
+    XBERGExtractionResult *result = xberg_extract_sync(
         bytes,
         bytes_len,
         "application/json",

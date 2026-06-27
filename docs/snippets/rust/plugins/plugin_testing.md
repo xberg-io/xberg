@@ -11,7 +11,7 @@ mod tests {
         let config = ExtractionConfig::default();
 
         let result = extractor
-            .extract_bytes(json_data, "application/json", &config)
+            .extract(json_data, "application/json", &config)
             .await
             .expect("Extraction failed");
 

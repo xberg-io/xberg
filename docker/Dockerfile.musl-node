@@ -9,7 +9,7 @@
 # Produces the napi platform artifact (xberg.linux-<arch>-musl.node) at the
 # output root. napi-rs selects gnu vs musl at runtime via the package `libc`
 # field, so the musl `.node` flows into the existing napi prepublish path as the
-# `@xberg/node-linux-{x64,arm64}-musl` package (already declared in
+# `@xberg-io/xberg-linux-{x64,arm64}-musl` package (already declared in
 # crates/xberg-node/package.json optionalDependencies).
 # =============================================================================
 FROM alpine:3.21 AS builder

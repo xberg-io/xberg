@@ -1,5 +1,5 @@
 ```python title="Python"
-from xberg import extract_file_sync, ExtractionConfig, ImageExtractionConfig
+from xberg import extract_sync, ExtractionConfig, ImageExtractionConfig
 
 config: ExtractionConfig = ExtractionConfig(
     images=ImageExtractionConfig(
@@ -11,7 +11,7 @@ config: ExtractionConfig = ExtractionConfig(
     )
 )
 
-result = extract_file_sync("document.pdf", config=config)
+result = extract_sync("document.pdf", config=config)
 
 print(f"Content length: {len(result.content)} characters")
 ```

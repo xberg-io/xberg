@@ -3,7 +3,7 @@ library(xberg)
 
 config <- list(force_ocr = TRUE)
 
-json <- extract_file_sync("multipage_document.pdf", "application/pdf", config)
+json <- extract_sync("multipage_document.pdf", "application/pdf", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Total pages: %d\n", length(result$pages)))

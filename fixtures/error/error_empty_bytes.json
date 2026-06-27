@@ -2,16 +2,22 @@
 	"id": "error_empty_bytes",
 	"category": "error",
 	"description": "Graceful handling of empty bytes (should not error)",
-	"tags": ["error", "input", "edge-case"],
-	"call": "extract_bytes_sync",
+	"tags": [
+		"error",
+		"input",
+		"edge-case"
+	],
+	"call": "extract",
 	"input": {
-		"data": "text/empty.txt",
+		"kind": "bytes",
+		"bytes": [],
 		"mime_type": "text/plain",
-		"config": {}
+		"filename": "empty.txt"
 	},
 	"assertions": [
 		{
 			"type": "not_error"
 		}
-	]
+	],
+	"config": {}
 }

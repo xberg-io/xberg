@@ -1,5 +1,5 @@
 ```rust title="disk_cache.rs"
-use xberg::{extract_file_sync, ExtractionConfig};
+use xberg::{extract_sync, ExtractionConfig};
 
 fn main() -> xberg::Result<()> {
     let path = std::env::args()
@@ -14,11 +14,11 @@ fn main() -> xberg::Result<()> {
     };
 
     println!("First extraction (will be cached)...");
-    let result1 = extract_file_sync(&path, None, &config)?;
+    let result1 = extract_sync(&path, None, &config)?;
     println!("  - Content length: {}", result1.content.len());
 
     println!("\nSecond extraction (from cache when available)...");
-    let result2 = extract_file_sync(&path, None, &config)?;
+    let result2 = extract_sync(&path, None, &config)?;
     println!("  - Content length: {}", result2.content.len());
 
     println!("\nResults are identical: {}", result1.content == result2.content);

@@ -1,5 +1,5 @@
-import type { ExtractionConfig } from "@xberg/wasm";
-import { extractBytes, initWasm } from "@xberg/wasm";
+import type { ExtractionConfig } from "@xberg-io/xberg-wasm";
+import { extract, initWasm } from "@xberg-io/xberg-wasm";
 
 async function extractWithFullConfig() {
   await initWasm();
@@ -21,7 +21,7 @@ async function extractWithFullConfig() {
     },
   };
 
-  const result = await extractBytes(bytes, "application/pdf", config);
+  const result = await extract(bytes, "application/pdf", config);
 
   console.log("=== Extraction Results ===");
   console.log(`Content: ${result.content.length} chars`);

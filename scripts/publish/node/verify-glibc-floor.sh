@@ -58,7 +58,7 @@ else
   highest=$(printf '%s\n%s\n' "$max_glibc" "$MAX_FLOOR" | sort -V | tail -1)
   if [ "$highest" != "$MAX_FLOOR" ]; then
     echo "  FAIL: ${node_file} requires ${max_glibc} (> ${MAX_FLOOR})"
-    echo "  This breaks @xberg/node on RHEL 8 / AlmaLinux 8 / Rocky 8."
+    echo "  This breaks @xberg-io/xberg on RHEL 8 / AlmaLinux 8 / Rocky 8."
     echo "  Likely cause: a Rust dependency has been bumped to a version that"
     echo "  references a newer glibc symbol; revert the bump or stay on this floor."
     failed=1

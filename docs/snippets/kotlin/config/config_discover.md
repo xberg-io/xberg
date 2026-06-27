@@ -11,7 +11,7 @@ fun main() {
         .withUseCache(true)
         .build()
 
-    val result = Xberg.extractFileSync(Paths.get("document.pdf"), null, config)
+    val result = Xberg.extractSync(Paths.get("document.pdf"), null, config)
     println(result.content())
 }
 ```

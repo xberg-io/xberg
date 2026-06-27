@@ -1,6 +1,6 @@
 ```python title="Python"
 import asyncio
-from xberg import extract_file, ExtractionConfig, TokenReductionConfig
+from xberg import extract, ExtractionConfig, TokenReductionConfig
 
 async def main() -> None:
     config: ExtractionConfig = ExtractionConfig(
@@ -8,7 +8,7 @@ async def main() -> None:
             mode="moderate", preserve_important_words=True
         )
     )
-    result = await extract_file("verbose_document.pdf", config=config)
+    result = await extract("verbose_document.pdf", config=config)
     original: int = result.metadata.get("original_token_count", 0)
     reduced: int = result.metadata.get("token_count", 0)
     ratio: float = result.metadata.get("token_reduction_ratio", 0.0)

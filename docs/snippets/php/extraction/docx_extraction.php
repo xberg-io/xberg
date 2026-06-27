@@ -13,9 +13,9 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 use Xberg\Xberg;
 use Xberg\Config\ExtractionConfig;
-use function Xberg\extract_file;
+use function Xberg\extract;
 
-$result = extract_file('document.docx');
+$result = extract('document.docx');
 
 echo "Word Document Extraction:\n";
 echo str_repeat('=', 60) . "\n";
@@ -37,7 +37,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('report.docx');
+$result = $xberg->extract('report.docx');
 
 foreach ($result->tables as $index => $table) {
     echo "Table " . ($index + 1) . ":\n";
@@ -64,20 +64,20 @@ foreach ($conversions as $name => $format) {
     );
 
     $xberg = new Xberg($config);
-    $result = $xberg->extractFile('document.docx');
+    $result = $xberg->extract('document.docx');
 
     $outputFile = "output_$name.txt";
     file_put_contents($outputFile, $result->content);
     echo "Saved $name format to: $outputFile\n";
 }
 
-use function Xberg\batch_extract_files;
+use function Xberg\extract_batch;
 
 $docxFiles = glob('*.docx');
 if (!empty($docxFiles)) {
     echo "\nBatch processing " . count($docxFiles) . " DOCX files...\n";
 
-    $results = batch_extract_files($docxFiles);
+    $results = extract_batch($docxFiles);
 
     foreach ($results as $index => $result) {
         $filename = basename($docxFiles[$index]);
@@ -88,7 +88,7 @@ if (!empty($docxFiles)) {
     }
 }
 
-$result = extract_file('reviewed_document.docx');
+$result = extract('reviewed_document.docx');
 
 if (!empty($result->metadata->createdBy)) {
     echo "\nDocument Information:\n";
@@ -99,7 +99,7 @@ if (!empty($result->metadata->producer)) {
     echo "Producer: " . $result->metadata->producer . "\n";
 }
 
-$result = extract_file('document.docx');
+$result = extract('document.docx');
 $content = $result->content;
 
 $stats = [

@@ -1,7 +1,7 @@
 ```python title="Python"
-from xberg import extract_file_sync, ExtractionConfig
+from xberg import extract_sync, ExtractionConfig
 
-result = extract_file_sync("document.pdf", config=ExtractionConfig())
+result = extract_sync("document.pdf", config=ExtractionConfig())
 
 # Metadata is flat — format-specific fields are at the top level
 metadata = result.metadata
@@ -12,7 +12,7 @@ if metadata.get("title"):
 if metadata.get("authors"):
     print(f"Authors: {', '.join(metadata['authors'])}")
 
-result = extract_file_sync("page.html", config=ExtractionConfig())
+result = extract_sync("page.html", config=ExtractionConfig())
 metadata = result.metadata
 if metadata.get("title"):
     print(f"Title: {metadata['title']}")

@@ -7,7 +7,7 @@ ExtractionConfig config = ExtractionConfig.builder()
     .includeDocumentStructure(true)
     .build();
 
-ExtractionResult result = Xberg.extractFileSync("document.pdf", config);
+ExtractionResult result = Xberg.extractSync("document.pdf", config);
 
 if (result.getDocumentStructure().isPresent()) {
     var document = result.getDocumentStructure().get();

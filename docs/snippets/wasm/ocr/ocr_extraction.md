@@ -1,5 +1,5 @@
 ```typescript title="WASM (Browser)"
-import { enableOcr, extractFromFile, initWasm } from "@xberg/wasm";
+import { enableOcr, extract, initWasm } from "@xberg-io/xberg-wasm";
 
 await initWasm();
 await enableOcr();
@@ -8,7 +8,7 @@ const fileInput = document.getElementById("file") as HTMLInputElement;
 const file = fileInput.files?.[0];
 
 if (file) {
-  const result = await extractFromFile(file, file.type, {
+  const result = await extract(file, file.type, {
     ocr: {
       backend: "xberg-tesseract",
       language: "eng",
@@ -19,12 +19,12 @@ if (file) {
 ```
 
 ```typescript title="WASM (Node.js / Deno / Bun)"
-import { enableOcr, extractFile, initWasm } from "@xberg/wasm";
+import { enableOcr, extract, initWasm } from "@xberg-io/xberg-wasm";
 
 await initWasm();
 await enableOcr(); // Uses native xberg-tesseract backend
 
-const result = await extractFile("./scanned_document.png", "image/png", {
+const result = await extract("./scanned_document.png", "image/png", {
   ocr: {
     backend: "xberg-tesseract",
     language: "eng",

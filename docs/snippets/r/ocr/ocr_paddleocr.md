@@ -8,7 +8,7 @@ config <- list(
 )
 
 # Extract text from an image using PaddleOCR
-json <- extract_file_sync("document.jpg", "image/jpeg", config)
+json <- extract_sync("document.jpg", "image/jpeg", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Extracted %d characters\n", nchar(result$content)))

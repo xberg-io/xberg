@@ -1,5 +1,5 @@
 ```typescript title="WASM - Extract and Score Keywords"
-import init, { extractBytes } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 
@@ -8,7 +8,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extractBytes(bytes, "application/pdf", config);
+const result = await extract(bytes, "application/pdf", config);
 
 // TF-IDF style keyword extraction (simplified)
 interface Keyword {
@@ -53,7 +53,7 @@ topKeywords.forEach((kw) => {
 ```
 
 ```typescript title="WASM - Keyword Context Window"
-import init, { extractBytes } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 
@@ -66,7 +66,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extractBytes(bytes, "application/pdf", config);
+const result = await extract(bytes, "application/pdf", config);
 
 interface KeywordContext {
   keyword: string;

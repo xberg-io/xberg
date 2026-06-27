@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-import { registerValidator, ValidationError, type ExtractionResult } from "@xberg/node";
+import { registerValidator, ValidationError, type ExtractionResult } from "@xberg-io/xberg";
 
 class QualityScoreValidator {
   private readonly minScore: number;

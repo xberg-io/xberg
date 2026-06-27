@@ -1,13 +1,14 @@
-import { extractFileSync } from "xberg";
+import { extractSync } from "xberg";
 
 // Test DOCX
-const docxResult = extractFileSync(
-	"/Users/naamanhirschfeld/workspace/xberg-io/xberg/test_documents/docx/fake.docx",
-	undefined,
+const docxOutput = extractSync(
 	{
-		includeDocumentStructure: true,
+		kind: "uri",
+		uri: "/Users/naamanhirschfeld/workspace/xberg-io/xberg/test_documents/docx/fake.docx",
 	},
+	{ includeDocumentStructure: true },
 );
+const docxResult = docxOutput.results[0];
 console.log("=== DOCX Result ===");
 console.log("document:", docxResult.document);
 console.log("typeof document:", typeof docxResult.document);
@@ -17,9 +18,11 @@ console.log(
 );
 
 // Test XLSX
-const xlsxResult = extractFileSync(
-	"/Users/naamanhirschfeld/workspace/xberg-io/xberg/test_documents/xlsx/stanley_cups.xlsx",
-);
+const xlsxOutput = extractSync({
+	kind: "uri",
+	uri: "/Users/naamanhirschfeld/workspace/xberg-io/xberg/test_documents/xlsx/stanley_cups.xlsx",
+});
+const xlsxResult = xlsxOutput.results[0];
 console.log("\n=== XLSX Result ===");
 console.log("metadata.format:", xlsxResult.metadata?.format);
 console.log("typeof format:", typeof xlsxResult.metadata?.format);

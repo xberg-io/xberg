@@ -1,6 +1,6 @@
 ```python title="Python"
 from xberg import (
-    extract_file_sync,
+    extract_sync,
     ExtractionConfig,
     OcrConfig,
     TesseractConfig,
@@ -16,7 +16,7 @@ config: ExtractionConfig = ExtractionConfig(
     ),
 )
 
-result = extract_file_sync("scanned.pdf", config=config)
+result = extract_sync("scanned.pdf", config=config)
 
 content_length: int = len(result.content)
 table_count: int = len(result.tables)

@@ -16,7 +16,7 @@ public class Main {
                     .build())
                 .build();
 
-            ExtractionResult result = Xberg.extractFile("scanned.pdf", config);
+            ExtractionResult result = Xberg.extract("scanned.pdf", config);
             System.out.println(result.getContent());
         } catch (IOException | XbergException e) {
             System.err.println("Extraction failed: " + e.getMessage());

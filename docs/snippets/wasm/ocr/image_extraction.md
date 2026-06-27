@@ -1,11 +1,11 @@
 ```typescript title="WASM"
-import init, { extractBytes } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 
 const imageData = await fetch("document.pdf").then((res) => res.arrayBuffer());
 
-const result = await extractBytes(imageData, "application/pdf", {
+const result = await extract(imageData, "application/pdf", {
   images: {
     extract_images: true,
   },

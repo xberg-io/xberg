@@ -195,7 +195,7 @@ EasyOCR supports the same 80+ languages as PaddleOCR plus additional variants. R
 
 **Selection:** Use `--ocr-language` or config `ocr.languages` with language codes from the EasyOCR documentation.
 
-### Candle TrOCR <span class="version-badge new">v5.0</span>
+### Candle TrOCR
 
 Lightweight line-level text recognition using Microsoft's TrOCR model. **Trained primarily for English.**
 
@@ -227,7 +227,7 @@ Lightweight line-level text recognition using Microsoft's TrOCR model. **Trained
 }
 ```
 
-### Candle GLM-OCR <span class="version-badge new">v5.0</span>
+### Candle GLM-OCR
 
 Multilingual vision-language model (0.9B) for full-page document parsing. Supports text, tables, formulas, and charts with region-aware layout dispatch.
 
@@ -269,7 +269,7 @@ Multilingual vision-language model (0.9B) for full-page document parsing. Suppor
 }
 ```
 
-### Candle PaddleOCR-VL <span class="version-badge new">v5.0</span>
+### Candle PaddleOCR-VL
 
 Lightweight vision-language model for multilingual document parsing. Supports text, tables, formulas, and charts.
 
@@ -311,7 +311,7 @@ Lightweight vision-language model for multilingual document parsing. Supports te
 }
 ```
 
-### Candle DeepSeek-OCR <span class="version-badge new">v5.0</span>
+### Candle DeepSeek-OCR
 
 Vision-language model combining SAM vision encoder, ViT/Qwen2, CLIP, and language decoder. Supports multilingual document parsing.
 
@@ -353,7 +353,7 @@ Vision-language model combining SAM vision encoder, ViT/Qwen2, CLIP, and languag
 }
 ```
 
-### Candle Hunyuan-OCR <span class="version-badge new">v5.0</span>
+### Candle Hunyuan-OCR
 
 Vision-language model for comprehensive document parsing. Supports CJK (Chinese, Japanese, Korean) and Latin scripts with multilingual capabilities.
 
@@ -464,7 +464,7 @@ Use the `language-detection` feature to auto-detect document language, then pass
 from xberg import Client
 
 client = Client()
-result = client.extract_file(
+result = client.extract(
     "document.pdf",
     {
         "language_detection": True,

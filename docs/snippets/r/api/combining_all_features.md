@@ -20,7 +20,7 @@ config_json <- jsonlite::toJSON(list(
 
 config <- ExtractionConfig$from_json(config_json)
 
-json <- extract_file_sync(
+json <- extract_sync(
   path = "scanned_report.pdf",
   mime_type = "application/pdf",
   config = config

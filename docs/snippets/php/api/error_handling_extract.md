@@ -8,7 +8,7 @@ use Xberg\XbergException;
 
 function extract_text(string $bytes, string $mime_type): string {
     $config = new ExtractionConfig();
-    $result = Xberg::extractBytesSync($bytes, $mime_type, $config);
+    $result = Xberg::extractSync($bytes, $mime_type, $config);
     return $result->getContent();
 }
 

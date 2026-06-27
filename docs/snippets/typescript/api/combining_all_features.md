@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-import { extractFileSync } from "xberg";
+import { extractSync } from "xberg";
 
 const config = {
   // OCR: Tesseract on all pages with English text
@@ -27,7 +27,7 @@ const config = {
   enable_quality_processing: true,
 };
 
-const result = extractFileSync("report.pdf", undefined, config);
+const result = extractSync("report.pdf", undefined, config);
 
 console.log(`Content (${result.content.length} chars):`);
 console.log(result.content.slice(0, 200));

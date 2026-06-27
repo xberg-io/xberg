@@ -2,6 +2,6 @@
 library(xberg)
 
 # Extract text from a PDF file
-result <- extract_file_sync("document.pdf")
+result <- extract_sync("document.pdf")
 cat(result$content)
 ```

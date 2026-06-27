@@ -284,8 +284,8 @@ sequenceDiagram
     B->>R: Store as Arc<dyn DocumentExtractor>
 
     Note over R: During extraction...
-    R->>B: extract_file(path, mime, config)
-    B->>P: Call plugin.extract_file()
+    R->>B: extract(path, mime, config)
+    B->>P: Call plugin.extract()
     P-->>B: Return result as dict
     B-->>R: Convert to ExtractionResult
 ```

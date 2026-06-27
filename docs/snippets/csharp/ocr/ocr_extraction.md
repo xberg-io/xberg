@@ -10,7 +10,7 @@ var config = new ExtractionConfig
     }
 };
 
-var result = XbergLib.ExtractFileSync("scanned.pdf", null, config);
+var result = XbergLib.ExtractSync("scanned.pdf", null, config);
 
 string content = result.Content;
 string preview = content.Length > 100 ? content[..100] : content;

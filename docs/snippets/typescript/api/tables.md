@@ -1,7 +1,7 @@
 ```typescript title="TypeScript"
-import { extractFileSync } from "xberg";
+import { extractSync } from "xberg";
 
-const result = extractFileSync("document.pdf");
+const result = extractSync("document.pdf");
 
 result.tables?.forEach((table) => {
   console.log(`Table with ${table.cells?.length ?? 0} rows`);

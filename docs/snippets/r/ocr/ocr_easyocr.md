@@ -7,7 +7,7 @@ config <- list(
   ocr = list(backend = "easyocr", language = "en")
 )
 
-json <- extract_file_sync("document.pdf", "application/pdf", config)
+json <- extract_sync("document.pdf", "application/pdf", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat("EasyOCR extraction:\n")

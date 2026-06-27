@@ -9,7 +9,7 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract_file_sync('multilingual_document.pdf', config: config)
+result = Xberg.extract_sync('multilingual_document.pdf', config: config)
 
 puts "Detected languages: #{result.detected_languages}"
 # Output: ['eng', 'fra', 'deu']

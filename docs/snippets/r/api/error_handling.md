@@ -5,7 +5,7 @@ content <- charToRaw("Hello, world!")
 
 result <- tryCatch(
   {
-    json <- extract_bytes_sync(
+    json <- extract_sync(
       content = content,
       mime_type = "application/x-nonexistent",
       config = ExtractionConfig$default()

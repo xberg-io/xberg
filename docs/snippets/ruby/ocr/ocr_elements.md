@@ -8,7 +8,7 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract_file_sync('scanned.pdf', config: config)
+result = Xberg.extract_sync('scanned.pdf', config: config)
 
 result.ocr_elements&.each do |element|
   puts "Text: #{element.text}"

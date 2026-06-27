@@ -17,7 +17,7 @@ class Program
 
         try
         {
-            var result = await XbergLib.ExtractFileAsync("document.pdf", config);
+            var result = await XbergLib.ExtractAsync("document.pdf", config);
 
             if (result.DetectedLanguages?.Count > 0)
             {

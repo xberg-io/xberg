@@ -39,7 +39,7 @@ public class StructuredExtractionExample {
             .withStructuredExtraction(java.util.Optional.of(structured))
             .build();
 
-        ExtractionResult result = Xberg.extractFile(Path.of("paper.pdf"), config);
+        ExtractionResult result = Xberg.extract(Path.of("paper.pdf"), config);
         System.out.println(result.structuredOutput());
     }
 }

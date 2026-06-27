@@ -20,7 +20,7 @@ ExtractionConfig config = ExtractionConfig.builder()
         .build())
     .build();
 
-ExtractionResult result = Xberg.extractFile("document.pdf", config);
+ExtractionResult result = Xberg.extract("document.pdf", config);
 
 List<Object> chunks = result.getChunks() != null ? result.getChunks() : List.of();
 for (int index = 0; index < chunks.size(); index++) {

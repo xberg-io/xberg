@@ -8,8 +8,8 @@ import io.xberg.DocumentExtractorBridge;
 // helpers, but the InternalDocument return type is referenced from the
 // interface signature without a corresponding generated Java class. Until the
 // alef Java backend emits io.xberg.InternalDocument, custom Java
-// DocumentExtractor implementations cannot return a value from extract_bytes /
-// extract_file.
+// DocumentExtractor implementations cannot return a value from extract /
+// extract.
 //
 // Implement the extractor in Rust as `Plugin + DocumentExtractor` and register
 // it via `register_document_extractor` in a Rust shim crate that links

@@ -13,7 +13,7 @@ fun main() {
         .withTokenReduction(Optional.of(tokenReduction))
         .build()
 
-    val result = Xberg.extractFileSync(Paths.get("verbose_document.pdf"), null, config)
+    val result = Xberg.extractSync(Paths.get("verbose_document.pdf"), null, config)
     println("Reduced content length: ${result.content().length}")
 }
 ```

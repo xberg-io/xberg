@@ -3,7 +3,7 @@
 Register a post-processor that only processes PDF documents and filters others.
 
 ```typescript title="WASM"
-import init, { registerPostProcessor, extractBytes } from "xberg-wasm";
+import init, { registerPostProcessor, extract } from "xberg-wasm";
 
 await init();
 
@@ -63,7 +63,7 @@ const testDocs = [
 ];
 
 for (const doc of testDocs) {
-  const result = await extractBytes(doc.bytes, doc.type, {});
+  const result = await extract(doc.bytes, doc.type, {});
   console.log(`${doc.type}: PDF-specific processing applied:`, result.metadata?.pdfProcessed);
 }
 ```

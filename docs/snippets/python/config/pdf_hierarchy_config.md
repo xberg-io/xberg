@@ -1,5 +1,5 @@
 ```python title="Python"
-from xberg import extract_file_sync, ExtractionConfig, PdfConfig, HierarchyConfig
+from xberg import extract_sync, ExtractionConfig, PdfConfig, HierarchyConfig
 
 config: ExtractionConfig = ExtractionConfig(
     pdf_options=PdfConfig(
@@ -13,7 +13,7 @@ config: ExtractionConfig = ExtractionConfig(
     )
 )
 
-result = extract_file_sync("document.pdf", config=config)
+result = extract_sync("document.pdf", config=config)
 
 # Access hierarchy information
 for page in result.pages or []:

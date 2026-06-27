@@ -8,7 +8,7 @@ config_json = Jason.encode!(%{
   }
 })
 
-{:ok, result} = Xberg.extract_file_sync("encrypted.pdf", "application/pdf", config_json)
+{:ok, result} = Xberg.extract_sync("encrypted.pdf", "application/pdf", config_json)
 IO.puts("Title: #{inspect(result.metadata.title)}")
 IO.puts("Authors: #{inspect(result.metadata.authors)}")
 ```

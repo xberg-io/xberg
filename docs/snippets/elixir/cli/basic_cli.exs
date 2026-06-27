@@ -89,7 +89,7 @@ defmodule XbergCLI do
       IO.puts(:stderr, "Error: File not found: #{file}")
       :error
     else
-      extract_file(file, opts)
+      extract(file, opts)
     end
   end
 
@@ -108,7 +108,7 @@ defmodule XbergCLI do
     :error
   end
 
-  defp extract_file(file_path, opts) do
+  defp extract(file_path, opts) do
     verbose = Map.get(opts, :verbose, false)
     mime_type = Map.get(opts, :mime_type, nil)
     output_path = Map.get(opts, :output, nil)
@@ -118,7 +118,7 @@ defmodule XbergCLI do
     IO.puts("Extracting: #{file_path}")
     start_time = System.monotonic_time(:millisecond)
 
-    case Xberg.extract_file(file_path, mime_type, config) do
+    case Xberg.extract(file_path, mime_type, config) do
       {:ok, result} ->
         elapsed = System.monotonic_time(:millisecond) - start_time
 
@@ -158,7 +158,7 @@ defmodule XbergCLI do
             IO.write("  [#{idx}/#{length(files)}] ")
             start_time = System.monotonic_time(:millisecond)
 
-            case Xberg.extract_file(file, nil, config) do
+            case Xberg.extract(file, nil, config) do
               {:ok, result} ->
                 elapsed = System.monotonic_time(:millisecond) - start_time
                 IO.puts("#{Path.basename(file)} (#{elapsed}ms)")

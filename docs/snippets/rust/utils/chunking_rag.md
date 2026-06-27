@@ -1,6 +1,6 @@
 ```rust title="Rust"
 use xberg::{
-    extract_file, ChunkingConfig, EmbeddingConfig, EmbeddingModelType, ExtractionConfig,
+    extract, ChunkingConfig, EmbeddingConfig, EmbeddingModelType, ExtractionConfig,
 };
 
 #[tokio::main]
@@ -20,7 +20,7 @@ async fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract_file("research_paper.pdf", None, &config).await?;
+    let result = extract("research_paper.pdf", None, &config).await?;
 
     let mut chunks_with_embeddings = 0usize;
     for chunk in result.chunks.unwrap_or_default() {

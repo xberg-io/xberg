@@ -12,7 +12,7 @@ try
     await dockerClient.StartContainerAsync();
     await Task.Delay(2000);
 
-    var content = await dockerClient.ExtractFileAsync("document.pdf");
+    var content = await dockerClient.ExtractAsync("document.pdf");
     Console.WriteLine($"Extracted content:\n{content}");
 }
 finally
@@ -46,7 +46,7 @@ class DockerXbergLib
         Console.WriteLine($"Container started on http://localhost:{ApiPort}");
     }
 
-    public async Task<string> ExtractFileAsync(string filePath)
+    public async Task<string> ExtractAsync(string filePath)
     {
         using (var client = new HttpClient())
         {

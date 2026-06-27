@@ -5,7 +5,7 @@ config = Xberg::ExtractionConfig.new(
   enable_quality_processing: true
 )
 
-result = Xberg.extract_file_sync('scanned_document.pdf', config: config)
+result = Xberg.extract_sync('scanned_document.pdf', config: config)
 
 quality_score = result.quality_score || 0.0
 

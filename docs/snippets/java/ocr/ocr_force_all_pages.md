@@ -11,6 +11,6 @@ ExtractionConfig config = ExtractionConfig.builder()
     .forceOcr(true)
     .build();
 
-ExtractionResult result = Xberg.extractFile("document.pdf", config);
+ExtractionResult result = Xberg.extract("document.pdf", config);
 System.out.println(result.getContent());
 ```

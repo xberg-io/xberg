@@ -2,7 +2,7 @@
 from xberg import (
     ExtractionResult,
     ValidationError,
-    extract_file_sync,
+    extract_sync,
     register_validator,
 )
 
@@ -29,6 +29,6 @@ class MinLengthValidator:
 validator: MinLengthValidator = MinLengthValidator()
 register_validator(validator)
 
-result = extract_file_sync("document.pdf")
+result = extract_sync("document.pdf")
 print(f"Content length: {len(result.content)}")
 ```

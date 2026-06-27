@@ -3,7 +3,7 @@ library(xberg)
 
 config <- ExtractionConfig$default()
 
-json <- extract_file_sync(
+json <- extract_sync(
   path = "document.pdf",
   mime_type = NULL,
   config = config

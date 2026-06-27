@@ -18,7 +18,7 @@ pub fn main() !void {
     try child.spawn();
 
     const request =
-        \\{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"extract_file","arguments":{"path":"document.pdf"}}}
+        \\{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"extract","arguments":{"path":"document.pdf"}}}
         ++ "\n";
 
     if (child.stdin) |stdin| {

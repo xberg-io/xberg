@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-import { extractFile } from "@xberg/node";
+import { extract } from "@xberg-io/xberg";
 
 interface VectorRecord {
   id: string;
@@ -24,7 +24,7 @@ async function extractAndVectorize(
     },
   };
 
-  const result = await extractFile(documentPath, null, config);
+  const result = await extract(documentPath, null, config);
 
   const records: VectorRecord[] = [];
   for (const [index, chunk] of (result.chunks ?? []).entries()) {

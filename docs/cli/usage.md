@@ -419,14 +419,13 @@ xberg cache stats
 | Flag                              | Description                                                                                                                  |
 | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `--ocr <true\|false>`             | Enable or disable OCR. Defaults to tesseract backend when enabled.                                                           |
-| `--ocr-backend <BACKEND>`         | OCR backend: `tesseract`, `paddle-ocr`, `easyocr`, `candle-trocr`, `candle-paddleocr-vl`, `candle-paddleocr-vl-15`, `candle-glm-ocr`, `candle-hunyuan-ocr`, `candle-deepseek-ocr`, or `vlm`.                                  |
-| `--ocr-language <LANG>`           | OCR language code. Tesseract uses ISO 639-3 (`eng`, `fra`, `deu`). PaddleOCR/EasyOCR use short codes (`en`, `ch`, `korean`). |
+| `--ocr-backend <BACKEND>`         | OCR backend: `tesseract`, `paddle-ocr`, `easyocr`, `candle-trocr`, `candle-paddleocr-vl`, `candle-paddleocr-vl-15`, `candle-glm-ocr`, `candle-hunyuan-ocr`, `candle-deepseek-ocr`, or `vlm`. |
+| `--ocr-language <LANG>` | OCR language code. Tesseract uses ISO 639-3 (`eng`, `fra`, `deu`). PaddleOCR/EasyOCR use short codes (`en`, `ch`, `korean`). |
 | `--force-ocr <true\|false>`       | Force OCR even if the document has an existing text layer.                                                                   |
 | `--ocr-auto-rotate <true\|false>` | Automatically rotate images before OCR based on detected orientation.                                                        |
-| `--disable-ocr <true\|false>`     | Disable OCR entirely, even for images.                                                                                       |
+| `--disable-ocr <true\|false>` | Disable OCR entirely, even for images. |
 
-!!! Info "Added in v5.0.0-rc.18"
-    Candle-based backends (`candle-trocr`, `candle-paddleocr-vl`, `candle-paddleocr-vl-15`, `candle-glm-ocr`, `candle-hunyuan-ocr`, `candle-deepseek-ocr`) are pure-Rust VLM and vision-transformer OCR engines. No ONNX Runtime required; GPU-accelerated on Metal (macOS) and CUDA (Linux).
+Candle-based backends (`candle-trocr`, `candle-paddleocr-vl`, `candle-paddleocr-vl-15`, `candle-glm-ocr`, `candle-hunyuan-ocr`, `candle-deepseek-ocr`) are pure-Rust VLM and vision-transformer OCR engines. No ONNX Runtime required; GPU-accelerated on Metal (macOS) and CUDA (Linux).
 
 ```bash title="Terminal"
 xberg extract scanned.pdf --ocr true --ocr-backend paddle-ocr --ocr-language ch
@@ -826,9 +825,9 @@ xberg mcp --config xberg.toml --transport stdio
 
 The MCP server provides tools for AI agents:
 
-- `extract_file` - Extract text from a file path
-- `extract_bytes` - Extract text from base64-encoded bytes
-- `batch_extract` - Extract from multiple files
+- `extract` - Extract text from a file path
+- `extract` - Extract text from base64-encoded bytes
+- `extract_batch` - Extract from multiple files
 
 See [API Server Guide](../guides/api-server.md) for MCP integration details.
 

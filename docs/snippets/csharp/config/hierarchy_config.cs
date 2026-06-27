@@ -27,7 +27,7 @@ public class HierarchyConfigExample
         };
 
         var xberg = new Xberg(extractionConfigBasic);
-        // var result = xberg.ExtractFileSync("document.pdf");
+        // var result = xberg.ExtractSync("document.pdf");
 
 
         // Example 2: Custom KClusters for minimal structure

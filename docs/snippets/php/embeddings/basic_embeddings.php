@@ -29,7 +29,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('document.pdf');
+$result = $xberg->extract('document.pdf');
 
 echo "Embedding Generation Results:\n";
 echo str_repeat('=', 60) . "\n";
@@ -68,7 +68,7 @@ foreach ($models as $model) {
 
     $xberg = new Xberg($config);
     $start = microtime(true);
-    $result = $xberg->extractFile('test_doc.pdf');
+    $result = $xberg->extract('test_doc.pdf');
     $elapsed = microtime(true) - $start;
 
     $chunk = ($result->chunks ?? [])[0] ?? null;
@@ -100,7 +100,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('document.pdf');
+$result = $xberg->extract('document.pdf');
 
 echo "Chunk Similarity Analysis:\n";
 echo str_repeat('=', 60) . "\n";
@@ -175,7 +175,7 @@ $files = ['doc1.pdf', 'doc2.pdf', 'doc3.pdf'];
 foreach ($files as $file) {
     if (!file_exists($file)) continue;
 
-    $result = $xberg->extractFile($file);
+    $result = $xberg->extract($file);
 
     foreach ($result->chunks ?? [] as $chunk) {
         if ($chunk->embedding) {
@@ -194,7 +194,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('export_doc.pdf');
+$result = $xberg->extract('export_doc.pdf');
 
 $exportData = [];
 foreach ($result->chunks ?? [] as $chunk) {

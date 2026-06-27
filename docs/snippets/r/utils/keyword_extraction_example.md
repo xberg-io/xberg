@@ -9,7 +9,7 @@ config <- list(
   )
 )
 
-json <- extract_file_sync("research_paper.pdf", "application/pdf", config)
+json <- extract_sync("research_paper.pdf", "application/pdf", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Content length: %d characters\n", nchar(result$content)))

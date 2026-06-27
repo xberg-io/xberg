@@ -22,7 +22,7 @@ config <- list(
   )
 )
 
-json <- extract_file_sync("paper.pdf", "application/pdf", config)
+json <- extract_sync("paper.pdf", "application/pdf", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(result$structured_output, "\n")

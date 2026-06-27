@@ -15,7 +15,7 @@ fun main() {
     val stdout = BufferedReader(InputStreamReader(process.inputStream))
 
     val request = """
-        {"method":"tools/call","params":{"name":"extract_file","arguments":{"path":"document.pdf","async":true}}}
+        {"method":"tools/call","params":{"name":"extract","arguments":{"path":"document.pdf","async":true}}}
     """.trimIndent()
 
     stdin.write(request)

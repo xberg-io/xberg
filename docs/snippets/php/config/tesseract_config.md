@@ -18,7 +18,7 @@ $config = new ExtractionConfig(
     )
 );
 
-$result = Xberg::extractFileSync('scanned.pdf', null, $config);
+$result = Xberg::extractSync('scanned.pdf', null, $config);
 
 echo "OCR text: " . substr($result->getContent(), 0, 100) . "...\n";
 ?>

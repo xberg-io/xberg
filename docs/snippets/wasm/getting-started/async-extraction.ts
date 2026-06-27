@@ -1,4 +1,4 @@
-import { extractBytes, getWasmCapabilities, initWasm } from "@xberg/wasm";
+import { extract, getWasmCapabilities, initWasm } from "@xberg-io/xberg-wasm";
 
 async function extractDocuments(files: Uint8Array[], mimeTypes: string[]) {
   const caps = getWasmCapabilities();
@@ -9,7 +9,7 @@ async function extractDocuments(files: Uint8Array[], mimeTypes: string[]) {
   await initWasm();
 
   const results = await Promise.all(
-    files.map((bytes, index) => extractBytes(bytes, mimeTypes[index])),
+    files.map((bytes, index) => extract(bytes, mimeTypes[index])),
   );
 
   return results.map((r) => ({

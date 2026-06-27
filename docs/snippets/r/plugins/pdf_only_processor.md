@@ -14,7 +14,7 @@ pdf_only_processor <- function(result) {
 register_post_processor("pdf_only", pdf_only_processor)
 
 config <- list(postprocessor = list(enabled = TRUE))
-json <- extract_file_sync("document.pdf", "application/pdf", config)
+json <- extract_sync("document.pdf", "application/pdf", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Processed PDF: %d characters\n", nchar(result$content)))

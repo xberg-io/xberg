@@ -14,5 +14,5 @@ ExtractionConfig config = ExtractionConfig.builder()
         .build())
     .build();
 
-ExtractionResult result = Xberg.extractFile("scanned.pdf", config);
+ExtractionResult result = Xberg.extract("scanned.pdf", config);
 ```

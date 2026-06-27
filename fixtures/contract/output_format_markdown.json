@@ -1,33 +1,39 @@
 {
 	"id": "output_format_markdown",
 	"description": "Tests Markdown output format",
-	"tags": ["contract", "output_format"],
-	"call": "extract_file_sync",
+	"tags": [
+		"contract",
+		"output_format"
+	],
+	"call": "extract",
 	"input": {
-		"path": "pdf/fake_memo.pdf",
-		"config": {
-			"output_format": "markdown"
-		}
+		"kind": "uri",
+		"uri": "pdf/fake_memo.pdf"
 	},
 	"assertions": [
 		{
 			"type": "equals",
-			"field": "mime_type",
+			"field": "results.0.mime_type",
 			"value": "application/pdf"
 		},
 		{
 			"type": "min_length",
-			"field": "content",
+			"field": "results.0.content",
 			"value": 10
 		},
 		{
 			"type": "equals",
-			"field": "metadata.output_format",
+			"field": "results.0.metadata.output_format",
 			"value": "markdown"
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
-		"reason": "WASM cannot access filesystem; use extractBytes with file content instead"
+		"languages": [
+			"wasm"
+		],
+		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
+	},
+	"config": {
+		"output_format": "markdown"
 	}
 }

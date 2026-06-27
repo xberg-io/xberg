@@ -4,14 +4,12 @@
 
 use rmcp::schemars;
 #[cfg_attr(alef, alef(skip))]
-/// Request parameters for file extraction.
+/// Request parameters for unified extraction.
 #[derive(Debug, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
-pub struct ExtractFileParams {
-    /// Path to the file to extract
-    pub path: String,
-    /// Optional MIME type hint (auto-detected if not provided)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub mime_type: Option<String>,
+pub struct ExtractParams {
+    /// Unified extraction input: bytes or URI.
+    #[schemars(schema_with = "extract_input_schema")]
+    pub input: serde_json::Value,
     /// Extraction configuration (JSON object)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config: Option<serde_json::Value>,
@@ -23,41 +21,18 @@ pub struct ExtractFileParams {
     pub response_format: Option<String>,
 }
 #[cfg_attr(alef, alef(skip))]
-/// Request parameters for bytes extraction.
+/// Request parameters for unified batch extraction.
 #[derive(Debug, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
-pub struct ExtractBytesParams {
-    /// Base64-encoded file content
-    pub data: String,
-    /// Optional MIME type hint (auto-detected if not provided)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub mime_type: Option<String>,
+pub struct ExtractBatchParams {
+    /// Unified extraction inputs: bytes and/or URIs.
+    #[schemars(schema_with = "extract_inputs_schema")]
+    pub inputs: Vec<serde_json::Value>,
     /// Extraction configuration (JSON object)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config: Option<serde_json::Value>,
     /// Password for encrypted PDFs
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pdf_password: Option<String>,
-    /// Wire format for the response: "json" (default) or "toon"
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub response_format: Option<String>,
-}
-#[cfg_attr(alef, alef(skip))]
-/// Request parameters for batch file extraction.
-#[derive(Debug, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
-pub struct BatchExtractFilesParams {
-    /// Paths to files to extract
-    pub paths: Vec<String>,
-    /// Extraction configuration (JSON object)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub config: Option<serde_json::Value>,
-    /// Password for encrypted PDFs
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pdf_password: Option<String>,
-    /// Per-file extraction configuration overrides (parallel array to paths).
-    /// Each entry is either null (use default) or a FileExtractionConfig JSON object.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[schemars(schema_with = "file_configs_schema")]
-    pub file_configs: Option<Vec<Option<serde_json::Value>>>,
     /// Wire format for the response: "json" (default) or "toon"
     #[serde(skip_serializing_if = "Option::is_none")]
     pub response_format: Option<String>,
@@ -181,18 +156,47 @@ pub struct ChunkTextParams {
     pub topic_threshold: Option<f32>,
 }
 
-// Emits `{"type":"array","items":{"anyOf":[{"type":"null"},{"type":"object"}]}}` instead
-// of the default `{"type":"array","items":true}` that schemars derives for Vec<Option<Value>>.
-// `items: true` is valid JSON Schema 2019-09+ but Moonshot AI rejects it (issue #877).
-fn file_configs_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+fn extract_input_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    schemars::json_schema!({
+        "type": "object",
+        "required": ["kind"],
+        "additionalProperties": false,
+        "properties": {
+            "kind": {
+                "type": "string",
+                "enum": ["bytes", "uri"],
+                "description": "Input source kind."
+            },
+            "bytes": {
+                "type": "array",
+                "items": { "type": "integer", "minimum": 0, "maximum": 255 },
+                "description": "Raw bytes for kind=bytes."
+            },
+            "uri": {
+                "type": "string",
+                "description": "Local path, file:// URI, or HTTP(S) URL for kind=uri."
+            },
+            "mime_type": {
+                "type": "string",
+                "description": "Optional MIME type hint."
+            },
+            "filename": {
+                "type": "string",
+                "description": "Optional filename hint for bytes inputs."
+            },
+            "config": {
+                "type": "object",
+                "description": "Optional per-input extraction overrides."
+            }
+        }
+    })
+}
+
+fn extract_inputs_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    let input_schema = extract_input_schema(generator);
     schemars::json_schema!({
         "type": "array",
-        "items": {
-            "anyOf": [
-                {"type": "null"},
-                {"type": "object"}
-            ]
-        }
+        "items": input_schema
     })
 }
 
@@ -232,31 +236,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_extract_file_params_defaults() {
-        let json = r#"{"path": "/test.pdf"}"#;
-        let params: ExtractFileParams = serde_json::from_str(json).unwrap();
+    fn test_extract_params_defaults() {
+        let json = r#"{"input": {"kind": "uri", "uri": "/test.pdf"}}"#;
+        let params: ExtractParams = serde_json::from_str(json).unwrap();
 
-        assert_eq!(params.path, "/test.pdf");
-        assert_eq!(params.mime_type, None);
+        assert_eq!(params.input["uri"], "/test.pdf");
         assert_eq!(params.config, None);
     }
 
     #[test]
-    fn test_extract_bytes_params_defaults() {
-        let json = r#"{"data": "SGVsbG8="}"#;
-        let params: ExtractBytesParams = serde_json::from_str(json).unwrap();
+    fn test_extract_params_accepts_bytes_input() {
+        let json = r#"{"input": {"kind": "bytes", "bytes": [72, 105], "mime_type": "text/plain"}}"#;
+        let params: ExtractParams = serde_json::from_str(json).unwrap();
 
-        assert_eq!(params.data, "SGVsbG8=");
-        assert_eq!(params.mime_type, None);
+        assert_eq!(params.input["kind"], "bytes");
         assert_eq!(params.config, None);
     }
 
     #[test]
-    fn test_batch_extract_files_params_defaults() {
-        let json = r#"{"paths": ["/a.pdf", "/b.pdf"]}"#;
-        let params: BatchExtractFilesParams = serde_json::from_str(json).unwrap();
+    fn test_extract_batch_params_defaults() {
+        let json = r#"{"inputs": [{"kind": "uri", "uri": "/a.pdf"}, {"kind": "uri", "uri": "/b.pdf"}]}"#;
+        let params: ExtractBatchParams = serde_json::from_str(json).unwrap();
 
-        assert_eq!(params.paths.len(), 2);
+        assert_eq!(params.inputs.len(), 2);
         assert_eq!(params.config, None);
     }
 
@@ -278,62 +280,50 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_file_params_with_config() {
-        let json = r#"{"path": "/test.pdf", "config": {"use_cache": false}}"#;
-        let params: ExtractFileParams = serde_json::from_str(json).unwrap();
+    fn test_extract_params_with_config() {
+        let json = r#"{"input": {"kind": "uri", "uri": "/test.pdf"}, "config": {"use_cache": false}}"#;
+        let params: ExtractParams = serde_json::from_str(json).unwrap();
 
-        assert_eq!(params.path, "/test.pdf");
+        assert_eq!(params.input["uri"], "/test.pdf");
         assert!(params.config.is_some());
     }
 
     #[test]
-    fn test_extract_file_params_serialization() {
-        let params = ExtractFileParams {
-            path: "/test.pdf".to_string(),
-            mime_type: Some("application/pdf".to_string()),
+    fn test_extract_params_serialization() {
+        let params = ExtractParams {
+            input: serde_json::json!({
+                "kind": "uri",
+                "uri": "/test.pdf",
+                "mime_type": "application/pdf"
+            }),
             config: Some(serde_json::json!({"use_cache": false})),
             pdf_password: None,
             response_format: None,
         };
 
         let json = serde_json::to_string(&params).unwrap();
-        let deserialized: ExtractFileParams = serde_json::from_str(&json).unwrap();
+        let deserialized: ExtractParams = serde_json::from_str(&json).unwrap();
 
-        assert_eq!(params.path, deserialized.path);
-        assert_eq!(params.mime_type, deserialized.mime_type);
+        assert_eq!(params.input, deserialized.input);
         assert_eq!(params.config, deserialized.config);
     }
 
     #[test]
-    fn test_extract_bytes_params_serialization() {
-        let params = ExtractBytesParams {
-            data: "SGVsbG8=".to_string(),
-            mime_type: None,
-            config: None,
-            pdf_password: None,
-            response_format: None,
-        };
-
-        let json = serde_json::to_string(&params).unwrap();
-        let deserialized: ExtractBytesParams = serde_json::from_str(&json).unwrap();
-
-        assert_eq!(params.data, deserialized.data);
-    }
-
-    #[test]
-    fn test_batch_extract_params_serialization() {
-        let params = BatchExtractFilesParams {
-            paths: vec!["/a.pdf".to_string(), "/b.pdf".to_string()],
+    fn test_extract_batch_params_serialization() {
+        let params = ExtractBatchParams {
+            inputs: vec![
+                serde_json::json!({"kind": "uri", "uri": "/a.pdf"}),
+                serde_json::json!({"kind": "uri", "uri": "/b.pdf"}),
+            ],
             config: Some(serde_json::json!({"use_cache": true})),
             pdf_password: None,
-            file_configs: None,
             response_format: None,
         };
 
         let json = serde_json::to_string(&params).unwrap();
-        let deserialized: BatchExtractFilesParams = serde_json::from_str(&json).unwrap();
+        let deserialized: ExtractBatchParams = serde_json::from_str(&json).unwrap();
 
-        assert_eq!(params.paths, deserialized.paths);
+        assert_eq!(params.inputs, deserialized.inputs);
         assert_eq!(params.config, deserialized.config);
     }
 

@@ -24,7 +24,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('long_document.pdf');
+$result = $xberg->extract('long_document.pdf');
 
 echo "Document Chunking Results:\n";
 echo str_repeat('=', 60) . "\n";
@@ -54,7 +54,7 @@ foreach ($sizes as $name => $size) {
     );
 
     $xberg = new Xberg($config);
-    $result = $xberg->extractFile('document.pdf');
+    $result = $xberg->extract('document.pdf');
 
     echo "$name chunks:\n";
     echo "  Total: " . count($result->chunks ?? []) . "\n";
@@ -76,7 +76,7 @@ $sentenceConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($sentenceConfig);
-$result = $xberg->extractFile('article.pdf');
+$result = $xberg->extract('article.pdf');
 
 echo "Sentence-respecting chunks:\n";
 echo str_repeat('=', 60) . "\n";
@@ -98,7 +98,7 @@ $paragraphConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($paragraphConfig);
-$result = $xberg->extractFile('essay.pdf');
+$result = $xberg->extract('essay.pdf');
 
 echo "Paragraph-respecting chunks:\n";
 echo str_repeat('=', 60) . "\n";
@@ -118,7 +118,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('knowledge_base.pdf');
+$result = $xberg->extract('knowledge_base.pdf');
 
 $chunksForDb = [];
 foreach ($result->chunks ?? [] as $chunk) {

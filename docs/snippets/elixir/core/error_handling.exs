@@ -1,6 +1,6 @@
 ```elixir title="Elixir"
 # Example: Handling extraction errors
-case Xberg.extract_file("document.pdf") do
+case Xberg.extract("document.pdf") do
   {:ok, result} ->
     IO.puts("Successfully extracted content")
     IO.puts("Content length: #{byte_size(result.content)} characters")
@@ -10,7 +10,7 @@ case Xberg.extract_file("document.pdf") do
 end
 
 # Example: Handling with custom error message
-result = Xberg.extract_file("nonexistent.pdf")
+result = Xberg.extract("nonexistent.pdf")
 
 case result do
   {:ok, data} ->

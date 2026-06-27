@@ -6,13 +6,12 @@
 //! # Quick Start
 //!
 //! ```rust,no_run
-//! use xberg::{extract_file_sync, ExtractionConfig};
+//! use xberg::{extract, ExtractInput, ExtractionConfig};
 //!
-//! # fn main() -> xberg::Result<()> {
-//! // Extract content from a file
+//! # async fn run() -> xberg::Result<()> {
 //! let config = ExtractionConfig::default();
-//! let result = extract_file_sync("document.pdf", None, &config)?;
-//! println!("Extracted: {}", result.content);
+//! let output = extract(ExtractInput::uri("document.pdf"), &config).await?;
+//! println!("Extracted: {}", output.results[0].content);
 //! # Ok(())
 //! # }
 //! ```
@@ -195,24 +194,20 @@ pub use types::*;
 #[cfg(feature = "office")]
 pub use extraction::office_metadata::{CoreProperties, DocxAppProperties};
 
-// ── Extraction — public API (8 functions) ────────────────────────────────────
+// ── Extraction — public API ──────────────────────────────────────────────────
+pub use core::extractor::{extract, extract_batch};
 #[cfg(feature = "tokio-runtime")]
-pub use core::extractor::{batch_extract_bytes, batch_extract_files};
-pub use core::extractor::{extract_bytes, extract_file};
-
-pub use core::extractor::{batch_extract_bytes_sync, extract_bytes_sync};
-
-#[cfg(feature = "tokio-runtime")]
-pub use core::extractor::{batch_extract_files_sync, extract_file_sync};
+pub use core::extractor::{extract_batch_sync, extract_sync};
 
 // ── Extraction config types ───────────────────────────────────────────────────
 pub use core::config::{
-    AccelerationConfig, BatchBytesItem, BatchFileItem, CallMode, CaptioningConfig, ChunkSizing, ChunkerType,
-    ChunkingConfig, ContentFilterConfig, EmailConfig, EmbeddingConfig, EmbeddingModelType, ExecutionProviderType,
-    ExtractionConfig, FileExtractionConfig, ImageExtractionConfig, LanguageDetectionConfig, LlmConfig, MergeMode,
-    NerBackendKind, NerConfig, OcrConfig, OutputFormat, PageClassificationConfig, PageConfig, PostProcessorConfig,
-    RedactionConfig, RedactionPattern, RedactionTerm, RerankerConfig, RerankerModelType, StructuredExtractionConfig,
-    SummarizationConfig, TableChunkingMode, TokenReductionOptions, TranslationConfig,
+    AccelerationConfig, CallMode, CaptioningConfig, ChunkSizing, ChunkerType, ChunkingConfig, ContentFilterConfig,
+    EmailConfig, EmbeddingConfig, EmbeddingModelType, ExecutionProviderType, ExtractInput, ExtractInputKind,
+    ExtractionConfig, ExtractionErrorItem, ExtractionOutput, ExtractionSummary, FileExtractionConfig,
+    ImageExtractionConfig, LanguageDetectionConfig, LlmConfig, MergeMode, NerBackendKind, NerConfig, OcrConfig,
+    OutputFormat, PageClassificationConfig, PageConfig, PostProcessorConfig, RedactionConfig, RedactionPattern,
+    RedactionTerm, RerankerConfig, RerankerModelType, StructuredExtractionConfig, SummarizationConfig,
+    TableChunkingMode, TokenReductionOptions, TranslationConfig, UrlExtractionConfig, UrlExtractionMode,
 };
 #[cfg(feature = "transcription-types")]
 pub use core::config::{TranscriptionConfig, WhisperModel};

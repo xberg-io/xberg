@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-import { extractFileSync } from "@xberg/node";
+import { extractSync } from "@xberg-io/xberg";
 
 const config = {
   structuredExtraction: {
@@ -20,6 +20,6 @@ const config = {
   },
 };
 
-const result = extractFileSync("paper.pdf", null, config);
+const result = extractSync("paper.pdf", null, config);
 console.log(result.structuredOutput);
 ```

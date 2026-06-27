@@ -1,4 +1,4 @@
-import { extractBytes, initWasm } from "@xberg/wasm";
+import { extract, initWasm } from "@xberg-io/xberg-wasm";
 
 async function detectAndExtract(bytes: Uint8Array) {
   await initWasm();
@@ -20,7 +20,7 @@ async function detectAndExtract(bytes: Uint8Array) {
 
   console.log("Detected MIME type:", mimeType);
 
-  const result = await extractBytes(bytes, mimeType);
+  const result = await extract(bytes, mimeType);
   return result;
 }
 

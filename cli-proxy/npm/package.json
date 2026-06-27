@@ -1,5 +1,5 @@
 {
-	"name": "@xberg/xberg-cli",
+	"name": "@xberg-io/xberg-cli",
 	"version": "0.0.1",
 	"description": "CLI proxy for xberg — downloads and runs the native xberg binary from GitHub releases.",
 	"license": "MIT",

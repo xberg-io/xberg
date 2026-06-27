@@ -10,7 +10,7 @@ var config = new ExtractionConfig
     }
 };
 
-var result = XbergLib.ExtractFileSync("multilingual.pdf", null, config);
+var result = XbergLib.ExtractSync("multilingual.pdf", null, config);
 
 string content = result.Content;
 string preview = content.Length > 100 ? content[..100] : content;

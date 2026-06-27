@@ -2,13 +2,19 @@
 	"id": "extractors_list",
 	"category": "document_extractor_management",
 	"description": "List all registered document extractors",
-	"tags": ["extractors", "plugin_management", "list"],
+	"tags": [
+		"extractors",
+		"plugin_management",
+		"list"
+	],
 	"call": "list_document_extractors",
 	"input": {
 		"setup": {
 			"lazy_init_required": {
-				"languages": ["go"],
-				"init_action": "extract_file_sync",
+				"languages": [
+					"go"
+				],
+				"init_action": "extract",
 				"init_data": {
 					"create_temp_file": true,
 					"temp_file_name": "test.pdf",

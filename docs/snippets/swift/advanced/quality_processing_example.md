@@ -10,7 +10,7 @@ let configJson = """
 """
 
 let config = try extractionConfigFromJson(configJson)
-let result = try extractFileSync("scanned_document.pdf", nil, config)
+let result = try extractSync("scanned_document.pdf", nil, config)
 
 if let score = result.quality_score() {
     if score < 0.5 {

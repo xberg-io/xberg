@@ -1,5 +1,5 @@
-import type { ExtractionResult } from "@xberg/wasm";
-import { extractBytes, initWasm } from "@xberg/wasm";
+import type { ExtractionResult } from "@xberg-io/xberg-wasm";
+import { extract, initWasm } from "@xberg-io/xberg-wasm";
 
 class ExtractionCache {
   private cache = new Map<string, ExtractionResult>();
@@ -29,7 +29,7 @@ class ExtractionCache {
 
     console.log("Cache miss for", file.name);
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const result = await extractBytes(bytes, file.type);
+    const result = await extract(bytes, file.type);
 
     this.cache.set(hash, result);
     return result;

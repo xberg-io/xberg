@@ -15,7 +15,7 @@ $config = new ExtractionConfig(
     )
 );
 
-$result = Xberg::extractFileSync('document.pdf', null, $config);
+$result = Xberg::extractSync('document.pdf', null, $config);
 
 if ($result->getKeywords()) {
     foreach ($result->getKeywords() as $keyword) {

@@ -10,7 +10,7 @@ import java.util.List;
 public class Main {
     public static void main(String[] args) {
         try {
-            ExtractionResult result = Xberg.extractFileSync("document.pdf");
+            ExtractionResult result = Xberg.extractSync("document.pdf");
 
             // Metadata is flat — format-specific fields are at the top level
             Metadata metadata = result.getMetadata();
@@ -24,7 +24,7 @@ public class Main {
             }
 
             // Access HTML metadata
-            ExtractionResult htmlResult = Xberg.extractFileSync("page.html");
+            ExtractionResult htmlResult = Xberg.extractSync("page.html");
             Metadata htmlMeta = htmlResult.getMetadata();
             htmlMeta.getTitle().ifPresent(t -> System.out.println("Title: " + t));
 

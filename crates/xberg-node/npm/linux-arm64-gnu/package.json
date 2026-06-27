@@ -1,5 +1,5 @@
 {
-  "name": "@xberg/node-linux-arm64-gnu",
+  "name": "@xberg-io/xberg-linux-arm64-gnu",
   "version": "1.0.0-rc.1",
   "license": "MIT",
   "repository": {

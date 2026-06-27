@@ -1,11 +1,11 @@
 ```python title="Python"
-from xberg import extract_file_sync, ExtractionConfig, OcrConfig
+from xberg import extract_sync, ExtractionConfig, OcrConfig
 
 config: ExtractionConfig = ExtractionConfig(
     ocr=OcrConfig(backend="tesseract", language="eng+deu+fra")
 )
 
-result = extract_file_sync("multilingual.pdf", config=config)
+result = extract_sync("multilingual.pdf", config=config)
 
 content: str = result.content
 preview: str = content[:100]

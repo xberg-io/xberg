@@ -6,7 +6,7 @@ config <- list(
   pages = list(extract_pages = TRUE)
 )
 
-json <- extract_file_sync("document.pdf", "application/pdf", config)
+json <- extract_sync("document.pdf", "application/pdf", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 for (i in seq_along(result$chunks)) {

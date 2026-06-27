@@ -2,7 +2,11 @@
 	"id": "list_reranker_backends",
 	"category": "reranker_backend_management",
 	"description": "List all registered reranker backends",
-	"tags": ["reranker", "plugin_management", "list"],
+	"tags": [
+		"reranker",
+		"plugin_management",
+		"list"
+	],
 	"call": "list_reranker_backends",
 	"assertions": [
 		{

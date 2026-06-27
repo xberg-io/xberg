@@ -10,7 +10,7 @@
  */
 
 import * as readline from "node:readline";
-import { batchExtractFiles, type ExtractionConfig, extractFile } from "@xberg/node";
+import { batchExtractFiles, type ExtractionConfig, extractFile } from "@xberg-io/xberg";
 
 interface ExtractionOutput {
 	content: string;

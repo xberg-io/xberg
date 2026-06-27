@@ -2,8 +2,14 @@
 	"id": "list_post_processors",
 	"category": "registry",
 	"description": "List post-processors",
-	"tags": ["registry"],
+	"tags": [
+		"registry"
+	],
 	"call": "list_post_processors",
 	"input": {},
-	"assertions": [{ "type": "not_error" }]
+	"assertions": [
+		{
+			"type": "not_error"
+		}
+	]
 }

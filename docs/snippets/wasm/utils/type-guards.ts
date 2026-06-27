@@ -1,4 +1,4 @@
-import type { Chunk, ExtractedImage, ExtractionResult, Table } from "@xberg/wasm";
+import type { Chunk, ExtractedImage, ExtractionResult, Table } from "@xberg-io/xberg-wasm";
 
 function _isTable(obj: unknown): obj is Table {
   if (!obj || typeof obj !== "object") return false;

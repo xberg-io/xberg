@@ -12,7 +12,7 @@ This document covers all XBERG\_\* environment variables for version 4.3.8.
 
 Environment variables are ideal for:
 
-- **Container/Cloud Deployments**: Docker, Kubernetes, serverless environments where config files are impractical
+- **Container/Cloud Deployments**: Docker, serverless, and orchestrated environments where config files are impractical
 - **CI/CD Pipelines**: Override settings per environment (dev, staging, production)
 - **Simple Overrides**: Changing one or two settings without managing a config file
 - **Secrets Management**: Using secret management systems that inject values as env vars
@@ -744,41 +744,19 @@ fi
 xberg
 ```
 
-### Kubernetes ConfigMap
+### Container Environment Block
 
-```yaml title="Kubernetes ConfigMap and Pod Configuration"
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: xberg-config
-data:
+```yaml title="container-env.yaml"
+environment:
   XBERG_HOST: "0.0.0.0"
   XBERG_PORT: "8000"
   XBERG_CORS_ORIGINS: "https://api.example.com"
   XBERG_CACHE_DIR: "/data/cache"
   XBERG_OCR_BACKEND: "tesseract"
   XBERG_TOKEN_REDUCTION_MODE: "moderate"
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: xberg-server
-spec:
-  containers:
-    - name: xberg
-      image: xberg:latest
-      ports:
-        - containerPort: 8000
-      envFrom:
-        - configMapRef:
-            name: xberg-config
-      volumeMounts:
-        - name: cache
-          mountPath: /data/cache
-  volumes:
-    - name: cache
-      persistentVolumeClaim:
-        claimName: xberg-cache-pvc
+volumes:
+  - source: xberg-cache
+    target: /data/cache
 ```
 
 ## ONNX Runtime Configuration

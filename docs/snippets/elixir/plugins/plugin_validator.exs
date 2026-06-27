@@ -23,7 +23,7 @@ end
 Xberg.Plugin.register_validator(MyApp.MinLengthValidator)
 
 # Use with extraction
-{:ok, result} = Xberg.extract_file(
+{:ok, result} = Xberg.extract(
   "document.pdf",
   nil
 )

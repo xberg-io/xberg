@@ -6,7 +6,7 @@ from xberg import (
     ChunkerType,
     ImageExtractionConfig,
     OutputFormat,
-    extract_file_sync,
+    extract_sync,
 )
 
 config = ExtractionConfig(
@@ -34,7 +34,7 @@ config = ExtractionConfig(
     use_cache=True,
 )
 
-result = extract_file_sync("report.pdf", config=config)
+result = extract_sync("report.pdf", config=config)
 
 print(f"Content ({len(result.content)} chars):")
 print(result.content[:200])

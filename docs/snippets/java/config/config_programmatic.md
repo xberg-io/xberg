@@ -24,7 +24,7 @@ public final class ProgrammaticConfigExample {
             .enableQualityProcessing(true)
             .build();
 
-        ExtractionResult result = Xberg.extractFile("document.pdf", config);
+        ExtractionResult result = Xberg.extract("document.pdf", config);
         System.out.printf("Content length: %d%n", result.getContent().length());
     }
 }

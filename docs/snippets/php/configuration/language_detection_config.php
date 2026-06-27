@@ -23,7 +23,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('multilingual.pdf');
+$result = $xberg->extract('multilingual.pdf');
 
 echo "Detected languages:\n";
 foreach ($result->detectedLanguages ?? [] as $lang) {
@@ -40,7 +40,7 @@ $advancedConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($advancedConfig);
-$result = $xberg->extractFile('document.pdf');
+$result = $xberg->extract('document.pdf');
 
 if (!empty($result->detectedLanguages)) {
     echo "High-confidence languages detected:\n";
@@ -56,7 +56,7 @@ $detectConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($detectConfig);
-$result = $xberg->extractFile('scanned.pdf');
+$result = $xberg->extract('scanned.pdf');
 
 if (!empty($result->detectedLanguages)) {
     $primaryLanguage = $result->detectedLanguages[0];
@@ -71,7 +71,7 @@ if (!empty($result->detectedLanguages)) {
     );
 
     $xberg = new Xberg($ocrConfig);
-    $result = $xberg->extractFile('scanned.pdf');
+    $result = $xberg->extract('scanned.pdf');
     echo "OCR extraction complete\n";
 }
 
@@ -81,7 +81,7 @@ $languageMap = [];
 foreach ($files as $file) {
     if (!file_exists($file)) continue;
 
-    $result = $xberg->extractFile($file);
+    $result = $xberg->extract($file);
     $lang = $result->detectedLanguages[0] ?? 'unknown';
 
     if (!isset($languageMap[$lang])) {

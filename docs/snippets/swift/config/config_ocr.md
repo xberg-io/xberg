@@ -13,7 +13,7 @@ let configJson = """
 """
 
 let config = try extractionConfigFromJson(configJson)
-let result = try extractFileSync("scanned.pdf", nil, config)
+let result = try extractSync("scanned.pdf", nil, config)
 
 print("Content length: \(result.content().toString().count)")
 print("Tables detected: \(result.tables().count)")

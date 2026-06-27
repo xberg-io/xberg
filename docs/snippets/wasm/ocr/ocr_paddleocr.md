@@ -1,7 +1,7 @@
 <!-- snippet:syntax-only -->
 
 ```typescript title="WASM"
-import init, { extractBytes } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 

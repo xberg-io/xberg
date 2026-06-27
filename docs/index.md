@@ -15,6 +15,8 @@ Document intelligence with a Rust core and polyglot SDKs. Extract text, tables, 
 
 </div>
 
+> Xberg is the next iteration of [Kreuzberg](https://github.com/kreuzberg-dev/kreuzberg-v4-lts) — the same document-intelligence engine, rebuilt and rebranded under a fresh v1 line.
+
 ---
 
 ## Why Xberg
@@ -56,8 +58,8 @@ Document intelligence with a Rust core and polyglot SDKs. Extract text, tables, 
 | Language                | Package                                        | Docs                                         |
 | :---------------------- | :--------------------------------------------- | :------------------------------------------- |
 | **Python**              | `pip install xberg`                        | [API Reference](reference/api-python.md)     |
-| **TypeScript (Native)** | `npm install @xberg/node`                  | [API Reference](reference/api-typescript.md) |
-| **TypeScript (WASM)**   | `npm install @xberg/wasm`                  | [API Reference](reference/api-wasm.md)       |
+| **TypeScript (Native)** | `npm install @xberg-io/xberg`                  | [API Reference](reference/api-typescript.md) |
+| **TypeScript (WASM)**   | `npm install @xberg-io/xberg-wasm`                  | [API Reference](reference/api-wasm.md)       |
 | **Rust**                | `cargo add xberg`                          | [API Reference](reference/api-rust.md)       |
 | **Go**                  | `go get github.com/xberg-io/xberg` | [API Reference](reference/api-go.md)         |
 | **Java / Kotlin JVM**   | Maven Central `io.xberg:xberg`        | [API Reference](reference/api-java.md)       |
@@ -78,9 +80,9 @@ Homebrew 6.0+ requires explicit trust for third-party taps. Run `brew trust xber
 
 !!! Tip "Choosing Between TypeScript Packages"
 
-    **`@xberg/node`** — Use for Node.js servers and CLI tools. Native performance (100% speed).
+    **`@xberg-io/xberg`** — Use for Node.js servers and CLI tools. Native performance (100% speed).
 
-    **`@xberg/wasm`** — Use for browsers, Cloudflare Workers, Deno, Bun, and serverless environments (60-80% speed, cross-platform).
+    **`@xberg-io/xberg-wasm`** — Use for browsers, Cloudflare Workers, Deno, Bun, and serverless environments (60-80% speed, cross-platform).
 
 ---
 
@@ -88,15 +90,34 @@ Homebrew 6.0+ requires explicit trust for third-party taps. Run `brew trust xber
 
 === "Python"
 
-    --8<-- "snippets/python/api/extract_file_sync.md"
+    ```python
+    from xberg import ExtractInput, extract
+
+    output = await extract(ExtractInput(kind="uri", uri="document.pdf"))
+    print(output.results[0].content)
+    ```
 
 === "TypeScript"
 
-    --8<-- "snippets/typescript/getting-started/extract_file_sync.md"
+    ```typescript
+    import { ExtractInputKind, extract } from "@xberg-io/xberg";
+
+    const output = await extract({
+      kind: ExtractInputKind.Uri,
+      uri: "document.pdf",
+    });
+    console.log(output.results[0].content);
+    ```
 
 === "Rust"
 
-    --8<-- "snippets/rust/api/extract_file_sync.md"
+    ```rust
+    use xberg::{extract, ExtractInput, ExtractionConfig};
+
+    let config = ExtractionConfig::default();
+    let output = extract(ExtractInput::uri("document.pdf"), &config).await?;
+    println!("{}", output.results[0].content);
+    ```
 
 ---
 
@@ -105,10 +126,6 @@ Homebrew 6.0+ requires explicit trust for third-party taps. Run `brew trust xber
 Xberg is the document intelligence core in the [Xberg.io](https://xberg.io) ecosystem.
 
 <div class="grid cards" markdown>
-
-- :material-cloud:{ .lg .middle } **[Xberg Enterprise](https://enterprise.xberg.io)**
-
-  Managed extraction API with SDKs, dashboards, and observability.
 
 - :material-spider-web:{ .lg .middle } **[crawlberg](https://docs.crawlberg.xberg.io)**
 
@@ -170,10 +187,9 @@ Xberg is the document intelligence core in the [Xberg.io](https://xberg.io) ecos
 
 - :material-swap-horizontal:{ .lg .middle } **Migration**
 
-  Migrate from Unstructured or other document extraction libraries, including the v5 image-index change.
+  Migrate from Unstructured or other document extraction libraries.
 
   [:octicons-arrow-right-24: Migration Guides](migration/from-unstructured.md)
-  [:octicons-arrow-right-24: v5 Image Indices](migration/v5.0-image-indices.md)
 
 </div>
 

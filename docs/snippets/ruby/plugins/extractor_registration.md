@@ -10,6 +10,6 @@ Xberg.register_document_extractor(
   priority: 50
 )
 
-result = Xberg.extract_file("document.json")
+result = Xberg.extract("document.json")
 puts "Extracted content length: #{result.content.length}"
 ```

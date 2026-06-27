@@ -1,5 +1,5 @@
 {
-  "name": "@xberg/node-win32-arm64-msvc",
+  "name": "@xberg-io/xberg-win32-arm64-msvc",
   "version": "1.0.0-rc.1",
   "license": "MIT",
   "repository": {

@@ -9,7 +9,7 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract_file_sync('scanned.pdf', config: config)
+result = Xberg.extract_sync('scanned.pdf', config: config)
 puts result.content[0..100]
 puts "Total length: #{result.content.length}"
 ```

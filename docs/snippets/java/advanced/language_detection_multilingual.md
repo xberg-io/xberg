@@ -15,7 +15,7 @@ ExtractionConfig config = ExtractionConfig.builder()
     .build();
 
 try {
-    ExtractionResult result = Xberg.extractFile("multilingual_document.pdf", config);
+    ExtractionResult result = Xberg.extract("multilingual_document.pdf", config);
 
     List<String> languages = result.getDetectedLanguages() != null
         ? result.getDetectedLanguages()

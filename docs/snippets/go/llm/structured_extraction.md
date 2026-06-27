@@ -35,7 +35,7 @@ func main() {
 		},
 	}
 
-	result, err := xberg.ExtractFile("paper.pdf", nil, config)
+	result, err := xberg.Extract("paper.pdf", nil, config)
 	if err != nil {
 		log.Fatalf("extract: %v", err)
 	}

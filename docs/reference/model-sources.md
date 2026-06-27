@@ -18,10 +18,6 @@ download where a checksum is pinned.
 | Layout detection — RT-DETR, TATR, PP-DocLayout-V3 | [`xberg-io/layout-models`](https://huggingface.co/xberg-io/layout-models) | |
 | Named-entity recognition (GLiNER) | [`xberg-io/gliner-models`](https://huggingface.co/xberg-io/gliner-models) | xberg-managed span-mode ONNX exports and tokenizer files. Source model lineage is [`gliner-community`](https://huggingface.co/gliner-community). |
 
-These were previously published under the `Kreuzberg` organization; the old
-`Kreuzberg/*` repository ids redirect to `xberg-io/*`, so existing installs keep
-working.
-
 For GLiNER, Xberg downloads only the exported artifacts listed in
 `xberg-io/gliner-models`. If the repository is private or not publicly readable,
 configure Hugging Face credentials supported by `hf-hub` before warming the

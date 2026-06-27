@@ -12,7 +12,7 @@ $config->pages = new PageConfig(
     markerFormat: "\n\n<!-- PAGE {page_num} -->\n\n"
 );
 
-$result = Xberg::extract_file_sync("document.pdf", null, $config);
+$result = Xberg::extract_sync("document.pdf", null, $config);
 
 if ($result->pages !== null) {
     foreach ($result->pages as $page) {

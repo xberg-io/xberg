@@ -2,7 +2,11 @@
 	"id": "extensions_html",
 	"category": "registry_operations",
 	"description": "Get file extensions for HTML MIME type",
-	"tags": ["registry", "extensions", "html"],
+	"tags": [
+		"registry",
+		"extensions",
+		"html"
+	],
 	"call": "get_extensions_for_mime",
 	"input": {
 		"mime_type": "text/html"

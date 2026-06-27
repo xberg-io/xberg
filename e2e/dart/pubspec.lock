@@ -89,6 +89,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.7"
+  ffi:
+    dependency: "direct main"
+    description:
+      name: ffi
+      sha256: "6d7fd89431262d8f3125e81b50d3847a091d846eafcd4fdb88dd06f36d705a45"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.2.0"
   file:
     dependency: transitive
     description:
@@ -169,13 +177,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.12.0"
-  xberg:
-    dependency: "direct main"
-    description:
-      path: "../../packages/dart"
-      relative: true
-    source: path
-    version: "1.0.0-rc.1"
   logging:
     dependency: transitive
     description:
@@ -416,6 +417,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.2.1"
+  xberg:
+    dependency: "direct main"
+    description:
+      path: "../../packages/dart"
+      relative: true
+    source: path
+    version: "1.0.0-rc.1"
   yaml:
     dependency: transitive
     description:

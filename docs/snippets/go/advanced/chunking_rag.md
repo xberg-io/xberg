@@ -26,7 +26,7 @@ func main() {
 		},
 	}
 
-	result, err := xberg.ExtractFileSync("research_paper.pdf", config)
+	result, err := xberg.ExtractSync("research_paper.pdf", config)
 	if err != nil {
 		log.Fatalf("RAG extraction failed: %v", err)
 	}

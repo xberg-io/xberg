@@ -277,7 +277,7 @@ fn extract_package_name(framework: &str) -> &str {
 
     match name {
         "xberg-python" => "xberg",
-        "xberg-node" => "@xberg/node",
+        "xberg-node" => "@xberg-io/xberg",
         "xberg-ruby" => "xberg_rb",
         "docling" => "docling",
         "markitdown" => "markitdown",
@@ -727,10 +727,7 @@ fn measure_wasm_bundle(name: &str) -> Result<Option<u64>> {
 
     // Check node_modules for installed WASM package
     if name.contains("wasm") || name.contains("xberg") {
-        let node_modules_paths = [
-            "node_modules/@xberg/wasm",
-            "packages/typescript/node_modules/@xberg/wasm",
-        ];
+        let node_modules_paths = ["node_modules/@xberg-io/xberg-wasm"];
         for path in node_modules_paths {
             let dir = Path::new(path);
             if dir.exists() {

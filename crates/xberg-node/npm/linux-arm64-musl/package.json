@@ -1,5 +1,5 @@
 {
-  "name": "@xberg/node-linux-arm64-musl",
+  "name": "@xberg-io/xberg-linux-arm64-musl",
   "version": "1.0.0-rc.1",
   "license": "MIT",
   "repository": {

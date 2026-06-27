@@ -31,7 +31,7 @@ function extractAndVectorize(
         )
     );
 
-    $result = Xberg::extractFileSync($documentPath, null, $config);
+    $result = Xberg::extractSync($documentPath, null, $config);
 
     $records = [];
     if ($result->getChunks()) {

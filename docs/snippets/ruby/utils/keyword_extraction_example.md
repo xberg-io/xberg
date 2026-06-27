@@ -9,7 +9,7 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract_file_sync('research_paper.pdf', config: config)
+result = Xberg.extract_sync('research_paper.pdf', config: config)
 
 keywords = result.extracted_keywords
 keywords.each do |kw|

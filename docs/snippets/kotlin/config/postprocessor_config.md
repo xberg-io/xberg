@@ -16,7 +16,7 @@ fun main() {
         .withPostprocessor(Optional.of(postprocessor))
         .build()
 
-    val result = Xberg.extractFileSync(Paths.get("document.pdf"), null, config)
+    val result = Xberg.extractSync(Paths.get("document.pdf"), null, config)
     println("Processed content: ${result.content()}")
 }
 ```

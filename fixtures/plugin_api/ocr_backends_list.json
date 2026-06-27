@@ -2,7 +2,11 @@
 	"id": "ocr_backends_list",
 	"category": "ocr_backend_management",
 	"description": "List all registered OCR backends",
-	"tags": ["ocr", "plugin_management", "list"],
+	"tags": [
+		"ocr",
+		"plugin_management",
+		"list"
+	],
 	"call": "list_ocr_backends",
 	"assertions": [
 		{

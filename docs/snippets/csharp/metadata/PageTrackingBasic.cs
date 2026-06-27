@@ -8,7 +8,7 @@ var config = new ExtractionConfig
     }
 };
 
-var result = Xberg.ExtractFileSync("document.pdf", config);
+var result = Xberg.ExtractSync("document.pdf", config);
 
 if (result.Pages != null)
 {

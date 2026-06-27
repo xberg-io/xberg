@@ -16,7 +16,7 @@ use Xberg\Config\ExtractionConfig;
 use Xberg\Config\PdfConfig;
 
 $xberg = new Xberg();
-$result = $xberg->extractFile('document.pdf');
+$result = $xberg->extract('document.pdf');
 
 echo "PDF Extraction Results:\n";
 echo str_repeat('=', 60) . "\n";
@@ -34,7 +34,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('report.pdf');
+$result = $xberg->extract('report.pdf');
 
 echo "Extracted Tables:\n";
 echo str_repeat('=', 60) . "\n";
@@ -78,12 +78,12 @@ $formattedConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($formattedConfig);
-$result = $xberg->extractFile('formatted.pdf');
+$result = $xberg->extract('formatted.pdf');
 
 file_put_contents('output.md', $result->content);
 echo "Saved formatted output to: output.md\n";
 
-$result = $xberg->extractFile('document.pdf');
+$result = $xberg->extract('document.pdf');
 $content = $result->content;
 
 $sections = [];

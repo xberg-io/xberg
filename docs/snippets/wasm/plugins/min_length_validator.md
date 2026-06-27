@@ -3,7 +3,7 @@
 Register a validator that filters out extraction results with text below a minimum length threshold.
 
 ```typescript title="WASM"
-import init, { registerValidator, extractBytes } from "xberg-wasm";
+import init, { registerValidator, extract } from "xberg-wasm";
 
 await init();
 
@@ -44,7 +44,7 @@ const config = {
   chunking: null,
 };
 
-const result = await extractBytes(pdfBytes, "application/pdf", config);
+const result = await extract(pdfBytes, "application/pdf", config);
 console.log("Validated result:", result);
 ```
 

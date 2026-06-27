@@ -3,9 +3,14 @@
 	"category": "embed_async_pending",
 	"description": "embed_texts_async: basic async embedding",
 	"call": "embed_texts_async",
-	"assertion_recipes": ["embeddings"],
+	"assertion_recipes": [
+		"embeddings"
+	],
 	"input": {
-		"texts": ["First", "Second"],
+		"texts": [
+			"First",
+			"Second"
+		],
 		"config": {
 			"model": {
 				"type": "preset",

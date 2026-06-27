@@ -13,7 +13,7 @@ fun main() {
         .withHtmlOutput(Optional.of(htmlOutput))
         .build()
 
-    val result = Xberg.extractFileSync(Paths.get("document.pdf"), null, config)
+    val result = Xberg.extractSync(Paths.get("document.pdf"), null, config)
     println(result.content()) // HTML with kb-* classes
 }
 ```

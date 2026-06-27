@@ -3,7 +3,7 @@ import {
   listOcrBackends,
   registerOcrBackend,
   unregisterOcrBackend,
-} from "@xberg/wasm";
+} from "@xberg-io/xberg-wasm";
 
 class CustomOcrBackend {
   private name: string = "custom-ocr";

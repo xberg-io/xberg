@@ -10,7 +10,7 @@ var config = new ExtractionConfig
     }
 };
 
-var result = await XbergLib.ExtractFileAsync(
+var result = await XbergLib.ExtractAsync(
     "verbose_document.pdf",
     config
 );

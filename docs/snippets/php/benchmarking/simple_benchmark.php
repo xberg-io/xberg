@@ -15,8 +15,8 @@ require_once __DIR__ . '/vendor/autoload.php';
 use Xberg\Xberg;
 use Xberg\Config\ExtractionConfig;
 use Xberg\Config\OcrConfig;
-use function Xberg\extract_file;
-use function Xberg\batch_extract_files;
+use function Xberg\extract;
+use function Xberg\extract_batch;
 
 class Benchmark
 {
@@ -100,7 +100,7 @@ $benchmark = new Benchmark();
 $testFile = 'test_document.pdf';
 if (file_exists($testFile)) {
     $benchmark->run('Simple PDF extraction', function () use ($testFile) {
-        extract_file($testFile);
+        extract($testFile);
     }, 5);
 }
 
@@ -108,7 +108,7 @@ if (file_exists($testFile)) {
     $benchmark->run('PDF with table extraction', function () use ($testFile) {
         $config = new ExtractionConfig(extractTables: true);
         $xberg = new Xberg($config);
-        $xberg->extractFile($testFile);
+        $xberg->extract($testFile);
     }, 5);
 }
 
@@ -118,19 +118,19 @@ if (file_exists($testFile)) {
             ocr: new OcrConfig(backend: 'tesseract', language: 'eng')
         );
         $xberg = new Xberg($config);
-        $xberg->extractFile($testFile);
+        $xberg->extract($testFile);
     }, 3);
 }
 
 $files = array_filter(['doc1.pdf', 'doc2.pdf', 'doc3.pdf'], 'file_exists');
 if (count($files) >= 3) {
     $benchmark->run('Batch processing (3 files)', function () use ($files) {
-        batch_extract_files(array_slice($files, 0, 3));
+        extract_batch(array_slice($files, 0, 3));
     }, 3);
 
     $benchmark->run('Sequential processing (3 files)', function () use ($files) {
         foreach (array_slice($files, 0, 3) as $file) {
-            extract_file($file);
+            extract($file);
         }
     }, 3);
 }
@@ -145,7 +145,7 @@ $fileTypes = [
 foreach ($fileTypes as $type => $file) {
     if (file_exists($file)) {
         $benchmark->run("$type extraction", function () use ($file) {
-            extract_file($file);
+            extract($file);
         }, 5);
     }
 }
@@ -170,7 +170,7 @@ foreach ($configs as $name => $config) {
     if (file_exists($testFile)) {
         $benchmark->run("$name config", function () use ($testFile, $config) {
             $xberg = new Xberg($config);
-            $xberg->extractFile($testFile);
+            $xberg->extract($testFile);
         }, 5);
     }
 }
@@ -186,7 +186,7 @@ if (!empty($files)) {
     $count = 0;
 
     foreach ($files as $file) {
-        extract_file($file);
+        extract($file);
         $count++;
     }
 
@@ -205,7 +205,7 @@ $results = [];
 
 for ($i = 0; $i < 10; $i++) {
     if (file_exists($testFile)) {
-        $results[] = extract_file($testFile);
+        $results[] = extract($testFile);
     }
 }
 

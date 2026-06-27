@@ -5,7 +5,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/vendor/autoload.php';
 
-use function Xberg\extract_file;
+use function Xberg\extract;
 use Xberg\Config\ExtractionConfig;
 use Xberg\Config\PdfConfig;
 
@@ -26,7 +26,7 @@ $config = new ExtractionConfig(
     )
 );
 
-$result = extract_file('document.pdf', config: $config);
+$result = extract('document.pdf', config: $config);
 
 echo "Content length: " . strlen($result->content) . " characters\n";
 echo "Metadata: " . implode(', ', array_keys((array) $result->metadata)) . "\n";

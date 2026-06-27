@@ -2,7 +2,12 @@
 	"id": "ocr_backends_unregister",
 	"category": "ocr_backend_management",
 	"description": "Unregister nonexistent OCR backend gracefully",
-	"tags": ["ocr", "plugin_management", "unregister", "trait-bridge"],
+	"tags": [
+		"ocr",
+		"plugin_management",
+		"unregister",
+		"trait-bridge"
+	],
 	"call": "unregister_ocr_backend",
 	"input": {
 		"name": "nonexistent-backend-xyz"

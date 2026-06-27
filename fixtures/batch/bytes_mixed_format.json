@@ -1,0 +1,36 @@
+{
+	"id": "extract_batch_bytes_mixed_format",
+	"category": "batch",
+	"description": "extract_batch: handles unsupported MIME gracefully",
+	"call": "extract_batch",
+	"input": {
+		"inputs": [
+			{
+				"kind": "bytes",
+				"bytes": [
+					80,
+					68,
+					70,
+					32,
+					112,
+					108,
+					97,
+					99,
+					101,
+					104,
+					111,
+					108,
+					100,
+					101,
+					114
+				],
+				"mime_type": "application/x-unknown"
+			}
+		]
+	},
+	"assertions": [
+		{
+			"type": "not_error"
+		}
+	]
+}

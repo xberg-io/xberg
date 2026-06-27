@@ -11,7 +11,7 @@ var config = new ExtractionConfig
     }
 };
 
-var result = await XbergLib.ExtractFile("document.pdf", null, config);
+var result = await XbergLib.Extract("document.pdf", null, config);
 Console.WriteLine($"Detected language: {result.Language}");
 if (result.DetectedLanguages != null)
 {

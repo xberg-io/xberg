@@ -11,11 +11,11 @@
   <a href="https://pypi.org/project/xberg/">
     <img src="https://img.shields.io/pypi/v/xberg?label=Python&color=007ec6" alt="Python">
   </a>
-  <a href="https://www.npmjs.com/package/@xberg/node">
-    <img src="https://img.shields.io/npm/v/@xberg/node?label=Node.js&color=007ec6" alt="Node.js">
+  <a href="https://www.npmjs.com/package/@xberg-io/xberg">
+    <img src="https://img.shields.io/npm/v/@xberg-io/xberg?label=Node.js&color=007ec6" alt="Node.js">
   </a>
-  <a href="https://www.npmjs.com/package/@xberg/wasm">
-    <img src="https://img.shields.io/npm/v/@xberg/wasm?label=WASM&color=007ec6" alt="WASM">
+  <a href="https://www.npmjs.com/package/@xberg-io/xberg-wasm">
+    <img src="https://img.shields.io/npm/v/@xberg-io/xberg-wasm?label=WASM&color=007ec6" alt="WASM">
   </a>
   <a href="https://central.sonatype.com/artifact/io.xberg/xberg">
     <img src="https://img.shields.io/maven-central/v/io.xberg/xberg?label=Java&color=007ec6" alt="Java">
@@ -56,10 +56,6 @@
   <a href="https://github.com/xberg-io/xberg/pkgs/container/xberg">
     <img src="https://img.shields.io/badge/Docker-ghcr.io-007ec6?logo=docker&logoColor=white" alt="Docker">
   </a>
-  <a href="https://github.com/xberg-io/xberg/pkgs/container/charts%2Fxberg">
-    <img src="https://img.shields.io/badge/Helm-ghcr.io-007ec6?logo=helm&logoColor=white" alt="Helm">
-  </a>
-
   <!-- Project Info -->
   <a href="https://github.com/xberg-io/xberg/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/License-MIT-007ec6" alt="License">
@@ -111,7 +107,6 @@ flutter pub add xberg
 ```
 
 ### System Requirements
-
 - **Dart SDK 3.0+** for pure-Dart consumers
 - Flutter projects supported on macOS, iOS, Android, Linux, and Windows; Flutter Web is not supported
 - Native runtime delivered via `flutter_rust_bridge` with bundled binaries for the supported platforms
@@ -126,15 +121,14 @@ Extract text, metadata, and structure from any supported document format:
 ```dart title="Dart"
 import 'package:xberg/xberg.dart';
 
-Future<void> main() async {
-  // Sync semantics — flutter_rust_bridge surfaces every call as a Future,
-  // so even the *Sync entrypoints must be awaited from Dart.
-  final result = await XbergBridge.extractFileSync('document.pdf', null);
+final output = await Xberg.extract(
+  const ExtractInput(
+    kind: ExtractInputKind.uri,
+    uri: 'document.pdf',
+  ),
+);
 
-  print(result.content);
-  print('MIME type: ${result.mimeType}');
-  print('Tables: ${result.tables.length}');
-}
+print(output.results.first.content);
 ```
 
 ### Common Use Cases
@@ -167,7 +161,7 @@ Future<void> main() async {
     useLayoutForMarkdown: false,
   );
 
-  final result = await XbergBridge.extractFile('scanned.pdf', null, config);
+  final result = await XbergBridge.extract('scanned.pdf', null, config);
   print(result.content);
 }
 ```
@@ -179,24 +173,24 @@ See [Configuration Guide](https://docs.xberg.io/guides/configuration/) for table
 #### Processing Multiple Files
 
 ```dart title="Dart"
+import 'dart:convert';
 import 'package:xberg/xberg.dart';
 
-Future<void> main() async {
-  final items = <BatchFileItem>[
-    const BatchFileItem(path: 'doc1.pdf'),
-    BatchFileItem(
-      path: 'scan.pdf',
-      config: FileExtractionConfig(forceOcr: true),
-    ),
-  ];
+final output = await Xberg.extractBatch([
+  const ExtractInput(
+    kind: ExtractInputKind.uri,
+    uri: 'document.pdf',
+  ),
+  ExtractInput(
+    kind: ExtractInputKind.bytes,
+    bytes: utf8.encode('Hello from memory'),
+    mimeType: 'text/plain',
+    filename: 'note.txt',
+  ),
+]);
 
-  // Sync semantics — flutter_rust_bridge still returns a Future from Dart.
-  final results = await XbergBridge.batchExtractFilesSync(items);
-
-  print('Processed ${results.length} files');
-  for (final result in results) {
-    print('${result.mimeType}: ${result.content.length} chars');
-  }
+for (final result in output.results) {
+  print(result.content);
 }
 ```
 
@@ -207,13 +201,14 @@ For non-blocking document processing:
 ```dart title="Dart"
 import 'package:xberg/xberg.dart';
 
-Future<void> main() async {
-  final result = await XbergBridge.extractFile('document.pdf', null);
+final output = await Xberg.extract(
+  const ExtractInput(
+    kind: ExtractInputKind.uri,
+    uri: 'document.pdf',
+  ),
+);
 
-  print(result.content);
-  print('MIME type: ${result.mimeType}');
-  print('Tables: ${result.tables.length}');
-}
+print(output.results.first.content);
 ```
 
 ### Next Steps
@@ -355,7 +350,7 @@ Future<void> main() async {
     useLayoutForMarkdown: false,
   );
 
-  final result = await XbergBridge.extractFile('scanned.pdf', null, config);
+  final result = await XbergBridge.extract('scanned.pdf', null, config);
   print(result.content);
 }
 ```
@@ -367,13 +362,14 @@ This binding provides full async/await support for non-blocking document process
 ```dart title="Dart"
 import 'package:xberg/xberg.dart';
 
-Future<void> main() async {
-  final result = await XbergBridge.extractFile('document.pdf', null);
+final output = await Xberg.extract(
+  const ExtractInput(
+    kind: ExtractInputKind.uri,
+    uri: 'document.pdf',
+  ),
+);
 
-  print(result.content);
-  print('MIME type: ${result.mimeType}');
-  print('Tables: ${result.tables.length}');
-}
+print(output.results.first.content);
 ```
 
 ## Plugin System
@@ -393,24 +389,24 @@ Generate vector embeddings for extracted text using the built-in ONNX Runtime su
 Process multiple documents efficiently:
 
 ```dart title="Dart"
+import 'dart:convert';
 import 'package:xberg/xberg.dart';
 
-Future<void> main() async {
-  final items = <BatchFileItem>[
-    const BatchFileItem(path: 'doc1.pdf'),
-    BatchFileItem(
-      path: 'scan.pdf',
-      config: FileExtractionConfig(forceOcr: true),
-    ),
-  ];
+final output = await Xberg.extractBatch([
+  const ExtractInput(
+    kind: ExtractInputKind.uri,
+    uri: 'document.pdf',
+  ),
+  ExtractInput(
+    kind: ExtractInputKind.bytes,
+    bytes: utf8.encode('Hello from memory'),
+    mimeType: 'text/plain',
+    filename: 'note.txt',
+  ),
+]);
 
-  // Sync semantics — flutter_rust_bridge still returns a Future from Dart.
-  final results = await XbergBridge.batchExtractFilesSync(items);
-
-  print('Processed ${results.length} files');
-  for (final result in results) {
-    print('${result.mimeType}: ${result.content.length} chars');
-  }
+for (final result in output.results) {
+  print(result.content);
 }
 ```
 
@@ -432,7 +428,6 @@ Contributions are welcome! See [Contributing Guide](https://github.com/xberg-io/
 
 ## Part of Xberg.dev
 
-- [Xberg Enterprise](https://github.com/xberg-io/xberg-enterprise) — managed extraction API with SDKs, dashboards, and observability.
 - [crawlberg](https://github.com/xberg-io/crawlberg) — web crawling and scraping with HTML→Markdown and headless-Chrome fallback.
 - [html-to-markdown](https://github.com/xberg-io/html-to-markdown) — fast, lossless HTML→Markdown engine.
 - [liter-llm](https://github.com/xberg-io/liter-llm) — universal LLM API client with native bindings for 14 languages and 143 providers.

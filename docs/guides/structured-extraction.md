@@ -1,7 +1,5 @@
 # Structured Extraction
 
-<span class="version-badge new">v5.0</span>
-
 Structured extraction combines document extraction with LLM-based schema completion to return data matching a JSON schema.
 
 ## Overview
@@ -107,8 +105,6 @@ Metadata fields (vendor, invoice number) typically appear once. Use `object_merg
 ```
 
 ## Heuristics
-
-<span class="version-badge new">v5.0</span>
 
 Heuristics automatically decide whether and how to invoke structured extraction based on document characteristics. The `heuristics` feature gate must be enabled:
 
@@ -220,7 +216,7 @@ The `TextOnlyWithVisionFallback` mode is the bridge between heuristics and orche
 
 ```rust
 use xberg::{
-    extract_file, ExtractionConfig,
+    extract, ExtractionConfig,
     presets::{Registry, resolve},
     heuristics::{
         score_confidence, ConfidenceSignals, StructuredInput, StructuredThresholds,
@@ -231,7 +227,7 @@ use std::collections::BTreeMap;
 
 // Extract the document
 let config = ExtractionConfig::default();
-let result = extract_file("invoice.pdf", None, &config).await?;
+let result = extract("invoice.pdf", None, &config).await?;
 
 // Load the invoice preset
 let registry = Registry::global();

@@ -30,7 +30,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('document.pdf');
+$result = $xberg->extract('document.pdf');
 
 echo "Hierarchy detection enabled\n";
 echo "Content length: " . strlen($result->content) . " characters\n";
@@ -49,7 +49,7 @@ $advancedConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($advancedConfig);
-$result = $xberg->extractFile('complex_document.pdf');
+$result = $xberg->extract('complex_document.pdf');
 
 echo "Advanced hierarchy detection completed\n";
 echo "Detected structure preserved in output\n";
@@ -65,7 +65,7 @@ $fastConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($fastConfig);
-$result = $xberg->extractFile('simple_document.pdf');
+$result = $xberg->extract('simple_document.pdf');
 
 echo "Fast extraction without hierarchy detection\n";
 ```

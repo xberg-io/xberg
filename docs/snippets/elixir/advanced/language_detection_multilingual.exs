@@ -9,7 +9,7 @@ config = %ExtractionConfig{
   }
 }
 
-case Xberg.extract_file("multilingual.pdf", nil, config) do
+case Xberg.extract("multilingual.pdf", nil, config) do
   {:ok, result} ->
     IO.puts("=== Language Detection ===\n")
 

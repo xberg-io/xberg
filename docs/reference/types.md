@@ -322,6 +322,7 @@ It can be loaded from TOML, YAML, or JSON files, or created programmatically.
 | `cache_namespace` | `Option<String>` | `None` | Cache namespace for tenant isolation. When set, cache entries are stored under `{cache_dir}/{namespace}/`. Must be alphanumeric, hyphens, or underscores only (max 64 chars). Different namespaces have isolated cache spaces on the same filesystem. |
 | `cache_ttl_secs` | `Option<u64>` | `None` | Per-request cache TTL in seconds. Overrides the global `max_age_days` for this specific extraction. When `0`, caching is completely skipped (no read or write). When `None`, the global TTL applies. |
 | `email` | `Option<EmailConfig>` | `None` | Email extraction configuration (None = use defaults). Currently supports configuring the fallback codepage for MSG files that do not specify one. See `EmailConfig` for details. |
+| `url` | `UrlExtractionConfig` | — | URL ingestion and crawl configuration. |
 | `max_archive_depth` | `usize` | — | Maximum recursion depth for archive extraction (default: 3). Set to 0 to disable recursive extraction (legacy behavior). |
 | `tree_sitter` | `Option<TreeSitterConfig>` | `None` | Tree-sitter language pack configuration (None = tree-sitter disabled). When set, enables code file extraction using tree-sitter parsers. Controls grammar download behavior and code analysis options. |
 | `structured_extraction` | `Option<StructuredExtractionConfig>` | `None` | Structured extraction via LLM (None = disabled). When set, the extracted document content is sent to an LLM with the provided JSON schema. The structured response is stored in `ExtractionResult::structured_output`. |
@@ -340,9 +341,8 @@ It can be loaded from TOML, YAML, or JSON files, or created programmatically.
 Per-file extraction configuration overrides for batch processing.
 
 All fields are `Option<T>` — `None` means "use the batch-level default."
-This type is used with `batch_extract_files` and
-`batch_extract_bytes` to allow heterogeneous
-extraction settings within a single batch.
+This type is used by `config` and `extract_batch`
+to allow heterogeneous extraction settings within a single batch.
 
 ### Excluded Fields
 
@@ -386,7 +386,7 @@ cannot be overridden per file:
 SVG-specific configuration for the image-encode pipeline.
 
 Applies when the source image is SVG or when the output format is set to
-`ImageOutputFormat.Svg`. Available when the `svg` feature is active.
+`ImageOutputFormat.Svg`.  Available when the `svg` feature is active.
 
 Used via `ImageExtractionConfig.svg`.
 
@@ -394,6 +394,66 @@ Used via `ImageExtractionConfig.svg`.
 |-------|------|---------|-------------|
 | `sanitize` | `bool` | `true` | Run SVG bytes through `usvg` sanitization (strips external `href` attributes, JavaScript event handlers, and `foreignObject` elements) even when the output format is `Native`.  Defaults to `true`. |
 | `render_dpi` | `f32` | `96` | Target DPI when rasterizing SVG to a pixel-based format (PNG, JPEG, WebP, HEIF).  The tree's viewBox is scaled by `render_dpi / 96.0` before the pixel buffer is allocated.  Defaults to `96.0` (1× CSS pixel density). |
+
+---
+
+#### ExtractInput
+
+Unified extraction input for all public extraction entry points.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `kind` | `ExtractInputKind` | `ExtractInputKind::Uri` | Source kind. `bytes` requires `bytes`; `uri` requires `uri`. |
+| `bytes` | `Option<Vec<u8>>` | `None` | Raw bytes for `kind = "bytes"`. |
+| `uri` | `Option<String>` | `None` | Local path, `file://` URI, or HTTP(S) URL for `kind = "uri"`. |
+| `mime_type` | `Option<String>` | `None` | MIME type hint. |
+| `filename` | `Option<String>` | `None` | Filename hint used for MIME detection and metadata. |
+| `config` | `Option<FileExtractionConfig>` | `None` | Per-input extraction overrides. |
+
+---
+
+#### ExtractionSummary
+
+Summary for a unified extraction call.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `inputs` | `usize` | — | Number of inputs submitted by the caller. |
+| `results` | `usize` | — | Number of extraction results produced. |
+| `errors` | `usize` | — | Number of per-input errors. |
+| `remote_urls` | `usize` | — | Number of URI inputs that resolved to remote HTTP(S) URLs. |
+| `pages_crawled` | `usize` | — | Number of HTML pages crawled or scraped. |
+| `documents_downloaded` | `usize` | — | Number of downloaded non-HTML documents extracted from URLs. |
+
+---
+
+#### ExtractionOutput
+
+Unified extraction output envelope.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `results` | `Vec<ExtractionResult>` | `vec!\[\]` | Extraction results in discovery order. |
+| `errors` | `Vec<ExtractionErrorItem>` | `vec!\[\]` | Non-fatal per-input errors. |
+| `summary` | `ExtractionSummary` | — | Aggregate counts for the operation. |
+| `crawl_final_urls` | `Vec<String>` | `vec!\[\]` | Final URLs reached after redirects during URL ingestion. |
+| `crawl_redirect_count` | `usize` | — | Total redirects followed while fetching or crawling URLs. |
+| `crawl_unique_normalized_urls` | `Vec<String>` | `vec!\[\]` | Unique normalized URLs discovered by crawls. |
+
+---
+
+#### UrlExtractionConfig
+
+URL ingestion and crawl configuration.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `mode` | `UrlExtractionMode` | `UrlExtractionMode::Auto` | URL extraction mode. |
+| `document_url_pattern` | `Option<String>` | `None` | Optional regex filter for document-discovered URLs. |
+| `max_document_urls_per_result` | `Option<u32>` | `Default::default()` | Maximum URLs to follow per extraction result. |
+| `max_total_urls` | `Option<u32>` | `Default::default()` | Maximum URLs followed across the whole extraction call. |
+| `allow_local_file_inputs` | `bool` | `true` | Allow bare local filesystem path inputs. |
+| `allow_file_uris` | `bool` | `true` | Allow local `file://` URI inputs. |
 
 ---
 
@@ -588,7 +648,7 @@ OCR configuration.
 | `tesseract_config` | `Option<TesseractConfig>` | `None` | Tesseract-specific configuration (optional) |
 | `output_format` | `Option<OutputFormat>` | `None` | Output format for OCR results (optional, for format conversion) |
 | `paddle_ocr_config` | `Option<serde_json::Value>` | `None` | PaddleOCR-specific configuration (optional, JSON passthrough) |
-| `backend_options` | `Option<serde_json::Value>` | `None` | Arbitrary per-call options passed through to the backend unchanged. Custom OCR backends and built-in backends that support runtime tuning can read this value and deserialize the keys they care about. Keys unknown to the backend are silently ignored. This is the recommended extension point for per-call parameters that are not covered by the typed fields above (e.g. mode switching, preprocessing flags, inference batch size). **Scope:** when `pipeline` is `None`, this value is propagated to the primary stage of the auto-constructed pipeline. When `pipeline` is explicitly set, this field has **no effect** — the caller must set `OcrPipelineStage.backend_options` directly on the relevant stage(s) instead. Example: ```json { "mode": "fast", "enable_layout": true, "timeout_ms": 5000 }``` |
+| `backend_options` | `Option<serde_json::Value>` | `None` | Arbitrary per-call options passed through to the backend unchanged. Custom OCR backends and built-in backends that support runtime tuning can read this value and deserialize the keys they care about. Keys unknown to the backend are silently ignored. This is the recommended extension point for per-call parameters that are not covered by the typed fields above (e.g. mode switching, preprocessing flags, inference batch size). **Scope:** when `pipeline` is `None`, this value is propagated to the primary stage of the auto-constructed pipeline. When `pipeline` is explicitly set, this field has **no effect** — the caller must set `OcrPipelineStage.backend_options` directly on the relevant stage(s) instead. Example: ```json { "mode": "fast", "enable_layout": true, "timeout_ms": 5000 } ``` |
 | `element_config` | `Option<OcrElementConfig>` | `None` | OCR element extraction configuration |
 | `quality_thresholds` | `Option<OcrQualityThresholds>` | `None` | Quality thresholds for the native-text-to-OCR fallback decision. When None, uses compiled defaults (matching previous hardcoded behavior). |
 | `pipeline` | `Option<OcrPipelineConfig>` | `None` | Multi-backend OCR pipeline configuration. When set, enables weighted fallback across multiple OCR backends based on output quality. When None, uses the single `backend` field (same as today). |
@@ -1482,7 +1542,7 @@ All fields are public; callers override any subset via struct-update syntax.
 
 Thresholds for the structured-extraction call-mode heuristic.
 
-All defaults are **conservative starting points**. Deployments should
+All defaults are **conservative starting points**.  Deployments should
 measure their own document corpus and override via their own config;
 these values are chosen to be safe-by-default, not to be optimal for
 any particular workload.
@@ -2097,7 +2157,7 @@ Cell-level changes for a pair of tables that share the same index.
 Pre-computed table markdown for a table detection region.
 
 Produced by the TATR-based table structure recognizer and surfaced as part of
-layout-aware OCR results. The struct lives here (under `layout-types`, pure-Rust)
+layout-aware OCR results.  The struct lives here (under `layout-types`, pure-Rust)
 so that consumers who do not enable `layout-detection` (ORT) can still reference
 the type in their own code.
 
@@ -2125,32 +2185,17 @@ Aggregate statistics for a xberg cache directory.
 
 ---
 
-#### BatchBytesItem
+#### ExtractionErrorItem
 
-Batch item for byte array extraction.
-
-Used with `batch_extract_bytes` and `batch_extract_bytes_sync`
-to represent a single item in a batch extraction job.
+Non-fatal per-input extraction error captured by `ExtractionOutput`.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `content` | `Vec<u8>` | — | The content bytes to extract from |
-| `mime_type` | `String` | — | MIME type of the content (e.g., "application/pdf", "text/html") |
-| `config` | `Option<FileExtractionConfig>` | `None` | Per-item configuration overrides (None uses batch-level defaults) |
-
----
-
-#### BatchFileItem
-
-Batch item for file extraction.
-
-Used with `batch_extract_files` and `batch_extract_files_sync`
-to represent a single file in a batch extraction job.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `path` | `PathBuf` | — | Path to the file to extract from |
-| `config` | `Option<FileExtractionConfig>` | `None` | Per-file configuration overrides (None uses batch-level defaults) |
+| `index` | `usize` | — | Input index in the original request. |
+| `code` | `u32` | — | Stable numeric error code. |
+| `error_type` | `String` | — | Stable snake_case error kind. |
+| `source` | `String` | — | Best-effort source identifier. |
+| `message` | `String` | — | Error message. |
 
 ---
 
@@ -2166,7 +2211,7 @@ A single backend stage in the OCR pipeline.
 | `tesseract_config` | `Option<TesseractConfig>` | `/* serde(default) */` | Tesseract-specific config override for this stage. |
 | `paddle_ocr_config` | `Option<serde_json::Value>` | `/* serde(default) */` | PaddleOCR-specific config for this stage. |
 | `vlm_config` | `Option<LlmConfig>` | `/* serde(default) */` | VLM config override for this pipeline stage. |
-| `backend_options` | `Option<serde_json::Value>` | `/* serde(default) */` | Arbitrary per-call options passed through to the backend unchanged. Backends that support runtime tuning (mode switching, preprocessing flags, inference parameters, etc.) read this value and deserialize the keys they care about. Keys unknown to the backend are silently ignored, so options from different backends can coexist in the same config without conflict. Example (custom backend): ```json { "mode": "fast", "enable_layout": true }``` |
+| `backend_options` | `Option<serde_json::Value>` | `/* serde(default) */` | Arbitrary per-call options passed through to the backend unchanged. Backends that support runtime tuning (mode switching, preprocessing flags, inference parameters, etc.) read this value and deserialize the keys they care about. Keys unknown to the backend are silently ignored, so options from different backends can coexist in the same config without conflict. Example (custom backend): ```json { "mode": "fast", "enable_layout": true } ``` |
 
 ---
 
@@ -2264,38 +2309,6 @@ requires a multi-thread tokio runtime. Callers running inside a
 `current_thread` runtime (e.g. `#[tokio.test]` without `flavor = "multi_thread"`,
 or `tokio.runtime.Builder.new_current_thread()`) must use
 `embed_texts_async` instead, which awaits directly without `block_in_place`.
-
-*Opaque type — fields are not directly accessible.*
-
----
-
-#### DocumentExtractor
-
-Trait for document extractor plugins.
-
-Implement this trait to add support for new document formats or to override
-built-in extraction behavior with custom logic.
-
-### Return Type
-
-Extractors return `InternalDocument`, a flat intermediate representation.
-The pipeline converts this into the public `ExtractionResult` via the
-derivation step.
-
-### Priority System
-
-When multiple extractors support the same MIME type, the registry selects
-the extractor with the highest priority value. Use this to:
-
-- Override built-in extractors (priority > 50)
-- Provide fallback extractors (priority < 50)
-- Implement specialized extractors for specific use cases
-
-Default priority is 50.
-
-### Thread Safety
-
-Extractors must be thread-safe (`Send + Sync`) to support concurrent extraction.
 
 *Opaque type — fields are not directly accessible.*
 
@@ -3470,7 +3483,7 @@ A curated structured-extraction preset loaded from the embedded library.
 Each preset is a JSON file under `src/presets/library/<id>/v1.json` that
 validates against the meta-schema in `src/presets/preset.schema.json`.
 
-The curated catalog is downstream (xberg-enterprise) and injects presets via
+Downstream catalog consumers can inject presets via
 `extend_from_dir`. The embedded OSS library
 ships only the `generic_document` toy preset.
 
@@ -3882,6 +3895,17 @@ Determines which hardware backend is used for model inference.
 | `CoreMl` | `coreml` | Apple CoreML (macOS/iOS Neural Engine + GPU). |
 | `Cuda` | `cuda` | NVIDIA CUDA GPU acceleration. |
 | `TensorRt` | `tensorrt` | NVIDIA TensorRT (optimized CUDA inference). |
+
+---
+
+#### ExtractInputKind
+
+Source kind for `ExtractInput`.
+
+| Variant | Wire value | Description |
+|---------|------------|-------------|
+| `Bytes` | `bytes` | Raw in-memory bytes. |
+| `Uri` | `uri` | A filesystem path, `file://` URI, or HTTP(S) URL. |
 
 ---
 
@@ -4530,7 +4554,7 @@ error types.
 Outcome of the structured-extraction call-mode heuristic.
 
 **Distinct from `crate::core::config::CallMode`** which has three variants
-and governs extraction-engine behaviour. This enum governs whether and how
+and governs extraction-engine behaviour.  This enum governs whether and how
 an already-extracted document is sent to an LLM structured-extraction
 pipeline.
 
@@ -4634,6 +4658,18 @@ Semantic classification of an extracted URI.
 | `Citation` | `citation` | A citation or bibliographic reference (DOI, academic ref). |
 | `Reference` | `reference` | A general reference (e.g. `\ref{}` in LaTeX, `:ref:` in RST). |
 | `Email` | `email` | An email address (`mailto:` link or bare email). |
+
+---
+
+#### UrlExtractionMode
+
+URL extraction mode.
+
+| Variant | Wire value | Description |
+|---------|------------|-------------|
+| `Auto` | `auto` | Classify HTTP(S) resources after fetch. |
+| `Document` | `document` | Treat the URI as a single remote document/page. |
+| `Crawl` | `crawl` | Crawl from the seed URI and extract discovered pages/documents. |
 
 ---
 

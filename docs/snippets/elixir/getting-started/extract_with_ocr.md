@@ -4,7 +4,7 @@ defmodule ExtractWithOcr do
     # Build configuration with OCR settings as JSON string
     config = ~s({"ocr": {"backend": "tesseract", "language": "eng"}})
 
-    case Xberg.extract_file_sync("scanned.pdf", nil, config) do
+    case Xberg.extract_sync("scanned.pdf", nil, config) do
       {:ok, result} ->
         IO.puts("Extracted via OCR:")
         IO.puts(result)

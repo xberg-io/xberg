@@ -1,4 +1,4 @@
-from xberg import PdfConfig, HierarchyConfig, ExtractionConfig, extract_file_sync
+from xberg import PdfConfig, HierarchyConfig, ExtractionConfig, extract_sync
 
 # Example 1: Basic hierarchy extraction
 # Enabled with default k_clusters=6 for standard H1-H6 heading hierarchy.
@@ -13,7 +13,7 @@ hierarchy_config_basic = HierarchyConfig(
 pdf_config_basic = PdfConfig(hierarchy=hierarchy_config_basic)
 extraction_config_basic = ExtractionConfig(pdf_options=pdf_config_basic)
 
-result = extract_file_sync("document.pdf", config=extraction_config_basic)
+result = extract_sync("document.pdf", config=extraction_config_basic)
 
 
 # Example 2: Custom k_clusters for minimal structure
@@ -29,7 +29,7 @@ hierarchy_config_minimal = HierarchyConfig(
 pdf_config_minimal = PdfConfig(hierarchy=hierarchy_config_minimal)
 extraction_config_minimal = ExtractionConfig(pdf_options=pdf_config_minimal)
 
-result = extract_file_sync("document.pdf", config=extraction_config_minimal)
+result = extract_sync("document.pdf", config=extraction_config_minimal)
 
 
 # Example 3: With OCR coverage threshold
@@ -45,7 +45,7 @@ hierarchy_config_ocr = HierarchyConfig(
 pdf_config_ocr = PdfConfig(hierarchy=hierarchy_config_ocr)
 extraction_config_ocr = ExtractionConfig(pdf_options=pdf_config_ocr)
 
-result = extract_file_sync("document.pdf", config=extraction_config_ocr)
+result = extract_sync("document.pdf", config=extraction_config_ocr)
 
 
 # Field descriptions:

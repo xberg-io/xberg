@@ -8,7 +8,7 @@ const DocumentExtractorVTable = extern struct {
     version_fn: ?*const fn (user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.C) void,
     initialize_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32,
     shutdown_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32,
-    extract_bytes: ?*const fn (
+    extract: ?*const fn (
         user_data: ?*anyopaque,
         content: [*c]const u8,
         content_len: usize,
@@ -17,7 +17,7 @@ const DocumentExtractorVTable = extern struct {
         out_result: ?*?[*c]u8,
         out_error: ?*?[*c]u8,
     ) callconv(.C) i32,
-    extract_file: ?*const fn (
+    extract: ?*const fn (
         user_data: ?*anyopaque,
         path: [*c]const u8,
         mime_type: [*c]const u8,
@@ -51,7 +51,7 @@ extern "xberg_ffi" fn xberg_unregister_document_extractor(
 extern "xberg_ffi" fn xberg_free_string(ptr: [*c]u8) void;
 
 // Implement callback functions for the extractor.
-fn extract_bytes_fn(
+fn extract_fn(
     user_data: ?*anyopaque,
     content: [*c]const u8,
     content_len: usize,
@@ -136,8 +136,8 @@ pub fn main() !void {
         .version_fn = version_fn,
         .initialize_fn = initialize_fn,
         .shutdown_fn = shutdown_fn,
-        .extract_bytes = extract_bytes_fn,
-        .extract_file = null,
+        .extract = extract_fn,
+        .extract = null,
         .supported_mime_types = supported_mime_types_fn,
         .priority = priority_fn,
         .can_handle = null,

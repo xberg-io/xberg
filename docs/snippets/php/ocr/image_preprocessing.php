@@ -29,7 +29,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('noisy_scan.pdf');
+$result = $xberg->extract('noisy_scan.pdf');
 
 echo "Basic Preprocessing Results:\n";
 echo str_repeat('=', 60) . "\n";
@@ -48,7 +48,7 @@ $highDpiConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($highDpiConfig);
-$result = $xberg->extractFile('small_text_scan.pdf');
+$result = $xberg->extract('small_text_scan.pdf');
 
 echo "High DPI Preprocessing:\n";
 echo str_repeat('=', 60) . "\n";
@@ -68,7 +68,7 @@ $deskewConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($deskewConfig);
-$result = $xberg->extractFile('crooked_scan.pdf');
+$result = $xberg->extract('crooked_scan.pdf');
 
 echo "Deskewed OCR Results:\n";
 echo str_repeat('=', 60) . "\n";
@@ -87,7 +87,7 @@ $cleanConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($cleanConfig);
-$result = $xberg->extractFile('watermarked_document.pdf');
+$result = $xberg->extract('watermarked_document.pdf');
 
 echo "Background Removal Results:\n";
 echo str_repeat('=', 60) . "\n";
@@ -112,7 +112,7 @@ $comprehensiveConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($comprehensiveConfig);
-$result = $xberg->extractFile('very_poor_quality.pdf');
+$result = $xberg->extract('very_poor_quality.pdf');
 
 echo "Comprehensive Preprocessing:\n";
 echo str_repeat('=', 60) . "\n";
@@ -154,7 +154,7 @@ if (file_exists($testFile)) {
     foreach ($configs as $name => $config) {
         $xberg = new Xberg($config);
         $start = microtime(true);
-        $result = $xberg->extractFile($testFile);
+        $result = $xberg->extract($testFile);
         $elapsed = microtime(true) - $start;
 
         echo "$name:\n";
@@ -169,7 +169,7 @@ function getOptimalPreprocessing(string $file): ImagePreprocessingConfig
     $quickScan = new Xberg(new ExtractionConfig(
         ocr: new OcrConfig(backend: 'tesseract', language: 'eng')
     ));
-    $quickResult = $quickScan->extractFile($file);
+    $quickResult = $quickScan->extract($file);
 
     $fileSize = filesize($file);
     $contentLength = strlen($quickResult->content);
@@ -213,7 +213,7 @@ if (file_exists($file)) {
     );
 
     $xberg = new Xberg($config);
-    $result = $xberg->extractFile($file);
+    $result = $xberg->extract($file);
 
     echo "Adaptive preprocessing applied\n";
     echo "Result: " . strlen($result->content) . " characters extracted\n";

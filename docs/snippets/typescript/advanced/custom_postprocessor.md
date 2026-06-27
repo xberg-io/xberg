@@ -4,7 +4,7 @@ import {
   unregisterPostProcessor,
   type PostProcessorProtocol,
   type ExtractionResult,
-} from "@xberg/node";
+} from "@xberg-io/xberg";
 
 /**
  * Custom post-processor for cleaning extraction results

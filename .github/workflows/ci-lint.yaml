@@ -124,12 +124,6 @@ jobs:
       - name: Install Task
         uses: xberg-io/actions/install-task@v1
 
-      - name: Setup Helm
-        uses: azure/setup-helm@v5
-
-      - name: Setup kubeconform
-        uses: bmuschko/setup-kubeconform@v1
-
       - name: Install alef CLI
         uses: xberg-io/actions/install-alef@v1
 

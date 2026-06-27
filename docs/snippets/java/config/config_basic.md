@@ -7,5 +7,5 @@ ExtractionConfig config = ExtractionConfig.builder()
     .useCache(true)
     .enableQualityProcessing(true)
     .build();
-ExtractionResult result = Xberg.extractFile("document.pdf", config);
+ExtractionResult result = Xberg.extract("document.pdf", config);
 ```

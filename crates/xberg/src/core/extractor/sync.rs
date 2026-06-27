@@ -2,12 +2,13 @@
 //!
 //! This module provides blocking synchronous wrappers around async extraction functions
 //! for use in non-async contexts. Uses a global Tokio runtime for optimal performance.
+#![allow(dead_code)]
 
 use crate::Result;
-use crate::core::config::BatchBytesItem;
 #[cfg(feature = "tokio-runtime")]
 use crate::core::config::BatchFileItem;
 use crate::core::config::ExtractionConfig;
+use crate::core::config::{BatchBytesItem, ExtractInput, ExtractionOutput};
 use crate::types::ExtractionResult;
 
 #[cfg(feature = "tokio-runtime")]
@@ -25,9 +26,25 @@ use super::batch::{batch_extract_bytes, batch_extract_files};
 use super::bytes::extract_bytes;
 #[cfg(feature = "tokio-runtime")]
 use super::file::extract_file;
+#[cfg(feature = "tokio-runtime")]
+use super::unified::{extract, extract_batch};
 
 #[cfg(not(feature = "tokio-runtime"))]
 use super::helpers::error_extraction_result;
+
+/// Synchronous wrapper for `extract`.
+#[cfg(feature = "tokio-runtime")]
+#[cfg_attr(alef, alef(skip))]
+pub fn extract_sync(input: ExtractInput, config: &ExtractionConfig) -> Result<ExtractionOutput> {
+    global_runtime()?.block_on(extract(input, config))
+}
+
+/// Synchronous wrapper for `extract_batch`.
+#[cfg(feature = "tokio-runtime")]
+#[cfg_attr(alef, alef(skip))]
+pub fn extract_batch_sync(inputs: Vec<ExtractInput>, config: &ExtractionConfig) -> Result<ExtractionOutput> {
+    global_runtime()?.block_on(extract_batch(inputs, config))
+}
 
 /// Synchronous wrapper for `extract_file`.
 ///
@@ -52,7 +69,8 @@ use super::helpers::error_extraction_result;
 /// # Ok::<(), xberg::XbergError>(())
 /// ```
 #[cfg(feature = "tokio-runtime")]
-pub fn extract_file_sync(
+#[cfg_attr(alef, alef(skip))]
+pub(crate) fn extract_file_sync(
     path: impl AsRef<Path>,
     mime_type: Option<&str>,
     config: &ExtractionConfig,
@@ -81,7 +99,12 @@ pub fn extract_file_sync(
 /// # Ok::<(), xberg::XbergError>(())
 /// ```
 #[cfg(feature = "tokio-runtime")]
-pub fn extract_bytes_sync(content: &[u8], mime_type: &str, config: &ExtractionConfig) -> Result<ExtractionResult> {
+#[cfg_attr(alef, alef(skip))]
+pub(crate) fn extract_bytes_sync(
+    content: &[u8],
+    mime_type: &str,
+    config: &ExtractionConfig,
+) -> Result<ExtractionResult> {
     global_runtime()?.block_on(extract_bytes(content, mime_type, config))
 }
 
@@ -90,7 +113,12 @@ pub fn extract_bytes_sync(content: &[u8], mime_type: &str, config: &ExtractionCo
 /// This is a truly synchronous implementation without tokio runtime dependency.
 /// It calls `extract_bytes_sync_impl()` to perform the extraction.
 #[cfg(not(feature = "tokio-runtime"))]
-pub fn extract_bytes_sync(content: &[u8], mime_type: &str, config: &ExtractionConfig) -> Result<ExtractionResult> {
+#[cfg_attr(alef, alef(skip))]
+pub(crate) fn extract_bytes_sync(
+    content: &[u8],
+    mime_type: &str,
+    config: &ExtractionConfig,
+) -> Result<ExtractionResult> {
     super::legacy::extract_bytes_sync_impl(content, Some(mime_type), Some(config))
 }
 
@@ -117,7 +145,11 @@ pub fn extract_bytes_sync(content: &[u8], mime_type: &str, config: &ExtractionCo
 /// # Ok::<(), xberg::XbergError>(())
 /// ```
 #[cfg(feature = "tokio-runtime")]
-pub fn batch_extract_files_sync(items: Vec<BatchFileItem>, config: &ExtractionConfig) -> Result<Vec<ExtractionResult>> {
+#[cfg_attr(alef, alef(skip))]
+pub(crate) fn batch_extract_files_sync(
+    items: Vec<BatchFileItem>,
+    config: &ExtractionConfig,
+) -> Result<Vec<ExtractionResult>> {
     global_runtime()?.block_on(batch_extract_files(items, config))
 }
 
@@ -147,7 +179,8 @@ pub fn batch_extract_files_sync(items: Vec<BatchFileItem>, config: &ExtractionCo
 /// # Ok::<(), xberg::XbergError>(())
 /// ```
 #[cfg(feature = "tokio-runtime")]
-pub fn batch_extract_bytes_sync(
+#[cfg_attr(alef, alef(skip))]
+pub(crate) fn batch_extract_bytes_sync(
     items: Vec<BatchBytesItem>,
     config: &ExtractionConfig,
 ) -> Result<Vec<ExtractionResult>> {
@@ -158,7 +191,8 @@ pub fn batch_extract_bytes_sync(
 ///
 /// Iterates through items sequentially, applying per-file config overrides.
 #[cfg(not(feature = "tokio-runtime"))]
-pub fn batch_extract_bytes_sync(
+#[cfg_attr(alef, alef(skip))]
+pub(crate) fn batch_extract_bytes_sync(
     items: Vec<BatchBytesItem>,
     config: &ExtractionConfig,
 ) -> Result<Vec<ExtractionResult>> {

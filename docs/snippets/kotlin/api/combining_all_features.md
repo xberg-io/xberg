@@ -31,7 +31,7 @@ fun main() {
         .withEnableQualityProcessing(true)
         .build()
 
-    val result = Xberg.extractFileSync(Paths.get("report.pdf"), null, config)
+    val result = Xberg.extractSync(Paths.get("report.pdf"), null, config)
 
     val content = result.content()
     println("Content (${content.length} chars):")

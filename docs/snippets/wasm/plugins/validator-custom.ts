@@ -1,5 +1,5 @@
-import type { ExtractionResult } from "@xberg/wasm";
-import { extractBytes, initWasm } from "@xberg/wasm";
+import type { ExtractionResult } from "@xberg-io/xberg-wasm";
+import { extract, initWasm } from "@xberg-io/xberg-wasm";
 
 interface ValidationError {
   field: string;
@@ -54,7 +54,7 @@ async function demonstrateValidator() {
 
   const bytes = new Uint8Array(await fetch("document.pdf").then((r) => r.arrayBuffer()));
 
-  const result = await extractBytes(bytes, "application/pdf");
+  const result = await extract(bytes, "application/pdf");
   const errors = validator.validate(result);
 
   if (errors.length > 0) {

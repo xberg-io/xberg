@@ -2,7 +2,11 @@
 	"id": "mime_get_extensions",
 	"category": "mime_utilities",
 	"description": "Get file extensions for a MIME type",
-	"tags": ["mime", "extensions", "lookup"],
+	"tags": [
+		"mime",
+		"extensions",
+		"lookup"
+	],
 	"call": "get_extensions_for_mime",
 	"input": {
 		"mime_type": "application/pdf"

@@ -6,4 +6,4 @@ var config = new ExtractionConfig
     EnableQualityProcessing = true
 };
 
-var result = XbergLib.ExtractFileSync("document.pdf", config);
+var result = XbergLib.ExtractSync("document.pdf", config);

@@ -18,7 +18,7 @@ extraction_config_basic = Xberg::ExtractionConfig.new(
   pdf_options: pdf_config_basic
 )
 
-# result = Xberg.extract_file_sync("document.pdf", config: extraction_config_basic)
+# result = Xberg.extract_sync("document.pdf", config: extraction_config_basic)
 
 
 # Example 2: Custom k_clusters for minimal structure
@@ -39,7 +39,7 @@ extraction_config_minimal = Xberg::ExtractionConfig.new(
   pdf_options: pdf_config_minimal
 )
 
-# result = Xberg.extract_file_sync("document.pdf", config: extraction_config_minimal)
+# result = Xberg.extract_sync("document.pdf", config: extraction_config_minimal)
 
 
 # Example 3: With OCR coverage threshold
@@ -60,7 +60,7 @@ extraction_config_ocr = Xberg::ExtractionConfig.new(
   pdf_options: pdf_config_ocr
 )
 
-# result = Xberg.extract_file_sync("document.pdf", config: extraction_config_ocr)
+# result = Xberg.extract_sync("document.pdf", config: extraction_config_ocr)
 
 
 # Field descriptions:

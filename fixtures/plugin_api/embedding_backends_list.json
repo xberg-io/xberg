@@ -2,7 +2,11 @@
 	"id": "embedding_backends_list",
 	"category": "embedding_backend_management",
 	"description": "List all registered embedding backends",
-	"tags": ["embedding", "plugin_management", "list"],
+	"tags": [
+		"embedding",
+		"plugin_management",
+		"list"
+	],
 	"call": "list_embedding_backends",
 	"assertions": [
 		{

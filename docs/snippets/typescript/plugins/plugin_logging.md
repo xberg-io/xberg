@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-import { registerPostProcessor, registerValidator, type ExtractionResult } from "@xberg/node";
+import { registerPostProcessor, registerValidator, type ExtractionResult } from "@xberg-io/xberg";
 
 class LoggingPostProcessor {
   name = "logging-processor";

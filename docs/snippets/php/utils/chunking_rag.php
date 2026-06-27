@@ -31,7 +31,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('research_paper.pdf');
+$result = $xberg->extract('research_paper.pdf');
 
 echo "RAG Chunking Results:\n";
 echo str_repeat('=', 60) . "\n";

@@ -20,14 +20,14 @@ func main() {
 	}
 
 	fmt.Println("First extraction (will be cached)...")
-	result1, err := xberg.ExtractFileSync("document.pdf", nil, config)
+	result1, err := xberg.ExtractSync("document.pdf", nil, config)
 	if err != nil {
 		log.Fatalf("extract failed: %v", err)
 	}
 	fmt.Printf("  - Content length: %d\n", len(result1.Content))
 
 	fmt.Println("\nSecond extraction (from cache)...")
-	result2, err := xberg.ExtractFileSync("document.pdf", nil, config)
+	result2, err := xberg.ExtractSync("document.pdf", nil, config)
 	if err != nil {
 		log.Fatalf("extract failed: %v", err)
 	}

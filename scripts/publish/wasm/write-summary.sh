@@ -10,8 +10,8 @@ if [ -z "${GITHUB_STEP_SUMMARY:-}" ]; then
 fi
 
 if [ "$published" = "true" ]; then
-  echo "WASM package @xberg/wasm@${version} was already published; skipped republish." >>"$GITHUB_STEP_SUMMARY"
+  echo "WASM package @xberg-io/xberg-wasm@${version} was already published; skipped republish." >>"$GITHUB_STEP_SUMMARY"
 else
-  echo "Successfully published WASM package @xberg/wasm@${version} to npm" >>"$GITHUB_STEP_SUMMARY"
+  echo "Successfully published WASM package @xberg-io/xberg-wasm@${version} to npm" >>"$GITHUB_STEP_SUMMARY"
   echo "Uploaded WASM artifacts to GitHub release" >>"$GITHUB_STEP_SUMMARY"
 fi

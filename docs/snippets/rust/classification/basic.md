@@ -1,5 +1,5 @@
 ```rust title="Rust"
-use xberg::{extract_file, ExtractionConfig, PageClassificationConfig, LlmConfig};
+use xberg::{extract, ExtractionConfig, PageClassificationConfig, LlmConfig};
 
 let config = ExtractionConfig {
     page_classification: Some(PageClassificationConfig {
@@ -13,5 +13,5 @@ let config = ExtractionConfig {
     }),
     ..Default::default()
 };
-let result = extract_file("packet.pdf", None, &config).await?;
+let result = extract("packet.pdf", None, &config).await?;
 ```

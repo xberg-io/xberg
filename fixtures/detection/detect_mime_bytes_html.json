@@ -2,10 +2,17 @@
 	"id": "detect_mime_bytes_html",
 	"category": "detection",
 	"description": "Detect HTML MIME from bytes",
-	"tags": ["mime_detection", "bytes"],
+	"tags": [
+		"mime_detection",
+		"bytes"
+	],
 	"call": "detect_mime_type_from_bytes",
 	"input": {
 		"data": "html/html.html"
 	},
-	"assertions": [{ "type": "not_error" }]
+	"assertions": [
+		{
+			"type": "not_error"
+		}
+	]
 }

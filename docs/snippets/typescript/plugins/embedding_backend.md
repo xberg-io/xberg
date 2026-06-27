@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-import { registerEmbeddingBackend, embedTexts } from "@xberg/node";
+import { registerEmbeddingBackend, embedTexts } from "@xberg-io/xberg";
 
 // Wrap an already-loaded embedder so xberg can call back into it during
 // chunking and standalone embed requests.

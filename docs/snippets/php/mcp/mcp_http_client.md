@@ -83,9 +83,9 @@ final readonly class XbergMcpClient
      * @return array<string, mixed>
      * @throws GuzzleException
      */
-    public function extractFile(string $path, ?array $config = null): array
+    public function extract(string $path, ?array $config = null): array
     {
-        return $this->callTool('extract_file', [
+        return $this->callTool('extract', [
             'path' => $path,
             'config' => $config,
         ]);
@@ -97,9 +97,9 @@ final readonly class XbergMcpClient
      * @return array<string, mixed>
      * @throws GuzzleException
      */
-    public function batchExtractFiles(array $paths, ?array $config = null): array
+    public function extractBatch(array $paths, ?array $config = null): array
     {
-        return $this->callTool('batch_extract_files', [
+        return $this->callTool('extract_batch', [
             'paths' => $paths,
             'config' => $config,
         ]);
@@ -119,11 +119,11 @@ $toolNames = array_column($tools, 'name');
 echo "Available tools: " . implode(', ', $toolNames) . "\n";
 
 // Extract a file
-$result = $client->extractFile('document.pdf');
+$result = $client->extract('document.pdf');
 echo "Extracted content length: " . strlen($result['content']) . "\n";
 
 // Batch extract
-$results = $client->batchExtractFiles([
+$results = $client->extractBatch([
     'file1.pdf',
     'file2.docx',
     'file3.md',

@@ -2,27 +2,35 @@
 	"id": "code_shebang_detection",
 	"category": "code",
 	"description": "Test language detection from shebang line via bytes input",
-	"tags": ["code", "shebang", "tree-sitter"],
-	"call": "extract_file_sync",
+	"tags": [
+		"code",
+		"shebang",
+		"tree-sitter"
+	],
+	"call": "extract",
 	"input": {
-		"path": "code/script.sh",
+		"kind": "uri",
+		"uri": "code/script.sh",
 		"mime_type": "text/x-source-code"
 	},
 	"assertions": [
 		{
 			"type": "equals",
-			"field": "mime_type",
+			"field": "results.0.mime_type",
 			"value": "text/x-source-code"
 		},
 		{
 			"type": "min_length",
-			"field": "content",
+			"field": "results.0.content",
 			"value": 10
 		},
 		{
 			"type": "contains_all",
-			"field": "content",
-			"values": ["build", "clean"]
+			"field": "results.0.content",
+			"values": [
+				"build",
+				"clean"
+			]
 		}
 	],
 	"skip": {

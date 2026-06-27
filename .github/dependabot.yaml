@@ -30,7 +30,6 @@ updates:
       - "/"
       - "/crates/xberg-node"
       - "/crates/xberg-wasm"
-      - "/packages/typescript/core"
     patterns: ["*"]
     multi-ecosystem-group: "dependencies"
 

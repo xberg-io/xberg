@@ -27,7 +27,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('presentation.pptx');
+$result = $xberg->extract('presentation.pptx');
 
 echo "Image Extraction Results:\n";
 echo str_repeat('=', 60) . "\n";
@@ -64,7 +64,7 @@ $ocrConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($ocrConfig);
-$result = $xberg->extractFile('scanned_images.pdf');
+$result = $xberg->extract('scanned_images.pdf');
 
 echo "Images with OCR:\n";
 echo str_repeat('=', 60) . "\n";
@@ -91,7 +91,7 @@ $largeImageConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($largeImageConfig);
-$result = $xberg->extractFile('photo_album.pdf');
+$result = $xberg->extract('photo_album.pdf');
 
 echo "Large images (>500x500):\n";
 foreach ($result->images ?? [] as $image) {
@@ -100,7 +100,7 @@ foreach ($result->images ?? [] as $image) {
     echo "Saved: $filename ({$image->width}x{$image->height})\n";
 }
 
-$result = $xberg->extractFile('document.pdf');
+$result = $xberg->extract('document.pdf');
 
 $imageTypes = [];
 foreach ($result->images ?? [] as $image) {

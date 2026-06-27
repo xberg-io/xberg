@@ -1,7 +1,7 @@
 ```typescript title="TypeScript"
-import { extractFile } from '@xberg/node';
+import { extract } from '@xberg-io/xberg';
 
-const result = await extractFile("packet.pdf", {
+const result = await extract("packet.pdf", {
     pageClassification: {
         labels: ["invoice", "contract", "id_document", "receipt"],
         llm: { model: "openai/gpt-4o-mini" },

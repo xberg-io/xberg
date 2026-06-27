@@ -17,7 +17,7 @@ public class Main {
                     .build())
                 .build();
 
-            ExtractionResult result = Xberg.extractFile("scanned.pdf", config);
+            ExtractionResult result = Xberg.extract("scanned.pdf", config);
 
             if (result.getOcrElements() != null) {
                 for (OcrElement element : result.getOcrElements()) {

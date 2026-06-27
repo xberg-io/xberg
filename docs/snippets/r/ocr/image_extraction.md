@@ -6,7 +6,7 @@ config <- list(
   ocr = list(backend = "tesseract", language = "eng")
 )
 
-json <- extract_file_sync("scan.png", "image/png", config)
+json <- extract_sync("scan.png", "image/png", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat("Image extraction via OCR:\n")

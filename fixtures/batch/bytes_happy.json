@@ -1,0 +1,75 @@
+{
+	"id": "extract_batch_bytes_happy",
+	"category": "batch",
+	"description": "extract_batch: happy path with mixed inputs",
+	"call": "extract_batch",
+	"input": {
+		"inputs": [
+			{
+				"kind": "bytes",
+				"bytes": [
+					72,
+					101,
+					108,
+					108,
+					111,
+					44,
+					32,
+					119,
+					111,
+					114,
+					108,
+					100,
+					33
+				],
+				"mime_type": "text/plain"
+			},
+			{
+				"kind": "bytes",
+				"bytes": [
+					60,
+					104,
+					116,
+					109,
+					108,
+					62,
+					60,
+					98,
+					111,
+					100,
+					121,
+					62,
+					84,
+					101,
+					115,
+					116,
+					60,
+					47,
+					98,
+					111,
+					100,
+					121,
+					62,
+					60,
+					47,
+					104,
+					116,
+					109,
+					108,
+					62
+				],
+				"mime_type": "text/html"
+			}
+		]
+	},
+	"assertions": [
+		{
+			"type": "not_error"
+		},
+		{
+			"type": "count_min",
+			"value": 1,
+			"field": "summary.results"
+		}
+	]
+}

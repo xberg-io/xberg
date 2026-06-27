@@ -1,0 +1,69 @@
+{
+	"id": "url_html_page_extract",
+	"category": "url",
+	"description": "extract: website URL returns page content",
+	"tags": [
+		"url",
+		"html"
+	],
+	"call": "extract",
+	"args": [
+		{
+			"name": "input",
+			"field": "input.extract_input",
+			"type": "json_object",
+			"owned": true,
+			"go_type": "ExtractInput",
+			"element_type": "ExtractInput"
+		},
+		{
+			"name": "config",
+			"field": "config",
+			"type": "json_object",
+			"optional": true
+		}
+	],
+	"input": {
+		"mock_responses": [
+			{
+				"path": "/",
+				"method": "GET",
+				"status_code": 200,
+				"headers": {
+					"content-type": "text/html; charset=utf-8"
+				},
+				"body_inline": "<html><body><h1>Xberg URL Page</h1><p>HTML extraction through crawlberg.</p></body></html>"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url"
+		}
+	},
+	"config": {
+		"url": {
+			"mode": "document"
+		}
+	},
+	"assertions": [
+		{
+			"type": "not_error"
+		},
+		{
+			"type": "contains",
+			"field": "results.0.content",
+			"value": "Xberg URL Page"
+		},
+		{
+			"type": "count_min",
+			"field": "summary.results",
+			"value": 1
+		}
+	],
+	"skip": {
+		"languages": [
+			"wasm"
+		],
+		"reason": "WASM e2e does not enable URL ingestion"
+	}
+}

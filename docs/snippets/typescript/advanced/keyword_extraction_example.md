@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-import { extractFile } from "@xberg/node";
+import { extract } from "@xberg-io/xberg";
 
 const config = {
   keywords: {
@@ -9,7 +9,7 @@ const config = {
   },
 };
 
-const result = await extractFile("research_paper.pdf", null, config);
+const result = await extract("research_paper.pdf", null, config);
 
 for (const keyword of result.extractedKeywords ?? []) {
   console.log(`${keyword.text}: ${keyword.score.toFixed(3)}`);

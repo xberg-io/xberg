@@ -4,7 +4,7 @@ from xberg import (
     ExtractionConfig,
     KeywordConfig,
     KeywordAlgorithm,
-    extract_file,
+    extract,
 )
 
 async def main() -> None:
@@ -17,7 +17,7 @@ async def main() -> None:
             language="en"
         )
     )
-    result = await extract_file("document.pdf", config=config)
+    result = await extract("document.pdf", config=config)
     print(f"Content extracted: {len(result.content)} chars")
 
 asyncio.run(main())

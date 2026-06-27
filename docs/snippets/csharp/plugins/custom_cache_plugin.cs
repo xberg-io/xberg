@@ -67,7 +67,7 @@ class CustomCacheWrapper
             return cached;
         }
 
-        var result = XbergLib.ExtractFileSync(filePath, config);
+        var result = XbergLib.ExtractSync(filePath, config);
         Set(cacheKey, result);
         Console.WriteLine("Extracted and cached");
 

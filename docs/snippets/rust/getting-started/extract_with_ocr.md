@@ -1,5 +1,5 @@
 ```rust title="Rust"
-use xberg::{extract_file_sync, ExtractionConfig, OcrConfig};
+use xberg::{extract_sync, ExtractionConfig, OcrConfig};
 
 fn main() -> xberg::Result<()> {
     let config = ExtractionConfig {
@@ -12,7 +12,7 @@ fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract_file_sync("scanned.pdf", None, &config)?;
+    let result = extract_sync("scanned.pdf", None, &config)?;
     println!("{}", result.content);
     println!("Detected languages: {:?}", result.detected_languages);
     Ok(())

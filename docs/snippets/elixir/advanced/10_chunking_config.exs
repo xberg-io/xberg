@@ -17,7 +17,7 @@ config = %ExtractionConfig{
 }
 
 # Use the configuration for extraction
-{:ok, result} = Xberg.extract_file("document.pdf", nil, config)
+{:ok, result} = Xberg.extract("document.pdf", nil, config)
 
 # Process the chunked results
 chunks = result.chunks || []
@@ -41,7 +41,7 @@ config_with_headings = %ExtractionConfig{
   }
 }
 
-{:ok, result_headings} = Xberg.extract_file("document.md", nil, config_with_headings)
+{:ok, result_headings} = Xberg.extract("document.md", nil, config_with_headings)
 
 if result_headings.chunks do
   IO.puts("Generated #{length(result_headings.chunks)} chunks with prepended headings")

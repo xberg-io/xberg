@@ -10,7 +10,7 @@ Future<void> main() async {
   final request = <String, Object?>{
     'method': 'tools/call',
     'params': <String, Object?>{
-      'name': 'extract_file',
+      'name': 'extract',
       'arguments': <String, Object?>{
         'path': 'document.pdf',
         'async': true,

@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 var client = new McpClient();
 await client.StartAsync();
-var content = await client.ExtractFileAsync("document.pdf");
+var content = await client.ExtractAsync("document.pdf");
 Console.WriteLine(content);
 client.Stop();
 
@@ -34,14 +34,14 @@ class McpClient
         _writer = _mcpProcess.StandardInput;
     }
 
-    public async Task<string> ExtractFileAsync(string path)
+    public async Task<string> ExtractAsync(string path)
     {
         var request = new
         {
             method = "tools/call",
             @params = new
             {
-                name = "extract_file",
+                name = "extract",
                 arguments = new { path, @async = true }
             }
         };

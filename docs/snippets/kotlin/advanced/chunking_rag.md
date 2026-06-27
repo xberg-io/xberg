@@ -19,7 +19,7 @@ fun main() {
         .withChunking(Optional.of(chunking))
         .build()
 
-    val result = Xberg.extractFileSync(Paths.get("research_paper.pdf"), null, config)
+    val result = Xberg.extractSync(Paths.get("research_paper.pdf"), null, config)
     for (chunk in result.chunks().orEmpty()) {
         val metadata = chunk.metadata()
         println("Chunk ${metadata.chunkIndex() + 1}/${metadata.totalChunks()}")

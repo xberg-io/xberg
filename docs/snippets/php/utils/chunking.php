@@ -28,7 +28,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('document.pdf');
+$result = $xberg->extract('document.pdf');
 
 echo "Chunking Results:\n";
 echo str_repeat('=', 60) . "\n";

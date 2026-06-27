@@ -336,7 +336,7 @@
         href="https://xberg.io"
         class="font-normal text-sm text-green hover:underline transition-all"
       >
-        Join Xberg Enterprise Waitlist
+        Join the Xberg Community
       </a>
     </footer>
 
@@ -375,7 +375,7 @@
       // Worker, so the Worker always loads from the same origin as the main thread.
       // In production the origin stays @latest; after version is confirmed we pin
       // to the exact version so the Worker and the version log agree.
-      const WASM_CDN_ORIGIN = "https://cdn.jsdelivr.net/npm/@xberg/wasm@latest";
+      const WASM_CDN_ORIGIN = "https://cdn.jsdelivr.net/npm/@xberg-io/xberg-wasm@latest";
       let resolvedVersion = null;
       let wasmCdnBase = null;
       try {
@@ -388,14 +388,14 @@
         t.end();
         resolvedVersion = pkg.version;
         if (!resolvedVersion || typeof resolvedVersion !== "string")
-          throw new Error("Invalid version in @xberg/wasm package.json");
+          throw new Error("Invalid version in @xberg-io/xberg-wasm package.json");
         // Dev: keep localhost base as-is. Prod: pin to resolved version so the
         // Worker loads the exact same release that was verified above.
         // NOTE: string concatenation (not a template literal) is intentional —
         // the patch regex stops at '"' so the prod URL is never misreplaced.
         wasmCdnBase = WASM_CDN_ORIGIN.startsWith("http://localhost")
           ? WASM_CDN_ORIGIN
-          : "https://cdn.jsdelivr.net/npm/@xberg/wasm@" + resolvedVersion;
+          : "https://cdn.jsdelivr.net/npm/@xberg-io/xberg-wasm@" + resolvedVersion;
         log.info("CDN version resolved", { version: resolvedVersion, base: wasmCdnBase });
       } catch (e) {
         log.error("version resolution failed", e);

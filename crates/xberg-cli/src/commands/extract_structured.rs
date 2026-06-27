@@ -5,7 +5,7 @@
 
 use anyhow::{Context, Result};
 use std::path::PathBuf;
-use xberg::{LlmConfig, StructuredExtractionConfig, extract_file_sync};
+use xberg::{ExtractInput, LlmConfig, StructuredExtractionConfig, extract_sync};
 
 use crate::WireFormat;
 
@@ -75,14 +75,24 @@ pub fn extract_structured_command(args: ExtractStructuredArgs) -> Result<()> {
         llm: llm_config,
     });
 
-    // 3. Call xberg::extract_file_sync()
+    // 3. Call xberg::extract_sync()
     let path_str = path.to_string_lossy().to_string();
-    let result = extract_file_sync(&path_str, None, &config).with_context(|| {
+    let mut output = extract_sync(ExtractInput::uri(&path_str), &config).with_context(|| {
         format!(
             "Failed to extract structured data from '{}'. Ensure the file is readable and the LLM configuration is correct.",
             path.display()
         )
     })?;
+    if let Some(error) = output.errors.first() {
+        anyhow::bail!("Structured extraction failed for '{}': {}", error.source, error.message);
+    }
+    if output.results.len() != 1 {
+        anyhow::bail!(
+            "Expected one structured extraction result, got {}.",
+            output.results.len()
+        );
+    }
+    let result = output.results.remove(0);
 
     // 4. Output result.structured_output (or error if None)
     let structured = result.structured_output.with_context(|| {

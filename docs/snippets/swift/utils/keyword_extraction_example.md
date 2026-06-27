@@ -14,7 +14,7 @@ let configJson = """
 """
 
 let config = try extractionConfigFromJson(configJson)
-let result = try extractFileSync("research_paper.pdf", nil, config)
+let result = try extractSync("research_paper.pdf", nil, config)
 
 if let keywords = result.extracted_keywords() {
     for keyword in keywords {

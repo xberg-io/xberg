@@ -5,7 +5,7 @@ from xberg import (
     OcrConfig,
     TesseractConfig,
     ImagePreprocessingConfig,
-    extract_file,
+    extract,
 )
 
 async def main() -> None:
@@ -22,7 +22,7 @@ async def main() -> None:
             )
         )
     )
-    result = await extract_file("scanned.pdf", config=config)
+    result = await extract("scanned.pdf", config=config)
     print(f"Content: {result.content[:100]}")
 
 asyncio.run(main())

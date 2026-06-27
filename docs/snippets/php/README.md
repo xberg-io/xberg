@@ -174,7 +174,7 @@ Benchmark extraction performance across different configurations.
 use Xberg\Xberg;
 
 $xberg = new Xberg();
-$result = $xberg->extractFile('document.pdf');
+$result = $xberg->extract('document.pdf');
 echo $result->content;
 ```
 
@@ -190,30 +190,30 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('scanned.pdf');
+$result = $xberg->extract('scanned.pdf');
 ```
 
 ### Procedural API
 
 ```php title="Procedural API"
-use function Xberg\extract_file;
+use function Xberg\extract;
 
-$result = extract_file('document.pdf');
+$result = extract('document.pdf');
 echo $result->content;
 ```
 
 ### Batch Processing
 
 ```php title="Batch Processing"
-use function Xberg\batch_extract_files;
+use function Xberg\extract_batch;
 
 $files = ['doc1.pdf', 'doc2.docx', 'doc3.xlsx'];
-$results = batch_extract_files($files);
+$results = extract_batch($files);
 ```
 
 ## Async Extraction (4 snippets)
 
-### Async_extract_file.php
+### Async_extract.php
 
 Async file extraction with DeferredResult polling and blocking patterns.
 

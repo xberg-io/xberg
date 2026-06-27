@@ -6,7 +6,7 @@ var config = ExtractionConfig.builder()
 .build())
 .build();
 
-var result = Xberg.extractFileSync("document.pdf", config);
+var result = Xberg.extractSync("document.pdf", config);
 
 If (result.pages() != null) {
 for (var page : result.pages()) {

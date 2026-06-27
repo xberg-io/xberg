@@ -14,7 +14,7 @@ config <- list(
   output_format = "markdown"
 )
 
-json <- extract_file_sync("document.pdf", "application/pdf", config)
+json <- extract_sync("document.pdf", "application/pdf", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 cat(sprintf("MIME type: %s\n", result$mime_type))
 ```

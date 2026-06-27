@@ -60,7 +60,7 @@ class DockerXbergClient
      * @return string Extracted content
      * @throws RuntimeException if extraction fails
      */
-    public function extractFile(string $filePath): string
+    public function extract(string $filePath): string
     {
         if (!file_exists($filePath)) {
             throw new RuntimeException("File not found: {$filePath}");
@@ -131,7 +131,7 @@ try {
 
     sleep(2);
 
-    $content = $dockerClient->extractFile('document.pdf');
+    $content = $dockerClient->extract('document.pdf');
     echo "Extracted content:\n{$content}\n";
 } finally {
     $dockerClient->stopContainer();

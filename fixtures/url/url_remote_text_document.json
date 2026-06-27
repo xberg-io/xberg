@@ -1,0 +1,69 @@
+{
+	"id": "url_remote_text_document",
+	"category": "url",
+	"description": "extract: remote text document URL",
+	"tags": [
+		"url",
+		"document"
+	],
+	"call": "extract",
+	"args": [
+		{
+			"name": "input",
+			"field": "input.extract_input",
+			"type": "json_object",
+			"owned": true,
+			"go_type": "ExtractInput",
+			"element_type": "ExtractInput"
+		},
+		{
+			"name": "config",
+			"field": "config",
+			"type": "json_object",
+			"optional": true
+		}
+	],
+	"input": {
+		"mock_responses": [
+			{
+				"path": "/",
+				"method": "GET",
+				"status_code": 200,
+				"headers": {
+					"content-type": "text/plain; charset=utf-8"
+				},
+				"body_inline": "Remote document hello from Xberg URL e2e.\n"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url"
+		}
+	},
+	"config": {
+		"url": {
+			"mode": "document"
+		}
+	},
+	"assertions": [
+		{
+			"type": "not_error"
+		},
+		{
+			"type": "contains",
+			"field": "results.0.content",
+			"value": "Remote document hello"
+		},
+		{
+			"type": "equals",
+			"field": "summary.remote_urls",
+			"value": 1
+		}
+	],
+	"skip": {
+		"languages": [
+			"wasm"
+		],
+		"reason": "WASM e2e does not enable URL ingestion"
+	}
+}

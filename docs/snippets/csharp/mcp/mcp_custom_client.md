@@ -22,7 +22,7 @@ var request = new
     method = "tools/call",
     @params = new
     {
-        name = "extract_file",
+        name = "extract",
         arguments = new { path = "document.pdf" },
     },
 };

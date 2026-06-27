@@ -1,4 +1,4 @@
-import { type ExtractionConfig, extractFile } from "@xberg/wasm";
+import { type ExtractionConfig, extract } from "@xberg-io/xberg-wasm";
 
 // Example 1: Basic YAKE configuration
 // Uses YAKE algorithm with default parameters and English stopword filtering
@@ -15,7 +15,7 @@ async function basicYake(): Promise<void> {
     },
   };
 
-  const result = await extractFile("document.pdf", null, config);
+  const result = await extract("document.pdf", null, config);
   console.log("Keywords:", result.keywords);
 }
 
@@ -36,7 +36,7 @@ async function _advancedYake(): Promise<void> {
     },
   };
 
-  const result = await extractFile("document.pdf", null, config);
+  const result = await extract("document.pdf", null, config);
   console.log("Keywords:", result.keywords);
 }
 
@@ -58,7 +58,7 @@ async function _rakeConfig(): Promise<void> {
     },
   };
 
-  const result = await extractFile("document.pdf", null, config);
+  const result = await extract("document.pdf", null, config);
   console.log("Keywords:", result.keywords);
 }
 

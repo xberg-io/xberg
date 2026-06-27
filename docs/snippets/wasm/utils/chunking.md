@@ -1,5 +1,5 @@
 ```typescript title="WASM"
-import init, { extractFile } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 
@@ -10,6 +10,6 @@ const config = {
   },
 };
 
-const result = await extractFile("document.pdf", undefined, config);
+const result = await extract("document.pdf", undefined, config);
 console.log(`Chunks created: ${result.chunks?.length ?? 0}`);
 ```

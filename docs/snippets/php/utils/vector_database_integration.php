@@ -29,7 +29,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('document.pdf');
+$result = $xberg->extract('document.pdf');
 
 echo "Vector Database Integration:\n";
 echo str_repeat('=', 60) . "\n";
@@ -194,7 +194,7 @@ foreach ($documents as $document) {
         continue;
     }
 
-    $result = $xberg->extractFile($document);
+    $result = $xberg->extract($document);
 
     echo basename($document) . ":\n";
     echo "  Chunks: " . count($result->chunks ?? []) . "\n";

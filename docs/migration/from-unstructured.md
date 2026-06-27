@@ -149,11 +149,11 @@ for element in elements:
 **Xberg**:
 
 ```python
-from xberg import extract_bytes
+from xberg import extract
 
 # Option 1: Element-based output
 config = {"output_format": "element_based"}
-result = extract_bytes(pdf_bytes, "application/pdf", config)
+result = extract(pdf_bytes, "application/pdf", config)
 
 for element in result.elements:
     print(f"{element.element_type}: {element.text}")
@@ -161,7 +161,7 @@ for element in result.elements:
         print(f"  Page: {element.metadata.page_number}")
 
 # Option 2: Unified output (default, richer metadata)
-result = extract_bytes(pdf_bytes, "application/pdf")
+result = extract(pdf_bytes, "application/pdf")
 print(result.content)  # Full text
 print(result.metadata.title)  # Document metadata
 for page in result.pages:
@@ -279,9 +279,9 @@ curl -X POST "http://localhost:8080/extract" \
 You can use **both formats** simultaneously:
 
 ```python
-from xberg import extract_bytes
+from xberg import extract
 
-result = extract_bytes(pdf_bytes, "application/pdf", {
+result = extract(pdf_bytes, "application/pdf", {
     "output_format": "element_based",  # Get elements
     "pages": {"extract_pages": true}   # Also get per-page content
 })

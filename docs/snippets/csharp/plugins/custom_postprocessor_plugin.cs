@@ -100,7 +100,7 @@ class Program
         try
         {
             var config = new ExtractionConfig();
-            var result = XbergLib.ExtractFileSync("document.pdf", config);
+            var result = XbergLib.ExtractSync("document.pdf", config);
 
             Console.WriteLine($"Original content length: {result.Content.Length}");
 

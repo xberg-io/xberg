@@ -1,0 +1,83 @@
+{
+	"id": "url_recursive_document_urls",
+	"category": "url",
+	"description": "extract: recursive URL extraction follows document links discovered in results",
+	"tags": [
+		"url",
+		"recursive"
+	],
+	"call": "extract",
+	"args": [
+		{
+			"name": "input",
+			"field": "input.extract_input",
+			"type": "json_object",
+			"owned": true,
+			"go_type": "ExtractInput",
+			"element_type": "ExtractInput"
+		},
+		{
+			"name": "config",
+			"field": "config",
+			"type": "json_object",
+			"optional": true
+		}
+	],
+	"input": {
+		"mock_responses": [
+			{
+				"path": "/",
+				"method": "GET",
+				"status_code": 200,
+				"headers": {
+					"content-type": "text/html; charset=utf-8"
+				},
+				"body_inline": "<html><body><h1>Recursive source</h1><a href=\"/linked.txt\">Linked document</a></body></html>"
+			},
+			{
+				"path": "/linked.txt",
+				"method": "GET",
+				"status_code": 200,
+				"headers": {
+					"content-type": "text/plain; charset=utf-8"
+				},
+				"body_inline": "Recursive document target reached by Xberg.\n"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url"
+		}
+	},
+	"config": {
+		"url": {
+			"mode": "document",
+			"crawl": {
+				"follow_document_urls": true,
+				"document_url_depth": 1,
+				"respect_robots_txt": false
+			}
+		}
+	},
+	"assertions": [
+		{
+			"type": "not_error"
+		},
+		{
+			"type": "count_min",
+			"field": "summary.results",
+			"value": 2
+		},
+		{
+			"type": "contains",
+			"field": "results.1.content",
+			"value": "Recursive document target"
+		}
+	],
+	"skip": {
+		"languages": [
+			"wasm"
+		],
+		"reason": "WASM e2e does not enable URL ingestion"
+	}
+}

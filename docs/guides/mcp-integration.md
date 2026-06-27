@@ -77,7 +77,7 @@ Configure in Claude Desktop or Cursor:
 
 Xberg exposes 13 tools via MCP. All extraction tools accept an optional `config` object to override defaults:
 
-**Extraction:** `extract_file`, `extract_bytes`, `batch_extract_files`, `detect_mime_type`, `extract_structured`
+**Extraction:** `extract`, `extract_batch`, `detect_mime_type`, `extract_structured`
 **Embeddings:** `embed_text`
 **Chunking:** `chunk_text`
 **Cache:** `cache_stats`, `cache_clear`, `cache_manifest`, `cache_warm`
@@ -104,7 +104,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-Restart Claude. Xberg's tools appear automatically — ask Claude to "extract text from invoice.pdf" and it will call `extract_file` behind the scenes.
+Restart Claude. Xberg's tools appear automatically — ask Claude to "extract text from invoice.pdf" and it will call `extract` behind the scenes.
 
 ### Cursor
 
@@ -143,7 +143,7 @@ async def main() -> None:
             print(f"Available: {[t.name for t in tools.tools]}")
 
             result = await session.call_tool(
-                "extract_file",
+                "extract",
                 arguments={"path": "document.pdf"},
             )
             print(result)

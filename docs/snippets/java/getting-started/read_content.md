@@ -6,7 +6,7 @@ import java.util.Map;
 
 public class ReadContent {
     public static void main(String[] args) throws IOException {
-        ExtractionResult result = Xberg.extractFile("document.pdf");
+        ExtractionResult result = Xberg.extract("document.pdf");
 
         String content = result.getContent();
         var tables = result.getTables();

@@ -10,6 +10,6 @@ var config = new ExtractionConfig
     },
 };
 
-var result = await XbergLib.ExtractFile("document.pdf", null, config);
+var result = await XbergLib.Extract("document.pdf", null, config);
 Console.WriteLine($"Content length: {result.Content.Length}");
 ```

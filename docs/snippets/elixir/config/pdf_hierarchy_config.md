@@ -11,6 +11,6 @@ config_json = Jason.encode!(%{
   }
 })
 
-{:ok, result} = Xberg.extract_file_sync("document.pdf", "application/pdf", config_json)
+{:ok, result} = Xberg.extract_sync("document.pdf", "application/pdf", config_json)
 IO.puts("Hierarchy levels: #{length(result.hierarchy)}")
 ```

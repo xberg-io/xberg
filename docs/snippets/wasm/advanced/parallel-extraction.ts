@@ -1,4 +1,4 @@
-import { detectRuntime, extractBytes, hasWorkers, initWasm } from "@xberg/wasm";
+import { detectRuntime, extract, hasWorkers, initWasm } from "@xberg-io/xberg-wasm";
 
 async function extractInParallel(documents: Uint8Array[], mimeTypes: string[]) {
   await initWasm();
@@ -10,7 +10,7 @@ async function extractInParallel(documents: Uint8Array[], mimeTypes: string[]) {
     return extractWithWebWorkers(documents, mimeTypes);
   }
 
-  return Promise.all(documents.map((bytes, index) => extractBytes(bytes, mimeTypes[index])));
+  return Promise.all(documents.map((bytes, index) => extract(bytes, mimeTypes[index])));
 }
 
 function extractWithWebWorkers(documents: Uint8Array[], mimeTypes: string[]) {

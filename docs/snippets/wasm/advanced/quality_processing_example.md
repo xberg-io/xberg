@@ -1,5 +1,5 @@
 ```typescript title="WASM - Assess Text Quality"
-import init, { extractBytes } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 
@@ -43,7 +43,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extractBytes(bytes, "application/pdf", config);
+const result = await extract(bytes, "application/pdf", config);
 
 const metrics = assessTextQuality(result.content);
 
@@ -59,7 +59,7 @@ console.log(`  Xberg quality score: ${result.qualityScore?.toFixed(3) || "N/A"}`
 ```
 
 ```typescript title="WASM - Quality-Based Content Filtering"
-import init, { extractBytes } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 
@@ -73,7 +73,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extractBytes(bytes, "application/pdf", config);
+const result = await extract(bytes, "application/pdf", config);
 
 interface QualityFilteredChunk {
   index: number;
@@ -112,7 +112,7 @@ keptChunks.slice(0, 3).forEach((c) => {
 ```
 
 ```typescript title="WASM - Content Encoding Validation"
-import init, { extractBytes } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 
@@ -121,7 +121,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extractBytes(bytes, "application/pdf", config);
+const result = await extract(bytes, "application/pdf", config);
 
 // Validate text encoding quality
 interface EncodingValidation {

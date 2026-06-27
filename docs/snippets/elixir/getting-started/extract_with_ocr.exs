@@ -11,7 +11,7 @@ config = %Xberg.Config.Extraction{
   ocr: ocr_config
 }
 
-{:ok, result} = Xberg.extract_file("scanned.pdf", config: config)
+{:ok, result} = Xberg.extract("scanned.pdf", config: config)
 
 IO.puts("Extracted text from scanned document:")
 IO.puts(result.content)

@@ -155,10 +155,10 @@ Register the backend and set its name in `OcrConfig`:
     backend = CloudOcrBackend(api_key="your-api-key")
     register_ocr_backend(backend)
 
-    from xberg import extract_file_sync, ExtractionConfig, OcrConfig
+    from xberg import extract, ExtractionConfig, OcrConfig
 
     config = ExtractionConfig(ocr=OcrConfig(backend="cloud-ocr", language="eng"))
-    result = extract_file_sync("scanned.pdf", config=config)
+    result = extract("scanned.pdf", config=config)
 
     unregister_ocr_backend("cloud-ocr")
     ```

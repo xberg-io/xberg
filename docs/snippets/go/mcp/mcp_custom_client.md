@@ -37,7 +37,7 @@ func main() {
 	request := MCPRequest{
 		Method: "tools/call",
 		Params: MCPParams{
-			Name: "extract_file",
+			Name: "extract",
 			Arguments: map[string]interface{}{
 				"path":  "document.pdf",
 				"async": true,

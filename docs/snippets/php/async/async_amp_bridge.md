@@ -10,14 +10,14 @@ use Xberg\Async\AmpBridge;
 $xberg = new Xberg();
 
 // Single file extraction with Amp Future
-$deferred = $xberg->extractFileAsync('document.pdf');
+$deferred = $xberg->extractAsync('document.pdf');
 $future = AmpBridge::toFuture($deferred);
 $result = $future->await();
 echo $result->content;
 
 // Batch extraction with Amp Future
 $files = ['doc1.pdf', 'doc2.docx', 'doc3.xlsx'];
-$batchDeferred = $xberg->batchExtractFilesAsync($files);
+$batchDeferred = $xberg->extractBatchAsync($files);
 $batchFuture = AmpBridge::toBatchFuture($batchDeferred);
 $results = $batchFuture->await();
 

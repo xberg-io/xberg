@@ -26,7 +26,7 @@ Future<void> main() async {
     useLayoutForMarkdown: false,
   );
 
-  final result = await XbergBridge.extractFile('document.pdf', null, config);
+  final result = await XbergBridge.extract('document.pdf', null, config);
   final pages = result.pages ?? const [];
   print('Pages with hierarchy: ${pages.where((p) => p.hierarchy != null).length}');
 }

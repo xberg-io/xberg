@@ -6,7 +6,7 @@ var config = new ExtractionConfig
     PdfOptions = new PdfConfig { ExtractMetadata = true }
 };
 
-var result = XbergLib.ExtractFileSync("document.pdf", config);
+var result = XbergLib.ExtractSync("document.pdf", config);
 
 if (result.Metadata?.Format.Pdf != null)
 {
@@ -16,7 +16,7 @@ if (result.Metadata?.Format.Pdf != null)
     Console.WriteLine($"Title: {pdfMeta.Title}");
 }
 
-var htmlResult = XbergLib.ExtractFileSync("page.html", config);
+var htmlResult = XbergLib.ExtractSync("page.html", config);
 if (htmlResult.Metadata?.Format.Html != null)
 {
     var htmlMeta = htmlResult.Metadata.Format.Html;

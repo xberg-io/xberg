@@ -10,7 +10,7 @@ config <- list(
   )
 )
 
-json <- extract_file_sync("scanned_document.pdf", "application/pdf", config)
+json <- extract_sync("scanned_document.pdf", "application/pdf", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 cat(result$content)
 ```

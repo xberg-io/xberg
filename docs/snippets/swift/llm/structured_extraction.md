@@ -25,7 +25,7 @@ let configJson = """
 """
 
 let config = try extractionConfigFromJson(configJson)
-let result = try extractFileSync("paper.pdf", nil, config)
+let result = try extractSync("paper.pdf", nil, config)
 
 if let structured = result.structured_output() {
     print(structured.toString())

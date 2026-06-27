@@ -6,7 +6,7 @@ config_json = Jason.encode!(%{
   }
 })
 
-{:ok, result} = Xberg.extract_file_sync("verbose_document.pdf", "application/pdf", config_json)
+{:ok, result} = Xberg.extract_sync("verbose_document.pdf", "application/pdf", config_json)
 
 # Display token reduction metrics
 original = result.original_token_count || 0

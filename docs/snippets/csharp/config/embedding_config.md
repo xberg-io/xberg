@@ -17,7 +17,7 @@ var config = new ExtractionConfig
     }
 };
 
-var result = await XbergLib.ExtractFile("document.pdf", null, config);
+var result = await XbergLib.Extract("document.pdf", null, config);
 if (result.Chunks != null)
 {
     Console.WriteLine($"Chunks with embeddings: {result.Chunks.Count}");

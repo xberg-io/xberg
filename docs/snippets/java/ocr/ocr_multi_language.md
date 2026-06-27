@@ -11,6 +11,6 @@ ExtractionConfig config = ExtractionConfig.builder()
         .build())
     .build();
 
-ExtractionResult result = Xberg.extractFile("multilingual.pdf", config);
+ExtractionResult result = Xberg.extract("multilingual.pdf", config);
 System.out.println(result.getContent());
 ```

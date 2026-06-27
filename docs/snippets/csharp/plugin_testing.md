@@ -10,7 +10,7 @@ public class CustomExtractorTests
         var jsonData = System.Text.Encoding.UTF8.GetBytes(@"{""message"": ""Hello, world!""}");
         var config = new Dictionary<string, object>();
 
-        var result = extractor.ExtractBytes(jsonData, "application/json", config);
+        var result = extractor.Extract(jsonData, "application/json", config);
 
         Assert.Contains("Hello, world!", (string)result["content"]);
         Assert.Equal("application/json", (string)result["mime_type"]);

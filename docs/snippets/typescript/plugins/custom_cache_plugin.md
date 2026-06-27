@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-import { extractFile, type ExtractionConfig } from "@xberg/node";
+import { extract, type ExtractionConfig } from "@xberg-io/xberg";
 
 /**
  * Note: Custom cache backends are not supported in TypeScript v4.0.
@@ -13,5 +13,5 @@ const config: ExtractionConfig = {
   useCache: true,
 };
 
-const result = await extractFile("document.pdf", null, config);
+const result = await extract("document.pdf", null, config);
 ```

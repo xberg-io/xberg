@@ -17,12 +17,12 @@ var config = new ExtractionConfig
 };
 
 Console.WriteLine("First extraction (will be cached)...");
-var result1 = await XbergLib.ExtractFileAsync("document.pdf", config);
+var result1 = await XbergLib.ExtractAsync("document.pdf", config);
 Console.WriteLine($"  - Content length: {result1.Content.Length}");
 Console.WriteLine($"  - Cached: {result1.Metadata.WasCached}");
 
 Console.WriteLine("\nSecond extraction (from cache)...");
-var result2 = await XbergLib.ExtractFileAsync("document.pdf", config);
+var result2 = await XbergLib.ExtractAsync("document.pdf", config);
 Console.WriteLine($"  - Content length: {result2.Content.Length}");
 Console.WriteLine($"  - Cached: {result2.Metadata.WasCached}");
 

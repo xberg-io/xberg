@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-import { extractFileSync } from "@xberg/node";
+import { extractSync } from "@xberg-io/xberg";
 
 const config = {
   ocr: {
@@ -8,7 +8,7 @@ const config = {
   },
 };
 
-const result = extractFileSync("scanned.pdf", null, config);
+const result = extractSync("scanned.pdf", null, config);
 
 if (result.ocrElements) {
   for (const element of result.ocrElements) {

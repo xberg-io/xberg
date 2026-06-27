@@ -37,7 +37,7 @@ $config = new ExtractionConfig(
     )
 );
 
-$result = Xberg::extractFileSync('document.pdf', null, $config);
+$result = Xberg::extractSync('document.pdf', null, $config);
 
 echo "Content length: " . strlen($result->getContent()) . " characters\n";
 if ($result->getDetectedLanguages()) {

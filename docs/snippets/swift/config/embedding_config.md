@@ -19,7 +19,7 @@ let configJson = """
 """
 
 let config = try extractionConfigFromJson(configJson)
-let result = try extractFileSync("document.pdf", nil, config)
+let result = try extractSync("document.pdf", nil, config)
 
 if let chunks = result.chunks() {
     print("Chunks with embeddings: \(chunks.count)")

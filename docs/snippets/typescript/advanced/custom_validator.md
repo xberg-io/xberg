@@ -2,11 +2,11 @@
 import {
   registerValidator,
   unregisterValidator,
-  extractFile,
+  extract,
   type ValidatorProtocol,
   type ExtractionResult,
   ValidationError,
-} from "@xberg/node";
+} from "@xberg-io/xberg";
 
 /**
  * Custom validator for quality checking
@@ -71,7 +71,7 @@ registerValidator(validator);
 
 // Usage with error handling (must use async extraction for custom validators)
 try {
-  const result = await extractFile("document.pdf");
+  const result = await extract("document.pdf");
   console.log(`Validated content length: ${result.content.length} characters`);
 } catch (error) {
   if (error instanceof ValidationError) {

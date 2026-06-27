@@ -11,7 +11,7 @@ config <- list(
 )
 
 # Extract an image file with OCR enabled
-json <- extract_file_sync("image.png", "image/png", config)
+json <- extract_sync("image.png", "image/png", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat("Extracted text from image:\n")

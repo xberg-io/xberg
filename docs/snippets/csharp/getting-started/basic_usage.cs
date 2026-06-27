@@ -6,7 +6,7 @@ var config = new ExtractionConfig
     EnableQualityProcessing = true
 };
 
-var result = XbergClient.ExtractFileSync("document.pdf", config);
+var result = XbergClient.ExtractSync("document.pdf", config);
 
 Console.WriteLine(result.Content);
 Console.WriteLine($"MIME Type: {result.MimeType}");

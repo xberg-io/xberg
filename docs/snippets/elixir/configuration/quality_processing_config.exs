@@ -20,7 +20,7 @@ config = %ExtractionConfig{
   use_cache: true
 }
 
-{:ok, result} = Xberg.extract_file("noisy_document.pdf", nil, config)
+{:ok, result} = Xberg.extract("noisy_document.pdf", nil, config)
 
 IO.puts("Quality Processing Applied:")
 IO.puts("Content quality score: #{result.quality_score}")

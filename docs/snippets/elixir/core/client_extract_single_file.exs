@@ -23,16 +23,16 @@ defmodule DocumentClient do
 
   ## Examples
 
-      {:ok, result} = DocumentClient.extract_file("document.pdf")
-      {:ok, result} = DocumentClient.extract_file("document.pdf", mime_type: "application/pdf")
+      {:ok, result} = DocumentClient.extract("document.pdf")
+      {:ok, result} = DocumentClient.extract("document.pdf", mime_type: "application/pdf")
   """
-  @spec extract_file(String.t(), keyword()) ::
+  @spec extract(String.t(), keyword()) ::
           {:ok, ExtractionResult.t()} | {:error, String.t()}
-  def extract_file(path, opts \\ []) do
+  def extract(path, opts \\ []) do
     mime_type = Keyword.get(opts, :mime_type, nil)
     config = Keyword.get(opts, :config, nil)
 
-    case Xberg.extract_file(path, mime_type, config) do
+    case Xberg.extract(path, mime_type, config) do
       {:ok, result} ->
         IO.debug("Successfully extracted file: #{path}")
         {:ok, result}
@@ -48,12 +48,12 @@ defmodule DocumentClient do
 
   Raises Xberg.Error if extraction fails.
   """
-  @spec extract_file!(String.t(), keyword()) :: ExtractionResult.t()
-  def extract_file!(path, opts \\ []) do
+  @spec extract!(String.t(), keyword()) :: ExtractionResult.t()
+  def extract!(path, opts \\ []) do
     mime_type = Keyword.get(opts, :mime_type, nil)
     config = Keyword.get(opts, :config, nil)
 
-    Xberg.extract_file!(path, mime_type, config)
+    Xberg.extract!(path, mime_type, config)
   end
 
   @doc """
@@ -66,7 +66,7 @@ defmodule DocumentClient do
   def extract_with_stats(path, opts \\ []) do
     start_time = System.monotonic_time(:millisecond)
 
-    case extract_file(path, opts) do
+    case extract(path, opts) do
       {:ok, result} ->
         elapsed_ms = System.monotonic_time(:millisecond) - start_time
 
@@ -87,7 +87,7 @@ defmodule DocumentClient do
 end
 
 # Usage examples
-case DocumentClient.extract_file("document.pdf") do
+case DocumentClient.extract("document.pdf") do
   {:ok, result} ->
     IO.puts("Content length: #{byte_size(result.content)} bytes")
 

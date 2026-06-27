@@ -32,7 +32,7 @@ func extractAndVectorize(documentPath string, documentID string) ([]VectorRecord
 		},
 	}
 
-	result, err := xberg.ExtractFileSync(documentPath, config)
+	result, err := xberg.ExtractSync(documentPath, config)
 	if err != nil {
 		return nil, err
 	}

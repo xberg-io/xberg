@@ -17,7 +17,7 @@ $config = new ExtractionConfig(
     )
 );
 
-$result = Xberg::extractFileSync('document.pdf', null, $config);
+$result = Xberg::extractSync('document.pdf', null, $config);
 
 echo "Extracted images: " . count($result->getImages()) . "\n";
 ?>

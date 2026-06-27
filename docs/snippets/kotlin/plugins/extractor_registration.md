@@ -11,7 +11,7 @@ fun useRegisteredExtractors() {
     println("Available extractors: $extractors")
 
     val config = ExtractionConfig.builder().build()
-    val result: ExtractionResult = Xberg.extractFileSync(
+    val result: ExtractionResult = Xberg.extractSync(
         java.nio.file.Path.of("document.pdf"),
         null,
         config,

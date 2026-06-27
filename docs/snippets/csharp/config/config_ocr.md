@@ -10,7 +10,7 @@ var config = new ExtractionConfig
     }
 };
 
-var result = await XbergLib.ExtractFile("scanned.pdf", null, config);
+var result = await XbergLib.Extract("scanned.pdf", null, config);
 Console.WriteLine($"Content length: {result.Content.Length}");
 if (result.Tables != null)
 {

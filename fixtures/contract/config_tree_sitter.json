@@ -1,40 +1,52 @@
 {
 	"id": "config_tree_sitter",
 	"description": "Tests tree-sitter configuration round-trip",
-	"tags": ["contract", "config", "tree-sitter"],
-	"call": "extract_file_sync",
+	"tags": [
+		"contract",
+		"config",
+		"tree-sitter"
+	],
+	"call": "extract",
 	"input": {
-		"path": "code/hello.py",
-		"config": {
-			"tree_sitter": {
-				"languages": ["python", "rust"],
-				"groups": ["web"],
-				"process": {
-					"structure": true,
-					"imports": true,
-					"exports": true,
-					"comments": false,
-					"docstrings": false,
-					"symbols": false,
-					"diagnostics": false
-				}
-			}
-		}
+		"kind": "uri",
+		"uri": "code/hello.py"
 	},
 	"assertions": [
 		{
 			"type": "equals",
-			"field": "mime_type",
+			"field": "results.0.mime_type",
 			"value": "text/x-source-code"
 		},
 		{
 			"type": "min_length",
-			"field": "content",
+			"field": "results.0.content",
 			"value": 5
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
-		"reason": "WASM cannot access filesystem; use extractBytes with file content instead"
+		"languages": [
+			"wasm"
+		],
+		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
+	},
+	"config": {
+		"tree_sitter": {
+			"languages": [
+				"python",
+				"rust"
+			],
+			"groups": [
+				"web"
+			],
+			"process": {
+				"structure": true,
+				"imports": true,
+				"exports": true,
+				"comments": false,
+				"docstrings": false,
+				"symbols": false,
+				"diagnostics": false
+			}
+		}
 	}
 }

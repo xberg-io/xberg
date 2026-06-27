@@ -15,7 +15,7 @@ $config = new ExtractionConfig(
     )
 );
 
-$result = Xberg::extractFileSync('research_paper.pdf', null, $config);
+$result = Xberg::extractSync('research_paper.pdf', null, $config);
 
 if ($result->getKeywords()) {
     echo "Extracted Keywords:\n";

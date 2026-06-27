@@ -38,7 +38,7 @@ $files = glob('knowledge_base/*.pdf');
 foreach ($files as $file) {
     echo "Indexing: " . basename($file) . "\n";
 
-    $result = $xberg->extractFile($file);
+    $result = $xberg->extract($file);
 
     foreach ($result->chunks ?? [] as $chunk) {
         if ($chunk->embedding) {
@@ -91,7 +91,7 @@ function getQueryEmbedding(Xberg $xberg, string $query): ?array
     file_put_contents($tempFile, $query);
 
     try {
-        $result = $xberg->extractFile($tempFile);
+        $result = $xberg->extract($tempFile);
         $chunk = ($result->chunks ?? [])[0] ?? null;
         return $chunk?->embedding;
     } finally {

@@ -1,11 +1,11 @@
 ```rust title="Rust"
-use xberg::{extract_file, ExtractionConfig};
+use xberg::{extract, ExtractionConfig};
 
 let config = ExtractionConfig {
     qr_codes: Some(true),
     ..Default::default()
 };
-let result = extract_file("ticket.pdf", None, &config).await?;
+let result = extract("ticket.pdf", None, &config).await?;
 for image in &result.images {
     if let Some(qrs) = &image.qr_codes {
         for qr in qrs {

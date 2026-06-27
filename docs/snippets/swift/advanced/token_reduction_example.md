@@ -13,7 +13,7 @@ let configJson = """
 """
 
 let config = try extractionConfigFromJson(configJson)
-let result = try extractFileSync("verbose_document.pdf", nil, config)
+let result = try extractSync("verbose_document.pdf", nil, config)
 
 let content = result.content().toString()
 print("Reduced content length: \(content.count)")

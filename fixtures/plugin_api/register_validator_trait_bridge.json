@@ -2,7 +2,9 @@
 	"id": "register_validator_trait_bridge",
 	"category": "plugin_api",
 	"description": "register_validator: trait bridge",
-	"tags": ["trait-bridge"],
+	"tags": [
+		"trait-bridge"
+	],
 	"call": "register_validator",
 	"input": {
 		"validator": {

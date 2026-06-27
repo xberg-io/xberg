@@ -18,7 +18,7 @@ fun main() {
         .withPages(Optional.of(pages))
         .build()
 
-    val result = Xberg.extractFileSync(Paths.get("document.pdf"), null, config)
+    val result = Xberg.extractSync(Paths.get("document.pdf"), null, config)
     for (chunk in result.chunks().orEmpty()) {
         val first = chunk.metadata().firstPage()
         val last = chunk.metadata().lastPage()

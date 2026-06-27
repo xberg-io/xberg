@@ -21,7 +21,7 @@ echo "Example 1: Basic PowerPoint Extraction\n";
 echo "======================================\n";
 
 $xberg = new Xberg();
-$result = $xberg->extractFile('presentation.pptx');
+$result = $xberg->extract('presentation.pptx');
 
 echo "Content:\n";
 echo $result->content . "\n\n";
@@ -42,7 +42,7 @@ $config2 = new ExtractionConfig(
     )
 );
 
-$result2 = (new Xberg($config2))->extractFile('presentation.pptx');
+$result2 = (new Xberg($config2))->extract('presentation.pptx');
 
 if ($result2->pages !== null) {
     echo "Total slides: " . count($result2->pages) . "\n\n";
@@ -67,7 +67,7 @@ $config3 = new ExtractionConfig(
     )
 );
 
-$result3 = (new Xberg($config3))->extractFile('presentation.pptx');
+$result3 = (new Xberg($config3))->extract('presentation.pptx');
 
 if ($result3->images !== null) {
     echo "Total images: " . count($result3->images) . "\n\n";
@@ -91,7 +91,7 @@ $config4 = new ExtractionConfig(
     extractTables: true
 );
 
-$result4 = (new Xberg($config4))->extractFile('data_presentation.pptx');
+$result4 = (new Xberg($config4))->extract('data_presentation.pptx');
 
 if (count($result4->tables) > 0) {
     echo "Found " . count($result4->tables) . " table(s)\n\n";
@@ -114,7 +114,7 @@ $config5 = new ExtractionConfig(
     outputFormat: 'markdown'
 );
 
-$result5 = (new Xberg($config5))->extractFile('presentation.pptx');
+$result5 = (new Xberg($config5))->extract('presentation.pptx');
 
 $markdownContent = $result5->content;
 file_put_contents('presentation.md', $markdownContent);
@@ -131,7 +131,7 @@ $config6 = new ExtractionConfig(
     page: new PageConfig(extractPages: true)
 );
 
-$result6 = (new Xberg($config6))->extractFile('meeting_deck.pptx');
+$result6 = (new Xberg($config6))->extract('meeting_deck.pptx');
 
 echo "Presentation Summary:\n";
 echo "====================\n";
@@ -158,7 +158,7 @@ $config7 = new ExtractionConfig(
     page: new PageConfig(extractPages: true)
 );
 
-$result7 = (new Xberg($config7))->extractFile('presentation.pptx');
+$result7 = (new Xberg($config7))->extract('presentation.pptx');
 
 $searchTerm = "revenue";
 

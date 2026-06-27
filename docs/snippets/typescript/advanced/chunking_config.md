@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-import { extractFile } from "@xberg/node";
+import { extract } from "@xberg-io/xberg";
 
 const config = {
   chunking: {
@@ -8,12 +8,12 @@ const config = {
   },
 };
 
-const result = await extractFile("document.pdf", null, config);
+const result = await extract("document.pdf", null, config);
 console.log(`Total chunks: ${result.chunks?.length ?? 0}`);
 ```
 
 ```typescript title="TypeScript - Semantic"
-import { extractFile } from "@xberg/node";
+import { extract } from "@xberg-io/xberg";
 
 const config = {
   chunking: {
@@ -21,14 +21,14 @@ const config = {
   },
 };
 
-const result = await extractFile("document.pdf", null, config);
+const result = await extract("document.pdf", null, config);
 for (const chunk of result.chunks ?? []) {
   console.log(`Content: ${chunk.content.slice(0, 100)}...`);
 }
 ```
 
 ```typescript title="TypeScript - Prepend Heading Context"
-import { extractFile } from "@xberg/node";
+import { extract } from "@xberg-io/xberg";
 
 const config = {
   chunking: {
@@ -39,7 +39,7 @@ const config = {
   },
 };
 
-const result = await extractFile("document.md", null, config);
+const result = await extract("document.md", null, config);
 for (const chunk of result.chunks ?? []) {
   // Each chunk's content is prefixed with its heading breadcrumb
   console.log(`Content: ${chunk.content.slice(0, 100)}...`);

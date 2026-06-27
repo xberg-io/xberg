@@ -3,7 +3,7 @@
 Register a validator that computes and checks a quality score for extracted text.
 
 ```typescript title="WASM"
-import init, { registerValidator, extractBytes } from "xberg-wasm";
+import init, { registerValidator, extract } from "xberg-wasm";
 
 await init();
 
@@ -68,7 +68,7 @@ try {
 const pdfBytes = new Uint8Array([
   /* PDF content */
 ]);
-const result = await extractBytes(pdfBytes, "application/pdf", {});
+const result = await extract(pdfBytes, "application/pdf", {});
 const validation = qualityScoreValidator.validate(result);
 console.log("Quality assessment:", validation.metadata);
 ```

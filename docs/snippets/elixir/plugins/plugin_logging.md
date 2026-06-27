@@ -8,7 +8,7 @@ use tracing::{debug, info, warn};
 
 #[async_trait]
 impl DocumentExtractor for MyExtractor {
-    async fn extract_bytes(
+    async fn extract(
         &self,
         content: &[u8],
         mime_type: &str,

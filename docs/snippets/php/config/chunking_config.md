@@ -14,7 +14,7 @@ $config = new ExtractionConfig(
     )
 );
 
-$result = Xberg::extractFileSync('document.pdf', null, $config);
+$result = Xberg::extractSync('document.pdf', null, $config);
 
 echo "Number of chunks: " . count($result->getChunks()) . "\n";
 foreach ($result->getChunks() as $chunk) {
@@ -40,7 +40,7 @@ $config = new ExtractionConfig(
     )
 );
 
-$result = Xberg::extractFileSync('document.md', null, $config);
+$result = Xberg::extractSync('document.md', null, $config);
 
 foreach ($result->getChunks() as $chunk) {
     $metadata = $chunk->getMetadata();

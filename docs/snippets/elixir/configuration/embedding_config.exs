@@ -14,7 +14,7 @@ config = %ExtractionConfig{
   }
 }
 
-{:ok, result} = Xberg.extract_file("document.pdf", nil, config)
+{:ok, result} = Xberg.extract("document.pdf", nil, config)
 
 IO.puts("Extracted chunks with embeddings: #{length(result.chunks || [])}")
 ```

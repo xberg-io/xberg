@@ -1,4 +1,4 @@
-import type { ExtractionConfig } from "@xberg/wasm";
+import type { ExtractionConfig } from "@xberg-io/xberg-wasm";
 
 function validateExtractionConfig(config: unknown): config is ExtractionConfig {
   if (!config || typeof config !== "object") {

@@ -10,7 +10,7 @@ Future<void> main() async {
   // Recommended approaches:
   // 1. Test core plugin logic directly in unit tests with mock data
   // 2. Write integration tests that register the plugin and exercise it via
-  //    XbergBridge.extractFile or other extraction methods
+  //    XbergBridge.extract or other extraction methods
   // 3. For complex plugins, implement in Rust and test with #[tokio::test]
 }
 ```

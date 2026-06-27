@@ -7,35 +7,44 @@
 use rmcp::schemars;
 use serde::{Deserialize, Serialize};
 
-/// Structured output for a single document extraction.
+/// Structured output for unified extraction.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ExtractionOutput {
-    /// Plain-text content extracted from the document.
-    #[schemars(description = "Plain-text content extracted from the document")]
-    pub text: String,
-    /// MIME type of the source document.
-    #[schemars(description = "MIME type of the source document")]
-    pub mime_type: Option<String>,
-    /// Document-level metadata key-value pairs.
-    #[schemars(description = "Document-level metadata key-value pairs")]
-    pub metadata: std::collections::HashMap<String, String>,
-    /// Tables extracted from the document as JSON values.
-    #[schemars(description = "Tables extracted from the document")]
-    pub tables: Vec<serde_json::Value>,
-    /// ISO 639-1 language codes detected in the document.
-    #[schemars(description = "ISO 639-1 language codes detected in the document")]
-    pub detected_languages: Vec<String>,
+    /// Extraction results in discovery order.
+    #[schemars(description = "Extraction results in discovery order")]
+    pub results: Vec<serde_json::Value>,
+    /// Non-fatal per-input errors.
+    #[schemars(description = "Non-fatal per-input errors")]
+    pub errors: Vec<serde_json::Value>,
+    /// Aggregate extraction counts.
+    #[schemars(description = "Aggregate extraction counts")]
+    pub summary: ExtractionSummaryOutput,
+    /// Final URLs reached after redirects during URL ingestion.
+    #[schemars(description = "Final URLs reached after redirects during URL ingestion")]
+    pub crawl_final_urls: Vec<String>,
+    /// Total redirects followed while fetching or crawling URLs.
+    #[schemars(description = "Total redirects followed while fetching or crawling URLs")]
+    pub crawl_redirect_count: usize,
+    /// Unique normalized URLs discovered by crawls.
+    #[schemars(description = "Unique normalized URLs discovered by crawls")]
+    pub crawl_unique_normalized_urls: Vec<String>,
 }
 
-/// Structured output for batch document extraction.
+/// Structured summary for unified extraction.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
-pub struct BatchExtractionOutput {
-    /// Extraction results, one per input file.
-    #[schemars(description = "Extraction results, one per input file")]
-    pub results: Vec<ExtractionOutput>,
-    /// Total number of documents processed.
-    #[schemars(description = "Total number of documents processed")]
-    pub count: usize,
+pub struct ExtractionSummaryOutput {
+    /// Number of inputs submitted by the caller.
+    pub inputs: usize,
+    /// Number of extraction results produced.
+    pub results: usize,
+    /// Number of per-input errors.
+    pub errors: usize,
+    /// Number of remote HTTP(S) URLs resolved.
+    pub remote_urls: usize,
+    /// Number of HTML pages crawled or scraped.
+    pub pages_crawled: usize,
+    /// Number of downloaded non-HTML documents extracted from URLs.
+    pub documents_downloaded: usize,
 }
 
 /// Structured output for MIME type detection.

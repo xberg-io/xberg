@@ -26,7 +26,7 @@ func main() {
 		log.Fatalf("register validator failed: %v", err)
 	}
 
-	result, err := xberg.ExtractFileSync("document.pdf", nil)
+	result, err := xberg.ExtractSync("document.pdf", nil)
 	if err != nil {
 		log.Fatalf("extract failed: %v", err)
 	}

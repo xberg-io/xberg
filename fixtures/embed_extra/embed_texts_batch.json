@@ -2,10 +2,16 @@
 	"id": "embed_texts_batch",
 	"category": "embed_extra",
 	"description": "Batch embed texts",
-	"tags": ["embedding", "batch"],
+	"tags": [
+		"embedding",
+		"batch"
+	],
 	"call": "embed_texts",
 	"input": {
-		"texts": ["Hello", "World"],
+		"texts": [
+			"Hello",
+			"World"
+		],
 		"config": {
 			"model": {
 				"type": "preset",
@@ -13,9 +19,15 @@
 			}
 		}
 	},
-	"assertions": [{ "type": "not_error" }],
+	"assertions": [
+		{
+			"type": "not_error"
+		}
+	],
 	"skip": {
-		"languages": ["wasm"],
+		"languages": [
+			"wasm"
+		],
 		"reason": "embeddings feature depends on ONNX Runtime which is not available on the WASM target"
 	}
 }

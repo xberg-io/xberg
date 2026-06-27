@@ -10,7 +10,7 @@ config = %ExtractionConfig{
   }
 }
 
-{:ok, result} = Xberg.extract_file("document.pdf", nil, config)
+{:ok, result} = Xberg.extract("document.pdf", nil, config)
 
 # Access extracted keywords
 if result.keywords do

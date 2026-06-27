@@ -1,5 +1,5 @@
 ```typescript title="WASM"
-import { initWasm, extractBytes } from "@xberg/wasm";
+import { initWasm, extract } from "@xberg-io/xberg-wasm";
 
 await initWasm();
 
@@ -11,7 +11,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extractBytes(bytes, "application/pdf", config);
+const result = await extract(bytes, "application/pdf", config);
 
 result.chunks?.forEach((chunk, idx) => {
   console.log(`Chunk ${idx}: ${chunk.content.substring(0, 50)}...`);
@@ -20,7 +20,7 @@ result.chunks?.forEach((chunk, idx) => {
 ```
 
 ```typescript title="WASM - Markdown with Heading Context"
-import { initWasm, extractBytes } from "@xberg/wasm";
+import { initWasm, extract } from "@xberg-io/xberg-wasm";
 
 await initWasm();
 
@@ -34,7 +34,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extractBytes(bytes, "text/markdown", config);
+const result = await extract(bytes, "text/markdown", config);
 
 result.chunks?.forEach((chunk, idx) => {
   console.log(`Chunk ${idx}: ${chunk.content.substring(0, 50)}...`);
@@ -49,7 +49,7 @@ result.chunks?.forEach((chunk, idx) => {
 ```
 
 ```typescript title="WASM - Prepend Heading Context"
-import { initWasm, extractBytes } from "@xberg/wasm";
+import { initWasm, extract } from "@xberg-io/xberg-wasm";
 
 await initWasm();
 
@@ -62,7 +62,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extractBytes(bytes, "text/markdown", config);
+const result = await extract(bytes, "text/markdown", config);
 
 result.chunks?.forEach((chunk, idx) => {
   // Each chunk's content is prefixed with its heading breadcrumb

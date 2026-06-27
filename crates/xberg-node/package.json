@@ -1,5 +1,5 @@
 {
-  "name": "@xberg/node",
+  "name": "@xberg-io/xberg",
   "version": "1.0.0-rc.1",
   "description": "High-performance document intelligence library",
   "license": "MIT",
@@ -18,17 +18,17 @@
   },
   "files": ["index.js", "index.d.ts", "*.node"],
   "optionalDependencies": {
-    "@xberg/node-linux-x64-gnu": "1.0.0-rc.1",
-    "@xberg/node-linux-arm64-gnu": "1.0.0-rc.1",
-    "@xberg/node-linux-x64-musl": "1.0.0-rc.1",
-    "@xberg/node-linux-arm64-musl": "1.0.0-rc.1",
-    "@xberg/node-darwin-x64": "1.0.0-rc.1",
-    "@xberg/node-darwin-arm64": "1.0.0-rc.1",
-    "@xberg/node-win32-x64-msvc": "1.0.0-rc.1",
-    "@xberg/node-win32-arm64-msvc": "1.0.0-rc.1"
+    "@xberg-io/xberg-linux-x64-gnu": "1.0.0-rc.1",
+    "@xberg-io/xberg-linux-arm64-gnu": "1.0.0-rc.1",
+    "@xberg-io/xberg-linux-x64-musl": "1.0.0-rc.1",
+    "@xberg-io/xberg-linux-arm64-musl": "1.0.0-rc.1",
+    "@xberg-io/xberg-darwin-x64": "1.0.0-rc.1",
+    "@xberg-io/xberg-darwin-arm64": "1.0.0-rc.1",
+    "@xberg-io/xberg-win32-x64-msvc": "1.0.0-rc.1",
+    "@xberg-io/xberg-win32-arm64-msvc": "1.0.0-rc.1"
   },
   "napi": {
-    "packageName": "@xberg/node",
+    "packageName": "@xberg-io/xberg",
     "binaryName": "xberg-node",
     "targets": [
       "x86_64-unknown-linux-gnu",

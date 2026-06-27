@@ -43,7 +43,7 @@ func (c *DockerXbergClient) StartContainer() error {
 	return nil
 }
 
-func (c *DockerXbergClient) ExtractFile(filePath string) (string, error) {
+func (c *DockerXbergClient) Extract(filePath string) (string, error) {
 	fileBytes, err := os.ReadFile(filePath)
 	if err != nil {
 		return "", err
@@ -104,7 +104,7 @@ func main() {
 
 	time.Sleep(2 * time.Second)
 
-	content, err := client.ExtractFile("document.pdf")
+	content, err := client.Extract("document.pdf")
 	if err != nil {
 		panic(err)
 	}

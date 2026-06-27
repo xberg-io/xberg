@@ -16,7 +16,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('scanned.pdf');
+$result = $xberg->extract('scanned.pdf');
 
 if ($result->ocrElements !== null) {
     foreach ($result->ocrElements as $element) {

@@ -1,5 +1,5 @@
 ```rust title="Rust"
-use xberg::{extract_file_sync, ChunkingConfig, ExtractionConfig, OcrConfig, TesseractConfig};
+use xberg::{extract_sync, ChunkingConfig, ExtractionConfig, OcrConfig, TesseractConfig};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = ExtractionConfig {
@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ..Default::default()
     };
 
-    let result = extract_file_sync("document.pdf", None, &config)?;
+    let result = extract_sync("document.pdf", None, &config)?;
     println!("Content length: {}", result.content.len());
     Ok(())
 }

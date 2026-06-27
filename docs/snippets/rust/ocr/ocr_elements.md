@@ -1,5 +1,5 @@
 ```rust title="Rust"
-use xberg::{extract_file, ExtractionConfig, OcrConfig};
+use xberg::{extract, ExtractionConfig, OcrConfig};
 use xberg::types::OcrElementConfig;
 
 #[tokio::main]
@@ -17,7 +17,7 @@ async fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract_file("scanned.pdf", None, &config).await?;
+    let result = extract("scanned.pdf", None, &config).await?;
 
     if let Some(elements) = &result.ocr_elements {
         for element in elements {

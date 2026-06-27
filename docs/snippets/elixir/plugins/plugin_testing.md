@@ -12,10 +12,10 @@ mod tests {
     async fn test_custom_extractor() {
         let extractor = MyExtractor;
         let content = b"test content";
-        let result = extractor.extract_bytes(content, "text/plain", &ExtractionConfig::default()).await;
+        let result = extractor.extract(content, "text/plain", &ExtractionConfig::default()).await;
         assert!(result.is_ok());
     }
 }
 ```
 
-For Elixir, you can test the extraction results using the built-in functions like `Xberg.extract_bytes_async/3` and `Xberg.extract_file_async/3`.
+For Elixir, you can test the extraction results using the built-in functions like `Xberg.extract_async/3` and `Xberg.extract_async/3`.

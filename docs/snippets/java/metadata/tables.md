@@ -9,7 +9,7 @@ import java.util.List;
 public class Main {
     public static void main(String[] args) {
         try {
-            ExtractionResult result = Xberg.extractFile("document.pdf");
+            ExtractionResult result = Xberg.extract("document.pdf");
 
             for (Table table : result.getTables()) {
                 System.out.println("Table with " + table.cells().size() + " rows");

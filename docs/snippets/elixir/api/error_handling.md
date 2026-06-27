@@ -2,7 +2,7 @@
 defmodule Example do
   def handle_extraction_errors do
     # Extract with invalid MIME type
-    case Xberg.extract_file_sync("document.txt", nil, nil) do
+    case Xberg.extract_sync("document.txt", nil, nil) do
       {:ok, result} ->
         IO.puts("Success: #{String.length(result)} chars")
 

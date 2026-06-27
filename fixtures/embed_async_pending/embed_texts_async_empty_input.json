@@ -3,7 +3,9 @@
 	"category": "embed_async_pending",
 	"description": "embed_texts_async: empty text list",
 	"call": "embed_texts_async",
-	"assertion_recipes": ["embeddings"],
+	"assertion_recipes": [
+		"embeddings"
+	],
 	"input": {
 		"texts": [],
 		"config": {

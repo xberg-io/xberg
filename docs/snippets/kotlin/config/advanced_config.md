@@ -55,7 +55,7 @@ fun main() {
         .withPostprocessor(Optional.of(postprocessor))
         .build()
 
-    val result = Xberg.extractFileSync(Paths.get("document.pdf"), null, config)
+    val result = Xberg.extractSync(Paths.get("document.pdf"), null, config)
     println("Content: ${result.content()}")
     result.detectedLanguages()?.let { println("Languages: $it") }
     println("Chunks: ${result.chunks()?.size ?: 0}")

@@ -181,10 +181,10 @@ jobs:
         uses: xberg-io/actions/check-registry@v1
         with:
           registry: npm
-          package: "@xberg/node"
+          package: "@xberg-io/xberg"
           version: ${{ needs.prepare.outputs.version }}
           extra-packages: |
-            wasm_exists=@xberg/wasm
+            wasm_exists=@xberg-io/xberg-wasm
 
   check-rubygems:
     name: Check RubyGems for existing version
@@ -706,7 +706,7 @@ jobs:
           name: wasm-bundle
           # pkg/ holds the wasm-pack output that package.json's main/module/types
           # point at (pkg/nodejs/…, pkg/web/…); it MUST ship in the artifact or the
-          # published @xberg/wasm tarball has missing entry points. package.json
+          # published @xberg-io/xberg-wasm tarball has missing entry points. package.json
           # is included so the publish job uses the build-stamped manifest.
           path: |
             crates/xberg-wasm/dist/**
@@ -2254,7 +2254,7 @@ jobs:
         with:
           language: node-platform
           artifact-path: crates/xberg-node/npm
-          package-name: "@xberg/node"
+          package-name: "@xberg-io/xberg"
           # NAPI scaffolds stub package.json dirs for every platform in
           # crates/xberg-node/package.json's `napi.triples.additional`,
           # not just the targets we build (e.g. darwin-x64, win32-arm64-msvc
@@ -2275,13 +2275,13 @@ jobs:
       # Wait for the platform sub-packages to be resolvable on npm before
       # publishing the main package, whose optionalDependencies reference them.
       # Without this the main package can land before its platform deps index,
-      # leaving a window where `npm install @xberg/node` fails.
+      # leaving a window where `npm install @xberg-io/xberg` fails.
       - name: Wait for npm indexing (node-linux-x64-gnu)
         if: ${{ needs.prepare.outputs.dry_run != 'true' }}
         uses: xberg-io/actions/wait-for-package@v1
         with:
           registry: npm
-          package: "@xberg/node-linux-x64-gnu"
+          package: "@xberg-io/xberg-linux-x64-gnu"
           version: ${{ needs.prepare.outputs.version }}
           max-attempts: "60"
 
@@ -2290,11 +2290,11 @@ jobs:
         uses: xberg-io/actions/wait-for-package@v1
         with:
           registry: npm
-          package: "@xberg/node-linux-arm64-gnu"
+          package: "@xberg-io/xberg-linux-arm64-gnu"
           version: ${{ needs.prepare.outputs.version }}
           max-attempts: "60"
 
-      - name: Publish main @xberg/node package
+      - name: Publish main @xberg-io/xberg package
         uses: xberg-io/actions/publish-npm@v1
         with:
           package-dir: crates/xberg-node

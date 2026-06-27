@@ -64,7 +64,7 @@ use super::helpers::get_extractor;
         { crate::telemetry::conventions::ERROR_MESSAGE } = tracing::field::Empty,
     )
 ))]
-pub async fn extract_file(
+pub(crate) async fn extract_file(
     path: impl AsRef<Path>,
     mime_type: Option<&str>,
     config: &ExtractionConfig,

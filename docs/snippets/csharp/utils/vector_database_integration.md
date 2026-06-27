@@ -15,7 +15,7 @@ var config = new ExtractionConfig
     },
 };
 
-var result = await XbergLib.ExtractFile("document.pdf", null, config);
+var result = await XbergLib.Extract("document.pdf", null, config);
 
 var chunks = result.Chunks ?? new List<Chunk>();
 for (var i = 0; i < chunks.Count; i++)

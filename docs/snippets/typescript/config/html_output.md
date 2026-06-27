@@ -1,7 +1,7 @@
 ```typescript title="TypeScript"
-import { extractFile } from "xberg";
+import { extract } from "xberg";
 
-const result = await extractFile("document.pdf", {
+const result = await extract("document.pdf", {
   outputFormat: "html",
   htmlOutput: {
     theme: "github",

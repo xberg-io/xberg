@@ -23,7 +23,7 @@ $config = new ExtractionConfig();
 $config->chunking = $chunkConfig;
 $config->embeddings = $embeddingConfig;
 
-$result = Xberg::extract_file_sync("document.pdf", null, $config);
+$result = Xberg::extract_sync("document.pdf", null, $config);
 
 // Store chunks and embeddings for vector database
 if ($result->chunks !== null) {

@@ -13,7 +13,7 @@ var config = new ExtractionConfig
     }
 };
 
-var result = await XbergLib.ExtractFile("document.pdf", null, config);
+var result = await XbergLib.Extract("document.pdf", null, config);
 if (result.Keywords != null)
 {
     Console.WriteLine($"Keywords: {string.Join(", ", result.Keywords)}");

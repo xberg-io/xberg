@@ -1,7 +1,7 @@
 ```r title="R"
 library(xberg)
 
-result <- extract_file_sync("spreadsheet.xlsx")
+result <- extract_sync("spreadsheet.xlsx")
 
 cat("Tables extracted:", length(result$tables), "\n\n")
 

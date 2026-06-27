@@ -60,7 +60,7 @@ Future<List<VectorRecord>> extractAndVectorize(
     useLayoutForMarkdown: false,    chunking: chunking,
   );
 
-  final result = await XbergBridge.extractFile(documentPath, null, config);
+  final result = await XbergBridge.extract(documentPath, null, config);
   final chunks = result.chunks ?? const <Chunk>[];
 
   final records = <VectorRecord>[];

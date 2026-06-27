@@ -193,7 +193,7 @@ Document extractors in Go are lazily initialized. The fixture `extractors_list.j
   "setup": {
     "lazy_init_required": {
       "languages": ["go"],
-      "init_action": "extract_file_sync",
+      "init_action": "extract",
       "init_data": {
         "create_temp_file": true,
         "temp_file_name": "test.pdf",

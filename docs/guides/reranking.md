@@ -1,8 +1,5 @@
 # Reranking
 
-!!! Tip "New in v5.0"
-    Cross-encoder reranking is a new feature for query-time document reordering.
-
 Rerank candidate documents by joint relevance scoring. After vector retrieval returns top-K candidates, rerank to surface the most relevant documents for LLM context.
 
 ## Quick example
@@ -34,7 +31,7 @@ Use the `fast` preset to rerank three documents against a query.
 === "TypeScript"
 
     ```typescript
-    import { rerankSync, RerankerConfig } from "@xberg/node";
+    import { rerankSync, RerankerConfig } from "@xberg-io/xberg";
 
     const config: RerankerConfig = {
       model: { type: "preset", name: "fast" },

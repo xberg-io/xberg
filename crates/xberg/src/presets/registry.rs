@@ -1,8 +1,7 @@
 //! In-memory registry of curated presets, embedded at compile time.
 //!
-//! The embedded library ships only the `generic_document` toy preset. The
-//! curated downstream catalog (xberg-enterprise) adds presets at runtime via
-//! [`Registry::extend_from_dir`].
+//! The embedded library ships only the `generic_document` toy preset. Downstream
+//! catalog consumers can add presets at runtime via [`Registry::extend_from_dir`].
 
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
@@ -101,9 +100,8 @@ impl Registry {
     ///
     /// # Use case
     ///
-    /// This is the injection point for downstream catalogs: xberg-enterprise
-    /// calls this once at startup to add its 20+ curated presets on top of the
-    /// single embedded OSS preset.
+    /// This is the injection point for downstream catalogs that add curated
+    /// presets on top of the single embedded OSS preset.
     pub fn extend_from_dir(&mut self, dir: &std::path::Path) -> Result<usize, LoadError> {
         let meta = MetaSchema::compile(META_SCHEMA)?;
         let mut count = 0usize;

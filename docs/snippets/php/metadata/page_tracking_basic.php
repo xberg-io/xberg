@@ -23,7 +23,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('document.pdf');
+$result = $xberg->extract('document.pdf');
 
 if (!empty($result->pages)) {
     foreach ($result->pages as $page) {

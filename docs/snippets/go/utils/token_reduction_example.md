@@ -16,7 +16,7 @@ func main() {
 		},
 	}
 
-	result, err := xberg.ExtractFileSync("verbose_document.pdf", config)
+	result, err := xberg.ExtractSync("verbose_document.pdf", config)
 	if err != nil {
 		log.Fatalf("extract failed: %v", err)
 	}

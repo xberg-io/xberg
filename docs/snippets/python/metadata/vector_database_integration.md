@@ -1,5 +1,5 @@
 ```python title="Python"
-from xberg import extract_file_sync, ExtractionConfig, ChunkingConfig, EmbeddingConfig
+from xberg import extract_sync, ExtractionConfig, ChunkingConfig, EmbeddingConfig
 
 config = ExtractionConfig(
     chunking=ChunkingConfig(
@@ -13,7 +13,7 @@ config = ExtractionConfig(
     ),
 )
 
-result = extract_file_sync("document.pdf", config=config)
+result = extract_sync("document.pdf", config=config)
 
 records: list[dict] = []
 if result.chunks:

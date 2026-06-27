@@ -237,7 +237,7 @@ config = %Xberg.ExtractionConfig{
   chunking: %{"enabled" => true, "max_characters" => 1000}
 }
 
-{:ok, result} = Xberg.extract_file("multipage_doc.pdf", nil, config)
+{:ok, result} = Xberg.extract("multipage_doc.pdf", nil, config)
 chunks = result.chunks || []
 
 IO.puts("=== Page Boundaries ===")

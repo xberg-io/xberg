@@ -5,7 +5,7 @@ import java.nio.file.Paths
 
 fun extractText(bytes: ByteArray, mimeType: String): String {
     val config = ExtractionConfig.builder().build()
-    val result = Xberg.extractBytesSync(bytes, mimeType, config)
+    val result = Xberg.extractSync(bytes, mimeType, config)
     return result.content()
 }
 

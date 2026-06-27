@@ -6,7 +6,7 @@ config <- list(
   output_format = "markdown"
 )
 
-json <- extract_file_sync("document.pdf", "application/pdf", config)
+json <- extract_sync("document.pdf", "application/pdf", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Total elements: %d\n\n", length(result$elements)))

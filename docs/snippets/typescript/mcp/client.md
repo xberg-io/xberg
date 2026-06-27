@@ -8,7 +8,7 @@ import * as readline from "node:readline";
  * @example
  * const client = new XbergMcpClient();
  * await client.connect();
- * const result = await client.callTool("extract_file", { path: "doc.pdf" });
+ * const result = await client.callTool("extract", { path: "doc.pdf" });
  */
 class XbergMcpClient {
   private process: ReturnType<typeof spawn> | null = null;
@@ -88,8 +88,8 @@ class XbergMcpClient {
   /**
    * Extract file from path
    */
-  async extractFile(path: string, async: boolean = false): Promise<Record<string, unknown>> {
-    return this.callTool("extract_file", {
+  async extract(path: string, async: boolean = false): Promise<Record<string, unknown>> {
+    return this.callTool("extract", {
       path,
       async,
     }) as Promise<Record<string, unknown>>;
@@ -98,13 +98,13 @@ class XbergMcpClient {
   /**
    * Extract from bytes
    */
-  async extractBytes(
+  async extract(
     data: Uint8Array,
     mimeType: string,
     async: boolean = false,
   ): Promise<Record<string, unknown>> {
     const base64 = Buffer.from(data).toString("base64");
-    return this.callTool("extract_bytes", {
+    return this.callTool("extract", {
       data: base64,
       mimeType,
       async,
@@ -156,7 +156,7 @@ async function main(): Promise<void> {
     );
 
     // Extract file
-    const result = await client.extractFile("document.pdf", true);
+    const result = await client.extract("document.pdf", true);
     console.log("Extraction result:", result);
   } catch (error) {
     console.error("Error:", error);

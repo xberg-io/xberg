@@ -5,7 +5,7 @@ import java.nio.file.Paths
 fun main() {
     val config = ExtractionConfig.builder().build()
     try {
-        val result = Xberg.extractFileSync(Paths.get("document.pdf"), null, config)
+        val result = Xberg.extractSync(Paths.get("document.pdf"), null, config)
         println(result.content())
     } catch (e: XbergRsException) {
         System.err.println("Extraction failed: ${e.message}")

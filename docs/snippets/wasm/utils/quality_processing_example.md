@@ -1,5 +1,5 @@
 ```typescript title="WASM"
-import init, { extractFile } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 
@@ -7,7 +7,7 @@ const config = {
   enableQualityProcessing: true,
 };
 
-const result = await extractFile("scanned_document.pdf", undefined, config);
+const result = await extract("scanned_document.pdf", undefined, config);
 console.log(`Content length: ${result.content.length} characters`);
 if (result.qualityScore !== undefined && result.qualityScore !== null) {
   console.log(`Quality score: ${result.qualityScore.toFixed(2)}`);

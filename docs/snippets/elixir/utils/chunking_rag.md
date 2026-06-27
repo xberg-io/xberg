@@ -14,7 +14,7 @@ config_json =
     }
   })
 
-{:ok, json} = Xberg.extract_file_async("research_paper.pdf", nil, config_json)
+{:ok, json} = Xberg.extract_async("research_paper.pdf", nil, config_json)
 result = Jason.decode!(json)
 
 chunks_with_embeddings =

@@ -11,7 +11,7 @@ var config = new ExtractionConfig
     }
 };
 
-var result = await XbergLib.ExtractFile("document.pdf", null, config);
+var result = await XbergLib.Extract("document.pdf", null, config);
 if (result.Chunks != null)
 {
     Console.WriteLine($"Total chunks: {result.Chunks.Count}");
@@ -36,7 +36,7 @@ var config = new ExtractionConfig
     }
 };
 
-var result = await XbergLib.ExtractFile("document.md", null, config);
+var result = await XbergLib.Extract("document.md", null, config);
 if (result.Chunks != null)
 {
     foreach (var chunk in result.Chunks)

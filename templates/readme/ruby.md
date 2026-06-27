@@ -39,7 +39,7 @@ gem install xberg
 require 'xberg'
 
 # Simple synchronous extraction
-result = Xberg.extract_file("document.pdf")
+result = Xberg.extract(Xberg::ExtractInput.file("document.pdf"))
 puts result.content
 ```
 
@@ -50,7 +50,7 @@ require 'xberg'
 
 # Using Fiber for concurrency (Ruby 3.0+)
 Fiber.new do
-  result = Xberg.extract_file_async("document.pdf")
+  result = Xberg.extract(Xberg::ExtractInput.file("document.pdf"))
   puts result.content
 end.resume
 ```
@@ -60,9 +60,13 @@ end.resume
 ```ruby
 require 'xberg'
 
-files = ["doc1.pdf", "doc2.docx", "doc3.xlsx"]
+inputs = [
+  Xberg::ExtractInput.file("doc1.pdf"),
+  Xberg::ExtractInput.file("doc2.docx"),
+  Xberg::ExtractInput.file("doc3.xlsx"),
+]
 
-results = files.map { |file| Xberg.extract_file(file) }
+results = Xberg.extract_batch(inputs)
 
 results.each do |result|
   puts "Content length: #{result.content.length}"
@@ -83,7 +87,7 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract_file("document.pdf", config: config)
+result = Xberg.extract("document.pdf", config: config)
 puts result.content
 ```
 
@@ -105,7 +109,7 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract_file("scanned.pdf", config: config)
+result = Xberg.extract("scanned.pdf", config: config)
 puts result.content
 ```
 
@@ -123,7 +127,7 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract_file("invoice.pdf", config: config)
+result = Xberg.extract("invoice.pdf", config: config)
 
 result.tables.each_with_index do |table, index|
   puts "Table #{index}:"
@@ -136,7 +140,7 @@ end
 ```ruby
 require 'xberg'
 
-result = Xberg.extract_file("document.pdf")
+result = Xberg.extract("document.pdf")
 
 # PDF metadata
 if result.metadata[:pdf]
@@ -167,7 +171,7 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract_file("long_document.pdf", config: config)
+result = Xberg.extract("long_document.pdf", config: config)
 
 result.chunks.each_with_index do |chunk, index|
   puts "Chunk #{index}: #{chunk.length} characters"
@@ -185,7 +189,7 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract_file("protected.pdf", config: config)
+result = Xberg.extract("protected.pdf", config: config)
 puts result.content
 ```
 
@@ -200,7 +204,7 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract_file("multilingual.pdf", config: config)
+result = Xberg.extract("multilingual.pdf", config: config)
 puts "Detected languages: #{result.detected_languages}"
 ```
 
@@ -208,10 +212,10 @@ puts "Detected languages: #{result.detected_languages}"
 
 ### Main Methods
 
-- `Xberg.extract_file(path, config: nil)` – Extract from file
-- `Xberg.extract_file_async(path, config: nil)` – Async extraction
-- `Xberg.extract_bytes(data, mime_type, config: nil)` – Extract from bytes
-- `Xberg.batch_extract_files(paths, config: nil)` – Batch processing
+- `Xberg.extract(input, config: nil)` – Extract one `ExtractInput`
+- `Xberg.extract_batch(inputs, config: nil)` – Batch processing
+- `Xberg::ExtractInput.file(path, mime_type: nil, **overrides)` – File path input
+- `Xberg::ExtractInput.bytes(data, mime_type:, **overrides)` – In-memory bytes input
 
 ### Configuration Classes
 
@@ -322,7 +326,7 @@ require 'pathname'
 
 Dir.glob("documents/*.pdf").each do |file|
   puts "Processing: #{file}"
-  result = Xberg.extract_file(file)
+  result = Xberg.extract(file)
   puts "  Content length: #{result.content.length}"
   puts "  Language: #{result.detected_languages}"
 end
@@ -334,7 +338,7 @@ end
 require 'xberg'
 require 'json'
 
-result = Xberg.extract_file("data.pdf")
+result = Xberg.extract("data.pdf")
 
 # Parse content as JSON (if applicable)
 begin
@@ -356,7 +360,7 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract_file("document.pdf", config: config)
+result = Xberg.extract("document.pdf", config: config)
 
 result.images&.each_with_index do |image, index|
   File.write("image_#{index}.png", image.data)
@@ -369,7 +373,6 @@ For comprehensive documentation, visit [https://xberg.io](https://xberg.io)
 
 ## Part of Xberg.dev
 
-- [Xberg Enterprise](https://github.com/xberg-io/xberg-enterprise) — managed extraction API with SDKs, dashboards, and observability.
 - [crawlberg](https://github.com/xberg-io/crawlberg) — web crawling and scraping with HTML→Markdown and headless-Chrome fallback.
 - [html-to-markdown](https://github.com/xberg-io/html-to-markdown) — fast, lossless HTML→Markdown engine.
 - [liter-llm](https://github.com/xberg-io/liter-llm) — universal LLM API client with native bindings for 14 languages and 143 providers.

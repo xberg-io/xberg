@@ -6,7 +6,7 @@ Open3.popen3('xberg', 'mcp') do |stdin, stdout, stderr, wait_thr|
   request = {
     method: 'tools/call',
     params: {
-      name: 'extract_file',
+      name: 'extract',
       arguments: { path: 'document.pdf', async: true }
     }
   }

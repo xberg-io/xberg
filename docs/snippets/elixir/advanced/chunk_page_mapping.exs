@@ -4,7 +4,7 @@ config = %Xberg.ExtractionConfig{
   track_page_boundaries: true
 }
 
-{:ok, result} = Xberg.extract_file("document.pdf", nil, config)
+{:ok, result} = Xberg.extract("document.pdf", nil, config)
 
 # Map each chunk to its source page
 Enum.with_index(result.chunks || [], 1) |> Enum.each(fn {chunk, idx} ->

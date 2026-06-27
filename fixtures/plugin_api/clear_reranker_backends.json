@@ -2,7 +2,12 @@
 	"id": "clear_reranker_backends",
 	"category": "reranker_backend_management",
 	"description": "Clear all reranker backends and verify list is empty",
-	"tags": ["reranker", "plugin_management", "clear", "trait-bridge"],
+	"tags": [
+		"reranker",
+		"plugin_management",
+		"clear",
+		"trait-bridge"
+	],
 	"call": "clear_reranker_backends",
 	"assertions": [
 		{

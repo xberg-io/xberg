@@ -47,7 +47,7 @@ Future<List<VectorRecord>> extractAndVectorize(
     useLayoutForMarkdown: false,
   );
 
-  final result = await XbergBridge.extractFile(documentPath, null, config);
+  final result = await XbergBridge.extract(documentPath, null, config);
   final records = <VectorRecord>[];
   final chunks = result.chunks ?? const [];
   for (var index = 0; index < chunks.length; index++) {

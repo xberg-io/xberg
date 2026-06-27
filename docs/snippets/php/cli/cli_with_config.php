@@ -86,7 +86,7 @@ try {
 
     $start = microtime(true);
     $xberg = new Xberg($config);
-    $result = $xberg->extractFile($inputFile);
+    $result = $xberg->extract($inputFile);
     $elapsed = microtime(true) - $start;
 
     fwrite(STDERR, "Extraction completed in " . number_format($elapsed, 3) . "s\n");

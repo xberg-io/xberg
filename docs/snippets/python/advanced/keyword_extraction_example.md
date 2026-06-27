@@ -4,7 +4,7 @@ from xberg import (
     ExtractionConfig,
     KeywordConfig,
     KeywordAlgorithm,
-    extract_file,
+    extract,
 )
 
 
@@ -17,7 +17,7 @@ async def main() -> None:
         )
     )
 
-    result = await extract_file("research_paper.pdf", config=config)
+    result = await extract("research_paper.pdf", config=config)
 
     for keyword in result.extracted_keywords or []:
         print(f"{keyword.text}: {keyword.score:.3f}")

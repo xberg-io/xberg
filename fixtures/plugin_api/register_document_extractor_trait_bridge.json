@@ -2,7 +2,9 @@
 	"id": "register_document_extractor_trait_bridge",
 	"category": "plugin_api",
 	"description": "register_document_extractor: trait bridge",
-	"tags": ["trait-bridge"],
+	"tags": [
+		"trait-bridge"
+	],
 	"call": "register_document_extractor",
 	"input": {
 		"extractor": {

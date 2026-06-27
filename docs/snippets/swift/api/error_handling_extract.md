@@ -7,7 +7,7 @@ func extractText(bytes: [UInt8], mimeType: String) throws -> String {
     let content = RustVec<UInt8>()
     for byte in bytes { content.push(value: byte) }
     let config = try extractionConfigFromJson("{}")
-    let result = try extractBytesSync(content, mimeType, config)
+    let result = try extractSync(content, mimeType, config)
     return result.content().toString()
 }
 

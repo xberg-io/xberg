@@ -1,4 +1,4 @@
-import { extractBytes, initWasm } from "@xberg/wasm";
+import { extract, initWasm } from "@xberg-io/xberg-wasm";
 
 async function processLargeDocumentSet(files: File[]) {
   await initWasm();
@@ -15,7 +15,7 @@ async function processLargeDocumentSet(files: File[]) {
       batch.map(async (file) => {
         const arrayBuffer = await file.arrayBuffer();
         const bytes = new Uint8Array(arrayBuffer);
-        return extractBytes(bytes, file.type);
+        return extract(bytes, file.type);
       }),
     );
 

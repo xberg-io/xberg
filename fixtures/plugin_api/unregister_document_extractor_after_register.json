@@ -11,5 +11,8 @@
 			"type": "not_error"
 		}
 	],
-	"tags": ["plugin-lifecycle", "trait-bridge"]
+	"tags": [
+		"plugin-lifecycle",
+		"trait-bridge"
+	]
 }

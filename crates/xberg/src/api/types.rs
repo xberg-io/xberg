@@ -152,9 +152,13 @@ pub struct InfoResponse {
     pub rust_backend: bool,
 }
 
-/// Extraction response (list of results).
+/// Extraction output returned by the V1 API.
 #[cfg_attr(alef, alef(skip))]
-pub type ExtractResponse = Vec<ExtractionResult>;
+pub type ExtractionOutput = crate::core::config::ExtractionOutput;
+
+/// Extraction response.
+#[cfg_attr(alef, alef(skip))]
+pub type ExtractResponse = ExtractionOutput;
 
 /// Error response.
 #[cfg_attr(alef, alef(skip))]

@@ -11,11 +11,11 @@
   <a href="https://pypi.org/project/xberg/">
     <img src="https://img.shields.io/pypi/v/xberg?label=Python&color=007ec6" alt="Python">
   </a>
-  <a href="https://www.npmjs.com/package/@xberg/node">
-    <img src="https://img.shields.io/npm/v/@xberg/node?label=Node.js&color=007ec6" alt="Node.js">
+  <a href="https://www.npmjs.com/package/@xberg-io/xberg">
+    <img src="https://img.shields.io/npm/v/@xberg-io/xberg?label=Node.js&color=007ec6" alt="Node.js">
   </a>
-  <a href="https://www.npmjs.com/package/@xberg/wasm">
-    <img src="https://img.shields.io/npm/v/@xberg/wasm?label=WASM&color=007ec6" alt="WASM">
+  <a href="https://www.npmjs.com/package/@xberg-io/xberg-wasm">
+    <img src="https://img.shields.io/npm/v/@xberg-io/xberg-wasm?label=WASM&color=007ec6" alt="WASM">
   </a>
   <a href="https://central.sonatype.com/artifact/io.xberg/xberg">
     <img src="https://img.shields.io/maven-central/v/io.xberg/xberg?label=Java&color=007ec6" alt="Java">
@@ -56,10 +56,6 @@
   <a href="https://github.com/xberg-io/xberg/pkgs/container/xberg">
     <img src="https://img.shields.io/badge/Docker-ghcr.io-007ec6?logo=docker&logoColor=white" alt="Docker">
   </a>
-  <a href="https://github.com/xberg-io/xberg/pkgs/container/charts%2Fxberg">
-    <img src="https://img.shields.io/badge/Helm-ghcr.io-007ec6?logo=helm&logoColor=white" alt="Helm">
-  </a>
-
   <!-- Project Info -->
   <a href="https://github.com/xberg-io/xberg/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/License-MIT-007ec6" alt="License">
@@ -118,14 +114,14 @@ pip install "xberg[all]"
 
 ```python title="Python"
 import asyncio
-from xberg import extract_file, ExtractionConfig
+from xberg import extract, ExtractionConfig
 
 async def main() -> None:
     config = ExtractionConfig(
         use_cache=True,
         enable_quality_processing=True
     )
-    result = await extract_file("document.pdf", config=config)
+    result = await extract("document.pdf", config=config)
     print(result.content)
 
 asyncio.run(main())
@@ -133,31 +129,16 @@ asyncio.run(main())
 
 ### Simple Extraction
 
-```python title="Python"
-import asyncio
-from pathlib import Path
-from xberg import extract_file
-
-async def main() -> None:
-    file_path: Path = Path("document.pdf")
-
-    result = await extract_file(file_path)
-
-    print(f"Content: {result.content}")
-    print(f"Format: {result.metadata.format.format_type if result.metadata.format else None}")
-    print(f"Tables: {len(result.tables)}")
-
-asyncio.run(main())
-```
+<!-- snippet not found: getting-started/extract.md -->
 
 ### Reading Content
 
 ```python title="Python"
 import asyncio
-from xberg import extract_file
+from xberg import extract
 
 async def main() -> None:
-    result = await extract_file("document.pdf")
+    result = await extract("document.pdf")
 
     content: str = result.content
     tables: int = len(result.tables)
@@ -176,7 +157,7 @@ asyncio.run(main())
 
 ```python title="Python"
 import asyncio
-from xberg import extract_file, ExtractionConfig, OcrConfig, TesseractConfig
+from xberg import extract, ExtractionConfig, OcrConfig, TesseractConfig
 
 async def main() -> None:
     config = ExtractionConfig(
@@ -187,7 +168,7 @@ async def main() -> None:
             tesseract_config=TesseractConfig(psm=3)
         )
     )
-    result = await extract_file("scanned.pdf", config=config)
+    result = await extract("scanned.pdf", config=config)
     print(result.content)
     print(f"Detected Languages: {result.detected_languages}")
 
@@ -197,13 +178,13 @@ asyncio.run(main())
 ### EasyOCR (GPU-Accelerated)
 
 ```python
-from xberg import extract_file_sync, ExtractionConfig, OcrConfig
+from xberg import extract, ExtractionConfig, OcrConfig
 
 config = ExtractionConfig(
     ocr=OcrConfig(backend="easyocr", language="en")
 )
 
-result = extract_file_sync(
+result = extract(
     "photo.jpg",
     config=config,
     easyocr_kwargs={"use_gpu": True}
@@ -213,13 +194,13 @@ result = extract_file_sync(
 ### PaddleOCR (Complex Layouts)
 
 ```python
-from xberg import extract_file_sync, ExtractionConfig, OcrConfig
+from xberg import extract, ExtractionConfig, OcrConfig
 
 config = ExtractionConfig(
     ocr=OcrConfig(backend="paddleocr", language="ch")
 )
 
-result = extract_file_sync(
+result = extract(
     "invoice.pdf",
     config=config,
 )
@@ -228,7 +209,7 @@ result = extract_file_sync(
 ## Table Extraction
 
 ```python
-from xberg import extract_file_sync, ExtractionConfig, OcrConfig, TesseractConfig
+from xberg import extract, ExtractionConfig, OcrConfig, TesseractConfig
 
 config = ExtractionConfig(
     ocr=OcrConfig(
@@ -239,7 +220,7 @@ config = ExtractionConfig(
     )
 )
 
-result = extract_file_sync("invoice.pdf", config=config)
+result = extract("invoice.pdf", config=config)
 
 for table in result.tables:
     print(table.markdown)
@@ -252,7 +233,7 @@ for table in result.tables:
 
 ```python
 from xberg import (
-    extract_file_sync,
+    extract,
     ExtractionConfig,
     OcrConfig,
     TesseractConfig,
@@ -302,7 +283,7 @@ config = ExtractionConfig(
     ),
 )
 
-result = extract_file_sync("document.pdf", config=config)
+result = extract("document.pdf", config=config)
 ```
 
 ### HTML Conversion Options & Batch Concurrency
@@ -325,9 +306,9 @@ config = ExtractionConfig(
 ## Metadata Extraction
 
 ```python
-from xberg import extract_file_sync
+from xberg import extract
 
-result = extract_file_sync("document.pdf")
+result = extract("document.pdf")
 
 if result.images:
     print(f"Extracted {len(result.images)} inline images")
@@ -350,7 +331,7 @@ if "pdf" in result.metadata:
 ## Password-Protected PDFs
 
 ```python
-from xberg import extract_file_sync, ExtractionConfig, PdfConfig
+from xberg import extract, ExtractionConfig, PdfConfig
 
 config = ExtractionConfig(
     pdf_options=PdfConfig(
@@ -358,26 +339,26 @@ config = ExtractionConfig(
     )
 )
 
-result = extract_file_sync("protected.pdf", config=config)
+result = extract("protected.pdf", config=config)
 ```
 
 ## Language Detection
 
 ```python
-from xberg import extract_file_sync, ExtractionConfig, LanguageDetectionConfig
+from xberg import extract, ExtractionConfig, LanguageDetectionConfig
 
 config = ExtractionConfig(
     language_detection=LanguageDetectionConfig(enabled=True)
 )
 
-result = extract_file_sync("multilingual.pdf", config=config)
+result = extract("multilingual.pdf", config=config)
 print(result.detected_languages)
 ```
 
 ## Text Chunking
 
 ```python
-from xberg import extract_file_sync, ExtractionConfig, ChunkingConfig
+from xberg import extract, ExtractionConfig, ChunkingConfig
 
 config = ExtractionConfig(
     chunking=ChunkingConfig(
@@ -386,7 +367,7 @@ config = ExtractionConfig(
     )
 )
 
-result = extract_file_sync("long_document.pdf", config=config)
+result = extract("long_document.pdf", config=config)
 
 for chunk in result.chunks:
     print(chunk)
@@ -395,12 +376,12 @@ for chunk in result.chunks:
 ## Extract from Bytes
 
 ```python
-from xberg import extract_bytes_sync
+from xberg import ExtractInput, extract
 
 with open("document.pdf", "rb") as f:
     data = f.read()
 
-result = extract_bytes_sync(data, "application/pdf")
+result = await extract(ExtractInput.bytes(data, mime_type="application/pdf"))
 print(result.content)
 ```
 
@@ -408,14 +389,10 @@ print(result.content)
 
 ### Extraction Functions
 
-- `extract_file(file_path, mime_type=None, config=None, **kwargs)` – Async extraction
-- `extract_file_sync(file_path, mime_type=None, config=None, **kwargs)` – Sync extraction
-- `extract_bytes(data, mime_type, config=None, **kwargs)` – Async extraction from bytes
-- `extract_bytes_sync(data, mime_type, config=None, **kwargs)` – Sync extraction from bytes
-- `batch_extract_files(paths, config=None, **kwargs)` – Async batch extraction
-- `batch_extract_files_sync(paths, config=None, **kwargs)` – Sync batch extraction
-- `batch_extract_bytes(data_list, mime_types, config=None, **kwargs)` – Async batch from bytes
-- `batch_extract_bytes_sync(data_list, mime_types, config=None, **kwargs)` – Sync batch from bytes
+- `extract(input: ExtractInput, config=None, **kwargs)` – Extract one file or byte input
+- `extract_batch(inputs: list[ExtractInput], config=None, **kwargs)` – Extract mixed file and byte inputs
+- `ExtractInput.file(path, mime_type=None, **overrides)` – File path input
+- `ExtractInput.bytes(data, mime_type, **overrides)` – In-memory bytes input
 
 ### Configuration Classes
 
@@ -447,9 +424,9 @@ print(result.content)
 ### Custom Processing
 
 ```python
-from xberg import extract_file_sync
+from xberg import extract
 
-result = extract_file_sync("document.pdf")
+result = extract("document.pdf")
 
 text = result.content
 text = text.lower()
@@ -461,7 +438,7 @@ print(text)
 ### Multiple Files with Progress
 
 ```python
-from xberg import extract_file_sync
+from xberg import extract
 from pathlib import Path
 
 files = list(Path("documents").glob("*.pdf"))
@@ -469,7 +446,7 @@ results = []
 
 for i, file in enumerate(files, 1):
     print(f"Processing {i}/{len(files)}: {file.name}")
-    result = extract_file_sync(str(file))
+    result = extract(str(file))
     results.append((file.name, result))
 
 for name, result in results:
@@ -479,13 +456,13 @@ for name, result in results:
 ### Filter by Language
 
 ```python
-from xberg import extract_file_sync, ExtractionConfig, LanguageDetectionConfig
+from xberg import extract, ExtractionConfig, LanguageDetectionConfig
 
 config = ExtractionConfig(
     language_detection=LanguageDetectionConfig(enabled=True)
 )
 
-result = extract_file_sync("document.pdf", config=config)
+result = extract("document.pdf", config=config)
 
 if result.detected_languages and "en" in result.detected_languages:
     print("English document detected")
@@ -584,7 +561,6 @@ For comprehensive documentation, visit [https://xberg.io](https://xberg.io)
 
 ## Part of Xberg.dev
 
-- [Xberg Enterprise](https://github.com/xberg-io/xberg-enterprise) — managed extraction API with SDKs, dashboards, and observability.
 - [crawlberg](https://github.com/xberg-io/crawlberg) — web crawling and scraping with HTML→Markdown and headless-Chrome fallback.
 - [html-to-markdown](https://github.com/xberg-io/html-to-markdown) — fast, lossless HTML→Markdown engine.
 - [liter-llm](https://github.com/xberg-io/liter-llm) — universal LLM API client with native bindings for 14 languages and 143 providers.

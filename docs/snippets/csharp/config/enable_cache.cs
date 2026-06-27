@@ -5,4 +5,4 @@ var config = new ExtractionConfig
     UseCache = true
 };
 
-var result = XbergLib.ExtractFileSync("document.pdf", config);
+var result = XbergLib.ExtractSync("document.pdf", config);

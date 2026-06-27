@@ -7,7 +7,7 @@ config_json = Jason.encode!(%{
   }
 })
 
-{:ok, result} = Xberg.extract_file_sync("multilingual_document.pdf", "application/pdf", config_json)
+{:ok, result} = Xberg.extract_sync("multilingual_document.pdf", "application/pdf", config_json)
 
 if result.languages do
   IO.puts("Detected languages:")

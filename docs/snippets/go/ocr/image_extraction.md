@@ -14,7 +14,7 @@ func main() {
 	targetDpi := int32(200)
 	maxDim := int32(2048)
 
-	result, err := xberg.ExtractFileSync("document.pdf", nil, xberg.ExtractionConfig{
+	result, err := xberg.ExtractSync("document.pdf", nil, xberg.ExtractionConfig{
 		Images: &xberg.ImageExtractionConfig{
 			ExtractImages:      &extractImages,
 			TargetDpi:          &targetDpi,

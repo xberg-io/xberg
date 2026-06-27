@@ -2,7 +2,12 @@
 	"id": "embedding_backends_clear",
 	"category": "embedding_backend_management",
 	"description": "Clear all embedding backends and verify list is empty",
-	"tags": ["embedding", "plugin_management", "clear", "trait-bridge"],
+	"tags": [
+		"embedding",
+		"plugin_management",
+		"clear",
+		"trait-bridge"
+	],
 	"call": "clear_embedding_backends",
 	"assertions": [
 		{

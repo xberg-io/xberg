@@ -8,7 +8,7 @@ config = %Xberg.ExtractionConfig{
   }
 }
 
-{:ok, result} = Xberg.extract_file("document.pdf", nil, config)
+{:ok, result} = Xberg.extract("document.pdf", nil, config)
 
 # Prepare chunks for vector embedding and search
 chunks_for_embedding = result.chunks

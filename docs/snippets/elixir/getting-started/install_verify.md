@@ -6,7 +6,7 @@ defmodule InstallVerify do
     IO.puts("Available extractors: #{inspect(extractors)}")
 
     # Verify a simple extraction works
-    case Xberg.extract_file_sync("test.txt", nil, nil) do
+    case Xberg.extract_sync("test.txt", nil, nil) do
       {:ok, _result} ->
         IO.puts("Xberg is properly installed and working!")
 

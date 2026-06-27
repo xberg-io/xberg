@@ -2,8 +2,14 @@
 	"id": "list_document_extractors",
 	"category": "registry",
 	"description": "List document extractors",
-	"tags": ["registry"],
+	"tags": [
+		"registry"
+	],
 	"call": "list_document_extractors",
 	"input": {},
-	"assertions": [{ "type": "not_error" }]
+	"assertions": [
+		{
+			"type": "not_error"
+		}
+	]
 }

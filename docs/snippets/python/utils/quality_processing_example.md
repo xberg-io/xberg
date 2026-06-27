@@ -1,8 +1,8 @@
 ```python title="Python"
-from xberg import extract_file, ExtractionConfig
+from xberg import extract, ExtractionConfig
 
 config = ExtractionConfig(enable_quality_processing=True)
-result = extract_file("scanned_document.pdf", config=config)
+result = extract("scanned_document.pdf", config=config)
 
 quality_score = result.quality_score or 0.0
 

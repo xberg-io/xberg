@@ -1,13 +1,13 @@
 //! Core extraction orchestration module.
 //!
 //! This module contains the main extraction logic and orchestration layer for Xberg.
-//! It provides the primary entry points for file and bytes extraction, manages the
+//! It provides the primary entry points for bytes and URI extraction, manages the
 //! extractor registry, MIME type detection, configuration, and post-processing pipeline.
 //!
 //! # Architecture
 //!
 //! The core module is responsible for:
-//! - **Entry Points**: Main `extract_file()` and `extract_bytes()` functions
+//! - **Entry Points**: Main `extract()` and `extract_batch()` functions
 //! - **Registry**: Mapping MIME types to extractors with priority-based selection
 //! - **MIME Detection**: Detecting and validating MIME types from files and extensions
 //! - **Pipeline**: Orchestrating post-processing steps (chunking, quality, etc.)
@@ -17,13 +17,13 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! use xberg::core::extractor::extract_file;
-//! use xberg::core::config::ExtractionConfig;
+//! use xberg::core::extractor::extract;
+//! use xberg::core::config::{ExtractInput, ExtractionConfig};
 //!
 //! # async fn example() -> xberg::Result<()> {
 //! let config = ExtractionConfig::default();
-//! let result = extract_file("document.pdf", None, &config).await?;
-//! println!("Extracted content: {}", result.content);
+//! let output = extract(ExtractInput::uri("document.pdf"), &config).await?;
+//! println!("Extracted content: {}", output.results[0].content);
 //! # Ok(())
 //! # }
 //! ```
@@ -59,6 +59,4 @@ pub use server_config::ServerConfig;
 pub use batch_optimizations::{BatchProcessor, BatchProcessorConfig};
 #[cfg(feature = "pdf")]
 pub use config::PdfConfig;
-#[cfg(feature = "tokio-runtime")]
-pub use extractor::{batch_extract_bytes, batch_extract_files};
-pub use extractor::{extract_bytes, extract_file};
+pub use extractor::{extract, extract_batch};

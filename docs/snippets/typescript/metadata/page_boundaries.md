@@ -1,6 +1,6 @@
-Import { extractFileSync } from '@xberg/node';
+Import { extractSync } from '@xberg-io/xberg';
 
-Const result = extractFileSync('document.pdf');
+Const result = extractSync('document.pdf');
 
 If (result.metadata.page_structure?.boundaries) {
 const encoder = new TextEncoder();

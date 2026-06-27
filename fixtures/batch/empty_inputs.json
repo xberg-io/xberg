@@ -1,0 +1,19 @@
+{
+	"id": "extract_batch_empty_inputs",
+	"category": "batch",
+	"description": "extract_batch: empty batch",
+	"call": "extract_batch",
+	"input": {
+		"inputs": []
+	},
+	"assertions": [
+		{
+			"type": "not_error"
+		},
+		{
+			"type": "count_equals",
+			"value": 0,
+			"field": "summary.results"
+		}
+	]
+}

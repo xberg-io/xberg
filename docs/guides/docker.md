@@ -265,6 +265,5 @@ The FFI variant builds a shared library used by the Go, Ruby, R, PHP, and Elixir
 
 ## Next Steps
 
-- [Kubernetes Deployment](kubernetes.md) — production K8s with OCR config and health checks
 - [API Server Guide](api-server.md) — endpoint documentation
 - [Configuration](configuration.md) — all configuration options

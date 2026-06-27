@@ -5,7 +5,7 @@ import java.util.Optional
 
 fun main() {
     val config = ExtractionConfig.builder().build()
-    val result = Xberg.extractFileSync(Paths.get("document.pdf"), null, config)
+    val result = Xberg.extractSync(Paths.get("document.pdf"), null, config)
 
     val metadata = result.metadata()
     metadata.title()?.let { println("Title: $it") }
@@ -19,7 +19,7 @@ fun main() {
     }
 
     // Access HTML metadata
-    val htmlResult = Xberg.extractFileSync(Paths.get("page.html"), null, config)
+    val htmlResult = Xberg.extractSync(Paths.get("page.html"), null, config)
     htmlResult.metadata().format()?.html()?.let { html ->
         html.title()?.let { println("Title: $it") }
         html.description()?.let { println("Description: $it") }

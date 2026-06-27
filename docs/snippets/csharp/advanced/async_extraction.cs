@@ -6,16 +6,16 @@ class Program
     {
         try
         {
-            var result = await XbergLib.ExtractFileAsync("document.pdf");
+            var result = await XbergLib.ExtractAsync("document.pdf");
 
             Console.WriteLine($"Content length: {result.Content.Length}");
             Console.WriteLine($"MIME type: {result.MimeType}");
 
             var tasks = new[]
             {
-                XbergLib.ExtractFileAsync("file1.pdf"),
-                XbergLib.ExtractFileAsync("file2.pdf"),
-                XbergLib.ExtractFileAsync("file3.pdf")
+                XbergLib.ExtractAsync("file1.pdf"),
+                XbergLib.ExtractAsync("file2.pdf"),
+                XbergLib.ExtractAsync("file3.pdf")
             };
 
             var results = await Task.WhenAll(tasks);

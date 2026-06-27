@@ -3,7 +3,7 @@ config = %Xberg.ExtractionConfig{
   include_document_structure: true
 }
 
-{:ok, result} = Xberg.extract_file_sync("document.pdf", config)
+{:ok, result} = Xberg.extract_sync("document.pdf", config)
 
 if result.document do
   Enum.each(result.document.nodes, fn node ->

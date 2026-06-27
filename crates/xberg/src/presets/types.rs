@@ -44,7 +44,7 @@ pub struct PresetSample {
 /// Each preset is a JSON file under `src/presets/library/<id>/v1.json` that
 /// validates against the meta-schema in `src/presets/preset.schema.json`.
 ///
-/// The curated catalog is downstream (xberg-enterprise) and injects presets via
+/// Downstream catalog consumers can inject presets via
 /// [`super::registry::Registry::extend_from_dir`]. The embedded OSS library
 /// ships only the `generic_document` toy preset.
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -69,7 +69,7 @@ Add the package to `opencode.json`:
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["@xberg/opencode-xberg"]
+  "plugin": ["@xberg-io/opencode-xberg"]
 }
 ```
 
@@ -90,22 +90,22 @@ When your AI coding assistant discovers the skill, it knows:
 === "Python"
 
     ```python
-    from xberg import extract_file, extract_file_sync, ExtractionConfig, OcrConfig
+    from xberg import extract, extract, ExtractionConfig, OcrConfig
 
-    result = await extract_file("document.pdf")
+    result = await extract("document.pdf")
     print(result.content)
 
     config = ExtractionConfig(
         ocr=OcrConfig(backend="tesseract", language="eng"),
         output_format="markdown",
     )
-    result = await extract_file("document.pdf", config=config)
+    result = await extract("document.pdf", config=config)
     ```
 
 === "Node.js"
 
     ```typescript
-    import { extractFile, extractFileSync } from '@xberg/node';
+    import { extractFile, extractFileSync } from '@xberg-io/xberg';
 
     const result = await extractFile('document.pdf');
     console.log(result.content);
@@ -114,10 +114,10 @@ When your AI coding assistant discovers the skill, it knows:
 === "Rust"
 
     ```rust
-    use xberg::{extract_file, ExtractionConfig};
+    use xberg::{extract, ExtractionConfig};
 
     let config = ExtractionConfig::default();
-    let result = extract_file("document.pdf", None, &config).await?;
+    let result = extract("document.pdf", None, &config).await?;
     ```
 
 === "CLI"

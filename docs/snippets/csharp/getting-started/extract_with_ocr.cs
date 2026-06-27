@@ -10,7 +10,7 @@ var config = new ExtractionConfig
     }
 };
 
-var result = XbergClient.ExtractFileSync("scanned.pdf", config);
+var result = XbergClient.ExtractSync("scanned.pdf", config);
 
 Console.WriteLine(result.Content);
 Console.WriteLine($"Detected Languages: {string.Join(", ", result.DetectedLanguages ?? new List<string>())}");

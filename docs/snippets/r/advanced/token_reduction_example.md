@@ -5,7 +5,7 @@ config <- list(
   token_reduction = list(enabled = TRUE)
 )
 
-json <- extract_file_sync("document.pdf", "application/pdf", config)
+json <- extract_sync("document.pdf", "application/pdf", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat("Token-reduced content:\n")

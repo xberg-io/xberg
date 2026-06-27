@@ -15,7 +15,7 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract_file_sync('research_paper.pdf', config: config)
+result = Xberg.extract_sync('research_paper.pdf', config: config)
 
 result.chunks.each_with_index do |chunk, i|
   puts "Chunk #{i + 1}/#{result.chunks.length}"

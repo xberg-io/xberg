@@ -24,7 +24,7 @@ test_that("post processor registers and runs", {
   on.exit(unregister_post_processor("uppercase"), add = TRUE)
 
   config <- list(postprocessor = list(enabled = TRUE))
-  json <- extract_bytes_sync(
+  json <- extract_sync(
     charToRaw("hello world"), "text/plain", config
   )
   result <- jsonlite::fromJSON(json, simplifyVector = FALSE)

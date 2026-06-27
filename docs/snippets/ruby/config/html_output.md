@@ -9,6 +9,6 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract_file_sync('document.pdf', nil, config)
+result = Xberg.extract_sync('document.pdf', nil, config)
 puts result.content # HTML with kb-* classes
 ```

@@ -1,5 +1,5 @@
 ```typescript title="WASM - Basic Language Detection"
-import init, { extractBytes } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 
@@ -11,7 +11,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extractBytes(bytes, "application/pdf", config);
+const result = await extract(bytes, "application/pdf", config);
 
 console.log(`Primary language: ${result.metadata?.language}`);
 console.log(`Language confidence: ${result.metadata?.languageConfidence}`);
@@ -19,7 +19,7 @@ console.log(`Detected languages: ${result.detectedLanguages?.join(", ")}`);
 ```
 
 ```typescript title="WASM - Multi-Language Detection"
-import init, { extractBytes } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 
@@ -32,7 +32,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extractBytes(bytes, "application/pdf", config);
+const result = await extract(bytes, "application/pdf", config);
 
 console.log(`Primary language: ${result.metadata?.language}`);
 console.log(`Confidence score: ${result.metadata?.languageConfidence?.toFixed(3)}`);
@@ -45,7 +45,7 @@ if (result.detectedLanguages && result.detectedLanguages.length > 1) {
 ```
 
 ```typescript title="WASM - Language-Specific Extraction"
-import init, { extractBytes } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 
@@ -62,7 +62,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extractBytes(bytes, "text/plain", config);
+const result = await extract(bytes, "text/plain", config);
 
 // Process result based on detected language
 const language = result.metadata?.language;

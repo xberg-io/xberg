@@ -4,6 +4,6 @@ config_json = Jason.encode!(%{
   "enable_quality_processing" => true
 })
 
-{:ok, result} = Xberg.extract_file_sync("document.pdf", "application/pdf", config_json)
+{:ok, result} = Xberg.extract_sync("document.pdf", "application/pdf", config_json)
 IO.puts(result.content)
 ```

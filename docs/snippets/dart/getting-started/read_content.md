@@ -2,7 +2,7 @@
 import 'package:xberg/xberg.dart';
 
 Future<void> main() async {
-  final result = await XbergBridge.extractFile('document.pdf', null);
+  final result = await XbergBridge.extract('document.pdf', null);
 
   print(result.content);
 

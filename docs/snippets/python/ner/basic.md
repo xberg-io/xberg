@@ -1,6 +1,6 @@
 ```python title="Python"
 import asyncio
-from xberg import extract_file, ExtractionConfig, NerConfig, LlmConfig
+from xberg import extract, ExtractionConfig, NerConfig, LlmConfig
 
 async def main() -> None:
     config = ExtractionConfig(
@@ -9,7 +9,7 @@ async def main() -> None:
             llm=LlmConfig(model="openai/gpt-4o-mini"),
         ),
     )
-    result = await extract_file("contract.pdf", config=config)
+    result = await extract("contract.pdf", config=config)
     for entity in result.entities or []:
         print(f"{entity.category}: {entity.text} (confidence={entity.confidence})")
 

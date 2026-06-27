@@ -1,12 +1,12 @@
 ```rust title="Document Structure Config (Rust)"
-use xberg::{extract_file_sync, ExtractionConfig};
+use xberg::{extract_sync, ExtractionConfig};
 
 let config = ExtractionConfig {
     include_document_structure: true,
     ..Default::default()
 };
 
-let result = extract_file_sync("document.pdf", None, &config)?;
+let result = extract_sync("document.pdf", None, &config)?;
 
 if let Some(document) = &result.document {
     for node in &document.nodes {

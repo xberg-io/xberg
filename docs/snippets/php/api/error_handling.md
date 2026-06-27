@@ -8,7 +8,7 @@ use Xberg\XbergException;
 
 $config = new ExtractionConfig();
 try {
-    $result = Xberg::extractFileSync('document.pdf', null, $config);
+    $result = Xberg::extractSync('document.pdf', null, $config);
     echo $result->getContent();
 } catch (XbergException $e) {
     // The extension throws XbergException with the error message

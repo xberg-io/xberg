@@ -1,5 +1,5 @@
-import type { ExtractionConfig } from "@xberg/wasm";
-import { extractBytes, initWasm } from "@xberg/wasm";
+import type { ExtractionConfig } from "@xberg-io/xberg-wasm";
+import { extract, initWasm } from "@xberg-io/xberg-wasm";
 
 async function extractWithConditionalConfig(fileSize: number) {
   await initWasm();
@@ -26,7 +26,7 @@ async function extractWithConditionalConfig(fileSize: number) {
 
   const bytes = new Uint8Array(await fetch("document.pdf").then((r) => r.arrayBuffer()));
 
-  const result = await extractBytes(bytes, "application/pdf", config);
+  const result = await extract(bytes, "application/pdf", config);
 
   return result;
 }

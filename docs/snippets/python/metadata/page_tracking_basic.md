@@ -1,10 +1,10 @@
-From Xberg import extract_file_sync, ExtractionConfig, PageConfig
+From Xberg import extract_sync, ExtractionConfig, PageConfig
 
 Config = ExtractionConfig(
 pages=PageConfig(extract_pages=True)
 )
 
-Result = extract_file_sync("document.pdf", config=config)
+Result = extract_sync("document.pdf", config=config)
 
 If result.pages:
 for page in result.pages:

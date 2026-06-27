@@ -11,11 +11,11 @@
   <a href="https://pypi.org/project/xberg/">
     <img src="https://img.shields.io/pypi/v/xberg?label=Python&color=007ec6" alt="Python">
   </a>
-  <a href="https://www.npmjs.com/package/@xberg/node">
-    <img src="https://img.shields.io/npm/v/@xberg/node?label=Node.js&color=007ec6" alt="Node.js">
+  <a href="https://www.npmjs.com/package/@xberg-io/xberg">
+    <img src="https://img.shields.io/npm/v/@xberg-io/xberg?label=Node.js&color=007ec6" alt="Node.js">
   </a>
-  <a href="https://www.npmjs.com/package/@xberg/wasm">
-    <img src="https://img.shields.io/npm/v/@xberg/wasm?label=WASM&color=007ec6" alt="WASM">
+  <a href="https://www.npmjs.com/package/@xberg-io/xberg-wasm">
+    <img src="https://img.shields.io/npm/v/@xberg-io/xberg-wasm?label=WASM&color=007ec6" alt="WASM">
   </a>
   <a href="https://central.sonatype.com/artifact/io.xberg/xberg">
     <img src="https://img.shields.io/maven-central/v/io.xberg/xberg?label=Java&color=007ec6" alt="Java">
@@ -56,10 +56,6 @@
   <a href="https://github.com/xberg-io/xberg/pkgs/container/xberg">
     <img src="https://img.shields.io/badge/Docker-ghcr.io-007ec6?logo=docker&logoColor=white" alt="Docker">
   </a>
-  <a href="https://github.com/xberg-io/xberg/pkgs/container/charts%2Fxberg">
-    <img src="https://img.shields.io/badge/Helm-ghcr.io-007ec6?logo=helm&logoColor=white" alt="Helm">
-  </a>
-
   <!-- Project Info -->
   <a href="https://github.com/xberg-io/xberg/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/License-MIT-007ec6" alt="License">
@@ -105,7 +101,6 @@ composer require xberg-io/xberg
 ```
 
 ### System Requirements
-
 - **PHP 8.2+** required
 - Optional: [ONNX Runtime](https://github.com/microsoft/onnxruntime/releases) version 1.24+ for ORT-dependent inference features
 - Optional: [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for OCR functionality
@@ -135,7 +130,7 @@ use Xberg\Xberg;
 
 $xberg = new Xberg();
 
-$result = $xberg->extractFile('document.pdf');
+$result = $xberg->extract('document.pdf');
 
 echo "Extracted Content:\n";
 echo "==================\n";
@@ -156,8 +151,7 @@ if (count($result->tables) > 0) {
     }
 }
 ```
-
-```text
+```
 
 ### Common Use Cases
 
@@ -193,7 +187,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('scanned_document.pdf');
+$result = $xberg->extract('scanned_document.pdf');
 
 echo "OCR Extraction Results:\n";
 echo str_repeat('=', 60) . "\n";
@@ -207,7 +201,7 @@ $multilingualConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($multilingualConfig);
-$result = $xberg->extractFile('multilingual_scan.pdf');
+$result = $xberg->extract('multilingual_scan.pdf');
 
 echo "Multilingual OCR:\n";
 echo str_repeat('=', 60) . "\n";
@@ -227,7 +221,7 @@ foreach ($imageFormats as $format) {
     $file = "scan.$format";
     if (file_exists($file)) {
         echo "Processing $file...\n";
-        $result = $xberg->extractFile($file);
+        $result = $xberg->extract($file);
         echo "Extracted " . strlen($result->content) . " characters\n";
         echo "Preview: " . substr($result->content, 0, 100) . "...\n\n";
     }
@@ -256,26 +250,26 @@ foreach ($languages as $lang => $description) {
         );
 
         $xberg = new Xberg($config);
-        $result = $xberg->extractFile($file);
+        $result = $xberg->extract($file);
 
         echo "$description ($lang):\n";
         echo "  Characters extracted: " . mb_strlen($result->content) . "\n\n";
     }
 }
 
-use function Xberg\extract_file;
+use function Xberg\extract;
 
 $config = new ExtractionConfig(
     ocr: new OcrConfig(backend: 'tesseract', language: 'eng')
 );
 
-$result = extract_file('invoice_scan.pdf', config: $config);
+$result = extract('invoice_scan.pdf', config: $config);
 
 echo "Invoice OCR:\n";
 echo str_repeat('=', 60) . "\n";
 echo $result->content . "\n";
 
-$result = $xberg->extractFile('scanned.pdf');
+$result = $xberg->extract('scanned.pdf');
 
 $contentLength = strlen($result->content);
 $pageCount = $result->metadata->pageCount ?? 1;
@@ -295,8 +289,7 @@ if ($avgCharsPerPage < 100) {
     echo "Pass: Moderate - Text extracted successfully\n";
 }
 ```
-
-```text
+```
 
 #### Table Extraction
 
@@ -321,8 +314,8 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 use Xberg\Xberg;
 use Xberg\Config\ExtractionConfig;
-use function Xberg\batch_extract_files;
-use function Xberg\batch_extract_bytes;
+use function Xberg\extract_batch;
+use function Xberg\extract_batch;
 
 $files = [
     'document1.pdf',
@@ -337,7 +330,7 @@ if (!empty($files)) {
     echo "Processing " . count($files) . " files in batch...\n\n";
 
     $start = microtime(true);
-    $results = batch_extract_files($files);
+    $results = extract_batch($files);
     $elapsed = microtime(true) - $start;
 
     echo "Batch extraction completed in " . number_format($elapsed, 3) . " seconds\n";
@@ -364,7 +357,7 @@ if (!empty($pdfFiles)) {
     echo "Processing " . count($pdfFiles) . " PDF files...\n";
 
     $start = microtime(true);
-    $results = $xberg->batchExtractFiles($pdfFiles, $config);
+    $results = $xberg->extractBatch($pdfFiles, $config);
     $elapsed = microtime(true) - $start;
 
     echo "Completed in " . number_format($elapsed, 2) . " seconds\n";
@@ -390,7 +383,7 @@ $uploadedFiles = [
 $dataList = array_column($uploadedFiles, 'data');
 $mimeTypes = array_column($uploadedFiles, 'mime');
 
-$results = batch_extract_bytes($dataList, $mimeTypes);
+$results = extract_batch($dataList, $mimeTypes);
 
 echo "\nProcessed " . count($results) . " files from memory\n";
 
@@ -419,7 +412,7 @@ function processDirectory(string $dir, Xberg $xberg): array
 
     foreach ($batches as $batchIndex => $batch) {
         echo "Processing batch " . ($batchIndex + 1) . "/" . count($batches) . "...\n";
-        $batchResults = $xberg->batchExtractFiles($batch);
+        $batchResults = $xberg->extractBatch($batch);
         $results = array_merge($results, $batchResults);
     }
 
@@ -436,7 +429,7 @@ if (is_dir($directory)) {
 $mixedFiles = ['valid.pdf', 'nonexistent.pdf', 'another.docx'];
 
 try {
-    $results = batch_extract_files($mixedFiles);
+    $results = extract_batch($mixedFiles);
 } catch (\Xberg\Exceptions\XbergException $e) {
     echo "Batch processing error: " . $e->getMessage() . "\n";
 }
@@ -453,14 +446,13 @@ foreach ($batches as $index => $batch) {
     echo sprintf("\rProgress: %.1f%% [%d/%d batches]",
         $progress, $index + 1, count($batches));
 
-    $results = $xberg->batchExtractFiles($batch);
+    $results = $xberg->extractBatch($batch);
     $totalProcessed += count($results);
 }
 
 echo "\n\nCompleted! Processed $totalProcessed files.\n";
 ```
-
-```text
+```
 
 ### Next Steps
 
@@ -604,7 +596,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('scanned_document.pdf');
+$result = $xberg->extract('scanned_document.pdf');
 
 echo "OCR Extraction Results:\n";
 echo str_repeat('=', 60) . "\n";
@@ -618,7 +610,7 @@ $multilingualConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($multilingualConfig);
-$result = $xberg->extractFile('multilingual_scan.pdf');
+$result = $xberg->extract('multilingual_scan.pdf');
 
 echo "Multilingual OCR:\n";
 echo str_repeat('=', 60) . "\n";
@@ -638,7 +630,7 @@ foreach ($imageFormats as $format) {
     $file = "scan.$format";
     if (file_exists($file)) {
         echo "Processing $file...\n";
-        $result = $xberg->extractFile($file);
+        $result = $xberg->extract($file);
         echo "Extracted " . strlen($result->content) . " characters\n";
         echo "Preview: " . substr($result->content, 0, 100) . "...\n\n";
     }
@@ -667,26 +659,26 @@ foreach ($languages as $lang => $description) {
         );
 
         $xberg = new Xberg($config);
-        $result = $xberg->extractFile($file);
+        $result = $xberg->extract($file);
 
         echo "$description ($lang):\n";
         echo "  Characters extracted: " . mb_strlen($result->content) . "\n\n";
     }
 }
 
-use function Xberg\extract_file;
+use function Xberg\extract;
 
 $config = new ExtractionConfig(
     ocr: new OcrConfig(backend: 'tesseract', language: 'eng')
 );
 
-$result = extract_file('invoice_scan.pdf', config: $config);
+$result = extract('invoice_scan.pdf', config: $config);
 
 echo "Invoice OCR:\n";
 echo str_repeat('=', 60) . "\n";
 echo $result->content . "\n";
 
-$result = $xberg->extractFile('scanned.pdf');
+$result = $xberg->extract('scanned.pdf');
 
 $contentLength = strlen($result->content);
 $pageCount = $result->metadata->pageCount ?? 1;
@@ -706,8 +698,7 @@ if ($avgCharsPerPage < 100) {
     echo "Pass: Moderate - Text extracted successfully\n";
 }
 ```
-
-```text
+```
 
 ## Plugin System
 
@@ -742,8 +733,8 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 use Xberg\Xberg;
 use Xberg\Config\ExtractionConfig;
-use function Xberg\batch_extract_files;
-use function Xberg\batch_extract_bytes;
+use function Xberg\extract_batch;
+use function Xberg\extract_batch;
 
 $files = [
     'document1.pdf',
@@ -758,7 +749,7 @@ if (!empty($files)) {
     echo "Processing " . count($files) . " files in batch...\n\n";
 
     $start = microtime(true);
-    $results = batch_extract_files($files);
+    $results = extract_batch($files);
     $elapsed = microtime(true) - $start;
 
     echo "Batch extraction completed in " . number_format($elapsed, 3) . " seconds\n";
@@ -785,7 +776,7 @@ if (!empty($pdfFiles)) {
     echo "Processing " . count($pdfFiles) . " PDF files...\n";
 
     $start = microtime(true);
-    $results = $xberg->batchExtractFiles($pdfFiles, $config);
+    $results = $xberg->extractBatch($pdfFiles, $config);
     $elapsed = microtime(true) - $start;
 
     echo "Completed in " . number_format($elapsed, 2) . " seconds\n";
@@ -811,7 +802,7 @@ $uploadedFiles = [
 $dataList = array_column($uploadedFiles, 'data');
 $mimeTypes = array_column($uploadedFiles, 'mime');
 
-$results = batch_extract_bytes($dataList, $mimeTypes);
+$results = extract_batch($dataList, $mimeTypes);
 
 echo "\nProcessed " . count($results) . " files from memory\n";
 
@@ -840,7 +831,7 @@ function processDirectory(string $dir, Xberg $xberg): array
 
     foreach ($batches as $batchIndex => $batch) {
         echo "Processing batch " . ($batchIndex + 1) . "/" . count($batches) . "...\n";
-        $batchResults = $xberg->batchExtractFiles($batch);
+        $batchResults = $xberg->extractBatch($batch);
         $results = array_merge($results, $batchResults);
     }
 
@@ -857,7 +848,7 @@ if (is_dir($directory)) {
 $mixedFiles = ['valid.pdf', 'nonexistent.pdf', 'another.docx'];
 
 try {
-    $results = batch_extract_files($mixedFiles);
+    $results = extract_batch($mixedFiles);
 } catch (\Xberg\Exceptions\XbergException $e) {
     echo "Batch processing error: " . $e->getMessage() . "\n";
 }
@@ -874,14 +865,13 @@ foreach ($batches as $index => $batch) {
     echo sprintf("\rProgress: %.1f%% [%d/%d batches]",
         $progress, $index + 1, count($batches));
 
-    $results = $xberg->batchExtractFiles($batch);
+    $results = $xberg->extractBatch($batch);
     $totalProcessed += count($results);
 }
 
 echo "\n\nCompleted! Processed $totalProcessed files.\n";
 ```
-
-```text
+```
 
 ## Configuration
 
@@ -901,7 +891,6 @@ Contributions are welcome! See [Contributing Guide](https://github.com/xberg-io/
 
 ## Part of Xberg.dev
 
-- [Xberg Enterprise](https://github.com/xberg-io/xberg-enterprise) — managed extraction API with SDKs, dashboards, and observability.
 - [crawlberg](https://github.com/xberg-io/crawlberg) — web crawling and scraping with HTML→Markdown and headless-Chrome fallback.
 - [html-to-markdown](https://github.com/xberg-io/html-to-markdown) — fast, lossless HTML→Markdown engine.
 - [liter-llm](https://github.com/xberg-io/liter-llm) — universal LLM API client with native bindings for 14 languages and 143 providers.

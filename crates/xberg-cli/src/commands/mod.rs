@@ -30,7 +30,9 @@ pub use chunk::chunk_command;
 pub use config::load_config;
 #[cfg(feature = "embeddings")]
 pub use embed::embed_command;
-pub use extract::{batch_command, extract_command};
+pub use extract::{
+    BatchInputFormat, ExtractInputSource, batch_command, extract_command, load_batch_input_manifest, uri_to_local_path,
+};
 #[cfg(feature = "mcp")]
 pub use server::mcp_command;
 #[cfg(feature = "api")]

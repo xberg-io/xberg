@@ -1,9 +1,0 @@
-{
-  "id": "async_extract_bytes_invalid_mime",
-  "category": "async",
-  "description": "extract_bytes unsupported MIME async",
-  "tags": ["async", "error"],
-  "call": "extract_bytes",
-  "input": { "data": "text/plain.txt", "mime_type": "application/x-nonexistent", "config": {} },
-  "assertions": [{ "type": "error" }]
-}

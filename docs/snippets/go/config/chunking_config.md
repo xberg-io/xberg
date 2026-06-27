@@ -50,7 +50,7 @@ func main() {
 		},
 	}
 
-	result, err := xberg.ExtractFile("document.md", nil, config)
+	result, err := xberg.Extract("document.md", nil, config)
 	if err != nil {
 		log.Fatalf("extract failed: %v", err)
 	}
@@ -90,7 +90,7 @@ func main() {
 		},
 	}
 
-	result, err := xberg.ExtractFile("document.md", nil, config)
+	result, err := xberg.Extract("document.md", nil, config)
 	if err != nil {
 		log.Fatalf("extract failed: %v", err)
 	}

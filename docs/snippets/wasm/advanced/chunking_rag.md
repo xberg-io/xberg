@@ -1,5 +1,5 @@
 ```typescript title="WASM - Chunking for RAG Pipeline"
-import init, { extractBytes } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 
@@ -13,7 +13,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extractBytes(bytes, "application/pdf", config);
+const result = await extract(bytes, "application/pdf", config);
 
 // Prepare chunks for vector database ingestion
 const ragChunks =
@@ -45,7 +45,7 @@ ragChunks.slice(0, 3).forEach((c) => {
 ```
 
 ```typescript title="WASM - RAG with Retrieval Context"
-import init, { extractBytes } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 
@@ -58,7 +58,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extractBytes(bytes, "text/markdown", config);
+const result = await extract(bytes, "text/markdown", config);
 
 // Build retrieval augmented context
 interface RagDocument {

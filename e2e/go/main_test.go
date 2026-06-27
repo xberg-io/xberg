@@ -1,15 +1,27 @@
 package e2e_test
 
 import (
+	"bufio"
+	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"time"
 )
 
 func TestMain(m *testing.M) {
 	_, filename, _, _ := runtime.Caller(0)
 	dir := filepath.Dir(filename)
+
+	if _, ok := os.LookupEnv("CRAWLBERG_ALLOW_PRIVATE_NETWORK"); !ok {
+		_ = os.Setenv("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true")
+	}
 
 	// Change to the configured test-documents directory (if it exists) so that fixture
 	// file paths like "pdf/fake_memo.pdf" resolve correctly when running go test
@@ -21,5 +33,99 @@ func TestMain(m *testing.M) {
 		}
 	}
 
-	os.Exit(m.Run())
+	if os.Getenv("MOCK_SERVER_URL") != "" {
+		os.Exit(m.Run())
+	}
+
+	mockBin := filepath.Join(dir, "..", "rust", "target", "release", "mock-server")
+	mockManifest := filepath.Join(dir, "..", "rust", "Cargo.toml")
+	if _, err := os.Stat(mockBin); os.IsNotExist(err) {
+		fmt.Fprintln(os.Stderr, "Building mock-server...")
+		build := exec.Command("cargo", "build", "--release", "--manifest-path", mockManifest, "--bin", "mock-server")
+		build.Stdout = os.Stderr
+		build.Stderr = os.Stderr
+		if err := build.Run(); err != nil {
+			panic(fmt.Sprintf("mock-server build failed: %v", err))
+		}
+	}
+
+	fixturesDir := filepath.Join(dir, "..", "..", "fixtures")
+	cmd := exec.Command(mockBin, fixturesDir)
+	cmdEnv := os.Environ()
+	if v := os.Getenv("CRAWLBERG_ALLOW_PRIVATE_NETWORK"); v != "" {
+		cmdEnv = append(cmdEnv, "CRAWLBERG_ALLOW_PRIVATE_NETWORK=" + v)
+	}
+	cmdEnv = append(cmdEnv, "MOCK_SERVER_NO_STDIN_WATCH=1")
+	cmd.Env = cmdEnv
+	stdout, err := cmd.StdoutPipe()
+	if err != nil { panic(err) }
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil { panic(err) }
+	// Defer cleanup to a helper to avoid 'exitAfterDefer' linter violation.
+	// The helper owns process cleanup via defer; TestMain calls os.Exit
+	// after the helper returns, so defer cleanup completes properly.
+	code := runTests(m, cmd, stdout)
+	os.Exit(code)
+}
+
+// runTests executes the test suite with process cleanup via defer.
+// By returning int and calling os.Exit in TestMain, we avoid
+// the 'exitAfterDefer' linter error.
+func runTests(m *testing.M, cmd *exec.Cmd, stdout io.ReadCloser) int {
+	defer func() { _ = cmd.Process.Kill() }()
+
+	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	// The mock-server emits two sentinel lines on stdout: MOCK_SERVER_URL=<url>
+	// (always) and MOCK_SERVERS={"<fixture_id>":"<per-fixture-url>",...} (when
+	// any fixture has origin-root routes that need a per-fixture listener). We
+	// read until we have seen MOCK_SERVER_URL and either MOCK_SERVERS or a non
+	// MOCK_SERVER line, then drain the rest in the background.
+	haveURL := false
+	for scanner.Scan() {
+		line := scanner.Text()
+		//nolint:gocritic
+		if strings.HasPrefix(line, "MOCK_SERVER_URL=") {
+			_ = os.Setenv("MOCK_SERVER_URL", strings.TrimPrefix(line, "MOCK_SERVER_URL="))
+			haveURL = true
+			continue
+		} else if strings.HasPrefix(line, "MOCK_SERVERS=") {
+			payload := strings.TrimPrefix(line, "MOCK_SERVERS=")
+			_ = os.Setenv("MOCK_SERVERS", payload)
+			var servers map[string]string
+			if err := json.Unmarshal([]byte(payload), &servers); err == nil {
+				for fid, furl := range servers {
+					_ = os.Setenv("MOCK_SERVER_"+strings.ToUpper(fid), furl)
+				}
+			}
+			break
+		} else if haveURL {
+			break
+		}
+	}
+	if os.Getenv("MOCK_SERVER_URL") == "" {
+		panic("mock-server did not emit MOCK_SERVER_URL")
+	}
+	// Drain remaining stdout asynchronously so the pipe doesn't fill.
+	go func() { for scanner.Scan() { } }()
+
+	// Poll the mock-server URL until it answers (axum::serve start race).
+	{
+		url := os.Getenv("MOCK_SERVER_URL")
+		ready := false
+		for i := 0; i < 400; i++ {
+			resp, err := http.Get(url)
+			if err == nil {
+				_ = resp.Body.Close()
+				ready = true
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		if !ready {
+			panic("mock-server did not become ready within 20s")
+		}
+	}
+
+	return m.Run()
 }

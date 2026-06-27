@@ -20,7 +20,7 @@ ignored = ["serde_json", "async-trait", "tokio-util"]
 crate-type = ["cdylib"]
 
 [features]
-default = ["api", "api-types", "auto-rotate-types", "captioning", "chunking", "chunking-tokenizers", "classification", "diff", "embedding-presets", "embeddings", "enrichment", "heic", "heuristics", "html", "keywords-rake", "keywords-yake", "layout-types", "liter-llm", "markdown-footnotes", "ner-llm", "ner-onnx", "ocr", "ocr-wasm", "office", "paddle-ocr-types", "pdf", "presets", "quality", "redaction", "reranker", "reranker-presets", "structured", "svg", "tokio-runtime", "transcription-types", "tree-sitter", "xml"]
+default = ["api", "api-types", "auto-rotate-types", "captioning", "chunking", "chunking-tokenizers", "classification", "diff", "embedding-presets", "embeddings", "enrichment", "heic", "heuristics", "html", "keywords-rake", "keywords-yake", "layout-types", "liter-llm", "markdown-footnotes", "ner-llm", "ner-onnx", "ocr", "ocr-wasm", "office", "paddle-ocr-types", "pdf", "presets", "quality", "redaction", "reranker", "reranker-presets", "structured", "svg", "tokio-runtime", "transcription-types", "tree-sitter", "url-ingestion", "xml"]
 api = ["xberg/api"]
 api-types = ["xberg/api-types"]
 auto-rotate-types = ["xberg/auto-rotate-types"]
@@ -57,6 +57,7 @@ svg = ["xberg/svg"]
 tokio-runtime = ["xberg/tokio-runtime"]
 transcription-types = ["xberg/transcription-types"]
 tree-sitter = ["xberg/tree-sitter"]
+url-ingestion = ["xberg/url-ingestion"]
 xml = ["xberg/xml"]
 
 [dependencies]
@@ -67,7 +68,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_with = "3"
 tokio-util = { version = "0.7", features = ["rt"] }
-xberg = { version = "1.0.0-rc.1", path = "../xberg", features = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "reranker", "reranker-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "api-types", "mcp", "liter-llm", "quality", "svg", "transcription", "transcription-types", "classification", "captioning", "ner-onnx", "ner-llm", "diff", "markdown-footnotes", "redaction", "enrichment", "heuristics", "presets", "structured"] }
+xberg = { version = "1.0.0-rc.1", path = "../xberg", features = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "reranker", "reranker-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "api-types", "mcp", "liter-llm", "quality", "svg", "transcription", "transcription-types", "classification", "captioning", "ner-onnx", "ner-llm", "diff", "markdown-footnotes", "redaction", "enrichment", "heuristics", "presets", "structured", "url-ingestion"] }
 
 [build-dependencies]
 napi-build = "2"

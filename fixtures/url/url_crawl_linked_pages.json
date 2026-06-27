@@ -1,0 +1,83 @@
+{
+	"id": "url_crawl_linked_pages",
+	"category": "url",
+	"description": "extract: crawl mode follows linked pages",
+	"tags": [
+		"url",
+		"crawl"
+	],
+	"call": "extract",
+	"args": [
+		{
+			"name": "input",
+			"field": "input.extract_input",
+			"type": "json_object",
+			"owned": true,
+			"go_type": "ExtractInput",
+			"element_type": "ExtractInput"
+		},
+		{
+			"name": "config",
+			"field": "config",
+			"type": "json_object",
+			"optional": true
+		}
+	],
+	"input": {
+		"mock_responses": [
+			{
+				"path": "/",
+				"method": "GET",
+				"status_code": 200,
+				"headers": {
+					"content-type": "text/html; charset=utf-8"
+				},
+				"body_inline": "<html><body><h1>Root Crawl Page</h1><a href=\"/about\">About</a></body></html>"
+			},
+			{
+				"path": "/about",
+				"method": "GET",
+				"status_code": 200,
+				"headers": {
+					"content-type": "text/html; charset=utf-8"
+				},
+				"body_inline": "<html><body><h1>About crawl target</h1><p>Linked page body.</p></body></html>"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url"
+		}
+	},
+	"config": {
+		"url": {
+			"mode": "crawl",
+			"crawl": {
+				"max_depth": 1,
+				"max_pages": 4,
+				"respect_robots_txt": false
+			}
+		}
+	},
+	"assertions": [
+		{
+			"type": "not_error"
+		},
+		{
+			"type": "count_min",
+			"field": "summary.pages_crawled",
+			"value": 2
+		},
+		{
+			"type": "contains",
+			"field": "results.1.content",
+			"value": "About crawl target"
+		}
+	],
+	"skip": {
+		"languages": [
+			"wasm"
+		],
+		"reason": "WASM e2e does not enable URL ingestion"
+	}
+}

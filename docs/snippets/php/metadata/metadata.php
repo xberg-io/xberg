@@ -12,9 +12,9 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/vendor/autoload.php';
 
-use function Xberg\extract_file;
+use function Xberg\extract;
 
-$result = extract_file('document.pdf');
+$result = extract('document.pdf');
 
 if (isset($result->metadata->pdf)) {
     $pdfMeta = $result->metadata->pdf;
@@ -23,7 +23,7 @@ if (isset($result->metadata->pdf)) {
     echo "Title: " . ($pdfMeta['title'] ?? 'N/A') . "\n";
 }
 
-$htmlResult = extract_file('page.html');
+$htmlResult = extract('page.html');
 
 if (isset($htmlResult->metadata->html)) {
     $htmlMeta = $htmlResult->metadata->html;

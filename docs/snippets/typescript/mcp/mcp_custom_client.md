@@ -13,7 +13,7 @@ const rl = readline.createInterface({
 const request = {
   method: "tools/call",
   params: {
-    name: "extract_file",
+    name: "extract",
     arguments: {
       path: "document.pdf",
       async: true,

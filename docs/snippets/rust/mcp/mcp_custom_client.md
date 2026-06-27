@@ -15,7 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let request = json!({
             "method": "tools/call",
             "params": {
-                "name": "extract_file",
+                "name": "extract",
                 "arguments": {
                     "path": "document.pdf",
                     "async": true

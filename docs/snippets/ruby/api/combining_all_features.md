@@ -29,7 +29,7 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract_file_sync('document.pdf', config: config)
+result = Xberg.extract_sync('document.pdf', config: config)
 
 puts "Content length: #{result.content.length} characters"
 puts "Quality score: #{result.quality_score}"

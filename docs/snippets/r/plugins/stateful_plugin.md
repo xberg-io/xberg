@@ -21,7 +21,7 @@ plugin <- make_stateful_plugin()
 register_post_processor("stateful_counter", plugin$process)
 
 config <- list(postprocessor = list(enabled = TRUE))
-extract_file_sync("document.pdf", "application/pdf", config)
+extract_sync("document.pdf", "application/pdf", config)
 
 cat(sprintf("Processed: %d\n", plugin$count()))
 ```

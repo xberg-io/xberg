@@ -1,5 +1,5 @@
 ```typescript title="WASM"
-import init, { extractBytes } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 import { LanguageDetectionConfig, ExtractionConfig } from "xberg-wasm";
 
 await init();
@@ -14,7 +14,7 @@ const config = new ExtractionConfig({
   }),
 });
 
-const result = await extractBytes(fileBuffer, mimeType, config);
+const result = await extract(fileBuffer, mimeType, config);
 
 if (result.detected_languages) {
   console.log("Detected languages:", result.detected_languages);

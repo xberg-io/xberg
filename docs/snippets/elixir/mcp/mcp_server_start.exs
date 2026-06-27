@@ -115,7 +115,7 @@ defmodule XbergMCPServer.Handler do
     else
       config = build_config(config_opts)
 
-      case Xberg.extract_file(file_path, mime_type, config) do
+      case Xberg.extract(file_path, mime_type, config) do
         {:ok, result} ->
           response_data = %{
             success: true,
@@ -228,7 +228,7 @@ defmodule XbergMCPServer.FileHandler do
       {:ok, body, req} ->
         File.write!(temp_path, body)
 
-        case Xberg.extract_file(temp_path) do
+        case Xberg.extract(temp_path) do
           {:ok, result} ->
             response = Jason.encode!(%{
               success: true,

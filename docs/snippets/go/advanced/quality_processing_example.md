@@ -15,7 +15,7 @@ func main() {
 		EnableQualityProcessing: &enableQualityProcessing,
 	}
 
-	result, err := xberg.ExtractFileSync("scanned_document.pdf", config)
+	result, err := xberg.ExtractSync("scanned_document.pdf", config)
 	if err != nil {
 		log.Fatalf("extraction failed: %v", err)
 	}

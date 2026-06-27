@@ -1,5 +1,5 @@
 ```rust title="Rust"
-use xberg::{extract_file, ExtractionConfig, KeywordConfig, KeywordAlgorithm};
+use xberg::{extract, ExtractionConfig, KeywordConfig, KeywordAlgorithm};
 
 let config = ExtractionConfig {
     keywords: Some(KeywordConfig {
@@ -11,7 +11,7 @@ let config = ExtractionConfig {
     ..Default::default()
 };
 
-let result = extract_file("research_paper.pdf", None, &config).await?;
+let result = extract("research_paper.pdf", None, &config).await?;
 
 if let Some(keywords) = &result.extracted_keywords {
     println!("Keywords: {:?}", keywords);

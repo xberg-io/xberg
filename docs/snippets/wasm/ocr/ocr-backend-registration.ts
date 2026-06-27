@@ -4,7 +4,7 @@ import {
   registerOcrBackend,
   TesseractWasmBackend,
   unregisterOcrBackend,
-} from "@xberg/wasm";
+} from "@xberg-io/xberg-wasm";
 
 async function manageOcrBackends() {
   await initWasm();

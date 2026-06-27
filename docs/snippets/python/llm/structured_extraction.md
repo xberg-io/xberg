@@ -1,6 +1,6 @@
 ```python title="Python"
 import asyncio
-from xberg import extract_file, ExtractionConfig, StructuredExtractionConfig, LlmConfig
+from xberg import extract, ExtractionConfig, StructuredExtractionConfig, LlmConfig
 
 async def main() -> None:
     config = ExtractionConfig(
@@ -19,7 +19,7 @@ async def main() -> None:
             strict=True,
         ),
     )
-    result = await extract_file("paper.pdf", config=config)
+    result = await extract("paper.pdf", config=config)
     print(result.structured_output)
     # {"title": "...", "authors": ["..."], "date": "..."}
 

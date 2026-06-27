@@ -1,4 +1,4 @@
-import { getVersion, getWasmCapabilities, initWasm, isInitialized } from "@xberg/wasm";
+import { getVersion, getWasmCapabilities, initWasm, isInitialized } from "@xberg-io/xberg-wasm";
 
 async function initializeXberg() {
   const caps = getWasmCapabilities();

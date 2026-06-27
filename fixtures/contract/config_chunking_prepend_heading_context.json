@@ -1,23 +1,21 @@
 {
 	"id": "config_chunking_prepend_heading_context",
 	"description": "Tests markdown chunker prepends heading hierarchy to chunk content",
-	"tags": ["contract", "config", "chunking", "heading-context"],
-	"call": "extract_file_sync",
+	"tags": [
+		"contract",
+		"config",
+		"chunking",
+		"heading-context"
+	],
+	"call": "extract",
 	"input": {
-		"path": "markdown/extraction_test.md",
-		"config": {
-			"chunking": {
-				"chunker_type": "markdown",
-				"max_chars": 300,
-				"max_overlap": 50,
-				"prepend_heading_context": true
-			}
-		}
+		"kind": "uri",
+		"uri": "markdown/extraction_test.md"
 	},
 	"assertions": [
 		{
 			"type": "min_length",
-			"field": "content",
+			"field": "results.0.content",
 			"value": 10
 		}
 	],
@@ -41,5 +39,13 @@
 			"homebrew"
 		],
 		"reason": "Fixture needs streaming assertions which alef v0.23.2+ enforces; not all languages support chunks streaming"
+	},
+	"config": {
+		"chunking": {
+			"chunker_type": "markdown",
+			"max_chars": 300,
+			"max_overlap": 50,
+			"prepend_heading_context": true
+		}
 	}
 }

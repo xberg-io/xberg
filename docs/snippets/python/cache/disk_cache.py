@@ -18,12 +18,12 @@ config = ExtractionConfig(
 xberg = Xberg(config)
 
 print("First extraction (will be cached)...")
-result1 = xberg.extract_file("document.pdf")
+result1 = xberg.extract("document.pdf")
 print(f"  - Content length: {len(result1.content)}")
 print(f"  - Cached: {result1.metadata.get('was_cached', False)}")
 
 print("\nSecond extraction (from cache)...")
-result2 = xberg.extract_file("document.pdf")
+result2 = xberg.extract("document.pdf")
 print(f"  - Content length: {len(result2.content)}")
 print(f"  - Cached: {result2.metadata.get('was_cached', False)}")
 

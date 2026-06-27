@@ -1,5 +1,5 @@
 ```rust title="Rust"
-use xberg::{extract_file, ExtractionConfig, TranslationConfig, LlmConfig};
+use xberg::{extract, ExtractionConfig, TranslationConfig, LlmConfig};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -15,7 +15,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }),
         ..Default::default()
     };
-    let result = extract_file("contract.pdf", None, &config).await?;
+    let result = extract("contract.pdf", None, &config).await?;
     if let Some(translation) = result.translation {
         println!("{}", translation.content);
     }

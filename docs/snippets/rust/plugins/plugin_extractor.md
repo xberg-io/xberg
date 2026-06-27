@@ -15,7 +15,7 @@ impl Plugin for CustomJsonExtractor {
 
 #[async_trait]
 impl DocumentExtractor for CustomJsonExtractor {
-    async fn extract_bytes(
+    async fn extract(
         &self,
         content: &[u8],
         _mime_type: &str,

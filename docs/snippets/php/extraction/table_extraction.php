@@ -19,7 +19,7 @@ use Xberg\Config\TesseractConfig;
 
 $config = new ExtractionConfig(extractTables: true);
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('financial_report.pdf');
+$result = $xberg->extract('financial_report.pdf');
 
 echo "Table Extraction:\n";
 echo str_repeat('=', 60) . "\n";
@@ -75,7 +75,7 @@ $ocrConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($ocrConfig);
-$result = $xberg->extractFile('scanned_table.pdf');
+$result = $xberg->extract('scanned_table.pdf');
 
 echo "OCR Table Extraction:\n";
 echo str_repeat('=', 60) . "\n";
@@ -147,7 +147,7 @@ function tableToAssociativeArray(\Xberg\Types\Table $table): array
     return $result;
 }
 
-$result = $xberg->extractFile('quarterly_report.pdf');
+$result = $xberg->extract('quarterly_report.pdf');
 
 foreach ($result->tables as $index => $table) {
     $data = tableToAssociativeArray($table);

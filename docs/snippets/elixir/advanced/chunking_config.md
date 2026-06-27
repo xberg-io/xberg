@@ -10,7 +10,7 @@ config_json = Jason.encode!(%{
   }
 })
 
-{:ok, result} = Xberg.extract_file_sync("document.pdf", "application/pdf", config_json)
+{:ok, result} = Xberg.extract_sync("document.pdf", "application/pdf", config_json)
 
 chunks = result.chunks || []
 IO.puts("Total chunks: #{length(chunks)}")
@@ -33,7 +33,7 @@ config_json = Jason.encode!(%{
   }
 })
 
-{:ok, result} = Xberg.extract_file_sync("document.md", "text/markdown", config_json)
+{:ok, result} = Xberg.extract_sync("document.md", "text/markdown", config_json)
 
 if result.chunks do
   IO.puts("Generated #{length(result.chunks)} chunks with prepended headings")

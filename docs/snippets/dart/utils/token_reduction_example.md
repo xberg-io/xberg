@@ -18,7 +18,7 @@ Future<void> main() async {
     useLayoutForMarkdown: false,
   );
 
-  final result = await XbergBridge.extractFile('verbose_document.pdf', null, config);
+  final result = await XbergBridge.extract('verbose_document.pdf', null, config);
   print('Content length after reduction: ${result.content.length}');
 }
 ```

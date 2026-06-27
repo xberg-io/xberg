@@ -14,7 +14,7 @@ repos:
     stages:
     - commit-msg
 - repo: https://github.com/xberg-io/pre-commit-hooks
-  rev: v2.3.0
+  rev: v3.0.0
   hooks:
     # Alef verification
     - id: alef-verify
@@ -212,15 +212,6 @@ repos:
     - id: cppcheck
     - id: alef-docs-fresh
     - id: alef-snippets-validate
-
-    - id: helm-lint
-      files: ^charts/.*/(Chart\.yaml|templates/.+\.ya?ml)$
-    - id: kubeconform
-      args:
-      - -strict
-      - -summary
-      files: ^charts/.*/templates/.+\.ya?ml$
-      exclude: ^charts/.*/(values|Chart)\.ya?ml$
 
     # Formatters
     - id: trailing-whitespace

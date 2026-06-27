@@ -16,7 +16,7 @@ config_json = Jason.encode!(%{
   }
 })
 
-{:ok, result} = Xberg.extract_file_sync("document.pdf", "application/pdf", config_json)
+{:ok, result} = Xberg.extract_sync("document.pdf", "application/pdf", config_json)
 chunks_count = if result.chunks, do: length(result.chunks), else: 0
 IO.puts("Chunks with embeddings: #{chunks_count}")
 ```

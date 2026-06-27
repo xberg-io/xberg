@@ -1,6 +1,6 @@
-Import { extractFileSync } from '@xberg/node';
+Import { extractSync } from '@xberg-io/xberg';
 
-Const result = extractFileSync('document.pdf', null, { pages: { extractPages: true } });
+Const result = extractSync('document.pdf', null, { pages: { extractPages: true } });
 
 If (result.pages) {
 for (const page of result.pages) {

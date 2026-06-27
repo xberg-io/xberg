@@ -17,7 +17,7 @@ ExtractionConfig config = ExtractionConfig.builder()
     .withEnableQualityProcessing(true)
     .build();
 
-ExtractionResult result = Xberg.extractFileSync(Paths.get("document.pdf"), config);
+ExtractionResult result = Xberg.extractSync(Paths.get("document.pdf"), config);
 System.out.println("Content: " + result.content().substring(0, 100) + "...");
 if (result.tables() != null) {
     System.out.println("Tables: " + result.tables().size());

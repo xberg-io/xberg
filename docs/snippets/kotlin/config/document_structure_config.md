@@ -8,7 +8,7 @@ fun main() {
         .withIncludeDocumentStructure(true)
         .build()
 
-    val result = Xberg.extractFileSync(Paths.get("document.pdf"), null, config)
+    val result = Xberg.extractSync(Paths.get("document.pdf"), null, config)
     val document = result.document()
     if (document != null) {
         for (node in document.nodes()) {

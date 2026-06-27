@@ -14,7 +14,7 @@ import {
   type PostProcessorProtocol,
   type ValidatorProtocol,
   type OcrBackendProtocol,
-} from "@xberg/node";
+} from "@xberg-io/xberg";
 
 /**
  * Plugin registry and lifecycle management

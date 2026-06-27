@@ -20,7 +20,7 @@ public class HtmlOutput {
             .withHtmlOutput(Optional.of(htmlOutput))
             .build();
 
-        ExtractionResult result = Xberg.extractFileSync(Path.of("document.pdf"), config);
+        ExtractionResult result = Xberg.extractSync(Path.of("document.pdf"), config);
         System.out.println(result.content()); // HTML with kb-* classes
     }
 }

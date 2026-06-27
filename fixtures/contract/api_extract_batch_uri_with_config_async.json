@@ -1,0 +1,45 @@
+{
+	"id": "api_extract_batch_uri_with_config_async",
+	"description": "Tests async batch file extraction with per-file configs (extract_batch with file_configs parameter)",
+	"tags": [
+		"contract",
+		"api",
+		"batch",
+		"file_config"
+	],
+	"call": "extract_batch",
+	"input": {
+		"inputs": [
+			{
+				"kind": "uri",
+				"uri": "pdf/fake_memo.pdf",
+				"config": {
+					"output_format": "markdown"
+				}
+			}
+		]
+	},
+	"assertions": [
+		{
+			"type": "equals",
+			"field": "results.0.mime_type",
+			"value": "application/pdf"
+		},
+		{
+			"type": "min_length",
+			"field": "results.0.content",
+			"value": 10
+		},
+		{
+			"type": "equals",
+			"field": "results.0.metadata.output_format",
+			"value": "markdown"
+		}
+	],
+	"skip": {
+		"languages": [
+			"wasm"
+		],
+		"reason": "WASM uses synchronous-only API; async extraction is not available on the wasm target"
+	}
+}

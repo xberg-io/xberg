@@ -9,7 +9,7 @@ config <- list(
   )
 )
 
-json <- extract_file_sync("large_document.pdf", "application/pdf", config)
+json <- extract_sync("large_document.pdf", "application/pdf", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 cat("Number of chunks:", length(result$chunks), "\n")
 ```
@@ -27,7 +27,7 @@ config <- list(
   )
 )
 
-json <- extract_file_sync("document.md", "text/markdown", config)
+json <- extract_sync("document.md", "text/markdown", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 cat("Number of chunks:", length(result$chunks), "\n")
 ```

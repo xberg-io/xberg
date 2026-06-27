@@ -8,9 +8,9 @@ config_json = Jason.encode!(%{
   ]
 })
 
-{:ok, result_before} = Xberg.extract_file_sync("document.pdf", "application/pdf", nil)
+{:ok, result_before} = Xberg.extract_sync("document.pdf", "application/pdf", nil)
 
-{:ok, result_after} = Xberg.extract_file_sync("document.pdf", "application/pdf", config_json)
+{:ok, result_after} = Xberg.extract_sync("document.pdf", "application/pdf", config_json)
 
 # Compare text quality metrics
 text_before = result_before.text || ""

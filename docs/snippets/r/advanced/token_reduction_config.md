@@ -10,7 +10,7 @@ config <- list(
   )
 )
 
-json <- extract_file_sync("document.pdf", "application/pdf", config)
+json <- extract_sync("document.pdf", "application/pdf", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Reduced content length: %d characters\n", nchar(result$content)))

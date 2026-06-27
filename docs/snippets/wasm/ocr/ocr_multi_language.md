@@ -1,11 +1,11 @@
 ```typescript title="WASM"
-import init, { extractBytes } from "xberg-wasm";
+import init, { extract } from "xberg-wasm";
 
 await init();
 
 const multilingualData = await fetch("multilingual.pdf").then((res) => res.arrayBuffer());
 
-const result = await extractBytes(multilingualData, "application/pdf", {
+const result = await extract(multilingualData, "application/pdf", {
   ocr: {
     backend: "tesseract",
     language: "eng+deu+fra",

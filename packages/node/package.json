@@ -1,5 +1,5 @@
 {
-	"name": "@xberg/node-tsproject",
+	"name": "@xberg-io/xberg-tsproject",
 	"version": "1.0.0-rc.1",
 	"private": true,
 	"description": "High-performance document intelligence library",

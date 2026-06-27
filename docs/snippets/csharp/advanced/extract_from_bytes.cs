@@ -8,7 +8,7 @@ class Program
         {
             var pdfBytes = await File.ReadAllBytesAsync("document.pdf");
 
-            var result = await XbergLib.ExtractBytesAsync(
+            var result = await XbergLib.ExtractAsync(
                 pdfBytes,
                 "application/pdf"
             );
@@ -22,7 +22,7 @@ class Program
                 EnableQualityProcessing = true
             };
 
-            var result2 = await XbergLib.ExtractBytesAsync(
+            var result2 = await XbergLib.ExtractAsync(
                 pdfBytes,
                 "application/pdf",
                 config
@@ -32,7 +32,7 @@ class Program
 
             var imageBytes = new byte[] {  };
 
-            var imageResult = await XbergLib.ExtractBytesAsync(
+            var imageResult = await XbergLib.ExtractAsync(
                 imageBytes,
                 "image/jpeg"
             );
@@ -47,7 +47,7 @@ class Program
 
             foreach (var (name, (bytes, mimeType)) in multipleFiles)
             {
-                var extractResult = await XbergLib.ExtractBytesAsync(
+                var extractResult = await XbergLib.ExtractAsync(
                     bytes,
                     mimeType
                 );

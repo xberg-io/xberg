@@ -3,7 +3,7 @@
 ```elixir
 config_json = Jason.encode!(%{"enable_quality_processing" => true})
 
-{:ok, json} = Xberg.extract_file_async("scanned_document.pdf", nil, config_json)
+{:ok, json} = Xberg.extract_async("scanned_document.pdf", nil, config_json)
 result = Jason.decode!(json)
 
 quality_score = result["quality_score"] || 0.0

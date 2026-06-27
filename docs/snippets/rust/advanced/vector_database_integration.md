@@ -1,5 +1,5 @@
 ```rust title="Rust"
-use xberg::{extract_file, ExtractionConfig, ChunkingConfig, EmbeddingConfig};
+use xberg::{extract, ExtractionConfig, ChunkingConfig, EmbeddingConfig};
 
 struct VectorRecord {
     id: String,
@@ -29,7 +29,7 @@ async fn extract_and_vectorize(
         ..Default::default()
     };
 
-    let result = extract_file(document_path, None, &config).await?;
+    let result = extract(document_path, None, &config).await?;
 
     let mut records = Vec::new();
     if let Some(chunks) = result.chunks {

@@ -13,7 +13,7 @@ let configJson = """
 """
 
 let config = try extractionConfigFromJson(configJson)
-let result = try extractFileSync("multilingual.pdf", nil, config)
+let result = try extractSync("multilingual.pdf", nil, config)
 
 print(result.content().toString())
 ```

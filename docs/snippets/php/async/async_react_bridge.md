@@ -10,7 +10,7 @@ use Xberg\Async\ReactBridge;
 $xberg = new Xberg();
 
 // Single file extraction with ReactPHP Promise
-$deferred = $xberg->extractFileAsync('document.pdf');
+$deferred = $xberg->extractAsync('document.pdf');
 $promise = ReactBridge::toPromise($deferred);
 
 $promise->then(

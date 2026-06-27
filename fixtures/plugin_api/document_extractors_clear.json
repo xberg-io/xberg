@@ -2,7 +2,12 @@
 	"id": "document_extractors_clear",
 	"category": "document_extractor_management",
 	"description": "Clear all document extractors and verify list is empty",
-	"tags": ["document_extractor", "plugin_management", "clear", "trait-bridge"],
+	"tags": [
+		"document_extractor",
+		"plugin_management",
+		"clear",
+		"trait-bridge"
+	],
 	"call": "clear_document_extractors",
 	"assertions": [
 		{

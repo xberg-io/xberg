@@ -1,5 +1,5 @@
 ```rust title="Rust"
-use xberg::{extract_file_sync, ExtractionConfig, OcrConfig};
+use xberg::{extract_sync, ExtractionConfig, OcrConfig};
 use xberg::types::TesseractConfig;
 
 fn main() -> xberg::Result<()> {
@@ -16,7 +16,7 @@ fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract_file_sync("scanned.pdf", None::<&str>, &config)?;
+    let result = extract_sync("scanned.pdf", None::<&str>, &config)?;
     println!("OCR text: {}", result.content);
     Ok(())
 }

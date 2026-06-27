@@ -1,5 +1,5 @@
 ```rust title="Rust"
-use xberg::{extract_file, ExtractionConfig};
+use xberg::{extract, ExtractionConfig};
 
 #[tokio::main]
 async fn main() -> xberg::Result<()> {
@@ -9,7 +9,7 @@ async fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract_file("document.pdf", None, &config).await?;
+    let result = extract("document.pdf", None, &config).await?;
     println!("{}", result.content);
     Ok(())
 }

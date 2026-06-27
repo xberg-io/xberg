@@ -9,7 +9,7 @@ config <- list(
   )
 )
 
-json <- extract_file_sync("document.pdf", "application/pdf", config)
+json <- extract_sync("document.pdf", "application/pdf", config)
 result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 if (length(result$detected_languages) > 0) {

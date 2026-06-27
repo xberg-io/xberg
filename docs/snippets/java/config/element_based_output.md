@@ -15,7 +15,7 @@ public class ElementBasedOutput {
             .build();
 
         // Extract document
-        ExtractionResult result = Xberg.extractFileSync(Path.of("document.pdf"), config);
+        ExtractionResult result = Xberg.extractSync(Path.of("document.pdf"), config);
 
         // Access elements
         List<Element> elements = result.elements();

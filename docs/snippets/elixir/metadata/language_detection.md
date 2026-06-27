@@ -9,7 +9,7 @@ config =
   }
   |> Jason.encode!()
 
-case Xberg.extract_file_sync("document.pdf", nil, config) do
+case Xberg.extract_sync("document.pdf", nil, config) do
   {:ok, result} ->
     decoded = Jason.decode!(result)
 

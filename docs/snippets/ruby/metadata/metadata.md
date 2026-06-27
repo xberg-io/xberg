@@ -1,7 +1,7 @@
 ```ruby title="Ruby"
 require 'xberg'
 
-result = Xberg.extract_file_sync('document.pdf')
+result = Xberg.extract_sync('document.pdf')
 
 # Metadata is flat — format-specific fields are at the top level
 metadata = result.metadata
@@ -16,7 +16,7 @@ if metadata['authors']
 end
 
 # Access HTML metadata
-html_result = Xberg.extract_file_sync('page.html')
+html_result = Xberg.extract_sync('page.html')
 metadata = html_result.metadata
 if metadata['title']
   puts "Title: #{metadata['title']}"

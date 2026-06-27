@@ -18,7 +18,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('document.pdf');
+$result = $xberg->extract('document.pdf');
 
 echo "EasyOCR Results:\n";
 echo $result->content . "\n";
@@ -32,7 +32,7 @@ $multiLangConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($multiLangConfig);
-$result = $xberg->extractFile('multilingual_document.pdf');
+$result = $xberg->extract('multilingual_document.pdf');
 
 echo "\nMulti-language extraction:\n";
 echo $result->content . "\n";

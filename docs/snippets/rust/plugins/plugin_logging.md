@@ -15,7 +15,7 @@ impl Plugin for MyPlugin {
 
 #[async_trait]
 impl DocumentExtractor for MyPlugin {
-    async fn extract_bytes(
+    async fn extract(
         &self,
         content: &[u8],
         mime_type: &str,

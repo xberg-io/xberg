@@ -13,7 +13,7 @@ func main() {
 		log.Fatalf("register extractor failed: %v", err)
 	}
 
-	result, err := xberg.ExtractFileSync("document.json", nil)
+	result, err := xberg.ExtractSync("document.json", nil)
 	if err != nil {
 		log.Fatalf("extract failed: %v", err)
 	}

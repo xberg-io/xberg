@@ -10,7 +10,7 @@ int main(void) {
 
     char *config_json = xberg_config_to_json(config);
     struct CExtractionResult *result =
-        xberg_extract_file_sync_with_config("scanned.png", config_json);
+        xberg_extract_sync_with_config("scanned.png", config_json);
 
     if (result && result->success) {
         printf("OCR text: %s\n", result->content);

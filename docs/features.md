@@ -87,8 +87,7 @@ A map of what Xberg can do. Each section links to the guide or reference page wi
     <span class="format-chip">WebM audio track <code>.webm</code></span>
     </div>
 
-    !!! info "Since v5.0"
-        Enable the `transcription` feature and set a `transcription` config block to extract Whisper ONNX transcripts from audio files and video audio tracks. See [Audio and Video Transcription](guides/transcription.md).
+    Enable the `transcription` feature and set a `transcription` config block to extract Whisper ONNX transcripts from audio files and video audio tracks. See [Audio and Video Transcription](guides/transcription.md).
 
 === "Email"
 
@@ -141,21 +140,6 @@ For the full format matrix with MIME types, extraction methods, and special capa
 
 ---
 
-## Feature Availability
-
-Use these labels when matching docs to deployed packages. Labels use major.minor only.
-
-| Version | Feature area |
-| ------- | ------------ |
-| <span class="version-badge">v4.0</span> | HTML metadata extraction and the pdf_oxide PDF provider. |
-| <span class="version-badge">v4.3</span> | LibreOffice-free extraction for legacy `.doc` and `.ppt` files. |
-| <span class="version-badge">v4.5</span> | OCR pipeline fallback, layout detection, and document-level OCR. |
-| <span class="version-badge">v4.6</span> | PDF page rendering. |
-| <span class="version-badge">v4.8</span> | LLM/VLM intelligence through liter-llm. |
-| <span class="version-badge">v5.0</span> | Image-index references, SVG/image output normalization, HEIC aggregate formats, `list_supported_formats`, Whisper audio/video transcription, reranking, NER, redaction, summarization, translation, page classification, image captions, QR-code detection, and the `windows-target` feature aggregate. |
-
----
-
 ## Extraction Pipeline
 
 Every file flows through the same multi-stage pipeline:
@@ -202,8 +186,6 @@ Three OCR backends, usable individually or chained into a quality-driven fallbac
 
 ### Multi-Backend Pipeline
 
-!!! Info "Available by v4.5"
-
 When the `paddle-ocr` feature is enabled, Xberg automatically constructs a fallback pipeline: Tesseract runs first, and if the output falls below configurable quality thresholds (16 tunable parameters), PaddleOCR takes over. You can also define a custom ordering across all three backends.
 
 The pipeline supports auto-rotate for page orientation detection (0/90/180/270 degrees) and per-stage language and backend-specific settings.
@@ -221,15 +203,11 @@ flowchart TD
 
 ### Document-Level Optimization
 
-!!! Info "Available by v4.5"
-
 Some OCR backends (including EasyOCR) now support **document-level processing**. When a file path is provided, the extractor can bypass the expensive page-by-page rendering stage and delegate the entire document to the OCR engine. This significantly reduces memory overhead and improves throughput for large PDFs and multi-page images.
 
 For backend configuration, language selection, and PSM/OEM modes, see the [OCR Guide](guides/ocr.md).
 
 ### Candle GLM-OCR
-
-!!! Info "Added in v5.0.0-rc.18"
 
 Pure-Rust VLM OCR via the `candle-glm-ocr` feature. Wraps the zai-org/GLM-OCR 0.9B-param vision-language model running natively through the candle transformer framework. No ONNX Runtime dependency.
 
@@ -254,8 +232,6 @@ Pure-Rust VLM OCR via the `candle-glm-ocr` feature. Wraps the zai-org/GLM-OCR 0.
 Configure via `--ocr-backend candle-glm-ocr` or `ocr.backend = "candle-glm-ocr"` in config. Set layout mode and device via `backend_options`: `{"layout_mode":"paired"}`, `{"layout_mode":"whole_page"}`, `{"device":"metal"}`, `{"device":"cuda"}`.
 
 ### Candle Hunyuan-OCR
-
-!!! Info "Added in v5.0.0-rc.18"
 
 Pure-Rust VLM OCR via the `candle-hunyuan-ocr` feature. Tencent Hunyuan-OCR vision-language model with document layout understanding and multilingual support. No ONNX Runtime dependency.
 
@@ -282,8 +258,6 @@ Configure via `--ocr-backend candle-hunyuan-ocr` or `ocr.backend = "candle-hunyu
 
 ### Candle DeepSeek-OCR
 
-!!! Info "Added in v5.0.0-rc.18"
-
 Pure-Rust VLM OCR via the `candle-deepseek-ocr` feature. DeepSeek-OCR vision-language model combining SAM, CLIP, Qwen2, and DeepSeek-V2 MoE architecture. Advanced document understanding with multilingual support. No ONNX Runtime dependency.
 
 **Feature flag:** `candle-deepseek-ocr`
@@ -308,8 +282,6 @@ Configure via `--ocr-backend candle-deepseek-ocr` or `ocr.backend = "candle-deep
 **Attribution:** Model vendored from [jhqxxx/aha](https://github.com/jhqxxx/aha) (Apache-2.0). See [ATTRIBUTIONS.md](https://github.com/xberg-io/xberg/blob/main/ATTRIBUTIONS.md).
 
 ### Candle PaddleOCR-VL 1.5
-
-!!! Info "Added in v5.0.0-rc.18"
 
 Pure-Rust VLM OCR via the `candle-paddleocr-vl-15` feature. PaddleOCR-VL 1.5 vision-language model with SigLIP+Ernie integration. Fast multilingual document OCR with strong CJK support. No ONNX Runtime dependency.
 
@@ -354,11 +326,9 @@ Optional post-extraction steps, each configured independently through `Extractio
 
 **PDF Hierarchy Detection** -- Detect document structure from PDFs using K-means clustering on block characteristics (font size, weight, indentation, position). Blocks are assigned to semantic levels (title, section, subsection, paragraph) without relying on explicit heading tags. See the [Output Formats Guide](guides/output-formats.md#pdf-hierarchy-detection).
 
-**PDF Page Rendering** <span class="version-badge">v4.6</span> -- Render individual PDF pages as PNG images for thumbnails, vision model input, or custom processing pipelines. Memory-efficient iterator renders one page at a time. Configurable DPI (default 150). Available across all language bindings. See [Extraction Guide](guides/extraction.md#pdf-page-rendering).
+**PDF Page Rendering** -- Render individual PDF pages as PNG images for thumbnails, vision model input, or custom processing pipelines. Memory-efficient iterator renders one page at a time. Configurable DPI (default 150). Available across all language bindings. See [Extraction Guide](guides/extraction.md#pdf-page-rendering).
 
 ### LLM-Powered Intelligence
-
-!!! Info "Available by v4.8"
 
 Xberg integrates with 143 LLM providers including local inference (Ollama, LM Studio, vLLM, llama.cpp) via [liter-llm](https://github.com/xberg-io/liter-llm) to unlock three new capabilities that complement the local extraction pipeline.
 
@@ -414,8 +384,6 @@ Customize the prompts sent to LLMs with Minijinja templates. Available variables
 
 ### Document Enrichment
 
-!!! Info "Available by v5.0"
-
 **Named-Entity Recognition** -- Detect people, organisations, locations, dates, money, percentages, emails, phones, URLs, and caller-supplied zero-shot labels via `xberg-gliner` (ONNX artifacts from `xberg-io/gliner-models`) or any liter-llm provider. Results populate `ExtractionResult.entities`. See the [NER Guide](guides/ner.md).
 
 **Redaction & Anonymisation** -- Late-stage post-processor that rewrites `content`, `formatted_content`, chunks, entities, summary, translation, and page classifications. Pattern engine covers emails, phones, SSNs, credit cards, IBANs, IP addresses, SWIFT/BIC, postal codes, dates of birth; pair with NER for PERSON / ORGANIZATION / LOCATION. Strategies: mask, hash, token-replace, drop. Caller can supply literal terms and regex patterns. See the [Redaction Guide](guides/redaction.md).
@@ -453,8 +421,6 @@ Customize the prompts sent to LLMs with Minijinja templates. Available variables
 ---
 
 ## Layout Detection
-
-!!! Info "Available by v4.5"
 
 Detect and classify document regions using ONNX-based deep learning. Layout detection identifies 17 element types (text, tables, figures, headers, code, forms, captions, and more), enabling accurate region-aware extraction and structured table recovery.
 
@@ -531,8 +497,8 @@ Polyglot bindings share the Rust core and expose the same generated types where 
 
 **TypeScript: Two flavors**
 
-- **Native** (`@xberg/node`) — Full speed, complete feature parity (servers, plugins, config file discovery)
-- **WASM** (`@xberg/wasm`) — Browser/edge runtime, 60–80% of native speed, no native dependencies required. Excluded features: ORT-dependent inference (`paddle-ocr`, layout detection, embeddings, reranker, auto-rotate, transcription), liter-llm/VLM features, server modes (`api`/`mcp`), CLI binary, and browser filesystem paths. Pure-Rust extraction formats, Tesseract WASM OCR, chunking, keywords, language detection, stopwords, tree-sitter, redaction, summarization, SVG, and QR-code detection are supported.
+- **Native** (`@xberg-io/xberg`) — Full speed, complete feature parity (servers, plugins, config file discovery)
+- **WASM** (`@xberg-io/xberg-wasm`) — Browser/edge runtime, 60–80% of native speed, no native dependencies required. Excluded features: ORT-dependent inference (`paddle-ocr`, layout detection, embeddings, reranker, auto-rotate, transcription), liter-llm/VLM features, server modes (`api`/`mcp`), CLI binary, and browser filesystem paths. Pure-Rust extraction formats, Tesseract WASM OCR, chunking, keywords, language detection, stopwords, tree-sitter, redaction, summarization, SVG, and QR-code detection are supported.
 
 Choose Native for server-side Node.js; choose WASM for browser or edge deployments.
 
@@ -561,8 +527,8 @@ Rust builds are modular through Cargo features. The default feature set is `toki
 === "TypeScript"
 
     ```bash
-    npm install @xberg/node            # Native (Node.js/Bun)
-    npm install @xberg/wasm            # WASM (browser/edge)
+    npm install @xberg-io/xberg            # Native (Node.js/Bun)
+    npm install @xberg-io/xberg-wasm            # WASM (browser/edge)
     ```
 
 === "Rust"
@@ -600,8 +566,6 @@ For the full configuration schema and examples, see the [Configuration Guide](gu
 ---
 
 ## AI Coding Assistants
-
-!!! Info "Added in v4.2"
 
 Xberg ships with an [Agent Skill](https://agentskills.io) that teaches AI coding assistants the complete API across Python, TypeScript, Rust, and CLI. Install it with:
 

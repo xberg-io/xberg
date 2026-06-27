@@ -1,16 +1,21 @@
 {
 	"id": "batch_file_not_found",
 	"category": "batch",
-	"description": "batch_extract_file_sync nonexistent",
-	"tags": ["batch", "error"],
-	"call": "batch_extract_files_sync",
+	"description": "extract_batch nonexistent",
+	"tags": [
+		"batch",
+		"error"
+	],
+	"call": "extract_batch",
 	"input": {
-		"paths": [
+		"inputs": [
 			{
-				"path": "/nonexistent/a.pdf"
+				"kind": "uri",
+				"uri": "/nonexistent/a.pdf"
 			},
 			{
-				"path": "/nonexistent/b.txt"
+				"kind": "uri",
+				"uri": "/nonexistent/b.txt"
 			}
 		]
 	},
@@ -20,7 +25,9 @@
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
-		"reason": "WASM cannot access filesystem; use extractBytes with file content instead"
+		"languages": [
+			"wasm"
+		],
+		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	}
 }

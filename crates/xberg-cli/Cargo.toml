@@ -23,6 +23,7 @@ path = "src/main.rs"
 default = [
     "embeddings",
     "html",
+    "url-ingestion",
     "liter-llm",
     "ocr",
     "paddle-ocr",
@@ -53,6 +54,7 @@ candle-mkl = ["xberg/candle-mkl"]
 layout-detection = ["xberg/layout-detection"]
 chunking-tokenizers = ["xberg/chunking-tokenizers"]
 html = ["xberg/html"]
+url-ingestion = ["xberg/url-ingestion"]
 liter-llm = ["xberg/liter-llm"]
 tree-sitter = ["xberg/tree-sitter", "dep:tree-sitter-language-pack"]
 ner-onnx = ["xberg/ner-onnx"]
@@ -62,6 +64,7 @@ all = [
     "api",
     "heic",
     "html",
+    "url-ingestion",
     "mcp",
     "mcp-http",
     "chunking-tokenizers",

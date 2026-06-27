@@ -2,7 +2,11 @@
 	"id": "extensions_docx",
 	"category": "registry_operations",
 	"description": "Get file extensions for DOCX MIME type",
-	"tags": ["registry", "extensions", "docx"],
+	"tags": [
+		"registry",
+		"extensions",
+		"docx"
+	],
 	"call": "get_extensions_for_mime",
 	"input": {
 		"mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"

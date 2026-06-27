@@ -1,13 +1,13 @@
 ```typescript title="TypeScript"
-import { extractFileSync } from "@xberg/node";
+import { extractSync } from "@xberg-io/xberg";
 
-const result = extractFileSync("document.pdf");
+const result = extractSync("document.pdf");
 console.log(`Metadata: ${JSON.stringify(result.metadata)}`);
 if (result.metadata.pageCount) {
   console.log(`Pages: ${result.metadata.pageCount}`);
 }
 
-const htmlResult = extractFileSync("page.html");
+const htmlResult = extractSync("page.html");
 console.log(`HTML Metadata: ${JSON.stringify(htmlResult.metadata)}`);
 
 const htmlMeta = htmlResult.metadata;

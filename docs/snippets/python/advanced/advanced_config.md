@@ -1,6 +1,6 @@
 ```python title="Python"
 from xberg import (
-    extract_file_sync,
+    extract_sync,
     ExtractionConfig,
     OcrConfig,
     ChunkingConfig,
@@ -19,7 +19,7 @@ config = ExtractionConfig(
     enable_quality_processing=True,
 )
 
-result = extract_file_sync("document.pdf", config=config)
+result = extract_sync("document.pdf", config=config)
 
 for chunk in result.chunks or []:
     print(f"Chunk: {chunk.content[:100]}")

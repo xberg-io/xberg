@@ -1,4 +1,4 @@
-Use Xberg::{extract_file_sync, ExtractionConfig, PageConfig};
+Use Xberg::{extract_sync, ExtractionConfig, PageConfig};
 
 Let config = ExtractionConfig {
 pages: Some(PageConfig {
@@ -8,7 +8,7 @@ extract_pages: true,
 ..Default::default()
 };
 
-Let result = extract_file_sync("document.pdf", &config)?;
+Let result = extract_sync("document.pdf", &config)?;
 
 If let Some(pages) = result.pages {
 for page in pages {

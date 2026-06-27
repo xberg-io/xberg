@@ -6,7 +6,7 @@
 
 int main(void) {
     XBERGExtractionResult *result =
-        xberg_extract_file("document.pdf", NULL, NULL);
+        xberg_extract("document.pdf", NULL, NULL);
     if (!result) {
         fprintf(stderr, "extraction failed (code %d): %s\n",
                 xberg_last_error_code(),

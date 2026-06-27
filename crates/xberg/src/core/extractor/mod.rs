@@ -1,37 +1,47 @@
 //! Main extraction entry points.
 //!
-//! This module provides the primary API for extracting content from files and byte arrays.
+//! This module provides the primary API for extracting content from bytes and URIs.
 //! It orchestrates the entire extraction pipeline: cache checking, MIME detection,
 //! extractor selection, extraction, post-processing, and cache storage.
 //!
 //! # Functions
 //!
-//! - [`extract_file`] - Extract content from a file path
-//! - [`extract_bytes`] - Extract content from a byte array
-//! - [`batch_extract_files`] - Extract content from multiple files concurrently
-//! - [`batch_extract_bytes`] - Extract content from multiple byte arrays concurrently
+//! - [`extract`] - Extract content from one bytes or URI input
+//! - [`extract_batch`] - Extract content from multiple bytes or URI inputs
 
 mod bytes;
 mod file;
 mod helpers;
 mod legacy;
 mod sync;
+mod unified;
 
 #[cfg(feature = "tokio-runtime")]
 mod batch;
 
 // Re-export public API
-pub use bytes::extract_bytes;
-pub use file::extract_file;
-pub use sync::{batch_extract_bytes_sync, extract_bytes_sync};
+pub use unified::{extract, extract_batch};
 
 #[cfg(feature = "tokio-runtime")]
-pub use sync::extract_file_sync;
+pub use sync::{extract_batch_sync, extract_sync};
 
+#[allow(unused_imports)]
+pub(crate) use bytes::extract_bytes;
+#[allow(unused_imports)]
+pub(crate) use file::extract_file;
+#[allow(unused_imports)]
+pub(crate) use sync::{batch_extract_bytes_sync, extract_bytes_sync};
+
+#[allow(unused_imports)]
 #[cfg(feature = "tokio-runtime")]
-pub use batch::{batch_extract_bytes, batch_extract_files};
+pub(crate) use sync::extract_file_sync;
+
+#[allow(unused_imports)]
 #[cfg(feature = "tokio-runtime")]
-pub use sync::batch_extract_files_sync;
+pub(crate) use batch::{batch_extract_bytes, batch_extract_files};
+#[allow(unused_imports)]
+#[cfg(feature = "tokio-runtime")]
+pub(crate) use sync::batch_extract_files_sync;
 
 // The test module exercises the async extraction entry points and the batch/sync helpers
 // (`batch_extract_files`, `batch_extract_bytes`, `extract_file_sync`, `batch_extract_files_sync`),

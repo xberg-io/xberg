@@ -26,7 +26,7 @@ func extractAndVectorize(documentPath: String, documentId: String) throws -> [Ve
     """
 
     let config = try extractionConfigFromJson(configJson)
-    let result = try extractFileSync(documentPath, nil, config)
+    let result = try extractSync(documentPath, nil, config)
 
     var records: [VectorRecord] = []
     if let chunks = result.chunks() {

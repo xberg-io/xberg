@@ -2,8 +2,14 @@
 	"id": "list_validators",
 	"category": "registry",
 	"description": "List validators",
-	"tags": ["registry"],
+	"tags": [
+		"registry"
+	],
 	"call": "list_validators",
 	"input": {},
-	"assertions": [{ "type": "not_error" }]
+	"assertions": [
+		{
+			"type": "not_error"
+		}
+	]
 }

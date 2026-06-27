@@ -2,15 +2,22 @@
 	"id": "batch_file_async_basic",
 	"category": "batch",
 	"description": "Extract text from multiple files asynchronously",
-	"tags": ["batch", "async", "concurrent", "multiple_files"],
-	"call": "batch_extract_files",
+	"tags": [
+		"batch",
+		"async",
+		"concurrent",
+		"multiple_files"
+	],
+	"call": "extract_batch",
 	"input": {
-		"paths": [
+		"inputs": [
 			{
-				"path": "pdf/fake_memo.pdf"
+				"kind": "uri",
+				"uri": "pdf/fake_memo.pdf"
 			},
 			{
-				"path": "text/fake_text.txt"
+				"kind": "uri",
+				"uri": "text/fake_text.txt"
 			}
 		]
 	},
@@ -20,7 +27,9 @@
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
-		"reason": "WASM cannot access filesystem; use extractBytes with file content instead"
+		"languages": [
+			"wasm"
+		],
+		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	}
 }

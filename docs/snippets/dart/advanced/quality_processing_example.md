@@ -14,7 +14,7 @@ Future<void> main() async {
     useLayoutForMarkdown: false,
   );
 
-  final result = await XbergBridge.extractFile('scanned_document.pdf', null, config);
+  final result = await XbergBridge.extract('scanned_document.pdf', null, config);
   final score = result.qualityScore;
   if (score != null) {
     if (score < 0.5) {

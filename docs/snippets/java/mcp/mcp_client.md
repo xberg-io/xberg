@@ -20,11 +20,11 @@ public class McpClient {
         stdout = new BufferedReader(new InputStreamReader(mcpProcess.getInputStream()));
     }
 
-    public String extractFile(String path) throws IOException {
+    public String extract(String path) throws IOException {
         Map<String, Object> request = Map.of(
             "method", "tools/call",
             "params", Map.of(
-                "name", "extract_file",
+                "name", "extract",
                 "arguments", Map.of("path", path, "async", true)
             )
         );
@@ -49,7 +49,7 @@ public class McpClient {
 
     public static void main(String[] args) {
         try (McpClient client = new McpClient()) {
-            String content = client.extractFile("contract.pdf");
+            String content = client.extract("contract.pdf");
             System.out.println("Extracted content: " + content);
         } catch (IOException e) {
             System.err.println("Error: " + e.getMessage());

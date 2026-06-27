@@ -22,7 +22,7 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract_file("document.md", config)
+result = Xberg.extract("document.md", config)
 
 result.chunks.each do |chunk|
   if chunk.metadata.heading_context
@@ -46,7 +46,7 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract_file("document.md", config)
+result = Xberg.extract("document.md", config)
 
 result.chunks.each do |chunk|
   # Each chunk's content is prefixed with its heading breadcrumb

@@ -1,10 +1,17 @@
 // swift-tools-version: 6.0
 import PackageDescription
+import Foundation
 
 // NOTE: Run `cargo build -p xberg-swift` and then rerun `alef generate`
 // before `swift build`. Alef materializes the swift-bridge Swift/C outputs into
 // Sources/RustBridge and Sources/RustBridgeC when the Cargo build output exists.
 // See README.md for the full workflow.
+
+// Absolute path to the Cargo target dir, resolved from this manifest's own location so the
+// runtime rpath is independent of the process working directory (`swift test` may chdir into
+// fixture dirs). `#filePath` is a compile-time literal, so this performs no filesystem access.
+let rustTargetDir = (#filePath as NSString).deletingLastPathComponent.appending("/../../target")
+
 let package = Package(
   name: "Xberg",
   platforms: [
@@ -37,8 +44,13 @@ let package = Package(
       path: "Sources/RustBridge",
       linkerSettings: [
         .unsafeFlags([
-          "-L../../target/release",
-          "-L../../target/debug",
+          "-L\(rustTargetDir)/release",
+          "-L\(rustTargetDir)/debug",
+          // Runtime search paths: the FFI dylib's install_name is @rpath/lib...dylib, so the
+          // consumer (and any test bundle linking this target) needs an LC_RPATH to dlopen it.
+          // swiftc rejects `-Wl,-rpath,<p>`; the driver-native spelling is `-Xlinker -rpath -Xlinker <p>`.
+          "-Xlinker", "-rpath", "-Xlinker", "\(rustTargetDir)/release",
+          "-Xlinker", "-rpath", "-Xlinker", "\(rustTargetDir)/debug",
         ]),
         .linkedLibrary("xberg_swift"),
         .linkedLibrary("xberg_ffi"),

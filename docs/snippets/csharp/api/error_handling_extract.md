@@ -4,7 +4,7 @@ using Xberg;
 try
 {
     var data = File.ReadAllBytes("document.unsupported");
-    var result = XbergLib.ExtractBytesSync(data, "application/x-custom", null);
+    var result = XbergLib.ExtractSync(data, "application/x-custom", null);
     Console.WriteLine(result.Content);
 }
 catch (XbergException ex) when (ex.Code == 1)

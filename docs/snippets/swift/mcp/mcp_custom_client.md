@@ -17,7 +17,7 @@ try process.run()
 let request: [String: Any] = [
     "method": "tools/call",
     "params": [
-        "name": "extract_file",
+        "name": "extract",
         "arguments": [
             "path": "document.pdf",
             "async": true,

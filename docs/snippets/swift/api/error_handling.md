@@ -10,7 +10,7 @@ import RustBridge
 // on the prefix or simply print the message.
 do {
     let config = try extractionConfigFromJson("{}")
-    let result = try extractFileSync("document.pdf", nil, config)
+    let result = try extractSync("document.pdf", nil, config)
     print(result.content().toString())
 } catch let error as RustString {
     let message = error.toString()

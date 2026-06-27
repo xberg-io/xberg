@@ -19,7 +19,7 @@ fun main() {
         .withPdfOptions(Optional.of(pdf))
         .build()
 
-    val result = Xberg.extractFileSync(Paths.get("document.pdf"), null, config)
+    val result = Xberg.extractSync(Paths.get("document.pdf"), null, config)
     val pages = result.pages().orEmpty()
     println("Pages: ${pages.size}")
 }

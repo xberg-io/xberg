@@ -24,7 +24,7 @@ $config = new ExtractionConfig(
 );
 
 $xberg = new Xberg($config);
-$result = $xberg->extractFile('document.pdf');
+$result = $xberg->extract('document.pdf');
 
 echo "Token Reduction Results:\n";
 echo str_repeat('=', 60) . "\n";
@@ -63,7 +63,7 @@ foreach ($modes as $mode => $description) {
     );
 
     $xberg = new Xberg($modeConfig);
-    $result = $xberg->extractFile('sample.pdf');
+    $result = $xberg->extract('sample.pdf');
 
     $contentLength = strlen($result->content);
     $tokenCount = $result->metadata['token_count'] ?? $contentLength;
@@ -105,7 +105,7 @@ $advancedConfig = new ExtractionConfig(
 );
 
 $xberg = new Xberg($advancedConfig);
-$result = $xberg->extractFile('verbose_document.pdf');
+$result = $xberg->extract('verbose_document.pdf');
 
 echo "Advanced Token Reduction:\n";
 echo str_repeat('=', 60) . "\n";

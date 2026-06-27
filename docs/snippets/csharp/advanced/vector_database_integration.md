@@ -34,7 +34,7 @@ public class VectorDatabaseIntegration
             }
         };
 
-        var result = await Xberg.ExtractFileAsync(documentPath, config);
+        var result = await Xberg.ExtractAsync(documentPath, config);
         var chunks = result.Chunks ?? new List<Chunk>();
 
         var vectorRecords = chunks

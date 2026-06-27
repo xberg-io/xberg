@@ -24,7 +24,7 @@ ignored = ["ahash", "serde_json", "tokio", "async-trait"]
 crate-type = ["cdylib", "staticlib", "rlib"]
 
 [features]
-default = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "reranker", "reranker-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "api-types", "mcp", "liter-llm", "quality", "svg", "transcription", "transcription-types", "classification", "captioning", "ner-onnx", "ner-llm", "diff", "markdown-footnotes", "redaction", "enrichment", "heuristics", "presets", "structured"]
+default = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "reranker", "reranker-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "api-types", "mcp", "liter-llm", "quality", "svg", "transcription", "transcription-types", "classification", "captioning", "ner-onnx", "ner-llm", "diff", "markdown-footnotes", "redaction", "enrichment", "heuristics", "presets", "structured", "url-ingestion"]
 full = ["xberg/full"]
 pdf = ["xberg/pdf"]
 ocr = ["xberg/ocr"]
@@ -68,6 +68,7 @@ enrichment = ["xberg/enrichment"]
 heuristics = ["xberg/heuristics"]
 presets = ["xberg/presets"]
 structured = ["xberg/structured"]
+url-ingestion = ["xberg/url-ingestion"]
 android-target = ["xberg/android-target", "api", "api-types", "archives", "auto-rotate-types", "captioning", "chunking", "classification", "diff", "email", "embedding-presets", "enrichment", "heuristics", "html", "keywords-rake", "keywords-yake", "language-detection", "layout-types", "liter-llm", "markdown-footnotes", "mcp", "ner-llm", "ocr", "office", "paddle-ocr-types", "pdf", "presets", "quality", "redaction", "reranker-presets", "stopwords", "structured", "svg", "tokio-runtime", "transcription-types", "tree-sitter"]
 
 [dependencies]
@@ -77,7 +78,7 @@ serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios", target_os = "windows")))'.dependencies]
-xberg = { path = "../xberg", version = "1.0.0-rc.1", features = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "reranker", "reranker-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "api-types", "mcp", "liter-llm", "quality", "svg", "transcription", "transcription-types", "classification", "captioning", "ner-onnx", "ner-llm", "diff", "markdown-footnotes", "redaction", "enrichment", "heuristics", "presets", "structured"] }
+xberg = { path = "../xberg", version = "1.0.0-rc.1", features = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "reranker", "reranker-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "api-types", "mcp", "liter-llm", "quality", "svg", "transcription", "transcription-types", "classification", "captioning", "ner-onnx", "ner-llm", "diff", "markdown-footnotes", "redaction", "enrichment", "heuristics", "presets", "structured", "url-ingestion"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 xberg = { path = "../xberg", version = "1.0.0-rc.1", features = ["android-target"] }

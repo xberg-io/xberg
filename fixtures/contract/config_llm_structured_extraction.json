@@ -1,43 +1,26 @@
 {
 	"id": "config_llm_structured_extraction",
 	"description": "Tests structured extraction via liter-llm with JSON schema",
-	"tags": ["contract", "config", "liter-llm", "structured-extraction"],
-	"call": "extract_file_sync",
+	"tags": [
+		"contract",
+		"config",
+		"liter-llm",
+		"structured-extraction"
+	],
+	"call": "extract",
 	"input": {
-		"path": "pdf/fake_memo.pdf",
-		"config": {
-			"structured_extraction": {
-				"schema": {
-					"type": "object",
-					"properties": {
-						"title": {
-							"type": "string"
-						},
-						"date": {
-							"type": "string"
-						},
-						"summary": {
-							"type": "string"
-						}
-					},
-					"required": ["title"]
-				},
-				"schema_name": "memo_data",
-				"llm": {
-					"model": "openai/gpt-4o"
-				}
-			}
-		}
+		"kind": "uri",
+		"uri": "pdf/fake_memo.pdf"
 	},
 	"assertions": [
 		{
 			"type": "equals",
-			"field": "mime_type",
+			"field": "results.0.mime_type",
 			"value": "application/pdf"
 		},
 		{
 			"type": "min_length",
-			"field": "content",
+			"field": "results.0.content",
 			"value": 10
 		},
 		{
@@ -64,5 +47,30 @@
 			"zig"
 		],
 		"reason": "Requires liter-llm feature and XBERG_LLM_API_KEY env var; runtime-only skip"
+	},
+	"config": {
+		"structured_extraction": {
+			"schema": {
+				"type": "object",
+				"properties": {
+					"title": {
+						"type": "string"
+					},
+					"date": {
+						"type": "string"
+					},
+					"summary": {
+						"type": "string"
+					}
+				},
+				"required": [
+					"title"
+				]
+			},
+			"schema_name": "memo_data",
+			"llm": {
+				"model": "openai/gpt-4o"
+			}
+		}
 	}
 }

@@ -1,5 +1,5 @@
 ```rust title="Rust"
-use xberg::{extract_file, ExtractionConfig, NerConfig, NerBackendKind, LlmConfig};
+use xberg::{extract, ExtractionConfig, NerConfig, NerBackendKind, LlmConfig};
 
 let config = ExtractionConfig {
     ner: Some(NerConfig {
@@ -12,7 +12,7 @@ let config = ExtractionConfig {
     }),
     ..Default::default()
 };
-let result = extract_file("contract.pdf", None, &config).await?;
+let result = extract("contract.pdf", None, &config).await?;
 for entity in result.entities.unwrap_or_default() {
     println!("{:?}: {} (confidence={:?})", entity.category, entity.text, entity.confidence);
 }

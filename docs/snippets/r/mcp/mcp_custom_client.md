@@ -7,7 +7,7 @@ on.exit(close(mcp), add = TRUE)
 request <- list(
   method = "tools/call",
   params = list(
-    name = "extract_file",
+    name = "extract",
     arguments = list(
       path = "document.pdf",
       async = TRUE

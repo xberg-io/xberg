@@ -3,7 +3,7 @@ require 'xberg'
 
 config = Xberg::ExtractionConfig.new(include_document_structure: true)
 
-result = Xberg.extract_file_sync('document.pdf', config: config)
+result = Xberg.extract_sync('document.pdf', config: config)
 
 if result.document
   result.document['nodes'].each do |node|

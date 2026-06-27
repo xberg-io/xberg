@@ -1,11 +1,16 @@
 {
 	"id": "format_xlsx",
 	"category": "format_specific",
-	"description": "XLSX spreadsheet extraction using extract_file_sync",
-	"tags": ["format_specific", "xlsx", "text_extraction"],
-	"call": "extract_file_sync",
+	"description": "XLSX spreadsheet extraction using extract",
+	"tags": [
+		"format_specific",
+		"xlsx",
+		"text_extraction"
+	],
+	"call": "extract",
 	"input": {
-		"path": "xlsx/stanley_cups.xlsx",
+		"kind": "uri",
+		"uri": "xlsx/stanley_cups.xlsx",
 		"mime_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 	},
 	"assertions": [
@@ -14,7 +19,9 @@
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
-		"reason": "WASM cannot access filesystem; use extractBytes with file content instead"
+		"languages": [
+			"wasm"
+		],
+		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	}
 }

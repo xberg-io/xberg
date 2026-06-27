@@ -1,5 +1,5 @@
 ```rust title="Rust"
-use xberg::{extract_file, ExtractionConfig, LanguageDetectionConfig};
+use xberg::{extract, ExtractionConfig, LanguageDetectionConfig};
 
 #[tokio::main]
 async fn main() -> xberg::Result<()> {
@@ -12,7 +12,7 @@ async fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract_file("document.pdf", None::<&str>, &config).await?;
+    let result = extract("document.pdf", None::<&str>, &config).await?;
     println!("Detected language: {}", result.language);
     println!("Confidence: {}", result.language_confidence);
     Ok(())

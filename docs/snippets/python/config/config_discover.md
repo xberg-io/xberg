@@ -1,10 +1,10 @@
 ```python title="Python"
 import asyncio
-from xberg import ExtractionConfig, extract_file
+from xberg import ExtractionConfig, extract
 
 async def main() -> None:
     config: ExtractionConfig = ExtractionConfig()
-    result = await extract_file("document.pdf", config=config)
+    result = await extract("document.pdf", config=config)
 
     content: str = result.content
     content_preview: str = content[:100]

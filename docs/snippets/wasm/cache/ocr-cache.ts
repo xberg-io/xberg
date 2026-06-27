@@ -1,4 +1,4 @@
-import { extractBytes, initWasm, TesseractWasmBackend } from "@xberg/wasm";
+import { extract, initWasm, TesseractWasmBackend } from "@xberg-io/xberg-wasm";
 
 async function demonstrateOcrCaching() {
   await initWasm();
@@ -11,7 +11,7 @@ async function demonstrateOcrCaching() {
   const imageBytes = new Uint8Array(await fetch("page1.png").then((r) => r.arrayBuffer()));
 
   console.time("First OCR (with model load)");
-  const _result1 = await extractBytes(imageBytes, "image/png", {
+  const _result1 = await extract(imageBytes, "image/png", {
     ocr: { backend: "tesseract-wasm", language: "eng" },
   });
   console.timeEnd("First OCR (with model load)");
@@ -21,7 +21,7 @@ async function demonstrateOcrCaching() {
   const imageBytes2 = new Uint8Array(await fetch("page2.png").then((r) => r.arrayBuffer()));
 
   console.time("Second OCR (model cached)");
-  const _result2 = await extractBytes(imageBytes2, "image/png", {
+  const _result2 = await extract(imageBytes2, "image/png", {
     ocr: { backend: "tesseract-wasm", language: "eng" },
   });
   console.timeEnd("Second OCR (model cached)");

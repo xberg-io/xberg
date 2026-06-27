@@ -1,5 +1,5 @@
 {
-  "name": "@xberg/wasm",
+  "name": "@xberg-io/xberg-wasm",
   "version": "1.0.0-rc.1",
   "private": false,
   "description": "High-performance document intelligence library",

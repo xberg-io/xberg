@@ -16,7 +16,7 @@ $config = new ExtractionConfig(
     )
 );
 
-$result = Xberg::extractFileSync('document.pdf', null, $config);
+$result = Xberg::extractSync('document.pdf', null, $config);
 
 echo "Processed content: " . substr($result->getContent(), 0, 100) . "...\n";
 ?>

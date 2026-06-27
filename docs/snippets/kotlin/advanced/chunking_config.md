@@ -13,7 +13,7 @@ fun main() {
         .withChunking(Optional.of(chunking))
         .build()
 
-    val result = Xberg.extractFileSync(Paths.get("document.pdf"), null, config)
+    val result = Xberg.extractSync(Paths.get("document.pdf"), null, config)
     println("Chunks: ${result.chunks()?.size ?: 0}")
 }
 ```
@@ -32,7 +32,7 @@ fun main() {
         .withChunking(Optional.of(chunking))
         .build()
 
-    val result = Xberg.extractFileSync(Paths.get("document.pdf"), null, config)
+    val result = Xberg.extractSync(Paths.get("document.pdf"), null, config)
     println("Chunks: ${result.chunks()?.size ?: 0}")
 }
 ```
@@ -54,7 +54,7 @@ fun main() {
         .withChunking(Optional.of(chunking))
         .build()
 
-    val result = Xberg.extractFileSync(Paths.get("document.md"), null, config)
+    val result = Xberg.extractSync(Paths.get("document.md"), null, config)
     println("Chunks: ${result.chunks()?.size ?: 0}")
 }
 ```

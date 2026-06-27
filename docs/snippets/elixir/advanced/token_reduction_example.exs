@@ -9,7 +9,7 @@ config = %ExtractionConfig{
   }
 }
 
-case Xberg.extract_file("document.pdf", nil, config) do
+case Xberg.extract("document.pdf", nil, config) do
   {:ok, result} ->
     IO.puts("=== Token Reduction ===\n")
 

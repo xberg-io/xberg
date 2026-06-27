@@ -1,4 +1,4 @@
-import { enableOcr, extractBytes, initWasm } from "@xberg/wasm";
+import { enableOcr, extract, initWasm } from "@xberg-io/xberg-wasm";
 
 async function extractWithErrorHandling() {
   try {
@@ -21,7 +21,7 @@ async function extractWithErrorHandling() {
   try {
     const bytes = new Uint8Array(await fetch("document.png").then((r) => r.arrayBuffer()));
 
-    const result = await extractBytes(bytes, "image/png", {
+    const result = await extract(bytes, "image/png", {
       ocr: {
         backend: "tesseract-wasm",
         language: "eng",

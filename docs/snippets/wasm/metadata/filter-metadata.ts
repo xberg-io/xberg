@@ -1,4 +1,4 @@
-import { extractBytes, initWasm } from "@xberg/wasm";
+import { extract, initWasm } from "@xberg-io/xberg-wasm";
 
 interface DocumentSummary {
   fileName: string;
@@ -16,7 +16,7 @@ async function filterAndSummarizeMetadata(files: string[]): Promise<DocumentSumm
   for (const fileName of files) {
     const bytes = new Uint8Array(await fetch(fileName).then((r) => r.arrayBuffer()));
 
-    const result = await extractBytes(bytes, "application/pdf");
+    const result = await extract(bytes, "application/pdf");
 
     summaries.push({
       fileName,
