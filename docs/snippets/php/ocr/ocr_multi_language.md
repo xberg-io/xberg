@@ -17,13 +17,13 @@ $config = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($config);
-$result = $xberg->extract('multilingual_document.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('multilingual_document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "Multilingual OCR Results:\n";
 echo "Supported languages: English, French, German\n";
 echo "Extracted content:\n";
-echo $result->content . "\n\n";
+echo $result->getContent() . "\n\n";
 
 // Language detection with multi-language support
 $autoDetectConfig = new ExtractionConfig(
@@ -33,12 +33,12 @@ $autoDetectConfig = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($autoDetectConfig);
-$result = $xberg->extract('european_document.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('european_document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "European Language Document:\n";
-echo "Extracted " . strlen($result->content) . " characters\n";
-echo "Preview: " . substr($result->content, 0, 300) . "...\n\n";
+echo "Extracted " . strlen($result->getContent()) . " characters\n";
+echo "Preview: " . substr($result->getContent(), 0, 300) . "...\n\n";
 
 // Mixed language with language detection
 $mixedConfig = new ExtractionConfig(
@@ -48,10 +48,10 @@ $mixedConfig = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($mixedConfig);
-$result = $xberg->extract('asian_document.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('asian_document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "Multi-script Document:\n";
-echo "Characters extracted: " . mb_strlen($result->content) . "\n";
+echo "Characters extracted: " . mb_strlen($result->getContent()) . "\n";
 ?>
 ```

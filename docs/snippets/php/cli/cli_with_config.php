@@ -85,19 +85,19 @@ try {
     fwrite(STDERR, "  Format: $format\n\n");
 
     $start = microtime(true);
-    $xberg = new Xberg($config);
-    $result = $xberg->extract($inputFile);
+    $output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri($inputFile), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
     $elapsed = microtime(true) - $start;
 
     fwrite(STDERR, "Extraction completed in " . number_format($elapsed, 3) . "s\n");
 
     $output = match ($format) {
         'json' => json_encode([
-            'content' => $result->content,
+            'content' => $result->getContent(),
             'metadata' => [
-                'title' => $result->metadata->title,
+                'title' => $result->metadata?->title,
                 'author' => $result->metadata->author,
-                'page_count' => $result->metadata->pageCount,
+                'page_count' => $result->metadata?->pdf?->page_count,
             ],
             'tables' => array_map(fn($t) => [
                 'page' => $t->pageNumber,
@@ -108,8 +108,8 @@ try {
                 'content' => $c->content,
             ], $result->chunks ?? []) : null,
         ], JSON_PRETTY_PRINT),
-        'markdown' => $result->content,
-        default => $result->content,
+        'markdown' => $result->getContent(),
+        default => $result->getContent(),
     };
 
     $outputFile = $options['output'] ?? $options['o'] ?? null;
@@ -121,7 +121,7 @@ try {
     }
 
     fwrite(STDERR, "\nStatistics:\n");
-    fwrite(STDERR, "  Content: " . strlen($result->content) . " characters\n");
+    fwrite(STDERR, "  Content: " . strlen($result->getContent()) . " characters\n");
     fwrite(STDERR, "  Tables: " . count($result->tables) . "\n");
     fwrite(STDERR, "  Images: " . count($result->images ?? []) . "\n");
     fwrite(STDERR, "  Chunks: " . count($result->chunks ?? []) . "\n");

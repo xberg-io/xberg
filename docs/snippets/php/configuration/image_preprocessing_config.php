@@ -107,8 +107,8 @@ $config5 = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($config5);
-$result = $xberg->extract('noisy_scan.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('noisy_scan.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "Denoising: Enabled\n";
 echo "Best for:\n";
@@ -116,7 +116,7 @@ echo "- Poor quality scans\n";
 echo "- Fax documents\n";
 echo "- Images with background noise\n";
 echo "- Old or damaged documents\n";
-echo "\nExtracted text length: " . strlen($result->content) . " characters\n\n";
+echo "\nExtracted text length: " . strlen($result->getContent()) . " characters\n\n";
 
 echo "Example 6: Maximum Quality Configuration\n";
 echo "========================================\n";
@@ -254,7 +254,7 @@ $config10 = new ExtractionConfig(
     )
 );
 
-$result10 = (new Xberg($config10))->extract('poor_quality_scan.pdf');
+$result10 = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('poor_quality_scan.pdf'), $config10)->results[0];
 
 echo "Processing pipeline:\n";
 echo "1. Load image\n";

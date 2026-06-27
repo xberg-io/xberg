@@ -28,8 +28,8 @@ $config = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($config);
-$result = $xberg->extract('document.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "Vector Database Integration:\n";
 echo str_repeat('=', 60) . "\n";
@@ -186,7 +186,6 @@ $vectorConfig = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($vectorConfig);
 
 foreach ($documents as $document) {
     if (!file_exists($document)) {
@@ -194,7 +193,8 @@ foreach ($documents as $document) {
         continue;
     }
 
-    $result = $xberg->extract($document);
+    $output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri($document), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
     echo basename($document) . ":\n";
     echo "  Chunks: " . count($result->chunks ?? []) . "\n";

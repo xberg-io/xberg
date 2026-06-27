@@ -39,7 +39,6 @@ if (extension_loaded('xberg')) {
     }
 
     try {
-        $xberg = new Xberg();
         echo "✓ Xberg client initialized successfully\n\n";
 
         echo "Installation complete!\n";

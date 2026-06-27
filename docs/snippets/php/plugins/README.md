@@ -72,7 +72,7 @@ use Xberg\Types\ExtractedDocument;
 function postProcessResult(ExtractedDocument $result): ExtractedDocument
 {
     // Custom post-processing logic
-    $processedContent = strtoupper($result->content);
+    $processedContent = strtoupper($result->getContent());
 
     // Return a new result with modified content
     return new ExtractedDocument(
@@ -85,8 +85,7 @@ function postProcessResult(ExtractedDocument $result): ExtractedDocument
     );
 }
 
-$xberg = new Xberg();
-$output = $xberg->extract('document.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
 $result = $output->results[0];
 $processed = postProcessResult($result);
 ```
@@ -111,8 +110,8 @@ $config = new ExtractionConfig(
     ),
 );
 
-$xberg = new Xberg($config);
-$result = $xberg->extract('scanned.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('scanned.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 ```
 
 ### 3. Validate Results in PHP
@@ -129,7 +128,7 @@ use Xberg\Types\ExtractedDocument;
 
 function validateResult(ExtractedDocument $result): void
 {
-    if (strlen($result->content) < 100) {
+    if (strlen($result->getContent()) < 100) {
         throw new ValidationException('Content too short (minimum 100 characters)');
     }
 
@@ -138,7 +137,7 @@ function validateResult(ExtractedDocument $result): void
     }
 }
 
-$output = $xberg->extract('document.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
 $result = $output->results[0];
 validateResult($result);
 ```
@@ -166,7 +165,7 @@ final class CustomXberg extends BaseXberg
 	        $result = $output->results[0];
 
         // Custom validation
-        if (strlen($result->content) < 100) {
+        if (strlen($result->getContent()) < 100) {
             throw new \RuntimeException('Content too short');
         }
 
@@ -182,7 +181,7 @@ final class CustomXberg extends BaseXberg
 	        $result = $output->results[0];
 
         // Custom transformation
-        $transformedContent = $transformer($result->content);
+        $transformedContent = $transformer($result->getContent());
 
         return new ExtractedDocument(
             content: $transformedContent,

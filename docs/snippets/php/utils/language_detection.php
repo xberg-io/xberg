@@ -24,13 +24,13 @@ $config = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($config);
-$result = $xberg->extract('document.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "Language Detection Results:\n";
 echo str_repeat('=', 60) . "\n";
 echo "Document: document.pdf\n";
-echo "Content length: " . strlen($result->content) . " characters\n\n";
+echo "Content length: " . strlen($result->getContent()) . " characters\n\n";
 
 $detectedLanguages = $result->detectedLanguages ?? [];
 
@@ -80,8 +80,8 @@ foreach ($thresholds as $threshold) {
         )
     );
 
-    $xberg = new Xberg($thresholdConfig);
-    $result = $xberg->extract('document.pdf');
+    $output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
     $languages = $result->detectedLanguages ?? [];
 
@@ -146,7 +146,6 @@ $detectionConfig = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($detectionConfig);
 
 foreach ($documents as $document) {
     if (!file_exists($document)) {
@@ -154,7 +153,8 @@ foreach ($documents as $document) {
         continue;
     }
 
-    $result = $xberg->extract($document);
+    $output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri($document), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
     $languages = $result->detectedLanguages ?? [];
 
     echo basename($document) . ": ";

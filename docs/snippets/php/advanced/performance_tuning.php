@@ -14,7 +14,6 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 use Xberg\Xberg;
 use Xberg\Config\ExtractionConfig;
-use function Xberg\extract;
 
 function extractBatchFiles(array $files): array
 {
@@ -82,13 +81,11 @@ if (file_exists($testFile)) {
     echo str_repeat('=', 60) . "\n\n";
 
     benchmark(function () use ($testFile, $fastConfig) {
-        $xberg = new Xberg($fastConfig);
-        return $xberg->extract($testFile);
+        return \Xberg\Xberg::extract(\Xberg\ExtractInput::uri($testFile), $config ?? \Xberg\ExtractionConfig::default());
     }, "Fast config (minimal features)");
 
     benchmark(function () use ($testFile, $standardConfig) {
-        $xberg = new Xberg($standardConfig);
-        return $xberg->extract($testFile);
+        return \Xberg\Xberg::extract(\Xberg\ExtractInput::uri($testFile), $config ?? \Xberg\ExtractionConfig::default());
     }, "Standard config (all features)");
 }
 
@@ -101,8 +98,8 @@ function processLargeDocumentEfficiently(string $filePath): void
         extractImages: false    
     );
 
-    $xberg = new Xberg($config);
-    $result = $xberg->extract($filePath);
+    $output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri($filePath), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
     echo "Processing large document page by page:\n";
 
@@ -197,13 +194,13 @@ class ResourceMonitor
 
 $monitor = new ResourceMonitor();
 
-$xberg = new Xberg();
 $monitor->checkpoint("Xberg initialized");
 
-$result = $xberg->extract('document.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 $monitor->checkpoint("Document extracted");
 
-$words = str_word_count($result->content);
+$words = str_word_count($result->getContent());
 $monitor->checkpoint("Word count completed");
 
 unset($result);
@@ -245,7 +242,8 @@ class CachedXberg
             return $this->cache[$cacheKey];
         }
 
-        $result = $this->xberg->extract($filePath);
+        $output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri($filePath), $config ?? \Xberg\ExtractionConfig::default());
+        $result = $output->results[0];
 
         if (count($this->cache) >= $this->maxCacheSize) {
             array_shift($this->cache); 

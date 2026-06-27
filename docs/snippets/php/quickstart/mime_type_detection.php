@@ -14,7 +14,6 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 use function Xberg\detect_mime_type;
 use function Xberg\detect_mime_type_from_path;
-use function Xberg\extract;
 
 $path = 'document.pdf';
 $mimeType = detect_mime_type_from_path($path);
@@ -30,7 +29,7 @@ if (file_exists($unknownFile)) {
     echo "Unknown file detected as: $detectedType\n";
 
     $result = extract($unknownFile, $detectedType);
-    echo "Successfully extracted " . strlen($result->content) . " characters\n";
+    echo "Successfully extracted " . strlen($result->getContent()) . " characters\n";
 }
 
 $allowedTypes = [
@@ -45,7 +44,8 @@ if (file_exists($fileToCheck)) {
 
     if (in_array($type, $allowedTypes, true)) {
         echo "File type $type is allowed, processing...\n";
-        $result = extract($fileToCheck);
+        $output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri($fileToCheck), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
     } else {
         echo "File type $type is not allowed\n";
     }

@@ -12,18 +12,18 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/vendor/autoload.php';
 
-use function Xberg\extract;
 
-$result = extract('document.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
-if (isset($result->metadata->pdf)) {
+if ($result->metadata?->pdf !== null) {
     $pdfMeta = $result->metadata->pdf;
     echo "Pages: " . ($pdfMeta['page_count'] ?? 'N/A') . "\n";
     echo "Author: " . ($pdfMeta['author'] ?? 'N/A') . "\n";
     echo "Title: " . ($pdfMeta['title'] ?? 'N/A') . "\n";
 }
 
-$htmlResult = extract('page.html');
+$htmlResult = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('page.html'), $config ?? \Xberg\ExtractionConfig::default())->results[0];
 
 if (isset($htmlResult->metadata->html)) {
     $htmlMeta = $htmlResult->metadata->html;

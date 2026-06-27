@@ -25,8 +25,8 @@ $config = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($config);
-$result = $xberg->extract('document_with_images.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('document_with_images.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "Image Extraction Results:\n";
 echo str_repeat('=', 60) . "\n";

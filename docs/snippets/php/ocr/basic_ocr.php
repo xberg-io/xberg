@@ -22,12 +22,12 @@ $config = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($config);
-$result = $xberg->extract('scanned_document.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('scanned_document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "OCR Extraction Results:\n";
 echo str_repeat('=', 60) . "\n";
-echo $result->content . "\n\n";
+echo $result->getContent() . "\n\n";
 
 $multilingualConfig = new ExtractionConfig(
     ocr: new OcrConfig(
@@ -36,12 +36,12 @@ $multilingualConfig = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($multilingualConfig);
-$result = $xberg->extract('multilingual_scan.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('multilingual_scan.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "Multilingual OCR:\n";
 echo str_repeat('=', 60) . "\n";
-echo substr($result->content, 0, 500) . "...\n\n";
+echo substr($result->getContent(), 0, 500) . "...\n\n";
 
 $imageConfig = new ExtractionConfig(
     ocr: new OcrConfig(
@@ -50,16 +50,16 @@ $imageConfig = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($imageConfig);
 
 $imageFormats = ['png', 'jpg', 'tiff'];
 foreach ($imageFormats as $format) {
     $file = "scan.$format";
     if (file_exists($file)) {
         echo "Processing $file...\n";
-        $result = $xberg->extract($file);
-        echo "Extracted " . strlen($result->content) . " characters\n";
-        echo "Preview: " . substr($result->content, 0, 100) . "...\n\n";
+        $output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri($file), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
+        echo "Extracted " . strlen($result->getContent()) . " characters\n";
+        echo "Preview: " . substr($result->getContent(), 0, 100) . "...\n\n";
     }
 }
 
@@ -85,30 +85,31 @@ foreach ($languages as $lang => $description) {
             )
         );
 
-        $xberg = new Xberg($config);
-        $result = $xberg->extract($file);
+        $output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri($file), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
         echo "$description ($lang):\n";
-        echo "  Characters extracted: " . mb_strlen($result->content) . "\n\n";
+        echo "  Characters extracted: " . mb_strlen($result->getContent()) . "\n\n";
     }
 }
 
-use function Xberg\extract;
 
 $config = new ExtractionConfig(
     ocr: new OcrConfig(backend: 'tesseract', language: 'eng')
 );
 
-$result = extract('invoice_scan.pdf', config: $config);
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('invoice_scan.pdf'), $config);
+$result = $output->results[0];
 
 echo "Invoice OCR:\n";
 echo str_repeat('=', 60) . "\n";
-echo $result->content . "\n";
+echo $result->getContent() . "\n";
 
-$result = $xberg->extract('scanned.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('scanned.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
-$contentLength = strlen($result->content);
-$pageCount = $result->metadata->pageCount ?? 1;
+$contentLength = strlen($result->getContent());
+$pageCount = $result->metadata?->pdf?->page_count ?? 1;
 $avgCharsPerPage = $contentLength / $pageCount;
 
 echo "\nOCR Quality Assessment:\n";

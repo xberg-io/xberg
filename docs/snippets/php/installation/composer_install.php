@@ -25,6 +25,5 @@ if (!extension_loaded('xberg')) {
 echo "Xberg extension is loaded successfully!\n";
 echo "Version: " . Xberg::version() . "\n";
 
-$xberg = new Xberg();
 echo "Xberg client initialized successfully!\n";
 ```

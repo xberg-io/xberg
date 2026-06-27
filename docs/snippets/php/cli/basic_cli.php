@@ -13,7 +13,6 @@ declare(strict_types=1);
 require_once __DIR__ . '/vendor/autoload.php';
 
 use Xberg\Xberg;
-use function Xberg\extract;
 
 $options = getopt('f:o:h', ['file:', 'output:', 'help']);
 
@@ -44,18 +43,19 @@ try {
     fwrite(STDERR, "Extracting: $inputFile\n");
     $start = microtime(true);
 
-    $result = extract($inputFile);
+    $output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri($inputFile), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
     $elapsed = microtime(true) - $start;
     fwrite(STDERR, "Extraction completed in " . number_format($elapsed, 3) . "s\n");
-    fwrite(STDERR, "Content length: " . strlen($result->content) . " characters\n");
+    fwrite(STDERR, "Content length: " . strlen($result->getContent()) . " characters\n");
     fwrite(STDERR, "Tables found: " . count($result->tables) . "\n");
 
     if ($outputFile) {
-        file_put_contents($outputFile, $result->content);
+        file_put_contents($outputFile, $result->getContent());
         fwrite(STDERR, "Saved to: $outputFile\n");
     } else {
-        echo $result->content;
+        echo $result->getContent();
     }
 
     exit(0);

@@ -19,13 +19,13 @@ $config = new ExtractionConfig(
     enableQualityProcessing: true
 );
 
-$xberg = new Xberg($config);
-$result = $xberg->extract('scanned_document.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('scanned_document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "Quality Processing Results:\n";
 echo str_repeat('=', 60) . "\n";
 echo "Document: scanned_document.pdf\n";
-echo "Content length: " . strlen($result->content) . " characters\n\n";
+echo "Content length: " . strlen($result->getContent()) . " characters\n\n";
 
 $qualityScore = $result->qualityScore ?? null;
 
@@ -106,7 +106,6 @@ $qualityConfig = new ExtractionConfig(
     enableQualityProcessing: true
 );
 
-$xberg = new Xberg($qualityConfig);
 $qualityResults = [];
 
 foreach ($documents as $document) {
@@ -115,18 +114,19 @@ foreach ($documents as $document) {
         continue;
     }
 
-    $result = $xberg->extract($document);
+    $output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri($document), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
     $score = $result->qualityScore ?? 0.0;
 
     $qualityResults[$document] = [
         'score' => $score,
-        'content_length' => strlen($result->content),
+        'content_length' => strlen($result->getContent()),
         'result' => $result,
     ];
 
     echo basename($document) . ":\n";
     echo "  Quality score: " . number_format($score, 2) . "\n";
-    echo "  Content length: " . strlen($result->content) . " chars\n";
+    echo "  Content length: " . strlen($result->getContent()) . " chars\n";
 
     $indicator = match(true) {
         $score >= 0.8 => '✓ Excellent',

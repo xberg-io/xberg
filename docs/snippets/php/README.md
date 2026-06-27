@@ -173,9 +173,9 @@ Benchmark extraction performance across different configurations.
 ```php title="Basic Extraction"
 use Xberg\Xberg;
 
-$xberg = new Xberg();
-$result = $xberg->extract('document.pdf');
-echo $result->content;
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
+echo $result->getContent();
 ```
 
 ### With Configuration
@@ -189,17 +189,17 @@ $config = new ExtractionConfig(
     extractTables: true
 );
 
-$xberg = new Xberg($config);
-$result = $xberg->extract('scanned.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('scanned.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 ```
 
 ### Procedural API
 
 ```php title="Procedural API"
-use function Xberg\extract;
 
-$result = extract('document.pdf');
-echo $result->content;
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
+echo $result->getContent();
 ```
 
 ### Batch Processing

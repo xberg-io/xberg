@@ -20,16 +20,16 @@ use Xberg\Config\PageConfig;
 echo "Example 1: Basic PowerPoint Extraction\n";
 echo "======================================\n";
 
-$xberg = new Xberg();
-$result = $xberg->extract('presentation.pptx');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('presentation.pptx'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "Content:\n";
-echo $result->content . "\n\n";
+echo $result->getContent() . "\n\n";
 
 echo "Metadata:\n";
-echo "- Title: " . ($result->metadata->title ?? 'N/A') . "\n";
-echo "- Author: " . (isset($result->metadata->authors) ? implode(', ', $result->metadata->authors) : 'N/A') . "\n";
-echo "- Slide Count: " . ($result->metadata->pageCount ?? 'N/A') . "\n\n";
+echo "- Title: " . ($result->metadata?->title ?? 'N/A') . "\n";
+echo "- Author: " . (isset($result->metadata?->authors) ? implode(', ', $result->metadata?->authors) : 'N/A') . "\n";
+echo "- Slide Count: " . ($result->metadata?->pdf?->page_count ?? 'N/A') . "\n\n";
 
 echo "Example 2: Extract Per-Slide Content\n";
 echo "====================================\n";
@@ -42,7 +42,7 @@ $config2 = new ExtractionConfig(
     )
 );
 
-$result2 = (new Xberg($config2))->extract('presentation.pptx');
+$result2 = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('presentation.pptx'), $config2)->results[0];
 
 if ($result2->pages !== null) {
     echo "Total slides: " . count($result2->pages) . "\n\n";
@@ -67,7 +67,7 @@ $config3 = new ExtractionConfig(
     )
 );
 
-$result3 = (new Xberg($config3))->extract('presentation.pptx');
+$result3 = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('presentation.pptx'), $config3)->results[0];
 
 if ($result3->images !== null) {
     echo "Total images: " . count($result3->images) . "\n\n";
@@ -91,7 +91,7 @@ $config4 = new ExtractionConfig(
     extractTables: true
 );
 
-$result4 = (new Xberg($config4))->extract('data_presentation.pptx');
+$result4 = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('data_presentation.pptx'), $config4)->results[0];
 
 if (count($result4->tables) > 0) {
     echo "Found " . count($result4->tables) . " table(s)\n\n";
@@ -114,7 +114,7 @@ $config5 = new ExtractionConfig(
     outputFormat: 'markdown'
 );
 
-$result5 = (new Xberg($config5))->extract('presentation.pptx');
+$result5 = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('presentation.pptx'), $config5)->results[0];
 
 $markdownContent = $result5->content;
 file_put_contents('presentation.md', $markdownContent);
@@ -131,7 +131,7 @@ $config6 = new ExtractionConfig(
     page: new PageConfig(extractPages: true)
 );
 
-$result6 = (new Xberg($config6))->extract('meeting_deck.pptx');
+$result6 = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('meeting_deck.pptx'), $config6)->results[0];
 
 echo "Presentation Summary:\n";
 echo "====================\n";
@@ -158,7 +158,7 @@ $config7 = new ExtractionConfig(
     page: new PageConfig(extractPages: true)
 );
 
-$result7 = (new Xberg($config7))->extract('presentation.pptx');
+$result7 = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('presentation.pptx'), $config7)->results[0];
 
 $searchTerm = "revenue";
 

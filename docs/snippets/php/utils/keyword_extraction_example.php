@@ -61,7 +61,7 @@ $keywords = $result->extractedKeywords ?? [];
 echo "Keyword Extraction Results:\n";
 echo str_repeat('=', 60) . "\n";
 echo "Document: research_paper.pdf\n";
-echo "Content length: " . strlen($result->content) . " characters\n\n";
+echo "Content length: " . strlen($result->getContent()) . " characters\n\n";
 
 if ($keywords !== []) {
     echo "Extracted Keywords:\n";

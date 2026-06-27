@@ -27,9 +27,9 @@ $config1 = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($config1);
-$result = $xberg->extract('scanned_document.pdf');
-echo "Extracted text length: " . strlen($result->content) . " characters\n\n";
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('scanned_document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
+echo "Extracted text length: " . strlen($result->getContent()) . " characters\n\n";
 
 echo "Example 2: Multi-Language OCR\n";
 echo "=============================\n";

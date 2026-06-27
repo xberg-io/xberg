@@ -28,12 +28,12 @@ $config = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($config);
-$result = $xberg->extract('noisy_scan.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('noisy_scan.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "Basic Preprocessing Results:\n";
 echo str_repeat('=', 60) . "\n";
-echo substr($result->content, 0, 300) . "...\n\n";
+echo substr($result->getContent(), 0, 300) . "...\n\n";
 
 $highDpiConfig = new ExtractionConfig(
     ocr: new OcrConfig(
@@ -47,13 +47,13 @@ $highDpiConfig = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($highDpiConfig);
-$result = $xberg->extract('small_text_scan.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('small_text_scan.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "High DPI Preprocessing:\n";
 echo str_repeat('=', 60) . "\n";
-echo "Characters extracted: " . strlen($result->content) . "\n";
-echo "Preview: " . substr($result->content, 0, 200) . "...\n\n";
+echo "Characters extracted: " . strlen($result->getContent()) . "\n";
+echo "Preview: " . substr($result->getContent(), 0, 200) . "...\n\n";
 
 $deskewConfig = new ExtractionConfig(
     ocr: new OcrConfig(
@@ -67,12 +67,12 @@ $deskewConfig = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($deskewConfig);
-$result = $xberg->extract('crooked_scan.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('crooked_scan.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "Deskewed OCR Results:\n";
 echo str_repeat('=', 60) . "\n";
-echo $result->content . "\n\n";
+echo $result->getContent() . "\n\n";
 
 $cleanConfig = new ExtractionConfig(
     ocr: new OcrConfig(
@@ -86,12 +86,12 @@ $cleanConfig = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($cleanConfig);
-$result = $xberg->extract('watermarked_document.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('watermarked_document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "Background Removal Results:\n";
 echo str_repeat('=', 60) . "\n";
-echo "Extracted " . strlen($result->content) . " characters\n";
+echo "Extracted " . strlen($result->getContent()) . " characters\n";
 echo "Text quality improved by removing background noise\n\n";
 
 $comprehensiveConfig = new ExtractionConfig(
@@ -111,16 +111,16 @@ $comprehensiveConfig = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($comprehensiveConfig);
-$result = $xberg->extract('very_poor_quality.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('very_poor_quality.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "Comprehensive Preprocessing:\n";
 echo str_repeat('=', 60) . "\n";
 echo "Original quality: Very Poor\n";
 echo "After preprocessing:\n";
-echo "  Characters: " . strlen($result->content) . "\n";
+echo "  Characters: " . strlen($result->getContent()) . "\n";
 echo "  Content preview:\n";
-echo "  " . substr($result->content, 0, 300) . "...\n\n";
+echo "  " . substr($result->getContent(), 0, 300) . "...\n\n";
 
 $testFile = 'test_scan.pdf';
 if (file_exists($testFile)) {
@@ -152,14 +152,14 @@ if (file_exists($testFile)) {
     echo str_repeat('=', 60) . "\n";
 
     foreach ($configs as $name => $config) {
-        $xberg = new Xberg($config);
         $start = microtime(true);
-        $result = $xberg->extract($testFile);
+        $output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri($testFile), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
         $elapsed = microtime(true) - $start;
 
         echo "$name:\n";
         echo "  Time: " . number_format($elapsed, 3) . "s\n";
-        echo "  Characters: " . strlen($result->content) . "\n";
+        echo "  Characters: " . strlen($result->getContent()) . "\n";
         echo "  Tables: " . count($result->tables) . "\n\n";
     }
 }
@@ -169,7 +169,7 @@ function getOptimalPreprocessing(string $file): ImagePreprocessingConfig
     $quickScan = new Xberg(new ExtractionConfig(
         ocr: new OcrConfig(backend: 'tesseract', language: 'eng')
     ));
-    $quickResult = $quickScan->extract($file);
+    $quickResult = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri($file), $config ?? \Xberg\ExtractionConfig::default())->results[0];
 
     $fileSize = filesize($file);
     $contentLength = strlen($quickResult->content);
@@ -212,10 +212,10 @@ if (file_exists($file)) {
         )
     );
 
-    $xberg = new Xberg($config);
-    $result = $xberg->extract($file);
+    $output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri($file), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
     echo "Adaptive preprocessing applied\n";
-    echo "Result: " . strlen($result->content) . " characters extracted\n";
+    echo "Result: " . strlen($result->getContent()) . " characters extracted\n";
 }
 ```

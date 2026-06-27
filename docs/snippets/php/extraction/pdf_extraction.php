@@ -15,14 +15,14 @@ use Xberg\Xberg;
 use Xberg\Config\ExtractionConfig;
 use Xberg\Config\PdfConfig;
 
-$xberg = new Xberg();
-$result = $xberg->extract('document.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "PDF Extraction Results:\n";
 echo str_repeat('=', 60) . "\n";
-echo "Content length: " . strlen($result->content) . " characters\n";
+echo "Content length: " . strlen($result->getContent()) . " characters\n";
 echo "Tables found: " . count($result->tables) . "\n";
-echo "Pages: " . ($result->metadata->pageCount ?? 'unknown') . "\n\n";
+echo "Pages: " . ($result->metadata?->pdf?->page_count ?? 'unknown') . "\n\n";
 
 $config = new ExtractionConfig(
     extractImages: true,
@@ -33,8 +33,8 @@ $config = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($config);
-$result = $xberg->extract('report.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('report.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "Extracted Tables:\n";
 echo str_repeat('=', 60) . "\n";
@@ -77,14 +77,15 @@ $formattedConfig = new ExtractionConfig(
     outputFormat: 'markdown'
 );
 
-$xberg = new Xberg($formattedConfig);
-$result = $xberg->extract('formatted.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('formatted.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
-file_put_contents('output.md', $result->content);
+file_put_contents('output.md', $result->getContent());
 echo "Saved formatted output to: output.md\n";
 
-$result = $xberg->extract('document.pdf');
-$content = $result->content;
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
+$content = $result->getContent();
 
 $sections = [];
 $lines = explode("\n", $content);

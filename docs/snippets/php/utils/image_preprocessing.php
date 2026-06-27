@@ -32,13 +32,13 @@ $config = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($config);
-$result = $xberg->extract('scanned.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('scanned.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "OCR with Image Preprocessing:\n";
 echo str_repeat('=', 60) . "\n";
-echo "Content extracted: " . strlen($result->content) . " characters\n";
-echo "Preview: " . substr($result->content, 0, 100) . "...\n\n";
+echo "Content extracted: " . strlen($result->getContent()) . " characters\n";
+echo "Preview: " . substr($result->getContent(), 0, 100) . "...\n\n";
 
 $advancedConfig = new ExtractionConfig(
     ocr: new OcrConfig(
@@ -60,12 +60,12 @@ $advancedConfig = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($advancedConfig);
-$result = $xberg->extract('poor_quality_scan.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('poor_quality_scan.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "Advanced Preprocessing Results:\n";
 echo str_repeat('=', 60) . "\n";
-echo "Content length: " . strlen($result->content) . " characters\n";
+echo "Content length: " . strlen($result->getContent()) . " characters\n";
 
 if (isset($result->metadata)) {
     $qualityScore = $result->qualityScore ?? null;
@@ -127,14 +127,14 @@ foreach ($preprocessingProfiles as $profileName => $preprocessing) {
         )
     );
 
-    $xberg = new Xberg($profileConfig);
 
     $startTime = microtime(true);
-    $result = $xberg->extract('sample_scan.pdf');
+    $output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('sample_scan.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
     $elapsedTime = microtime(true) - $startTime;
 
     echo ucfirst($profileName) . " profile:\n";
-    echo "  Content length: " . strlen($result->content) . " characters\n";
+    echo "  Content length: " . strlen($result->getContent()) . " characters\n";
     echo "  Processing time: " . number_format($elapsedTime, 3) . " seconds\n";
     echo "  Settings:\n";
     echo "    - DPI: {$preprocessing->targetDpi}\n";

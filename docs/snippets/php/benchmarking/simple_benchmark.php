@@ -15,7 +15,6 @@ require_once __DIR__ . '/vendor/autoload.php';
 use Xberg\Xberg;
 use Xberg\Config\ExtractionConfig;
 use Xberg\Config\OcrConfig;
-use function Xberg\extract;
 
 function extractBatchFiles(array $files): array
 {
@@ -116,8 +115,7 @@ if (file_exists($testFile)) {
 if (file_exists($testFile)) {
     $benchmark->run('PDF with table extraction', function () use ($testFile) {
         $config = new ExtractionConfig(extractTables: true);
-        $xberg = new Xberg($config);
-        $xberg->extract($testFile);
+        \Xberg\Xberg::extract(\Xberg\ExtractInput::uri($testFile), $config ?? \Xberg\ExtractionConfig::default());
     }, 5);
 }
 
@@ -126,8 +124,7 @@ if (file_exists($testFile)) {
         $config = new ExtractionConfig(
             ocr: new OcrConfig(backend: 'tesseract', language: 'eng')
         );
-        $xberg = new Xberg($config);
-        $xberg->extract($testFile);
+        \Xberg\Xberg::extract(\Xberg\ExtractInput::uri($testFile), $config ?? \Xberg\ExtractionConfig::default());
     }, 3);
 }
 
@@ -178,8 +175,7 @@ $configs = [
 foreach ($configs as $name => $config) {
     if (file_exists($testFile)) {
         $benchmark->run("$name config", function () use ($testFile, $config) {
-            $xberg = new Xberg($config);
-            $xberg->extract($testFile);
+            \Xberg\Xberg::extract(\Xberg\ExtractInput::uri($testFile), $config ?? \Xberg\ExtractionConfig::default());
         }, 5);
     }
 }

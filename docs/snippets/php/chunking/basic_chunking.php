@@ -23,13 +23,13 @@ $config = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($config);
-$result = $xberg->extract('long_document.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('long_document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "Document Chunking Results:\n";
 echo str_repeat('=', 60) . "\n";
 echo "Total chunks: " . count($result->chunks ?? []) . "\n";
-echo "Total content length: " . strlen($result->content) . "\n\n";
+echo "Total content length: " . strlen($result->getContent()) . "\n\n";
 
 foreach ($result->chunks ?? [] as $chunk) {
     echo "Chunk {$chunk->metadata->chunkIndex}:\n";
@@ -53,8 +53,8 @@ foreach ($sizes as $name => $size) {
         )
     );
 
-    $xberg = new Xberg($config);
-    $result = $xberg->extract('document.pdf');
+    $output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
     echo "$name chunks:\n";
     echo "  Total: " . count($result->chunks ?? []) . "\n";
@@ -75,8 +75,8 @@ $sentenceConfig = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($sentenceConfig);
-$result = $xberg->extract('article.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('article.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "Sentence-respecting chunks:\n";
 echo str_repeat('=', 60) . "\n";
@@ -97,8 +97,8 @@ $paragraphConfig = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($paragraphConfig);
-$result = $xberg->extract('essay.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('essay.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "Paragraph-respecting chunks:\n";
 echo str_repeat('=', 60) . "\n";
@@ -117,14 +117,14 @@ $config = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($config);
-$result = $xberg->extract('knowledge_base.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('knowledge_base.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 $chunksForDb = [];
 foreach ($result->chunks ?? [] as $chunk) {
     $chunksForDb[] = [
         'id' => uniqid('chunk_', true),
-        'document_id' => 'doc_' . md5($result->content),
+        'document_id' => 'doc_' . md5($result->getContent()),
         'chunk_index' => $chunk->metadata->chunkIndex,
         'content' => $chunk->content,
         'length' => strlen($chunk->content),

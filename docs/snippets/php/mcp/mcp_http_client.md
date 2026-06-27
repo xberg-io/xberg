@@ -119,7 +119,8 @@ $toolNames = array_column($tools, 'name');
 echo "Available tools: " . implode(', ', $toolNames) . "\n";
 
 // Extract a file
-$result = $client->extract('document.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 echo "Extracted content length: " . strlen($result['content']) . "\n";
 
 // Batch extract

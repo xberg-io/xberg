@@ -26,8 +26,8 @@ $config1 = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($config1);
-$result = $xberg->extract('presentation.pptx');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('presentation.pptx'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 if ($result->images !== null) {
     echo "Total images extracted: " . count($result->images) . "\n";
@@ -53,7 +53,7 @@ $config2 = new ExtractionConfig(
     )
 );
 
-$result2 = (new Xberg($config2))->extract('document.pdf');
+$result2 = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('document.pdf'), $config2)->results[0];
 
 echo "Filtering images smaller than 200x200 pixels\n";
 if ($result2->images !== null) {
@@ -106,7 +106,7 @@ $config5 = new ExtractionConfig(
     )
 );
 
-$result5 = (new Xberg($config5))->extract('document_with_images.pdf');
+$result5 = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('document_with_images.pdf'), $config5)->results[0];
 
 if ($result5->images !== null) {
     echo "Extracted " . count($result5->images) . " images with OCR:\n\n";
@@ -136,7 +136,7 @@ $config6 = new ExtractionConfig(
     )
 );
 
-$result6 = (new Xberg($config6))->extract('presentation.pptx');
+$result6 = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('presentation.pptx'), $config6)->results[0];
 
 if ($result6->images !== null) {
     $outputDir = 'extracted_images';
@@ -215,7 +215,7 @@ $config8 = new ExtractionConfig(
     )
 );
 
-$result8 = (new Xberg($config8))->extract('mixed_content.pdf');
+$result8 = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('mixed_content.pdf'), $config8)->results[0];
 
 if ($result8->images !== null) {
     echo "Extracted images: " . count($result8->images) . "\n\n";

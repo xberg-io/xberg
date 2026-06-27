@@ -23,8 +23,8 @@ $config = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($config);
-$result = $xberg->extract('verbose_document.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('verbose_document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "Token Reduction Example:\n";
 echo str_repeat('=', 60) . "\n";
@@ -52,8 +52,8 @@ if (isset($result->metadata['original_token_count'])) {
 
 echo "Content Analysis:\n";
 echo str_repeat('-', 40) . "\n";
-echo "  Content length: " . strlen($result->content) . " characters\n";
-echo "  First 200 chars: " . substr($result->content, 0, 200) . "...\n\n";
+echo "  Content length: " . strlen($result->getContent()) . " characters\n";
+echo "  First 200 chars: " . substr($result->getContent(), 0, 200) . "...\n\n";
 
 $documents = [
     'long_article.pdf',
@@ -72,7 +72,6 @@ $batchConfig = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($batchConfig);
 $totalOriginal = 0;
 $totalReduced = 0;
 
@@ -82,7 +81,8 @@ foreach ($documents as $document) {
         continue;
     }
 
-    $result = $xberg->extract($document);
+    $output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri($document), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
     $originalTokens = $result->metadata['original_token_count'] ?? 0;
     $reducedTokens = $result->metadata['token_count'] ?? 0;
@@ -123,9 +123,10 @@ function fitWithinTokenLimit(
         );
 
         $xbergWithMode = new Xberg($config);
-        $result = $xbergWithMode->extract($filePath);
+        $output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri($filePath), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
-        $tokens = $result->metadata['token_count'] ?? strlen($result->content);
+        $tokens = $result->metadata['token_count'] ?? strlen($result->getContent());
 
         if ($tokens <= $maxTokens) {
             return [
@@ -145,8 +146,9 @@ function fitWithinTokenLimit(
     );
 
     $xbergWithMode = new Xberg($config);
-    $result = $xbergWithMode->extract($filePath);
-    $tokens = $result->metadata['token_count'] ?? strlen($result->content);
+    $output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri($filePath), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
+    $tokens = $result->metadata['token_count'] ?? strlen($result->getContent());
 
     return [
         'mode' => 'aggressive',

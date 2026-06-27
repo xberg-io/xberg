@@ -4,7 +4,6 @@ use Xberg\Xberg;
 use Xberg\Config\EmbeddingConfig;
 use Xberg\Config\EmbeddingModelType;
 
-$xberg = new Xberg();
 
 // Embed with default config (balanced preset)
 $embeddings = $xberg->embed(["Hello world", "How are you?"]);

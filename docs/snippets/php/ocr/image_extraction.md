@@ -17,11 +17,11 @@ $config = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($config);
-$result = $xberg->extract('document_with_images.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('document_with_images.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "Extracted Content:\n";
-echo $result->content . "\n\n";
+echo $result->getContent() . "\n\n";
 
 if (!empty($result->images)) {
     echo "Extracted " . count($result->images) . " images\n";

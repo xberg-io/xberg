@@ -19,11 +19,11 @@ use Xberg\Exceptions\ParsingException;
 use Xberg\Exceptions\OcrException;
 use Xberg\Exceptions\ValidationException;
 
-$xberg = new Xberg();
 
 try {
-    $result = $xberg->extract('document.pdf');
-    echo "Extracted " . strlen($result->content) . " characters\n";
+    $output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
+    echo "Extracted " . strlen($result->getContent()) . " characters\n";
 } catch (ParsingException $e) {
     echo "Failed to parse document: " . $e->getMessage() . "\n";
     echo "Error code: " . $e->getCode() . "\n";
@@ -46,7 +46,7 @@ try {
     }
 
     $result = $xberg->extract($pdfBytes, 'application/pdf', $config);
-    echo "Extracted from bytes: " . substr($result->content, 0, 100) . "...\n";
+    echo "Extracted from bytes: " . substr($result->getContent(), 0, 100) . "...\n";
 } catch (ValidationException $e) {
     echo "Invalid configuration or input: " . $e->getMessage() . "\n";
     echo "Details: " . $e->getFile() . " at line " . $e->getLine() . "\n";
@@ -64,7 +64,8 @@ $failedExtractions = [];
 
 foreach ($files as $file) {
     try {
-        $result = $xberg->extract($file);
+        $output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri($file), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
         $successfulExtractions[$file] = $result;
         echo "Success: $file\n";
     } catch (XbergException $e) {
@@ -89,7 +90,7 @@ function extractWithRetry(
 
     while ($attempt < $maxRetries) {
         try {
-            return $xberg->extract($file);
+            return \Xberg\Xberg::extract(\Xberg\ExtractInput::uri($file), $config ?? \Xberg\ExtractionConfig::default());
         } catch (OcrException $e) {
             $attempt++;
             if ($attempt >= $maxRetries) {
@@ -109,6 +110,6 @@ function extractWithRetry(
 
 $result = extractWithRetry($xberg, 'difficult_scan.pdf');
 if ($result !== null) {
-    echo "Successfully extracted with retry: " . strlen($result->content) . " chars\n";
+    echo "Successfully extracted with retry: " . strlen($result->getContent()) . " chars\n";
 }
 ```

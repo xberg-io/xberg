@@ -24,8 +24,8 @@ $config = new ExtractionConfig(
     )
 );
 
-$xberg = new Xberg($config);
-$result = $xberg->extract('document.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "PDF extraction complete\n";
 echo "Images extracted: " . count($result->images ?? []) . "\n\n";
@@ -39,8 +39,8 @@ $highQualityConfig = new ExtractionConfig(
     extractImages: true
 );
 
-$xberg = new Xberg($highQualityConfig);
-$result = $xberg->extract('presentation.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('presentation.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 foreach ($result->images ?? [] as $image) {
     $filename = sprintf('image_%d_page_%d.%s',
@@ -60,11 +60,11 @@ $fastConfig = new ExtractionConfig(
     extractTables: false  
 );
 
-$xberg = new Xberg($fastConfig);
 $start = microtime(true);
-$result = $xberg->extract('large_document.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('large_document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 $elapsed = microtime(true) - $start;
 
 echo "\nFast extraction completed in " . number_format($elapsed, 3) . " seconds\n";
-echo "Content length: " . strlen($result->content) . " characters\n";
+echo "Content length: " . strlen($result->getContent()) . " characters\n";
 ```

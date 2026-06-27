@@ -14,19 +14,19 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 use Xberg\Xberg;
 
-$xberg = new Xberg();
 
-$result = $xberg->extract('document.pdf');
+$output = \Xberg\Xberg::extract(\Xberg\ExtractInput::uri('document.pdf'), $config ?? \Xberg\ExtractionConfig::default());
+$result = $output->results[0];
 
 echo "Extracted Content:\n";
 echo "==================\n";
-echo $result->content . "\n\n";
+echo $result->getContent() . "\n\n";
 
 echo "Metadata:\n";
 echo "=========\n";
-echo "Title: " . ($result->metadata->title ?? 'N/A') . "\n";
-echo "Authors: " . (isset($result->metadata->authors) ? implode(', ', $result->metadata->authors) : 'N/A') . "\n";
-echo "Pages: " . ($result->metadata->pageCount ?? 'N/A') . "\n";
+echo "Title: " . ($result->metadata?->title ?? 'N/A') . "\n";
+echo "Authors: " . (isset($result->metadata?->authors) ? implode(', ', $result->metadata?->authors) : 'N/A') . "\n";
+echo "Pages: " . ($result->metadata?->pdf?->page_count ?? 'N/A') . "\n";
 echo "Format: " . $result->mimeType . "\n\n";
 
 if (count($result->tables) > 0) {
