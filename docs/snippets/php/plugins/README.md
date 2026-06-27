@@ -167,7 +167,7 @@ final class CustomXberg
         $result = $output->results[0];
 
         // Custom validation
-        if (strlen($result->getContent()) < 100) {
+        if (strlen($result->content) < 100) {
             throw new \RuntimeException('Content too short');
         }
 
@@ -183,7 +183,7 @@ final class CustomXberg
         $result = $output->results[0];
 
         // Custom transformation
-        $transformedContent = $transformer($result->getContent());
+        $transformedContent = $transformer($result->content);
 
         return new ExtractedDocument(
             content: $transformedContent,
