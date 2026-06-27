@@ -25,7 +25,9 @@ let configJson = """
 """
 
 let config = try extractionConfigFromJson(configJson)
-let result = try extract("paper.pdf", nil, config)
+let input = try extractInputFromJson(#"{"kind":"uri","uri":"paper.pdf"}"#)
+let resultOutput = try await extract(input: input, config: config)
+let result = resultOutput.results().get(index: 0)!
 
 if let structured = result.structured_output() {
     print(structured.toString())

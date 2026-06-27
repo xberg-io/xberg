@@ -12,9 +12,11 @@ let configJson = """
 """
 
 let config = try extractionConfigFromJson(configJson)
-let result = try extract("document.pdf", nil, config)
+let input = try extractInputFromJson(#"{"kind":"uri","uri":"document.pdf"}"#)
+let resultOutput = try await extract(input: input, config: config)
+let result = resultOutput.results().get(index: 0)!
 
-if let pages = result.pages() {
+if let pages = result.pages {
     for page in pages {
         let pageContent = page.content().toString()
         print("Page \(page.page_number()):")

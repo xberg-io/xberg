@@ -30,24 +30,26 @@ let configJson = """
 """
 
 let config = try extractionConfigFromJson(configJson)
-let result = try extract("report.pdf", nil, config)
+let input = try extractInputFromJson(#"{"kind":"uri","uri":"report.pdf"}"#)
+let resultOutput = try await extract(input: input, config: config)
+let result = resultOutput.results().get(index: 0)!
 
-let content = result.content().toString()
+let content = result.content.toString()
 print("Content (\(content.count) chars):")
 let preview = String(content.prefix(200))
 print(preview)
 
-if let chunks = result.chunks() {
+if let chunks = result.chunks {
     print("\nChunks: \(chunks.count)")
 }
-print("Tables: \(result.tables().count)")
+print("Tables: \(result.tables.count)")
 
-if let languages = result.detected_languages() {
+if let languages = result.detectedLanguages {
     let langs = languages.map { $0.toString() }
     print("Languages: \(langs)")
 }
 
-if let method = result.extraction_method() {
+if let method = result.extractionMethod {
     print("Extraction method: \(method)")
 }
 ```

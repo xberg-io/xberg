@@ -26,11 +26,13 @@ let configJson = """
 
 let documentId = "doc_001"
 let config = try extractionConfigFromJson(configJson)
-let result = try extract("document.pdf", nil, config)
+let input = try extractInputFromJson(#"{"kind":"uri","uri":"document.pdf"}"#)
+let resultOutput = try await extract(input: input, config: config)
+let result = resultOutput.results().get(index: 0)!
 
 var records: [VectorRecord] = []
 
-if let chunks = result.chunks() {
+if let chunks = result.chunks {
     for (index, chunk) in chunks.enumerated() {
         guard let embedding = chunk.embedding() else { continue }
 

@@ -16,6 +16,8 @@ if let data = try? Data(contentsOf: URL(fileURLWithPath: "xberg.json")),
 }
 
 let config = try extractionConfigFromJson(configJson)
-let result = try extract("document.pdf", nil, config)
-print(result.content().toString())
+let input = try extractInputFromJson(#"{"kind":"uri","uri":"document.pdf"}"#)
+let resultOutput = try await extract(input: input, config: config)
+let result = resultOutput.results().get(index: 0)!
+print(result.content.toString())
 ```

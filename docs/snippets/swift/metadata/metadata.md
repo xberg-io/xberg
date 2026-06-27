@@ -4,9 +4,11 @@ import Xberg
 import RustBridge
 
 let config = try extractionConfigFromJson("{}")
-let result = try extract("document.pdf", nil, config)
+let input = try extractInputFromJson(#"{"kind":"uri","uri":"document.pdf"}"#)
+let resultOutput = try await extract(input: input, config: config)
+let result = resultOutput.results().get(index: 0)!
 
-let metadata = result.metadata()
+let metadata = result.metadata
 
 if let title = metadata.title() {
     print("Title: \(title.toString())")

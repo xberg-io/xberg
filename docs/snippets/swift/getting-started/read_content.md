@@ -14,15 +14,17 @@ let configJson = """
 """
 
 let config = try extractionConfigFromJson(configJson)
-let result = try extract("document.pdf", nil, config)
+let input = try extractInputFromJson(#"{"kind":"uri","uri":"document.pdf"}"#)
+let resultOutput = try await extract(input: input, config: config)
+let result = resultOutput.results().get(index: 0)!
 
-let tables = result.tables()
+let tables = result.tables
 print("Tables: \(tables.count)")
 for (index, _) in tables.enumerated() {
     print("Table \(index)")
 }
 
-if let chunks = result.chunks() {
+if let chunks = result.chunks {
     print("Chunks: \(chunks.count)")
     for (index, _) in chunks.enumerated() {
         print("Chunk \(index)")

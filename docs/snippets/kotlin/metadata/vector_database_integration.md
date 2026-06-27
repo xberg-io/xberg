@@ -1,6 +1,5 @@
 ```kotlin title="Kotlin"
 import io.xberg.*
-import java.nio.file.Paths
 import java.util.Optional
 
 data class VectorRecord(
@@ -27,7 +26,11 @@ fun extractAndVectorize(documentPath: String, documentId: String): List<VectorRe
         .withChunking(Optional.of(chunking))
         .build()
 
-    val result = Xberg.extract(Paths.get(documentPath), null, config)
+    val resultOutput = Xberg.extract(
+        ExtractInput(kind = ExtractInputKind.URI, uri = documentPath),
+        config,
+    )
+    val result = resultOutput.results().first()
 
     val records = mutableListOf<VectorRecord>()
     val chunks = result.chunks() ?: return records

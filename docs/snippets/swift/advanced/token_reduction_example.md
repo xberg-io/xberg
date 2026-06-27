@@ -13,9 +13,11 @@ let configJson = """
 """
 
 let config = try extractionConfigFromJson(configJson)
-let result = try extract("verbose_document.pdf", nil, config)
+let input = try extractInputFromJson(#"{"kind":"uri","uri":"verbose_document.pdf"}"#)
+let resultOutput = try await extract(input: input, config: config)
+let result = resultOutput.results().get(index: 0)!
 
-let content = result.content().toString()
+let content = result.content.toString()
 print("Reduced content length: \(content.count)")
 for warning in result.processing_warnings() {
     print("Warning [\(warning.source().toString())]: \(warning.message().toString())")

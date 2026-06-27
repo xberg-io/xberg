@@ -15,9 +15,11 @@ let configJson = """
 """
 
 let config = try extractionConfigFromJson(configJson)
-let result = try extract("document.md", nil, config)
+let input = try extractInputFromJson(#"{"kind":"uri","uri":"document.md"}"#)
+let resultOutput = try await extract(input: input, config: config)
+let result = resultOutput.results().get(index: 0)!
 
-if let chunks = result.chunks() {
+if let chunks = result.chunks {
     print("Chunks: \(chunks.count)")
     for chunk in chunks {
         let content = chunk.content().toString()

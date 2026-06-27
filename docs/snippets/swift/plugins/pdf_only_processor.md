@@ -25,7 +25,7 @@ final class PdfOnlyProcessor: PostProcessor {
     }
 
     func shouldProcess(result: ExtractedDocument, config: ExtractionConfig) -> Bool {
-        result.mimeType() == "application/pdf"
+        result.mimeType == "application/pdf"
     }
 
     func estimatedDurationMs(result: ExtractedDocument) -> UInt64 {

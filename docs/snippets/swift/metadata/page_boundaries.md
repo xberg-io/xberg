@@ -4,12 +4,14 @@ import Xberg
 import RustBridge
 
 let config = try extractionConfigFromJson("{}")
-let result = try extract("document.pdf", nil, config)
+let input = try extractInputFromJson(#"{"kind":"uri","uri":"document.pdf"}"#)
+let resultOutput = try await extract(input: input, config: config)
+let result = resultOutput.results().get(index: 0)!
 
-let content = result.content().toString()
+let content = result.content.toString()
 let utf8 = Array(content.utf8)
 
-guard let pageStructure = result.metadata().pages() else {
+guard let pageStructure = result.metadata.pages() else {
     print("No page structure available")
     exit(0)
 }

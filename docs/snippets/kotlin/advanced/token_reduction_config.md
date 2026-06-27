@@ -1,6 +1,5 @@
 ```kotlin title="Kotlin"
 import io.xberg.*
-import java.nio.file.Paths
 import java.util.Optional
 
 fun main() {
@@ -13,7 +12,11 @@ fun main() {
         .withTokenReduction(Optional.of(tokenReduction))
         .build()
 
-    val result = Xberg.extract(Paths.get("document.pdf"), null, config)
+    val resultOutput = Xberg.extract(
+        ExtractInput(kind = ExtractInputKind.URI, uri = "document.pdf"),
+        config,
+    )
+    val result = resultOutput.results().first()
     println("Reduced content: ${result.content()}")
 }
 ```

@@ -18,8 +18,8 @@ let configJson = """
 let config = try extractionConfigFromJson(configJson)
 let output = try await extract(input: input, config: config)
 
-if let document = output.results().get(index: 0) {
-    print(document.content().toString())
-    print("MIME type: \(document.mimeType().toString())")
+if let document = output.results[0] {
+    print(document.content.toString())
+    print("MIME type: \(document.mimeType.toString())")
 }
 ```

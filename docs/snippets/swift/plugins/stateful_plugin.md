@@ -28,7 +28,7 @@ final class StatefulPlugin: PostProcessor {
         defer { lock.unlock() }
 
         callCount += 1
-        cache["last_mime"] = result.mimeType()
+        cache["last_mime"] = result.mimeType
         cache["call_count"] = String(callCount)
 
         return "{\"ok\": null}"

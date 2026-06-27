@@ -1,11 +1,14 @@
 ```kotlin title="Kotlin"
 import io.xberg.*
-import java.nio.file.Paths
 import java.util.Optional
 
 fun main() {
     val config = ExtractionConfig.builder().build()
-    val result = Xberg.extract(Paths.get("document.pdf"), null, config)
+    val resultOutput = Xberg.extract(
+        ExtractInput(kind = ExtractInputKind.URI, uri = "document.pdf"),
+        config,
+    )
+    val result = resultOutput.results().first()
 
     val metadata = result.metadata()
     metadata.title()?.let { println("Title: $it") }
@@ -19,7 +22,11 @@ fun main() {
     }
 
     // Access HTML metadata
-    val htmlResult = Xberg.extract(Paths.get("page.html"), null, config)
+    val htmlResultOutput = Xberg.extract(
+        ExtractInput(kind = ExtractInputKind.URI, uri = "page.html"),
+        config,
+    )
+    val htmlResult = htmlResultOutput.results().first()
     htmlResult.metadata().format()?.html()?.let { html ->
         html.title()?.let { println("Title: $it") }
         html.description()?.let { println("Description: $it") }

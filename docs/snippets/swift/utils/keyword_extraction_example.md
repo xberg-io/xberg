@@ -14,7 +14,9 @@ let configJson = """
 """
 
 let config = try extractionConfigFromJson(configJson)
-let result = try extract("research_paper.pdf", nil, config)
+let input = try extractInputFromJson(#"{"kind":"uri","uri":"research_paper.pdf"}"#)
+let resultOutput = try await extract(input: input, config: config)
+let result = resultOutput.results().get(index: 0)!
 
 if let keywords = result.extracted_keywords() {
     for keyword in keywords {

@@ -1,6 +1,5 @@
 ```kotlin title="Kotlin"
 import io.xberg.*
-import java.nio.file.Paths
 import java.util.Optional
 
 fun main() {
@@ -18,7 +17,11 @@ fun main() {
         .withPages(Optional.of(pages))
         .build()
 
-    val result = Xberg.extract(Paths.get("document.pdf"), null, config)
+    val resultOutput = Xberg.extract(
+        ExtractInput(kind = ExtractInputKind.URI, uri = "document.pdf"),
+        config,
+    )
+    val result = resultOutput.results().first()
     for (chunk in result.chunks().orEmpty()) {
         val first = chunk.metadata().firstPage()
         val last = chunk.metadata().lastPage()

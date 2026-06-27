@@ -18,7 +18,7 @@ final class QualityValidator: Validator {
 
     func validate(result: ExtractedDocument, config: ExtractionConfig) -> String {
         // Parse metadata to extract quality score
-        let metadata = result.metadata()
+        let metadata = result.metadata
         let qualityScore: Double
 
         if let scoreStr = metadata["quality_score"] as? String,

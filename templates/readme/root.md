@@ -379,7 +379,7 @@ async fn main() -> xberg::Result<()> {
         ExtractInput::from_uri("document.pdf"),
         &config
     ).await?;
-    
+
     println!("{}", output.results[0].content);
     Ok(())
 }

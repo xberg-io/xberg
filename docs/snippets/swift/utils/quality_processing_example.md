@@ -10,7 +10,9 @@ let configJson = """
 """
 
 let config = try extractionConfigFromJson(configJson)
-let result = try extract("scanned_document.pdf", nil, config)
+let input = try extractInputFromJson(#"{"kind":"uri","uri":"scanned_document.pdf"}"#)
+let resultOutput = try await extract(input: input, config: config)
+let result = resultOutput.results().get(index: 0)!
 
 if let score = result.quality_score() {
     if score < 0.5 {

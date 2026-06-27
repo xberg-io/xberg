@@ -1,10 +1,13 @@
 ```kotlin title="Kotlin"
 import io.xberg.*
-import java.nio.file.Paths
 
 fun main() {
     val config = ExtractionConfig.builder().build()
-    val result = io.xberg.Xberg.extract(Paths.get("document.pdf"), null, config)
+    val resultOutput = Xberg.extract(
+        ExtractInput(kind = ExtractInputKind.URI, uri = "document.pdf"),
+        config,
+    )
+    val result = resultOutput.results().first()
 
     result.tables()?.forEachIndexed { index, table ->
         println("Table ${index + 1}: ${table}")

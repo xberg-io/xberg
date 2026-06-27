@@ -234,6 +234,7 @@ xberg mcp --config xberg.toml
 | `cache_clear`         | —                                                                                                                                                 | Remove cached files                                                       |
 | `cache_manifest`      | —                                                                                                                                                 | Model checksums                                                           |
 | `cache_warm`          | —                                                                                                                                                 | Pre-download models                                                       |
+
 All extraction tools accept an optional `config` object. URI and byte payload details live in `ExtractInput` as `kind = "uri"` or `kind = "bytes"`.
 
 ### AI Agent Integration

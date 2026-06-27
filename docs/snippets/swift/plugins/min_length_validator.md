@@ -22,7 +22,7 @@ final class MinLengthValidator: Validator {
 
     func validate(result: ExtractedDocument, config: ExtractionConfig) -> String {
         // Returns JSON-encoded Result<(), String>
-        let contentLength = result.content().count
+        let contentLength = result.content.count
         if contentLength < minLength {
             let message = "Content too short: \(contentLength) < \(minLength)"
             return "{\"err\": \"\(message)\"}"

@@ -15,7 +15,7 @@ final class MinLengthValidator: Validator {
     }
 
     func validate(result: ExtractedDocument, config: ExtractionConfig) -> String {
-        let contentLength = result.content().count
+        let contentLength = result.content.count
         if contentLength < 50 {
             let message = "Content too short: \(contentLength)"
             return "{\"err\": \"\(message)\"}"
@@ -46,11 +46,8 @@ let config = ExtractionConfig(
     resultFormat: .unified,
     outputFormat: .markdown
 )
-let output = try extract(
-    path: "document.pdf",
-    mimeType: nil,
-    config: config
-)
-let document = output.results().first!
-print("Content length: \(document.content().count)")
+let input = try extractInputFromJson(#"{"kind":"uri","uri":"document.pdf"}"#)
+let output = try await extract(input: input, config: config)
+let document = output.results.first!
+print("Content length: \(document.content.count)")
 ```

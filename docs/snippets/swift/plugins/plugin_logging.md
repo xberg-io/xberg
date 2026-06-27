@@ -24,8 +24,8 @@ final class MyPlugin: PostProcessor {
     }
 
     func process(result: ExtractedDocument, config: ExtractionConfig) -> String {
-        let contentLen = result.content().count
-        logger.info("Processing \(result.mimeType()) (\(contentLen) bytes)")
+        let contentLen = result.content.count
+        logger.info("Processing \(result.mimeType) (\(contentLen) bytes)")
 
         if contentLen == 0 {
             logger.warning("Processing resulted in empty content")

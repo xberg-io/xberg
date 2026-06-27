@@ -1,6 +1,5 @@
 ```kotlin title="Kotlin"
 import io.xberg.*
-import java.nio.file.Paths
 import java.util.Optional
 
 fun main() {
@@ -14,7 +13,11 @@ fun main() {
         .withForceOcr(true)
         .build()
 
-    val result = io.xberg.Xberg.extract(Paths.get("scanned.pdf"), null, config)
+    val resultOutput = Xberg.extract(
+        ExtractInput(kind = ExtractInputKind.URI, uri = "scanned.pdf"),
+        config,
+    )
+    val result = resultOutput.results().first()
     println(result.content())
     result.detectedLanguages()?.let { println("Detected languages: $it") }
 }

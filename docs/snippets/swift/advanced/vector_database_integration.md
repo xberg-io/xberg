@@ -10,7 +10,7 @@ struct VectorRecord {
     let metadata: [String: String]
 }
 
-func extractAndVectorize(documentPath: String, documentId: String) throws -> [VectorRecord] {
+func extractAndVectorize(documentPath: String, documentId: String) async throws -> [VectorRecord] {
     let configJson = """
     {
         "chunking": {
@@ -26,10 +26,12 @@ func extractAndVectorize(documentPath: String, documentId: String) throws -> [Ve
     """
 
     let config = try extractionConfigFromJson(configJson)
-    let result = try extract(documentPath, nil, config)
+    let input = try extractInputFromJson(#"{"kind":"uri","uri":"\#(documentPath)"}"#)
+    let resultOutput = try await extract(input: input, config: config)
+    let result = resultOutput.results().get(index: 0)!
 
     var records: [VectorRecord] = []
-    if let chunks = result.chunks() {
+    if let chunks = result.chunks {
         for (index, chunk) in chunks.enumerated() {
             guard let embedding = chunk.embedding() else { continue }
             let content = chunk.content().toString()

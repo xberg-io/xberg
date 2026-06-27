@@ -17,7 +17,7 @@ final class MinLengthValidator: Validator {
     func shutdown() -> String { "{\"ok\": null}" }
 
     func validate(result: ExtractedDocument, config: ExtractionConfig) -> String {
-        let contentLength = result.content().count
+        let contentLength = result.content.count
         if contentLength < minLength {
             return "{\"err\": \"Content too short: \(contentLength) < \(minLength)\"}"
         }
@@ -39,7 +39,9 @@ let configJson = "{\"use_cache\": false}"
 let config = try extractionConfigFromJson(configJson)
 
 // Extract a document; the validator runs automatically during extraction
-let result = try extract(path: "test.txt", mimeType: "text/plain", config: config)
+let input = try extractInputFromJson(#"{"kind":"uri","uri":"test.txt","mime_type":"text/plain"}"#)
+let resultOutput = try await extract(input: input, config: config)
+let result = resultOutput.results().get(index: 0)!
 
 // The validator's validate() method is invoked in-pipeline.
 // If it rejects, the extraction throws an error.
