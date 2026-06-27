@@ -1115,6 +1115,9 @@ default_features = false
 
 [crates.csharp]
 namespace = "Xberg"
+# NuGet PackageId is org-prefixed for consistency (XbergIo.*); the C# code
+# namespace/RootNamespace stays `Xberg`.
+package_id = "XbergIo.Xberg"
 # project_file directs `dotnet format` to the .csproj inside packages/csharp/Xberg/
 # rather than the parent directory (which has no .sln or .csproj at its root).
 project_file = "packages/csharp/Xberg/Xberg.csproj"
@@ -3571,8 +3574,8 @@ snippets = { basic_extraction = "getting-started/basic_usage.md", async_extracti
 [crates.readme.languages.csharp]
 template = "language_package.md"
 name = "C#"
-package_name = "Xberg"
-badge_url = "https://img.shields.io/nuget/v/Xberg?label=C%23&color=007ec6"
+package_name = "XbergIo.Xberg"
+badge_url = "https://img.shields.io/nuget/v/XbergIo.Xberg?label=C%23&color=007ec6"
 docs_url = "https://xberg.io/"
 description = "Extract text, tables, images, metadata, and code intelligence from 96 file formats and 306 programming languages including PDF, Office documents, images, and audio/video transcripts where native transcription is available. .NET bindings with full type safety, async/await support, and .NET 10.0+ compatibility."
 package_manager = ["nuget"]
