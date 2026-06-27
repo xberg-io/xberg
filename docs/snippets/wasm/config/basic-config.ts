@@ -21,7 +21,7 @@ async function extractWithConfig() {
     },
   };
 
-  const result = await extract(bytes, "application/pdf", config);
+  const result = await extract({ kind: "bytes", bytes, mimeType: "application/pdf" }, config);
   console.log("Extraction complete");
   console.log("Content length:", result.content.length);
 }

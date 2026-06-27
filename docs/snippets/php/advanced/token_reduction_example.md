@@ -13,7 +13,9 @@ $config = new ExtractionConfig(
     )
 );
 
-$result = Xberg::extractSync('verbose_document.pdf', null, $config);
+$resultOutput = Xberg::extract(\Xberg\ExtractInput::uri('verbose_document.pdf'), $config);
+
+$result = $resultOutput->results[0];
 
 if ($result->getTokenCount() !== null) {
     echo "Original token count: " . $result->getTokenCount() . "\n";

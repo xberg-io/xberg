@@ -14,11 +14,11 @@ config_json =
     }
   })
 
-{:ok, json} = Xberg.extract_async("research_paper.pdf", nil, config_json)
-result = Jason.decode!(json)
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "research_paper.pdf"}, config_json)
 
+result = List.first(output.results)
 chunks_with_embeddings =
-  for chunk <- result["chunks"] || [],
+  for chunk <- result.chunks || [],
       embedding = chunk["embedding"],
       is_list(embedding) do
     %{

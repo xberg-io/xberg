@@ -1,5 +1,5 @@
 ```python title="Python"
-from xberg import register_post_processor, ExtractionResult
+from xberg import register_post_processor, ExtractedDocument
 
 class WordCountProcessor:
     def name(self) -> str:
@@ -11,12 +11,12 @@ class WordCountProcessor:
     def processing_stage(self) -> str:
         return "early"
 
-    def process(self, result: ExtractionResult) -> ExtractionResult:
+    def process(self, result: ExtractedDocument) -> ExtractedDocument:
         word_count: int = len(result.content.split())
         result.metadata["word_count"] = word_count
         return result
 
-    def should_process(self, result: ExtractionResult) -> bool:
+    def should_process(self, result: ExtractedDocument) -> bool:
         return bool(result.content)
 
     def initialize(self) -> None:

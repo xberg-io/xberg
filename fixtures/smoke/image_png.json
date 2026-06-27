@@ -2,11 +2,7 @@
 	"id": "smoke_image_png",
 	"category": "smoke",
 	"description": "Smoke test: PNG image (without OCR, metadata only)",
-	"tags": [
-		"smoke",
-		"image",
-		"png"
-	],
+	"tags": ["smoke", "image", "png"],
 	"input": {
 		"kind": "uri",
 		"uri": "images/sample.png"
@@ -14,14 +10,12 @@
 	"assertions": [
 		{
 			"type": "equals",
-			"field": "results.0.mime_type",
+			"field": "results[0].mime_type",
 			"value": "image/png"
 		}
 	],
 	"skip": {
-		"languages": [
-			"wasm"
-		],
+		"languages": ["wasm"],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	},
 	"call": "extract",

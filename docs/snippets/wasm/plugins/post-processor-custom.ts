@@ -1,8 +1,8 @@
-import type { ExtractionResult } from "@xberg-io/xberg-wasm";
+import type { ExtractedDocument } from "@xberg-io/xberg-wasm";
 import { extract, initWasm } from "@xberg-io/xberg-wasm";
 
 class MarkdownFormatter {
-  async process(result: ExtractionResult): Promise<ExtractionResult> {
+  async process(result: ExtractedDocument): Promise<ExtractedDocument> {
     const formatted = result.content.replace(/^(.+)$/gm, "# $1").replace(/\n\n+/g, "\n\n");
 
     return {
@@ -26,7 +26,7 @@ async function demonstrateCustomProcessor() {
   const processor = new MarkdownFormatter();
   const bytes = new Uint8Array(await fetch("document.pdf").then((r) => r.arrayBuffer()));
 
-  let result = await extract(bytes, "application/pdf");
+  let result = await extract({ kind: "bytes", bytes, mimeType: "application/pdf" });
 
   result = await processor.process(result);
   console.log("Formatted result:", result.content);

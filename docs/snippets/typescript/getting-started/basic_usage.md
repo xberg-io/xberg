@@ -1,13 +1,19 @@
 ```typescript title="TypeScript"
-import { extractSync } from "@xberg-io/xberg";
+import { ExtractInputKind, extract } from "@xberg-io/xberg";
 
 const config = {
   useCache: true,
   enableQualityProcessing: true,
 };
 
-const result = extractSync("document.pdf", null, config);
+const output = await extract(
+  {
+    kind: "uri",
+    uri: "document.pdf",
+  },
+  config,
+);
 
-console.log(result.content);
-console.log(`MIME Type: ${result.mimeType}`);
+console.log(output.results[0].content);
+console.log(`MIME Type: ${output.results[0].mimeType}`);
 ```

@@ -2,13 +2,15 @@
 
 Detect document layout regions (tables, figures, headers, text blocks, etc.) in PDFs using ONNX-based deep learning models. Enables table extraction, figure isolation, reading-order reconstruction, and selective OCR.
 
+See the [LayoutDetectionConfig reference](../reference/configuration.md#layoutdetectionconfig) for all configuration options.
+
 !!! Note "Feature gate" Requires the `layout-detection` Cargo feature. Not included in the default feature set.
 
 ## Model
 
 Layout detection uses the **RT-DETR v2** model, an ONNX-based deep learning model that detects 17 layout element classes: text blocks, tables, figures, headers, footers, captions, code, lists, sections, formulas, footnotes, page headers/footers, titles, checkboxes, key-value regions, and document indices.
 
-Layout detection now populates `ExtractionResult.formulas` for formula regions and supports chart understanding via
+Layout detection now populates `ExtractedDocument.formulas` for formula regions and supports chart understanding via
 `enable_chart_understanding`.
 
 ### When to Enable

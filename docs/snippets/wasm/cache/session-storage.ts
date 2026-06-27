@@ -13,7 +13,7 @@ async function _cacheResultInSessionStorage(file: File): Promise<ExtractionResul
   }
 
   console.log("Extracting and caching result");
-  const result = await extract(file);
+  const result = await extract({ kind: "bytes", bytes: file, mimeType: file.type || "application/octet-stream" });
 
   try {
     sessionStorage.setItem(cacheKey, JSON.stringify(result));

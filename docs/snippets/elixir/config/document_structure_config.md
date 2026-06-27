@@ -3,8 +3,9 @@ config = %Xberg.ExtractionConfig{
   include_document_structure: true
 }
 
-{:ok, result} = Xberg.extract_sync("document.pdf", config)
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "document.pdf"}, config)
 
+result = List.first(output.results)
 if result.document do
   Enum.each(result.document.nodes, fn node ->
     IO.puts("[#{node.content.node_type}]")

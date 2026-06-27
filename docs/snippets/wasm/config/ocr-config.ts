@@ -13,7 +13,7 @@ async function extractWithOcr() {
     },
   };
 
-  const result = await extract(bytes, "application/pdf", config);
+  const result = await extract({ kind: "bytes", bytes, mimeType: "application/pdf" }, config);
 
   console.log("Extracted text from scanned document:");
   console.log(result.content);

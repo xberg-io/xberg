@@ -11,7 +11,7 @@ async function convertAndExtract(file: File) {
     const bytes = await fileToUint8Array(file);
     console.log(`Converted ${file.name} (${bytes.byteLength} bytes) to Uint8Array`);
 
-    const result = await extract(bytes, file.type);
+    const result = await extract({ kind: "bytes", bytes, mimeType: file.type });
     return result;
   } catch (error) {
     console.error("Conversion failed:", error);

@@ -6,7 +6,7 @@ class WordCountPostProcessor : IPostProcessor
     public string Name => "word-count";
     public int Priority => 10;
 
-    public ExtractionResult Process(ExtractionResult result)
+    public ExtractedDocument Process(ExtractedDocument result)
     {
         if (string.IsNullOrEmpty(result.Content))
         {
@@ -33,7 +33,7 @@ class CleanupPostProcessor : IPostProcessor
     public string Name => "text-cleanup";
     public int Priority => 5;
 
-    public ExtractionResult Process(ExtractionResult result)
+    public ExtractedDocument Process(ExtractedDocument result)
     {
         if (string.IsNullOrEmpty(result.Content))
         {
@@ -55,7 +55,7 @@ class LanguageDetectionPostProcessor : IPostProcessor
     public string Name => "language-detection";
     public int Priority => 1;
 
-    public ExtractionResult Process(ExtractionResult result)
+    public ExtractedDocument Process(ExtractedDocument result)
     {
         if (string.IsNullOrEmpty(result.Content))
         {
@@ -100,7 +100,7 @@ class Program
         try
         {
             var config = new ExtractionConfig();
-            var result = XbergLib.ExtractSync("document.pdf", config);
+            var result = XbergLib.Extract("document.pdf", config);
 
             Console.WriteLine($"Original content length: {result.Content.Length}");
 

@@ -8,12 +8,17 @@ custom_ocr_backend <- function(image_path, language) {
 
 register_ocr_backend("custom_cloud", custom_ocr_backend)
 
-config <- list(
+config <- ExtractionConfig$from_json(jsonlite::toJSON(list(
   force_ocr = TRUE,
   ocr = list(backend = "custom_cloud", language = "en")
-)
+), auto_unbox = TRUE))
 
-json <- extract_sync("document.pdf", "application/pdf", config)
-result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+input <- list(kind = "uri", uri = "document.pdf", mime_type = "application/pdf")
+json <- extract(
+  input = ExtractInput$from_json(jsonlite::toJSON(input, auto_unbox = TRUE)),
+  config = config
+)
+output <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+result <- output$results[[1]]
 cat(sprintf("Custom backend result: %d chars\n", nchar(result$content)))
 ```

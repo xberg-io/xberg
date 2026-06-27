@@ -1,6 +1,6 @@
 ```rust title="Rust"
 use xberg::plugins::{Plugin, PostProcessor, ProcessingStage, register_post_processor};
-use xberg::{Result, ExtractionResult, ExtractionConfig};
+use xberg::{Result, ExtractedDocument, ExtractionConfig};
 use async_trait::async_trait;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -24,7 +24,7 @@ impl Plugin for PdfMetadataExtractor {
 impl PostProcessor for PdfMetadataExtractor {
     async fn process(
         &self,
-        result: &mut ExtractionResult,
+        result: &mut ExtractedDocument,
         _config: &ExtractionConfig,
     ) -> Result<()> {
         if result.mime_type != "application/pdf" {
@@ -53,7 +53,7 @@ impl PostProcessor for PdfMetadataExtractor {
 
     fn should_process(
         &self,
-        result: &ExtractionResult,
+        result: &ExtractedDocument,
         _config: &ExtractionConfig,
     ) -> bool {
         result.mime_type == "application/pdf"

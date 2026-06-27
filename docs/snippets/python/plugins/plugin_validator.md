@@ -1,8 +1,8 @@
 ```python title="Python"
-from xberg import (
-    ExtractionResult,
+from xberg import ExtractInput, (, ExtractionConfig
+    ExtractedDocument,
     ValidationError,
-    extract_sync,
+    extract,
     register_validator,
 )
 
@@ -13,11 +13,11 @@ class MinLengthValidator:
     def version(self) -> str:
         return "1.0.0"
 
-    def validate(self, result: ExtractionResult) -> None:
-        if len(result.content) < 50:
-            raise ValidationError(f"Content too short: {len(result.content)}")
+    def validate(self, result: ExtractedDocument) -> None:
+        if len(result.results[0].content) < 50:
+            raise ValidationError(f"Content too short: {len(result.results[0].content)}")
 
-    def should_validate(self, result: ExtractionResult) -> bool:
+    def should_validate(self, result: ExtractedDocument) -> bool:
         return True
 
     def initialize(self) -> None:
@@ -29,6 +29,6 @@ class MinLengthValidator:
 validator: MinLengthValidator = MinLengthValidator()
 register_validator(validator)
 
-result = extract_sync("document.pdf")
-print(f"Content length: {len(result.content)}")
+result = extract(ExtractInput.from_uri("document.pdf"), ExtractionConfig())
+print(f"Content length: {len(result.results[0].content)}")
 ```

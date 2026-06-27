@@ -2,6 +2,7 @@
 import asyncio
 from dataclasses import dataclass, field
 from xberg import (
+    ExtractInput,
     ExtractionConfig,
     ChunkingConfig,
     EmbeddingConfig,
@@ -34,10 +35,10 @@ async def extract_and_vectorize(
         )
     )
 
-    result = await extract(document_path, config=config)
+    result = await extract(ExtractInput.from_uri(document_path), config)
 
     records: list[VectorRecord] = []
-    for index, chunk in enumerate(result.chunks or []):
+    for index, chunk in enumerate(result.results[0].chunks or []):
         if chunk.embedding is None:
             continue
         records.append(

@@ -1,9 +1,9 @@
 ```rust title="Rust"
-use xberg::{extract_sync, ExtractionConfig};
+use xberg::{extract, ExtractionConfig};
 
 fn main() -> xberg::Result<()> {
     let config = ExtractionConfig::default();
-    let result = extract_sync("document.pdf", None, &config)?;
+    let result = extract("document.pdf", None, &config)?;
 
     let Some(pages) = &result.metadata.pages else {
         return Ok(());

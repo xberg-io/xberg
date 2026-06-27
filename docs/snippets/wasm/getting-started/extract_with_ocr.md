@@ -14,7 +14,7 @@ const config = {
   },
 };
 
-const result = await extract(data, "application/pdf", config);
+const result = await extract({ kind: "bytes", bytes: data, mimeType: "application/pdf" }, config);
 console.log(result.content);
 console.log(`Detected languages: ${result.detected_languages?.join(", ") ?? "unknown"}`);
 ```

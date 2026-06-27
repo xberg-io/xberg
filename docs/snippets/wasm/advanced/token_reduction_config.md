@@ -11,7 +11,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extract(bytes, "application/pdf", config);
+const result = await extract({ kind: "bytes", bytes, mimeType: "application/pdf" }, config);
 
 console.log(`Original content: ${result.content.length} characters`);
 console.log(`Preview: ${result.content.substring(0, 100)}...`);
@@ -47,7 +47,7 @@ async function compareTokenReductionModes(bytes: Uint8Array): Promise<TokenReduc
       },
     };
 
-    const result = await extract(bytes, "application/pdf", config);
+    const result = await extract({ kind: "bytes", bytes, mimeType: "application/pdf" }, config);
     const originalSize = result.content.length;
     const reducedSize = result.content.split(/\s+/).length;
 

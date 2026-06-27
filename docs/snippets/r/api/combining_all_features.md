@@ -20,13 +20,13 @@ config_json <- jsonlite::toJSON(list(
 
 config <- ExtractionConfig$from_json(config_json)
 
-json <- extract_sync(
-  path = "scanned_report.pdf",
-  mime_type = "application/pdf",
+input <- list(kind = "uri", uri = "scanned_report.pdf", mime_type = "application/pdf")
+json <- extract(
+  input = ExtractInput$from_json(jsonlite::toJSON(input, auto_unbox = TRUE)),
   config = config
 )
-result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
-
+output <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+result <- output$results[[1]]
 cat(sprintf("Chunks: %d\n", length(result$chunks)))
 cat(sprintf("Tables: %d\n", length(result$tables)))
 title <- if (!is.null(result$metadata$title)) result$metadata$title else "<none>"

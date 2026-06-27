@@ -12,19 +12,14 @@ var config = new ExtractionConfig
     }
 };
 
-var result = await XbergLib.ExtractAsync(
-    "research_paper.pdf",
+var output = await XbergConverter.ExtractAsync(
+    ExtractInput.FromUri("research_paper.pdf"),
     config
 );
+var result = output.Results[0];
 
-if (result.Metadata.ContainsKey("keywords"))
+foreach (var keyword in result.ExtractedKeywords ?? new List<Keyword>())
 {
-    var keywords = (List<Dictionary<string, object>>)result.Metadata["keywords"];
-    foreach (var kw in keywords)
-    {
-        var text = (string)kw["text"];
-        var score = (double)kw["score"];
-        Console.WriteLine($"{text}: {score:F3}");
-    }
+    Console.WriteLine($"{keyword.Text}: {keyword.Score:F3}");
 }
 ```

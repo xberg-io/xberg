@@ -23,8 +23,8 @@ class CustomOcrBackend implements OcrBackend {
     }
 
     public function processImage(string $imageBytes, object $config): object {
-        // Process image bytes and return ExtractionResult
-        // This would call your OCR engine (Tesseract, EasyOCR, etc.)
+        // Process image bytes and return ExtractedDocument
+        // This would call your OCR engine (Tesseract, PaddleOCR, VLM OCR, etc.)
         return (object)[
             'content' => 'Extracted text from image',
             'mime_type' => 'image/png',

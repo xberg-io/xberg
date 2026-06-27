@@ -13,7 +13,7 @@
 		{
 			"type": "count_equals",
 			"value": 0,
-			"field": "summary.results"
+			"field": "results"
 		}
 	]
 }

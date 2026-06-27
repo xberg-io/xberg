@@ -8,15 +8,16 @@ def basic_yake
       algorithm: :yake,
       max_keywords: 10,
       min_score: 0.0,
-      ngram_range: [1, 3],
       language: 'en',
       yake_params: nil,
       rake_params: nil
     )
   )
 
-  result = Xberg.extract('document.pdf', config: config)
-  puts "Keywords: #{result.keywords}"
+  input = Xberg::ExtractInput.new(uri: 'document.pdf')
+  output = Xberg.extract(input, config)
+  result = output.results.first
+  puts "Keywords: #{result.extracted_keywords&.map(&:text)&.join(', ')}"
 end
 
 # Example 2: Advanced YAKE with custom parameters
@@ -27,7 +28,6 @@ def advanced_yake
       algorithm: :yake,
       max_keywords: 15,
       min_score: 0.1,
-      ngram_range: [1, 2],
       language: 'en',
       yake_params: Xberg::YakeParams.new(
         window_size: 1
@@ -36,8 +36,10 @@ def advanced_yake
     )
   )
 
-  result = Xberg.extract('document.pdf', config: config)
-  puts "Keywords: #{result.keywords}"
+  input = Xberg::ExtractInput.new(uri: 'document.pdf')
+  output = Xberg.extract(input, config)
+  result = output.results.first
+  puts "Keywords: #{result.extracted_keywords&.map(&:text)&.join(', ')}"
 end
 
 # Example 3: RAKE configuration
@@ -48,7 +50,6 @@ def rake_config
       algorithm: :rake,
       max_keywords: 10,
       min_score: 5.0,
-      ngram_range: [1, 3],
       language: 'en',
       yake_params: nil,
       rake_params: Xberg::RakeParams.new(
@@ -58,8 +59,10 @@ def rake_config
     )
   )
 
-  result = Xberg.extract('document.pdf', config: config)
-  puts "Keywords: #{result.keywords}"
+  input = Xberg::ExtractInput.new(uri: 'document.pdf')
+  output = Xberg.extract(input, config)
+  result = output.results.first
+  puts "Keywords: #{result.extracted_keywords&.map(&:text)&.join(', ')}"
 end
 
 basic_yake if __FILE__ == $0

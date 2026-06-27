@@ -16,8 +16,9 @@ config = %ExtractionConfig{
   use_cache: true
 }
 
-{:ok, result} = Xberg.extract("form_document.pdf", nil, config)
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "form_document.pdf"}, config)
 
+result = List.first(output.results)
 IO.puts("PDF Extraction Complete:")
 IO.puts("Content length: #{byte_size(result.content)} bytes")
 IO.puts("Metadata: #{inspect(result.metadata)}")

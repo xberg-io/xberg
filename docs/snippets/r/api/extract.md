@@ -1,11 +1,15 @@
 ```r title="R"
 library(xberg)
 
+input <- list(kind = "uri", uri = "document.pdf")
+
 json <- extract(
-  ExtractInput$uri("document.pdf"),
-  ExtractionConfig$default()
+  input = ExtractInput$from_json(jsonlite::toJSON(input, auto_unbox = TRUE)),
+  config = ExtractionConfig$default()
 )
 output <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+result <- output$results[[1]]
 
-cat(output$results[[1]]$content)
+cat(sprintf("Results: %d\n", output$summary$results))
+cat(result$content)
 ```

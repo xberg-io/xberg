@@ -2,10 +2,7 @@
 	"id": "url_html_page_extract",
 	"category": "url",
 	"description": "extract: website URL returns page content",
-	"tags": [
-		"url",
-		"html"
-	],
+	"tags": ["url", "html"],
 	"call": "extract",
 	"args": [
 		{
@@ -51,19 +48,17 @@
 		},
 		{
 			"type": "contains",
-			"field": "results.0.content",
+			"field": "results[0].content",
 			"value": "Xberg URL Page"
 		},
 		{
 			"type": "count_min",
-			"field": "summary.results",
+			"field": "results",
 			"value": 1
 		}
 	],
 	"skip": {
-		"languages": [
-			"wasm"
-		],
+		"languages": ["wasm"],
 		"reason": "WASM e2e does not enable URL ingestion"
 	}
 }

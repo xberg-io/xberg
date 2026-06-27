@@ -16,7 +16,7 @@ async function filterAndSummarizeMetadata(files: string[]): Promise<DocumentSumm
   for (const fileName of files) {
     const bytes = new Uint8Array(await fetch(fileName).then((r) => r.arrayBuffer()));
 
-    const result = await extract(bytes, "application/pdf");
+    const result = await extract({ kind: "bytes", bytes, mimeType: "application/pdf" });
 
     summaries.push({
       fileName,

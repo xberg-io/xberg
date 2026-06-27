@@ -110,7 +110,7 @@ It can be loaded from TOML, YAML, or JSON files, or created programmatically.
 | `layout` | `LayoutDetectionConfig \| None` | `None` | Layout detection configuration (None = layout detection disabled). When set, PDF pages and images are analyzed for document structure (headings, code, formulas, tables, figures, etc.) using RT-DETR models via ONNX Runtime. For PDFs, layout hints override paragraph classification in the markdown pipeline. For images, per-region OCR is performed with markdown formatting based on detected layout classes. Requires the `layout-detection` feature to run inference; the field is present whenever the `layout-types` feature is active (which includes `layout-detection` as well as the no-ORT target groups). |
 | `transcription` | `TranscriptionConfig \| None` | `None` | Transcription (speech-to-text) configuration for audio/video files. When set and `enabled`, files with audio/video MIME types (mp3, mp4, m4a, wav, webm, etc.) are routed to the Whisper-based transcription pipeline. The actual heavy dependencies are only active under the `transcription` feature; the field is visible under `transcription-types` (including on WASM and Android targets that use the no-ORT preset). Default: `None` (transcription disabled). This is an additive, non-breaking change. |
 | `use_layout_for_markdown` | `bool` | `False` | Run layout detection on the non-OCR PDF markdown path. When `True` and `layout` is `Some(_)`, layout regions inform heading, table, list, and figure detection in the structure pipeline that would otherwise rely on font-clustering heuristics alone. Significantly improves SF1 (structural F1) at the cost of inference latency (~150-300ms/page CPU, ~20-50ms/page GPU). Default: `False`. Requires the `layout-detection` feature. |
-| `include_document_structure` | `bool` | `False` | Enable structured document tree output. When true, populates the `document` field on `ExtractionResult` with a hierarchical `DocumentStructure` containing heading-driven section nesting, table grids, content layer classification, and inline annotations. Independent of `result_format` — can be combined with Unified or ElementBased. |
+| `include_document_structure` | `bool` | `False` | Enable structured document tree output. When true, populates the `document` field on `ExtractedDocument` with a hierarchical `DocumentStructure` containing heading-driven section nesting, table grids, content layer classification, and inline annotations. Independent of `result_format` — can be combined with Unified or ElementBased. |
 | `acceleration` | `AccelerationConfig \| None` | `None` | Hardware acceleration configuration for ONNX Runtime models. Controls execution provider selection for layout detection and embedding models. When `None`, uses platform defaults (CoreML on macOS, CUDA on Linux, CPU on Windows). |
 | `cache_namespace` | `str \| None` | `None` | Cache namespace for tenant isolation. When set, cache entries are stored under `{cache_dir}/{namespace}/`. Must be alphanumeric, hyphens, or underscores only (max 64 chars). Different namespaces have isolated cache spaces on the same filesystem. |
 | `cache_ttl_secs` | `int \| None` | `None` | Per-request cache TTL in seconds. Overrides the global `max_age_days` for this specific extraction. When `0`, caching is completely skipped (no read or write). When `None`, the global TTL applies. |
@@ -118,12 +118,12 @@ It can be loaded from TOML, YAML, or JSON files, or created programmatically.
 | `url` | `UrlExtractionConfig` | — | URL ingestion and crawl configuration. |
 | `max_archive_depth` | `int` | — | Maximum recursion depth for archive extraction (default: 3). Set to 0 to disable recursive extraction (legacy behavior). |
 | `tree_sitter` | `TreeSitterConfig \| None` | `None` | Tree-sitter language pack configuration (None = tree-sitter disabled). When set, enables code file extraction using tree-sitter parsers. Controls grammar download behavior and code analysis options. |
-| `structured_extraction` | `StructuredExtractionConfig \| None` | `None` | Structured extraction via LLM (None = disabled). When set, the extracted document content is sent to an LLM with the provided JSON schema. The structured response is stored in `ExtractionResult.structured_output`. |
-| `ner` | `NerConfig \| None` | `None` | Named-entity recognition configuration. When set, the NER post-processor runs at the Middle stage and populates `ExtractionResult.entities`. |
-| `redaction` | `RedactionConfig \| None` | `None` | Redaction / anonymisation configuration. When set, the redaction post-processor runs at the Late stage and rewrites every textual field in `ExtractionResult`, emitting an audit trail in `ExtractionResult.redaction_report`. |
-| `summarization` | `SummarizationConfig \| None` | `None` | Summarisation configuration. When set, the summarisation post-processor runs at the Middle stage and populates `ExtractionResult.summary`. |
-| `translation` | `TranslationConfig \| None` | `None` | Translation configuration. When set, the translation post-processor runs at the Middle stage and populates `ExtractionResult.translation`. |
-| `page_classification` | `PageClassificationConfig \| None` | `None` | Per-page classification configuration. When set, the classification post-processor runs at the Middle stage and populates `ExtractionResult.page_classifications`. |
+| `structured_extraction` | `StructuredExtractionConfig \| None` | `None` | Structured extraction via LLM (None = disabled). When set, the extracted document content is sent to an LLM with the provided JSON schema. The structured response is stored in `ExtractedDocument.structured_output`. |
+| `ner` | `NerConfig \| None` | `None` | Named-entity recognition configuration. When set, the NER post-processor runs at the Middle stage and populates `ExtractedDocument.entities`. |
+| `redaction` | `RedactionConfig \| None` | `None` | Redaction / anonymisation configuration. When set, the redaction post-processor runs at the Late stage and rewrites every textual field in `ExtractedDocument`, emitting an audit trail in `ExtractedDocument.redaction_report`. |
+| `summarization` | `SummarizationConfig \| None` | `None` | Summarisation configuration. When set, the summarisation post-processor runs at the Middle stage and populates `ExtractedDocument.summary`. |
+| `translation` | `TranslationConfig \| None` | `None` | Translation configuration. When set, the translation post-processor runs at the Middle stage and populates `ExtractedDocument.translation`. |
+| `page_classification` | `PageClassificationConfig \| None` | `None` | Per-page classification configuration. When set, the classification post-processor runs at the Middle stage and populates `ExtractedDocument.page_classifications`. |
 | `captioning` | `CaptioningConfig \| None` | `None` | VLM captioning configuration for extracted images. When set, the captioning post-processor runs at the Middle stage and writes a caption into each `ExtractedImage.caption`. |
 | `qr_codes` | `bool \| None` | `None` | Enable QR-code detection in extracted images. When `True`, the QR post-processor runs at the Middle stage and populates `ExtractedImage.qr_codes`. |
 
@@ -163,6 +163,7 @@ cannot be overridden per file:
 | `pages` | `PageConfig \| None` | `None` | Override page extraction for this file. |
 | `keywords` | `KeywordConfig \| None` | `None` | Override keyword extraction for this file. |
 | `postprocessor` | `PostProcessorConfig \| None` | `None` | Override post-processor for this file. |
+| `html_output` | `HtmlOutputConfig \| None` | `None` | Override styled HTML output configuration for this file. |
 | `result_format` | `ResultFormat \| None` | `None` | Override result format for this file. |
 | `output_format` | `OutputFormat \| None` | `None` | Override output content format for this file. |
 | `include_document_structure` | `bool \| None` | `None` | Override document structure output for this file. |
@@ -171,6 +172,14 @@ cannot be overridden per file:
 | `timeout_secs` | `int \| None` | `None` | Override per-file extraction timeout in seconds. When set, the extraction for this file will be canceled after the specified duration. A timed-out file produces an error result without affecting other files in the batch. |
 | `tree_sitter` | `TreeSitterConfig \| None` | `None` | Override tree-sitter configuration for this file. |
 | `structured_extraction` | `StructuredExtractionConfig \| None` | `None` | Override structured extraction configuration for this file. When set, enables LLM-based structured extraction with a JSON schema for this specific file. The extracted content is sent to a VLM/LLM and the response is parsed according to the provided schema. |
+| `url` | `UrlExtractionConfig \| None` | `None` | Override URL ingestion and crawl configuration for this file. |
+| `ner` | `NerConfig \| None` | `None` | Override named-entity recognition configuration for this file. |
+| `redaction` | `RedactionConfig \| None` | `None` | Override redaction configuration for this file. |
+| `summarization` | `SummarizationConfig \| None` | `None` | Override summarization configuration for this file. |
+| `translation` | `TranslationConfig \| None` | `None` | Override translation configuration for this file. |
+| `page_classification` | `PageClassificationConfig \| None` | `None` | Override per-page classification configuration for this file. |
+| `captioning` | `CaptioningConfig \| None` | `None` | Override VLM captioning configuration for this file. |
+| `qr_codes` | `bool \| None` | `None` | Override QR-code detection for this file. |
 
 ---
 
@@ -220,13 +229,13 @@ Summary for a unified extraction call.
 
 ---
 
-### ExtractionOutput
+### ExtractionResult
 
-Unified extraction output envelope.
+Unified extraction result envelope.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `results` | `list\[ExtractionResult\]` | `\[\]` | Extraction results in discovery order. |
+| `results` | `list\[ExtractedDocument\]` | `\[\]` | Extracted documents in discovery order. |
 | `errors` | `list\[ExtractionErrorItem\]` | `\[\]` | Non-fatal per-input errors. |
 | `summary` | `ExtractionSummary` | — | Aggregate counts for the operation. |
 | `crawl_final_urls` | `list\[str\]` | `\[\]` | Final URLs reached after redirects during URL ingestion. |
@@ -265,7 +274,7 @@ Image extraction configuration.
 | `max_dpi` | `int` | `600` | Maximum DPI threshold |
 | `max_images_per_page` | `int \| None` | `None` | Maximum number of image objects to extract per PDF page. Some PDFs (e.g. technical diagrams stored as thousands of raster fragments) can trigger extremely long or indefinite extraction times when every image object on a dense page is decoded individually via the PDF extractor. Setting this limit causes xberg to stop collecting individual images once the count per page reaches the cap and emit a warning instead. `None` (default) means no limit — all images are extracted. |
 | `classify` | `bool` | `False` | When `True`, extracted images are classified by kind and grouped into clusters where they appear to belong to one figure. Defaults to `False` — opt in explicitly to avoid unexpected ML overhead. |
-| `include_page_rasters` | `bool` | `False` | When `True`, full-page renders produced during OCR preprocessing are captured and returned as `ImageKind.PageRaster` entries in `ExtractionResult.images`. **PDF + OCR only.** No rasters are captured for non-PDF inputs or when the document-level OCR bypass is active (whole-document backend). When OCR is enabled and this flag is set but the active backend skips per-page rendering, a `ProcessingWarning` is emitted in `ExtractionResult.processing_warnings`. Defaults to `False`. Enable when downstream consumers need page thumbnails (e.g. citation previews, visual grounding). |
+| `include_page_rasters` | `bool` | `False` | When `True`, full-page renders produced during OCR preprocessing are captured and returned as `ImageKind.PageRaster` entries in `ExtractedDocument.images`. **PDF + OCR only.** No rasters are captured for non-PDF inputs or when the document-level OCR bypass is active (whole-document backend). When OCR is enabled and this flag is set but the active backend skips per-page rendering, a `ProcessingWarning` is emitted in `ExtractedDocument.processing_warnings`. Defaults to `False`. Enable when downstream consumers need page thumbnails (e.g. citation previews, visual grounding). |
 | `run_ocr_on_images` | `bool` | `True` | Run OCR on extracted images and include the recognized text in the document content. When `True` (default) and `ExtractionConfig.ocr` is configured, extracted images are processed with the configured OCR backend. Set to `False` to extract images without OCR processing, even when OCR is enabled. |
 | `ocr_text_only` | `bool` | `False` | When `True`, image OCR results are rendered as plain text without the `!\[...\](...)` markdown placeholder. Only takes effect when `run_ocr_on_images` is also `True`. |
 | `append_ocr_text` | `bool` | `False` | When `True` and `ocr_text_only` is `False`, append the OCR text after the image placeholder in the rendered output. |
@@ -381,7 +390,7 @@ Configuration for the NER post-processor.
 | `backend` | `NerBackendKind` | `NerBackendKind.ONNX` | Backend that runs the entity detection. |
 | `categories` | `list\[EntityCategory\]` | `\[\]` | Entity categories to detect. Defaults to a sensible PERSON/ORG/LOCATION/EMAIL set when empty. |
 | `model` | `str \| None` | `None` | Override the default model — only used by `NerBackendKind.Onnx`. `None` lets the backend pick its pinned default xberg GLiNER model alias. |
-| `llm` | `LlmConfig \| None` | `None` | Optional LLM configuration — only used by `NerBackendKind.Llm`. Token usage for LLM backends is recorded in `ExtractionResult.llm_usage`. |
+| `llm` | `LlmConfig \| None` | `None` | Optional LLM configuration — only used by `NerBackendKind.Llm`. Token usage for LLM backends is recorded in `ExtractedDocument.llm_usage`. |
 | `custom_labels` | `list\[str\]` | `\[\]` | Arbitrary user-supplied entity labels for zero-shot detection. `xberg-gliner` natively supports zero-shot inference over caller-supplied labels. The LLM backend also honours these labels by including them in the structured-output schema. Custom labels surface as `EntityCategory.Custom` in the resulting `Entity` stream. Use this when you need domain-specific entity types (e.g. `"Treatment"`, `"Product"`, `"Vessel"`) without forking GLiNER's taxonomy. |
 
 ---
@@ -436,7 +445,7 @@ OCR configuration.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | `bool` | `True` | Whether OCR is enabled. Setting `enabled: false` is a shorthand for `disable_ocr: true` on the parent `ExtractionConfig`. Images return metadata only; PDFs use native text extraction without OCR fallback. Defaults to `True`. When `False`, all other OCR settings are ignored. |
-| `backend` | `str` | — | OCR backend: tesseract, easyocr, paddleocr |
+| `backend` | `str` | — | OCR backend: tesseract, paddleocr, paddle-ocr, or vlm |
 | `language` | `list\[str\]` | `\[\]` | Language code(s) for OCR recognition. Accepts either a single language code ("eng") or a list (\["eng", "deu"\]). Defaults to \["eng"\]. For Tesseract, languages are joined with "+". |
 | `tesseract_config` | `TesseractConfig \| None` | `None` | Tesseract-specific configuration (optional) |
 | `output_format` | `OutputFormat \| None` | `None` | Output format for OCR results (optional, for format conversion) |
@@ -467,7 +476,7 @@ when page boundaries are available and chunking is configured.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `extract_pages` | `bool` | `False` | Extract pages as separate array (ExtractionResult.pages) |
+| `extract_pages` | `bool` | `False` | Extract pages as separate array (ExtractedDocument.pages) |
 | `insert_page_markers` | `bool` | `False` | Insert page markers in main content string |
 | `marker_format` | `str` | `"<!-- PAGE {page_num} -->"` | Page marker format (use {page_num} placeholder) Default: "\n\n<!-- PAGE {page_num} -->\n\n" |
 
@@ -489,7 +498,7 @@ PDF-specific configuration.
 | `bottom_margin_fraction` | `float \| None` | `None` | Bottom margin fraction (0.0–1.0) of page height to exclude footers/page numbers. Default: 0.05 (5%) |
 | `allow_single_column_tables` | `bool` | `False` | Allow single-column pseudo tables in extraction results. By default, tables with fewer than 2 columns (layout-guided) or 3 columns (heuristic) are rejected. When `True`, the minimum column count is relaxed to 1, allowing single-column structured data (glossaries, itemized lists) to be emitted as tables. Other quality filters (density, sparsity, prose detection) still apply. |
 | `ocr_inline_images` | `bool` | `False` | Perform OCR on inline images extracted from PDF pages and attach the recognized text to each `ExtractedImage.ocr_result`. Requires Tesseract to be available; if `ExtractionConfig.ocr` is `None` the extractor falls back to `TesseractConfig.default()`. Per-image failures degrade gracefully (the image is returned without OCR text rather than failing the whole extraction). Default: `False`. |
-| `extract_form_fields` | `bool` | `True` | Extract AcroForm and XFA form fields into `ExtractionResult.form_fields`. When `True` (default), reads the document's interactive form structure (field names, types, values, widget geometry). Cheap and strictly additive — non-form PDFs simply yield an empty list. Set to `False` to skip the form pass entirely. |
+| `extract_form_fields` | `bool` | `True` | Extract AcroForm and XFA form fields into `ExtractedDocument.form_fields`. When `True` (default), reads the document's interactive form structure (field names, types, values, widget geometry). Cheap and strictly additive — non-form PDFs simply yield an empty list. Set to `False` to skip the form pass entirely. |
 | `reading_order` | `bool` | `False` | Reorder extracted text by layout-detected reading order. When `True`, projects text spans onto layout-detected regions, performs column detection, and emits spans in natural reading order (important for multi-column academic PDFs). Requires the `layout-detection` feature; has no effect without it. Defaults to `False`. |
 
 ---
@@ -925,11 +934,12 @@ Stores row/column dimensions and a flat list of cells with position info.
 
 ---
 
-### ExtractionResult
+### ExtractedDocument
 
-General extraction result used by the core extraction API.
+Document extracted by the core extraction pipeline.
 
-This is the main result type returned by all extraction functions.
+`extract` and `extract_batch` return an `ExtractionResult` envelope whose
+`results` field contains these per-document payloads.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1008,7 +1018,7 @@ PIL.Image (Python), Sharp (Node.js), or other formats as needed.
 | `bits_per_component` | `int \| None` | `None` | Bits per color component (e.g., 8, 16) |
 | `is_mask` | `bool` | — | Whether this image is a mask image |
 | `description` | `str \| None` | `None` | Optional description of the image |
-| `ocr_result` | `ExtractionResult \| None` | `None` | Nested OCR extraction result (if image was OCRed) When OCR is performed on this image, the result is embedded here rather than in a separate collection, making the relationship explicit. |
+| `ocr_result` | `ExtractedDocument \| None` | `None` | Nested OCR extraction result (if image was OCRed) When OCR is performed on this image, the result is embedded here rather than in a separate collection, making the relationship explicit. |
 | `bounding_box` | `BoundingBox \| None` | `None` | Bounding box of the image on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top). Only populated for PDF-extracted images when position data is available from the PDF extractor. |
 | `source_path` | `str \| None` | `None` | Original source path of the image within the document archive (e.g., "media/image1.png" in DOCX). Used for rendering image references when the binary data is not extracted. |
 | `image_kind` | `ImageKind \| None` | `None` | Heuristic classification of what this image likely depicts. `None` if classification was disabled or inconclusive. |
@@ -1452,7 +1462,7 @@ Controls how OCR elements are extracted and filtered.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `include_elements` | `bool` | — | Whether to include OCR elements in the extraction result. When true, the `ocr_elements` field in `ExtractionResult` will be populated. |
+| `include_elements` | `bool` | — | Whether to include OCR elements in the extraction result. When true, the `ocr_elements` field in `ExtractedDocument` will be populated. |
 | `min_level` | `OcrElementLevel` | `OcrElementLevel.LINE` | Minimum hierarchical level to include. Elements below this level (e.g., words when min_level is Line) will be excluded. |
 | `min_confidence` | `float` | — | Minimum recognition confidence threshold (0.0-1.0). Elements with confidence below this threshold will be filtered out. |
 | `build_hierarchy` | `bool` | — | Whether to build hierarchical relationships between elements. When true, `parent_id` fields will be populated based on spatial containment. Only meaningful for Tesseract output. |
@@ -1525,7 +1535,7 @@ Future extension point for rich table support with cell-level metadata.
 
 ### DiffOptions
 
-Options controlling how two `ExtractionResult` values are compared.
+Options controlling how two `ExtractedDocument` values are compared.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1537,7 +1547,7 @@ Options controlling how two `ExtractionResult` values are compared.
 
 ### ExtractionDiff
 
-The complete diff between two `ExtractionResult` values.
+The complete diff between two `ExtractedDocument` values.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1558,7 +1568,7 @@ Changes to embedded archive children between two results.
 |-------|------|---------|-------------|
 | `added` | `list\[ArchiveEntry\]` | `\[\]` | Children present in `b` but not in `a` (matched by `path`). |
 | `removed` | `list\[ArchiveEntry\]` | `\[\]` | Children present in `a` but not in `b` (matched by `path`). |
-| `changed` | `list\[EmbeddedDiff\]` | `\[\]` | Children present in both but with differing content (matched by `path`). Each entry holds the diff of the nested `ExtractionResult`. |
+| `changed` | `list\[EmbeddedDiff\]` | `\[\]` | Children present in both but with differing content (matched by `path`). Each entry holds the diff of the nested `ExtractedDocument`. |
 
 ---
 
@@ -1639,20 +1649,6 @@ User-provided chunk configuration.
 
 ---
 
-### ConfidenceWeights
-
-Tunable weights for the confidence scoring formula.
-
-Defaults picked by inspection; callers tune them via config.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `text_coverage` | `float` | `0.3` | Weight assigned to `text_coverage`. Default 0.30. |
-| `ocr_aggregate` | `float` | `0.3` | Weight assigned to `ocr_aggregate` when OCR ran. Default 0.30 — folds into `text_coverage` weight when OCR did not run. |
-| `schema_compliance` | `float` | `0.4` | Weight assigned to `schema_compliance`. Default 0.40. |
-
----
-
 ### HeuristicsConfig
 
 Configuration for document chunking and analysis heuristics.
@@ -1703,26 +1699,6 @@ All fields are public; callers override any subset via struct-update syntax.
 
 ---
 
-### StructuredThresholds
-
-Thresholds for the structured-extraction call-mode heuristic.
-
-All defaults are **conservative starting points**.  Deployments should
-measure their own document corpus and override via their own config;
-these values are chosen to be safe-by-default, not to be optimal for
-any particular workload.
-
-Construct custom thresholds with struct-update syntax:
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `scan_max_coverage` | `float` | `0.1` | PDFs with `text_coverage` strictly below this are treated as scanned. **Conservative default: 0.10** — deployments override via their own config after measuring their document corpus. |
-| `digital_min_coverage` | `float` | `0.9` | PDFs with `text_coverage` at or above this AND zero embedded images route to `StructuredCallMode.TextOnly`. **Conservative default: 0.90** — deployments override via their own config after measuring their document corpus. |
-| `docx_text_min_density` | `float` | `200` | DOCX / HTML / text documents with `avg_chars_per_page` above this route to `StructuredCallMode.TextOnly`. **Conservative default: 200.0** — deployments override via their own config after measuring their document corpus. |
-| `enable_vision_fallback` | `bool` | `False` | When `True`, emit `StructuredCallMode.TextOnlyWithVisionFallback` instead of `StructuredCallMode.TextOnly` so the orchestrator can escalate to vision on low confidence. **Conservative default: `False`** — must be explicitly enabled per deployment after bench validation; deployments override via their own config. |
-
----
-
 ### PaddleOcrConfig
 
 Configuration for PaddleOCR backend.
@@ -1763,32 +1739,6 @@ are at the `Metadata` level.
 | `width` | `int \| None` | `None` | First page width in points (1/72 inch) |
 | `height` | `int \| None` | `None` | First page height in points (1/72 inch) |
 | `page_count` | `int \| None` | `None` | Total number of pages in the PDF document |
-
----
-
-### ClassificationEnrichmentConfig
-
-Classification enrichment knob: how to label the document.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `config` | `PageClassificationConfig` | — | Label set and LLM settings for the classification stage. |
-
----
-
-### CaptioningEnrichmentConfig
-
-Captioning enrichment knob: which LLM to use for image captions.
-
-The enrichment stage calls `caption_image` for every
-image in `ExtractionResult.images` that has non-empty `data`. Images with
-empty byte data (e.g. reference-only images populated via `source_path`) are
-skipped rather than forwarded to the VLM.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `config` | `LlmConfig` | — | LLM / VLM configuration forwarded verbatim to each `caption_image` call. |
-| `custom_prompt` | `str \| None` | `None` | Optional custom prompt override forwarded to every `caption_image` call. `None` uses the default `RegionKind.Caption` prompt. |
 
 ---
 
@@ -1856,7 +1806,7 @@ Reason for chunking a document.
 Content rendering mode for code extraction.
 
 Controls how extracted code content is represented in the `content` field
-of `ExtractionResult`.
+of `ExtractedDocument`.
 
 | Variant | Wire value | Description |
 |---------|------------|-------------|
@@ -1987,7 +1937,7 @@ type-safe, clean metadata without nested optionals.
 | `Epub` | `epub` | Metadata extracted from an EPUB e-book. — Fields: `_0`: `EpubMetadata` |
 | `Pst` | `pst` | Metadata extracted from an Outlook PST archive. — Fields: `_0`: `PstMetadata` |
 | `Audio` | `audio` | Metadata extracted from an audio or video file. — Fields: `_0`: `AudioMetadata` |
-| `Code` | `code` | Code (tree-sitter analyzable source). The structured analysis result is exposed via `ExtractionResult.code_intelligence`; this variant only tags the format. |
+| `Code` | `code` | Code (tree-sitter analyzable source). The structured analysis result is exposed via `ExtractedDocument.code_intelligence`; this variant only tags the format. |
 
 ---
 
@@ -2031,7 +1981,7 @@ Heuristic classification of what an image likely depicts.
 Target format for re-encoding extracted images.
 
 Controls whether and how extracted images are normalised to a uniform
-container format before being returned in `ExtractionResult.images`.
+container format before being returned in `ExtractedDocument.images`.
 The default (`Native`) preserves the format produced by each extractor
 without any additional encode pass.
 
@@ -2111,7 +2061,7 @@ equivalent semantics for PaddleOCR.
 
 Output format for extraction results.
 
-Controls the format of the `content` field in `ExtractionResult`.
+Controls the format of the `content` field in `ExtractedDocument`.
 When set to `Markdown`, `Djot`, or `Html`, the output uses that format.
 `Plain` returns the raw extracted text.
 `Structured` returns JSON with full OCR element data including bounding
@@ -2215,7 +2165,7 @@ Summarisation strategy.
 | Variant | Wire value | Description |
 |---------|------------|-------------|
 | `Extractive` | `extractive` | Pure-Rust extractive summary (TextRank over the chunk graph). Deterministic, fast, no external service required. |
-| `Abstractive` | `abstractive` | Abstractive summary produced by liter-llm. Requires `liter-llm` feature and a configured `LlmConfig`. Token usage is captured in `ExtractionResult.llm_usage`. |
+| `Abstractive` | `abstractive` | Abstractive summary produced by liter-llm. Requires `liter-llm` feature and a configured `LlmConfig`. Token usage is captured in `ExtractedDocument.llm_usage`. |
 
 ---
 

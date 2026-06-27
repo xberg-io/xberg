@@ -13,15 +13,15 @@ async function basicYake(): Promise<void> {
       algorithm: "yake",
       maxKeywords: 10,
       minScore: 0.0,
-      ngramRange: [1, 3],
       language: "en",
       yakeParams: null,
       rakeParams: null,
     },
   };
 
-  const result = await extract("document.pdf", null, config);
-  console.log("Keywords:", result.keywords);
+  const output = await extract({ kind: "uri", uri: "document.pdf" }, config);
+  const result = output.results![0];
+  console.log("Keywords:", result.extractedKeywords ?? []);
 }
 
 // Example 2: Advanced YAKE with custom parameters
@@ -32,7 +32,6 @@ async function _advancedYake(): Promise<void> {
       algorithm: "yake",
       maxKeywords: 15,
       minScore: 0.1,
-      ngramRange: [1, 2],
       language: "en",
       yakeParams: {
         windowSize: 1,
@@ -41,8 +40,9 @@ async function _advancedYake(): Promise<void> {
     },
   };
 
-  const result = await extract("document.pdf", null, config);
-  console.log("Keywords:", result.keywords);
+  const output = await extract({ kind: "uri", uri: "document.pdf" }, config);
+  const result = output.results![0];
+  console.log("Keywords:", result.extractedKeywords ?? []);
 }
 
 // Example 3: RAKE configuration
@@ -53,7 +53,6 @@ async function _rakeConfig(): Promise<void> {
       algorithm: "rake",
       maxKeywords: 10,
       minScore: 5.0,
-      ngramRange: [1, 3],
       language: "en",
       yakeParams: null,
       rakeParams: {
@@ -63,8 +62,9 @@ async function _rakeConfig(): Promise<void> {
     },
   };
 
-  const result = await extract("document.pdf", null, config);
-  console.log("Keywords:", result.keywords);
+  const output = await extract({ kind: "uri", uri: "document.pdf" }, config);
+  const result = output.results![0];
+  console.log("Keywords:", result.extractedKeywords ?? []);
 }
 
 basicYake();

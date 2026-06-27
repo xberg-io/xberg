@@ -159,7 +159,9 @@ config = %Xberg.ExtractionConfig{
   chunking: %{"enabled" => true, "max_characters" => 1000}
 }
 
-{:ok, result} = Xberg.extract("multilingual_doc.pdf", nil, config)
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "multilingual_doc.pdf"}, config)
+
+result = List.first(output.results)
 chunks = result.chunks || []
 
 IO.puts("=== Language Detection ===")

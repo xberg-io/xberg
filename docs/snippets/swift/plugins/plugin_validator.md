@@ -14,7 +14,7 @@ final class MinLengthValidator: Validator {
         50
     }
 
-    func validate(result: ExtractionResult, config: ExtractionConfig) -> String {
+    func validate(result: ExtractedDocument, config: ExtractionConfig) -> String {
         let contentLength = result.content().count
         if contentLength < 50 {
             let message = "Content too short: \(contentLength)"
@@ -23,7 +23,7 @@ final class MinLengthValidator: Validator {
         return "{\"ok\": null}"
     }
 
-    func shouldValidate(result: ExtractionResult, config: ExtractionConfig) -> Bool {
+    func shouldValidate(result: ExtractedDocument, config: ExtractionConfig) -> Bool {
         true
     }
 
@@ -46,10 +46,11 @@ let config = ExtractionConfig(
     resultFormat: .unified,
     outputFormat: .markdown
 )
-let result = try extractSync(
+let output = try extract(
     path: "document.pdf",
     mimeType: nil,
     config: config
 )
-print("Content length: \(result.content().count)")
+let document = output.results().first!
+print("Content length: \(document.content().count)")
 ```

@@ -129,27 +129,37 @@ implementation 'io.xberg:xberg:1.0.0-rc.1'
 Extract text, metadata, and structure from any supported document format:
 
 ```java title="Java"
+import io.xberg.ExtractInput;
+import io.xberg.ExtractInputKind;
+import io.xberg.ExtractedDocument;
+import io.xberg.ExtractionConfig;
 import io.xberg.Xberg;
 import io.xberg.ExtractionResult;
-import java.io.IOException;
-import java.util.Map;
+import io.xberg.XbergRsException;
 
 public class BasicUsage {
-    public static void main(String[] args) throws IOException {
-        ExtractionResult result = Xberg.extract("document.pdf");
+    public static void main(String[] args) throws XbergRsException {
+        ExtractInput input = ExtractInput.builder()
+            .withKind(ExtractInputKind.Uri)
+            .withUri("document.pdf")
+            .build();
+
+        ExtractionResult output = Xberg.extract(input, ExtractionConfig.builder().build());
+        ExtractedDocument document = output.results().get(0);
 
         System.out.println("Content:");
-        System.out.println(result.getContent());
+        System.out.println(document.content());
 
         System.out.println("\nMetadata:");
-        Map<String, Object> metadata = result.getMetadata();
-        if (metadata != null) {
-            System.out.println("Title: " + metadata.get("title"));
-            System.out.println("Author: " + metadata.get("author"));
+        if (document.metadata().title() != null) {
+            System.out.println("Title: " + document.metadata().title());
+        }
+        if (document.metadata().authors() != null) {
+            System.out.println("Authors: " + String.join(", ", document.metadata().authors()));
         }
 
-        System.out.println("\nTables found: " + result.getTables().size());
-        System.out.println("Images found: " + result.getImages().size());
+        System.out.println("\nTables found: " + document.tables().size());
+        System.out.println("Images found: " + (document.images() == null ? 0 : document.images().size()));
     }
 }
 ```
@@ -163,26 +173,36 @@ Most use cases benefit from configuration to control extraction behavior:
 **With OCR (for scanned documents):**
 
 ```java title="Java"
-import io.xberg.Xberg;
-import io.xberg.ExtractionResult;
-import io.xberg.XbergException;
+import io.xberg.ExtractInput;
+import io.xberg.ExtractInputKind;
+import io.xberg.ExtractedDocument;
 import io.xberg.ExtractionConfig;
+import io.xberg.ExtractionResult;
 import io.xberg.OcrConfig;
-import java.io.IOException;
+import io.xberg.Xberg;
+import io.xberg.XbergRsException;
+import java.util.List;
 
 public class Main {
     public static void main(String[] args) {
         try {
             ExtractionConfig config = ExtractionConfig.builder()
-                .ocr(OcrConfig.builder()
-                    .backend("tesseract")
-                    .language("eng")
+                .withForceOcr(true)
+                .withOcr(OcrConfig.builder()
+                    .withBackend("tesseract")
+                    .withLanguage(List.of("eng"))
                     .build())
                 .build();
 
-            ExtractionResult result = Xberg.extract("scanned.pdf", config);
-            System.out.println(result.getContent());
-        } catch (IOException | XbergException e) {
+            ExtractInput input = ExtractInput.builder()
+                .withKind(ExtractInputKind.Uri)
+                .withUri("scanned.pdf")
+                .build();
+
+            ExtractionResult output = Xberg.extract(input, config);
+            ExtractedDocument document = output.results().get(0);
+            System.out.println(document.content());
+        } catch (XbergRsException e) {
             System.err.println("Extraction failed: " + e.getMessage());
         }
     }
@@ -331,22 +351,13 @@ Powered by [tree-sitter-language-pack](https://github.com/xberg-io/tree-sitter-l
 - **OCR Support** - Integrate multiple OCR backends for scanned documents
 - **Async/Await** - Non-blocking document processing with concurrent operations
 - **Plugin System** - Extensible post-processing for custom text transformation
-- **Embeddings** - Generate vector embeddings using ONNX Runtime models
+- **Embeddings** - Generate vector embeddings using ONNX Runtime models or provider-hosted services
 - **Batch Processing** - Efficiently process multiple documents in parallel
 - **Memory Efficient** - Stream large files without loading entirely into memory
 - **Language Detection** - Detect and support multiple languages in documents
 - **Code Intelligence** - Extract structure, imports, exports, symbols, and docstrings from [306 programming languages](https://docs.tree-sitter-language-pack.xberg.io) via tree-sitter
 - **Configuration** - Fine-grained control over extraction behavior
-
-### Performance Characteristics
-
-| Format | Speed | Memory | Notes |
-|--------|-------|--------|-------|
-| **PDF (text)** | 10-100 MB/s | ~50MB per doc | Fastest extraction |
-| **Office docs** | 20-200 MB/s | ~100MB per doc | DOCX, XLSX, PPTX |
-| **Images (OCR)** | 1-5 MB/s | Variable | Depends on OCR backend |
-| **Archives** | 5-50 MB/s | ~200MB per doc | ZIP, TAR, etc. |
-| **Web formats** | 50-200 MB/s | Streaming | HTML, XML, JSON |
+- **Six Output Formats** - Plain text, Markdown, Djot, HTML, JSON tree structure, or Structured JSON with OCR metadata
 
 ## OCR Support
 
@@ -359,26 +370,36 @@ Xberg supports multiple OCR backends for extracting text from scanned documents 
 ### OCR Configuration Example
 
 ```java title="Java"
-import io.xberg.Xberg;
-import io.xberg.ExtractionResult;
-import io.xberg.XbergException;
+import io.xberg.ExtractInput;
+import io.xberg.ExtractInputKind;
+import io.xberg.ExtractedDocument;
 import io.xberg.ExtractionConfig;
+import io.xberg.ExtractionResult;
 import io.xberg.OcrConfig;
-import java.io.IOException;
+import io.xberg.Xberg;
+import io.xberg.XbergRsException;
+import java.util.List;
 
 public class Main {
     public static void main(String[] args) {
         try {
             ExtractionConfig config = ExtractionConfig.builder()
-                .ocr(OcrConfig.builder()
-                    .backend("tesseract")
-                    .language("eng")
+                .withForceOcr(true)
+                .withOcr(OcrConfig.builder()
+                    .withBackend("tesseract")
+                    .withLanguage(List.of("eng"))
                     .build())
                 .build();
 
-            ExtractionResult result = Xberg.extract("scanned.pdf", config);
-            System.out.println(result.getContent());
-        } catch (IOException | XbergException e) {
+            ExtractInput input = ExtractInput.builder()
+                .withKind(ExtractInputKind.Uri)
+                .withUri("scanned.pdf")
+                .build();
+
+            ExtractionResult output = Xberg.extract(input, config);
+            ExtractedDocument document = output.results().get(0);
+            System.out.println(document.content());
+        } catch (XbergRsException e) {
             System.err.println("Extraction failed: " + e.getMessage());
         }
     }

@@ -22,9 +22,13 @@ logging_validator <- function(result) {
 register_post_processor("logging_processor", logging_processor)
 register_validator("logging_validator", logging_validator)
 
-config <- list(postprocessor = list(enabled = TRUE))
-json <- extract_sync("document.pdf", "application/pdf", config)
-result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
-
+config <- ExtractionConfig$from_json(jsonlite::toJSON(list(postprocessor = list(enabled = TRUE)), auto_unbox = TRUE))
+input <- list(kind = "uri", uri = "document.pdf", mime_type = "application/pdf")
+json <- extract(
+  input = ExtractInput$from_json(jsonlite::toJSON(input, auto_unbox = TRUE)),
+  config = config
+)
+output <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+result <- output$results[[1]]
 cat(sprintf("Done: %d characters\n", nchar(result$content)))
 ```

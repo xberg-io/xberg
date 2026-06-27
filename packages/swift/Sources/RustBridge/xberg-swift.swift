@@ -1,4 +1,6 @@
+// swift-format-ignore-file
 import RustBridgeC
+
 public func token_counter_noop(_ client: TokenCounterRef) {
     __swift_bridge__$token_counter_noop(client.ptr)
 }
@@ -61,6 +63,9 @@ public func validator_call_validate(_ this: ValidatorBoxRef, _ result: Extracted
 }
 public func alef_phantom_vec_document_extractor() -> RustVec<DocumentExtractorBox> {
     RustVec(ptr: __swift_bridge__$alef_phantom_vec_document_extractor())
+}
+public func document_extractor_call_extract(_ this: DocumentExtractorBoxRef, _ input: ExtractInput, _ config: ExtractionConfig) -> RustString {
+    RustString(ptr: __swift_bridge__$document_extractor_call_extract(this.ptr, {input.isOwned = false; return input.ptr;}(), {config.isOwned = false; return config.ptr;}()))
 }
 public func document_extractor_call_supported_mime_types(_ this: DocumentExtractorBoxRef) -> RustVec<RustString> {
     RustVec(ptr: __swift_bridge__$document_extractor_call_supported_mime_types(this.ptr))
@@ -1161,6 +1166,9 @@ public func __alef_phantom_vec_translation_config() -> RustVec<TranslationConfig
 public func __alef_phantom_vec_supported_format() -> RustVec<SupportedFormat> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_supported_format())
 }
+public func __alef_phantom_vec_structured_data_result() -> RustVec<StructuredDataResult> {
+    RustVec(ptr: __swift_bridge__$__alef_phantom_vec_structured_data_result())
+}
 public func __alef_phantom_vec_xlsx_app_properties() -> RustVec<XlsxAppProperties> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_xlsx_app_properties())
 }
@@ -1613,9 +1621,6 @@ public func __alef_phantom_vec_tree_sitter_process_config() -> RustVec<TreeSitte
 }
 public func __alef_phantom_vec_server_config() -> RustVec<ServerConfig> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_server_config())
-}
-public func __alef_phantom_vec_structured_data_result() -> RustVec<StructuredDataResult> {
-    RustVec(ptr: __swift_bridge__$__alef_phantom_vec_structured_data_result())
 }
 public func __alef_phantom_vec_docx_app_properties() -> RustVec<DocxAppProperties> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_docx_app_properties())

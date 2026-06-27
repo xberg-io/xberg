@@ -13,7 +13,8 @@ async fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract("research_paper.pdf", None, &config).await?;
+    let output = extract("research_paper.pdf", None, &config).await?;
+    let result = output.results.into_iter().next().expect("one extraction result");
 
     for kw in result.extracted_keywords.unwrap_or_default() {
         println!("{}: {:.3}", kw.text, kw.score);

@@ -12,7 +12,7 @@ class MinLengthValidator : IValidator
     public string Name => "min-length";
     public int Priority => 10;
 
-    public void Validate(ExtractionResult result)
+    public void Validate(ExtractedDocument result)
     {
         if (result.Content.Length < _minLength)
         {
@@ -35,7 +35,7 @@ class QualityScoreValidator : IValidator
     public string Name => "quality-score";
     public int Priority => 5;
 
-    public void Validate(ExtractionResult result)
+    public void Validate(ExtractedDocument result)
     {
         var score = result.QualityScore;
 
@@ -53,7 +53,7 @@ class ContentValidValidator : IValidator
     public string Name => "content-valid";
     public int Priority => 20;
 
-    public void Validate(ExtractionResult result)
+    public void Validate(ExtractedDocument result)
     {
         if (string.IsNullOrWhiteSpace(result.Content))
         {
@@ -86,7 +86,7 @@ class Program
                 EnableQualityProcessing = true
             };
 
-            var result = XbergLib.ExtractSync("document.pdf", config);
+            var result = XbergLib.Extract("document.pdf", config);
 
             Console.WriteLine("All validations passed");
             Console.WriteLine($"Content length: {result.Content.Length}");

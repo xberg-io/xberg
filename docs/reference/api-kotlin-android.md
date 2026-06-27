@@ -14,7 +14,7 @@ Extract content from a single bytes or URI input.
 
 ```kotlin
 @Throws(Error::class)
-fun extract(input: ExtractInput, config: ExtractionConfig): ExtractionOutput
+fun extract(input: ExtractInput, config: ExtractionConfig): ExtractionResult
 ```
 
 **Example:**
@@ -30,7 +30,7 @@ val result = extract(ExtractInput(), ExtractionConfig())
 | `input` | `ExtractInput` | Yes | The input data |
 | `config` | `ExtractionConfig` | Yes | The configuration options |
 
-**Returns:** `ExtractionOutput`
+**Returns:** `ExtractionResult`
 
 **Errors:** Throws `Error`.
 
@@ -44,7 +44,7 @@ Extract content from multiple bytes or URI inputs.
 
 ```kotlin
 @Throws(Error::class)
-fun extractBatch(inputs: List<ExtractInput>, config: ExtractionConfig): ExtractionOutput
+fun extractBatch(inputs: List<ExtractInput>, config: ExtractionConfig): ExtractionResult
 ```
 
 **Example:**
@@ -60,85 +60,7 @@ val result = extractBatch([], ExtractionConfig())
 | `inputs` | `List<ExtractInput>` | Yes | The inputs |
 | `config` | `ExtractionConfig` | Yes | The configuration options |
 
-**Returns:** `ExtractionOutput`
-
-**Errors:** Throws `Error`.
-
----
-
-#### detectMimeTypeFromBytes()
-
-Detect MIME type from raw file bytes.
-
-Uses magic byte signatures to detect file type from content.
-Falls back to `infer` crate for comprehensive detection.
-
-For ZIP-based files, inspects contents to distinguish Office Open XML
-formats (DOCX, XLSX, PPTX) from plain ZIP archives.
-
-**Returns:**
-
-The detected MIME type string.
-
-**Errors:**
-
-Returns `XbergError.UnsupportedFormat` if MIME type cannot be determined.
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun detectMimeTypeFromBytes(content: ByteArray): String
-```
-
-**Example:**
-
-```kotlin
-val result = detectMimeTypeFromBytes("data".toByteArray())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `content` | `ByteArray` | Yes | Raw file bytes |
-
-**Returns:** `String`
-
-**Errors:** Throws `Error`.
-
----
-
-#### getExtensionsForMime()
-
-Get file extensions for a given MIME type.
-
-Returns all known file extensions that map to the specified MIME type.
-
-**Returns:**
-
-A vector of file extensions (without leading dot) for the MIME type.
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun getExtensionsForMime(mimeType: String): List<String>
-```
-
-**Example:**
-
-```kotlin
-val result = getExtensionsForMime("value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `mimeType` | `String` | Yes | The MIME type to look up |
-
-**Returns:** `List<String>`
+**Returns:** `ExtractionResult`
 
 **Errors:** Throws `Error`.
 
@@ -172,50 +94,6 @@ val result = listSupportedFormats()
 ```
 
 **Returns:** `List<SupportedFormat>`
-
----
-
-#### detectQrCodes()
-
-Detect QR codes in the bytes of an `ExtractedImage`.
-
-`format_hint` is currently unused — the `image` crate auto-detects the
-container format from magic bytes — but the parameter is retained so future
-backends (e.g. a WebP-via-`webp-decoder` variant) can use it without an API
-break.
-
-Returns an empty listtor on any of:
-
-- Empty input.
-- Image-decode failure.
-- No QR grids detected.
-- All detected grids fail to decode.
-
-Successfully decoded QR codes carry their payload, a confidence of `1.0`
-(rqrr does not expose per-grid confidence; a successful decode is treated
-as high-confidence by convention), and the pixel-space bounding box derived
-from the four corner points of the grid.
-
-**Signature:**
-
-```kotlin
-fun detectQrCodes(imageBytes: ByteArray, formatHint: String? = null): List<QrCode>
-```
-
-**Example:**
-
-```kotlin
-val result = detectQrCodes("data".toByteArray(), "value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `imageBytes` | `ByteArray` | Yes | The image bytes |
-| `formatHint` | `String?` | No | The  format hint |
-
-**Returns:** `List<QrCode>`
 
 ---
 
@@ -275,6 +153,59 @@ val result = listEmbeddingBackends()
 
 ---
 
+#### listDocumentExtractors()
+
+List names of all registered document extractors.
+
+**Signature:**
+
+```kotlin
+@Throws(Error::class)
+fun listDocumentExtractors(): List<String>
+```
+
+**Example:**
+
+```kotlin
+val result = listDocumentExtractors()
+```
+
+**Returns:** `List<String>`
+
+**Errors:** Throws `Error`.
+
+---
+
+#### clearDocumentExtractors()
+
+Clear all document extractors from the global registry.
+
+Calls `shutdown()` on every registered extractor, then empties the registry.
+
+**Errors:**
+
+- Any error returned by an extractor's `shutdown()` method. The first error
+  encountered stops processing of remaining extractors.
+
+**Signature:**
+
+```kotlin
+@Throws(Error::class)
+fun clearDocumentExtractors()
+```
+
+**Example:**
+
+```kotlin
+clearDocumentExtractors()
+```
+
+**Returns:** No return value.
+
+**Errors:** Throws `Error`.
+
+---
+
 #### listOcrBackends()
 
 List all registered OCR backends.
@@ -326,35 +257,6 @@ fun clearOcrBackends()
 
 ```kotlin
 clearOcrBackends()
-```
-
-**Returns:** No return value.
-
-**Errors:** Throws `Error`.
-
----
-
-#### registerBuiltin()
-
-Register every built-in post-processor enabled by the active feature set.
-
-This is the single entry point that callers (including
-`register_default_post_processors`) use to populate the global
-post-processor registry with the in-tree built-ins. Each submodule's own
-`register` function is gated by its feature flag so this aggregate stays
-safe to call on any target.
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun registerBuiltin()
-```
-
-**Example:**
-
-```kotlin
-registerBuiltin()
 ```
 
 **Returns:** No return value.
@@ -581,560 +483,6 @@ clearValidators()
 
 ---
 
-#### classifyPages()
-
-Run page classification against an extraction result.
-
-Mutates `result.page_classifications` with one entry per non-empty page and
-appends every LLM call's usage to `result.llm_usage`.
-
-**Errors:**
-
-Returns the first error encountered when rendering the prompt or calling the
-LLM. Partially produced classifications are discarded so callers do not see
-a half-populated vector.
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun classifyPages(result: ExtractionResult, config: PageClassificationConfig)
-```
-
-**Example:**
-
-```kotlin
-classifyPages(ExtractionResult(), PageClassificationConfig())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `result` | `ExtractionResult` | Yes | The extraction result |
-| `config` | `PageClassificationConfig` | Yes | The configuration options |
-
-**Returns:** No return value.
-
-**Errors:** Throws `Error`.
-
----
-
-#### classifyText()
-
-Classify a single piece of text without requiring an `ExtractionResult`.
-
-Use this when the caller already has plain text (e.g. a RAG ingest pipeline
-receiving documents off a queue) and wants a label list back without
-manufacturing extractor-side metadata.
-
-**Errors:**
-
-Same as `classify_pages`: a validation error when `config.labels` is empty,
-or any error returned by prompt rendering or the underlying LLM call.
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun classifyText(text: String, config: PageClassificationConfig): List<ClassificationLabel>
-```
-
-**Example:**
-
-```kotlin
-val result = classifyText("value", PageClassificationConfig())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `text` | `String` | Yes | The text |
-| `config` | `PageClassificationConfig` | Yes | The configuration options |
-
-**Returns:** `List<ClassificationLabel>`
-
-**Errors:** Throws `Error`.
-
----
-
-#### classifyDocument()
-
-Classify a single document (as multiple pages or a single text block).
-
-Aggregates classifications across all pages in the provided text, returning
-a combined label set that represents the document as a whole.
-
-  using the configured LLM, and results are aggregated.
-
-- `config` - Classification configuration including labels and LLM settings.
-
-**Returns:**
-
-A vector of `ClassificationLabel` entries representing the document's overall classification.
-
-**Errors:**
-
-Returns an error if `config.labels` is empty or if LLM calls fail.
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun classifyDocument(pages: List<String>, config: PageClassificationConfig): List<ClassificationLabel>
-```
-
-**Example:**
-
-```kotlin
-val result = classifyDocument([], PageClassificationConfig())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `pages` | `List<String>` | Yes | Slice of page texts to classify. Each page is classified independently |
-| `config` | `PageClassificationConfig` | Yes | Classification configuration including labels and LLM settings. |
-
-**Returns:** `List<ClassificationLabel>`
-
-**Errors:** Throws `Error`.
-
----
-
-#### downloadModel()
-
-Eagerly download a NER model into the xberg cache.
-
-`name` is a supported xberg GLiNER alias or catalog id. The CLI flag
-`xberg cache warm --ner` delegates here.
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun downloadModel(name: String, cacheDir: Path? = null): Path
-```
-
-**Example:**
-
-```kotlin
-val result = downloadModel("value", "value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `name` | `String` | Yes | The name |
-| `cacheDir` | `Path?` | No | The cache dir |
-
-**Returns:** `Path`
-
-**Errors:** Throws `Error`.
-
----
-
-#### downloadModel()
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun downloadModel(name: String, cacheDir: Path? = null): Path
-```
-
-**Example:**
-
-```kotlin
-val result = downloadModel("value", "value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `name` | `String` | Yes | The  name |
-| `cacheDir` | `Path?` | No | The  cache dir |
-
-**Returns:** `Path`
-
-**Errors:** Throws `Error`.
-
----
-
-#### defaultModelName()
-
-Pinned default NER model identifier.
-
-**Signature:**
-
-```kotlin
-fun defaultModelName(): String
-```
-
-**Example:**
-
-```kotlin
-val result = defaultModelName()
-```
-
-**Returns:** `String`
-
----
-
-#### defaultModelName()
-
-**Signature:**
-
-```kotlin
-fun defaultModelName(): String
-```
-
-**Example:**
-
-```kotlin
-val result = defaultModelName()
-```
-
-**Returns:** `String`
-
----
-
-#### knownModels()
-
-All NER models xberg knows about (used by `--all-ner-models`).
-
-**Signature:**
-
-```kotlin
-fun knownModels(): List<String>
-```
-
-**Example:**
-
-```kotlin
-val result = knownModels()
-```
-
-**Returns:** `List<String>`
-
----
-
-#### knownModels()
-
-**Signature:**
-
-```kotlin
-fun knownModels(): List<String>
-```
-
-**Example:**
-
-```kotlin
-val result = knownModels()
-```
-
-**Returns:** `List<String>`
-
----
-
-#### downloadModel()
-
-Download a NER model into the xberg cache.
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun downloadModel(name: String, cacheDir: Path? = null): Path
-```
-
-**Example:**
-
-```kotlin
-val result = downloadModel("value", "value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `name` | `String` | Yes | The  name |
-| `cacheDir` | `Path?` | No | The  cache dir |
-
-**Returns:** `Path`
-
-**Errors:** Throws `Error`.
-
----
-
-#### defaultModelName()
-
-Default NER model identifier.
-
-**Signature:**
-
-```kotlin
-fun defaultModelName(): String
-```
-
-**Example:**
-
-```kotlin
-val result = defaultModelName()
-```
-
-**Returns:** `String`
-
----
-
-#### knownModels()
-
-All NER models xberg knows about.
-
-**Signature:**
-
-```kotlin
-fun knownModels(): List<String>
-```
-
-**Example:**
-
-```kotlin
-val result = knownModels()
-```
-
-**Returns:** `List<String>`
-
----
-
-#### redact()
-
-Run pattern redaction (and optional NER-driven redaction) over `result` and
-rewrite every textual field. Populates `result.redaction_report`.
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun redact(result: ExtractionResult, config: RedactionConfig)
-```
-
-**Example:**
-
-```kotlin
-redact(ExtractionResult(), RedactionConfig())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `result` | `ExtractionResult` | Yes | The extraction result |
-| `config` | `RedactionConfig` | Yes | The configuration options |
-
-**Returns:** No return value.
-
-**Errors:** Throws `Error`.
-
----
-
-#### summarize()
-
-Score and return the top-N sentences from `text`, joined in original order.
-
-`language` is an ISO 639 (or locale) code used to pick a stopword list;
-pass `null` (or an unknown code) to fall back to English.
-`max_tokens` bounds the summary length by whitespace-separated tokens;
-`null` falls back to `DEFAULT_MAX_TOKENS`.
-
-**Signature:**
-
-```kotlin
-fun summarize(text: String, language: String? = null, maxTokens: Int? = null): String?
-```
-
-**Example:**
-
-```kotlin
-val result = summarize("value", "value", 42)
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `text` | `String` | Yes | The text |
-| `language` | `String?` | No | The language |
-| `maxTokens` | `Int?` | No | The max tokens |
-
-**Returns:** `String?`
-
----
-
-#### tokenCount()
-
-Count whitespace-separated tokens (used for token-budget bookkeeping by
-callers).
-
-**Signature:**
-
-```kotlin
-fun tokenCount(text: String): Int
-```
-
-**Example:**
-
-```kotlin
-val result = tokenCount("value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `text` | `String` | Yes | The text |
-
-**Returns:** `Int`
-
----
-
-#### translateResult()
-
-Translate the extraction result in place.
-
-Populates `result.translation` with the translated `content`, optionally the
-translated `formatted_content` (when `preserve_markup = true`), and rewrites
-every chunk's `content` field. Every LLM call's usage is appended to
-`result.llm_usage`.
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun translateResult(result: ExtractionResult, config: TranslationConfig)
-```
-
-**Example:**
-
-```kotlin
-translateResult(ExtractionResult(), TranslationConfig())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `result` | `ExtractionResult` | Yes | The extraction result |
-| `config` | `TranslationConfig` | Yes | The configuration options |
-
-**Returns:** No return value.
-
-**Errors:** Throws `Error`.
-
----
-
-#### findFootnoteAnchors()
-
-Find all footnote anchor references in markdown text.
-
-Returns a vector of footnote anchors (`[^label]` use-sites), including byte offsets.
-Footnote definitions (`[^label]: ...`) are NOT included in the results.
-
-**Returns:**
-
-A vector of `FootnoteAnchor` entries, each with the label and byte offset.
-
-**Signature:**
-
-```kotlin
-fun findFootnoteAnchors(markdown: String): List<FootnoteAnchor>
-```
-
-**Example:**
-
-```kotlin
-val result = findFootnoteAnchors("value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `markdown` | `String` | Yes | The markdown text to search |
-
-**Returns:** `List<FootnoteAnchor>`
-
----
-
-#### parseFootnoteDefinitions()
-
-Parse footnote definitions from markdown text.
-
-Returns a vector of footnote definitions found in the markdown.
-Handles multi-line definitions with continuation/indented lines (CommonMark format).
-
-**Returns:**
-
-A vector of `FootnoteDefinition` entries, each with label, content, and byte offset.
-
-**Signature:**
-
-```kotlin
-fun parseFootnoteDefinitions(markdown: String): List<FootnoteDefinition>
-```
-
-**Example:**
-
-```kotlin
-val result = parseFootnoteDefinitions("value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `markdown` | `String` | Yes | The markdown text to search |
-
-**Returns:** `List<FootnoteDefinition>`
-
----
-
-#### findInferenceMarkers()
-
-Find inference markers in markdown text.
-
-Returns byte offsets of every `[*inference*]` marker found in the text.
-
-**Returns:**
-
-A vector of byte offsets where inference markers appear.
-
-**Signature:**
-
-```kotlin
-fun findInferenceMarkers(markdown: String): List<Long>
-```
-
-**Example:**
-
-```kotlin
-val result = findInferenceMarkers("value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `markdown` | `String` | Yes | The markdown text to search |
-
-**Returns:** `List<Long>`
-
----
-
 #### findUnmarkedClaims()
 
 Find unmarked claims in markdown text.
@@ -1169,42 +517,6 @@ val result = findUnmarkedClaims("value")
 | `markdown` | `String` | Yes | The markdown text to search |
 
 **Returns:** `List<String>`
-
----
-
-#### parseCitations()
-
-Parse the structured citation block from markdown.
-
-Extracts citations from the block after a `---` thematic break followed by
-`<!-- citations ... -->` comment. Parses each entry as:
-`[^srcN]: <source>, <optional-locator>, excerpt: "<text>"`
-
-Returns parsed citations with source, optional locator, and optional excerpt.
-
-**Returns:**
-
-A vector of `Citation` entries parsed from the citation block.
-
-**Signature:**
-
-```kotlin
-fun parseCitations(markdown: String): List<Citation>
-```
-
-**Example:**
-
-```kotlin
-val result = parseCitations("value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `markdown` | `String` | Yes | The markdown text to search |
-
-**Returns:** `List<Citation>`
 
 ---
 
@@ -1243,1218 +555,6 @@ val result = verifyExcerpt("value", "value")
 
 ---
 
-#### chunkForRag()
-
-Chunk text for RAG retrieval, ensuring every chunk carries a `heading_path`.
-
-Delegates to `chunk_text` using the caller's config (defaulting to
-`ChunkerType.Markdown` when the config uses the default `Text` type, so that
-heading hierarchy is resolved).  After chunking, derives
-`ChunkMetadata.heading_path` from each chunk's `heading_context`.
-
-  underlying splitter; use `ChunkerType.Markdown` for documents with ATX
-  headings.
-
-**Returns:**
-
-A `ChunkingResult` where every chunk's `heading_path` is populated from its
-`heading_context` (empty when the chunk is not under any heading).
-
-**Errors:**
-
-Propagates any error from the underlying chunker (e.g. invalid overlap).
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun chunkForRag(text: String, config: ChunkingConfig): ChunkingResult
-```
-
-**Example:**
-
-```kotlin
-val result = chunkForRag("value", ChunkingConfig())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `text` | `String` | Yes | The text |
-| `config` | `ChunkingConfig` | Yes | The configuration options |
-
-**Returns:** `ChunkingResult`
-
-**Errors:** Throws `Error`.
-
----
-
-#### compare()
-
-Compare two extraction results and return a structured diff.
-
-The comparison is purely structural — no I/O, no side effects. All fields
-of `ExtractionDiff` are populated according to the provided `DiffOptions`.
-
-**Signature:**
-
-```kotlin
-fun compare(a: ExtractionResult, b: ExtractionResult, opts: DiffOptions): ExtractionDiff
-```
-
-**Example:**
-
-```kotlin
-val result = compare(ExtractionResult(), ExtractionResult(), DiffOptions())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `a` | `ExtractionResult` | Yes | The extraction result |
-| `b` | `ExtractionResult` | Yes | The extraction result |
-| `opts` | `DiffOptions` | Yes | The options to use |
-
-**Returns:** `ExtractionDiff`
-
----
-
-#### extractRegionWithVlm()
-
-Extract content from a pre-cropped image region using a VLM.
-
-The caller is responsible for cropping the page image to the region's bounding
-box before calling this function. The `image_bytes` parameter must contain the
-raw bytes of the **cropped** region image (JPEG, PNG, WebP, etc.).
-
-**Returns:**
-
-Extracted Markdown text from the VLM, or an error if the VLM call fails.
-
-**Errors:**
-
-- `Ocr` if the VLM call fails or returns no content.
-- `MissingDependency` if the liter-llm client cannot
-  be initialised.
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun extractRegionWithVlm(imageBytes: ByteArray, imageMime: String, regionKind: RegionKind, llmConfig: LlmConfig, customPrompt: String? = null): String
-```
-
-**Example:**
-
-```kotlin
-val result = extractRegionWithVlm("data".toByteArray(), "value", RegionKind(), LlmConfig(), "value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `imageBytes` | `ByteArray` | Yes | The image bytes |
-| `imageMime` | `String` | Yes | The image mime |
-| `regionKind` | `RegionKind` | Yes | The region kind |
-| `llmConfig` | `LlmConfig` | Yes | The llm config |
-| `customPrompt` | `String?` | No | The custom prompt |
-
-**Returns:** `String`
-
-**Errors:** Throws `Error`.
-
----
-
-#### rerankAsync()
-
-Rerank documents asynchronously.
-
-Async counterpart to `rerank`. Offloads blocking ONNX inference to a
-dedicated blocking thread pool via Tokio's `spawn_blocking`, keeping the
-async executor free.
-
-Since v5.0.
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun rerankAsync(query: String, documents: List<String>, config: RerankerConfig): List<RerankedDocument>
-```
-
-**Example:**
-
-```kotlin
-val result = rerankAsync("value", [], RerankerConfig())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `query` | `String` | Yes | The query |
-| `documents` | `List<String>` | Yes | The documents |
-| `config` | `RerankerConfig` | Yes | The configuration options |
-
-**Returns:** `List<RerankedDocument>`
-
-**Errors:** Throws `Error`.
-
----
-
-#### extractKeywords()
-
-Extract keywords from text using the specified algorithm.
-
-This is the unified entry point for keyword extraction. The algorithm
-used is determined by `config.algorithm`.
-
-**Returns:**
-
-A vector of keywords sorted by relevance (highest score first).
-
-**Errors:**
-
-Returns an error if:
-
-- The specified algorithm feature is not enabled
-- Keyword extraction fails
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun extractKeywords(text: String, config: KeywordConfig): List<Keyword>
-```
-
-**Example:**
-
-```kotlin
-val result = extractKeywords("value", KeywordConfig())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `text` | `String` | Yes | The text to extract keywords from |
-| `config` | `KeywordConfig` | Yes | Keyword extraction configuration |
-
-**Returns:** `List<Keyword>`
-
-**Errors:** Throws `Error`.
-
----
-
-#### analyzeDocument()
-
-Analyze a document and determine the optimal chunking strategy.
-
-Decision logic (in priority order):
-
-1. If user provides `disable_chunking` → no chunking
-2. If user provides page_ranges → use user overrides
-3. If chunking is not enabled → no chunking
-4. If format doesn't support chunking → no chunking
-5. If file is small (below both thresholds) and not force_chunking → no chunking
-6. If PDF has a substantial text layer AND !force_ocr → no chunking
-   *(only when `heuristics-pdf` feature is enabled; otherwise skipped)*
-
-7. Otherwise → chunk the document
-
-**Errors:**
-
-Returns an error only when the `heuristics-pdf` feature is active and
-the PDF text-layer analysis itself returns a hard error.  In all other
-cases the function returns a `ChunkingDecision`.
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun analyzeDocument(metadata: DocumentMetadata, config: HeuristicsConfig, documentBytes: ByteArray? = null): ChunkingDecision
-```
-
-**Example:**
-
-```kotlin
-val result = analyzeDocument(DocumentMetadata(), HeuristicsConfig(), "data".toByteArray())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `metadata` | `DocumentMetadata` | Yes | The document metadata |
-| `config` | `HeuristicsConfig` | Yes | The configuration options |
-| `documentBytes` | `ByteArray?` | No | The document bytes |
-
-**Returns:** `ChunkingDecision`
-
-**Errors:** Throws `Error`.
-
----
-
-#### analyzeWithUserChunks()
-
-Analyze a document with user-specified chunk ranges.
-
-Creates a chunk plan based on user-provided page ranges.
-
-**Signature:**
-
-```kotlin
-fun analyzeWithUserChunks(userRanges: List<PageRange>, totalPages: Int, sizeBytes: Long, config: HeuristicsConfig): ChunkingDecision
-```
-
-**Example:**
-
-```kotlin
-val result = analyzeWithUserChunks([], 42, 42, HeuristicsConfig())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `userRanges` | `List<PageRange>` | Yes | The user ranges |
-| `totalPages` | `Int` | Yes | The total pages |
-| `sizeBytes` | `Long` | Yes | The size bytes |
-| `config` | `HeuristicsConfig` | Yes | The configuration options |
-
-**Returns:** `ChunkingDecision`
-
----
-
-#### scoreConfidence()
-
-Score a `ConfidenceSignals` triple into an `ExtractionConfidence` using
-the supplied weights.
-
-When `signals.ocr_aggregate` is `null`, the OCR weight folds into
-`text_coverage` so the weighted sum still totals 1.0.
-
-**Signature:**
-
-```kotlin
-fun scoreConfidence(signals: ConfidenceSignals, weights: ConfidenceWeights): ExtractionConfidence
-```
-
-**Example:**
-
-```kotlin
-val result = scoreConfidence(ConfidenceSignals(), ConfidenceWeights())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `signals` | `ConfidenceSignals` | Yes | The confidence signals |
-| `weights` | `ConfidenceWeights` | Yes | The confidence weights |
-
-**Returns:** `ExtractionConfidence`
-
----
-
-#### checkFormatLimits()
-
-Decision returned for pre-extraction rejection based on XLSX/PPTX-specific
-resource bounds. Returns `Some(reason)` to reject; `null` to proceed.
-
-Callers must provide counts from a pre-extraction peek (e.g. parsing
-`xl/workbook.xml` for sheet count).
-
-**Signature:**
-
-```kotlin
-fun checkFormatLimits(mimeType: String, sheetCount: Int? = null, workbookCells: Long? = null, embeddedCount: Int? = null, config: HeuristicsConfig): String?
-```
-
-**Example:**
-
-```kotlin
-val result = checkFormatLimits("value", 42, 42, 42, HeuristicsConfig())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `mimeType` | `String` | Yes | The mime type |
-| `sheetCount` | `Int?` | No | The sheet count |
-| `workbookCells` | `Long?` | No | The workbook cells |
-| `embeddedCount` | `Int?` | No | The embedded count |
-| `config` | `HeuristicsConfig` | Yes | The configuration options |
-
-**Returns:** `String?`
-
----
-
-#### boundariesFromExtractionResult()
-
-Derive document boundaries from an already-produced `ExtractionResult`.
-
-Builds a `MultidocInput` from `result.pages` (one `PageSignals` per
-`PageContent` entry), then delegates to `detect_boundaries`.
-
-### Fallback behaviour
-
-- If `result.pages` is `null` or empty the whole document is treated as a
-  single document: returns `[Start(1), End(1)]`, matching the contract of
-  `detect_boundaries` for a one-page input.
-
-### Text density
-
-`PageContent` does not carry a pre-computed density score.
-This function approximates density as
-`non_whitespace_chars / total_chars` (clamped to `[0.0, 1.0]`), which is a
-reasonable proxy for how text-dense a page is relative to itself.  Pass a
-custom `MultidocInput` to `detect_boundaries` directly when you need a
-higher-fidelity density measurement (e.g. chars-per-pt² from a PDF extractor).
-
-**Signature:**
-
-```kotlin
-fun boundariesFromExtractionResult(result: ExtractionResult, thresholds: MultidocThresholds): List<DocumentBoundary>
-```
-
-**Example:**
-
-```kotlin
-val result = boundariesFromExtractionResult(ExtractionResult(), MultidocThresholds())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `result` | `ExtractionResult` | Yes | The extraction result |
-| `thresholds` | `MultidocThresholds` | Yes | The multidoc thresholds |
-
-**Returns:** `List<DocumentBoundary>`
-
----
-
-#### detectBoundaries()
-
-Detect document boundaries in a multi-document PDF.
-
-Returns a list of detected boundaries, always including implicit boundaries
-at start (page 1) and end (page_count).  Boundaries are returned in ascending
-order of `start_page`.
-
-**Returns:**
-
-Ordered list of document boundaries.
-
-**Signature:**
-
-```kotlin
-fun detectBoundaries(input: MultidocInput, thresholds: MultidocThresholds): List<DocumentBoundary>
-```
-
-**Example:**
-
-```kotlin
-val result = detectBoundaries(MultidocInput(), MultidocThresholds())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `input` | `MultidocInput` | Yes | Page signals for the PDF |
-| `thresholds` | `MultidocThresholds` | Yes | Detection thresholds |
-
-**Returns:** `List<DocumentBoundary>`
-
----
-
-#### chooseCallMode()
-
-Decide which call mode best fits this document.
-
-Rules applied in order:
-
-1. `image/*` → `StructuredCallMode.VisionOnly` (no text layer to start from).
-2. `application/pdf` → `StructuredCallMode.TextOnly` regardless of
-   `text_coverage` or embedded image count.  Xberg's OCR + text-layer
-   extraction produces text for scanned PDFs; the orchestrator's
-   post-call confidence gate handles any vision escalation actually needed.
-
-3. DOCX / `text/html` / `text/*` / `application/json` / `application/xml` /
-   `application/rtf` with `avg_chars_per_page > docx_text_min_density`
-   → `StructuredCallMode.TextOnly`.
-
-4. Anything else → `StructuredCallMode.Skip`.
-
-After rule selection two post-rule promotions apply (in order):
-
-- `user_force_vision` promotes `TextOnly` → `TextPlusVision`
-  (`Skip` stays `Skip` — caller meant to opt out).
-
-- `enable_vision_fallback` promotes `TextOnly` →
-  `TextOnlyWithVisionFallback` (does **not** upgrade `TextPlusVision` or
-  `Skip`).
-
-**Signature:**
-
-```kotlin
-fun chooseCallMode(input: StructuredInput, t: StructuredThresholds): StructuredCallMode
-```
-
-**Example:**
-
-```kotlin
-val result = chooseCallMode(StructuredInput(), StructuredThresholds())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `input` | `StructuredInput` | Yes | The input data |
-| `t` | `StructuredThresholds` | Yes | The structured thresholds |
-
-**Returns:** `StructuredCallMode`
-
----
-
-#### calculateChunkPlan()
-
-Calculate a chunking plan for a document.
-
-**Returns:**
-
-A `ChunkPlan` with optimal chunk boundaries.
-
-**Signature:**
-
-```kotlin
-fun calculateChunkPlan(pageCount: Int, sizeBytes: Long, needsOcr: Boolean, config: HeuristicsConfig): ChunkPlan
-```
-
-**Example:**
-
-```kotlin
-val result = calculateChunkPlan(42, 42, true, HeuristicsConfig())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `pageCount` | `Int` | Yes | Total number of pages in the document |
-| `sizeBytes` | `Long` | Yes | File size in bytes |
-| `needsOcr` | `Boolean` | Yes | Whether OCR will be required |
-| `config` | `HeuristicsConfig` | Yes | Heuristics configuration |
-
-**Returns:** `ChunkPlan`
-
----
-
-#### calculatePlanFromOverrides()
-
-Calculate a chunk plan from user-specified page ranges.
-
-Validates and processes user overrides into a proper chunk plan.
-
-**Signature:**
-
-```kotlin
-fun calculatePlanFromOverrides(userChunks: List<PageRange>, totalPages: Int, sizeBytes: Long, config: HeuristicsConfig): ChunkPlan
-```
-
-**Example:**
-
-```kotlin
-val result = calculatePlanFromOverrides([], 42, 42, HeuristicsConfig())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `userChunks` | `List<PageRange>` | Yes | The user chunks |
-| `totalPages` | `Int` | Yes | The total pages |
-| `sizeBytes` | `Long` | Yes | The size bytes |
-| `config` | `HeuristicsConfig` | Yes | The configuration options |
-
-**Returns:** `ChunkPlan`
-
----
-
-#### fingerprint()
-
-Stable sha256 fingerprint of `raw`, formatted as `sha256:<hex>`.
-
-**Signature:**
-
-```kotlin
-fun fingerprint(raw: ByteArray): String
-```
-
-**Example:**
-
-```kotlin
-val result = fingerprint("data".toByteArray())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `raw` | `ByteArray` | Yes | The raw |
-
-**Returns:** `String`
-
----
-
-#### resolve()
-
-Resolve `(preset, custom_schema_override, context)` into a `ResolvedPreset`.
-
-- `custom_schema` overrides `preset.schema` when set.
-- `context` substitutes `{{key}}` tokens in `preset.context_template`; the
-  rendered string is appended to `system_prompt` so the model sees it.
-
-**Signature:**
-
-```kotlin
-@Throws(ResolveError::class)
-fun resolve(preset: Preset, customSchema: Any? = null, context: Map<String, String>): ResolvedPreset
-```
-
-**Example:**
-
-```kotlin
-val result = resolve(Preset(), emptyMap(), emptyMap())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `preset` | `Preset` | Yes | The preset |
-| `customSchema` | `Any?` | No | The custom schema |
-| `context` | `Map<String, String>` | Yes | The context |
-
-**Returns:** `ResolvedPreset`
-
-**Errors:** Throws `ResolveError`.
-
----
-
-#### extractStructuredJson()
-
-Extract structured JSON from a document using JSON-encoded preset spec and options.
-
-This is the synchronous JSON-in / JSON-out entry point suitable for FFI and
-language-binding call paths.
-
-  `cache`).  Pass `"{}"` to use all defaults.
-
-**Returns:**
-
-JSON-serialised `StructuredOutput` on success.
-
-**Errors:**
-
-Returns `Validation` when either JSON argument is
-malformed.  All other failures from the underlying
-`extract_structured_sync` call are mapped onto `XbergError`
-via `From<StructuredError>`.
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun extractStructuredJson(bytes: ByteArray, mime: String, presetSpecJson: String, optionsJson: String): String
-```
-
-**Example:**
-
-```kotlin
-val result = extractStructuredJson("data".toByteArray(), "value", "value", "value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `bytes` | `ByteArray` | Yes | The bytes |
-| `mime` | `String` | Yes | The mime |
-| `presetSpecJson` | `String` | Yes | The preset spec json |
-| `optionsJson` | `String` | Yes | The options json |
-
-**Returns:** `String`
-
-**Errors:** Throws `Error`.
-
----
-
-#### splitAndExtractJson()
-
-Split a multi-document PDF and extract structured JSON from each segment,
-returning a JSON array of `StructuredOutput` objects.
-
-Non-PDF documents are passed through as a single-element array.
-
-Same as `extract_structured_json`.
-
-**Returns:**
-
-JSON-serialised `List<StructuredOutput>` (a JSON array) on success.
-
-**Errors:**
-
-Returns `Validation` when either JSON argument is
-malformed.  All other failures from the underlying
-`split_and_extract_sync` call are mapped onto `XbergError`
-via `From<StructuredError>`.
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun splitAndExtractJson(bytes: ByteArray, mime: String, presetSpecJson: String, optionsJson: String): String
-```
-
-**Example:**
-
-```kotlin
-val result = splitAndExtractJson("data".toByteArray(), "value", "value", "value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `bytes` | `ByteArray` | Yes | The bytes |
-| `mime` | `String` | Yes | The mime |
-| `presetSpecJson` | `String` | Yes | The preset spec json |
-| `optionsJson` | `String` | Yes | The options json |
-
-**Returns:** `String`
-
-**Errors:** Throws `Error`.
-
----
-
-#### renderPdfPageToPng()
-
-Render a single PDF page to PNG bytes.
-
-Returns raw PNG-encoded bytes for the specified page at the given DPI.
-Uses pdf_oxide with tiny-skia for pure-Rust rendering.
-
-For pages with extreme dimensions (very wide vector diagrams, etc.) the
-effective DPI may be automatically reduced to avoid rasterizer failure.
-A warning is logged when this happens.
-
-**Errors:**
-
-Returns `XbergError.Parsing` if the PDF cannot be opened, authenticated,
-or rendered, or if `page_index` is out of range.
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun renderPdfPageToPng(pdfBytes: ByteArray, pageIndex: Long, dpi: Int? = null, password: String? = null): ByteArray
-```
-
-**Example:**
-
-```kotlin
-val result = renderPdfPageToPng("data".toByteArray(), 42, 42, "value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `pdfBytes` | `ByteArray` | Yes | Raw PDF file bytes |
-| `pageIndex` | `Long` | Yes | Zero-based page index |
-| `dpi` | `Int?` | No | Resolution in dots per inch (default: 150) |
-| `password` | `String?` | No | Optional password for encrypted PDFs |
-
-**Returns:** `ByteArray`
-
-**Errors:** Throws `Error`.
-
----
-
-#### pdfPageCount()
-
-Count the pages in a PDF without rendering any of them.
-
-Opens the document and returns its page count from the PDF structure. No page
-is rasterized, so this is cheap relative to `render_pdf_page_to_png` — use it
-when you only need the count (e.g. to drive a render loop over the pages).
-
-**Errors:**
-
-Returns `XbergError.Parsing` if the PDF cannot be opened, authenticated,
-or its page count read.
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun pdfPageCount(pdfBytes: ByteArray, password: String? = null): Long
-```
-
-**Example:**
-
-```kotlin
-val result = pdfPageCount("data".toByteArray(), "value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `pdfBytes` | `ByteArray` | Yes | Raw PDF file bytes |
-| `password` | `String?` | No | Optional password for encrypted PDFs |
-
-**Returns:** `Long`
-
-**Errors:** Throws `Error`.
-
----
-
-#### captionImage()
-
-Caption a single image from bytes.
-
-  `RegionKind.Caption` prompt when `null`.
-
-**Returns:**
-
-The generated caption text.
-
-**Errors:**
-
-Returns an error if the VLM call fails or if image format detection fails.
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun captionImage(imageBytes: ByteArray, llmConfig: LlmConfig, customPrompt: String? = null): String
-```
-
-**Example:**
-
-```kotlin
-val result = captionImage("data".toByteArray(), LlmConfig(), "value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `imageBytes` | `ByteArray` | Yes | The image data. |
-| `llmConfig` | `LlmConfig` | Yes | LLM configuration for the VLM call. |
-| `customPrompt` | `String?` | No | Optional custom caption prompt. Uses the default |
-
-**Returns:** `String`
-
-**Errors:** Throws `Error`.
-
----
-
-#### captionImageFile()
-
-Caption a single image from a file path.
-
-  `RegionKind.Caption` prompt when `null`.
-
-**Returns:**
-
-The generated caption text.
-
-**Errors:**
-
-Returns an error if the file cannot be read, if image format detection fails,
-or if the VLM call fails.
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun captionImageFile(path: Path, llmConfig: LlmConfig, customPrompt: String? = null): String
-```
-
-**Example:**
-
-```kotlin
-val result = captionImageFile("value", LlmConfig(), "value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `path` | `Path` | Yes | Path to the image file. |
-| `llmConfig` | `LlmConfig` | Yes | LLM configuration for the VLM call. |
-| `customPrompt` | `String?` | No | Optional custom caption prompt. Uses the default |
-
-**Returns:** `String`
-
-**Errors:** Throws `Error`.
-
----
-
-#### detectMimeType()
-
-Detect the MIME type of a file at the given path.
-
-Uses the file extension and optionally the file content to determine the MIME type.
-Set `check_exists` to `true` to verify the file exists before detection.
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun detectMimeType(path: String, checkExists: Boolean): String
-```
-
-**Example:**
-
-```kotlin
-val result = detectMimeType("value", true)
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `path` | `String` | Yes | Path to the file |
-| `checkExists` | `Boolean` | Yes | The check exists |
-
-**Returns:** `String`
-
-**Errors:** Throws `Error`.
-
----
-
-#### getEmbeddingPreset()
-
-Get an embedding preset by name.
-
-Returns `null` if no preset with the given name exists. Returns an owned
-clone so the value is safe to pass across FFI boundaries.
-
-**Signature:**
-
-```kotlin
-fun getEmbeddingPreset(name: String): EmbeddingPreset?
-```
-
-**Example:**
-
-```kotlin
-val result = getEmbeddingPreset("value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `name` | `String` | Yes | The name |
-
-**Returns:** `EmbeddingPreset?`
-
----
-
-#### listEmbeddingPresets()
-
-List the names of all available embedding presets.
-
-Returns owned `String`s so the values are safe to pass across FFI boundaries.
-
-**Signature:**
-
-```kotlin
-fun listEmbeddingPresets(): List<String>
-```
-
-**Example:**
-
-```kotlin
-val result = listEmbeddingPresets()
-```
-
-**Returns:** `List<String>`
-
----
-
-#### getEmbeddingPreset()
-
-Returns `null` for builds without the `embedding-presets` feature.
-
-**Signature:**
-
-```kotlin
-fun getEmbeddingPreset(name: String): EmbeddingPreset?
-```
-
-**Example:**
-
-```kotlin
-val result = getEmbeddingPreset("value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `name` | `String` | Yes | The  name |
-
-**Returns:** `EmbeddingPreset?`
-
----
-
-#### listEmbeddingPresets()
-
-Returns an empty list for builds without the `embedding-presets` feature.
-
-**Signature:**
-
-```kotlin
-fun listEmbeddingPresets(): List<String>
-```
-
-**Example:**
-
-```kotlin
-val result = listEmbeddingPresets()
-```
-
-**Returns:** `List<String>`
-
----
-
-#### rerank()
-
-Rerank a list of documents by relevance to a query.
-
-Returns documents sorted descending by score. Applies `top_k` truncation if
-configured.
-
-**Errors:**
-
-- `XbergError.Validation` if `query` is empty or blank.
-- `XbergError.MissingDependency` if ONNX Runtime is not installed (ONNX path).
-- `XbergError.Reranking` if the preset is unknown or model download fails.
-
-Since v5.0.
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun rerank(query: String, documents: List<String>, config: RerankerConfig): List<RerankedDocument>
-```
-
-**Example:**
-
-```kotlin
-val result = rerank("value", [], RerankerConfig())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `query` | `String` | Yes | The query |
-| `documents` | `List<String>` | Yes | The documents |
-| `config` | `RerankerConfig` | Yes | The configuration options |
-
-**Returns:** `List<RerankedDocument>`
-
-**Errors:** Throws `Error`.
-
----
-
-#### rerank()
-
-Stub for builds without the `reranker` feature — keeps the symbol available
-on no-ORT targets (Android x86_64 emulator, WASM) so language bindings compile.
-
-Since v5.0.
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun rerank(query: String, documents: List<String>, config: RerankerConfig): List<RerankedDocument>
-```
-
-**Example:**
-
-```kotlin
-val result = rerank("value", [], RerankerConfig())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `query` | `String` | Yes | The  query |
-| `documents` | `List<String>` | Yes | The  documents |
-| `config` | `RerankerConfig` | Yes | The reranker config |
-
-**Returns:** `List<RerankedDocument>`
-
-**Errors:** Throws `Error`.
-
----
-
-#### rerankAsync()
-
-Stub for builds without the `reranker` feature.
-
-Since v5.0.
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun rerankAsync(query: String, documents: List<String>, config: RerankerConfig): List<RerankedDocument>
-```
-
-**Example:**
-
-```kotlin
-val result = rerankAsync("value", [], RerankerConfig())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `query` | `String` | Yes | The  query |
-| `documents` | `List<String>` | Yes | The  documents |
-| `config` | `RerankerConfig` | Yes | The reranker config |
-
-**Returns:** `List<RerankedDocument>`
-
-**Errors:** Throws `Error`.
-
----
-
-#### getRerankerPreset()
-
-Get a reranker preset by name.
-
-Returns `null` if no preset with the given name exists. Returns an owned
-clone so the value is safe to pass across FFI boundaries.
-
-Since v5.0.
-
-**Signature:**
-
-```kotlin
-fun getRerankerPreset(name: String): RerankerPreset?
-```
-
-**Example:**
-
-```kotlin
-val result = getRerankerPreset("value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `name` | `String` | Yes | The name |
-
-**Returns:** `RerankerPreset?`
-
----
-
-#### listRerankerPresets()
-
-List the names of all available reranker presets.
-
-Returns owned `String`s so the values are safe to pass across FFI boundaries.
-
-Since v5.0.
-
-**Signature:**
-
-```kotlin
-fun listRerankerPresets(): List<String>
-```
-
-**Example:**
-
-```kotlin
-val result = listRerankerPresets()
-```
-
-**Returns:** `List<String>`
-
----
-
-#### getRerankerPreset()
-
-Returns `null` for builds without the `reranker-presets` feature.
-
-Since v5.0.
-
-**Signature:**
-
-```kotlin
-fun getRerankerPreset(name: String): RerankerPreset?
-```
-
-**Example:**
-
-```kotlin
-val result = getRerankerPreset("value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `name` | `String` | Yes | The  name |
-
-**Returns:** `RerankerPreset?`
-
----
-
-#### listRerankerPresets()
-
-Returns an empty list for builds without the `reranker-presets` feature.
-
-Since v5.0.
-
-**Signature:**
-
-```kotlin
-fun listRerankerPresets(): List<String>
-```
-
-**Example:**
-
-```kotlin
-val result = listRerankerPresets()
-```
-
-**Returns:** `List<String>`
-
----
-
 ### Types
 
 #### AccelerationConfig
@@ -2476,13 +576,13 @@ for inference in layout detection and embedding generation.
 A single file extracted from an archive.
 
 When archives (ZIP, TAR, 7Z, GZIP) are extracted with recursive extraction
-enabled, each processable file produces its own full `ExtractionResult`.
+enabled, each processable file produces its own full `ExtractedDocument`.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `path` | `String` | — | Archive-relative file path (e.g. "folder/document.pdf"). |
 | `mimeType` | `String` | — | Detected MIME type of the file. |
-| `result` | `ExtractionResult` | — | Full extraction result for this file. |
+| `result` | `ExtractedDocument` | — | Full extraction result for this file. |
 
 ---
 
@@ -2588,22 +688,6 @@ Configuration for the VLM captioning post-processor.
 
 ---
 
-#### CaptioningEnrichmentConfig
-
-Captioning enrichment knob: which LLM to use for image captions.
-
-The enrichment stage calls `caption_image` for every
-image in `ExtractionResult.images` that has non-empty `data`. Images with
-empty byte data (e.g. reference-only images populated via `source_path`) are
-skipped rather than forwarded to the VLM.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `config` | `LlmConfig` | — | LLM / VLM configuration forwarded verbatim to each `caption_image` call. |
-| `customPrompt` | `String?` | `null` | Optional custom prompt override forwarded to every `caption_image` call. `null` uses the default `RegionKind.Caption` prompt. |
-
----
-
 #### CellChange
 
 A single changed cell within a table.
@@ -2665,7 +749,7 @@ Metadata about a chunk's position in the original document.
 | `lastPage` | `Int?` | `null` | Last page number this chunk spans (1-indexed, equal to first_page for single-page chunks). Only populated when page tracking is enabled in extraction configuration. |
 | `headingContext` | `HeadingContext?` | `/* serde(default) */` | Heading context when using Markdown chunker. Contains the heading hierarchy this chunk falls under. Only populated when `ChunkerType.Markdown` is used. |
 | `headingPath` | `List<String>` | `/* serde(default) */` | Flattened heading trail from document root to this chunk's section. Each element is a heading's text, outermost first. Derived from `heading_context` when present; empty otherwise. Provides a binding-friendly, RAG-shaped breadcrumb without requiring callers to walk the nested `HeadingContext` structure. |
-| `imageIndices` | `List<Int>` | `/* serde(default) */` | Indices into `ExtractionResult.images` for images on pages covered by this chunk. Contains zero-based indices into the top-level `images` collection for every image whose `page_number` falls within `\[first_page, last_page\]`. Empty when image extraction is disabled or the chunk spans no pages with images. |
+| `imageIndices` | `List<Int>` | `/* serde(default) */` | Indices into `ExtractedDocument.images` for images on pages covered by this chunk. Contains zero-based indices into the top-level `images` collection for every image whose `page_number` falls within `\[first_page, last_page\]`. Empty when image extraction is disabled or the chunk spans no pages with images. |
 
 ---
 
@@ -2766,19 +850,6 @@ val result = ChunkingConfig.default()
 
 ---
 
-#### ChunkingResult
-
-Result of a text chunking operation.
-
-Contains the generated chunks and metadata about the chunking.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `chunks` | `List<Chunk>` | — | List of text chunks |
-| `chunkCount` | `Long` | — | Total number of chunks generated |
-
----
-
 #### Citation
 
 A structured citation from a citation block.
@@ -2810,16 +881,6 @@ Citation file metadata (RIS, PubMed, EndNote).
 
 ---
 
-#### ClassificationEnrichmentConfig
-
-Classification enrichment knob: how to label the document.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `config` | `PageClassificationConfig` | — | Label set and LLM settings for the classification stage. |
-
----
-
 #### ClassificationLabel
 
 A single label + confidence pair.
@@ -2828,109 +889,6 @@ A single label + confidence pair.
 |-------|------|---------|-------------|
 | `label` | `String` | — | Label name as configured in `PageClassificationConfig.labels`. |
 | `confidence` | `Float?` | `null` | Backend-reported confidence in `\[0.0, 1.0\]`. `null` when the backend (e.g. an LLM prompt without explicit confidence schema) did not report one. |
-
----
-
-#### ConfidenceSignals
-
-Input signals for confidence scoring.
-
-Caller fills these from the extraction result and the LLM response.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `textCoverage` | `Float` | — | Fraction of pages with usable text in `\[0, 1\]`. |
-| `ocrAggregate` | `Float?` | `null` | Mean OCR per-element recognition confidence; `null` when OCR did not run. |
-| `schemaCompliance` | `SchemaCompliance` | — | Schema-validation result of the merged output. |
-
-##### Methods
-
-###### fromExtractionResult()
-
-Build `ConfidenceSignals` from an `ExtractionResult`.
-
-- `result` — The extraction result whose `ocr_elements` are inspected.
-- `schema_compliance` — Caller-supplied schema validation outcome.
-- `text_coverage` — Caller-supplied fraction of pages with usable text
-  (e.g. 1.0 for native text formats, value from PDF analysis for PDFs).
-
-The `ocr_aggregate` is computed as the arithmetic mean of all
-`ocr_elements[].confidence.recognition` values.  When `ocr_elements` is
-`null` or empty the field is set to `null`.
-
-**Signature:**
-
-```kotlin
-@JvmStatic
-fun fromExtractionResult(result: ExtractionResult, schemaCompliance: SchemaCompliance, textCoverage: Float): ConfidenceSignals
-```
-
-**Example:**
-
-```kotlin
-val result = ConfidenceSignals.fromExtractionResult(ExtractionResult(), SchemaCompliance(), 0.5)
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `result` | `ExtractionResult` | Yes | The extraction result |
-| `schemaCompliance` | `SchemaCompliance` | Yes | The schema compliance |
-| `textCoverage` | `Float` | Yes | The text coverage |
-
-**Returns:** `ConfidenceSignals`
-
----
-
-#### ConfidenceWeights
-
-Tunable weights for the confidence scoring formula.
-
-Defaults picked by inspection; callers tune them via config.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `textCoverage` | `Float` | `0.3` | Weight assigned to `text_coverage`. Default 0.30. |
-| `ocrAggregate` | `Float` | `0.3` | Weight assigned to `ocr_aggregate` when OCR ran. Default 0.30 — folds into `text_coverage` weight when OCR did not run. |
-| `schemaCompliance` | `Float` | `0.4` | Weight assigned to `schema_compliance`. Default 0.40. |
-
-##### Methods
-
-###### default()
-
-**Signature:**
-
-```kotlin
-@JvmStatic
-fun default(): ConfidenceWeights
-```
-
-**Example:**
-
-```kotlin
-val result = ConfidenceWeights.default()
-```
-
-**Returns:** `ConfidenceWeights`
-
-###### isNormalized()
-
-Validate that weights sum to approximately 1.0.
-
-**Signature:**
-
-```kotlin
-fun isNormalized(): Boolean
-```
-
-**Example:**
-
-```kotlin
-val result = instance.isNormalized()
-```
-
-**Returns:** `Boolean`
 
 ---
 
@@ -3088,7 +1046,7 @@ A single contiguous hunk in a unified diff.
 
 #### DiffOptions
 
-Options controlling how two `ExtractionResult` values are compared.
+Options controlling how two `ExtractedDocument` values are compared.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -3181,6 +1139,157 @@ Detected document boundary within a PDF.
 
 ---
 
+#### DocumentExtractor
+
+Trait for document extractor plugins.
+
+Implement this trait to add support for new document formats or override
+built-in extraction behavior. Foreign-language bindings expose the
+`DocumentExtractor.extract` method, which accepts `ExtractInput` and
+returns an `ExtractedDocument`.
+
+##### Priority System
+
+When multiple extractors support the same MIME type, the registry selects
+the extractor with the highest priority value. Use this to:
+
+- Override built-in extractors (priority > 50)
+- Provide fallback extractors (priority < 50)
+- Implement specialized extractors for specific use cases
+
+Default priority is 50.
+
+##### Thread Safety
+
+Extractors must be thread-safe (`Send + Sync`) to support concurrent extraction.
+
+##### Methods
+
+###### extract()
+
+Binding-safe extraction entry point for foreign-language plugin bridges.
+
+Accepts the same unified input shape as the public extraction API and
+returns one extracted document result.
+
+**Signature:**
+
+```kotlin
+@Throws(Error::class)
+fun extract(input: ExtractInput, config: ExtractionConfig): ExtractedDocument
+```
+
+**Example:**
+
+```kotlin
+val result = instance.extract(ExtractInput(), ExtractionConfig())
+```
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `input` | `ExtractInput` | Yes | The input data |
+| `config` | `ExtractionConfig` | Yes | The configuration options |
+
+**Returns:** `ExtractedDocument`
+
+**Errors:** Throws `Error`.
+
+###### supportedMimeTypes()
+
+Get the list of MIME types supported by this extractor.
+
+Can include exact MIME types and prefix patterns:
+
+- Exact: `"application/pdf"`, `"text/plain"`
+- Prefix: `"image/*"` (matches any image type)
+
+**Returns:**
+
+A slice of MIME type strings.
+
+**Signature:**
+
+```kotlin
+fun supportedMimeTypes(): List<String>
+```
+
+**Example:**
+
+```kotlin
+val result = instance.supportedMimeTypes()
+```
+
+**Returns:** `List<String>`
+
+###### priority()
+
+Get the priority of this extractor.
+
+Higher priority extractors are preferred when multiple extractors
+support the same MIME type.
+
+##### Priority Guidelines
+
+- **0-25**: Fallback/low-quality extractors
+- **26-49**: Alternative extractors
+- **50**: Default priority (built-in extractors)
+- **51-75**: Premium/enhanced extractors
+- **76-100**: Specialized/high-priority extractors
+
+**Returns:**
+
+Priority value (default: 50)
+
+**Signature:**
+
+```kotlin
+fun priority(): Int
+```
+
+**Example:**
+
+```kotlin
+val result = instance.priority()
+```
+
+**Returns:** `Int`
+
+###### canHandle()
+
+Optional: Check if this extractor can handle a specific file.
+
+Allows for more sophisticated detection beyond MIME types.
+Defaults to `true` (rely on MIME type matching).
+
+**Returns:**
+
+`true` if the extractor can handle this file, `false` otherwise.
+
+**Signature:**
+
+```kotlin
+fun canHandle(path: Path, mimeType: String): Boolean
+```
+
+**Example:**
+
+```kotlin
+val result = instance.canHandle("value", "value")
+```
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `path` | `Path` | Yes | The  path |
+| `mimeType` | `String` | Yes | The  mime type |
+
+**Returns:** `Boolean`
+
+---
+
 #### DocumentMetadata
 
 Metadata about a document for analysis.
@@ -3235,7 +1344,7 @@ A single tracked change embedded in a document.
 
 Populated by per-format extractors that understand change-tracking metadata
 (DOCX `w:ins`/`w:del`/`w:rPrChange`, ODT `text:change-*`, …). Every
-extractor defaults to `ExtractionResult.revisions = None` until a
+extractor defaults to `ExtractedDocument.revisions = None` until a
 format-specific implementation is added.
 
 | Field | Type | Default | Description |
@@ -3489,7 +1598,7 @@ Changes to embedded archive children between two results.
 |-------|------|---------|-------------|
 | `added` | `List<ArchiveEntry>` | `\[\]` | Children present in `b` but not in `a` (matched by `path`). |
 | `removed` | `List<ArchiveEntry>` | `\[\]` | Children present in `a` but not in `b` (matched by `path`). |
-| `changed` | `List<EmbeddedDiff>` | `\[\]` | Children present in both but with differing content (matched by `path`). Each entry holds the diff of the nested `ExtractionResult`. |
+| `changed` | `List<EmbeddedDiff>` | `\[\]` | Children present in both but with differing content (matched by `path`). Each entry holds the diff of the nested `ExtractedDocument`. |
 
 ---
 
@@ -3521,8 +1630,8 @@ Embedded file descriptor extracted from the PDF name tree.
 
 Trait for in-process embedding backend plugins.
 
-Async to match the convention used by `OcrBackend`,
-`DocumentExtractor`, and `PostProcessor`.
+Async to match the convention used by other plugin hooks such as
+`OcrBackend` and `PostProcessor`.
 Host-language bridges (PyO3, napi-rs, Rustler, extendr, magnus, ext-php-rs,
 C FFI, etc.) wrap their synchronous host callables in `spawn_blocking` or the
 equivalent to satisfy the async signature.
@@ -3661,29 +1770,6 @@ val result = EmbeddingConfig.default()
 
 ---
 
-#### EmbeddingPreset
-
-Preset configurations for common RAG use cases.
-
-Each preset combines chunk size, overlap, and embedding model
-to provide an optimized configuration for specific scenarios.
-
-All string fields are owned `String` for FFI compatibility — instances
-are safe to clone and pass across language boundaries.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `name` | `String` | — | Short identifier for this preset (e.g. `"balanced"`, `"fast"`, `"quality"`). |
-| `chunkSize` | `Long` | — | Target chunk size in characters. |
-| `overlap` | `Long` | — | Overlap between consecutive chunks in characters. |
-| `modelRepo` | `String` | — | HuggingFace repository name for the model. |
-| `pooling` | `String` | — | Pooling strategy: "cls" or "mean". |
-| `modelFile` | `String` | — | Path to the ONNX model file within the repo. |
-| `dimensions` | `Long` | — | Embedding vector dimension produced by this model. |
-| `description` | `String` | — | Human-readable description of the preset's intended use case. |
-
----
-
 #### EnrichOptions
 
 Which enrichment passes to run on a piece of text.
@@ -3720,8 +1806,8 @@ A single named entity detected in the extracted text.
 |-------|------|---------|-------------|
 | `category` | `EntityCategory` | — | Canonical category the entity belongs to (PERSON, ORG, LOCATION, etc.). |
 | `text` | `String` | — | Raw mention text exactly as it appeared in the source. |
-| `start` | `Int` | — | Byte-offset span in `ExtractionResult.content` where the mention starts. |
-| `end` | `Int` | — | Byte-offset span in `ExtractionResult.content` where the mention ends (exclusive). |
+| `start` | `Int` | — | Byte-offset span in `ExtractedDocument.content` where the mention starts. |
+| `end` | `Int` | — | Byte-offset span in `ExtractedDocument.content` where the mention ends (exclusive). |
 | `confidence` | `Float?` | `null` | Backend-reported confidence in `\[0.0, 1.0\]`. `null` when the backend does not expose confidence scores. |
 
 ---
@@ -3831,7 +1917,7 @@ val result = ExtractInput.default()
 
 **Returns:** `ExtractInput`
 
-###### bytes()
+###### fromBytes()
 
 Build a bytes input with a MIME type and optional filename hint.
 
@@ -3839,13 +1925,13 @@ Build a bytes input with a MIME type and optional filename hint.
 
 ```kotlin
 @JvmStatic
-fun bytes(bytes: ByteArray, mimeType: String, filename: String? = null): ExtractInput
+fun fromBytes(bytes: ByteArray, mimeType: String, filename: String? = null): ExtractInput
 ```
 
 **Example:**
 
 ```kotlin
-val result = ExtractInput.bytes("data".toByteArray(), "value", "value")
+val result = ExtractInput.fromBytes("data".toByteArray(), "value", "value")
 ```
 
 **Parameters:**
@@ -3858,7 +1944,7 @@ val result = ExtractInput.bytes("data".toByteArray(), "value", "value")
 
 **Returns:** `ExtractInput`
 
-###### uri()
+###### fromUri()
 
 Build a URI input from a local path, `file://` URI, or HTTP(S) URL.
 
@@ -3866,13 +1952,13 @@ Build a URI input from a local path, `file://` URI, or HTTP(S) URL.
 
 ```kotlin
 @JvmStatic
-fun uri(uri: String): ExtractInput
+fun fromUri(uri: String): ExtractInput
 ```
 
 **Example:**
 
 ```kotlin
-val result = ExtractInput.uri("value")
+val result = ExtractInput.fromUri("value")
 ```
 
 **Parameters:**
@@ -3882,6 +1968,77 @@ val result = ExtractInput.uri("value")
 | `uri` | `String` | Yes | The uri |
 
 **Returns:** `ExtractInput`
+
+---
+
+#### ExtractedDocument
+
+Document extracted by the core extraction pipeline.
+
+`extract` and `extract_batch` return an `ExtractionResult` envelope whose
+`results` field contains these per-document payloads.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `content` | `String` | — | Plain-text representation of the extracted document content. |
+| `mimeType` | `String` | — | MIME type of the source document (e.g. `"application/pdf"`). |
+| `metadata` | `Metadata` | — | Document-level metadata (author, title, dates, format-specific fields). |
+| `extractionMethod` | `ExtractionMethod?` | `null` | Extraction strategy used to produce the returned text. Populated when the extractor can reliably distinguish native text extraction, OCR-only extraction, or mixed native/OCR output. |
+| `tables` | `List<Table>` | `\[\]` | Tables extracted from the document, each with structured cell data. |
+| `detectedLanguages` | `List<String>?` | `\[\]` | ISO 639-1 language codes detected in the document content. |
+| `chunks` | `List<Chunk>?` | `\[\]` | Text chunks when chunking is enabled. When chunking configuration is provided, the content is split into overlapping chunks for efficient processing. Each chunk contains the text, optional embeddings (if enabled), and metadata about its position. |
+| `images` | `List<ExtractedImage>?` | `\[\]` | Extracted images from the document. When image extraction is enabled via `ImageExtractionConfig`, this field contains all images found in the document with their raw data and metadata. Each image may optionally contain a nested `ocr_result` if OCR was performed. |
+| `pages` | `List<PageContent>?` | `\[\]` | Per-page content when page extraction is enabled. When page extraction is configured, the document is split into per-page content with tables and images mapped to their respective pages. |
+| `elements` | `List<Element>?` | `\[\]` | Semantic elements when element-based result format is enabled. When result_format is set to ElementBased, this field contains semantic elements with type classification, unique identifiers, and metadata for Unstructured-compatible element-based processing. |
+| `djotContent` | `DjotContent?` | `null` | Rich Djot content structure (when extracting Djot documents). When extracting Djot documents with structured extraction enabled, this field contains the full semantic structure including: - Block-level elements with nesting - Inline formatting with attributes - Links, images, footnotes - Math expressions - Complete attribute information The `content` field still contains plain text for backward compatibility. Always `null` for non-Djot documents. |
+| `ocrElements` | `List<OcrElement>?` | `\[\]` | OCR elements with full spatial and confidence metadata. When OCR is performed with element extraction enabled, this field contains the structured representation of detected text including: - Bounding geometry (rectangles or quadrilaterals) - Confidence scores (detection and recognition) - Rotation information - Hierarchical relationships (Tesseract only) This field preserves all metadata that would otherwise be lost when converting to plain text or markdown output formats. Only populated when `OcrElementConfig.include_elements` is true. |
+| `document` | `DocumentStructure?` | `null` | Structured document tree (when document structure extraction is enabled). When `include_document_structure` is true in `ExtractionConfig`, this field contains the full hierarchical representation of the document including: - Heading-driven section nesting - Table grids with cell-level metadata - Content layer classification (body, header, footer, footnote) - Inline text annotations (formatting, links) - Bounding boxes and page numbers Independent of `result_format` — can be combined with Unified or ElementBased. |
+| `extractedKeywords` | `List<Keyword>?` | `\[\]` | Extracted keywords when keyword extraction is enabled. When keyword extraction (RAKE or YAKE) is configured, this field contains the extracted keywords with scores, algorithm info, and position data. Previously stored in `metadata.additional\["keywords"\]`. |
+| `qualityScore` | `Double?` | `null` | Document quality score from quality analysis. A value between 0.0 and 1.0 indicating the overall text quality. Previously stored in `metadata.additional\["quality_score"\]`. |
+| `processingWarnings` | `List<ProcessingWarning>` | `\[\]` | Non-fatal warnings collected during processing pipeline stages. Captures errors from optional pipeline features (embedding, chunking, language detection, output formatting) that don't prevent extraction but may indicate degraded results. Previously stored as individual keys in `metadata.additional`. |
+| `annotations` | `List<PdfAnnotation>?` | `\[\]` | PDF annotations extracted from the document. When annotation extraction is enabled via `PdfConfig.extract_annotations`, this field contains text notes, highlights, links, stamps, and other annotations found in PDF documents. |
+| `children` | `List<ArchiveEntry>?` | `\[\]` | Nested extraction results from archive contents. When extracting archives, each processable file inside produces its own full extraction result. Set to `null` for non-archive formats. Use `max_archive_depth` in config to control recursion depth. |
+| `uris` | `List<ExtractedUri>?` | `\[\]` | URIs/links discovered during document extraction. Contains hyperlinks, image references, citations, email addresses, and other URI-like references found in the document. Always extracted when present in the source document. |
+| `revisions` | `List<DocumentRevision>?` | `\[\]` | Tracked changes embedded in the source document. Populated by per-format extractors that understand change-tracking metadata (DOCX `w:ins`/`w:del`/`w:rPrChange`, ODT `text:change-*`, …). Every extractor defaults to `null` until its format-specific implementation is added. Extractors that do populate this field follow the "accepted-changes" convention: inserted text is present in `content`, deleted text is absent — the revision list is the separate audit trail. |
+| `structuredOutput` | `Any?` | `null` | Structured extraction output from LLM-based JSON schema extraction. When `structured_extraction` is configured in `ExtractionConfig`, the extracted document content is sent to a VLM with the provided JSON schema. The response is parsed and stored here as a JSON value matching the schema. |
+| `codeIntelligence` | `Any?` | `null` | Code intelligence results from tree-sitter analysis. Populated when extracting source code files with the `tree-sitter` feature. Contains metrics, structural analysis, imports/exports, comments, docstrings, symbols, diagnostics, and optionally chunked code segments. Stored as an opaque JSON value so that all language bindings (Go, Java, C#, …) can deserialize it as a raw JSON object rather than a typed struct. The underlying type is `tree_sitter_language_pack.ProcessResult`. |
+| `llmUsage` | `List<LlmUsage>?` | `\[\]` | LLM token usage and cost data for all LLM calls made during this extraction. Contains one entry per LLM call. Multiple entries are produced when VLM OCR, structured extraction, or LLM embeddings run during the same extraction. `null` when no LLM was used. |
+| `entities` | `List<Entity>?` | `\[\]` | Named entities detected in `content` by the NER post-processor. `null` when no NER backend is configured. Populated by the `xberg-gliner` ONNX backend or the LLM-driven backend (see `crates/xberg/src/text/ner/`). |
+| `summary` | `DocumentSummary?` | `null` | Summary of `content` produced by the summarisation post-processor. `null` when summarisation is not configured. Populated by the TextRank extractive backend (deterministic, no external service) or by the liter-llm-driven abstractive backend. |
+| `extractionConfidence` | `ExtractionConfidence?` | `null` | Confidence score computed by the heuristics pipeline. Populated when the `heuristics` feature is enabled and confidence scoring has been performed.  Combines text-coverage, OCR aggregate confidence, and schema-compliance into a single `\[0, 1\]` value. `null` when confidence scoring is not configured or the feature is absent. |
+| `translation` | `Translation?` | `null` | Translation of `content` produced by the translation post-processor. `null` when translation is not configured. |
+| `pageClassifications` | `List<PageClassification>?` | `\[\]` | Per-page classifications produced by the page-classification post-processor. `null` when classification is not configured. |
+| `redactionReport` | `RedactionReport?` | `null` | Audit report of redactions applied by the redaction post-processor. The redaction processor rewrites `content`, `formatted_content`, every chunk's text, and the textual fields of `entities` / `summary` / `translation` / `page_classifications` in place. This report describes what was found and how it was replaced. `null` when redaction is not configured. |
+| `formulas` | `List<Formula>` | `\[\]` | Mathematical formulas recognized in the document. Populated by the layout-guided formula pipeline when the `layout-detection` feature is enabled and the document contains regions classified as formulas. Empty otherwise. |
+| `formFields` | `List<PdfFormField>` | `\[\]` | Form fields extracted from a PDF's AcroForm or XFA structure. Populated by the PDF extractor when `PdfConfig.extract_form_fields` is enabled (default) and the document is a fillable form. Empty otherwise. |
+| `formattedContent` | `String?` | `null` | Pre-rendered content in the requested output format. Populated during `derive_extraction_result` before tree derivation consumes element data. `apply_output_format` swaps this into `content` at the end of the pipeline, after post-processors have operated on plain text. |
+
+##### Methods
+
+###### fromOcr()
+
+Convert from an OCR result.
+
+**Signature:**
+
+```kotlin
+@JvmStatic
+fun fromOcr(ocr: OcrExtractionResult): ExtractedDocument
+```
+
+**Example:**
+
+```kotlin
+val result = ExtractedDocument.fromOcr(OcrExtractionResult())
+```
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `ocr` | `OcrExtractionResult` | Yes | The ocr extraction result |
+
+**Returns:** `ExtractedDocument`
 
 ---
 
@@ -3905,7 +2062,7 @@ PIL.Image (Python), Sharp (Node.js), or other formats as needed.
 | `bitsPerComponent` | `Int?` | `null` | Bits per color component (e.g., 8, 16) |
 | `isMask` | `Boolean` | — | Whether this image is a mask image |
 | `description` | `String?` | `null` | Optional description of the image |
-| `ocrResult` | `ExtractionResult?` | `null` | Nested OCR extraction result (if image was OCRed) When OCR is performed on this image, the result is embedded here rather than in a separate collection, making the relationship explicit. |
+| `ocrResult` | `ExtractedDocument?` | `null` | Nested OCR extraction result (if image was OCRed) When OCR is performed on this image, the result is embedded here rather than in a separate collection, making the relationship explicit. |
 | `boundingBox` | `BoundingBox?` | `null` | Bounding box of the image on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top). Only populated for PDF-extracted images when position data is available from the PDF extractor. |
 | `sourcePath` | `String?` | `null` | Original source path of the image within the document archive (e.g., "media/image1.png" in DOCX). Used for rendering image references when the binary data is not extracted. |
 | `imageKind` | `ImageKind?` | `null` | Heuristic classification of what this image likely depicts. `null` if classification was disabled or inconclusive. |
@@ -3984,7 +2141,7 @@ It can be loaded from TOML, YAML, or JSON files, or created programmatically.
 | `layout` | `LayoutDetectionConfig?` | `null` | Layout detection configuration (None = layout detection disabled). When set, PDF pages and images are analyzed for document structure (headings, code, formulas, tables, figures, etc.) using RT-DETR models via ONNX Runtime. For PDFs, layout hints override paragraph classification in the markdown pipeline. For images, per-region OCR is performed with markdown formatting based on detected layout classes. Requires the `layout-detection` feature to run inference; the field is present whenever the `layout-types` feature is active (which includes `layout-detection` as well as the no-ORT target groups). |
 | `transcription` | `TranscriptionConfig?` | `null` | Transcription (speech-to-text) configuration for audio/video files. When set and `enabled`, files with audio/video MIME types (mp3, mp4, m4a, wav, webm, etc.) are routed to the Whisper-based transcription pipeline. The actual heavy dependencies are only active under the `transcription` feature; the field is visible under `transcription-types` (including on WASM and Android targets that use the no-ORT preset). Default: `null` (transcription disabled). This is an additive, non-breaking change. |
 | `useLayoutForMarkdown` | `Boolean` | `false` | Run layout detection on the non-OCR PDF markdown path. When `true` and `layout` is `Some(_)`, layout regions inform heading, table, list, and figure detection in the structure pipeline that would otherwise rely on font-clustering heuristics alone. Significantly improves SF1 (structural F1) at the cost of inference latency (~150-300ms/page CPU, ~20-50ms/page GPU). Default: `false`. Requires the `layout-detection` feature. |
-| `includeDocumentStructure` | `Boolean` | `false` | Enable structured document tree output. When true, populates the `document` field on `ExtractionResult` with a hierarchical `DocumentStructure` containing heading-driven section nesting, table grids, content layer classification, and inline annotations. Independent of `result_format` — can be combined with Unified or ElementBased. |
+| `includeDocumentStructure` | `Boolean` | `false` | Enable structured document tree output. When true, populates the `document` field on `ExtractedDocument` with a hierarchical `DocumentStructure` containing heading-driven section nesting, table grids, content layer classification, and inline annotations. Independent of `result_format` — can be combined with Unified or ElementBased. |
 | `acceleration` | `AccelerationConfig?` | `null` | Hardware acceleration configuration for ONNX Runtime models. Controls execution provider selection for layout detection and embedding models. When `null`, uses platform defaults (CoreML on macOS, CUDA on Linux, CPU on Windows). |
 | `cacheNamespace` | `String?` | `null` | Cache namespace for tenant isolation. When set, cache entries are stored under `{cache_dir}/{namespace}/`. Must be alphanumeric, hyphens, or underscores only (max 64 chars). Different namespaces have isolated cache spaces on the same filesystem. |
 | `cacheTtlSecs` | `Long?` | `null` | Per-request cache TTL in seconds. Overrides the global `max_age_days` for this specific extraction. When `0`, caching is completely skipped (no read or write). When `null`, the global TTL applies. |
@@ -3992,12 +2149,12 @@ It can be loaded from TOML, YAML, or JSON files, or created programmatically.
 | `url` | `UrlExtractionConfig` | — | URL ingestion and crawl configuration. |
 | `maxArchiveDepth` | `Long` | — | Maximum recursion depth for archive extraction (default: 3). Set to 0 to disable recursive extraction (legacy behavior). |
 | `treeSitter` | `TreeSitterConfig?` | `null` | Tree-sitter language pack configuration (None = tree-sitter disabled). When set, enables code file extraction using tree-sitter parsers. Controls grammar download behavior and code analysis options. |
-| `structuredExtraction` | `StructuredExtractionConfig?` | `null` | Structured extraction via LLM (None = disabled). When set, the extracted document content is sent to an LLM with the provided JSON schema. The structured response is stored in `ExtractionResult.structured_output`. |
-| `ner` | `NerConfig?` | `null` | Named-entity recognition configuration. When set, the NER post-processor runs at the Middle stage and populates `ExtractionResult.entities`. |
-| `redaction` | `RedactionConfig?` | `null` | Redaction / anonymisation configuration. When set, the redaction post-processor runs at the Late stage and rewrites every textual field in `ExtractionResult`, emitting an audit trail in `ExtractionResult.redaction_report`. |
-| `summarization` | `SummarizationConfig?` | `null` | Summarisation configuration. When set, the summarisation post-processor runs at the Middle stage and populates `ExtractionResult.summary`. |
-| `translation` | `TranslationConfig?` | `null` | Translation configuration. When set, the translation post-processor runs at the Middle stage and populates `ExtractionResult.translation`. |
-| `pageClassification` | `PageClassificationConfig?` | `null` | Per-page classification configuration. When set, the classification post-processor runs at the Middle stage and populates `ExtractionResult.page_classifications`. |
+| `structuredExtraction` | `StructuredExtractionConfig?` | `null` | Structured extraction via LLM (None = disabled). When set, the extracted document content is sent to an LLM with the provided JSON schema. The structured response is stored in `ExtractedDocument.structured_output`. |
+| `ner` | `NerConfig?` | `null` | Named-entity recognition configuration. When set, the NER post-processor runs at the Middle stage and populates `ExtractedDocument.entities`. |
+| `redaction` | `RedactionConfig?` | `null` | Redaction / anonymisation configuration. When set, the redaction post-processor runs at the Late stage and rewrites every textual field in `ExtractedDocument`, emitting an audit trail in `ExtractedDocument.redaction_report`. |
+| `summarization` | `SummarizationConfig?` | `null` | Summarisation configuration. When set, the summarisation post-processor runs at the Middle stage and populates `ExtractedDocument.summary`. |
+| `translation` | `TranslationConfig?` | `null` | Translation configuration. When set, the translation post-processor runs at the Middle stage and populates `ExtractedDocument.translation`. |
+| `pageClassification` | `PageClassificationConfig?` | `null` | Per-page classification configuration. When set, the classification post-processor runs at the Middle stage and populates `ExtractedDocument.page_classifications`. |
 | `captioning` | `CaptioningConfig?` | `null` | VLM captioning configuration for extracted images. When set, the captioning post-processor runs at the Middle stage and writes a caption into each `ExtractedImage.caption`. |
 | `qrCodes` | `Boolean?` | `null` | Enable QR-code detection in extracted images. When `true`, the QR post-processor runs at the Middle stage and populates `ExtractedImage.qr_codes`. |
 
@@ -4035,9 +2192,9 @@ decompression can improve CPU utilization by 5-10% by avoiding wasteful
 image I/O and processing when results won't be used.
 Returns `true` when image binary data should be extracted.
 
-True when `config.images.extract_images` is set **or** when captioning is
-configured — captioning requires image bytes regardless of whether the caller
-also requested `images` extraction.
+True when `config.images.extract_images` is set, captioning is configured, or QR-code
+detection is enabled. Captioning and QR-code detection both require image bytes
+regardless of whether the caller also requested image extraction.
 
 **Signature:**
 
@@ -4081,7 +2238,7 @@ val result = instance.needsImageProcessing()
 
 #### ExtractionDiff
 
-The complete diff between two `ExtractionResult` values.
+The complete diff between two `ExtractedDocument` values.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -4096,7 +2253,7 @@ The complete diff between two `ExtractionResult` values.
 
 #### ExtractionErrorItem
 
-Non-fatal per-input extraction error captured by `ExtractionOutput`.
+Non-fatal per-input extraction error captured by `ExtractionResult`.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -4108,13 +2265,13 @@ Non-fatal per-input extraction error captured by `ExtractionOutput`.
 
 ---
 
-#### ExtractionOutput
+#### ExtractionResult
 
-Unified extraction output envelope.
+Unified extraction result envelope.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `results` | `List<ExtractionResult>` | `\[\]` | Extraction results in discovery order. |
+| `results` | `List<ExtractedDocument>` | `\[\]` | Extracted documents in discovery order. |
 | `errors` | `List<ExtractionErrorItem>` | `\[\]` | Non-fatal per-input errors. |
 | `summary` | `ExtractionSummary` | — | Aggregate counts for the operation. |
 | `crawlFinalUrls` | `List<String>` | `\[\]` | Final URLs reached after redirects during URL ingestion. |
@@ -4131,90 +2288,20 @@ Build an output containing one successful result.
 
 ```kotlin
 @JvmStatic
-fun single(result: ExtractionResult): ExtractionOutput
+fun single(result: ExtractedDocument): ExtractionResult
 ```
 
 **Example:**
 
 ```kotlin
-val result = ExtractionOutput.single(ExtractionResult())
+val result = ExtractionResult.single(ExtractedDocument())
 ```
 
 **Parameters:**
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `result` | `ExtractionResult` | Yes | The extraction result |
-
-**Returns:** `ExtractionOutput`
-
----
-
-#### ExtractionResult
-
-General extraction result used by the core extraction API.
-
-This is the main result type returned by all extraction functions.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `content` | `String` | — | Plain-text representation of the extracted document content. |
-| `mimeType` | `String` | — | MIME type of the source document (e.g. `"application/pdf"`). |
-| `metadata` | `Metadata` | — | Document-level metadata (author, title, dates, format-specific fields). |
-| `extractionMethod` | `ExtractionMethod?` | `null` | Extraction strategy used to produce the returned text. Populated when the extractor can reliably distinguish native text extraction, OCR-only extraction, or mixed native/OCR output. |
-| `tables` | `List<Table>` | `\[\]` | Tables extracted from the document, each with structured cell data. |
-| `detectedLanguages` | `List<String>?` | `\[\]` | ISO 639-1 language codes detected in the document content. |
-| `chunks` | `List<Chunk>?` | `\[\]` | Text chunks when chunking is enabled. When chunking configuration is provided, the content is split into overlapping chunks for efficient processing. Each chunk contains the text, optional embeddings (if enabled), and metadata about its position. |
-| `images` | `List<ExtractedImage>?` | `\[\]` | Extracted images from the document. When image extraction is enabled via `ImageExtractionConfig`, this field contains all images found in the document with their raw data and metadata. Each image may optionally contain a nested `ocr_result` if OCR was performed. |
-| `pages` | `List<PageContent>?` | `\[\]` | Per-page content when page extraction is enabled. When page extraction is configured, the document is split into per-page content with tables and images mapped to their respective pages. |
-| `elements` | `List<Element>?` | `\[\]` | Semantic elements when element-based result format is enabled. When result_format is set to ElementBased, this field contains semantic elements with type classification, unique identifiers, and metadata for Unstructured-compatible element-based processing. |
-| `djotContent` | `DjotContent?` | `null` | Rich Djot content structure (when extracting Djot documents). When extracting Djot documents with structured extraction enabled, this field contains the full semantic structure including: - Block-level elements with nesting - Inline formatting with attributes - Links, images, footnotes - Math expressions - Complete attribute information The `content` field still contains plain text for backward compatibility. Always `null` for non-Djot documents. |
-| `ocrElements` | `List<OcrElement>?` | `\[\]` | OCR elements with full spatial and confidence metadata. When OCR is performed with element extraction enabled, this field contains the structured representation of detected text including: - Bounding geometry (rectangles or quadrilaterals) - Confidence scores (detection and recognition) - Rotation information - Hierarchical relationships (Tesseract only) This field preserves all metadata that would otherwise be lost when converting to plain text or markdown output formats. Only populated when `OcrElementConfig.include_elements` is true. |
-| `document` | `DocumentStructure?` | `null` | Structured document tree (when document structure extraction is enabled). When `include_document_structure` is true in `ExtractionConfig`, this field contains the full hierarchical representation of the document including: - Heading-driven section nesting - Table grids with cell-level metadata - Content layer classification (body, header, footer, footnote) - Inline text annotations (formatting, links) - Bounding boxes and page numbers Independent of `result_format` — can be combined with Unified or ElementBased. |
-| `extractedKeywords` | `List<Keyword>?` | `\[\]` | Extracted keywords when keyword extraction is enabled. When keyword extraction (RAKE or YAKE) is configured, this field contains the extracted keywords with scores, algorithm info, and position data. Previously stored in `metadata.additional\["keywords"\]`. |
-| `qualityScore` | `Double?` | `null` | Document quality score from quality analysis. A value between 0.0 and 1.0 indicating the overall text quality. Previously stored in `metadata.additional\["quality_score"\]`. |
-| `processingWarnings` | `List<ProcessingWarning>` | `\[\]` | Non-fatal warnings collected during processing pipeline stages. Captures errors from optional pipeline features (embedding, chunking, language detection, output formatting) that don't prevent extraction but may indicate degraded results. Previously stored as individual keys in `metadata.additional`. |
-| `annotations` | `List<PdfAnnotation>?` | `\[\]` | PDF annotations extracted from the document. When annotation extraction is enabled via `PdfConfig.extract_annotations`, this field contains text notes, highlights, links, stamps, and other annotations found in PDF documents. |
-| `children` | `List<ArchiveEntry>?` | `\[\]` | Nested extraction results from archive contents. When extracting archives, each processable file inside produces its own full extraction result. Set to `null` for non-archive formats. Use `max_archive_depth` in config to control recursion depth. |
-| `uris` | `List<ExtractedUri>?` | `\[\]` | URIs/links discovered during document extraction. Contains hyperlinks, image references, citations, email addresses, and other URI-like references found in the document. Always extracted when present in the source document. |
-| `revisions` | `List<DocumentRevision>?` | `\[\]` | Tracked changes embedded in the source document. Populated by per-format extractors that understand change-tracking metadata (DOCX `w:ins`/`w:del`/`w:rPrChange`, ODT `text:change-*`, …). Every extractor defaults to `null` until its format-specific implementation is added. Extractors that do populate this field follow the "accepted-changes" convention: inserted text is present in `content`, deleted text is absent — the revision list is the separate audit trail. |
-| `structuredOutput` | `Any?` | `null` | Structured extraction output from LLM-based JSON schema extraction. When `structured_extraction` is configured in `ExtractionConfig`, the extracted document content is sent to a VLM with the provided JSON schema. The response is parsed and stored here as a JSON value matching the schema. |
-| `codeIntelligence` | `Any?` | `null` | Code intelligence results from tree-sitter analysis. Populated when extracting source code files with the `tree-sitter` feature. Contains metrics, structural analysis, imports/exports, comments, docstrings, symbols, diagnostics, and optionally chunked code segments. Stored as an opaque JSON value so that all language bindings (Go, Java, C#, …) can deserialize it as a raw JSON object rather than a typed struct. The underlying type is `tree_sitter_language_pack.ProcessResult`. |
-| `llmUsage` | `List<LlmUsage>?` | `\[\]` | LLM token usage and cost data for all LLM calls made during this extraction. Contains one entry per LLM call. Multiple entries are produced when VLM OCR, structured extraction, or LLM embeddings run during the same extraction. `null` when no LLM was used. |
-| `entities` | `List<Entity>?` | `\[\]` | Named entities detected in `content` by the NER post-processor. `null` when no NER backend is configured. Populated by the `xberg-gliner` ONNX backend or the LLM-driven backend (see `crates/xberg/src/text/ner/`). |
-| `summary` | `DocumentSummary?` | `null` | Summary of `content` produced by the summarisation post-processor. `null` when summarisation is not configured. Populated by the TextRank extractive backend (deterministic, no external service) or by the liter-llm-driven abstractive backend. |
-| `extractionConfidence` | `ExtractionConfidence?` | `null` | Confidence score computed by the heuristics pipeline. Populated when the `heuristics` feature is enabled and confidence scoring has been performed.  Combines text-coverage, OCR aggregate confidence, and schema-compliance into a single `\[0, 1\]` value. `null` when confidence scoring is not configured or the feature is absent. |
-| `translation` | `Translation?` | `null` | Translation of `content` produced by the translation post-processor. `null` when translation is not configured. |
-| `pageClassifications` | `List<PageClassification>?` | `\[\]` | Per-page classifications produced by the page-classification post-processor. `null` when classification is not configured. |
-| `redactionReport` | `RedactionReport?` | `null` | Audit report of redactions applied by the redaction post-processor. The redaction processor rewrites `content`, `formatted_content`, every chunk's text, and the textual fields of `entities` / `summary` / `translation` / `page_classifications` in place. This report describes what was found and how it was replaced. `null` when redaction is not configured. |
-| `formulas` | `List<Formula>` | `\[\]` | Mathematical formulas recognized in the document. Populated by the layout-guided formula pipeline when the `layout-detection` feature is enabled and the document contains regions classified as formulas. Empty otherwise. |
-| `formFields` | `List<PdfFormField>` | `\[\]` | Form fields extracted from a PDF's AcroForm or XFA structure. Populated by the PDF extractor when `PdfConfig.extract_form_fields` is enabled (default) and the document is a fillable form. Empty otherwise. |
-| `formattedContent` | `String?` | `null` | Pre-rendered content in the requested output format. Populated during `derive_extraction_result` before tree derivation consumes element data. `apply_output_format` swaps this into `content` at the end of the pipeline, after post-processors have operated on plain text. |
-
-##### Methods
-
-###### fromOcr()
-
-Convert from an OCR result.
-
-**Signature:**
-
-```kotlin
-@JvmStatic
-fun fromOcr(ocr: OcrExtractionResult): ExtractionResult
-```
-
-**Example:**
-
-```kotlin
-val result = ExtractionResult.fromOcr(OcrExtractionResult())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `ocr` | `OcrExtractionResult` | Yes | The ocr extraction result |
+| `result` | `ExtractedDocument` | Yes | The extracted document |
 
 **Returns:** `ExtractionResult`
 
@@ -4281,6 +2368,7 @@ cannot be overridden per file:
 | `pages` | `PageConfig?` | `null` | Override page extraction for this file. |
 | `keywords` | `KeywordConfig?` | `null` | Override keyword extraction for this file. |
 | `postprocessor` | `PostProcessorConfig?` | `null` | Override post-processor for this file. |
+| `htmlOutput` | `HtmlOutputConfig?` | `null` | Override styled HTML output configuration for this file. |
 | `resultFormat` | `ResultFormat?` | `null` | Override result format for this file. |
 | `outputFormat` | `OutputFormat?` | `null` | Override output content format for this file. |
 | `includeDocumentStructure` | `Boolean?` | `null` | Override document structure output for this file. |
@@ -4289,6 +2377,14 @@ cannot be overridden per file:
 | `timeoutSecs` | `Long?` | `null` | Override per-file extraction timeout in seconds. When set, the extraction for this file will be canceled after the specified duration. A timed-out file produces an error result without affecting other files in the batch. |
 | `treeSitter` | `TreeSitterConfig?` | `null` | Override tree-sitter configuration for this file. |
 | `structuredExtraction` | `StructuredExtractionConfig?` | `null` | Override structured extraction configuration for this file. When set, enables LLM-based structured extraction with a JSON schema for this specific file. The extracted content is sent to a VLM/LLM and the response is parsed according to the provided schema. |
+| `url` | `UrlExtractionConfig?` | `null` | Override URL ingestion and crawl configuration for this file. |
+| `ner` | `NerConfig?` | `null` | Override named-entity recognition configuration for this file. |
+| `redaction` | `RedactionConfig?` | `null` | Override redaction configuration for this file. |
+| `summarization` | `SummarizationConfig?` | `null` | Override summarization configuration for this file. |
+| `translation` | `TranslationConfig?` | `null` | Override translation configuration for this file. |
+| `pageClassification` | `PageClassificationConfig?` | `null` | Override per-page classification configuration for this file. |
+| `captioning` | `CaptioningConfig?` | `null` | Override VLM captioning configuration for this file. |
+| `qrCodes` | `Boolean?` | `null` | Override QR-code detection for this file. |
 
 ---
 
@@ -4407,7 +2503,7 @@ A mathematical formula detected and recognized in a document.
 Populated by the layout-guided formula pipeline: regions classified as
 `LayoutClass.Formula` are routed to the formula OCR task, which returns the
 LaTeX source for the region. The field is always present on
-`ExtractionResult` but only populated
+`ExtractedDocument` but only populated
 when the `layout-detection` feature is active and the document contains
 formula regions.
 
@@ -4674,7 +2770,7 @@ Image extraction configuration.
 | `maxDpi` | `Int` | `600` | Maximum DPI threshold |
 | `maxImagesPerPage` | `Int?` | `null` | Maximum number of image objects to extract per PDF page. Some PDFs (e.g. technical diagrams stored as thousands of raster fragments) can trigger extremely long or indefinite extraction times when every image object on a dense page is decoded individually via the PDF extractor. Setting this limit causes xberg to stop collecting individual images once the count per page reaches the cap and emit a warning instead. `null` (default) means no limit — all images are extracted. |
 | `classify` | `Boolean` | `false` | When `true`, extracted images are classified by kind and grouped into clusters where they appear to belong to one figure. Defaults to `false` — opt in explicitly to avoid unexpected ML overhead. |
-| `includePageRasters` | `Boolean` | `false` | When `true`, full-page renders produced during OCR preprocessing are captured and returned as `ImageKind.PageRaster` entries in `ExtractionResult.images`. **PDF + OCR only.** No rasters are captured for non-PDF inputs or when the document-level OCR bypass is active (whole-document backend). When OCR is enabled and this flag is set but the active backend skips per-page rendering, a `ProcessingWarning` is emitted in `ExtractionResult.processing_warnings`. Defaults to `false`. Enable when downstream consumers need page thumbnails (e.g. citation previews, visual grounding). |
+| `includePageRasters` | `Boolean` | `false` | When `true`, full-page renders produced during OCR preprocessing are captured and returned as `ImageKind.PageRaster` entries in `ExtractedDocument.images`. **PDF + OCR only.** No rasters are captured for non-PDF inputs or when the document-level OCR bypass is active (whole-document backend). When OCR is enabled and this flag is set but the active backend skips per-page rendering, a `ProcessingWarning` is emitted in `ExtractedDocument.processing_warnings`. Defaults to `false`. Enable when downstream consumers need page thumbnails (e.g. citation previews, visual grounding). |
 | `runOcrOnImages` | `Boolean` | `true` | Run OCR on extracted images and include the recognized text in the document content. When `true` (default) and `ExtractionConfig.ocr` is configured, extracted images are processed with the configured OCR backend. Set to `false` to extract images without OCR processing, even when OCR is enabled. |
 | `ocrTextOnly` | `Boolean` | `false` | When `true`, image OCR results are rendered as plain text without the `!\[...\](...)` markdown placeholder. Only takes effect when `run_ocr_on_images` is also `true`. |
 | `appendOcrText` | `Boolean` | `false` | When `true` and `ocr_text_only` is `false`, append the OCR text after the image placeholder in the rendered output. |
@@ -4976,92 +3072,6 @@ Link element metadata.
 
 ---
 
-#### LlmBackend
-
-liter-llm-backed NER backend.
-
-##### Methods
-
-###### new()
-
-Create a new LLM-backed NER backend with the given LLM configuration.
-
-**Signature:**
-
-```kotlin
-@JvmStatic
-fun new(config: LlmConfig): LlmBackend
-```
-
-**Example:**
-
-```kotlin
-val result = LlmBackend.new(LlmConfig())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `config` | `LlmConfig` | Yes | The configuration options |
-
-**Returns:** `LlmBackend`
-
-###### detect()
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun detect(text: String, categories: List<EntityCategory>): List<Entity>
-```
-
-**Example:**
-
-```kotlin
-val result = instance.detect("value", [])
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `text` | `String` | Yes | The text |
-| `categories` | `List<EntityCategory>` | Yes | The categories |
-
-**Returns:** `List<Entity>`
-
-**Errors:** Throws `Error`.
-
-###### detectWithCustom()
-
-**Signature:**
-
-```kotlin
-@Throws(Error::class)
-fun detectWithCustom(text: String, categories: List<EntityCategory>, customLabels: List<String>): List<Entity>
-```
-
-**Example:**
-
-```kotlin
-val result = instance.detectWithCustom("value", [], [])
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `text` | `String` | Yes | The text |
-| `categories` | `List<EntityCategory>` | Yes | The categories |
-| `customLabels` | `List<String>` | Yes | The custom labels |
-
-**Returns:** `List<Entity>`
-
-**Errors:** Throws `Error`.
-
----
-
 #### LlmConfig
 
 Configuration for an LLM provider/model via liter-llm.
@@ -5288,7 +3298,7 @@ Configuration for the NER post-processor.
 | `backend` | `NerBackendKind` | `NerBackendKind.Onnx` | Backend that runs the entity detection. |
 | `categories` | `List<EntityCategory>` | `\[\]` | Entity categories to detect. Defaults to a sensible PERSON/ORG/LOCATION/EMAIL set when empty. |
 | `model` | `String?` | `null` | Override the default model — only used by `NerBackendKind.Onnx`. `null` lets the backend pick its pinned default xberg GLiNER model alias. |
-| `llm` | `LlmConfig?` | `null` | Optional LLM configuration — only used by `NerBackendKind.Llm`. Token usage for LLM backends is recorded in `ExtractionResult.llm_usage`. |
+| `llm` | `LlmConfig?` | `null` | Optional LLM configuration — only used by `NerBackendKind.Llm`. Token usage for LLM backends is recorded in `ExtractedDocument.llm_usage`. |
 | `customLabels` | `List<String>` | `\[\]` | Arbitrary user-supplied entity labels for zero-shot detection. `xberg-gliner` natively supports zero-shot inference over caller-supplied labels. The LLM backend also honours these labels by including them in the structured-output schema. Custom labels surface as `EntityCategory.Custom` in the resulting `Entity` stream. Use this when you need domain-specific entity types (e.g. `"Treatment"`, `"Product"`, `"Vessel"`) without forking GLiNER's taxonomy. |
 
 ---
@@ -5300,7 +3310,7 @@ Trait for OCR backend plugins.
 Implement this trait to add custom OCR capabilities. OCR backends can be:
 
 - Native Rust implementations (like Tesseract)
-- FFI bridges to Python libraries (like EasyOCR, PaddleOCR)
+- FFI bridges to external libraries (like PaddleOCR)
 - Cloud-based OCR services (Google Vision, AWS Textract, etc.)
 
 ##### Thread Safety
@@ -5315,7 +3325,7 @@ Process an image and extract text via OCR.
 
 **Returns:**
 
-An `ExtractionResult` containing the extracted text and metadata.
+An `ExtractedDocument` containing the extracted text and metadata.
 
 **Errors:**
 
@@ -5333,7 +3343,7 @@ so multiple backends can coexist in a pipeline without key conflicts.
 
 ```kotlin
 @Throws(Error::class)
-fun processImage(imageBytes: ByteArray, config: OcrConfig): ExtractionResult
+fun processImage(imageBytes: ByteArray, config: OcrConfig): ExtractedDocument
 ```
 
 **Example:**
@@ -5349,7 +3359,7 @@ val result = instance.processImage("data".toByteArray(), OcrConfig())
 | `imageBytes` | `ByteArray` | Yes | Raw image data (JPEG, PNG, TIFF, etc.) |
 | `config` | `OcrConfig` | Yes | OCR configuration (language, PSM mode, etc.) |
 
-**Returns:** `ExtractionResult`
+**Returns:** `ExtractedDocument`
 
 **Errors:** Throws `Error`.
 
@@ -5368,7 +3378,7 @@ Same as `process_image`, plus file I/O errors.
 
 ```kotlin
 @Throws(Error::class)
-fun processImageFile(path: Path, config: OcrConfig): ExtractionResult
+fun processImageFile(path: Path, config: OcrConfig): ExtractedDocument
 ```
 
 **Example:**
@@ -5384,7 +3394,7 @@ val result = instance.processImageFile("value", OcrConfig())
 | `path` | `Path` | Yes | Path to the image file |
 | `config` | `OcrConfig` | Yes | OCR configuration |
 
-**Returns:** `ExtractionResult`
+**Returns:** `ExtractedDocument`
 
 **Errors:** Throws `Error`.
 
@@ -5531,7 +3541,7 @@ Only called if `supports_document_processing` returns `true`.
 
 ```kotlin
 @Throws(Error::class)
-fun processDocument(path: Path, config: OcrConfig): ExtractionResult
+fun processDocument(path: Path, config: OcrConfig): ExtractedDocument
 ```
 
 **Example:**
@@ -5547,7 +3557,7 @@ val result = instance.processDocument("value", OcrConfig())
 | `path` | `Path` | Yes | The  path |
 | `config` | `OcrConfig` | Yes | The ocr config |
 
-**Returns:** `ExtractionResult`
+**Returns:** `ExtractedDocument`
 
 **Errors:** Throws `Error`.
 
@@ -5574,7 +3584,7 @@ OCR configuration.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | `Boolean` | `true` | Whether OCR is enabled. Setting `enabled: false` is a shorthand for `disable_ocr: true` on the parent `ExtractionConfig`. Images return metadata only; PDFs use native text extraction without OCR fallback. Defaults to `true`. When `false`, all other OCR settings are ignored. |
-| `backend` | `String` | — | OCR backend: tesseract, easyocr, paddleocr |
+| `backend` | `String` | — | OCR backend: tesseract, paddleocr, paddle-ocr, or vlm |
 | `language` | `List<String>` | `\[\]` | Language code(s) for OCR recognition. Accepts either a single language code ("eng") or a list (\["eng", "deu"\]). Defaults to \["eng"\]. For Tesseract, languages are joined with "+". |
 | `tesseractConfig` | `TesseractConfig?` | `null` | Tesseract-specific configuration (optional) |
 | `outputFormat` | `OutputFormat?` | `null` | Output format for OCR results (optional, for format conversion) |
@@ -5640,7 +3650,7 @@ Controls how OCR elements are extracted and filtered.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `includeElements` | `Boolean` | — | Whether to include OCR elements in the extraction result. When true, the `ocr_elements` field in `ExtractionResult` will be populated. |
+| `includeElements` | `Boolean` | — | Whether to include OCR elements in the extraction result. When true, the `ocr_elements` field in `ExtractedDocument` will be populated. |
 | `minLevel` | `OcrElementLevel` | `OcrElementLevel.Line` | Minimum hierarchical level to include. Elements below this level (e.g., words when min_level is Line) will be excluded. |
 | `minConfidence` | `Double` | — | Minimum recognition confidence threshold (0.0-1.0). Elements with confidence below this threshold will be filtered out. |
 | `buildHierarchy` | `Boolean` | — | Whether to build hierarchical relationships between elements. When true, `parent_id` fields will be populated based on spatial containment. Only meaningful for Tesseract output. |
@@ -5702,7 +3712,7 @@ A single backend stage in the OCR pipeline.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `backend` | `String` | — | Backend name: "tesseract", "paddleocr", "easyocr", or a custom registered name. |
+| `backend` | `String` | — | Backend name: "tesseract", "paddleocr", "paddle-ocr", "vlm", or a custom registered name. |
 | `priority` | `Int` | `serde(default = "default_priority")` | Priority weight (higher = tried first). Stages are sorted by priority descending. |
 | `language` | `List<String>?` | `/* serde(default) */` | Language override for this stage (None = use parent OcrConfig.language). Accepts either a single language code ("eng") or a list (\["eng", "deu"\]). |
 | `tesseractConfig` | `TesseractConfig?` | `/* serde(default) */` | Tesseract-specific config override for this stage. |
@@ -6172,7 +4182,7 @@ when page boundaries are available and chunking is configured.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `extractPages` | `Boolean` | `false` | Extract pages as separate array (ExtractionResult.pages) |
+| `extractPages` | `Boolean` | `false` | Extract pages as separate array (ExtractedDocument.pages) |
 | `insertPageMarkers` | `Boolean` | `false` | Insert page markers in main content string |
 | `markerFormat` | `String` | `"<!-- PAGE {page_num} -->"` | Page marker format (use {page_num} placeholder) Default: "\n\n<!-- PAGE {page_num} -->\n\n" |
 
@@ -6220,7 +4230,7 @@ by avoiding redundant copies during serialization.
 | `pageNumber` | `Int` | — | Page number (1-indexed) |
 | `content` | `String` | — | Text content for this page |
 | `tables` | `List<Table>` | `/* serde(default) */` | Tables found on this page (uses Arc for memory efficiency) Serializes as List<Table> for JSON compatibility while maintaining shared in-memory ownership for zero-copy sharing. |
-| `imageIndices` | `List<Int>` | `/* serde(default) */` | Indices into `ExtractionResult.images` for images found on this page. Each value is a zero-based index into the top-level `images` collection. Only populated when `extract_images = true` in the extraction config. |
+| `imageIndices` | `List<Int>` | `/* serde(default) */` | Indices into `ExtractedDocument.images` for images found on this page. Each value is a zero-based index into the top-level `images` collection. Only populated when `extract_images = true` in the extraction config. |
 | `hierarchy` | `PageHierarchy?` | `null` | Hierarchy information for the page (when hierarchy extraction is enabled) Contains text hierarchy levels (H1-H6) extracted from the page content. |
 | `isBlank` | `Boolean?` | `null` | Whether this page is blank (no meaningful text content) Determined during extraction based on text content analysis. A page is blank if it has fewer than 3 non-whitespace characters and contains no tables or images. |
 | `layoutRegions` | `List<LayoutRegion>?` | `null` | Layout detection regions for this page (when layout detection is enabled). Contains detected layout regions with class, confidence, bounding box, and area fraction. Only populated when layout detection is configured. |
@@ -6259,7 +4269,7 @@ and visibility state (for presentations).
 | `tableCount` | `Int?` | `null` | Number of tables on this page |
 | `hidden` | `Boolean?` | `null` | Whether this page is hidden (e.g., in presentations) |
 | `isBlank` | `Boolean?` | `null` | Whether this page is blank (no meaningful text, no images, no tables) A page is considered blank if it has fewer than 3 non-whitespace characters and contains no tables or images. This is useful for filtering out empty pages in scanned documents or PDFs with blank separator pages. |
-| `hasVectorGraphics` | `Boolean` | `/* serde(default) */` | Whether this page contains non-trivial vector graphics (paths, shapes, curves) Indicates the presence of vector-drawn content such as charts, diagrams, or geometric shapes (e.g., from Adobe InDesign, LaTeX TikZ). These are invisible to `ExtractionResult.images` since they are not embedded as raster XObjects. Set to `true` when path count exceeds a heuristic threshold, signaling that downstream consumers may want to rasterize the page to capture this content. Only populated for PDFs; `null` for other document types. |
+| `hasVectorGraphics` | `Boolean` | `/* serde(default) */` | Whether this page contains non-trivial vector graphics (paths, shapes, curves) Indicates the presence of vector-drawn content such as charts, diagrams, or geometric shapes (e.g., from Adobe InDesign, LaTeX TikZ). These are invisible to `ExtractedDocument.images` since they are not embedded as raster XObjects. Set to `true` when path count exceeds a heuristic threshold, signaling that downstream consumers may want to rasterize the page to capture this content. Only populated for PDFs; `null` for other document types. |
 
 ---
 
@@ -6408,7 +4418,7 @@ PDF-specific configuration.
 | `bottomMarginFraction` | `Float?` | `null` | Bottom margin fraction (0.0–1.0) of page height to exclude footers/page numbers. Default: 0.05 (5%) |
 | `allowSingleColumnTables` | `Boolean` | `false` | Allow single-column pseudo tables in extraction results. By default, tables with fewer than 2 columns (layout-guided) or 3 columns (heuristic) are rejected. When `true`, the minimum column count is relaxed to 1, allowing single-column structured data (glossaries, itemized lists) to be emitted as tables. Other quality filters (density, sparsity, prose detection) still apply. |
 | `ocrInlineImages` | `Boolean` | `false` | Perform OCR on inline images extracted from PDF pages and attach the recognized text to each `ExtractedImage.ocr_result`. Requires Tesseract to be available; if `ExtractionConfig.ocr` is `null` the extractor falls back to `TesseractConfig.default()`. Per-image failures degrade gracefully (the image is returned without OCR text rather than failing the whole extraction). Default: `false`. |
-| `extractFormFields` | `Boolean` | `true` | Extract AcroForm and XFA form fields into `ExtractionResult.form_fields`. When `true` (default), reads the document's interactive form structure (field names, types, values, widget geometry). Cheap and strictly additive — non-form PDFs simply yield an empty list. Set to `false` to skip the form pass entirely. |
+| `extractFormFields` | `Boolean` | `true` | Extract AcroForm and XFA form fields into `ExtractedDocument.form_fields`. When `true` (default), reads the document's interactive form structure (field names, types, values, widget geometry). Cheap and strictly additive — non-form PDFs simply yield an empty list. Set to `false` to skip the form pass entirely. |
 | `readingOrder` | `Boolean` | `false` | Reorder extracted text by layout-detected reading order. When `true`, projects text spans onto layout-detected regions, performs column detection, and emits spans in natural reading order (important for multi-column academic PDFs). Requires the `layout-detection` feature; has no effect without it. Defaults to `false`. |
 
 ##### Methods
@@ -6726,20 +4736,20 @@ result in place.
 
 ```kotlin
 @Throws(Error::class)
-fun process(result: ExtractionResult, config: ExtractionConfig)
+fun process(result: ExtractedDocument, config: ExtractionConfig)
 ```
 
 **Example:**
 
 ```kotlin
-instance.process(ExtractionResult(), ExtractionConfig())
+instance.process(ExtractedDocument(), ExtractionConfig())
 ```
 
 **Parameters:**
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `result` | `ExtractionResult` | Yes | Mutable reference to the extraction result to process |
+| `result` | `ExtractedDocument` | Yes | Mutable reference to the extraction result to process |
 | `config` | `ExtractionConfig` | Yes | Extraction configuration |
 
 **Returns:** No return value.
@@ -6784,20 +4794,20 @@ Defaults to `true` (always run).
 **Signature:**
 
 ```kotlin
-fun shouldProcess(result: ExtractionResult, config: ExtractionConfig): Boolean
+fun shouldProcess(result: ExtractedDocument, config: ExtractionConfig): Boolean
 ```
 
 **Example:**
 
 ```kotlin
-val result = instance.shouldProcess(ExtractionResult(), ExtractionConfig())
+val result = instance.shouldProcess(ExtractedDocument(), ExtractionConfig())
 ```
 
 **Parameters:**
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `result` | `ExtractionResult` | Yes | The extraction result |
+| `result` | `ExtractedDocument` | Yes | The extracted document |
 | `config` | `ExtractionConfig` | Yes | The extraction config |
 
 **Returns:** `Boolean`
@@ -6815,20 +4825,20 @@ Estimated processing time in milliseconds.
 **Signature:**
 
 ```kotlin
-fun estimatedDurationMs(result: ExtractionResult): Long
+fun estimatedDurationMs(result: ExtractedDocument): Long
 ```
 
 **Example:**
 
 ```kotlin
-val result = instance.estimatedDurationMs(ExtractionResult())
+val result = instance.estimatedDurationMs(ExtractedDocument())
 ```
 
 **Parameters:**
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `result` | `ExtractionResult` | Yes | The extraction result |
+| `result` | `ExtractedDocument` | Yes | The extracted document |
 
 **Returns:** `Long`
 
@@ -7177,8 +5187,8 @@ One redaction event: which span was rewritten, why, and with what.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `start` | `Int` | — | Byte-offset start in the original (pre-redaction) `ExtractionResult.content`. |
-| `end` | `Int` | — | Byte-offset end (exclusive) in the original `ExtractionResult.content`. |
+| `start` | `Int` | — | Byte-offset start in the original (pre-redaction) `ExtractedDocument.content`. |
+| `end` | `Int` | — | Byte-offset end (exclusive) in the original `ExtractedDocument.content`. |
 | `category` | `PiiCategory` | — | PII category that fired this redaction. |
 | `strategy` | `RedactionStrategy` | — | Strategy applied to this finding (mask, hash, token-replace, drop). |
 | `replacementToken` | `String` | — | String that replaced the original mention. Always present; for `Drop` the replacement is the empty string. |
@@ -7517,11 +5527,11 @@ val result = instance.extendFromDir("value")
 
 #### Renderer
 
-Trait for document renderers that convert `InternalDocument` to output strings.
+Trait for document renderers that convert extraction results to output strings.
 
-Renderers are typically stateless converters that transform the internal
-document representation into a specific output format (Markdown, HTML,
-Djot, plain text, etc.). They participate in the standard `Plugin`
+Renderers are typically stateless converters that transform extracted
+content into a specific output format (Markdown, HTML, Djot, plain text,
+etc.). They participate in the standard `Plugin`
 lifecycle so custom renderers can be registered from any supported binding
 language.
 
@@ -7535,36 +5545,30 @@ Renderers must be `Send + Sync` (inherited from `Plugin`).
 
 ##### Methods
 
-###### render()
+###### renderResult()
 
-Render an `InternalDocument` to the output format.
+Binding-safe rendering entry point for foreign-language plugin bridges.
 
-**Returns:**
-
-The rendered output as a string.
-
-**Errors:**
-
-Returns an error if rendering fails.
+Accepts one public extraction result and returns the rendered output.
 
 **Signature:**
 
 ```kotlin
 @Throws(Error::class)
-fun render(doc: InternalDocument): String
+fun renderResult(result: ExtractedDocument): String
 ```
 
 **Example:**
 
 ```kotlin
-val result = instance.render(InternalDocument())
+val result = instance.renderResult(ExtractedDocument())
 ```
 
 **Parameters:**
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `doc` | `InternalDocument` | Yes | The internal document to render |
+| `result` | `ExtractedDocument` | Yes | The extracted document |
 
 **Returns:** `String`
 
@@ -7715,26 +5719,6 @@ val result = RerankerConfig.default()
 ```
 
 **Returns:** `RerankerConfig`
-
----
-
-#### RerankerPreset
-
-Metadata for a bundled reranker preset.
-
-All string fields are owned `String` for FFI compatibility — instances are
-safe to clone and pass across language boundaries.
-
-Since v5.0.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `name` | `String` | — | Short identifier (catalog name, e.g. `"bge-reranker-base"`). |
-| `modelRepo` | `String` | — | HuggingFace repository name for the model. |
-| `modelFile` | `String` | — | Path to the ONNX model file within the repo. |
-| `additionalFiles` | `List<String>` | `/* serde(default) */` | Sibling files that must be downloaded alongside `model_file`. Empty for most presets. Used by repos that split the weight blob — e.g. `rozgo/bge-reranker-v2-m3` ships the model in `model.onnx` plus a co-located `model.onnx.data` payload. |
-| `maxLength` | `Long` | — | Maximum token sequence length the model supports. |
-| `description` | `String` | — | Human-readable description of the preset's intended use case. |
 
 ---
 
@@ -8001,64 +5985,6 @@ returning structured data that conforms to the schema.
 | `strict` | `Boolean` | `/* serde(default) */` | Enable strict mode — output must exactly match the schema. |
 | `prompt` | `String?` | `/* serde(default) */` | Custom Jinja2 extraction prompt template. When `null`, a default template is used. Available template variables: - `{{ content }}` — The extracted document text. - `{{ schema }}` — The JSON schema as a formatted string. - `{{ schema_name }}` — The schema name. - `{{ schema_description }}` — The schema description (may be empty). |
 | `llm` | `LlmConfig` | — | LLM configuration for the extraction. |
-
----
-
-#### StructuredInput
-
-Signals consumed by the call-mode heuristic.
-
-All fields derive from a prior xberg extraction — no double-work.
-This is a plain DTO; it intentionally has no dependency on internal
-xberg extraction types so it can be constructed from any source.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `mimeType` | `String` | — | MIME type, canonicalised to lowercase by the caller. |
-| `pageCount` | `Int` | — | Number of pages in the document. |
-| `textCoverage` | `Double` | — | Fraction of pages with a real text layer (0.0..=1.0). |
-| `avgCharsPerPage` | `Double` | — | Average extracted characters per page. |
-| `embeddedImageCount` | `Int` | — | Count of embedded images (figures, photos, signatures) discovered. |
-| `userForceVision` | `Boolean` | — | When `true`, promote the result to at least `StructuredCallMode.TextPlusVision`. |
-
----
-
-#### StructuredThresholds
-
-Thresholds for the structured-extraction call-mode heuristic.
-
-All defaults are **conservative starting points**.  Deployments should
-measure their own document corpus and override via their own config;
-these values are chosen to be safe-by-default, not to be optimal for
-any particular workload.
-
-Construct custom thresholds with struct-update syntax:
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `scanMaxCoverage` | `Double` | `0.1` | PDFs with `text_coverage` strictly below this are treated as scanned. **Conservative default: 0.10** — deployments override via their own config after measuring their document corpus. |
-| `digitalMinCoverage` | `Double` | `0.9` | PDFs with `text_coverage` at or above this AND zero embedded images route to `StructuredCallMode.TextOnly`. **Conservative default: 0.90** — deployments override via their own config after measuring their document corpus. |
-| `docxTextMinDensity` | `Double` | `200` | DOCX / HTML / text documents with `avg_chars_per_page` above this route to `StructuredCallMode.TextOnly`. **Conservative default: 200.0** — deployments override via their own config after measuring their document corpus. |
-| `enableVisionFallback` | `Boolean` | `false` | When `true`, emit `StructuredCallMode.TextOnlyWithVisionFallback` instead of `StructuredCallMode.TextOnly` so the orchestrator can escalate to vision on low confidence. **Conservative default: `false`** — must be explicitly enabled per deployment after bench validation; deployments override via their own config. |
-
-##### Methods
-
-###### default()
-
-**Signature:**
-
-```kotlin
-@JvmStatic
-fun default(): StructuredThresholds
-```
-
-**Example:**
-
-```kotlin
-val result = StructuredThresholds.default()
-```
-
-**Returns:** `StructuredThresholds`
 
 ---
 
@@ -8436,16 +6362,16 @@ val result = TranscriptionConfig.default()
 
 Translation of the extracted content.
 
-Holds the translated rendition of `ExtractionResult.content` and (when
+Holds the translated rendition of `ExtractedDocument.content` and (when
 `preserve_markup` was requested) the translated `formatted_content`. Chunks
-are translated in place inside `ExtractionResult.chunks[*].content` rather
+are translated in place inside `ExtractedDocument.chunks[*].content` rather
 than duplicated here.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `targetLang` | `String` | — | BCP-47 language tag the translation was produced into (e.g. `"de"`, `"fr-CA"`). |
 | `sourceLang` | `String?` | `null` | BCP-47 source language. `null` when the translation backend was asked to detect. |
-| `content` | `String` | — | Translated plain-text body. Matches the shape of `ExtractionResult.content`. |
+| `content` | `String` | — | Translated plain-text body. Matches the shape of `ExtractedDocument.content`. |
 | `formattedContent` | `String?` | `null` | Translated markup body (Markdown / HTML / etc.) when `preserve_markup` was enabled on the config. `null` otherwise. |
 
 ---
@@ -8655,20 +6581,20 @@ if validation fails.
 
 ```kotlin
 @Throws(Error::class)
-fun validate(result: ExtractionResult, config: ExtractionConfig)
+fun validate(result: ExtractedDocument, config: ExtractionConfig)
 ```
 
 **Example:**
 
 ```kotlin
-instance.validate(ExtractionResult(), ExtractionConfig())
+instance.validate(ExtractedDocument(), ExtractionConfig())
 ```
 
 **Parameters:**
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `result` | `ExtractionResult` | Yes | The extraction result to validate |
+| `result` | `ExtractedDocument` | Yes | The extraction result to validate |
 | `config` | `ExtractionConfig` | Yes | Extraction configuration |
 
 **Returns:** No return value.
@@ -8689,20 +6615,20 @@ Defaults to `true` (always run).
 **Signature:**
 
 ```kotlin
-fun shouldValidate(result: ExtractionResult, config: ExtractionConfig): Boolean
+fun shouldValidate(result: ExtractedDocument, config: ExtractionConfig): Boolean
 ```
 
 **Example:**
 
 ```kotlin
-val result = instance.shouldValidate(ExtractionResult(), ExtractionConfig())
+val result = instance.shouldValidate(ExtractedDocument(), ExtractionConfig())
 ```
 
 **Parameters:**
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `result` | `ExtractionResult` | Yes | The extraction result |
+| `result` | `ExtractedDocument` | Yes | The extracted document |
 | `config` | `ExtractionConfig` | Yes | The extraction config |
 
 **Returns:** `Boolean`
@@ -8849,7 +6775,7 @@ Determines which hardware backend is used for model inference.
 Target format for re-encoding extracted images.
 
 Controls whether and how extracted images are normalised to a uniform
-container format before being returned in `ExtractionResult.images`.
+container format before being returned in `ExtractedDocument.images`.
 The default (`Native`) preserves the format produced by each extractor
 without any additional encode pass.
 
@@ -8900,7 +6826,7 @@ URL extraction mode.
 
 Output format for extraction results.
 
-Controls the format of the `content` field in `ExtractionResult`.
+Controls the format of the `content` field in `ExtractedDocument`.
 When set to `Markdown`, `Djot`, or `Html`, the output uses that format.
 `Plain` returns the raw extracted text.
 `Structured` returns JSON with full OCR element data including bounding
@@ -8956,9 +6882,8 @@ YAML).
 How a structured-extraction preset is dispatched to the model.
 
 This is the preset-facing call mode (the `preferred_call_mode` field of a
-`Preset`). The richer runtime decision enum used by the
-structured pipeline — which adds `Skip` and `TextOnlyWithVisionFallback` —
-lives in `crate.heuristics.structured.StructuredCallMode`; this 3-variant
+`Preset`). The structured pipeline has a richer
+runtime-only decision enum with skip and fallback states; this 3-variant
 type is the stable, serializable surface presets and bindings depend on.
 
 | Value | Description |
@@ -9148,7 +7073,7 @@ transcription engine.
 Content rendering mode for code extraction.
 
 Controls how extracted code content is represented in the `content` field
-of `ExtractionResult`.
+of `ExtractedDocument`.
 
 | Value | Description |
 |-------|-------------|
@@ -9178,7 +7103,6 @@ OCR backend types.
 | Value | Description |
 |-------|-------------|
 | `Tesseract` | Tesseract OCR (native Rust binding) |
-| `EasyOcr` | EasyOCR (Python-based, via FFI) |
 | `PaddleOcr` | PaddleOCR (Python-based, via FFI) |
 | `Candle` | Candle-based VLM OCR (TrOCR, PaddleOCR-VL). |
 | `Custom` | Custom/third-party OCR backend |
@@ -9532,7 +7456,7 @@ type-safe, clean metadata without nested optionals.
 | `Epub` | Metadata extracted from an EPUB e-book. — Fields: `0`: `EpubMetadata` |
 | `Pst` | Metadata extracted from an Outlook PST archive. — Fields: `0`: `PstMetadata` |
 | `Audio` | Metadata extracted from an audio or video file. — Fields: `0`: `AudioMetadata` |
-| `Code` | Code (tree-sitter analyzable source). The structured analysis result is exposed via `ExtractionResult.code_intelligence`; this variant only tags the format. |
+| `Code` | Code (tree-sitter analyzable source). The structured analysis result is exposed via `ExtractedDocument.code_intelligence`; this variant only tags the format. |
 
 ---
 
@@ -9717,7 +7641,7 @@ Summarisation strategy.
 | Value | Description |
 |-------|-------------|
 | `Extractive` | Pure-Rust extractive summary (TextRank over the chunk graph). Deterministic, fast, no external service required. |
-| `Abstractive` | Abstractive summary produced by liter-llm. Requires `liter-llm` feature and a configured `LlmConfig`. Token usage is captured in `ExtractionResult.llm_usage`. |
+| `Abstractive` | Abstractive summary produced by liter-llm. Requires `liter-llm` feature and a configured `LlmConfig`. Token usage is captured in `ExtractedDocument.llm_usage`. |
 
 ---
 
@@ -9855,25 +7779,6 @@ Reason for boundary detection.
 | `LetterheadReset` | Letterhead reset after signature block. |
 | `DensityShift` | Text density shift with low bigram overlap. |
 | `End` | End of PDF. |
-
----
-
-#### StructuredCallMode
-
-Outcome of the structured-extraction call-mode heuristic.
-
-**Distinct from `crate.core.config.CallMode`** which has three variants
-and governs extraction-engine behaviour.  This enum governs whether and how
-an already-extracted document is sent to an LLM structured-extraction
-pipeline.
-
-| Value | Description |
-|-------|-------------|
-| `Skip` | Document is unsupported or not worth invoking the pipeline. |
-| `TextOnly` | Send extracted text only; no vision model call. |
-| `VisionOnly` | Send page rasters only; no extracted text payload. |
-| `TextPlusVision` | Fuse extracted text with page rasters in a single multimodal call. |
-| `TextOnlyWithVisionFallback` | Try text-only first; escalate to vision on low confidence score. |
 
 ---
 

@@ -10,6 +10,6 @@ const config = {
   },
 };
 
-const result = await extract("document.pdf", undefined, config);
+const result = await extract({ kind: "uri", uri: "document.pdf" }, config);
 console.log(`Chunks created: ${result.chunks?.length ?? 0}`);
 ```

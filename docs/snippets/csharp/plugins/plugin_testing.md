@@ -17,7 +17,7 @@ public class CustomValidatorTests
     [Fact]
     public void TestValidatorProcessing()
     {
-        var result = new ExtractionResult
+        var result = new ExtractedDocument
         {
             Content = "Test content with some length",
             MimeType = "text/plain"
@@ -41,7 +41,7 @@ public class TestValidator : IValidator
     public void Initialize() { }
     public void Shutdown() { }
 
-    public void Validate(ExtractionResult result, ExtractionConfig config)
+    public void Validate(ExtractedDocument result, ExtractionConfig config)
     {
         if (string.IsNullOrEmpty(result.Content))
         {
@@ -49,7 +49,7 @@ public class TestValidator : IValidator
         }
     }
 
-    public bool ShouldValidate(ExtractionResult result, ExtractionConfig config)
+    public bool ShouldValidate(ExtractedDocument result, ExtractionConfig config)
     {
         return !string.IsNullOrEmpty(result.Content);
     }

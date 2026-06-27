@@ -2,11 +2,7 @@
 	"id": "error_empty_bytes",
 	"category": "error",
 	"description": "Graceful handling of empty bytes (should not error)",
-	"tags": [
-		"error",
-		"input",
-		"edge-case"
-	],
+	"tags": ["error", "input", "edge-case"],
 	"call": "extract",
 	"input": {
 		"kind": "bytes",

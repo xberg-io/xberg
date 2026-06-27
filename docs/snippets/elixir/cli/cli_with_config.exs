@@ -138,8 +138,9 @@ defmodule XbergAdvancedCLI do
 
         start_time = System.monotonic_time(:millisecond)
 
-        case Xberg.extract(processed_file, nil, extraction_config) do
-          {:ok, result} ->
+        case Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: processed_file}, extraction_config) do
+          {:ok, output} ->
+            result = List.first(output.results)
             elapsed = System.monotonic_time(:millisecond) - start_time
 
             # Post-process if configured

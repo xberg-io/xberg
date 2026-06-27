@@ -9,7 +9,7 @@ async function extractDocuments(files: Uint8Array[], mimeTypes: string[]) {
   await initWasm();
 
   const results = await Promise.all(
-    files.map((bytes, index) => extract(bytes, mimeTypes[index])),
+    files.map((bytes, index) => extract({ kind: "bytes", bytes, mimeType: mimeTypes[index] })),
   );
 
   return results.map((r) => ({

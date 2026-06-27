@@ -5,7 +5,7 @@ using System.Text.Json;
 
 class CustomJsonProcessor
 {
-    public static ExtractionResult ProcessJson(byte[] content, string mimeType)
+    public static ExtractedDocument ProcessJson(byte[] content, string mimeType)
     {
         try
         {
@@ -14,7 +14,7 @@ class CustomJsonProcessor
 
             var text = ExtractText(document.RootElement);
 
-            return new ExtractionResult
+            return new ExtractedDocument
             {
                 Content = text,
                 MimeType = mimeType,

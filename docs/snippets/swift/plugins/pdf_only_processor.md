@@ -18,17 +18,17 @@ final class PdfOnlyProcessor: PostProcessor {
         50  // Default priority
     }
 
-    func process(result: ExtractionResult, config: ExtractionConfig) -> String {
+    func process(result: ExtractedDocument, config: ExtractionConfig) -> String {
         // Returns JSON-encoded Result<(), String>
         // No-op post-processor for PDF-only processing
         "{\"ok\": null}"
     }
 
-    func shouldProcess(result: ExtractionResult, config: ExtractionConfig) -> Bool {
+    func shouldProcess(result: ExtractedDocument, config: ExtractionConfig) -> Bool {
         result.mimeType() == "application/pdf"
     }
 
-    func estimatedDurationMs(result: ExtractionResult) -> UInt64 {
+    func estimatedDurationMs(result: ExtractedDocument) -> UInt64 {
         0  // No processing overhead
     }
 

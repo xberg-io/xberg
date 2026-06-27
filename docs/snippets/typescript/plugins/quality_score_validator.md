@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-import { registerValidator, ValidationError, type ExtractionResult } from "@xberg-io/xberg";
+import { registerValidator, ValidationError, type ExtractedDocument } from "@xberg-io/xberg";
 
 class QualityScoreValidator {
   private readonly minScore: number;
@@ -16,7 +16,7 @@ class QualityScoreValidator {
     return 50;
   }
 
-  validate(result: ExtractionResult): void {
+  validate(result: ExtractedDocument): void {
     const score = Number(result.metadata?.qualityScore ?? 0);
 
     if (score < this.minScore) {

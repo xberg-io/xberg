@@ -2,7 +2,13 @@
 library(xberg)
 
 # Extract a document
-result <- extract_sync("document.docx")
+input <- list(kind = "uri", uri = "document.docx")
+json <- extract(
+  input = ExtractInput$from_json(jsonlite::toJSON(input, auto_unbox = TRUE)),
+  config = ExtractionConfig$default()
+)
+output <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+result <- output$results[[1]]
 
 # Access core content fields
 cat(sprintf("MIME type: %s\n", mime_type(result)))

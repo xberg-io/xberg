@@ -11,18 +11,18 @@ int main(void) {
         "]";
 
     XBERGExtractionConfig *config = xberg_extraction_config_default();
-    XBERGExtractionOutput *output = xberg_extract_batch(inputs_json, config);
+    XBERGExtractionResult *output = xberg_extract_batch(inputs_json, config);
     if (!output) {
         fprintf(stderr, "batch extraction failed: %s\n", xberg_last_error_context());
         xberg_extraction_config_free(config);
         return 1;
     }
 
-    char *json = xberg_extraction_output_to_json(output);
+    char *json = xberg_extraction_result_to_json(output);
     puts(json);
 
     xberg_free_string(json);
-    xberg_extraction_output_free(output);
+    xberg_extraction_result_free(output);
     xberg_extraction_config_free(config);
     return 0;
 }

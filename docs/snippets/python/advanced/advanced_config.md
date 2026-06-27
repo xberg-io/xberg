@@ -1,6 +1,6 @@
 ```python title="Python"
-from xberg import (
-    extract_sync,
+from xberg import ExtractInput, (
+    extract,
     ExtractionConfig,
     OcrConfig,
     ChunkingConfig,
@@ -19,11 +19,11 @@ config = ExtractionConfig(
     enable_quality_processing=True,
 )
 
-result = extract_sync("document.pdf", config=config)
+result = extract(ExtractInput.from_uri("document.pdf"), config)
 
-for chunk in result.chunks or []:
+for chunk in result.results[0].chunks or []:
     print(f"Chunk: {chunk.content[:100]}")
 
-if result.detected_languages:
-    print(f"Languages: {result.detected_languages}")
+if result.results[0].detected_languages:
+    print(f"Languages: {result.results[0].detected_languages}")
 ```

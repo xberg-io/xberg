@@ -1,16 +1,23 @@
 ```typescript title="TypeScript"
-import { extract } from "@xberg-io/xberg";
+import { ExtractInputKind, extract } from "@xberg-io/xberg";
 
 const config = {
   ocr: {
     backend: "tesseract",
-    language: "eng+fra",
+    language: ["eng", "fra"],
     tesseractConfig: {
       psm: 3,
     },
   },
 };
 
-const result = await extract("document.pdf", null, config);
-console.log(result.content);
+const output = await extract(
+  {
+    kind: "uri",
+    uri: "document.pdf",
+  },
+  config,
+);
+
+console.log(output.results[0].content);
 ```

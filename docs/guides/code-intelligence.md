@@ -1,5 +1,9 @@
 # Code Intelligence
 
+Parse source code to extract structure, dependencies, exports, and semantic chunks — all automatically detected by language. Use in code search, codebase mapping, RAG pipelines, and dependency analysis across 306 programming languages.
+
+See the [TreeSitterConfig reference](../reference/configuration.md#treesitterconfig) for all configuration options.
+
 Xberg integrates [tree-sitter-language-pack](https://docs.tree-sitter-language-pack.xberg.io) (TSLP) to parse and analyze source code files. When you extract a source code file, Xberg automatically detects the programming language and produces structured analysis alongside the raw text content.
 
 ## What You Get
@@ -25,10 +29,11 @@ Code intelligence is enabled by default when the `tree-sitter` feature flag is a
 === "Rust"
 
     ```rust title="basic.rs"
-    use xberg::{extract, ExtractionConfig};
+    use xberg::{extract, ExtractInput, ExtractionConfig};
 
     let config = ExtractionConfig::default();
-    let result = extract("app.py", None, &config)?;
+    let output = extract(ExtractInput::from_uri("app.py"), &config).await?;
+    let result = &output.results[0];
 
     // The content field has the raw source text
     println!("{}", result.content);
@@ -47,7 +52,8 @@ Code intelligence is enabled by default when the `tree-sitter` feature flag is a
     import xberg
 
     config = xberg.ExtractionConfig()
-    result = xberg.extract("app.py", config=config)
+    output = await xberg.extract(xberg.ExtractInput(kind="uri", uri="app.py"), config=config)
+    result = output.results[0]
 
     # The content field has the raw source text
     print(result.content)
@@ -63,9 +69,13 @@ Code intelligence is enabled by default when the `tree-sitter` feature flag is a
 === "TypeScript"
 
     ```typescript title="basic.ts"
-    import { extractFileSync } from "@xberg-io/xberg";
+    import { ExtractInputKind, extract } from "@xberg-io/xberg";
 
-    const result = extractFileSync("app.ts");
+    const output = await extract({
+      kind: ExtractInputKind.Uri,
+      uri: "app.ts",
+    });
+    const result = output.results[0];
 
     console.log(result.content);
 
@@ -80,7 +90,7 @@ Code intelligence is enabled by default when the `tree-sitter` feature flag is a
 === "Go"
 
     ```go title="basic.go"
-    result, err := xberg.ExtractFileSync("app.py", nil)
+    result, err := xberg.Extract("app.py", nil)
     if err != nil {
         log.Fatal(err)
     }

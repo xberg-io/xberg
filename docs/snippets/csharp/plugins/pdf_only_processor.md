@@ -14,7 +14,7 @@ public class PdfOnlyProcessor : IPostProcessor
     {
     }
 
-    public void Process(ExtractionResult result, ExtractionConfig config)
+    public void Process(ExtractedDocument result, ExtractionConfig config)
     {
         if (result.MimeType != "application/pdf")
         {
@@ -27,12 +27,12 @@ public class PdfOnlyProcessor : IPostProcessor
         return ProcessingStage.Middle;
     }
 
-    public bool ShouldProcess(ExtractionResult result, ExtractionConfig config)
+    public bool ShouldProcess(ExtractedDocument result, ExtractionConfig config)
     {
         return result.MimeType == "application/pdf";
     }
 
-    public ulong EstimatedDurationMs(ExtractionResult result)
+    public ulong EstimatedDurationMs(ExtractedDocument result)
     {
         return 10;
     }

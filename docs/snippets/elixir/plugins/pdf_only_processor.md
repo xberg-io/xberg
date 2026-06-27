@@ -5,7 +5,7 @@ To implement a PDF-only post-processor in Rust:
 
 ```rust
 use xberg::plugins::{Plugin, PostProcessor, ProcessingStage};
-use xberg::{Result, ExtractionResult, ExtractionConfig};
+use xberg::{Result, ExtractedDocument, ExtractionConfig};
 use async_trait::async_trait;
 
 struct PdfOnlyProcessor;
@@ -21,7 +21,7 @@ impl Plugin for PdfOnlyProcessor {
 impl PostProcessor for PdfOnlyProcessor {
     async fn process(
         &self,
-        result: &mut ExtractionResult,
+        result: &mut ExtractedDocument,
         _config: &ExtractionConfig
     ) -> Result<()> {
         // Custom processing logic for PDF documents
@@ -30,7 +30,7 @@ impl PostProcessor for PdfOnlyProcessor {
 
     fn should_process(
         &self,
-        result: &ExtractionResult,
+        result: &ExtractedDocument,
         _config: &ExtractionConfig
     ) -> bool {
         result.mime_type == "application/pdf"

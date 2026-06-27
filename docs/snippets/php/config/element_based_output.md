@@ -4,11 +4,12 @@ use Xberg\ExtractionConfig;
 use Xberg\Xberg;
 
 // Configure element-based output
-$config = new ExtractionConfig();
+$config = ExtractionConfig::default();
 $config->setOutputFormat('element_based');
 
 // Extract document
-$result = Xberg::extractSync('document.pdf', $config);
+$resultOutput = Xberg::extract(\Xberg\ExtractInput::uri('document.pdf'), $config);
+$result = $resultOutput->results[0];
 
 // Access elements
 foreach ($result->getElements() as $element) {

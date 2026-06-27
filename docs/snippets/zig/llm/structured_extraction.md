@@ -21,10 +21,11 @@ pub fn main() !void {
         \\}
     ;
 
-    const result_json = try xberg.extract_sync("paper.pdf", null, config_json);
-    defer std.heap.c_allocator.free(result_json);
+    const input_json = "{\"kind\":\"uri\",\"uri\":\"paper.pdf\"}";
+    const output_json = try xberg.extract(input_json, config_json);
+    defer std.heap.c_allocator.free(output_json);
 
     const stdout = std.io.getStdOut().writer();
-    try stdout.print("{s}\n", .{result_json});
+    try stdout.print("{s}\n", .{output_json});
 }
 ```

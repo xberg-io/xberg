@@ -8,7 +8,7 @@ defmodule BatchDocumentClient do
   Handles multiple files with comprehensive error handling and logging.
   """
 
-  alias Xberg.ExtractionResult
+  alias Xberg.ExtractedDocument
 
   @doc """
   Extract content from multiple files in batch.
@@ -31,14 +31,17 @@ defmodule BatchDocumentClient do
       )
   """
   @spec extracts([String.t()], keyword()) ::
-          {:ok, [ExtractionResult.t()]} | {:error, String.t()}
+          {:ok, [ExtractedDocument.t()]} | {:error, String.t()}
   def extracts(paths, opts \\ []) do
     mime_type = Keyword.get(opts, :mime_type, nil)
     config = Keyword.get(opts, :config, nil)
     log_errors = Keyword.get(opts, :log_errors, true)
 
-    case Xberg.extract_batch(paths, mime_type, config) do
-      {:ok, results} ->
+    inputs = Enum.map(paths, fn path -> %Xberg.ExtractInput{kind: :uri, uri: path, mime_type: mime_type} end)
+
+    case Xberg.extract_batch(inputs, config) do
+      {:ok, output} ->
+        results = output.results
         IO.debug("Successfully extracted #{length(results)} files")
         {:ok, results}
 

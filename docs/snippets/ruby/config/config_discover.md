@@ -2,5 +2,6 @@
 require 'xberg'
 
 config = Xberg::ExtractionConfig.discover
-result = Xberg.extract_sync('document.pdf', config: config)
+input = Xberg::ExtractInput.new(uri: 'document.pdf')
+result = Xberg.extract(input, config)
 ```

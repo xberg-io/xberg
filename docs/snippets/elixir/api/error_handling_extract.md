@@ -4,7 +4,9 @@ defmodule Example do
     with {:file_exists, true} <- {:file_exists, File.exists?(path)},
          {:read, {:ok, content}} <- {:read, File.read(path)},
          {:mime, {:ok, mime_type}} <- {:mime, detect_mime_type(content)},
-         {:extract, {:ok, result}} <- {:extract, Xberg.extract_sync(content, mime_type, nil)} do
+         input = %Xberg.ExtractInput{kind: :bytes, bytes: content, mime_type: mime_type},
+         {:extract, {:ok, output}} <- {:extract, Xberg.extract(input, nil)} do
+      result = List.first(output.results)
       {:ok, result}
     else
       {:file_exists, false} ->

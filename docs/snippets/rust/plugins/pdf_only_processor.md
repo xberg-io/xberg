@@ -1,6 +1,6 @@
 ```rust title="Rust"
 use xberg::plugins::{Plugin, PostProcessor, ProcessingStage, register_post_processor};
-use xberg::{Result, ExtractionResult, ExtractionConfig};
+use xberg::{Result, ExtractedDocument, ExtractionConfig};
 use async_trait::async_trait;
 use std::sync::Arc;
 use serde_json::json;
@@ -18,7 +18,7 @@ impl Plugin for PdfOnlyProcessor {
 impl PostProcessor for PdfOnlyProcessor {
     async fn process(
         &self,
-        result: &mut ExtractionResult,
+        result: &mut ExtractedDocument,
         _config: &ExtractionConfig,
     ) -> Result<()> {
         if result.mime_type != "application/pdf" {
@@ -36,7 +36,7 @@ impl PostProcessor for PdfOnlyProcessor {
 
     fn should_process(
         &self,
-        result: &ExtractionResult,
+        result: &ExtractedDocument,
         _config: &ExtractionConfig,
     ) -> bool {
         result.mime_type == "application/pdf"

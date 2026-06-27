@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-import { registerOcrBackend, extractSync } from "@xberg-io/xberg";
+import { registerOcrBackend, extract } from "@xberg-io/xberg";
 
 const supportedLangs = ["eng", "deu", "fra"];
 
@@ -19,7 +19,7 @@ const cloudBackend = {
 
 registerOcrBackend(cloudBackend);
 
-const result = extractSync("scanned.pdf", {
+const result = extract("scanned.pdf", {
   ocr: {
     backend: "cloud-ocr",
     language: "eng",

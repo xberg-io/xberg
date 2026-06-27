@@ -91,32 +91,6 @@ xberg batch documents/*.pdf
 xberg batch documents/**/*.pdf
 ```
 
-### Extract Structured Data
-
-`extract-structured` pulls typed JSON out of a document via an LLM, using a JSON schema as constraint.
-
-```bash title="Terminal"
-# Extract invoice fields into JSON matching invoice_schema.json
-xberg extract-structured invoice.pdf \
-  --schema invoice_schema.json \
-  --model openai/gpt-4o \
-  --strict
-```
-
-| Flag                    | Description                                                                                          |
-| ----------------------- | ---------------------------------------------------------------------------------------------------- |
-| `<PATH>` (positional)   | Document file path. Required.                                                                        |
-| `--schema <PATH>`       | Path to a JSON schema file describing the desired output. Required.                                  |
-| `--model <MODEL>`       | LLM model identifier, for example `openai/gpt-4o` or `anthropic/claude-sonnet-4-20250514`. Required. |
-| `--api-key <KEY>`       | LLM provider API key. Falls back to `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and so on.                |
-| `--prompt <TEMPLATE>`   | Custom Jinja2 prompt template overriding the built-in one.                                           |
-| `--schema-name <NAME>`  | Schema identifier passed to the LLM. Default: `extraction`.                                          |
-| `--strict`              | Enable OpenAI strict mode for exact schema matching.                                                 |
-| `-c, --config <PATH>`   | Path to a TOML/YAML/JSON extraction config file applied to the document extraction step.             |
-| `-f, --format <FORMAT>` | Wire format for the printed output: `json` (default), `text`, or `toon`.                             |
-
-Only the structured output is printed; the underlying document text is not. Set `RUST_LOG=xberg=debug` to inspect the prompt sent.
-
 ### Output Formats
 
 ```bash title="Terminal"
@@ -185,7 +159,6 @@ xberg extract document.pdf --force-ocr true
 | --------- | ---------------------------- | -------------------------------------------------- |
 | Tesseract | ISO 639-3 (three-letter)     | `eng`, `fra`, `deu`, `spa`, `jpn`                  |
 | PaddleOCR | short codes / language names | `en`, `ch`, `french`, `korean`, `thai`, `cyrillic` |
-| EasyOCR   | similar to PaddleOCR         | —                                                  |
 
 ```bash title="Terminal"
 # French OCR with Tesseract (default backend)
@@ -419,8 +392,8 @@ xberg cache stats
 | Flag                              | Description                                                                                                                  |
 | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `--ocr <true\|false>`             | Enable or disable OCR. Defaults to tesseract backend when enabled.                                                           |
-| `--ocr-backend <BACKEND>`         | OCR backend: `tesseract`, `paddle-ocr`, `easyocr`, `candle-trocr`, `candle-paddleocr-vl`, `candle-paddleocr-vl-15`, `candle-glm-ocr`, `candle-hunyuan-ocr`, `candle-deepseek-ocr`, or `vlm`. |
-| `--ocr-language <LANG>` | OCR language code. Tesseract uses ISO 639-3 (`eng`, `fra`, `deu`). PaddleOCR/EasyOCR use short codes (`en`, `ch`, `korean`). |
+| `--ocr-backend <BACKEND>`         | OCR backend: `tesseract`, `paddle-ocr`, `candle-trocr`, `candle-paddleocr-vl`, `candle-paddleocr-vl-15`, `candle-glm-ocr`, `candle-hunyuan-ocr`, `candle-deepseek-ocr`, or `vlm`. |
+| `--ocr-language <LANG>` | OCR language code. Tesseract uses ISO 639-3 (`eng`, `fra`, `deu`). PaddleOCR uses short codes (`en`, `ch`, `korean`). |
 | `--force-ocr <true\|false>`       | Force OCR even if the document has an existing text layer.                                                                   |
 | `--ocr-auto-rotate <true\|false>` | Automatically rotate images before OCR based on detected orientation.                                                        |
 | `--disable-ocr <true\|false>` | Disable OCR entirely, even for images. |
@@ -1052,6 +1025,11 @@ xberg version --format json
 ## Next Steps
 
 - [API Server Guide](../guides/api-server.md) - API and MCP server setup
-- [Advanced Features](../guides/advanced.md) - Advanced Xberg features
+- [Chunking](../guides/chunking.md) - Split text for RAG
+- [Embeddings](../guides/embeddings.md) - Semantic vectors for search
+- [Language Detection](../guides/language-detection.md) - Multilingual document analysis
+- [Token Reduction](../guides/token-reduction.md) - Optimize for LLMs
+- [Quality Processing](../guides/quality-processing.md) - Filter low-quality text
+- [PDF Form Fields](../guides/pdf-form-fields.md) - Extract form data
 - [Plugin Development](../guides/plugins.md) - Extend Xberg functionality
 - [API Reference](../reference/api-python.md) - Programmatic access

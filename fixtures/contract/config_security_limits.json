@@ -1,11 +1,7 @@
 {
 	"id": "config_security_limits",
 	"description": "Tests archive extraction with custom security limits",
-	"tags": [
-		"contract",
-		"config",
-		"security"
-	],
+	"tags": ["contract", "config", "security"],
 	"call": "extract",
 	"input": {
 		"kind": "uri",
@@ -14,22 +10,17 @@
 	"assertions": [
 		{
 			"type": "contains_any",
-			"field": "results.0.mime_type",
-			"values": [
-				"application/zip",
-				"application/x-zip-compressed"
-			]
+			"field": "results[0].mime_type",
+			"values": ["application/zip", "application/x-zip-compressed"]
 		},
 		{
 			"type": "min_length",
-			"field": "results.0.content",
+			"field": "results[0].content",
 			"value": 10
 		}
 	],
 	"skip": {
-		"languages": [
-			"wasm"
-		],
+		"languages": ["wasm"],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	},
 	"config": {

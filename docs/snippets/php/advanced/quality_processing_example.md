@@ -9,7 +9,9 @@ $config = new ExtractionConfig(
     enableQualityProcessing: true
 );
 
-$result = Xberg::extractSync('scanned_document.pdf', null, $config);
+$resultOutput = Xberg::extract(\Xberg\ExtractInput::uri('scanned_document.pdf'), $config);
+
+$result = $resultOutput->results[0];
 
 if ($result->getQualityScore() !== null) {
     $score = $result->getQualityScore();

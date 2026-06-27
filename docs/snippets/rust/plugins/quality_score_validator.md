@@ -3,7 +3,7 @@
 impl Validator for QualityValidator {
     async fn validate(
         &self,
-        result: &ExtractionResult,
+        result: &ExtractedDocument,
         _config: &ExtractionConfig,
     ) -> Result<()> {
         let score = result.metadata

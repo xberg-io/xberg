@@ -22,14 +22,14 @@ public class UnregisterableProcessor : IPostProcessor
     public void Initialize() { }
     public void Shutdown() { }
 
-    public void Process(ExtractionResult result, ExtractionConfig config)
+    public void Process(ExtractedDocument result, ExtractionConfig config)
     {
         Console.WriteLine("Processing...");
     }
 
     public ProcessingStage ProcessingStage() => ProcessingStage.Middle;
-    public bool ShouldProcess(ExtractionResult result, ExtractionConfig config) => true;
-    public ulong EstimatedDurationMs(ExtractionResult result) => 10;
+    public bool ShouldProcess(ExtractedDocument result, ExtractionConfig config) => true;
+    public ulong EstimatedDurationMs(ExtractedDocument result) => 10;
     public int Priority() => 50;
 }
 ```

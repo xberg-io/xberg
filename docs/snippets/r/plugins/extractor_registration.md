@@ -12,7 +12,13 @@ custom_extractor <- function(path, mime_type) {
 
 register_document_extractor("custom_format", custom_extractor)
 
-result <- extract_sync("custom_document.xyz", "application/custom", NULL)
+input <- list(kind = "uri", uri = "custom_document.xyz", mime_type = "application/custom")
+json <- extract(
+  input = ExtractInput$from_json(jsonlite::toJSON(input, auto_unbox = TRUE)),
+  config = ExtractionConfig$default()
+)
+output <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+result <- output$results[[1]]
 
 cat(sprintf("Custom extractor result:\n"))
 cat(sprintf("Content: %s\n", result$content))

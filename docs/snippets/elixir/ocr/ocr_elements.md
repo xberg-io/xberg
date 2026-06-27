@@ -5,8 +5,9 @@ config = %ExtractionConfig{
   ocr: %{"enabled" => true, "backend" => "paddle-ocr", "language" => "en"}
 }
 
-{:ok, result} = Xberg.extract("scanned.pdf", nil, config)
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "scanned.pdf"}, config)
 
+result = List.first(output.results)
 for element <- result.ocr_elements || [] do
   IO.puts("Text: #{element.text}")
   IO.puts("Confidence: #{Float.round(element.confidence.recognition, 2)}")

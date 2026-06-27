@@ -18,4 +18,4 @@ mod tests {
 }
 ```
 
-For Elixir, you can test the extraction results using the built-in functions like `Xberg.extract_async/3` and `Xberg.extract_async/3`.
+For Elixir, you can test extraction results with `Xberg.extract/2` and `Xberg.extract_batch/2`.

@@ -5,7 +5,7 @@ const config = {
   enableQualityProcessing: true,
 };
 
-const result = await extract("scanned_document.pdf", null, config);
+const result = await extract({ kind: "uri", uri: "scanned_document.pdf" }, config);
 
 if (result.qualityScore !== null && result.qualityScore !== undefined) {
   if (result.qualityScore < 0.5) {

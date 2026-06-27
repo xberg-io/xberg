@@ -1,6 +1,6 @@
 ```python title="Python"
 import asyncio
-from xberg import ExtractionConfig, ImageExtractionConfig, extract
+from xberg import ExtractInput, ExtractionConfig, ImageExtractionConfig, extract
 
 async def main() -> None:
     config: ExtractionConfig = ExtractionConfig(
@@ -12,8 +12,8 @@ async def main() -> None:
             auto_adjust_dpi=True,
         )
     )
-    result = await extract("document.pdf", config=config)
-    print(f"Extracted: {result.content[:100]}")
+    result = await extract(ExtractInput.from_uri("document.pdf"), config)
+    print(f"Extracted: {result.results[0].content[:100]}")
 
 asyncio.run(main())
 ```

@@ -30,10 +30,11 @@ pub fn main() !void {
     var buffer = std.ArrayList(u8).init(a);
     try std.json.stringify(config_value, .{}, buffer.writer());
 
-    const result_json = try xberg.extract_sync("document.pdf", null, buffer.items);
-    defer std.heap.c_allocator.free(result_json);
+    const input_json = "{\"kind\":\"uri\",\"uri\":\"document.pdf\"}";
+    const output_json = try xberg.extract(input_json, buffer.items);
+    defer std.heap.c_allocator.free(output_json);
 
     const stdout = std.io.getStdOut().writer();
-    try stdout.print("{s}\n", .{result_json});
+    try stdout.print("{s}\n", .{output_json});
 }
 ```

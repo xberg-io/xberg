@@ -13,7 +13,7 @@ fun main() {
         .withOcr(Optional.of(ocr))
         .build()
 
-    val result = Xberg.extractSync(Paths.get("document.pdf"), null, config)
+    val result = Xberg.extract(Paths.get("document.pdf"), null, config)
     println("Extracted text: ${result.content()}")
 }
 ```

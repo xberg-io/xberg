@@ -11,7 +11,7 @@ const fileList = files.files || [];
 const extractionPromises = Array.from(fileList).map(async (file) => {
   try {
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const result = await extract(bytes, file.type || "application/octet-stream", undefined);
+    const result = await extract({ kind: "bytes", bytes, mimeType: file.type || "application/octet-stream" }, undefined);
     return { file: file.name, success: true, result };
   } catch (err) {
     return {

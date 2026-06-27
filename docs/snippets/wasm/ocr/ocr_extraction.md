@@ -8,12 +8,15 @@ const fileInput = document.getElementById("file") as HTMLInputElement;
 const file = fileInput.files?.[0];
 
 if (file) {
-  const result = await extract(file, file.type, {
-    ocr: {
-      backend: "xberg-tesseract",
-      language: "eng",
+  const result = await extract(
+    { kind: "bytes", bytes: file, mimeType: file.type },
+    {
+      ocr: {
+        backend: "xberg-tesseract",
+        language: "eng",
+      },
     },
-  });
+  );
   console.log(result.content);
 }
 ```
@@ -24,11 +27,14 @@ import { enableOcr, extract, initWasm } from "@xberg-io/xberg-wasm";
 await initWasm();
 await enableOcr(); // Uses native xberg-tesseract backend
 
-const result = await extract("./scanned_document.png", "image/png", {
-  ocr: {
-    backend: "xberg-tesseract",
-    language: "eng",
+const result = await extract(
+  { kind: "uri", uri: "./scanned_document.png" },
+  {
+    ocr: {
+      backend: "xberg-tesseract",
+      language: "eng",
+    },
   },
-});
+);
 console.log(result.content);
 ```

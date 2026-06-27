@@ -185,16 +185,6 @@ Fast text detection and recognition for 80+ languages across 11 script families.
 
 **Note:** PaddleOCR uses two-letter ISO 639-1 codes and script-specific variants (e.g., `zh_hans` for Simplified Chinese). Consult the [paddleocr-vl backend source](https://github.com/xberg-io/xberg/blob/main/crates/xberg/src/candle_ocr/paddleocr_vl_backend.rs) for the authoritative list.
 
-### EasyOCR
-
-High-accuracy deep learning models for 80+ languages. Python-only backend.
-
-EasyOCR supports the same 80+ languages as PaddleOCR plus additional variants. Refer to the [official EasyOCR language list](https://github.com/JaidedAI/EasyOCR?tab=readme-ov-file#supported-languages) for the complete set.
-
-**Installation:** `pip install "xberg[easyocr]"`
-
-**Selection:** Use `--ocr-language` or config `ocr.languages` with language codes from the EasyOCR documentation.
-
 ### Candle TrOCR
 
 Lightweight line-level text recognition using Microsoft's TrOCR model. **Trained primarily for English.**
@@ -452,7 +442,6 @@ If a requested language is unavailable:
 - **Tesseract:** Fails with an error if the tessdata pack is not installed
 - **PaddleOCR:** Falls back to the model's training base or returns an error
 - **Candle VLMs:** Accept all language codes and attempt recognition (graceful degradation)
-- **EasyOCR:** Falls back to the EasyOCR model's default behavior or returns an error
 
 Install missing language packs for Tesseract via your OS package manager before OCR execution.
 

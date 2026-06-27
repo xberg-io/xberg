@@ -1,6 +1,6 @@
 # HTML Output
 
-Render extracted document content as styled HTML with semantic `kb-*` CSS classes, configurable themes, and full CSS customization.
+Render extracted document content as styled HTML with semantic `kb-*` CSS classes, configurable themes, and full CSS customization. See the [HtmlOutputConfig reference](../reference/configuration.md#htmloutputconfig) for all options.
 
 ## Quick Start
 
@@ -13,32 +13,37 @@ Render extracted document content as styled HTML with semantic `kb-*` CSS classe
 === "Python"
 
     ```python title="html_output.py"
-    from xberg import ExtractionConfig, HtmlOutputConfig, HtmlTheme, extract
+    from xberg import ExtractInput, ExtractionConfig, HtmlOutputConfig, HtmlTheme, extract
 
     config = ExtractionConfig(
         output_format="html",
         html_output=HtmlOutputConfig(theme=HtmlTheme.GitHub),
     )
-    result = await extract("doc.pdf", config=config)
+    output = await extract(ExtractInput(kind="uri", uri="doc.pdf"), config=config)
+    result = output.results[0]
     print(result.content)  # styled HTML string
     ```
 
 === "TypeScript"
 
     ```typescript title="html_output.ts"
-    import { extractFile, HtmlTheme } from '@xberg-io/xberg';
+    import { ExtractInputKind, HtmlTheme, extract } from '@xberg-io/xberg';
 
-    const result = await extractFile('doc.pdf', {
-      outputFormat: 'html',
-      htmlOutput: { theme: HtmlTheme.GitHub },
-    });
+    const output = await extract(
+      { kind: ExtractInputKind.Uri, uri: 'doc.pdf' },
+      {
+        outputFormat: 'html',
+        htmlOutput: { theme: HtmlTheme.GitHub },
+      },
+    );
+    const result = output.results[0];
     console.log(result.content);
     ```
 
 === "Rust"
 
     ```rust title="html_output.rs"
-    use xberg::{extract, ExtractionConfig, HtmlOutputConfig, HtmlTheme};
+    use xberg::{extract, ExtractInput, ExtractionConfig, HtmlOutputConfig, HtmlTheme};
 
     let config = ExtractionConfig {
         output_format: "html".to_string(),
@@ -48,7 +53,8 @@ Render extracted document content as styled HTML with semantic `kb-*` CSS classe
         }),
         ..Default::default()
     };
-    let result = extract("doc.pdf", None, &config).await?;
+    let output = extract(ExtractInput::from_uri("doc.pdf"), &config).await?;
+    let result = &output.results[0];
     println!("{}", result.content);
     ```
 

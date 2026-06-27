@@ -3344,7 +3344,7 @@ badge_url = "https://img.shields.io/npm/v/@xberg-io/xberg?label=TypeScript&color
 docs_url = "https://xberg.io/"
 description = "Extract text, tables, images, metadata, and code intelligence from 96 file formats and 306 programming languages including PDF, Office documents, images, and audio/video transcripts where native transcription is available. Native NAPI-RS bindings for Node.js with superior performance, async/await support, and TypeScript type definitions."
 package_manager = ["pnpm"]
-features = { ocr = true, async = true, plugin_system = true, embeddings = true, worker_pools = true, config_discovery = true, code_intelligence = true }
+features = { ocr = true, async = true, plugin_system = true, embeddings = true, config_discovery = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
 optional_sections = [
   "native_vs_wasm_comparison",
@@ -3352,7 +3352,7 @@ optional_sections = [
   "performance",
   "napi_implementation",
 ]
-snippets = { basic_extraction = "getting-started/basic_usage.md", async_extraction = "getting-started/extract.md", batch_processing = "getting-started/extract_batch.md", ocr_configuration = "config/config_ocr.md", table_extraction = "api/tables.md", config_discovery = "config/config_discovery.md", worker_pool = "advanced/worker_pool.md" }
+snippets = { basic_extraction = "getting-started/basic_usage.md", async_extraction = "getting-started/extract.md", batch_processing = "getting-started/extract_batch.md", ocr_configuration = "config/config_ocr.md", table_extraction = "api/tables.md", config_discovery = "config/config_discovery.md" }
 
 [crates.readme.languages.go]
 template = "go.md"

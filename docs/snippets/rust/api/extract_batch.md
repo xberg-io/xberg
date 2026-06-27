@@ -3,8 +3,8 @@ use xberg::{extract_batch, ExtractInput, ExtractionConfig};
 
 let config = ExtractionConfig::default();
 let inputs = vec![
-    ExtractInput::uri("document.pdf"),
-    ExtractInput::bytes(
+    ExtractInput::from_uri("document.pdf"),
+    ExtractInput::from_bytes(
         b"Hello from memory".to_vec(),
         "text/plain",
         Some("note.txt".to_string()),

@@ -14,5 +14,5 @@ inputs = [
 output = await extract_batch(inputs)
 
 for result in output.results:
-    print(result.content[:200])
+    print(result.results[0].content[:200])
 ```

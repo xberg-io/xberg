@@ -12,7 +12,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extract(bytes, "application/pdf", config);
+const result = await extract({ kind: "bytes", bytes, mimeType: "application/pdf" }, config);
 
 result.chunks?.forEach((chunk, idx) => {
   console.log(`Chunk ${chunk.metadata?.chunkIndex}/${chunk.metadata?.totalChunks}`);
@@ -35,7 +35,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extract(bytes, "text/markdown", config);
+const result = await extract({ kind: "bytes", bytes, mimeType: "text/markdown" }, config);
 
 result.chunks?.forEach((chunk) => {
   // Content already includes heading context prepended
@@ -61,7 +61,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extract(bytes, "text/markdown", config);
+const result = await extract({ kind: "bytes", bytes, mimeType: "text/markdown" }, config);
 
 console.log(`Generated ${result.chunks?.length} semantic chunks`);
 result.chunks?.forEach((chunk) => {

@@ -26,7 +26,7 @@ public class ContentTypeValidator : IValidator
         Console.WriteLine("Content type validator shut down");
     }
 
-    public void Validate(ExtractionResult result, ExtractionConfig config)
+    public void Validate(ExtractedDocument result, ExtractionConfig config)
     {
         if (!_allowedMimeTypes.Contains(result.MimeType))
         {
@@ -37,7 +37,7 @@ public class ContentTypeValidator : IValidator
         }
     }
 
-    public bool ShouldValidate(ExtractionResult result, ExtractionConfig config)
+    public bool ShouldValidate(ExtractedDocument result, ExtractionConfig config)
     {
         return true;
     }

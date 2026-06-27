@@ -3,10 +3,11 @@ require 'xberg'
 
 config = Xberg::ExtractionConfig.new(include_document_structure: true)
 
-result = Xberg.extract_sync('document.pdf', config: config)
+input = Xberg::ExtractInput.new(uri: 'document.pdf')
+result = Xberg.extract(input, config)
 
-if result.document
-  result.document['nodes'].each do |node|
+if result.results.first.document
+  result.results.first.document['nodes'].each do |node|
     node_type = node['content']['node_type']
     text = node['content']['text'] || ''
     puts "[#{node_type}] #{text[0...80]}"

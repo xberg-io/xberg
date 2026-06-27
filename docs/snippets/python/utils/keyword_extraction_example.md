@@ -1,6 +1,6 @@
 ```python title="Python"
 import asyncio
-from xberg import extract, ExtractionConfig, KeywordConfig, KeywordAlgorithm
+from xberg import ExtractInput, extract, ExtractionConfig, KeywordConfig, KeywordAlgorithm
 
 async def main() -> None:
     config: ExtractionConfig = ExtractionConfig(
@@ -10,7 +10,8 @@ async def main() -> None:
             min_score=0.3
         )
     )
-    result = await extract("research_paper.pdf", config=config)
+    output = await extract(ExtractInput.from_uri("research_paper.pdf"), config)
+    result = output.results[0]
 
     keywords: list = result.extracted_keywords or []
     for kw in keywords:

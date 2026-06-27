@@ -1,7 +1,9 @@
 ```ruby title="Ruby"
 require 'xberg'
 
-result = Xberg.extract_sync('document.pdf')
+input = Xberg::ExtractInput.new(uri: 'document.pdf')
+config = Xberg::ExtractionConfig.new
+result = Xberg.extract(input, config)
 puts "Extracted content:"
-puts result.content[0...200]
+puts result.results.first.content[0...200]
 ```

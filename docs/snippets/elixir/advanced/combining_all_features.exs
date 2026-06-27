@@ -7,8 +7,9 @@ config = %Xberg.ExtractionConfig{
   keyword_extraction: %{"enabled" => true}
 }
 
-{:ok, result} = Xberg.extract("document.pdf", nil, config)
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "document.pdf"}, config)
 
+result = List.first(output.results)
 # Process results with all extracted features
 IO.inspect(result, label: "Extraction Result")
 

@@ -8,12 +8,12 @@
 
 - **Document intelligence core** — extract text, tables, images, metadata, entities, keywords, code intelligence, and transcripts in builds that enable transcription.
 - **Format coverage** — PDF, Office, images, HTML/XML, email, archives, notebooks, citations, scientific formats, plain text, and audio/video formats in builds that enable transcription.
-- **OCR choices** — Tesseract, PaddleOCR, EasyOCR where supported, VLM OCR through liter-llm, and plugin hooks for custom backends.
+- **OCR choices** — Tesseract, PaddleOCR, Candle where supported, VLM OCR through liter-llm, and plugin hooks for custom backends.
 - **Same engine as every binding** — Rust, Python, Node.js, Go, Java, PHP, Ruby, .NET, Elixir, R, WASM, Kotlin Android, Swift, Dart, Zig, and C FFI share the same Rust implementation.
 {% if language == "typescript" %}
 - **Node-first TypeScript API** — NAPI-RS package with typed options/results and async extraction.
 {% elif language == "python" %}
-- **Python package** — sync and async APIs with typed results for ingestion, RAG, and data workflows.
+- **Python package** — async API with typed results for ingestion, RAG, and data workflows.
 {% elif language == "go" %}
 - **Go module** — context-aware API over the shared native library.
 {% elif language == "java" %}

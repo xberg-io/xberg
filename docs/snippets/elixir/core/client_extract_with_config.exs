@@ -31,8 +31,15 @@ defmodule ConfiguredDocumentClient do
     mime_type = Keyword.get(opts, :mime_type, nil)
 
     case is_file do
-      true -> Xberg.extract(input, mime_type, config)
-      false -> Xberg.extract(input, mime_type || "application/pdf", config)
+      true -> Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: input, mime_type: mime_type}, config)
+      false ->
+        extract_input = %Xberg.ExtractInput{
+          kind: :bytes,
+          bytes: input,
+          mime_type: mime_type || "application/pdf"
+        }
+
+        Xberg.extract(extract_input, config)
     end
   end
 
@@ -53,8 +60,9 @@ defmodule ConfiguredDocumentClient do
 
     mime_type = Keyword.get(opts, :mime_type, nil)
 
-    case Xberg.extract(path, mime_type, config) do
-      {:ok, result} ->
+    case Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: path, mime_type: mime_type}, config) do
+      {:ok, output} ->
+        result = List.first(output.results)
         chunks = result.chunks || []
 
         {:ok,
@@ -85,8 +93,9 @@ defmodule ConfiguredDocumentClient do
 
     mime_type = Keyword.get(opts, :mime_type, nil)
 
-    case Xberg.extract(path, mime_type, config) do
-      {:ok, result} ->
+    case Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: path, mime_type: mime_type}, config) do
+      {:ok, output} ->
+        result = List.first(output.results)
         {:ok,
          %{
            content: result.content,
@@ -131,8 +140,9 @@ defmodule ConfiguredDocumentClient do
 
     mime_type = Keyword.get(opts, :mime_type, nil)
 
-    case Xberg.extract(path, mime_type, config) do
-      {:ok, result} ->
+    case Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: path, mime_type: mime_type}, config) do
+      {:ok, output} ->
+        result = List.first(output.results)
         summary = %{
           file_path: path,
           mime_type: result.mime_type,

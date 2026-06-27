@@ -6,11 +6,11 @@ const config = {
     algorithm: "yake",
     maxKeywords: 10,
     minScore: 0.3,
-    ngramRange: [1, 3],
     language: "en",
   },
 };
 
-const result = await extract("document.pdf", null, config);
+const output = await extract({ kind: "uri", uri: "document.pdf" }, config);
+const result = output.results![0];
 console.log(`Content: ${result.content}`);
 ```

@@ -1,6 +1,6 @@
 ```rust title="Rust"
 use xberg::plugins::{DocumentExtractor, Plugin};
-use xberg::{Result, ExtractionResult, ExtractionConfig, Metadata};
+use xberg::{Result, ExtractedDocument, ExtractionConfig, Metadata};
 use async_trait::async_trait;
 use std::path::Path;
 
@@ -20,11 +20,11 @@ impl DocumentExtractor for CustomJsonExtractor {
         content: &[u8],
         _mime_type: &str,
         _config: &ExtractionConfig,
-    ) -> Result<ExtractionResult> {
+    ) -> Result<ExtractedDocument> {
         let json: serde_json::Value = serde_json::from_slice(content)?;
         let text = extract_text_from_json(&json);
 
-        Ok(ExtractionResult {
+        Ok(ExtractedDocument {
             content: text,
             mime_type: "application/json".to_string(),
             metadata: Metadata::default(),

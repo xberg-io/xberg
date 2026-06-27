@@ -12,7 +12,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extract(bytes, "application/pdf", config);
+const result = await extract({ kind: "bytes", bytes, mimeType: "application/pdf" }, config);
 
 // Map chunks back to pages for source attribution
 const chunkPageMap = new Map<number, number[]>();

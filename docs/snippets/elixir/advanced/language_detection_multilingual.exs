@@ -9,8 +9,9 @@ config = %ExtractionConfig{
   }
 }
 
-case Xberg.extract("multilingual.pdf", nil, config) do
-  {:ok, result} ->
+case Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "multilingual.pdf"}, config) do
+  {:ok, output} ->
+    result = List.first(output.results)
     IO.puts("=== Language Detection ===\n")
 
     # Display detected languages

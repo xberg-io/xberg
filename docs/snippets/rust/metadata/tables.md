@@ -1,8 +1,8 @@
 ```rust title="Rust"
-use xberg::{extract_sync, ExtractionConfig};
+use xberg::{extract, ExtractionConfig};
 
 fn main() -> xberg::Result<()> {
-    let result = extract_sync("document.pdf", None, &ExtractionConfig::default())?;
+    let result = extract("document.pdf", None, &ExtractionConfig::default())?;
 
     for table in &result.tables {
         println!("Table with {} rows", table.cells.len());

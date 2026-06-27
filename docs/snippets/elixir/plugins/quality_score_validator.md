@@ -5,7 +5,7 @@ To implement a quality score validator in Rust:
 
 ```rust
 use xberg::plugins::{Plugin, Validator};
-use xberg::{Result, ExtractionResult, ExtractionConfig, XbergError};
+use xberg::{Result, ExtractedDocument, ExtractionConfig, XbergError};
 use async_trait::async_trait;
 
 struct QualityScoreValidator {
@@ -23,7 +23,7 @@ impl Plugin for QualityScoreValidator {
 impl Validator for QualityScoreValidator {
     async fn validate(
         &self,
-        result: &ExtractionResult,
+        result: &ExtractedDocument,
         _config: &ExtractionConfig,
     ) -> Result<()> {
         let quality = calculate_quality_score(result);
@@ -39,7 +39,7 @@ impl Validator for QualityScoreValidator {
     fn priority(&self) -> i32 { 50 }
 }
 
-fn calculate_quality_score(result: &ExtractionResult) -> f32 {
+fn calculate_quality_score(result: &ExtractedDocument) -> f32 {
     // Implement quality scoring logic
     0.8
 }

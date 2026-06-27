@@ -16,7 +16,14 @@ ExtractionConfig config = ExtractionConfig.builder()
         .build()))
     .build();
 
-var result = Xberg.extractSync(Path.of("document.pdf"), config);
+var resultOutput = Xberg.extract(
+    io.xberg.ExtractInput.builder()
+        .withKind(io.xberg.ExtractInputKind.Uri)
+        .withUri("document.pdf")
+        .build(),
+    config
+);
+var result = resultOutput.results().get(0);
 
 if (result.chunks() != null) {
     for (var chunk : result.chunks()) {

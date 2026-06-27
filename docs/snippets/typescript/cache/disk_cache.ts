@@ -6,12 +6,12 @@ const config: ExtractionConfig = { useCache: true };
 
 (async () => {
   console.log("First extraction (will be cached)...");
-  const result1 = await extract("document.pdf", null, config);
+  const result1 = await extract({ kind: "uri", uri: "document.pdf" }, config);
   const length1 = result1.content.length;
   console.log("  - Content length: " + length1);
 
   console.log("\nSecond extraction (from cache)...");
-  const result2 = await extract("document.pdf", null, config);
+  const result2 = await extract({ kind: "uri", uri: "document.pdf" }, config);
   const length2 = result2.content.length;
   console.log("  - Content length: " + length2);
 

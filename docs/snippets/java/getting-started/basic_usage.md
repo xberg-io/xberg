@@ -1,25 +1,35 @@
 ```java title="Java"
+import io.xberg.ExtractInput;
+import io.xberg.ExtractInputKind;
+import io.xberg.ExtractedDocument;
+import io.xberg.ExtractionConfig;
 import io.xberg.Xberg;
 import io.xberg.ExtractionResult;
-import java.io.IOException;
-import java.util.Map;
+import io.xberg.XbergRsException;
 
 public class BasicUsage {
-    public static void main(String[] args) throws IOException {
-        ExtractionResult result = Xberg.extract("document.pdf");
+    public static void main(String[] args) throws XbergRsException {
+        ExtractInput input = ExtractInput.builder()
+            .withKind(ExtractInputKind.Uri)
+            .withUri("document.pdf")
+            .build();
+
+        ExtractionResult output = Xberg.extract(input, ExtractionConfig.builder().build());
+        ExtractedDocument document = output.results().get(0);
 
         System.out.println("Content:");
-        System.out.println(result.getContent());
+        System.out.println(document.content());
 
         System.out.println("\nMetadata:");
-        Map<String, Object> metadata = result.getMetadata();
-        if (metadata != null) {
-            System.out.println("Title: " + metadata.get("title"));
-            System.out.println("Author: " + metadata.get("author"));
+        if (document.metadata().title() != null) {
+            System.out.println("Title: " + document.metadata().title());
+        }
+        if (document.metadata().authors() != null) {
+            System.out.println("Authors: " + String.join(", ", document.metadata().authors()));
         }
 
-        System.out.println("\nTables found: " + result.getTables().size());
-        System.out.println("Images found: " + result.getImages().size());
+        System.out.println("\nTables found: " + document.tables().size());
+        System.out.println("Images found: " + (document.images() == null ? 0 : document.images().size()));
     }
 }
 ```

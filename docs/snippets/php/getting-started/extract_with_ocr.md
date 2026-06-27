@@ -10,11 +10,13 @@ $ocrConfig = new OcrConfig();
 $ocrConfig->setBackend('tesseract');
 $ocrConfig->setLanguage('eng');
 
-$config = new ExtractionConfig();
+$config = ExtractionConfig::default();
 $config->setForceOcr(true);
 $config->setOcr($ocrConfig);
 
-$result = Xberg::extractSync('scanned.pdf', null, $config);
+$resultOutput = Xberg::extract(\Xberg\ExtractInput::uri('scanned.pdf'), $config);
+
+$result = $resultOutput->results[0];
 
 echo "Content:\n";
 echo $result->getContent();

@@ -53,7 +53,7 @@ try {
 
 // Extract and validate
 async function extractAndValidate(fileBytes, mimeType) {
-  const result = await extract(fileBytes, mimeType, {});
+  const result = await extract({ kind: "bytes", bytes: fileBytes, mimeType: mimeType }, {});
 
   const validation = customValidator.validate(result);
   if (!validation.valid) {

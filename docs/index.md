@@ -1,10 +1,10 @@
 ---
-description: "Xberg – Extract text, tables, metadata, and audio transcripts from 96 file formats with a Rust core and polyglot SDKs. No GPU required."
+description: "Xberg – Full content intelligence engine: extract text, tables, entities, embeddings from 96+ formats with OCR, transcription, code intelligence, and LLM integration. Native bindings for 16 languages."
 ---
 
 # Xberg
 
-Document intelligence with a Rust core and polyglot SDKs. Extract text, tables, metadata, and audio transcripts from 96 formats with optional OCR — usable as an SDK, CLI, REST API, MCP server, or Docker image.
+Full content intelligence from one engine. Turn documents, URLs, code, and media into clean, structured output. Extract text, tables, entities, code structure, and embeddings—with automatic OCR, transcription, enrichment, and LLM-powered extraction. Available natively in 16 languages.
 
 <div class="hero-badges" markdown>
 
@@ -23,29 +23,37 @@ Document intelligence with a Rust core and polyglot SDKs. Extract text, tables, 
 
 <div class="grid cards" markdown>
 
-- :material-flash:{ .lg .middle } **High Performance**
+- :material-layers-multiple:{ .lg .middle } **One Engine for Everything**
 
-  Rust core with pdf_oxide PDF extraction, SIMD optimizations, and full parallelism. Process thousands of documents per minute without a GPU.
+  Feed documents, URLs, code, images, and audio into one API. Get clean Markdown, entities, code structure, embeddings, and enrichment without stitching libraries together.
 
-- :material-file-document-multiple:{ .lg .middle } **96 File Formats**
+- :material-file-document-multiple:{ .lg .middle } **96+ Document Formats**
 
-  PDF, DOCX, XLSX, PPTX, images, HTML, XML, emails, archives, academic formats, and audio/video transcription when enabled.
+  PDFs, Office documents, images, email, archives, academic publications, and more—all standardize to clean Markdown plus 5 other output formats.
 
-- :material-eye:{ .lg .middle } **Multi-Engine OCR**
+- :material-spider-web:{ .lg .middle } **Crawl and Extract at Scale**
 
-  Tesseract works across native and Wasm targets. PaddleOCR is available on native ONNX Runtime builds; EasyOCR is Python-only.
+  Recursively fetch URLs, extract documents from nested archives, and process hundreds in parallel. Configurable depth, timeouts, and headless-Chrome fallback.
 
-- :material-translate:{ .lg .middle } **Polyglot SDKs**
+- :material-robot-outline:{ .lg .middle } **Structured LLM Extraction**
 
-  SDKs for Python, TypeScript, Rust, Go, Java, Kotlin Android, C#, Ruby, PHP, Elixir, R, Dart, Swift, Zig, C, and WebAssembly. Kotlin/JVM consumers use the Java artifact.
+  Extract entities, JSON schemas, and structured data using local LLM servers (Ollama, LM Studio, vLLM) or 143+ remote providers—no custom prompting required.
+
+- :material-eye:{ .lg .middle } **OCR and Transcription**
+
+  Tesseract, PaddleOCR, and VLM models for scans. Whisper for audio and video. Confidence scores, language detection, and automatic fallback chains.
 
 - :material-code-tags:{ .lg .middle } **Code Intelligence**
 
-  Extract functions, classes, imports, symbols, and docstrings from 306 programming languages. Results in the **code_intelligence** field with semantic chunking.
+  Extract functions, classes, imports, and symbols from 306 programming languages. Automatic semantic chunking for RAG pipelines.
 
-- :material-puzzle:{ .lg .middle } **Plugin System**
+- :material-vector-polyline:{ .lg .middle } **Embeddings and Enrichment**
 
-  Register custom extractors, OCR backends, reranker backends, validators, post-processors, and renderers.
+  Vectorize with local ONNX models or provider-hosted embeddings. Enrich with named entity recognition, keyword extraction (YAKE/RAKE), image captions, and token reduction.
+
+- :material-translate:{ .lg .middle } **16-Language Native SDKs**
+
+  Python, TypeScript, Rust, Go, Java, C#, Ruby, PHP, Elixir, R, Dart, Swift, Zig, C FFI—plus CLI, REST API, MCP server, Docker, and WASM.
 
 </div>
 
@@ -115,7 +123,7 @@ Homebrew 6.0+ requires explicit trust for third-party taps. Run `brew trust xber
     use xberg::{extract, ExtractInput, ExtractionConfig};
 
     let config = ExtractionConfig::default();
-    let output = extract(ExtractInput::uri("document.pdf"), &config).await?;
+    let output = extract(ExtractInput::from_uri("document.pdf"), &config).await?;
     println!("{}", output.results[0].content);
     ```
 

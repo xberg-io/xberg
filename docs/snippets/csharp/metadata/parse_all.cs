@@ -8,7 +8,7 @@ var config = new ExtractionConfig
     }
 };
 
-var result = XbergLib.ExtractSync("document.pdf", config);
+var result = XbergLib.Extract("document.pdf", config);
 
 if (result.Metadata?.Format.Pdf != null)
 {
@@ -20,7 +20,7 @@ if (result.Metadata?.Format.Pdf != null)
     Console.WriteLine($"Created: {pdfMeta.CreatedDate:O}");
 }
 
-var htmlResult = XbergLib.ExtractSync("page.html", config);
+var htmlResult = XbergLib.Extract("page.html", config);
 if (htmlResult.Metadata?.Format.Html != null)
 {
     var htmlMeta = htmlResult.Metadata.Format.Html;

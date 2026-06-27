@@ -27,7 +27,7 @@ static int32_t validate_fn(
     (void)config;
     const MinLengthState *state = (const MinLengthState *)user_data;
 
-    /* `result` is a JSON string of ExtractionResult. We approximate the content
+    /* `result` is a JSON string of ExtractedDocument. We approximate the content
      * length check by scanning for the "content" field. Production plugins
      * should parse JSON properly. */
     const char *content = strstr(result, "\"content\":\"");

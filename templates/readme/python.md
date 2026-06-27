@@ -7,7 +7,7 @@
 ## What This Package Provides
 
 - **Python-native extraction** — async APIs for URI, bytes, and batch inputs.
-- **Structured results** — an `ExtractionOutput` envelope with `ExtractionResult` items, errors, and summary counts.
+- **Structured results** — an `ExtractionResult` envelope with `ExtractedDocument` items, errors, and summary counts.
 - **OCR choices** — Tesseract, PaddleOCR, Candle, and VLM OCR where configured.
 - **Same Rust engine as every binding** — behavior matches the Node.js, Ruby, Go, Java, .NET, PHP, Elixir, R, Dart, Swift, Zig, WASM, and C FFI packages.
 
@@ -309,8 +309,8 @@ print(document.content)
 
 ### Result Types
 
-- `ExtractionOutput` – Envelope with `results`, `errors`, and `summary`.
-- `ExtractionResult` – Per-document item at `output.results[0]` with `content`, `metadata`, `tables`, and chunks.
+- `ExtractionResult` – Envelope with `results`, `errors`, and `summary`.
+- `ExtractedDocument` – Per-document item at `output.results[0]` with `content`, `metadata`, `tables`, and chunks.
 - `Table` – Table with `cells`, `markdown`, and `page_number`.
 - `Metadata` – Typed document metadata.
 

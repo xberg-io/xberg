@@ -5,25 +5,31 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/xberg-io/xberg/packages/go"
+	"github.com/xberg-io/xberg"
 )
 
 func main() {
-	config := &xberg.ExtractionConfig{
+	maxKeywords := uint(10)
+	minScore := float32(0.3)
+	kind := xberg.ExtractInputKindURI
+	uri := "research_paper.pdf"
+
+	config := xberg.ExtractionConfig{
 		Keywords: &xberg.KeywordConfig{
-			Algorithm:   "YAKE",
-			MaxKeywords: 10,
-			MinScore:    0.3,
+			Algorithm:   xberg.KeywordAlgorithmYake,
+			MaxKeywords: &maxKeywords,
+			MinScore:    minScore,
 		},
 	}
 
-	result, err := xberg.ExtractSync("research_paper.pdf", config)
+	output, err := xberg.Extract(
+		xberg.ExtractInput{Kind: &kind, URI: &uri},
+		config,
+	)
 	if err != nil {
 		log.Fatalf("extract failed: %v", err)
 	}
 
-	if keywords, ok := result.Metadata.Additional["keywords"]; ok {
-		fmt.Printf("Keywords: %v\n", keywords)
-	}
+	fmt.Printf("Keywords: %v\n", output.Results[0].ExtractedKeywords)
 }
 ```

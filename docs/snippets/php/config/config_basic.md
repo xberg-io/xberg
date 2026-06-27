@@ -10,7 +10,9 @@ $config = new ExtractionConfig(
     enableQualityProcessing: true
 );
 
-$result = Xberg::extractSync('document.pdf', null, $config);
+$resultOutput = Xberg::extract(\Xberg\ExtractInput::uri('document.pdf'), $config);
+
+$result = $resultOutput->results[0];
 
 echo $result->getContent();
 ?>

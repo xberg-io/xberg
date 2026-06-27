@@ -9,7 +9,7 @@ const config = {
   },
 };
 
-const result = await extract("multilingual_document.pdf", null, config);
+const result = await extract({ kind: "uri", uri: "multilingual_document.pdf" }, config);
 if (result.detectedLanguages) {
   console.log(`Detected languages: ${result.detectedLanguages.join(", ")}`);
 }

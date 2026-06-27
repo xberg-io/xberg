@@ -1,14 +1,14 @@
-From Xberg import extract_sync, ExtractionConfig, PageConfig
+from xberg import extract, ExtractInput, ExtractionConfig, PageConfig
 
-Config = ExtractionConfig(
-pages=PageConfig(extract_pages=True)
+config = ExtractionConfig(
+    pages=PageConfig(extract_pages=True)
 )
 
-Result = extract_sync("document.pdf", config=config)
+result = extract(ExtractInput.from_uri("document.pdf"), config)
 
-If result.pages:
-for page in result.pages:
-print(f"Page {page.page_number}:")
-print(f" Content: {len(page.content)} chars")
-print(f" Tables: {len(page.tables)}")
-print(f" Images: {len(page.images)}")
+if result.results[0].pages:
+    for page in result.results[0].pages:
+        print(f"Page {page.page_number}:")
+        print(f" Content: {len(page.content)} chars")
+        print(f" Tables: {len(page.tables)}")
+        print(f" Images: {len(page.images)}")

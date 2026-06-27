@@ -9,15 +9,16 @@ config =
   }
   |> Jason.encode!()
 
-case Xberg.extract_sync("document.pdf", nil, config) do
-  {:ok, result} ->
-    decoded = Jason.decode!(result)
+case Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "document.pdf"}, config) do
+  {:ok, output} ->
+    result = List.first(output.results)
+    languages = result.detected_languages || []
 
-    case decoded do
-      %{"detected_languages" => languages} when is_list(languages) ->
+    case languages do
+      [_ | _] ->
         IO.inspect(languages, label: "Detected languages")
 
-      _ ->
+      [] ->
         IO.puts("No language detection results")
     end
 

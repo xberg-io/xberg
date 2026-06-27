@@ -2,11 +2,7 @@
 	"id": "format_pptx",
 	"category": "format_specific",
 	"description": "PPTX presentation extraction using extract",
-	"tags": [
-		"format_specific",
-		"pptx",
-		"text_extraction"
-	],
+	"tags": ["format_specific", "pptx", "text_extraction"],
 	"call": "extract",
 	"input": {
 		"kind": "uri",
@@ -19,9 +15,7 @@
 		}
 	],
 	"skip": {
-		"languages": [
-			"wasm"
-		],
+		"languages": ["wasm"],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	}
 }

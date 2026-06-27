@@ -1,11 +1,11 @@
 ```typescript title="Document Structure Config (TypeScript)"
-import { extractSync, ExtractionConfig } from "@xberg-io/xberg";
+import { extract, ExtractionConfig } from "@xberg-io/xberg";
 
 const config: ExtractionConfig = {
   includeDocumentStructure: true,
 };
 
-const result = extractSync("document.pdf", undefined, config);
+const result = extract({ kind: "uri", uri: "document.pdf" }, config);
 
 if (result.document) {
   for (const node of result.document.nodes) {

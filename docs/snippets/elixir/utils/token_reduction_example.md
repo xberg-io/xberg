@@ -9,9 +9,10 @@ config_json =
     }
   })
 
-{:ok, json} = Xberg.extract_async("verbose_document.pdf", nil, config_json)
-result = Jason.decode!(json)
-metadata = result["metadata"] || %{}
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "verbose_document.pdf"}, config_json)
+
+result = List.first(output.results)
+metadata = result.metadata || %{}
 
 original = metadata["original_token_count"] || 0
 reduced = metadata["token_count"] || 0

@@ -14,7 +14,7 @@ const config = new ExtractionConfig({
   }),
 });
 
-const result = await extract(fileBuffer, mimeType, config);
+const result = await extract({ kind: "bytes", bytes: fileBuffer, mimeType: mimeType }, config);
 
 if (result.detected_languages) {
   console.log("Detected languages:", result.detected_languages);

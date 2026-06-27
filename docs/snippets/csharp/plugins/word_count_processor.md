@@ -19,7 +19,7 @@ public class WordCountProcessor : IPostProcessor
         Console.WriteLine("Word count processor shut down");
     }
 
-    public void Process(ExtractionResult result, ExtractionConfig config)
+    public void Process(ExtractedDocument result, ExtractionConfig config)
     {
         var wordCount = CountWords(result.Content);
 
@@ -36,12 +36,12 @@ public class WordCountProcessor : IPostProcessor
         return ProcessingStage.Early;
     }
 
-    public bool ShouldProcess(ExtractionResult result, ExtractionConfig config)
+    public bool ShouldProcess(ExtractedDocument result, ExtractionConfig config)
     {
         return !string.IsNullOrEmpty(result.Content);
     }
 
-    public ulong EstimatedDurationMs(ExtractionResult result)
+    public ulong EstimatedDurationMs(ExtractedDocument result)
     {
         return 5;
     }

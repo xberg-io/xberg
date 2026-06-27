@@ -5,7 +5,7 @@ class WordCountPostProcessor : IPostProcessor
     public string Name => "word-count";
     public int Priority => 10;
 
-    public ExtractionResult Process(ExtractionResult result)
+    public ExtractedDocument Process(ExtractedDocument result)
     {
         var wordCount = result.Content.Split(
             new[] { ' ', '\n', '\r', '\t' },
@@ -27,7 +27,7 @@ class SentimentPostProcessor : IPostProcessor
     public string Name => "sentiment-analyzer";
     public int Priority => 5;
 
-    public ExtractionResult Process(ExtractionResult result)
+    public ExtractedDocument Process(ExtractedDocument result)
     {
         var sentiment = AnalyzeSentiment(result.Content);
 
@@ -58,7 +58,7 @@ class Program
 
         try
         {
-            var result = XbergLib.ExtractSync("document.pdf");
+            var result = XbergLib.Extract("document.pdf");
 
             if (result.Metadata.Additional != null)
             {

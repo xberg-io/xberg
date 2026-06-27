@@ -2,25 +2,37 @@
 import 'package:xberg/xberg.dart';
 
 Future<void> main() async {
-  final config = ExtractionConfig(
+  const config = ExtractionConfig(
     useCache: true,
     enableQualityProcessing: true,
-    forceOcr: false,
+    forceOcr: true,
     disableOcr: false,
-    ocr: const OcrConfig(
+    ocr: OcrConfig(
       enabled: true,
       backend: 'tesseract',
-      language: 'eng',
+      language: ['eng'],
       autoRotate: false,
+      vlmFallback: VlmFallbackPolicy.disabled(),
     ),
     resultFormat: ResultFormat.unified,
     outputFormat: OutputFormat.plain(),
     includeDocumentStructure: false,
     maxArchiveDepth: 3,
     useLayoutForMarkdown: false,
+    url: UrlExtractionConfig(
+      mode: UrlExtractionMode.auto,
+      allowLocalFileInputs: true,
+      allowFileUris: true,
+    ),
   );
 
-  final result = await XbergBridge.extract('scanned.pdf', null, config);
-  print(result.content);
+  const input = ExtractInput(
+    kind: ExtractInputKind.uri,
+    uri: 'scanned.pdf',
+  );
+  final output = await XbergBridge.extract(input, config: config);
+  final document = output.results.first;
+
+  print(document.content);
 }
 ```

@@ -117,17 +117,23 @@ Pre-built binaries available for:
 Extract text, metadata, and structure from any supported document format:
 
 ```typescript title="TypeScript"
-import { extract } from "@xberg-io/xberg";
+import { ExtractInputKind, extract } from "@xberg-io/xberg";
 
 const config = {
   useCache: true,
   enableQualityProcessing: true,
 };
 
-const result = extract("document.pdf", null, config);
+const output = await extract(
+  {
+    kind: ExtractInputKind.Uri,
+    uri: "document.pdf",
+  },
+  config,
+);
 
-console.log(result.content);
-console.log(`MIME Type: ${result.mimeType}`);
+console.log(output.results[0].content);
+console.log(`MIME Type: ${output.results[0].mimeType}`);
 ```
 
 ### Common Use Cases
@@ -139,30 +145,40 @@ Most use cases benefit from configuration to control extraction behavior:
 **With OCR (for scanned documents):**
 
 ```typescript title="TypeScript"
-import { extract } from "@xberg-io/xberg";
+import { ExtractInputKind, extract } from "@xberg-io/xberg";
 
 const config = {
   ocr: {
     backend: "tesseract",
-    language: "eng+fra",
+    language: ["eng", "fra"],
     tesseractConfig: {
       psm: 3,
     },
   },
 };
 
-const result = await extract("document.pdf", null, config);
-console.log(result.content);
+const output = await extract(
+  {
+    kind: ExtractInputKind.Uri,
+    uri: "document.pdf",
+  },
+  config,
+);
+
+console.log(output.results[0].content);
 ```
 
 #### Table Extraction
 
 ```typescript title="TypeScript"
-import { extract } from "xberg";
+import { ExtractInputKind, extract } from "@xberg-io/xberg";
 
-const result = extract("document.pdf");
+const output = await extract({
+  kind: ExtractInputKind.Uri,
+  uri: "document.pdf",
+});
 
-result.tables?.forEach((table) => {
+output.results[0].tables?.forEach((table) => {
   console.log(`Table with ${table.cells?.length ?? 0} rows`);
   console.log(table.markdown);
   table.cells?.forEach((row) => console.log(row.join(" | ")));
@@ -208,66 +224,24 @@ console.log(`Results: ${output.summary.results}`);
 #### Configuration Discovery
 
 ```typescript title="config_discovery.ts"
-import { ExtractionConfig, extract } from "@xberg-io/xberg";
+import { ExtractInputKind, ExtractionConfig, extract } from "@xberg-io/xberg";
 
 const config = ExtractionConfig.discover();
+const input = {
+  kind: ExtractInputKind.Uri,
+  uri: "document.pdf",
+};
+
 if (config) {
   console.log("Found configuration file");
-  const result = await extract("document.pdf", null, config);
-  console.log(result.content);
+  const output = await extract(input, config);
+  console.log(output.results[0].content);
 } else {
   console.log("No configuration file found, using defaults");
-  const result = await extract("document.pdf");
-  console.log(result.content);
+  const output = await extract(input);
+  console.log(output.results[0].content);
 }
 ```
-
-#### Worker Thread Pool
-
-```typescript title="worker_pool.ts"
-import {
-  createWorkerPool,
-  extractInWorker,
-  extractBatchInWorker,
-  closeWorkerPool,
-} from "@xberg-io/xberg";
-
-// Create a pool with 4 worker threads
-const pool = createWorkerPool(4);
-
-try {
-  // Extract single file in worker
-  const result = await extractInWorker(pool, "document.pdf", null, {
-    useCache: true,
-  });
-  console.log(result.content);
-
-  // Extract multiple files concurrently
-  const files = ["doc1.pdf", "doc2.docx", "doc3.xlsx"];
-  const results = await extractBatchInWorker(pool, files, {
-    useCache: true,
-  });
-
-  results.forEach((result, i) => {
-    console.log(`File ${i + 1}: ${result.content.length} characters`);
-  });
-} finally {
-  // Always close the pool when done
-  await closeWorkerPool(pool);
-}
-```
-
-**Performance Benefits:**
-- **Parallel Processing**: Multiple documents extracted simultaneously
-- **CPU Utilization**: Maximizes multi-core CPU usage for large batches
-- **Queue Management**: Automatically distributes work across available workers
-- **Resource Control**: Prevents thread exhaustion with configurable pool size
-
-**Best Practices:**
-- Use worker pools for batches of 10+ documents
-- Set pool size to number of CPU cores (default behavior)
-- Always close pools with `closeWorkerPool()` to prevent resource leaks
-- Reuse pools across multiple batch operations for efficiency
 
 ### Next Steps
 
@@ -384,22 +358,13 @@ Powered by [tree-sitter-language-pack](https://github.com/xberg-io/tree-sitter-l
 - **OCR Support** - Integrate multiple OCR backends for scanned documents
 - **Async/Await** - Non-blocking document processing with concurrent operations
 - **Plugin System** - Extensible post-processing for custom text transformation
-- **Embeddings** - Generate vector embeddings using ONNX Runtime models
+- **Embeddings** - Generate vector embeddings using ONNX Runtime models or provider-hosted services
 - **Batch Processing** - Efficiently process multiple documents in parallel
 - **Memory Efficient** - Stream large files without loading entirely into memory
 - **Language Detection** - Detect and support multiple languages in documents
 - **Code Intelligence** - Extract structure, imports, exports, symbols, and docstrings from [306 programming languages](https://docs.tree-sitter-language-pack.xberg.io) via tree-sitter
 - **Configuration** - Fine-grained control over extraction behavior
-
-### Performance Characteristics
-
-| Format | Speed | Memory | Notes |
-|--------|-------|--------|-------|
-| **PDF (text)** | 10-100 MB/s | ~50MB per doc | Fastest extraction |
-| **Office docs** | 20-200 MB/s | ~100MB per doc | DOCX, XLSX, PPTX |
-| **Images (OCR)** | 1-5 MB/s | Variable | Depends on OCR backend |
-| **Archives** | 5-50 MB/s | ~200MB per doc | ZIP, TAR, etc. |
-| **Web formats** | 50-200 MB/s | Streaming | HTML, XML, JSON |
+- **Six Output Formats** - Plain text, Markdown, Djot, HTML, JSON tree structure, or Structured JSON with OCR metadata
 
 ## OCR Support
 
@@ -412,20 +377,27 @@ Xberg supports multiple OCR backends for extracting text from scanned documents 
 ### OCR Configuration Example
 
 ```typescript title="TypeScript"
-import { extract } from "@xberg-io/xberg";
+import { ExtractInputKind, extract } from "@xberg-io/xberg";
 
 const config = {
   ocr: {
     backend: "tesseract",
-    language: "eng+fra",
+    language: ["eng", "fra"],
     tesseractConfig: {
       psm: 3,
     },
   },
 };
 
-const result = await extract("document.pdf", null, config);
-console.log(result.content);
+const output = await extract(
+  {
+    kind: ExtractInputKind.Uri,
+    uri: "document.pdf",
+  },
+  config,
+);
+
+console.log(output.results[0].content);
 ```
 
 ## Async Support

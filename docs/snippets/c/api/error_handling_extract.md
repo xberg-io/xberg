@@ -21,7 +21,7 @@ int main(void) {
         return 1;
     }
 
-    /* Returns a JSON array of ExtractionResult objects (one per input, in order),
+    /* Returns a JSON array of ExtractedDocument objects (one per input, in order),
      * or NULL on a system-level failure. Per-item errors are encoded inside
      * each result object's metadata (e.g. an "errors" array). */
     char *results_json = xberg_extract_batch(items_json, config);

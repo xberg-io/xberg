@@ -23,7 +23,7 @@ final class MyPlugin: PostProcessor {
         return "{\"ok\": null}"
     }
 
-    func process(result: ExtractionResult, config: ExtractionConfig) -> String {
+    func process(result: ExtractedDocument, config: ExtractionConfig) -> String {
         let contentLen = result.content().count
         logger.info("Processing \(result.mimeType()) (\(contentLen) bytes)")
 
@@ -34,7 +34,7 @@ final class MyPlugin: PostProcessor {
         return "{\"ok\": null}"
     }
 
-    func shouldProcess(result: ExtractionResult, config: ExtractionConfig) -> Bool {
+    func shouldProcess(result: ExtractedDocument, config: ExtractionConfig) -> Bool {
         true
     }
 
@@ -46,7 +46,7 @@ final class MyPlugin: PostProcessor {
         50
     }
 
-    func estimatedDurationMs(result: ExtractionResult) -> UInt64 {
+    func estimatedDurationMs(result: ExtractedDocument) -> UInt64 {
         10
     }
 }

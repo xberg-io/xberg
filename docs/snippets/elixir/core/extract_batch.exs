@@ -9,7 +9,7 @@ inputs = [
   }
 ]
 
-{:ok, output} = Xberg.extract_batch_async(inputs: inputs)
+{:ok, output} = Xberg.extract_batch(inputs, nil)
 
 Enum.each(output.results, fn result ->
   IO.puts(result.content)

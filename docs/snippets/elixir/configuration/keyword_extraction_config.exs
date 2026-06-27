@@ -10,13 +10,14 @@ config = %ExtractionConfig{
   }
 }
 
-{:ok, result} = Xberg.extract("document.pdf", nil, config)
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "document.pdf"}, config)
 
+result = List.first(output.results)
 # Access extracted keywords
-if result.keywords do
-  IO.puts("Extracted #{length(result.keywords)} keywords")
+if result.extracted_keywords do
+  IO.puts("Extracted #{length(result.extracted_keywords)} keywords")
 
-  Enum.each(result.keywords, fn keyword ->
+  Enum.each(result.extracted_keywords, fn keyword ->
     IO.puts("#{keyword["text"]}: #{keyword["score"]}")
   end)
 end

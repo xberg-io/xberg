@@ -6,7 +6,7 @@ This directory contains fixtures for generating E2E tests for plugin/config/util
 
 Unlike document extraction fixtures (in parent `fixtures/` directory), these fixtures test:
 
-- Plugin management APIs (validators, post-processors, OCR backends, document extractors)
+- Plugin management APIs (validators, post-processors, OCR backends, renderers, rerankers, and embedding backends)
 - Configuration loading APIs (`from_file`, `discover`)
 - MIME utility APIs (`detect_mime_type`, `get_extensions_for_mime`, etc.)
 
@@ -182,30 +182,6 @@ The generator translates fixtures to language-specific code:
 - Java: `assertEquals()` (JUnit)
 - Go: `if err != nil` checks
 
-## Special Cases
-
-### Go Lazy Initialization
-
-Document extractors in Go are lazily initialized. The fixture `extractors_list.json` includes:
-
-```json
-{
-  "setup": {
-    "lazy_init_required": {
-      "languages": ["go"],
-      "init_action": "extract",
-      "init_data": {
-        "create_temp_file": true,
-        "temp_file_name": "test.pdf",
-        "temp_file_content": "%PDF-1.4\\n%EOF\\n"
-      }
-    }
-  }
-}
-```
-
-The generator will produce Go-specific setup code to extract a PDF before listing extractors.
-
 ## Fixture Inventory
 
 ### Validator Management (2 fixtures)
@@ -223,12 +199,6 @@ The generator will produce Go-specific setup code to extract a PDF before listin
 - `ocr_backends_list.json` - List all OCR backends
 - `ocr_backends_unregister.json` - Unregister nonexistent backend
 - `ocr_backends_clear.json` - Clear OCR backends
-
-### Document Extractor Management (3 fixtures)
-
-- `extractors_list.json` - List all extractors (with Go lazy init)
-- `extractors_unregister.json` - Unregister nonexistent extractor
-- `extractors_clear.json` - Clear extractors
 
 ### Configuration APIs (2 fixtures)
 

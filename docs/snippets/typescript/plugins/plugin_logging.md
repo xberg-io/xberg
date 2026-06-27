@@ -1,11 +1,11 @@
 ```typescript title="TypeScript"
-import { registerPostProcessor, registerValidator, type ExtractionResult } from "@xberg-io/xberg";
+import { registerPostProcessor, registerValidator, type ExtractedDocument } from "@xberg-io/xberg";
 
 class LoggingPostProcessor {
   name = "logging-processor";
   priority = 5;
 
-  process(result: ExtractionResult): ExtractionResult {
+  process(result: ExtractedDocument): ExtractedDocument {
     console.info(`[PostProcessor] Processing ${result.mimeType}`);
     console.info(`[PostProcessor] Content length: ${result.content.length}`);
 
@@ -21,7 +21,7 @@ class LoggingValidator {
   name = "logging-validator";
   priority = 100;
 
-  validate(result: ExtractionResult): void {
+  validate(result: ExtractedDocument): void {
     console.info(`[Validator] Validating extraction result (${result.content.length} bytes)`);
 
     if (result.content.length < 50) {

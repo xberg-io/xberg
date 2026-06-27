@@ -1,7 +1,7 @@
 ```r title="R"
 library(xberg)
 
-config <- list(
+config <- ExtractionConfig$from_json(jsonlite::toJSON(list(
   pdf_options = list(
     extract_metadata = TRUE,
     hierarchy = list(
@@ -11,9 +11,14 @@ config <- list(
       ocr_coverage_threshold = 0.8
     )
   )
-)
+), auto_unbox = TRUE))
 
-json <- extract_sync("document.pdf", "application/pdf", config)
-result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+input <- list(kind = "uri", uri = "document.pdf", mime_type = "application/pdf")
+json <- extract(
+  input = ExtractInput$from_json(jsonlite::toJSON(input, auto_unbox = TRUE)),
+  config = config
+)
+output <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+result <- output$results[[1]]
 cat(sprintf("Pages: %d\n", length(result$pages)))
 ```

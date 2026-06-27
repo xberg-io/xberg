@@ -1,6 +1,6 @@
 ```python title="Python"
 import asyncio
-from xberg import ExtractionConfig, OcrConfig, TesseractConfig, extract
+from xberg import ExtractInput, ExtractionConfig, OcrConfig, TesseractConfig, extract
 
 async def main() -> None:
     config: ExtractionConfig = ExtractionConfig(
@@ -9,8 +9,8 @@ async def main() -> None:
             tesseract_config=TesseractConfig(psm=3)
         )
     )
-    result = await extract("document.pdf", config=config)
-    print(result.content)
+    result = await extract(ExtractInput.from_uri("document.pdf"), config)
+    print(result.results[0].content)
 
 asyncio.run(main())
 ```

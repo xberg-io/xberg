@@ -2,9 +2,19 @@
 const std = @import("std");
 const xberg = @import("xberg");
 
-fn extract_text(bytes: []const u8, mime_type: []const u8) ![]u8 {
+fn extract_text(allocator: std.mem.Allocator, bytes: []const u8, mime_type: []const u8) ![]u8 {
     const config_json = "{}";
-    return xberg.extract_sync(bytes, mime_type, config_json);
+    var input_json = std.ArrayList(u8).init(allocator);
+    defer input_json.deinit();
+
+    try input_json.writer().writeAll("{\"kind\":\"bytes\",\"bytes\":[");
+    for (bytes, 0..) |byte, index| {
+        if (index > 0) try input_json.writer().writeAll(",");
+        try input_json.writer().print("{d}", .{byte});
+    }
+    try input_json.writer().print("],\"mime_type\":\"{s}\",\"filename\":\"document.pdf\"}}", .{mime_type});
+
+    return xberg.extract(input_json.items, config_json);
 }
 
 pub fn main() !void {
@@ -16,7 +26,7 @@ pub fn main() !void {
     defer if (bytes.len > 0) allocator.free(bytes);
 
     const stderr = std.io.getStdErr().writer();
-    const result_json = extract_text(bytes, "application/pdf") catch |err| {
+    const output_json = extract_text(allocator, bytes, "application/pdf") catch |err| {
         switch (err) {
             error.UnsupportedFormat => try stderr.print("Format not supported\n", .{}),
             error.Ocr => try stderr.print("OCR failed\n", .{}),
@@ -25,9 +35,9 @@ pub fn main() !void {
         }
         return;
     };
-    defer std.heap.c_allocator.free(result_json);
+    defer std.heap.c_allocator.free(output_json);
 
     const stdout = std.io.getStdOut().writer();
-    try stdout.print("Extracted {d} bytes of JSON\n", .{result_json.len});
+    try stdout.print("Extracted {d} bytes of JSON\n", .{output_json.len});
 }
 ```

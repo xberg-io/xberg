@@ -57,7 +57,7 @@ class CustomPostProcessor : IPostProcessor
     public string Name => "custom-processor";
     public int Priority => 50;
 
-    public ExtractionResult Process(ExtractionResult result)
+    public ExtractedDocument Process(ExtractedDocument result)
     {
         result.Content = result.Content.ToUpper();
         return result;

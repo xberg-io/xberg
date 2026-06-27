@@ -15,7 +15,7 @@ let configJson = """
 """
 
 let config = try extractionConfigFromJson(configJson)
-let result = try extractSync("document.md", nil, config)
+let result = try extract("document.md", nil, config)
 
 if let chunks = result.chunks() {
     print("Chunks: \(chunks.count)")

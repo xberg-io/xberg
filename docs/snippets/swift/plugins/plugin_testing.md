@@ -16,7 +16,7 @@ final class MinLengthValidator: Validator {
     func initialize() -> String { "{\"ok\": null}" }
     func shutdown() -> String { "{\"ok\": null}" }
 
-    func validate(result: ExtractionResult, config: ExtractionConfig) -> String {
+    func validate(result: ExtractedDocument, config: ExtractionConfig) -> String {
         let contentLength = result.content().count
         if contentLength < minLength {
             return "{\"err\": \"Content too short: \(contentLength) < \(minLength)\"}"
@@ -24,7 +24,7 @@ final class MinLengthValidator: Validator {
         return "{\"ok\": null}"
     }
 
-    func shouldValidate(result: ExtractionResult, config: ExtractionConfig) -> Bool {
+    func shouldValidate(result: ExtractedDocument, config: ExtractionConfig) -> Bool {
         true
     }
 }

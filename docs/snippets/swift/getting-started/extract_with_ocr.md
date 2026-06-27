@@ -3,19 +3,23 @@ import Foundation
 import Xberg
 import RustBridge
 
+let input = try extractInputFromJson(#"{"kind":"uri","uri":"scanned.pdf"}"#)
 let configJson = """
 {
     "force_ocr": true,
     "ocr": {
+        "enabled": true,
         "backend": "tesseract",
-        "language": "eng"
+        "language": ["eng"]
     }
 }
 """
 
 let config = try extractionConfigFromJson(configJson)
-let result = try extractSync("scanned.pdf", nil, config)
+let output = try await extract(input: input, config: config)
 
-print(result.content().toString())
-print("MIME type: \(result.mime_type().toString())")
+if let document = output.results().get(index: 0) {
+    print(document.content().toString())
+    print("MIME type: \(document.mimeType().toString())")
+}
 ```

@@ -3,65 +3,65 @@
 
 declare(strict_types=1);
 
-/**
- * KeywordConfig - Keyword Extraction
- *
- * Automatically extract keywords and key phrases from documents.
- * Useful for document categorization, search indexing, and summarization.
- */
-
 require_once __DIR__ . '/vendor/autoload.php';
 
+use Xberg\ExtractInput;
+use Xberg\ExtractionConfig;
 use Xberg\Xberg;
-use Xberg\Config\ExtractionConfig;
-use Xberg\Config\KeywordConfig;
 
-$config = new ExtractionConfig(
-    keyword: new KeywordConfig(
-        maxKeywords: 10,
-        minScore: 0.0,
-        language: 'en'
-    )
-);
+function keywordConfig(array $keywords): ExtractionConfig
+{
+    return ExtractionConfig::from_json(json_encode([
+        'keywords' => $keywords,
+    ], JSON_THROW_ON_ERROR));
+}
 
-$xberg = new Xberg($config);
-$result = $xberg->extract('article.pdf');
+function extractFirst(string $uri, ExtractionConfig $config): object
+{
+    $output = Xberg::extract(ExtractInput::fromUri($uri), $config);
+    return $output->results[0];
+}
+
+$config = keywordConfig([
+    'algorithm' => 'yake',
+    'maxKeywords' => 10,
+    'minScore' => 0.0,
+    'language' => 'en',
+]);
+
+$result = extractFirst('article.pdf', $config);
 
 echo "Top Keywords:\n";
 echo str_repeat('=', 40) . "\n";
-foreach ($result->metadata->keywords ?? [] as $keyword) {
-    echo "  • $keyword\n";
+foreach ($result->extractedKeywords ?? [] as $keyword) {
+    echo "  - {$keyword->text} ({$keyword->score})\n";
 }
 echo "\n";
 
-$detailedConfig = new ExtractionConfig(
-    keyword: new KeywordConfig(
-        maxKeywords: 25,
-        minScore: 0.0,
-        language: 'en'
-    )
-);
+$detailedConfig = keywordConfig([
+    'algorithm' => 'yake',
+    'maxKeywords' => 25,
+    'minScore' => 0.0,
+    'language' => 'en',
+]);
 
-$xberg = new Xberg($detailedConfig);
-$result = $xberg->extract('research_paper.pdf');
+$result = extractFirst('research_paper.pdf', $detailedConfig);
+$keywords = $result->extractedKeywords ?? [];
 
 echo "Detailed keyword analysis:\n";
-echo "Total keywords: " . count($result->metadata->keywords ?? []) . "\n";
+echo "Total keywords: " . count($keywords) . "\n";
 
-if (!empty($result->metadata->keywords)) {
+if ($keywords !== []) {
     $grouped = [];
-    foreach ($result->metadata->keywords as $keyword) {
-        $first = strtoupper($keyword[0]);
-        if (!isset($grouped[$first])) {
-            $grouped[$first] = [];
-        }
-        $grouped[$first][] = $keyword;
+    foreach ($keywords as $keyword) {
+        $first = strtoupper($keyword->text[0]);
+        $grouped[$first][] = $keyword->text;
     }
 
-    foreach ($grouped as $letter => $keywords) {
+    foreach ($grouped as $letter => $items) {
         echo "\n$letter:\n";
-        foreach ($keywords as $keyword) {
-            echo "  - $keyword\n";
+        foreach ($items as $item) {
+            echo "  - $item\n";
         }
     }
 }
@@ -70,46 +70,23 @@ $files = ['doc1.pdf', 'doc2.pdf', 'doc3.pdf'];
 $allKeywords = [];
 
 foreach ($files as $file) {
-    if (!file_exists($file)) continue;
+    if (!file_exists($file)) {
+        continue;
+    }
 
-    $result = $xberg->extract($file);
-    foreach ($result->metadata->keywords ?? [] as $keyword) {
-        if (!isset($allKeywords[$keyword])) {
-            $allKeywords[$keyword] = 0;
-        }
-        $allKeywords[$keyword]++;
+    $result = extractFirst($file, $detailedConfig);
+    foreach ($result->extractedKeywords ?? [] as $keyword) {
+        $allKeywords[$keyword->text] = ($allKeywords[$keyword->text] ?? 0) + 1;
     }
 }
 
 arsort($allKeywords);
 echo "\n\nMost common keywords across documents:\n";
-$count = 0;
+$rank = 0;
 foreach ($allKeywords as $keyword => $frequency) {
-    if ($count++ >= 10) break;
-    echo sprintf("  %2d. %-30s (appears in %d documents)\n",
-        $count, $keyword, $frequency);
-}
-
-$categoryKeywords = [
-    'technology' => ['software', 'computer', 'algorithm', 'data', 'system'],
-    'business' => ['market', 'revenue', 'sales', 'customer', 'profit'],
-    'science' => ['research', 'experiment', 'hypothesis', 'analysis', 'study'],
-];
-
-$docKeywords = $result->metadata->keywords ?? [];
-$scores = [];
-
-foreach ($categoryKeywords as $category => $terms) {
-    $score = 0;
-    foreach ($terms as $term) {
-        if (in_array($term, $docKeywords, true)) {
-            $score++;
-        }
+    if ($rank++ >= 10) {
+        break;
     }
-    $scores[$category] = $score;
+    echo sprintf("  %2d. %-30s (appears in %d documents)\n", $rank, $keyword, $frequency);
 }
-
-arsort($scores);
-$topCategory = array_key_first($scores);
-echo "\nDocument category: $topCategory (score: {$scores[$topCategory]})\n";
 ```

@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-import { extractSync } from "@xberg-io/xberg";
+import { extract } from "@xberg-io/xberg";
 
 const config = {
   ocr: {
@@ -21,7 +21,7 @@ const config = {
   enableQualityProcessing: true,
 };
 
-const result = extractSync("document.pdf", null, config);
+const result = extract({ kind: "uri", uri: "document.pdf" }, config);
 
 if (result.chunks) {
   for (const chunk of result.chunks) {

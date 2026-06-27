@@ -3,7 +3,7 @@ import {
   registerValidator,
   unregisterValidator,
   type ValidatorProtocol,
-  type ExtractionResult,
+  type ExtractedDocument,
   ValidationError,
 } from "@xberg-io/xberg";
 
@@ -30,7 +30,7 @@ class StatefulValidator implements ValidatorProtocol {
   /**
    * Validate with state tracking
    */
-  validate(result: ExtractionResult): void {
+  validate(result: ExtractedDocument): void {
     this.callCount++;
 
     // Check cache first
@@ -51,7 +51,7 @@ class StatefulValidator implements ValidatorProtocol {
   /**
    * Perform actual validation logic
    */
-  private performValidation(result: ExtractionResult): void {
+  private performValidation(result: ExtractedDocument): void {
     // Check content length
     if (result.content.length < 10) {
       throw new ValidationError("Content too short (minimum 10 characters)");
@@ -71,7 +71,7 @@ class StatefulValidator implements ValidatorProtocol {
   /**
    * Create cache key from result
    */
-  private getCacheKey(result: ExtractionResult): string {
+  private getCacheKey(result: ExtractedDocument): string {
     return `${result.mimeType}-${result.content.length}`;
   }
 
@@ -112,7 +112,7 @@ class ContentTypeValidator implements ValidatorProtocol {
   /**
    * Validate content matches MIME type
    */
-  validate(result: ExtractionResult): void {
+  validate(result: ExtractedDocument): void {
     this.validateContentType(result.mimeType, result.content);
   }
 

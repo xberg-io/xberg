@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	result, err := xberg.ExtractSync("document.pdf", nil)
+	result, err := xberg.Extract("document.pdf", nil)
 	if err != nil {
 		log.Fatalf("extract pdf: %v", err)
 	}
@@ -29,7 +29,7 @@ func main() {
 	}
 
 	// Access HTML metadata
-	htmlResult, err := xberg.ExtractSync("page.html", nil)
+	htmlResult, err := xberg.Extract("page.html", nil)
 	if err != nil {
 		log.Fatalf("extract html: %v", err)
 	}

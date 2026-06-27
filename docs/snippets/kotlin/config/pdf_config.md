@@ -19,7 +19,7 @@ fun main() {
         .withPdfOptions(Optional.of(pdf))
         .build()
 
-    val result = Xberg.extractSync(Paths.get("encrypted.pdf"), null, config)
+    val result = Xberg.extract(Paths.get("encrypted.pdf"), null, config)
     println("Title: ${result.metadata().title()}")
     println("Authors: ${result.metadata().authors()}")
 }

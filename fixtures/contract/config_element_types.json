@@ -1,11 +1,7 @@
 {
 	"id": "config_element_types",
 	"description": "Tests element-based result format with element type assertions on DOCX",
-	"tags": [
-		"contract",
-		"config",
-		"result_format"
-	],
+	"tags": ["contract", "config", "result_format"],
 	"call": "extract",
 	"input": {
 		"kind": "uri",
@@ -14,21 +10,17 @@
 	"assertions": [
 		{
 			"type": "contains_any",
-			"field": "results.0.mime_type",
-			"values": [
-				"application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-			]
+			"field": "results[0].mime_type",
+			"values": ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
 		},
 		{
 			"type": "count_min",
-			"field": "results.0.elements",
+			"field": "results[0].elements",
 			"value": 1
 		}
 	],
 	"skip": {
-		"languages": [
-			"wasm"
-		],
+		"languages": ["wasm"],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	},
 	"config": {

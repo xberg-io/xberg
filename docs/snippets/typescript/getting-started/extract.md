@@ -2,7 +2,7 @@
 import { ExtractInputKind, extract } from "@xberg-io/xberg";
 
 const output = await extract({
-  kind: ExtractInputKind.Uri,
+  kind: "uri",
   uri: "document.pdf",
 });
 

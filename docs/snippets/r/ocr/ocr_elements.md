@@ -2,17 +2,21 @@
 library(xberg)
 
 # Enable structured OCR elements alongside text extraction
-config <- list(
+config <- ExtractionConfig$from_json(jsonlite::toJSON(list(
   ocr = list(
     backend = "paddleocr",
     language = "en",
     element_config = list(include_elements = TRUE)
   )
+), auto_unbox = TRUE))
+
+input <- list(kind = "uri", uri = "scanned.pdf", mime_type = "application/pdf")
+json <- extract(
+  input = ExtractInput$from_json(jsonlite::toJSON(input, auto_unbox = TRUE)),
+  config = config
 )
-
-json <- extract_sync("scanned.pdf", "application/pdf", config)
-result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
-
+output <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+result <- output$results[[1]]
 if (!is.null(result$ocr_elements)) {
   for (element in result$ocr_elements) {
     cat(sprintf("Text: %s\n", element$text))

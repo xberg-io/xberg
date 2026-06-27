@@ -124,10 +124,7 @@ Extract structured JSON data from documents by providing a schema; the document 
 === "CLI"
 
     ```bash title="Terminal"
-    xberg extract-structured paper.pdf \
-      --schema schema.json \
-      --model openai/gpt-4o-mini \
-      --strict
+    xberg extract paper.pdf --config structured-extraction.toml --format json
     ```
 
 === "TOML"
@@ -281,9 +278,7 @@ provider routing; point to your local server without needing an API key.
       --vlm-model ollama/llama3.2-vision
 
     # Use it for structured extraction
-    xberg extract-structured doc.pdf \
-      --schema schema.json \
-      --model ollama/llama3.2
+    xberg extract doc.pdf --config structured-extraction.toml --format json
 
     # Use it for embeddings
     xberg embed --provider llm \
@@ -313,12 +308,15 @@ provider routing; point to your local server without needing an API key.
 
 ## LLM Usage Tracking
 
-Every LLM call made during extraction is tracked in the `llm_usage` field of `ExtractionResult`. Each entry records the model used, token counts, estimated cost, and why the model stopped generating.
+Every LLM call made during extraction is tracked in the `llm_usage` field of `ExtractedDocument`. Each entry records the model used, token counts, estimated cost, and why the model stopped generating.
 
 === "Python"
 
     ```python
-    result = await extract("document.pdf", config)
+    from xberg import ExtractInput, extract
+
+    output = await extract(ExtractInput(kind="uri", uri="document.pdf"), config)
+    result = output.results[0]
     if result.get("llm_usage"):
         for usage in result["llm_usage"]:
             print(f"{usage['source']}: {usage['input_tokens']} in, {usage['output_tokens']} out, ${usage['estimated_cost']:.4f}")
@@ -327,7 +325,13 @@ Every LLM call made during extraction is tracked in the `llm_usage` field of `Ex
 === "TypeScript"
 
     ```typescript
-    const result = await extractFile("document.pdf", config);
+    import { ExtractInputKind, extract } from "@xberg-io/xberg";
+
+    const output = await extract(
+      { kind: ExtractInputKind.Uri, uri: "document.pdf" },
+      config,
+    );
+    const result = output.results[0];
     for (const usage of result.llmUsage ?? []) {
         console.log(`${usage.source}: ${usage.inputTokens} in, ${usage.outputTokens} out, $${usage.estimatedCost?.toFixed(4)}`);
     }
@@ -336,7 +340,10 @@ Every LLM call made during extraction is tracked in the `llm_usage` field of `Ex
 === "Rust"
 
     ```rust
-    let result = extract("document.pdf", &config).await?;
+    use xberg::{extract, ExtractInput};
+
+    let output = extract(ExtractInput::from_uri("document.pdf"), &config).await?;
+    let result = &output.results[0];
     if let Some(usages) = &result.llm_usage {
         for usage in usages {
             println!("{}: {} in, {} out", usage.source, usage.input_tokens.unwrap_or(0), usage.output_tokens.unwrap_or(0));
@@ -381,30 +388,15 @@ config = LlmConfig(
 | `temperature`  | `float \| None` | `None`     | Sampling temperature                                                |
 | `max_tokens`   | `int \| None`   | `None`     | Maximum tokens to generate                                          |
 
-## REST API
+## REST API And MCP
 
-### Structured Extraction
-
-`POST /extract-structured` — multipart form with file + schema + model configuration.
-
-```bash title="Terminal"
-curl -X POST http://localhost:4000/extract-structured \
-  -F "file=@invoice.pdf" \
-  -F 'schema={"type":"object","properties":{"vendor":{"type":"string"},"total":{"type":"number"}}}' \
-  -F "model=openai/gpt-4o-mini" \
-  -F "strict=true"
-```
-
-## MCP Tools
-
-When running Xberg as an MCP server, LLM features are available as tools:
-
-- `extract_structured` — extract structured data from a document using a JSON schema
-- `embed_text` — extended with `model` parameter for LLM-hosted embeddings
+Use the unified `/extract` endpoint or `extract` MCP tool with a `structured_extraction` config object. LLM-hosted embeddings are Rust-only for now and can be wired into extraction through `EmbeddingConfig`.
 
 ## Related
 
 - [OCR](ocr.md) — OCR backends including VLM OCR
 - [Configuration Reference](configuration.md) — full field reference for all config types
-- [Advanced Features](advanced.md) — chunking, language detection, local embeddings
+- [Chunking](chunking.md) — split text for RAG
+- [Language Detection](language-detection.md) — multilingual document analysis
+- [Embeddings](embeddings.md) — semantic vectors for search
 - [API Server](api-server.md) — REST API endpoints

@@ -115,8 +115,9 @@ defmodule XbergMCPServer.Handler do
     else
       config = build_config(config_opts)
 
-      case Xberg.extract(file_path, mime_type, config) do
-        {:ok, result} ->
+      case Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: file_path, mime_type: mime_type}, config) do
+        {:ok, output} ->
+          result = List.first(output.results)
           response_data = %{
             success: true,
             content: result.content,
@@ -228,8 +229,9 @@ defmodule XbergMCPServer.FileHandler do
       {:ok, body, req} ->
         File.write!(temp_path, body)
 
-        case Xberg.extract(temp_path) do
-          {:ok, result} ->
+        case Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: temp_path}, nil) do
+          {:ok, output} ->
+            result = List.first(output.results)
             response = Jason.encode!(%{
               success: true,
               content_size: byte_size(result.content),

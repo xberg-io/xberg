@@ -20,10 +20,10 @@ impl DocumentExtractor for MyPlugin {
         content: &[u8],
         mime_type: &str,
         _config: &ExtractionConfig,
-    ) -> Result<ExtractionResult> {
+    ) -> Result<ExtractedDocument> {
         info!("Extracting {} ({} bytes)", mime_type, content.len());
 
-        let result = ExtractionResult::default();
+        let result = ExtractedDocument::default();
 
         if result.content.is_empty() {
             warn!("Extraction resulted in empty content");

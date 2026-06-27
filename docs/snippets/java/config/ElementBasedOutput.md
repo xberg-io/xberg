@@ -1,7 +1,7 @@
 ```java title="Element-Based Output (Java)"
 import io.xberg.Xberg;
 import io.xberg.ExtractionConfig;
-import io.xberg.ExtractionResult;
+import io.xberg.ExtractedDocument;
 import io.xberg.Element;
 import io.xberg.OutputFormat;
 
@@ -12,7 +12,14 @@ public class ElementBasedOutput {
         config.setOutputFormat(OutputFormat.ELEMENT_BASED);
 
         // Extract document
-        ExtractionResult result = Xberg.extractSync("document.pdf", config);
+        var resultOutput = Xberg.extract(
+            io.xberg.ExtractInput.builder()
+                .withKind(io.xberg.ExtractInputKind.Uri)
+                .withUri("document.pdf")
+                .build(),
+            config
+        );
+        ExtractedDocument result = resultOutput.results().get(0);
 
         // Access elements
         for (Element element : result.getElements()) {

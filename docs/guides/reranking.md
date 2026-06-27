@@ -2,6 +2,14 @@
 
 Rerank candidate documents by joint relevance scoring. After vector retrieval returns top-K candidates, rerank to surface the most relevant documents for LLM context.
 
+## How it works
+
+Vector similarity uses **bi-encoders**: the query and each document are embedded independently, then compared by dot product or cosine. This is fast and parallel — ideal for first-pass retrieval over millions of documents — but the query and document never see each other during encoding.
+
+Reranking uses **cross-encoders**: each `(query, document)` pair is scored together by a transformer, so the two attend to each other across every layer. That yields far more accurate relevance scores, at the cost of one forward pass per candidate.
+
+Use reranking as the **second pass** in a retrieval pipeline: retrieve a candidate set cheaply (top-100 via vector search or BM25), rerank it with a cross-encoder, then pass the top-k into your LLM context. This keeps the recall of vector search while sharpening the precision of what reaches the model.
+
 ## Quick example
 
 Use the `fast` preset to rerank three documents against a query.
@@ -220,40 +228,6 @@ results = rerank_sync("query text", ["doc1", "doc2"], config)
 ```
 
 The Plugin variant works on every target (including WASM) because no native ONNX Runtime is loaded.
-
-## HTTP `/rerank`
-
-When the API server is running, `POST /rerank` accepts JSON requests:
-
-```bash
-curl -X POST http://localhost:8000/rerank \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "How to train a dog",
-    "documents": [
-      "Dog training requires patience.",
-      "Cats are independent animals.",
-      "Bird care includes proper cage setup."
-    ],
-    "config": {
-      "model": {"type": "preset", "name": "fast"},
-      "top_k": 2
-    }
-  }'
-```
-
-Response:
-
-```json
-{
-  "results": [
-    {"index": 0, "score": 0.987, "document": "Dog training requires patience."},
-    {"index": 2, "score": 0.412, "document": "Bird care includes proper cage setup."}
-  ]
-}
-```
-
-The endpoint caps `documents.length` at 1024 entries — chunk larger candidate sets client-side.
 
 ## Performance notes
 

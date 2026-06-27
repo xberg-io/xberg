@@ -1,7 +1,7 @@
 ```java title="Java"
 import io.xberg.Xberg;
 import io.xberg.ExtractionConfig;
-import io.xberg.ExtractionResult;
+import io.xberg.ExtractedDocument;
 import io.xberg.HtmlOutputConfig;
 import io.xberg.HtmlTheme;
 import io.xberg.OutputFormat;
@@ -20,7 +20,14 @@ public class HtmlOutput {
             .withHtmlOutput(Optional.of(htmlOutput))
             .build();
 
-        ExtractionResult result = Xberg.extractSync(Path.of("document.pdf"), config);
+        var resultOutput = Xberg.extract(
+            io.xberg.ExtractInput.builder()
+                .withKind(io.xberg.ExtractInputKind.Uri)
+                .withUri("document.pdf")
+                .build(),
+            config
+        );
+        ExtractedDocument result = resultOutput.results().get(0);
         System.out.println(result.content()); // HTML with kb-* classes
     }
 }

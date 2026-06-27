@@ -1,6 +1,6 @@
 import {
   type ExtractionConfig,
-  extractSync,
+  extract,
   type HierarchyConfig,
   type PdfConfig,
 } from "@xberg-io/xberg";
@@ -23,7 +23,7 @@ const extractionConfigBasic: ExtractionConfig = {
   pdfOptions: pdfConfigBasic,
 };
 
-const _result = extractSync("document.pdf", { config: extractionConfigBasic });
+const _result = extract({ kind: "uri", uri: "document.pdf" }, extractionConfigBasic);
 
 // Example 2: Custom kClusters for minimal structure
 // Use 3 clusters for simpler hierarchy with minimal structure.
@@ -43,7 +43,7 @@ const extractionConfigMinimal: ExtractionConfig = {
   pdfOptions: pdfConfigMinimal,
 };
 
-const _resultMinimal = extractSync("document.pdf", { config: extractionConfigMinimal });
+const _resultMinimal = extract({ kind: "uri", uri: "document.pdf" }, extractionConfigMinimal);
 
 // Example 3: With OCR coverage threshold
 // Trigger OCR if less than 50% of text has font data.
@@ -63,7 +63,7 @@ const extractionConfigOcr: ExtractionConfig = {
   pdfOptions: pdfConfigOcr,
 };
 
-const _resultOcr = extractSync("document.pdf", { config: extractionConfigOcr });
+const _resultOcr = extract({ kind: "uri", uri: "document.pdf" }, extractionConfigOcr);
 
 // Field descriptions:
 //

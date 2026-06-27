@@ -15,21 +15,23 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-xberg = Xberg::Client.new(config)
-
 puts "First extraction (will be cached)..."
-result1 = xberg.extract('document.pdf')
-puts "  - Content length: #{result1.content.length}"
-puts "  - Cached: #{result1.metadata['was_cached']}"
+input1 = Xberg::ExtractInput.new(uri: 'document.pdf')
+result1 = Xberg.extract(input1, config)
+doc1 = result1.results.first
+puts "  - Content length: #{doc1.content.length}"
+puts "  - Cached: #{doc1.metadata['was_cached']}"
 
 puts "\nSecond extraction (from cache)..."
-result2 = xberg.extract('document.pdf')
-puts "  - Content length: #{result2.content.length}"
-puts "  - Cached: #{result2.metadata['was_cached']}"
+input2 = Xberg::ExtractInput.new(uri: 'document.pdf')
+result2 = Xberg.extract(input2, config)
+doc2 = result2.results.first
+puts "  - Content length: #{doc2.content.length}"
+puts "  - Cached: #{doc2.metadata['was_cached']}"
 
-puts "\nResults are identical: #{result1.content == result2.content}"
+puts "\nResults are identical: #{doc1.content == doc2.content}"
 
-cache_stats = xberg.get_cache_stats
+cache_stats = Xberg.get_cache_stats
 puts "\nCache Statistics:"
 puts "  - Total entries: #{cache_stats['total_entries']}"
 puts "  - Cache size: #{(cache_stats['cache_size_bytes'] / 1024.0 / 1024.0).round(1)} MB"

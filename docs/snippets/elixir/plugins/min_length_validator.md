@@ -5,7 +5,7 @@ To implement a minimum length validator in Rust:
 
 ```rust
 use xberg::plugins::{Plugin, Validator};
-use xberg::{Result, ExtractionResult, ExtractionConfig, XbergError};
+use xberg::{Result, ExtractedDocument, ExtractionConfig, XbergError};
 use async_trait::async_trait;
 
 struct MinLengthValidator {
@@ -23,7 +23,7 @@ impl Plugin for MinLengthValidator {
 impl Validator for MinLengthValidator {
     async fn validate(
         &self,
-        result: &ExtractionResult,
+        result: &ExtractedDocument,
         _config: &ExtractionConfig,
     ) -> Result<()> {
         if result.content.len() < self.min_length {

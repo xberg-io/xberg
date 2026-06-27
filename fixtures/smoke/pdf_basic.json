@@ -2,11 +2,7 @@
 	"id": "smoke_pdf_basic",
 	"category": "smoke",
 	"description": "Smoke test: PDF with simple text extraction",
-	"tags": [
-		"smoke",
-		"pdf",
-		"basic"
-	],
+	"tags": ["smoke", "pdf", "basic"],
 	"input": {
 		"kind": "uri",
 		"uri": "pdf/fake_memo.pdf",
@@ -15,27 +11,22 @@
 	"assertions": [
 		{
 			"type": "equals",
-			"field": "results.0.mime_type",
+			"field": "results[0].mime_type",
 			"value": "application/pdf"
 		},
 		{
 			"type": "min_length",
-			"field": "results.0.content",
+			"field": "results[0].content",
 			"value": 50
 		},
 		{
 			"type": "contains_any",
-			"field": "results.0.content",
-			"values": [
-				"May 5, 2023",
-				"To Whom it May Concern"
-			]
+			"field": "results[0].content",
+			"values": ["May 5, 2023", "To Whom it May Concern"]
 		}
 	],
 	"skip": {
-		"languages": [
-			"wasm"
-		],
+		"languages": ["wasm"],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	},
 	"call": "extract",

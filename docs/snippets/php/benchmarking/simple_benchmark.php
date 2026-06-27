@@ -16,7 +16,16 @@ use Xberg\Xberg;
 use Xberg\Config\ExtractionConfig;
 use Xberg\Config\OcrConfig;
 use function Xberg\extract;
-use function Xberg\extract_batch;
+
+function extractBatchFiles(array $files): array
+{
+    $inputs = array_map(
+        static fn (string $file): \Xberg\ExtractInput => \Xberg\ExtractInput::uri($file),
+        $files
+    );
+
+    return Xberg::extractBatch($inputs, \Xberg\ExtractionConfig::default())->results;
+}
 
 class Benchmark
 {
@@ -125,7 +134,7 @@ if (file_exists($testFile)) {
 $files = array_filter(['doc1.pdf', 'doc2.pdf', 'doc3.pdf'], 'file_exists');
 if (count($files) >= 3) {
     $benchmark->run('Batch processing (3 files)', function () use ($files) {
-        extract_batch(array_slice($files, 0, 3));
+        extractBatchFiles(array_slice($files, 0, 3));
     }, 3);
 
     $benchmark->run('Sequential processing (3 files)', function () use ($files) {

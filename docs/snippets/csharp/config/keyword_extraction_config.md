@@ -8,14 +8,14 @@ var config = new ExtractionConfig
         Algorithm = KeywordAlgorithm.Yake,
         MaxKeywords = 10,
         MinScore = 0.1f,
-        NgramRange = [1, 3],
         Language = "en"
     }
 };
 
-var result = await XbergLib.Extract("document.pdf", null, config);
-if (result.Keywords != null)
+var output = await XbergConverter.ExtractAsync(ExtractInput.FromUri("document.pdf"), config);
+var result = output.Results[0];
+if (result.ExtractedKeywords != null)
 {
-    Console.WriteLine($"Keywords: {string.Join(", ", result.Keywords)}");
+    Console.WriteLine($"Keywords: {string.Join(", ", result.ExtractedKeywords.Select(k => k.Text))}");
 }
 ```

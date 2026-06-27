@@ -2,8 +2,10 @@
 require 'xberg'
 
 begin
-  result = Xberg.extract_sync('missing.pdf')
-  puts result.content
+  input = Xberg::ExtractInput.new(uri: 'missing.pdf')
+  config = Xberg::ExtractionConfig.new
+  result = Xberg.extract(input, config)
+  puts result.results.first.content
 rescue RuntimeError => e
   # All extraction errors are raised as RuntimeError
   # Check error message for specific error details

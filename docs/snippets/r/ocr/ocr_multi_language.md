@@ -2,15 +2,18 @@
 library(xberg)
 
 # Configure multi-language OCR (English, French, German)
-config <- list(
+config <- ExtractionConfig$from_json(jsonlite::toJSON(list(
   force_ocr = TRUE,
   ocr = list(backend = "tesseract", language = "eng+fra+deu")
-)
-
+), auto_unbox = TRUE))
 # Extract from a multilingual document
-json <- extract_sync("multilingual.png", "image/png", config)
-result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
-
+input <- list(kind = "uri", uri = "multilingual.png", mime_type = "image/png")
+json <- extract(
+  input = ExtractInput$from_json(jsonlite::toJSON(input, auto_unbox = TRUE)),
+  config = config
+)
+output <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+result <- output$results[[1]]
 cat(sprintf("Detected language: %s\n", result$detected_language))
 cat(sprintf("Extracted %d characters\n", nchar(result$content)))
 cat("Content preview:\n")

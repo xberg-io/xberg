@@ -5,33 +5,33 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/xberg-io/xberg/packages/go"
+	"github.com/xberg-io/xberg"
 )
 
 func main() {
-	maxKeywords := int32(10)
-	minScore := 0.3
+	maxKeywords := uint(10)
+	minScore := float32(0.3)
+	kind := xberg.ExtractInputKindURI
+	uri := "research_paper.pdf"
 
-	config := &xberg.ExtractionConfig{
+	config := xberg.ExtractionConfig{
 		Keywords: &xberg.KeywordConfig{
-			Algorithm:   xberg.KeywordAlgorithm_YAKE,
+			Algorithm:   xberg.KeywordAlgorithmYake,
 			MaxKeywords: &maxKeywords,
-			MinScore:    &minScore,
+			MinScore:    minScore,
 		},
 	}
 
-	result, err := xberg.ExtractSync("research_paper.pdf", config)
+	output, err := xberg.Extract(
+		xberg.ExtractInput{Kind: &kind, URI: &uri},
+		config,
+	)
 	if err != nil {
 		log.Fatalf("extraction failed: %v", err)
 	}
 
-	if keywords, ok := result.Metadata["keywords"]; ok {
-		keywordList := keywords.([]map[string]interface{})
-		for _, kw := range keywordList {
-			text := kw["text"].(string)
-			score := kw["score"].(float64)
-			fmt.Printf("%s: %.3f\n", text, score)
-		}
+	for _, keyword := range output.Results[0].ExtractedKeywords {
+		fmt.Printf("%s: %.3f\n", keyword.Text, keyword.Score)
 	}
 }
 ```

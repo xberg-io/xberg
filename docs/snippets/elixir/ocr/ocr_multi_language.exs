@@ -20,8 +20,9 @@ config = %ExtractionConfig{
   force_ocr: true
 }
 
-{:ok, result} = Xberg.extract("multilingual_document.pdf", nil, config)
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "multilingual_document.pdf"}, config)
 
+result = List.first(output.results)
 # Results will contain text recognized in all specified languages
 IO.puts("Multi-language OCR Extraction:")
 IO.puts("Supported languages: English, French, German")

@@ -1,4 +1,4 @@
-import type { Chunk, ExtractedImage, ExtractionResult, Table } from "@xberg-io/xberg-wasm";
+import type { Chunk, ExtractedImage, ExtractedDocument, Table } from "@xberg-io/xberg-wasm";
 
 function _isTable(obj: unknown): obj is Table {
   if (!obj || typeof obj !== "object") return false;
@@ -27,7 +27,7 @@ function _isExtractedImage(obj: unknown): obj is ExtractedImage {
   );
 }
 
-function isExtractionResult(obj: unknown): obj is ExtractionResult {
+function isExtractedDocument(obj: unknown): obj is ExtractedDocument {
   if (!obj || typeof obj !== "object") return false;
   const r = obj as Record<string, unknown>;
   return (
@@ -39,9 +39,9 @@ function isExtractionResult(obj: unknown): obj is ExtractionResult {
   );
 }
 
-const result = { content: "text", mimeType: "application/pdf", metadata: {}, tables: [] };
+const document = { content: "text", mimeType: "application/pdf", metadata: {}, tables: [] };
 
-if (isExtractionResult(result)) {
-  console.log("Valid extraction result");
-  console.log("Has tables:", result.tables.length > 0);
+if (isExtractedDocument(document)) {
+  console.log("Valid extracted document");
+  console.log("Has tables:", document.tables.length > 0);
 }

@@ -1,5 +1,5 @@
 ```java title="Java"
-import io.xberg.ExtractionResult;
+import io.xberg.ExtractedDocument;
 import io.xberg.PostProcessor;
 import org.junit.jupiter.api.Test;
 import java.util.HashMap;
@@ -18,7 +18,7 @@ class PostProcessorTest {
             return result;
         };
 
-        ExtractionResult input = new ExtractionResult(
+        ExtractedDocument input = new ExtractedDocument(
             "Hello world test",
             "text/plain",
             new HashMap<>(),
@@ -29,7 +29,7 @@ class PostProcessorTest {
             true
         );
 
-        ExtractionResult output = processor.process(input);
+        ExtractedDocument output = processor.process(input);
 
         assertEquals(3, output.getMetadata().get("word_count"));
     }

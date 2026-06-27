@@ -15,7 +15,7 @@ async function extractImagesWithConfig() {
     },
   };
 
-  const result = await extract(bytes, "application/pdf", config);
+  const result = await extract({ kind: "bytes", bytes, mimeType: "application/pdf" }, config);
 
   if (result.images) {
     console.log(`Extracted ${result.images.length} images`);

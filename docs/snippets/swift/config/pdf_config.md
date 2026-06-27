@@ -14,7 +14,7 @@ let configJson = """
 """
 
 let config = try extractionConfigFromJson(configJson)
-let result = try extractSync("encrypted.pdf", nil, config)
+let result = try extract("encrypted.pdf", nil, config)
 
 print("Content length: \(result.content().toString().count)")
 ```

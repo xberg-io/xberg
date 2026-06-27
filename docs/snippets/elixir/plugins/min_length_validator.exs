@@ -25,10 +25,9 @@ end
 Xberg.Plugin.register_validator(MinLengthValidator)
 
 # Example usage with extraction
-{:ok, result} = Xberg.extract(
-  "document.pdf",
-  nil
-)
+input = %Xberg.ExtractInput{kind: :uri, uri: "document.pdf"}
+{:ok, output} = Xberg.extract(input, nil)
+result = List.first(output.results)
 
 case result do
   result ->

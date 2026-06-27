@@ -2,9 +2,7 @@
 	"id": "list_embedding_backends",
 	"category": "registry",
 	"description": "List embedding backends",
-	"tags": [
-		"registry"
-	],
+	"tags": ["registry"],
 	"call": "list_embedding_backends",
 	"input": {},
 	"assertions": [

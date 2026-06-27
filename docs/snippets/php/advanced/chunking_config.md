@@ -14,7 +14,9 @@ $config = new ExtractionConfig(
     )
 );
 
-$result = Xberg::extractSync('document.pdf', null, $config);
+$resultOutput = Xberg::extract(\Xberg\ExtractInput::uri('document.pdf'), $config);
+
+$result = $resultOutput->results[0];
 
 echo "Number of chunks: " . count($result->getChunks()) . "\n";
 foreach ($result->getChunks() as $chunk) {
@@ -40,7 +42,9 @@ $config = new ExtractionConfig(
     )
 );
 
-$result = Xberg::extractSync('document.pdf', null, $config);
+$resultOutput = Xberg::extract(\Xberg\ExtractInput::uri('document.pdf'), $config);
+
+$result = $resultOutput->results[0];
 
 echo "Chunks with topic-based boundaries: " . count($result->getChunks()) . "\n";
 ?>
@@ -63,7 +67,9 @@ $config = new ExtractionConfig(
     )
 );
 
-$result = Xberg::extractSync('document.md', null, $config);
+$resultOutput = Xberg::extract(\Xberg\ExtractInput::uri('document.md'), $config);
+
+$result = $resultOutput->results[0];
 
 foreach ($result->getChunks() as $chunk) {
     $metadata = $chunk->getMetadata();

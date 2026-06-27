@@ -1,9 +1,12 @@
 ```typescript title="TypeScript"
-import { extractSync } from "xberg";
+import { ExtractInputKind, extract } from "@xberg-io/xberg";
 
-const result = extractSync("document.pdf");
+const output = await extract({
+  kind: "uri",
+  uri: "document.pdf",
+});
 
-result.tables?.forEach((table) => {
+output.results[0].tables?.forEach((table) => {
   console.log(`Table with ${table.cells?.length ?? 0} rows`);
   console.log(table.markdown);
   table.cells?.forEach((row) => console.log(row.join(" | ")));

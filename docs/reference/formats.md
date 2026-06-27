@@ -315,56 +315,114 @@ Example with manual override:
 === "C#"
 
     ```csharp title="format_detection.cs"
+    using System.IO;
     using Xberg;
 
+    var config = ExtractionConfig.Default();
+
     // Automatic format detection from file extension
-    var result = XbergClient.ExtractSync("document.pdf");
+    var output = await XbergConverter.ExtractAsync(
+        ExtractInput.FromUri("document.pdf"),
+        config
+    );
+    var result = output.Results[0];
 
     // Manual MIME type override for files without extensions
-    var result2 = XbergClient.ExtractAsBytes(rawBytes, "application/pdf", null);
+    var rawBytes = File.ReadAllBytes("document.dat");
+    var output2 = await XbergConverter.ExtractAsync(
+        ExtractInput.FromBytes(rawBytes, "application/pdf", "document.dat"),
+        config
+    );
+    var result2 = output2.Results[0];
     ```
 
 === "Go"
 
     ```go title="format_detection.go"
-    import "xberg"
+    import (
+        "log"
+        "os"
+
+        xberg "github.com/xberg-io/xberg/packages/go"
+    )
+
+    config := xberg.ExtractionConfig{}
 
     // Automatic format detection from file extension
-    result, err := xberg.ExtractSync("document.pdf", nil)
+    input := xberg.ExtractInputFromURI("document.pdf")
+    output, err := xberg.Extract(*input, config)
     if err != nil {
         log.Fatal(err)
     }
+    result := output.Results[0]
 
     // Manual MIME type override for ambiguous files
-    config := &xberg.ExtractionConfig{}
-    mimeBytes, _ := ioutil.ReadFile("document.dat")
-    result2, err := xberg.ExtractSync(mimeBytes, "application/pdf", config)
+    rawBytes, err := os.ReadFile("document.dat")
+    if err != nil {
+        log.Fatal(err)
+    }
+    input2 := xberg.ExtractInputFromBytes(
+        rawBytes,
+        "application/pdf",
+        xberg.Ptr("document.dat"),
+    )
+    output2, err := xberg.Extract(*input2, config)
+    if err != nil {
+        log.Fatal(err)
+    }
+    result2 := output2.Results[0]
     ```
 
 === "Java"
 
     ```java title="FormatDetection.java"
+    import io.xberg.ExtractInput;
+    import io.xberg.ExtractInputKind;
+    import io.xberg.ExtractionConfig;
     import io.xberg.Xberg;
-    import io.xberg.ExtractionResult;
+    import java.nio.file.Files;
+    import java.nio.file.Path;
+
+    var config = ExtractionConfig.builder().build();
 
     // Automatic format detection from file extension
-    ExtractionResult result = Xberg.extract("document.pdf");
+    var output = Xberg.extract(
+        ExtractInput.builder()
+            .withKind(ExtractInputKind.Uri)
+            .withUri("document.pdf")
+            .build(),
+        config
+    );
+    var result = output.results().get(0);
 
-    // Manual MIME type override using detectMimeType for byte arrays
-    String mimeType = Xberg.detectMimeType(new byte[]{/* PDF header bytes */});
-    ExtractionResult result2 = Xberg.extractAsBytes(rawBytes, mimeType, null);
+    // Manual MIME type override for files without extensions
+    var rawBytes = Files.readAllBytes(Path.of("document.dat"));
+    var output2 = Xberg.extract(
+        ExtractInput.builder()
+            .withKind(ExtractInputKind.Bytes)
+            .withBytes(rawBytes)
+            .withMimeType("application/pdf")
+            .withFilename("document.dat")
+            .build(),
+        config
+    );
+    var result2 = output2.results().get(0);
     ```
 
 === "Python"
 
     ```python title="format_detection.py"
-    from xberg import extract
+    from xberg import ExtractInput, extract
 
     # Automatic format detection from file extension
-    result = extract("document.pdf")
+    output = await extract(ExtractInput(kind="uri", uri="document.pdf"))
+    result = output.results[0]
 
     # Manual MIME type override for unknown extensions
-    result = extract("document.dat", mime_type="application/pdf")
+    output2 = await extract(
+        ExtractInput(kind="uri", uri="document.dat", mime_type="application/pdf")
+    )
+    result2 = output2.results[0]
     ```
 
 === "Ruby"
@@ -373,27 +431,40 @@ Example with manual override:
     require 'xberg'
 
     # Automatic format detection from file extension
-    result = Xberg.extract('document.pdf')
+    input = Xberg::ExtractInput.new(kind: 'uri', uri: 'document.pdf')
+    output = Xberg.extract(input, Xberg::ExtractionConfig.new)
+    result = output.results.first
 
     # Manual MIME type override for files with ambiguous extensions
-    config = Xberg::Config::Extraction.new
-    result = Xberg.extract('document.dat', mime_type: 'application/pdf', config: config)
+    input2 = Xberg::ExtractInput.new(
+      kind: 'uri',
+      uri: 'document.dat',
+      mime_type: 'application/pdf'
+    )
+    output2 = Xberg.extract(input2, Xberg::ExtractionConfig.new)
+    result2 = output2.results.first
     ```
 
 === "Rust"
 
     ```rust title="format_detection.rs"
-    use xberg::{extract, ExtractionConfig};
+    use xberg::{extract, ExtractInput, ExtractionConfig};
 
     #[tokio::main]
     async fn main() -> xberg::Result<()> {
         let config = ExtractionConfig::default();
 
         // Automatic format detection from file extension
-        let result = extract("document.pdf", None, &config).await?;
+        let output = extract(ExtractInput::from_uri("document.pdf"), &config).await?;
+        let result = &output.results[0];
 
         // Manual MIME type override for extensionless files
-        let result = extract("document.dat", Some("application/pdf"), &config).await?;
+        let input = ExtractInput {
+            mime_type: Some("application/pdf".to_string()),
+            ..ExtractInput::from_uri("document.dat")
+        };
+        let output2 = extract(input, &config).await?;
+        let result2 = &output2.results[0];
 
         Ok(())
     }
@@ -402,13 +473,22 @@ Example with manual override:
 === "TypeScript"
 
     ```typescript title="format_detection.ts"
-    import { extract } from '@xberg-io/xberg';
+    import { ExtractInputKind, extract } from '@xberg-io/xberg';
 
     // Automatic format detection from file extension
-    const result = await extract('document.pdf');
+    const output = await extract({
+      kind: ExtractInputKind.Uri,
+      uri: 'document.pdf',
+    });
+    const result = output.results[0];
 
     // Manual MIME type override for files with no extension
-    const result2 = await extract('document.dat', { mimeType: 'application/pdf' });
+    const output2 = await extract({
+      kind: ExtractInputKind.Uri,
+      uri: 'document.dat',
+      mimeType: 'application/pdf',
+    });
+    const result2 = output2.results[0];
     ```
 
 ## OCR Support
@@ -422,21 +502,25 @@ OCR is available for:
 ### Configuration
 
 ```python title="ocr_configuration.py"
-from xberg import extract, ExtractionConfig, OcrConfig, TesseractConfig
+from xberg import ExtractInput, extract, ExtractionConfig, OcrConfig, TesseractConfig
 
 # Configure OCR with multi-language support and custom Tesseract settings
 config = ExtractionConfig(
     ocr=OcrConfig(
         tesseract_config=TesseractConfig(
-            lang="eng+deu",  # Multiple languages: English and German
-            psm=3,           # Page segmentation mode: Auto
-            oem=1            # OCR Engine mode: LSTM neural net
+            language=["eng", "deu"],  # English and German
+            psm=3,                    # Page segmentation mode: Auto
+            oem=1                     # OCR Engine mode: LSTM neural net
         )
     ),
     force_ocr=False  # Only use OCR when native text extraction is insufficient
 )
 
-result = extract("scanned_document.pdf", config=config)
+output = await extract(
+    ExtractInput(kind="uri", uri="scanned_document.pdf"),
+    config=config,
+)
+result = output.results[0]
 ```
 
 ### Automatic OCR Decision
@@ -469,13 +553,16 @@ Override with `force_ocr=True` to always use OCR regardless of native text quali
 All formats support concurrent batch processing:
 
 ```python title="batch_processing.py"
-from xberg import extract_batch, ExtractionConfig
+from xberg import ExtractInput, extract_batch, ExtractionConfig
 
 # Process multiple files concurrently for better throughput
 paths = ["file1.pdf", "file2.docx", "file3.xlsx"]
+inputs = [ExtractInput(kind="uri", uri=path) for path in paths]
 config = ExtractionConfig(max_concurrent_extractions=8)
 
-results = extract_batch(paths, config=config)
+output = await extract_batch(inputs, config=config)
+for result in output.results:
+    print(result.content[:200])
 ```
 
 ## Format Limitations
@@ -499,250 +586,52 @@ results = extract_batch(paths, config=config)
 
 ## Adding New Formats
 
-Xberg's plugin system allows adding custom format extractors:
+Xberg's plugin system can add custom format extractors. The public extractor
+bridge accepts the same `ExtractInput` shape as `extract` and returns one
+`ExtractedDocument`.
 
-=== "C#"
+```rust title="custom_extractor.rs"
+use async_trait::async_trait;
+use std::sync::Arc;
+use xberg::plugins::{register_document_extractor, DocumentExtractor, Plugin};
+use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, Result};
 
-    ```csharp title="CustomExtractor.cs"
-    using Xberg;
-    using Xberg.Plugins;
+pub struct CustomExtractor;
 
-    // Custom document extractor for proprietary format support
-    public class CustomExtractor : IDocumentExtractor
-    {
-        public string Name => "custom-format-extractor";
-
-        public string[] SupportedMimeTypes => new[] { "application/x-custom" };
-
-        public ExtractionResult Extract(byte[] content, string mimeType, ExtractionConfig config)
-        {
-            // Implement custom extraction logic for your format
-            var text = ParseCustomFormat(content);
-            return new ExtractionResult
-            {
-                Content = text,
-                MimeType = mimeType,
-                Metadata = new Dictionary<string, object>()
-            };
-        }
+impl Plugin for CustomExtractor {
+    fn name(&self) -> &str {
+        "custom-format-extractor"
     }
 
-    // Register the custom extractor with Xberg
-    XbergClient.RegisterDocumentExtractor(new CustomExtractor());
-    ```
+    fn version(&self) -> String {
+        "1.0.0".to_string()
+    }
+}
 
-=== "Go"
+#[async_trait]
+impl DocumentExtractor for CustomExtractor {
+    async fn extract(
+        &self,
+        input: ExtractInput,
+        _config: &ExtractionConfig,
+    ) -> Result<ExtractedDocument> {
+        let bytes = input.bytes.unwrap_or_default();
+        let text = parse_custom_format(&bytes)?;
 
-    ```go title="custom_extractor.go"
-    package main
-
-    import (
-        "xberg"
-        "log"
-    )
-
-    // CustomExtractor implements DocumentExtractor for proprietary formats
-    type CustomExtractor struct{}
-
-    func (e *CustomExtractor) Name() string {
-        return "custom-format-extractor"
+        Ok(ExtractedDocument {
+            content: text,
+            mime_type: "application/x-custom".into(),
+            ..Default::default()
+        })
     }
 
-    func (e *CustomExtractor) SupportedMimeTypes() []string {
-        return []string{"application/x-custom"}
+    fn supported_mime_types(&self) -> &[&str] {
+        &["application/x-custom"]
     }
+}
 
-    func (e *CustomExtractor) Extract(content []byte, mimeType string, config *xberg.ExtractionConfig) (*xberg.ExtractionResult, error) {
-        // Implement custom parsing logic for your file format
-        text := parseCustomFormat(content)
-        return &xberg.ExtractionResult{
-            Content:  text,
-            MimeType: mimeType,
-            Success:  true,
-        }, nil
-    }
-
-    // Register the custom extractor during package initialization
-    func init() {
-        if err := xberg.RegisterDocumentExtractor("custom-format-extractor", &CustomExtractor{}); err != nil {
-            log.Fatal(err)
-        }
-    }
-    ```
-
-=== "Java"
-
-    ```java title="CustomExtractor.java"
-    import io.xberg.Xberg;
-    import io.xberg.DocumentExtractorProtocol;
-    import io.xberg.ExtractionResult;
-    import io.xberg.config.ExtractionConfig;
-
-    // Custom document extractor for unsupported file formats
-    public class CustomExtractor implements DocumentExtractorProtocol {
-        @Override
-        public String name() {
-            return "custom-format-extractor";
-        }
-
-        @Override
-        public String[] supportedMimeTypes() {
-            return new String[]{"application/x-custom"};
-        }
-
-        @Override
-        public ExtractionResult extract(
-            byte[] content,
-            String mimeType,
-            ExtractionConfig config) throws Exception {
-            // Implement format-specific extraction logic
-            String text = parseCustomFormat(content);
-            return new ExtractionResult(text, mimeType, true, null);
-        }
-    }
-
-    // Register the custom extractor
-    Xberg.registerDocumentExtractor(new CustomExtractor());
-    ```
-
-=== "Python"
-
-    ```python title="custom_extractor.py"
-    from xberg import DocumentExtractor, ExtractionResult, Metadata
-
-    # Custom extractor for proprietary or unsupported file formats
-    class CustomExtractor(DocumentExtractor):
-        def name(self) -> str:
-            return "custom-format-extractor"
-
-        def supported_mime_types(self) -> list[str]:
-            return ["application/x-custom"]
-
-        def extract(self, content: bytes, mime_type: str, config) -> ExtractionResult:
-            # Implement parsing logic specific to your format
-            text = parse_custom_format(content)
-            return ExtractionResult(
-                content=text,
-                mime_type=mime_type,
-                metadata=Metadata()
-            )
-
-    # Register the custom extractor with Xberg's registry
-    from xberg import get_document_extractor_registry
-    registry = get_document_extractor_registry()
-    registry.register(CustomExtractor())
-    ```
-
-=== "Ruby"
-
-    ```ruby title="custom_extractor.rb"
-    require 'xberg'
-
-    # Custom document extractor for new file format support
-    class CustomExtractor
-      def name
-        'custom-format-extractor'
-      end
-
-      def supported_mime_types
-        ['application/x-custom']
-      end
-
-      def extract(content, mime_type, config)
-        # Implement your custom format parsing logic
-        text = parse_custom_format(content)
-        Xberg::Result.new(
-          content: text,
-          mime_type: mime_type,
-          metadata: {}
-        )
-      end
-    end
-
-    # Register the custom extractor
-    Xberg.register_document_extractor(CustomExtractor.new)
-    ```
-
-=== "Rust"
-
-    ```rust title="custom_extractor.rs"
-    use xberg::plugins::{DocumentExtractor, Plugin};
-    use xberg::types::ExtractionResult;
-    use async_trait::async_trait;
-
-    // Custom document extractor for proprietary file formats
-    pub struct CustomExtractor;
-
-    impl Plugin for CustomExtractor {
-        fn name(&self) -> &str {
-            "custom-format-extractor"
-        }
-
-        fn version(&self) -> String {
-            "1.0.0".to_string()
-        }
-    }
-
-    #[async_trait]
-    impl DocumentExtractor for CustomExtractor {
-        async fn extract(
-            &self,
-            content: &[u8],
-            mime_type: &str,
-            config: &ExtractionConfig,
-        ) -> xberg::Result<ExtractionResult> {
-            // Implement format-specific parsing logic
-            let text = parse_custom_format(content)?;
-            Ok(ExtractionResult {
-                content: text,
-                mime_type: mime_type.to_string(),
-                ..Default::default()
-            })
-        }
-
-        fn supported_mime_types(&self) -> &[&str] {
-            &["application/x-custom"]
-        }
-    }
-
-    // Register the custom extractor with Xberg's plugin registry
-    use xberg::plugins::registry::get_document_extractor_registry;
-    use std::sync::Arc;
-
-    let registry = get_document_extractor_registry();
-    registry.write().unwrap().register(Arc::new(CustomExtractor))?;
-    ```
-
-=== "TypeScript"
-
-    ```typescript title="custom_extractor.ts"
-    import { registerDocumentExtractor, type DocumentExtractorProtocol } from '@xberg-io/xberg';
-
-    // Custom document extractor for new or proprietary file formats
-    class CustomExtractor implements DocumentExtractorProtocol {
-        name(): string {
-            return "custom-format-extractor";
-        }
-
-        supportedMimeTypes(): string[] {
-            return ["application/x-custom"];
-        }
-
-        async extract(content: Uint8Array, mimeType: string, config?: ExtractionConfig): Promise<ExtractionResult> {
-            // Implement custom parsing logic for your format
-            const text = parseCustomFormat(content);
-            return {
-                content: text,
-                mimeType: mimeType,
-                success: true,
-                metadata: {}
-            };
-        }
-    }
-
-    // Register the custom extractor
-    registerDocumentExtractor(new CustomExtractor());
-    ```
+register_document_extractor(Arc::new(CustomExtractor))?;
+```
 
 ## See Also
 

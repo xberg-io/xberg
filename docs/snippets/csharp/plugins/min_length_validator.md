@@ -21,7 +21,7 @@ public class MinimumLengthValidator : IValidator
         Console.WriteLine("Minimum length validator shut down");
     }
 
-    public void Validate(ExtractionResult result, ExtractionConfig config)
+    public void Validate(ExtractedDocument result, ExtractionConfig config)
     {
         if (result.Content.Length < MinimumLength)
         {
@@ -32,7 +32,7 @@ public class MinimumLengthValidator : IValidator
         }
     }
 
-    public bool ShouldValidate(ExtractionResult result, ExtractionConfig config)
+    public bool ShouldValidate(ExtractedDocument result, ExtractionConfig config)
     {
         return !string.IsNullOrEmpty(result.Content);
     }

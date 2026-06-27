@@ -5,8 +5,8 @@ config = %Xberg.ExtractionConfig{
 }
 
 # Extract document
-{:ok, result} = Xberg.extract_sync("document.pdf", config)
-
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "document.pdf"}, config)
+result = List.first(output.results)
 # Access elements
 Enum.each(result.elements, fn element ->
   IO.puts("Type: #{element.element_type}")

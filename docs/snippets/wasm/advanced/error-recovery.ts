@@ -8,7 +8,7 @@ async function extractWithRetry(bytes: Uint8Array, mimeType: string, maxRetries:
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`Extraction attempt ${attempt}/${maxRetries}`);
-      const result = await extract(bytes, mimeType);
+      const result = await extract({ kind: "bytes", bytes, mimeType: mimeType });
       console.log("Extraction successful");
       return result;
     } catch (error) {

@@ -11,7 +11,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extract(bytes, "application/pdf", config);
+const result = await extract({ kind: "bytes", bytes, mimeType: "application/pdf" }, config);
 
 result.chunks?.forEach((chunk, idx) => {
   console.log(`Chunk ${idx}: ${chunk.content.substring(0, 50)}...`);
@@ -34,7 +34,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extract(bytes, "text/markdown", config);
+const result = await extract({ kind: "bytes", bytes, mimeType: "text/markdown" }, config);
 
 result.chunks?.forEach((chunk, idx) => {
   console.log(`Chunk ${idx}: ${chunk.content.substring(0, 50)}...`);
@@ -62,7 +62,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extract(bytes, "text/markdown", config);
+const result = await extract({ kind: "bytes", bytes, mimeType: "text/markdown" }, config);
 
 result.chunks?.forEach((chunk, idx) => {
   // Each chunk's content is prefixed with its heading breadcrumb

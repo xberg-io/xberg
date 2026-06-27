@@ -1,6 +1,6 @@
 ```python title="Python"
 import asyncio
-from xberg import ExtractionConfig, LanguageDetectionConfig, extract
+from xberg import ExtractInput, ExtractionConfig, LanguageDetectionConfig, extract
 
 
 async def main() -> None:
@@ -12,9 +12,9 @@ async def main() -> None:
         )
     )
 
-    result = await extract("multilingual_document.pdf", config=config)
+    result = await extract(ExtractInput.from_uri("multilingual_document.pdf"), config)
 
-    print(f"Detected languages: {result.detected_languages}")
+    print(f"Detected languages: {result.results[0].detected_languages}")
 
 
 asyncio.run(main())

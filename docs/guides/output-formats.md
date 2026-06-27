@@ -1,6 +1,8 @@
 # Output Formats
 
-Choose the format that matches your downstream processing:
+Choose the format that matches your downstream processing. See the [Configuration Reference](../reference/configuration.md) for all output format options.
+
+## Available Formats
 
 - **Unified (default)** — Plain text/Markdown, for LLM prompts and full-text search
 - **Element-Based** — Flat array of typed elements with metadata, for RAG chunking and semantic search

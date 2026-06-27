@@ -13,7 +13,7 @@ fun main() {
         .withChunking(Optional.of(chunking))
         .build()
 
-    val result = Xberg.extractSync(Paths.get("document.pdf"), null, config)
+    val result = Xberg.extract(Paths.get("document.pdf"), null, config)
     println("Chunks: ${result.chunks()?.size ?: 0}")
 }
 ```

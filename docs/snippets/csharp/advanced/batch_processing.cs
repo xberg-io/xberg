@@ -24,9 +24,10 @@ class Program
 
             foreach (var filePath in filePaths)
             {
-                var result = await XbergLib.ExtractAsync(filePath, config);
-                batchResults.Add(result);
-                Console.WriteLine($"Processed {filePath}: {result.Content.Length} chars");
+                var output = await XbergLib.ExtractAsync(filePath, config);
+                batchResults.Add(output);
+                var document = output.Results[0];
+                Console.WriteLine($"Processed {filePath}: {document.Content.Length} chars");
             }
 
             var tasks = filePaths.Select(path =>
@@ -35,7 +36,7 @@ class Program
 
             var results = await Task.WhenAll(tasks);
 
-            var totalChars = results.Sum(r => r.Content.Length);
+            var totalChars = results.Sum(output => output.Results.Sum(document => document.Content.Length));
             Console.WriteLine($"Total extracted: {totalChars} characters");
         }
         catch (XbergException ex)

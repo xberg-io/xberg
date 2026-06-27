@@ -90,34 +90,37 @@ When your AI coding assistant discovers the skill, it knows:
 === "Python"
 
     ```python
-    from xberg import extract, extract, ExtractionConfig, OcrConfig
+    from xberg import ExtractInput, ExtractionConfig, OcrConfig, extract
 
-    result = await extract("document.pdf")
-    print(result.content)
+    output = await extract(ExtractInput(kind="uri", uri="document.pdf"))
+    print(output.results[0].content)
 
     config = ExtractionConfig(
         ocr=OcrConfig(backend="tesseract", language="eng"),
         output_format="markdown",
     )
-    result = await extract("document.pdf", config=config)
+    output = await extract(ExtractInput(kind="uri", uri="document.pdf"), config=config)
     ```
 
 === "Node.js"
 
     ```typescript
-    import { extractFile, extractFileSync } from '@xberg-io/xberg';
+    import { ExtractInputKind, extract } from '@xberg-io/xberg';
 
-    const result = await extractFile('document.pdf');
-    console.log(result.content);
+    const output = await extract({
+      kind: ExtractInputKind.Uri,
+      uri: 'document.pdf',
+    });
+    console.log(output.results[0].content);
     ```
 
 === "Rust"
 
     ```rust
-    use xberg::{extract, ExtractionConfig};
+    use xberg::{extract, ExtractInput, ExtractionConfig};
 
     let config = ExtractionConfig::default();
-    let result = extract("document.pdf", None, &config).await?;
+    let output = extract(ExtractInput::from_uri("document.pdf"), &config).await?;
     ```
 
 === "CLI"
@@ -132,5 +135,7 @@ When your AI coding assistant discovers the skill, it knows:
 - [Plugin marketplace](https://github.com/xberg-io/plugins) — install the plugin in every supported harness
 - [Extraction Basics](extraction.md) — core extraction API
 - [Configuration](configuration.md) — all configuration options
-- [Advanced Features](advanced.md) — chunking, embeddings, language detection
+- [Chunking](chunking.md) — split text for RAG
+- [Embeddings](embeddings.md) — semantic vectors for search
+- [Language Detection](language-detection.md) — multilingual document analysis
 - [Plugin System](plugins.md) — custom plugins

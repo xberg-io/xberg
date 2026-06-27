@@ -3,7 +3,7 @@ import {
   registerPostProcessor,
   unregisterPostProcessor,
   type PostProcessorProtocol,
-  type ExtractionResult,
+  type ExtractedDocument,
 } from "@xberg-io/xberg";
 
 /**
@@ -25,7 +25,7 @@ class CleaningPostProcessor implements PostProcessorProtocol {
   /**
    * Process extraction result for cleanup
    */
-  process(result: ExtractionResult): ExtractionResult {
+  process(result: ExtractedDocument): ExtractedDocument {
     return {
       ...result,
       content: this.cleanContent(result.content),

@@ -2,8 +2,13 @@
 require "xberg"
 
 inputs = [
-  Xberg::ExtractInput.uri("document.pdf"),
-  Xberg::ExtractInput.bytes("Hello from memory", "text/plain", "note.txt")
+  Xberg::ExtractInput.new(kind: Xberg::ExtractInputKind::Uri, uri: "document.pdf"),
+  Xberg::ExtractInput.new(
+    kind: Xberg::ExtractInputKind::Bytes,
+    bytes: "Hello from memory",
+    mime_type: "text/plain",
+    filename: "note.txt"
+  )
 ]
 
 output = Xberg.extract_batch(inputs)

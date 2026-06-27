@@ -19,7 +19,7 @@ name = "xberg_nif"
 crate-type = ["cdylib"]
 
 [features]
-default = ["api", "api-types", "auto-rotate-types", "chunking-tokenizers", "diff", "enrichment", "heic", "heuristics", "html", "keywords-rake", "keywords-yake", "layout-types", "liter-llm", "markdown-footnotes", "ocr", "ocr-wasm", "office", "paddle-ocr-types", "pdf", "presets", "quality", "redaction", "reranker", "reranker-presets", "structured", "svg", "transcription-types", "tree-sitter", "url-ingestion", "xml"]
+default = ["api", "api-types", "auto-rotate-types", "chunking-tokenizers", "diff", "enrichment", "heic", "heuristics", "html", "keywords-rake", "keywords-yake", "layout-types", "liter-llm", "markdown-footnotes", "ocr", "ocr-wasm", "office", "paddle-ocr-types", "pdf", "presets", "quality", "redaction", "reranker", "reranker-presets", "svg", "transcription-types", "tree-sitter", "url-ingestion", "xml"]
 api = ["xberg/api"]
 api-types = ["xberg/api-types"]
 auto-rotate-types = ["xberg/auto-rotate-types"]
@@ -44,7 +44,6 @@ quality = ["xberg/quality"]
 redaction = ["xberg/redaction"]
 reranker = ["xberg/reranker"]
 reranker-presets = ["xberg/reranker-presets"]
-structured = ["xberg/structured"]
 svg = ["xberg/svg"]
 transcription-types = ["xberg/transcription-types"]
 tree-sitter = ["xberg/tree-sitter"]
@@ -62,4 +61,4 @@ serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
 xberg = { version = "1.0.0-rc.1", path = "../../../../crates/xberg", features = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "reranker", "reranker-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "api-types", "mcp", "liter-llm", "quality", "svg", "transcription", "transcription-types", "classification", "captioning", "ner-onnx", "ner-llm", "diff", "markdown-footnotes", "redaction", "enrichment", "heuristics", "presets", "structured", "url-ingestion"] }
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("api", "api-types", "auto-rotate-types", "chunking-tokenizers", "diff", "enrichment", "heic", "heuristics", "html", "keywords-rake", "keywords-yake", "layout-types", "liter-llm", "markdown-footnotes", "ocr", "ocr-wasm", "office", "paddle-ocr-types", "pdf", "presets", "quality", "redaction", "reranker", "reranker-presets", "structured", "svg", "transcription-types", "tree-sitter", "url-ingestion", "xml"))'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("api", "api-types", "auto-rotate-types", "chunking-tokenizers", "diff", "enrichment", "heic", "heuristics", "html", "keywords-rake", "keywords-yake", "layout-types", "liter-llm", "markdown-footnotes", "ocr", "ocr-wasm", "office", "paddle-ocr-types", "pdf", "presets", "quality", "redaction", "reranker", "reranker-presets", "svg", "transcription-types", "tree-sitter", "url-ingestion", "xml"))'] }

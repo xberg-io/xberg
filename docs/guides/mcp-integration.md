@@ -75,15 +75,13 @@ Configure in Claude Desktop or Cursor:
 
 ## Tools
 
-Xberg exposes 13 tools via MCP. All extraction tools accept an optional `config` object to override defaults:
+Xberg exposes MCP tools for extraction, cache operations, and metadata. All extraction tools accept an optional `config` object to override defaults:
 
-**Extraction:** `extract`, `extract_batch`, `detect_mime_type`, `extract_structured`
-**Embeddings:** `embed_text`
-**Chunking:** `chunk_text`
+**Extraction:** `extract`, `extract_batch`, `detect_mime_type`
 **Cache:** `cache_stats`, `cache_clear`, `cache_manifest`, `cache_warm`
 **Metadata:** `list_formats`, `get_version`
 
-`extract_structured` requires the server to be built with the `liter-llm` feature. Full parameter schemas are discoverable at runtime via the MCP client's `list_tools` call.
+Full parameter schemas are discoverable at runtime via the MCP client's `list_tools` call.
 
 ---
 

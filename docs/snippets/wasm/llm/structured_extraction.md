@@ -22,7 +22,7 @@ const config = {
   },
 };
 
-const result = await extract("paper.pdf", undefined, config);
+const result = await extract({ kind: "uri", uri: "paper.pdf" }, config);
 console.log(result.structuredOutput);
 ```
 

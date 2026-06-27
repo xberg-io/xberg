@@ -9,8 +9,9 @@ config = %ExtractionConfig{
   }
 }
 
-case Xberg.extract("document.pdf", nil, config) do
-  {:ok, result} ->
+case Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "document.pdf"}, config) do
+  {:ok, output} ->
+    result = List.first(output.results)
     IO.puts("=== Token Reduction ===\n")
 
     # Display content and token information

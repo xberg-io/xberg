@@ -1,12 +1,13 @@
 ```elixir title="Elixir"
 config = Jason.encode!(%{})
 
-case Xberg.extract_sync("document.pdf", nil, config) do
-  {:ok, result} ->
-    decoded = Jason.decode!(result)
+case Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "document.pdf"}, config) do
+  {:ok, output} ->
+    result = List.first(output.results)
+    tables = result.tables || []
 
-    case decoded do
-      %{"tables" => tables} when is_list(tables) ->
+    case tables do
+      [_ | _] ->
         Enum.each(tables, fn table ->
           cells = table["cells"] || []
           markdown = table["markdown"] || ""
@@ -19,7 +20,7 @@ case Xberg.extract_sync("document.pdf", nil, config) do
           end)
         end)
 
-      _ ->
+      [] ->
         nil
     end
 

@@ -1,9 +1,12 @@
 # Audio and Video Transcription
 
-The `transcription` Cargo feature adds speech-to-text extraction for audio and
-video MIME types via Whisper ONNX models. Enable the feature and set a
-`TranscriptionConfig` block in your `ExtractionConfig` to produce transcripts
-from audio and video files.
+Turn audio and video into searchable, model-ready transcripts. Whisper-based speech-to-text with automatic language detection and multi-language support, automatic sample-rate and channel handling, chunking for files over 30 seconds, and configurable model sizes from tiny (10 MB) to large.
+
+See the [TranscriptionConfig reference](../reference/configuration.md#transcriptionconfig) for all configuration options.
+
+## Setup
+
+Enable the `transcription` Cargo feature and set a `TranscriptionConfig` block in your `ExtractionConfig` to extract transcripts from audio and video files.
 
 ## Supported MIME types
 

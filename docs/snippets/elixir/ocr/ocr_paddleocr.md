@@ -6,8 +6,9 @@ config = %ExtractionConfig{
   # Add "model_tier" => "server" for max accuracy
 }
 
-{:ok, result} = Xberg.extract("scanned_document.pdf", nil, config)
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "scanned_document.pdf"}, config)
 
+result = List.first(output.results)
 IO.puts("OCR Extracted content:")
 IO.puts(result.content)
 ```

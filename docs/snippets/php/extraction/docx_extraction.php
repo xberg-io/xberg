@@ -71,13 +71,16 @@ foreach ($conversions as $name => $format) {
     echo "Saved $name format to: $outputFile\n";
 }
 
-use function Xberg\extract_batch;
-
 $docxFiles = glob('*.docx');
 if (!empty($docxFiles)) {
     echo "\nBatch processing " . count($docxFiles) . " DOCX files...\n";
 
-    $results = extract_batch($docxFiles);
+    $inputs = array_map(
+        static fn (string $file): \Xberg\ExtractInput => \Xberg\ExtractInput::uri($file),
+        $docxFiles
+    );
+    $output = Xberg::extractBatch($inputs, \Xberg\ExtractionConfig::default());
+    $results = $output->results;
 
     foreach ($results as $index => $result) {
         $filename = basename($docxFiles[$index]);

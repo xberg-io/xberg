@@ -152,7 +152,7 @@ flowchart LR
     D -->|Yes| E[OCR Engine]
     D -->|No| F[Post-Processing]
     E --> F
-    F --> G[ExtractionResult]
+    F --> G[ExtractedDocument]
 ```
 
 1. **MIME detection** -- Xberg identifies the file type from magic bytes and extension, then selects the matching native extractor from the registry.
@@ -171,22 +171,22 @@ Xberg supports five output formats: **Plain text**, **Markdown**, **Djot**, **HT
 
 ## OCR Engines
 
-Three OCR backends, usable individually or chained into a quality-driven fallback pipeline.
+OCR backends are usable individually or chained into a quality-driven fallback pipeline.
 
 ### Backend Comparison
 
-|                    | Tesseract                                | PaddleOCR                                                          | EasyOCR                          |
-| ------------------ | ---------------------------------------- | ------------------------------------------------------------------ | -------------------------------- |
-| **Languages**      | 100+                                     | 80+ (11 script families)                                           | 80+                              |
-| **Best for**       | General purpose, broad language coverage | CJK, complex scripts, high accuracy                                | GPU-accelerated workloads        |
-| **Platform**       | Native and WASM targets                  | Native ONNX Runtime builds                                         | Python only                      |
-| **Install**        | System package (`tesseract-ocr`)         | Cargo feature `paddle-ocr` (bundled in Python package by v4.8)     | `pip install xberg[easyocr]` |
-| **Runtime**        | C library (Tesseract 4.0+)               | ONNX Runtime (models downloaded on first use)                      | PyTorch (optional CUDA)          |
-| **Python version** | Any                                      | Any                                                                | Any                              |
+|                    | Tesseract                                | PaddleOCR                                                          |
+| ------------------ | ---------------------------------------- | ------------------------------------------------------------------ |
+| **Languages**      | 100+                                     | 80+ (11 script families)                                           |
+| **Best for**       | General purpose, broad language coverage | CJK, complex scripts, high accuracy                                |
+| **Platform**       | Native and WASM targets                  | Native ONNX Runtime builds                                         |
+| **Install**        | System package (`tesseract-ocr`)         | Cargo feature `paddle-ocr` (bundled in the Python package)         |
+| **Runtime**        | C library (Tesseract 4.0+)               | ONNX Runtime (models downloaded on first use)                      |
+| **Python version** | Any                                      | Any                                                                |
 
 ### Multi-Backend Pipeline
 
-When the `paddle-ocr` feature is enabled, Xberg automatically constructs a fallback pipeline: Tesseract runs first, and if the output falls below configurable quality thresholds (16 tunable parameters), PaddleOCR takes over. You can also define a custom ordering across all three backends.
+When the `paddle-ocr` feature is enabled, Xberg automatically constructs a fallback pipeline: Tesseract runs first, and if the output falls below configurable quality thresholds (16 tunable parameters), PaddleOCR takes over. You can also define a custom ordering across supported backends.
 
 The pipeline supports auto-rotate for page orientation detection (0/90/180/270 degrees) and per-stage language and backend-specific settings.
 
@@ -203,7 +203,7 @@ flowchart TD
 
 ### Document-Level Optimization
 
-Some OCR backends (including EasyOCR) now support **document-level processing**. When a file path is provided, the extractor can bypass the expensive page-by-page rendering stage and delegate the entire document to the OCR engine. This significantly reduces memory overhead and improves throughput for large PDFs and multi-page images.
+Some OCR backends support **document-level processing**. When a file path is provided, the extractor can bypass the expensive page-by-page rendering stage and delegate the entire document to the OCR engine. This significantly reduces memory overhead and improves throughput for large PDFs and multi-page images.
 
 For backend configuration, language selection, and PSM/OEM modes, see the [OCR Guide](guides/ocr.md).
 
@@ -342,7 +342,7 @@ Use OpenAI GPT-4o, Anthropic Claude, Google Gemini, or any vision-capable model 
 <details>
 <summary><strong>Structured Extraction</strong> -- Extract typed JSON from documents using a schema</summary>
 
-Provide a JSON schema and an optional Jinja2 prompt template; the LLM returns conforming structured data. Supports strict mode (OpenAI) with automatic `additionalProperties` sanitization for cross-provider compatibility. Available through the `xberg extract-structured` CLI command, `POST /extract-structured` API endpoint, and `extract_structured` MCP tool.
+Provide a JSON schema and an optional Jinja2 prompt template in `ExtractionConfig.structured_extraction`; unified `extract` returns conforming structured data in the extraction result. Supports strict mode with automatic `additionalProperties` sanitization for cross-provider compatibility.
 
 ```json
 {
@@ -384,15 +384,15 @@ Customize the prompts sent to LLMs with Minijinja templates. Available variables
 
 ### Document Enrichment
 
-**Named-Entity Recognition** -- Detect people, organisations, locations, dates, money, percentages, emails, phones, URLs, and caller-supplied zero-shot labels via `xberg-gliner` (ONNX artifacts from `xberg-io/gliner-models`) or any liter-llm provider. Results populate `ExtractionResult.entities`. See the [NER Guide](guides/ner.md).
+**Named-Entity Recognition** -- Detect people, organisations, locations, dates, money, percentages, emails, phones, URLs, and caller-supplied zero-shot labels via `xberg-gliner` (ONNX artifacts from `xberg-io/gliner-models`) or any liter-llm provider. Results populate `ExtractedDocument.entities`. See the [NER Guide](guides/ner.md).
 
 **Redaction & Anonymisation** -- Late-stage post-processor that rewrites `content`, `formatted_content`, chunks, entities, summary, translation, and page classifications. Pattern engine covers emails, phones, SSNs, credit cards, IBANs, IP addresses, SWIFT/BIC, postal codes, dates of birth; pair with NER for PERSON / ORGANIZATION / LOCATION. Strategies: mask, hash, token-replace, drop. Caller can supply literal terms and regex patterns. See the [Redaction Guide](guides/redaction.md).
 
-**Document Summarisation** -- Pure-Rust TextRank (extractive, local, deterministic) or any liter-llm provider (abstractive). Result on `ExtractionResult.summary`. See the [Summarisation Guide](guides/summarization.md).
+**Document Summarisation** -- Pure-Rust TextRank (extractive, local, deterministic) or any liter-llm provider (abstractive). Result on `ExtractedDocument.summary`. See the [Summarisation Guide](guides/summarization.md).
 
-**Document Translation** -- Translate `content`, `formatted_content`, and per-chunk text into a BCP-47 target language with any liter-llm provider. Optional Markdown/HTML preservation. Result on `ExtractionResult.translation`. See the [Translation Guide](guides/translation.md).
+**Document Translation** -- Translate `content`, `formatted_content`, and per-chunk text into a BCP-47 target language with any liter-llm provider. Optional Markdown/HTML preservation. Result on `ExtractedDocument.translation`. See the [Translation Guide](guides/translation.md).
 
-**Page Classification** -- Per-page LLM classification against caller-supplied labels. Single-label or multi-label. Result on `ExtractionResult.page_classifications`. See the [Page Classification Guide](guides/page-classification.md).
+**Page Classification** -- Per-page LLM classification against caller-supplied labels. Single-label or multi-label. Result on `ExtractedDocument.page_classifications`. See the [Page Classification Guide](guides/page-classification.md).
 
 **VLM Image Captions** -- Describe extracted images with any vision-capable liter-llm provider. Result on `ExtractedImage.caption`. See the [Image Captions Guide](guides/image-captions.md).
 
@@ -408,7 +408,7 @@ Customize the prompts sent to LLMs with Minijinja templates. Available variables
 
 ### For Code
 
-**Code Intelligence** -- Extract functions, classes, imports, exports, symbols, docstrings, and diagnostics from 306 programming languages via tree-sitter. Results are available in `ExtractionResult.code_intelligence` as a `ProcessResult`. Code files produce semantic chunks (function/class-aware) that bypass the text-splitter entirely. Configure content mode with `CodeContentMode`: `chunks` (default, semantic TSLP chunks), `raw` (source as-is), or `structure` (headings + docstrings only).
+**Code Intelligence** -- Extract functions, classes, imports, exports, symbols, docstrings, and diagnostics from 306 programming languages via tree-sitter. Results are available in `ExtractedDocument.code_intelligence` as a `ProcessResult`. Code files produce semantic chunks (function/class-aware) that bypass the text-splitter entirely. Configure content mode with `CodeContentMode`: `chunks` (default, semantic TSLP chunks), `raw` (source as-is), or `structure` (headings + docstrings only).
 
 ### For Data Quality
 
@@ -520,7 +520,6 @@ Rust builds are modular through Cargo features. The default feature set is `toki
 
     ```bash
     pip install xberg                  # Core + Tesseract + PaddleOCR
-    pip install xberg[easyocr]         # + EasyOCR
     pip install xberg[all]             # Everything
     ```
 

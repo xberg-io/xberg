@@ -10,7 +10,7 @@ const config = {
   },
 };
 
-const result = await extract("document.pdf", null, config);
+const result = await extract({ kind: "uri", uri: "document.pdf" }, config);
 if (result.chunks && result.chunks.length > 0) {
   console.log(`Chunk embeddings: ${result.chunks[0].embedding?.length ?? 0} dimensions`);
 }

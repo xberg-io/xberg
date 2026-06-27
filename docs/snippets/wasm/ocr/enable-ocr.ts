@@ -1,4 +1,4 @@
-import { enableOcr, extract, initWasm } from "@xberg-io/xberg-wasm";
+import { enableOcr, ExtractInputKind, extract, initWasm } from "@xberg-io/xberg-wasm";
 
 async function extractWithOcr() {
   await initWasm();
@@ -13,15 +13,23 @@ async function extractWithOcr() {
 
   const bytes = new Uint8Array(await fetch("scanned-page.png").then((r) => r.arrayBuffer()));
 
-  const result = await extract(bytes, "image/png", {
-    ocr: {
-      backend: "tesseract-wasm",
-      language: "eng",
+  const output = await extract(
+    {
+      kind: "bytes",
+      bytes,
+      mimeType: "image/png",
+      filename: "scanned-page.png",
     },
-  });
+    {
+      ocr: {
+        backend: "tesseract-wasm",
+        language: ["eng"],
+      },
+    },
+  );
 
   console.log("Extracted text:");
-  console.log(result.content);
+  console.log(output.results[0].content);
 }
 
 extractWithOcr().catch(console.error);

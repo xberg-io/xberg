@@ -1,7 +1,7 @@
 ```java title="Java"
 import io.xberg.IValidator;
 import io.xberg.ExtractionConfig;
-import io.xberg.ExtractionResult;
+import io.xberg.ExtractedDocument;
 import io.xberg.ValidatorBridge;
 
 // Generic validator pattern: every IValidator has the same shape.
@@ -37,14 +37,14 @@ public class GenericValidator implements IValidator {
     }
 
     @Override
-    public void validate(ExtractionResult result, ExtractionConfig config) throws Exception {
+    public void validate(ExtractedDocument result, ExtractionConfig config) throws Exception {
         if (result.content() == null || result.content().isBlank()) {
             throw new IllegalArgumentException("Extracted content is blank");
         }
     }
 
     @Override
-    public boolean should_validate(ExtractionResult _result, ExtractionConfig _config) {
+    public boolean should_validate(ExtractedDocument _result, ExtractionConfig _config) {
         return true;
     }
 

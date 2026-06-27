@@ -1,6 +1,9 @@
 ```java title="Java"
 import io.xberg.Xberg;
 import io.xberg.ExtractionResult;
+import io.xberg.ExtractedDocument;
+import io.xberg.ExtractInput;
+import io.xberg.ExtractionConfig;
 import io.xberg.Validator;
 import io.xberg.ValidationException;
 import io.xberg.XbergException;
@@ -22,7 +25,12 @@ public class MinLengthValidatorExample {
         try {
             Xberg.registerValidator("min-length", minLengthValidator, 100);
 
-            ExtractionResult result = Xberg.extract("document.pdf");
+            ExtractionResult output = Xberg.extract(
+                ExtractInput.fromUri("document.pdf"),
+                ExtractionConfig.builder().build()
+            );
+
+            ExtractedDocument result = output.results().get(0);
             System.out.println("Validation passed!");
         } catch (ValidationException e) {
             System.err.println("Validation failed: " + e.getMessage());

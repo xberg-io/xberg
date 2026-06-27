@@ -4,11 +4,13 @@ config_json = Jason.encode!(%{
     "algorithm" => "Yake",
     "max_keywords" => 10,
     "min_score" => 0.1,
-    "ngram_range" => [1, 3],
     "language" => "en"
   }
 })
 
-{:ok, result} = Xberg.extract_sync("document.pdf", "application/pdf", config_json)
-IO.puts("Keywords: #{inspect(result.keywords)}")
+input = %Xberg.ExtractInput{kind: :uri, uri: "document.pdf", mime_type: "application/pdf"}
+{:ok, output} = Xberg.extract(input, config_json)
+
+result = List.first(output.results)
+IO.puts("Keywords: #{inspect(result.extracted_keywords)}")
 ```

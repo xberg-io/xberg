@@ -14,7 +14,6 @@ Xberg provides async/sync APIs, text chunking, language detection, keyword extra
 - [Architecture](https://docs.xberg.io/concepts/architecture/): Rust core with polyglot bindings architecture
 - [Extraction Pipeline](https://docs.xberg.io/concepts/extraction-pipeline/): How document extraction works
 - [Plugin System](https://docs.xberg.io/concepts/plugin-system/): Extend Xberg with custom extractors and backends
-- [Reranking](https://docs.xberg.io/concepts/reranking/): Query-time document reranking with cross-encoders
 - [MIME Detection](https://docs.xberg.io/guides/extraction/#mime-type-detection): Automatic file format detection
 - [Performance](https://docs.xberg.io/guides/development/#performance): Performance characteristics and optimization
 
@@ -22,12 +21,17 @@ Xberg provides async/sync APIs, text chunking, language detection, keyword extra
 
 - [Extraction Basics](https://docs.xberg.io/guides/extraction/): Core extraction functionality
 - [Configuration](https://docs.xberg.io/guides/configuration/): Configuration options
-- [OCR](https://docs.xberg.io/guides/ocr/): Optical character recognition setup with Tesseract, EasyOCR, or PaddleOCR
+- [OCR](https://docs.xberg.io/guides/ocr/): Optical character recognition setup with Tesseract, PaddleOCR, Candle, or VLM backends
 - [Element-Based Output](https://docs.xberg.io/guides/output-formats/#element-based-output): Structured element extraction
 - [Document Structure](https://docs.xberg.io/guides/output-formats/#document-structure): Hierarchical tree-based document output
 - [PDF Hierarchy](https://docs.xberg.io/guides/output-formats/#pdf-hierarchy-detection): PDF hierarchy detection using K-means clustering
 - [Keyword Extraction](https://docs.xberg.io/guides/keywords/): YAKE and RAKE keyword extraction
-- [Advanced Features](https://docs.xberg.io/guides/advanced/): Advanced usage patterns
+- [Chunking](https://docs.xberg.io/guides/chunking/): Split text into overlapping chunks for RAG
+- [Embeddings](https://docs.xberg.io/guides/embeddings/): Local in-process semantic vectors via ONNX
+- [Language Detection](https://docs.xberg.io/guides/language-detection/): Detect languages in extracted text
+- [Token Reduction](https://docs.xberg.io/guides/token-reduction/): Reduce token count for LLM pipelines
+- [Quality Processing](https://docs.xberg.io/guides/quality-processing/): Score and filter text quality
+- [PDF Form Fields](https://docs.xberg.io/guides/pdf-form-fields/): Extract filled form field values
 - [Audio and Video Transcription](https://docs.xberg.io/guides/transcription/): Whisper ONNX transcription for MP3, M4A, WAV, WebM, and MP4 audio tracks
 - [Named-Entity Recognition](https://docs.xberg.io/guides/ner/): Detect people, organisations, locations, and zero-shot labels via xberg-gliner artifacts from xberg-io/gliner-models or LLM
 - [Reranking](https://docs.xberg.io/guides/reranking/): Cross-encoder document reranking for RAG retrieval
@@ -85,4 +89,3 @@ Xberg provides async/sync APIs, text chunking, language detection, keyword extra
 - [Features Overview](https://docs.xberg.io/features/): Complete feature list
 - [Changelog](https://docs.xberg.io/CHANGELOG/): Release history
 - [Contributing](https://docs.xberg.io/contributing/): Contribution guidelines
-- [Comparisons](https://docs.xberg.io/comparisons/xberg-vs-unstructured/): Xberg vs alternatives

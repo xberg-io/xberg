@@ -1,11 +1,11 @@
 ```python title="Python"
-from xberg import extract_sync, ExtractionConfig
+from xberg import ExtractInput, extract, ExtractionConfig
 
-result = extract_sync("document.pdf", config=ExtractionConfig())
+result = extract(ExtractInput.from_uri("document.pdf"), ExtractionConfig())
 
-if result.metadata.pages and result.metadata.pages.boundaries:
-    boundaries = result.metadata.pages.boundaries
-    content_bytes = result.content.encode("utf-8")
+if result.results[0].metadata.pages and result.results[0].metadata.pages.boundaries:
+    boundaries = result.results[0].metadata.pages.boundaries
+    content_bytes = result.results[0].content.encode("utf-8")
 
     for boundary in boundaries[:3]:
         page_bytes = content_bytes[boundary.byte_start:boundary.byte_end]

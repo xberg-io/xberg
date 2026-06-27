@@ -24,7 +24,7 @@ async function extractWithChunking() {
     },
   };
 
-  const result = await extract(bytes, "application/pdf", config);
+  const result = await extract({ kind: "bytes", bytes, mimeType: "application/pdf" }, config);
 
   if (result.chunks) {
     console.log(`Total chunks: ${result.chunks.length}`);
@@ -50,7 +50,7 @@ async function extractWithPrependHeadingContext() {
     },
   };
 
-  const result = await extract(bytes, "text/markdown", config);
+  const result = await extract({ kind: "bytes", bytes, mimeType: "text/markdown" }, config);
 
   if (result.chunks) {
     console.log(`Total chunks: ${result.chunks.length}`);

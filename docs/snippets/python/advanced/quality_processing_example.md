@@ -1,6 +1,6 @@
 ```python title="Python"
 import asyncio
-from xberg import ExtractionConfig, extract
+from xberg import ExtractInput, ExtractionConfig, extract
 
 
 async def main() -> None:
@@ -8,7 +8,7 @@ async def main() -> None:
         enable_quality_processing=True,
     )
 
-    result = await extract("scanned_document.pdf", config=config)
+    result = await extract(ExtractInput.from_uri("scanned_document.pdf"), config)
 
     if result.quality_score is not None:
         if result.quality_score < 0.5:

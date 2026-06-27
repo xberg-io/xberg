@@ -17,8 +17,9 @@ config = %ExtractionConfig{
   force_ocr: false
 }
 
-{:ok, result} = Xberg.extract("document.pdf", nil, config)
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "document.pdf"}, config)
 
+result = List.first(output.results)
 IO.puts("Post-Processing Configuration Applied:")
 IO.puts("Remove Whitespace: true")
 IO.puts("Normalize Unicode: true")

@@ -1,5 +1,5 @@
 ```typescript title="Element-Based Output (WASM)"
-import { extractSync, ExtractionConfig } from "xberg-wasm";
+import { extract, ExtractionConfig } from "xberg-wasm";
 
 // Configure element-based output
 const config: ExtractionConfig = {
@@ -7,7 +7,7 @@ const config: ExtractionConfig = {
 };
 
 // Extract document
-const result = extractSync(fileBuffer, "application/pdf", config);
+const result = extract({ kind: "bytes", bytes: fileBuffer, mimeType: "application/pdf" }, config);
 
 // Access elements
 for (const element of result.elements) {

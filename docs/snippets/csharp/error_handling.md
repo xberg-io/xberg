@@ -3,7 +3,7 @@ using Xberg;
 
 try
 {
-    var result = XbergLib.ExtractSync("missing.pdf");
+    var result = XbergLib.Extract("missing.pdf");
     Console.WriteLine(result.Content);
 }
 catch (XbergValidationException ex)

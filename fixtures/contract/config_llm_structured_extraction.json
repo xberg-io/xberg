@@ -1,12 +1,7 @@
 {
 	"id": "config_llm_structured_extraction",
 	"description": "Tests structured extraction via liter-llm with JSON schema",
-	"tags": [
-		"contract",
-		"config",
-		"liter-llm",
-		"structured-extraction"
-	],
+	"tags": ["contract", "config", "liter-llm", "structured-extraction"],
 	"call": "extract",
 	"input": {
 		"kind": "uri",
@@ -15,12 +10,12 @@
 	"assertions": [
 		{
 			"type": "equals",
-			"field": "results.0.mime_type",
+			"field": "results[0].mime_type",
 			"value": "application/pdf"
 		},
 		{
 			"type": "min_length",
-			"field": "results.0.content",
+			"field": "results[0].content",
 			"value": 10
 		},
 		{
@@ -63,9 +58,7 @@
 						"type": "string"
 					}
 				},
-				"required": [
-					"title"
-				]
+				"required": ["title"]
 			},
 			"schema_name": "memo_data",
 			"llm": {

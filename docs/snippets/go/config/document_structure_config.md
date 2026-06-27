@@ -11,7 +11,7 @@ func main() {
         xberg.WithIncludeDocumentStructure(true),
     )
 
-    result, err := xberg.ExtractSync("document.pdf", config)
+    result, err := xberg.Extract("document.pdf", config)
     if err != nil {
         panic(err)
     }

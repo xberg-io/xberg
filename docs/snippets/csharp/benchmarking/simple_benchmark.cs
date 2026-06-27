@@ -25,9 +25,9 @@ public class XbergBenchmark
     }
 
     [Benchmark]
-    public void ExtractSync()
+    public void Extract()
     {
-        var result = XbergLib.ExtractSync(_testFilePath, _config);
+        var result = XbergLib.Extract(_testFilePath, _config);
         _ = result.Content.Length;
     }
 
@@ -81,7 +81,7 @@ public class ManualBenchmark
         var sw = Stopwatch.StartNew();
         for (int i = 0; i < 10; i++)
         {
-            XbergLib.ExtractSync(filePath, config);
+            XbergLib.Extract(filePath, config);
         }
         sw.Stop();
         Console.WriteLine($"Sync extraction (10 runs): {sw.ElapsedMilliseconds}ms avg {sw.ElapsedMilliseconds / 10f}ms");

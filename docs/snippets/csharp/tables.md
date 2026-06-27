@@ -1,7 +1,7 @@
 ```csharp title="C#"
 using Xberg;
 
-var result = XbergLib.ExtractSync("document.pdf", new ExtractionConfig());
+var result = XbergLib.Extract("document.pdf", new ExtractionConfig());
 
 foreach (var table in result.Tables)
 {

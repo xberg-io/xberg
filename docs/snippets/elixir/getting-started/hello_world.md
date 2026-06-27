@@ -1,10 +1,11 @@
 ```elixir title="Elixir"
 defmodule HelloWorld do
   def main do
-    case Xberg.extract_sync("document.pdf", nil, nil) do
-      {:ok, result} ->
+    case Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "document.pdf"}, nil) do
+      {:ok, output} ->
+        result = List.first(output.results)
         IO.puts("Extraction succeeded!")
-        IO.puts(result)
+        IO.puts(result.content)
 
       {:error, reason} ->
         IO.puts("Error: #{reason}")

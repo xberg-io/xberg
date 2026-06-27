@@ -143,26 +143,38 @@ Most use cases benefit from configuration to control extraction behavior:
 import 'package:xberg/xberg.dart';
 
 Future<void> main() async {
-  final config = ExtractionConfig(
+  const config = ExtractionConfig(
     useCache: true,
     enableQualityProcessing: true,
-    forceOcr: false,
+    forceOcr: true,
     disableOcr: false,
-    ocr: const OcrConfig(
+    ocr: OcrConfig(
       enabled: true,
       backend: 'tesseract',
-      language: 'eng',
+      language: ['eng'],
       autoRotate: false,
+      vlmFallback: VlmFallbackPolicy.disabled(),
     ),
     resultFormat: ResultFormat.unified,
     outputFormat: OutputFormat.plain(),
     includeDocumentStructure: false,
     maxArchiveDepth: 3,
     useLayoutForMarkdown: false,
+    url: UrlExtractionConfig(
+      mode: UrlExtractionMode.auto,
+      allowLocalFileInputs: true,
+      allowFileUris: true,
+    ),
   );
 
-  final result = await XbergBridge.extract('scanned.pdf', null, config);
-  print(result.content);
+  const input = ExtractInput(
+    kind: ExtractInputKind.uri,
+    uri: 'scanned.pdf',
+  );
+  final output = await XbergBridge.extract(input, config: config);
+  final document = output.results.first;
+
+  print(document.content);
 }
 ```
 
@@ -301,22 +313,13 @@ Powered by [tree-sitter-language-pack](https://github.com/xberg-io/tree-sitter-l
 - **OCR Support** - Integrate multiple OCR backends for scanned documents
 - **Async/Await** - Non-blocking document processing with concurrent operations
 - **Plugin System** - Extensible post-processing for custom text transformation
-- **Embeddings** - Generate vector embeddings using ONNX Runtime models
+- **Embeddings** - Generate vector embeddings using ONNX Runtime models or provider-hosted services
 - **Batch Processing** - Efficiently process multiple documents in parallel
 - **Memory Efficient** - Stream large files without loading entirely into memory
 - **Language Detection** - Detect and support multiple languages in documents
 - **Code Intelligence** - Extract structure, imports, exports, symbols, and docstrings from [306 programming languages](https://docs.tree-sitter-language-pack.xberg.io) via tree-sitter
 - **Configuration** - Fine-grained control over extraction behavior
-
-### Performance Characteristics
-
-| Format | Speed | Memory | Notes |
-|--------|-------|--------|-------|
-| **PDF (text)** | 10-100 MB/s | ~50MB per doc | Fastest extraction |
-| **Office docs** | 20-200 MB/s | ~100MB per doc | DOCX, XLSX, PPTX |
-| **Images (OCR)** | 1-5 MB/s | Variable | Depends on OCR backend |
-| **Archives** | 5-50 MB/s | ~200MB per doc | ZIP, TAR, etc. |
-| **Web formats** | 50-200 MB/s | Streaming | HTML, XML, JSON |
+- **Six Output Formats** - Plain text, Markdown, Djot, HTML, JSON tree structure, or Structured JSON with OCR metadata
 
 ## OCR Support
 
@@ -332,26 +335,38 @@ Xberg supports multiple OCR backends for extracting text from scanned documents 
 import 'package:xberg/xberg.dart';
 
 Future<void> main() async {
-  final config = ExtractionConfig(
+  const config = ExtractionConfig(
     useCache: true,
     enableQualityProcessing: true,
-    forceOcr: false,
+    forceOcr: true,
     disableOcr: false,
-    ocr: const OcrConfig(
+    ocr: OcrConfig(
       enabled: true,
       backend: 'tesseract',
-      language: 'eng',
+      language: ['eng'],
       autoRotate: false,
+      vlmFallback: VlmFallbackPolicy.disabled(),
     ),
     resultFormat: ResultFormat.unified,
     outputFormat: OutputFormat.plain(),
     includeDocumentStructure: false,
     maxArchiveDepth: 3,
     useLayoutForMarkdown: false,
+    url: UrlExtractionConfig(
+      mode: UrlExtractionMode.auto,
+      allowLocalFileInputs: true,
+      allowFileUris: true,
+    ),
   );
 
-  final result = await XbergBridge.extract('scanned.pdf', null, config);
-  print(result.content);
+  const input = ExtractInput(
+    kind: ExtractInputKind.uri,
+    uri: 'scanned.pdf',
+  );
+  final output = await XbergBridge.extract(input, config: config);
+  final document = output.results.first;
+
+  print(document.content);
 }
 ```
 

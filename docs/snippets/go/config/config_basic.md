@@ -11,7 +11,7 @@ func main() {
 	useCache := true
 	enableQP := true
 
-	result, err := xberg.ExtractSync("document.pdf", &xberg.ExtractionConfig{
+	result, err := xberg.Extract("document.pdf", &xberg.ExtractionConfig{
 		UseCache:                &useCache,
 		EnableQualityProcessing: &enableQP,
 	})

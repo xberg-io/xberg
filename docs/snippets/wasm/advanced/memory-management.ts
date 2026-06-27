@@ -15,7 +15,7 @@ async function processLargeDocumentSet(files: File[]) {
       batch.map(async (file) => {
         const arrayBuffer = await file.arrayBuffer();
         const bytes = new Uint8Array(arrayBuffer);
-        return extract(bytes, file.type);
+        return extract({ kind: "bytes", bytes, mimeType: file.type });
       }),
     );
 

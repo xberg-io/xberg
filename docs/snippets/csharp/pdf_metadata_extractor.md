@@ -13,10 +13,10 @@ public class PdfMetadataExtractor : IPostProcessor
     public string Description() => "Extracts and enriches PDF metadata";
     public string ProcessingStage() => "early";
 
-    public bool ShouldProcess(ExtractionResult result)
+    public bool ShouldProcess(ExtractedDocument result)
         => result.MimeType == "application/pdf";
 
-    public ExtractionResult Process(ExtractionResult result)
+    public ExtractedDocument Process(ExtractedDocument result)
     {
         _processedCount++;
         return result;

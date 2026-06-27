@@ -16,7 +16,7 @@ let configJson = """
 """
 
 let config = try extractionConfigFromJson(configJson)
-let result = try extractSync("document.pdf", nil, config)
+let result = try extract("document.pdf", nil, config)
 
 if let chunks = result.chunks() {
     for chunk in chunks {

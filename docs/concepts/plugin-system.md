@@ -207,7 +207,7 @@ declares a name and provides a render method.
 ```rust
 pub trait Renderer: Send + Sync {
     fn name(&self) -> &str;
-    fn render_result(&self, result: &ExtractionResult) -> Result<String>;
+    fn render_result(&self, result: &ExtractedDocument) -> Result<String>;
 }
 ```
 
@@ -287,7 +287,7 @@ sequenceDiagram
     R->>B: extract(input, config)
     B->>P: Call plugin.extract()
     P-->>B: Return result as dict
-    B-->>R: Convert to ExtractionResult
+    B-->>R: Convert to ExtractedDocument
 ```
 
 Type mapping: `Vec<u8>` ↔ `bytes`, `String` ↔ `str`, Rust structs ↔ Python dataclasses.

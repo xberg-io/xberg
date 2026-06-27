@@ -1,6 +1,6 @@
 ```python title="Python"
 import asyncio
-from xberg import ExtractionConfig, TokenReductionConfig, extract
+from xberg import ExtractInput, ExtractionConfig, TokenReductionConfig, extract
 
 async def main() -> None:
     config: ExtractionConfig = ExtractionConfig(
@@ -8,8 +8,8 @@ async def main() -> None:
             mode="moderate", preserve_important_words=True
         )
     )
-    result = await extract("document.pdf", config=config)
-    print(f"Content length: {len(result.content)}")
+    result = await extract(ExtractInput.from_uri("document.pdf"), config)
+    print(f"Content length: {len(result.results[0].content)}")
 
 asyncio.run(main())
 ```

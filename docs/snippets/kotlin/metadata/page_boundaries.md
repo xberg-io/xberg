@@ -4,7 +4,7 @@ import java.nio.file.Paths
 
 fun main() {
     val config = ExtractionConfig.builder().build()
-    val result = Xberg.extractSync(Paths.get("document.pdf"), null, config)
+    val result = Xberg.extract(Paths.get("document.pdf"), null, config)
 
     val pages = result.metadata().pages() ?: return
     val boundaries = pages.boundaries() ?: return

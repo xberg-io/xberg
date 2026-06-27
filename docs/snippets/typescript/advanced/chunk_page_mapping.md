@@ -1,6 +1,6 @@
-Import { extractSync } from '@xberg-io/xberg';
+Import { extract } from '@xberg-io/xberg';
 
-Const result = extractSync('document.pdf', null, { chunking: { maxChars: 500, maxOverlap: 50 }, pages: { extractPages: true } });
+Const result = extract({ kind: "uri", uri: 'document.pdf' }, { chunking: { maxChars: 500, maxOverlap: 50 }, pages: { extractPages: true } });
 
 If (result.chunks) {
 for (const chunk of result.chunks) {

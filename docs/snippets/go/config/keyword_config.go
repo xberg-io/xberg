@@ -2,83 +2,89 @@ package main
 
 import (
 	"fmt"
-	"xberg"
+
+	"github.com/xberg-io/xberg"
 )
 
 // Example 1: Basic YAKE configuration
 // Uses YAKE algorithm with default parameters and English stopword filtering
 func basicYake() error {
-	config := &xberg.ExtractionConfig{
+	maxKeywords := uint(10)
+	language := "en"
+
+	config := xberg.ExtractionConfig{
 		Keywords: &xberg.KeywordConfig{
-			Algorithm:   "yake",
-			MaxKeywords: 10,
+			Algorithm:   xberg.KeywordAlgorithmYake,
+			MaxKeywords: &maxKeywords,
 			MinScore:    0.0,
-			NgramRange:  [2]int{1, 3},
-			Language:    "en",
+			Language:    &language,
 			YakeParams:  nil,
 			RakeParams:  nil,
 		},
 	}
 
-	result, err := xberg.ExtractSync("document.pdf", config)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("Keywords: %v\n", result.Keywords)
-	return nil
+	return printKeywords("document.pdf", config)
 }
 
 // Example 2: Advanced YAKE with custom parameters
 // Fine-tunes YAKE with custom window size for co-occurrence analysis
 func advancedYake() error {
-	config := &xberg.ExtractionConfig{
+	maxKeywords := uint(15)
+	windowSize := uint(1)
+	language := "en"
+
+	config := xberg.ExtractionConfig{
 		Keywords: &xberg.KeywordConfig{
-			Algorithm:   "yake",
-			MaxKeywords: 15,
+			Algorithm:   xberg.KeywordAlgorithmYake,
+			MaxKeywords: &maxKeywords,
 			MinScore:    0.1,
-			NgramRange:  [2]int{1, 2},
-			Language:    "en",
+			Language:    &language,
 			YakeParams: &xberg.YakeParams{
-				WindowSize: 1,
+				WindowSize: &windowSize,
 			},
 			RakeParams: nil,
 		},
 	}
 
-	result, err := xberg.ExtractSync("document.pdf", config)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("Keywords: %v\n", result.Keywords)
-	return nil
+	return printKeywords("document.pdf", config)
 }
 
 // Example 3: RAKE configuration
 // Uses RAKE algorithm for rapid keyword extraction with phrase constraints
 func rakeConfig() error {
-	config := &xberg.ExtractionConfig{
+	maxKeywords := uint(10)
+	minWordLength := uint(1)
+	maxWordsPerPhrase := uint(3)
+	language := "en"
+
+	config := xberg.ExtractionConfig{
 		Keywords: &xberg.KeywordConfig{
-			Algorithm:   "rake",
-			MaxKeywords: 10,
+			Algorithm:   xberg.KeywordAlgorithmRake,
+			MaxKeywords: &maxKeywords,
 			MinScore:    5.0,
-			NgramRange:  [2]int{1, 3},
-			Language:    "en",
+			Language:    &language,
 			YakeParams:  nil,
 			RakeParams: &xberg.RakeParams{
-				MinWordLength:      1,
-				MaxWordsPerPhrase:  3,
+				MinWordLength:     &minWordLength,
+				MaxWordsPerPhrase: &maxWordsPerPhrase,
 			},
 		},
 	}
 
-	result, err := xberg.ExtractSync("document.pdf", config)
+	return printKeywords("document.pdf", config)
+}
+
+func printKeywords(uri string, config xberg.ExtractionConfig) error {
+	kind := xberg.ExtractInputKindURI
+	output, err := xberg.Extract(xberg.ExtractInput{Kind: &kind, URI: &uri}, config)
 	if err != nil {
-		return err
+		return fmt.Errorf("extracting keywords from %s: %w", uri, err)
+	}
+	if len(output.Results) == 0 {
+		return fmt.Errorf("no extraction results for %s", uri)
 	}
 
-	fmt.Printf("Keywords: %v\n", result.Keywords)
+	fmt.Printf("Keywords: %v\n", output.Results[0].ExtractedKeywords)
 	return nil
 }
 

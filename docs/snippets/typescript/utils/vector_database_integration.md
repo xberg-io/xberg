@@ -11,7 +11,7 @@ const config = {
   },
 };
 
-const result = await extract("document.pdf", null, config);
+const result = await extract({ kind: "uri", uri: "document.pdf" }, config);
 
 if (result.chunks) {
   for (const chunk of result.chunks) {

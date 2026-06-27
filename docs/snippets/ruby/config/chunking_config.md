@@ -22,9 +22,10 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract("document.md", config)
+input = Xberg::ExtractInput.new(uri: "document.md")
+result = Xberg.extract(input, config)
 
-result.chunks.each do |chunk|
+result.results.first.chunks.each do |chunk|
   if chunk.metadata.heading_context
     puts "Headings:"
     chunk.metadata.heading_context.headings.each do |heading|
@@ -46,9 +47,10 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract("document.md", config)
+input = Xberg::ExtractInput.new(uri: "document.md")
+result = Xberg.extract(input, config)
 
-result.chunks.each do |chunk|
+result.results.first.chunks.each do |chunk|
   # Each chunk's content is prefixed with its heading breadcrumb
   puts chunk.content[0, 100]
 end

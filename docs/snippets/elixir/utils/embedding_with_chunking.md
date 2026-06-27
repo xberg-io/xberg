@@ -15,7 +15,8 @@ config_json =
     }
   })
 
-{:ok, json} = Xberg.extract_async("document.pdf", nil, config_json)
-result = Jason.decode!(json)
-IO.puts("chunks: #{length(result["chunks"] || [])}")
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "document.pdf"}, config_json)
+
+result = List.first(output.results)
+IO.puts("chunks: #{length(result.chunks || [])}")
 ```

@@ -10,7 +10,7 @@ const config = {
   },
 };
 
-const result = await extract("research_paper.pdf", undefined, config);
+const result = await extract({ kind: "uri", uri: "research_paper.pdf" }, config);
 
 if (result.chunks) {
   for (const chunk of result.chunks) {

@@ -1,11 +1,11 @@
 ```python title="Element-Based Output (Python)"
-from xberg import extract_sync, ExtractionConfig
+from xberg import ExtractInput, extract, ExtractionConfig
 
 # Configure element-based output
 config = ExtractionConfig(result_format="element_based")
 
 # Extract document
-result = extract_sync("document.pdf", config=config)
+result = extract(ExtractInput.from_uri("document.pdf"), config)
 
 # Access elements
 for element in result.elements:

@@ -11,7 +11,7 @@ var config = new ExtractionConfig
     },
 };
 
-var result = XbergLib.ExtractSync("scanned.pdf", config);
+var result = XbergLib.Extract("scanned.pdf", config);
 Console.WriteLine(result.Content);
 Console.WriteLine(result.DetectedLanguages);
 ```

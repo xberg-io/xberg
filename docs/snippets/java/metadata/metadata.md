@@ -1,6 +1,6 @@
 ```java title="Java"
 import io.xberg.Xberg;
-import io.xberg.ExtractionResult;
+import io.xberg.ExtractedDocument;
 import io.xberg.Metadata;
 import io.xberg.XbergException;
 import java.io.IOException;
@@ -10,7 +10,14 @@ import java.util.List;
 public class Main {
     public static void main(String[] args) {
         try {
-            ExtractionResult result = Xberg.extractSync("document.pdf");
+            var resultOutput = Xberg.extract(
+                io.xberg.ExtractInput.builder()
+                    .withKind(io.xberg.ExtractInputKind.Uri)
+                    .withUri("document.pdf")
+                    .build(),
+                io.xberg.ExtractionConfig.builder().build()
+            );
+            ExtractedDocument result = resultOutput.results().get(0);
 
             // Metadata is flat — format-specific fields are at the top level
             Metadata metadata = result.getMetadata();
@@ -24,7 +31,14 @@ public class Main {
             }
 
             // Access HTML metadata
-            ExtractionResult htmlResult = Xberg.extractSync("page.html");
+            var htmlResultOutput = Xberg.extract(
+                io.xberg.ExtractInput.builder()
+                    .withKind(io.xberg.ExtractInputKind.Uri)
+                    .withUri("page.html")
+                    .build(),
+                io.xberg.ExtractionConfig.builder().build()
+            );
+            ExtractedDocument htmlResult = htmlResultOutput.results().get(0);
             Metadata htmlMeta = htmlResult.getMetadata();
             htmlMeta.getTitle().ifPresent(t -> System.out.println("Title: " + t));
 

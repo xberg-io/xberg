@@ -1,5 +1,5 @@
 ```python title="Python"
-from xberg import extract_sync, ExtractionConfig, ChunkingConfig, EmbeddingConfig
+from xberg import ExtractInput, extract, ExtractionConfig, ChunkingConfig, EmbeddingConfig
 
 config = ExtractionConfig(
     chunking=ChunkingConfig(
@@ -13,11 +13,11 @@ config = ExtractionConfig(
     ),
 )
 
-result = extract_sync("document.pdf", config=config)
+result = extract(ExtractInput.from_uri("document.pdf"), config)
 
 records: list[dict] = []
-if result.chunks:
-    for index, chunk in enumerate(result.chunks):
+if result.results[0].chunks:
+    for index, chunk in enumerate(result.results[0].chunks):
         if chunk.embedding is None:
             continue
         records.append({

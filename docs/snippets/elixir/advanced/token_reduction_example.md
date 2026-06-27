@@ -6,8 +6,10 @@ config_json = Jason.encode!(%{
   }
 })
 
-{:ok, result} = Xberg.extract_sync("verbose_document.pdf", "application/pdf", config_json)
+input = %Xberg.ExtractInput{kind: :uri, uri: "verbose_document.pdf", mime_type: "application/pdf"}
+{:ok, output} = Xberg.extract(input, config_json)
 
+result = List.first(output.results)
 # Display token reduction metrics
 original = result.original_token_count || 0
 reduced = result.reduced_token_count || 0

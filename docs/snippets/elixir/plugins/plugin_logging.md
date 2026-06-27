@@ -13,7 +13,7 @@ impl DocumentExtractor for MyExtractor {
         content: &[u8],
         mime_type: &str,
         _config: &ExtractionConfig,
-    ) -> Result<ExtractionResult> {
+    ) -> Result<ExtractedDocument> {
         debug!("Starting extraction for {}", mime_type);
 
         // Extraction logic...

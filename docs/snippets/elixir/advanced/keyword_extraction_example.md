@@ -7,11 +7,13 @@ config_json = Jason.encode!(%{
   }
 })
 
-{:ok, result} = Xberg.extract_sync("research_paper.pdf", "application/pdf", config_json)
+input = %Xberg.ExtractInput{kind: :uri, uri: "research_paper.pdf", mime_type: "application/pdf"}
+{:ok, output} = Xberg.extract(input, config_json)
 
-if result.keywords do
-  result.keywords
-    |> Enum.each(fn %{"keyword" => kw, "score" => score} ->
+result = List.first(output.results)
+if result.extracted_keywords do
+  result.extracted_keywords
+    |> Enum.each(fn %{"text" => kw, "score" => score} ->
       IO.puts("#{kw}: #{Float.round(score, 4)}")
     end)
 end

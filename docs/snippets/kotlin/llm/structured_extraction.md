@@ -32,7 +32,7 @@ fun main() {
         .withStructuredExtraction(Optional.of(structured))
         .build()
 
-    val result = Xberg.extractSync(Paths.get("paper.pdf"), null, config)
+    val result = Xberg.extract(Paths.get("paper.pdf"), null, config)
     result.structuredOutput()?.let { println(it) }
 }
 ```

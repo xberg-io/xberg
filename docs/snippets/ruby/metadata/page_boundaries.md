@@ -1,12 +1,15 @@
 ```ruby title="Ruby"
 require 'xberg'
 
-result = Xberg.extract_sync('document.pdf')
+input = Xberg::ExtractInput.new(uri: 'document.pdf')
+config = Xberg::ExtractionConfig.new
+result = Xberg.extract(input, config)
+first_result = result.results.first
 
-if result.metadata.pages&.boundaries
-  content_bytes = result.content.bytes
+if first_result.metadata.pages&.boundaries
+  content_bytes = first_result.content.bytes
 
-  result.metadata.pages.boundaries.take(3).each do |boundary|
+  first_result.metadata.pages.boundaries.take(3).each do |boundary|
     page_bytes = content_bytes[boundary.byte_start...boundary.byte_end]
     page_text = page_bytes.pack('C*').force_encoding('UTF-8')
 

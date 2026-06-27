@@ -19,7 +19,7 @@ public class LoggingPostProcessor : IPostProcessor
         Console.WriteLine("Logging post-processor shut down");
     }
 
-    public void Process(ExtractionResult result, ExtractionConfig config)
+    public void Process(ExtractedDocument result, ExtractionConfig config)
     {
         Console.WriteLine($"Processing: {result.MimeType}, Content length: {result.Content.Length}");
 
@@ -34,12 +34,12 @@ public class LoggingPostProcessor : IPostProcessor
         return ProcessingStage.Early;
     }
 
-    public bool ShouldProcess(ExtractionResult result, ExtractionConfig config)
+    public bool ShouldProcess(ExtractedDocument result, ExtractionConfig config)
     {
         return true;
     }
 
-    public ulong EstimatedDurationMs(ExtractionResult result)
+    public ulong EstimatedDurationMs(ExtractedDocument result)
     {
         return 1;
     }

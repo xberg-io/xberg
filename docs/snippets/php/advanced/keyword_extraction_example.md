@@ -3,24 +3,26 @@
 declare(strict_types=1);
 
 use Xberg\Xberg;
+use Xberg\ExtractInput;
 use Xberg\ExtractionConfig;
-use Xberg\KeywordConfig;
 
-$config = new ExtractionConfig(
-    keywords: new KeywordConfig(
-        algorithm: 'yake',
-        maxKeywords: 10,
-        minScore: 0.3,
-        language: 'en'
-    )
-);
+$config = ExtractionConfig::from_json(json_encode([
+    'keywords' => [
+        'algorithm' => 'yake',
+        'maxKeywords' => 10,
+        'minScore' => 0.3,
+        'language' => 'en',
+    ],
+], JSON_THROW_ON_ERROR));
 
-$result = Xberg::extractSync('research_paper.pdf', null, $config);
+$resultOutput = Xberg::extract(ExtractInput::fromUri('research_paper.pdf'), $config);
 
-if ($result->getKeywords()) {
+$result = $resultOutput->results[0];
+
+if ($result->extractedKeywords) {
     echo "Extracted Keywords:\n";
-    foreach ($result->getKeywords() as $index => $keyword) {
-        echo ($index + 1) . ". " . $keyword . "\n";
+    foreach ($result->extractedKeywords as $index => $keyword) {
+        echo ($index + 1) . ". " . $keyword->text . "\n";
     }
 } else {
     echo "No keywords extracted.\n";

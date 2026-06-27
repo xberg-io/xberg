@@ -1,5 +1,5 @@
 ```rust title="Rust"
-use xberg::{extract_sync, ExtractionConfig, OcrConfig};
+use xberg::{extract, ExtractionConfig, OcrConfig};
 
 fn main() -> xberg::Result<()> {
     let config = ExtractionConfig {
@@ -11,7 +11,7 @@ fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract_sync("document.pdf", None, &config)?;
+    let result = extract("document.pdf", None, &config)?;
     println!("{}", result.content);
     Ok(())
 }

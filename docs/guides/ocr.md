@@ -2,26 +2,27 @@
 
 Extract text from images and scanned PDFs. Xberg automatically determines when OCR is needed — images always require it, scanned PDFs trigger it per-page, and hybrid PDFs only OCR the pages that lack a text layer. Set `force_ocr=True` to OCR all pages regardless.
 
+See the [OcrConfig reference](../reference/configuration.md#ocrconfig) for all configuration options.
+
 ## Backend Comparison
 
-Six OCR backends — pick based on platform, accuracy needs, and language coverage.
+Eight OCR backends — pick based on platform, accuracy needs, and language coverage.
 
-|                  | **Tesseract**        | **PaddleOCR**                       | **EasyOCR**         | **Candle GLM-OCR** | **Candle TrOCR** | **Candle Hunyuan-OCR** | **Candle DeepSeek-OCR** | **Candle PaddleOCR-VL** | **VLM**                  |
-| ---------------- | -------------------- | ----------------------------------- | ------------------- | --------------------- | --------------------- | ---------------------- | ----------------------- | ----------------------- | ------------------------ |
-| **Speed**        | Fast                 | Very fast                           | Moderate            | Moderate              | Moderate              | Moderate               | Moderate                | Moderate                | Slow (API latency)       |
-| **Accuracy**     | Good                 | Excellent                           | Excellent           | Excellent             | Good                  | Excellent              | Excellent               | Excellent               | Highest                  |
-| **Languages**    | 100+                 | 80+ (11 script families)            | 80+                 | All                   | 100+                  | 20+ (CJK + Latin)      | 20+ (CJK + Latin)       | 20+ (CJK + Latin)       | All (provider-dependent) |
-| **Installation** | System package       | Built-in (native) or Python package | Python package only | Cargo feature         | Cargo feature         | Cargo feature          | Cargo feature           | Cargo feature           | API key only             |
-| **Model size**   | ~10 MB               | Mobile ~8 MB, Server ~120 MB        | ~100 MB             | ~3 GB                 | ~250 MB               | ~3.5 GB                | ~4 GB                   | ~2.5 GB                 | None (cloud-hosted)      |
-| **GPU support**  | No                   | Yes                                 | Yes                 | Yes (Metal/CUDA)      | Yes (Metal/CUDA)      | Yes (Metal/CUDA)       | Yes (Metal/CUDA)        | Yes (Metal/CUDA)        | N/A (server-side)        |
-| **Platform**     | All (including Wasm) | All except Wasm                     | Python only         | Native only           | Native only           | Native only            | Native only             | Native only             | All                      |
-| **Cost**         | Free                 | Free                                | Free                | Free                  | Free                  | Free                   | Free                    | Free                    | Per-token API cost       |
+|                  | **Tesseract**        | **PaddleOCR**                       | **Candle GLM-OCR** | **Candle TrOCR** | **Candle Hunyuan-OCR** | **Candle DeepSeek-OCR** | **Candle PaddleOCR-VL** | **VLM**                  |
+| ---------------- | -------------------- | ----------------------------------- | ------------------ | ---------------- | ---------------------- | ----------------------- | ----------------------- | ------------------------ |
+| **Speed**        | Fast                 | Very fast                           | Moderate           | Moderate         | Moderate               | Moderate                | Moderate                | Slow (API latency)       |
+| **Accuracy**     | Good                 | Excellent                           | Excellent          | Good             | Excellent              | Excellent               | Excellent               | Highest                  |
+| **Languages**    | 100+                 | 80+ (11 script families)            | All                | 100+             | 20+ (CJK + Latin)      | 20+ (CJK + Latin)       | 20+ (CJK + Latin)       | All (provider-dependent) |
+| **Installation** | System package       | Built-in (native) or Python package | Cargo feature      | Cargo feature    | Cargo feature          | Cargo feature           | Cargo feature           | API key only             |
+| **Model size**   | ~10 MB               | Mobile ~8 MB, Server ~120 MB        | ~3 GB              | ~250 MB          | ~3.5 GB                | ~4 GB                   | ~2.5 GB                 | None (cloud-hosted)      |
+| **GPU support**  | No                   | Yes                                 | Yes (Metal/CUDA)   | Yes (Metal/CUDA) | Yes (Metal/CUDA)       | Yes (Metal/CUDA)        | Yes (Metal/CUDA)        | N/A (server-side)        |
+| **Platform**     | All (including Wasm) | All except Wasm                     | Native only        | Native only      | Native only            | Native only             | Native only             | All                      |
+| **Cost**         | Free                 | Free                                | Free               | Free             | Free                   | Free                    | Free                    | Per-token API cost       |
 
 **When to use which:**
 
 - **Tesseract** — Default choice. Works everywhere, low overhead, broadest platform support.
 - **PaddleOCR** — Best speed-to-accuracy ratio. Preferred for CJK languages. Mobile tier is fast; server tier maximizes accuracy with GPU.
-- **EasyOCR** — Highest accuracy with deep learning models. Python-only, heavier dependency.
 - **Candle GLM-OCR** — Excellent accuracy with VLM-level reasoning on 0.9B-param GLM model. Pure Rust, GPU-accelerated (Metal on macOS, CUDA on Linux). Region-aware layout dispatch. First download ~3 GB.
 - **Candle TrOCR** — Smaller model footprint (~250 MB) with solid accuracy across languages. Pure Rust, GPU-accelerated. Good balance of speed and quality.
 - **Candle Hunyuan-OCR** — Tencent Hunyuan-OCR with comprehensive document parsing and multilingual support including CJK and Latin scripts. Pure Rust, GPU-accelerated. First download ~3.5 GB.
@@ -84,14 +85,6 @@ tesseract --list-langs
 
     PaddleOCR is bundled via the native Rust bindings and works out of the box since 4.8.5 — no extra installation is needed. Models are downloaded automatically on first use.
 
-### EasyOCR (Python only)
-
-```bash title="Terminal"
-pip install "xberg[easyocr]"
-```
-
-!!! Info "Python 3.14" EasyOCR 1.7.3+ and PyTorch 2.9.1+ support Python 3.14. Install `xberg[easyocr]` on any supported Python version (3.10–3.14).
-
 !!! Tip "Tesseract marker extra"
 `pip install "xberg[tesseract]"` is available as a metadata-only marker to document a dependency on the Tesseract system package. It installs no Python packages — Tesseract itself must still be installed via your OS package manager (see above).
 
@@ -133,7 +126,7 @@ pip install "xberg[easyocr]"
 
 ### Multiple Languages
 
-Specify multiple language codes separated by `+` (Tesseract) or as a list (EasyOCR/PaddleOCR):
+Specify multiple language codes separated by `+` (Tesseract) or as a list (PaddleOCR and VLM backends):
 
 === "Python"
 
@@ -166,16 +159,23 @@ Specify multiple language codes separated by `+` (Tesseract) or as a list (EasyO
 === "Wasm"
 
     ```typescript
-    import { enableOcr, extractFromFile, initWasm } from '@xberg-io/xberg-wasm';
+    import { ExtractInputKind, enableOcr, extract, initWasm } from '@xberg-io/xberg-wasm';
 
     await initWasm();
     await enableOcr();
 
     const file = fileInput.files?.[0];
     if (file) {
-      const result = await extractFromFile(file, file.type, {
-        ocr: { backend: 'tesseract-wasm', language: 'eng+deu' },
-      });
+      const output = await extract(
+        {
+          kind: ExtractInputKind.Bytes,
+          bytes: new Uint8Array(await file.arrayBuffer()),
+          mimeType: file.type || 'application/octet-stream',
+          filename: file.name,
+        },
+        { ocr: { backend: 'tesseract-wasm', language: 'eng+deu' } },
+      );
+      const result = output.results[0];
     }
     ```
 
@@ -211,20 +211,6 @@ Process PDFs with OCR even when they have a text layer:
 
     --8<-- "snippets/r/ocr/ocr_force_all_pages.md"
 
-### Using EasyOCR
-
-=== "Python"
-
-    --8<-- "snippets/python/ocr/ocr_easyocr.md"
-
-=== "TypeScript"
-
-    --8<-- "snippets/typescript/ocr/ocr_easyocr.md"
-
-=== "Rust"
-
-    --8<-- "snippets/rust/ocr/ocr_easyocr.md"
-
 ### Disable OCR
 
 When `disable_ocr` is set, image files return empty content instead of raising `MissingDependencyError`:
@@ -232,34 +218,38 @@ When `disable_ocr` is set, image files return empty content instead of raising `
 === "Python"
 
     ```python title="disable_ocr.py"
-    from xberg import ExtractionConfig, extract
+    from xberg import ExtractInput, ExtractionConfig, extract
 
     config = ExtractionConfig(disable_ocr=True)
-    result = extract("scanned.png", config=config)
+    output = await extract(ExtractInput(kind="uri", uri="scanned.png"), config=config)
+    result = output.results[0]
     # result.content will be empty — OCR was skipped
     ```
 
 === "TypeScript"
 
     ```typescript title="disable_ocr.ts"
-    import { extractFileSync } from '@xberg-io/xberg';
+    import { ExtractInputKind, extract } from '@xberg-io/xberg';
 
-    const result = extractFileSync('scanned.png', {
-      disableOcr: true,
-    });
+    const output = await extract(
+      { kind: ExtractInputKind.Uri, uri: 'scanned.png' },
+      { disableOcr: true },
+    );
+    const result = output.results[0];
     // result.content will be empty — OCR was skipped
     ```
 
 === "Rust"
 
     ```rust title="disable_ocr.rs"
-    use xberg::{ExtractionConfig, extract};
+    use xberg::{extract, ExtractInput, ExtractionConfig};
 
     let config = ExtractionConfig {
         disable_ocr: true,
         ..Default::default()
     };
-    let result = extract("scanned.png", &config).await?;
+    let output = extract(ExtractInput::from_uri("scanned.png"), &config).await?;
+    let result = &output.results[0];
     // result.content will be empty — OCR was skipped
     ```
 
@@ -317,7 +307,7 @@ Candle GLM-OCR dispatches by detected layout region using PP-DocLayout-V3. Each 
 === "Python"
 
     ```python title="candle_glm_ocr.py"
-    from xberg import ExtractionConfig, OcrConfig, extract
+    from xberg import ExtractInput, ExtractionConfig, OcrConfig, extract
 
     # Paired mode: per-region dispatch (default)
     config = ExtractionConfig(
@@ -328,7 +318,8 @@ Candle GLM-OCR dispatches by detected layout region using PP-DocLayout-V3. Each 
             backend_options={"layout_mode": "paired"},
         ),
     )
-    result = extract("document.pdf", config=config)
+    output = await extract(ExtractInput(kind="uri", uri="document.pdf"), config=config)
+    result = output.results[0]
     print(result.content)
 
     # Whole-page mode: single OCR pass over entire page
@@ -340,40 +331,52 @@ Candle GLM-OCR dispatches by detected layout region using PP-DocLayout-V3. Each 
             backend_options={"layout_mode": "whole_page"},
         ),
     )
-    result_whole = extract("document.pdf", config=config_whole)
+    whole_page_output = await extract(
+        ExtractInput(kind="uri", uri="document.pdf"),
+        config=config_whole,
+    )
+    result_whole_page = whole_page_output.results[0]
     ```
 
 === "TypeScript"
 
     ```typescript title="candle-glm-ocr.ts"
-    import { extractFileSync } from '@xberg-io/xberg';
+    import { ExtractInputKind, extract } from '@xberg-io/xberg';
 
     // Paired mode: per-region dispatch (default)
-    const result = extractFileSync('document.pdf', {
-      forceOcr: true,
-      ocr: {
-        backend: 'candle-glm-ocr',
-        language: 'en',
-        backendOptions: { layout_mode: 'paired' },
+    const output = await extract(
+      { kind: ExtractInputKind.Uri, uri: 'document.pdf' },
+      {
+        forceOcr: true,
+        ocr: {
+          backend: 'candle-glm-ocr',
+          language: 'en',
+          backendOptions: { layout_mode: 'paired' },
+        },
       },
-    });
+    );
+    const result = output.results[0];
     console.log(result.content);
 
     // Whole-page mode
-    const resultWholePage = extractFileSync('document.pdf', {
-      forceOcr: true,
-      ocr: {
-        backend: 'candle-glm-ocr',
-        language: 'en',
-        backendOptions: { layout_mode: 'whole_page' },
+    const wholePageOutput = await extract(
+      { kind: ExtractInputKind.Uri, uri: 'document.pdf' },
+      {
+        forceOcr: true,
+        ocr: {
+          backend: 'candle-glm-ocr',
+          language: 'en',
+          backendOptions: { layout_mode: 'whole_page' },
+        },
       },
-    });
+    );
+    const resultWholePage = wholePageOutput.results[0];
     ```
 
 === "Rust"
 
     ```rust title="candle_glm_ocr.rs"
-    use xberg::{extract, ExtractionConfig, OcrConfig};
+    use xberg::{extract, ExtractInput, ExtractionConfig, OcrConfig};
     use serde_json::json;
 
     // Paired mode: per-region dispatch (default)
@@ -387,7 +390,8 @@ Candle GLM-OCR dispatches by detected layout region using PP-DocLayout-V3. Each 
         }),
         ..Default::default()
     };
-    let result = extract("document.pdf", &config).await?;
+    let output = extract(ExtractInput::from_uri("document.pdf"), &config).await?;
+    let result = &output.results[0];
     println!("{}", result.content);
 
     // Whole-page mode
@@ -401,7 +405,8 @@ Candle GLM-OCR dispatches by detected layout region using PP-DocLayout-V3. Each 
         }),
         ..Default::default()
     };
-    let result_whole = extract("document.pdf", &config_whole).await?;
+    let whole_page_output = extract(ExtractInput::from_uri("document.pdf"), &config_whole).await?;
+    let _result_whole_page = &whole_page_output.results[0];
     ```
 
 **Backend options:**
@@ -436,7 +441,7 @@ Tencent Hunyuan-OCR — vision-language model for comprehensive document parsing
 === "Python"
 
     ```python title="candle_hunyuan_ocr.py"
-    from xberg import ExtractionConfig, OcrConfig, extract
+    from xberg import ExtractInput, ExtractionConfig, OcrConfig, extract
 
     config = ExtractionConfig(
         force_ocr=True,
@@ -446,30 +451,35 @@ Tencent Hunyuan-OCR — vision-language model for comprehensive document parsing
             backend_options={"device": "auto", "model_path": "~/.cache/huggingface/"},
         ),
     )
-    result = extract("document.pdf", config=config)
+    output = await extract(ExtractInput(kind="uri", uri="document.pdf"), config=config)
+    result = output.results[0]
     print(result.content)
     ```
 
 === "TypeScript"
 
     ```typescript title="candle-hunyuan-ocr.ts"
-    import { extractFileSync } from '@xberg-io/xberg';
+    import { ExtractInputKind, extract } from '@xberg-io/xberg';
 
-    const result = extractFileSync('document.pdf', {
-      forceOcr: true,
-      ocr: {
-        backend: 'candle-hunyuan-ocr',
-        language: 'en',
-        backendOptions: { device: 'auto', model_path: '~/.cache/huggingface/' },
+    const output = await extract(
+      { kind: ExtractInputKind.Uri, uri: 'document.pdf' },
+      {
+        forceOcr: true,
+        ocr: {
+          backend: 'candle-hunyuan-ocr',
+          language: 'en',
+          backendOptions: { device: 'auto', model_path: '~/.cache/huggingface/' },
+        },
       },
-    });
+    );
+    const result = output.results[0];
     console.log(result.content);
     ```
 
 === "Rust"
 
     ```rust title="candle_hunyuan_ocr.rs"
-    use xberg::{extract, ExtractionConfig, OcrConfig};
+    use xberg::{extract, ExtractInput, ExtractionConfig, OcrConfig};
     use serde_json::json;
 
     let config = ExtractionConfig {
@@ -482,7 +492,8 @@ Tencent Hunyuan-OCR — vision-language model for comprehensive document parsing
         }),
         ..Default::default()
     };
-    let result = extract("document.pdf", &config).await?;
+    let output = extract(ExtractInput::from_uri("document.pdf"), &config).await?;
+    let result = &output.results[0];
     println!("{}", result.content);
     ```
 
@@ -520,7 +531,7 @@ DeepSeek-OCR — combination of SAM + CLIP encoder fused with Qwen2 decoder and 
 === "Python"
 
     ```python title="candle_deepseek_ocr.py"
-    from xberg import ExtractionConfig, OcrConfig, extract
+    from xberg import ExtractInput, ExtractionConfig, OcrConfig, extract
 
     config = ExtractionConfig(
         force_ocr=True,
@@ -530,30 +541,35 @@ DeepSeek-OCR — combination of SAM + CLIP encoder fused with Qwen2 decoder and 
             backend_options={"device": "auto", "model_path": "~/.cache/huggingface/"},
         ),
     )
-    result = extract("document.pdf", config=config)
+    output = await extract(ExtractInput(kind="uri", uri="document.pdf"), config=config)
+    result = output.results[0]
     print(result.content)
     ```
 
 === "TypeScript"
 
     ```typescript title="candle-deepseek-ocr.ts"
-    import { extractFileSync } from '@xberg-io/xberg';
+    import { ExtractInputKind, extract } from '@xberg-io/xberg';
 
-    const result = extractFileSync('document.pdf', {
-      forceOcr: true,
-      ocr: {
-        backend: 'candle-deepseek-ocr',
-        language: 'en',
-        backendOptions: { device: 'auto', model_path: '~/.cache/huggingface/' },
+    const output = await extract(
+      { kind: ExtractInputKind.Uri, uri: 'document.pdf' },
+      {
+        forceOcr: true,
+        ocr: {
+          backend: 'candle-deepseek-ocr',
+          language: 'en',
+          backendOptions: { device: 'auto', model_path: '~/.cache/huggingface/' },
+        },
       },
-    });
+    );
+    const result = output.results[0];
     console.log(result.content);
     ```
 
 === "Rust"
 
     ```rust title="candle_deepseek_ocr.rs"
-    use xberg::{extract, ExtractionConfig, OcrConfig};
+    use xberg::{extract, ExtractInput, ExtractionConfig, OcrConfig};
     use serde_json::json;
 
     let config = ExtractionConfig {
@@ -566,7 +582,8 @@ DeepSeek-OCR — combination of SAM + CLIP encoder fused with Qwen2 decoder and 
         }),
         ..Default::default()
     };
-    let result = extract("document.pdf", &config).await?;
+    let output = extract(ExtractInput::from_uri("document.pdf"), &config).await?;
+    let result = &output.results[0];
     println!("{}", result.content);
     ```
 
@@ -604,7 +621,7 @@ PaddleOCR-VL 1.5 — SigLIP vision encoder + Ernie-4.5 text decoder for lightwei
 === "Python"
 
     ```python title="candle_paddleocr_vl.py"
-    from xberg import ExtractionConfig, OcrConfig, extract
+    from xberg import ExtractInput, ExtractionConfig, OcrConfig, extract
 
     config = ExtractionConfig(
         force_ocr=True,
@@ -614,30 +631,35 @@ PaddleOCR-VL 1.5 — SigLIP vision encoder + Ernie-4.5 text decoder for lightwei
             backend_options={"device": "auto", "model_path": "~/.cache/huggingface/"},
         ),
     )
-    result = extract("document.pdf", config=config)
+    output = await extract(ExtractInput(kind="uri", uri="document.pdf"), config=config)
+    result = output.results[0]
     print(result.content)
     ```
 
 === "TypeScript"
 
     ```typescript title="candle-paddleocr-vl.ts"
-    import { extractFileSync } from '@xberg-io/xberg';
+    import { ExtractInputKind, extract } from '@xberg-io/xberg';
 
-    const result = extractFileSync('document.pdf', {
-      forceOcr: true,
-      ocr: {
-        backend: 'candle-paddleocr-vl-15',
-        language: 'en',
-        backendOptions: { device: 'auto', model_path: '~/.cache/huggingface/' },
+    const output = await extract(
+      { kind: ExtractInputKind.Uri, uri: 'document.pdf' },
+      {
+        forceOcr: true,
+        ocr: {
+          backend: 'candle-paddleocr-vl-15',
+          language: 'en',
+          backendOptions: { device: 'auto', model_path: '~/.cache/huggingface/' },
+        },
       },
-    });
+    );
+    const result = output.results[0];
     console.log(result.content);
     ```
 
 === "Rust"
 
     ```rust title="candle_paddleocr_vl.rs"
-    use xberg::{extract, ExtractionConfig, OcrConfig};
+    use xberg::{extract, ExtractInput, ExtractionConfig, OcrConfig};
     use serde_json::json;
 
     let config = ExtractionConfig {
@@ -650,7 +672,8 @@ PaddleOCR-VL 1.5 — SigLIP vision encoder + Ernie-4.5 text decoder for lightwei
         }),
         ..Default::default()
     };
-    let result = extract("document.pdf", &config).await?;
+    let output = extract(ExtractInput::from_uri("document.pdf"), &config).await?;
+    let result = &output.results[0];
     println!("{}", result.content);
     ```
 
@@ -679,7 +702,7 @@ Use a vision-language model (e.g. GPT-4o, Claude) as the OCR backend — each pa
 === "Rust"
 
     ```rust title="Rust"
-    use xberg::{extract, ExtractionConfig, OcrConfig, LlmConfig};
+    use xberg::{extract, ExtractInput, ExtractionConfig, OcrConfig, LlmConfig};
 
     let config = ExtractionConfig {
         force_ocr: true,
@@ -693,7 +716,8 @@ Use a vision-language model (e.g. GPT-4o, Claude) as the OCR backend — each pa
         }),
         ..Default::default()
     };
-    let result = extract("scan.pdf", None, &config).await?;
+    let output = extract(ExtractInput::from_uri("scan.pdf"), &config).await?;
+    let result = &output.results[0];
     ```
 
 === "CLI"
@@ -716,7 +740,7 @@ Use a vision-language model (e.g. GPT-4o, Claude) as the OCR backend — each pa
 
 For more on VLM OCR, including custom prompts, supported providers, and API key configuration, see [LLM Integration](llm-integration.md#vlm-ocr).
 
-!!! Tip "GPU Acceleration" EasyOCR and PaddleOCR support GPU acceleration. Set `use_gpu=True` in your OCR config. PaddleOCR's `model_tier="server"` gives the best accuracy with GPU.
+!!! Tip "GPU Acceleration" PaddleOCR and Candle OCR backends support GPU acceleration. PaddleOCR's `model_tier="server"` gives the best accuracy with GPU.
 
 ## DPI Configuration
 
@@ -802,7 +826,7 @@ xberg extract scanned.pdf --config xberg.toml --ocr true
 | ------------------------- | ---------------------------------------------------------------------------------- |
 | `--ocr true`              | Enable OCR processing                                                              |
 | `--ocr-language <code>`   | Language code (`eng`, `deu`, `fra`, `ch`, `ja`, `ru`, etc.)                        |
-| `--ocr-backend <backend>` | Engine: `tesseract`, `paddle-ocr`, `easyocr`, or `vlm`                             |
+| `--ocr-backend <backend>` | Engine: `tesseract`, `paddle-ocr`, a `candle-*` backend, or `vlm`                  |
 | `--force-ocr true`        | OCR all pages regardless of text layer                                             |
 | `--vlm-model <model>`     | VLM model for OCR (for example, `openai/gpt-4o-mini`). Implies `--ocr-backend vlm` |
 
@@ -841,7 +865,7 @@ xberg extract scanned.pdf --config xberg.toml --ocr true
 ??? Question "Poor accuracy"
 
     - Increase DPI to 600 for better quality
-    - Try a different backend — PaddleOCR and EasyOCR often outperform Tesseract on complex layouts
+    - Try a different backend — PaddleOCR often outperforms Tesseract on complex layouts
     - Specify the correct language code for your document
     - Use `force_ocr=True` if a PDF's embedded text layer is low quality
     - For handwritten text or very poor scans, try the VLM backend with a vision-capable model (see [LLM Integration](llm-integration.md#vlm-ocr))
@@ -849,7 +873,7 @@ xberg extract scanned.pdf --config xberg.toml --ocr true
 ??? Question "Slow processing"
 
     - Reduce DPI to 150 for faster throughput
-    - Enable GPU acceleration with EasyOCR or PaddleOCR (`use_gpu=True`)
+    - Use a GPU-capable backend such as PaddleOCR or Candle OCR
     - Use batch extraction to process multiple files concurrently
 
 ??? Question "Out of memory on large PDFs"
@@ -863,4 +887,6 @@ xberg extract scanned.pdf --config xberg.toml --ocr true
 - [LLM Integration](llm-integration.md) — VLM OCR, structured extraction, and LLM embeddings
 - [Configuration](configuration.md) — all configuration options
 - [Extraction Basics](extraction.md) — core extraction API and supported formats
-- [Advanced Features](advanced.md) — chunking, language detection, embeddings
+- [Chunking](chunking.md) — split text for RAG
+- [Language Detection](language-detection.md) — multilingual document analysis
+- [Embeddings](embeddings.md) — semantic vectors for search

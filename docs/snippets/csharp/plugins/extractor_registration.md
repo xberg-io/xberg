@@ -19,11 +19,11 @@ public class JsonDocumentExtractor : IDocumentExtractor
         Console.WriteLine("JSON extractor shut down");
     }
 
-    public ExtractionResult Extract(byte[] content, string mimeType, ExtractionConfig config)
+    public ExtractedDocument Extract(byte[] content, string mimeType, ExtractionConfig config)
     {
         var json = System.Text.Encoding.UTF8.GetString(content);
 
-        var result = new ExtractionResult
+        var result = new ExtractedDocument
         {
             Content = json,
             MimeType = mimeType,
@@ -32,7 +32,7 @@ public class JsonDocumentExtractor : IDocumentExtractor
         return result;
     }
 
-    public ExtractionResult Extract(string path, string mimeType, ExtractionConfig config)
+    public ExtractedDocument Extract(string path, string mimeType, ExtractionConfig config)
     {
         var content = System.IO.File.ReadAllBytes(path);
         return Extract(content, mimeType, config);

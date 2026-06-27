@@ -1,6 +1,6 @@
 ```rust title="Rust"
 use xberg::plugins::{Plugin, PostProcessor, ProcessingStage};
-use xberg::{Result, ExtractionResult, ExtractionConfig};
+use xberg::{Result, ExtractedDocument, ExtractionConfig};
 use async_trait::async_trait;
 
 struct WordCountProcessor;
@@ -16,7 +16,7 @@ impl Plugin for WordCountProcessor {
 impl PostProcessor for WordCountProcessor {
     async fn process(
         &self,
-        result: &mut ExtractionResult,
+        result: &mut ExtractedDocument,
         _config: &ExtractionConfig
     ) -> Result<()> {
         let word_count = result.content.split_whitespace().count();
@@ -35,7 +35,7 @@ impl PostProcessor for WordCountProcessor {
 
     fn should_process(
         &self,
-        result: &ExtractionResult,
+        result: &ExtractedDocument,
         _config: &ExtractionConfig
     ) -> bool {
         !result.content.is_empty()

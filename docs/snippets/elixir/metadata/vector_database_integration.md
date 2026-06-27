@@ -19,12 +19,13 @@ defmodule VectorIntegration do
       }
       |> Jason.encode!()
 
-    case Xberg.extract_sync(document_path, nil, config) do
-      {:ok, result} ->
-        decoded = Jason.decode!(result)
+    case Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: document_path}, config) do
+      {:ok, output} ->
+        result = List.first(output.results)
+        chunks = result.chunks || []
 
-        case decoded do
-          %{"chunks" => chunks} when is_list(chunks) ->
+        case chunks do
+          [_ | _] ->
             records =
               chunks
               |> Enum.with_index()
@@ -54,7 +55,7 @@ defmodule VectorIntegration do
 
             {:ok, records}
 
-          _ ->
+          [] ->
             {:error, "No chunks in extraction result"}
         end
 

@@ -7,9 +7,11 @@ config_json = Jason.encode!(%{
   }
 })
 
-{:ok, result} = Xberg.extract_sync("research_paper.pdf", "application/pdf", config_json)
+input = %Xberg.ExtractInput{kind: :uri, uri: "research_paper.pdf", mime_type: "application/pdf"}
+{:ok, output} = Xberg.extract(input, config_json)
 
-if result.keywords do
-  IO.puts("Keywords: #{inspect(result.keywords)}")
+result = List.first(output.results)
+if result.extracted_keywords do
+  IO.puts("Keywords: #{inspect(result.extracted_keywords)}")
 end
 ```

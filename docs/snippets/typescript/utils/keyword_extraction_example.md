@@ -9,7 +9,8 @@ const config = {
   },
 };
 
-const result = await extract("research_paper.pdf", null, config);
+const output = await extract({ kind: "uri", uri: "research_paper.pdf" }, config);
+const result = output.results![0];
 console.log(`Content length: ${result.content.length}`);
 console.log(`Metadata: ${JSON.stringify(result.metadata)}`);
 ```

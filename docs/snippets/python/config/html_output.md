@@ -1,6 +1,6 @@
 ```python title="Python"
 import asyncio
-from xberg import ExtractionConfig, extract
+from xberg import ExtractInput, ExtractionConfig, extract
 
 async def main() -> None:
     config = ExtractionConfig(
@@ -10,8 +10,8 @@ async def main() -> None:
             "embed_css": True,
         },
     )
-    result = await extract("document.pdf", config=config)
-    print(result.content)  # HTML with kb-* classes and GitHub theme
+    result = await extract(ExtractInput.from_uri("document.pdf"), config)
+    print(result.results[0].content)  # HTML with kb-* classes and GitHub theme
 
 asyncio.run(main())
 ```

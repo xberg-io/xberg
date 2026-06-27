@@ -5,7 +5,7 @@ import {
   registerValidator,
   unregisterPostProcessor,
   unregisterValidator,
-  type ExtractionResult,
+  type ExtractedDocument,
 } from "@xberg-io/xberg";
 
 describe("Plugin Testing", () => {
@@ -14,7 +14,7 @@ describe("Plugin Testing", () => {
       const processor = {
         name: "test-processor",
         priority: 10,
-        process(result: ExtractionResult): ExtractionResult {
+        process(result: ExtractedDocument): ExtractedDocument {
           return {
             ...result,
             metadata: {
@@ -28,7 +28,7 @@ describe("Plugin Testing", () => {
 
       registerPostProcessor(processor);
 
-      const mockResult: ExtractionResult = {
+      const mockResult: ExtractedDocument = {
         content: "Test content",
         mimeType: "text/plain",
         metadata: { custom: "value" },
@@ -52,7 +52,7 @@ describe("Plugin Testing", () => {
       const validator = {
         name: "length-validator",
         priority: 10,
-        validate(result: ExtractionResult): void {
+        validate(result: ExtractedDocument): void {
           if (result.content.length < 10) {
             throw new Error("Content too short");
           }
@@ -61,7 +61,7 @@ describe("Plugin Testing", () => {
 
       registerValidator(validator);
 
-      const mockResult: ExtractionResult = {
+      const mockResult: ExtractedDocument = {
         content: "Short",
         mimeType: "text/plain",
         metadata: {},
@@ -80,14 +80,14 @@ describe("Plugin Testing", () => {
       const validator = {
         name: "length-validator-pass",
         priority: 10,
-        validate(result: ExtractionResult): void {
+        validate(result: ExtractedDocument): void {
           if (result.content.length < 10) {
             throw new Error("Content too short");
           }
         },
       };
 
-      const mockResult: ExtractionResult = {
+      const mockResult: ExtractedDocument = {
         content: "This is a valid long content",
         mimeType: "text/plain",
         metadata: {},

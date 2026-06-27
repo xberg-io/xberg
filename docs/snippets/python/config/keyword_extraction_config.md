@@ -1,6 +1,6 @@
 ```python title="Python"
 import asyncio
-from xberg import (
+from xberg import ExtractInput, (
     ExtractionConfig,
     KeywordConfig,
     KeywordAlgorithm,
@@ -13,12 +13,12 @@ async def main() -> None:
             algorithm=KeywordAlgorithm.YAKE,
             max_keywords=10,
             min_score=0.3,
-            ngram_range=(1, 3),
             language="en"
         )
     )
-    result = await extract("document.pdf", config=config)
-    print(f"Content extracted: {len(result.content)} chars")
+    output = await extract(ExtractInput.from_uri("document.pdf"), config)
+    result = output.results[0]
+    print(f"Content extracted: {len(result.results[0].content)} chars")
 
 asyncio.run(main())
 ```

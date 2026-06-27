@@ -10,10 +10,10 @@ config_json =
     }
   })
 
-{:ok, json} = Xberg.extract_async("research_paper.pdf", nil, config_json)
-result = Jason.decode!(json)
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "research_paper.pdf"}, config_json)
 
-for keyword <- result["extracted_keywords"] || [] do
+result = List.first(output.results)
+for keyword <- result.extracted_keywords || [] do
   text = keyword["text"] || ""
   score = keyword["score"] || 0.0
   IO.puts("#{text}: #{:io_lib.format("~.3f", [score])}")

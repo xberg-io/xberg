@@ -9,7 +9,7 @@ import (
 
 func main() {
 	extractMetadata := true
-	result, err := xberg.ExtractSync("document.pdf", nil, xberg.ExtractionConfig{
+	result, err := xberg.Extract("document.pdf", nil, xberg.ExtractionConfig{
 		PdfOptions: &xberg.PdfConfig{
 			ExtractImages:   true,
 			ExtractMetadata: &extractMetadata,

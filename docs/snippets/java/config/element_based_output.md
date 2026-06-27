@@ -1,7 +1,7 @@
 ```java title="Element-Based Output (Java)"
 import io.xberg.Xberg;
 import io.xberg.ExtractionConfig;
-import io.xberg.ExtractionResult;
+import io.xberg.ExtractedDocument;
 import io.xberg.Element;
 import io.xberg.ResultFormat;
 import java.nio.file.Path;
@@ -15,7 +15,14 @@ public class ElementBasedOutput {
             .build();
 
         // Extract document
-        ExtractionResult result = Xberg.extractSync(Path.of("document.pdf"), config);
+        var resultOutput = Xberg.extract(
+            io.xberg.ExtractInput.builder()
+                .withKind(io.xberg.ExtractInputKind.Uri)
+                .withUri("document.pdf")
+                .build(),
+            config
+        );
+        ExtractedDocument result = resultOutput.results().get(0);
 
         // Access elements
         List<Element> elements = result.elements();

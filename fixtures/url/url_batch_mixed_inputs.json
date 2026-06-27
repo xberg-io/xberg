@@ -2,10 +2,7 @@
 	"id": "url_batch_mixed_inputs",
 	"category": "url",
 	"description": "extract_batch: mixed bytes and URL inputs share one output envelope",
-	"tags": [
-		"url",
-		"batch"
-	],
+	"tags": ["url", "batch"],
 	"call": "extract_batch",
 	"args": [
 		{
@@ -42,27 +39,7 @@
 			},
 			{
 				"kind": "bytes",
-				"bytes": [
-					66,
-					97,
-					116,
-					99,
-					104,
-					32,
-					98,
-					121,
-					116,
-					101,
-					115,
-					32,
-					99,
-					111,
-					110,
-					116,
-					101,
-					110,
-					116
-				],
+				"bytes": [66, 97, 116, 99, 104, 32, 98, 121, 116, 101, 115, 32, 99, 111, 110, 116, 101, 110, 116],
 				"mime_type": "text/plain",
 				"filename": "inline.txt"
 			}
@@ -79,24 +56,22 @@
 		},
 		{
 			"type": "count_min",
-			"field": "summary.results",
+			"field": "results",
 			"value": 2
 		},
 		{
 			"type": "contains",
-			"field": "results.0.content",
+			"field": "results[0].content",
 			"value": "Batch URL document content"
 		},
 		{
 			"type": "contains",
-			"field": "results.1.content",
+			"field": "results[1].content",
 			"value": "Batch bytes content"
 		}
 	],
 	"skip": {
-		"languages": [
-			"wasm"
-		],
+		"languages": ["wasm"],
 		"reason": "WASM e2e does not enable URL ingestion"
 	}
 }

@@ -124,7 +124,8 @@ if ($result === null) {
 
 $elapsed = microtime(true) - $start;
 echo "  Time: " . number_format($elapsed, 4) . "s\n";
-echo "  Content length: " . strlen($result->content) . " chars\n\n";
+$document = $result->results[0];
+echo "  Content length: " . strlen($document->content) . " chars\n\n";
 
 echo "Second extraction (from cache)...\n";
 $start = microtime(true);
@@ -141,7 +142,8 @@ if ($result === null) {
 
 $elapsed = microtime(true) - $start;
 echo "  Time: " . number_format($elapsed, 4) . "s\n";
-echo "  Content length: " . strlen($result->content) . " chars\n\n";
+$document = $result->results[0];
+echo "  Content length: " . strlen($document->content) . " chars\n\n";
 
 $stats = $cache->getStats();
 echo "Cache Statistics:\n";

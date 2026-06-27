@@ -1,5 +1,5 @@
 ```rust title="Element-Based Output (Rust)"
-use xberg::{extract_sync, ExtractionConfig};
+use xberg::{extract, ExtractionConfig};
 use xberg::types::OutputFormat as ResultFormat;
 
 fn main() -> xberg::Result<()> {
@@ -10,7 +10,7 @@ fn main() -> xberg::Result<()> {
     };
 
     // Extract document
-    let result = extract_sync("document.pdf", None, &config)?;
+    let result = extract("document.pdf", None, &config)?;
 
     // Access elements
     if let Some(elements) = result.elements {

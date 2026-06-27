@@ -9,7 +9,8 @@ const config = {
   },
 };
 
-const result = await extract("research_paper.pdf", null, config);
+const output = await extract({ kind: "uri", uri: "research_paper.pdf" }, config);
+const result = output.results![0];
 
 for (const keyword of result.extractedKeywords ?? []) {
   console.log(`${keyword.text}: ${keyword.score.toFixed(3)}`);

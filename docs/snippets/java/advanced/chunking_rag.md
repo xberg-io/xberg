@@ -1,7 +1,9 @@
 ```java title="Java"
 import io.xberg.Xberg;
 import io.xberg.ExtractionResult;
+import io.xberg.ExtractedDocument;
 import io.xberg.ExtractionConfig;
+import io.xberg.ExtractInput;
 import io.xberg.ChunkingConfig;
 import io.xberg.EmbeddingConfig;
 import io.xberg.EmbeddingModelType;
@@ -20,7 +22,11 @@ ExtractionConfig config = ExtractionConfig.builder()
     .build();
 
 try {
-    ExtractionResult result = Xberg.extract("research_paper.pdf", config);
+    ExtractionResult output = Xberg.extract(
+        ExtractInput.fromUri("research_paper.pdf"),
+        config
+    );
+    ExtractedDocument result = output.results().get(0);
 
     List<Object> chunks = result.getChunks() != null ? result.getChunks() : List.of();
     System.out.println("Found " + chunks.size() + " chunks for RAG pipeline");

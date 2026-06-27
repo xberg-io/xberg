@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-import { extractSync } from "@xberg-io/xberg";
+import { extract } from "@xberg-io/xberg";
 
 const config = {
   ocr: {
@@ -8,6 +8,6 @@ const config = {
   },
 };
 
-const result = extractSync("scanned.pdf", null, config);
+const result = extract({ kind: "uri", uri: "scanned.pdf" }, config);
 console.log(result.content);
 ```

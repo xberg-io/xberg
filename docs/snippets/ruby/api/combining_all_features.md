@@ -29,16 +29,18 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract_sync('document.pdf', config: config)
+input = Xberg::ExtractInput.new(uri: 'document.pdf')
+result = Xberg.extract(input, config)
+first_result = result.results.first
 
-puts "Content length: #{result.content.length} characters"
-puts "Quality score: #{result.quality_score}"
-puts "Detected languages: #{result.detected_languages&.join(', ')}"
-puts "Total chunks: #{result.chunks&.length || 0}"
-puts "Keywords: #{result.extracted_keywords&.map(&:text)&.join(', ')}"
+puts "Content length: #{first_result.content.length} characters"
+puts "Quality score: #{first_result.quality_score}"
+puts "Detected languages: #{first_result.detected_languages&.join(', ')}"
+puts "Total chunks: #{first_result.chunks&.length || 0}"
+puts "Keywords: #{first_result.extracted_keywords&.map(&:text)&.join(', ')}"
 
-if result.chunks && result.chunks.length > 0
-  first_chunk = result.chunks[0]
+if first_result.chunks && first_result.chunks.length > 0
+  first_chunk = first_result.chunks[0]
   puts "First chunk size: #{first_chunk.content.length} chars"
   puts "Embedding dims: #{first_chunk.embedding&.length || 0}"
 end

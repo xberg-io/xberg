@@ -1,6 +1,6 @@
 ```python title="Python"
 import asyncio
-from xberg import (
+from xberg import ExtractInput, (
     extract,
     ExtractionConfig,
     ChunkingConfig,
@@ -18,7 +18,7 @@ async def main() -> None:
             ),
         )
     )
-    result = await extract("document.pdf", config=config)
+    result = await extract(ExtractInput.from_uri("document.pdf"), config)
     chunks = result.chunks or []
     for i, chunk in enumerate(chunks):
         chunk_id: str = f"doc_chunk_{i}"

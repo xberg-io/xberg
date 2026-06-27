@@ -1,6 +1,6 @@
 ```python title="Python"
 import asyncio
-from xberg import (
+from xberg import ExtractInput, (
     extract,
     ExtractionConfig,
     ChunkingConfig,
@@ -20,7 +20,7 @@ async def main() -> None:
             )
         )
     )
-    result = await extract("research_paper.pdf", config=config)
+    result = await extract(ExtractInput.from_uri("research_paper.pdf"), config)
 
     chunks_with_embeddings: list = []
     for chunk in result.chunks or []:

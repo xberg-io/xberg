@@ -3,7 +3,7 @@ import {
   registerPostProcessor,
   unregisterPostProcessor,
   type PostProcessorProtocol,
-  type ExtractionResult,
+  type ExtractedDocument,
 } from "@xberg-io/xberg";
 
 /**
@@ -27,7 +27,7 @@ class MetadataEnrichmentProcessor implements PostProcessorProtocol {
   /**
    * Enrich result with additional metadata
    */
-  process(result: ExtractionResult): ExtractionResult {
+  process(result: ExtractedDocument): ExtractedDocument {
     this.processedCount++;
 
     return {
@@ -99,7 +99,7 @@ class FormatPostProcessor implements PostProcessorProtocol {
   /**
    * Format content for consistency
    */
-  process(result: ExtractionResult): ExtractionResult {
+  process(result: ExtractedDocument): ExtractedDocument {
     return {
       ...result,
       content: this.formatContent(result.content),

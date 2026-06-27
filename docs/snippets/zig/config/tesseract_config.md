@@ -21,10 +21,11 @@ pub fn main() !void {
         \\}
     ;
 
-    const result_json = try xberg.extract_sync("scanned.pdf", null, config_json);
-    defer std.heap.c_allocator.free(result_json);
+    const input_json = "{\"kind\":\"uri\",\"uri\":\"scanned.pdf\"}";
+    const output_json = try xberg.extract(input_json, config_json);
+    defer std.heap.c_allocator.free(output_json);
 
-    const owned = try allocator.dupe(u8, result_json);
+    const owned = try allocator.dupe(u8, output_json);
     defer allocator.free(owned);
 
     const stdout = std.io.getStdOut().writer();

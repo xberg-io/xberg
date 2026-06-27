@@ -20,7 +20,7 @@ async function detectAndExtract(bytes: Uint8Array) {
 
   console.log("Detected MIME type:", mimeType);
 
-  const result = await extract(bytes, mimeType);
+  const result = await extract({ kind: "bytes", bytes, mimeType: mimeType });
   return result;
 }
 

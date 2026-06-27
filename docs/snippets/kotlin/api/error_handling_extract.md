@@ -5,8 +5,14 @@ import java.nio.file.Paths
 
 fun extractText(bytes: ByteArray, mimeType: String): String {
     val config = ExtractionConfig.builder().build()
-    val result = Xberg.extractSync(bytes, mimeType, config)
-    return result.content()
+    val input = ExtractInput(
+        kind = ExtractInputKind.BYTES,
+        bytes = bytes,
+        mimeType = mimeType,
+        filename = "document.pdf",
+    )
+    val output = Xberg.extract(input, config)
+    return output.results().first().content()
 }
 
 fun main() {

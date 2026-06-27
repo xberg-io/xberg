@@ -5,7 +5,7 @@ async function getDocumentMetadata() {
 
   const bytes = new Uint8Array(await fetch("document.pdf").then((r) => r.arrayBuffer()));
 
-  const result = await extract(bytes, "application/pdf");
+  const result = await extract({ kind: "bytes", bytes, mimeType: "application/pdf" });
 
   const metadata = result.metadata;
 

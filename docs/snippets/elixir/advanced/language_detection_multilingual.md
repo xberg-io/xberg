@@ -7,8 +7,10 @@ config_json = Jason.encode!(%{
   }
 })
 
-{:ok, result} = Xberg.extract_sync("multilingual_document.pdf", "application/pdf", config_json)
+input = %Xberg.ExtractInput{kind: :uri, uri: "multilingual_document.pdf", mime_type: "application/pdf"}
+{:ok, output} = Xberg.extract(input, config_json)
 
+result = List.first(output.results)
 if result.languages do
   IO.puts("Detected languages:")
   Enum.each(result.languages, fn %{"language" => lang, "confidence" => conf} ->

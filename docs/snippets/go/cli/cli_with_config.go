@@ -7,13 +7,13 @@ import (
 	"os/exec"
 )
 
-type ExtractionResult struct {
+type ExtractedDocument struct {
 	Content   string   `json:"content"`
 	Format    string   `json:"format"`
 	Languages []string `json:"languages"`
 }
 
-func extractWithConfig(filePath string, configPath string) (*ExtractionResult, error) {
+func extractWithConfig(filePath string, configPath string) (*ExtractedDocument, error) {
 	cmd := exec.Command(
 		"xberg",
 		"extract",
@@ -29,7 +29,7 @@ func extractWithConfig(filePath string, configPath string) (*ExtractionResult, e
 		return nil, fmt.Errorf("CLI error: %w, output: %s", err, string(output))
 	}
 
-	var result ExtractionResult
+	var result ExtractedDocument
 	if err := json.Unmarshal(output, &result); err != nil {
 		return nil, fmt.Errorf("JSON parse error: %w", err)
 	}

@@ -5,7 +5,7 @@ To implement a stateful plugin in Rust:
 
 ```rust
 use xberg::plugins::{Plugin, PostProcessor};
-use xberg::{Result, ExtractionResult, ExtractionConfig};
+use xberg::{Result, ExtractedDocument, ExtractionConfig};
 use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 
@@ -32,7 +32,7 @@ impl Plugin for StatefulProcessor {
 impl PostProcessor for StatefulProcessor {
     async fn process(
         &self,
-        _result: &mut ExtractionResult,
+        _result: &mut ExtractedDocument,
         _config: &ExtractionConfig
     ) -> Result<()> {
         let mut state = self.state.lock().unwrap();

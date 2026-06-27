@@ -28,10 +28,11 @@ pub fn main() !void {
         \\}
     ;
 
-    const result_json = try xberg.extract_sync("report.pdf", null, config_json);
-    defer std.heap.c_allocator.free(result_json);
+    const input_json = "{\"kind\":\"uri\",\"uri\":\"report.pdf\"}";
+    const output_json = try xberg.extract(input_json, config_json);
+    defer std.heap.c_allocator.free(output_json);
 
     const stdout = std.io.getStdOut().writer();
-    try stdout.print("Result ({d} bytes of JSON):\n{s}\n", .{ result_json.len, result_json });
+    try stdout.print("Result ({d} bytes of JSON):\n{s}\n", .{ output_json.len, output_json });
 }
 ```

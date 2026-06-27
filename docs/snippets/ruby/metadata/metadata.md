@@ -1,10 +1,12 @@
 ```ruby title="Ruby"
 require 'xberg'
 
-result = Xberg.extract_sync('document.pdf')
+input = Xberg::ExtractInput.new(uri: 'document.pdf')
+config = Xberg::ExtractionConfig.new
+result = Xberg.extract(input, config)
 
 # Metadata is flat — format-specific fields are at the top level
-metadata = result.metadata
+metadata = result.results.first.metadata
 if metadata['page_count']
   puts "Pages: #{metadata['page_count']}"
 end
@@ -16,8 +18,9 @@ if metadata['authors']
 end
 
 # Access HTML metadata
-html_result = Xberg.extract_sync('page.html')
-metadata = html_result.metadata
+html_input = Xberg::ExtractInput.new(uri: 'page.html')
+html_result = Xberg.extract(html_input, Xberg::ExtractionConfig.new)
+metadata = html_result.results.first.metadata
 if metadata['title']
   puts "Title: #{metadata['title']}"
 end

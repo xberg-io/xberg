@@ -1,13 +1,20 @@
 ```java title="Document Structure Config (Java)"
 import io.xberg.Xberg;
 import io.xberg.ExtractionConfig;
-import io.xberg.ExtractionResult;
+import io.xberg.ExtractedDocument;
 
 ExtractionConfig config = ExtractionConfig.builder()
     .includeDocumentStructure(true)
     .build();
 
-ExtractionResult result = Xberg.extractSync("document.pdf", config);
+var resultOutput = Xberg.extract(
+    io.xberg.ExtractInput.builder()
+        .withKind(io.xberg.ExtractInputKind.Uri)
+        .withUri("document.pdf")
+        .build(),
+    config
+);
+ExtractedDocument result = resultOutput.results().get(0);
 
 if (result.getDocumentStructure().isPresent()) {
     var document = result.getDocumentStructure().get();

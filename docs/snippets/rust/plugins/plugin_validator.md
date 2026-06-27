@@ -1,6 +1,6 @@
 ```rust title="Rust"
 use xberg::plugins::{Plugin, Validator, register_validator};
-use xberg::{Result, ExtractionResult, ExtractionConfig, XbergError};
+use xberg::{Result, ExtractedDocument, ExtractionConfig, XbergError};
 use async_trait::async_trait;
 use std::sync::Arc;
 
@@ -9,7 +9,7 @@ use std::sync::Arc;
 // and `validate()` returns Err on failure.
 struct GenericValidator<F>
 where
-    F: Fn(&ExtractionResult, &ExtractionConfig) -> Result<()> + Send + Sync + 'static,
+    F: Fn(&ExtractedDocument, &ExtractionConfig) -> Result<()> + Send + Sync + 'static,
 {
     plugin_name: String,
     plugin_priority: i32,
@@ -18,7 +18,7 @@ where
 
 impl<F> Plugin for GenericValidator<F>
 where
-    F: Fn(&ExtractionResult, &ExtractionConfig) -> Result<()> + Send + Sync + 'static,
+    F: Fn(&ExtractedDocument, &ExtractionConfig) -> Result<()> + Send + Sync + 'static,
 {
     fn name(&self) -> &str { &self.plugin_name }
     fn version(&self) -> String { "1.0.0".to_string() }
@@ -29,11 +29,11 @@ where
 #[async_trait]
 impl<F> Validator for GenericValidator<F>
 where
-    F: Fn(&ExtractionResult, &ExtractionConfig) -> Result<()> + Send + Sync + 'static,
+    F: Fn(&ExtractedDocument, &ExtractionConfig) -> Result<()> + Send + Sync + 'static,
 {
     async fn validate(
         &self,
-        result: &ExtractionResult,
+        result: &ExtractedDocument,
         config: &ExtractionConfig,
     ) -> Result<()> {
         (self.check)(result, config)

@@ -1,10 +1,12 @@
 ```ruby title="Ruby"
 require 'xberg'
 
-result = Xberg.extract_sync('document.pdf')
+input = Xberg::ExtractInput.new(uri: 'document.pdf')
+config = Xberg::ExtractionConfig.new
+result = Xberg.extract(input, config)
 
 # Iterate over tables
-result.tables.each do |table|
+result.results.first.tables.each do |table|
   puts "Table with #{table['cells'].length} rows"
   puts table['markdown']  # Markdown representation
 

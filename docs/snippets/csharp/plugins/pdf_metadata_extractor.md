@@ -22,7 +22,7 @@ public class PdfMetadataEnricher : IPostProcessor
         Console.WriteLine($"PDF metadata enricher processed {_processedCount} documents");
     }
 
-    public void Process(ExtractionResult result, ExtractionConfig config)
+    public void Process(ExtractedDocument result, ExtractionConfig config)
     {
         if (result.MimeType == "application/pdf")
         {
@@ -40,12 +40,12 @@ public class PdfMetadataEnricher : IPostProcessor
         return ProcessingStage.Early;
     }
 
-    public bool ShouldProcess(ExtractionResult result, ExtractionConfig config)
+    public bool ShouldProcess(ExtractedDocument result, ExtractionConfig config)
     {
         return result.MimeType == "application/pdf";
     }
 
-    public ulong EstimatedDurationMs(ExtractionResult result)
+    public ulong EstimatedDurationMs(ExtractedDocument result)
     {
         return 50;
     }

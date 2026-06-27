@@ -6,9 +6,10 @@ use Xberg\Xberg;
 use Xberg\ExtractionConfig;
 use Xberg\ChunkingConfig;
 
-$config = new ExtractionConfig();
+$config = ExtractionConfig::default();
 $config->setChunking(new ChunkingConfig());
-$result = Xberg::extractSync('document.pdf', null, $config);
+$resultOutput = Xberg::extract(\Xberg\ExtractInput::uri('document.pdf'), $config);
+$result = $resultOutput->results[0];
 
 echo "Total content length: " . strlen($result->getContent()) . "\n";
 

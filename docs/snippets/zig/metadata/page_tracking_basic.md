@@ -15,13 +15,19 @@ pub fn main() !void {
         \\}
     ;
 
-    const result_json = try xberg.extract_sync("document.pdf", null, config_json);
-    defer std.heap.c_allocator.free(result_json);
+    const input_json = "{\"kind\":\"uri\",\"uri\":\"document.pdf\"}";
+    const output_json = try xberg.extract(input_json, config_json);
+    defer std.heap.c_allocator.free(output_json);
 
-    var parsed = try std.json.parseFromSlice(std.json.Value, allocator, result_json, .{});
+    var parsed = try std.json.parseFromSlice(std.json.Value, allocator, output_json, .{});
     defer parsed.deinit();
 
-    const root = parsed.value;
+    const output = parsed.value;
+    if (output != .object) return;
+
+    const results_val = output.object.get("results") orelse return;
+    if (results_val != .array or results_val.array.items.len == 0) return;
+    const root = results_val.array.items[0];
     if (root != .object) return;
 
     const stdout = std.io.getStdOut().writer();

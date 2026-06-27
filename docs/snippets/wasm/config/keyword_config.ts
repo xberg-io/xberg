@@ -15,7 +15,7 @@ async function basicYake(): Promise<void> {
     },
   };
 
-  const result = await extract("document.pdf", null, config);
+  const result = await extract({ kind: "uri", uri: "document.pdf" }, config);
   console.log("Keywords:", result.keywords);
 }
 
@@ -36,7 +36,7 @@ async function _advancedYake(): Promise<void> {
     },
   };
 
-  const result = await extract("document.pdf", null, config);
+  const result = await extract({ kind: "uri", uri: "document.pdf" }, config);
   console.log("Keywords:", result.keywords);
 }
 
@@ -58,7 +58,7 @@ async function _rakeConfig(): Promise<void> {
     },
   };
 
-  const result = await extract("document.pdf", null, config);
+  const result = await extract({ kind: "uri", uri: "document.pdf" }, config);
   console.log("Keywords:", result.keywords);
 }
 

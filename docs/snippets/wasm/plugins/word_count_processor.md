@@ -61,7 +61,7 @@ try {
 
 // Extract with word counting
 async function extractAndAnalyze(fileBytes, mimeType) {
-  const result = await extract(fileBytes, mimeType, {});
+  const result = await extract({ kind: "bytes", bytes: fileBytes, mimeType: mimeType }, {});
   const stats = result.metadata?.statistics;
 
   console.log("Text Analysis:", {

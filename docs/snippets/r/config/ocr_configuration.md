@@ -2,15 +2,20 @@
 library(xberg)
 
 # Configure OCR with Tesseract
-config <- list(
+config <- ExtractionConfig$from_json(jsonlite::toJSON(list(
   force_ocr = TRUE,
   ocr = list(
     backend = "tesseract",
     language = "eng+deu"
   )
-)
+), auto_unbox = TRUE))
 
-json <- extract_sync("scanned_document.pdf", "application/pdf", config)
-result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+input <- list(kind = "uri", uri = "scanned_document.pdf", mime_type = "application/pdf")
+json <- extract(
+  input = ExtractInput$from_json(jsonlite::toJSON(input, auto_unbox = TRUE)),
+  config = config
+)
+output <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+result <- output$results[[1]]
 cat(result$content)
 ```

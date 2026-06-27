@@ -13,7 +13,7 @@ const config = new ExtractionConfig({
   }),
 });
 
-const result = await extract(fileBuffer, mimeType, config);
+const result = await extract({ kind: "bytes", bytes: fileBuffer, mimeType: mimeType }, config);
 
 if (result.metadata && result.metadata.pages) {
   const pageStructure = result.metadata.pages;

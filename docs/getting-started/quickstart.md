@@ -1,7 +1,7 @@
 # Quick Start
 
 This guide walks you through Xberg's core API: `extract`, `extract_batch`,
-`ExtractInput`, and the `ExtractionOutput` envelope. Install your binding first if you haven't:
+`ExtractInput`, and the `ExtractionResult` envelope. Install your binding first if you haven't:
 [Installation](installation.md).
 
 TypeScript users: `@xberg-io/xberg` for Node.js, `@xberg-io/xberg-wasm` for browsers and edge runtimes — see [Language Support](../index.md#language-support).
@@ -9,7 +9,7 @@ TypeScript users: `@xberg-io/xberg` for Node.js, `@xberg-io/xberg-wasm` for brow
 ## Your First Extraction
 
 Pass an `ExtractInput` with `kind = "uri"` to extract a local path, `file://` URI,
-or HTTP(S) URL. `extract` returns an `ExtractionOutput` with a `results` list:
+or HTTP(S) URL. `extract` returns an `ExtractionResult` with a `results` list:
 
 === "C"
 
@@ -280,8 +280,8 @@ Pass a list of `ExtractInput` values to `extract_batch`. Mix `kind = "uri"` and
 
 ## Read Document Metadata
 
-Every `ExtractionOutput` contains document metadata in `results`. Each
-`ExtractionResult` includes format-specific metadata: page count for PDFs, sheet
+Every `ExtractionResult` contains document metadata in `results`. Each
+`ExtractedDocument` includes format-specific metadata: page count for PDFs, sheet
 names for Excel, dimensions for images:
 
 === "C"

@@ -1,6 +1,6 @@
 ```python title="Python"
 import asyncio
-from xberg import (
+from xberg import ExtractInput, (
     ExtractionConfig,
     TokenReductionConfig,
     ReductionLevel,
@@ -16,9 +16,9 @@ async def main() -> None:
         )
     )
 
-    result = await extract("verbose_document.pdf", config=config)
+    result = await extract(ExtractInput.from_uri("verbose_document.pdf"), config)
 
-    print(f"Reduced content length: {len(result.content)} chars")
+    print(f"Reduced content length: {len(result.results[0].content)} chars")
 
 
 asyncio.run(main())

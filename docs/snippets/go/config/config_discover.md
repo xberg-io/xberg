@@ -13,7 +13,7 @@ func main() {
 		log.Fatalf("discover config failed: %v", err)
 	}
 
-	result, err := xberg.ExtractSync("document.pdf", config)
+	result, err := xberg.Extract("document.pdf", config)
 	if err != nil {
 		log.Fatalf("extract failed: %v", err)
 	}

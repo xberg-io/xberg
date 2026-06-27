@@ -1,14 +1,14 @@
 ```python title="Python"
-from xberg import extract_sync, ExtractionConfig, ChunkingConfig
+from xberg import ExtractInput, extract, ExtractionConfig, ChunkingConfig
 
 config = ExtractionConfig(
     chunking=ChunkingConfig(max_characters=500, overlap=50),
 )
 
-result = extract_sync("document.pdf", config=config)
+result = extract(ExtractInput.from_uri("document.pdf"), config)
 
-if result.chunks:
-    for chunk in result.chunks:
+if result.results[0].chunks:
+    for chunk in result.results[0].chunks:
         first = chunk.metadata.first_page
         last = chunk.metadata.last_page
         if first is None:

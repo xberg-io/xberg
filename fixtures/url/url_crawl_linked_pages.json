@@ -2,10 +2,7 @@
 	"id": "url_crawl_linked_pages",
 	"category": "url",
 	"description": "extract: crawl mode follows linked pages",
-	"tags": [
-		"url",
-		"crawl"
-	],
+	"tags": ["url", "crawl"],
 	"call": "extract",
 	"args": [
 		{
@@ -64,20 +61,18 @@
 			"type": "not_error"
 		},
 		{
-			"type": "count_min",
+			"type": "greater_than_or_equal",
 			"field": "summary.pages_crawled",
 			"value": 2
 		},
 		{
 			"type": "contains",
-			"field": "results.1.content",
+			"field": "results[1].content",
 			"value": "About crawl target"
 		}
 	],
 	"skip": {
-		"languages": [
-			"wasm"
-		],
+		"languages": ["wasm"],
 		"reason": "WASM e2e does not enable URL ingestion"
 	}
 }

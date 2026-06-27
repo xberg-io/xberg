@@ -188,7 +188,7 @@ final class DocumentController extends Controller
         ]);
     }
 
-    public function batchExtract(Request $request): JsonResponse
+    public function extractBatch(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'file_paths' => 'required|array',

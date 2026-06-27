@@ -8,7 +8,7 @@ const bytes = new Uint8Array(
 );
 
 const output = await extract({
-  kind: ExtractInputKind.Bytes,
+  kind: "bytes",
   bytes,
   mimeType: "application/pdf",
   filename: "document.pdf",

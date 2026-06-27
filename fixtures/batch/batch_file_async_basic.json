@@ -2,12 +2,7 @@
 	"id": "batch_file_async_basic",
 	"category": "batch",
 	"description": "Extract text from multiple files asynchronously",
-	"tags": [
-		"batch",
-		"async",
-		"concurrent",
-		"multiple_files"
-	],
+	"tags": ["batch", "async", "concurrent", "multiple_files"],
 	"call": "extract_batch",
 	"input": {
 		"inputs": [
@@ -27,9 +22,7 @@
 		}
 	],
 	"skip": {
-		"languages": [
-			"wasm"
-		],
+		"languages": ["wasm"],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	}
 }

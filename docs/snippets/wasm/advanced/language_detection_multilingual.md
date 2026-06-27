@@ -16,7 +16,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extract(bytes, "application/pdf", config);
+const result = await extract({ kind: "bytes", bytes, mimeType: "application/pdf" }, config);
 
 interface MultilingualChunk {
   index: number;
@@ -80,7 +80,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extract(bytes, "text/plain", config);
+const result = await extract({ kind: "bytes", bytes, mimeType: "text/plain" }, config);
 
 // Language-specific text normalization
 interface LanguageProcessor {
@@ -149,7 +149,7 @@ const languageDetectConfig = {
 };
 
 const bytes = new Uint8Array(buffer);
-const langResult = await extract(bytes, "text/plain", languageDetectConfig);
+const langResult = await extract({ kind: "bytes", bytes, mimeType: "text/plain" }, languageDetectConfig);
 const detectedLang = langResult.metadata?.language || "en";
 
 // Re-extract with language-specific chunking
@@ -164,7 +164,7 @@ const finalConfig = {
   },
 };
 
-const finalResult = await extract(bytes, "text/plain", finalConfig);
+const finalResult = await extract({ kind: "bytes", bytes, mimeType: "text/plain" }, finalConfig);
 console.log(`Language: ${detectedLang}`);
 console.log(`Chunking strategy: maxChars=${chunkConfig.maxChars}, overlap=${chunkConfig.overlap}`);
 console.log(`Generated ${finalResult.chunks?.length} chunks`);

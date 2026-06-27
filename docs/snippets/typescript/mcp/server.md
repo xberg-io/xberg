@@ -1,9 +1,9 @@
 ```typescript title="TypeScript"
 import {
   extract,
-  extractSync,
   extract,
-  extractSync,
+  extract,
+  extract,
   type ExtractionResult,
   type ExtractionConfig,
 } from "@xberg-io/xberg";
@@ -143,9 +143,9 @@ class XbergMcpServer {
       const config = (args.config as ExtractionConfig) ?? this.config;
 
       if (useAsync) {
-        return extract(path, null, config);
+        return extract({ kind: "uri", uri: path }, config);
       } else {
-        return extractSync(path, null, config);
+        return extract({ kind: "uri", uri: path }, config);
       }
     }
 
@@ -156,9 +156,9 @@ class XbergMcpServer {
       const config = (args.config as ExtractionConfig) ?? this.config;
 
       if (useAsync) {
-        return extract(data, mimeType, config);
+        return extract({ kind: "bytes", bytes: data, mimeType: mimeType }, config);
       } else {
-        return extractSync(data, mimeType, config);
+        return extract({ kind: "bytes", bytes: data, mimeType: mimeType }, config);
       }
     }
 

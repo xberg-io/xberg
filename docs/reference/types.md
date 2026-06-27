@@ -8,6 +8,21 @@ All types defined by the library, grouped by category. Types are shown using Rus
 
 ### Result Types
 
+#### ExtractionResult
+
+Unified extraction result envelope.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `results` | `Vec<ExtractedDocument>` | `vec!\[\]` | Extracted documents in discovery order. |
+| `errors` | `Vec<ExtractionErrorItem>` | `vec!\[\]` | Non-fatal per-input errors. |
+| `summary` | `ExtractionSummary` | — | Aggregate counts for the operation. |
+| `crawl_final_urls` | `Vec<String>` | `vec!\[\]` | Final URLs reached after redirects during URL ingestion. |
+| `crawl_redirect_count` | `usize` | — | Total redirects followed while fetching or crawling URLs. |
+| `crawl_unique_normalized_urls` | `Vec<String>` | `vec!\[\]` | Unique normalized URLs discovered by crawls. |
+
+---
+
 #### StructuredDataResult
 
 Result of parsing a structured data file (JSON, JSONL, YAML, or TOML).
@@ -18,49 +33,6 @@ Result of parsing a structured data file (JSON, JSONL, YAML, or TOML).
 | `format` | `String` | — | The source format identifier (e.g. `"json"`, `"yaml"`, `"toml"`). |
 | `metadata` | `HashMap<String, String>` | — | Key-value metadata extracted from recognized text fields. |
 | `text_fields` | `Vec<String>` | — | JSON paths of fields that were classified as text-bearing. |
-
----
-
-#### ExtractionResult
-
-General extraction result used by the core extraction API.
-
-This is the main result type returned by all extraction functions.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `content` | `String` | — | Plain-text representation of the extracted document content. |
-| `mime_type` | `String` | — | MIME type of the source document (e.g. `"application/pdf"`). |
-| `metadata` | `Metadata` | — | Document-level metadata (author, title, dates, format-specific fields). |
-| `extraction_method` | `Option<ExtractionMethod>` | `Default::default()` | Extraction strategy used to produce the returned text. Populated when the extractor can reliably distinguish native text extraction, OCR-only extraction, or mixed native/OCR output. |
-| `tables` | `Vec<Table>` | `vec!\[\]` | Tables extracted from the document, each with structured cell data. |
-| `detected_languages` | `Vec<String>` | `vec!\[\]` | ISO 639-1 language codes detected in the document content. |
-| `chunks` | `Vec<Chunk>` | `vec!\[\]` | Text chunks when chunking is enabled. When chunking configuration is provided, the content is split into overlapping chunks for efficient processing. Each chunk contains the text, optional embeddings (if enabled), and metadata about its position. |
-| `images` | `Vec<ExtractedImage>` | `vec!\[\]` | Extracted images from the document. When image extraction is enabled via `ImageExtractionConfig`, this field contains all images found in the document with their raw data and metadata. Each image may optionally contain a nested `ocr_result` if OCR was performed. |
-| `pages` | `Vec<PageContent>` | `vec!\[\]` | Per-page content when page extraction is enabled. When page extraction is configured, the document is split into per-page content with tables and images mapped to their respective pages. |
-| `elements` | `Vec<Element>` | `vec!\[\]` | Semantic elements when element-based result format is enabled. When result_format is set to ElementBased, this field contains semantic elements with type classification, unique identifiers, and metadata for Unstructured-compatible element-based processing. |
-| `djot_content` | `Option<DjotContent>` | `Default::default()` | Rich Djot content structure (when extracting Djot documents). When extracting Djot documents with structured extraction enabled, this field contains the full semantic structure including: - Block-level elements with nesting - Inline formatting with attributes - Links, images, footnotes - Math expressions - Complete attribute information The `content` field still contains plain text for backward compatibility. Always `None` for non-Djot documents. |
-| `ocr_elements` | `Vec<OcrElement>` | `vec!\[\]` | OCR elements with full spatial and confidence metadata. When OCR is performed with element extraction enabled, this field contains the structured representation of detected text including: - Bounding geometry (rectangles or quadrilaterals) - Confidence scores (detection and recognition) - Rotation information - Hierarchical relationships (Tesseract only) This field preserves all metadata that would otherwise be lost when converting to plain text or markdown output formats. Only populated when `OcrElementConfig.include_elements` is true. |
-| `document` | `Option<DocumentStructure>` | `Default::default()` | Structured document tree (when document structure extraction is enabled). When `include_document_structure` is true in `ExtractionConfig`, this field contains the full hierarchical representation of the document including: - Heading-driven section nesting - Table grids with cell-level metadata - Content layer classification (body, header, footer, footnote) - Inline text annotations (formatting, links) - Bounding boxes and page numbers Independent of `result_format` — can be combined with Unified or ElementBased. |
-| `extracted_keywords` | `Vec<Keyword>` | `vec!\[\]` | Extracted keywords when keyword extraction is enabled. When keyword extraction (RAKE or YAKE) is configured, this field contains the extracted keywords with scores, algorithm info, and position data. Previously stored in `metadata.additional\["keywords"\]`. |
-| `quality_score` | `Option<f64>` | `Default::default()` | Document quality score from quality analysis. A value between 0.0 and 1.0 indicating the overall text quality. Previously stored in `metadata.additional\["quality_score"\]`. |
-| `processing_warnings` | `Vec<ProcessingWarning>` | `vec!\[\]` | Non-fatal warnings collected during processing pipeline stages. Captures errors from optional pipeline features (embedding, chunking, language detection, output formatting) that don't prevent extraction but may indicate degraded results. Previously stored as individual keys in `metadata.additional`. |
-| `annotations` | `Vec<PdfAnnotation>` | `vec!\[\]` | PDF annotations extracted from the document. When annotation extraction is enabled via `PdfConfig::extract_annotations`, this field contains text notes, highlights, links, stamps, and other annotations found in PDF documents. |
-| `children` | `Vec<ArchiveEntry>` | `vec!\[\]` | Nested extraction results from archive contents. When extracting archives, each processable file inside produces its own full extraction result. Set to `None` for non-archive formats. Use `max_archive_depth` in config to control recursion depth. |
-| `uris` | `Vec<ExtractedUri>` | `vec!\[\]` | URIs/links discovered during document extraction. Contains hyperlinks, image references, citations, email addresses, and other URI-like references found in the document. Always extracted when present in the source document. |
-| `revisions` | `Vec<DocumentRevision>` | `vec!\[\]` | Tracked changes embedded in the source document. Populated by per-format extractors that understand change-tracking metadata (DOCX `w:ins`/`w:del`/`w:rPrChange`, ODT `text:change-*`, …). Every extractor defaults to `None` until its format-specific implementation is added. Extractors that do populate this field follow the "accepted-changes" convention: inserted text is present in `content`, deleted text is absent — the revision list is the separate audit trail. |
-| `structured_output` | `Option<serde_json::Value>` | `Default::default()` | Structured extraction output from LLM-based JSON schema extraction. When `structured_extraction` is configured in `ExtractionConfig`, the extracted document content is sent to a VLM with the provided JSON schema. The response is parsed and stored here as a JSON value matching the schema. |
-| `code_intelligence` | `Option<serde_json::Value>` | `Default::default()` | Code intelligence results from tree-sitter analysis. Populated when extracting source code files with the `tree-sitter` feature. Contains metrics, structural analysis, imports/exports, comments, docstrings, symbols, diagnostics, and optionally chunked code segments. Stored as an opaque JSON value so that all language bindings (Go, Java, C#, …) can deserialize it as a raw JSON object rather than a typed struct. The underlying type is `tree_sitter_language_pack::ProcessResult`. |
-| `llm_usage` | `Vec<LlmUsage>` | `vec!\[\]` | LLM token usage and cost data for all LLM calls made during this extraction. Contains one entry per LLM call. Multiple entries are produced when VLM OCR, structured extraction, or LLM embeddings run during the same extraction. `None` when no LLM was used. |
-| `entities` | `Vec<Entity>` | `vec!\[\]` | Named entities detected in `content` by the NER post-processor. `None` when no NER backend is configured. Populated by the `xberg-gliner` ONNX backend or the LLM-driven backend (see `crates/xberg/src/text/ner/`). |
-| `summary` | `Option<DocumentSummary>` | `Default::default()` | Summary of `content` produced by the summarisation post-processor. `None` when summarisation is not configured. Populated by the TextRank extractive backend (deterministic, no external service) or by the liter-llm-driven abstractive backend. |
-| `extraction_confidence` | `Option<ExtractionConfidence>` | `Default::default()` | Confidence score computed by the heuristics pipeline. Populated when the `heuristics` feature is enabled and confidence scoring has been performed.  Combines text-coverage, OCR aggregate confidence, and schema-compliance into a single `\[0, 1\]` value. `None` when confidence scoring is not configured or the feature is absent. |
-| `translation` | `Option<Translation>` | `Default::default()` | Translation of `content` produced by the translation post-processor. `None` when translation is not configured. |
-| `page_classifications` | `Vec<PageClassification>` | `vec!\[\]` | Per-page classifications produced by the page-classification post-processor. `None` when classification is not configured. |
-| `redaction_report` | `Option<RedactionReport>` | `Default::default()` | Audit report of redactions applied by the redaction post-processor. The redaction processor rewrites `content`, `formatted_content`, every chunk's text, and the textual fields of `entities` / `summary` / `translation` / `page_classifications` in place. This report describes what was found and how it was replaced. `None` when redaction is not configured. |
-| `formulas` | `Vec<Formula>` | `vec!\[\]` | Mathematical formulas recognized in the document. Populated by the layout-guided formula pipeline when the `layout-detection` feature is enabled and the document contains regions classified as formulas. Empty otherwise. |
-| `form_fields` | `Vec<PdfFormField>` | `vec!\[\]` | Form fields extracted from a PDF's AcroForm or XFA structure. Populated by the PDF extractor when `PdfConfig::extract_form_fields` is enabled (default) and the document is a fillable form. Empty otherwise. |
-| `formatted_content` | `Option<String>` | `Default::default()` | Pre-rendered content in the requested output format. Populated during `derive_extraction_result` before tree derivation consumes element data. `apply_output_format` swaps this into `content` at the end of the pipeline, after post-processors have operated on plain text. |
 
 ---
 
@@ -156,19 +128,6 @@ including recognized text and detected tables.
 | `metadata` | `HashMap<String, serde_json::Value>` | — | OCR processing metadata (confidence scores, language, etc.) |
 | `tables` | `Vec<OcrTable>` | — | Tables detected and extracted via OCR |
 | `ocr_elements` | `Vec<OcrElement>` | `/* serde(default) */` | Structured OCR elements with bounding boxes and confidence scores. Available when TSV output is requested or table detection is enabled. |
-
----
-
-#### ChunkingResult
-
-Result of a text chunking operation.
-
-Contains the generated chunks and metadata about the chunking.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `chunks` | `Vec<Chunk>` | — | List of text chunks |
-| `chunk_count` | `usize` | — | Total number of chunks generated |
 
 ---
 
@@ -317,7 +276,7 @@ It can be loaded from TOML, YAML, or JSON files, or created programmatically.
 | `layout` | `Option<LayoutDetectionConfig>` | `None` | Layout detection configuration (None = layout detection disabled). When set, PDF pages and images are analyzed for document structure (headings, code, formulas, tables, figures, etc.) using RT-DETR models via ONNX Runtime. For PDFs, layout hints override paragraph classification in the markdown pipeline. For images, per-region OCR is performed with markdown formatting based on detected layout classes. Requires the `layout-detection` feature to run inference; the field is present whenever the `layout-types` feature is active (which includes `layout-detection` as well as the no-ORT target groups). |
 | `transcription` | `Option<TranscriptionConfig>` | `None` | Transcription (speech-to-text) configuration for audio/video files. When set and `enabled`, files with audio/video MIME types (mp3, mp4, m4a, wav, webm, etc.) are routed to the Whisper-based transcription pipeline. The actual heavy dependencies are only active under the `transcription` feature; the field is visible under `transcription-types` (including on WASM and Android targets that use the no-ORT preset). Default: `None` (transcription disabled). This is an additive, non-breaking change. |
 | `use_layout_for_markdown` | `bool` | `false` | Run layout detection on the non-OCR PDF markdown path. When `true` and `layout` is `Some(_)`, layout regions inform heading, table, list, and figure detection in the structure pipeline that would otherwise rely on font-clustering heuristics alone. Significantly improves SF1 (structural F1) at the cost of inference latency (~150-300ms/page CPU, ~20-50ms/page GPU). Default: `false`. Requires the `layout-detection` feature. |
-| `include_document_structure` | `bool` | `false` | Enable structured document tree output. When true, populates the `document` field on `ExtractionResult` with a hierarchical `DocumentStructure` containing heading-driven section nesting, table grids, content layer classification, and inline annotations. Independent of `result_format` — can be combined with Unified or ElementBased. |
+| `include_document_structure` | `bool` | `false` | Enable structured document tree output. When true, populates the `document` field on `ExtractedDocument` with a hierarchical `DocumentStructure` containing heading-driven section nesting, table grids, content layer classification, and inline annotations. Independent of `result_format` — can be combined with Unified or ElementBased. |
 | `acceleration` | `Option<AccelerationConfig>` | `None` | Hardware acceleration configuration for ONNX Runtime models. Controls execution provider selection for layout detection and embedding models. When `None`, uses platform defaults (CoreML on macOS, CUDA on Linux, CPU on Windows). |
 | `cache_namespace` | `Option<String>` | `None` | Cache namespace for tenant isolation. When set, cache entries are stored under `{cache_dir}/{namespace}/`. Must be alphanumeric, hyphens, or underscores only (max 64 chars). Different namespaces have isolated cache spaces on the same filesystem. |
 | `cache_ttl_secs` | `Option<u64>` | `None` | Per-request cache TTL in seconds. Overrides the global `max_age_days` for this specific extraction. When `0`, caching is completely skipped (no read or write). When `None`, the global TTL applies. |
@@ -325,12 +284,12 @@ It can be loaded from TOML, YAML, or JSON files, or created programmatically.
 | `url` | `UrlExtractionConfig` | — | URL ingestion and crawl configuration. |
 | `max_archive_depth` | `usize` | — | Maximum recursion depth for archive extraction (default: 3). Set to 0 to disable recursive extraction (legacy behavior). |
 | `tree_sitter` | `Option<TreeSitterConfig>` | `None` | Tree-sitter language pack configuration (None = tree-sitter disabled). When set, enables code file extraction using tree-sitter parsers. Controls grammar download behavior and code analysis options. |
-| `structured_extraction` | `Option<StructuredExtractionConfig>` | `None` | Structured extraction via LLM (None = disabled). When set, the extracted document content is sent to an LLM with the provided JSON schema. The structured response is stored in `ExtractionResult::structured_output`. |
-| `ner` | `Option<NerConfig>` | `None` | Named-entity recognition configuration. When set, the NER post-processor runs at the Middle stage and populates `ExtractionResult::entities`. |
-| `redaction` | `Option<RedactionConfig>` | `None` | Redaction / anonymisation configuration. When set, the redaction post-processor runs at the Late stage and rewrites every textual field in `ExtractionResult`, emitting an audit trail in `ExtractionResult::redaction_report`. |
-| `summarization` | `Option<SummarizationConfig>` | `None` | Summarisation configuration. When set, the summarisation post-processor runs at the Middle stage and populates `ExtractionResult::summary`. |
-| `translation` | `Option<TranslationConfig>` | `None` | Translation configuration. When set, the translation post-processor runs at the Middle stage and populates `ExtractionResult::translation`. |
-| `page_classification` | `Option<PageClassificationConfig>` | `None` | Per-page classification configuration. When set, the classification post-processor runs at the Middle stage and populates `ExtractionResult::page_classifications`. |
+| `structured_extraction` | `Option<StructuredExtractionConfig>` | `None` | Structured extraction via LLM (None = disabled). When set, the extracted document content is sent to an LLM with the provided JSON schema. The structured response is stored in `ExtractedDocument::structured_output`. |
+| `ner` | `Option<NerConfig>` | `None` | Named-entity recognition configuration. When set, the NER post-processor runs at the Middle stage and populates `ExtractedDocument::entities`. |
+| `redaction` | `Option<RedactionConfig>` | `None` | Redaction / anonymisation configuration. When set, the redaction post-processor runs at the Late stage and rewrites every textual field in `ExtractedDocument`, emitting an audit trail in `ExtractedDocument::redaction_report`. |
+| `summarization` | `Option<SummarizationConfig>` | `None` | Summarisation configuration. When set, the summarisation post-processor runs at the Middle stage and populates `ExtractedDocument::summary`. |
+| `translation` | `Option<TranslationConfig>` | `None` | Translation configuration. When set, the translation post-processor runs at the Middle stage and populates `ExtractedDocument::translation`. |
+| `page_classification` | `Option<PageClassificationConfig>` | `None` | Per-page classification configuration. When set, the classification post-processor runs at the Middle stage and populates `ExtractedDocument::page_classifications`. |
 | `captioning` | `Option<CaptioningConfig>` | `None` | VLM captioning configuration for extracted images. When set, the captioning post-processor runs at the Middle stage and writes a caption into each `ExtractedImage::caption`. |
 | `qr_codes` | `Option<bool>` | `None` | Enable QR-code detection in extracted images. When `true`, the QR post-processor runs at the Middle stage and populates `ExtractedImage::qr_codes`. |
 
@@ -370,6 +329,7 @@ cannot be overridden per file:
 | `pages` | `Option<PageConfig>` | `Default::default()` | Override page extraction for this file. |
 | `keywords` | `Option<KeywordConfig>` | `Default::default()` | Override keyword extraction for this file. |
 | `postprocessor` | `Option<PostProcessorConfig>` | `Default::default()` | Override post-processor for this file. |
+| `html_output` | `Option<HtmlOutputConfig>` | `Default::default()` | Override styled HTML output configuration for this file. |
 | `result_format` | `Option<ResultFormat>` | `Default::default()` | Override result format for this file. |
 | `output_format` | `Option<OutputFormat>` | `Default::default()` | Override output content format for this file. |
 | `include_document_structure` | `Option<bool>` | `Default::default()` | Override document structure output for this file. |
@@ -378,6 +338,14 @@ cannot be overridden per file:
 | `timeout_secs` | `Option<u64>` | `Default::default()` | Override per-file extraction timeout in seconds. When set, the extraction for this file will be canceled after the specified duration. A timed-out file produces an error result without affecting other files in the batch. |
 | `tree_sitter` | `Option<TreeSitterConfig>` | `Default::default()` | Override tree-sitter configuration for this file. |
 | `structured_extraction` | `Option<StructuredExtractionConfig>` | `Default::default()` | Override structured extraction configuration for this file. When set, enables LLM-based structured extraction with a JSON schema for this specific file. The extracted content is sent to a VLM/LLM and the response is parsed according to the provided schema. |
+| `url` | `Option<UrlExtractionConfig>` | `Default::default()` | Override URL ingestion and crawl configuration for this file. |
+| `ner` | `Option<NerConfig>` | `Default::default()` | Override named-entity recognition configuration for this file. |
+| `redaction` | `Option<RedactionConfig>` | `Default::default()` | Override redaction configuration for this file. |
+| `summarization` | `Option<SummarizationConfig>` | `Default::default()` | Override summarization configuration for this file. |
+| `translation` | `Option<TranslationConfig>` | `Default::default()` | Override translation configuration for this file. |
+| `page_classification` | `Option<PageClassificationConfig>` | `Default::default()` | Override per-page classification configuration for this file. |
+| `captioning` | `Option<CaptioningConfig>` | `Default::default()` | Override VLM captioning configuration for this file. |
+| `qr_codes` | `Option<bool>` | `Default::default()` | Override QR-code detection for this file. |
 
 ---
 
@@ -427,21 +395,6 @@ Summary for a unified extraction call.
 
 ---
 
-#### ExtractionOutput
-
-Unified extraction output envelope.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `results` | `Vec<ExtractionResult>` | `vec!\[\]` | Extraction results in discovery order. |
-| `errors` | `Vec<ExtractionErrorItem>` | `vec!\[\]` | Non-fatal per-input errors. |
-| `summary` | `ExtractionSummary` | — | Aggregate counts for the operation. |
-| `crawl_final_urls` | `Vec<String>` | `vec!\[\]` | Final URLs reached after redirects during URL ingestion. |
-| `crawl_redirect_count` | `usize` | — | Total redirects followed while fetching or crawling URLs. |
-| `crawl_unique_normalized_urls` | `Vec<String>` | `vec!\[\]` | Unique normalized URLs discovered by crawls. |
-
----
-
 #### UrlExtractionConfig
 
 URL ingestion and crawl configuration.
@@ -472,7 +425,7 @@ Image extraction configuration.
 | `max_dpi` | `i32` | `600` | Maximum DPI threshold |
 | `max_images_per_page` | `Option<u32>` | `None` | Maximum number of image objects to extract per PDF page. Some PDFs (e.g. technical diagrams stored as thousands of raster fragments) can trigger extremely long or indefinite extraction times when every image object on a dense page is decoded individually via the PDF extractor. Setting this limit causes xberg to stop collecting individual images once the count per page reaches the cap and emit a warning instead. `None` (default) means no limit — all images are extracted. |
 | `classify` | `bool` | `false` | When `true`, extracted images are classified by kind and grouped into clusters where they appear to belong to one figure. Defaults to `false` — opt in explicitly to avoid unexpected ML overhead. |
-| `include_page_rasters` | `bool` | `false` | When `true`, full-page renders produced during OCR preprocessing are captured and returned as `ImageKind::PageRaster` entries in `ExtractionResult.images`. **PDF + OCR only.** No rasters are captured for non-PDF inputs or when the document-level OCR bypass is active (whole-document backend). When OCR is enabled and this flag is set but the active backend skips per-page rendering, a `ProcessingWarning` is emitted in `ExtractionResult.processing_warnings`. Defaults to `false`. Enable when downstream consumers need page thumbnails (e.g. citation previews, visual grounding). |
+| `include_page_rasters` | `bool` | `false` | When `true`, full-page renders produced during OCR preprocessing are captured and returned as `ImageKind::PageRaster` entries in `ExtractedDocument.images`. **PDF + OCR only.** No rasters are captured for non-PDF inputs or when the document-level OCR bypass is active (whole-document backend). When OCR is enabled and this flag is set but the active backend skips per-page rendering, a `ProcessingWarning` is emitted in `ExtractedDocument.processing_warnings`. Defaults to `false`. Enable when downstream consumers need page thumbnails (e.g. citation previews, visual grounding). |
 | `run_ocr_on_images` | `bool` | `true` | Run OCR on extracted images and include the recognized text in the document content. When `true` (default) and `ExtractionConfig.ocr` is configured, extracted images are processed with the configured OCR backend. Set to `false` to extract images without OCR processing, even when OCR is enabled. |
 | `ocr_text_only` | `bool` | `false` | When `true`, image OCR results are rendered as plain text without the `!\[...\](...)` markdown placeholder. Only takes effect when `run_ocr_on_images` is also `true`. |
 | `append_ocr_text` | `bool` | `false` | When `true` and `ocr_text_only` is `false`, append the OCR text after the image placeholder in the rendered output. |
@@ -588,7 +541,7 @@ Configuration for the NER post-processor.
 | `backend` | `NerBackendKind` | `NerBackendKind::Onnx` | Backend that runs the entity detection. |
 | `categories` | `Vec<EntityCategory>` | `vec!\[\]` | Entity categories to detect. Defaults to a sensible PERSON/ORG/LOCATION/EMAIL set when empty. |
 | `model` | `Option<String>` | `Default::default()` | Override the default model — only used by `NerBackendKind::Onnx`. `None` lets the backend pick its pinned default xberg GLiNER model alias. |
-| `llm` | `Option<LlmConfig>` | `Default::default()` | Optional LLM configuration — only used by `NerBackendKind::Llm`. Token usage for LLM backends is recorded in `ExtractionResult::llm_usage`. |
+| `llm` | `Option<LlmConfig>` | `Default::default()` | Optional LLM configuration — only used by `NerBackendKind::Llm`. Token usage for LLM backends is recorded in `ExtractedDocument::llm_usage`. |
 | `custom_labels` | `Vec<String>` | `vec!\[\]` | Arbitrary user-supplied entity labels for zero-shot detection. `xberg-gliner` natively supports zero-shot inference over caller-supplied labels. The LLM backend also honours these labels by including them in the structured-output schema. Custom labels surface as `EntityCategory::Custom` in the resulting `Entity` stream. Use this when you need domain-specific entity types (e.g. `"Treatment"`, `"Product"`, `"Vessel"`) without forking GLiNER's taxonomy. |
 
 ---
@@ -643,7 +596,7 @@ OCR configuration.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | `bool` | `true` | Whether OCR is enabled. Setting `enabled: false` is a shorthand for `disable_ocr: true` on the parent `ExtractionConfig`. Images return metadata only; PDFs use native text extraction without OCR fallback. Defaults to `true`. When `false`, all other OCR settings are ignored. |
-| `backend` | `String` | — | OCR backend: tesseract, easyocr, paddleocr |
+| `backend` | `String` | — | OCR backend: tesseract, paddleocr, paddle-ocr, or vlm |
 | `language` | `Vec<String>` | `vec!\[\]` | Language code(s) for OCR recognition. Accepts either a single language code ("eng") or a list (\["eng", "deu"\]). Defaults to \["eng"\]. For Tesseract, languages are joined with "+". |
 | `tesseract_config` | `Option<TesseractConfig>` | `None` | Tesseract-specific configuration (optional) |
 | `output_format` | `Option<OutputFormat>` | `None` | Output format for OCR results (optional, for format conversion) |
@@ -674,7 +627,7 @@ when page boundaries are available and chunking is configured.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `extract_pages` | `bool` | `false` | Extract pages as separate array (ExtractionResult.pages) |
+| `extract_pages` | `bool` | `false` | Extract pages as separate array (ExtractedDocument.pages) |
 | `insert_page_markers` | `bool` | `false` | Insert page markers in main content string |
 | `marker_format` | `String` | `"<!-- PAGE {page_num} -->"` | Page marker format (use {page_num} placeholder) Default: "\n\n<!-- PAGE {page_num} -->\n\n" |
 
@@ -696,7 +649,7 @@ PDF-specific configuration.
 | `bottom_margin_fraction` | `Option<f32>` | `None` | Bottom margin fraction (0.0–1.0) of page height to exclude footers/page numbers. Default: 0.05 (5%) |
 | `allow_single_column_tables` | `bool` | `false` | Allow single-column pseudo tables in extraction results. By default, tables with fewer than 2 columns (layout-guided) or 3 columns (heuristic) are rejected. When `true`, the minimum column count is relaxed to 1, allowing single-column structured data (glossaries, itemized lists) to be emitted as tables. Other quality filters (density, sparsity, prose detection) still apply. |
 | `ocr_inline_images` | `bool` | `false` | Perform OCR on inline images extracted from PDF pages and attach the recognized text to each `ExtractedImage.ocr_result`. Requires Tesseract to be available; if `ExtractionConfig.ocr` is `None` the extractor falls back to `TesseractConfig::default()`. Per-image failures degrade gracefully (the image is returned without OCR text rather than failing the whole extraction). Default: `false`. |
-| `extract_form_fields` | `bool` | `true` | Extract AcroForm and XFA form fields into `ExtractionResult.form_fields`. When `true` (default), reads the document's interactive form structure (field names, types, values, widget geometry). Cheap and strictly additive — non-form PDFs simply yield an empty list. Set to `false` to skip the form pass entirely. |
+| `extract_form_fields` | `bool` | `true` | Extract AcroForm and XFA form fields into `ExtractedDocument.form_fields`. When `true` (default), reads the document's interactive form structure (field names, types, values, widget geometry). Cheap and strictly additive — non-form PDFs simply yield an empty list. Set to `false` to skip the form pass entirely. |
 | `reading_order` | `bool` | `false` | Reorder extracted text by layout-detected reading order. When `true`, projects text spans onto layout-detected regions, performs column detection, and emits spans in natural reading order (important for multi-column academic PDFs). Requires the `layout-detection` feature; has no effect without it. Defaults to `false`. |
 
 ---
@@ -1140,6 +1093,50 @@ Stores row/column dimensions and a flat list of cells with position info.
 
 ---
 
+#### ExtractedDocument
+
+Document extracted by the core extraction pipeline.
+
+`extract` and `extract_batch` return an `ExtractionResult` envelope whose
+`results` field contains these per-document payloads.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `content` | `String` | — | Plain-text representation of the extracted document content. |
+| `mime_type` | `String` | — | MIME type of the source document (e.g. `"application/pdf"`). |
+| `metadata` | `Metadata` | — | Document-level metadata (author, title, dates, format-specific fields). |
+| `extraction_method` | `Option<ExtractionMethod>` | `Default::default()` | Extraction strategy used to produce the returned text. Populated when the extractor can reliably distinguish native text extraction, OCR-only extraction, or mixed native/OCR output. |
+| `tables` | `Vec<Table>` | `vec!\[\]` | Tables extracted from the document, each with structured cell data. |
+| `detected_languages` | `Vec<String>` | `vec!\[\]` | ISO 639-1 language codes detected in the document content. |
+| `chunks` | `Vec<Chunk>` | `vec!\[\]` | Text chunks when chunking is enabled. When chunking configuration is provided, the content is split into overlapping chunks for efficient processing. Each chunk contains the text, optional embeddings (if enabled), and metadata about its position. |
+| `images` | `Vec<ExtractedImage>` | `vec!\[\]` | Extracted images from the document. When image extraction is enabled via `ImageExtractionConfig`, this field contains all images found in the document with their raw data and metadata. Each image may optionally contain a nested `ocr_result` if OCR was performed. |
+| `pages` | `Vec<PageContent>` | `vec!\[\]` | Per-page content when page extraction is enabled. When page extraction is configured, the document is split into per-page content with tables and images mapped to their respective pages. |
+| `elements` | `Vec<Element>` | `vec!\[\]` | Semantic elements when element-based result format is enabled. When result_format is set to ElementBased, this field contains semantic elements with type classification, unique identifiers, and metadata for Unstructured-compatible element-based processing. |
+| `djot_content` | `Option<DjotContent>` | `Default::default()` | Rich Djot content structure (when extracting Djot documents). When extracting Djot documents with structured extraction enabled, this field contains the full semantic structure including: - Block-level elements with nesting - Inline formatting with attributes - Links, images, footnotes - Math expressions - Complete attribute information The `content` field still contains plain text for backward compatibility. Always `None` for non-Djot documents. |
+| `ocr_elements` | `Vec<OcrElement>` | `vec!\[\]` | OCR elements with full spatial and confidence metadata. When OCR is performed with element extraction enabled, this field contains the structured representation of detected text including: - Bounding geometry (rectangles or quadrilaterals) - Confidence scores (detection and recognition) - Rotation information - Hierarchical relationships (Tesseract only) This field preserves all metadata that would otherwise be lost when converting to plain text or markdown output formats. Only populated when `OcrElementConfig.include_elements` is true. |
+| `document` | `Option<DocumentStructure>` | `Default::default()` | Structured document tree (when document structure extraction is enabled). When `include_document_structure` is true in `ExtractionConfig`, this field contains the full hierarchical representation of the document including: - Heading-driven section nesting - Table grids with cell-level metadata - Content layer classification (body, header, footer, footnote) - Inline text annotations (formatting, links) - Bounding boxes and page numbers Independent of `result_format` — can be combined with Unified or ElementBased. |
+| `extracted_keywords` | `Vec<Keyword>` | `vec!\[\]` | Extracted keywords when keyword extraction is enabled. When keyword extraction (RAKE or YAKE) is configured, this field contains the extracted keywords with scores, algorithm info, and position data. Previously stored in `metadata.additional\["keywords"\]`. |
+| `quality_score` | `Option<f64>` | `Default::default()` | Document quality score from quality analysis. A value between 0.0 and 1.0 indicating the overall text quality. Previously stored in `metadata.additional\["quality_score"\]`. |
+| `processing_warnings` | `Vec<ProcessingWarning>` | `vec!\[\]` | Non-fatal warnings collected during processing pipeline stages. Captures errors from optional pipeline features (embedding, chunking, language detection, output formatting) that don't prevent extraction but may indicate degraded results. Previously stored as individual keys in `metadata.additional`. |
+| `annotations` | `Vec<PdfAnnotation>` | `vec!\[\]` | PDF annotations extracted from the document. When annotation extraction is enabled via `PdfConfig::extract_annotations`, this field contains text notes, highlights, links, stamps, and other annotations found in PDF documents. |
+| `children` | `Vec<ArchiveEntry>` | `vec!\[\]` | Nested extraction results from archive contents. When extracting archives, each processable file inside produces its own full extraction result. Set to `None` for non-archive formats. Use `max_archive_depth` in config to control recursion depth. |
+| `uris` | `Vec<ExtractedUri>` | `vec!\[\]` | URIs/links discovered during document extraction. Contains hyperlinks, image references, citations, email addresses, and other URI-like references found in the document. Always extracted when present in the source document. |
+| `revisions` | `Vec<DocumentRevision>` | `vec!\[\]` | Tracked changes embedded in the source document. Populated by per-format extractors that understand change-tracking metadata (DOCX `w:ins`/`w:del`/`w:rPrChange`, ODT `text:change-*`, …). Every extractor defaults to `None` until its format-specific implementation is added. Extractors that do populate this field follow the "accepted-changes" convention: inserted text is present in `content`, deleted text is absent — the revision list is the separate audit trail. |
+| `structured_output` | `Option<serde_json::Value>` | `Default::default()` | Structured extraction output from LLM-based JSON schema extraction. When `structured_extraction` is configured in `ExtractionConfig`, the extracted document content is sent to a VLM with the provided JSON schema. The response is parsed and stored here as a JSON value matching the schema. |
+| `code_intelligence` | `Option<serde_json::Value>` | `Default::default()` | Code intelligence results from tree-sitter analysis. Populated when extracting source code files with the `tree-sitter` feature. Contains metrics, structural analysis, imports/exports, comments, docstrings, symbols, diagnostics, and optionally chunked code segments. Stored as an opaque JSON value so that all language bindings (Go, Java, C#, …) can deserialize it as a raw JSON object rather than a typed struct. The underlying type is `tree_sitter_language_pack::ProcessResult`. |
+| `llm_usage` | `Vec<LlmUsage>` | `vec!\[\]` | LLM token usage and cost data for all LLM calls made during this extraction. Contains one entry per LLM call. Multiple entries are produced when VLM OCR, structured extraction, or LLM embeddings run during the same extraction. `None` when no LLM was used. |
+| `entities` | `Vec<Entity>` | `vec!\[\]` | Named entities detected in `content` by the NER post-processor. `None` when no NER backend is configured. Populated by the `xberg-gliner` ONNX backend or the LLM-driven backend (see `crates/xberg/src/text/ner/`). |
+| `summary` | `Option<DocumentSummary>` | `Default::default()` | Summary of `content` produced by the summarisation post-processor. `None` when summarisation is not configured. Populated by the TextRank extractive backend (deterministic, no external service) or by the liter-llm-driven abstractive backend. |
+| `extraction_confidence` | `Option<ExtractionConfidence>` | `Default::default()` | Confidence score computed by the heuristics pipeline. Populated when the `heuristics` feature is enabled and confidence scoring has been performed.  Combines text-coverage, OCR aggregate confidence, and schema-compliance into a single `\[0, 1\]` value. `None` when confidence scoring is not configured or the feature is absent. |
+| `translation` | `Option<Translation>` | `Default::default()` | Translation of `content` produced by the translation post-processor. `None` when translation is not configured. |
+| `page_classifications` | `Vec<PageClassification>` | `vec!\[\]` | Per-page classifications produced by the page-classification post-processor. `None` when classification is not configured. |
+| `redaction_report` | `Option<RedactionReport>` | `Default::default()` | Audit report of redactions applied by the redaction post-processor. The redaction processor rewrites `content`, `formatted_content`, every chunk's text, and the textual fields of `entities` / `summary` / `translation` / `page_classifications` in place. This report describes what was found and how it was replaced. `None` when redaction is not configured. |
+| `formulas` | `Vec<Formula>` | `vec!\[\]` | Mathematical formulas recognized in the document. Populated by the layout-guided formula pipeline when the `layout-detection` feature is enabled and the document contains regions classified as formulas. Empty otherwise. |
+| `form_fields` | `Vec<PdfFormField>` | `vec!\[\]` | Form fields extracted from a PDF's AcroForm or XFA structure. Populated by the PDF extractor when `PdfConfig::extract_form_fields` is enabled (default) and the document is a fillable form. Empty otherwise. |
+| `formatted_content` | `Option<String>` | `Default::default()` | Pre-rendered content in the requested output format. Populated during `derive_extraction_result` before tree derivation consumes element data. `apply_output_format` swaps this into `content` at the end of the pipeline, after post-processors have operated on plain text. |
+
+---
+
 #### LlmUsage
 
 Token usage and cost data for a single LLM call made during extraction.
@@ -1180,7 +1177,7 @@ PIL.Image (Python), Sharp (Node.js), or other formats as needed.
 | `bits_per_component` | `Option<u32>` | `Default::default()` | Bits per color component (e.g., 8, 16) |
 | `is_mask` | `bool` | — | Whether this image is a mask image |
 | `description` | `Option<String>` | `Default::default()` | Optional description of the image |
-| `ocr_result` | `Option<ExtractionResult>` | `Default::default()` | Nested OCR extraction result (if image was OCRed) When OCR is performed on this image, the result is embedded here rather than in a separate collection, making the relationship explicit. |
+| `ocr_result` | `Option<ExtractedDocument>` | `Default::default()` | Nested OCR extraction result (if image was OCRed) When OCR is performed on this image, the result is embedded here rather than in a separate collection, making the relationship explicit. |
 | `bounding_box` | `Option<BoundingBox>` | `Default::default()` | Bounding box of the image on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top). Only populated for PDF-extracted images when position data is available from the PDF extractor. |
 | `source_path` | `Option<String>` | `Default::default()` | Original source path of the image within the document archive (e.g., "media/image1.png" in DOCX). Used for rendering image references when the binary data is not extracted. |
 | `image_kind` | `Option<ImageKind>` | `Default::default()` | Heuristic classification of what this image likely depicts. `None` if classification was disabled or inconclusive. |
@@ -1301,7 +1298,7 @@ Controls how OCR elements are extracted and filtered.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `include_elements` | `bool` | — | Whether to include OCR elements in the extraction result. When true, the `ocr_elements` field in `ExtractionResult` will be populated. |
+| `include_elements` | `bool` | — | Whether to include OCR elements in the extraction result. When true, the `ocr_elements` field in `ExtractedDocument` will be populated. |
 | `min_level` | `OcrElementLevel` | `OcrElementLevel::Line` | Minimum hierarchical level to include. Elements below this level (e.g., words when min_level is Line) will be excluded. |
 | `min_confidence` | `f64` | — | Minimum recognition confidence threshold (0.0-1.0). Elements with confidence below this threshold will be filtered out. |
 | `build_hierarchy` | `bool` | — | Whether to build hierarchical relationships between elements. When true, `parent_id` fields will be populated based on spatial containment. Only meaningful for Tesseract output. |
@@ -1374,7 +1371,7 @@ Future extension point for rich table support with cell-level metadata.
 
 #### DiffOptions
 
-Options controlling how two `ExtractionResult` values are compared.
+Options controlling how two `ExtractedDocument` values are compared.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1386,7 +1383,7 @@ Options controlling how two `ExtractionResult` values are compared.
 
 #### ExtractionDiff
 
-The complete diff between two `ExtractionResult` values.
+The complete diff between two `ExtractedDocument` values.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1407,7 +1404,7 @@ Changes to embedded archive children between two results.
 |-------|------|---------|-------------|
 | `added` | `Vec<ArchiveEntry>` | `vec!\[\]` | Children present in `b` but not in `a` (matched by `path`). |
 | `removed` | `Vec<ArchiveEntry>` | `vec!\[\]` | Children present in `a` but not in `b` (matched by `path`). |
-| `changed` | `Vec<EmbeddedDiff>` | `vec!\[\]` | Children present in both but with differing content (matched by `path`). Each entry holds the diff of the nested `ExtractionResult`. |
+| `changed` | `Vec<EmbeddedDiff>` | `vec!\[\]` | Children present in both but with differing content (matched by `path`). Each entry holds the diff of the nested `ExtractedDocument`. |
 
 ---
 
@@ -1474,20 +1471,6 @@ User-provided chunk configuration.
 
 ---
 
-#### ConfidenceWeights
-
-Tunable weights for the confidence scoring formula.
-
-Defaults picked by inspection; callers tune them via config.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `text_coverage` | `f32` | `0.3` | Weight assigned to `text_coverage`. Default 0.30. |
-| `ocr_aggregate` | `f32` | `0.3` | Weight assigned to `ocr_aggregate` when OCR ran. Default 0.30 — folds into `text_coverage` weight when OCR did not run. |
-| `schema_compliance` | `f32` | `0.4` | Weight assigned to `schema_compliance`. Default 0.40. |
-
----
-
 #### HeuristicsConfig
 
 Configuration for document chunking and analysis heuristics.
@@ -1538,26 +1521,6 @@ All fields are public; callers override any subset via struct-update syntax.
 
 ---
 
-#### StructuredThresholds
-
-Thresholds for the structured-extraction call-mode heuristic.
-
-All defaults are **conservative starting points**.  Deployments should
-measure their own document corpus and override via their own config;
-these values are chosen to be safe-by-default, not to be optimal for
-any particular workload.
-
-Construct custom thresholds with struct-update syntax:
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `scan_max_coverage` | `f64` | `0.1` | PDFs with `text_coverage` strictly below this are treated as scanned. **Conservative default: 0.10** — deployments override via their own config after measuring their document corpus. |
-| `digital_min_coverage` | `f64` | `0.9` | PDFs with `text_coverage` at or above this AND zero embedded images route to `StructuredCallMode::TextOnly`. **Conservative default: 0.90** — deployments override via their own config after measuring their document corpus. |
-| `docx_text_min_density` | `f64` | `200` | DOCX / HTML / text documents with `avg_chars_per_page` above this route to `StructuredCallMode::TextOnly`. **Conservative default: 200.0** — deployments override via their own config after measuring their document corpus. |
-| `enable_vision_fallback` | `bool` | `false` | When `true`, emit `StructuredCallMode::TextOnlyWithVisionFallback` instead of `StructuredCallMode::TextOnly` so the orchestrator can escalate to vision on low confidence. **Conservative default: `false`** — must be explicitly enabled per deployment after bench validation; deployments override via their own config. |
-
----
-
 #### PaddleOcrConfig
 
 Configuration for PaddleOCR backend.
@@ -1582,32 +1545,6 @@ Uses a builder pattern for convenient configuration.
 
 ---
 
-#### ClassificationEnrichmentConfig
-
-Classification enrichment knob: how to label the document.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `config` | `PageClassificationConfig` | — | Label set and LLM settings for the classification stage. |
-
----
-
-#### CaptioningEnrichmentConfig
-
-Captioning enrichment knob: which LLM to use for image captions.
-
-The enrichment stage calls `caption_image` for every
-image in `ExtractionResult.images` that has non-empty `data`. Images with
-empty byte data (e.g. reference-only images populated via `source_path`) are
-skipped rather than forwarded to the VLM.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `config` | `LlmConfig` | — | LLM / VLM configuration forwarded verbatim to each `caption_image` call. |
-| `custom_prompt` | `Option<String>` | `None` | Optional custom prompt override forwarded to every `caption_image` call. `None` uses the default `RegionKind::Caption` prompt. |
-
----
-
 ### Metadata Types
 
 #### ChunkMetadata
@@ -1625,7 +1562,7 @@ Metadata about a chunk's position in the original document.
 | `last_page` | `Option<u32>` | `None` | Last page number this chunk spans (1-indexed, equal to first_page for single-page chunks). Only populated when page tracking is enabled in extraction configuration. |
 | `heading_context` | `Option<HeadingContext>` | `/* serde(default) */` | Heading context when using Markdown chunker. Contains the heading hierarchy this chunk falls under. Only populated when `ChunkerType::Markdown` is used. |
 | `heading_path` | `Vec<String>` | `/* serde(default) */` | Flattened heading trail from document root to this chunk's section. Each element is a heading's text, outermost first. Derived from `heading_context` when present; empty otherwise. Provides a binding-friendly, RAG-shaped breadcrumb without requiring callers to walk the nested `HeadingContext` structure. |
-| `image_indices` | `Vec<u32>` | `/* serde(default) */` | Indices into `ExtractionResult.images` for images on pages covered by this chunk. Contains zero-based indices into the top-level `images` collection for every image whose `page_number` falls within `\[first_page, last_page\]`. Empty when image extraction is disabled or the chunk spans no pages with images. |
+| `image_indices` | `Vec<u32>` | `/* serde(default) */` | Indices into `ExtractedDocument.images` for images on pages covered by this chunk. Contains zero-based indices into the top-level `images` collection for every image whose `page_number` falls within `\[first_page, last_page\]`. Empty when image extraction is disabled or the chunk spans no pages with images. |
 
 ---
 
@@ -2187,7 +2124,7 @@ Aggregate statistics for a xberg cache directory.
 
 #### ExtractionErrorItem
 
-Non-fatal per-input extraction error captured by `ExtractionOutput`.
+Non-fatal per-input extraction error captured by `ExtractionResult`.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -2205,7 +2142,7 @@ A single backend stage in the OCR pipeline.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `backend` | `String` | — | Backend name: "tesseract", "paddleocr", "easyocr", or a custom registered name. |
+| `backend` | `String` | — | Backend name: "tesseract", "paddleocr", "paddle-ocr", "vlm", or a custom registered name. |
 | `priority` | `u32` | `serde(default = "default_priority")` | Priority weight (higher = tried first). Stages are sorted by priority descending. |
 | `language` | `Vec<String>` | `/* serde(default) */` | Language override for this stage (None = use parent OcrConfig.language). Accepts either a single language code ("eng") or a list (\["eng", "deu"\]). |
 | `tesseract_config` | `Option<TesseractConfig>` | `/* serde(default) */` | Tesseract-specific config override for this stage. |
@@ -2264,8 +2201,8 @@ Represents a file extension and its corresponding MIME type that Xberg can proce
 
 Trait for in-process embedding backend plugins.
 
-Async to match the convention used by `OcrBackend`,
-`DocumentExtractor`, and `PostProcessor`.
+Async to match the convention used by other plugin hooks such as
+`OcrBackend` and `PostProcessor`.
 Host-language bridges (PyO3, napi-rs, Rustler, extendr, magnus, ext-php-rs,
 C FFI, etc.) wrap their synchronous host callables in `spawn_blocking` or the
 equivalent to satisfy the async signature.
@@ -2314,6 +2251,34 @@ or `tokio.runtime.Builder.new_current_thread()`) must use
 
 ---
 
+#### DocumentExtractor
+
+Trait for document extractor plugins.
+
+Implement this trait to add support for new document formats or override
+built-in extraction behavior. Foreign-language bindings expose the
+`DocumentExtractor.extract` method, which accepts `ExtractInput` and
+returns an `ExtractedDocument`.
+
+### Priority System
+
+When multiple extractors support the same MIME type, the registry selects
+the extractor with the highest priority value. Use this to:
+
+- Override built-in extractors (priority > 50)
+- Provide fallback extractors (priority < 50)
+- Implement specialized extractors for specific use cases
+
+Default priority is 50.
+
+### Thread Safety
+
+Extractors must be thread-safe (`Send + Sync`) to support concurrent extraction.
+
+*Opaque type — fields are not directly accessible.*
+
+---
+
 #### OcrBackend
 
 Trait for OCR backend plugins.
@@ -2321,7 +2286,7 @@ Trait for OCR backend plugins.
 Implement this trait to add custom OCR capabilities. OCR backends can be:
 
 - Native Rust implementations (like Tesseract)
-- FFI bridges to Python libraries (like EasyOCR, PaddleOCR)
+- FFI bridges to external libraries (like PaddleOCR)
 - Cloud-based OCR services (Google Vision, AWS Textract, etc.)
 
 ### Thread Safety
@@ -2370,11 +2335,11 @@ Post-processors must be thread-safe (`Send + Sync`).
 
 #### Renderer
 
-Trait for document renderers that convert `InternalDocument` to output strings.
+Trait for document renderers that convert extraction results to output strings.
 
-Renderers are typically stateless converters that transform the internal
-document representation into a specific output format (Markdown, HTML,
-Djot, plain text, etc.). They participate in the standard `Plugin`
+Renderers are typically stateless converters that transform extracted
+content into a specific output format (Markdown, HTML, Djot, plain text,
+etc.). They participate in the standard `Plugin`
 lifecycle so custom renderers can be registered from any supported binding
 language.
 
@@ -2483,14 +2448,6 @@ For non-fatal checks, use post-processors instead.
 ### Thread Safety
 
 Validators must be thread-safe (`Send + Sync`).
-
-*Opaque type — fields are not directly accessible.*
-
----
-
-#### LlmBackend
-
-liter-llm-backed NER backend.
 
 *Opaque type — fields are not directly accessible.*
 
@@ -2715,8 +2672,8 @@ A single named entity detected in the extracted text.
 |-------|------|---------|-------------|
 | `category` | `EntityCategory` | — | Canonical category the entity belongs to (PERSON, ORG, LOCATION, etc.). |
 | `text` | `String` | — | Raw mention text exactly as it appeared in the source. |
-| `start` | `u32` | — | Byte-offset span in `ExtractionResult::content` where the mention starts. |
-| `end` | `u32` | — | Byte-offset span in `ExtractionResult::content` where the mention ends (exclusive). |
+| `start` | `u32` | — | Byte-offset span in `ExtractedDocument::content` where the mention starts. |
+| `end` | `u32` | — | Byte-offset span in `ExtractedDocument::content` where the mention ends (exclusive). |
 | `confidence` | `Option<f32>` | `None` | Backend-reported confidence in `\[0.0, 1.0\]`. `None` when the backend does not expose confidence scores. |
 
 ---
@@ -2726,13 +2683,13 @@ A single named entity detected in the extracted text.
 A single file extracted from an archive.
 
 When archives (ZIP, TAR, 7Z, GZIP) are extracted with recursive extraction
-enabled, each processable file produces its own full `ExtractionResult`.
+enabled, each processable file produces its own full `ExtractedDocument`.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `path` | `String` | — | Archive-relative file path (e.g. "folder/document.pdf"). |
 | `mime_type` | `String` | — | Detected MIME type of the file. |
-| `result` | `ExtractionResult` | — | Full extraction result for this file. |
+| `result` | `ExtractedDocument` | — | Full extraction result for this file. |
 
 ---
 
@@ -2889,7 +2846,7 @@ A mathematical formula detected and recognized in a document.
 Populated by the layout-guided formula pipeline: regions classified as
 `LayoutClass.Formula` are routed to the formula OCR task, which returns the
 LaTeX source for the region. The field is always present on
-`ExtractionResult` but only populated
+`ExtractedDocument` but only populated
 when the `layout-detection` feature is active and the document contains
 formula regions.
 
@@ -3005,7 +2962,7 @@ and visibility state (for presentations).
 | `table_count` | `Option<u32>` | `None` | Number of tables on this page |
 | `hidden` | `Option<bool>` | `None` | Whether this page is hidden (e.g., in presentations) |
 | `is_blank` | `Option<bool>` | `None` | Whether this page is blank (no meaningful text, no images, no tables) A page is considered blank if it has fewer than 3 non-whitespace characters and contains no tables or images. This is useful for filtering out empty pages in scanned documents or PDFs with blank separator pages. |
-| `has_vector_graphics` | `bool` | `/* serde(default) */` | Whether this page contains non-trivial vector graphics (paths, shapes, curves) Indicates the presence of vector-drawn content such as charts, diagrams, or geometric shapes (e.g., from Adobe InDesign, LaTeX TikZ). These are invisible to `ExtractionResult.images` since they are not embedded as raster XObjects. Set to `true` when path count exceeds a heuristic threshold, signaling that downstream consumers may want to rasterize the page to capture this content. Only populated for PDFs; `None` for other document types. |
+| `has_vector_graphics` | `bool` | `/* serde(default) */` | Whether this page contains non-trivial vector graphics (paths, shapes, curves) Indicates the presence of vector-drawn content such as charts, diagrams, or geometric shapes (e.g., from Adobe InDesign, LaTeX TikZ). These are invisible to `ExtractedDocument.images` since they are not embedded as raster XObjects. Set to `true` when path count exceeds a heuristic threshold, signaling that downstream consumers may want to rasterize the page to capture this content. Only populated for PDFs; `None` for other document types. |
 
 ---
 
@@ -3032,7 +2989,7 @@ by avoiding redundant copies during serialization.
 | `page_number` | `u32` | — | Page number (1-indexed) |
 | `content` | `String` | — | Text content for this page |
 | `tables` | `Vec<Table>` | `/* serde(default) */` | Tables found on this page (uses Arc for memory efficiency) Serializes as Vec<Table> for JSON compatibility while maintaining Arc semantics in-memory for zero-copy sharing. |
-| `image_indices` | `Vec<u32>` | `/* serde(default) */` | Indices into `ExtractionResult.images` for images found on this page. Each value is a zero-based index into the top-level `images` collection. Only populated when `extract_images = true` in the extraction config. |
+| `image_indices` | `Vec<u32>` | `/* serde(default) */` | Indices into `ExtractedDocument.images` for images found on this page. Each value is a zero-based index into the top-level `images` collection. Only populated when `extract_images = true` in the extraction config. |
 | `hierarchy` | `Option<PageHierarchy>` | `None` | Hierarchy information for the page (when hierarchy extraction is enabled) Contains text hierarchy levels (H1-H6) extracted from the page content. |
 | `is_blank` | `Option<bool>` | `None` | Whether this page is blank (no meaningful text content) Determined during extraction based on text content analysis. A page is blank if it has fewer than 3 non-whitespace characters and contains no tables or images. |
 | `layout_regions` | `Vec<LayoutRegion>` | `None` | Layout detection regions for this page (when layout detection is enabled). Contains detected layout regions with class, confidence, bounding box, and area fraction. Only populated when layout detection is configured. |
@@ -3118,8 +3075,8 @@ One redaction event: which span was rewritten, why, and with what.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `start` | `u32` | — | Byte-offset start in the original (pre-redaction) `ExtractionResult::content`. |
-| `end` | `u32` | — | Byte-offset end (exclusive) in the original `ExtractionResult::content`. |
+| `start` | `u32` | — | Byte-offset start in the original (pre-redaction) `ExtractedDocument::content`. |
+| `end` | `u32` | — | Byte-offset end (exclusive) in the original `ExtractedDocument::content`. |
 | `category` | `PiiCategory` | — | PII category that fired this redaction. |
 | `strategy` | `RedactionStrategy` | — | Strategy applied to this finding (mask, hash, token-replace, drop). |
 | `replacement_token` | `String` | — | String that replaced the original mention. Always present; for `Drop` the replacement is the empty string. |
@@ -3149,7 +3106,7 @@ A single tracked change embedded in a document.
 
 Populated by per-format extractors that understand change-tracking metadata
 (DOCX `w:ins`/`w:del`/`w:rPrChange`, ODT `text:change-*`, …). Every
-extractor defaults to `ExtractionResult.revisions = None` until a
+extractor defaults to `ExtractedDocument.revisions = None` until a
 format-specific implementation is added.
 
 | Field | Type | Default | Description |
@@ -3179,16 +3136,16 @@ Summary of an extracted document.
 
 Translation of the extracted content.
 
-Holds the translated rendition of `ExtractionResult.content` and (when
+Holds the translated rendition of `ExtractedDocument.content` and (when
 `preserve_markup` was requested) the translated `formatted_content`. Chunks
-are translated in place inside `ExtractionResult.chunks[*].content` rather
+are translated in place inside `ExtractedDocument.chunks[*].content` rather
 than duplicated here.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `target_lang` | `String` | — | BCP-47 language tag the translation was produced into (e.g. `"de"`, `"fr-CA"`). |
 | `source_lang` | `Option<String>` | `None` | BCP-47 source language. `None` when the translation backend was asked to detect. |
-| `content` | `String` | — | Translated plain-text body. Matches the shape of `ExtractionResult::content`. |
+| `content` | `String` | — | Translated plain-text body. Matches the shape of `ExtractedDocument::content`. |
 | `formatted_content` | `Option<String>` | `None` | Translated markup body (Markdown / HTML / etc.) when `preserve_markup` was enabled on the config. `None` otherwise. |
 
 ---
@@ -3246,29 +3203,6 @@ Diff for a single embedded archive entry that appears in both results.
 
 ---
 
-#### EmbeddingPreset
-
-Preset configurations for common RAG use cases.
-
-Each preset combines chunk size, overlap, and embedding model
-to provide an optimized configuration for specific scenarios.
-
-All string fields are owned `String` for FFI compatibility — instances
-are safe to clone and pass across language boundaries.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `name` | `String` | — | Short identifier for this preset (e.g. `"balanced"`, `"fast"`, `"quality"`). |
-| `chunk_size` | `usize` | — | Target chunk size in characters. |
-| `overlap` | `usize` | — | Overlap between consecutive chunks in characters. |
-| `model_repo` | `String` | — | HuggingFace repository name for the model. |
-| `pooling` | `String` | — | Pooling strategy: "cls" or "mean". |
-| `model_file` | `String` | — | Path to the ONNX model file within the repo. |
-| `dimensions` | `usize` | — | Embedding vector dimension produced by this model. |
-| `description` | `String` | — | Human-readable description of the preset's intended use case. |
-
----
-
 #### RerankedDocument
 
 A single document returned by the reranker, with its position in the input and score.
@@ -3286,26 +3220,6 @@ Since v5.0.
 
 ---
 
-#### RerankerPreset
-
-Metadata for a bundled reranker preset.
-
-All string fields are owned `String` for FFI compatibility — instances are
-safe to clone and pass across language boundaries.
-
-Since v5.0.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `name` | `String` | — | Short identifier (catalog name, e.g. `"bge-reranker-base"`). |
-| `model_repo` | `String` | — | HuggingFace repository name for the model. |
-| `model_file` | `String` | — | Path to the ONNX model file within the repo. |
-| `additional_files` | `Vec<String>` | `/* serde(default) */` | Sibling files that must be downloaded alongside `model_file`. Empty for most presets. Used by repos that split the weight blob — e.g. `rozgo/bge-reranker-v2-m3` ships the model in `model.onnx` plus a co-located `model.onnx.data` payload. |
-| `max_length` | `usize` | — | Maximum token sequence length the model supports. |
-| `description` | `String` | — | Human-readable description of the preset's intended use case. |
-
----
-
 #### Keyword
 
 Extracted keyword with metadata.
@@ -3316,20 +3230,6 @@ Extracted keyword with metadata.
 | `score` | `f32` | — | Relevance score (higher is better, algorithm-specific range). |
 | `algorithm` | `KeywordAlgorithm` | — | Algorithm that extracted this keyword. |
 | `positions` | `Vec<usize>` | `None` | Optional positions where keyword appears in text (character offsets). |
-
----
-
-#### ConfidenceSignals
-
-Input signals for confidence scoring.
-
-Caller fills these from the extraction result and the LLM response.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `text_coverage` | `f32` | — | Fraction of pages with usable text in `\[0, 1\]`. |
-| `ocr_aggregate` | `Option<f32>` | `None` | Mean OCR per-element recognition confidence; `None` when OCR did not run. |
-| `schema_compliance` | `SchemaCompliance` | — | Schema-validation result of the merged output. |
 
 ---
 
@@ -3408,25 +3308,6 @@ Detected document boundary within a PDF.
 | `end_page` | `u32` | — | 1-indexed end page (inclusive). |
 | `confidence` | `f32` | — | Confidence in this boundary, `\[0.0, 1.0\]`. |
 | `reason` | `BoundaryReason` | — | Reason for the boundary detection. |
-
----
-
-#### StructuredInput
-
-Signals consumed by the call-mode heuristic.
-
-All fields derive from a prior xberg extraction — no double-work.
-This is a plain DTO; it intentionally has no dependency on internal
-xberg extraction types so it can be constructed from any source.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `mime_type` | `String` | — | MIME type, canonicalised to lowercase by the caller. |
-| `page_count` | `u32` | — | Number of pages in the document. |
-| `text_coverage` | `f64` | — | Fraction of pages with a real text layer (0.0..=1.0). |
-| `avg_chars_per_page` | `f64` | — | Average extracted characters per page. |
-| `embedded_image_count` | `u32` | — | Count of embedded images (figures, photos, signatures) discovered. |
-| `user_force_vision` | `bool` | — | When `true`, promote the result to at least `StructuredCallMode::TextPlusVision`. |
 
 ---
 
@@ -3643,9 +3524,8 @@ Reason for boundary detection.
 How a structured-extraction preset is dispatched to the model.
 
 This is the preset-facing call mode (the `preferred_call_mode` field of a
-`Preset`). The richer runtime decision enum used by the
-structured pipeline — which adds `Skip` and `TextOnlyWithVisionFallback` —
-lives in `crate::heuristics::structured::StructuredCallMode`; this 3-variant
+`Preset`). The structured pipeline has a richer
+runtime-only decision enum with skip and fallback states; this 3-variant
 type is the stable, serializable surface presets and bindings depend on.
 
 | Variant | Wire value | Description |
@@ -3756,7 +3636,7 @@ Reason for chunking a document.
 Content rendering mode for code extraction.
 
 Controls how extracted code content is represented in the `content` field
-of `ExtractionResult`.
+of `ExtractedDocument`.
 
 | Variant | Wire value | Description |
 |---------|------------|-------------|
@@ -3969,7 +3849,7 @@ type-safe, clean metadata without nested optionals.
 | `Epub` | `epub` | Metadata extracted from an EPUB e-book. — Fields: `_0`: `EpubMetadata` |
 | `Pst` | `pst` | Metadata extracted from an Outlook PST archive. — Fields: `_0`: `PstMetadata` |
 | `Audio` | `audio` | Metadata extracted from an audio or video file. — Fields: `_0`: `AudioMetadata` |
-| `Code` | `code` | Code (tree-sitter analyzable source). The structured analysis result is exposed via `ExtractionResult::code_intelligence`; this variant only tags the format. |
+| `Code` | `code` | Code (tree-sitter analyzable source). The structured analysis result is exposed via `ExtractedDocument::code_intelligence`; this variant only tags the format. |
 
 ---
 
@@ -4013,7 +3893,7 @@ Heuristic classification of what an image likely depicts.
 Target format for re-encoding extracted images.
 
 Controls whether and how extracted images are normalised to a uniform
-container format before being returned in `ExtractionResult.images`.
+container format before being returned in `ExtractedDocument.images`.
 The default (`Native`) preserves the format produced by each extractor
 without any additional encode pass.
 
@@ -4228,7 +4108,6 @@ OCR backend types.
 | Variant | Description |
 |---------|-------------|
 | `Tesseract` | Tesseract OCR (native Rust binding) |
-| `EasyOCR` | EasyOCR (Python-based, via FFI) |
 | `PaddleOCR` | PaddleOCR (Python-based, via FFI) |
 | `Candle` | Candle-based VLM OCR (TrOCR, PaddleOCR-VL). |
 | `Custom` | Custom/third-party OCR backend |
@@ -4269,7 +4148,7 @@ equivalent semantics for PaddleOCR.
 
 Output format for extraction results.
 
-Controls the format of the `content` field in `ExtractionResult`.
+Controls the format of the `content` field in `ExtractedDocument`.
 When set to `Markdown`, `Djot`, or `Html`, the output uses that format.
 `Plain` returns the raw extracted text.
 `Structured` returns JSON with full OCR element data including bounding
@@ -4549,25 +4428,6 @@ error types.
 
 ---
 
-#### StructuredCallMode
-
-Outcome of the structured-extraction call-mode heuristic.
-
-**Distinct from `crate::core::config::CallMode`** which has three variants
-and governs extraction-engine behaviour.  This enum governs whether and how
-an already-extracted document is sent to an LLM structured-extraction
-pipeline.
-
-| Variant | Wire value | Description |
-|---------|------------|-------------|
-| `Skip` | `skip` | Document is unsupported or not worth invoking the pipeline. |
-| `TextOnly` | `text_only` | Send extracted text only; no vision model call. |
-| `VisionOnly` | `vision_only` | Send page rasters only; no extracted text payload. |
-| `TextPlusVision` | `text_plus_vision` | Fuse extracted text with page rasters in a single multimodal call. |
-| `TextOnlyWithVisionFallback` | `text_only_with_vision_fallback` | Try text-only first; escalate to vision on low confidence score. |
-
----
-
 #### StructuredDataType
 
 Structured data type classification.
@@ -4587,7 +4447,7 @@ Summarisation strategy.
 | Variant | Wire value | Description |
 |---------|------------|-------------|
 | `Extractive` | `extractive` | Pure-Rust extractive summary (TextRank over the chunk graph). Deterministic, fast, no external service required. |
-| `Abstractive` | `abstractive` | Abstractive summary produced by liter-llm. Requires `liter-llm` feature and a configured `LlmConfig`. Token usage is captured in `ExtractionResult::llm_usage`. |
+| `Abstractive` | `abstractive` | Abstractive summary produced by liter-llm. Requires `liter-llm` feature and a configured `LlmConfig`. Token usage is captured in `ExtractedDocument::llm_usage`. |
 
 ---
 

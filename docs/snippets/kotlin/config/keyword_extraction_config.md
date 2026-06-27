@@ -1,22 +1,19 @@
 ```kotlin title="Kotlin"
 import io.xberg.*
-import java.nio.file.Paths
-import java.util.Optional
 
 fun main() {
-    val keywords = KeywordConfig.builder()
-        .withAlgorithm(KeywordAlgorithm.Yake)
-        .withMaxKeywords(10L)
-        .withMinScore(0.1f)
-        .withNgramRange(listOf(1L, 3L))
-        .withLanguage(Optional.of("en"))
-        .build()
+    val keywords = KeywordConfig(
+        algorithm = KeywordAlgorithm.YAKE,
+        maxKeywords = 10L,
+        minScore = 0.1f,
+        ngramRange = listOf(1L, 3L),
+        language = "en",
+    )
 
-    val config = ExtractionConfig.builder()
-        .withKeywords(Optional.of(keywords))
-        .build()
+    val config = ExtractionConfig(keywords = keywords)
 
-    val result = Xberg.extractSync(Paths.get("document.pdf"), null, config)
-    println("Keywords: ${result.extractedKeywords()}")
+    val output = Xberg.extract(ExtractInput(kind = ExtractInputKind.URI, uri = "document.pdf"), config)
+    val result = output.results.first()
+    println("Keywords: ${result.extractedKeywords}")
 }
 ```

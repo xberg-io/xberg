@@ -362,7 +362,7 @@ xberg extract <PATH> [OPTIONS]
 | Flag                                   | Description                                                                                                |
 | -------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | `--ocr <true\|false>`                  | Enable/disable OCR                                                                                         |
-| `--ocr-backend <BACKEND>`              | OCR backend: `tesseract`, `paddle-ocr`, `easyocr`                                                          |
+| `--ocr-backend <BACKEND>`              | OCR backend: `tesseract`, `paddle-ocr`, `vlm`, or `candle-*`                                               |
 | `--ocr-language <LANG>`                | OCR language code (e.g. `eng`, `fra`, `ch`)                                                                |
 | `--ocr-auto-rotate <true\|false>`      | Auto-rotate images before OCR                                                                              |
 | `--force-ocr <true\|false>`            | Force OCR even if text extraction succeeds                                                                 |

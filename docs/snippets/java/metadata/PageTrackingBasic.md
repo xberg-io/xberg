@@ -6,7 +6,14 @@ var config = ExtractionConfig.builder()
 .build())
 .build();
 
-var result = Xberg.extractSync("document.pdf", config);
+var resultOutput = Xberg.extract(
+    io.xberg.ExtractInput.builder()
+        .withKind(io.xberg.ExtractInputKind.Uri)
+        .withUri("document.pdf")
+        .build(),
+    config
+);
+var result = resultOutput.results().get(0);
 
 If (result.pages() != null) {
 for (var page : result.pages()) {

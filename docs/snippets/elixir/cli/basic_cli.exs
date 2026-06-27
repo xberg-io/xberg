@@ -118,8 +118,9 @@ defmodule XbergCLI do
     IO.puts("Extracting: #{file_path}")
     start_time = System.monotonic_time(:millisecond)
 
-    case Xberg.extract(file_path, mime_type, config) do
-      {:ok, result} ->
+    case Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: file_path, mime_type: mime_type}, config) do
+      {:ok, output} ->
+        result = List.first(output.results)
         elapsed = System.monotonic_time(:millisecond) - start_time
 
         print_extraction_result(result, elapsed, verbose)
@@ -158,8 +159,9 @@ defmodule XbergCLI do
             IO.write("  [#{idx}/#{length(files)}] ")
             start_time = System.monotonic_time(:millisecond)
 
-            case Xberg.extract(file, nil, config) do
-              {:ok, result} ->
+            case Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: file}, config) do
+              {:ok, output} ->
+                result = List.first(output.results)
                 elapsed = System.monotonic_time(:millisecond) - start_time
                 IO.puts("#{Path.basename(file)} (#{elapsed}ms)")
                 {:ok, file, result, elapsed}

@@ -8,10 +8,14 @@ config_json = Jason.encode!(%{
   ]
 })
 
-{:ok, result_before} = Xberg.extract_sync("document.pdf", "application/pdf", nil)
+input = %Xberg.ExtractInput{kind: :uri, uri: "document.pdf", mime_type: "application/pdf"}
+{:ok, output_before} = Xberg.extract(input, nil)
 
-{:ok, result_after} = Xberg.extract_sync("document.pdf", "application/pdf", config_json)
+result_before = List.first(output_before.results)
+input = %Xberg.ExtractInput{kind: :uri, uri: "document.pdf", mime_type: "application/pdf"}
+{:ok, output_after} = Xberg.extract(input, config_json)
 
+result_after = List.first(output_after.results)
 # Compare text quality metrics
 text_before = result_before.text || ""
 text_after = result_after.text || ""

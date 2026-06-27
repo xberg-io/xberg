@@ -28,8 +28,9 @@ config = %ExtractionConfig{
 IO.puts("Starting OCR extraction with force_all_pages enabled...")
 start_time = System.monotonic_time(:millisecond)
 
-case Xberg.extract("mixed_document.pdf", nil, config) do
-  {:ok, result} ->
+case Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "mixed_document.pdf"}, config) do
+  {:ok, output} ->
+    result = List.first(output.results)
     elapsed_ms = System.monotonic_time(:millisecond) - start_time
 
     IO.puts("\n=== OCR Extraction Complete ===\n")

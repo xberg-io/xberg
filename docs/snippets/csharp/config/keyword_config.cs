@@ -1,5 +1,5 @@
 using Xberg;
-using Xberg.Keywords;
+using System.Linq;
 
 // Example 1: Basic YAKE configuration
 // Uses YAKE algorithm with default parameters and English stopword filtering
@@ -10,15 +10,15 @@ var basicYakeConfig = new ExtractionConfig
         Algorithm = KeywordAlgorithm.Yake,
         MaxKeywords = 10,
         MinScore = 0.0f,
-        NgramRange = (1, 3),
         Language = "en",
         YakeParams = null,
         RakeParams = null,
     }
 };
 
-var result = XbergLib.ExtractSync("document.pdf", basicYakeConfig);
-Console.WriteLine($"Keywords: {string.Join(", ", result.Keywords)}");
+var output = await XbergConverter.ExtractAsync(ExtractInput.FromUri("document.pdf"), basicYakeConfig);
+var result = output.Results[0];
+Console.WriteLine($"Keywords: {string.Join(", ", result.ExtractedKeywords?.Select(k => k.Text) ?? Enumerable.Empty<string>())}");
 
 // Example 2: Advanced YAKE with custom parameters
 // Fine-tunes YAKE with custom window size for co-occurrence analysis
@@ -29,7 +29,6 @@ var advancedYakeConfig = new ExtractionConfig
         Algorithm = KeywordAlgorithm.Yake,
         MaxKeywords = 15,
         MinScore = 0.1f,
-        NgramRange = (1, 2),
         Language = "en",
         YakeParams = new YakeParams
         {
@@ -39,8 +38,9 @@ var advancedYakeConfig = new ExtractionConfig
     }
 };
 
-result = XbergLib.ExtractSync("document.pdf", advancedYakeConfig);
-Console.WriteLine($"Keywords: {string.Join(", ", result.Keywords)}");
+output = await XbergConverter.ExtractAsync(ExtractInput.FromUri("document.pdf"), advancedYakeConfig);
+result = output.Results[0];
+Console.WriteLine($"Keywords: {string.Join(", ", result.ExtractedKeywords?.Select(k => k.Text) ?? Enumerable.Empty<string>())}");
 
 // Example 3: RAKE configuration
 // Uses RAKE algorithm for rapid keyword extraction with phrase constraints
@@ -51,7 +51,6 @@ var rakeConfig = new ExtractionConfig
         Algorithm = KeywordAlgorithm.Rake,
         MaxKeywords = 10,
         MinScore = 5.0f,
-        NgramRange = (1, 3),
         Language = "en",
         YakeParams = null,
         RakeParams = new RakeParams
@@ -62,5 +61,6 @@ var rakeConfig = new ExtractionConfig
     }
 };
 
-result = XbergLib.ExtractSync("document.pdf", rakeConfig);
-Console.WriteLine($"Keywords: {string.Join(", ", result.Keywords)}");
+output = await XbergConverter.ExtractAsync(ExtractInput.FromUri("document.pdf"), rakeConfig);
+result = output.Results[0];
+Console.WriteLine($"Keywords: {string.Join(", ", result.ExtractedKeywords?.Select(k => k.Text) ?? Enumerable.Empty<string>())}");

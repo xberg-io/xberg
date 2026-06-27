@@ -2,8 +2,9 @@
 # Access different parts of result
 # Content, metadata, tables, images
 
-{:ok, result} = Xberg.extract("document.pdf")
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "document.pdf"}, nil)
 
+result = List.first(output.results)
 # Access main content
 content = result.content
 IO.puts("Content length: #{String.length(content)} characters")

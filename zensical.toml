@@ -23,13 +23,20 @@ nav = [
     { "Core" = [
       { "Extraction Basics" = "guides/extraction.md" },
       { "Configuration" = "guides/configuration.md" },
+      { "Rust Core API" = "guides/rust-core-api.md" },
       { "Output Formats" = "guides/output-formats.md" },
       { "OCR" = "guides/ocr.md" },
       { "HTML Output" = "guides/html-output.md" },
     ] },
     { "Advanced" = [
-      { "Advanced Features" = "guides/advanced.md" },
+      { "Chunking" = "guides/chunking.md" },
+      { "Embeddings" = "guides/embeddings.md" },
+      { "Reranking" = "guides/reranking.md" },
       { "Keyword Extraction" = "guides/keywords.md" },
+      { "Language Detection" = "guides/language-detection.md" },
+      { "Token Reduction" = "guides/token-reduction.md" },
+      { "Quality Processing" = "guides/quality-processing.md" },
+      { "PDF Form Fields" = "guides/pdf-form-fields.md" },
       { "Layout Detection" = "guides/layout-detection.md" },
       { "Audio and Video Transcription" = "guides/transcription.md" },
       { "Presets" = "guides/presets.md" },
@@ -96,18 +103,11 @@ nav = [
     { "Format Support" = "reference/formats.md" },
     { "OCR Languages" = "reference/ocr-languages.md" },
     { "Model Sources" = "reference/model-sources.md" },
+    { "HTML Styling Contract" = "reference/html-styling-contract.md" },
     { "Benchmarks" = "https://xberg.io/benchmarks" },
   ] },
 
   { "More" = [
-    { "Comparisons" = [
-      { "Overview" = "comparisons/index.md" },
-      { "vs Unstructured" = "comparisons/xberg-vs-unstructured.md" },
-      { "vs Docling" = "comparisons/xberg-vs-docling.md" },
-      { "vs Apache Tika" = "comparisons/xberg-vs-tika.md" },
-      { "vs MarkItDown" = "comparisons/xberg-vs-markitdown.md" },
-      { "vs MinerU" = "comparisons/xberg-vs-mineru.md" },
-    ] },
     { "Migration" = [
       { "From Unstructured" = "migration/from-unstructured.md" },
     ] },

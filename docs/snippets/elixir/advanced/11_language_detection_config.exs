@@ -14,8 +14,8 @@ config = %ExtractionConfig{
 }
 
 # Extract file with language detection enabled
-{:ok, result} = Xberg.extract("document.pdf", nil, config)
-
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "document.pdf"}, config)
+result = List.first(output.results)
 # Process the detection results
 detection_results = result.detected_languages || []
 

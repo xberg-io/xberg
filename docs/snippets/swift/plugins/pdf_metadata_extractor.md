@@ -9,5 +9,5 @@ import Xberg
 // factory required to construct and register instances from Swift.
 //
 // Workaround: Augment PDF extraction results by implementing a PostProcessor in Rust,
-// or post-process ExtractionResult.metadata in Swift after extraction.
+// or post-process ExtractedDocument.metadata in Swift after extraction.
 ```

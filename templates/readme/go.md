@@ -137,10 +137,15 @@ import (
 )
 
 func main() {
-	result, err := v4.ExtractSync("document.pdf", nil)
+	input := xberg.ExtractInputFromURI("document.pdf")
+	output, err := xberg.Extract(*input, xberg.ExtractionConfig{})
 	if err != nil {
 		log.Fatalf("extract failed: %v", err)
 	}
+	if len(output.Results) == 0 {
+		log.Fatal("extract produced no results")
+	}
+	result := output.Results[0]
 
 	fmt.Println("MIME:", result.MimeType)
 	fmt.Println("First 200 chars:")
@@ -169,54 +174,62 @@ data, err := os.ReadFile("slides.pptx")
 if err != nil {
 	log.Fatal(err)
 }
-result, err := v4.ExtractSync(data, "application/vnd.openxmlformats-officedocument.presentationml.presentation", nil)
+filename := "slides.pptx"
+input := xberg.ExtractInputFromBytes(
+	data,
+	"application/vnd.openxmlformats-officedocument.presentationml.presentation",
+	&filename,
+)
+output, err := xberg.Extract(*input, xberg.ExtractionConfig{})
 if err != nil {
 	log.Fatal(err)
 }
-fmt.Println(result.Metadata.FormatType())
+result := output.Results[0]
+fmt.Println("MIME:", result.MimeType)
 ```
 
 ### Use advanced configuration
 
 ```go
 lang := "eng"
-cfg := &v4.ExtractionConfig{
-	UseCache:        true,
-	ForceOCR:        false,
-	ImageExtraction: &v4.ImageExtractionConfig{Enabled: true},
-	OCR: &v4.OcrConfig{
+useCache := true
+cfg := xberg.ExtractionConfig{
+	UseCache: &useCache,
+	ForceOcr: false,
+	Images:   &xberg.ImageExtractionConfig{},
+	Ocr: &xberg.OcrConfig{
 		Backend: "tesseract",
-		Language: &lang,
+		Language: []string{lang},
 	},
 }
-result, err := v4.ExtractSync("scanned.pdf", cfg)
+input := xberg.ExtractInputFromURI("scanned.pdf")
+output, err := xberg.Extract(*input, cfg)
+result := output.Results[0]
 ```
 
-### Async (context-aware) extraction
+### URL extraction
 
 ```go
-ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-defer cancel()
-
-result, err := v4.Extract(ctx, "large.pdf", nil)
+input := xberg.ExtractInputFromURI("https://example.com/report.pdf")
+output, err := xberg.Extract(*input, xberg.ExtractionConfig{})
 if err != nil {
 	log.Fatal(err)
 }
-fmt.Println("Content length:", len(result.Content))
+fmt.Println("Results:", len(output.Results))
 ```
 
 ### Batch extract
 
 ```go
-paths := []string{"doc1.pdf", "doc2.docx", "report.xlsx"}
-results, err := v4.ExtractBatchSync(paths, nil)
+inputs := []xberg.ExtractInput{
+	*xberg.ExtractInputFromURI("doc1.pdf"),
+	*xberg.ExtractInputFromURI("https://example.com/report.pdf"),
+}
+output, err := xberg.ExtractBatch(inputs, xberg.ExtractionConfig{})
 if err != nil {
 	log.Fatal(err)
 }
-for i, res := range results {
-	if res == nil {
-		continue
-	}
+for i, res := range output.Results {
 	fmt.Printf("[%d] %s => %d bytes\n", i, res.MimeType, len(res.Content))
 }
 ```
@@ -231,7 +244,7 @@ func customValidator(resultJSON *C.char) *C.char {
 }
 
 func init() {
-	if err := v4.RegisterValidator("go-validator", 50, (C.ValidatorCallback)(C.customValidator)); err != nil {
+	if err := xberg.RegisterValidator("go-validator", 50, (C.ValidatorCallback)(C.customValidator)); err != nil {
 		log.Fatalf("validator registration failed: %v", err)
 	}
 }
@@ -248,8 +261,8 @@ func init() {
 | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ld returned 1 exit status` or `undefined reference to 'html_to_markdown_...'` | The static library wasn't found. Make sure `CGO_LDFLAGS` points to the directory containing `libxberg_ffi.a`: `CGO_LDFLAGS="-L/path/to/lib -lxberg_ffi" go build`                                           |
 | `cannot find -lxberg_ffi`                                                  | The static library file is missing or in the wrong location. Download it from [GitHub Releases](https://github.com/xberg-io/xberg/releases) or build it yourself: `cargo build -p xberg-ffi --release` |
-| `undefined: v4.Extract`                                                    | This function was removed in v4.1.0. Use `ExtractSync` and wrap in goroutine if needed (see migration guide)                                                                                                    |
-| `Missing dependency: tesseract`                                                | Install the OCR backend and ensure it is on `PATH`. Errors bubble up as `*v4.MissingDependencyError`.                                                                                                               |
+| `undefined: xberg.Extract`                                                  | Regenerate the binding or update to Xberg v1; extraction is exposed as `Extract(ExtractInput, ExtractionConfig)`.                                                                                           |
+| `Missing dependency: tesseract`                                                | Install the OCR backend and ensure it is on `PATH`. Errors bubble up as typed Xberg errors.                                                                                                               |
 | `undefined: C.customValidator` during build                                    | Export the callback with `//export` in a `*_cgo.go` file before using it in `Register*` helpers.                                                                                                                    |
 | `Missing dependency: onnxruntime`                                              | Install ONNX Runtime at build time: `brew install onnxruntime` (macOS), `apt install libonnxruntime libonnxruntime-dev` (Linux), `scoop install onnxruntime` (Windows). Required for embeddings functionality.      |
 | Embeddings not available on Windows MinGW                                      | Windows MinGW builds cannot link ONNX Runtime (MSVC-only). Use Windows MSVC build for embeddings support, or build without embeddings feature.                                                                      |

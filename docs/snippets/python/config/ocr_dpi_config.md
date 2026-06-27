@@ -1,6 +1,6 @@
 ```python title="Python"
-from xberg import (
-    extract_sync,
+from xberg import ExtractInput, (
+    extract,
     ExtractionConfig,
     OcrConfig,
     TesseractConfig,
@@ -16,10 +16,10 @@ config: ExtractionConfig = ExtractionConfig(
     ),
 )
 
-result = extract_sync("scanned.pdf", config=config)
+result = extract(ExtractInput.from_uri("scanned.pdf"), config)
 
-content_length: int = len(result.content)
-table_count: int = len(result.tables)
+content_length: int = len(result.results[0].content)
+table_count: int = len(result.results[0].tables)
 
 print(f"Content length: {content_length} characters")
 print(f"Tables detected: {table_count}")

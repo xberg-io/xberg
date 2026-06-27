@@ -81,110 +81,6 @@ curl -F "files=@scanned.pdf" \
 }
 ```
 
-#### POST /embed
-
-Generate vector embeddings. Requires the `embeddings` feature.
-
-| Field    | Required | Description                |
-| -------- | -------- | -------------------------- |
-| `texts`  | Yes      | Array of strings           |
-| `config` | No       | Embedding config overrides |
-
-```bash title="Terminal"
-curl -X POST http://localhost:8000/embed \
-  -H "Content-Type: application/json" \
-  -d '{"texts":["Hello world","Second text"]}'
-```
-
-| Preset               | Dimensions | Model              |
-| -------------------- | ---------- | ------------------ |
-| `fast`               | 384        | AllMiniLML6V2Q     |
-| `balanced` (default) | 768        | BGEBaseENV15       |
-| `quality`            | 1024       | BGELargeENV15      |
-| `multilingual`       | 768        | MultilingualE5Base |
-
-#### POST /chunk
-
-Chunk text for RAG pipelines.
-
-| Field                   | Required | Description                                                 |
-| ----------------------- | -------- | ----------------------------------------------------------- |
-| `text`                  | Yes      | Text to chunk                                               |
-| `chunker_type`          | No       | `"text"` (default), `"markdown"`, `"yaml"`, or `"semantic"` |
-| `config.max_characters` | No       | Max chars per chunk (default: 2000)                         |
-| `config.overlap`        | No       | Overlap between chunks (default: 100)                       |
-
-```bash title="Terminal"
-curl -X POST http://localhost:8000/chunk \
-  -H "Content-Type: application/json" \
-  -d '{"text":"Long text...","chunker_type":"text","config":{"max_characters":1000,"overlap":50}}'
-```
-
-=== "Python"
-
-    --8<-- "snippets/python/api/client_chunk_text.md"
-
-=== "TypeScript"
-
-    --8<-- "snippets/typescript/api/client_chunk_text.md"
-
-=== "Rust"
-
-    --8<-- "snippets/rust/api/client_chunk_text.md"
-
-=== "Go"
-
-    --8<-- "snippets/go/api/client_chunk_text.md"
-
-=== "Java"
-
-    --8<-- "snippets/java/api/client_chunk_text.md"
-
-=== "C#"
-
-    --8<-- "snippets/csharp/client_chunk_text.md"
-
-=== "Ruby"
-
-    --8<-- "snippets/ruby/api/client_chunk_text.md"
-
-#### POST /extract-structured
-
-Extract typed JSON from a document by running an LLM against the extracted text with a JSON schema (requires `liter-llm` feature; `multipart/form-data` request).
-
-| Field               | Required | Description                                                                                        |
-| ------------------- | -------- | -------------------------------------------------------------------------------------------------- |
-| `file` (or `files`) | Yes      | The document to extract from                                                                       |
-| `schema`            | Yes      | JSON Schema string describing the structured output                                                |
-| `model`             | Yes      | LLM model identifier, for example `openai/gpt-4o` or `anthropic/claude-sonnet-4-20250514`          |
-| `api_key`           | No       | LLM provider API key. Falls back to provider env vars (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, ...) |
-| `prompt`            | No       | Custom Jinja2 prompt template overriding the default                                               |
-| `schema_name`       | No       | Schema identifier (default: `extraction`)                                                          |
-| `strict`            | No       | `"true"` / `"false"` — enable OpenAI strict mode for exact schema matching                         |
-| `config`            | No       | Extraction config overrides as a JSON string                                                       |
-
-```bash title="Terminal"
-curl -X POST http://localhost:8000/extract-structured \
-  -F "file=@invoice.pdf" \
-  -F 'schema={"type":"object","properties":{"invoice_number":{"type":"string"},"total":{"type":"number"}},"required":["invoice_number","total"]}' \
-  -F "model=openai/gpt-4o" \
-  -F "api_key=$OPENAI_API_KEY" \
-  -F "strict=true"
-```
-
-```json title="Response"
-{
-  "structured_output": {
-    "invoice_number": "INV-2026-0142",
-    "total": 1284.5
-  },
-  "content": "Invoice INV-2026-0142...",
-  "mime_type": "application/pdf"
-}
-```
-
-Errors follow the same shape as `/extract`. A `501` response indicates the server was built without `liter-llm`.
-
 #### Other Endpoints
 
 | Endpoint          | Method | Description                                                               |
@@ -338,11 +234,7 @@ xberg mcp --config xberg.toml
 | `cache_clear`         | —                                                                                                                                                 | Remove cached files                                                       |
 | `cache_manifest`      | —                                                                                                                                                 | Model checksums                                                           |
 | `cache_warm`          | —                                                                                                                                                 | Pre-download models                                                       |
-| `embed_text`          | `texts`                                                                                                                                           | Generate embeddings                                                       |
-| `chunk_text`          | `text`                                                                                                                                            | Split text                                                                |
-| `extract_structured`  | `path`, `schema`, `model`; optional `schema_name` (default `"extraction"`), `schema_description`, `prompt`, `api_key`, `strict` (default `false`) | Extract structured JSON via LLM |
-
-All tools accept an optional `config` object. URI and byte payload details live in `ExtractInput` as `kind = "uri"` or `kind = "bytes"`. `extract_structured` requires the server to be built with the `liter-llm` feature; see the row above for optional fields and defaults.
+All extraction tools accept an optional `config` object. URI and byte payload details live in `ExtractInput` as `kind = "uri"` or `kind = "bytes"`.
 
 ### AI Agent Integration
 

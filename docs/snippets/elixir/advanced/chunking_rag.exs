@@ -8,8 +8,9 @@ config = %Xberg.ExtractionConfig{
   }
 }
 
-{:ok, result} = Xberg.extract("document.pdf", nil, config)
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "document.pdf"}, config)
 
+result = List.first(output.results)
 # Prepare chunks for vector embedding and search
 chunks_for_embedding = result.chunks
   |> Enum.map(fn chunk ->

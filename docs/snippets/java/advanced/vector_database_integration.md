@@ -1,6 +1,7 @@
 ```java title="Java"
 import io.xberg.Xberg;
 import io.xberg.ExtractionResult;
+import io.xberg.ExtractedDocument;
 import io.xberg.ExtractionConfig;
 import io.xberg.ChunkingConfig;
 import io.xberg.EmbeddingConfig;
@@ -30,7 +31,9 @@ public class VectorDatabaseIntegration {
                 .build())
             .build();
 
-        ExtractionResult result = Xberg.extract(documentPath, config);
+        ExtractionResult output = Xberg.extract(documentPath, config);
+
+        ExtractedDocument result = output.results().get(0);
         List<Object> chunks = result.getChunks() != null ? result.getChunks() : List.of();
 
         List<VectorRecord> vectorRecords = new java.util.ArrayList<>();

@@ -1,6 +1,6 @@
 ```elixir title="Elixir"
-{:ok, result} = Xberg.extract("document.pdf")
-
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "document.pdf"}, nil)
+result = List.first(output.results)
 tables = result.tables
 IO.puts("Total tables found: #{length(tables)}")
 

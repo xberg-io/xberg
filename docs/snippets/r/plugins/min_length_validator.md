@@ -20,8 +20,12 @@ min_length_validator <- function(result) {
 register_validator("min_length", min_length_validator)
 
 config <- ExtractionConfig$default()
-json <- extract_sync("document.pdf", "application/pdf", config)
-result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
-
+input <- list(kind = "uri", uri = "document.pdf", mime_type = "application/pdf")
+json <- extract(
+  input = ExtractInput$from_json(jsonlite::toJSON(input, auto_unbox = TRUE)),
+  config = config
+)
+output <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+result <- output$results[[1]]
 cat(sprintf("Content length: %d characters\n", nchar(result$content)))
 ```

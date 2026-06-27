@@ -13,7 +13,7 @@ async function extractImageMetadata() {
     },
   };
 
-  const result = await extract(bytes, "application/pdf", config);
+  const result = await extract({ kind: "bytes", bytes, mimeType: "application/pdf" }, config);
 
   if (result.images) {
     result.images.forEach((image, index) => {

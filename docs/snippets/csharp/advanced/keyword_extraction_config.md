@@ -8,7 +8,6 @@ var config = new ExtractionConfig
         Algorithm = KeywordAlgorithm.Yake,
         MaxKeywords = 10,
         MinScore = 0.3,
-        NgramRange = (1, 3),
         Language = "en"
     }
 };

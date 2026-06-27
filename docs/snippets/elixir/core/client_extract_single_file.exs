@@ -8,7 +8,7 @@ defmodule DocumentClient do
   Provides a consistent interface for extracting content from files.
   """
 
-  alias Xberg.ExtractionResult
+  alias Xberg.ExtractedDocument
 
   @doc """
   Extract content from a single file.
@@ -27,13 +27,14 @@ defmodule DocumentClient do
       {:ok, result} = DocumentClient.extract("document.pdf", mime_type: "application/pdf")
   """
   @spec extract(String.t(), keyword()) ::
-          {:ok, ExtractionResult.t()} | {:error, String.t()}
+          {:ok, ExtractedDocument.t()} | {:error, String.t()}
   def extract(path, opts \\ []) do
     mime_type = Keyword.get(opts, :mime_type, nil)
     config = Keyword.get(opts, :config, nil)
 
-    case Xberg.extract(path, mime_type, config) do
-      {:ok, result} ->
+    case Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: path, mime_type: mime_type}, config) do
+      {:ok, output} ->
+        result = List.first(output.results)
         IO.debug("Successfully extracted file: #{path}")
         {:ok, result}
 
@@ -48,12 +49,13 @@ defmodule DocumentClient do
 
   Raises Xberg.Error if extraction fails.
   """
-  @spec extract!(String.t(), keyword()) :: ExtractionResult.t()
+  @spec extract!(String.t(), keyword()) :: ExtractedDocument.t()
   def extract!(path, opts \\ []) do
     mime_type = Keyword.get(opts, :mime_type, nil)
     config = Keyword.get(opts, :config, nil)
 
-    Xberg.extract!(path, mime_type, config)
+    output = Xberg.extract!(path, mime_type, config)
+    List.first(output.results)
   end
 
   @doc """

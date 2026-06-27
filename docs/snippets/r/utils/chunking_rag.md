@@ -1,7 +1,7 @@
 ```r title="R"
 library(xberg)
 
-config <- list(
+config <- ExtractionConfig$from_json(jsonlite::toJSON(list(
   chunking = list(
     max_characters = 500L,
     overlap = 50L,
@@ -10,11 +10,15 @@ config <- list(
       normalize = TRUE
     )
   )
+), auto_unbox = TRUE))
+
+input <- list(kind = "uri", uri = "research_paper.pdf", mime_type = "application/pdf")
+json <- extract(
+  input = ExtractInput$from_json(jsonlite::toJSON(input, auto_unbox = TRUE)),
+  config = config
 )
-
-json <- extract_sync("research_paper.pdf", "application/pdf", config)
-result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
-
+output <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+result <- output$results[[1]]
 for (i in seq_along(result$chunks)) {
   chunk <- result$chunks[[i]]
   cat(sprintf("Chunk %d/%d\n", i, length(result$chunks)))

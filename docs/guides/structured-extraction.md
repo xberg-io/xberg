@@ -1,9 +1,11 @@
 # Structured Extraction
 
+Define a JSON schema and extract typed structured data directly from documents via LLM. Get back fields ready for your database or app, no manual parsing of raw text required.
+
 Structured extraction is part of the unified extraction pipeline. Set
 `ExtractionConfig.structured_extraction`, call `extract` or `extract_batch`, and
-read `structured_output` from each `ExtractionResult` in the returned
-`ExtractionOutput` envelope.
+read `structured_output` from each `ExtractedDocument` in the returned
+`ExtractionResult` envelope.
 
 There is no separate public structured-extraction entrypoint in v1.
 
@@ -11,7 +13,7 @@ There is no separate public structured-extraction entrypoint in v1.
 
 Provide a JSON schema and an LLM model. Xberg first extracts the document, then
 sends the extracted content to the configured model and stores the parsed JSON
-result on the extraction result.
+result on the extracted document.
 
 === "Rust"
     ```rust
@@ -183,12 +185,12 @@ Structured extraction works with every `ExtractInput` source:
 - `kind = "uri"` for HTTP(S) document URLs and website crawl seeds
 
 For batches, each successful result can carry its own `structured_output`.
-Failures are reported in `ExtractionOutput.errors` without discarding other
+Failures are reported in `ExtractionResult.errors` without discarding other
 results.
 
 ## Output
 
-Read structured data from each `ExtractionResult.structured_output`.
+Read structured data from each `ExtractedDocument.structured_output`.
 
 The extraction envelope still includes normal document content, pages, chunks,
 metadata, warnings, and errors. This lets downstream code store the raw

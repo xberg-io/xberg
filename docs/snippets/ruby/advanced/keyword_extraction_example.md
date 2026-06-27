@@ -9,12 +9,13 @@ config = Xberg::ExtractionConfig.new(
   )
 )
 
-result = Xberg.extract_sync('research_paper.pdf', config: config)
+output = Xberg.extract('research_paper.pdf', config: config)
+result = output.results.first
 
-keywords = result.metadata&.dig('keywords') || []
+keywords = result.extracted_keywords || []
 keywords.each do |kw|
-  text = kw['text']
-  score = kw['score']
+  text = kw.text
+  score = kw.score
   puts "#{text}: #{score.round(3)}"
 end
 ```

@@ -4,7 +4,9 @@
 use Xberg\Xberg;
 use Xberg\ExtractionConfig;
 
-$result = Xberg::extract_sync("document.pdf", null, new ExtractionConfig());
+$resultOutput = Xberg::extract(\Xberg\ExtractInput::uri("document.pdf"), \Xberg\ExtractionConfig::default());
+
+$result = $resultOutput->results[0];
 
 foreach ($result->tables as $table) {
     echo "Table on page " . $table->page_number . " with " . count($table->cells) . " rows\n";

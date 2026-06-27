@@ -1,4 +1,4 @@
-import type { ExtractionResult } from "@xberg-io/xberg-wasm";
+import type { ExtractedDocument } from "@xberg-io/xberg-wasm";
 import { extract, initWasm } from "@xberg-io/xberg-wasm";
 
 interface ValidationError {
@@ -14,7 +14,7 @@ class ContentValidator {
     this.minContentLength = length;
   }
 
-  validate(result: ExtractionResult): ValidationError[] {
+  validate(result: ExtractedDocument): ValidationError[] {
     const errors: ValidationError[] = [];
 
     if (result.content.length < this.minContentLength) {
@@ -54,7 +54,7 @@ async function demonstrateValidator() {
 
   const bytes = new Uint8Array(await fetch("document.pdf").then((r) => r.arrayBuffer()));
 
-  const result = await extract(bytes, "application/pdf");
+  const result = await extract({ kind: "bytes", bytes, mimeType: "application/pdf" });
   const errors = validator.validate(result);
 
   if (errors.length > 0) {

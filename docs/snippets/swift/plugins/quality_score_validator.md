@@ -16,7 +16,7 @@ final class QualityValidator: Validator {
         75
     }
 
-    func validate(result: ExtractionResult, config: ExtractionConfig) -> String {
+    func validate(result: ExtractedDocument, config: ExtractionConfig) -> String {
         // Parse metadata to extract quality score
         let metadata = result.metadata()
         let qualityScore: Double
@@ -35,7 +35,7 @@ final class QualityValidator: Validator {
         return "{\"ok\": null}"
     }
 
-    func shouldValidate(result: ExtractionResult, config: ExtractionConfig) -> Bool {
+    func shouldValidate(result: ExtractedDocument, config: ExtractionConfig) -> Bool {
         // Only validate if quality processing was enabled
         config.enableQualityProcessing()
     }

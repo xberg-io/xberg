@@ -205,10 +205,18 @@ echo $result->content;
 ### Batch Processing
 
 ```php title="Batch Processing"
-use function Xberg\extract_batch;
+use Xberg\ExtractInput;
+use Xberg\ExtractionConfig;
+use Xberg\Xberg;
 
 $files = ['doc1.pdf', 'doc2.docx', 'doc3.xlsx'];
-$results = extract_batch($files);
+$inputs = array_map(
+    static fn (string $file): ExtractInput => ExtractInput::uri($file),
+    $files
+);
+
+$output = Xberg::extractBatch($inputs, ExtractionConfig::default());
+$results = $output->results;
 ```
 
 ## Async Extraction (4 snippets)

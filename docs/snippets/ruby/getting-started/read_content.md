@@ -1,12 +1,14 @@
 ```ruby title="Ruby"
 require 'xberg'
 
-result = Xberg.extract_sync('document.pdf')
+input = Xberg::ExtractInput.new(uri: 'document.pdf')
+config = Xberg::ExtractionConfig.new
+result = Xberg.extract(input, config)
 
-content = result.content
-tables = result.tables
-images = result.images
-metadata = result.metadata
+content = result.results.first.content
+tables = result.results.first.tables
+images = result.results.first.images
+metadata = result.results.first.metadata
 
 puts "Content: #{content.length} characters"
 puts "Tables: #{tables.length}"

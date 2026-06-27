@@ -10,7 +10,7 @@ async function extractInParallel(documents: Uint8Array[], mimeTypes: string[]) {
     return extractWithWebWorkers(documents, mimeTypes);
   }
 
-  return Promise.all(documents.map((bytes, index) => extract(bytes, mimeTypes[index])));
+  return Promise.all(documents.map((bytes, index) => extract({ kind: "bytes", bytes, mimeType: mimeTypes[index] })));
 }
 
 function extractWithWebWorkers(documents: Uint8Array[], mimeTypes: string[]) {

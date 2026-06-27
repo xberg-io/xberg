@@ -1,15 +1,15 @@
-import type { ExtractionResult } from "@xberg-io/xberg-wasm";
+import type { ExtractedDocument } from "@xberg-io/xberg-wasm";
 import { extract, initWasm } from "@xberg-io/xberg-wasm";
 
 interface Plugin {
   name: string;
-  execute: (result: ExtractionResult) => Promise<ExtractionResult>;
+  execute: (result: ExtractedDocument) => Promise<ExtractedDocument>;
 }
 
 class TextCleanerPlugin implements Plugin {
   name = "text-cleaner";
 
-  async execute(result: ExtractionResult): Promise<ExtractionResult> {
+  async execute(result: ExtractedDocument): Promise<ExtractedDocument> {
     const cleaned = result.content.replace(/\x00/g, "").replace(/\s+/g, " ").trim();
 
     return { ...result, content: cleaned };
@@ -19,7 +19,7 @@ class TextCleanerPlugin implements Plugin {
 class MetadataEnricherPlugin implements Plugin {
   name = "metadata-enricher";
 
-  async execute(result: ExtractionResult): Promise<ExtractionResult> {
+  async execute(result: ExtractedDocument): Promise<ExtractedDocument> {
     return {
       ...result,
       metadata: {
@@ -35,10 +35,14 @@ async function executePipeline(
   bytes: Uint8Array,
   mimeType: string,
   plugins: Plugin[],
-): Promise<ExtractionResult> {
+): Promise<ExtractedDocument> {
   await initWasm();
 
-  let result = await extract(bytes, mimeType);
+  const output = await extract({ kind: "bytes", bytes, mimeType: mimeType });
+  let result = output.results[0];
+  if (!result) {
+    throw new Error("No document extracted");
+  }
 
   for (const plugin of plugins) {
     console.log(`Executing plugin: ${plugin.name}`);

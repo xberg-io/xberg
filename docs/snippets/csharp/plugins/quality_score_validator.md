@@ -18,7 +18,7 @@ public class QualityScoreValidator : IValidator
         Console.WriteLine("Quality score validator shut down");
     }
 
-    public void Validate(ExtractionResult result, ExtractionConfig config)
+    public void Validate(ExtractedDocument result, ExtractionConfig config)
     {
         var qualityScore = CalculateQualityScore(result);
 
@@ -31,7 +31,7 @@ public class QualityScoreValidator : IValidator
         }
     }
 
-    public bool ShouldValidate(ExtractionResult result, ExtractionConfig config)
+    public bool ShouldValidate(ExtractedDocument result, ExtractionConfig config)
     {
         return !string.IsNullOrEmpty(result.Content);
     }
@@ -41,7 +41,7 @@ public class QualityScoreValidator : IValidator
         return 50;
     }
 
-    private float CalculateQualityScore(ExtractionResult result)
+    private float CalculateQualityScore(ExtractedDocument result)
     {
         var contentLength = result.Content.Length;
         var hasMetadata = result.Metadata != null;

@@ -42,30 +42,11 @@ For non-blocking document processing:
 {{ snippets.async_extraction | include_snippet(language) }}
 
 {% endif %}
-{% if snippets.config_discovery %}
 
+{% if snippets.config_discovery %}
 #### Configuration Discovery
 
 {{ snippets.config_discovery | include_snippet(language) }}
-
-{% endif %}
-{% if snippets.worker_pool %}
-
-#### Worker Thread Pool
-
-{{ snippets.worker_pool | include_snippet(language) }}
-
-**Performance Benefits:**
-- **Parallel Processing**: Multiple documents extracted simultaneously
-- **CPU Utilization**: Maximizes multi-core CPU usage for large batches
-- **Queue Management**: Automatically distributes work across available workers
-- **Resource Control**: Prevents thread exhaustion with configurable pool size
-
-**Best Practices:**
-- Use worker pools for batches of 10+ documents
-- Set pool size to number of CPU cores (default behavior)
-- Always close pools with `closeWorkerPool()` to prevent resource leaks
-- Reuse pools across multiple batch operations for efficiency
 
 {% endif %}
 

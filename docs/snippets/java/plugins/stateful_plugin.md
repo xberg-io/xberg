@@ -1,4 +1,6 @@
 ```java title="Java"
+import io.xberg.ExtractedDocument;
+import io.xberg.PostProcessor;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -10,7 +12,7 @@ class StatefulPlugin implements PostProcessor {
     private final ConcurrentHashMap<String, String> cache = new ConcurrentHashMap<>();
 
     @Override
-    public ExtractionResult process(ExtractionResult result) {
+    public ExtractedDocument process(ExtractedDocument result) {
         // Increment counter atomically
         callCount.incrementAndGet();
 

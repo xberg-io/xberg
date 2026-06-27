@@ -1,6 +1,6 @@
 # VLM Image Captions
 
-Caption every extracted image with a vision-language model. Captions populate `ExtractedImage.caption` for every image whose area exceeds `CaptioningConfig.min_image_area`.
+Caption every extracted image with a vision-language model to add alt-text, feed into retrieval pipelines, or describe diagrams and charts for downstream LLMs. See the [CaptioningConfig reference](../reference/configuration.md#captioningconfig) for all options.
 
 !!! Note "Feature gate"
     Requires the `captioning` Cargo feature. Included in `full`. Requires `liter-llm` and a vision-capable provider.

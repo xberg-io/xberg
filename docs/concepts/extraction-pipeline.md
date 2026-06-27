@@ -2,7 +2,7 @@
 
 Every file Xberg processes follows the same multi-stage pipeline. A PDF, a scanned
 image, a spreadsheet, an email attachment: they all enter at the top and come out as a
-structured `ExtractionResult` inside an `ExtractionOutput` envelope. The stages run in a fixed order, but several
+structured `ExtractedDocument` inside an `ExtractionResult` envelope. The stages run in a fixed order, but several
 of them are conditional. Caching can short-circuit the entire flow. OCR only runs when
 images are present. Post-processing steps only fire if you've configured them.
 
@@ -17,7 +17,7 @@ flowchart TD
     Input(["Input: URI or raw bytes"]):::input
 
     Input --> S1["<b>1. Cache Lookup</b>\nHash file + config, check for stored result"]
-    S1 -->|Cache hit| FastReturn(["Return cached ExtractionResult"]):::cached
+    S1 -->|Cache hit| FastReturn(["Return cached ExtractedDocument"]):::cached
 
     S1 -->|Cache miss| S2["<b>2. MIME Detection</b>\nResolve file type from extension or explicit param"]
     S2 --> S3["<b>3. Registry Lookup</b>\nFind the right DocumentExtractor for this MIME type"]
@@ -32,7 +32,7 @@ flowchart TD
     S7 --> S8["<b>8. Post-Processors</b>\nTransform result (Early → Middle → Late)"]
 
     S8 --> S9["<b>9. Cache Store</b>\nSave result for future lookups"]
-    S9 --> Output(["Return ExtractionOutput envelope"]):::output
+    S9 --> Output(["Return ExtractionResult envelope"]):::output
 
     classDef input fill:#e3f2fd,stroke:#1565c0,color:#0d47a1
     classDef output fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
@@ -96,7 +96,7 @@ let extractor = registry.get("application/pdf")?;
 ## 4. Format Extraction
 
 This is the core of the pipeline. The selected extractor reads the file and produces an
-`ExtractionResult` containing the extracted text, metadata (author, title, creation date),
+`ExtractedDocument` containing the extracted text, metadata (author, title, creation date),
 page count, and detected language.
 
 Each file format has a tailored extraction strategy:
@@ -110,7 +110,7 @@ Each file format has a tailored extraction strategy:
 | **Email** (`.eml`, `.msg`)         | The MIME structure is parsed. The email body (plain text or HTML) is extracted as the main content. Attachments are extracted recursively using the same pipeline.                                     |
 | **Office** (DOCX, PPTX)            | The file is a ZIP archive containing XML. Xberg opens the archive, locates the content XML parts, and parses the document structure into text.                                                     |
 
-The extraction result at this point contains raw extracted text. It hasn't been validated, scored, or chunked yet.
+The extracted document at this point contains raw extracted text. It hasn't been validated, scored, or chunked yet.
 
 ---
 
@@ -158,7 +158,7 @@ produced. The merged result moves to post-processing.
 
 ## 6. Validators
 
-Validators are the first post-processing step. They inspect the `ExtractionResult` and decide
+Validators are the first post-processing step. They inspect the `ExtractedDocument` and decide
 whether it meets your requirements. If a validator rejects the result, the pipeline stops
 immediately and the error is returned to the caller. No further processing happens.
 
@@ -198,7 +198,7 @@ Chunking is designed for RAG (Retrieval-Augmented Generation) pipelines. The ove
 
 ## 8. Post-Processors
 
-Post-processors are the final transformation step. They receive the `ExtractionResult` and can modify it in any way: clean up text, extract entities, redact sensitive content, reformat output, or add custom metadata.
+Post-processors are the final transformation step. They receive the `ExtractedDocument` and can modify it in any way: clean up text, extract entities, redact sensitive content, reformat output, or add custom metadata.
 
 Post-processors run in three ordered stages so you can control what happens first:
 
@@ -217,7 +217,7 @@ result as-is. This means a buggy post-processor can't take down your extraction 
 Redaction runs Late by design: it must see the populated `entities`, `summary`,
 `translation`, and `page_classifications` fields so it can rewrite their textual content
 before the result leaves Xberg. The original pre-redaction text is dropped at the end
-of the pipeline; only `ExtractionResult.redaction_report` carries byte offsets back into
+of the pipeline; only `ExtractedDocument.redaction_report` carries byte offsets back into
 the original.
 
 ---
@@ -226,7 +226,7 @@ the original.
 
 If caching is enabled and the extraction completed without errors, the result is written to the cache for future lookups.
 
-Each final `ExtractionResult` returned in `ExtractionOutput.results` contains:
+Each final `ExtractedDocument` returned in `ExtractionResult.results` contains:
 
 - **`content`** - the fully processed text
 - **`metadata`** — format-specific metadata (author, title, creation date, page count, etc.)

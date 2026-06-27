@@ -1,5 +1,7 @@
 ```java title="Java"
 import io.xberg.ExtractionConfig;
+import io.xberg.ExtractionResult;
+import io.xberg.ExtractedDocument;
 import io.xberg.ChunkingConfig;
 
 ExtractionConfig config = ExtractionConfig.builder()
@@ -11,8 +13,12 @@ ExtractionConfig config = ExtractionConfig.builder()
 ```
 
 ```java title="Java - Markdown with Heading Context"
+import io.xberg.Xberg;
 import io.xberg.ExtractionConfig;
+import io.xberg.ExtractionResult;
+import io.xberg.ExtractedDocument;
 import io.xberg.ChunkingConfig;
+import io.xberg.ExtractInput;
 import io.xberg.HeadingContext;
 import io.xberg.HeadingLevel;
 
@@ -25,7 +31,12 @@ ExtractionConfig config = ExtractionConfig.builder()
         .build())
     .build();
 
-ExtractionResult result = XbergClient.extract("document.md", config);
+ExtractionResult output = Xberg.extract(
+    ExtractInput.fromUri("document.md"),
+    config
+);
+
+ExtractedDocument result = output.results().get(0);
 
 result.getChunks().forEach(chunk -> {
     var headingContext = chunk.getMetadata().getHeadingContext();
@@ -39,8 +50,12 @@ result.getChunks().forEach(chunk -> {
 ```
 
 ```java title="Java - Prepend Heading Context"
+import io.xberg.Xberg;
 import io.xberg.ExtractionConfig;
+import io.xberg.ExtractionResult;
+import io.xberg.ExtractedDocument;
 import io.xberg.ChunkingConfig;
+import io.xberg.ExtractInput;
 
 ExtractionConfig config = ExtractionConfig.builder()
     .chunking(ChunkingConfig.builder()
@@ -51,7 +66,12 @@ ExtractionConfig config = ExtractionConfig.builder()
         .build())
     .build();
 
-ExtractionResult result = XbergClient.extract("document.md", config);
+ExtractionResult output = Xberg.extract(
+    ExtractInput.fromUri("document.md"),
+    config
+);
+
+ExtractedDocument result = output.results().get(0);
 
 result.getChunks().forEach(chunk -> {
     // Each chunk's content is prefixed with its heading breadcrumb

@@ -9,8 +9,8 @@ import kotlin.test.assertTrue
 
 class MinLengthValidatorTest {
 
-    private fun makeResult(content: String): ExtractionResult =
-        ExtractionResult.builder()
+    private fun makeResult(content: String): ExtractedDocument =
+        ExtractedDocument.builder()
             .content(content)
             .mimeType("text/plain")
             .metadata(Metadata.builder().build())

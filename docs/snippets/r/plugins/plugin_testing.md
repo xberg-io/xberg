@@ -23,12 +23,14 @@ test_that("post processor registers and runs", {
   register_post_processor("uppercase", uppercase_processor)
   on.exit(unregister_post_processor("uppercase"), add = TRUE)
 
-  config <- list(postprocessor = list(enabled = TRUE))
-  json <- extract_sync(
-    charToRaw("hello world"), "text/plain", config
+  config <- ExtractionConfig$from_json(jsonlite::toJSON(list(postprocessor = list(enabled = TRUE)), auto_unbox = TRUE))
+  input <- list(kind = "bytes", bytes = as.integer(charToRaw("hello world")), mime_type = "text/plain")
+  json <- extract(
+    input = ExtractInput$from_json(jsonlite::toJSON(input, auto_unbox = TRUE)),
+    config = config
   )
-  result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
-
+  output <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+  result <- output$results[[1]]
   expect_match(result$content, "HELLO WORLD", fixed = TRUE)
 })
 ```

@@ -1,12 +1,12 @@
 ```python title="Python"
-from xberg import (
+from xberg import ExtractInput, (
     ExtractionConfig,
     OcrConfig,
     ChunkingConfig,
     ChunkerType,
     ImageExtractionConfig,
     OutputFormat,
-    extract_sync,
+    extract,
 )
 
 config = ExtractionConfig(
@@ -34,18 +34,18 @@ config = ExtractionConfig(
     use_cache=True,
 )
 
-result = extract_sync("report.pdf", config=config)
+result = extract(ExtractInput.from_uri("report.pdf"), config)
 
-print(f"Content ({len(result.content)} chars):")
-print(result.content[:200])
+print(f"Content ({len(result.results[0].content)} chars):")
+print(result.results[0].content[:200])
 
-if result.chunks:
-    print(f"\nChunks: {len(result.chunks)}")
+if result.results[0].chunks:
+    print(f"\nChunks: {len(result.results[0].chunks)}")
 
-print(f"Tables: {len(result.tables)}")
+print(f"Tables: {len(result.results[0].tables)}")
 
-if result.detected_languages:
-    print(f"Languages: {result.detected_languages}")
+if result.results[0].detected_languages:
+    print(f"Languages: {result.results[0].detected_languages}")
 
 if result.extraction_method:
     print(f"Extraction method: {result.extraction_method}")

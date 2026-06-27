@@ -24,8 +24,9 @@ defmodule ImageExtractor do
       use_cache: true
     }
 
-    case Xberg.extract(file_path, nil, config) do
-      {:ok, result} ->
+    case Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: file_path}, config) do
+      {:ok, output} ->
+        result = List.first(output.results)
         {:ok, result.images || []}
 
       {:error, reason} ->

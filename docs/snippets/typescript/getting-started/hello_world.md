@@ -1,6 +1,6 @@
 ```typescript title="TypeScript"
-import { extractSync } from "@xberg-io/xberg";
+import { extract } from "@xberg-io/xberg";
 
-const result = extractSync("document.pdf");
+const result = extract("document.pdf");
 console.log(result.content);
 ```

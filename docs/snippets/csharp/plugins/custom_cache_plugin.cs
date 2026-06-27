@@ -67,7 +67,7 @@ class CustomCacheWrapper
             return cached;
         }
 
-        var result = XbergLib.ExtractSync(filePath, config);
+        var result = XbergLib.Extract(filePath, config);
         Set(cacheKey, result);
         Console.WriteLine("Extracted and cached");
 
@@ -87,10 +87,12 @@ class Program
             var filePath = "document.pdf";
 
             var result1 = cache.GetOrExtract(filePath, config);
-            Console.WriteLine($"First extraction: {result1.Content.Length} chars");
+            var document1 = result1.Results[0];
+            Console.WriteLine($"First extraction: {document1.Content.Length} chars");
 
             var result2 = cache.GetOrExtract(filePath, config);
-            Console.WriteLine($"Second extraction: {result2.Content.Length} chars");
+            var document2 = result2.Results[0];
+            Console.WriteLine($"Second extraction: {document2.Content.Length} chars");
 
             cache.Clear();
             Console.WriteLine("Cache cleared");

@@ -24,7 +24,11 @@ public class HierarchyConfigExample {
             .build();
 
         Xberg xberg = new Xberg(extractionConfigBasic);
-        // var result = xberg.extractSync("document.pdf");
+        // var input = ExtractInput.builder()
+        //     .withKind(ExtractInputKind.Uri)
+        //     .withUri("document.pdf")
+        //     .build();
+        // var result = Xberg.extract(input, extractionConfigBasic).results().get(0);
 
 
         // Example 2: Custom kClusters for minimal structure

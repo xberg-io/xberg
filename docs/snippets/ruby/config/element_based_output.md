@@ -5,10 +5,11 @@ require 'xberg'
 config = Xberg::ExtractionConfig.new(output_format: 'element_based')
 
 # Extract document
-result = Xberg.extract_sync('document.pdf', config: config)
+input = Xberg::ExtractInput.new(uri: 'document.pdf')
+result = Xberg.extract(input, config)
 
 # Access elements
-result.elements.each do |element|
+result.results.first.elements.each do |element|
   puts "Type: #{element.element_type}"
   puts "Text: #{element.text[0...100]}"
 
@@ -23,7 +24,7 @@ result.elements.each do |element|
 end
 
 # Filter by element type
-titles = result.elements.select { |e| e.element_type == 'title' }
+titles = result.results.first.elements.select { |e| e.element_type == 'title' }
 titles.each do |title|
   level = title.metadata.additional['level'] || 'unknown'
   puts "[#{level}] #{title.text}"

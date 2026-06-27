@@ -2,11 +2,7 @@
 	"id": "batch_file_sync_basic",
 	"category": "batch",
 	"description": "Extract text from multiple files synchronously",
-	"tags": [
-		"batch",
-		"sync",
-		"multiple_files"
-	],
+	"tags": ["batch", "sync", "multiple_files"],
 	"call": "extract_batch",
 	"input": {
 		"inputs": [
@@ -26,9 +22,7 @@
 		}
 	],
 	"skip": {
-		"languages": [
-			"wasm"
-		],
+		"languages": ["wasm"],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	}
 }

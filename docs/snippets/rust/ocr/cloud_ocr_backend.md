@@ -1,6 +1,6 @@
 ```rust title="Rust"
 use xberg::plugins::{Plugin, OcrBackend, OcrBackendType};
-use xberg::{Result, ExtractionResult, OcrConfig, Metadata};
+use xberg::{Result, ExtractedDocument, OcrConfig, Metadata};
 use async_trait::async_trait;
 use std::path::Path;
 
@@ -22,10 +22,10 @@ impl OcrBackend for CloudOcrBackend {
         &self,
         image_bytes: &[u8],
         config: &OcrConfig,
-    ) -> Result<ExtractionResult> {
+    ) -> Result<ExtractedDocument> {
         let text = self.call_cloud_api(image_bytes, &config.language).await?;
 
-        Ok(ExtractionResult {
+        Ok(ExtractedDocument {
             content: text,
             mime_type: "text/plain".to_string(),
             metadata: Metadata::default(),

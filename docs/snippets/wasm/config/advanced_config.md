@@ -20,7 +20,7 @@ const fileInput = document.getElementById("file") as HTMLInputElement;
 const file = fileInput.files?.[0];
 
 if (file) {
-  const result = await extract(file, file.type, config);
+  const result = await extract({ kind: "bytes", bytes: file, mimeType: file.type }, config);
 
   if (result.chunks) {
     for (const chunk of result.chunks) {

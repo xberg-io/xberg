@@ -7,9 +7,10 @@ ocr_config = Xberg::OcrConfig.new(
 )
 
 config = Xberg::ExtractionConfig.new(ocr: ocr_config)
-result = Xberg.extract_sync('scanned.pdf', config: config)
+input = Xberg::ExtractInput.new(uri: 'scanned.pdf')
+result = Xberg.extract(input, config)
 
 puts "Extracted text from scanned document:"
-puts result.content
+puts result.results.first.content
 puts "Used OCR backend: tesseract"
 ```

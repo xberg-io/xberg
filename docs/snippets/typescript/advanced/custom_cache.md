@@ -14,5 +14,5 @@ const config: ExtractionConfig = {
   useCache: true, // Enable internal Rust cache
 };
 
-const result = await extract("document.pdf", null, config);
+const result = await extract({ kind: "uri", uri: "document.pdf" }, config);
 ```

@@ -26,7 +26,7 @@ async function extractWithConditionalConfig(fileSize: number) {
 
   const bytes = new Uint8Array(await fetch("document.pdf").then((r) => r.arrayBuffer()));
 
-  const result = await extract(bytes, "application/pdf", config);
+  const result = await extract({ kind: "bytes", bytes, mimeType: "application/pdf" }, config);
 
   return result;
 }

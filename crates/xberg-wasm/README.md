@@ -109,7 +109,7 @@ pnpm add @xberg-io/xberg-wasm
 Extract text, metadata, and structure from any supported document format:
 
 ```ts
-import { extract, initWasm } from "@xberg-io/xberg-wasm";
+import { ExtractInputKind, extract, initWasm } from "@xberg-io/xberg-wasm";
 
 async function main() {
   await initWasm();
@@ -117,12 +117,17 @@ async function main() {
   const buffer = await fetch("document.pdf").then((r) => r.arrayBuffer());
   const bytes = new Uint8Array(buffer);
 
-  const result = await extract(bytes, "application/pdf");
+  const output = await extract({
+    kind: ExtractInputKind.Bytes,
+    bytes,
+    mimeType: "application/pdf",
+    filename: "document.pdf",
+  });
 
   console.log("Extracted content:");
-  console.log(result.content);
-  console.log("MIME type:", result.mimeType);
-  console.log("Metadata:", result.metadata);
+  console.log(output.results[0].content);
+  console.log("MIME type:", output.results[0].mimeType);
+  console.log("Metadata:", output.results[0].metadata);
 }
 
 main().catch(console.error);
@@ -137,7 +142,7 @@ Most use cases benefit from configuration to control extraction behavior:
 **With OCR (for scanned documents):**
 
 ```ts
-import { enableOcr, extract, initWasm } from "@xberg-io/xberg-wasm";
+import { enableOcr, ExtractInputKind, extract, initWasm } from "@xberg-io/xberg-wasm";
 
 async function extractWithOcr() {
   await initWasm();
@@ -152,15 +157,23 @@ async function extractWithOcr() {
 
   const bytes = new Uint8Array(await fetch("scanned-page.png").then((r) => r.arrayBuffer()));
 
-  const result = await extract(bytes, "image/png", {
-    ocr: {
-      backend: "tesseract-wasm",
-      language: "eng",
+  const output = await extract(
+    {
+      kind: ExtractInputKind.Bytes,
+      bytes,
+      mimeType: "image/png",
+      filename: "scanned-page.png",
     },
-  });
+    {
+      ocr: {
+        backend: "tesseract-wasm",
+        language: ["eng"],
+      },
+    },
+  );
 
   console.log("Extracted text:");
-  console.log(result.content);
+  console.log(output.results[0].content);
 }
 
 extractWithOcr().catch(console.error);
@@ -173,7 +186,7 @@ See [Configuration Guide](https://docs.xberg.io/guides/configuration/) for table
 #### Processing Multiple Files
 
 ```ts
-import { extract, initWasm } from "@xberg-io/xberg-wasm";
+import { ExtractInputKind, extractBatch, initWasm } from "@xberg-io/xberg-wasm";
 
 interface DocumentJob {
   name: string;
@@ -185,25 +198,22 @@ async function _processBatch(documents: DocumentJob[], concurrency: number = 3) 
   await initWasm();
 
   const results: Record<string, string> = {};
-  const queue = [...documents];
 
-  const workers = Array(concurrency)
-    .fill(null)
-    .map(async () => {
-      while (queue.length > 0) {
-        const doc = queue.shift();
-        if (!doc) break;
+  for (let index = 0; index < documents.length; index += concurrency) {
+    const batch = documents.slice(index, index + concurrency);
+    const output = await extractBatch(
+      batch.map((doc) => ({
+        kind: ExtractInputKind.Bytes,
+        bytes: doc.bytes,
+        mimeType: doc.mimeType,
+        filename: doc.name,
+      })),
+    );
 
-        try {
-          const result = await extract(doc.bytes, doc.mimeType);
-          results[doc.name] = result.content;
-        } catch (error) {
-          console.error(`Failed to process ${doc.name}:`, error);
-        }
-      }
+    output.results.forEach((result, resultIndex) => {
+      results[batch[resultIndex].name] = result.content ?? "";
     });
-
-  await Promise.all(workers);
+  }
   return results;
 }
 ```
@@ -336,16 +346,7 @@ Powered by [tree-sitter-language-pack](https://github.com/xberg-io/tree-sitter-l
 - **Language Detection** - Detect and support multiple languages in documents
 - **Code Intelligence** - Extract structure, imports, exports, symbols, and docstrings from [306 programming languages](https://docs.tree-sitter-language-pack.xberg.io) via tree-sitter
 - **Configuration** - Fine-grained control over extraction behavior
-
-### Performance Characteristics
-
-| Format | Speed | Memory | Notes |
-|--------|-------|--------|-------|
-| **PDF (text)** | 10-100 MB/s | ~50MB per doc | Fastest extraction |
-| **Office docs** | 20-200 MB/s | ~100MB per doc | DOCX, XLSX, PPTX |
-| **Images (OCR)** | 1-5 MB/s | Variable | Depends on OCR backend |
-| **Archives** | 5-50 MB/s | ~200MB per doc | ZIP, TAR, etc. |
-| **Web formats** | 50-200 MB/s | Streaming | HTML, XML, JSON |
+- **Six Output Formats** - Plain text, Markdown, Djot, HTML, JSON tree structure, or Structured JSON with OCR metadata
 
 ## OCR Support
 
@@ -356,7 +357,7 @@ Xberg supports multiple OCR backends for extracting text from scanned documents 
 ### OCR Configuration Example
 
 ```ts
-import { enableOcr, extract, initWasm } from "@xberg-io/xberg-wasm";
+import { enableOcr, ExtractInputKind, extract, initWasm } from "@xberg-io/xberg-wasm";
 
 async function extractWithOcr() {
   await initWasm();
@@ -371,15 +372,23 @@ async function extractWithOcr() {
 
   const bytes = new Uint8Array(await fetch("scanned-page.png").then((r) => r.arrayBuffer()));
 
-  const result = await extract(bytes, "image/png", {
-    ocr: {
-      backend: "tesseract-wasm",
-      language: "eng",
+  const output = await extract(
+    {
+      kind: ExtractInputKind.Bytes,
+      bytes,
+      mimeType: "image/png",
+      filename: "scanned-page.png",
     },
-  });
+    {
+      ocr: {
+        backend: "tesseract-wasm",
+        language: ["eng"],
+      },
+    },
+  );
 
   console.log("Extracted text:");
-  console.log(result.content);
+  console.log(output.results[0].content);
 }
 
 extractWithOcr().catch(console.error);
@@ -429,7 +438,7 @@ For detailed plugin documentation, visit [Plugin System Guide](https://docs.xber
 Process multiple documents efficiently:
 
 ```ts
-import { extract, initWasm } from "@xberg-io/xberg-wasm";
+import { ExtractInputKind, extractBatch, initWasm } from "@xberg-io/xberg-wasm";
 
 interface DocumentJob {
   name: string;
@@ -441,25 +450,22 @@ async function _processBatch(documents: DocumentJob[], concurrency: number = 3) 
   await initWasm();
 
   const results: Record<string, string> = {};
-  const queue = [...documents];
 
-  const workers = Array(concurrency)
-    .fill(null)
-    .map(async () => {
-      while (queue.length > 0) {
-        const doc = queue.shift();
-        if (!doc) break;
+  for (let index = 0; index < documents.length; index += concurrency) {
+    const batch = documents.slice(index, index + concurrency);
+    const output = await extractBatch(
+      batch.map((doc) => ({
+        kind: ExtractInputKind.Bytes,
+        bytes: doc.bytes,
+        mimeType: doc.mimeType,
+        filename: doc.name,
+      })),
+    );
 
-        try {
-          const result = await extract(doc.bytes, doc.mimeType);
-          results[doc.name] = result.content;
-        } catch (error) {
-          console.error(`Failed to process ${doc.name}:`, error);
-        }
-      }
+    output.results.forEach((result, resultIndex) => {
+      results[batch[resultIndex].name] = result.content ?? "";
     });
-
-  await Promise.all(workers);
+  }
   return results;
 }
 ```

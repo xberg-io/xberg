@@ -163,14 +163,6 @@ Register the backend and set its name in `OcrConfig`:
     unregister_ocr_backend("cloud-ocr")
     ```
 
-### Using EasyOCR (Built-in)
-
-The built-in EasyOCR backend supports 80+ languages and GPU acceleration — just point `OcrConfig` at it:
-
-=== "Python"
-
-    --8<-- "snippets/python/ocr/ocr_easyocr.md"
-
 ## Validators
 
 !!! Warning Validation errors cause extraction to fail. Use validators for critical quality checks only.

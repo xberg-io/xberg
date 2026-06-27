@@ -9,7 +9,7 @@ fun main() {
         .withUseCache(true)
         .build()
 
-    val result = Xberg.extractSync(Paths.get("document.pdf"), null, config)
+    val result = Xberg.extract(Paths.get("document.pdf"), null, config)
     println("Quality score: ${result.qualityScore()}")
     println("Warnings: ${result.processingWarnings()?.size ?: 0}")
 }

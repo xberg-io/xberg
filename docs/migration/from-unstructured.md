@@ -335,6 +335,5 @@ for page in result.pages:
 
 After migration:
 
-1. Review the [Xberg vs Unstructured Comparison](../comparisons/xberg-vs-unstructured.md)
-2. Explore Xberg-specific features (hierarchy, per-page metadata, embeddings)
-3. Optimize your pipeline with native Rust performance
+1. Explore Xberg-specific features (hierarchy, per-page metadata, embeddings)
+2. Optimize your pipeline with native Rust performance

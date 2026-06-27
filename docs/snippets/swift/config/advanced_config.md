@@ -46,7 +46,7 @@ let configJson = """
 """
 
 let config = try extractionConfigFromJson(configJson)
-let result = try extractSync("document.pdf", nil, config)
+let result = try extract("document.pdf", nil, config)
 
 print("Content: \(result.content().toString())")
 if let languages = result.detected_languages() {

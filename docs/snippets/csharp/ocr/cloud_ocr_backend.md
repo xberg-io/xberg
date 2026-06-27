@@ -22,14 +22,14 @@ public class CloudOcrBackend : IOcrBackend
     {
     }
 
-    public ExtractionResult ProcessImage(byte[] imageBytes, OcrConfig config)
+    public ExtractedDocument ProcessImage(byte[] imageBytes, OcrConfig config)
     {
         // Call cloud OCR API with imageBytes and config.Language
-        // Return ExtractionResult with extracted text
+        // Return ExtractedDocument with extracted text
         throw new NotImplementedException();
     }
 
-    public ExtractionResult ProcessImageFile(string path, OcrConfig config)
+    public ExtractedDocument ProcessImageFile(string path, OcrConfig config)
     {
         var imageBytes = File.ReadAllBytes(path);
         return ProcessImage(imageBytes, config);
@@ -60,7 +60,7 @@ public class CloudOcrBackend : IOcrBackend
         return false;
     }
 
-    public ExtractionResult ProcessDocument(string path, OcrConfig config)
+    public ExtractedDocument ProcessDocument(string path, OcrConfig config)
     {
         throw new NotSupportedException("Document processing not supported by CloudOcrBackend");
     }

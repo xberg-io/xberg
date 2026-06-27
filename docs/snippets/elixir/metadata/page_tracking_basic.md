@@ -3,12 +3,13 @@ config =
   %{"pages" => %{"extract_pages" => true}}
   |> Jason.encode!()
 
-case Xberg.extract_sync("document.pdf", nil, config) do
-  {:ok, result} ->
-    decoded = Jason.decode!(result)
+case Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "document.pdf"}, config) do
+  {:ok, output} ->
+    result = List.first(output.results)
+    pages = result.pages || []
 
-    case decoded do
-      %{"pages" => pages} when is_list(pages) ->
+    case pages do
+      [_ | _] ->
         Enum.each(pages, fn page ->
           page_number = page["page_number"]
           content = page["content"]
@@ -21,7 +22,7 @@ case Xberg.extract_sync("document.pdf", nil, config) do
           IO.puts("  Images: #{length(images)}")
         end)
 
-      _ ->
+      [] ->
         nil
     end
 

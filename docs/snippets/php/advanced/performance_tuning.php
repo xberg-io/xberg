@@ -15,7 +15,16 @@ require_once __DIR__ . '/vendor/autoload.php';
 use Xberg\Xberg;
 use Xberg\Config\ExtractionConfig;
 use function Xberg\extract;
-use function Xberg\extract_batch;
+
+function extractBatchFiles(array $files): array
+{
+    $inputs = array_map(
+        static fn (string $file): \Xberg\ExtractInput => \Xberg\ExtractInput::uri($file),
+        $files
+    );
+
+    return Xberg::extractBatch($inputs, \Xberg\ExtractionConfig::default())->results;
+}
 
 function benchmark(callable $fn, string $label): void
 {
@@ -51,7 +60,7 @@ if (!empty($files)) {
     }, "Single file processing");
 
     benchmark(function () use ($files) {
-        return extract_batch($files);
+        return extractBatchFiles($files);
     }, "Batch processing (parallel)");
 }
 
@@ -123,7 +132,7 @@ function findOptimalBatchSize(array $files): int
         $startTime = microtime(true);
 
         foreach ($batches as $batch) {
-            extract_batch($batch);
+            extractBatchFiles($batch);
         }
 
         $elapsed = microtime(true) - $startTime;
@@ -209,7 +218,7 @@ function processConcurrently(array $files, int $workers = 4): array
     $results = [];
 
     foreach ($chunks as $chunk) {
-        $chunkResults = extract_batch($chunk);
+        $chunkResults = extractBatchFiles($chunk);
         $results = array_merge($results, $chunkResults);
     }
 

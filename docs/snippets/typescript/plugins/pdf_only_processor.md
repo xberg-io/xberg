@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-import { registerPostProcessor, type ExtractionResult } from "@xberg-io/xberg";
+import { registerPostProcessor, type ExtractedDocument } from "@xberg-io/xberg";
 
 class PdfOnlyProcessor {
   name(): string {
@@ -11,11 +11,11 @@ class PdfOnlyProcessor {
   }
 
   // Gate the processor so it only runs for PDF documents.
-  shouldProcess(result: ExtractionResult): boolean {
+  shouldProcess(result: ExtractedDocument): boolean {
     return result.mimeType === "application/pdf";
   }
 
-  process(result: ExtractionResult): ExtractionResult {
+  process(result: ExtractedDocument): ExtractedDocument {
     return result;
   }
 }

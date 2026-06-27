@@ -11,16 +11,16 @@ class CloudOcrBackend(
 
     override fun version(): String = "1.0.0"
 
-    override fun process_image(image_bytes: ByteArray, config: OcrConfig): ExtractionResult {
+    override fun process_image(image_bytes: ByteArray, config: OcrConfig): ExtractedDocument {
         val text = callCloudApi(image_bytes, config.language())
-        return ExtractionResult.builder()
+        return ExtractedDocument.builder()
             .withContent(text)
             .withMimeType("text/plain")
             .withMetadata(Metadata.builder().build())
             .build()
     }
 
-    override fun process_image_file(path: Path, config: OcrConfig): ExtractionResult {
+    override fun process_image_file(path: Path, config: OcrConfig): ExtractedDocument {
         return process_image(java.nio.file.Files.readAllBytes(path), config)
     }
 
@@ -34,7 +34,7 @@ class CloudOcrBackend(
 
     override fun supports_document_processing(): Boolean = false
 
-    override fun process_document(_path: Path, _config: OcrConfig): ExtractionResult {
+    override fun process_document(_path: Path, _config: OcrConfig): ExtractedDocument {
         throw UnsupportedOperationException("document processing not supported")
     }
 

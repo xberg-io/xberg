@@ -8,7 +8,7 @@ const file = fileInput.files?.[0];
 
 if (file) {
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const result = await extract(bytes, file.type || "application/pdf", undefined);
+  const result = await extract({ kind: "bytes", bytes, mimeType: file.type || "application/pdf" }, undefined);
 
   result.tables?.forEach((table) => {
     console.log(`Table with ${table.cells?.length ?? 0} rows`);

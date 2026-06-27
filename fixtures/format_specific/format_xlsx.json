@@ -2,11 +2,7 @@
 	"id": "format_xlsx",
 	"category": "format_specific",
 	"description": "XLSX spreadsheet extraction using extract",
-	"tags": [
-		"format_specific",
-		"xlsx",
-		"text_extraction"
-	],
+	"tags": ["format_specific", "xlsx", "text_extraction"],
 	"call": "extract",
 	"input": {
 		"kind": "uri",
@@ -19,9 +15,7 @@
 		}
 	],
 	"skip": {
-		"languages": [
-			"wasm"
-		],
+		"languages": ["wasm"],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	}
 }

@@ -19,7 +19,13 @@ custom_json_extractor <- function(path, mime_type) {
 
 register_document_extractor("custom-json-extractor", custom_json_extractor)
 
-result <- extract_sync("data.json", "application/json", NULL)
+input <- list(kind = "uri", uri = "data.json", mime_type = "application/json")
+json <- extract(
+  input = ExtractInput$from_json(jsonlite::toJSON(input, auto_unbox = TRUE)),
+  config = ExtractionConfig$default()
+)
+output <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+result <- output$results[[1]]
 
 cat(sprintf("Extracted %d characters from JSON\n", nchar(result$content)))
 ```

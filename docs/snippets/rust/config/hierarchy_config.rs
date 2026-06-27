@@ -20,8 +20,8 @@ let extraction_config_basic = ExtractionConfig {
     ..Default::default()
 };
 
-// Use with extract_sync or extract_sync
-// let result = extract_sync("document.pdf", extraction_config_basic)?;
+// Use with extract or extract
+// let result = extract("document.pdf", extraction_config_basic)?;
 
 
 // Example 2: Custom k_clusters for minimal structure

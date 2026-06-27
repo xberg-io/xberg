@@ -1,14 +1,21 @@
 ```java title="Java"
 import io.xberg.Xberg;
 import io.xberg.ExtractionResult;
+import io.xberg.ExtractedDocument;
 import io.xberg.ExtractionConfig;
+import io.xberg.ExtractInput;
 import java.util.Map;
 
 ExtractionConfig config = ExtractionConfig.builder()
     .enableQualityProcessing(true)
     .build();
 
-ExtractionResult result = Xberg.extract("scanned_document.pdf", config);
+ExtractionResult output = Xberg.extract(
+    ExtractInput.fromUri("scanned_document.pdf"),
+    config
+);
+
+ExtractedDocument result = output.results().get(0);
 
 double qualityScore = result.getQualityScore() != null ? result.getQualityScore() : 0.0;
 

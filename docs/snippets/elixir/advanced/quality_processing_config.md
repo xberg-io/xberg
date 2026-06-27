@@ -8,8 +8,10 @@ config_json = Jason.encode!(%{
   ]
 })
 
-{:ok, result} = Xberg.extract_sync("document.pdf", "application/pdf", config_json)
+input = %Xberg.ExtractInput{kind: :uri, uri: "document.pdf", mime_type: "application/pdf"}
+{:ok, output} = Xberg.extract(input, config_json)
 
+result = List.first(output.results)
 IO.puts("Extraction quality applied")
 IO.inspect(result.text, label: "Quality-filtered text")
 ```

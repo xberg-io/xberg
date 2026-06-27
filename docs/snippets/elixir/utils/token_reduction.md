@@ -9,7 +9,8 @@ config_json =
     }
   })
 
-{:ok, json} = Xberg.extract_async("document.pdf", nil, config_json)
-result = Jason.decode!(json)
-IO.puts("Content length: #{String.length(result["content"] || "")}")
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "document.pdf"}, config_json)
+
+result = List.first(output.results)
+IO.puts("Content length: #{String.length(result.content || "")}")
 ```

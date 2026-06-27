@@ -21,25 +21,35 @@ int main(void) {
         return 1;
     }
 
-    XBERGExtractionResult *result =
-        xberg_extract_sync("research_paper.pdf", NULL, config);
-    if (!result) {
-        fprintf(stderr, "extraction failed (code %d): %s\n",
+    XBERGExtractInput *input = xberg_extract_input_from_uri("research_paper.pdf");
+    if (!input) {
+        fprintf(stderr, "input create failed (code %d): %s\n",
                 xberg_last_error_code(),
                 xberg_last_error_context());
         xberg_extraction_config_free(config);
         return 1;
     }
 
-    char *keywords_json = xberg_extraction_result_extracted_keywords(result);
-    if (keywords_json) {
-        printf("Keywords: %s\n", keywords_json);
-        xberg_free_string(keywords_json);
-    } else {
-        printf("Keywords: (none)\n");
+    XBERGExtractionResult *output = xberg_extract(input, config);
+    if (!output) {
+        fprintf(stderr, "extraction failed (code %d): %s\n",
+                xberg_last_error_code(),
+                xberg_last_error_context());
+        xberg_extract_input_free(input);
+        xberg_extraction_config_free(config);
+        return 1;
     }
 
-    xberg_extraction_result_free(result);
+    char *results_json = xberg_extraction_result_results(output);
+    if (results_json) {
+        printf("results[0].extracted_keywords: %s\n", results_json);
+        xberg_free_string(results_json);
+    } else {
+        printf("results[0].extracted_keywords: []\n");
+    }
+
+    xberg_extraction_result_free(output);
+    xberg_extract_input_free(input);
     xberg_extraction_config_free(config);
     return 0;
 }

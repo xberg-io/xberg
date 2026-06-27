@@ -1,6 +1,6 @@
 # Keyword Extraction
 
-Extract ranked keywords from document text using YAKE or RAKE algorithms.
+Extract ranked keywords and key phrases from document text for search indexing, topic detection, and content summarization. Choose between YAKE (best for single terms and multilingual content) or RAKE (best for multi-word phrases in technical documents).
 
 | Algorithm | Scoring                                  | Best for                                      |
 | --------- | ---------------------------------------- | --------------------------------------------- |

@@ -20,7 +20,7 @@ final class MinLengthValidator: Validator {
         100
     }
 
-    func validate(result: ExtractionResult, config: ExtractionConfig) -> String {
+    func validate(result: ExtractedDocument, config: ExtractionConfig) -> String {
         // Returns JSON-encoded Result<(), String>
         let contentLength = result.content().count
         if contentLength < minLength {
@@ -30,7 +30,7 @@ final class MinLengthValidator: Validator {
         return "{\"ok\": null}"
     }
 
-    func shouldValidate(result: ExtractionResult, config: ExtractionConfig) -> Bool {
+    func shouldValidate(result: ExtractedDocument, config: ExtractionConfig) -> Bool {
         true
     }
 

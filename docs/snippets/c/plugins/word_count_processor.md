@@ -25,7 +25,7 @@ static int32_t process_fn(
 
     /* The `result` JSON string is read-only at this layer; for a real
      * mutating post-processor, decode the JSON, mutate, and serialise back
-     * via the xberg ExtractionResult helpers in your host language. */
+     * via the xberg ExtractedDocument helpers in your host language. */
     size_t words = 0;
     int in_word = 0;
     for (const char *p = result; *p; ++p) {

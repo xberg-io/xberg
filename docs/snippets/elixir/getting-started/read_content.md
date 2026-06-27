@@ -2,12 +2,13 @@
 defmodule ReadContent do
   def process_extracted_content do
     # Extract content and iterate over lines
-    case Xberg.extract_sync("document.pdf", nil, nil) do
-      {:ok, content} ->
+    case Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "document.pdf"}, nil) do
+      {:ok, output} ->
+        result = List.first(output.results)
         IO.puts("Processing extracted content:")
 
         # Split content into lines and iterate
-        content
+        result.content
         |> String.split("\n", trim: true)
         |> Enum.each(fn line ->
           IO.puts("  #{line}")

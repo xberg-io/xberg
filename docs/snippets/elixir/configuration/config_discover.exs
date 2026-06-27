@@ -18,8 +18,9 @@ IO.puts("OCR Enabled: #{inspect(config.ocr["enabled"])}")
 IO.puts("Chunking Max Characters: #{inspect(config.chunking["max_characters"])}")
 IO.puts("Use Cache: #{inspect(config.use_cache)}")
 
-{:ok, result} = Xberg.extract("document.pdf", nil, config)
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "document.pdf"}, config)
 
+result = List.first(output.results)
 IO.puts("Document extraction complete")
 IO.puts("Content length: #{byte_size(result.content)} bytes")
 IO.puts("Languages detected: #{inspect(result.detected_languages)}")

@@ -18,7 +18,9 @@ $config = new ExtractionConfig(
     )
 );
 
-$result = Xberg::extractSync('research_paper.pdf', null, $config);
+$resultOutput = Xberg::extract(\Xberg\ExtractInput::uri('research_paper.pdf'), $config);
+
+$result = $resultOutput->results[0];
 
 if ($result->getChunks()) {
     foreach ($result->getChunks() as $chunk) {

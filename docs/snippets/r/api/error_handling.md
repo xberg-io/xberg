@@ -5,12 +5,13 @@ content <- charToRaw("Hello, world!")
 
 result <- tryCatch(
   {
-    json <- extract_sync(
-      content = content,
-      mime_type = "application/x-nonexistent",
+    input <- list(kind = "bytes", bytes = as.integer(content), mime_type = "application/x-nonexistent")
+    json <- extract(
+      input = ExtractInput$from_json(jsonlite::toJSON(input, auto_unbox = TRUE)),
       config = ExtractionConfig$default()
     )
-    jsonlite::fromJSON(json, simplifyVector = FALSE)
+    output <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+    output$results[[1]]
   },
   error = function(e) {
     message(sprintf("Extraction failed: %s", conditionMessage(e)))

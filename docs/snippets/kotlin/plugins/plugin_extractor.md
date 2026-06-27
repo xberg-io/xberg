@@ -4,24 +4,33 @@ import io.xberg.kt.Xberg
 import java.nio.file.Files
 import java.nio.file.Path
 
-// The Kotlin/Java bindings expose plugin bridges for IPostProcessor,
-// IValidator, IOcrBackend, and IEmbeddingBackend. There is no
-// IDocumentExtractor bridge — extractor selection happens entirely in the
-// Rust core based on MIME type. From Kotlin, the "extractor plugin" pattern
-// is to wrap Xberg.extract / extract and dispatch to the right
-// extractor by MIME.
+// Wrap Xberg.extract behind a small client when you want app-level dispatch.
 class GenericExtractorClient {
     suspend fun extract(
         content: ByteArray,
         mimeType: String,
         config: ExtractionConfig = ExtractionConfig.builder().build(),
-    ): ExtractionResult = Xberg.extract(content, mimeType, config)
+    ): ExtractedDocument = Xberg.extract(
+        ExtractInput(
+            kind = ExtractInputKind.BYTES,
+            bytes = content,
+            mimeType = mimeType,
+        ),
+        config,
+    ).results().first()
 
     suspend fun extract(
         path: Path,
         mimeType: String? = null,
         config: ExtractionConfig = ExtractionConfig.builder().build(),
-    ): ExtractionResult = Xberg.extract(path, mimeType, config)
+    ): ExtractedDocument = Xberg.extract(
+        ExtractInput(
+            kind = ExtractInputKind.URI,
+            uri = path.toString(),
+            mimeType = mimeType,
+        ),
+        config,
+    ).results().first()
 }
 
 suspend fun extractCustomPayload() {

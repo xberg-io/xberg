@@ -94,8 +94,9 @@ use xberg::{extract, ExtractInput, ExtractionConfig};
 #[tokio::main]
 async fn main() -> xberg::Result<()> {
     let config = ExtractionConfig::default();
-    let result = extract(ExtractInput::file("document.pdf"), &config).await?;
-    println!("{}", result.content);
+    let output = extract(ExtractInput::from_uri("document.pdf"), &config).await?;
+    let document = &output.results[0];
+    println!("{}", document.content);
     Ok(())
 }
 ```
@@ -108,8 +109,9 @@ use xberg::{extract, ExtractInput, ExtractionConfig};
 #[tokio::main]
 async fn main() -> xberg::Result<()> {
     let config = ExtractionConfig::default();
-    let result = extract(ExtractInput::file("document.pdf"), &config).await?;
-    println!("{}", result.content);
+    let output = extract(ExtractInput::from_uri("document.pdf"), &config).await?;
+    let document = &output.results[0];
+    println!("{}", document.content);
     Ok(())
 }
 ```
@@ -123,14 +125,14 @@ use xberg::{extract_batch, ExtractInput, ExtractionConfig};
 async fn main() -> xberg::Result<()> {
     let config = ExtractionConfig::default();
     let inputs = vec![
-        ExtractInput::file("doc1.pdf"),
-        ExtractInput::file("doc2.pdf"),
-        ExtractInput::file("doc3.pdf"),
+        ExtractInput::from_uri("doc1.pdf"),
+        ExtractInput::from_uri("doc2.pdf"),
+        ExtractInput::from_uri("doc3.pdf"),
     ];
-    let results = extract_batch(inputs, &config).await?;
+    let output = extract_batch(inputs, &config).await?;
 
-    for result in results {
-        println!("{}", result.content);
+    for document in output.results {
+        println!("{}", document.content);
     }
     Ok(())
 }
@@ -155,9 +157,10 @@ async fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract(ExtractInput::file("invoice.pdf"), &config).await?;
+    let output = extract(ExtractInput::from_uri("invoice.pdf"), &config).await?;
+    let document = &output.results[0];
 
-    for table in &result.tables {
+    for table in &document.tables {
         println!("{}", table.markdown);
     }
     Ok(())
@@ -179,7 +182,8 @@ async fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract(ExtractInput::file("protected.pdf"), &config).await?;
+    let output = extract(ExtractInput::from_uri("protected.pdf"), &config).await?;
+    let document = &output.results[0];
     Ok(())
 }
 ```
@@ -194,8 +198,10 @@ use std::fs;
 async fn main() -> xberg::Result<()> {
     let data = fs::read("document.pdf")?;
     let config = ExtractionConfig::default();
-    let result = extract(ExtractInput::bytes(data, "application/pdf"), &config).await?;
-    println!("{}", result.content);
+    let input = ExtractInput::from_bytes(data, "application/pdf", Some("document.pdf".to_string()));
+    let output = extract(input, &config).await?;
+    let document = &output.results[0];
+    println!("{}", document.content);
     Ok(())
 }
 ```
@@ -207,9 +213,10 @@ Xberg integrates [tree-sitter-language-pack](https://docs.tree-sitter-language-p
 Code intelligence data is available via the `metadata.format` field as a `FormatMetadata::Code` variant containing a `ProcessResult`.
 
 ```rust
-use xberg::{extract, ExtractionConfig, TreeSitterConfig, TreeSitterProcessConfig};
+use xberg::{extract, ExtractInput, ExtractionConfig, TreeSitterConfig, TreeSitterProcessConfig};
 
-fn main() -> xberg::Result<()> {
+#[tokio::main]
+async fn main() -> xberg::Result<()> {
     let config = ExtractionConfig {
         tree_sitter: Some(TreeSitterConfig {
             process: TreeSitterProcessConfig {
@@ -225,10 +232,11 @@ fn main() -> xberg::Result<()> {
         ..Default::default()
     };
 
-    let result = extract("app.py", None, &config)?;
+    let output = extract(ExtractInput::from_uri("app.py"), &config).await?;
+    let document = &output.results[0];
 
     // Access code intelligence from format metadata
-    if let Some(xberg::types::FormatMetadata::Code(ref code)) = result.metadata.format {
+    if let Some(xberg::types::FormatMetadata::Code(ref code)) = document.metadata.format {
         println!("Language: {}", code.language);
         println!("Functions/classes: {}", code.structure.len());
         println!("Imports: {}", code.imports.len());

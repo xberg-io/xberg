@@ -34,7 +34,7 @@ async function extractWithPlugins(fileBytes, mimeType) {
   };
 
   // Extraction automatically applies registered post-processors
-  const result = await extract(fileBytes, mimeType, config);
+  const result = await extract({ kind: "bytes", bytes: fileBytes, mimeType: mimeType }, config);
 
   console.log("Extraction complete");
   console.log("Plugins applied:", result.metadata?.enriched);

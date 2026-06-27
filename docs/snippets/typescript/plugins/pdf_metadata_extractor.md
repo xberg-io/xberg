@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-import { registerPostProcessor, type ExtractionResult } from "@xberg-io/xberg";
+import { registerPostProcessor, type ExtractedDocument } from "@xberg-io/xberg";
 
 class PdfMetadataExtractor {
   private processedCount: number = 0;
@@ -12,11 +12,11 @@ class PdfMetadataExtractor {
     return "early";
   }
 
-  shouldProcess(result: ExtractionResult): boolean {
+  shouldProcess(result: ExtractedDocument): boolean {
     return result.mimeType === "application/pdf";
   }
 
-  process(result: ExtractionResult): ExtractionResult {
+  process(result: ExtractedDocument): ExtractedDocument {
     this.processedCount += 1;
 
     return {

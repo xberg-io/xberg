@@ -6,5 +6,6 @@ config = Xberg::ExtractionConfig.new(
   enable_quality_processing: true
 )
 
-result = Xberg.extract_sync('document.pdf', config: config)
+input = Xberg::ExtractInput.new(uri: 'document.pdf')
+result = Xberg.extract(input, config)
 ```

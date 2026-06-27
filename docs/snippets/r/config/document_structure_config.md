@@ -1,14 +1,18 @@
 ```r title="R"
 library(xberg)
 
-config <- list(
+config <- ExtractionConfig$from_json(jsonlite::toJSON(list(
   include_document_structure = TRUE,
   output_format = "markdown"
+), auto_unbox = TRUE))
+
+input <- list(kind = "uri", uri = "document.pdf", mime_type = "application/pdf")
+json <- extract(
+  input = ExtractInput$from_json(jsonlite::toJSON(input, auto_unbox = TRUE)),
+  config = config
 )
-
-json <- extract_sync("document.pdf", "application/pdf", config)
-result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
-
+output <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+result <- output$results[[1]]
 cat(sprintf("Total pages: %d\n", length(result$pages)))
 cat(sprintf("MIME type: %s\n\n", result$mime_type))
 

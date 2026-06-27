@@ -11,7 +11,8 @@ let config = ExtractionConfig {
     ..Default::default()
 };
 
-let result = extract("research_paper.pdf", None, &config).await?;
+let output = extract("research_paper.pdf", None, &config).await?;
+let result = &output.results[0];
 
 if let Some(keywords) = &result.extracted_keywords {
     println!("Keywords: {:?}", keywords);

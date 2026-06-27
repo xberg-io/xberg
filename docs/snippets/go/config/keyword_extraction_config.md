@@ -4,23 +4,25 @@ package main
 import (
 	"fmt"
 
-	"github.com/xberg-io/xberg/packages/go"
+	"github.com/xberg-io/xberg"
 )
 
 func main() {
-	config := &xberg.ExtractionConfig{
+	maxKeywords := uint(10)
+	language := "en"
+
+	config := xberg.ExtractionConfig{
 		Keywords: &xberg.KeywordConfig{
-			Algorithm:  "YAKE",
-			MaxKeywords: 10,
-			MinScore:   0.3,
-			NgramRange: "1,3",
-			Language:   "en",
+			Algorithm:   xberg.KeywordAlgorithmYake,
+			MaxKeywords: &maxKeywords,
+			MinScore:    0.3,
+			Language:    &language,
 		},
 	}
 
 	fmt.Printf("Keywords config: Algorithm=%s, MaxKeywords=%d, MinScore=%f\n",
 		config.Keywords.Algorithm,
-		config.Keywords.MaxKeywords,
+		*config.Keywords.MaxKeywords,
 		config.Keywords.MinScore)
 }
 ```

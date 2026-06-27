@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-import { registerValidator, ValidationError, type ExtractionResult } from "@xberg-io/xberg";
+import { registerValidator, ValidationError, type ExtractedDocument } from "@xberg-io/xberg";
 
 class MinLengthValidator {
   private readonly minLength: number;
@@ -16,7 +16,7 @@ class MinLengthValidator {
     return 100;
   }
 
-  validate(result: ExtractionResult): void {
+  validate(result: ExtractedDocument): void {
     if (result.content.length < this.minLength) {
       throw new ValidationError(
         `Content too short: ${result.content.length} < ${this.minLength} characters`,

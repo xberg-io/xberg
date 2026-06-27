@@ -2,9 +2,7 @@
 	"id": "register_ocr_backend_trait_bridge",
 	"category": "plugin_api",
 	"description": "register_ocr_backend: trait bridge",
-	"tags": [
-		"trait-bridge"
-	],
+	"tags": ["trait-bridge"],
 	"call": "register_ocr_backend",
 	"input": {
 		"backend": {

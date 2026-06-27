@@ -5,7 +5,7 @@ const config = {
   includeDocumentStructure: true,
 };
 
-const result = extract(fileBuffer, "application/pdf", config);
+const result = extract({ kind: "bytes", bytes: fileBuffer, mimeType: "application/pdf" }, config);
 
 if (result.document) {
   for (const node of result.document.nodes) {

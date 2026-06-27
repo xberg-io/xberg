@@ -3,23 +3,25 @@
 declare(strict_types=1);
 
 use Xberg\Xberg;
+use Xberg\ExtractInput;
 use Xberg\ExtractionConfig;
-use Xberg\KeywordConfig;
 
-$config = new ExtractionConfig(
-    keywords: new KeywordConfig(
-        algorithm: 'yake',
-        maxKeywords: 10,
-        minScore: 0.1,
-        language: 'en'
-    )
-);
+$config = ExtractionConfig::from_json(json_encode([
+    'keywords' => [
+        'algorithm' => 'yake',
+        'maxKeywords' => 10,
+        'minScore' => 0.1,
+        'language' => 'en',
+    ],
+], JSON_THROW_ON_ERROR));
 
-$result = Xberg::extractSync('document.pdf', null, $config);
+$resultOutput = Xberg::extract(ExtractInput::fromUri('document.pdf'), $config);
 
-if ($result->getKeywords()) {
-    foreach ($result->getKeywords() as $keyword) {
-        echo $keyword . "\n";
+$result = $resultOutput->results[0];
+
+if ($result->extractedKeywords) {
+    foreach ($result->extractedKeywords as $keyword) {
+        echo $keyword->text . "\n";
     }
 }
 ?>

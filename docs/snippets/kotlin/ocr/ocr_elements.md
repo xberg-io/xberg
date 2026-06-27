@@ -18,7 +18,7 @@ fun main() {
         .withOcr(Optional.of(ocr))
         .build()
 
-    val result = Xberg.extractSync(Paths.get("scanned.pdf"), null, config)
+    val result = Xberg.extract(Paths.get("scanned.pdf"), null, config)
 
     result.ocrElements()?.forEach { element ->
         println("Text: ${element.text()}")

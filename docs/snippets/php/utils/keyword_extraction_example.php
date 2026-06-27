@@ -3,94 +3,27 @@
 
 declare(strict_types=1);
 
-/**
- * Keyword Extraction Example
- *
- * Extract keywords from documents using various algorithms.
- * Demonstrates automatic keyword detection for document analysis and indexing.
- */
-
 require_once __DIR__ . '/vendor/autoload.php';
 
+use Xberg\ExtractInput;
+use Xberg\ExtractionConfig;
 use Xberg\Xberg;
-use Xberg\Config\ExtractionConfig;
-use Xberg\Config\KeywordConfig;
-use Xberg\Enums\KeywordAlgorithm;
 
-$config = new ExtractionConfig(
-    keywords: new KeywordConfig(
-        algorithm: KeywordAlgorithm::YAKE,
-        maxKeywords: 10,
-        minScore: 0.3
-    )
-);
-
-$xberg = new Xberg($config);
-$result = $xberg->extract('research_paper.pdf');
-
-echo "Keyword Extraction Results:\n";
-echo str_repeat('=', 60) . "\n";
-echo "Document: research_paper.pdf\n";
-echo "Content length: " . strlen($result->content) . " characters\n\n";
-
-$keywords = $result->metadata['keywords'] ?? [];
-
-if (!empty($keywords)) {
-    echo "Extracted Keywords:\n";
-    echo str_repeat('-', 40) . "\n";
-
-    foreach ($keywords as $keyword) {
-        $text = $keyword['text'] ?? '';
-        $score = $keyword['score'] ?? 0.0;
-        $frequency = $keyword['frequency'] ?? null;
-
-        echo sprintf("  %-30s  Score: %.3f", $text, $score);
-
-        if ($frequency !== null) {
-            echo sprintf("  (appears %d times)", $frequency);
-        }
-
-        echo "\n";
-    }
-    echo "\n";
-} else {
-    echo "No keywords extracted. Try adjusting minScore or maxKeywords.\n\n";
+function keywordConfig(string $algorithm, int $maxKeywords, float $minScore): ExtractionConfig
+{
+    return ExtractionConfig::from_json(json_encode([
+        'keywords' => [
+            'algorithm' => $algorithm,
+            'maxKeywords' => $maxKeywords,
+            'minScore' => $minScore,
+        ],
+    ], JSON_THROW_ON_ERROR));
 }
 
-$algorithms = [
-    'YAKE' => KeywordAlgorithm::YAKE,
-    'TextRank' => KeywordAlgorithm::TEXT_RANK,
-    'TF-IDF' => KeywordAlgorithm::TF_IDF,
-];
-
-echo "Algorithm Comparison:\n";
-echo str_repeat('=', 60) . "\n";
-
-foreach ($algorithms as $name => $algorithm) {
-    $algoConfig = new ExtractionConfig(
-        keywords: new KeywordConfig(
-            algorithm: $algorithm,
-            maxKeywords: 5,
-            minScore: 0.2
-        )
-    );
-
-    $xberg = new Xberg($algoConfig);
-    $result = $xberg->extract('article.pdf');
-
-    $keywords = $result->metadata['keywords'] ?? [];
-
-    echo "$name algorithm:\n";
-
-    if (!empty($keywords)) {
-        foreach ($keywords as $keyword) {
-            echo "  - {$keyword['text']} ({$keyword['score']})\n";
-        }
-    } else {
-        echo "  No keywords extracted\n";
-    }
-
-    echo "\n";
+function extractFirst(string $uri, ExtractionConfig $config): object
+{
+    $output = Xberg::extract(ExtractInput::fromUri($uri), $config);
+    return $output->results[0];
 }
 
 function categorizeDocument(array $keywords): string
@@ -104,27 +37,70 @@ function categorizeDocument(array $keywords): string
 
     $scores = [];
     foreach ($categories as $category => $terms) {
-        $scores[$category] = 0;
+        $scores[$category] = 0.0;
 
         foreach ($keywords as $keyword) {
-            $keywordText = strtolower($keyword['text'] ?? '');
-            $keywordScore = $keyword['score'] ?? 0.0;
+            $keywordText = strtolower($keyword->text);
 
             foreach ($terms as $term) {
                 if (str_contains($keywordText, $term)) {
-                    $scores[$category] += $keywordScore;
+                    $scores[$category] += $keyword->score;
                 }
             }
         }
     }
 
     arsort($scores);
-    $topCategory = array_key_first($scores);
-
-    return $topCategory ?? 'uncategorized';
+    return array_key_first($scores) ?? 'uncategorized';
 }
 
-if (!empty($keywords)) {
+$config = keywordConfig('yake', 10, 0.3);
+$result = extractFirst('research_paper.pdf', $config);
+$keywords = $result->extractedKeywords ?? [];
+
+echo "Keyword Extraction Results:\n";
+echo str_repeat('=', 60) . "\n";
+echo "Document: research_paper.pdf\n";
+echo "Content length: " . strlen($result->content) . " characters\n\n";
+
+if ($keywords !== []) {
+    echo "Extracted Keywords:\n";
+    echo str_repeat('-', 40) . "\n";
+
+    foreach ($keywords as $keyword) {
+        echo sprintf("  %-30s  Score: %.3f\n", $keyword->text, $keyword->score);
+    }
+    echo "\n";
+} else {
+    echo "No keywords extracted. Try adjusting minScore or maxKeywords.\n\n";
+}
+
+$algorithms = [
+    'YAKE' => 'yake',
+    'RAKE' => 'rake',
+];
+
+echo "Algorithm Comparison:\n";
+echo str_repeat('=', 60) . "\n";
+
+foreach ($algorithms as $name => $algorithm) {
+    $result = extractFirst('article.pdf', keywordConfig($algorithm, 5, 0.2));
+    $keywords = $result->extractedKeywords ?? [];
+
+    echo "$name algorithm:\n";
+
+    if ($keywords !== []) {
+        foreach ($keywords as $keyword) {
+            echo "  - {$keyword->text} ({$keyword->score})\n";
+        }
+    } else {
+        echo "  No keywords extracted\n";
+    }
+
+    echo "\n";
+}
+
+if ($keywords !== []) {
     $category = categorizeDocument($keywords);
     echo "Document Category: " . ucfirst($category) . "\n\n";
 }
@@ -135,15 +111,7 @@ $documents = [
     'research_paper.pdf',
 ];
 
-$keywordConfig = new ExtractionConfig(
-    keywords: new KeywordConfig(
-        algorithm: KeywordAlgorithm::YAKE,
-        maxKeywords: 8,
-        minScore: 0.25
-    )
-);
-
-$xberg = new Xberg($keywordConfig);
+$batchConfig = keywordConfig('yake', 8, 0.25);
 
 echo "Batch Keyword Extraction:\n";
 echo str_repeat('=', 60) . "\n";
@@ -154,47 +122,20 @@ foreach ($documents as $document) {
         continue;
     }
 
-    $result = $xberg->extract($document);
-    $keywords = $result->metadata['keywords'] ?? [];
+    $result = extractFirst($document, $batchConfig);
+    $keywords = $result->extractedKeywords ?? [];
 
     echo basename($document) . ":\n";
 
-    if (!empty($keywords)) {
+    if ($keywords !== []) {
         $topKeywords = array_slice($keywords, 0, 5);
-        $keywordTexts = array_column($topKeywords, 'text');
+        $keywordTexts = array_map(static fn(object $keyword): string => $keyword->text, $topKeywords);
         echo "  Top keywords: " . implode(', ', $keywordTexts) . "\n";
-
-        $category = categorizeDocument($keywords);
-        echo "  Category: " . ucfirst($category) . "\n";
+        echo "  Category: " . ucfirst(categorizeDocument($keywords)) . "\n";
     } else {
         echo "  No keywords extracted\n";
     }
 
     echo "\n";
-}
-
-$keywordIndex = [];
-
-foreach ($documents as $document) {
-    if (!file_exists($document)) {
-        continue;
-    }
-
-    $result = $xberg->extract($document);
-    $keywords = $result->metadata['keywords'] ?? [];
-
-    foreach ($keywords as $keyword) {
-        $text = strtolower($keyword['text'] ?? '');
-        if (!isset($keywordIndex[$text])) {
-            $keywordIndex[$text] = [];
-        }
-        $keywordIndex[$text][] = basename($document);
-    }
-}
-
-echo "Keyword Index (for search):\n";
-echo str_repeat('=', 60) . "\n";
-foreach (array_slice($keywordIndex, 0, 10) as $keyword => $docs) {
-    echo "$keyword: " . implode(', ', array_unique($docs)) . "\n";
 }
 ```

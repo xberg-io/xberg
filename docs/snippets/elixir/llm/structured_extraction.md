@@ -22,10 +22,10 @@ config_json =
     }
   })
 
-{:ok, json} = Xberg.extract_async("paper.pdf", nil, config_json)
-result = Jason.decode!(json)
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "paper.pdf"}, config_json)
 
-case result["structured_output"] do
+result = List.first(output.results)
+case result.structured_output do
   nil -> IO.puts("no structured output")
   output -> IO.inspect(output, label: "structured")
 end

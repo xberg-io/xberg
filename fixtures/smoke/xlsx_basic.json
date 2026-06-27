@@ -2,12 +2,7 @@
 	"id": "smoke_xlsx_basic",
 	"category": "smoke",
 	"description": "Smoke test: XLSX with basic spreadsheet data including tables",
-	"tags": [
-		"smoke",
-		"office",
-		"xlsx",
-		"tables"
-	],
+	"tags": ["smoke", "office", "xlsx", "tables"],
 	"input": {
 		"kind": "uri",
 		"uri": "xlsx/stanley_cups.xlsx",
@@ -16,51 +11,37 @@
 	"assertions": [
 		{
 			"type": "equals",
-			"field": "results.0.mime_type",
+			"field": "results[0].mime_type",
 			"value": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 		},
 		{
 			"type": "min_length",
-			"field": "results.0.content",
+			"field": "results[0].content",
 			"value": 100
 		},
 		{
 			"type": "contains_all",
-			"field": "results.0.content",
-			"values": [
-				"Team",
-				"Location",
-				"Stanley Cups",
-				"Blues",
-				"Flyers",
-				"Maple Leafs",
-				"STL",
-				"PHI",
-				"TOR"
-			]
+			"field": "results[0].content",
+			"values": ["Team", "Location", "Stanley Cups", "Blues", "Flyers", "Maple Leafs", "STL", "PHI", "TOR"]
 		},
 		{
 			"type": "count_min",
-			"field": "results.0.tables",
+			"field": "results[0].tables",
 			"value": 1
 		},
 		{
 			"type": "greater_than_or_equal",
-			"field": "results.0.metadata.format.excel.sheet_count",
+			"field": "results[0].metadata.format.excel.sheet_count",
 			"value": 2
 		},
 		{
 			"type": "contains_all",
-			"field": "results.0.metadata.format.excel.sheet_names",
-			"values": [
-				"Stanley Cups"
-			]
+			"field": "results[0].metadata.format.excel.sheet_names",
+			"values": ["Stanley Cups"]
 		}
 	],
 	"skip": {
-		"languages": [
-			"wasm"
-		],
+		"languages": ["wasm"],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	},
 	"call": "extract",

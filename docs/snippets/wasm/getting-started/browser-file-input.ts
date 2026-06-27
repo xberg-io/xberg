@@ -1,4 +1,4 @@
-import { extract, initWasm } from "@xberg-io/xberg-wasm";
+import { ExtractInputKind, extract, initWasm } from "@xberg-io/xberg-wasm";
 
 async function setupFileInput() {
   await initWasm();
@@ -10,9 +10,16 @@ async function setupFileInput() {
     if (!file) return;
 
     try {
-      const result = await extract(file);
-      console.log("Extracted text:", result.content);
-      displayResults(result);
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const output = await extract({
+        kind: "bytes",
+        bytes,
+        mimeType: file.type || "application/octet-stream",
+        filename: file.name,
+      });
+
+      console.log("Extracted text:", output.results[0].content);
+      displayResults(output.results[0]);
     } catch (error) {
       console.error("Extraction failed:", error);
     }
@@ -22,7 +29,7 @@ async function setupFileInput() {
 function displayResults(result: any) {
   const output = document.getElementById("output");
   if (output) {
-    output.textContent = `${result.content.substring(0, 500)}...`;
+    output.textContent = `${result.content?.substring(0, 500) ?? ""}...`;
   }
 }
 

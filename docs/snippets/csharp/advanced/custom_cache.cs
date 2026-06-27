@@ -48,10 +48,12 @@ class Program
         try
         {
             var result1 = await cacheBackend.GetOrExtractAsync("document.pdf", config);
-            Console.WriteLine($"Result 1: {result1.Content.Length} chars");
+            var document1 = result1.Results[0];
+            Console.WriteLine($"Result 1: {document1.Content.Length} chars");
 
             var result2 = await cacheBackend.GetOrExtractAsync("document.pdf", config);
-            Console.WriteLine($"Result 2: {result2.Content.Length} chars");
+            var document2 = result2.Results[0];
+            Console.WriteLine($"Result 2: {document2.Content.Length} chars");
 
             cacheBackend.ClearCache();
         }

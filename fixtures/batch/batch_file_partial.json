@@ -2,9 +2,7 @@
 	"id": "batch_file_partial",
 	"category": "batch",
 	"description": "extract_batch mixed",
-	"tags": [
-		"batch"
-	],
+	"tags": ["batch"],
 	"call": "extract_batch",
 	"input": {
 		"inputs": [
@@ -24,9 +22,7 @@
 		}
 	],
 	"skip": {
-		"languages": [
-			"wasm"
-		],
+		"languages": ["wasm"],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	}
 }

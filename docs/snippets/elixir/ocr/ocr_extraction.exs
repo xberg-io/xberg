@@ -17,8 +17,9 @@ config = %ExtractionConfig{
   use_cache: true
 }
 
-{:ok, result} = Xberg.extract("scanned_invoice.pdf", nil, config)
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "scanned_invoice.pdf"}, config)
 
+result = List.first(output.results)
 # Process the extracted content
 content = result.content
 chunks = result.chunks || []

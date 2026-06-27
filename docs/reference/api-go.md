@@ -13,7 +13,7 @@ Extract content from a single bytes or URI input.
 **Signature:**
 
 ```go
-func Extract(input ExtractInput, config ExtractionConfig) (ExtractionOutput, error)
+func Extract(input ExtractInput, config ExtractionConfig) (ExtractionResult, error)
 ```
 
 **Example:**
@@ -32,7 +32,7 @@ if err != nil {
 | `Input` | `ExtractInput` | Yes | The input data |
 | `Config` | `ExtractionConfig` | Yes | The configuration options |
 
-**Returns:** `ExtractionOutput`
+**Returns:** `ExtractionResult`
 
 **Errors:** Returns `error`.
 
@@ -45,7 +45,7 @@ Extract content from multiple bytes or URI inputs.
 **Signature:**
 
 ```go
-func ExtractBatch(inputs []ExtractInput, config ExtractionConfig) (ExtractionOutput, error)
+func ExtractBatch(inputs []ExtractInput, config ExtractionConfig) (ExtractionResult, error)
 ```
 
 **Example:**
@@ -64,89 +64,7 @@ if err != nil {
 | `Inputs` | `\[\]ExtractInput` | Yes | The inputs |
 | `Config` | `ExtractionConfig` | Yes | The configuration options |
 
-**Returns:** `ExtractionOutput`
-
-**Errors:** Returns `error`.
-
----
-
-#### DetectMimeTypeFromBytes()
-
-Detect MIME type from raw file bytes.
-
-Uses magic byte signatures to detect file type from content.
-Falls back to `infer` crate for comprehensive detection.
-
-For ZIP-based files, inspects contents to distinguish Office Open XML
-formats (DOCX, XLSX, PPTX) from plain ZIP archives.
-
-**Returns:**
-
-The detected MIME type string.
-
-**Errors:**
-
-Returns `XbergError.UnsupportedFormat` if MIME type cannot be determined.
-
-**Signature:**
-
-```go
-func DetectMimeTypeFromBytes(content []byte) (string, error)
-```
-
-**Example:**
-
-```go
-result, err := DetectMimeTypeFromBytes([]byte("data"))
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Content` | `\[\]byte` | Yes | Raw file bytes |
-
-**Returns:** `string`
-
-**Errors:** Returns `error`.
-
----
-
-#### GetExtensionsForMime()
-
-Get file extensions for a given MIME type.
-
-Returns all known file extensions that map to the specified MIME type.
-
-**Returns:**
-
-A vector of file extensions (without leading dot) for the MIME type.
-
-**Signature:**
-
-```go
-func GetExtensionsForMime(mimeType string) ([]string, error)
-```
-
-**Example:**
-
-```go
-result, err := GetExtensionsForMime("value")
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `MimeType` | `string` | Yes | The MIME type to look up |
-
-**Returns:** `[]string`
+**Returns:** `ExtractionResult`
 
 **Errors:** Returns `error`.
 
@@ -180,50 +98,6 @@ result := ListSupportedFormats()
 ```
 
 **Returns:** `[]SupportedFormat`
-
----
-
-#### DetectQrCodes()
-
-Detect QR codes in the bytes of an `ExtractedImage`.
-
-`format_hint` is currently unused — the `image` crate auto-detects the
-container format from magic bytes — but the parameter is retained so future
-backends (e.g. a WebP-via-`webp-decoder` variant) can use it without an API
-break.
-
-Returns an empty listtor on any of:
-
-- Empty input.
-- Image-decode failure.
-- No QR grids detected.
-- All detected grids fail to decode.
-
-Successfully decoded QR codes carry their payload, a confidence of `1.0`
-(rqrr does not expose per-grid confidence; a successful decode is treated
-as high-confidence by convention), and the pixel-space bounding box derived
-from the four corner points of the grid.
-
-**Signature:**
-
-```go
-func DetectQrCodes(imageBytes []byte, formatHint string) []QrCode
-```
-
-**Example:**
-
-```go
-result := DetectQrCodes([]byte("data"), "value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `ImageBytes` | `\[\]byte` | Yes | The image bytes |
-| `FormatHint` | `*string` | No | The  format hint |
-
-**Returns:** `[]QrCode`
 
 ---
 
@@ -286,6 +160,62 @@ if err != nil {
 
 ---
 
+#### ListDocumentExtractors()
+
+List names of all registered document extractors.
+
+**Signature:**
+
+```go
+func ListDocumentExtractors() ([]string, error)
+```
+
+**Example:**
+
+```go
+result, err := ListDocumentExtractors()
+if err != nil {
+    return err
+}
+```
+
+**Returns:** `[]string`
+
+**Errors:** Returns `error`.
+
+---
+
+#### ClearDocumentExtractors()
+
+Clear all document extractors from the global registry.
+
+Calls `shutdown()` on every registered extractor, then empties the registry.
+
+**Errors:**
+
+- Any error returned by an extractor's `shutdown()` method. The first error
+  encountered stops processing of remaining extractors.
+
+**Signature:**
+
+```go
+func ClearDocumentExtractors() error
+```
+
+**Example:**
+
+```go
+if err := ClearDocumentExtractors(); err != nil {
+    return err
+}
+```
+
+**Returns:** No return value.
+
+**Errors:** Returns `error`.
+
+---
+
 #### ListOcrBackends()
 
 List all registered OCR backends.
@@ -338,36 +268,6 @@ func ClearOcrBackends() error
 
 ```go
 if err := ClearOcrBackends(); err != nil {
-    return err
-}
-```
-
-**Returns:** No return value.
-
-**Errors:** Returns `error`.
-
----
-
-#### RegisterBuiltin()
-
-Register every built-in post-processor enabled by the active feature set.
-
-This is the single entry point that callers (including
-`register_default_post_processors`) use to populate the global
-post-processor registry with the in-tree built-ins. Each submodule's own
-`register` function is gated by its feature flag so this aggregate stays
-safe to call on any target.
-
-**Signature:**
-
-```go
-func RegisterBuiltin() error
-```
-
-**Example:**
-
-```go
-if err := RegisterBuiltin(); err != nil {
     return err
 }
 ```
@@ -608,573 +508,6 @@ if err := ClearValidators(); err != nil {
 
 ---
 
-#### ClassifyPages()
-
-Run page classification against an extraction result.
-
-Mutates `result.page_classifications` with one entry per non-empty page and
-appends every LLM call's usage to `result.llm_usage`.
-
-**Errors:**
-
-Returns the first error encountered when rendering the prompt or calling the
-LLM. Partially produced classifications are discarded so callers do not see
-a half-populated vector.
-
-**Signature:**
-
-```go
-func ClassifyPages(result ExtractionResult, config PageClassificationConfig) error
-```
-
-**Example:**
-
-```go
-if err := ClassifyPages(ExtractionResult{}, PageClassificationConfig{}); err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Result` | `ExtractionResult` | Yes | The extraction result |
-| `Config` | `PageClassificationConfig` | Yes | The configuration options |
-
-**Returns:** No return value.
-
-**Errors:** Returns `error`.
-
----
-
-#### ClassifyText()
-
-Classify a single piece of text without requiring an `ExtractionResult`.
-
-Use this when the caller already has plain text (e.g. a RAG ingest pipeline
-receiving documents off a queue) and wants a label list back without
-manufacturing extractor-side metadata.
-
-**Errors:**
-
-Same as `classify_pages`: a validation error when `config.labels` is empty,
-or any error returned by prompt rendering or the underlying LLM call.
-
-**Signature:**
-
-```go
-func ClassifyText(text string, config PageClassificationConfig) ([]ClassificationLabel, error)
-```
-
-**Example:**
-
-```go
-result, err := ClassifyText("value", PageClassificationConfig{})
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Text` | `string` | Yes | The text |
-| `Config` | `PageClassificationConfig` | Yes | The configuration options |
-
-**Returns:** `[]ClassificationLabel`
-
-**Errors:** Returns `error`.
-
----
-
-#### ClassifyDocument()
-
-Classify a single document (as multiple pages or a single text block).
-
-Aggregates classifications across all pages in the provided text, returning
-a combined label set that represents the document as a whole.
-
-  using the configured LLM, and results are aggregated.
-
-- `config` - Classification configuration including labels and LLM settings.
-
-**Returns:**
-
-A vector of `ClassificationLabel` entries representing the document's overall classification.
-
-**Errors:**
-
-Returns an error if `config.labels` is empty or if LLM calls fail.
-
-**Signature:**
-
-```go
-func ClassifyDocument(pages []string, config PageClassificationConfig) ([]ClassificationLabel, error)
-```
-
-**Example:**
-
-```go
-result, err := ClassifyDocument(nil, PageClassificationConfig{})
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Pages` | `\[\]string` | Yes | Slice of page texts to classify. Each page is classified independently |
-| `Config` | `PageClassificationConfig` | Yes | Classification configuration including labels and LLM settings. |
-
-**Returns:** `[]ClassificationLabel`
-
-**Errors:** Returns `error`.
-
----
-
-#### DownloadModel()
-
-Eagerly download a NER model into the xberg cache.
-
-`name` is a supported xberg GLiNER alias or catalog id. The CLI flag
-`xberg cache warm --ner` delegates here.
-
-**Signature:**
-
-```go
-func DownloadModel(name string, cacheDir string) (string, error)
-```
-
-**Example:**
-
-```go
-result, err := DownloadModel("value", "value")
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Name` | `string` | Yes | The name |
-| `CacheDir` | `*string` | No | The cache dir |
-
-**Returns:** `string`
-
-**Errors:** Returns `error`.
-
----
-
-#### DownloadModel()
-
-**Signature:**
-
-```go
-func DownloadModel(name string, cacheDir string) (string, error)
-```
-
-**Example:**
-
-```go
-result, err := DownloadModel("value", "value")
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Name` | `string` | Yes | The  name |
-| `CacheDir` | `*string` | No | The  cache dir |
-
-**Returns:** `string`
-
-**Errors:** Returns `error`.
-
----
-
-#### DefaultModelName()
-
-Pinned default NER model identifier.
-
-**Signature:**
-
-```go
-func DefaultModelName() string
-```
-
-**Example:**
-
-```go
-result := DefaultModelName()
-```
-
-**Returns:** `string`
-
----
-
-#### DefaultModelName()
-
-**Signature:**
-
-```go
-func DefaultModelName() string
-```
-
-**Example:**
-
-```go
-result := DefaultModelName()
-```
-
-**Returns:** `string`
-
----
-
-#### KnownModels()
-
-All NER models xberg knows about (used by `--all-ner-models`).
-
-**Signature:**
-
-```go
-func KnownModels() []string
-```
-
-**Example:**
-
-```go
-result := KnownModels()
-```
-
-**Returns:** `[]string`
-
----
-
-#### KnownModels()
-
-**Signature:**
-
-```go
-func KnownModels() []string
-```
-
-**Example:**
-
-```go
-result := KnownModels()
-```
-
-**Returns:** `[]string`
-
----
-
-#### DownloadModel()
-
-Download a NER model into the xberg cache.
-
-**Signature:**
-
-```go
-func DownloadModel(name string, cacheDir string) (string, error)
-```
-
-**Example:**
-
-```go
-result, err := DownloadModel("value", "value")
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Name` | `string` | Yes | The  name |
-| `CacheDir` | `*string` | No | The  cache dir |
-
-**Returns:** `string`
-
-**Errors:** Returns `error`.
-
----
-
-#### DefaultModelName()
-
-Default NER model identifier.
-
-**Signature:**
-
-```go
-func DefaultModelName() string
-```
-
-**Example:**
-
-```go
-result := DefaultModelName()
-```
-
-**Returns:** `string`
-
----
-
-#### KnownModels()
-
-All NER models xberg knows about.
-
-**Signature:**
-
-```go
-func KnownModels() []string
-```
-
-**Example:**
-
-```go
-result := KnownModels()
-```
-
-**Returns:** `[]string`
-
----
-
-#### Redact()
-
-Run pattern redaction (and optional NER-driven redaction) over `result` and
-rewrite every textual field. Populates `result.redaction_report`.
-
-**Signature:**
-
-```go
-func Redact(result ExtractionResult, config RedactionConfig) error
-```
-
-**Example:**
-
-```go
-if err := Redact(ExtractionResult{}, RedactionConfig{}); err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Result` | `ExtractionResult` | Yes | The extraction result |
-| `Config` | `RedactionConfig` | Yes | The configuration options |
-
-**Returns:** No return value.
-
-**Errors:** Returns `error`.
-
----
-
-#### Summarize()
-
-Score and return the top-N sentences from `text`, joined in original order.
-
-`language` is an ISO 639 (or locale) code used to pick a stopword list;
-pass `nil` (or an unknown code) to fall back to English.
-`max_tokens` bounds the summary length by whitespace-separated tokens;
-`nil` falls back to `DEFAULT_MAX_TOKENS`.
-
-**Signature:**
-
-```go
-func Summarize(text string, language string, maxTokens uint32) *string
-```
-
-**Example:**
-
-```go
-result := Summarize("value", "value", 42)
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Text` | `string` | Yes | The text |
-| `Language` | `*string` | No | The language |
-| `MaxTokens` | `*uint32` | No | The max tokens |
-
-**Returns:** `*string`
-
----
-
-#### TokenCount()
-
-Count whitespace-separated tokens (used for token-budget bookkeeping by
-callers).
-
-**Signature:**
-
-```go
-func TokenCount(text string) uint32
-```
-
-**Example:**
-
-```go
-result := TokenCount("value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Text` | `string` | Yes | The text |
-
-**Returns:** `uint32`
-
----
-
-#### TranslateResult()
-
-Translate the extraction result in place.
-
-Populates `result.translation` with the translated `content`, optionally the
-translated `formatted_content` (when `preserve_markup = true`), and rewrites
-every chunk's `content` field. Every LLM call's usage is appended to
-`result.llm_usage`.
-
-**Signature:**
-
-```go
-func TranslateResult(result ExtractionResult, config TranslationConfig) error
-```
-
-**Example:**
-
-```go
-if err := TranslateResult(ExtractionResult{}, TranslationConfig{}); err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Result` | `ExtractionResult` | Yes | The extraction result |
-| `Config` | `TranslationConfig` | Yes | The configuration options |
-
-**Returns:** No return value.
-
-**Errors:** Returns `error`.
-
----
-
-#### FindFootnoteAnchors()
-
-Find all footnote anchor references in markdown text.
-
-Returns a vector of footnote anchors (`[^label]` use-sites), including byte offsets.
-Footnote definitions (`[^label]: ...`) are NOT included in the results.
-
-**Returns:**
-
-A vector of `FootnoteAnchor` entries, each with the label and byte offset.
-
-**Signature:**
-
-```go
-func FindFootnoteAnchors(markdown string) []FootnoteAnchor
-```
-
-**Example:**
-
-```go
-result := FindFootnoteAnchors("value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Markdown` | `string` | Yes | The markdown text to search |
-
-**Returns:** `[]FootnoteAnchor`
-
----
-
-#### ParseFootnoteDefinitions()
-
-Parse footnote definitions from markdown text.
-
-Returns a vector of footnote definitions found in the markdown.
-Handles multi-line definitions with continuation/indented lines (CommonMark format).
-
-**Returns:**
-
-A vector of `FootnoteDefinition` entries, each with label, content, and byte offset.
-
-**Signature:**
-
-```go
-func ParseFootnoteDefinitions(markdown string) []FootnoteDefinition
-```
-
-**Example:**
-
-```go
-result := ParseFootnoteDefinitions("value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Markdown` | `string` | Yes | The markdown text to search |
-
-**Returns:** `[]FootnoteDefinition`
-
----
-
-#### FindInferenceMarkers()
-
-Find inference markers in markdown text.
-
-Returns byte offsets of every `[*inference*]` marker found in the text.
-
-**Returns:**
-
-A vector of byte offsets where inference markers appear.
-
-**Signature:**
-
-```go
-func FindInferenceMarkers(markdown string) []int
-```
-
-**Example:**
-
-```go
-result := FindInferenceMarkers("value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Markdown` | `string` | Yes | The markdown text to search |
-
-**Returns:** `[]int`
-
----
-
 #### FindUnmarkedClaims()
 
 Find unmarked claims in markdown text.
@@ -1209,42 +542,6 @@ result := FindUnmarkedClaims("value")
 | `Markdown` | `string` | Yes | The markdown text to search |
 
 **Returns:** `[]string`
-
----
-
-#### ParseCitations()
-
-Parse the structured citation block from markdown.
-
-Extracts citations from the block after a `---` thematic break followed by
-`<!-- citations ... -->` comment. Parses each entry as:
-`[^srcN]: <source>, <optional-locator>, excerpt: "<text>"`
-
-Returns parsed citations with source, optional locator, and optional excerpt.
-
-**Returns:**
-
-A vector of `Citation` entries parsed from the citation block.
-
-**Signature:**
-
-```go
-func ParseCitations(markdown string) []Citation
-```
-
-**Example:**
-
-```go
-result := ParseCitations("value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Markdown` | `string` | Yes | The markdown text to search |
-
-**Returns:** `[]Citation`
 
 ---
 
@@ -1283,1310 +580,6 @@ result := VerifyExcerpt("value", "value")
 
 ---
 
-#### ChunkForRag()
-
-Chunk text for RAG retrieval, ensuring every chunk carries a `heading_path`.
-
-Delegates to `chunk_text` using the caller's config (defaulting to
-`ChunkerType.Markdown` when the config uses the default `Text` type, so that
-heading hierarchy is resolved).  After chunking, derives
-`ChunkMetadata.heading_path` from each chunk's `heading_context`.
-
-  underlying splitter; use `ChunkerType.Markdown` for documents with ATX
-  headings.
-
-**Returns:**
-
-A `ChunkingResult` where every chunk's `heading_path` is populated from its
-`heading_context` (empty when the chunk is not under any heading).
-
-**Errors:**
-
-Propagates any error from the underlying chunker (e.g. invalid overlap).
-
-**Signature:**
-
-```go
-func ChunkForRag(text string, config ChunkingConfig) (ChunkingResult, error)
-```
-
-**Example:**
-
-```go
-result, err := ChunkForRag("value", ChunkingConfig{})
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Text` | `string` | Yes | The text |
-| `Config` | `ChunkingConfig` | Yes | The configuration options |
-
-**Returns:** `ChunkingResult`
-
-**Errors:** Returns `error`.
-
----
-
-#### Compare()
-
-Compare two extraction results and return a structured diff.
-
-The comparison is purely structural — no I/O, no side effects. All fields
-of `ExtractionDiff` are populated according to the provided `DiffOptions`.
-
-**Signature:**
-
-```go
-func Compare(a ExtractionResult, b ExtractionResult, opts DiffOptions) ExtractionDiff
-```
-
-**Example:**
-
-```go
-result := Compare(ExtractionResult{}, ExtractionResult{}, DiffOptions{})
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `A` | `ExtractionResult` | Yes | The extraction result |
-| `B` | `ExtractionResult` | Yes | The extraction result |
-| `Opts` | `DiffOptions` | Yes | The options to use |
-
-**Returns:** `ExtractionDiff`
-
----
-
-#### ExtractRegionWithVlm()
-
-Extract content from a pre-cropped image region using a VLM.
-
-The caller is responsible for cropping the page image to the region's bounding
-box before calling this function. The `image_bytes` parameter must contain the
-raw bytes of the **cropped** region image (JPEG, PNG, WebP, etc.).
-
-**Returns:**
-
-Extracted Markdown text from the VLM, or an error if the VLM call fails.
-
-**Errors:**
-
-- `Ocr` if the VLM call fails or returns no content.
-- `MissingDependency` if the liter-llm client cannot
-  be initialised.
-
-**Signature:**
-
-```go
-func ExtractRegionWithVlm(imageBytes []byte, imageMime string, regionKind RegionKind, llmConfig LlmConfig, customPrompt string) (string, error)
-```
-
-**Example:**
-
-```go
-result, err := ExtractRegionWithVlm([]byte("data"), "value", RegionKind{}, LlmConfig{}, "value")
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `ImageBytes` | `\[\]byte` | Yes | The image bytes |
-| `ImageMime` | `string` | Yes | The image mime |
-| `RegionKind` | `RegionKind` | Yes | The region kind |
-| `LlmConfig` | `LlmConfig` | Yes | The llm config |
-| `CustomPrompt` | `*string` | No | The custom prompt |
-
-**Returns:** `string`
-
-**Errors:** Returns `error`.
-
----
-
-#### RerankAsync()
-
-Rerank documents asynchronously.
-
-Async counterpart to `rerank`. Offloads blocking ONNX inference to a
-dedicated blocking thread pool via Tokio's `spawn_blocking`, keeping the
-async executor free.
-
-Since v5.0.
-
-**Signature:**
-
-```go
-func RerankAsync(query string, documents []string, config RerankerConfig) ([]RerankedDocument, error)
-```
-
-**Example:**
-
-```go
-result, err := RerankAsync("value", nil, RerankerConfig{})
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Query` | `string` | Yes | The query |
-| `Documents` | `\[\]string` | Yes | The documents |
-| `Config` | `RerankerConfig` | Yes | The configuration options |
-
-**Returns:** `[]RerankedDocument`
-
-**Errors:** Returns `error`.
-
----
-
-#### ExtractKeywords()
-
-Extract keywords from text using the specified algorithm.
-
-This is the unified entry point for keyword extraction. The algorithm
-used is determined by `config.algorithm`.
-
-**Returns:**
-
-A vector of keywords sorted by relevance (highest score first).
-
-**Errors:**
-
-Returns an error if:
-
-- The specified algorithm feature is not enabled
-- Keyword extraction fails
-
-**Signature:**
-
-```go
-func ExtractKeywords(text string, config KeywordConfig) ([]Keyword, error)
-```
-
-**Example:**
-
-```go
-result, err := ExtractKeywords("value", KeywordConfig{})
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Text` | `string` | Yes | The text to extract keywords from |
-| `Config` | `KeywordConfig` | Yes | Keyword extraction configuration |
-
-**Returns:** `[]Keyword`
-
-**Errors:** Returns `error`.
-
----
-
-#### AnalyzeDocument()
-
-Analyze a document and determine the optimal chunking strategy.
-
-Decision logic (in priority order):
-
-1. If user provides `disable_chunking` → no chunking
-2. If user provides page_ranges → use user overrides
-3. If chunking is not enabled → no chunking
-4. If format doesn't support chunking → no chunking
-5. If file is small (below both thresholds) and not force_chunking → no chunking
-6. If PDF has a substantial text layer AND !force_ocr → no chunking
-   *(only when `heuristics-pdf` feature is enabled; otherwise skipped)*
-
-7. Otherwise → chunk the document
-
-**Errors:**
-
-Returns an error only when the `heuristics-pdf` feature is active and
-the PDF text-layer analysis itself returns a hard error.  In all other
-cases the function returns a `ChunkingDecision`.
-
-**Signature:**
-
-```go
-func AnalyzeDocument(metadata DocumentMetadata, config HeuristicsConfig, documentBytes []byte) (ChunkingDecision, error)
-```
-
-**Example:**
-
-```go
-result, err := AnalyzeDocument(DocumentMetadata{}, HeuristicsConfig{}, []byte("data"))
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Metadata` | `DocumentMetadata` | Yes | The document metadata |
-| `Config` | `HeuristicsConfig` | Yes | The configuration options |
-| `DocumentBytes` | `*\[\]byte` | No | The document bytes |
-
-**Returns:** `ChunkingDecision`
-
-**Errors:** Returns `error`.
-
----
-
-#### AnalyzeWithUserChunks()
-
-Analyze a document with user-specified chunk ranges.
-
-Creates a chunk plan based on user-provided page ranges.
-
-**Signature:**
-
-```go
-func AnalyzeWithUserChunks(userRanges []PageRange, totalPages uint32, sizeBytes uint64, config HeuristicsConfig) ChunkingDecision
-```
-
-**Example:**
-
-```go
-result := AnalyzeWithUserChunks(nil, 42, 42, HeuristicsConfig{})
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `UserRanges` | `\[\]PageRange` | Yes | The user ranges |
-| `TotalPages` | `uint32` | Yes | The total pages |
-| `SizeBytes` | `uint64` | Yes | The size bytes |
-| `Config` | `HeuristicsConfig` | Yes | The configuration options |
-
-**Returns:** `ChunkingDecision`
-
----
-
-#### ScoreConfidence()
-
-Score a `ConfidenceSignals` triple into an `ExtractionConfidence` using
-the supplied weights.
-
-When `signals.ocr_aggregate` is `nil`, the OCR weight folds into
-`text_coverage` so the weighted sum still totals 1.0.
-
-**Signature:**
-
-```go
-func ScoreConfidence(signals ConfidenceSignals, weights ConfidenceWeights) ExtractionConfidence
-```
-
-**Example:**
-
-```go
-result := ScoreConfidence(ConfidenceSignals{}, ConfidenceWeights{})
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Signals` | `ConfidenceSignals` | Yes | The confidence signals |
-| `Weights` | `ConfidenceWeights` | Yes | The confidence weights |
-
-**Returns:** `ExtractionConfidence`
-
----
-
-#### CheckFormatLimits()
-
-Decision returned for pre-extraction rejection based on XLSX/PPTX-specific
-resource bounds. Returns `Some(reason)` to reject; `nil` to proceed.
-
-Callers must provide counts from a pre-extraction peek (e.g. parsing
-`xl/workbook.xml` for sheet count).
-
-**Signature:**
-
-```go
-func CheckFormatLimits(mimeType string, sheetCount uint32, workbookCells uint64, embeddedCount uint32, config HeuristicsConfig) *string
-```
-
-**Example:**
-
-```go
-result := CheckFormatLimits("value", 42, 42, 42, HeuristicsConfig{})
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `MimeType` | `string` | Yes | The mime type |
-| `SheetCount` | `*uint32` | No | The sheet count |
-| `WorkbookCells` | `*uint64` | No | The workbook cells |
-| `EmbeddedCount` | `*uint32` | No | The embedded count |
-| `Config` | `HeuristicsConfig` | Yes | The configuration options |
-
-**Returns:** `*string`
-
----
-
-#### BoundariesFromExtractionResult()
-
-Derive document boundaries from an already-produced `ExtractionResult`.
-
-Builds a `MultidocInput` from `result.pages` (one `PageSignals` per
-`PageContent` entry), then delegates to `detect_boundaries`.
-
-### Fallback behaviour
-
-- If `result.pages` is `nil` or empty the whole document is treated as a
-  single document: returns `[Start(1), End(1)]`, matching the contract of
-  `detect_boundaries` for a one-page input.
-
-### Text density
-
-`PageContent` does not carry a pre-computed density score.
-This function approximates density as
-`non_whitespace_chars / total_chars` (clamped to `[0.0, 1.0]`), which is a
-reasonable proxy for how text-dense a page is relative to itself.  Pass a
-custom `MultidocInput` to `detect_boundaries` directly when you need a
-higher-fidelity density measurement (e.g. chars-per-pt² from a PDF extractor).
-
-**Signature:**
-
-```go
-func BoundariesFromExtractionResult(result ExtractionResult, thresholds MultidocThresholds) []DocumentBoundary
-```
-
-**Example:**
-
-```go
-result := BoundariesFromExtractionResult(ExtractionResult{}, MultidocThresholds{})
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Result` | `ExtractionResult` | Yes | The extraction result |
-| `Thresholds` | `MultidocThresholds` | Yes | The multidoc thresholds |
-
-**Returns:** `[]DocumentBoundary`
-
----
-
-#### DetectBoundaries()
-
-Detect document boundaries in a multi-document PDF.
-
-Returns a list of detected boundaries, always including implicit boundaries
-at start (page 1) and end (page_count).  Boundaries are returned in ascending
-order of `start_page`.
-
-**Returns:**
-
-Ordered list of document boundaries.
-
-**Signature:**
-
-```go
-func DetectBoundaries(input MultidocInput, thresholds MultidocThresholds) []DocumentBoundary
-```
-
-**Example:**
-
-```go
-result := DetectBoundaries(MultidocInput{}, MultidocThresholds{})
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Input` | `MultidocInput` | Yes | Page signals for the PDF |
-| `Thresholds` | `MultidocThresholds` | Yes | Detection thresholds |
-
-**Returns:** `[]DocumentBoundary`
-
----
-
-#### ChooseCallMode()
-
-Decide which call mode best fits this document.
-
-Rules applied in order:
-
-1. `image/*` → `StructuredCallMode.VisionOnly` (no text layer to start from).
-2. `application/pdf` → `StructuredCallMode.TextOnly` regardless of
-   `text_coverage` or embedded image count.  Xberg's OCR + text-layer
-   extraction produces text for scanned PDFs; the orchestrator's
-   post-call confidence gate handles any vision escalation actually needed.
-
-3. DOCX / `text/html` / `text/*` / `application/json` / `application/xml` /
-   `application/rtf` with `avg_chars_per_page > docx_text_min_density`
-   → `StructuredCallMode.TextOnly`.
-
-4. Anything else → `StructuredCallMode.Skip`.
-
-After rule selection two post-rule promotions apply (in order):
-
-- `user_force_vision` promotes `TextOnly` → `TextPlusVision`
-  (`Skip` stays `Skip` — caller meant to opt out).
-
-- `enable_vision_fallback` promotes `TextOnly` →
-  `TextOnlyWithVisionFallback` (does **not** upgrade `TextPlusVision` or
-  `Skip`).
-
-**Signature:**
-
-```go
-func ChooseCallMode(input StructuredInput, t StructuredThresholds) StructuredCallMode
-```
-
-**Example:**
-
-```go
-result := ChooseCallMode(StructuredInput{}, StructuredThresholds{})
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Input` | `StructuredInput` | Yes | The input data |
-| `T` | `StructuredThresholds` | Yes | The structured thresholds |
-
-**Returns:** `StructuredCallMode`
-
----
-
-#### CalculateChunkPlan()
-
-Calculate a chunking plan for a document.
-
-**Returns:**
-
-A `ChunkPlan` with optimal chunk boundaries.
-
-**Signature:**
-
-```go
-func CalculateChunkPlan(pageCount uint32, sizeBytes uint64, needsOcr bool, config HeuristicsConfig) ChunkPlan
-```
-
-**Example:**
-
-```go
-result := CalculateChunkPlan(42, 42, true, HeuristicsConfig{})
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `PageCount` | `uint32` | Yes | Total number of pages in the document |
-| `SizeBytes` | `uint64` | Yes | File size in bytes |
-| `NeedsOcr` | `bool` | Yes | Whether OCR will be required |
-| `Config` | `HeuristicsConfig` | Yes | Heuristics configuration |
-
-**Returns:** `ChunkPlan`
-
----
-
-#### CalculatePlanFromOverrides()
-
-Calculate a chunk plan from user-specified page ranges.
-
-Validates and processes user overrides into a proper chunk plan.
-
-**Signature:**
-
-```go
-func CalculatePlanFromOverrides(userChunks []PageRange, totalPages uint32, sizeBytes uint64, config HeuristicsConfig) ChunkPlan
-```
-
-**Example:**
-
-```go
-result := CalculatePlanFromOverrides(nil, 42, 42, HeuristicsConfig{})
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `UserChunks` | `\[\]PageRange` | Yes | The user chunks |
-| `TotalPages` | `uint32` | Yes | The total pages |
-| `SizeBytes` | `uint64` | Yes | The size bytes |
-| `Config` | `HeuristicsConfig` | Yes | The configuration options |
-
-**Returns:** `ChunkPlan`
-
----
-
-#### Fingerprint()
-
-Stable sha256 fingerprint of `raw`, formatted as `sha256:<hex>`.
-
-**Signature:**
-
-```go
-func Fingerprint(raw []byte) string
-```
-
-**Example:**
-
-```go
-result := Fingerprint([]byte("data"))
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Raw` | `\[\]byte` | Yes | The raw |
-
-**Returns:** `string`
-
----
-
-#### Resolve()
-
-Resolve `(preset, custom_schema_override, context)` into a `ResolvedPreset`.
-
-- `custom_schema` overrides `preset.schema` when set.
-- `context` substitutes `{{key}}` tokens in `preset.context_template`; the
-  rendered string is appended to `system_prompt` so the model sees it.
-
-**Signature:**
-
-```go
-func Resolve(preset Preset, customSchema interface{}, context map[string]string) (ResolvedPreset, error)
-```
-
-**Example:**
-
-```go
-result, err := Resolve(Preset{}, nil, nil)
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Preset` | `Preset` | Yes | The preset |
-| `CustomSchema` | `*interface{}` | No | The custom schema |
-| `Context` | `map\[string\]string` | Yes | The context |
-
-**Returns:** `ResolvedPreset`
-
-**Errors:** Returns `error`.
-
----
-
-#### ExtractStructuredJson()
-
-Extract structured JSON from a document using JSON-encoded preset spec and options.
-
-This is the synchronous JSON-in / JSON-out entry point suitable for FFI and
-language-binding call paths.
-
-  `cache`).  Pass `"{}"` to use all defaults.
-
-**Returns:**
-
-JSON-serialised `StructuredOutput` on success.
-
-**Errors:**
-
-Returns `Validation` when either JSON argument is
-malformed.  All other failures from the underlying
-`extract_structured_sync` call are mapped onto `XbergError`
-via `From<StructuredError>`.
-
-**Signature:**
-
-```go
-func ExtractStructuredJson(bytes []byte, mime string, presetSpecJson string, optionsJson string) (string, error)
-```
-
-**Example:**
-
-```go
-result, err := ExtractStructuredJson([]byte("data"), "value", "value", "value")
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Bytes` | `\[\]byte` | Yes | The bytes |
-| `Mime` | `string` | Yes | The mime |
-| `PresetSpecJson` | `string` | Yes | The preset spec json |
-| `OptionsJson` | `string` | Yes | The options json |
-
-**Returns:** `string`
-
-**Errors:** Returns `error`.
-
----
-
-#### SplitAndExtractJson()
-
-Split a multi-document PDF and extract structured JSON from each segment,
-returning a JSON array of `StructuredOutput` objects.
-
-Non-PDF documents are passed through as a single-element array.
-
-Same as `extract_structured_json`.
-
-**Returns:**
-
-JSON-serialised `[]StructuredOutput` (a JSON array) on success.
-
-**Errors:**
-
-Returns `Validation` when either JSON argument is
-malformed.  All other failures from the underlying
-`split_and_extract_sync` call are mapped onto `XbergError`
-via `From<StructuredError>`.
-
-**Signature:**
-
-```go
-func SplitAndExtractJson(bytes []byte, mime string, presetSpecJson string, optionsJson string) (string, error)
-```
-
-**Example:**
-
-```go
-result, err := SplitAndExtractJson([]byte("data"), "value", "value", "value")
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Bytes` | `\[\]byte` | Yes | The bytes |
-| `Mime` | `string` | Yes | The mime |
-| `PresetSpecJson` | `string` | Yes | The preset spec json |
-| `OptionsJson` | `string` | Yes | The options json |
-
-**Returns:** `string`
-
-**Errors:** Returns `error`.
-
----
-
-#### RenderPdfPageToPng()
-
-Render a single PDF page to PNG bytes.
-
-Returns raw PNG-encoded bytes for the specified page at the given DPI.
-Uses pdf_oxide with tiny-skia for pure-Rust rendering.
-
-For pages with extreme dimensions (very wide vector diagrams, etc.) the
-effective DPI may be automatically reduced to avoid rasterizer failure.
-A warning is logged when this happens.
-
-**Errors:**
-
-Returns `XbergError.Parsing` if the PDF cannot be opened, authenticated,
-or rendered, or if `page_index` is out of range.
-
-**Signature:**
-
-```go
-func RenderPdfPageToPng(pdfBytes []byte, pageIndex int, dpi int32, password string) ([]byte, error)
-```
-
-**Example:**
-
-```go
-result, err := RenderPdfPageToPng([]byte("data"), 42, 42, "value")
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `PdfBytes` | `\[\]byte` | Yes | Raw PDF file bytes |
-| `PageIndex` | `int` | Yes | Zero-based page index |
-| `Dpi` | `*int32` | No | Resolution in dots per inch (default: 150) |
-| `Password` | `*string` | No | Optional password for encrypted PDFs |
-
-**Returns:** `[]byte`
-
-**Errors:** Returns `error`.
-
----
-
-#### PdfPageCount()
-
-Count the pages in a PDF without rendering any of them.
-
-Opens the document and returns its page count from the PDF structure. No page
-is rasterized, so this is cheap relative to `render_pdf_page_to_png` — use it
-when you only need the count (e.g. to drive a render loop over the pages).
-
-**Errors:**
-
-Returns `XbergError.Parsing` if the PDF cannot be opened, authenticated,
-or its page count read.
-
-**Signature:**
-
-```go
-func PdfPageCount(pdfBytes []byte, password string) (int, error)
-```
-
-**Example:**
-
-```go
-result, err := PdfPageCount([]byte("data"), "value")
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `PdfBytes` | `\[\]byte` | Yes | Raw PDF file bytes |
-| `Password` | `*string` | No | Optional password for encrypted PDFs |
-
-**Returns:** `int`
-
-**Errors:** Returns `error`.
-
----
-
-#### CaptionImage()
-
-Caption a single image from bytes.
-
-  `RegionKind.Caption` prompt when `nil`.
-
-**Returns:**
-
-The generated caption text.
-
-**Errors:**
-
-Returns an error if the VLM call fails or if image format detection fails.
-
-**Signature:**
-
-```go
-func CaptionImage(imageBytes []byte, llmConfig LlmConfig, customPrompt string) (string, error)
-```
-
-**Example:**
-
-```go
-result, err := CaptionImage([]byte("data"), LlmConfig{}, "value")
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `ImageBytes` | `\[\]byte` | Yes | The image data. |
-| `LlmConfig` | `LlmConfig` | Yes | LLM configuration for the VLM call. |
-| `CustomPrompt` | `*string` | No | Optional custom caption prompt. Uses the default |
-
-**Returns:** `string`
-
-**Errors:** Returns `error`.
-
----
-
-#### CaptionImageFile()
-
-Caption a single image from a file path.
-
-  `RegionKind.Caption` prompt when `nil`.
-
-**Returns:**
-
-The generated caption text.
-
-**Errors:**
-
-Returns an error if the file cannot be read, if image format detection fails,
-or if the VLM call fails.
-
-**Signature:**
-
-```go
-func CaptionImageFile(path string, llmConfig LlmConfig, customPrompt string) (string, error)
-```
-
-**Example:**
-
-```go
-result, err := CaptionImageFile("value", LlmConfig{}, "value")
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Path` | `string` | Yes | Path to the image file. |
-| `LlmConfig` | `LlmConfig` | Yes | LLM configuration for the VLM call. |
-| `CustomPrompt` | `*string` | No | Optional custom caption prompt. Uses the default |
-
-**Returns:** `string`
-
-**Errors:** Returns `error`.
-
----
-
-#### DetectMimeType()
-
-Detect the MIME type of a file at the given path.
-
-Uses the file extension and optionally the file content to determine the MIME type.
-Set `check_exists` to `true` to verify the file exists before detection.
-
-**Signature:**
-
-```go
-func DetectMimeType(path string, checkExists bool) (string, error)
-```
-
-**Example:**
-
-```go
-result, err := DetectMimeType("value", true)
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Path` | `string` | Yes | Path to the file |
-| `CheckExists` | `bool` | Yes | The check exists |
-
-**Returns:** `string`
-
-**Errors:** Returns `error`.
-
----
-
-#### EmbedTextsAsync()
-
-**Signature:**
-
-```go
-func EmbedTextsAsync(texts []string, config EmbeddingConfig) ([][]float32, error)
-```
-
-**Example:**
-
-```go
-result, err := EmbedTextsAsync(nil, EmbeddingConfig{})
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Texts` | `\[\]string` | Yes | The  texts |
-| `Config` | `EmbeddingConfig` | Yes | The embedding config |
-
-**Returns:** `[][]float32`
-
-**Errors:** Returns `error`.
-
----
-
-#### GetEmbeddingPreset()
-
-Get an embedding preset by name.
-
-Returns `nil` if no preset with the given name exists. Returns an owned
-clone so the value is safe to pass across FFI boundaries.
-
-**Signature:**
-
-```go
-func GetEmbeddingPreset(name string) *EmbeddingPreset
-```
-
-**Example:**
-
-```go
-result := GetEmbeddingPreset("value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Name` | `string` | Yes | The name |
-
-**Returns:** `*EmbeddingPreset`
-
----
-
-#### ListEmbeddingPresets()
-
-List the names of all available embedding presets.
-
-Returns owned `String`s so the values are safe to pass across FFI boundaries.
-
-**Signature:**
-
-```go
-func ListEmbeddingPresets() []string
-```
-
-**Example:**
-
-```go
-result := ListEmbeddingPresets()
-```
-
-**Returns:** `[]string`
-
----
-
-#### GetEmbeddingPreset()
-
-Returns `nil` for builds without the `embedding-presets` feature.
-
-**Signature:**
-
-```go
-func GetEmbeddingPreset(name string) *EmbeddingPreset
-```
-
-**Example:**
-
-```go
-result := GetEmbeddingPreset("value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Name` | `string` | Yes | The  name |
-
-**Returns:** `*EmbeddingPreset`
-
----
-
-#### ListEmbeddingPresets()
-
-Returns an empty list for builds without the `embedding-presets` feature.
-
-**Signature:**
-
-```go
-func ListEmbeddingPresets() []string
-```
-
-**Example:**
-
-```go
-result := ListEmbeddingPresets()
-```
-
-**Returns:** `[]string`
-
----
-
-#### Rerank()
-
-Rerank a list of documents by relevance to a query.
-
-Returns documents sorted descending by score. Applies `top_k` truncation if
-configured.
-
-**Errors:**
-
-- `XbergError.Validation` if `query` is empty or blank.
-- `XbergError.MissingDependency` if ONNX Runtime is not installed (ONNX path).
-- `XbergError.Reranking` if the preset is unknown or model download fails.
-
-Since v5.0.
-
-**Signature:**
-
-```go
-func Rerank(query string, documents []string, config RerankerConfig) ([]RerankedDocument, error)
-```
-
-**Example:**
-
-```go
-result, err := Rerank("value", nil, RerankerConfig{})
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Query` | `string` | Yes | The query |
-| `Documents` | `\[\]string` | Yes | The documents |
-| `Config` | `RerankerConfig` | Yes | The configuration options |
-
-**Returns:** `[]RerankedDocument`
-
-**Errors:** Returns `error`.
-
----
-
-#### Rerank()
-
-Stub for builds without the `reranker` feature — keeps the symbol available
-on no-ORT targets (Android x86_64 emulator, WASM) so language bindings compile.
-
-Since v5.0.
-
-**Signature:**
-
-```go
-func Rerank(query string, documents []string, config RerankerConfig) ([]RerankedDocument, error)
-```
-
-**Example:**
-
-```go
-result, err := Rerank("value", nil, RerankerConfig{})
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Query` | `string` | Yes | The  query |
-| `Documents` | `\[\]string` | Yes | The  documents |
-| `Config` | `RerankerConfig` | Yes | The reranker config |
-
-**Returns:** `[]RerankedDocument`
-
-**Errors:** Returns `error`.
-
----
-
-#### RerankAsync()
-
-Stub for builds without the `reranker` feature.
-
-Since v5.0.
-
-**Signature:**
-
-```go
-func RerankAsync(query string, documents []string, config RerankerConfig) ([]RerankedDocument, error)
-```
-
-**Example:**
-
-```go
-result, err := RerankAsync("value", nil, RerankerConfig{})
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Query` | `string` | Yes | The  query |
-| `Documents` | `\[\]string` | Yes | The  documents |
-| `Config` | `RerankerConfig` | Yes | The reranker config |
-
-**Returns:** `[]RerankedDocument`
-
-**Errors:** Returns `error`.
-
----
-
-#### GetRerankerPreset()
-
-Get a reranker preset by name.
-
-Returns `nil` if no preset with the given name exists. Returns an owned
-clone so the value is safe to pass across FFI boundaries.
-
-Since v5.0.
-
-**Signature:**
-
-```go
-func GetRerankerPreset(name string) *RerankerPreset
-```
-
-**Example:**
-
-```go
-result := GetRerankerPreset("value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Name` | `string` | Yes | The name |
-
-**Returns:** `*RerankerPreset`
-
----
-
-#### ListRerankerPresets()
-
-List the names of all available reranker presets.
-
-Returns owned `String`s so the values are safe to pass across FFI boundaries.
-
-Since v5.0.
-
-**Signature:**
-
-```go
-func ListRerankerPresets() []string
-```
-
-**Example:**
-
-```go
-result := ListRerankerPresets()
-```
-
-**Returns:** `[]string`
-
----
-
-#### GetRerankerPreset()
-
-Returns `nil` for builds without the `reranker-presets` feature.
-
-Since v5.0.
-
-**Signature:**
-
-```go
-func GetRerankerPreset(name string) *RerankerPreset
-```
-
-**Example:**
-
-```go
-result := GetRerankerPreset("value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Name` | `string` | Yes | The  name |
-
-**Returns:** `*RerankerPreset`
-
----
-
-#### ListRerankerPresets()
-
-Returns an empty list for builds without the `reranker-presets` feature.
-
-Since v5.0.
-
-**Signature:**
-
-```go
-func ListRerankerPresets() []string
-```
-
-**Example:**
-
-```go
-result := ListRerankerPresets()
-```
-
-**Returns:** `[]string`
-
----
-
-#### EmbedTextsAsync()
-
-**Signature:**
-
-```go
-func EmbedTextsAsync(texts []string, config EmbeddingConfig) ([][]float32, error)
-```
-
-**Example:**
-
-```go
-result, err := EmbedTextsAsync(nil, EmbeddingConfig{})
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Texts` | `\[\]string` | Yes | The  texts |
-| `Config` | `EmbeddingConfig` | Yes | The embedding config |
-
-**Returns:** `[][]float32`
-
-**Errors:** Returns `error`.
-
----
-
 ### Types
 
 #### AccelerationConfig
@@ -2608,13 +601,13 @@ for inference in layout detection and embedding generation.
 A single file extracted from an archive.
 
 When archives (ZIP, TAR, 7Z, GZIP) are extracted with recursive extraction
-enabled, each processable file produces its own full `ExtractionResult`.
+enabled, each processable file produces its own full `ExtractedDocument`.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `Path` | `string` | — | Archive-relative file path (e.g. "folder/document.pdf"). |
 | `MimeType` | `string` | — | Detected MIME type of the file. |
-| `Result` | `ExtractionResult` | — | Full extraction result for this file. |
+| `Result` | `ExtractedDocument` | — | Full extraction result for this file. |
 
 ---
 
@@ -2720,22 +713,6 @@ Configuration for the VLM captioning post-processor.
 
 ---
 
-#### CaptioningEnrichmentConfig
-
-Captioning enrichment knob: which LLM to use for image captions.
-
-The enrichment stage calls `caption_image` for every
-image in `ExtractionResult.images` that has non-empty `data`. Images with
-empty byte data (e.g. reference-only images populated via `source_path`) are
-skipped rather than forwarded to the VLM.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `Config` | `LlmConfig` | — | LLM / VLM configuration forwarded verbatim to each `caption_image` call. |
-| `CustomPrompt` | `*string` | `nil` | Optional custom prompt override forwarded to every `caption_image` call. `nil` uses the default `RegionKind.Caption` prompt. |
-
----
-
 #### CellChange
 
 A single changed cell within a table.
@@ -2797,7 +774,7 @@ Metadata about a chunk's position in the original document.
 | `LastPage` | `*uint32` | `nil` | Last page number this chunk spans (1-indexed, equal to first_page for single-page chunks). Only populated when page tracking is enabled in extraction configuration. |
 | `HeadingContext` | `*HeadingContext` | `/* serde(default) */` | Heading context when using Markdown chunker. Contains the heading hierarchy this chunk falls under. Only populated when `ChunkerType.Markdown` is used. |
 | `HeadingPath` | `\[\]string` | `/* serde(default) */` | Flattened heading trail from document root to this chunk's section. Each element is a heading's text, outermost first. Derived from `heading_context` when present; empty otherwise. Provides a binding-friendly, RAG-shaped breadcrumb without requiring callers to walk the nested `HeadingContext` structure. |
-| `ImageIndices` | `\[\]uint32` | `/* serde(default) */` | Indices into `ExtractionResult.images` for images on pages covered by this chunk. Contains zero-based indices into the top-level `images` collection for every image whose `page_number` falls within `\[first_page, last_page\]`. Empty when image extraction is disabled or the chunk spans no pages with images. |
+| `ImageIndices` | `\[\]uint32` | `/* serde(default) */` | Indices into `ExtractedDocument.images` for images on pages covered by this chunk. Contains zero-based indices into the top-level `images` collection for every image whose `page_number` falls within `\[first_page, last_page\]`. Empty when image extraction is disabled or the chunk spans no pages with images. |
 
 ---
 
@@ -2896,19 +873,6 @@ result := ChunkingConfig.Default()
 
 ---
 
-#### ChunkingResult
-
-Result of a text chunking operation.
-
-Contains the generated chunks and metadata about the chunking.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `Chunks` | `\[\]Chunk` | — | List of text chunks |
-| `ChunkCount` | `int` | — | Total number of chunks generated |
-
----
-
 #### Citation
 
 A structured citation from a citation block.
@@ -2940,16 +904,6 @@ Citation file metadata (RIS, PubMed, EndNote).
 
 ---
 
-#### ClassificationEnrichmentConfig
-
-Classification enrichment knob: how to label the document.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `Config` | `PageClassificationConfig` | — | Label set and LLM settings for the classification stage. |
-
----
-
 #### ClassificationLabel
 
 A single label + confidence pair.
@@ -2958,107 +912,6 @@ A single label + confidence pair.
 |-------|------|---------|-------------|
 | `Label` | `string` | — | Label name as configured in `PageClassificationConfig.labels`. |
 | `Confidence` | `*float32` | `nil` | Backend-reported confidence in `\[0.0, 1.0\]`. `nil` when the backend (e.g. an LLM prompt without explicit confidence schema) did not report one. |
-
----
-
-#### ConfidenceSignals
-
-Input signals for confidence scoring.
-
-Caller fills these from the extraction result and the LLM response.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `TextCoverage` | `float32` | — | Fraction of pages with usable text in `\[0, 1\]`. |
-| `OcrAggregate` | `*float32` | `nil` | Mean OCR per-element recognition confidence; `nil` when OCR did not run. |
-| `SchemaCompliance` | `SchemaCompliance` | — | Schema-validation result of the merged output. |
-
-##### Methods
-
-###### FromExtractionResult()
-
-Build `ConfidenceSignals` from an `ExtractionResult`.
-
-- `result` — The extraction result whose `ocr_elements` are inspected.
-- `schema_compliance` — Caller-supplied schema validation outcome.
-- `text_coverage` — Caller-supplied fraction of pages with usable text
-  (e.g. 1.0 for native text formats, value from PDF analysis for PDFs).
-
-The `ocr_aggregate` is computed as the arithmetic mean of all
-`ocr_elements[].confidence.recognition` values.  When `ocr_elements` is
-`nil` or empty the field is set to `nil`.
-
-**Signature:**
-
-```go
-func (o *ConfidenceSignals) FromExtractionResult(result ExtractionResult, schemaCompliance SchemaCompliance, textCoverage float32) ConfidenceSignals
-```
-
-**Example:**
-
-```go
-result := ConfidenceSignals.FromExtractionResult(ExtractionResult{}, SchemaCompliance{}, 0.5)
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Result` | `ExtractionResult` | Yes | The extraction result |
-| `SchemaCompliance` | `SchemaCompliance` | Yes | The schema compliance |
-| `TextCoverage` | `float32` | Yes | The text coverage |
-
-**Returns:** `ConfidenceSignals`
-
----
-
-#### ConfidenceWeights
-
-Tunable weights for the confidence scoring formula.
-
-Defaults picked by inspection; callers tune them via config.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `TextCoverage` | `float32` | `0.3` | Weight assigned to `text_coverage`. Default 0.30. |
-| `OcrAggregate` | `float32` | `0.3` | Weight assigned to `ocr_aggregate` when OCR ran. Default 0.30 — folds into `text_coverage` weight when OCR did not run. |
-| `SchemaCompliance` | `float32` | `0.4` | Weight assigned to `schema_compliance`. Default 0.40. |
-
-##### Methods
-
-###### Default()
-
-**Signature:**
-
-```go
-func (o *ConfidenceWeights) Default() ConfidenceWeights
-```
-
-**Example:**
-
-```go
-result := ConfidenceWeights.Default()
-```
-
-**Returns:** `ConfidenceWeights`
-
-###### IsNormalized()
-
-Validate that weights sum to approximately 1.0.
-
-**Signature:**
-
-```go
-func (o *ConfidenceWeights) IsNormalized() bool
-```
-
-**Example:**
-
-```go
-result := instance.IsNormalized()
-```
-
-**Returns:** `bool`
 
 ---
 
@@ -3215,7 +1068,7 @@ A single contiguous hunk in a unified diff.
 
 #### DiffOptions
 
-Options controlling how two `ExtractionResult` values are compared.
+Options controlling how two `ExtractedDocument` values are compared.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -3307,6 +1160,159 @@ Detected document boundary within a PDF.
 
 ---
 
+#### DocumentExtractor
+
+Trait for document extractor plugins.
+
+Implement this trait to add support for new document formats or override
+built-in extraction behavior. Foreign-language bindings expose the
+`DocumentExtractor.extract` method, which accepts `ExtractInput` and
+returns an `ExtractedDocument`.
+
+##### Priority System
+
+When multiple extractors support the same MIME type, the registry selects
+the extractor with the highest priority value. Use this to:
+
+- Override built-in extractors (priority > 50)
+- Provide fallback extractors (priority < 50)
+- Implement specialized extractors for specific use cases
+
+Default priority is 50.
+
+##### Thread Safety
+
+Extractors must be thread-safe (`Send + Sync`) to support concurrent extraction.
+
+##### Methods
+
+###### Extract()
+
+Binding-safe extraction entry point for foreign-language plugin bridges.
+
+Accepts the same unified input shape as the public extraction API and
+returns one extracted document result.
+
+**Signature:**
+
+```go
+func (o *DocumentExtractor) Extract(input ExtractInput, config ExtractionConfig) (ExtractedDocument, error)
+```
+
+**Example:**
+
+```go
+result, err := instance.Extract(ExtractInput{}, ExtractionConfig{})
+if err != nil {
+    return err
+}
+```
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `Input` | `ExtractInput` | Yes | The input data |
+| `Config` | `ExtractionConfig` | Yes | The configuration options |
+
+**Returns:** `ExtractedDocument`
+
+**Errors:** Returns `error`.
+
+###### SupportedMimeTypes()
+
+Get the list of MIME types supported by this extractor.
+
+Can include exact MIME types and prefix patterns:
+
+- Exact: `"application/pdf"`, `"text/plain"`
+- Prefix: `"image/*"` (matches any image type)
+
+**Returns:**
+
+A slice of MIME type strings.
+
+**Signature:**
+
+```go
+func (o *DocumentExtractor) SupportedMimeTypes() []string
+```
+
+**Example:**
+
+```go
+result := instance.SupportedMimeTypes()
+```
+
+**Returns:** `[]string`
+
+###### Priority()
+
+Get the priority of this extractor.
+
+Higher priority extractors are preferred when multiple extractors
+support the same MIME type.
+
+##### Priority Guidelines
+
+- **0-25**: Fallback/low-quality extractors
+- **26-49**: Alternative extractors
+- **50**: Default priority (built-in extractors)
+- **51-75**: Premium/enhanced extractors
+- **76-100**: Specialized/high-priority extractors
+
+**Returns:**
+
+Priority value (default: 50)
+
+**Signature:**
+
+```go
+func (o *DocumentExtractor) Priority() int32
+```
+
+**Example:**
+
+```go
+result := instance.Priority()
+```
+
+**Returns:** `int32`
+
+###### CanHandle()
+
+Optional: Check if this extractor can handle a specific file.
+
+Allows for more sophisticated detection beyond MIME types.
+Defaults to `true` (rely on MIME type matching).
+
+**Returns:**
+
+`true` if the extractor can handle this file, `false` otherwise.
+
+**Signature:**
+
+```go
+func (o *DocumentExtractor) CanHandle(path string, mimeType string) bool
+```
+
+**Example:**
+
+```go
+result := instance.CanHandle("value", "value")
+```
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `Path` | `string` | Yes | The  path |
+| `MimeType` | `string` | Yes | The  mime type |
+
+**Returns:** `bool`
+
+---
+
 #### DocumentMetadata
 
 Metadata about a document for analysis.
@@ -3361,7 +1367,7 @@ A single tracked change embedded in a document.
 
 Populated by per-format extractors that understand change-tracking metadata
 (DOCX `w:ins`/`w:del`/`w:rPrChange`, ODT `text:change-*`, …). Every
-extractor defaults to `ExtractionResult.revisions = None` until a
+extractor defaults to `ExtractedDocument.revisions = None` until a
 format-specific implementation is added.
 
 | Field | Type | Default | Description |
@@ -3614,7 +1620,7 @@ Changes to embedded archive children between two results.
 |-------|------|---------|-------------|
 | `Added` | `\[\]ArchiveEntry` | `nil` | Children present in `b` but not in `a` (matched by `path`). |
 | `Removed` | `\[\]ArchiveEntry` | `nil` | Children present in `a` but not in `b` (matched by `path`). |
-| `Changed` | `\[\]EmbeddedDiff` | `nil` | Children present in both but with differing content (matched by `path`). Each entry holds the diff of the nested `ExtractionResult`. |
+| `Changed` | `\[\]EmbeddedDiff` | `nil` | Children present in both but with differing content (matched by `path`). Each entry holds the diff of the nested `ExtractedDocument`. |
 
 ---
 
@@ -3646,8 +1652,8 @@ Embedded file descriptor extracted from the PDF name tree.
 
 Trait for in-process embedding backend plugins.
 
-Async to match the convention used by `OcrBackend`,
-`DocumentExtractor`, and `PostProcessor`.
+Async to match the convention used by other plugin hooks such as
+`OcrBackend` and `PostProcessor`.
 Host-language bridges (PyO3, napi-rs, Rustler, extendr, magnus, ext-php-rs,
 C FFI, etc.) wrap their synchronous host callables in `spawn_blocking` or the
 equivalent to satisfy the async signature.
@@ -3787,29 +1793,6 @@ result := EmbeddingConfig.Default()
 
 ---
 
-#### EmbeddingPreset
-
-Preset configurations for common RAG use cases.
-
-Each preset combines chunk size, overlap, and embedding model
-to provide an optimized configuration for specific scenarios.
-
-All string fields are owned `String` for FFI compatibility — instances
-are safe to clone and pass across language boundaries.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `Name` | `string` | — | Short identifier for this preset (e.g. `"balanced"`, `"fast"`, `"quality"`). |
-| `ChunkSize` | `int` | — | Target chunk size in characters. |
-| `Overlap` | `int` | — | Overlap between consecutive chunks in characters. |
-| `ModelRepo` | `string` | — | HuggingFace repository name for the model. |
-| `Pooling` | `string` | — | Pooling strategy: "cls" or "mean". |
-| `ModelFile` | `string` | — | Path to the ONNX model file within the repo. |
-| `Dimensions` | `int` | — | Embedding vector dimension produced by this model. |
-| `Description` | `string` | — | Human-readable description of the preset's intended use case. |
-
----
-
 #### EnrichOptions
 
 Which enrichment passes to run on a piece of text.
@@ -3846,8 +1829,8 @@ A single named entity detected in the extracted text.
 |-------|------|---------|-------------|
 | `Category` | `EntityCategory` | — | Canonical category the entity belongs to (PERSON, ORG, LOCATION, etc.). |
 | `Text` | `string` | — | Raw mention text exactly as it appeared in the source. |
-| `Start` | `uint32` | — | Byte-offset span in `ExtractionResult.content` where the mention starts. |
-| `End` | `uint32` | — | Byte-offset span in `ExtractionResult.content` where the mention ends (exclusive). |
+| `Start` | `uint32` | — | Byte-offset span in `ExtractedDocument.content` where the mention starts. |
+| `End` | `uint32` | — | Byte-offset span in `ExtractedDocument.content` where the mention ends (exclusive). |
 | `Confidence` | `*float32` | `nil` | Backend-reported confidence in `\[0.0, 1.0\]`. `nil` when the backend does not expose confidence scores. |
 
 ---
@@ -3956,20 +1939,20 @@ result := ExtractInput.Default()
 
 **Returns:** `ExtractInput`
 
-###### Bytes()
+###### FromBytes()
 
 Build a bytes input with a MIME type and optional filename hint.
 
 **Signature:**
 
 ```go
-func (o *ExtractInput) Bytes(bytes []byte, mimeType string, filename string) ExtractInput
+func (o *ExtractInput) FromBytes(bytes []byte, mimeType string, filename string) ExtractInput
 ```
 
 **Example:**
 
 ```go
-result := ExtractInput.Bytes([]byte("data"), "value", "value")
+result := ExtractInput.FromBytes([]byte("data"), "value", "value")
 ```
 
 **Parameters:**
@@ -3982,20 +1965,20 @@ result := ExtractInput.Bytes([]byte("data"), "value", "value")
 
 **Returns:** `ExtractInput`
 
-###### Uri()
+###### FromUri()
 
 Build a URI input from a local path, `file://` URI, or HTTP(S) URL.
 
 **Signature:**
 
 ```go
-func (o *ExtractInput) Uri(uri string) ExtractInput
+func (o *ExtractInput) FromUri(uri string) ExtractInput
 ```
 
 **Example:**
 
 ```go
-result := ExtractInput.Uri("value")
+result := ExtractInput.FromUri("value")
 ```
 
 **Parameters:**
@@ -4005,6 +1988,76 @@ result := ExtractInput.Uri("value")
 | `Uri` | `string` | Yes | The uri |
 
 **Returns:** `ExtractInput`
+
+---
+
+#### ExtractedDocument
+
+Document extracted by the core extraction pipeline.
+
+`extract` and `extract_batch` return an `ExtractionResult` envelope whose
+`results` field contains these per-document payloads.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `Content` | `string` | — | Plain-text representation of the extracted document content. |
+| `MimeType` | `string` | — | MIME type of the source document (e.g. `"application/pdf"`). |
+| `Metadata` | `Metadata` | — | Document-level metadata (author, title, dates, format-specific fields). |
+| `ExtractionMethod` | `*ExtractionMethod` | `nil` | Extraction strategy used to produce the returned text. Populated when the extractor can reliably distinguish native text extraction, OCR-only extraction, or mixed native/OCR output. |
+| `Tables` | `\[\]Table` | `nil` | Tables extracted from the document, each with structured cell data. |
+| `DetectedLanguages` | `*\[\]string` | `nil` | ISO 639-1 language codes detected in the document content. |
+| `Chunks` | `*\[\]Chunk` | `nil` | Text chunks when chunking is enabled. When chunking configuration is provided, the content is split into overlapping chunks for efficient processing. Each chunk contains the text, optional embeddings (if enabled), and metadata about its position. |
+| `Images` | `*\[\]ExtractedImage` | `nil` | Extracted images from the document. When image extraction is enabled via `ImageExtractionConfig`, this field contains all images found in the document with their raw data and metadata. Each image may optionally contain a nested `ocr_result` if OCR was performed. |
+| `Pages` | `*\[\]PageContent` | `nil` | Per-page content when page extraction is enabled. When page extraction is configured, the document is split into per-page content with tables and images mapped to their respective pages. |
+| `Elements` | `*\[\]Element` | `nil` | Semantic elements when element-based result format is enabled. When result_format is set to ElementBased, this field contains semantic elements with type classification, unique identifiers, and metadata for Unstructured-compatible element-based processing. |
+| `DjotContent` | `*DjotContent` | `nil` | Rich Djot content structure (when extracting Djot documents). When extracting Djot documents with structured extraction enabled, this field contains the full semantic structure including: - Block-level elements with nesting - Inline formatting with attributes - Links, images, footnotes - Math expressions - Complete attribute information The `content` field still contains plain text for backward compatibility. Always `nil` for non-Djot documents. |
+| `OcrElements` | `*\[\]OcrElement` | `nil` | OCR elements with full spatial and confidence metadata. When OCR is performed with element extraction enabled, this field contains the structured representation of detected text including: - Bounding geometry (rectangles or quadrilaterals) - Confidence scores (detection and recognition) - Rotation information - Hierarchical relationships (Tesseract only) This field preserves all metadata that would otherwise be lost when converting to plain text or markdown output formats. Only populated when `OcrElementConfig.include_elements` is true. |
+| `Document` | `*DocumentStructure` | `nil` | Structured document tree (when document structure extraction is enabled). When `include_document_structure` is true in `ExtractionConfig`, this field contains the full hierarchical representation of the document including: - Heading-driven section nesting - Table grids with cell-level metadata - Content layer classification (body, header, footer, footnote) - Inline text annotations (formatting, links) - Bounding boxes and page numbers Independent of `result_format` — can be combined with Unified or ElementBased. |
+| `ExtractedKeywords` | `*\[\]Keyword` | `nil` | Extracted keywords when keyword extraction is enabled. When keyword extraction (RAKE or YAKE) is configured, this field contains the extracted keywords with scores, algorithm info, and position data. Previously stored in `metadata.additional\["keywords"\]`. |
+| `QualityScore` | `*float64` | `nil` | Document quality score from quality analysis. A value between 0.0 and 1.0 indicating the overall text quality. Previously stored in `metadata.additional\["quality_score"\]`. |
+| `ProcessingWarnings` | `\[\]ProcessingWarning` | `nil` | Non-fatal warnings collected during processing pipeline stages. Captures errors from optional pipeline features (embedding, chunking, language detection, output formatting) that don't prevent extraction but may indicate degraded results. Previously stored as individual keys in `metadata.additional`. |
+| `Annotations` | `*\[\]PdfAnnotation` | `nil` | PDF annotations extracted from the document. When annotation extraction is enabled via `PdfConfig.extract_annotations`, this field contains text notes, highlights, links, stamps, and other annotations found in PDF documents. |
+| `Children` | `*\[\]ArchiveEntry` | `nil` | Nested extraction results from archive contents. When extracting archives, each processable file inside produces its own full extraction result. Set to `nil` for non-archive formats. Use `max_archive_depth` in config to control recursion depth. |
+| `Uris` | `*\[\]ExtractedUri` | `nil` | URIs/links discovered during document extraction. Contains hyperlinks, image references, citations, email addresses, and other URI-like references found in the document. Always extracted when present in the source document. |
+| `Revisions` | `*\[\]DocumentRevision` | `nil` | Tracked changes embedded in the source document. Populated by per-format extractors that understand change-tracking metadata (DOCX `w:ins`/`w:del`/`w:rPrChange`, ODT `text:change-*`, …). Every extractor defaults to `nil` until its format-specific implementation is added. Extractors that do populate this field follow the "accepted-changes" convention: inserted text is present in `content`, deleted text is absent — the revision list is the separate audit trail. |
+| `StructuredOutput` | `*interface{}` | `nil` | Structured extraction output from LLM-based JSON schema extraction. When `structured_extraction` is configured in `ExtractionConfig`, the extracted document content is sent to a VLM with the provided JSON schema. The response is parsed and stored here as a JSON value matching the schema. |
+| `CodeIntelligence` | `*interface{}` | `nil` | Code intelligence results from tree-sitter analysis. Populated when extracting source code files with the `tree-sitter` feature. Contains metrics, structural analysis, imports/exports, comments, docstrings, symbols, diagnostics, and optionally chunked code segments. Stored as an opaque JSON value so that all language bindings (Go, Java, C#, …) can deserialize it as a raw JSON object rather than a typed struct. The underlying type is `tree_sitter_language_pack.ProcessResult`. |
+| `LlmUsage` | `*\[\]LlmUsage` | `nil` | LLM token usage and cost data for all LLM calls made during this extraction. Contains one entry per LLM call. Multiple entries are produced when VLM OCR, structured extraction, or LLM embeddings run during the same extraction. `nil` when no LLM was used. |
+| `Entities` | `*\[\]Entity` | `nil` | Named entities detected in `content` by the NER post-processor. `nil` when no NER backend is configured. Populated by the `xberg-gliner` ONNX backend or the LLM-driven backend (see `crates/xberg/src/text/ner/`). |
+| `Summary` | `*DocumentSummary` | `nil` | Summary of `content` produced by the summarisation post-processor. `nil` when summarisation is not configured. Populated by the TextRank extractive backend (deterministic, no external service) or by the liter-llm-driven abstractive backend. |
+| `ExtractionConfidence` | `*ExtractionConfidence` | `nil` | Confidence score computed by the heuristics pipeline. Populated when the `heuristics` feature is enabled and confidence scoring has been performed.  Combines text-coverage, OCR aggregate confidence, and schema-compliance into a single `\[0, 1\]` value. `nil` when confidence scoring is not configured or the feature is absent. |
+| `Translation` | `*Translation` | `nil` | Translation of `content` produced by the translation post-processor. `nil` when translation is not configured. |
+| `PageClassifications` | `*\[\]PageClassification` | `nil` | Per-page classifications produced by the page-classification post-processor. `nil` when classification is not configured. |
+| `RedactionReport` | `*RedactionReport` | `nil` | Audit report of redactions applied by the redaction post-processor. The redaction processor rewrites `content`, `formatted_content`, every chunk's text, and the textual fields of `entities` / `summary` / `translation` / `page_classifications` in place. This report describes what was found and how it was replaced. `nil` when redaction is not configured. |
+| `Formulas` | `\[\]Formula` | `nil` | Mathematical formulas recognized in the document. Populated by the layout-guided formula pipeline when the `layout-detection` feature is enabled and the document contains regions classified as formulas. Empty otherwise. |
+| `FormFields` | `\[\]PdfFormField` | `nil` | Form fields extracted from a PDF's AcroForm or XFA structure. Populated by the PDF extractor when `PdfConfig.extract_form_fields` is enabled (default) and the document is a fillable form. Empty otherwise. |
+| `FormattedContent` | `*string` | `nil` | Pre-rendered content in the requested output format. Populated during `derive_extraction_result` before tree derivation consumes element data. `apply_output_format` swaps this into `content` at the end of the pipeline, after post-processors have operated on plain text. |
+
+##### Methods
+
+###### FromOcr()
+
+Convert from an OCR result.
+
+**Signature:**
+
+```go
+func (o *ExtractedDocument) FromOcr(ocr OcrExtractionResult) ExtractedDocument
+```
+
+**Example:**
+
+```go
+result := ExtractedDocument.FromOcr(OcrExtractionResult{})
+```
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `Ocr` | `OcrExtractionResult` | Yes | The ocr extraction result |
+
+**Returns:** `ExtractedDocument`
 
 ---
 
@@ -4028,7 +2081,7 @@ PIL.Image (Python), Sharp (Node.js), or other formats as needed.
 | `BitsPerComponent` | `*uint32` | `nil` | Bits per color component (e.g., 8, 16) |
 | `IsMask` | `bool` | — | Whether this image is a mask image |
 | `Description` | `*string` | `nil` | Optional description of the image |
-| `OcrResult` | `*ExtractionResult` | `nil` | Nested OCR extraction result (if image was OCRed) When OCR is performed on this image, the result is embedded here rather than in a separate collection, making the relationship explicit. |
+| `OcrResult` | `*ExtractedDocument` | `nil` | Nested OCR extraction result (if image was OCRed) When OCR is performed on this image, the result is embedded here rather than in a separate collection, making the relationship explicit. |
 | `BoundingBox` | `*BoundingBox` | `nil` | Bounding box of the image on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top). Only populated for PDF-extracted images when position data is available from the PDF extractor. |
 | `SourcePath` | `*string` | `nil` | Original source path of the image within the document archive (e.g., "media/image1.png" in DOCX). Used for rendering image references when the binary data is not extracted. |
 | `ImageKind` | `*ImageKind` | `nil` | Heuristic classification of what this image likely depicts. `nil` if classification was disabled or inconclusive. |
@@ -4107,7 +2160,7 @@ It can be loaded from TOML, YAML, or JSON files, or created programmatically.
 | `Layout` | `*LayoutDetectionConfig` | `nil` | Layout detection configuration (None = layout detection disabled). When set, PDF pages and images are analyzed for document structure (headings, code, formulas, tables, figures, etc.) using RT-DETR models via ONNX Runtime. For PDFs, layout hints override paragraph classification in the markdown pipeline. For images, per-region OCR is performed with markdown formatting based on detected layout classes. Requires the `layout-detection` feature to run inference; the field is present whenever the `layout-types` feature is active (which includes `layout-detection` as well as the no-ORT target groups). |
 | `Transcription` | `*TranscriptionConfig` | `nil` | Transcription (speech-to-text) configuration for audio/video files. When set and `enabled`, files with audio/video MIME types (mp3, mp4, m4a, wav, webm, etc.) are routed to the Whisper-based transcription pipeline. The actual heavy dependencies are only active under the `transcription` feature; the field is visible under `transcription-types` (including on WASM and Android targets that use the no-ORT preset). Default: `nil` (transcription disabled). This is an additive, non-breaking change. |
 | `UseLayoutForMarkdown` | `bool` | `false` | Run layout detection on the non-OCR PDF markdown path. When `true` and `layout` is `Some(_)`, layout regions inform heading, table, list, and figure detection in the structure pipeline that would otherwise rely on font-clustering heuristics alone. Significantly improves SF1 (structural F1) at the cost of inference latency (~150-300ms/page CPU, ~20-50ms/page GPU). Default: `false`. Requires the `layout-detection` feature. |
-| `IncludeDocumentStructure` | `bool` | `false` | Enable structured document tree output. When true, populates the `document` field on `ExtractionResult` with a hierarchical `DocumentStructure` containing heading-driven section nesting, table grids, content layer classification, and inline annotations. Independent of `result_format` — can be combined with Unified or ElementBased. |
+| `IncludeDocumentStructure` | `bool` | `false` | Enable structured document tree output. When true, populates the `document` field on `ExtractedDocument` with a hierarchical `DocumentStructure` containing heading-driven section nesting, table grids, content layer classification, and inline annotations. Independent of `result_format` — can be combined with Unified or ElementBased. |
 | `Acceleration` | `*AccelerationConfig` | `nil` | Hardware acceleration configuration for ONNX Runtime models. Controls execution provider selection for layout detection and embedding models. When `nil`, uses platform defaults (CoreML on macOS, CUDA on Linux, CPU on Windows). |
 | `CacheNamespace` | `*string` | `nil` | Cache namespace for tenant isolation. When set, cache entries are stored under `{cache_dir}/{namespace}/`. Must be alphanumeric, hyphens, or underscores only (max 64 chars). Different namespaces have isolated cache spaces on the same filesystem. |
 | `CacheTtlSecs` | `*uint64` | `nil` | Per-request cache TTL in seconds. Overrides the global `max_age_days` for this specific extraction. When `0`, caching is completely skipped (no read or write). When `nil`, the global TTL applies. |
@@ -4115,12 +2168,12 @@ It can be loaded from TOML, YAML, or JSON files, or created programmatically.
 | `Url` | `UrlExtractionConfig` | — | URL ingestion and crawl configuration. |
 | `MaxArchiveDepth` | `int` | — | Maximum recursion depth for archive extraction (default: 3). Set to 0 to disable recursive extraction (legacy behavior). |
 | `TreeSitter` | `*TreeSitterConfig` | `nil` | Tree-sitter language pack configuration (None = tree-sitter disabled). When set, enables code file extraction using tree-sitter parsers. Controls grammar download behavior and code analysis options. |
-| `StructuredExtraction` | `*StructuredExtractionConfig` | `nil` | Structured extraction via LLM (None = disabled). When set, the extracted document content is sent to an LLM with the provided JSON schema. The structured response is stored in `ExtractionResult.structured_output`. |
-| `Ner` | `*NerConfig` | `nil` | Named-entity recognition configuration. When set, the NER post-processor runs at the Middle stage and populates `ExtractionResult.entities`. |
-| `Redaction` | `*RedactionConfig` | `nil` | Redaction / anonymisation configuration. When set, the redaction post-processor runs at the Late stage and rewrites every textual field in `ExtractionResult`, emitting an audit trail in `ExtractionResult.redaction_report`. |
-| `Summarization` | `*SummarizationConfig` | `nil` | Summarisation configuration. When set, the summarisation post-processor runs at the Middle stage and populates `ExtractionResult.summary`. |
-| `Translation` | `*TranslationConfig` | `nil` | Translation configuration. When set, the translation post-processor runs at the Middle stage and populates `ExtractionResult.translation`. |
-| `PageClassification` | `*PageClassificationConfig` | `nil` | Per-page classification configuration. When set, the classification post-processor runs at the Middle stage and populates `ExtractionResult.page_classifications`. |
+| `StructuredExtraction` | `*StructuredExtractionConfig` | `nil` | Structured extraction via LLM (None = disabled). When set, the extracted document content is sent to an LLM with the provided JSON schema. The structured response is stored in `ExtractedDocument.structured_output`. |
+| `Ner` | `*NerConfig` | `nil` | Named-entity recognition configuration. When set, the NER post-processor runs at the Middle stage and populates `ExtractedDocument.entities`. |
+| `Redaction` | `*RedactionConfig` | `nil` | Redaction / anonymisation configuration. When set, the redaction post-processor runs at the Late stage and rewrites every textual field in `ExtractedDocument`, emitting an audit trail in `ExtractedDocument.redaction_report`. |
+| `Summarization` | `*SummarizationConfig` | `nil` | Summarisation configuration. When set, the summarisation post-processor runs at the Middle stage and populates `ExtractedDocument.summary`. |
+| `Translation` | `*TranslationConfig` | `nil` | Translation configuration. When set, the translation post-processor runs at the Middle stage and populates `ExtractedDocument.translation`. |
+| `PageClassification` | `*PageClassificationConfig` | `nil` | Per-page classification configuration. When set, the classification post-processor runs at the Middle stage and populates `ExtractedDocument.page_classifications`. |
 | `Captioning` | `*CaptioningConfig` | `nil` | VLM captioning configuration for extracted images. When set, the captioning post-processor runs at the Middle stage and writes a caption into each `ExtractedImage.caption`. |
 | `QrCodes` | `*bool` | `nil` | Enable QR-code detection in extracted images. When `true`, the QR post-processor runs at the Middle stage and populates `ExtractedImage.qr_codes`. |
 
@@ -4157,9 +2210,9 @@ decompression can improve CPU utilization by 5-10% by avoiding wasteful
 image I/O and processing when results won't be used.
 Returns `true` when image binary data should be extracted.
 
-True when `config.images.extract_images` is set **or** when captioning is
-configured — captioning requires image bytes regardless of whether the caller
-also requested `images` extraction.
+True when `config.images.extract_images` is set, captioning is configured, or QR-code
+detection is enabled. Captioning and QR-code detection both require image bytes
+regardless of whether the caller also requested image extraction.
 
 **Signature:**
 
@@ -4203,7 +2256,7 @@ result := instance.NeedsImageProcessing()
 
 #### ExtractionDiff
 
-The complete diff between two `ExtractionResult` values.
+The complete diff between two `ExtractedDocument` values.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -4218,7 +2271,7 @@ The complete diff between two `ExtractionResult` values.
 
 #### ExtractionErrorItem
 
-Non-fatal per-input extraction error captured by `ExtractionOutput`.
+Non-fatal per-input extraction error captured by `ExtractionResult`.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -4230,13 +2283,13 @@ Non-fatal per-input extraction error captured by `ExtractionOutput`.
 
 ---
 
-#### ExtractionOutput
+#### ExtractionResult
 
-Unified extraction output envelope.
+Unified extraction result envelope.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `Results` | `\[\]ExtractionResult` | `nil` | Extraction results in discovery order. |
+| `Results` | `\[\]ExtractedDocument` | `nil` | Extracted documents in discovery order. |
 | `Errors` | `\[\]ExtractionErrorItem` | `nil` | Non-fatal per-input errors. |
 | `Summary` | `ExtractionSummary` | — | Aggregate counts for the operation. |
 | `CrawlFinalUrls` | `\[\]string` | `nil` | Final URLs reached after redirects during URL ingestion. |
@@ -4252,89 +2305,20 @@ Build an output containing one successful result.
 **Signature:**
 
 ```go
-func (o *ExtractionOutput) Single(result ExtractionResult) ExtractionOutput
+func (o *ExtractionResult) Single(result ExtractedDocument) ExtractionResult
 ```
 
 **Example:**
 
 ```go
-result := ExtractionOutput.Single(ExtractionResult{})
+result := ExtractionResult.Single(ExtractedDocument{})
 ```
 
 **Parameters:**
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `Result` | `ExtractionResult` | Yes | The extraction result |
-
-**Returns:** `ExtractionOutput`
-
----
-
-#### ExtractionResult
-
-General extraction result used by the core extraction API.
-
-This is the main result type returned by all extraction functions.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `Content` | `string` | — | Plain-text representation of the extracted document content. |
-| `MimeType` | `string` | — | MIME type of the source document (e.g. `"application/pdf"`). |
-| `Metadata` | `Metadata` | — | Document-level metadata (author, title, dates, format-specific fields). |
-| `ExtractionMethod` | `*ExtractionMethod` | `nil` | Extraction strategy used to produce the returned text. Populated when the extractor can reliably distinguish native text extraction, OCR-only extraction, or mixed native/OCR output. |
-| `Tables` | `\[\]Table` | `nil` | Tables extracted from the document, each with structured cell data. |
-| `DetectedLanguages` | `*\[\]string` | `nil` | ISO 639-1 language codes detected in the document content. |
-| `Chunks` | `*\[\]Chunk` | `nil` | Text chunks when chunking is enabled. When chunking configuration is provided, the content is split into overlapping chunks for efficient processing. Each chunk contains the text, optional embeddings (if enabled), and metadata about its position. |
-| `Images` | `*\[\]ExtractedImage` | `nil` | Extracted images from the document. When image extraction is enabled via `ImageExtractionConfig`, this field contains all images found in the document with their raw data and metadata. Each image may optionally contain a nested `ocr_result` if OCR was performed. |
-| `Pages` | `*\[\]PageContent` | `nil` | Per-page content when page extraction is enabled. When page extraction is configured, the document is split into per-page content with tables and images mapped to their respective pages. |
-| `Elements` | `*\[\]Element` | `nil` | Semantic elements when element-based result format is enabled. When result_format is set to ElementBased, this field contains semantic elements with type classification, unique identifiers, and metadata for Unstructured-compatible element-based processing. |
-| `DjotContent` | `*DjotContent` | `nil` | Rich Djot content structure (when extracting Djot documents). When extracting Djot documents with structured extraction enabled, this field contains the full semantic structure including: - Block-level elements with nesting - Inline formatting with attributes - Links, images, footnotes - Math expressions - Complete attribute information The `content` field still contains plain text for backward compatibility. Always `nil` for non-Djot documents. |
-| `OcrElements` | `*\[\]OcrElement` | `nil` | OCR elements with full spatial and confidence metadata. When OCR is performed with element extraction enabled, this field contains the structured representation of detected text including: - Bounding geometry (rectangles or quadrilaterals) - Confidence scores (detection and recognition) - Rotation information - Hierarchical relationships (Tesseract only) This field preserves all metadata that would otherwise be lost when converting to plain text or markdown output formats. Only populated when `OcrElementConfig.include_elements` is true. |
-| `Document` | `*DocumentStructure` | `nil` | Structured document tree (when document structure extraction is enabled). When `include_document_structure` is true in `ExtractionConfig`, this field contains the full hierarchical representation of the document including: - Heading-driven section nesting - Table grids with cell-level metadata - Content layer classification (body, header, footer, footnote) - Inline text annotations (formatting, links) - Bounding boxes and page numbers Independent of `result_format` — can be combined with Unified or ElementBased. |
-| `ExtractedKeywords` | `*\[\]Keyword` | `nil` | Extracted keywords when keyword extraction is enabled. When keyword extraction (RAKE or YAKE) is configured, this field contains the extracted keywords with scores, algorithm info, and position data. Previously stored in `metadata.additional\["keywords"\]`. |
-| `QualityScore` | `*float64` | `nil` | Document quality score from quality analysis. A value between 0.0 and 1.0 indicating the overall text quality. Previously stored in `metadata.additional\["quality_score"\]`. |
-| `ProcessingWarnings` | `\[\]ProcessingWarning` | `nil` | Non-fatal warnings collected during processing pipeline stages. Captures errors from optional pipeline features (embedding, chunking, language detection, output formatting) that don't prevent extraction but may indicate degraded results. Previously stored as individual keys in `metadata.additional`. |
-| `Annotations` | `*\[\]PdfAnnotation` | `nil` | PDF annotations extracted from the document. When annotation extraction is enabled via `PdfConfig.extract_annotations`, this field contains text notes, highlights, links, stamps, and other annotations found in PDF documents. |
-| `Children` | `*\[\]ArchiveEntry` | `nil` | Nested extraction results from archive contents. When extracting archives, each processable file inside produces its own full extraction result. Set to `nil` for non-archive formats. Use `max_archive_depth` in config to control recursion depth. |
-| `Uris` | `*\[\]ExtractedUri` | `nil` | URIs/links discovered during document extraction. Contains hyperlinks, image references, citations, email addresses, and other URI-like references found in the document. Always extracted when present in the source document. |
-| `Revisions` | `*\[\]DocumentRevision` | `nil` | Tracked changes embedded in the source document. Populated by per-format extractors that understand change-tracking metadata (DOCX `w:ins`/`w:del`/`w:rPrChange`, ODT `text:change-*`, …). Every extractor defaults to `nil` until its format-specific implementation is added. Extractors that do populate this field follow the "accepted-changes" convention: inserted text is present in `content`, deleted text is absent — the revision list is the separate audit trail. |
-| `StructuredOutput` | `*interface{}` | `nil` | Structured extraction output from LLM-based JSON schema extraction. When `structured_extraction` is configured in `ExtractionConfig`, the extracted document content is sent to a VLM with the provided JSON schema. The response is parsed and stored here as a JSON value matching the schema. |
-| `CodeIntelligence` | `*interface{}` | `nil` | Code intelligence results from tree-sitter analysis. Populated when extracting source code files with the `tree-sitter` feature. Contains metrics, structural analysis, imports/exports, comments, docstrings, symbols, diagnostics, and optionally chunked code segments. Stored as an opaque JSON value so that all language bindings (Go, Java, C#, …) can deserialize it as a raw JSON object rather than a typed struct. The underlying type is `tree_sitter_language_pack.ProcessResult`. |
-| `LlmUsage` | `*\[\]LlmUsage` | `nil` | LLM token usage and cost data for all LLM calls made during this extraction. Contains one entry per LLM call. Multiple entries are produced when VLM OCR, structured extraction, or LLM embeddings run during the same extraction. `nil` when no LLM was used. |
-| `Entities` | `*\[\]Entity` | `nil` | Named entities detected in `content` by the NER post-processor. `nil` when no NER backend is configured. Populated by the `xberg-gliner` ONNX backend or the LLM-driven backend (see `crates/xberg/src/text/ner/`). |
-| `Summary` | `*DocumentSummary` | `nil` | Summary of `content` produced by the summarisation post-processor. `nil` when summarisation is not configured. Populated by the TextRank extractive backend (deterministic, no external service) or by the liter-llm-driven abstractive backend. |
-| `ExtractionConfidence` | `*ExtractionConfidence` | `nil` | Confidence score computed by the heuristics pipeline. Populated when the `heuristics` feature is enabled and confidence scoring has been performed.  Combines text-coverage, OCR aggregate confidence, and schema-compliance into a single `\[0, 1\]` value. `nil` when confidence scoring is not configured or the feature is absent. |
-| `Translation` | `*Translation` | `nil` | Translation of `content` produced by the translation post-processor. `nil` when translation is not configured. |
-| `PageClassifications` | `*\[\]PageClassification` | `nil` | Per-page classifications produced by the page-classification post-processor. `nil` when classification is not configured. |
-| `RedactionReport` | `*RedactionReport` | `nil` | Audit report of redactions applied by the redaction post-processor. The redaction processor rewrites `content`, `formatted_content`, every chunk's text, and the textual fields of `entities` / `summary` / `translation` / `page_classifications` in place. This report describes what was found and how it was replaced. `nil` when redaction is not configured. |
-| `Formulas` | `\[\]Formula` | `nil` | Mathematical formulas recognized in the document. Populated by the layout-guided formula pipeline when the `layout-detection` feature is enabled and the document contains regions classified as formulas. Empty otherwise. |
-| `FormFields` | `\[\]PdfFormField` | `nil` | Form fields extracted from a PDF's AcroForm or XFA structure. Populated by the PDF extractor when `PdfConfig.extract_form_fields` is enabled (default) and the document is a fillable form. Empty otherwise. |
-| `FormattedContent` | `*string` | `nil` | Pre-rendered content in the requested output format. Populated during `derive_extraction_result` before tree derivation consumes element data. `apply_output_format` swaps this into `content` at the end of the pipeline, after post-processors have operated on plain text. |
-
-##### Methods
-
-###### FromOcr()
-
-Convert from an OCR result.
-
-**Signature:**
-
-```go
-func (o *ExtractionResult) FromOcr(ocr OcrExtractionResult) ExtractionResult
-```
-
-**Example:**
-
-```go
-result := ExtractionResult.FromOcr(OcrExtractionResult{})
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Ocr` | `OcrExtractionResult` | Yes | The ocr extraction result |
+| `Result` | `ExtractedDocument` | Yes | The extracted document |
 
 **Returns:** `ExtractionResult`
 
@@ -4401,6 +2385,7 @@ cannot be overridden per file:
 | `Pages` | `*PageConfig` | `nil` | Override page extraction for this file. |
 | `Keywords` | `*KeywordConfig` | `nil` | Override keyword extraction for this file. |
 | `Postprocessor` | `*PostProcessorConfig` | `nil` | Override post-processor for this file. |
+| `HtmlOutput` | `*HtmlOutputConfig` | `nil` | Override styled HTML output configuration for this file. |
 | `ResultFormat` | `*ResultFormat` | `nil` | Override result format for this file. |
 | `OutputFormat` | `*OutputFormat` | `nil` | Override output content format for this file. |
 | `IncludeDocumentStructure` | `*bool` | `nil` | Override document structure output for this file. |
@@ -4409,6 +2394,14 @@ cannot be overridden per file:
 | `TimeoutSecs` | `*uint64` | `nil` | Override per-file extraction timeout in seconds. When set, the extraction for this file will be canceled after the specified duration. A timed-out file produces an error result without affecting other files in the batch. |
 | `TreeSitter` | `*TreeSitterConfig` | `nil` | Override tree-sitter configuration for this file. |
 | `StructuredExtraction` | `*StructuredExtractionConfig` | `nil` | Override structured extraction configuration for this file. When set, enables LLM-based structured extraction with a JSON schema for this specific file. The extracted content is sent to a VLM/LLM and the response is parsed according to the provided schema. |
+| `Url` | `*UrlExtractionConfig` | `nil` | Override URL ingestion and crawl configuration for this file. |
+| `Ner` | `*NerConfig` | `nil` | Override named-entity recognition configuration for this file. |
+| `Redaction` | `*RedactionConfig` | `nil` | Override redaction configuration for this file. |
+| `Summarization` | `*SummarizationConfig` | `nil` | Override summarization configuration for this file. |
+| `Translation` | `*TranslationConfig` | `nil` | Override translation configuration for this file. |
+| `PageClassification` | `*PageClassificationConfig` | `nil` | Override per-page classification configuration for this file. |
+| `Captioning` | `*CaptioningConfig` | `nil` | Override VLM captioning configuration for this file. |
+| `QrCodes` | `*bool` | `nil` | Override QR-code detection for this file. |
 
 ---
 
@@ -4526,7 +2519,7 @@ A mathematical formula detected and recognized in a document.
 Populated by the layout-guided formula pipeline: regions classified as
 `LayoutClass.Formula` are routed to the formula OCR task, which returns the
 LaTeX source for the region. The field is always present on
-`ExtractionResult` but only populated
+`ExtractedDocument` but only populated
 when the `layout-detection` feature is active and the document contains
 formula regions.
 
@@ -4791,7 +2784,7 @@ Image extraction configuration.
 | `MaxDpi` | `int32` | `600` | Maximum DPI threshold |
 | `MaxImagesPerPage` | `*uint32` | `nil` | Maximum number of image objects to extract per PDF page. Some PDFs (e.g. technical diagrams stored as thousands of raster fragments) can trigger extremely long or indefinite extraction times when every image object on a dense page is decoded individually via the PDF extractor. Setting this limit causes xberg to stop collecting individual images once the count per page reaches the cap and emit a warning instead. `nil` (default) means no limit — all images are extracted. |
 | `Classify` | `bool` | `false` | When `true`, extracted images are classified by kind and grouped into clusters where they appear to belong to one figure. Defaults to `false` — opt in explicitly to avoid unexpected ML overhead. |
-| `IncludePageRasters` | `bool` | `false` | When `true`, full-page renders produced during OCR preprocessing are captured and returned as `ImageKind.PageRaster` entries in `ExtractionResult.images`. **PDF + OCR only.** No rasters are captured for non-PDF inputs or when the document-level OCR bypass is active (whole-document backend). When OCR is enabled and this flag is set but the active backend skips per-page rendering, a `ProcessingWarning` is emitted in `ExtractionResult.processing_warnings`. Defaults to `false`. Enable when downstream consumers need page thumbnails (e.g. citation previews, visual grounding). |
+| `IncludePageRasters` | `bool` | `false` | When `true`, full-page renders produced during OCR preprocessing are captured and returned as `ImageKind.PageRaster` entries in `ExtractedDocument.images`. **PDF + OCR only.** No rasters are captured for non-PDF inputs or when the document-level OCR bypass is active (whole-document backend). When OCR is enabled and this flag is set but the active backend skips per-page rendering, a `ProcessingWarning` is emitted in `ExtractedDocument.processing_warnings`. Defaults to `false`. Enable when downstream consumers need page thumbnails (e.g. citation previews, visual grounding). |
 | `RunOcrOnImages` | `bool` | `true` | Run OCR on extracted images and include the recognized text in the document content. When `true` (default) and `ExtractionConfig.ocr` is configured, extracted images are processed with the configured OCR backend. Set to `false` to extract images without OCR processing, even when OCR is enabled. |
 | `OcrTextOnly` | `bool` | `false` | When `true`, image OCR results are rendered as plain text without the `!\[...\](...)` markdown placeholder. Only takes effect when `run_ocr_on_images` is also `true`. |
 | `AppendOcrText` | `bool` | `false` | When `true` and `ocr_text_only` is `false`, append the OCR text after the image placeholder in the rendered output. |
@@ -5088,95 +3081,6 @@ Link element metadata.
 
 ---
 
-#### LlmBackend
-
-liter-llm-backed NER backend.
-
-##### Methods
-
-###### New()
-
-Create a new LLM-backed NER backend with the given LLM configuration.
-
-**Signature:**
-
-```go
-func (o *LlmBackend) New(config LlmConfig) LlmBackend
-```
-
-**Example:**
-
-```go
-result := LlmBackend.New(LlmConfig{})
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Config` | `LlmConfig` | Yes | The configuration options |
-
-**Returns:** `LlmBackend`
-
-###### Detect()
-
-**Signature:**
-
-```go
-func (o *LlmBackend) Detect(text string, categories []EntityCategory) ([]Entity, error)
-```
-
-**Example:**
-
-```go
-result, err := instance.Detect("value", nil)
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Text` | `string` | Yes | The text |
-| `Categories` | `\[\]EntityCategory` | Yes | The categories |
-
-**Returns:** `[]Entity`
-
-**Errors:** Returns `error`.
-
-###### DetectWithCustom()
-
-**Signature:**
-
-```go
-func (o *LlmBackend) DetectWithCustom(text string, categories []EntityCategory, customLabels []string) ([]Entity, error)
-```
-
-**Example:**
-
-```go
-result, err := instance.DetectWithCustom("value", nil, nil)
-if err != nil {
-    return err
-}
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `Text` | `string` | Yes | The text |
-| `Categories` | `\[\]EntityCategory` | Yes | The categories |
-| `CustomLabels` | `\[\]string` | Yes | The custom labels |
-
-**Returns:** `[]Entity`
-
-**Errors:** Returns `error`.
-
----
-
 #### LlmConfig
 
 Configuration for an LLM provider/model via liter-llm.
@@ -5405,7 +3309,7 @@ Configuration for the NER post-processor.
 | `Backend` | `NerBackendKind` | `NerBackendKind.Onnx` | Backend that runs the entity detection. |
 | `Categories` | `\[\]EntityCategory` | `nil` | Entity categories to detect. Defaults to a sensible PERSON/ORG/LOCATION/EMAIL set when empty. |
 | `Model` | `*string` | `nil` | Override the default model — only used by `NerBackendKind.Onnx`. `nil` lets the backend pick its pinned default xberg GLiNER model alias. |
-| `Llm` | `*LlmConfig` | `nil` | Optional LLM configuration — only used by `NerBackendKind.Llm`. Token usage for LLM backends is recorded in `ExtractionResult.llm_usage`. |
+| `Llm` | `*LlmConfig` | `nil` | Optional LLM configuration — only used by `NerBackendKind.Llm`. Token usage for LLM backends is recorded in `ExtractedDocument.llm_usage`. |
 | `CustomLabels` | `\[\]string` | `nil` | Arbitrary user-supplied entity labels for zero-shot detection. `xberg-gliner` natively supports zero-shot inference over caller-supplied labels. The LLM backend also honours these labels by including them in the structured-output schema. Custom labels surface as `EntityCategory.Custom` in the resulting `Entity` stream. Use this when you need domain-specific entity types (e.g. `"Treatment"`, `"Product"`, `"Vessel"`) without forking GLiNER's taxonomy. |
 
 ---
@@ -5417,7 +3321,7 @@ Trait for OCR backend plugins.
 Implement this trait to add custom OCR capabilities. OCR backends can be:
 
 - Native Rust implementations (like Tesseract)
-- FFI bridges to Python libraries (like EasyOCR, PaddleOCR)
+- FFI bridges to external libraries (like PaddleOCR)
 - Cloud-based OCR services (Google Vision, AWS Textract, etc.)
 
 ##### Thread Safety
@@ -5432,7 +3336,7 @@ Process an image and extract text via OCR.
 
 **Returns:**
 
-An `ExtractionResult` containing the extracted text and metadata.
+An `ExtractedDocument` containing the extracted text and metadata.
 
 **Errors:**
 
@@ -5449,7 +3353,7 @@ so multiple backends can coexist in a pipeline without key conflicts.
 **Signature:**
 
 ```go
-func (o *OcrBackend) ProcessImage(imageBytes []byte, config OcrConfig) (ExtractionResult, error)
+func (o *OcrBackend) ProcessImage(imageBytes []byte, config OcrConfig) (ExtractedDocument, error)
 ```
 
 **Example:**
@@ -5468,7 +3372,7 @@ if err != nil {
 | `ImageBytes` | `\[\]byte` | Yes | Raw image data (JPEG, PNG, TIFF, etc.) |
 | `Config` | `OcrConfig` | Yes | OCR configuration (language, PSM mode, etc.) |
 
-**Returns:** `ExtractionResult`
+**Returns:** `ExtractedDocument`
 
 **Errors:** Returns `error`.
 
@@ -5486,7 +3390,7 @@ Same as `process_image`, plus file I/O errors.
 **Signature:**
 
 ```go
-func (o *OcrBackend) ProcessImageFile(path string, config OcrConfig) (ExtractionResult, error)
+func (o *OcrBackend) ProcessImageFile(path string, config OcrConfig) (ExtractedDocument, error)
 ```
 
 **Example:**
@@ -5505,7 +3409,7 @@ if err != nil {
 | `Path` | `string` | Yes | Path to the image file |
 | `Config` | `OcrConfig` | Yes | OCR configuration |
 
-**Returns:** `ExtractionResult`
+**Returns:** `ExtractedDocument`
 
 **Errors:** Returns `error`.
 
@@ -5651,7 +3555,7 @@ Only called if `supports_document_processing` returns `true`.
 **Signature:**
 
 ```go
-func (o *OcrBackend) ProcessDocument(path string, config OcrConfig) (ExtractionResult, error)
+func (o *OcrBackend) ProcessDocument(path string, config OcrConfig) (ExtractedDocument, error)
 ```
 
 **Example:**
@@ -5670,7 +3574,7 @@ if err != nil {
 | `Path` | `string` | Yes | The  path |
 | `Config` | `OcrConfig` | Yes | The ocr config |
 
-**Returns:** `ExtractionResult`
+**Returns:** `ExtractedDocument`
 
 **Errors:** Returns `error`.
 
@@ -5697,7 +3601,7 @@ OCR configuration.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `Enabled` | `bool` | `true` | Whether OCR is enabled. Setting `enabled: false` is a shorthand for `disable_ocr: true` on the parent `ExtractionConfig`. Images return metadata only; PDFs use native text extraction without OCR fallback. Defaults to `true`. When `false`, all other OCR settings are ignored. |
-| `Backend` | `string` | — | OCR backend: tesseract, easyocr, paddleocr |
+| `Backend` | `string` | — | OCR backend: tesseract, paddleocr, paddle-ocr, or vlm |
 | `Language` | `\[\]string` | `nil` | Language code(s) for OCR recognition. Accepts either a single language code ("eng") or a list (\["eng", "deu"\]). Defaults to \["eng"\]. For Tesseract, languages are joined with "+". |
 | `TesseractConfig` | `*TesseractConfig` | `nil` | Tesseract-specific configuration (optional) |
 | `OutputFormat` | `*OutputFormat` | `nil` | Output format for OCR results (optional, for format conversion) |
@@ -5762,7 +3666,7 @@ Controls how OCR elements are extracted and filtered.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `IncludeElements` | `bool` | — | Whether to include OCR elements in the extraction result. When true, the `ocr_elements` field in `ExtractionResult` will be populated. |
+| `IncludeElements` | `bool` | — | Whether to include OCR elements in the extraction result. When true, the `ocr_elements` field in `ExtractedDocument` will be populated. |
 | `MinLevel` | `OcrElementLevel` | `OcrElementLevel.Line` | Minimum hierarchical level to include. Elements below this level (e.g., words when min_level is Line) will be excluded. |
 | `MinConfidence` | `float64` | — | Minimum recognition confidence threshold (0.0-1.0). Elements with confidence below this threshold will be filtered out. |
 | `BuildHierarchy` | `bool` | — | Whether to build hierarchical relationships between elements. When true, `parent_id` fields will be populated based on spatial containment. Only meaningful for Tesseract output. |
@@ -5824,7 +3728,7 @@ A single backend stage in the OCR pipeline.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `Backend` | `string` | — | Backend name: "tesseract", "paddleocr", "easyocr", or a custom registered name. |
+| `Backend` | `string` | — | Backend name: "tesseract", "paddleocr", "paddle-ocr", "vlm", or a custom registered name. |
 | `Priority` | `uint32` | `serde(default = "default_priority")` | Priority weight (higher = tried first). Stages are sorted by priority descending. |
 | `Language` | `*\[\]string` | `/* serde(default) */` | Language override for this stage (None = use parent OcrConfig.language). Accepts either a single language code ("eng") or a list (\["eng", "deu"\]). |
 | `TesseractConfig` | `*TesseractConfig` | `/* serde(default) */` | Tesseract-specific config override for this stage. |
@@ -6292,7 +4196,7 @@ when page boundaries are available and chunking is configured.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `ExtractPages` | `bool` | `false` | Extract pages as separate array (ExtractionResult.pages) |
+| `ExtractPages` | `bool` | `false` | Extract pages as separate array (ExtractedDocument.pages) |
 | `InsertPageMarkers` | `bool` | `false` | Insert page markers in main content string |
 | `MarkerFormat` | `string` | `"<!-- PAGE {page_num} -->"` | Page marker format (use {page_num} placeholder) Default: "\n\n<!-- PAGE {page_num} -->\n\n" |
 
@@ -6339,7 +4243,7 @@ by avoiding redundant copies during serialization.
 | `PageNumber` | `uint32` | — | Page number (1-indexed) |
 | `Content` | `string` | — | Text content for this page |
 | `Tables` | `\[\]Table` | `/* serde(default) */` | Tables found on this page (uses Arc for memory efficiency) Serializes as \[\]Table for JSON compatibility while maintaining shared in-memory ownership for zero-copy sharing. |
-| `ImageIndices` | `\[\]uint32` | `/* serde(default) */` | Indices into `ExtractionResult.images` for images found on this page. Each value is a zero-based index into the top-level `images` collection. Only populated when `extract_images = true` in the extraction config. |
+| `ImageIndices` | `\[\]uint32` | `/* serde(default) */` | Indices into `ExtractedDocument.images` for images found on this page. Each value is a zero-based index into the top-level `images` collection. Only populated when `extract_images = true` in the extraction config. |
 | `Hierarchy` | `*PageHierarchy` | `nil` | Hierarchy information for the page (when hierarchy extraction is enabled) Contains text hierarchy levels (H1-H6) extracted from the page content. |
 | `IsBlank` | `*bool` | `nil` | Whether this page is blank (no meaningful text content) Determined during extraction based on text content analysis. A page is blank if it has fewer than 3 non-whitespace characters and contains no tables or images. |
 | `LayoutRegions` | `*\[\]LayoutRegion` | `nil` | Layout detection regions for this page (when layout detection is enabled). Contains detected layout regions with class, confidence, bounding box, and area fraction. Only populated when layout detection is configured. |
@@ -6378,7 +4282,7 @@ and visibility state (for presentations).
 | `TableCount` | `*uint32` | `nil` | Number of tables on this page |
 | `Hidden` | `*bool` | `nil` | Whether this page is hidden (e.g., in presentations) |
 | `IsBlank` | `*bool` | `nil` | Whether this page is blank (no meaningful text, no images, no tables) A page is considered blank if it has fewer than 3 non-whitespace characters and contains no tables or images. This is useful for filtering out empty pages in scanned documents or PDFs with blank separator pages. |
-| `HasVectorGraphics` | `bool` | `/* serde(default) */` | Whether this page contains non-trivial vector graphics (paths, shapes, curves) Indicates the presence of vector-drawn content such as charts, diagrams, or geometric shapes (e.g., from Adobe InDesign, LaTeX TikZ). These are invisible to `ExtractionResult.images` since they are not embedded as raster XObjects. Set to `true` when path count exceeds a heuristic threshold, signaling that downstream consumers may want to rasterize the page to capture this content. Only populated for PDFs; `nil` for other document types. |
+| `HasVectorGraphics` | `bool` | `/* serde(default) */` | Whether this page contains non-trivial vector graphics (paths, shapes, curves) Indicates the presence of vector-drawn content such as charts, diagrams, or geometric shapes (e.g., from Adobe InDesign, LaTeX TikZ). These are invisible to `ExtractedDocument.images` since they are not embedded as raster XObjects. Set to `true` when path count exceeds a heuristic threshold, signaling that downstream consumers may want to rasterize the page to capture this content. Only populated for PDFs; `nil` for other document types. |
 
 ---
 
@@ -6526,7 +4430,7 @@ PDF-specific configuration.
 | `BottomMarginFraction` | `*float32` | `nil` | Bottom margin fraction (0.0–1.0) of page height to exclude footers/page numbers. Default: 0.05 (5%) |
 | `AllowSingleColumnTables` | `bool` | `false` | Allow single-column pseudo tables in extraction results. By default, tables with fewer than 2 columns (layout-guided) or 3 columns (heuristic) are rejected. When `true`, the minimum column count is relaxed to 1, allowing single-column structured data (glossaries, itemized lists) to be emitted as tables. Other quality filters (density, sparsity, prose detection) still apply. |
 | `OcrInlineImages` | `bool` | `false` | Perform OCR on inline images extracted from PDF pages and attach the recognized text to each `ExtractedImage.ocr_result`. Requires Tesseract to be available; if `ExtractionConfig.ocr` is `nil` the extractor falls back to `TesseractConfig.default()`. Per-image failures degrade gracefully (the image is returned without OCR text rather than failing the whole extraction). Default: `false`. |
-| `ExtractFormFields` | `bool` | `true` | Extract AcroForm and XFA form fields into `ExtractionResult.form_fields`. When `true` (default), reads the document's interactive form structure (field names, types, values, widget geometry). Cheap and strictly additive — non-form PDFs simply yield an empty list. Set to `false` to skip the form pass entirely. |
+| `ExtractFormFields` | `bool` | `true` | Extract AcroForm and XFA form fields into `ExtractedDocument.form_fields`. When `true` (default), reads the document's interactive form structure (field names, types, values, widget geometry). Cheap and strictly additive — non-form PDFs simply yield an empty list. Set to `false` to skip the form pass entirely. |
 | `ReadingOrder` | `bool` | `false` | Reorder extracted text by layout-detected reading order. When `true`, projects text spans onto layout-detected regions, performs column detection, and emits spans in natural reading order (important for multi-column academic PDFs). Requires the `layout-detection` feature; has no effect without it. Defaults to `false`. |
 
 ##### Methods
@@ -6844,13 +4748,13 @@ result in place.
 **Signature:**
 
 ```go
-func (o *PostProcessor) Process(result ExtractionResult, config ExtractionConfig) error
+func (o *PostProcessor) Process(result ExtractedDocument, config ExtractionConfig) error
 ```
 
 **Example:**
 
 ```go
-if err := instance.Process(ExtractionResult{}, ExtractionConfig{}); err != nil {
+if err := instance.Process(ExtractedDocument{}, ExtractionConfig{}); err != nil {
     return err
 }
 ```
@@ -6859,7 +4763,7 @@ if err := instance.Process(ExtractionResult{}, ExtractionConfig{}); err != nil {
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `Result` | `ExtractionResult` | Yes | Mutable reference to the extraction result to process |
+| `Result` | `ExtractedDocument` | Yes | Mutable reference to the extraction result to process |
 | `Config` | `ExtractionConfig` | Yes | Extraction configuration |
 
 **Returns:** No return value.
@@ -6904,20 +4808,20 @@ Defaults to `true` (always run).
 **Signature:**
 
 ```go
-func (o *PostProcessor) ShouldProcess(result ExtractionResult, config ExtractionConfig) bool
+func (o *PostProcessor) ShouldProcess(result ExtractedDocument, config ExtractionConfig) bool
 ```
 
 **Example:**
 
 ```go
-result := instance.ShouldProcess(ExtractionResult{}, ExtractionConfig{})
+result := instance.ShouldProcess(ExtractedDocument{}, ExtractionConfig{})
 ```
 
 **Parameters:**
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `Result` | `ExtractionResult` | Yes | The extraction result |
+| `Result` | `ExtractedDocument` | Yes | The extracted document |
 | `Config` | `ExtractionConfig` | Yes | The extraction config |
 
 **Returns:** `bool`
@@ -6935,20 +4839,20 @@ Estimated processing time in milliseconds.
 **Signature:**
 
 ```go
-func (o *PostProcessor) EstimatedDurationMs(result ExtractionResult) uint64
+func (o *PostProcessor) EstimatedDurationMs(result ExtractedDocument) uint64
 ```
 
 **Example:**
 
 ```go
-result := instance.EstimatedDurationMs(ExtractionResult{})
+result := instance.EstimatedDurationMs(ExtractedDocument{})
 ```
 
 **Parameters:**
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `Result` | `ExtractionResult` | Yes | The extraction result |
+| `Result` | `ExtractedDocument` | Yes | The extracted document |
 
 **Returns:** `uint64`
 
@@ -7295,8 +5199,8 @@ One redaction event: which span was rewritten, why, and with what.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `Start` | `uint32` | — | Byte-offset start in the original (pre-redaction) `ExtractionResult.content`. |
-| `End` | `uint32` | — | Byte-offset end (exclusive) in the original `ExtractionResult.content`. |
+| `Start` | `uint32` | — | Byte-offset start in the original (pre-redaction) `ExtractedDocument.content`. |
+| `End` | `uint32` | — | Byte-offset end (exclusive) in the original `ExtractedDocument.content`. |
 | `Category` | `PiiCategory` | — | PII category that fired this redaction. |
 | `Strategy` | `RedactionStrategy` | — | Strategy applied to this finding (mask, hash, token-replace, drop). |
 | `ReplacementToken` | `string` | — | String that replaced the original mention. Always present; for `Drop` the replacement is the empty string. |
@@ -7634,11 +5538,11 @@ if err != nil {
 
 #### Renderer
 
-Trait for document renderers that convert `InternalDocument` to output strings.
+Trait for document renderers that convert extraction results to output strings.
 
-Renderers are typically stateless converters that transform the internal
-document representation into a specific output format (Markdown, HTML,
-Djot, plain text, etc.). They participate in the standard `Plugin`
+Renderers are typically stateless converters that transform extracted
+content into a specific output format (Markdown, HTML, Djot, plain text,
+etc.). They participate in the standard `Plugin`
 lifecycle so custom renderers can be registered from any supported binding
 language.
 
@@ -7652,28 +5556,22 @@ Renderers must be `Send + Sync` (inherited from `Plugin`).
 
 ##### Methods
 
-###### Render()
+###### RenderResult()
 
-Render an `InternalDocument` to the output format.
+Binding-safe rendering entry point for foreign-language plugin bridges.
 
-**Returns:**
-
-The rendered output as a string.
-
-**Errors:**
-
-Returns an error if rendering fails.
+Accepts one public extraction result and returns the rendered output.
 
 **Signature:**
 
 ```go
-func (o *Renderer) Render(doc InternalDocument) (string, error)
+func (o *Renderer) RenderResult(result ExtractedDocument) (string, error)
 ```
 
 **Example:**
 
 ```go
-result, err := instance.Render(InternalDocument{})
+result, err := instance.RenderResult(ExtractedDocument{})
 if err != nil {
     return err
 }
@@ -7683,7 +5581,7 @@ if err != nil {
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `Doc` | `InternalDocument` | Yes | The internal document to render |
+| `Result` | `ExtractedDocument` | Yes | The extracted document |
 
 **Returns:** `string`
 
@@ -7835,26 +5733,6 @@ result := RerankerConfig.Default()
 ```
 
 **Returns:** `RerankerConfig`
-
----
-
-#### RerankerPreset
-
-Metadata for a bundled reranker preset.
-
-All string fields are owned `String` for FFI compatibility — instances are
-safe to clone and pass across language boundaries.
-
-Since v5.0.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `Name` | `string` | — | Short identifier (catalog name, e.g. `"bge-reranker-base"`). |
-| `ModelRepo` | `string` | — | HuggingFace repository name for the model. |
-| `ModelFile` | `string` | — | Path to the ONNX model file within the repo. |
-| `AdditionalFiles` | `\[\]string` | `/* serde(default) */` | Sibling files that must be downloaded alongside `model_file`. Empty for most presets. Used by repos that split the weight blob — e.g. `rozgo/bge-reranker-v2-m3` ships the model in `model.onnx` plus a co-located `model.onnx.data` payload. |
-| `MaxLength` | `int` | — | Maximum token sequence length the model supports. |
-| `Description` | `string` | — | Human-readable description of the preset's intended use case. |
 
 ---
 
@@ -8119,63 +5997,6 @@ returning structured data that conforms to the schema.
 | `Strict` | `bool` | `/* serde(default) */` | Enable strict mode — output must exactly match the schema. |
 | `Prompt` | `*string` | `/* serde(default) */` | Custom Jinja2 extraction prompt template. When `nil`, a default template is used. Available template variables: - `{{ content }}` — The extracted document text. - `{{ schema }}` — The JSON schema as a formatted string. - `{{ schema_name }}` — The schema name. - `{{ schema_description }}` — The schema description (may be empty). |
 | `Llm` | `LlmConfig` | — | LLM configuration for the extraction. |
-
----
-
-#### StructuredInput
-
-Signals consumed by the call-mode heuristic.
-
-All fields derive from a prior xberg extraction — no double-work.
-This is a plain DTO; it intentionally has no dependency on internal
-xberg extraction types so it can be constructed from any source.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `MimeType` | `string` | — | MIME type, canonicalised to lowercase by the caller. |
-| `PageCount` | `uint32` | — | Number of pages in the document. |
-| `TextCoverage` | `float64` | — | Fraction of pages with a real text layer (0.0..=1.0). |
-| `AvgCharsPerPage` | `float64` | — | Average extracted characters per page. |
-| `EmbeddedImageCount` | `uint32` | — | Count of embedded images (figures, photos, signatures) discovered. |
-| `UserForceVision` | `bool` | — | When `true`, promote the result to at least `StructuredCallMode.TextPlusVision`. |
-
----
-
-#### StructuredThresholds
-
-Thresholds for the structured-extraction call-mode heuristic.
-
-All defaults are **conservative starting points**.  Deployments should
-measure their own document corpus and override via their own config;
-these values are chosen to be safe-by-default, not to be optimal for
-any particular workload.
-
-Construct custom thresholds with struct-update syntax:
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `ScanMaxCoverage` | `float64` | `0.1` | PDFs with `text_coverage` strictly below this are treated as scanned. **Conservative default: 0.10** — deployments override via their own config after measuring their document corpus. |
-| `DigitalMinCoverage` | `float64` | `0.9` | PDFs with `text_coverage` at or above this AND zero embedded images route to `StructuredCallMode.TextOnly`. **Conservative default: 0.90** — deployments override via their own config after measuring their document corpus. |
-| `DocxTextMinDensity` | `float64` | `200` | DOCX / HTML / text documents with `avg_chars_per_page` above this route to `StructuredCallMode.TextOnly`. **Conservative default: 200.0** — deployments override via their own config after measuring their document corpus. |
-| `EnableVisionFallback` | `bool` | `false` | When `true`, emit `StructuredCallMode.TextOnlyWithVisionFallback` instead of `StructuredCallMode.TextOnly` so the orchestrator can escalate to vision on low confidence. **Conservative default: `false`** — must be explicitly enabled per deployment after bench validation; deployments override via their own config. |
-
-##### Methods
-
-###### Default()
-
-**Signature:**
-
-```go
-func (o *StructuredThresholds) Default() StructuredThresholds
-```
-
-**Example:**
-
-```go
-result := StructuredThresholds.Default()
-```
-
-**Returns:** `StructuredThresholds`
 
 ---
 
@@ -8547,16 +6368,16 @@ result := TranscriptionConfig.Default()
 
 Translation of the extracted content.
 
-Holds the translated rendition of `ExtractionResult.content` and (when
+Holds the translated rendition of `ExtractedDocument.content` and (when
 `preserve_markup` was requested) the translated `formatted_content`. Chunks
-are translated in place inside `ExtractionResult.chunks[*].content` rather
+are translated in place inside `ExtractedDocument.chunks[*].content` rather
 than duplicated here.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `TargetLang` | `string` | — | BCP-47 language tag the translation was produced into (e.g. `"de"`, `"fr-CA"`). |
 | `SourceLang` | `*string` | `nil` | BCP-47 source language. `nil` when the translation backend was asked to detect. |
-| `Content` | `string` | — | Translated plain-text body. Matches the shape of `ExtractionResult.content`. |
+| `Content` | `string` | — | Translated plain-text body. Matches the shape of `ExtractedDocument.content`. |
 | `FormattedContent` | `*string` | `nil` | Translated markup body (Markdown / HTML / etc.) when `preserve_markup` was enabled on the config. `nil` otherwise. |
 
 ---
@@ -8762,13 +6583,13 @@ if validation fails.
 **Signature:**
 
 ```go
-func (o *Validator) Validate(result ExtractionResult, config ExtractionConfig) error
+func (o *Validator) Validate(result ExtractedDocument, config ExtractionConfig) error
 ```
 
 **Example:**
 
 ```go
-if err := instance.Validate(ExtractionResult{}, ExtractionConfig{}); err != nil {
+if err := instance.Validate(ExtractedDocument{}, ExtractionConfig{}); err != nil {
     return err
 }
 ```
@@ -8777,7 +6598,7 @@ if err := instance.Validate(ExtractionResult{}, ExtractionConfig{}); err != nil 
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `Result` | `ExtractionResult` | Yes | The extraction result to validate |
+| `Result` | `ExtractedDocument` | Yes | The extraction result to validate |
 | `Config` | `ExtractionConfig` | Yes | Extraction configuration |
 
 **Returns:** No return value.
@@ -8798,20 +6619,20 @@ Defaults to `true` (always run).
 **Signature:**
 
 ```go
-func (o *Validator) ShouldValidate(result ExtractionResult, config ExtractionConfig) bool
+func (o *Validator) ShouldValidate(result ExtractedDocument, config ExtractionConfig) bool
 ```
 
 **Example:**
 
 ```go
-result := instance.ShouldValidate(ExtractionResult{}, ExtractionConfig{})
+result := instance.ShouldValidate(ExtractedDocument{}, ExtractionConfig{})
 ```
 
 **Parameters:**
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `Result` | `ExtractionResult` | Yes | The extraction result |
+| `Result` | `ExtractedDocument` | Yes | The extracted document |
 | `Config` | `ExtractionConfig` | Yes | The extraction config |
 
 **Returns:** `bool`
@@ -8957,7 +6778,7 @@ Determines which hardware backend is used for model inference.
 Target format for re-encoding extracted images.
 
 Controls whether and how extracted images are normalised to a uniform
-container format before being returned in `ExtractionResult.images`.
+container format before being returned in `ExtractedDocument.images`.
 The default (`Native`) preserves the format produced by each extractor
 without any additional encode pass.
 
@@ -9008,7 +6829,7 @@ URL extraction mode.
 
 Output format for extraction results.
 
-Controls the format of the `content` field in `ExtractionResult`.
+Controls the format of the `content` field in `ExtractedDocument`.
 When set to `Markdown`, `Djot`, or `Html`, the output uses that format.
 `Plain` returns the raw extracted text.
 `Structured` returns JSON with full OCR element data including bounding
@@ -9064,9 +6885,8 @@ YAML).
 How a structured-extraction preset is dispatched to the model.
 
 This is the preset-facing call mode (the `preferred_call_mode` field of a
-`Preset`). The richer runtime decision enum used by the
-structured pipeline — which adds `Skip` and `TextOnlyWithVisionFallback` —
-lives in `crate.heuristics.structured.StructuredCallMode`; this 3-variant
+`Preset`). The structured pipeline has a richer
+runtime-only decision enum with skip and fallback states; this 3-variant
 type is the stable, serializable surface presets and bindings depend on.
 
 | Value | Description |
@@ -9256,7 +7076,7 @@ transcription engine.
 Content rendering mode for code extraction.
 
 Controls how extracted code content is represented in the `content` field
-of `ExtractionResult`.
+of `ExtractedDocument`.
 
 | Value | Description |
 |-------|-------------|
@@ -9286,7 +7106,6 @@ OCR backend types.
 | Value | Description |
 |-------|-------------|
 | `Tesseract` | Tesseract OCR (native Rust binding) |
-| `EasyOcr` | EasyOCR (Python-based, via FFI) |
 | `PaddleOcr` | PaddleOCR (Python-based, via FFI) |
 | `Candle` | Candle-based VLM OCR (TrOCR, PaddleOCR-VL). |
 | `Custom` | Custom/third-party OCR backend |
@@ -9640,7 +7459,7 @@ type-safe, clean metadata without nested optionals.
 | `Epub` | Metadata extracted from an EPUB e-book. — Fields: `0`: `EpubMetadata` |
 | `Pst` | Metadata extracted from an Outlook PST archive. — Fields: `0`: `PstMetadata` |
 | `Audio` | Metadata extracted from an audio or video file. — Fields: `0`: `AudioMetadata` |
-| `Code` | Code (tree-sitter analyzable source). The structured analysis result is exposed via `ExtractionResult.code_intelligence`; this variant only tags the format. |
+| `Code` | Code (tree-sitter analyzable source). The structured analysis result is exposed via `ExtractedDocument.code_intelligence`; this variant only tags the format. |
 
 ---
 
@@ -9825,7 +7644,7 @@ Summarisation strategy.
 | Value | Description |
 |-------|-------------|
 | `Extractive` | Pure-Rust extractive summary (TextRank over the chunk graph). Deterministic, fast, no external service required. |
-| `Abstractive` | Abstractive summary produced by liter-llm. Requires `liter-llm` feature and a configured `LlmConfig`. Token usage is captured in `ExtractionResult.llm_usage`. |
+| `Abstractive` | Abstractive summary produced by liter-llm. Requires `liter-llm` feature and a configured `LlmConfig`. Token usage is captured in `ExtractedDocument.llm_usage`. |
 
 ---
 
@@ -9963,25 +7782,6 @@ Reason for boundary detection.
 | `LetterheadReset` | Letterhead reset after signature block. |
 | `DensityShift` | Text density shift with low bigram overlap. |
 | `End` | End of PDF. |
-
----
-
-#### StructuredCallMode
-
-Outcome of the structured-extraction call-mode heuristic.
-
-**Distinct from `crate.core.config.CallMode`** which has three variants
-and governs extraction-engine behaviour.  This enum governs whether and how
-an already-extracted document is sent to an LLM structured-extraction
-pipeline.
-
-| Value | Description |
-|-------|-------------|
-| `Skip` | Document is unsupported or not worth invoking the pipeline. |
-| `TextOnly` | Send extracted text only; no vision model call. |
-| `VisionOnly` | Send page rasters only; no extracted text payload. |
-| `TextPlusVision` | Fuse extracted text with page rasters in a single multimodal call. |
-| `TextOnlyWithVisionFallback` | Try text-only first; escalate to vision on low confidence score. |
 
 ---
 

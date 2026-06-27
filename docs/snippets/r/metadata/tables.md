@@ -1,7 +1,13 @@
 ```r title="R"
 library(xberg)
 
-result <- extract_sync("spreadsheet.xlsx")
+input <- list(kind = "uri", uri = "spreadsheet.xlsx")
+json <- extract(
+  input = ExtractInput$from_json(jsonlite::toJSON(input, auto_unbox = TRUE)),
+  config = ExtractionConfig$default()
+)
+output <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+result <- output$results[[1]]
 
 cat("Tables extracted:", length(result$tables), "\n\n")
 

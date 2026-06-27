@@ -2,10 +2,7 @@
 	"id": "batch_file_not_found",
 	"category": "batch",
 	"description": "extract_batch nonexistent",
-	"tags": [
-		"batch",
-		"error"
-	],
+	"tags": ["batch", "error"],
 	"call": "extract_batch",
 	"input": {
 		"inputs": [
@@ -25,9 +22,7 @@
 		}
 	],
 	"skip": {
-		"languages": [
-			"wasm"
-		],
+		"languages": ["wasm"],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	}
 }

@@ -7,7 +7,7 @@
 ## What This Package Provides
 
 - **Ruby-native extraction** — idiomatic Ruby objects over the shared Rust document engine.
-- **Structured results** — an `ExtractionOutput` envelope with `ExtractionResult` items, errors, and summary counts.
+- **Structured results** — an `ExtractionResult` envelope with `ExtractedDocument` items, errors, and summary counts.
 - **OCR support** — Tesseract and PaddleOCR through the same configuration model as other bindings.
 - **Cross-binding parity** — output matches the Python, Node.js, Go, Java, .NET, PHP, Elixir, R, Dart, Swift, Zig, WASM, and C FFI packages.
 
@@ -239,8 +239,8 @@ puts "Detected languages: #{document.detected_languages}"
 
 ### Result Types
 
-- `ExtractionOutput` – Envelope with `results`, `errors`, and `summary`.
-- `ExtractionResult` – Per-document item at `output.results.first` with content, metadata, tables, and chunks.
+- `ExtractionResult` – Envelope with `results`, `errors`, and `summary`.
+- `ExtractedDocument` – Per-document item at `output.results.first` with content, metadata, tables, and chunks.
 - `Table` – Table with `cells`, `markdown`, and `page_number`.
 - `Metadata` – Typed document metadata.
 

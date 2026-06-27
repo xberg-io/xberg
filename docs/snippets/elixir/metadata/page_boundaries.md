@@ -1,13 +1,14 @@
 ```elixir title="Elixir"
 config = Jason.encode!(%{})
 
-case Xberg.extract_sync("document.pdf", nil, config) do
-  {:ok, result} ->
-    decoded = Jason.decode!(result)
+case Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "document.pdf"}, config) do
+  {:ok, output} ->
+    result = List.first(output.results)
+    boundaries = get_in(result.metadata || %{}, ["pages", "boundaries"]) || []
+    content = result.content || ""
 
-    case decoded do
-      %{"metadata" => %{"pages" => %{"boundaries" => boundaries}}, "content" => content}
-      when is_list(boundaries) ->
+    case boundaries do
+      [_ | _] ->
         boundaries
         |> Enum.take(3)
         |> Enum.each(fn boundary ->
@@ -25,7 +26,7 @@ case Xberg.extract_sync("document.pdf", nil, config) do
           IO.puts("  Preview: #{preview}...")
         end)
 
-      _ ->
+      [] ->
         nil
     end
 

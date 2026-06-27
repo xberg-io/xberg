@@ -1,4 +1,5 @@
-<!-- snippet:syntax-only --> Requires network access to the configured LLM provider and a valid API key in the host environment.
+<!-- snippet:syntax-only -->
+<!-- Requires network access to the configured LLM provider and a valid API key in the host environment. -->
 
 ```r title="R"
 library(xberg)
@@ -14,16 +15,20 @@ schema <- list(
   additionalProperties = FALSE
 )
 
-config <- list(
+config <- ExtractionConfig$from_json(jsonlite::toJSON(list(
   structured_extraction = list(
     schema = schema,
     llm = list(model = "openai/gpt-4o-mini"),
     strict = TRUE
   )
+), auto_unbox = TRUE))
+
+input <- list(kind = "uri", uri = "paper.pdf", mime_type = "application/pdf")
+json <- extract(
+  input = ExtractInput$from_json(jsonlite::toJSON(input, auto_unbox = TRUE)),
+  config = config
 )
-
-json <- extract_sync("paper.pdf", "application/pdf", config)
-result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
-
+output <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+result <- output$results[[1]]
 cat(result$structured_output, "\n")
 ```

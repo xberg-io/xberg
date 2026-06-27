@@ -10,7 +10,7 @@ const config = {
   use_cache: true,
 };
 
-const result = await extract(data, "application/pdf", config);
+const result = await extract({ kind: "bytes", bytes: data, mimeType: "application/pdf" }, config);
 console.log(`Quality score: ${result.quality_score}`);
 console.log(`Processing time: ${result.processing_time}`);
 ```

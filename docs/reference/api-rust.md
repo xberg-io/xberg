@@ -13,7 +13,7 @@ Extract content from a single bytes or URI input.
 **Signature:**
 
 ```rust
-pub async fn extract(input: ExtractInput, config: ExtractionConfig) -> Result<ExtractionOutput, Error>
+pub async fn extract(input: ExtractInput, config: ExtractionConfig) -> Result<ExtractionResult, Error>
 ```
 
 **Example:**
@@ -29,7 +29,7 @@ let result = extract(ExtractInput::default(), ExtractionConfig::default()).await
 | `input` | `ExtractInput` | Yes | The input data |
 | `config` | `ExtractionConfig` | Yes | The configuration options |
 
-**Returns:** `ExtractionOutput`
+**Returns:** `ExtractionResult`
 
 **Errors:** Returns `Err(Error)`.
 
@@ -42,7 +42,7 @@ Extract content from multiple bytes or URI inputs.
 **Signature:**
 
 ```rust
-pub async fn extract_batch(inputs: Vec<ExtractInput>, config: ExtractionConfig) -> Result<ExtractionOutput, Error>
+pub async fn extract_batch(inputs: Vec<ExtractInput>, config: ExtractionConfig) -> Result<ExtractionResult, Error>
 ```
 
 **Example:**
@@ -58,89 +58,7 @@ let result = extract_batch(vec![], ExtractionConfig::default()).await?;
 | `inputs` | `Vec<ExtractInput>` | Yes | The inputs |
 | `config` | `ExtractionConfig` | Yes | The configuration options |
 
-**Returns:** `ExtractionOutput`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### detect_mime_type_from_bytes()
-
-Detect MIME type from raw file bytes.
-
-Uses magic byte signatures to detect file type from content.
-Falls back to `infer` crate for comprehensive detection.
-
-For ZIP-based files, inspects contents to distinguish Office Open XML
-formats (DOCX, XLSX, PPTX) from plain ZIP archives.
-
-**Returns:**
-
-The detected MIME type string.
-
-**Errors:**
-
-Returns `XbergError::UnsupportedFormat` if MIME type cannot be determined.
-
-**Signature:**
-
-```rust
-pub fn detect_mime_type_from_bytes(content: &[u8]) -> Result<String, Error>
-```
-
-**Example:**
-
-```rust
-let result = detect_mime_type_from_bytes(b"data")?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `content` | `Vec<u8>` | Yes | Raw file bytes |
-
-**Returns:** `String`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### get_extensions_for_mime()
-
-Get file extensions for a given MIME type.
-
-Returns all known file extensions that map to the specified MIME type.
-
-**Returns:**
-
-A vector of file extensions (without leading dot) for the MIME type.
-
-**Signature:**
-
-```rust
-pub fn get_extensions_for_mime(mime_type: &str) -> Result<Vec<String>, Error>
-```
-
-**Example:**
-
-```rust
-use xberg::core::mime::get_extensions_for_mime;
-
-let extensions = get_extensions_for_mime("application/pdf").unwrap();
-assert_eq!(extensions, vec!["pdf"]);
-
-let doc_extensions = get_extensions_for_mime("application/vnd.openxmlformats-officedocument.wordprocessingml.document").unwrap();
-assert!(doc_extensions.contains(&"docx".to_string()));
-```rust
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `mime_type` | `String` | Yes | The MIME type to look up |
-
-**Returns:** `Vec<String>`
+**Returns:** `ExtractionResult`
 
 **Errors:** Returns `Err(Error)`.
 
@@ -178,50 +96,6 @@ assert!(formats.iter().any(|f| f.extension == "pdf"));
 ```rust
 
 **Returns:** `Vec<SupportedFormat>`
-
----
-
-#### detect_qr_codes()
-
-Detect QR codes in the bytes of an `ExtractedImage`.
-
-`format_hint` is currently unused — the `image` crate auto-detects the
-container format from magic bytes — but the parameter is retained so future
-backends (e.g. a WebP-via-`webp-decoder` variant) can use it without an API
-break.
-
-Returns an empty vector on any of:
-
-- Empty input.
-- Image-decode failure.
-- No QR grids detected.
-- All detected grids fail to decode.
-
-Successfully decoded QR codes carry their payload, a confidence of `1.0`
-(rqrr does not expose per-grid confidence; a successful decode is treated
-as high-confidence by convention), and the pixel-space bounding box derived
-from the four corner points of the grid.
-
-**Signature:**
-
-```rust
-pub fn detect_qr_codes(image_bytes: &[u8], format_hint: Option<String>) -> Vec<QrCode>
-```
-
-**Example:**
-
-```rust
-let result = detect_qr_codes(b"data", "value");
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `image_bytes` | `Vec<u8>` | Yes | The image bytes |
-| `format_hint` | `Option<String>` | No | The  format hint |
-
-**Returns:** `Vec<QrCode>`
 
 ---
 
@@ -274,6 +148,131 @@ let result = list_embedding_backends()?;
 ```
 
 **Returns:** `Vec<String>`
+
+**Errors:** Returns `Err(Error)`.
+
+---
+
+#### register_document_extractor()
+
+Register a document extractor with the global registry.
+
+The extractor is keyed by `name` and indexed for
+every MIME type returned by
+`supported_mime_types`.
+
+**Errors:**
+
+- `Validation` if the plugin name is empty or
+  contains whitespace.
+
+- Any error returned by the extractor's `initialize()` method.
+
+**Signature:**
+
+```rust
+pub fn register_document_extractor(extractor: DocumentExtractor) -> Result<(), Error>
+```
+
+**Example:**
+
+```rust
+register_document_extractor(DocumentExtractor::default())?;
+```
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `extractor` | `DocumentExtractor` | Yes | The document extractor |
+
+**Returns:** No return value.
+
+**Errors:** Returns `Err(Error)`.
+
+---
+
+#### unregister_document_extractor()
+
+Unregister a document extractor by name.
+
+Removes the extractor from the global registry and calls its `shutdown()`
+method. No-op if no extractor with that name is registered.
+
+**Errors:**
+
+- Any error returned by the extractor's `shutdown()` method.
+
+**Signature:**
+
+```rust
+pub fn unregister_document_extractor(name: &str) -> Result<(), Error>
+```
+
+**Example:**
+
+```rust
+unregister_document_extractor("value")?;
+```
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `name` | `String` | Yes | The name |
+
+**Returns:** No return value.
+
+**Errors:** Returns `Err(Error)`.
+
+---
+
+#### list_document_extractors()
+
+List names of all registered document extractors.
+
+**Signature:**
+
+```rust
+pub fn list_document_extractors() -> Result<Vec<String>, Error>
+```
+
+**Example:**
+
+```rust
+let result = list_document_extractors()?;
+```
+
+**Returns:** `Vec<String>`
+
+**Errors:** Returns `Err(Error)`.
+
+---
+
+#### clear_document_extractors()
+
+Clear all document extractors from the global registry.
+
+Calls `shutdown()` on every registered extractor, then empties the registry.
+
+**Errors:**
+
+- Any error returned by an extractor's `shutdown()` method. The first error
+  encountered stops processing of remaining extractors.
+
+**Signature:**
+
+```rust
+pub fn clear_document_extractors() -> Result<(), Error>
+```
+
+**Example:**
+
+```rust
+clear_document_extractors()?;
+```
+
+**Returns:** No return value.
 
 **Errors:** Returns `Err(Error)`.
 
@@ -343,34 +342,6 @@ clear_ocr_backends()?;
 
 ---
 
-#### register_builtin()
-
-Register every built-in post-processor enabled by the active feature set.
-
-This is the single entry point that callers (including
-`register_default_post_processors`) use to populate the global
-post-processor registry with the in-tree built-ins. Each submodule's own
-`register` function is gated by its feature flag so this aggregate stays
-safe to call on any target.
-
-**Signature:**
-
-```rust
-pub fn register_builtin() -> Result<(), Error>
-```
-
-**Example:**
-
-```rust
-register_builtin()?;
-```
-
-**Returns:** No return value.
-
-**Errors:** Returns `Err(Error)`.
-
----
-
 #### list_post_processors()
 
 List all registered post-processor names.
@@ -421,6 +392,77 @@ pub fn clear_post_processors() -> Result<(), Error>
 ```rust
 clear_post_processors()?;
 ```
+
+**Returns:** No return value.
+
+**Errors:** Returns `Err(Error)`.
+
+---
+
+#### register_renderer()
+
+Register a renderer plugin with the global registry.
+
+The renderer's format name is taken from `Plugin::name`. Registering a
+renderer with a name that already exists replaces the previous renderer
+for that format.
+
+### Note on `Result` return type
+
+Returns `Result<()>` for cross-language API symmetry required by the alef
+trait-bridge codegen. The underlying `parking_lot::RwLock` cannot be
+poisoned (parking_lot provides no poisoning semantics), so this function
+never returns `Err` in practice.
+
+**Signature:**
+
+```rust
+pub fn register_renderer(renderer: Renderer) -> Result<(), Error>
+```
+
+**Example:**
+
+```rust
+register_renderer(Renderer::default())?;
+```
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `renderer` | `Renderer` | Yes | The renderer |
+
+**Returns:** No return value.
+
+**Errors:** Returns `Err(Error)`.
+
+---
+
+#### unregister_renderer()
+
+Unregister a renderer by format name.
+
+**Errors:**
+
+Returns an error if the registry lock is poisoned.
+
+**Signature:**
+
+```rust
+pub fn unregister_renderer(name: &str) -> Result<(), Error>
+```
+
+**Example:**
+
+```rust
+unregister_renderer("value")?;
+```
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `name` | `String` | Yes | The name |
 
 **Returns:** No return value.
 
@@ -586,632 +628,6 @@ clear_validators()?;
 
 ---
 
-#### classify_pages()
-
-Run page classification against an extraction result.
-
-Mutates `result.page_classifications` with one entry per non-empty page and
-appends every LLM call's usage to `result.llm_usage`.
-
-**Errors:**
-
-Returns the first error encountered when rendering the prompt or calling the
-LLM. Partially produced classifications are discarded so callers do not see
-a half-populated vector.
-
-**Signature:**
-
-```rust
-pub async fn classify_pages(result: ExtractionResult, config: PageClassificationConfig) -> Result<(), Error>
-```
-
-**Example:**
-
-```rust
-classify_pages(ExtractionResult::default(), PageClassificationConfig::default()).await?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `result` | `ExtractionResult` | Yes | The extraction result |
-| `config` | `PageClassificationConfig` | Yes | The configuration options |
-
-**Returns:** No return value.
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### classify_text()
-
-Classify a single piece of text without requiring an `ExtractionResult`.
-
-Use this when the caller already has plain text (e.g. a RAG ingest pipeline
-receiving documents off a queue) and wants a label list back without
-manufacturing extractor-side metadata.
-
-**Errors:**
-
-Same as `classify_pages`: a validation error when `config.labels` is empty,
-or any error returned by prompt rendering or the underlying LLM call.
-
-**Signature:**
-
-```rust
-pub async fn classify_text(text: &str, config: PageClassificationConfig) -> Result<Vec<ClassificationLabel>, Error>
-```
-
-**Example:**
-
-```rust
-let result = classify_text("value", PageClassificationConfig::default()).await?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `text` | `String` | Yes | The text |
-| `config` | `PageClassificationConfig` | Yes | The configuration options |
-
-**Returns:** `Vec<ClassificationLabel>`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### classify_document()
-
-Classify a single document (as multiple pages or a single text block).
-
-Aggregates classifications across all pages in the provided text, returning
-a combined label set that represents the document as a whole.
-
-  using the configured LLM, and results are aggregated.
-
-- `config` - Classification configuration including labels and LLM settings.
-
-**Returns:**
-
-A vector of `ClassificationLabel` entries representing the document's overall classification.
-
-**Errors:**
-
-Returns an error if `config.labels` is empty or if LLM calls fail.
-
-**Signature:**
-
-```rust
-pub async fn classify_document(pages: Vec<String>, config: PageClassificationConfig) -> Result<Vec<ClassificationLabel>, Error>
-```
-
-**Example:**
-
-```rust,no_run
-use xberg::text::classification::classify_document;
-use xberg::core::config::PageClassificationConfig;
-use xberg::core::config::LlmConfig;
-
-let config = PageClassificationConfig {
-    labels: vec!["invoice".to_string(), "memo".to_string()],
-    llm: LlmConfig::default(),
-    prompt_template: None,
-    multi_label: false,
-};
-
-let pages = vec!["Page 1 content", "Page 2 content"];
-let labels = classify_document(&pages, &config).await?;
-```rust
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `pages` | `Vec<String>` | Yes | Slice of page texts to classify. Each page is classified independently |
-| `config` | `PageClassificationConfig` | Yes | Classification configuration including labels and LLM settings. |
-
-**Returns:** `Vec<ClassificationLabel>`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### download_model()
-
-Eagerly download a NER model into the xberg cache.
-
-`name` is a supported xberg GLiNER alias or catalog id. The CLI flag
-`xberg cache warm --ner` delegates here.
-
-**Signature:**
-
-```rust
-pub fn download_model(name: &str, cache_dir: Option<PathBuf>) -> Result<PathBuf, Error>
-```
-
-**Example:**
-
-```rust
-let result = download_model("value", "value")?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `name` | `String` | Yes | The name |
-| `cache_dir` | `Option<PathBuf>` | No | The cache dir |
-
-**Returns:** `PathBuf`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### download_model()
-
-**Signature:**
-
-```rust
-pub fn download_model(name: &str, cache_dir: Option<PathBuf>) -> Result<PathBuf, Error>
-```
-
-**Example:**
-
-```rust
-let result = download_model("value", "value")?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `name` | `String` | Yes | The  name |
-| `cache_dir` | `Option<PathBuf>` | No | The  cache dir |
-
-**Returns:** `PathBuf`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### default_model_name()
-
-Pinned default NER model identifier.
-
-**Signature:**
-
-```rust
-pub fn default_model_name() -> String
-```
-
-**Example:**
-
-```rust
-let result = default_model_name();
-```
-
-**Returns:** `String`
-
----
-
-#### default_model_name()
-
-**Signature:**
-
-```rust
-pub fn default_model_name() -> String
-```
-
-**Example:**
-
-```rust
-let result = default_model_name();
-```
-
-**Returns:** `String`
-
----
-
-#### known_models()
-
-All NER models xberg knows about (used by `--all-ner-models`).
-
-**Signature:**
-
-```rust
-pub fn known_models() -> Vec<String>
-```
-
-**Example:**
-
-```rust
-let result = known_models();
-```
-
-**Returns:** `Vec<String>`
-
----
-
-#### known_models()
-
-**Signature:**
-
-```rust
-pub fn known_models() -> Vec<String>
-```
-
-**Example:**
-
-```rust
-let result = known_models();
-```
-
-**Returns:** `Vec<String>`
-
----
-
-#### download_model()
-
-Download a NER model into the xberg cache.
-
-**Signature:**
-
-```rust
-pub fn download_model(name: &str, cache_dir: Option<PathBuf>) -> Result<PathBuf, Error>
-```
-
-**Example:**
-
-```rust
-let result = download_model("value", "value")?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `name` | `String` | Yes | The  name |
-| `cache_dir` | `Option<PathBuf>` | No | The  cache dir |
-
-**Returns:** `PathBuf`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### default_model_name()
-
-Default NER model identifier.
-
-**Signature:**
-
-```rust
-pub fn default_model_name() -> String
-```
-
-**Example:**
-
-```rust
-let result = default_model_name();
-```
-
-**Returns:** `String`
-
----
-
-#### known_models()
-
-All NER models xberg knows about.
-
-**Signature:**
-
-```rust
-pub fn known_models() -> Vec<String>
-```
-
-**Example:**
-
-```rust
-let result = known_models();
-```
-
-**Returns:** `Vec<String>`
-
----
-
-#### redact()
-
-Run pattern redaction (and optional NER-driven redaction) over `result` and
-rewrite every textual field. Populates `result.redaction_report`.
-
-**Signature:**
-
-```rust
-pub async fn redact(result: ExtractionResult, config: RedactionConfig) -> Result<(), Error>
-```
-
-**Example:**
-
-```rust
-redact(ExtractionResult::default(), RedactionConfig::default()).await?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `result` | `ExtractionResult` | Yes | The extraction result |
-| `config` | `RedactionConfig` | Yes | The configuration options |
-
-**Returns:** No return value.
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### find_all()
-
-Find all US Social Security Number spans in `text` (format: NNN-NN-NNNN).
-
-**Signature:**
-
-```rust
-pub fn find_all(text: &str) -> Vec<PatternMatch>
-```
-
-**Example:**
-
-```rust
-let result = find_all("value");
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `text` | `String` | Yes | The text |
-
-**Returns:** `Vec<PatternMatch>`
-
----
-
-#### scan_text()
-
-Scan `text` for every PII category in `categories` and return all matches
-in source-byte order.
-
-When `categories` is empty every supported regex-detectable category fires.
-Person / Organization / Location are *not* covered by the pattern engine —
-they must be supplied by a NER backend through the redaction engine.
-
-**Signature:**
-
-```rust
-pub fn scan_text(text: &str, categories: Vec<PiiCategory>) -> Vec<PatternMatch>
-```
-
-**Example:**
-
-```rust
-let result = scan_text("value", vec![]);
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `text` | `String` | Yes | The text |
-| `categories` | `Vec<PiiCategory>` | Yes | The categories |
-
-**Returns:** `Vec<PatternMatch>`
-
----
-
-#### summarize()
-
-Score and return the top-N sentences from `text`, joined in original order.
-
-`language` is an ISO 639 (or locale) code used to pick a stopword list;
-pass `None` (or an unknown code) to fall back to English.
-`max_tokens` bounds the summary length by whitespace-separated tokens;
-`None` falls back to `DEFAULT_MAX_TOKENS`.
-
-**Signature:**
-
-```rust
-pub fn summarize(text: &str, language: Option<String>, max_tokens: Option<u32>) -> Option<String>
-```
-
-**Example:**
-
-```rust
-let result = summarize("value", "value", 42);
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `text` | `String` | Yes | The text |
-| `language` | `Option<String>` | No | The language |
-| `max_tokens` | `Option<u32>` | No | The max tokens |
-
-**Returns:** `Option<String>`
-
----
-
-#### token_count()
-
-Count whitespace-separated tokens (used for token-budget bookkeeping by
-callers).
-
-**Signature:**
-
-```rust
-pub fn token_count(text: &str) -> u32
-```
-
-**Example:**
-
-```rust
-let result = token_count("value");
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `text` | `String` | Yes | The text |
-
-**Returns:** `u32`
-
----
-
-#### translate_result()
-
-Translate the extraction result in place.
-
-Populates `result.translation` with the translated `content`, optionally the
-translated `formatted_content` (when `preserve_markup = true`), and rewrites
-every chunk's `content` field. Every LLM call's usage is appended to
-`result.llm_usage`.
-
-**Signature:**
-
-```rust
-pub async fn translate_result(result: ExtractionResult, config: TranslationConfig) -> Result<(), Error>
-```
-
-**Example:**
-
-```rust
-translate_result(ExtractionResult::default(), TranslationConfig::default()).await?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `result` | `ExtractionResult` | Yes | The extraction result |
-| `config` | `TranslationConfig` | Yes | The configuration options |
-
-**Returns:** No return value.
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### find_footnote_anchors()
-
-Find all footnote anchor references in markdown text.
-
-Returns a vector of footnote anchors (`[^label]` use-sites), including byte offsets.
-Footnote definitions (`[^label]: ...`) are NOT included in the results.
-
-**Returns:**
-
-A vector of `FootnoteAnchor` entries, each with the label and byte offset.
-
-**Signature:**
-
-```rust
-pub fn find_footnote_anchors(markdown: &str) -> Vec<FootnoteAnchor>
-```
-
-**Example:**
-
-```rust
-let text = "Text[^src1] more text[^src2].";
-let anchors = find_footnote_anchors(text);
-assert_eq!(anchors.len(), 2);
-assert_eq!(anchors[0].label, "src1");
-assert_eq!(anchors[1].label, "src2");
-```rust
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `markdown` | `String` | Yes | The markdown text to search |
-
-**Returns:** `Vec<FootnoteAnchor>`
-
----
-
-#### parse_footnote_definitions()
-
-Parse footnote definitions from markdown text.
-
-Returns a vector of footnote definitions found in the markdown.
-Handles multi-line definitions with continuation/indented lines (CommonMark format).
-
-**Returns:**
-
-A vector of `FootnoteDefinition` entries, each with label, content, and byte offset.
-
-**Signature:**
-
-```rust
-pub fn parse_footnote_definitions(markdown: &str) -> Vec<FootnoteDefinition>
-```
-
-**Example:**
-
-```rust
-let text = r#"[^1]: First footnote.
-[^2]: Second footnote.
-  Continued line."#;
-let defs = parse_footnote_definitions(text);
-assert_eq!(defs.len(), 2);
-```rust
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `markdown` | `String` | Yes | The markdown text to search |
-
-**Returns:** `Vec<FootnoteDefinition>`
-
----
-
-#### find_inference_markers()
-
-Find inference markers in markdown text.
-
-Returns byte offsets of every `[*inference*]` marker found in the text.
-
-**Returns:**
-
-A vector of byte offsets where inference markers appear.
-
-**Signature:**
-
-```rust
-pub fn find_inference_markers(markdown: &str) -> Vec<usize>
-```
-
-**Example:**
-
-```rust
-let text = "A claim [*inference*] with inference marker.";
-let offsets = find_inference_markers(text);
-assert_eq!(offsets.len(), 1);
-```rust
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `markdown` | `String` | Yes | The markdown text to search |
-
-**Returns:** `Vec<usize>`
-
----
-
 #### find_unmarked_claims()
 
 Find unmarked claims in markdown text.
@@ -1253,51 +669,6 @@ assert!(unmarked[0].contains("without citation"));
 | `markdown` | `String` | Yes | The markdown text to search |
 
 **Returns:** `Vec<String>`
-
----
-
-#### parse_citations()
-
-Parse the structured citation block from markdown.
-
-Extracts citations from the block after a `---` thematic break followed by
-`<!-- citations ... -->` comment. Parses each entry as:
-`[^srcN]: <source>, <optional-locator>, excerpt: "<text>"`
-
-Returns parsed citations with source, optional locator, and optional excerpt.
-
-**Returns:**
-
-A vector of `Citation` entries parsed from the citation block.
-
-**Signature:**
-
-```rust
-pub fn parse_citations(markdown: &str) -> Vec<Citation>
-```
-
-**Example:**
-
-```rust
-let text = r#"Body text.
-
----
-<!-- citations -->
-[^src1]: docs/paper.pdf, page 3, excerpt: "Exact quoted text."
-"#;
-let citations = parse_citations(text);
-assert_eq!(citations.len(), 1);
-assert_eq!(citations[0].source, "docs/paper.pdf");
-assert_eq!(citations[0].locator, Some("page 3".to_string()));
-```rust
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `markdown` | `String` | Yes | The markdown text to search |
-
-**Returns:** `Vec<Citation>`
 
 ---
 
@@ -1343,1373 +714,6 @@ assert!(verify_excerpt(excerpt2, source2));
 
 ---
 
-#### chunk_for_rag()
-
-Chunk text for RAG retrieval, ensuring every chunk carries a `heading_path`.
-
-Delegates to `chunk_text` using the caller's config (defaulting to
-`ChunkerType::Markdown` when the config uses the default `Text` type, so that
-heading hierarchy is resolved).  After chunking, derives
-`ChunkMetadata::heading_path` from each chunk's `heading_context`.
-
-  underlying splitter; use `ChunkerType::Markdown` for documents with ATX
-  headings.
-
-**Returns:**
-
-A `ChunkingResult` where every chunk's `heading_path` is populated from its
-`heading_context` (empty when the chunk is not under any heading).
-
-**Errors:**
-
-Propagates any error from the underlying chunker (e.g. invalid overlap).
-
-**Signature:**
-
-```rust
-pub fn chunk_for_rag(text: &str, config: ChunkingConfig) -> Result<ChunkingResult, Error>
-```
-
-**Example:**
-
-```rust
-let result = chunk_for_rag("value", ChunkingConfig::default())?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `text` | `String` | Yes | The text |
-| `config` | `ChunkingConfig` | Yes | The configuration options |
-
-**Returns:** `ChunkingResult`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### compare()
-
-Compare two extraction results and return a structured diff.
-
-The comparison is purely structural — no I/O, no side effects. All fields
-of `ExtractionDiff` are populated according to the provided `DiffOptions`.
-
-**Signature:**
-
-```rust
-pub fn compare(a: ExtractionResult, b: ExtractionResult, opts: DiffOptions) -> ExtractionDiff
-```
-
-**Example:**
-
-```rust,no_run
-use xberg::{ExtractionResult, diff::{compare, DiffOptions}};
-
-let mut a = ExtractionResult::default();
-let mut b = ExtractionResult::default();
-a.content = "Hello world".to_string();
-b.content = "Hello Rust".to_string();
-
-let diff = compare(&a, &b, &DiffOptions::default());
-assert_eq!(diff.content_diff.len(), 1);
-```rust
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `a` | `ExtractionResult` | Yes | The extraction result |
-| `b` | `ExtractionResult` | Yes | The extraction result |
-| `opts` | `DiffOptions` | Yes | The options to use |
-
-**Returns:** `ExtractionDiff`
-
----
-
-#### extract_region_with_vlm()
-
-Extract content from a pre-cropped image region using a VLM.
-
-The caller is responsible for cropping the page image to the region's bounding
-box before calling this function. The `image_bytes` parameter must contain the
-raw bytes of the **cropped** region image (JPEG, PNG, WebP, etc.).
-
-**Returns:**
-
-Extracted Markdown text from the VLM, or an error if the VLM call fails.
-
-**Errors:**
-
-- `Ocr` if the VLM call fails or returns no content.
-- `MissingDependency` if the liter-llm client cannot
-  be initialised.
-
-**Signature:**
-
-```rust
-pub async fn extract_region_with_vlm(image_bytes: &[u8], image_mime: &str, region_kind: RegionKind, llm_config: LlmConfig, custom_prompt: Option<String>) -> Result<String, Error>
-```
-
-**Example:**
-
-```rust,no_run
-use xberg::llm::region_extractor::{RegionKind, extract_region_with_vlm};
-use xberg::LlmConfig;
-
-let image_bytes: Vec<u8> = std::fs::read("cropped_figure.png")?;
-let config = LlmConfig {
-    model: "openai/gpt-4o-mini".to_string(),
-    base_url: Some("<http://localhost:9999".to_string(>)),
-    ..Default::default()
-};
-let markdown = extract_region_with_vlm(
-    &image_bytes,
-    "image/png",
-    RegionKind::Figure,
-    &config,
-    None,
-)
-.await?;
-println!("Extracted: {markdown}");
-```rust
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `image_bytes` | `Vec<u8>` | Yes | The image bytes |
-| `image_mime` | `String` | Yes | The image mime |
-| `region_kind` | `RegionKind` | Yes | The region kind |
-| `llm_config` | `LlmConfig` | Yes | The llm config |
-| `custom_prompt` | `Option<String>` | No | The custom prompt |
-
-**Returns:** `String`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### rerank_async()
-
-Rerank documents asynchronously.
-
-Async counterpart to `rerank`. Offloads blocking ONNX inference to a
-dedicated blocking thread pool via Tokio's `spawn_blocking`, keeping the
-async executor free.
-
-Since v5.0.
-
-**Signature:**
-
-```rust
-pub async fn rerank_async(query: &str, documents: Vec<String>, config: RerankerConfig) -> Result<Vec<RerankedDocument>, Error>
-```
-
-**Example:**
-
-```rust
-let result = rerank_async("value", vec![], RerankerConfig::default()).await?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `query` | `String` | Yes | The query |
-| `documents` | `Vec<String>` | Yes | The documents |
-| `config` | `RerankerConfig` | Yes | The configuration options |
-
-**Returns:** `Vec<RerankedDocument>`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### extract_keywords()
-
-Extract keywords from text using the specified algorithm.
-
-This is the unified entry point for keyword extraction. The algorithm
-used is determined by `config.algorithm`.
-
-**Returns:**
-
-A vector of keywords sorted by relevance (highest score first).
-
-**Errors:**
-
-Returns an error if:
-
-- The specified algorithm feature is not enabled
-- Keyword extraction fails
-
-**Signature:**
-
-```rust
-pub fn extract_keywords(text: &str, config: KeywordConfig) -> Result<Vec<Keyword>, Error>
-```
-
-**Example:**
-
-```rust,no_run
-let text = "Document intelligence with Rust provides memory safety.";
-let config = KeywordConfig::default()
-    .with_max_keywords(10)
-    .with_language("en");
-
-let keywords = extract_keywords(text, &config)?;
-
-for keyword in keywords {
-    println!("{}: {:.3}", keyword.text, keyword.score);
-}
-```rust
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `text` | `String` | Yes | The text to extract keywords from |
-| `config` | `KeywordConfig` | Yes | Keyword extraction configuration |
-
-**Returns:** `Vec<Keyword>`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### analyze_document()
-
-Analyze a document and determine the optimal chunking strategy.
-
-Decision logic (in priority order):
-
-1. If user provides `disable_chunking` → no chunking
-2. If user provides page_ranges → use user overrides
-3. If chunking is not enabled → no chunking
-4. If format doesn't support chunking → no chunking
-5. If file is small (below both thresholds) and not force_chunking → no chunking
-6. If PDF has a substantial text layer AND !force_ocr → no chunking
-   *(only when `heuristics-pdf` feature is enabled; otherwise skipped)*
-
-7. Otherwise → chunk the document
-
-**Errors:**
-
-Returns an error only when the `heuristics-pdf` feature is active and
-the PDF text-layer analysis itself returns a hard error.  In all other
-cases the function returns a `ChunkingDecision`.
-
-**Signature:**
-
-```rust
-pub fn analyze_document(metadata: DocumentMetadata, config: HeuristicsConfig, document_bytes: Option<Vec<u8>>) -> Result<ChunkingDecision, Error>
-```
-
-**Example:**
-
-```rust
-let result = analyze_document(DocumentMetadata::default(), HeuristicsConfig::default(), b"data")?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `metadata` | `DocumentMetadata` | Yes | The document metadata |
-| `config` | `HeuristicsConfig` | Yes | The configuration options |
-| `document_bytes` | `Option<Vec<u8>>` | No | The document bytes |
-
-**Returns:** `ChunkingDecision`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### analyze_with_user_chunks()
-
-Analyze a document with user-specified chunk ranges.
-
-Creates a chunk plan based on user-provided page ranges.
-
-**Signature:**
-
-```rust
-pub fn analyze_with_user_chunks(user_ranges: Vec<PageRange>, total_pages: u32, size_bytes: u64, config: HeuristicsConfig) -> ChunkingDecision
-```
-
-**Example:**
-
-```rust
-let result = analyze_with_user_chunks(vec![], 42, 42, HeuristicsConfig::default());
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `user_ranges` | `Vec<PageRange>` | Yes | The user ranges |
-| `total_pages` | `u32` | Yes | The total pages |
-| `size_bytes` | `u64` | Yes | The size bytes |
-| `config` | `HeuristicsConfig` | Yes | The configuration options |
-
-**Returns:** `ChunkingDecision`
-
----
-
-#### score_confidence()
-
-Score a `ConfidenceSignals` triple into an `ExtractionConfidence` using
-the supplied weights.
-
-When `signals.ocr_aggregate` is `None`, the OCR weight folds into
-`text_coverage` so the weighted sum still totals 1.0.
-
-**Signature:**
-
-```rust
-pub fn score_confidence(signals: ConfidenceSignals, weights: ConfidenceWeights) -> ExtractionConfidence
-```
-
-**Example:**
-
-```rust
-let result = score_confidence(ConfidenceSignals::default(), ConfidenceWeights::default());
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `signals` | `ConfidenceSignals` | Yes | The confidence signals |
-| `weights` | `ConfidenceWeights` | Yes | The confidence weights |
-
-**Returns:** `ExtractionConfidence`
-
----
-
-#### check_format_limits()
-
-Decision returned for pre-extraction rejection based on XLSX/PPTX-specific
-resource bounds. Returns `Some(reason)` to reject; `None` to proceed.
-
-Callers must provide counts from a pre-extraction peek (e.g. parsing
-`xl/workbook.xml` for sheet count).
-
-**Signature:**
-
-```rust
-pub fn check_format_limits(mime_type: &str, sheet_count: Option<u32>, workbook_cells: Option<u64>, embedded_count: Option<u32>, config: HeuristicsConfig) -> Option<String>
-```
-
-**Example:**
-
-```rust
-let result = check_format_limits("value", 42, 42, 42, HeuristicsConfig::default());
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `mime_type` | `String` | Yes | The mime type |
-| `sheet_count` | `Option<u32>` | No | The sheet count |
-| `workbook_cells` | `Option<u64>` | No | The workbook cells |
-| `embedded_count` | `Option<u32>` | No | The embedded count |
-| `config` | `HeuristicsConfig` | Yes | The configuration options |
-
-**Returns:** `Option<String>`
-
----
-
-#### boundaries_from_extraction_result()
-
-Derive document boundaries from an already-produced `ExtractionResult`.
-
-Builds a `MultidocInput` from `result.pages` (one `PageSignals` per
-`PageContent` entry), then delegates to `detect_boundaries`.
-
-### Fallback behaviour
-
-- If `result.pages` is `None` or empty the whole document is treated as a
-  single document: returns `[Start(1), End(1)]`, matching the contract of
-  `detect_boundaries` for a one-page input.
-
-### Text density
-
-`PageContent` does not carry a pre-computed density score.
-This function approximates density as
-`non_whitespace_chars / total_chars` (clamped to `[0.0, 1.0]`), which is a
-reasonable proxy for how text-dense a page is relative to itself.  Pass a
-custom `MultidocInput` to `detect_boundaries` directly when you need a
-higher-fidelity density measurement (e.g. chars-per-pt² from a PDF extractor).
-
-**Signature:**
-
-```rust
-pub fn boundaries_from_extraction_result(result: ExtractionResult, thresholds: MultidocThresholds) -> Vec<DocumentBoundary>
-```
-
-**Example:**
-
-```rust
-let result = boundaries_from_extraction_result(ExtractionResult::default(), MultidocThresholds::default());
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `result` | `ExtractionResult` | Yes | The extraction result |
-| `thresholds` | `MultidocThresholds` | Yes | The multidoc thresholds |
-
-**Returns:** `Vec<DocumentBoundary>`
-
----
-
-#### detect_boundaries()
-
-Detect document boundaries in a multi-document PDF.
-
-Returns a list of detected boundaries, always including implicit boundaries
-at start (page 1) and end (page_count).  Boundaries are returned in ascending
-order of `start_page`.
-
-**Returns:**
-
-Ordered list of document boundaries.
-
-**Signature:**
-
-```rust
-pub fn detect_boundaries(input: MultidocInput, thresholds: MultidocThresholds) -> Vec<DocumentBoundary>
-```
-
-**Example:**
-
-```rust
-let result = detect_boundaries(MultidocInput::default(), MultidocThresholds::default());
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `input` | `MultidocInput` | Yes | Page signals for the PDF |
-| `thresholds` | `MultidocThresholds` | Yes | Detection thresholds |
-
-**Returns:** `Vec<DocumentBoundary>`
-
----
-
-#### choose_call_mode()
-
-Decide which call mode best fits this document.
-
-Rules applied in order:
-
-1. `image/*` → `StructuredCallMode::VisionOnly` (no text layer to start from).
-2. `application/pdf` → `StructuredCallMode::TextOnly` regardless of
-   `text_coverage` or embedded image count.  Xberg's OCR + text-layer
-   extraction produces text for scanned PDFs; the orchestrator's
-   post-call confidence gate handles any vision escalation actually needed.
-
-3. DOCX / `text/html` / `text/*` / `application/json` / `application/xml` /
-   `application/rtf` with `avg_chars_per_page > docx_text_min_density`
-   → `StructuredCallMode::TextOnly`.
-
-4. Anything else → `StructuredCallMode::Skip`.
-
-After rule selection two post-rule promotions apply (in order):
-
-- `user_force_vision` promotes `TextOnly` → `TextPlusVision`
-  (`Skip` stays `Skip` — caller meant to opt out).
-
-- `enable_vision_fallback` promotes `TextOnly` →
-  `TextOnlyWithVisionFallback` (does **not** upgrade `TextPlusVision` or
-  `Skip`).
-
-**Signature:**
-
-```rust
-pub fn choose_call_mode(input: StructuredInput, t: StructuredThresholds) -> StructuredCallMode
-```
-
-**Example:**
-
-```rust
-let result = choose_call_mode(StructuredInput::default(), StructuredThresholds::default());
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `input` | `StructuredInput` | Yes | The input data |
-| `t` | `StructuredThresholds` | Yes | The structured thresholds |
-
-**Returns:** `StructuredCallMode`
-
----
-
-#### calculate_chunk_plan()
-
-Calculate a chunking plan for a document.
-
-**Returns:**
-
-A `ChunkPlan` with optimal chunk boundaries.
-
-**Signature:**
-
-```rust
-pub fn calculate_chunk_plan(page_count: u32, size_bytes: u64, needs_ocr: bool, config: HeuristicsConfig) -> ChunkPlan
-```
-
-**Example:**
-
-```rust
-let result = calculate_chunk_plan(42, 42, true, HeuristicsConfig::default());
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `page_count` | `u32` | Yes | Total number of pages in the document |
-| `size_bytes` | `u64` | Yes | File size in bytes |
-| `needs_ocr` | `bool` | Yes | Whether OCR will be required |
-| `config` | `HeuristicsConfig` | Yes | Heuristics configuration |
-
-**Returns:** `ChunkPlan`
-
----
-
-#### calculate_plan_from_overrides()
-
-Calculate a chunk plan from user-specified page ranges.
-
-Validates and processes user overrides into a proper chunk plan.
-
-**Signature:**
-
-```rust
-pub fn calculate_plan_from_overrides(user_chunks: Vec<PageRange>, total_pages: u32, size_bytes: u64, config: HeuristicsConfig) -> ChunkPlan
-```
-
-**Example:**
-
-```rust
-let result = calculate_plan_from_overrides(vec![], 42, 42, HeuristicsConfig::default());
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `user_chunks` | `Vec<PageRange>` | Yes | The user chunks |
-| `total_pages` | `u32` | Yes | The total pages |
-| `size_bytes` | `u64` | Yes | The size bytes |
-| `config` | `HeuristicsConfig` | Yes | The configuration options |
-
-**Returns:** `ChunkPlan`
-
----
-
-#### fingerprint()
-
-Stable sha256 fingerprint of `raw`, formatted as `sha256:<hex>`.
-
-**Signature:**
-
-```rust
-pub fn fingerprint(raw: &[u8]) -> String
-```
-
-**Example:**
-
-```rust
-let result = fingerprint(b"data");
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `raw` | `Vec<u8>` | Yes | The raw |
-
-**Returns:** `String`
-
----
-
-#### resolve()
-
-Resolve `(preset, custom_schema_override, context)` into a `ResolvedPreset`.
-
-- `custom_schema` overrides `preset.schema` when set.
-- `context` substitutes `{{key}}` tokens in `preset.context_template`; the
-  rendered string is appended to `system_prompt` so the model sees it.
-
-**Signature:**
-
-```rust
-pub fn resolve(preset: Preset, custom_schema: Option<serde_json::Value>, context: HashMap<String, String>) -> Result<ResolvedPreset, ResolveError>
-```
-
-**Example:**
-
-```rust
-let result = resolve(Preset::default(), std::collections::HashMap::new(), std::collections::HashMap::new())?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `preset` | `Preset` | Yes | The preset |
-| `custom_schema` | `Option<serde_json::Value>` | No | The custom schema |
-| `context` | `HashMap<String, String>` | Yes | The context |
-
-**Returns:** `ResolvedPreset`
-
-**Errors:** Returns `Err(ResolveError)`.
-
----
-
-#### extract_structured_json()
-
-Extract structured JSON from a document using JSON-encoded preset spec and options.
-
-This is the synchronous JSON-in / JSON-out entry point suitable for FFI and
-language-binding call paths.
-
-  `cache`).  Pass `"{}"` to use all defaults.
-
-**Returns:**
-
-JSON-serialised `StructuredOutput` on success.
-
-**Errors:**
-
-Returns `Validation` when either JSON argument is
-malformed.  All other failures from the underlying
-`extract_structured_sync` call are mapped onto `XbergError`
-via `From<StructuredError>`.
-
-**Signature:**
-
-```rust
-pub fn extract_structured_json(bytes: &[u8], mime: &str, preset_spec_json: &str, options_json: &str) -> Result<String, Error>
-```
-
-**Example:**
-
-```rust
-let result = extract_structured_json(b"data", "value", "value", "value")?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `bytes` | `Vec<u8>` | Yes | The bytes |
-| `mime` | `String` | Yes | The mime |
-| `preset_spec_json` | `String` | Yes | The preset spec json |
-| `options_json` | `String` | Yes | The options json |
-
-**Returns:** `String`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### split_and_extract_json()
-
-Split a multi-document PDF and extract structured JSON from each segment,
-returning a JSON array of `StructuredOutput` objects.
-
-Non-PDF documents are passed through as a single-element array.
-
-Same as `extract_structured_json`.
-
-**Returns:**
-
-JSON-serialised `Vec<StructuredOutput>` (a JSON array) on success.
-
-**Errors:**
-
-Returns `Validation` when either JSON argument is
-malformed.  All other failures from the underlying
-`split_and_extract_sync` call are mapped onto `XbergError`
-via `From<StructuredError>`.
-
-**Signature:**
-
-```rust
-pub fn split_and_extract_json(bytes: &[u8], mime: &str, preset_spec_json: &str, options_json: &str) -> Result<String, Error>
-```
-
-**Example:**
-
-```rust
-let result = split_and_extract_json(b"data", "value", "value", "value")?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `bytes` | `Vec<u8>` | Yes | The bytes |
-| `mime` | `String` | Yes | The mime |
-| `preset_spec_json` | `String` | Yes | The preset spec json |
-| `options_json` | `String` | Yes | The options json |
-
-**Returns:** `String`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### render_pdf_page_to_png()
-
-Render a single PDF page to PNG bytes.
-
-Returns raw PNG-encoded bytes for the specified page at the given DPI.
-Uses pdf_oxide with tiny-skia for pure-Rust rendering.
-
-For pages with extreme dimensions (very wide vector diagrams, etc.) the
-effective DPI may be automatically reduced to avoid rasterizer failure.
-A warning is logged when this happens.
-
-**Errors:**
-
-Returns `XbergError::Parsing` if the PDF cannot be opened, authenticated,
-or rendered, or if `page_index` is out of range.
-
-**Signature:**
-
-```rust
-pub fn render_pdf_page_to_png(pdf_bytes: &[u8], page_index: usize, dpi: Option<i32>, password: Option<String>) -> Result<Vec<u8>, Error>
-```
-
-**Example:**
-
-```rust
-let result = render_pdf_page_to_png(b"data", 42, 42, "value")?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `pdf_bytes` | `Vec<u8>` | Yes | Raw PDF file bytes |
-| `page_index` | `usize` | Yes | Zero-based page index |
-| `dpi` | `Option<i32>` | No | Resolution in dots per inch (default: 150) |
-| `password` | `Option<String>` | No | Optional password for encrypted PDFs |
-
-**Returns:** `Vec<u8>`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### pdf_page_count()
-
-Count the pages in a PDF without rendering any of them.
-
-Opens the document and returns its page count from the PDF structure. No page
-is rasterized, so this is cheap relative to `render_pdf_page_to_png` — use it
-when you only need the count (e.g. to drive a render loop over the pages).
-
-**Errors:**
-
-Returns `XbergError::Parsing` if the PDF cannot be opened, authenticated,
-or its page count read.
-
-**Signature:**
-
-```rust
-pub fn pdf_page_count(pdf_bytes: &[u8], password: Option<String>) -> Result<usize, Error>
-```
-
-**Example:**
-
-```rust
-let result = pdf_page_count(b"data", "value")?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `pdf_bytes` | `Vec<u8>` | Yes | Raw PDF file bytes |
-| `password` | `Option<String>` | No | Optional password for encrypted PDFs |
-
-**Returns:** `usize`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### caption_image()
-
-Caption a single image from bytes.
-
-  `RegionKind::Caption` prompt when `None`.
-
-**Returns:**
-
-The generated caption text.
-
-**Errors:**
-
-Returns an error if the VLM call fails or if image format detection fails.
-
-**Signature:**
-
-```rust
-pub async fn caption_image(image_bytes: &[u8], llm_config: LlmConfig, custom_prompt: Option<String>) -> Result<String, Error>
-```
-
-**Example:**
-
-```rust
-use xberg::captioning::caption_image;
-use xberg::LlmConfig;
-
-# async fn example() -> xberg::Result<()> {
-let image_bytes = vec![0xFF, 0xD8]; // JPEG header
-let config = LlmConfig {
-    model: "anthropic/claude-3-5-sonnet".to_string(),
-    ..Default::default()
-};
-let caption = caption_image(&image_bytes, &config, None).await?;
-# Ok(())
-# }
-```rust
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `image_bytes` | `Vec<u8>` | Yes | The image data. |
-| `llm_config` | `LlmConfig` | Yes | LLM configuration for the VLM call. |
-| `custom_prompt` | `Option<String>` | No | Optional custom caption prompt. Uses the default |
-
-**Returns:** `String`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### caption_image_file()
-
-Caption a single image from a file path.
-
-  `RegionKind::Caption` prompt when `None`.
-
-**Returns:**
-
-The generated caption text.
-
-**Errors:**
-
-Returns an error if the file cannot be read, if image format detection fails,
-or if the VLM call fails.
-
-**Signature:**
-
-```rust
-pub async fn caption_image_file(path: PathBuf, llm_config: LlmConfig, custom_prompt: Option<String>) -> Result<String, Error>
-```
-
-**Example:**
-
-```rust
-use xberg::captioning::caption_image_file;
-use xberg::LlmConfig;
-
-# async fn example() -> xberg::Result<()> {
-let config = LlmConfig {
-    model: "openai/gpt-4o-mini".to_string(),
-    ..Default::default()
-};
-let caption = caption_image_file("document_page_001.png", &config, None).await?;
-# Ok(())
-# }
-```rust
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `path` | `PathBuf` | Yes | Path to the image file. |
-| `llm_config` | `LlmConfig` | Yes | LLM configuration for the VLM call. |
-| `custom_prompt` | `Option<String>` | No | Optional custom caption prompt. Uses the default |
-
-**Returns:** `String`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### detect_mime_type()
-
-Detect the MIME type of a file at the given path.
-
-Uses the file extension and optionally the file content to determine the MIME type.
-Set `check_exists` to `true` to verify the file exists before detection.
-
-**Signature:**
-
-```rust
-pub fn detect_mime_type(path: &str, check_exists: bool) -> Result<String, Error>
-```
-
-**Example:**
-
-```rust
-let result = detect_mime_type("value", true)?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `path` | `String` | Yes | Path to the file |
-| `check_exists` | `bool` | Yes | The check exists |
-
-**Returns:** `String`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### embed_texts()
-
-Embed a list of texts using the configured embedding model.
-
-Returns a 2D vector where each inner vector is the embedding for the corresponding text.
-
-**Signature:**
-
-```rust
-pub fn embed_texts(texts: Vec<String>, config: EmbeddingConfig) -> Result<Vec<Vec<f32>>, Error>
-```
-
-**Example:**
-
-```rust
-let result = embed_texts(vec![], EmbeddingConfig::default())?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `texts` | `Vec<String>` | Yes | The texts |
-| `config` | `EmbeddingConfig` | Yes | The configuration options |
-
-**Returns:** `Vec<Vec<f32>>`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### embed_texts()
-
-Stub for builds without the `embeddings` feature — keeps the symbol available
-on no-ORT targets (Android x86_64 emulator, WASM) so language bindings that
-mirror the public API compile; the runtime call returns an unsupported error.
-
-**Signature:**
-
-```rust
-pub fn embed_texts(texts: Vec<String>, config: EmbeddingConfig) -> Result<Vec<Vec<f32>>, Error>
-```
-
-**Example:**
-
-```rust
-let result = embed_texts(vec![], EmbeddingConfig::default())?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `texts` | `Vec<String>` | Yes | The  texts |
-| `config` | `EmbeddingConfig` | Yes | The embedding config |
-
-**Returns:** `Vec<Vec<f32>>`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### embed_texts_async()
-
-**Signature:**
-
-```rust
-pub async fn embed_texts_async(texts: Vec<String>, config: EmbeddingConfig) -> Result<Vec<Vec<f32>>, Error>
-```
-
-**Example:**
-
-```rust
-let result = embed_texts_async(vec![], EmbeddingConfig::default()).await?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `texts` | `Vec<String>` | Yes | The  texts |
-| `config` | `EmbeddingConfig` | Yes | The embedding config |
-
-**Returns:** `Vec<Vec<f32>>`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### get_embedding_preset()
-
-Get an embedding preset by name.
-
-Returns `None` if no preset with the given name exists. Returns an owned
-clone so the value is safe to pass across FFI boundaries.
-
-**Signature:**
-
-```rust
-pub fn get_embedding_preset(name: &str) -> Option<EmbeddingPreset>
-```
-
-**Example:**
-
-```rust
-let result = get_embedding_preset("value");
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `name` | `String` | Yes | The name |
-
-**Returns:** `Option<EmbeddingPreset>`
-
----
-
-#### list_embedding_presets()
-
-List the names of all available embedding presets.
-
-Returns owned `String`s so the values are safe to pass across FFI boundaries.
-
-**Signature:**
-
-```rust
-pub fn list_embedding_presets() -> Vec<String>
-```
-
-**Example:**
-
-```rust
-let result = list_embedding_presets();
-```
-
-**Returns:** `Vec<String>`
-
----
-
-#### get_embedding_preset()
-
-Returns `None` for builds without the `embedding-presets` feature.
-
-**Signature:**
-
-```rust
-pub fn get_embedding_preset(name: &str) -> Option<EmbeddingPreset>
-```
-
-**Example:**
-
-```rust
-let result = get_embedding_preset("value");
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `name` | `String` | Yes | The  name |
-
-**Returns:** `Option<EmbeddingPreset>`
-
----
-
-#### list_embedding_presets()
-
-Returns an empty list for builds without the `embedding-presets` feature.
-
-**Signature:**
-
-```rust
-pub fn list_embedding_presets() -> Vec<String>
-```
-
-**Example:**
-
-```rust
-let result = list_embedding_presets();
-```
-
-**Returns:** `Vec<String>`
-
----
-
-#### rerank()
-
-Rerank a list of documents by relevance to a query.
-
-Returns documents sorted descending by score. Applies `top_k` truncation if
-configured.
-
-**Errors:**
-
-- `XbergError::Validation` if `query` is empty or blank.
-- `XbergError::MissingDependency` if ONNX Runtime is not installed (ONNX path).
-- `XbergError::Reranking` if the preset is unknown or model download fails.
-
-Since v5.0.
-
-**Signature:**
-
-```rust
-pub fn rerank(query: &str, documents: Vec<String>, config: RerankerConfig) -> Result<Vec<RerankedDocument>, Error>
-```
-
-**Example:**
-
-```rust
-let result = rerank("value", vec![], RerankerConfig::default())?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `query` | `String` | Yes | The query |
-| `documents` | `Vec<String>` | Yes | The documents |
-| `config` | `RerankerConfig` | Yes | The configuration options |
-
-**Returns:** `Vec<RerankedDocument>`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### rerank()
-
-Stub for builds without the `reranker` feature — keeps the symbol available
-on no-ORT targets (Android x86_64 emulator, WASM) so language bindings compile.
-
-Since v5.0.
-
-**Signature:**
-
-```rust
-pub fn rerank(query: &str, documents: Vec<String>, config: RerankerConfig) -> Result<Vec<RerankedDocument>, Error>
-```
-
-**Example:**
-
-```rust
-let result = rerank("value", vec![], RerankerConfig::default())?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `query` | `String` | Yes | The  query |
-| `documents` | `Vec<String>` | Yes | The  documents |
-| `config` | `RerankerConfig` | Yes | The reranker config |
-
-**Returns:** `Vec<RerankedDocument>`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### rerank_async()
-
-Stub for builds without the `reranker` feature.
-
-Since v5.0.
-
-**Signature:**
-
-```rust
-pub async fn rerank_async(query: &str, documents: Vec<String>, config: RerankerConfig) -> Result<Vec<RerankedDocument>, Error>
-```
-
-**Example:**
-
-```rust
-let result = rerank_async("value", vec![], RerankerConfig::default()).await?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `query` | `String` | Yes | The  query |
-| `documents` | `Vec<String>` | Yes | The  documents |
-| `config` | `RerankerConfig` | Yes | The reranker config |
-
-**Returns:** `Vec<RerankedDocument>`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
-#### get_reranker_preset()
-
-Get a reranker preset by name.
-
-Returns `None` if no preset with the given name exists. Returns an owned
-clone so the value is safe to pass across FFI boundaries.
-
-Since v5.0.
-
-**Signature:**
-
-```rust
-pub fn get_reranker_preset(name: &str) -> Option<RerankerPreset>
-```
-
-**Example:**
-
-```rust
-let result = get_reranker_preset("value");
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `name` | `String` | Yes | The name |
-
-**Returns:** `Option<RerankerPreset>`
-
----
-
-#### list_reranker_presets()
-
-List the names of all available reranker presets.
-
-Returns owned `String`s so the values are safe to pass across FFI boundaries.
-
-Since v5.0.
-
-**Signature:**
-
-```rust
-pub fn list_reranker_presets() -> Vec<String>
-```
-
-**Example:**
-
-```rust
-let result = list_reranker_presets();
-```
-
-**Returns:** `Vec<String>`
-
----
-
-#### get_reranker_preset()
-
-Returns `None` for builds without the `reranker-presets` feature.
-
-Since v5.0.
-
-**Signature:**
-
-```rust
-pub fn get_reranker_preset(name: &str) -> Option<RerankerPreset>
-```
-
-**Example:**
-
-```rust
-let result = get_reranker_preset("value");
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `name` | `String` | Yes | The  name |
-
-**Returns:** `Option<RerankerPreset>`
-
----
-
-#### list_reranker_presets()
-
-Returns an empty list for builds without the `reranker-presets` feature.
-
-Since v5.0.
-
-**Signature:**
-
-```rust
-pub fn list_reranker_presets() -> Vec<String>
-```
-
-**Example:**
-
-```rust
-let result = list_reranker_presets();
-```
-
-**Returns:** `Vec<String>`
-
----
-
-#### embed_texts_async()
-
-**Signature:**
-
-```rust
-pub async fn embed_texts_async(texts: Vec<String>, config: EmbeddingConfig) -> Result<Vec<Vec<f32>>, Error>
-```
-
-**Example:**
-
-```rust
-let result = embed_texts_async(vec![], EmbeddingConfig::default()).await?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `texts` | `Vec<String>` | Yes | The  texts |
-| `config` | `EmbeddingConfig` | Yes | The embedding config |
-
-**Returns:** `Vec<Vec<f32>>`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
 ### Types
 
 #### AccelerationConfig
@@ -2731,13 +735,13 @@ for inference in layout detection and embedding generation.
 A single file extracted from an archive.
 
 When archives (ZIP, TAR, 7Z, GZIP) are extracted with recursive extraction
-enabled, each processable file produces its own full `ExtractionResult`.
+enabled, each processable file produces its own full `ExtractedDocument`.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `path` | `String` | — | Archive-relative file path (e.g. "folder/document.pdf"). |
 | `mime_type` | `String` | — | Detected MIME type of the file. |
-| `result` | `ExtractionResult` | — | Full extraction result for this file. |
+| `result` | `ExtractedDocument` | — | Full extraction result for this file. |
 
 ---
 
@@ -2843,22 +847,6 @@ Configuration for the VLM captioning post-processor.
 
 ---
 
-#### CaptioningEnrichmentConfig
-
-Captioning enrichment knob: which LLM to use for image captions.
-
-The enrichment stage calls `caption_image` for every
-image in `ExtractionResult::images` that has non-empty `data`. Images with
-empty byte data (e.g. reference-only images populated via `source_path`) are
-skipped rather than forwarded to the VLM.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `config` | `LlmConfig` | — | LLM / VLM configuration forwarded verbatim to each `caption_image` call. |
-| `custom_prompt` | `Option<String>` | `None` | Optional custom prompt override forwarded to every `caption_image` call. `None` uses the default `RegionKind::Caption` prompt. |
-
----
-
 #### CellChange
 
 A single changed cell within a table.
@@ -2920,7 +908,7 @@ Metadata about a chunk's position in the original document.
 | `last_page` | `Option<u32>` | `None` | Last page number this chunk spans (1-indexed, equal to first_page for single-page chunks). Only populated when page tracking is enabled in extraction configuration. |
 | `heading_context` | `Option<HeadingContext>` | `/* serde(default) */` | Heading context when using Markdown chunker. Contains the heading hierarchy this chunk falls under. Only populated when `ChunkerType::Markdown` is used. |
 | `heading_path` | `Vec<String>` | `/* serde(default) */` | Flattened heading trail from document root to this chunk's section. Each element is a heading's text, outermost first. Derived from `heading_context` when present; empty otherwise. Provides a binding-friendly, RAG-shaped breadcrumb without requiring callers to walk the nested `HeadingContext` structure. |
-| `image_indices` | `Vec<u32>` | `/* serde(default) */` | Indices into `ExtractionResult.images` for images on pages covered by this chunk. Contains zero-based indices into the top-level `images` collection for every image whose `page_number` falls within `\[first_page, last_page\]`. Empty when image extraction is disabled or the chunk spans no pages with images. |
+| `image_indices` | `Vec<u32>` | `/* serde(default) */` | Indices into `ExtractedDocument.images` for images on pages covered by this chunk. Contains zero-based indices into the top-level `images` collection for every image whose `page_number` falls within `\[first_page, last_page\]`. Empty when image extraction is disabled or the chunk spans no pages with images. |
 
 ---
 
@@ -3019,19 +1007,6 @@ let result = ChunkingConfig::default();
 
 ---
 
-#### ChunkingResult
-
-Result of a text chunking operation.
-
-Contains the generated chunks and metadata about the chunking.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `chunks` | `Vec<Chunk>` | — | List of text chunks |
-| `chunk_count` | `usize` | — | Total number of chunks generated |
-
----
-
 #### Citation
 
 A structured citation from a citation block.
@@ -3063,16 +1038,6 @@ Citation file metadata (RIS, PubMed, EndNote).
 
 ---
 
-#### ClassificationEnrichmentConfig
-
-Classification enrichment knob: how to label the document.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `config` | `PageClassificationConfig` | — | Label set and LLM settings for the classification stage. |
-
----
-
 #### ClassificationLabel
 
 A single label + confidence pair.
@@ -3081,107 +1046,6 @@ A single label + confidence pair.
 |-------|------|---------|-------------|
 | `label` | `String` | — | Label name as configured in `PageClassificationConfig::labels`. |
 | `confidence` | `Option<f32>` | `None` | Backend-reported confidence in `\[0.0, 1.0\]`. `None` when the backend (e.g. an LLM prompt without explicit confidence schema) did not report one. |
-
----
-
-#### ConfidenceSignals
-
-Input signals for confidence scoring.
-
-Caller fills these from the extraction result and the LLM response.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `text_coverage` | `f32` | — | Fraction of pages with usable text in `\[0, 1\]`. |
-| `ocr_aggregate` | `Option<f32>` | `None` | Mean OCR per-element recognition confidence; `None` when OCR did not run. |
-| `schema_compliance` | `SchemaCompliance` | — | Schema-validation result of the merged output. |
-
-##### Methods
-
-###### from_extraction_result()
-
-Build `ConfidenceSignals` from an `ExtractionResult`.
-
-- `result` — The extraction result whose `ocr_elements` are inspected.
-- `schema_compliance` — Caller-supplied schema validation outcome.
-- `text_coverage` — Caller-supplied fraction of pages with usable text
-  (e.g. 1.0 for native text formats, value from PDF analysis for PDFs).
-
-The `ocr_aggregate` is computed as the arithmetic mean of all
-`ocr_elements[].confidence.recognition` values.  When `ocr_elements` is
-`None` or empty the field is set to `None`.
-
-**Signature:**
-
-```rust
-pub fn from_extraction_result(result: ExtractionResult, schema_compliance: SchemaCompliance, text_coverage: f32) -> ConfidenceSignals
-```
-
-**Example:**
-
-```rust
-let result = ConfidenceSignals::from_extraction_result(ExtractionResult::default(), SchemaCompliance::default(), 0.5);
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `result` | `ExtractionResult` | Yes | The extraction result |
-| `schema_compliance` | `SchemaCompliance` | Yes | The schema compliance |
-| `text_coverage` | `f32` | Yes | The text coverage |
-
-**Returns:** `ConfidenceSignals`
-
----
-
-#### ConfidenceWeights
-
-Tunable weights for the confidence scoring formula.
-
-Defaults picked by inspection; callers tune them via config.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `text_coverage` | `f32` | `0.3` | Weight assigned to `text_coverage`. Default 0.30. |
-| `ocr_aggregate` | `f32` | `0.3` | Weight assigned to `ocr_aggregate` when OCR ran. Default 0.30 — folds into `text_coverage` weight when OCR did not run. |
-| `schema_compliance` | `f32` | `0.4` | Weight assigned to `schema_compliance`. Default 0.40. |
-
-##### Methods
-
-###### default()
-
-**Signature:**
-
-```rust
-pub fn default() -> ConfidenceWeights
-```
-
-**Example:**
-
-```rust
-let result = ConfidenceWeights::default();
-```
-
-**Returns:** `ConfidenceWeights`
-
-###### is_normalized()
-
-Validate that weights sum to approximately 1.0.
-
-**Signature:**
-
-```rust
-pub fn is_normalized(&self) -> bool
-```
-
-**Example:**
-
-```rust
-let result = instance.is_normalized();
-```
-
-**Returns:** `bool`
 
 ---
 
@@ -3338,7 +1202,7 @@ A single contiguous hunk in a unified diff.
 
 #### DiffOptions
 
-Options controlling how two `ExtractionResult` values are compared.
+Options controlling how two `ExtractedDocument` values are compared.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -3433,6 +1297,156 @@ Detected document boundary within a PDF.
 
 ---
 
+#### DocumentExtractor
+
+Trait for document extractor plugins.
+
+Implement this trait to add support for new document formats or override
+built-in extraction behavior. Foreign-language bindings expose the
+`DocumentExtractor::extract` method, which accepts `ExtractInput` and
+returns an `ExtractedDocument`.
+
+##### Priority System
+
+When multiple extractors support the same MIME type, the registry selects
+the extractor with the highest priority value. Use this to:
+
+- Override built-in extractors (priority > 50)
+- Provide fallback extractors (priority < 50)
+- Implement specialized extractors for specific use cases
+
+Default priority is 50.
+
+##### Thread Safety
+
+Extractors must be thread-safe (`Send + Sync`) to support concurrent extraction.
+
+##### Methods
+
+###### extract()
+
+Binding-safe extraction entry point for foreign-language plugin bridges.
+
+Accepts the same unified input shape as the public extraction API and
+returns one extracted document result.
+
+**Signature:**
+
+```rust
+pub async fn extract(&self, input: ExtractInput, config: ExtractionConfig) -> Result<ExtractedDocument, Error>
+```
+
+**Example:**
+
+```rust
+let result = instance.extract(ExtractInput::default(), ExtractionConfig::default()).await?;
+```
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `input` | `ExtractInput` | Yes | The input data |
+| `config` | `ExtractionConfig` | Yes | The configuration options |
+
+**Returns:** `ExtractedDocument`
+
+**Errors:** Returns `Err(Error)`.
+
+###### supported_mime_types()
+
+Get the list of MIME types supported by this extractor.
+
+Can include exact MIME types and prefix patterns:
+
+- Exact: `"application/pdf"`, `"text/plain"`
+- Prefix: `"image/*"` (matches any image type)
+
+**Returns:**
+
+A slice of MIME type strings.
+
+**Signature:**
+
+```rust
+pub fn supported_mime_types(&self) -> Vec<String>
+```
+
+**Example:**
+
+```rust
+let result = instance.supported_mime_types();
+```
+
+**Returns:** `Vec<String>`
+
+###### priority()
+
+Get the priority of this extractor.
+
+Higher priority extractors are preferred when multiple extractors
+support the same MIME type.
+
+##### Priority Guidelines
+
+- **0-25**: Fallback/low-quality extractors
+- **26-49**: Alternative extractors
+- **50**: Default priority (built-in extractors)
+- **51-75**: Premium/enhanced extractors
+- **76-100**: Specialized/high-priority extractors
+
+**Returns:**
+
+Priority value (default: 50)
+
+**Signature:**
+
+```rust
+pub fn priority(&self) -> i32
+```
+
+**Example:**
+
+```rust
+let result = instance.priority();
+```
+
+**Returns:** `i32`
+
+###### can_handle()
+
+Optional: Check if this extractor can handle a specific file.
+
+Allows for more sophisticated detection beyond MIME types.
+Defaults to `true` (rely on MIME type matching).
+
+**Returns:**
+
+`true` if the extractor can handle this file, `false` otherwise.
+
+**Signature:**
+
+```rust
+pub fn can_handle(&self, path: PathBuf, mime_type: &str) -> bool
+```
+
+**Example:**
+
+```rust
+let result = instance.can_handle("value", "value");
+```
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `path` | `PathBuf` | Yes | The  path |
+| `mime_type` | `String` | Yes | The  mime type |
+
+**Returns:** `bool`
+
+---
+
 #### DocumentMetadata
 
 Metadata about a document for analysis.
@@ -3488,7 +1502,7 @@ A single tracked change embedded in a document.
 
 Populated by per-format extractors that understand change-tracking metadata
 (DOCX `w:ins`/`w:del`/`w:rPrChange`, ODT `text:change-*`, …). Every
-extractor defaults to `ExtractionResult.revisions = None` until a
+extractor defaults to `ExtractedDocument.revisions = None` until a
 format-specific implementation is added.
 
 | Field | Type | Default | Description |
@@ -3762,7 +1776,7 @@ Changes to embedded archive children between two results.
 |-------|------|---------|-------------|
 | `added` | `Vec<ArchiveEntry>` | `vec!\[\]` | Children present in `b` but not in `a` (matched by `path`). |
 | `removed` | `Vec<ArchiveEntry>` | `vec!\[\]` | Children present in `a` but not in `b` (matched by `path`). |
-| `changed` | `Vec<EmbeddedDiff>` | `vec!\[\]` | Children present in both but with differing content (matched by `path`). Each entry holds the diff of the nested `ExtractionResult`. |
+| `changed` | `Vec<EmbeddedDiff>` | `vec!\[\]` | Children present in both but with differing content (matched by `path`). Each entry holds the diff of the nested `ExtractedDocument`. |
 
 ---
 
@@ -3794,8 +1808,8 @@ Embedded file descriptor extracted from the PDF name tree.
 
 Trait for in-process embedding backend plugins.
 
-Async to match the convention used by `OcrBackend`,
-`DocumentExtractor`, and `PostProcessor`.
+Async to match the convention used by other plugin hooks such as
+`OcrBackend` and `PostProcessor`.
 Host-language bridges (PyO3, napi-rs, Rustler, extendr, magnus, ext-php-rs,
 C FFI, etc.) wrap their synchronous host callables in `spawn_blocking` or the
 equivalent to satisfy the async signature.
@@ -3932,29 +1946,6 @@ let result = EmbeddingConfig::default();
 
 ---
 
-#### EmbeddingPreset
-
-Preset configurations for common RAG use cases.
-
-Each preset combines chunk size, overlap, and embedding model
-to provide an optimized configuration for specific scenarios.
-
-All string fields are owned `String` for FFI compatibility — instances
-are safe to clone and pass across language boundaries.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `name` | `String` | — | Short identifier for this preset (e.g. `"balanced"`, `"fast"`, `"quality"`). |
-| `chunk_size` | `usize` | — | Target chunk size in characters. |
-| `overlap` | `usize` | — | Overlap between consecutive chunks in characters. |
-| `model_repo` | `String` | — | HuggingFace repository name for the model. |
-| `pooling` | `String` | — | Pooling strategy: "cls" or "mean". |
-| `model_file` | `String` | — | Path to the ONNX model file within the repo. |
-| `dimensions` | `usize` | — | Embedding vector dimension produced by this model. |
-| `description` | `String` | — | Human-readable description of the preset's intended use case. |
-
----
-
 #### EnrichOptions
 
 Which enrichment passes to run on a piece of text.
@@ -3991,8 +1982,8 @@ A single named entity detected in the extracted text.
 |-------|------|---------|-------------|
 | `category` | `EntityCategory` | — | Canonical category the entity belongs to (PERSON, ORG, LOCATION, etc.). |
 | `text` | `String` | — | Raw mention text exactly as it appeared in the source. |
-| `start` | `u32` | — | Byte-offset span in `ExtractionResult::content` where the mention starts. |
-| `end` | `u32` | — | Byte-offset span in `ExtractionResult::content` where the mention ends (exclusive). |
+| `start` | `u32` | — | Byte-offset span in `ExtractedDocument::content` where the mention starts. |
+| `end` | `u32` | — | Byte-offset span in `ExtractedDocument::content` where the mention ends (exclusive). |
 | `confidence` | `Option<f32>` | `None` | Backend-reported confidence in `\[0.0, 1.0\]`. `None` when the backend does not expose confidence scores. |
 
 ---
@@ -4101,20 +2092,20 @@ let result = ExtractInput::default();
 
 **Returns:** `ExtractInput`
 
-###### bytes()
+###### from_bytes()
 
 Build a bytes input with a MIME type and optional filename hint.
 
 **Signature:**
 
 ```rust
-pub fn bytes(bytes: &[u8], mime_type: &str, filename: Option<String>) -> ExtractInput
+pub fn from_bytes(bytes: &[u8], mime_type: &str, filename: Option<String>) -> ExtractInput
 ```
 
 **Example:**
 
 ```rust
-let result = ExtractInput::bytes(b"data", "value", "value");
+let result = ExtractInput::from_bytes(b"data", "value", "value");
 ```
 
 **Parameters:**
@@ -4127,20 +2118,20 @@ let result = ExtractInput::bytes(b"data", "value", "value");
 
 **Returns:** `ExtractInput`
 
-###### uri()
+###### from_uri()
 
 Build a URI input from a local path, `file://` URI, or HTTP(S) URL.
 
 **Signature:**
 
 ```rust
-pub fn uri(uri: &str) -> ExtractInput
+pub fn from_uri(uri: &str) -> ExtractInput
 ```
 
 **Example:**
 
 ```rust
-let result = ExtractInput::uri("value");
+let result = ExtractInput::from_uri("value");
 ```
 
 **Parameters:**
@@ -4150,6 +2141,76 @@ let result = ExtractInput::uri("value");
 | `uri` | `String` | Yes | The uri |
 
 **Returns:** `ExtractInput`
+
+---
+
+#### ExtractedDocument
+
+Document extracted by the core extraction pipeline.
+
+`extract` and `extract_batch` return an `ExtractionResult` envelope whose
+`results` field contains these per-document payloads.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `content` | `String` | — | Plain-text representation of the extracted document content. |
+| `mime_type` | `String` | — | MIME type of the source document (e.g. `"application/pdf"`). |
+| `metadata` | `Metadata` | — | Document-level metadata (author, title, dates, format-specific fields). |
+| `extraction_method` | `Option<ExtractionMethod>` | `Default::default()` | Extraction strategy used to produce the returned text. Populated when the extractor can reliably distinguish native text extraction, OCR-only extraction, or mixed native/OCR output. |
+| `tables` | `Vec<Table>` | `vec!\[\]` | Tables extracted from the document, each with structured cell data. |
+| `detected_languages` | `Option<Vec<String>>` | `vec!\[\]` | ISO 639-1 language codes detected in the document content. |
+| `chunks` | `Option<Vec<Chunk>>` | `vec!\[\]` | Text chunks when chunking is enabled. When chunking configuration is provided, the content is split into overlapping chunks for efficient processing. Each chunk contains the text, optional embeddings (if enabled), and metadata about its position. |
+| `images` | `Option<Vec<ExtractedImage>>` | `vec!\[\]` | Extracted images from the document. When image extraction is enabled via `ImageExtractionConfig`, this field contains all images found in the document with their raw data and metadata. Each image may optionally contain a nested `ocr_result` if OCR was performed. |
+| `pages` | `Option<Vec<PageContent>>` | `vec!\[\]` | Per-page content when page extraction is enabled. When page extraction is configured, the document is split into per-page content with tables and images mapped to their respective pages. |
+| `elements` | `Option<Vec<Element>>` | `vec!\[\]` | Semantic elements when element-based result format is enabled. When result_format is set to ElementBased, this field contains semantic elements with type classification, unique identifiers, and metadata for Unstructured-compatible element-based processing. |
+| `djot_content` | `Option<DjotContent>` | `Default::default()` | Rich Djot content structure (when extracting Djot documents). When extracting Djot documents with structured extraction enabled, this field contains the full semantic structure including: - Block-level elements with nesting - Inline formatting with attributes - Links, images, footnotes - Math expressions - Complete attribute information The `content` field still contains plain text for backward compatibility. Always `None` for non-Djot documents. |
+| `ocr_elements` | `Option<Vec<OcrElement>>` | `vec!\[\]` | OCR elements with full spatial and confidence metadata. When OCR is performed with element extraction enabled, this field contains the structured representation of detected text including: - Bounding geometry (rectangles or quadrilaterals) - Confidence scores (detection and recognition) - Rotation information - Hierarchical relationships (Tesseract only) This field preserves all metadata that would otherwise be lost when converting to plain text or markdown output formats. Only populated when `OcrElementConfig.include_elements` is true. |
+| `document` | `Option<DocumentStructure>` | `Default::default()` | Structured document tree (when document structure extraction is enabled). When `include_document_structure` is true in `ExtractionConfig`, this field contains the full hierarchical representation of the document including: - Heading-driven section nesting - Table grids with cell-level metadata - Content layer classification (body, header, footer, footnote) - Inline text annotations (formatting, links) - Bounding boxes and page numbers Independent of `result_format` — can be combined with Unified or ElementBased. |
+| `extracted_keywords` | `Option<Vec<Keyword>>` | `vec!\[\]` | Extracted keywords when keyword extraction is enabled. When keyword extraction (RAKE or YAKE) is configured, this field contains the extracted keywords with scores, algorithm info, and position data. Previously stored in `metadata.additional\["keywords"\]`. |
+| `quality_score` | `Option<f64>` | `Default::default()` | Document quality score from quality analysis. A value between 0.0 and 1.0 indicating the overall text quality. Previously stored in `metadata.additional\["quality_score"\]`. |
+| `processing_warnings` | `Vec<ProcessingWarning>` | `vec!\[\]` | Non-fatal warnings collected during processing pipeline stages. Captures errors from optional pipeline features (embedding, chunking, language detection, output formatting) that don't prevent extraction but may indicate degraded results. Previously stored as individual keys in `metadata.additional`. |
+| `annotations` | `Option<Vec<PdfAnnotation>>` | `vec!\[\]` | PDF annotations extracted from the document. When annotation extraction is enabled via `PdfConfig::extract_annotations`, this field contains text notes, highlights, links, stamps, and other annotations found in PDF documents. |
+| `children` | `Option<Vec<ArchiveEntry>>` | `vec!\[\]` | Nested extraction results from archive contents. When extracting archives, each processable file inside produces its own full extraction result. Set to `None` for non-archive formats. Use `max_archive_depth` in config to control recursion depth. |
+| `uris` | `Option<Vec<ExtractedUri>>` | `vec!\[\]` | URIs/links discovered during document extraction. Contains hyperlinks, image references, citations, email addresses, and other URI-like references found in the document. Always extracted when present in the source document. |
+| `revisions` | `Option<Vec<DocumentRevision>>` | `vec!\[\]` | Tracked changes embedded in the source document. Populated by per-format extractors that understand change-tracking metadata (DOCX `w:ins`/`w:del`/`w:rPrChange`, ODT `text:change-*`, …). Every extractor defaults to `None` until its format-specific implementation is added. Extractors that do populate this field follow the "accepted-changes" convention: inserted text is present in `content`, deleted text is absent — the revision list is the separate audit trail. |
+| `structured_output` | `Option<serde_json::Value>` | `Default::default()` | Structured extraction output from LLM-based JSON schema extraction. When `structured_extraction` is configured in `ExtractionConfig`, the extracted document content is sent to a VLM with the provided JSON schema. The response is parsed and stored here as a JSON value matching the schema. |
+| `code_intelligence` | `Option<serde_json::Value>` | `Default::default()` | Code intelligence results from tree-sitter analysis. Populated when extracting source code files with the `tree-sitter` feature. Contains metrics, structural analysis, imports/exports, comments, docstrings, symbols, diagnostics, and optionally chunked code segments. Stored as an opaque JSON value so that all language bindings (Go, Java, C#, …) can deserialize it as a raw JSON object rather than a typed struct. The underlying type is `tree_sitter_language_pack::ProcessResult`. |
+| `llm_usage` | `Option<Vec<LlmUsage>>` | `vec!\[\]` | LLM token usage and cost data for all LLM calls made during this extraction. Contains one entry per LLM call. Multiple entries are produced when VLM OCR, structured extraction, or LLM embeddings run during the same extraction. `None` when no LLM was used. |
+| `entities` | `Option<Vec<Entity>>` | `vec!\[\]` | Named entities detected in `content` by the NER post-processor. `None` when no NER backend is configured. Populated by the `xberg-gliner` ONNX backend or the LLM-driven backend (see `crates/xberg/src/text/ner/`). |
+| `summary` | `Option<DocumentSummary>` | `Default::default()` | Summary of `content` produced by the summarisation post-processor. `None` when summarisation is not configured. Populated by the TextRank extractive backend (deterministic, no external service) or by the liter-llm-driven abstractive backend. |
+| `extraction_confidence` | `Option<ExtractionConfidence>` | `Default::default()` | Confidence score computed by the heuristics pipeline. Populated when the `heuristics` feature is enabled and confidence scoring has been performed.  Combines text-coverage, OCR aggregate confidence, and schema-compliance into a single `\[0, 1\]` value. `None` when confidence scoring is not configured or the feature is absent. |
+| `translation` | `Option<Translation>` | `Default::default()` | Translation of `content` produced by the translation post-processor. `None` when translation is not configured. |
+| `page_classifications` | `Option<Vec<PageClassification>>` | `vec!\[\]` | Per-page classifications produced by the page-classification post-processor. `None` when classification is not configured. |
+| `redaction_report` | `Option<RedactionReport>` | `Default::default()` | Audit report of redactions applied by the redaction post-processor. The redaction processor rewrites `content`, `formatted_content`, every chunk's text, and the textual fields of `entities` / `summary` / `translation` / `page_classifications` in place. This report describes what was found and how it was replaced. `None` when redaction is not configured. |
+| `formulas` | `Vec<Formula>` | `vec!\[\]` | Mathematical formulas recognized in the document. Populated by the layout-guided formula pipeline when the `layout-detection` feature is enabled and the document contains regions classified as formulas. Empty otherwise. |
+| `form_fields` | `Vec<PdfFormField>` | `vec!\[\]` | Form fields extracted from a PDF's AcroForm or XFA structure. Populated by the PDF extractor when `PdfConfig::extract_form_fields` is enabled (default) and the document is a fillable form. Empty otherwise. |
+| `formatted_content` | `Option<String>` | `Default::default()` | Pre-rendered content in the requested output format. Populated during `derive_extraction_result` before tree derivation consumes element data. `apply_output_format` swaps this into `content` at the end of the pipeline, after post-processors have operated on plain text. |
+
+##### Methods
+
+###### from_ocr()
+
+Convert from an OCR result.
+
+**Signature:**
+
+```rust
+pub fn from_ocr(ocr: OcrExtractionResult) -> ExtractedDocument
+```
+
+**Example:**
+
+```rust
+let result = ExtractedDocument::from_ocr(OcrExtractionResult::default());
+```
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `ocr` | `OcrExtractionResult` | Yes | The ocr extraction result |
+
+**Returns:** `ExtractedDocument`
 
 ---
 
@@ -4173,7 +2234,7 @@ PIL.Image (Python), Sharp (Node.js), or other formats as needed.
 | `bits_per_component` | `Option<u32>` | `Default::default()` | Bits per color component (e.g., 8, 16) |
 | `is_mask` | `bool` | — | Whether this image is a mask image |
 | `description` | `Option<String>` | `Default::default()` | Optional description of the image |
-| `ocr_result` | `Option<ExtractionResult>` | `Default::default()` | Nested OCR extraction result (if image was OCRed) When OCR is performed on this image, the result is embedded here rather than in a separate collection, making the relationship explicit. |
+| `ocr_result` | `Option<ExtractedDocument>` | `Default::default()` | Nested OCR extraction result (if image was OCRed) When OCR is performed on this image, the result is embedded here rather than in a separate collection, making the relationship explicit. |
 | `bounding_box` | `Option<BoundingBox>` | `Default::default()` | Bounding box of the image on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top). Only populated for PDF-extracted images when position data is available from the PDF extractor. |
 | `source_path` | `Option<String>` | `Default::default()` | Original source path of the image within the document archive (e.g., "media/image1.png" in DOCX). Used for rendering image references when the binary data is not extracted. |
 | `image_kind` | `Option<ImageKind>` | `Default::default()` | Heuristic classification of what this image likely depicts. `None` if classification was disabled or inconclusive. |
@@ -4253,7 +2314,7 @@ It can be loaded from TOML, YAML, or JSON files, or created programmatically.
 | `layout` | `Option<LayoutDetectionConfig>` | `None` | Layout detection configuration (None = layout detection disabled). When set, PDF pages and images are analyzed for document structure (headings, code, formulas, tables, figures, etc.) using RT-DETR models via ONNX Runtime. For PDFs, layout hints override paragraph classification in the markdown pipeline. For images, per-region OCR is performed with markdown formatting based on detected layout classes. Requires the `layout-detection` feature to run inference; the field is present whenever the `layout-types` feature is active (which includes `layout-detection` as well as the no-ORT target groups). |
 | `transcription` | `Option<TranscriptionConfig>` | `None` | Transcription (speech-to-text) configuration for audio/video files. When set and `enabled`, files with audio/video MIME types (mp3, mp4, m4a, wav, webm, etc.) are routed to the Whisper-based transcription pipeline. The actual heavy dependencies are only active under the `transcription` feature; the field is visible under `transcription-types` (including on WASM and Android targets that use the no-ORT preset). Default: `None` (transcription disabled). This is an additive, non-breaking change. |
 | `use_layout_for_markdown` | `bool` | `false` | Run layout detection on the non-OCR PDF markdown path. When `true` and `layout` is `Some(_)`, layout regions inform heading, table, list, and figure detection in the structure pipeline that would otherwise rely on font-clustering heuristics alone. Significantly improves SF1 (structural F1) at the cost of inference latency (~150-300ms/page CPU, ~20-50ms/page GPU). Default: `false`. Requires the `layout-detection` feature. |
-| `include_document_structure` | `bool` | `false` | Enable structured document tree output. When true, populates the `document` field on `ExtractionResult` with a hierarchical `DocumentStructure` containing heading-driven section nesting, table grids, content layer classification, and inline annotations. Independent of `result_format` — can be combined with Unified or ElementBased. |
+| `include_document_structure` | `bool` | `false` | Enable structured document tree output. When true, populates the `document` field on `ExtractedDocument` with a hierarchical `DocumentStructure` containing heading-driven section nesting, table grids, content layer classification, and inline annotations. Independent of `result_format` — can be combined with Unified or ElementBased. |
 | `acceleration` | `Option<AccelerationConfig>` | `None` | Hardware acceleration configuration for ONNX Runtime models. Controls execution provider selection for layout detection and embedding models. When `None`, uses platform defaults (CoreML on macOS, CUDA on Linux, CPU on Windows). |
 | `cache_namespace` | `Option<String>` | `None` | Cache namespace for tenant isolation. When set, cache entries are stored under `{cache_dir}/{namespace}/`. Must be alphanumeric, hyphens, or underscores only (max 64 chars). Different namespaces have isolated cache spaces on the same filesystem. |
 | `cache_ttl_secs` | `Option<u64>` | `None` | Per-request cache TTL in seconds. Overrides the global `max_age_days` for this specific extraction. When `0`, caching is completely skipped (no read or write). When `None`, the global TTL applies. |
@@ -4262,12 +2323,12 @@ It can be loaded from TOML, YAML, or JSON files, or created programmatically.
 | `url` | `UrlExtractionConfig` | — | URL ingestion and crawl configuration. |
 | `max_archive_depth` | `usize` | — | Maximum recursion depth for archive extraction (default: 3). Set to 0 to disable recursive extraction (legacy behavior). |
 | `tree_sitter` | `Option<TreeSitterConfig>` | `None` | Tree-sitter language pack configuration (None = tree-sitter disabled). When set, enables code file extraction using tree-sitter parsers. Controls grammar download behavior and code analysis options. |
-| `structured_extraction` | `Option<StructuredExtractionConfig>` | `None` | Structured extraction via LLM (None = disabled). When set, the extracted document content is sent to an LLM with the provided JSON schema. The structured response is stored in `ExtractionResult::structured_output`. |
-| `ner` | `Option<NerConfig>` | `None` | Named-entity recognition configuration. When set, the NER post-processor runs at the Middle stage and populates `ExtractionResult::entities`. |
-| `redaction` | `Option<RedactionConfig>` | `None` | Redaction / anonymisation configuration. When set, the redaction post-processor runs at the Late stage and rewrites every textual field in `ExtractionResult`, emitting an audit trail in `ExtractionResult::redaction_report`. |
-| `summarization` | `Option<SummarizationConfig>` | `None` | Summarisation configuration. When set, the summarisation post-processor runs at the Middle stage and populates `ExtractionResult::summary`. |
-| `translation` | `Option<TranslationConfig>` | `None` | Translation configuration. When set, the translation post-processor runs at the Middle stage and populates `ExtractionResult::translation`. |
-| `page_classification` | `Option<PageClassificationConfig>` | `None` | Per-page classification configuration. When set, the classification post-processor runs at the Middle stage and populates `ExtractionResult::page_classifications`. |
+| `structured_extraction` | `Option<StructuredExtractionConfig>` | `None` | Structured extraction via LLM (None = disabled). When set, the extracted document content is sent to an LLM with the provided JSON schema. The structured response is stored in `ExtractedDocument::structured_output`. |
+| `ner` | `Option<NerConfig>` | `None` | Named-entity recognition configuration. When set, the NER post-processor runs at the Middle stage and populates `ExtractedDocument::entities`. |
+| `redaction` | `Option<RedactionConfig>` | `None` | Redaction / anonymisation configuration. When set, the redaction post-processor runs at the Late stage and rewrites every textual field in `ExtractedDocument`, emitting an audit trail in `ExtractedDocument::redaction_report`. |
+| `summarization` | `Option<SummarizationConfig>` | `None` | Summarisation configuration. When set, the summarisation post-processor runs at the Middle stage and populates `ExtractedDocument::summary`. |
+| `translation` | `Option<TranslationConfig>` | `None` | Translation configuration. When set, the translation post-processor runs at the Middle stage and populates `ExtractedDocument::translation`. |
+| `page_classification` | `Option<PageClassificationConfig>` | `None` | Per-page classification configuration. When set, the classification post-processor runs at the Middle stage and populates `ExtractedDocument::page_classifications`. |
 | `captioning` | `Option<CaptioningConfig>` | `None` | VLM captioning configuration for extracted images. When set, the captioning post-processor runs at the Middle stage and writes a caption into each `ExtractedImage::caption`. |
 | `qr_codes` | `Option<bool>` | `None` | Enable QR-code detection in extracted images. When `true`, the QR post-processor runs at the Middle stage and populates `ExtractedImage::qr_codes`. |
 | `cancel_token` | `Option<String>` | `None` | Cancellation token for this extraction (None = no external cancellation). Pass a `CancellationToken` clone here and call its `cancel()` from another thread / task to abort the extraction in progress. The extractor checks the token at safe checkpoints (before lock acquisition, between pages, between batch items) and returns `Cancelled` when set. The field is excluded from serialization because `CancellationToken` is a runtime handle, not a configuration value. |
@@ -4305,9 +2366,9 @@ decompression can improve CPU utilization by 5-10% by avoiding wasteful
 image I/O and processing when results won't be used.
 Returns `true` when image binary data should be extracted.
 
-True when `config.images.extract_images` is set **or** when captioning is
-configured — captioning requires image bytes regardless of whether the caller
-also requested `images` extraction.
+True when `config.images.extract_images` is set, captioning is configured, or QR-code
+detection is enabled. Captioning and QR-code detection both require image bytes
+regardless of whether the caller also requested image extraction.
 
 **Signature:**
 
@@ -4351,7 +2412,7 @@ let result = instance.needs_image_processing();
 
 #### ExtractionDiff
 
-The complete diff between two `ExtractionResult` values.
+The complete diff between two `ExtractedDocument` values.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -4366,7 +2427,7 @@ The complete diff between two `ExtractionResult` values.
 
 #### ExtractionErrorItem
 
-Non-fatal per-input extraction error captured by `ExtractionOutput`.
+Non-fatal per-input extraction error captured by `ExtractionResult`.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -4378,13 +2439,13 @@ Non-fatal per-input extraction error captured by `ExtractionOutput`.
 
 ---
 
-#### ExtractionOutput
+#### ExtractionResult
 
-Unified extraction output envelope.
+Unified extraction result envelope.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `results` | `Vec<ExtractionResult>` | `vec!\[\]` | Extraction results in discovery order. |
+| `results` | `Vec<ExtractedDocument>` | `vec!\[\]` | Extracted documents in discovery order. |
 | `errors` | `Vec<ExtractionErrorItem>` | `vec!\[\]` | Non-fatal per-input errors. |
 | `summary` | `ExtractionSummary` | — | Aggregate counts for the operation. |
 | `crawl_final_urls` | `Vec<String>` | `vec!\[\]` | Final URLs reached after redirects during URL ingestion. |
@@ -4400,91 +2461,20 @@ Build an output containing one successful result.
 **Signature:**
 
 ```rust
-pub fn single(result: ExtractionResult) -> ExtractionOutput
+pub fn single(result: ExtractedDocument) -> ExtractionResult
 ```
 
 **Example:**
 
 ```rust
-let result = ExtractionOutput::single(ExtractionResult::default());
+let result = ExtractionResult::single(ExtractedDocument::default());
 ```
 
 **Parameters:**
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `result` | `ExtractionResult` | Yes | The extraction result |
-
-**Returns:** `ExtractionOutput`
-
----
-
-#### ExtractionResult
-
-General extraction result used by the core extraction API.
-
-This is the main result type returned by all extraction functions.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `content` | `String` | — | Plain-text representation of the extracted document content. |
-| `mime_type` | `String` | — | MIME type of the source document (e.g. `"application/pdf"`). |
-| `metadata` | `Metadata` | — | Document-level metadata (author, title, dates, format-specific fields). |
-| `extraction_method` | `Option<ExtractionMethod>` | `Default::default()` | Extraction strategy used to produce the returned text. Populated when the extractor can reliably distinguish native text extraction, OCR-only extraction, or mixed native/OCR output. |
-| `tables` | `Vec<Table>` | `vec!\[\]` | Tables extracted from the document, each with structured cell data. |
-| `detected_languages` | `Option<Vec<String>>` | `vec!\[\]` | ISO 639-1 language codes detected in the document content. |
-| `chunks` | `Option<Vec<Chunk>>` | `vec!\[\]` | Text chunks when chunking is enabled. When chunking configuration is provided, the content is split into overlapping chunks for efficient processing. Each chunk contains the text, optional embeddings (if enabled), and metadata about its position. |
-| `images` | `Option<Vec<ExtractedImage>>` | `vec!\[\]` | Extracted images from the document. When image extraction is enabled via `ImageExtractionConfig`, this field contains all images found in the document with their raw data and metadata. Each image may optionally contain a nested `ocr_result` if OCR was performed. |
-| `pages` | `Option<Vec<PageContent>>` | `vec!\[\]` | Per-page content when page extraction is enabled. When page extraction is configured, the document is split into per-page content with tables and images mapped to their respective pages. |
-| `elements` | `Option<Vec<Element>>` | `vec!\[\]` | Semantic elements when element-based result format is enabled. When result_format is set to ElementBased, this field contains semantic elements with type classification, unique identifiers, and metadata for Unstructured-compatible element-based processing. |
-| `djot_content` | `Option<DjotContent>` | `Default::default()` | Rich Djot content structure (when extracting Djot documents). When extracting Djot documents with structured extraction enabled, this field contains the full semantic structure including: - Block-level elements with nesting - Inline formatting with attributes - Links, images, footnotes - Math expressions - Complete attribute information The `content` field still contains plain text for backward compatibility. Always `None` for non-Djot documents. |
-| `ocr_elements` | `Option<Vec<OcrElement>>` | `vec!\[\]` | OCR elements with full spatial and confidence metadata. When OCR is performed with element extraction enabled, this field contains the structured representation of detected text including: - Bounding geometry (rectangles or quadrilaterals) - Confidence scores (detection and recognition) - Rotation information - Hierarchical relationships (Tesseract only) This field preserves all metadata that would otherwise be lost when converting to plain text or markdown output formats. Only populated when `OcrElementConfig.include_elements` is true. |
-| `document` | `Option<DocumentStructure>` | `Default::default()` | Structured document tree (when document structure extraction is enabled). When `include_document_structure` is true in `ExtractionConfig`, this field contains the full hierarchical representation of the document including: - Heading-driven section nesting - Table grids with cell-level metadata - Content layer classification (body, header, footer, footnote) - Inline text annotations (formatting, links) - Bounding boxes and page numbers Independent of `result_format` — can be combined with Unified or ElementBased. |
-| `extracted_keywords` | `Option<Vec<Keyword>>` | `vec!\[\]` | Extracted keywords when keyword extraction is enabled. When keyword extraction (RAKE or YAKE) is configured, this field contains the extracted keywords with scores, algorithm info, and position data. Previously stored in `metadata.additional\["keywords"\]`. |
-| `quality_score` | `Option<f64>` | `Default::default()` | Document quality score from quality analysis. A value between 0.0 and 1.0 indicating the overall text quality. Previously stored in `metadata.additional\["quality_score"\]`. |
-| `processing_warnings` | `Vec<ProcessingWarning>` | `vec!\[\]` | Non-fatal warnings collected during processing pipeline stages. Captures errors from optional pipeline features (embedding, chunking, language detection, output formatting) that don't prevent extraction but may indicate degraded results. Previously stored as individual keys in `metadata.additional`. |
-| `annotations` | `Option<Vec<PdfAnnotation>>` | `vec!\[\]` | PDF annotations extracted from the document. When annotation extraction is enabled via `PdfConfig::extract_annotations`, this field contains text notes, highlights, links, stamps, and other annotations found in PDF documents. |
-| `children` | `Option<Vec<ArchiveEntry>>` | `vec!\[\]` | Nested extraction results from archive contents. When extracting archives, each processable file inside produces its own full extraction result. Set to `None` for non-archive formats. Use `max_archive_depth` in config to control recursion depth. |
-| `uris` | `Option<Vec<ExtractedUri>>` | `vec!\[\]` | URIs/links discovered during document extraction. Contains hyperlinks, image references, citations, email addresses, and other URI-like references found in the document. Always extracted when present in the source document. |
-| `revisions` | `Option<Vec<DocumentRevision>>` | `vec!\[\]` | Tracked changes embedded in the source document. Populated by per-format extractors that understand change-tracking metadata (DOCX `w:ins`/`w:del`/`w:rPrChange`, ODT `text:change-*`, …). Every extractor defaults to `None` until its format-specific implementation is added. Extractors that do populate this field follow the "accepted-changes" convention: inserted text is present in `content`, deleted text is absent — the revision list is the separate audit trail. |
-| `structured_output` | `Option<serde_json::Value>` | `Default::default()` | Structured extraction output from LLM-based JSON schema extraction. When `structured_extraction` is configured in `ExtractionConfig`, the extracted document content is sent to a VLM with the provided JSON schema. The response is parsed and stored here as a JSON value matching the schema. |
-| `code_intelligence` | `Option<serde_json::Value>` | `Default::default()` | Code intelligence results from tree-sitter analysis. Populated when extracting source code files with the `tree-sitter` feature. Contains metrics, structural analysis, imports/exports, comments, docstrings, symbols, diagnostics, and optionally chunked code segments. Stored as an opaque JSON value so that all language bindings (Go, Java, C#, …) can deserialize it as a raw JSON object rather than a typed struct. The underlying type is `tree_sitter_language_pack::ProcessResult`. |
-| `llm_usage` | `Option<Vec<LlmUsage>>` | `vec!\[\]` | LLM token usage and cost data for all LLM calls made during this extraction. Contains one entry per LLM call. Multiple entries are produced when VLM OCR, structured extraction, or LLM embeddings run during the same extraction. `None` when no LLM was used. |
-| `entities` | `Option<Vec<Entity>>` | `vec!\[\]` | Named entities detected in `content` by the NER post-processor. `None` when no NER backend is configured. Populated by the `xberg-gliner` ONNX backend or the LLM-driven backend (see `crates/xberg/src/text/ner/`). |
-| `summary` | `Option<DocumentSummary>` | `Default::default()` | Summary of `content` produced by the summarisation post-processor. `None` when summarisation is not configured. Populated by the TextRank extractive backend (deterministic, no external service) or by the liter-llm-driven abstractive backend. |
-| `extraction_confidence` | `Option<ExtractionConfidence>` | `Default::default()` | Confidence score computed by the heuristics pipeline. Populated when the `heuristics` feature is enabled and confidence scoring has been performed.  Combines text-coverage, OCR aggregate confidence, and schema-compliance into a single `\[0, 1\]` value. `None` when confidence scoring is not configured or the feature is absent. |
-| `translation` | `Option<Translation>` | `Default::default()` | Translation of `content` produced by the translation post-processor. `None` when translation is not configured. |
-| `page_classifications` | `Option<Vec<PageClassification>>` | `vec!\[\]` | Per-page classifications produced by the page-classification post-processor. `None` when classification is not configured. |
-| `redaction_report` | `Option<RedactionReport>` | `Default::default()` | Audit report of redactions applied by the redaction post-processor. The redaction processor rewrites `content`, `formatted_content`, every chunk's text, and the textual fields of `entities` / `summary` / `translation` / `page_classifications` in place. This report describes what was found and how it was replaced. `None` when redaction is not configured. |
-| `formulas` | `Vec<Formula>` | `vec!\[\]` | Mathematical formulas recognized in the document. Populated by the layout-guided formula pipeline when the `layout-detection` feature is enabled and the document contains regions classified as formulas. Empty otherwise. |
-| `form_fields` | `Vec<PdfFormField>` | `vec!\[\]` | Form fields extracted from a PDF's AcroForm or XFA structure. Populated by the PDF extractor when `PdfConfig::extract_form_fields` is enabled (default) and the document is a fillable form. Empty otherwise. |
-| `formatted_content` | `Option<String>` | `Default::default()` | Pre-rendered content in the requested output format. Populated during `derive_extraction_result` before tree derivation consumes element data. `apply_output_format` swaps this into `content` at the end of the pipeline, after post-processors have operated on plain text. |
-| `ocr_internal_document` | `Option<String>` | `Default::default()` | Structured hOCR document for the OCR+layout pipeline. When tesseract produces hOCR output, the parsed `InternalDocument` carries paragraph structure with bounding boxes and confidence scores. The layout classification step enriches these elements before final rendering. |
-| `internal_document` | `Option<String>` | `Default::default()` | The original `InternalDocument` from the extractor, preserved before derivation. Stored by the pipeline before `derive_extraction_result` consumes the document, so that downstream transformation steps (element-based result format) can walk the extractor's native reading order instead of reassembling from per-page content. This is especially important for DOCX, which has no native page boundaries: the per-page reconstruction scrambles element order, but the flat element list in the `InternalDocument` is always in reading order. `None` for extraction paths that do not go through the async/sync pipeline (e.g., direct `ExtractionResult::from_ocr` construction). |
-
-##### Methods
-
-###### from_ocr()
-
-Convert from an OCR result.
-
-**Signature:**
-
-```rust
-pub fn from_ocr(ocr: OcrExtractionResult) -> ExtractionResult
-```
-
-**Example:**
-
-```rust
-let result = ExtractionResult::from_ocr(OcrExtractionResult::default());
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `ocr` | `OcrExtractionResult` | Yes | The ocr extraction result |
+| `result` | `ExtractedDocument` | Yes | The extracted document |
 
 **Returns:** `ExtractionResult`
 
@@ -4552,6 +2542,7 @@ cannot be overridden per file:
 | `keywords` | `Option<KeywordConfig>` | `Default::default()` | Override keyword extraction for this file. |
 | `postprocessor` | `Option<PostProcessorConfig>` | `Default::default()` | Override post-processor for this file. |
 | `html_options` | `Option<String>` | `Default::default()` | Override HTML conversion options for this file. |
+| `html_output` | `Option<HtmlOutputConfig>` | `Default::default()` | Override styled HTML output configuration for this file. |
 | `result_format` | `Option<ResultFormat>` | `Default::default()` | Override result format for this file. |
 | `output_format` | `Option<OutputFormat>` | `Default::default()` | Override output content format for this file. |
 | `include_document_structure` | `Option<bool>` | `Default::default()` | Override document structure output for this file. |
@@ -4560,6 +2551,14 @@ cannot be overridden per file:
 | `timeout_secs` | `Option<u64>` | `Default::default()` | Override per-file extraction timeout in seconds. When set, the extraction for this file will be canceled after the specified duration. A timed-out file produces an error result without affecting other files in the batch. |
 | `tree_sitter` | `Option<TreeSitterConfig>` | `Default::default()` | Override tree-sitter configuration for this file. |
 | `structured_extraction` | `Option<StructuredExtractionConfig>` | `Default::default()` | Override structured extraction configuration for this file. When set, enables LLM-based structured extraction with a JSON schema for this specific file. The extracted content is sent to a VLM/LLM and the response is parsed according to the provided schema. |
+| `url` | `Option<UrlExtractionConfig>` | `Default::default()` | Override URL ingestion and crawl configuration for this file. |
+| `ner` | `Option<NerConfig>` | `Default::default()` | Override named-entity recognition configuration for this file. |
+| `redaction` | `Option<RedactionConfig>` | `Default::default()` | Override redaction configuration for this file. |
+| `summarization` | `Option<SummarizationConfig>` | `Default::default()` | Override summarization configuration for this file. |
+| `translation` | `Option<TranslationConfig>` | `Default::default()` | Override translation configuration for this file. |
+| `page_classification` | `Option<PageClassificationConfig>` | `Default::default()` | Override per-page classification configuration for this file. |
+| `captioning` | `Option<CaptioningConfig>` | `Default::default()` | Override VLM captioning configuration for this file. |
+| `qr_codes` | `Option<bool>` | `Default::default()` | Override QR-code detection for this file. |
 
 ---
 
@@ -4678,7 +2677,7 @@ A mathematical formula detected and recognized in a document.
 Populated by the layout-guided formula pipeline: regions classified as
 `LayoutClass::Formula` are routed to the formula OCR task, which returns the
 LaTeX source for the region. The field is always present on
-`ExtractionResult` but only populated
+`ExtractedDocument` but only populated
 when the `layout-detection` feature is active and the document contains
 formula regions.
 
@@ -4942,7 +2941,7 @@ Image extraction configuration.
 | `max_dpi` | `i32` | `600` | Maximum DPI threshold |
 | `max_images_per_page` | `Option<u32>` | `None` | Maximum number of image objects to extract per PDF page. Some PDFs (e.g. technical diagrams stored as thousands of raster fragments) can trigger extremely long or indefinite extraction times when every image object on a dense page is decoded individually via the PDF extractor. Setting this limit causes xberg to stop collecting individual images once the count per page reaches the cap and emit a warning instead. `None` (default) means no limit — all images are extracted. |
 | `classify` | `bool` | `false` | When `true`, extracted images are classified by kind and grouped into clusters where they appear to belong to one figure. Defaults to `false` — opt in explicitly to avoid unexpected ML overhead. |
-| `include_page_rasters` | `bool` | `false` | When `true`, full-page renders produced during OCR preprocessing are captured and returned as `ImageKind::PageRaster` entries in `ExtractionResult.images`. **PDF + OCR only.** No rasters are captured for non-PDF inputs or when the document-level OCR bypass is active (whole-document backend). When OCR is enabled and this flag is set but the active backend skips per-page rendering, a `ProcessingWarning` is emitted in `ExtractionResult.processing_warnings`. Defaults to `false`. Enable when downstream consumers need page thumbnails (e.g. citation previews, visual grounding). |
+| `include_page_rasters` | `bool` | `false` | When `true`, full-page renders produced during OCR preprocessing are captured and returned as `ImageKind::PageRaster` entries in `ExtractedDocument.images`. **PDF + OCR only.** No rasters are captured for non-PDF inputs or when the document-level OCR bypass is active (whole-document backend). When OCR is enabled and this flag is set but the active backend skips per-page rendering, a `ProcessingWarning` is emitted in `ExtractedDocument.processing_warnings`. Defaults to `false`. Enable when downstream consumers need page thumbnails (e.g. citation previews, visual grounding). |
 | `run_ocr_on_images` | `bool` | `true` | Run OCR on extracted images and include the recognized text in the document content. When `true` (default) and `ExtractionConfig.ocr` is configured, extracted images are processed with the configured OCR backend. Set to `false` to extract images without OCR processing, even when OCR is enabled. |
 | `ocr_text_only` | `bool` | `false` | When `true`, image OCR results are rendered as plain text without the `!\[...\](...)` markdown placeholder. Only takes effect when `run_ocr_on_images` is also `true`. |
 | `append_ocr_text` | `bool` | `false` | When `true` and `ocr_text_only` is `false`, append the OCR text after the image placeholder in the rendered output. |
@@ -5247,89 +3246,6 @@ Link element metadata.
 
 ---
 
-#### LlmBackend
-
-liter-llm-backed NER backend.
-
-##### Methods
-
-###### new()
-
-Create a new LLM-backed NER backend with the given LLM configuration.
-
-**Signature:**
-
-```rust
-pub fn new(config: LlmConfig) -> LlmBackend
-```
-
-**Example:**
-
-```rust
-let result = LlmBackend::new(LlmConfig::default());
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `config` | `LlmConfig` | Yes | The configuration options |
-
-**Returns:** `LlmBackend`
-
-###### detect()
-
-**Signature:**
-
-```rust
-pub async fn detect(&self, text: &str, categories: Vec<EntityCategory>) -> Result<Vec<Entity>, Error>
-```
-
-**Example:**
-
-```rust
-let result = instance.detect("value", vec![]).await?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `text` | `String` | Yes | The text |
-| `categories` | `Vec<EntityCategory>` | Yes | The categories |
-
-**Returns:** `Vec<Entity>`
-
-**Errors:** Returns `Err(Error)`.
-
-###### detect_with_custom()
-
-**Signature:**
-
-```rust
-pub async fn detect_with_custom(&self, text: &str, categories: Vec<EntityCategory>, custom_labels: Vec<String>) -> Result<Vec<Entity>, Error>
-```
-
-**Example:**
-
-```rust
-let result = instance.detect_with_custom("value", vec![], vec![]).await?;
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `text` | `String` | Yes | The text |
-| `categories` | `Vec<EntityCategory>` | Yes | The categories |
-| `custom_labels` | `Vec<String>` | Yes | The custom labels |
-
-**Returns:** `Vec<Entity>`
-
-**Errors:** Returns `Err(Error)`.
-
----
-
 #### LlmConfig
 
 Configuration for an LLM provider/model via liter-llm.
@@ -5552,7 +3468,7 @@ Configuration for the NER post-processor.
 | `backend` | `NerBackendKind` | `NerBackendKind::Onnx` | Backend that runs the entity detection. |
 | `categories` | `Vec<EntityCategory>` | `vec!\[\]` | Entity categories to detect. Defaults to a sensible PERSON/ORG/LOCATION/EMAIL set when empty. |
 | `model` | `Option<String>` | `Default::default()` | Override the default model — only used by `NerBackendKind::Onnx`. `None` lets the backend pick its pinned default xberg GLiNER model alias. |
-| `llm` | `Option<LlmConfig>` | `Default::default()` | Optional LLM configuration — only used by `NerBackendKind::Llm`. Token usage for LLM backends is recorded in `ExtractionResult::llm_usage`. |
+| `llm` | `Option<LlmConfig>` | `Default::default()` | Optional LLM configuration — only used by `NerBackendKind::Llm`. Token usage for LLM backends is recorded in `ExtractedDocument::llm_usage`. |
 | `custom_labels` | `Vec<String>` | `vec!\[\]` | Arbitrary user-supplied entity labels for zero-shot detection. `xberg-gliner` natively supports zero-shot inference over caller-supplied labels. The LLM backend also honours these labels by including them in the structured-output schema. Custom labels surface as `EntityCategory::Custom` in the resulting `Entity` stream. Use this when you need domain-specific entity types (e.g. `"Treatment"`, `"Product"`, `"Vessel"`) without forking GLiNER's taxonomy. |
 
 ---
@@ -5564,7 +3480,7 @@ Trait for OCR backend plugins.
 Implement this trait to add custom OCR capabilities. OCR backends can be:
 
 - Native Rust implementations (like Tesseract)
-- FFI bridges to Python libraries (like EasyOCR, PaddleOCR)
+- FFI bridges to external libraries (like PaddleOCR)
 - Cloud-based OCR services (Google Vision, AWS Textract, etc.)
 
 ##### Thread Safety
@@ -5579,7 +3495,7 @@ Process an image and extract text via OCR.
 
 **Returns:**
 
-An `ExtractionResult` containing the extracted text and metadata.
+An `ExtractedDocument` containing the extracted text and metadata.
 
 **Errors:**
 
@@ -5596,7 +3512,7 @@ so multiple backends can coexist in a pipeline without key conflicts.
 **Signature:**
 
 ```rust
-pub async fn process_image(&self, image_bytes: &[u8], config: OcrConfig) -> Result<ExtractionResult, Error>
+pub async fn process_image(&self, image_bytes: &[u8], config: OcrConfig) -> Result<ExtractedDocument, Error>
 ```
 
 **Example:**
@@ -5612,7 +3528,7 @@ let result = instance.process_image(b"data", OcrConfig::default()).await?;
 | `image_bytes` | `Vec<u8>` | Yes | Raw image data (JPEG, PNG, TIFF, etc.) |
 | `config` | `OcrConfig` | Yes | OCR configuration (language, PSM mode, etc.) |
 
-**Returns:** `ExtractionResult`
+**Returns:** `ExtractedDocument`
 
 **Errors:** Returns `Err(Error)`.
 
@@ -5630,7 +3546,7 @@ Same as `process_image`, plus file I/O errors.
 **Signature:**
 
 ```rust
-pub async fn process_image_file(&self, path: PathBuf, config: OcrConfig) -> Result<ExtractionResult, Error>
+pub async fn process_image_file(&self, path: PathBuf, config: OcrConfig) -> Result<ExtractedDocument, Error>
 ```
 
 **Example:**
@@ -5646,7 +3562,7 @@ let result = instance.process_image_file("value", OcrConfig::default()).await?;
 | `path` | `PathBuf` | Yes | Path to the image file |
 | `config` | `OcrConfig` | Yes | OCR configuration |
 
-**Returns:** `ExtractionResult`
+**Returns:** `ExtractedDocument`
 
 **Errors:** Returns `Err(Error)`.
 
@@ -5796,7 +3712,7 @@ Only called if `supports_document_processing` returns `true`.
 **Signature:**
 
 ```rust
-pub async fn process_document(&self, path: PathBuf, config: OcrConfig) -> Result<ExtractionResult, Error>
+pub async fn process_document(&self, path: PathBuf, config: OcrConfig) -> Result<ExtractedDocument, Error>
 ```
 
 **Example:**
@@ -5812,7 +3728,7 @@ let result = instance.process_document("value", OcrConfig::default()).await?;
 | `path` | `PathBuf` | Yes | The  path |
 | `config` | `OcrConfig` | Yes | The ocr config |
 
-**Returns:** `ExtractionResult`
+**Returns:** `ExtractedDocument`
 
 **Errors:** Returns `Err(Error)`.
 
@@ -5839,7 +3755,7 @@ OCR configuration.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | `bool` | `true` | Whether OCR is enabled. Setting `enabled: false` is a shorthand for `disable_ocr: true` on the parent `ExtractionConfig`. Images return metadata only; PDFs use native text extraction without OCR fallback. Defaults to `true`. When `false`, all other OCR settings are ignored. |
-| `backend` | `String` | — | OCR backend: tesseract, easyocr, paddleocr |
+| `backend` | `String` | — | OCR backend: tesseract, paddleocr, paddle-ocr, or vlm |
 | `language` | `Vec<String>` | `vec!\[\]` | Language code(s) for OCR recognition. Accepts either a single language code ("eng") or a list (\["eng", "deu"\]). Defaults to \["eng"\]. For Tesseract, languages are joined with "+". |
 | `tesseract_config` | `Option<TesseractConfig>` | `None` | Tesseract-specific configuration (optional) |
 | `output_format` | `Option<OutputFormat>` | `None` | Output format for OCR results (optional, for format conversion) |
@@ -5904,7 +3820,7 @@ Controls how OCR elements are extracted and filtered.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `include_elements` | `bool` | — | Whether to include OCR elements in the extraction result. When true, the `ocr_elements` field in `ExtractionResult` will be populated. |
+| `include_elements` | `bool` | — | Whether to include OCR elements in the extraction result. When true, the `ocr_elements` field in `ExtractedDocument` will be populated. |
 | `min_level` | `OcrElementLevel` | `OcrElementLevel::Line` | Minimum hierarchical level to include. Elements below this level (e.g., words when min_level is Line) will be excluded. |
 | `min_confidence` | `f64` | — | Minimum recognition confidence threshold (0.0-1.0). Elements with confidence below this threshold will be filtered out. |
 | `build_hierarchy` | `bool` | — | Whether to build hierarchical relationships between elements. When true, `parent_id` fields will be populated based on spatial containment. Only meaningful for Tesseract output. |
@@ -5925,7 +3841,6 @@ including recognized text and detected tables.
 | `metadata` | `HashMap<String, serde_json::Value>` | — | OCR processing metadata (confidence scores, language, etc.) |
 | `tables` | `Vec<OcrTable>` | — | Tables detected and extracted via OCR |
 | `ocr_elements` | `Option<Vec<OcrElement>>` | `/* serde(default) */` | Structured OCR elements with bounding boxes and confidence scores. Available when TSV output is requested or table detection is enabled. |
-| `internal_document` | `Option<String>` | `None` | Structured document produced from hOCR parsing. Carries paragraph structure, bounding boxes, and confidence scores that the flattened `content` string discards. |
 
 ---
 
@@ -5967,7 +3882,7 @@ A single backend stage in the OCR pipeline.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `backend` | `String` | — | Backend name: "tesseract", "paddleocr", "easyocr", or a custom registered name. |
+| `backend` | `String` | — | Backend name: "tesseract", "paddleocr", "paddle-ocr", "vlm", or a custom registered name. |
 | `priority` | `u32` | `serde(default = "default_priority")` | Priority weight (higher = tried first). Stages are sorted by priority descending. |
 | `language` | `Option<Vec<String>>` | `/* serde(default) */` | Language override for this stage (None = use parent OcrConfig.language). Accepts either a single language code ("eng") or a list (\["eng", "deu"\]). |
 | `tesseract_config` | `Option<TesseractConfig>` | `/* serde(default) */` | Tesseract-specific config override for this stage. |
@@ -6442,7 +4357,7 @@ when page boundaries are available and chunking is configured.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `extract_pages` | `bool` | `false` | Extract pages as separate array (ExtractionResult.pages) |
+| `extract_pages` | `bool` | `false` | Extract pages as separate array (ExtractedDocument.pages) |
 | `insert_page_markers` | `bool` | `false` | Insert page markers in main content string |
 | `marker_format` | `String` | `"<!-- PAGE {page_num} -->"` | Page marker format (use {page_num} placeholder) Default: "\n\n<!-- PAGE {page_num} -->\n\n" |
 
@@ -6489,7 +4404,7 @@ by avoiding redundant copies during serialization.
 | `page_number` | `u32` | — | Page number (1-indexed) |
 | `content` | `String` | — | Text content for this page |
 | `tables` | `Vec<Table>` | `/* serde(default) */` | Tables found on this page (uses Arc for memory efficiency) Serializes as Vec<Table> for JSON compatibility while maintaining Arc semantics in-memory for zero-copy sharing. |
-| `image_indices` | `Vec<u32>` | `/* serde(default) */` | Indices into `ExtractionResult.images` for images found on this page. Each value is a zero-based index into the top-level `images` collection. Only populated when `extract_images = true` in the extraction config. |
+| `image_indices` | `Vec<u32>` | `/* serde(default) */` | Indices into `ExtractedDocument.images` for images found on this page. Each value is a zero-based index into the top-level `images` collection. Only populated when `extract_images = true` in the extraction config. |
 | `hierarchy` | `Option<PageHierarchy>` | `None` | Hierarchy information for the page (when hierarchy extraction is enabled) Contains text hierarchy levels (H1-H6) extracted from the page content. |
 | `is_blank` | `Option<bool>` | `None` | Whether this page is blank (no meaningful text content) Determined during extraction based on text content analysis. A page is blank if it has fewer than 3 non-whitespace characters and contains no tables or images. |
 | `layout_regions` | `Option<Vec<LayoutRegion>>` | `None` | Layout detection regions for this page (when layout detection is enabled). Contains detected layout regions with class, confidence, bounding box, and area fraction. Only populated when layout detection is configured. |
@@ -6529,7 +4444,7 @@ and visibility state (for presentations).
 | `table_count` | `Option<u32>` | `None` | Number of tables on this page |
 | `hidden` | `Option<bool>` | `None` | Whether this page is hidden (e.g., in presentations) |
 | `is_blank` | `Option<bool>` | `None` | Whether this page is blank (no meaningful text, no images, no tables) A page is considered blank if it has fewer than 3 non-whitespace characters and contains no tables or images. This is useful for filtering out empty pages in scanned documents or PDFs with blank separator pages. |
-| `has_vector_graphics` | `bool` | `/* serde(default) */` | Whether this page contains non-trivial vector graphics (paths, shapes, curves) Indicates the presence of vector-drawn content such as charts, diagrams, or geometric shapes (e.g., from Adobe InDesign, LaTeX TikZ). These are invisible to `ExtractionResult.images` since they are not embedded as raster XObjects. Set to `true` when path count exceeds a heuristic threshold, signaling that downstream consumers may want to rasterize the page to capture this content. Only populated for PDFs; `None` for other document types. |
+| `has_vector_graphics` | `bool` | `/* serde(default) */` | Whether this page contains non-trivial vector graphics (paths, shapes, curves) Indicates the presence of vector-drawn content such as charts, diagrams, or geometric shapes (e.g., from Adobe InDesign, LaTeX TikZ). These are invisible to `ExtractedDocument.images` since they are not embedded as raster XObjects. Set to `true` when path count exceeds a heuristic threshold, signaling that downstream consumers may want to rasterize the page to capture this content. Only populated for PDFs; `None` for other document types. |
 
 ---
 
@@ -6677,7 +4592,7 @@ PDF-specific configuration.
 | `bottom_margin_fraction` | `Option<f32>` | `None` | Bottom margin fraction (0.0–1.0) of page height to exclude footers/page numbers. Default: 0.05 (5%) |
 | `allow_single_column_tables` | `bool` | `false` | Allow single-column pseudo tables in extraction results. By default, tables with fewer than 2 columns (layout-guided) or 3 columns (heuristic) are rejected. When `true`, the minimum column count is relaxed to 1, allowing single-column structured data (glossaries, itemized lists) to be emitted as tables. Other quality filters (density, sparsity, prose detection) still apply. |
 | `ocr_inline_images` | `bool` | `false` | Perform OCR on inline images extracted from PDF pages and attach the recognized text to each `ExtractedImage.ocr_result`. Requires Tesseract to be available; if `ExtractionConfig.ocr` is `None` the extractor falls back to `TesseractConfig::default()`. Per-image failures degrade gracefully (the image is returned without OCR text rather than failing the whole extraction). Default: `false`. |
-| `extract_form_fields` | `bool` | `true` | Extract AcroForm and XFA form fields into `ExtractionResult.form_fields`. When `true` (default), reads the document's interactive form structure (field names, types, values, widget geometry). Cheap and strictly additive — non-form PDFs simply yield an empty list. Set to `false` to skip the form pass entirely. |
+| `extract_form_fields` | `bool` | `true` | Extract AcroForm and XFA form fields into `ExtractedDocument.form_fields`. When `true` (default), reads the document's interactive form structure (field names, types, values, widget geometry). Cheap and strictly additive — non-form PDFs simply yield an empty list. Set to `false` to skip the form pass entirely. |
 | `reading_order` | `bool` | `false` | Reorder extracted text by layout-detected reading order. When `true`, projects text spans onto layout-detected regions, performs column detection, and emits spans in natural reading order (important for multi-column academic PDFs). Requires the `layout-detection` feature; has no effect without it. Defaults to `false`. |
 
 ##### Methods
@@ -7018,20 +4933,20 @@ result in place.
 **Signature:**
 
 ```rust
-pub async fn process(&self, result: ExtractionResult, config: ExtractionConfig) -> Result<(), Error>
+pub async fn process(&self, result: ExtractedDocument, config: ExtractionConfig) -> Result<(), Error>
 ```
 
 **Example:**
 
 ```rust
-instance.process(ExtractionResult::default(), ExtractionConfig::default()).await?;
+instance.process(ExtractedDocument::default(), ExtractionConfig::default()).await?;
 ```
 
 **Parameters:**
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `result` | `ExtractionResult` | Yes | Mutable reference to the extraction result to process |
+| `result` | `ExtractedDocument` | Yes | Mutable reference to the extraction result to process |
 | `config` | `ExtractionConfig` | Yes | Extraction configuration |
 
 **Returns:** No return value.
@@ -7078,14 +4993,14 @@ Defaults to `true` (always run).
 **Signature:**
 
 ```rust
-pub fn should_process(&self, result: ExtractionResult, config: ExtractionConfig) -> bool
+pub fn should_process(&self, result: ExtractedDocument, config: ExtractionConfig) -> bool
 ```
 
 **Example:**
 
 ```rust
 /// Only process PDF documents
-fn should_process(&self, result: &ExtractionResult, config: &ExtractionConfig) -> bool {
+fn should_process(&self, result: &ExtractedDocument, config: &ExtractionConfig) -> bool {
     result.mime_type == "application/pdf"
 }
 ```rust
@@ -7094,7 +5009,7 @@ fn should_process(&self, result: &ExtractionResult, config: &ExtractionConfig) -
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `result` | `ExtractionResult` | Yes | The extraction result |
+| `result` | `ExtractedDocument` | Yes | The extracted document |
 | `config` | `ExtractionConfig` | Yes | The extraction config |
 
 **Returns:** `bool`
@@ -7112,20 +5027,20 @@ Estimated processing time in milliseconds.
 **Signature:**
 
 ```rust
-pub fn estimated_duration_ms(&self, result: ExtractionResult) -> u64
+pub fn estimated_duration_ms(&self, result: ExtractedDocument) -> u64
 ```
 
 **Example:**
 
 ```rust
-let result = instance.estimated_duration_ms(ExtractionResult::default());
+let result = instance.estimated_duration_ms(ExtractedDocument::default());
 ```
 
 **Parameters:**
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `result` | `ExtractionResult` | Yes | The extraction result |
+| `result` | `ExtractedDocument` | Yes | The extracted document |
 
 **Returns:** `u64`
 
@@ -7471,8 +5386,8 @@ One redaction event: which span was rewritten, why, and with what.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `start` | `u32` | — | Byte-offset start in the original (pre-redaction) `ExtractionResult::content`. |
-| `end` | `u32` | — | Byte-offset end (exclusive) in the original `ExtractionResult::content`. |
+| `start` | `u32` | — | Byte-offset start in the original (pre-redaction) `ExtractedDocument::content`. |
+| `end` | `u32` | — | Byte-offset end (exclusive) in the original `ExtractedDocument::content`. |
 | `category` | `PiiCategory` | — | PII category that fired this redaction. |
 | `strategy` | `RedactionStrategy` | — | Strategy applied to this finding (mask, hash, token-replace, drop). |
 | `replacement_token` | `String` | — | String that replaced the original mention. Always present; for `Drop` the replacement is the empty string. |
@@ -7804,11 +5719,11 @@ let result = instance.extend_from_dir("value")?;
 
 #### Renderer
 
-Trait for document renderers that convert `InternalDocument` to output strings.
+Trait for document renderers that convert extraction results to output strings.
 
-Renderers are typically stateless converters that transform the internal
-document representation into a specific output format (Markdown, HTML,
-Djot, plain text, etc.). They participate in the standard `Plugin`
+Renderers are typically stateless converters that transform extracted
+content into a specific output format (Markdown, HTML, Djot, plain text,
+etc.). They participate in the standard `Plugin`
 lifecycle so custom renderers can be registered from any supported binding
 language.
 
@@ -7822,35 +5737,29 @@ Renderers must be `Send + Sync` (inherited from `Plugin`).
 
 ##### Methods
 
-###### render()
+###### render_result()
 
-Render an `InternalDocument` to the output format.
+Binding-safe rendering entry point for foreign-language plugin bridges.
 
-**Returns:**
-
-The rendered output as a string.
-
-**Errors:**
-
-Returns an error if rendering fails.
+Accepts one public extraction result and returns the rendered output.
 
 **Signature:**
 
 ```rust
-pub fn render(&self, doc: InternalDocument) -> Result<String, Error>
+pub fn render_result(&self, result: ExtractedDocument) -> Result<String, Error>
 ```
 
 **Example:**
 
 ```rust
-let result = instance.render(InternalDocument::default())?;
+let result = instance.render_result(ExtractedDocument::default())?;
 ```
 
 **Parameters:**
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `doc` | `InternalDocument` | Yes | The internal document to render |
+| `result` | `ExtractedDocument` | Yes | The extracted document |
 
 **Returns:** `String`
 
@@ -7999,26 +5908,6 @@ let result = RerankerConfig::default();
 ```
 
 **Returns:** `RerankerConfig`
-
----
-
-#### RerankerPreset
-
-Metadata for a bundled reranker preset.
-
-All string fields are owned `String` for FFI compatibility — instances are
-safe to clone and pass across language boundaries.
-
-Since v5.0.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `name` | `String` | — | Short identifier (catalog name, e.g. `"bge-reranker-base"`). |
-| `model_repo` | `String` | — | HuggingFace repository name for the model. |
-| `model_file` | `String` | — | Path to the ONNX model file within the repo. |
-| `additional_files` | `Vec<String>` | `/* serde(default) */` | Sibling files that must be downloaded alongside `model_file`. Empty for most presets. Used by repos that split the weight blob — e.g. `rozgo/bge-reranker-v2-m3` ships the model in `model.onnx` plus a co-located `model.onnx.data` payload. |
-| `max_length` | `usize` | — | Maximum token sequence length the model supports. |
-| `description` | `String` | — | Human-readable description of the preset's intended use case. |
 
 ---
 
@@ -8305,63 +6194,6 @@ returning structured data that conforms to the schema.
 | `strict` | `bool` | `/* serde(default) */` | Enable strict mode — output must exactly match the schema. |
 | `prompt` | `Option<String>` | `/* serde(default) */` | Custom Jinja2 extraction prompt template. When `None`, a default template is used. Available template variables: - `{{ content }}` — The extracted document text. - `{{ schema }}` — The JSON schema as a formatted string. - `{{ schema_name }}` — The schema name. - `{{ schema_description }}` — The schema description (may be empty). |
 | `llm` | `LlmConfig` | — | LLM configuration for the extraction. |
-
----
-
-#### StructuredInput
-
-Signals consumed by the call-mode heuristic.
-
-All fields derive from a prior xberg extraction — no double-work.
-This is a plain DTO; it intentionally has no dependency on internal
-xberg extraction types so it can be constructed from any source.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `mime_type` | `String` | — | MIME type, canonicalised to lowercase by the caller. |
-| `page_count` | `u32` | — | Number of pages in the document. |
-| `text_coverage` | `f64` | — | Fraction of pages with a real text layer (0.0..=1.0). |
-| `avg_chars_per_page` | `f64` | — | Average extracted characters per page. |
-| `embedded_image_count` | `u32` | — | Count of embedded images (figures, photos, signatures) discovered. |
-| `user_force_vision` | `bool` | — | When `true`, promote the result to at least `StructuredCallMode::TextPlusVision`. |
-
----
-
-#### StructuredThresholds
-
-Thresholds for the structured-extraction call-mode heuristic.
-
-All defaults are **conservative starting points**.  Deployments should
-measure their own document corpus and override via their own config;
-these values are chosen to be safe-by-default, not to be optimal for
-any particular workload.
-
-Construct custom thresholds with struct-update syntax:
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `scan_max_coverage` | `f64` | `0.1` | PDFs with `text_coverage` strictly below this are treated as scanned. **Conservative default: 0.10** — deployments override via their own config after measuring their document corpus. |
-| `digital_min_coverage` | `f64` | `0.9` | PDFs with `text_coverage` at or above this AND zero embedded images route to `StructuredCallMode::TextOnly`. **Conservative default: 0.90** — deployments override via their own config after measuring their document corpus. |
-| `docx_text_min_density` | `f64` | `200` | DOCX / HTML / text documents with `avg_chars_per_page` above this route to `StructuredCallMode::TextOnly`. **Conservative default: 200.0** — deployments override via their own config after measuring their document corpus. |
-| `enable_vision_fallback` | `bool` | `false` | When `true`, emit `StructuredCallMode::TextOnlyWithVisionFallback` instead of `StructuredCallMode::TextOnly` so the orchestrator can escalate to vision on low confidence. **Conservative default: `false`** — must be explicitly enabled per deployment after bench validation; deployments override via their own config. |
-
-##### Methods
-
-###### default()
-
-**Signature:**
-
-```rust
-pub fn default() -> StructuredThresholds
-```
-
-**Example:**
-
-```rust
-let result = StructuredThresholds::default();
-```
-
-**Returns:** `StructuredThresholds`
 
 ---
 
@@ -8737,16 +6569,16 @@ let result = TranscriptionConfig::default();
 
 Translation of the extracted content.
 
-Holds the translated rendition of `ExtractionResult::content` and (when
+Holds the translated rendition of `ExtractedDocument::content` and (when
 `preserve_markup` was requested) the translated `formatted_content`. Chunks
-are translated in place inside `ExtractionResult::chunks[*].content` rather
+are translated in place inside `ExtractedDocument::chunks[*].content` rather
 than duplicated here.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `target_lang` | `String` | — | BCP-47 language tag the translation was produced into (e.g. `"de"`, `"fr-CA"`). |
 | `source_lang` | `Option<String>` | `None` | BCP-47 source language. `None` when the translation backend was asked to detect. |
-| `content` | `String` | — | Translated plain-text body. Matches the shape of `ExtractionResult::content`. |
+| `content` | `String` | — | Translated plain-text body. Matches the shape of `ExtractedDocument::content`. |
 | `formatted_content` | `Option<String>` | `None` | Translated markup body (Markdown / HTML / etc.) when `preserve_markup` was enabled on the config. `None` otherwise. |
 
 ---
@@ -8953,20 +6785,20 @@ if validation fails.
 **Signature:**
 
 ```rust
-pub async fn validate(&self, result: ExtractionResult, config: ExtractionConfig) -> Result<(), Error>
+pub async fn validate(&self, result: ExtractedDocument, config: ExtractionConfig) -> Result<(), Error>
 ```
 
 **Example:**
 
 ```rust
-instance.validate(ExtractionResult::default(), ExtractionConfig::default()).await?;
+instance.validate(ExtractedDocument::default(), ExtractionConfig::default()).await?;
 ```
 
 **Parameters:**
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `result` | `ExtractionResult` | Yes | The extraction result to validate |
+| `result` | `ExtractedDocument` | Yes | The extraction result to validate |
 | `config` | `ExtractionConfig` | Yes | Extraction configuration |
 
 **Returns:** No return value.
@@ -8987,14 +6819,14 @@ Defaults to `true` (always run).
 **Signature:**
 
 ```rust
-pub fn should_validate(&self, result: ExtractionResult, config: ExtractionConfig) -> bool
+pub fn should_validate(&self, result: ExtractedDocument, config: ExtractionConfig) -> bool
 ```
 
 **Example:**
 
 ```rust
 /// Only validate PDF documents
-fn should_validate(&self, result: &ExtractionResult, config: &ExtractionConfig) -> bool {
+fn should_validate(&self, result: &ExtractedDocument, config: &ExtractionConfig) -> bool {
     result.mime_type == "application/pdf"
 }
 ```rust
@@ -9003,7 +6835,7 @@ fn should_validate(&self, result: &ExtractionResult, config: &ExtractionConfig) 
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `result` | `ExtractionResult` | Yes | The extraction result |
+| `result` | `ExtractedDocument` | Yes | The extracted document |
 | `config` | `ExtractionConfig` | Yes | The extraction config |
 
 **Returns:** `bool`
@@ -9152,7 +6984,7 @@ Determines which hardware backend is used for model inference.
 Target format for re-encoding extracted images.
 
 Controls whether and how extracted images are normalised to a uniform
-container format before being returned in `ExtractionResult.images`.
+container format before being returned in `ExtractedDocument.images`.
 The default (`Native`) preserves the format produced by each extractor
 without any additional encode pass.
 
@@ -9203,7 +7035,7 @@ URL extraction mode.
 
 Output format for extraction results.
 
-Controls the format of the `content` field in `ExtractionResult`.
+Controls the format of the `content` field in `ExtractedDocument`.
 When set to `Markdown`, `Djot`, or `Html`, the output uses that format.
 `Plain` returns the raw extracted text.
 `Structured` returns JSON with full OCR element data including bounding
@@ -9259,9 +7091,8 @@ YAML).
 How a structured-extraction preset is dispatched to the model.
 
 This is the preset-facing call mode (the `preferred_call_mode` field of a
-`Preset`). The richer runtime decision enum used by the
-structured pipeline — which adds `Skip` and `TextOnlyWithVisionFallback` —
-lives in `crate::heuristics::structured::StructuredCallMode`; this 3-variant
+`Preset`). The structured pipeline has a richer
+runtime-only decision enum with skip and fallback states; this 3-variant
 type is the stable, serializable surface presets and bindings depend on.
 
 | Value | Description |
@@ -9451,7 +7282,7 @@ transcription engine.
 Content rendering mode for code extraction.
 
 Controls how extracted code content is represented in the `content` field
-of `ExtractionResult`.
+of `ExtractedDocument`.
 
 | Value | Description |
 |-------|-------------|
@@ -9481,7 +7312,6 @@ OCR backend types.
 | Value | Description |
 |-------|-------------|
 | `Tesseract` | Tesseract OCR (native Rust binding) |
-| `EasyOcr` | EasyOCR (Python-based, via FFI) |
 | `PaddleOcr` | PaddleOCR (Python-based, via FFI) |
 | `Candle` | Candle-based VLM OCR (TrOCR, PaddleOCR-VL). |
 | `Custom` | Custom/third-party OCR backend |
@@ -9835,7 +7665,7 @@ type-safe, clean metadata without nested optionals.
 | `Epub` | Metadata extracted from an EPUB e-book. — Fields: `0`: `EpubMetadata` |
 | `Pst` | Metadata extracted from an Outlook PST archive. — Fields: `0`: `PstMetadata` |
 | `Audio` | Metadata extracted from an audio or video file. — Fields: `0`: `AudioMetadata` |
-| `Code` | Code (tree-sitter analyzable source). The structured analysis result is exposed via `ExtractionResult::code_intelligence`; this variant only tags the format. |
+| `Code` | Code (tree-sitter analyzable source). The structured analysis result is exposed via `ExtractedDocument::code_intelligence`; this variant only tags the format. |
 
 ---
 
@@ -10020,7 +7850,7 @@ Summarisation strategy.
 | Value | Description |
 |-------|-------------|
 | `Extractive` | Pure-Rust extractive summary (TextRank over the chunk graph). Deterministic, fast, no external service required. |
-| `Abstractive` | Abstractive summary produced by liter-llm. Requires `liter-llm` feature and a configured `LlmConfig`. Token usage is captured in `ExtractionResult::llm_usage`. |
+| `Abstractive` | Abstractive summary produced by liter-llm. Requires `liter-llm` feature and a configured `LlmConfig`. Token usage is captured in `ExtractedDocument::llm_usage`. |
 
 ---
 
@@ -10158,25 +7988,6 @@ Reason for boundary detection.
 | `LetterheadReset` | Letterhead reset after signature block. |
 | `DensityShift` | Text density shift with low bigram overlap. |
 | `End` | End of PDF. |
-
----
-
-#### StructuredCallMode
-
-Outcome of the structured-extraction call-mode heuristic.
-
-**Distinct from `crate::core::config::CallMode`** which has three variants
-and governs extraction-engine behaviour.  This enum governs whether and how
-an already-extracted document is sent to an LLM structured-extraction
-pipeline.
-
-| Value | Description |
-|-------|-------------|
-| `Skip` | Document is unsupported or not worth invoking the pipeline. |
-| `TextOnly` | Send extracted text only; no vision model call. |
-| `VisionOnly` | Send page rasters only; no extracted text payload. |
-| `TextPlusVision` | Fuse extracted text with page rasters in a single multimodal call. |
-| `TextOnlyWithVisionFallback` | Try text-only first; escalate to vision on low confidence score. |
 
 ---
 

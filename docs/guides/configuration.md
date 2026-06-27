@@ -210,5 +210,7 @@ For backend selection and language packs, see [OCR Guide](ocr.md). For fine-grai
 
 - [Extraction Basics](extraction.md) — core extraction API and supported formats
 - [OCR Guide](ocr.md) — backend installation and language setup
-- [Advanced Features](advanced.md) — embeddings, language detection, page tracking
+- [Embeddings](embeddings.md) — semantic vectors for search
+- [Language Detection](language-detection.md) — multilingual document analysis
+- [Chunking](chunking.md) — split text for RAG with page tracking
 - [Plugins Guide](plugins.md) — custom post-processors and validators

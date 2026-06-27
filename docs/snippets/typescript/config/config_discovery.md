@@ -3,17 +3,22 @@
 Use `ExtractionConfig.discover()` to automatically find and load configuration files from the current directory or parent directories:
 
 ```typescript title="config_discovery.ts"
-import { ExtractionConfig, extract } from "@xberg-io/xberg";
+import { ExtractInputKind, ExtractionConfig, extract } from "@xberg-io/xberg";
 
 const config = ExtractionConfig.discover();
+const input = {
+  kind: "uri",
+  uri: "document.pdf",
+};
+
 if (config) {
   console.log("Found configuration file");
-  const result = await extract("document.pdf", null, config);
-  console.log(result.content);
+  const output = await extract(input, config);
+  console.log(output.results[0].content);
 } else {
   console.log("No configuration file found, using defaults");
-  const result = await extract("document.pdf");
-  console.log(result.content);
+  const output = await extract(input);
+  console.log(output.results[0].content);
 }
 ```
 

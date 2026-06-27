@@ -1,15 +1,14 @@
 ```java title="Java"
 import io.xberg.ExtractionConfig;
-import io.xberg.KeywordConfig;
 import io.xberg.KeywordAlgorithm;
+import io.xberg.KeywordConfig;
 
 ExtractionConfig config = ExtractionConfig.builder()
-    .keywords(KeywordConfig.builder()
-        .algorithm(KeywordAlgorithm.YAKE)
-        .maxKeywords(10)
-        .minScore(0.3)
-        .ngramRange(1, 3)
-        .language("en")
+    .withKeywords(KeywordConfig.builder()
+        .withAlgorithm(KeywordAlgorithm.Yake)
+        .withMaxKeywords(10L)
+        .withMinScore(0.3f)
+        .withLanguage("en")
         .build())
     .build();
 ```

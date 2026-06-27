@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-import { extractSync, type ExtractionConfig } from "@xberg-io/xberg";
+import { extract, type ExtractionConfig } from "@xberg-io/xberg";
 
 const config: ExtractionConfig = {
   useCache: true,
@@ -17,6 +17,6 @@ const config: ExtractionConfig = {
   enableQualityProcessing: true,
 };
 
-const result = extractSync("document.pdf", null, config);
+const result = extract({ kind: "uri", uri: "document.pdf" }, config);
 console.log(`Content length: ${result.content.length}`);
 ```

@@ -2,10 +2,7 @@
 	"id": "url_recursive_document_urls",
 	"category": "url",
 	"description": "extract: recursive URL extraction follows document links discovered in results",
-	"tags": [
-		"url",
-		"recursive"
-	],
+	"tags": ["url", "recursive"],
 	"call": "extract",
 	"args": [
 		{
@@ -65,19 +62,17 @@
 		},
 		{
 			"type": "count_min",
-			"field": "summary.results",
+			"field": "results",
 			"value": 2
 		},
 		{
 			"type": "contains",
-			"field": "results.1.content",
+			"field": "results[1].content",
 			"value": "Recursive document target"
 		}
 	],
 	"skip": {
-		"languages": [
-			"wasm"
-		],
+		"languages": ["wasm"],
 		"reason": "WASM e2e does not enable URL ingestion"
 	}
 }

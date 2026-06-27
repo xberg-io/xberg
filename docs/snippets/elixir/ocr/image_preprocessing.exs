@@ -51,7 +51,7 @@ defmodule ImagePreprocessor do
       use_cache: false  # Disable caching for preprocessing runs
     }
 
-    Xberg.extract(file_path, nil, config)
+    Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: file_path}, config)
   end
 
   @doc """
@@ -88,11 +88,13 @@ defmodule ImagePreprocessor do
       use_cache: false
     }
 
-    {:ok, result_standard} = Xberg.extract(file_path, nil, config_standard)
+    {:ok, output_standard} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: file_path}, config_standard)
 
+    result_standard = List.first(output_standard.results)
     # Extract with preprocessing
     IO.puts("Extracting with preprocessing...")
-    {:ok, result_preprocessed} = extract_with_aggressive_preprocessing(file_path)
+    {:ok, output_preprocessed} = extract_with_aggressive_preprocessing(file_path)
+    result_preprocessed = List.first(output_preprocessed.results)
 
     # Compare results
     standard_size = byte_size(result_standard.content)
@@ -141,7 +143,8 @@ file_path = "scanned_document.pdf"
 
 IO.puts("Example 1: Standard Extraction with Preprocessing\n")
 case ImagePreprocessor.extract_with_preprocessing(file_path) do
-  {:ok, result} ->
+  {:ok, output} ->
+    result = List.first(output.results)
     IO.puts("Extraction successful!")
     IO.puts("Content length: #{byte_size(result.content)} bytes")
     IO.puts("Chunks created: #{length(result.chunks || [])}")
@@ -154,7 +157,8 @@ end
 # Example 2: Aggressive preprocessing for difficult documents
 IO.puts("Example 2: Aggressive Preprocessing for Poor Quality\n")
 case ImagePreprocessor.extract_with_aggressive_preprocessing(file_path) do
-  {:ok, result} ->
+  {:ok, output} ->
+    result = List.first(output.results)
     IO.puts("Aggressive preprocessing extraction successful!")
     IO.puts("Content length: #{byte_size(result.content)} bytes")
 

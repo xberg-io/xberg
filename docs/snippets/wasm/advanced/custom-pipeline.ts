@@ -1,9 +1,9 @@
-import type { ExtractionResult } from "@xberg-io/xberg-wasm";
+import type { ExtractedDocument } from "@xberg-io/xberg-wasm";
 import { extract, initWasm } from "@xberg-io/xberg-wasm";
 
 interface ProcessingStep {
   name: string;
-  process: (result: ExtractionResult) => Promise<ExtractionResult>;
+  process: (result: ExtractedDocument) => Promise<ExtractedDocument>;
 }
 
 async function createExtractionPipeline(
@@ -13,7 +13,11 @@ async function createExtractionPipeline(
 ) {
   await initWasm();
 
-  let result = await extract(bytes, mimeType);
+  const output = await extract({ kind: "bytes", bytes, mimeType: mimeType });
+  let result = output.results[0];
+  if (!result) {
+    throw new Error("No document extracted");
+  }
 
   for (const step of steps) {
     console.log(`Executing step: ${step.name}`);

@@ -2,29 +2,32 @@
 import io.xberg.Xberg;
 import io.xberg.ExtractionResult;
 import io.xberg.ExtractionConfig;
+import io.xberg.ExtractedDocument;
+import io.xberg.ExtractInput;
+import io.xberg.ExtractInputKind;
+import io.xberg.Keyword;
 import io.xberg.KeywordConfig;
 import io.xberg.KeywordAlgorithm;
-import java.util.List;
-import java.util.Map;
 
 ExtractionConfig config = ExtractionConfig.builder()
-    .keywords(KeywordConfig.builder()
-        .algorithm(KeywordAlgorithm.YAKE)
-        .maxKeywords(10)
-        .minScore(0.3)
+    .withKeywords(KeywordConfig.builder()
+        .withAlgorithm(KeywordAlgorithm.Yake)
+        .withMaxKeywords(10L)
+        .withMinScore(0.3f)
         .build())
     .build();
 
-ExtractionResult result = Xberg.extract("research_paper.pdf", config);
+ExtractInput input = ExtractInput.builder()
+    .withKind(ExtractInputKind.Uri)
+    .withUri("research_paper.pdf")
+    .build();
 
-Map<String, Object> metadata = result.getMetadata() != null ? result.getMetadata() : Map.of();
+ExtractionResult output = Xberg.extract(input, config);
+ExtractedDocument result = output.results().get(0);
 
-if (metadata.containsKey("keywords")) {
-    List<Map<String, Object>> keywords = (List<Map<String, Object>>) metadata.get("keywords");
-    for (Map<String, Object> kw : keywords) {
-        String text = (String) kw.get("text");
-        Double score = ((Number) kw.get("score")).doubleValue();
-        System.out.println(text + ": " + String.format("%.3f", score));
+if (result.extractedKeywords() != null) {
+    for (Keyword keyword : result.extractedKeywords()) {
+        System.out.println(keyword.text() + ": " + String.format("%.3f", keyword.score()));
     }
 }
 ```

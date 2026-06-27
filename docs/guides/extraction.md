@@ -1,5 +1,11 @@
 # Extraction Basics
 
+Extract text, metadata, and structure from 96 file formats — PDFs, Office documents, images, email, HTML, archives, and more. Single files or batches, from local paths or in-memory bytes, with per-document configuration overrides and built-in content filtering.
+
+See the [Configuration Reference](../reference/configuration.md) for all extraction settings and the [Supported Formats](../reference/configuration.md#supported-formats) reference for format-specific options.
+
+## Entry Points
+
 Two extraction functions are the public entry points:
 
 | Function        | Input model      | Purpose                                   |
@@ -9,7 +15,7 @@ Two extraction functions are the public entry points:
 
 `ExtractInput` uses `kind = "uri"` for local paths, `file://` URIs, and HTTP(S)
 URLs. Use `kind = "bytes"` for in-memory payloads. `extract` and
-`extract_batch` return an `ExtractionOutput` envelope with `results`, `errors`,
+`extract_batch` return an `ExtractionResult` envelope with `results`, `errors`,
 `summary`, and optional crawl metadata.
 
 ## Extract One Input
@@ -41,7 +47,7 @@ URLs. Use `kind = "bytes"` for in-memory payloads. `extract` and
     use xberg::{extract, ExtractInput, ExtractionConfig};
 
     let config = ExtractionConfig::default();
-    let output = extract(ExtractInput::uri("document.pdf"), &config).await?;
+    let output = extract(ExtractInput::from_uri("document.pdf"), &config).await?;
     println!("{}", output.results[0].content);
     ```
 
@@ -91,7 +97,7 @@ with an explicit MIME type.
     let data = std::fs::read("document.pdf")?;
     let config = ExtractionConfig::default();
     let output = extract(
-        ExtractInput::bytes(data, "application/pdf", Some("document.pdf".to_string())),
+        ExtractInput::from_bytes(data, "application/pdf", Some("document.pdf".to_string())),
         &config,
     )
     .await?;
@@ -138,7 +144,7 @@ in one request when a pipeline receives documents from multiple sources.
 
     let config = ExtractionConfig::default();
     let inputs = vec![
-        ExtractInput::uri("report.pdf"),
+        ExtractInput::from_uri("report.pdf"),
         ExtractInput {
             uri: Some("scan.tiff".to_string()),
             mime_type: Some("image/tiff".to_string()),
@@ -220,7 +226,7 @@ attach per-input overrides to `ExtractInput` while sharing a common batch config
     };
 
     let inputs = vec![
-        ExtractInput::uri("report.pdf"),
+        ExtractInput::from_uri("report.pdf"),
         ExtractInput {
             kind: ExtractInputKind::Uri,
             uri: Some("scan.tiff".to_string()),
@@ -315,7 +321,7 @@ field-level defaults and per-format behavior.
         ..Default::default()
     };
 
-    let output = extract(ExtractInput::uri("contract.pdf"), &config).await?;
+    let output = extract(ExtractInput::from_uri("contract.pdf"), &config).await?;
     ```
 
 When a layout-detection model is active, it can independently classify regions
@@ -392,11 +398,11 @@ config = ExtractionConfig(
 
 Page markers like `<!-- PAGE 1 -->` are inserted at boundaries in the `content` field — useful for LLMs that need to understand document layout. When both page tracking and chunking are enabled, chunks automatically include `first_page` and `last_page` metadata.
 
-See [PageConfig Reference](../reference/configuration.md#pageconfig) for all options and [Advanced Page Tracking](./advanced.md) for chunk-to-page mapping examples.
+See [PageConfig Reference](../reference/configuration.md#pageconfig) for all options and [Chunking](./chunking.md) for chunk-to-page mapping examples.
 
 ## Code File Extraction
 
-Source code files (`.py`, `.rs`, `.ts`, `.go`, etc.) go through tree-sitter and produce a `ProcessResult` on `ExtractionResult.code_intelligence` (structure, imports/exports, symbols, docstrings, diagnostics, semantic chunks). Code files bypass text chunking — TSLP's function/class-aware `CodeChunks` map directly to Xberg `Chunk`s with semantic `chunk_type` and heading context.
+Source code files (`.py`, `.rs`, `.ts`, `.go`, etc.) go through tree-sitter and produce a `ProcessResult` on `ExtractedDocument.code_intelligence` (structure, imports/exports, symbols, docstrings, diagnostics, semantic chunks). Code files bypass text chunking — TSLP's function/class-aware `CodeChunks` map directly to Xberg `Chunk`s with semantic `chunk_type` and heading context.
 
 See [Code Intelligence](code-intelligence.md) for usage and [`TreeSitterProcessConfig`](../reference/configuration.md#treesitterprocessconfig) for fields.
 
@@ -492,6 +498,8 @@ All extraction functions raise typed exceptions on failure. Catch specific excep
 
 - [Configuration](configuration.md) — all configuration options and file formats
 - [OCR Guide](ocr.md) — set up optical character recognition
-- [Advanced Features](advanced.md) — chunking, language detection, embeddings
+- [Chunking](chunking.md) — split text for RAG
+- [Language Detection](language-detection.md) — multilingual document analysis
+- [Embeddings](embeddings.md) — semantic vectors for search
 - [Element-Based Output](output-formats.md#element-based-output) — structured element arrays for RAG
 - [Document Structure](output-formats.md#document-structure) — hierarchical tree output

@@ -29,7 +29,7 @@ class ExtractionCache {
 
     console.log("Cache miss for", file.name);
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const result = await extract(bytes, file.type);
+    const result = await extract({ kind: "bytes", bytes, mimeType: file.type });
 
     this.cache.set(hash, result);
     return result;

@@ -1,9 +1,12 @@
 ```elixir title="Elixir"
 config = Jason.encode!(%{})
 
-case Xberg.extract_sync("document.pdf", nil, config) do
-  {:ok, result} ->
-    with %{"metadata" => %{"pdf" => pdf_meta}} <- Jason.decode!(result) do
+case Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "document.pdf"}, config) do
+  {:ok, output} ->
+    result = List.first(output.results)
+    pdf_meta = result.metadata || %{}
+
+    if map_size(pdf_meta) > 0 do
       case pdf_meta do
         %{"page_count" => pages} ->
           IO.puts("Pages: #{pages}")
@@ -30,9 +33,12 @@ case Xberg.extract_sync("document.pdf", nil, config) do
     IO.puts("Error: #{reason}")
 end
 
-case Xberg.extract_sync("page.html", nil, config) do
-  {:ok, result} ->
-    with %{"metadata" => %{"html" => html_meta}} <- Jason.decode!(result) do
+case Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "page.html"}, config) do
+  {:ok, output} ->
+    result = List.first(output.results)
+    html_meta = result.metadata || %{}
+
+    if map_size(html_meta) > 0 do
       case html_meta do
         %{"title" => title} ->
           IO.puts("Title: #{title}")

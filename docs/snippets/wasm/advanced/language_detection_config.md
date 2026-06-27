@@ -11,7 +11,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extract(bytes, "application/pdf", config);
+const result = await extract({ kind: "bytes", bytes, mimeType: "application/pdf" }, config);
 
 console.log(`Primary language: ${result.metadata?.language}`);
 console.log(`Language confidence: ${result.metadata?.languageConfidence}`);
@@ -32,7 +32,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extract(bytes, "application/pdf", config);
+const result = await extract({ kind: "bytes", bytes, mimeType: "application/pdf" }, config);
 
 console.log(`Primary language: ${result.metadata?.language}`);
 console.log(`Confidence score: ${result.metadata?.languageConfidence?.toFixed(3)}`);
@@ -62,7 +62,7 @@ const config = {
 };
 
 const bytes = new Uint8Array(buffer);
-const result = await extract(bytes, "text/plain", config);
+const result = await extract({ kind: "bytes", bytes, mimeType: "text/plain" }, config);
 
 // Process result based on detected language
 const language = result.metadata?.language;

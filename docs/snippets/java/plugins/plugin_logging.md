@@ -1,4 +1,6 @@
 ```java title="Java"
+import io.xberg.ExtractedDocument;
+import io.xberg.PostProcessor;
 import java.util.logging.Logger;
 import java.util.logging.Level;
 
@@ -6,7 +8,7 @@ class MyPlugin implements PostProcessor {
     private static final Logger logger = Logger.getLogger(MyPlugin.class.getName());
 
     @Override
-    public ExtractionResult process(ExtractionResult result) {
+    public ExtractedDocument process(ExtractedDocument result) {
         logger.info("Processing " + result.mimeType() +
             " (" + result.content().length() + " bytes)");
 

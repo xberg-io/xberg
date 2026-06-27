@@ -46,7 +46,14 @@ public class CloudOcrExample {
 
             // Use custom OCR backend in extraction
             // Note: Requires ExtractionConfig with OCR enabled
-            ExtractionResult result = Xberg.extractSync("scanned.pdf");
+            var resultOutput = Xberg.extract(
+                io.xberg.ExtractInput.builder()
+                    .withKind(io.xberg.ExtractInputKind.Uri)
+                    .withUri("scanned.pdf")
+                    .build(),
+                io.xberg.ExtractionConfig.builder().build()
+            );
+            ExtractedDocument result = resultOutput.results().get(0);
         } catch (Exception e) {
             e.printStackTrace();
         }

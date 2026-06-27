@@ -8,6 +8,6 @@ const config = {
   },
 };
 
-const result = await extract("document.pdf", null, config);
+const result = await extract({ kind: "uri", uri: "document.pdf" }, config);
 console.log(result.content);
 ```

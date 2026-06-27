@@ -1,6 +1,6 @@
 # Presets
 
-Presets define structured extraction schemas with system prompts, merge strategies, and call-mode hints for the LLM pipeline.
+Package reusable extraction schemas with their system prompts, merging rules, and call-mode preferences. Build extraction templates once, version them, load and reuse them across your application or team without redefining the schema and prompt every time.
 
 ## Overview
 

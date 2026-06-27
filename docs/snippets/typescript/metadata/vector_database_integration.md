@@ -24,7 +24,7 @@ async function extractAndVectorize(
     },
   };
 
-  const result = await extract(documentPath, null, config);
+  const result = await extract({ kind: "uri", uri: documentPath }, config);
 
   const records: VectorRecord[] = [];
   if (result.chunks) {

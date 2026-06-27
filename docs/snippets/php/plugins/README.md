@@ -67,15 +67,15 @@ Instead of registering a post-processor plugin, process the extraction result di
 declare(strict_types=1);
 
 use Xberg\Xberg;
-use Xberg\Types\ExtractionResult;
+use Xberg\Types\ExtractedDocument;
 
-function postProcessResult(ExtractionResult $result): ExtractionResult
+function postProcessResult(ExtractedDocument $result): ExtractedDocument
 {
     // Custom post-processing logic
     $processedContent = strtoupper($result->content);
 
     // Return a new result with modified content
-    return new ExtractionResult(
+    return new ExtractedDocument(
         content: $processedContent,
         mimeType: $result->mimeType,
         metadata: $result->metadata,
@@ -86,7 +86,8 @@ function postProcessResult(ExtractionResult $result): ExtractionResult
 }
 
 $xberg = new Xberg();
-$result = $xberg->extract('document.pdf');
+$output = $xberg->extract('document.pdf');
+$result = $output->results[0];
 $processed = postProcessResult($result);
 ```
 
@@ -124,9 +125,9 @@ Instead of validator plugins, validate extraction results directly:
 declare(strict_types=1);
 
 use Xberg\Exceptions\ValidationException;
-use Xberg\Types\ExtractionResult;
+use Xberg\Types\ExtractedDocument;
 
-function validateResult(ExtractionResult $result): void
+function validateResult(ExtractedDocument $result): void
 {
     if (strlen($result->content) < 100) {
         throw new ValidationException('Content too short (minimum 100 characters)');
@@ -137,7 +138,8 @@ function validateResult(ExtractionResult $result): void
     }
 }
 
-$result = $xberg->extract('document.pdf');
+$output = $xberg->extract('document.pdf');
+$result = $output->results[0];
 validateResult($result);
 ```
 
@@ -152,15 +154,16 @@ declare(strict_types=1);
 
 use Xberg\Config\ExtractionConfig;
 use Xberg\Xberg as BaseXberg;
-use Xberg\Types\ExtractionResult;
+use Xberg\Types\ExtractedDocument;
 
 final class CustomXberg extends BaseXberg
 {
-    public function extractAndValidate(
-        string $path,
-        ?ExtractionConfig $config = null
-    ): ExtractionResult {
-        $result = $this->extract($path, $config);
+	    public function extractAndValidate(
+	        string $path,
+	        ?ExtractionConfig $config = null
+	    ): ExtractedDocument {
+	        $output = $this->extract($path, $config);
+	        $result = $output->results[0];
 
         // Custom validation
         if (strlen($result->content) < 100) {
@@ -170,17 +173,18 @@ final class CustomXberg extends BaseXberg
         return $result;
     }
 
-    public function extractAndTransform(
-        string $path,
-        callable $transformer,
-        ?ExtractionConfig $config = null
-    ): ExtractionResult {
-        $result = $this->extract($path, $config);
+	    public function extractAndTransform(
+	        string $path,
+	        callable $transformer,
+	        ?ExtractionConfig $config = null
+	    ): ExtractedDocument {
+	        $output = $this->extract($path, $config);
+	        $result = $output->results[0];
 
         // Custom transformation
         $transformedContent = $transformer($result->content);
 
-        return new ExtractionResult(
+        return new ExtractedDocument(
             content: $transformedContent,
             mimeType: $result->mimeType,
             metadata: $result->metadata,

@@ -1,6 +1,4 @@
 ```dart title="Dart"
-import 'package:flutter_rust_bridge/flutter_rust_bridge.dart' show Int64List;
-
 import 'package:xberg/xberg.dart';
 
 Future<void> main() async {
@@ -13,7 +11,6 @@ Future<void> main() async {
       algorithm: KeywordAlgorithm.yake,
       maxKeywords: 10,
       minScore: 0.3,
-      ngramRange: Int64List.fromList(<int>[1, 3]),
       language: 'en',
     ),
     resultFormat: ResultFormat.unified,
@@ -23,7 +20,11 @@ Future<void> main() async {
     maxArchiveDepth: 3,
   );
 
-  final result = await XbergBridge.extract('document.pdf', null, config);
+  final output = await XbergBridge.extract(
+    const ExtractInput(kind: ExtractInputKind.uri, uri: 'document.pdf'),
+    config: config,
+  );
+  final result = output.results.first;
   print('Keywords: ${result.extractedKeywords}');
 }
 ```

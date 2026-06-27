@@ -1,8 +1,8 @@
 ```typescript title="TypeScript"
-import { extractSync } from "xberg";
+import { extract } from "xberg";
 
 try {
-  const result = extractSync("missing.pdf");
+  const result = extract("missing.pdf");
   console.log(result.content);
 } catch (error: unknown) {
   if (error instanceof Error) {

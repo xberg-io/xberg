@@ -28,7 +28,7 @@ impl Plugin for StatefulPlugin {
 impl PostProcessor for StatefulPlugin {
     async fn process(
         &self,
-        result: &mut ExtractionResult,
+        result: &mut ExtractedDocument,
         _config: &ExtractionConfig
     ) -> Result<()> {
         self.call_count.fetch_add(1, Ordering::AcqRel);

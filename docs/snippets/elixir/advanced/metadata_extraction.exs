@@ -1,6 +1,6 @@
 ```elixir title="Elixir"
-{:ok, result} = Xberg.extract("document.pdf")
-
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "document.pdf"}, nil)
+result = List.first(output.results)
 # Metadata is flat — format-specific fields are at the top level
 metadata = result.metadata
 IO.puts("MIME type: #{result.mime_type}")
@@ -17,7 +17,8 @@ title = metadata["title"]
 if title, do: IO.puts("Title: #{title}")
 
 # Access HTML metadata directly from the flat map
-{:ok, html_result} = Xberg.extract("page.html")
+{:ok, html_output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "page.html"}, nil)
+html_result = List.first(html_output.results)
 html_meta = html_result.metadata
 
 keywords = html_meta["keywords"] || []

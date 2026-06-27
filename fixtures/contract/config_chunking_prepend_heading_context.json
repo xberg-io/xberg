@@ -1,12 +1,7 @@
 {
 	"id": "config_chunking_prepend_heading_context",
 	"description": "Tests markdown chunker prepends heading hierarchy to chunk content",
-	"tags": [
-		"contract",
-		"config",
-		"chunking",
-		"heading-context"
-	],
+	"tags": ["contract", "config", "chunking", "heading-context"],
 	"call": "extract",
 	"input": {
 		"kind": "uri",
@@ -15,7 +10,7 @@
 	"assertions": [
 		{
 			"type": "min_length",
-			"field": "results.0.content",
+			"field": "results[0].content",
 			"value": 10
 		}
 	],

@@ -1,10 +1,10 @@
 ```python title="Python"
-from xberg import extract_sync, ExtractionConfig
+from xberg import ExtractInput, extract, ExtractionConfig
 
-result = extract_sync("document.pdf", config=ExtractionConfig())
+result = extract(ExtractInput.from_uri("document.pdf"), ExtractionConfig())
 
 # Metadata is flat — format-specific fields are at the top level
-metadata = result.metadata
+metadata = result.results[0].metadata
 if metadata.get("page_count"):
     print(f"Pages: {metadata['page_count']}")
 if metadata.get("title"):
@@ -12,8 +12,8 @@ if metadata.get("title"):
 if metadata.get("authors"):
     print(f"Authors: {', '.join(metadata['authors'])}")
 
-result = extract_sync("page.html", config=ExtractionConfig())
-metadata = result.metadata
+result = extract(ExtractInput.from_uri("page.html"), ExtractionConfig())
+metadata = result.results[0].metadata
 if metadata.get("title"):
     print(f"Title: {metadata['title']}")
 if metadata.get("description"):

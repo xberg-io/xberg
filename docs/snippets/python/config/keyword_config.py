@@ -1,5 +1,5 @@
 import asyncio
-from xberg import (
+from xberg import ExtractInput, (
     ExtractionConfig,
     KeywordConfig,
     KeywordAlgorithm,
@@ -17,15 +17,15 @@ async def basic_yake() -> None:
             algorithm=KeywordAlgorithm.YAKE,
             max_keywords=10,
             min_score=0.0,
-            ngram_range=(1, 3),
             language="en",
             yake_params=None,
             rake_params=None,
         )
     )
 
-    result = await extract("document.pdf", config=config)
-    print(f"Keywords: {result.keywords}")
+    output = await extract(ExtractInput.from_uri("document.pdf"), config)
+    result = output.results[0]
+    print(f"Keywords: {result.extracted_keywords}")
 
 
 # Example 2: Advanced YAKE with custom parameters
@@ -36,7 +36,6 @@ async def advanced_yake() -> None:
             algorithm=KeywordAlgorithm.YAKE,
             max_keywords=15,
             min_score=0.1,
-            ngram_range=(1, 2),
             language="en",
             yake_params=YakeParams(
                 window_size=1,
@@ -45,8 +44,9 @@ async def advanced_yake() -> None:
         )
     )
 
-    result = await extract("document.pdf", config=config)
-    print(f"Keywords: {result.keywords}")
+    output = await extract(ExtractInput.from_uri("document.pdf"), config)
+    result = output.results[0]
+    print(f"Keywords: {result.extracted_keywords}")
 
 
 # Example 3: RAKE configuration
@@ -57,7 +57,6 @@ async def rake_config() -> None:
             algorithm=KeywordAlgorithm.RAKE,
             max_keywords=10,
             min_score=5.0,
-            ngram_range=(1, 3),
             language="en",
             yake_params=None,
             rake_params=RakeParams(
@@ -67,8 +66,9 @@ async def rake_config() -> None:
         )
     )
 
-    result = await extract("document.pdf", config=config)
-    print(f"Keywords: {result.keywords}")
+    output = await extract(ExtractInput.from_uri("document.pdf"), config)
+    result = output.results[0]
+    print(f"Keywords: {result.extracted_keywords}")
 
 
 if __name__ == "__main__":

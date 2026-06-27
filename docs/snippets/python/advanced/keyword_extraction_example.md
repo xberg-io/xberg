@@ -1,6 +1,6 @@
 ```python title="Python"
 import asyncio
-from xberg import (
+from xberg import ExtractInput, (
     ExtractionConfig,
     KeywordConfig,
     KeywordAlgorithm,
@@ -17,9 +17,10 @@ async def main() -> None:
         )
     )
 
-    result = await extract("research_paper.pdf", config=config)
+    output = await extract(ExtractInput.from_uri("research_paper.pdf"), config)
+    result = output.results[0]
 
-    for keyword in result.extracted_keywords or []:
+    for keyword in result.results[0].extracted_keywords or []:
         print(f"{keyword.text}: {keyword.score:.3f}")
 
 

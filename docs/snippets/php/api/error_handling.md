@@ -6,9 +6,10 @@ use Xberg\Xberg;
 use Xberg\ExtractionConfig;
 use Xberg\XbergException;
 
-$config = new ExtractionConfig();
+$config = ExtractionConfig::default();
 try {
-    $result = Xberg::extractSync('document.pdf', null, $config);
+    $resultOutput = Xberg::extract(\Xberg\ExtractInput::uri('document.pdf'), $config);
+    $result = $resultOutput->results[0];
     echo $result->getContent();
 } catch (XbergException $e) {
     // The extension throws XbergException with the error message

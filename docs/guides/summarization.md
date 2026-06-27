@@ -1,6 +1,6 @@
 # Document Summarisation
 
-Produce a prose summary of an extracted document. Extractive backend uses pure-Rust TextRank; abstractive backend uses liter-llm. Result populates `ExtractionResult.summary`.
+Generate a one-paragraph summary of extracted documents for search snippets, indexing, or quick reviews. Choose extractive summarization for deterministic, network-free local processing, or abstractive for fluent, AI-generated prose.
 
 !!! Note "Feature gate"
     The `summarization` feature ships the TextRank backend (no LLM required) — included in `no-ort-target`, `wasm-target`, `android-target`, `full`. Enable `summarization-llm` for the abstractive backend.
@@ -49,7 +49,7 @@ Switch the strategy and attach an `LlmConfig`:
 
     --8<-- "snippets/python/summarization/abstractive.md"
 
-The model receives the extracted content and returns the summary verbatim. Token usage records in `ExtractionResult.llm_usage` with `source = "summarization"`.
+The model receives the extracted content and returns the summary verbatim. Token usage records in `ExtractedDocument.llm_usage` with `source = "summarization"`.
 
 ## `max_tokens` Semantics
 

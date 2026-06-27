@@ -180,16 +180,13 @@ All code formats are accepted regardless of backend — Xberg automatically maps
 
 **Type**: `String`
 **Default**: `tesseract`
-**Valid Values**: `tesseract`, `easyocr`, `paddleocr`
+**Valid Values**: `tesseract`, `paddleocr`, `paddle-ocr`, `vlm`
 
 OCR engine to use for text extraction from images and scanned documents.
 
 ```bash title="OCR Backend Selection"
 # Tesseract (open source, good for English)
 export XBERG_OCR_BACKEND=tesseract
-
-# EasyOCR (better multilingual support, slower)
-export XBERG_OCR_BACKEND=easyocr
 
 # PaddleOCR (fast, good accuracy across languages)
 export XBERG_OCR_BACKEND=paddleocr
@@ -198,7 +195,6 @@ export XBERG_OCR_BACKEND=paddleocr
 **Performance Notes**:
 
 - **tesseract**: Fastest, best for English and Latin scripts
-- **easyocr**: Slower, excellent multilingual support
 - **paddleocr**: Fast with good accuracy for many languages
 
 ### XBERG_CHUNKING_MAX_CHARS
@@ -672,7 +668,7 @@ services:
     environment:
       XBERG_HOST: "0.0.0.0"
       XBERG_PORT: "8000"
-      XBERG_OCR_BACKEND: "easyocr" # Better multilingual support
+      XBERG_OCR_BACKEND: "paddleocr" # Fast multilingual OCR
       XBERG_OCR_LANGUAGE: "fra" # French
       XBERG_CACHE_ENABLED: "true"
 ```

@@ -1,6 +1,6 @@
 # Named-Entity Recognition
 
-Detect named entities (people, organisations, locations, dates, money amounts, emails, phones, URLs, plus caller-supplied custom labels) in extracted text. Result populates `ExtractionResult.entities`.
+Detect named entities (people, organisations, locations, dates, money amounts, emails, phones, URLs, plus caller-supplied custom labels) in extracted text. Result populates `ExtractedDocument.entities`.
 
 !!! Note "Feature gate"
     The result types ship in the `ner` Cargo feature (included in `no-ort-target`, `wasm-target`, `android-target`, and `full`). Choose a backend: `ner-onnx` (`xberg-gliner` ONNX) or `ner-llm` (liter-llm).
@@ -72,7 +72,7 @@ Custom hits surface as `EntityCategory::Custom(label)` in the resulting `Entity`
 
 ## Output Shape
 
-`ExtractionResult.entities` is `Option<Vec<Entity>>`, populated when NER ran and produced at least one detection. JSON shape:
+`ExtractedDocument.entities` is `Option<Vec<Entity>>`, populated when NER ran and produced at least one detection. JSON shape:
 
 ```json
 {

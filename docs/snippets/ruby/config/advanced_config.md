@@ -15,8 +15,9 @@ config = Xberg::ExtractionConfig.new(
   enable_quality_processing: true
 )
 
-result = Xberg.extract_sync('document.pdf', config: config)
+input = Xberg::ExtractInput.new(uri: 'document.pdf')
+result = Xberg.extract(input, config)
 
-result.chunks&.each { |chunk| puts chunk[0..100] }
-puts "Languages: #{result.detected_languages.inspect}"
+result.results.first.chunks&.each { |chunk| puts chunk[0..100] }
+puts "Languages: #{result.results.first.detected_languages.inspect}"
 ```

@@ -2,9 +2,10 @@
 defmodule Example do
   def handle_extraction_errors do
     # Extract with invalid MIME type
-    case Xberg.extract_sync("document.txt", nil, nil) do
-      {:ok, result} ->
-        IO.puts("Success: #{String.length(result)} chars")
+    case Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "document.txt"}, nil) do
+      {:ok, output} ->
+        result = List.first(output.results)
+        IO.puts("Success: #{String.length(result.content || "")} chars")
 
       {:error, reason} when is_binary(reason) ->
         # Error is a string description

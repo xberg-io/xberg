@@ -26,7 +26,7 @@ public class StatefulPostProcessor : IPostProcessor
         Console.WriteLine($"Cache contains {_cache.Count} entries");
     }
 
-    public void Process(ExtractionResult result, ExtractionConfig config)
+    public void Process(ExtractedDocument result, ExtractionConfig config)
     {
         _callCount++;
 
@@ -41,12 +41,12 @@ public class StatefulPostProcessor : IPostProcessor
         return ProcessingStage.Middle;
     }
 
-    public bool ShouldProcess(ExtractionResult result, ExtractionConfig config)
+    public bool ShouldProcess(ExtractedDocument result, ExtractionConfig config)
     {
         return true;
     }
 
-    public ulong EstimatedDurationMs(ExtractionResult result)
+    public ulong EstimatedDurationMs(ExtractedDocument result)
     {
         return 5;
     }

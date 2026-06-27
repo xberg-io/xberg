@@ -1,6 +1,6 @@
 ```python title="Python"
 import asyncio
-from xberg import extract, ExtractionConfig, SummarizationConfig
+from xberg import ExtractInput, extract, ExtractionConfig, SummarizationConfig
 
 async def main() -> None:
     config = ExtractionConfig(
@@ -9,7 +9,7 @@ async def main() -> None:
             max_tokens=200,
         ),
     )
-    result = await extract("report.pdf", config=config)
+    result = await extract(ExtractInput.from_uri("report.pdf"), config)
     if result.summary:
         print(result.summary.text)
 

@@ -1,7 +1,9 @@
 ```java title="Java"
 import io.xberg.Xberg;
 import io.xberg.ExtractionResult;
+import io.xberg.ExtractedDocument;
 import io.xberg.ExtractionConfig;
+import io.xberg.ExtractInput;
 import io.xberg.ChunkingConfig;
 import io.xberg.EmbeddingConfig;
 import io.xberg.EmbeddingModelType;
@@ -20,7 +22,12 @@ ExtractionConfig config = ExtractionConfig.builder()
         .build())
     .build();
 
-ExtractionResult result = Xberg.extract("document.pdf", config);
+ExtractionResult output = Xberg.extract(
+    ExtractInput.fromUri("document.pdf"),
+    config
+);
+
+ExtractedDocument result = output.results().get(0);
 
 List<Object> chunks = result.getChunks() != null ? result.getChunks() : List.of();
 for (int index = 0; index < chunks.size(); index++) {

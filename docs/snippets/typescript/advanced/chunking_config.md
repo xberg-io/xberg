@@ -8,7 +8,7 @@ const config = {
   },
 };
 
-const result = await extract("document.pdf", null, config);
+const result = await extract({ kind: "uri", uri: "document.pdf" }, config);
 console.log(`Total chunks: ${result.chunks?.length ?? 0}`);
 ```
 
@@ -21,7 +21,7 @@ const config = {
   },
 };
 
-const result = await extract("document.pdf", null, config);
+const result = await extract({ kind: "uri", uri: "document.pdf" }, config);
 for (const chunk of result.chunks ?? []) {
   console.log(`Content: ${chunk.content.slice(0, 100)}...`);
 }
@@ -39,7 +39,7 @@ const config = {
   },
 };
 
-const result = await extract("document.md", null, config);
+const result = await extract({ kind: "uri", uri: "document.md" }, config);
 for (const chunk of result.chunks ?? []) {
   // Each chunk's content is prefixed with its heading breadcrumb
   console.log(`Content: ${chunk.content.slice(0, 100)}...`);

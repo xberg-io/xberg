@@ -6,9 +6,9 @@ public class PdfOnlyProcessor : IPostProcessor
     public string Name() => "pdf-only-processor";
     public string Version() => "1.0.0";
 
-    public ExtractionResult Process(ExtractionResult result) => result;
+    public ExtractedDocument Process(ExtractedDocument result) => result;
 
-    public bool ShouldProcess(ExtractionResult result)
+    public bool ShouldProcess(ExtractedDocument result)
         => result.MimeType == "application/pdf";
 }
 

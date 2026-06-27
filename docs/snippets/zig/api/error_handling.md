@@ -4,7 +4,8 @@ const xberg = @import("xberg");
 
 pub fn main() !void {
     const config_json = "{}";
-    const result_json = xberg.extract_sync("document.pdf", null, config_json) catch |err| {
+    const input_json = "{\"kind\":\"uri\",\"uri\":\"document.pdf\"}";
+    const output_json = xberg.extract(input_json, config_json) catch |err| {
         const stderr = std.io.getStdErr().writer();
         switch (err) {
             error.Io => try stderr.print("File error\n", .{}),
@@ -20,9 +21,9 @@ pub fn main() !void {
         }
         return;
     };
-    defer std.heap.c_allocator.free(result_json);
+    defer std.heap.c_allocator.free(output_json);
 
     const stdout = std.io.getStdOut().writer();
-    try stdout.print("{s}\n", .{result_json});
+    try stdout.print("{s}\n", .{output_json});
 }
 ```

@@ -6,7 +6,6 @@ config = Xberg::ExtractionConfig.new(
     algorithm: Xberg::KeywordAlgorithm::YAKE,
     max_keywords: 10,
     min_score: 0.3,
-    ngram_range: [1, 3],
     language: 'en'
   )
 )

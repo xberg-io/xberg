@@ -6,7 +6,7 @@ var config = new ExtractionConfig
     Pages = new PageConfig { ExtractPages = true }
 };
 
-var result = Xberg.ExtractSync("document.pdf", config);
+var result = Xberg.Extract("document.pdf", config);
 
 if (result.Chunks != null)
 {

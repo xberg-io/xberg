@@ -2,7 +2,7 @@
 impl PostProcessor for PdfOnlyProcessor {
     async fn process(
         &self,
-        result: &mut ExtractionResult,
+        result: &mut ExtractedDocument,
         _config: &ExtractionConfig
     ) -> Result<()> {
         Ok(())
@@ -14,7 +14,7 @@ impl PostProcessor for PdfOnlyProcessor {
 
     fn should_process(
         &self,
-        result: &ExtractionResult,
+        result: &ExtractedDocument,
         _config: &ExtractionConfig
     ) -> bool {
         result.mime_type == "application/pdf"

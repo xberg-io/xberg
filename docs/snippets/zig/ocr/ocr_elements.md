@@ -19,10 +19,11 @@ pub fn main() !void {
         \\}
     ;
 
-    const result_json = try xberg.extract_sync("scanned.pdf", null, config_json);
-    defer std.heap.c_allocator.free(result_json);
+    const input_json = "{\"kind\":\"uri\",\"uri\":\"scanned.pdf\"}";
+    const output_json = try xberg.extract(input_json, config_json);
+    defer std.heap.c_allocator.free(output_json);
 
-    const owned = try allocator.dupe(u8, result_json);
+    const owned = try allocator.dupe(u8, output_json);
     defer allocator.free(owned);
 
     var parsed = try std.json.parseFromSlice(std.json.Value, allocator, owned, .{});
@@ -30,7 +31,12 @@ pub fn main() !void {
 
     const stdout = std.io.getStdOut().writer();
 
-    const root = parsed.value;
+    const output = parsed.value;
+    if (output != .object) return;
+
+    const results_val = output.object.get("results") orelse return;
+    if (results_val != .array or results_val.array.items.len == 0) return;
+    const root = results_val.array.items[0];
     if (root != .object) return;
 
     if (root.object.get("ocr_elements")) |elements_val| {

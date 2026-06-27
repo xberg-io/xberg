@@ -21,12 +21,15 @@ async function extractWithErrorHandling() {
   try {
     const bytes = new Uint8Array(await fetch("document.png").then((r) => r.arrayBuffer()));
 
-    const result = await extract(bytes, "image/png", {
-      ocr: {
-        backend: "tesseract-wasm",
-        language: "eng",
+    const result = await extract(
+      { kind: "bytes", bytes, mimeType: "image/png" },
+      {
+        ocr: {
+          backend: "tesseract-wasm",
+          language: "eng",
+        },
       },
-    });
+    );
 
     console.log("Extraction successful:", result.content.length, "chars");
   } catch (error) {

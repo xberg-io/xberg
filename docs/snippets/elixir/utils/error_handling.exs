@@ -13,8 +13,9 @@ defmodule ErrorHandlingUtils do
   end
 
   defp extract_with_retry(file_path, config, max_retries, attempt, _prev_error) do
-    case Xberg.extract(file_path, nil, config) do
-      {:ok, result} ->
+    case Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: file_path}, config) do
+      {:ok, output} ->
+        result = List.first(output.results)
         {:ok, result}
 
       {:error, reason} ->
@@ -30,11 +31,12 @@ defmodule ErrorHandlingUtils do
   def extract_multiple(files, config) do
     files
     |> Enum.map(fn file ->
-      {file, Xberg.extract(file, nil, config)}
+      {file, Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: file}, config)}
     end)
     |> Enum.reduce(%{successes: [], failures: []}, fn {file, result}, acc ->
       case result do
-        {:ok, data} ->
+        {:ok, output} ->
+          data = List.first(output.results)
           Map.update!(acc, :successes, &[{file, data} | &1])
 
         {:error, reason} ->
@@ -144,9 +146,10 @@ end
 
 IO.puts("\n=== Validate Result ===")
 
-{:ok, result} = Xberg.extract("test.pdf", nil, config)
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "test.pdf"}, config)
 
-case ErrorHandlingUtils.validate_result(result, ["text", "chunks"]) do
+result = List.first(output.results)
+case ErrorHandlingUtils.validate_result({:ok, result}, ["text", "chunks"]) do
   {:ok, data} ->
     IO.puts("Validation passed")
 

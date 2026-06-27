@@ -26,10 +26,11 @@ defmodule Example do
       }
     })
 
-    case Xberg.extract_sync("report.pdf", nil, config_json) do
-      {:ok, result} ->
+    case Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "report.pdf"}, config_json) do
+      {:ok, output} ->
+        result = List.first(output.results)
         IO.puts("Extraction successful")
-        IO.puts("Content length: #{String.length(result)} chars")
+        IO.puts("Content length: #{String.length(result.content || "")} chars")
         :ok
 
       {:error, reason} ->

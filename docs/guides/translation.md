@@ -1,6 +1,6 @@
 # Document Translation
 
-Translate extracted content into a target language with an LLM. Translates `content`, optionally `formatted_content`, and every chunk's text in place. Result populates `ExtractionResult.translation`.
+Translate extracted documents into any language for normalized downstream processing. Extracted text, formatted markup, and chunks all translate together, keeping your search and retrieval indices in a single language.
 
 !!! Note "Feature gate"
     Requires the `translation` Cargo feature. Included in `full`. Requires `liter-llm` for the underlying provider.

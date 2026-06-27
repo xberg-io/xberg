@@ -1,6 +1,6 @@
 # Redaction & Anonymisation
 
-Rewrite every textual field of `ExtractionResult` to remove PII before the result leaves Xberg. The pattern engine covers regex-detectable categories (emails, phones, SSNs, credit cards, IBANs, IP addresses, dates of birth, SWIFT/BIC, postal codes); the optional NER backend adds PERSON / ORGANIZATION / LOCATION. The audit trail lands on `ExtractionResult.redaction_report`.
+Strip PII from extracted documents before they leave your system—emails, phone numbers, credit cards, names, organizations, and custom patterns you define. Redacted results stay locally processed with no network calls; an audit trail preserves what was redacted and where.
 
 !!! Note "Feature gate"
     Requires the `redaction` Cargo feature (pattern engine only; ships in `no-ort-target`, `wasm-target`, `android-target`, `full`). Enable `redaction-ml` to add the NER backend for name/organisation/location categories.

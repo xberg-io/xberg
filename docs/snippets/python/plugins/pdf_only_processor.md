@@ -1,5 +1,5 @@
 ```python title="Python"
-from xberg import ExtractionResult, register_post_processor
+from xberg import ExtractedDocument, register_post_processor
 
 class PdfOnlyProcessor:
     def name(self) -> str:
@@ -8,10 +8,10 @@ class PdfOnlyProcessor:
     def version(self) -> str:
         return "1.0.0"
 
-    def process(self, result: ExtractionResult) -> ExtractionResult:
+    def process(self, result: ExtractedDocument) -> ExtractedDocument:
         return result
 
-    def should_process(self, result: ExtractionResult) -> bool:
+    def should_process(self, result: ExtractedDocument) -> bool:
         return result.mime_type == "application/pdf"
 
 processor: PdfOnlyProcessor = PdfOnlyProcessor()

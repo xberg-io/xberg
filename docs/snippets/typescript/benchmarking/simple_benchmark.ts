@@ -9,7 +9,7 @@ async function benchmarkExtractions(): Promise<void> {
 
   let start = performance.now();
   for (let i = 0; i < numRuns; i++) {
-    await extract(filePath, null, config);
+    await extract({ kind: "uri", uri: filePath }, config);
   }
   const syncDuration = (performance.now() - start) / 1000;
   const avgSync = syncDuration / numRuns;
@@ -21,7 +21,7 @@ async function benchmarkExtractions(): Promise<void> {
   start = performance.now();
   const tasks = Array(numRuns)
     .fill(null)
-    .map(() => extract(filePath, null, config));
+    .map(() => extract({ kind: "uri", uri: filePath }, config));
   await Promise.all(tasks);
   const asyncDuration = (performance.now() - start) / 1000;
 
@@ -34,13 +34,13 @@ async function benchmarkExtractions(): Promise<void> {
 
   console.log("\nFirst extraction (populates cache)...");
   start = performance.now();
-  const _result1 = await extract(filePath, null, cacheConfig);
+  const _result1 = await extract({ kind: "uri", uri: filePath }, cacheConfig);
   const firstDuration = (performance.now() - start) / 1000;
   console.log("  - Time: " + firstDuration.toFixed(3) + "s");
 
   console.log("Second extraction (from cache)...");
   start = performance.now();
-  const _result2 = await extract(filePath, null, cacheConfig);
+  const _result2 = await extract({ kind: "uri", uri: filePath }, cacheConfig);
   const cachedDuration = (performance.now() - start) / 1000;
   console.log("  - Time: " + cachedDuration.toFixed(3) + "s");
   console.log("  - Cache speedup: " + (firstDuration / cachedDuration).toFixed(1) + "x");

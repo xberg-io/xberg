@@ -8,18 +8,19 @@ var config = new ExtractionConfig
 {
     Keywords = new KeywordConfig
     {
-        Algorithm = KeywordAlgorithm.YAKE,
+        Algorithm = KeywordAlgorithm.Yake,
         MaxKeywords = 10,
-        MinScore = 0.3
+        MinScore = 0.3f
     }
 };
 
-var result = XbergLib.ExtractSync("research_paper.pdf", config);
+var output = await XbergConverter.ExtractAsync(ExtractInput.FromUri("research_paper.pdf"), config);
+var result = output.Results[0];
 
 Console.WriteLine("Extracted Keywords:");
-if (result.Metadata.Keywords != null)
+if (result.ExtractedKeywords != null)
 {
-    foreach (var keyword in result.Metadata.Keywords.OrderByDescending(k => k.Score))
+    foreach (var keyword in result.ExtractedKeywords.OrderByDescending(k => k.Score))
     {
         Console.WriteLine($"  - {keyword.Text}: {keyword.Score:F3}");
     }
@@ -29,22 +30,23 @@ else
     Console.WriteLine("  (No keywords extracted)");
 }
 
-var tfidfConfig = new ExtractionConfig
+var rakeConfig = new ExtractionConfig
 {
     Keywords = new KeywordConfig
     {
-        Algorithm = KeywordAlgorithm.TfIdf,
+        Algorithm = KeywordAlgorithm.Rake,
         MaxKeywords = 15,
-        MinScore = 0.2
+        MinScore = 0.2f
     }
 };
 
-var tfidfResult = XbergLib.ExtractSync("document.pdf", tfidfConfig);
+var rakeOutput = await XbergConverter.ExtractAsync(ExtractInput.FromUri("document.pdf"), rakeConfig);
+var rakeResult = rakeOutput.Results[0];
 
-Console.WriteLine("\nTF-IDF Keywords:");
-if (tfidfResult.Metadata.Keywords != null)
+Console.WriteLine("\nRAKE Keywords:");
+if (rakeResult.ExtractedKeywords != null)
 {
-    var topKeywords = tfidfResult.Metadata.Keywords
+    var topKeywords = rakeResult.ExtractedKeywords
         .OrderByDescending(k => k.Score)
         .Take(10)
         .ToList();
@@ -57,6 +59,6 @@ if (tfidfResult.Metadata.Keywords != null)
 
 Console.WriteLine($"\nKeyword Extraction Summary:");
 Console.WriteLine($"  - Algorithm: YAKE");
-Console.WriteLine($"  - Total Keywords: {result.Metadata.Keywords?.Count ?? 0}");
-Console.WriteLine($"  - Top Keyword: {result.Metadata.Keywords?.FirstOrDefault()?.Text}");
+Console.WriteLine($"  - Total Keywords: {result.ExtractedKeywords?.Count ?? 0}");
+Console.WriteLine($"  - Top Keyword: {result.ExtractedKeywords?.FirstOrDefault()?.Text}");
 ```

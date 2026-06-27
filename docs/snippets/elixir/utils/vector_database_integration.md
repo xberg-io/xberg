@@ -13,10 +13,10 @@ config_json =
     }
   })
 
-{:ok, json} = Xberg.extract_async("document.pdf", nil, config_json)
-result = Jason.decode!(json)
+{:ok, output} = Xberg.extract(%Xberg.ExtractInput{kind: :uri, uri: "document.pdf"}, config_json)
 
-(result["chunks"] || [])
+result = List.first(output.results)
+(result.chunks || [])
 |> Enum.with_index()
 |> Enum.each(fn {chunk, i} ->
   chunk_id = "doc_chunk_#{i}"

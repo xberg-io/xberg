@@ -16,7 +16,7 @@ class LoggingPostProcessor : IPostProcessor {
         log.info("Shutting down plugin: ${name()}")
     }
 
-    override fun process(result: ExtractionResult, config: ExtractionConfig) {
+    override fun process(result: ExtractedDocument, config: ExtractionConfig) {
         log.info("Processing ${result.mimeType()} (${result.content().length} chars)")
         if (result.content().isEmpty()) {
             log.warning("Extraction resulted in empty content")
@@ -26,11 +26,11 @@ class LoggingPostProcessor : IPostProcessor {
     override fun processing_stage(): ProcessingStage = ProcessingStage.Late
 
     override fun should_process(
-        _result: ExtractionResult,
+        _result: ExtractedDocument,
         _config: ExtractionConfig,
     ): Boolean = true
 
-    override fun estimated_duration_ms(_result: ExtractionResult): Long = 1L
+    override fun estimated_duration_ms(_result: ExtractedDocument): Long = 1L
 
     override fun priority(): Int = 10
 }

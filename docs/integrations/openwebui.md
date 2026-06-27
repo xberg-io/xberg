@@ -1,7 +1,5 @@
 # Open WebUI
 
-![Xberg](https://img.shields.io/badge/xberg-v4.7.0+-blue)
-
 Open WebUI supports pluggable content extraction backends. Xberg implements two of those backend APIs — the **docling-serve** endpoint and the **external document loader** endpoint, so it works as a drop-in replacement without patching Open WebUI.
 
 ## How it works

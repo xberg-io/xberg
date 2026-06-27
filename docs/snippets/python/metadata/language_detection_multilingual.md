@@ -1,5 +1,5 @@
 ```python title="Python"
-from xberg import extract_sync, ExtractionConfig, LanguageDetectionConfig
+from xberg import ExtractInput, extract, ExtractionConfig, LanguageDetectionConfig
 
 config = ExtractionConfig(
     language_detection=LanguageDetectionConfig(
@@ -9,8 +9,8 @@ config = ExtractionConfig(
     ),
 )
 
-result = extract_sync("multilingual_document.pdf", config=config)
+result = extract(ExtractInput.from_uri("multilingual_document.pdf"), config)
 
-if result.detected_languages:
-    print(f"Detected languages: {', '.join(result.detected_languages)}")
+if result.results[0].detected_languages:
+    print(f"Detected languages: {', '.join(result.results[0].detected_languages)}")
 ```

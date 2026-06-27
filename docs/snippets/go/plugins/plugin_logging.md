@@ -82,7 +82,7 @@ func main() {
 	log.Println("[Main] Validator registered with logging enabled")
 
 	// Extract with logging
-	result, err := xberg.ExtractSync("document.pdf", nil)
+	result, err := xberg.Extract("document.pdf", nil)
 	if err != nil {
 		log.Fatalf("extract failed: %v", err)
 	}

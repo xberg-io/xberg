@@ -328,14 +328,22 @@ Both work with **pnpm** (`pnpm add`) and **Yarn** (`yarn add`) as well.
 
     ```html
     <script type="module">
-      import { initWasm, extractFromFile } from "@xberg-io/xberg-wasm";
+      import { ExtractInputKind, initWasm, extract } from "@xberg-io/xberg-wasm";
 
       await initWasm();
 
       const input = document.getElementById("file");
       input.addEventListener("change", async (e) => {
-        const result = await extractFromFile(e.target.files[0]);
-        console.log(result.content);
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const output = await extract({
+          kind: ExtractInputKind.Bytes,
+          bytes: new Uint8Array(await file.arrayBuffer()),
+          mimeType: file.type || "application/octet-stream",
+          filename: file.name,
+        });
+        console.log(output.results[0].content);
       });
     </script>
 
@@ -345,24 +353,31 @@ Both work with **pnpm** (`pnpm add`) and **Yarn** (`yarn add`) as well.
 ??? Note "Wasm — Deno"
 
     ```typescript
-    import { initWasm, extractFile } from "npm:@xberg-io/xberg-wasm";
+    import { ExtractInputKind, initWasm, extract } from "npm:@xberg-io/xberg-wasm";
 
     await initWasm();
-    const result = await extractFile("./document.pdf");
-    console.log(result.content);
+    const output = await extract({
+      kind: ExtractInputKind.Uri,
+      uri: "./document.pdf",
+    });
+    console.log(output.results[0].content);
     ```
 
 ??? Note "Wasm — Cloudflare Workers"
 
     ```typescript
-    import { initWasm, extractBytes } from "@xberg-io/xberg-wasm";
+    import { ExtractInputKind, initWasm, extract } from "@xberg-io/xberg-wasm";
 
     export default {
       async fetch(request: Request): Promise<Response> {
         await initWasm();
         const bytes = new Uint8Array(await request.arrayBuffer());
-        const result = await extractBytes(bytes, "application/pdf");
-        return Response.json({ content: result.content });
+        const output = await extract({
+          kind: ExtractInputKind.Bytes,
+          bytes,
+          mimeType: "application/pdf",
+        });
+        return Response.json({ content: output.results[0]?.content ?? "" });
       },
     };
     ```
@@ -378,7 +393,7 @@ Both work with **pnpm** (`pnpm add`) and **Yarn** (`yarn add`) as well.
     - **LLM/VLM features** (liter-llm is not part of the `wasm-target` feature set)
     - **Hardware acceleration config** (single-threaded WASM, no GPU access)
     - **Native server features** (`api`, `mcp`, CLI binary)
-    - **Browser filesystem paths** (`extractBytes`/`extractFromFile` are portable; path APIs require Node/Deno/Bun filesystem access)
+    - **Browser filesystem paths** (use `kind = "bytes"` for browser file uploads; path APIs require Node/Deno/Bun filesystem access)
     - **Email codepage config** (EmailConfig not available)
 
     Pure-Rust extraction formats, OCR via Tesseract WASM, chunking, metadata, tables, language detection, SVG handling, redaction, summarization, QR-code detection, and image extraction work in WASM. See the [WASM API Reference](../reference/api-wasm.md) for details.

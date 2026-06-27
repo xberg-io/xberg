@@ -1,6 +1,6 @@
 # Page Classification
 
-Classify each page of a document against a caller-supplied label set. Single-label (exactly one) or multi-label (any subset). Result populates `ExtractionResult.page_classifications`.
+Classify each page of a document against a caller-supplied label set. Single-label (exactly one) or multi-label (any subset). Result populates `ExtractedDocument.page_classifications`.
 
 !!! Note "Feature gate"
     Requires the `classification` Cargo feature. Included in `full`. Requires `liter-llm` for the underlying provider.
@@ -73,7 +73,7 @@ The output is JSON-schema-enforced: the response must be a JSON array of strings
 
 ## Output Shape
 
-`ExtractionResult.page_classifications` is `Option<Vec<PageClassification>>`. JSON shape:
+`ExtractedDocument.page_classifications` is `Option<Vec<PageClassification>>`. JSON shape:
 
 ```json
 {

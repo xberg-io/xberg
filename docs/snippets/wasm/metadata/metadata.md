@@ -7,7 +7,7 @@ const fileInput = document.getElementById("file") as HTMLInputElement;
 const file = fileInput.files?.[0];
 
 if (file) {
-  const result = await extract(file);
+  const result = await extract({ kind: "bytes", bytes: file, mimeType: file.type || "application/octet-stream" });
   console.log(`Metadata: ${JSON.stringify(result.metadata)}`);
 
   // Access common metadata fields

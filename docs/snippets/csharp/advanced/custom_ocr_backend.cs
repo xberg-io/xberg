@@ -73,7 +73,7 @@ class Program
                 }
             };
 
-            var result = XbergLib.ExtractSync("document.pdf", config);
+            var result = XbergLib.Extract("document.pdf", config);
             Console.WriteLine($"OCR text: {result.Content}");
         }
         catch (XbergException ex)

@@ -1,5 +1,5 @@
 using Xberg;
 
-var result = XbergClient.ExtractSync("document.pdf");
+var result = XbergClient.Extract("document.pdf");
 
 Console.WriteLine(result.Content);

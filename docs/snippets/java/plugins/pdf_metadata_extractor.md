@@ -1,6 +1,9 @@
 ```java title="Java"
 import io.xberg.Xberg;
 import io.xberg.ExtractionResult;
+import io.xberg.ExtractedDocument;
+import io.xberg.ExtractInput;
+import io.xberg.ExtractionConfig;
 import io.xberg.PostProcessor;
 import io.xberg.XbergException;
 import java.io.IOException;
@@ -38,7 +41,12 @@ public class PdfMetadataExtractorExample {
 
             logger.info("PDF metadata extractor initialized");
 
-            ExtractionResult result = Xberg.extract("document.pdf");
+            ExtractionResult output = Xberg.extract(
+                ExtractInput.fromUri("document.pdf"),
+                ExtractionConfig.builder().build()
+            );
+
+            ExtractedDocument result = output.results().get(0);
             System.out.println("PDF processed: " + result.getMetadata().get("pdf_processed"));
 
             logger.info("Processed " + processedCount.get() + " PDFs");

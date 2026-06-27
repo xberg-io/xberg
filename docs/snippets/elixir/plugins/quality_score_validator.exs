@@ -36,7 +36,7 @@ defmodule MyApp.Plugins.QualityScoreValidator do
 
   @impl true
   def validate(result) do
-    # Extract quality score from ExtractionResult struct
+    # Extract quality score from ExtractedDocument struct
     quality_score = result.quality_score
 
     if is_number(quality_score) and quality_score >= 0.5 do
@@ -51,7 +51,7 @@ end
 Plugin.register_validator(MyApp.Plugins.QualityScoreValidator)
 
 # Example usage with extraction
-# Note: In real usage, result will be an ExtractionResult struct, not a map.
+# Note: In real usage, result will be an ExtractedDocument struct, not a map.
 # This example shows the data structure for illustration purposes.
 result = %{
   "content" => "Extracted document content",

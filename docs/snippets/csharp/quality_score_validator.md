@@ -6,7 +6,7 @@ public class QualityValidator : IValidator
     public string Name() => "quality-validator";
     public string Version() => "1.0.0";
 
-    public void Validate(ExtractionResult result)
+    public void Validate(ExtractedDocument result)
     {
         var score = result.QualityScore;
 

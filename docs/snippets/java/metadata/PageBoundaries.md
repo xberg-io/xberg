@@ -1,7 +1,14 @@
 Import io.xberg.\*;
 import java.nio.charset.StandardCharsets;
 
-var result = Xberg.extractSync("document.pdf");
+var resultOutput = Xberg.extract(
+    io.xberg.ExtractInput.builder()
+        .withKind(io.xberg.ExtractInputKind.Uri)
+        .withUri("document.pdf")
+        .build(),
+    io.xberg.ExtractionConfig.builder().build()
+);
+var result = resultOutput.results().get(0);
 
 If (result.metadata().pages() != null &&
 result.metadata().pages().boundaries() != null) {
