@@ -575,6 +575,7 @@ impl OcrConfig {
     /// "Failed to download language pack ''" error.
     #[cfg(any(
         feature = "ocr",
+        feature = "ocr-wasm",
         feature = "paddle-ocr",
         all(feature = "liter-llm", not(target_arch = "wasm32")),
     ))]
