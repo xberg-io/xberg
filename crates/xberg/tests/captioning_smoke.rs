@@ -128,11 +128,9 @@ async fn captioning_post_processor_is_noop_without_images() {
     };
 
     // No images vector at all.
-    let mut result = ExtractedDocument {
-        content: String::new(),
-        mime_type: Cow::Borrowed("text/plain"),
-        ..Default::default()
-    };
+    let mut result = ExtractedDocument::default();
+    result.content = String::new();
+    result.mime_type = Cow::Borrowed("text/plain");
     CaptioningProcessor
         .process(&mut result, &cfg)
         .await
@@ -175,19 +173,17 @@ async fn captioning_post_processor_tolerates_vlm_failure() {
         ..Default::default()
     };
 
-    let mut result = ExtractedDocument {
-        content: String::new(),
-        mime_type: Cow::Borrowed("text/plain"),
-        images: Some(vec![ExtractedImage {
-            data: Bytes::from_static(b"not-a-real-image"),
-            format: Cow::Borrowed("png"),
-            width: Some(64),
-            height: Some(64),
-            is_mask: false,
-            ..Default::default()
-        }]),
+    let mut result = ExtractedDocument::default();
+    result.content = String::new();
+    result.mime_type = Cow::Borrowed("text/plain");
+    result.images = Some(vec![ExtractedImage {
+        data: Bytes::from_static(b"not-a-real-image"),
+        format: Cow::Borrowed("png"),
+        width: Some(64),
+        height: Some(64),
+        is_mask: false,
         ..Default::default()
-    };
+    }]);
     CaptioningProcessor
         .process(&mut result, &cfg)
         .await

@@ -47,12 +47,20 @@ typedef struct XBERGArchiveEntry XBERGArchiveEntry;
  */
 typedef struct XBERGArchiveMetadata XBERGArchiveMetadata;
 /**
+ * The category of a downloaded asset.
+ */
+typedef struct XBERGAssetCategory XBERGAssetCategory;
+/**
  * Audio/video file metadata.
  *
  * Populated from container tags (ID3v2, MP4 atoms, Vorbis comments, etc.) and
  * PCM decode properties. Available when the `transcription-types` feature is enabled.
  */
 typedef struct XBERGAudioMetadata XBERGAudioMetadata;
+/**
+ * Authentication configuration.
+ */
+typedef struct XBERGAuthConfig XBERGAuthConfig;
 /**
  * Bounding box in original image coordinates (x1, y1) top-left, (x2, y2) bottom-right.
  */
@@ -73,6 +81,22 @@ typedef struct XBERGBoundaryReason XBERGBoundaryReason;
  * Bounding box coordinates for element positioning.
  */
 typedef struct XBERGBoundingBox XBERGBoundingBox;
+/**
+ * Browser backend used for JavaScript rendering.
+ */
+typedef struct XBERGBrowserBackend XBERGBrowserBackend;
+/**
+ * Browser fallback configuration.
+ */
+typedef struct XBERGBrowserConfig XBERGBrowserConfig;
+/**
+ * When to use the headless browser fallback.
+ */
+typedef struct XBERGBrowserMode XBERGBrowserMode;
+/**
+ * Wait strategy for browser page rendering.
+ */
+typedef struct XBERGBrowserWait XBERGBrowserWait;
 /**
  * Aggregate statistics for a xberg cache directory.
  */
@@ -192,6 +216,14 @@ typedef struct XBERGClassificationLabel XBERGClassificationLabel;
  */
 typedef struct XBERGCodeContentMode XBERGCodeContentMode;
 /**
+ * Content extraction and conversion configuration.
+ *
+ * Controls how HTML is converted to the output format. Uses
+ * html-to-markdown-rs as the conversion engine for all formats
+ * (markdown, plain text, djot).
+ */
+typedef struct XBERGContentConfig XBERGContentConfig;
+/**
  * Cross-extractor content filtering configuration.
  *
  * Controls whether "furniture" content (headers, footers, page numbers,
@@ -220,6 +252,10 @@ typedef struct XBERGContributorRole XBERGContributorRole;
  * and Office-specific extensions.
  */
 typedef struct XBERGCoreProperties XBERGCoreProperties;
+/**
+ * Configuration for crawl, scrape, and map operations.
+ */
+typedef struct XBERGCrawlConfig XBERGCrawlConfig;
 /**
  * CSV/TSV file metadata.
  */
@@ -1444,6 +1480,10 @@ typedef struct XBERGProcessingStage XBERGProcessingStage;
  */
 typedef struct XBERGProcessingWarning XBERGProcessingWarning;
 /**
+ * Proxy configuration for HTTP requests.
+ */
+typedef struct XBERGProxyConfig XBERGProxyConfig;
+/**
  * Outlook PST archive metadata.
  */
 typedef struct XBERGPstMetadata XBERGPstMetadata;
@@ -1687,6 +1727,10 @@ typedef struct XBERGSecurityLimits XBERGSecurityLimits;
  * - `max_multipart_field_bytes`: 104_857_600 (100 MB)
  */
 typedef struct XBERGServerConfig XBERGServerConfig;
+/**
+ * SSRF policy configuration.
+ */
+typedef struct XBERGSsrfPolicy XBERGSsrfPolicy;
 /**
  * Structured data (Schema.org, microdata, RDFa) block.
  */
@@ -4146,6 +4190,13 @@ void xberg_url_extraction_config_free(XBERGUrlExtractionConfig *ptr);
  * Pointer must be a valid handle returned by this library.
  */
 XBERGUrlExtractionMode *xberg_url_extraction_config_mode(const XBERGUrlExtractionConfig *ptr);
+
+/**
+ * Get the `crawl` field from a `UrlExtractionConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGCrawlConfig *xberg_url_extraction_config_crawl(const XBERGUrlExtractionConfig *ptr);
 
 /**
  * Get the `document_url_pattern` field from a `UrlExtractionConfig`.
@@ -8493,13 +8544,6 @@ char *xberg_extracted_document_form_fields(const XBERGExtractedDocument *ptr);
  * Pointer must be a valid handle returned by this library.
  */
 char *xberg_extracted_document_formatted_content(const XBERGExtractedDocument *ptr);
-
-/**
- * Convert from an OCR result.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
- * freed with the appropriate free function.
- */
-XBERGExtractedDocument *xberg_extracted_document_from_ocr(const XBERGOcrExtractionResult *ocr);
 
 /**
  * Create a `ArchiveEntry` from a JSON string. Returns null on failure.
@@ -15311,6 +15355,611 @@ int64_t xberg_pdf_metadata_height(const XBERGPdfMetadata *ptr);
 uint32_t xberg_pdf_metadata_page_count(const XBERGPdfMetadata *ptr);
 
 /**
+ * Create a `ProxyConfig` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_proxy_config_free`.
+ */
+XBERGProxyConfig *xberg_proxy_config_from_json(const char *json);
+
+/**
+ * Serialize a `ProxyConfig` to a JSON string. Returns null on failure.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_proxy_config_to_json(const XBERGProxyConfig *ptr);
+
+/**
+ * Free a `ProxyConfig` handle.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void xberg_proxy_config_free(XBERGProxyConfig *ptr);
+
+/**
+ * Get the `url` field from a `ProxyConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_proxy_config_url(const XBERGProxyConfig *ptr);
+
+/**
+ * Get the `username` field from a `ProxyConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_proxy_config_username(const XBERGProxyConfig *ptr);
+
+/**
+ * Get the `password` field from a `ProxyConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_proxy_config_password(const XBERGProxyConfig *ptr);
+
+/**
+ * Create a `ContentConfig` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_content_config_free`.
+ */
+XBERGContentConfig *xberg_content_config_from_json(const char *json);
+
+/**
+ * Serialize a `ContentConfig` to a JSON string. Returns null on failure.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_content_config_to_json(const XBERGContentConfig *ptr);
+
+/**
+ * Free a `ContentConfig` handle.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void xberg_content_config_free(XBERGContentConfig *ptr);
+
+/**
+ * Get the `output_format` field from a `ContentConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_content_config_output_format(const XBERGContentConfig *ptr);
+
+/**
+ * Get the `preprocessing_preset` field from a `ContentConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_content_config_preprocessing_preset(const XBERGContentConfig *ptr);
+
+/**
+ * Get the `remove_navigation` field from a `ContentConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_content_config_remove_navigation(const XBERGContentConfig *ptr);
+
+/**
+ * Get the `remove_forms` field from a `ContentConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_content_config_remove_forms(const XBERGContentConfig *ptr);
+
+/**
+ * Get the `strip_tags` field from a `ContentConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_content_config_strip_tags(const XBERGContentConfig *ptr);
+
+/**
+ * Get the `preserve_tags` field from a `ContentConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_content_config_preserve_tags(const XBERGContentConfig *ptr);
+
+/**
+ * Get the `exclude_selectors` field from a `ContentConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_content_config_exclude_selectors(const XBERGContentConfig *ptr);
+
+/**
+ * Get the `skip_images` field from a `ContentConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_content_config_skip_images(const XBERGContentConfig *ptr);
+
+/**
+ * Get the `max_depth` field from a `ContentConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uintptr_t xberg_content_config_max_depth(const XBERGContentConfig *ptr);
+
+/**
+ * Get the `wrap` field from a `ContentConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_content_config_wrap(const XBERGContentConfig *ptr);
+
+/**
+ * Get the `wrap_width` field from a `ContentConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uintptr_t xberg_content_config_wrap_width(const XBERGContentConfig *ptr);
+
+/**
+ * Get the `include_document_structure` field from a `ContentConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_content_config_include_document_structure(const XBERGContentConfig *ptr);
+
+/**
+ * Create a `BrowserConfig` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_browser_config_free`.
+ */
+XBERGBrowserConfig *xberg_browser_config_from_json(const char *json);
+
+/**
+ * Serialize a `BrowserConfig` to a JSON string. Returns null on failure.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_browser_config_to_json(const XBERGBrowserConfig *ptr);
+
+/**
+ * Free a `BrowserConfig` handle.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void xberg_browser_config_free(XBERGBrowserConfig *ptr);
+
+/**
+ * Get the `mode` field from a `BrowserConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGBrowserMode *xberg_browser_config_mode(const XBERGBrowserConfig *ptr);
+
+/**
+ * Get the `backend` field from a `BrowserConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGBrowserBackend *xberg_browser_config_backend(const XBERGBrowserConfig *ptr);
+
+/**
+ * Get the `endpoint` field from a `BrowserConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_browser_config_endpoint(const XBERGBrowserConfig *ptr);
+
+/**
+ * Get the `timeout` field from a `BrowserConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uint64_t xberg_browser_config_timeout(const XBERGBrowserConfig *ptr);
+
+/**
+ * Get the `wait` field from a `BrowserConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGBrowserWait *xberg_browser_config_wait(const XBERGBrowserConfig *ptr);
+
+/**
+ * Get the `wait_selector` field from a `BrowserConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_browser_config_wait_selector(const XBERGBrowserConfig *ptr);
+
+/**
+ * Get the `extra_wait` field from a `BrowserConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uint64_t xberg_browser_config_extra_wait(const XBERGBrowserConfig *ptr);
+
+/**
+ * Get the `proxy` field from a `BrowserConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGProxyConfig *xberg_browser_config_proxy(const XBERGBrowserConfig *ptr);
+
+/**
+ * Get the `block_url_patterns` field from a `BrowserConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_browser_config_block_url_patterns(const XBERGBrowserConfig *ptr);
+
+/**
+ * Get the `eval_script` field from a `BrowserConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_browser_config_eval_script(const XBERGBrowserConfig *ptr);
+
+/**
+ * Get the `robots_user_agent` field from a `BrowserConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_browser_config_robots_user_agent(const XBERGBrowserConfig *ptr);
+
+/**
+ * Get the `capture_network_events` field from a `BrowserConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_browser_config_capture_network_events(const XBERGBrowserConfig *ptr);
+
+/**
+ * Get the `session_affinity` field from a `BrowserConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_browser_config_session_affinity(const XBERGBrowserConfig *ptr);
+
+/**
+ * Create a `CrawlConfig` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_crawl_config_free`.
+ */
+XBERGCrawlConfig *xberg_crawl_config_from_json(const char *json);
+
+/**
+ * Serialize a `CrawlConfig` to a JSON string. Returns null on failure.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_crawl_config_to_json(const XBERGCrawlConfig *ptr);
+
+/**
+ * Free a `CrawlConfig` handle.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void xberg_crawl_config_free(XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `max_depth` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uintptr_t xberg_crawl_config_max_depth(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `max_pages` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uintptr_t xberg_crawl_config_max_pages(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `max_concurrent` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uintptr_t xberg_crawl_config_max_concurrent(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `respect_robots_txt` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_crawl_config_respect_robots_txt(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `soft_http_errors` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_crawl_config_soft_http_errors(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `user_agent` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_crawl_config_user_agent(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `stay_on_domain` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_crawl_config_stay_on_domain(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `allow_subdomains` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_crawl_config_allow_subdomains(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `include_paths` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_crawl_config_include_paths(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `exclude_paths` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_crawl_config_exclude_paths(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `custom_headers` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_crawl_config_custom_headers(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `request_timeout` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uint64_t xberg_crawl_config_request_timeout(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `rate_limit_ms` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uint64_t xberg_crawl_config_rate_limit_ms(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `max_redirects` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uintptr_t xberg_crawl_config_max_redirects(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `retry_count` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uintptr_t xberg_crawl_config_retry_count(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `retry_codes` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_crawl_config_retry_codes(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `cookies_enabled` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_crawl_config_cookies_enabled(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `auth` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGAuthConfig *xberg_crawl_config_auth(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `max_body_size` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uintptr_t xberg_crawl_config_max_body_size(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `remove_tags` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_crawl_config_remove_tags(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `content` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGContentConfig *xberg_crawl_config_content(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `map_limit` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uintptr_t xberg_crawl_config_map_limit(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `map_search` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_crawl_config_map_search(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `download_assets` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_crawl_config_download_assets(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `asset_types` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_crawl_config_asset_types(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `max_asset_size` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uintptr_t xberg_crawl_config_max_asset_size(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `browser` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGBrowserConfig *xberg_crawl_config_browser(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `proxy` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGProxyConfig *xberg_crawl_config_proxy(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `user_agents` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_crawl_config_user_agents(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `capture_screenshot` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_crawl_config_capture_screenshot(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `follow_document_urls` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_crawl_config_follow_document_urls(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `document_url_depth` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uint32_t xberg_crawl_config_document_url_depth(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `download_documents` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_crawl_config_download_documents(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `document_max_size` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uintptr_t xberg_crawl_config_document_max_size(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `document_mime_types` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_crawl_config_document_mime_types(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `warc_output` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_crawl_config_warc_output(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `browser_profile` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_crawl_config_browser_profile(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `save_browser_profile` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_crawl_config_save_browser_profile(const XBERGCrawlConfig *ptr);
+
+/**
+ * Get the `ssrf` field from a `CrawlConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGSsrfPolicy *xberg_crawl_config_ssrf(const XBERGCrawlConfig *ptr);
+
+/**
+ * Create a `SsrfPolicy` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_ssrf_policy_free`.
+ */
+XBERGSsrfPolicy *xberg_ssrf_policy_from_json(const char *json);
+
+/**
+ * Serialize a `SsrfPolicy` to a JSON string. Returns null on failure.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_ssrf_policy_to_json(const XBERGSsrfPolicy *ptr);
+
+/**
+ * Free a `SsrfPolicy` handle.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void xberg_ssrf_policy_free(XBERGSsrfPolicy *ptr);
+
+/**
+ * Get the `deny_private` field from a `SsrfPolicy`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_ssrf_policy_deny_private(const XBERGSsrfPolicy *ptr);
+
+/**
+ * Get the `max_redirects` field from a `SsrfPolicy`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uint8_t xberg_ssrf_policy_max_redirects(const XBERGSsrfPolicy *ptr);
+
+/**
+ * Get the `scheme_allowlist` field from a `SsrfPolicy`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_ssrf_policy_scheme_allowlist(const XBERGSsrfPolicy *ptr);
+
+/**
  * Convert an integer to a `ExecutionProviderType` variant. Returns -1 on invalid input.
  * # Safety
  * Caller must ensure all pointer arguments are valid or null.
@@ -16224,6 +16873,81 @@ int32_t xberg_layout_class_from_i32(int32_t value);
  * Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t xberg_layout_class_from_str(const char *name);
+
+/**
+ * Convert an integer to a `BrowserMode` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+int32_t xberg_browser_mode_from_i32(int32_t value);
+
+/**
+ * Convert a `BrowserMode` serde wire value (C string) to its integer discriminant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
+ */
+int32_t xberg_browser_mode_from_str(const char *name);
+
+/**
+ * Convert an integer to a `BrowserWait` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+int32_t xberg_browser_wait_from_i32(int32_t value);
+
+/**
+ * Convert a `BrowserWait` serde wire value (C string) to its integer discriminant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
+ */
+int32_t xberg_browser_wait_from_str(const char *name);
+
+/**
+ * Convert an integer to a `BrowserBackend` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+int32_t xberg_browser_backend_from_i32(int32_t value);
+
+/**
+ * Convert a `BrowserBackend` serde wire value (C string) to its integer discriminant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
+ */
+int32_t xberg_browser_backend_from_str(const char *name);
+
+/**
+ * Convert an integer to a `AuthConfig` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+int32_t xberg_auth_config_from_i32(int32_t value);
+
+/**
+ * Convert a `AuthConfig` serde wire value (C string) to its integer discriminant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
+ */
+int32_t xberg_auth_config_from_str(const char *name);
+
+/**
+ * Convert an integer to a `AssetCategory` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+int32_t xberg_asset_category_from_i32(int32_t value);
+
+/**
+ * Convert a `AssetCategory` serde wire value (C string) to its integer discriminant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
+ */
+int32_t xberg_asset_category_from_str(const char *name);
 
 /**
  * Free a heap-allocated `ExecutionProviderType` returned by a pointer-returning FFI function.
@@ -17524,6 +18248,106 @@ char *xberg_layout_class_to_json(const XBERGLayoutClass *ptr);
  * The returned string must be freed with `xberg_free_string`.
  */
 char *xberg_layout_class_to_string(const XBERGLayoutClass *ptr);
+
+/**
+ * Free a heap-allocated `BrowserMode` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void xberg_browser_mode_free(XBERGBrowserMode *ptr);
+
+/**
+ * Serialize a heap-allocated `BrowserMode` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_browser_mode_to_json(const XBERGBrowserMode *ptr);
+
+/**
+ * Render a heap-allocated `BrowserMode` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_browser_mode_to_string(const XBERGBrowserMode *ptr);
+
+/**
+ * Free a heap-allocated `BrowserWait` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void xberg_browser_wait_free(XBERGBrowserWait *ptr);
+
+/**
+ * Serialize a heap-allocated `BrowserWait` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_browser_wait_to_json(const XBERGBrowserWait *ptr);
+
+/**
+ * Render a heap-allocated `BrowserWait` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_browser_wait_to_string(const XBERGBrowserWait *ptr);
+
+/**
+ * Free a heap-allocated `BrowserBackend` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void xberg_browser_backend_free(XBERGBrowserBackend *ptr);
+
+/**
+ * Serialize a heap-allocated `BrowserBackend` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_browser_backend_to_json(const XBERGBrowserBackend *ptr);
+
+/**
+ * Render a heap-allocated `BrowserBackend` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_browser_backend_to_string(const XBERGBrowserBackend *ptr);
+
+/**
+ * Free a heap-allocated `AuthConfig` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void xberg_auth_config_free(XBERGAuthConfig *ptr);
+
+/**
+ * Serialize a heap-allocated `AuthConfig` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_auth_config_to_json(const XBERGAuthConfig *ptr);
+
+/**
+ * Render a heap-allocated `AuthConfig` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_auth_config_to_string(const XBERGAuthConfig *ptr);
 
 /**
  * Extract content from a single bytes or URI input.

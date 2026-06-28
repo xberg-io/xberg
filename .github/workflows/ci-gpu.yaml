@@ -2,6 +2,24 @@ name: CI GPU
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".github/workflows/ci-gpu.yaml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".github/workflows/ci-gpu.yaml"
 
 concurrency:
   group: ci-gpu-${{ github.ref }}
@@ -110,3 +128,86 @@ jobs:
         env:
           RUST_LOG: "xberg=debug"
           TEST_DOCUMENTS_DIR: ${{ github.workspace }}/test_documents
+
+  candle-gpu-tests:
+    name: "Candle GPU Tests (CUDA)"
+    runs-on: runner-gpu-l4
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Verify GPU
+        run: |
+          nvidia-smi || {
+            echo "ERROR: nvidia-smi failed — no GPU detected"
+            exit 1
+          }
+          echo "GPU detected:"
+          nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.95"
+
+      - name: Install system dependencies
+        uses: ./.github/actions/install-system-deps
+
+      - name: Setup CUDA toolkit (nvcc)
+        # candle-cuda compiles CUDA kernels via cudarc at build time, which needs
+        # nvcc. The L4 runner ships the driver (nvidia-smi) but nvcc is not on PATH.
+        # Locate an existing CUDA toolkit install and add it to PATH/CUDA_PATH;
+        # fail loudly if the toolkit is genuinely absent so we know to provision it.
+        run: |
+          if command -v nvcc >/dev/null 2>&1; then
+            echo "nvcc already on PATH: $(command -v nvcc)"
+          else
+            cuda_home=""
+            for d in /usr/local/cuda /usr/local/cuda-*; do
+              if [ -x "$d/bin/nvcc" ]; then
+                cuda_home="$d"
+                break
+              fi
+            done
+            if [ -z "$cuda_home" ]; then
+              echo "ERROR: nvcc not found. CUDA toolkit is not installed on this runner."
+              echo "Searched: /usr/local/cuda, /usr/local/cuda-*"
+              ls -d /usr/local/cuda* 2>/dev/null || echo "  (no /usr/local/cuda* directories)"
+              exit 1
+            fi
+            echo "Found CUDA toolkit at $cuda_home"
+            echo "$cuda_home/bin" >> "$GITHUB_PATH"
+            echo "CUDA_PATH=$cuda_home" >> "$GITHUB_ENV"
+            echo "CUDA_HOME=$cuda_home" >> "$GITHUB_ENV"
+          fi
+
+      - name: Verify nvcc
+        run: nvcc --version
+
+      - name: Cache Cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: candle-gpu-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            candle-gpu-${{ runner.os }}-
+
+      - name: Run Candle registry and dispatch tests
+        run: |
+          cargo test --locked -p xberg --features "candle-vlm-ocr,candle-cuda" --test candle_backends -- --nocapture
+        env:
+          RUST_LOG: "xberg=debug"
+
+      - name: Run Candle model inference integration tests
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          XBERG_NETWORK_TESTS=1 cargo test --locked -p xberg-candle-ocr --features "cuda,trocr,glm-ocr,hunyuan-ocr,paddleocr-vl,deepseek-ocr" -- --ignored --nocapture
+        env:
+          RUST_LOG: "xberg=debug,xberg_candle_ocr=debug"

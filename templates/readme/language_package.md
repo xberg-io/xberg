@@ -6,9 +6,15 @@
 
 ## What This Package Provides
 
+{% if language == "r" or language == "wasm" %}
+- **Document intelligence core** — extract text, tables, images, metadata, entities, keywords, and code intelligence through the shared Rust engine.
+- **Format coverage** — PDF, Office, images, HTML/XML, email, archives, notebooks, citations, scientific formats, and plain text.
+- **OCR support** — Tesseract WASM when OCR is enabled; this build does not include ONNX Runtime, PaddleOCR, Candle, or native transcription dependencies.
+{% else %}
 - **Document intelligence core** — extract text, tables, images, metadata, entities, keywords, code intelligence, and transcripts in builds that enable transcription.
 - **Format coverage** — PDF, Office, images, HTML/XML, email, archives, notebooks, citations, scientific formats, plain text, and audio/video formats in builds that enable transcription.
 - **OCR choices** — Tesseract, PaddleOCR, Candle where supported, VLM OCR through liter-llm, and plugin hooks for custom backends.
+{% endif %}
 - **Same engine as every binding** — Rust, Python, Node.js, Go, Java, PHP, Ruby, .NET, Elixir, R, WASM, Kotlin Android, Swift, Dart, Zig, and C FFI share the same Rust implementation.
 {% if language == "typescript" %}
 - **Node-first TypeScript API** — NAPI-RS package with typed options/results and async extraction.

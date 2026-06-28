@@ -70,7 +70,7 @@ pub(crate) async fn extract_bytes(
 ) -> Result<ExtractedDocument> {
     use crate::core::mime;
 
-    let extraction_future = async {
+    let extraction_future = Box::pin(async {
         if config.force_ocr && config.effective_disable_ocr() {
             return Err(crate::XbergError::Validation {
                 message: "force_ocr and disable_ocr cannot both be true".to_string(),
@@ -132,8 +132,8 @@ pub(crate) async fn extract_bytes(
             let _ = LEGACY_POWERPOINT_MIME_TYPE;
         }
 
-        extract_bytes_with_extractor(content, &validated_mime, config).await
-    };
+        Box::pin(extract_bytes_with_extractor(content, &validated_mime, config)).await
+    });
 
     #[cfg(feature = "tokio-runtime")]
     let result = if let Some(secs) = config.extraction_timeout_secs {

@@ -1,6 +1,12 @@
 version: "3"
 
 tasks:
+  mock-server:build:
+    desc: Build mock-server binaries for standalone test_app tasks
+    internal: true
+    cmds:
+      - bash "{{.ROOT_DIR}}/scripts/e2e/build-mock-server.sh" all
+
   smoke:
     desc: Run all test_app smoke tests
     cmds:
@@ -23,13 +29,15 @@ tasks:
   smoke:python:
     desc: Run Python test_app smoke test
     dir: "{{.ROOT_DIR}}/test_apps/python"
+    deps: [mock-server:build]
     cmds:
       - uv sync
-      - uv run --no-sync pytest tests/test_smoke.py -v
+      - uv run --no-sync python -m pytest tests/test_smoke.py -v
 
   smoke:node:
     desc: Run Node.js test_app smoke test
     dir: "{{.ROOT_DIR}}/test_apps/node"
+    deps: [mock-server:build]
     cmds:
       - pnpm install
       - pnpm exec vitest run tests/smoke.test.ts
@@ -38,8 +46,8 @@ tasks:
     desc: Run Ruby test_app smoke test
     dir: "{{.ROOT_DIR}}/test_apps/ruby"
     cmds:
-      - bundle install
-      - bundle exec rspec spec/smoke_spec.rb
+      - export PATH="$HOME/.rbenv/shims:$HOME/.asdf/shims:$PATH" && ruby -S bundle install
+      - export PATH="$HOME/.rbenv/shims:$HOME/.asdf/shims:$PATH" && ruby -S bundle exec rspec spec/smoke_spec.rb
 
   smoke:go:
     desc: Run Go test_app smoke test
@@ -53,6 +61,7 @@ tasks:
   smoke:java:
     desc: Run Java test_app smoke test
     dir: "{{.ROOT_DIR}}/test_apps/java"
+    deps: [mock-server:build]
     cmds:
       - mvn test -Dtest=SmokeTest
 
@@ -66,6 +75,7 @@ tasks:
   smoke:csharp:
     desc: Run C# test_app smoke test
     dir: "{{.ROOT_DIR}}/test_apps/csharp"
+    deps: [mock-server:build]
     cmds:
       - dotnet restore
       - dotnet test --filter "FullyQualifiedName~SmokeTests"
@@ -73,6 +83,7 @@ tasks:
   smoke:php:
     desc: Run PHP test_app smoke test
     dir: "{{.ROOT_DIR}}/test_apps/php"
+    deps: [mock-server:build]
     cmds:
       - composer install
       - vendor/bin/phpunit
@@ -118,6 +129,7 @@ tasks:
   smoke:kotlin_android:
     desc: Run Kotlin Android test_app smoke test
     dir: "{{.ROOT_DIR}}/test_apps/kotlin_android"
+    deps: [mock-server:build]
     cmds:
       - ./gradlew testDebugUnitTest --tests "*SmokeTest"
 
@@ -132,13 +144,15 @@ tasks:
   comprehensive:python:
     desc: Run Python test_app comprehensive tests
     dir: "{{.ROOT_DIR}}/test_apps/python"
+    deps: [mock-server:build]
     cmds:
       - uv sync
-      - uv run --no-sync pytest tests/ -v
+      - uv run --no-sync python -m pytest tests/ -v
 
   comprehensive:node:
     desc: Run Node.js test_app comprehensive tests
     dir: "{{.ROOT_DIR}}/test_apps/node"
+    deps: [mock-server:build]
     cmds:
       - pnpm install
       - pnpm exec vitest run
@@ -147,8 +161,8 @@ tasks:
     desc: Run Ruby test_app comprehensive tests
     dir: "{{.ROOT_DIR}}/test_apps/ruby"
     cmds:
-      - bundle install
-      - bundle exec rspec
+      - export PATH="$HOME/.rbenv/shims:$HOME/.asdf/shims:$PATH" && ruby -S bundle install
+      - export PATH="$HOME/.rbenv/shims:$HOME/.asdf/shims:$PATH" && ruby -S bundle exec rspec
 
   comprehensive:go:
     desc: Run Go test_app comprehensive tests

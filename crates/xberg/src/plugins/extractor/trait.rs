@@ -125,10 +125,15 @@ pub trait DocumentExtractor: Plugin {
     }
 }
 
-/// Crate-private extraction capability used by native Rust extractors.
+/// Low-level extraction capability used by native Rust extractors.
+///
+/// Native extractors implement this to produce the pipeline's
+/// [`InternalDocument`] representation; the blanket impl below derives the
+/// public [`DocumentExtractor`] surface from it. Exposed for white-box tests
+/// and advanced consumers that need the pre-derivation document.
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-pub(crate) trait InternalDocumentExtractor: Plugin {
+pub trait InternalDocumentExtractor: Plugin {
     /// Extract an in-memory payload into the pipeline representation.
     async fn extract_content(
         &self,

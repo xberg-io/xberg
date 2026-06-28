@@ -7,12 +7,12 @@ license = "MIT"
 [package.metadata.cargo-machete]
 # Umbrella + sibling crates are pulled in so flutter_rust_bridge can resolve
 # every referenced type, but the generated Rust wrapper only `use`s a subset.
-ignored = ["xberg"]
+ignored = ["crawlberg", "xberg"]
 
 [lib]
 crate-type = ["cdylib", "staticlib"]
 [features]
-default = ["api", "api-types", "auto-rotate-types", "chunking-tokenizers", "diff", "heuristics", "html", "keywords-rake", "keywords-yake", "layout-types", "liter-llm", "markdown-footnotes", "ocr", "ocr-wasm", "office", "paddle-ocr-types", "pdf", "presets", "quality", "redaction", "reranker-presets", "svg", "transcription-types", "tree-sitter", "url-ingestion", "xml"]
+default = ["api", "api-types", "auto-rotate-types", "chunking-tokenizers", "diff", "heuristics", "html", "keywords-rake", "keywords-yake", "layout-types", "liter-llm", "markdown-footnotes", "ocr", "ocr-wasm", "office", "paddle-ocr-types", "pdf", "presets", "quality", "redaction", "reranker-presets", "svg", "transcription-types", "tree-sitter", "url-config-types", "url-ingestion", "xml"]
 api = ["xberg/api"]
 api-types = ["xberg/api-types"]
 auto-rotate-types = ["xberg/auto-rotate-types"]
@@ -39,12 +39,14 @@ reranker-presets = ["xberg/reranker-presets"]
 svg = ["xberg/svg"]
 transcription-types = ["xberg/transcription-types"]
 tree-sitter = ["xberg/tree-sitter"]
+url-config-types = ["xberg/url-config-types"]
 url-ingestion = ["xberg/url-ingestion"]
 xml = ["xberg/xml"]
 android-target = ["xberg/android-target", "api", "api-types", "auto-rotate-types", "chunking-tokenizers", "diff", "heuristics", "html", "keywords-rake", "keywords-yake", "layout-types", "liter-llm", "markdown-footnotes", "ocr", "office", "paddle-ocr-types", "pdf", "presets", "quality", "redaction", "reranker-presets", "svg", "transcription-types", "tree-sitter", "xml"]
 
 [dependencies]
 async-trait = "0.1"
+crawlberg = { workspace = true }
 flutter_rust_bridge = "=2.12.0"
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "sync"] }

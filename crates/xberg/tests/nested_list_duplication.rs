@@ -17,7 +17,6 @@
 #![cfg(feature = "chunking")]
 
 mod helpers;
-use helpers::extract_bytes_document_blocking;
 
 use xberg::chunking::{ChunkerType, ChunkingConfig, chunk_text};
 
@@ -103,6 +102,7 @@ fn markdown_chunker_valid_nested_list() {
 
 #[cfg(feature = "html")]
 mod html_extraction {
+    use crate::helpers::extract_bytes_document_blocking;
     use xberg::chunking::{ChunkerType, ChunkingConfig};
     use xberg::core::config::{ExtractionConfig, OutputFormat};
 

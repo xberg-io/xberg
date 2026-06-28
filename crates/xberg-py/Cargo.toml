@@ -26,6 +26,7 @@ extension-module = ["pyo3/extension-module", "pyo3/abi3-py310"]
 
 [dependencies]
 async-trait = "0.1"
+crawlberg = { workspace = true }
 pyo3 = { version = "0.29" }
 pyo3-async-runtimes = { version = "0.29", features = ["tokio-runtime"] }
 serde = { version = "1", features = ["derive"] }

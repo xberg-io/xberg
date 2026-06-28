@@ -10,8 +10,8 @@
 #[cfg(all(test, feature = "xml"))]
 mod jats_extractor_tests {
     use std::path::PathBuf;
+    use xberg::ExtractInput;
     use xberg::core::config::ExtractionConfig;
-    use xberg::extraction::derive::derive_extraction_result;
     use xberg::extractors::JatsExtractor;
     use xberg::plugins::{DocumentExtractor, Plugin};
 
@@ -78,14 +78,16 @@ mod jats_extractor_tests {
 </article>"#;
 
         let extractor = JatsExtractor;
-        let config = ExtractionConfig::default();
-        let doc_result = extractor
-            .extract_bytes(jats_content.as_bytes(), "application/x-jats+xml", &config)
-            .await;
+        let config = ExtractionConfig {
+            output_format: xberg::OutputFormat::Plain,
+            include_document_structure: false,
+            ..ExtractionConfig::default()
+        };
+        let input = ExtractInput::from_bytes(jats_content.as_bytes().to_vec(), "application/x-jats+xml", None);
+        let doc_result = extractor.extract(input, &config).await;
 
         assert!(doc_result.is_ok());
-        let extraction =
-            derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
+        let extraction = doc_result.expect("Operation failed");
 
         assert!(extraction.content.contains("Effects of Caffeine"));
         assert!(extraction.content.contains("Introduction"));
@@ -140,14 +142,16 @@ mod jats_extractor_tests {
 </article>"#;
 
         let extractor = JatsExtractor;
-        let config = ExtractionConfig::default();
-        let doc_result = extractor
-            .extract_bytes(jats_content.as_bytes(), "application/x-jats+xml", &config)
-            .await;
+        let config = ExtractionConfig {
+            output_format: xberg::OutputFormat::Plain,
+            include_document_structure: false,
+            ..ExtractionConfig::default()
+        };
+        let input = ExtractInput::from_bytes(jats_content.as_bytes().to_vec(), "application/x-jats+xml", None);
+        let doc_result = extractor.extract(input, &config).await;
 
         assert!(doc_result.is_ok());
-        let extraction =
-            derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
+        let extraction = doc_result.expect("Operation failed");
 
         let subject = extraction.metadata.subject.expect("Operation failed");
         assert!(subject.contains("Alpha"));
@@ -198,14 +202,16 @@ mod jats_extractor_tests {
 </article>"#;
 
         let extractor = JatsExtractor;
-        let config = ExtractionConfig::default();
-        let doc_result = extractor
-            .extract_bytes(jats_content.as_bytes(), "application/x-jats+xml", &config)
-            .await;
+        let config = ExtractionConfig {
+            output_format: xberg::OutputFormat::Plain,
+            include_document_structure: false,
+            ..ExtractionConfig::default()
+        };
+        let input = ExtractInput::from_bytes(jats_content.as_bytes().to_vec(), "application/x-jats+xml", None);
+        let doc_result = extractor.extract(input, &config).await;
 
         assert!(doc_result.is_ok());
-        let extraction =
-            derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
+        let extraction = doc_result.expect("Operation failed");
 
         assert!(extraction.content.contains("Introduction"));
         assert!(extraction.content.contains("Methods"));
@@ -271,14 +277,16 @@ mod jats_extractor_tests {
 </article>"#;
 
         let extractor = JatsExtractor;
-        let config = ExtractionConfig::default();
-        let doc_result = extractor
-            .extract_bytes(jats_content.as_bytes(), "application/x-jats+xml", &config)
-            .await;
+        let config = ExtractionConfig {
+            output_format: xberg::OutputFormat::Plain,
+            include_document_structure: false,
+            ..ExtractionConfig::default()
+        };
+        let input = ExtractInput::from_bytes(jats_content.as_bytes().to_vec(), "application/x-jats+xml", None);
+        let doc_result = extractor.extract(input, &config).await;
 
         assert!(doc_result.is_ok());
-        let extraction =
-            derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
+        let extraction = doc_result.expect("Operation failed");
 
         assert_eq!(extraction.tables.len(), 1);
         let table = &extraction.tables[0];
@@ -326,14 +334,16 @@ mod jats_extractor_tests {
 </article>"#;
 
         let extractor = JatsExtractor;
-        let config = ExtractionConfig::default();
-        let doc_result = extractor
-            .extract_bytes(jats_content.as_bytes(), "application/x-jats+xml", &config)
-            .await;
+        let config = ExtractionConfig {
+            output_format: xberg::OutputFormat::Plain,
+            include_document_structure: false,
+            ..ExtractionConfig::default()
+        };
+        let input = ExtractInput::from_bytes(jats_content.as_bytes().to_vec(), "application/x-jats+xml", None);
+        let doc_result = extractor.extract(input, &config).await;
 
         assert!(doc_result.is_ok());
-        let extraction =
-            derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
+        let extraction = doc_result.expect("Operation failed");
 
         assert_eq!(extraction.tables.len(), 2);
         assert_eq!(extraction.tables[0].cells[0].len(), 2);
@@ -390,14 +400,16 @@ mod jats_extractor_tests {
 </article>"#;
 
         let extractor = JatsExtractor;
-        let config = ExtractionConfig::default();
-        let doc_result = extractor
-            .extract_bytes(jats_content.as_bytes(), "application/x-jats+xml", &config)
-            .await;
+        let config = ExtractionConfig {
+            output_format: xberg::OutputFormat::Plain,
+            include_document_structure: false,
+            ..ExtractionConfig::default()
+        };
+        let input = ExtractInput::from_bytes(jats_content.as_bytes().to_vec(), "application/x-jats+xml", None);
+        let doc_result = extractor.extract(input, &config).await;
 
         assert!(doc_result.is_ok());
-        let extraction =
-            derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
+        let extraction = doc_result.expect("Operation failed");
 
         assert!(extraction.content.contains("Previous research"));
         assert!(extraction.content.contains("Other studies"));
@@ -430,14 +442,16 @@ mod jats_extractor_tests {
 </article>"#;
 
         let extractor = JatsExtractor;
-        let config = ExtractionConfig::default();
-        let doc_result = extractor
-            .extract_bytes(jats_content.as_bytes(), "application/x-jats+xml", &config)
-            .await;
+        let config = ExtractionConfig {
+            output_format: xberg::OutputFormat::Plain,
+            include_document_structure: false,
+            ..ExtractionConfig::default()
+        };
+        let input = ExtractInput::from_bytes(jats_content.as_bytes().to_vec(), "application/x-jats+xml", None);
+        let doc_result = extractor.extract(input, &config).await;
 
         assert!(doc_result.is_ok());
-        let extraction =
-            derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
+        let extraction = doc_result.expect("Operation failed");
 
         let subject = extraction.metadata.subject.expect("Operation failed");
         assert!(subject.contains("background") || subject.contains("Background") || subject.contains("Abstract"));
@@ -459,14 +473,16 @@ mod jats_extractor_tests {
 </article>"#;
 
         let extractor = JatsExtractor;
-        let config = ExtractionConfig::default();
-        let doc_result = extractor
-            .extract_bytes(jats_content.as_bytes(), "application/x-jats+xml", &config)
-            .await;
+        let config = ExtractionConfig {
+            output_format: xberg::OutputFormat::Plain,
+            include_document_structure: false,
+            ..ExtractionConfig::default()
+        };
+        let input = ExtractInput::from_bytes(jats_content.as_bytes().to_vec(), "application/x-jats+xml", None);
+        let doc_result = extractor.extract(input, &config).await;
 
         assert!(doc_result.is_ok());
-        let extraction =
-            derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
+        let extraction = doc_result.expect("Operation failed");
 
         assert!(extraction.metadata.subject.is_some());
     }
@@ -489,14 +505,16 @@ mod jats_extractor_tests {
 </article>"#;
 
         let extractor = JatsExtractor;
-        let config = ExtractionConfig::default();
-        let doc_result = extractor
-            .extract_bytes(jats_content.as_bytes(), "application/x-jats+xml", &config)
-            .await;
+        let config = ExtractionConfig {
+            output_format: xberg::OutputFormat::Plain,
+            include_document_structure: false,
+            ..ExtractionConfig::default()
+        };
+        let input = ExtractInput::from_bytes(jats_content.as_bytes().to_vec(), "application/x-jats+xml", None);
+        let doc_result = extractor.extract(input, &config).await;
 
         assert!(doc_result.is_ok());
-        let extraction =
-            derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
+        let extraction = doc_result.expect("Operation failed");
 
         assert!(extraction.metadata.created_at.is_some());
     }
@@ -515,14 +533,16 @@ mod jats_extractor_tests {
 </article>"#;
 
         let extractor = JatsExtractor;
-        let config = ExtractionConfig::default();
-        let doc_result = extractor
-            .extract_bytes(jats_content.as_bytes(), "application/x-jats+xml", &config)
-            .await;
+        let config = ExtractionConfig {
+            output_format: xberg::OutputFormat::Plain,
+            include_document_structure: false,
+            ..ExtractionConfig::default()
+        };
+        let input = ExtractInput::from_bytes(jats_content.as_bytes().to_vec(), "application/x-jats+xml", None);
+        let doc_result = extractor.extract(input, &config).await;
 
         assert!(doc_result.is_ok());
-        let extraction =
-            derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
+        let extraction = doc_result.expect("Operation failed");
         assert!(extraction.content.is_empty() || extraction.content.trim().is_empty());
     }
 
@@ -583,14 +603,16 @@ mod jats_extractor_tests {
 </article>"#;
 
         let extractor = JatsExtractor;
-        let config = ExtractionConfig::default();
-        let doc_result = extractor
-            .extract_bytes(jats_content.as_bytes(), "application/x-jats+xml", &config)
-            .await;
+        let config = ExtractionConfig {
+            output_format: xberg::OutputFormat::Plain,
+            include_document_structure: false,
+            ..ExtractionConfig::default()
+        };
+        let input = ExtractInput::from_bytes(jats_content.as_bytes().to_vec(), "application/x-jats+xml", None);
+        let doc_result = extractor.extract(input, &config).await;
 
         assert!(doc_result.is_ok());
-        let extraction =
-            derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
+        let extraction = doc_result.expect("Operation failed");
 
         assert!(extraction.content.contains("First paragraph"));
         assert!(extraction.content.contains("Second paragraph"));
@@ -617,14 +639,16 @@ mod jats_extractor_tests {
 </article>"#;
 
         let extractor = JatsExtractor;
-        let config = ExtractionConfig::default();
-        let doc_result = extractor
-            .extract_bytes(jats_content.as_bytes(), "application/x-jats+xml", &config)
-            .await;
+        let config = ExtractionConfig {
+            output_format: xberg::OutputFormat::Plain,
+            include_document_structure: false,
+            ..ExtractionConfig::default()
+        };
+        let input = ExtractInput::from_bytes(jats_content.as_bytes().to_vec(), "application/x-jats+xml", None);
+        let doc_result = extractor.extract(input, &config).await;
 
         assert!(doc_result.is_ok());
-        let extraction =
-            derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
+        let extraction = doc_result.expect("Operation failed");
 
         let subject = extraction.metadata.subject.expect("Operation failed");
         assert!(subject.contains("keyword") || subject.contains("Keyword"));
@@ -634,17 +658,20 @@ mod jats_extractor_tests {
     #[tokio::test]
     async fn test_extract_jats_file() {
         let extractor = JatsExtractor;
-        let config = ExtractionConfig::default();
+        let config = ExtractionConfig {
+            output_format: xberg::OutputFormat::Plain,
+            include_document_structure: false,
+            ..ExtractionConfig::default()
+        };
 
         let test_file = jats_fixture("sample_article.jats");
         if test_file.exists() {
-            let doc_result = extractor
-                .extract_file(&test_file, "application/x-jats+xml", &config)
-                .await;
+            let mut input = ExtractInput::from_uri(test_file.to_string_lossy().into_owned());
+            input.mime_type = Some("application/x-jats+xml".to_string());
+            let doc_result = extractor.extract(input, &config).await;
 
             assert!(doc_result.is_ok());
-            let extraction =
-                derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
+            let extraction = doc_result.expect("Operation failed");
 
             assert!(!extraction.content.is_empty());
             assert!(extraction.metadata.subject.is_some());

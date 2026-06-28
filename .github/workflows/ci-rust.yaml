@@ -94,7 +94,14 @@ jobs:
         uses: xberg-io/actions/install-task@v1
 
       - name: Run clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        # xberg-php, xberg-node, xberg-wasm are Alef-generated binding crates.
+        # They are excluded here to match the canonical local lint scope
+        # (.task/languages/rust.yml `rust:lint`); their glue is regenerated and
+        # linted via the Alef/e2e pipelines, not the core Rust workspace lint.
+        run: >-
+          cargo clippy --workspace --all-targets
+          --exclude xberg-php --exclude xberg-node --exclude xberg-wasm
+          -- -D warnings
         shell: bash
 
       - name: Run tests

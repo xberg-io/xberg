@@ -19,6 +19,6 @@ pub(crate) use djot::render_djot;
 pub(crate) use html::render_html;
 #[cfg(feature = "html")]
 pub use html_styled::StyledHtmlRenderer;
-pub(crate) use json::render_json;
+pub use json::render_json;
 pub(crate) use markdown::render_markdown;
 pub(crate) use plain::render_plain;

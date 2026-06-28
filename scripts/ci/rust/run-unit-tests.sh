@@ -82,6 +82,11 @@ if ! {
   # curated-feature job, not here.
   extra_excludes+=(--exclude xberg-candle-ocr)
   extra_excludes+=(--exclude xberg-cli)
+  # xberg-php and xberg-wasm are Alef-generated binding crates whose glue is
+  # exercised by the per-language e2e suites, not the core Rust workspace tests.
+  # Excluded here to match the canonical local lint scope (rust:lint).
+  extra_excludes+=(--exclude xberg-php)
+  extra_excludes+=(--exclude xberg-wasm)
   RUST_BACKTRACE=full cargo test --locked \
     --workspace \
     --exclude xberg \

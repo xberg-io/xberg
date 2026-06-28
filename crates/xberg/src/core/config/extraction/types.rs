@@ -304,9 +304,8 @@ pub struct UrlExtractionConfig {
     /// URL extraction mode.
     pub mode: UrlExtractionMode,
     /// Crawlberg crawl configuration used for HTTP(S) URL extraction.
-    #[cfg(feature = "url-ingestion")]
+    #[cfg(any(feature = "url-ingestion", feature = "url-config-types"))]
     #[cfg_attr(feature = "api", schema(value_type = serde_json::Value))]
-    #[cfg_attr(alef, alef(skip))]
     pub crawl: crawlberg::CrawlConfig,
     /// Optional regex filter for document-discovered URLs.
     pub document_url_pattern: Option<String>,
@@ -324,7 +323,7 @@ impl Default for UrlExtractionConfig {
     fn default() -> Self {
         Self {
             mode: UrlExtractionMode::Auto,
-            #[cfg(feature = "url-ingestion")]
+            #[cfg(any(feature = "url-ingestion", feature = "url-config-types"))]
             crawl: default_xberg_crawl_config(),
             document_url_pattern: None,
             max_document_urls_per_result: Some(100),
@@ -335,7 +334,7 @@ impl Default for UrlExtractionConfig {
     }
 }
 
-#[cfg(feature = "url-ingestion")]
+#[cfg(any(feature = "url-ingestion", feature = "url-config-types"))]
 fn default_xberg_crawl_config() -> crawlberg::CrawlConfig {
     crawlberg::CrawlConfig {
         max_depth: Some(1),

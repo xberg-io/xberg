@@ -7,10 +7,10 @@
 //! caller never requested.
 
 mod helpers;
-use helpers::extract_bytes_document;
 
 #[cfg(feature = "chunking")]
 mod preset_no_embedding {
+    use crate::helpers::extract_bytes_document;
     use xberg::core::config::{ChunkingConfig, ExtractionConfig};
 
     /// A preset with no explicit `EmbeddingConfig` must not produce chunk embeddings.

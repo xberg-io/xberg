@@ -82,7 +82,7 @@ pub(crate) async fn extract_file(
         );
     }
 
-    let extraction_future = async {
+    let extraction_future = Box::pin(async {
         io::validate_file_exists(path)?;
 
         if config.force_ocr && config.effective_disable_ocr() {
@@ -118,8 +118,8 @@ pub(crate) async fn extract_file(
             let _ = LEGACY_POWERPOINT_MIME_TYPE;
         }
 
-        extract_file_with_extractor(path, &detected_mime, config).await
-    };
+        Box::pin(extract_file_with_extractor(path, &detected_mime, config)).await
+    });
 
     #[cfg(feature = "tokio-runtime")]
     let result = if let Some(secs) = config.extraction_timeout_secs {
@@ -191,7 +191,7 @@ pub(in crate::core::extractor) async fn extract_file_with_extractor(
     }
 
     // Cache miss — extract
-    let result = extract_file_uncached(path, mime_type, config).await?;
+    let result = Box::pin(extract_file_uncached(path, mime_type, config)).await?;
 
     // Cache write (best-effort)
     if let Some(cache) = get_extraction_cache()
@@ -211,8 +211,8 @@ async fn extract_file_uncached(path: &Path, mime_type: &str, config: &Extraction
     crate::extractors::ensure_initialized()?;
 
     let extractor = get_extractor(mime_type)?;
-    let doc = extractor.extract_path(path, mime_type, config).await?;
-    let result = crate::core::pipeline::run_pipeline(doc, config).await?;
+    let doc = Box::pin(extractor.extract_path(path, mime_type, config)).await?;
+    let result = Box::pin(crate::core::pipeline::run_pipeline(doc, config)).await?;
     Ok(result)
 }
 
@@ -273,7 +273,7 @@ pub(in crate::core::extractor) async fn extract_bytes_with_extractor(
     crate::extractors::ensure_initialized()?;
 
     let extractor = get_extractor(mime_type)?;
-    let doc = extractor.extract_content(content, mime_type, config).await?;
-    let result = crate::core::pipeline::run_pipeline(doc, config).await?;
+    let doc = Box::pin(extractor.extract_content(content, mime_type, config)).await?;
+    let result = Box::pin(crate::core::pipeline::run_pipeline(doc, config)).await?;
     Ok(result)
 }

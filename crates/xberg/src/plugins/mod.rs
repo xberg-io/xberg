@@ -178,10 +178,9 @@ pub use embedding::{
     EmbeddingBackend, clear_embedding_backends, list_embedding_backends, register_embedding_backend,
     unregister_embedding_backend,
 };
-pub(crate) use extractor::InternalDocumentExtractor;
 pub use extractor::{
-    DocumentExtractor, clear_document_extractors, list_document_extractors, register_document_extractor,
-    unregister_document_extractor,
+    DocumentExtractor, InternalDocumentExtractor, clear_document_extractors, list_document_extractors,
+    register_document_extractor, unregister_document_extractor,
 };
 pub use ocr::{
     OcrBackend, OcrBackendType, clear_ocr_backends, list_ocr_backends, register_ocr_backend, unregister_ocr_backend,

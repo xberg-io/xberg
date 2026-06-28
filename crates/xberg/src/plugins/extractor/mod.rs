@@ -8,8 +8,7 @@ mod r#trait;
 #[cfg(feature = "otel")]
 pub(crate) mod instrumented;
 
-pub use r#trait::DocumentExtractor;
-pub(crate) use r#trait::InternalDocumentExtractor;
+pub use r#trait::{DocumentExtractor, InternalDocumentExtractor};
 
 use std::sync::Arc;
 

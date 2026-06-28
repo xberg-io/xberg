@@ -7,7 +7,7 @@
 use std::io::{Cursor, Write};
 use xberg::core::config::{ExtractionConfig, OutputFormat};
 use xberg::extractors::EpubExtractor;
-use xberg::plugins::DocumentExtractor;
+use xberg::plugins::InternalDocumentExtractor;
 use xberg::types::internal::{ElementKind, InternalDocument};
 use zip::write::FileOptions;
 
@@ -417,7 +417,7 @@ async fn test_epub3_excludes_navigation_but_keeps_non_linear_spine_content() {
     };
 
     let result = extractor
-        .extract_bytes(&bytes, "application/epub+zip", &config)
+        .extract_content(&bytes, "application/epub+zip", &config)
         .await
         .expect("EPUB extraction should succeed");
 
@@ -460,7 +460,7 @@ async fn test_epub3_plain_output_excludes_specialized_navigation_but_keeps_body_
     let extractor = EpubExtractor;
 
     let result = extractor
-        .extract_bytes(&bytes, "application/epub+zip", &ExtractionConfig::default())
+        .extract_content(&bytes, "application/epub+zip", &ExtractionConfig::default())
         .await
         .expect("EPUB extraction should succeed");
 
@@ -497,7 +497,7 @@ async fn test_epub_document_structure_excludes_navigation_but_keeps_non_linear_s
     };
 
     let result = extractor
-        .extract_bytes(&bytes, "application/epub+zip", &config)
+        .extract_content(&bytes, "application/epub+zip", &config)
         .await
         .expect("EPUB extraction should succeed");
 
@@ -532,7 +532,7 @@ async fn test_epub2_guide_toc_document_is_excluded_but_auxiliary_content_remains
     let extractor = EpubExtractor;
 
     let result = extractor
-        .extract_bytes(&bytes, "application/epub+zip", &ExtractionConfig::default())
+        .extract_content(&bytes, "application/epub+zip", &ExtractionConfig::default())
         .await
         .expect("EPUB extraction should succeed");
 
@@ -557,7 +557,7 @@ async fn test_epub_ignores_invalid_unused_manifest_assets_when_body_content_is_v
     let extractor = EpubExtractor;
 
     let result = extractor
-        .extract_bytes(&bytes, "application/epub+zip", &ExtractionConfig::default())
+        .extract_content(&bytes, "application/epub+zip", &ExtractionConfig::default())
         .await
         .expect("EPUB extraction should succeed");
 
@@ -581,7 +581,7 @@ async fn test_epub_manifest_fallback_resolves_renderable_body_document() {
     };
 
     let result = extractor
-        .extract_bytes(&bytes, "application/epub+zip", &config)
+        .extract_content(&bytes, "application/epub+zip", &config)
         .await
         .expect("EPUB extraction should succeed");
 
@@ -607,7 +607,7 @@ async fn test_epub_rejects_manifest_paths_that_escape_package_root() {
     let extractor = EpubExtractor;
 
     let err = extractor
-        .extract_bytes(&bytes, "application/epub+zip", &ExtractionConfig::default())
+        .extract_content(&bytes, "application/epub+zip", &ExtractionConfig::default())
         .await
         .expect_err("EPUB extraction should reject root-escaping manifest paths");
 
@@ -717,7 +717,7 @@ async fn test_epub_manifest_fallback_cycle_produces_warning_without_panic() {
     let extractor = EpubExtractor;
 
     let result = extractor
-        .extract_bytes(&bytes, "application/epub+zip", &ExtractionConfig::default())
+        .extract_content(&bytes, "application/epub+zip", &ExtractionConfig::default())
         .await
         .expect("EPUB extraction should not panic on fallback cycles");
 
@@ -738,7 +738,7 @@ async fn test_epub_empty_spine_produces_empty_content_without_error() {
     let extractor = EpubExtractor;
 
     let result = extractor
-        .extract_bytes(&bytes, "application/epub+zip", &ExtractionConfig::default())
+        .extract_content(&bytes, "application/epub+zip", &ExtractionConfig::default())
         .await
         .expect("EPUB extraction should succeed with empty spine");
 
