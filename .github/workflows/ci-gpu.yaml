@@ -236,12 +236,14 @@ jobs:
         run: |
           set -euo pipefail
           # The runner's system python3 has no pip and is externally-managed
-          # (PEP 668), so install the HF CLI into an isolated venv.
+          # (PEP 668), so install huggingface_hub into an isolated venv.
+          # huggingface_hub 1.x dropped the `huggingface-cli` entrypoint (it now
+          # exits 1) and the `cli`/`hf_transfer` extras; the CLI is now `hf`.
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends python3-venv
           python3 -m venv "$RUNNER_TEMP/hfvenv"
-          "$RUNNER_TEMP/hfvenv/bin/pip" install --quiet --upgrade "huggingface_hub[cli,hf_transfer]"
-          HF_HUB_ENABLE_HF_TRANSFER=1 "$RUNNER_TEMP/hfvenv/bin/huggingface-cli" download \
+          "$RUNNER_TEMP/hfvenv/bin/pip" install --quiet --upgrade "huggingface_hub"
+          "$RUNNER_TEMP/hfvenv/bin/hf" download \
             "${{ matrix.model.hf_repo }}" \
             --local-dir "${{ github.workspace }}/models/${{ matrix.model.name }}"
 
