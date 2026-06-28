@@ -201,7 +201,7 @@ jobs:
             . /etc/os-release
             distro="${ID}${VERSION_ID//./}"
             keyring="cuda-keyring_1.1-1_all.deb"
-            wget -q "https://developer.download.nvidia.com/compute/cuda/repos/${distro}/${repo_arch}/${keyring}"
+            curl -fsSL -o "${keyring}" "https://developer.download.nvidia.com/compute/cuda/repos/${distro}/${repo_arch}/${keyring}"
             sudo dpkg -i "${keyring}"
             sudo apt-get update
             # Toolkit only (nvcc + headers); the driver is already on the runner.
