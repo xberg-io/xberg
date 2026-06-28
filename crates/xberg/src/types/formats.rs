@@ -234,7 +234,7 @@ pub struct EmailAttachment {
 ///
 /// Result of performing OCR on an image or scanned document,
 /// including recognized text and detected tables.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct OcrExtractionResult {
     /// Recognized text content
     pub content: String,
