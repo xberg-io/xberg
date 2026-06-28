@@ -33,7 +33,7 @@ final class ErrorTest extends TestCase
     /** Error when extracting with empty MIME type */
     public function test_error_empty_mime(): void
     {
-        $this->expectException(\Exception::class);        $input = \Xberg\ExtractInput::from_json(json_encode(["bytes" => [84, 104, 105, 115, 32, 105, 115, 32, 97, 32, 112, 108, 97, 105, 110, 32, 116, 101, 120, 116, 32, 102, 105, 108, 101, 32, 102, 111, 114, 32, 116, 101, 115, 116, 105, 110, 103, 46, 10], "config" => [], "filename" => "plain.txt", "kind" => "bytes"]));
+        $this->expectException(\Exception::class);        $input = \Xberg\ExtractInput::from_json(json_encode(["bytes" => [84, 104, 105, 115, 32, 105, 115, 32, 97, 32, 112, 108, 97, 105, 110, 32, 116, 101, 120, 116, 32, 102, 105, 108, 101, 32, 102, 111, 114, 32, 116, 101, 115, 116, 105, 110, 103, 46, 10], "config" => [], "filename" => "plain.txt", "kind" => "bytes", "mimeType" => ""]));
         $config = \Xberg\ExtractionConfig::from_json('{}');
         Xberg::extract($input, $config);
     }

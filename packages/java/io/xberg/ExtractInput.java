@@ -8,6 +8,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -17,7 +18,7 @@ import org.jspecify.annotations.Nullable;
 @JsonDeserialize(builder = ExtractInput.Builder.class)
 public record ExtractInput(
     @JsonProperty("kind") ExtractInputKind kind,
-    @Nullable @JsonProperty("bytes") byte[] bytes,
+    @Nullable @JsonProperty("bytes") @JsonSerialize(using = ByteArraySerializer.class) byte[] bytes,
     @Nullable @JsonProperty("uri") String uri,
     @Nullable @JsonProperty("mime_type") String mimeType,
     @Nullable @JsonProperty("filename") String filename,

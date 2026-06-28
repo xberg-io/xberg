@@ -280,12 +280,16 @@ public final class XbergRs {
         }
     }
     private static com.fasterxml.jackson.databind.ObjectMapper createObjectMapper() {
-        return new com.fasterxml.jackson.databind.ObjectMapper()
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper()
             .registerModule(new com.fasterxml.jackson.datatype.jdk8.Jdk8Module())
             .findAndRegisterModules()
             .setPropertyNamingStrategy(com.fasterxml.jackson.databind.PropertyNamingStrategies.SNAKE_CASE)
             .setSerializationInclusion(com.fasterxml.jackson.annotation.JsonInclude.Include.ALWAYS)
             .configure(com.fasterxml.jackson.databind.MapperFeature.ACCEPT_CASE_INSENSITIVE_ENUMS, true);
+        var module = new com.fasterxml.jackson.databind.module.SimpleModule();
+        module.addSerializer(byte[].class, new ByteArraySerializer());
+        mapper.registerModule(module);
+        return mapper;
     }
 
     private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = createObjectMapper();

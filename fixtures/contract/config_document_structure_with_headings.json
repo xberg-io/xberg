@@ -1,11 +1,26 @@
 {
 	"id": "config_document_structure_with_headings",
 	"description": "Tests document structure with DOCX heading-driven nesting",
-	"tags": ["contract", "document_structure"],
+	"tags": [
+		"contract",
+		"document_structure"
+	],
 	"call": "extract",
 	"input": {
-		"kind": "uri",
-		"uri": "docx/fake.docx"
+		"mock_responses": [
+			{
+				"path": "/docx/fake.docx",
+				"status_code": 200,
+				"headers": {
+					"content-type": "application/octet-stream"
+				},
+				"body_file": "../test_documents/docx/fake.docx"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url/docx/fake.docx"
+		}
 	},
 	"assertions": [
 		{
@@ -24,7 +39,9 @@
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
+		"languages": [
+			"wasm"
+		],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	},
 	"config": {

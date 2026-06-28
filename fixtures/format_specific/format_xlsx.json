@@ -5,9 +5,21 @@
 	"tags": ["format_specific", "xlsx", "text_extraction"],
 	"call": "extract",
 	"input": {
-		"kind": "uri",
-		"uri": "xlsx/stanley_cups.xlsx",
-		"mime_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+		"mock_responses": [
+			{
+				"path": "/xlsx/stanley_cups.xlsx",
+				"status_code": 200,
+				"headers": {
+					"content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+				},
+				"body_file": "../test_documents/xlsx/stanley_cups.xlsx"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url/xlsx/stanley_cups.xlsx",
+			"mime_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+		}
 	},
 	"assertions": [
 		{

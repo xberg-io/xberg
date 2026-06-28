@@ -19,6 +19,15 @@ require 'open3'
 #    mock-server binary if it is missing, then spawn it, capture its URL, and
 #    tear it down on exit.
 RSpec.configure do |config|
+  # Change to test-documents directory so relative URIs work with local extraction
+  # (matching Python conftest and Go TestMain behavior)
+  config.before(:suite) do
+    test_documents_dir = File.expand_path('../../../test_documents', __dir__)
+    if File.exist?(test_documents_dir)
+      Dir.chdir(test_documents_dir)
+    end
+  end
+
   config.before(:suite) do
     existing_url = ENV['MOCK_SERVER_URL']
     if existing_url && !existing_url.empty?

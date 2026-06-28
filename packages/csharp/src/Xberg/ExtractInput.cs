@@ -6,6 +6,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -26,6 +27,7 @@ public sealed record ExtractInput
     /// Raw bytes for `kind = "bytes"`.
     /// </summary>
     [JsonPropertyName("bytes")]
+    [JsonConverter(typeof(ByteArrayJsonConverter))]
     public byte[]? Bytes { get; init; } = null;
 
     /// <summary>
@@ -61,7 +63,13 @@ public sealed record ExtractInput
     {
         try
         {
-            return JsonSerializer.Deserialize<ExtractInput>(json, JsonOptions)
+            // Filter out unknown properties that might appear in fixture JSON
+            var knownProperties = new HashSet<string>
+            {
+                "kind", "bytes", "uri", "mime_type", "filename", "config"
+            };
+            var filteredJson = JsonLeniency.FilterUnknownProperties(json, knownProperties);
+            return JsonSerializer.Deserialize<ExtractInput>(filteredJson, JsonOptions)
                 ?? throw new XbergException($"Failed to parse ExtractInput from JSON: deserializer returned null");
         }
         catch (XbergException)
@@ -77,7 +85,7 @@ public sealed record ExtractInput
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower) },
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower), new ByteArrayJsonConverter() },
     };
 
     /// <summary>Options for serializing config/input objects to FFI. Strips nulls
@@ -86,7 +94,7 @@ public sealed record ExtractInput
     private static readonly JsonSerializerOptions JsonSerializationOptions = new()
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower) },
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower), new ByteArrayJsonConverter() },
     };
 
     public static ExtractInput Default()
@@ -107,7 +115,7 @@ public sealed record ExtractInput
         var bytesHandle = GCHandle.Alloc(bytes, GCHandleType.Pinned);
         try
         {
-            var nativeResult = NativeMethods.ExtractInputFromBytes(bytesHandle.AddrOfPinnedObject(), mimeType, filename!);
+            var nativeResult = NativeMethods.ExtractInputFromBytes(bytesHandle.AddrOfPinnedObject(), (nuint)bytes.Length, mimeType, filename!);
             var jsonPtr = NativeMethods.ExtractInputToJson(nativeResult);
             var json = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(jsonPtr);
             NativeMethods.FreeString(jsonPtr);

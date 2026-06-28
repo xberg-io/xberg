@@ -17,7 +17,7 @@ RSpec.describe 'error' do
 
   it 'error_empty_mime: Error when extracting with empty MIME type' do
     expect {
-      Xberg.extract(ExtractInput.new(bytes: [84, 104, 105, 115, 32, 105, 115, 32, 97, 32, 112, 108, 97, 105, 110, 32, 116, 101, 120, 116, 32, 102, 105, 108, 101, 32, 102, 111, 114, 32, 116, 101, 115, 116, 105, 110, 103, 46, 10], config: {  }, filename: 'plain.txt', kind: 'bytes'), Xberg::ExtractionConfig.new())
+      Xberg.extract(ExtractInput.new(bytes: [84, 104, 105, 115, 32, 105, 115, 32, 97, 32, 112, 108, 97, 105, 110, 32, 116, 101, 120, 116, 32, 102, 105, 108, 101, 32, 102, 111, 114, 32, 116, 101, 115, 116, 105, 110, 103, 46, 10], config: {  }, filename: 'plain.txt', kind: 'bytes', mime_type: ''), Xberg::ExtractionConfig.new())
     }.to raise_error(RuntimeError)
   end
 

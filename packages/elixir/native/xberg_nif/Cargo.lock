@@ -8185,6 +8185,7 @@ dependencies = [
  "alloc-stdlib",
  "async-trait",
  "brotli-decompressor",
+ "crawlberg",
  "rustler",
  "serde",
  "serde_json",

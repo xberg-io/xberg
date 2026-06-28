@@ -1,11 +1,26 @@
 {
 	"id": "output_format_markdown",
 	"description": "Tests Markdown output format",
-	"tags": ["contract", "output_format"],
+	"tags": [
+		"contract",
+		"output_format"
+	],
 	"call": "extract",
 	"input": {
-		"kind": "uri",
-		"uri": "pdf/fake_memo.pdf"
+		"mock_responses": [
+			{
+				"path": "/pdf/fake_memo.pdf",
+				"status_code": 200,
+				"headers": {
+					"content-type": "application/octet-stream"
+				},
+				"body_file": "../test_documents/pdf/fake_memo.pdf"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url/pdf/fake_memo.pdf"
+		}
 	},
 	"assertions": [
 		{
@@ -25,7 +40,9 @@
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
+		"languages": [
+			"wasm"
+		],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	},
 	"config": {

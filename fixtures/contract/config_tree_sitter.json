@@ -1,11 +1,27 @@
 {
 	"id": "config_tree_sitter",
 	"description": "Tests tree-sitter configuration round-trip",
-	"tags": ["contract", "config", "tree-sitter"],
+	"tags": [
+		"contract",
+		"config",
+		"tree-sitter"
+	],
 	"call": "extract",
 	"input": {
-		"kind": "uri",
-		"uri": "code/hello.py"
+		"mock_responses": [
+			{
+				"path": "/code/hello.py",
+				"status_code": 200,
+				"headers": {
+					"content-type": "application/octet-stream"
+				},
+				"body_file": "../test_documents/code/hello.py"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url/code/hello.py"
+		}
 	},
 	"assertions": [
 		{
@@ -20,13 +36,20 @@
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
+		"languages": [
+			"wasm"
+		],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	},
 	"config": {
 		"tree_sitter": {
-			"languages": ["python", "rust"],
-			"groups": ["web"],
+			"languages": [
+				"python",
+				"rust"
+			],
+			"groups": [
+				"web"
+			],
 			"process": {
 				"structure": true,
 				"imports": true,

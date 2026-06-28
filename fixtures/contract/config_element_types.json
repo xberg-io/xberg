@@ -1,17 +1,35 @@
 {
 	"id": "config_element_types",
 	"description": "Tests element-based result format with element type assertions on DOCX",
-	"tags": ["contract", "config", "result_format"],
+	"tags": [
+		"contract",
+		"config",
+		"result_format"
+	],
 	"call": "extract",
 	"input": {
-		"kind": "uri",
-		"uri": "docx/unit_test_headers.docx"
+		"mock_responses": [
+			{
+				"path": "/docx/unit_test_headers.docx",
+				"status_code": 200,
+				"headers": {
+					"content-type": "application/octet-stream"
+				},
+				"body_file": "../test_documents/docx/unit_test_headers.docx"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url/docx/unit_test_headers.docx"
+		}
 	},
 	"assertions": [
 		{
 			"type": "contains_any",
 			"field": "results[0].mime_type",
-			"values": ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
+			"values": [
+				"application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+			]
 		},
 		{
 			"type": "count_min",
@@ -20,7 +38,9 @@
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
+		"languages": [
+			"wasm"
+		],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	},
 	"config": {

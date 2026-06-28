@@ -97,7 +97,7 @@ jobs:
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
-          owner: xberg-dev
+          owner: xberg-io
 
       - name: Checkout
         uses: actions/checkout@v6
@@ -1714,7 +1714,7 @@ jobs:
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
-          owner: xberg-dev
+          owner: xberg-io
 
       - uses: actions/checkout@v6
         with:
@@ -1865,7 +1865,7 @@ jobs:
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
-          owner: xberg-dev
+          owner: xberg-io
 
       - uses: actions/download-artifact@v8
         with:
@@ -1894,7 +1894,7 @@ jobs:
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
-          owner: xberg-dev
+          owner: xberg-io
 
       - uses: actions/download-artifact@v8
         with:
@@ -1921,7 +1921,7 @@ jobs:
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
-          owner: xberg-dev
+          owner: xberg-io
 
       - uses: actions/download-artifact@v8
         with:
@@ -1948,7 +1948,7 @@ jobs:
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
-          owner: xberg-dev
+          owner: xberg-io
 
       - uses: actions/download-artifact@v8
         with:
@@ -1975,7 +1975,7 @@ jobs:
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
-          owner: xberg-dev
+          owner: xberg-io
 
       - uses: actions/download-artifact@v8
         with:
@@ -2006,7 +2006,7 @@ jobs:
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
-          owner: xberg-dev
+          owner: xberg-io
 
       - uses: actions/download-artifact@v8
         with:
@@ -2517,7 +2517,7 @@ jobs:
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
-          owner: xberg-dev
+          owner: xberg-io
 
       - uses: xberg-io/actions/finalize-release@v1
         with:
@@ -2682,7 +2682,7 @@ jobs:
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
-          owner: xberg-dev
+          owner: xberg-io
 
       - name: Dispatch publish-pubdev workflow
         env:
@@ -2706,7 +2706,7 @@ jobs:
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
-          owner: xberg-dev
+          owner: xberg-io
 
       - uses: actions/checkout@v6
         with:
@@ -2800,14 +2800,14 @@ jobs:
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
-          owner: xberg-dev
+          owner: xberg-io
 
       - uses: actions/create-github-app-token@v2
         id: tap-token
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
-          owner: xberg-dev
+          owner: xberg-io
           repositories: homebrew-tap
 
       - name: Checkout source repo
@@ -2875,7 +2875,7 @@ jobs:
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
-          owner: xberg-dev
+          owner: xberg-io
 
       - uses: actions/checkout@v5
         with:
@@ -2916,7 +2916,7 @@ jobs:
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
-          owner: xberg-dev
+          owner: xberg-io
           repositories: homebrew-tap
 
       - uses: actions/checkout@v6
@@ -3002,7 +3002,7 @@ jobs:
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
-          owner: xberg-dev
+          owner: xberg-io
 
       - uses: xberg-io/actions/finalize-release@v1
         with:
@@ -3055,7 +3055,7 @@ jobs:
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
-          owner: xberg-dev
+          owner: xberg-io
 
       - uses: xberg-io/actions/announce-release-discord@v1
         with:

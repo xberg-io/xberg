@@ -20527,13 +20527,13 @@ impl From<JsEmailAttachment> for xberg::EmailAttachment {
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<JsOcrExtractionResult> for xberg::OcrExtractionResult {
     fn from(val: JsOcrExtractionResult) -> Self {
-        Self {
-            content: val.content,
-            mime_type: val.mime_type,
-            metadata: val.metadata.into_iter().map(|(k, v)| (k.into(), v)).collect(),
-            tables: val.tables.into_iter().map(Into::into).collect(),
-            ocr_elements: val.ocr_elements.map(|v| v.into_iter().map(Into::into).collect()),
-        }
+        Self::new(
+            val.content,
+            val.mime_type,
+            val.metadata.into_iter().map(|(k, v)| (k.into(), v)).collect(),
+            val.tables.into_iter().map(Into::into).collect(),
+            val.ocr_elements.map(|v| v.into_iter().map(Into::into).collect()),
+        )
     }
 }
 

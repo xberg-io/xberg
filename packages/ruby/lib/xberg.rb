@@ -16,3 +16,9 @@ require_relative "xberg/native"
 module Xberg
   # Re-export all types and functions from native extension
 end
+
+# Bring top-level Xberg classes into the global namespace for test compatibility
+::ExtractInput = Xberg::ExtractInput
+::ExtractionConfig = Xberg::ExtractionConfig
+::ExtractionResult = Xberg::ExtractionResult
+::ExtractedDocument = Xberg::ExtractedDocument

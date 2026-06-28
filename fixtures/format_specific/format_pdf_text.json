@@ -5,10 +5,22 @@
 	"tags": ["format_specific", "pdf", "text_extraction"],
 	"call": "extract",
 	"input": {
-		"kind": "uri",
-		"uri": "pdf/fake_memo.pdf",
-		"mime_type": "application/pdf",
-		"filename": "fake_memo.pdf"
+		"mock_responses": [
+			{
+				"path": "/pdf/fake_memo.pdf",
+				"status_code": 200,
+				"headers": {
+					"content-type": "application/pdf"
+				},
+				"body_file": "../test_documents/pdf/fake_memo.pdf"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url/pdf/fake_memo.pdf",
+			"mime_type": "application/pdf",
+			"filename": "fake_memo.pdf"
+		}
 	},
 	"assertions": [
 		{

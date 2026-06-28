@@ -8270,6 +8270,7 @@ name = "xberg-rb"
 version = "1.0.0-rc.1"
 dependencies = [
  "async-trait",
+ "crawlberg",
  "magnus",
  "rb-sys",
  "serde",

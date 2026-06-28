@@ -13,13 +13,13 @@ public static class XbergConverter
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower) },
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower), new ByteArrayJsonConverter() },
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault
     };
 
     private static readonly JsonSerializerOptions JsonSerializationOptions = new()
     {
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower) },
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower), new ByteArrayJsonConverter() },
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 

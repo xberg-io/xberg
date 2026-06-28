@@ -1,29 +1,16 @@
 name: CI GPU
 
 on:
+  # Manual dispatch only — this suite is heavy (real model weights, GPU
+  # inference across the candle model matrix). Trigger it explicitly.
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - ".github/workflows/ci-gpu.yaml"
-  pull_request:
-    branches:
-      - main
-    paths:
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - ".github/workflows/ci-gpu.yaml"
 
 concurrency:
+  # Heavy, dispatch-only suite (multi-GB model downloads, real GPU inference).
+  # Never cancel an in-flight run; queue re-dispatches instead so an expensive
+  # run is not killed mid-flight.
   group: ci-gpu-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
@@ -130,9 +117,40 @@ jobs:
           TEST_DOCUMENTS_DIR: ${{ github.workspace }}/test_documents
 
   candle-gpu-tests:
-    name: "Candle GPU Tests (CUDA)"
+    name: "Candle GPU (${{ matrix.model.name }})"
     runs-on: runner-gpu-l4
-    timeout-minutes: 30
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        model:
+          # Auto-download models (weights fetched from HF Hub on first use).
+          - name: trocr
+            feature: candle-trocr
+            test: candle_trocr_e2e_extraction
+            hf_repo: ""
+            env_var: ""
+          - name: glm-ocr
+            feature: candle-glm-ocr
+            test: candle_glm_ocr_e2e_extraction
+            hf_repo: ""
+            env_var: ""
+          # Local-weight models (staged by the download step, cached per model).
+          - name: hunyuan-ocr
+            feature: candle-hunyuan-ocr
+            test: candle_hunyuan_ocr_e2e_extraction
+            hf_repo: tencent/HunyuanOCR
+            env_var: XBERG_HUNYUAN_OCR_MODEL_PATH
+          - name: deepseek-ocr
+            feature: candle-deepseek-ocr
+            test: candle_deepseek_ocr_e2e_extraction
+            hf_repo: deepseek-ai/DeepSeek-OCR
+            env_var: XBERG_DEEPSEEK_OCR_MODEL_PATH
+          - name: paddleocr-vl
+            feature: candle-paddleocr-vl
+            test: candle_paddleocr_vl_e2e_extraction
+            hf_repo: PaddlePaddle/PaddleOCR-VL
+            env_var: XBERG_PADDLEOCR_VL_MODEL_PATH
 
     steps:
       - name: Checkout
@@ -150,64 +168,101 @@ jobs:
           nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        # setup-rust wires sccache (use-sccache) so the heavy candle/CUDA build is
+        # cached across matrix entries and runs.
+        uses: xberg-io/actions/setup-rust@v1
         with:
           toolchain: "1.95"
+          cache-key-prefix: candle-gpu-${{ matrix.model.name }}
+          use-sccache: "true"
 
       - name: Install system dependencies
         uses: ./.github/actions/install-system-deps
 
       - name: Setup CUDA toolkit (nvcc)
         # candle-cuda compiles CUDA kernels via cudarc at build time, which needs
-        # nvcc. The L4 runner ships the driver (nvidia-smi) but nvcc is not on PATH.
-        # Locate an existing CUDA toolkit install and add it to PATH/CUDA_PATH;
-        # fail loudly if the toolkit is genuinely absent so we know to provision it.
+        # nvcc. The L4 runner ships the driver (nvidia-smi) but no CUDA toolkit.
+        # Install it from NVIDIA's apt repo (idempotent: skip if nvcc already present).
         run: |
+          set -euxo pipefail
           if command -v nvcc >/dev/null 2>&1; then
-            echo "nvcc already on PATH: $(command -v nvcc)"
+            echo "nvcc already present: $(command -v nvcc)"
+          elif [ -x /usr/local/cuda/bin/nvcc ]; then
+            echo "/usr/local/cuda/bin" >> "$GITHUB_PATH"
+            echo "CUDA_PATH=/usr/local/cuda" >> "$GITHUB_ENV"
+            echo "CUDA_HOME=/usr/local/cuda" >> "$GITHUB_ENV"
           else
-            cuda_home=""
-            for d in /usr/local/cuda /usr/local/cuda-*; do
-              if [ -x "$d/bin/nvcc" ]; then
-                cuda_home="$d"
-                break
-              fi
-            done
-            if [ -z "$cuda_home" ]; then
-              echo "ERROR: nvcc not found. CUDA toolkit is not installed on this runner."
-              echo "Searched: /usr/local/cuda, /usr/local/cuda-*"
-              ls -d /usr/local/cuda* 2>/dev/null || echo "  (no /usr/local/cuda* directories)"
-              exit 1
-            fi
-            echo "Found CUDA toolkit at $cuda_home"
-            echo "$cuda_home/bin" >> "$GITHUB_PATH"
-            echo "CUDA_PATH=$cuda_home" >> "$GITHUB_ENV"
-            echo "CUDA_HOME=$cuda_home" >> "$GITHUB_ENV"
+            arch="$(uname -m)"
+            case "$arch" in
+              x86_64) repo_arch="x86_64" ;;
+              aarch64) repo_arch="sbsa" ;;
+              *) echo "Unsupported arch: $arch"; exit 1 ;;
+            esac
+            . /etc/os-release
+            distro="${ID}${VERSION_ID//./}"
+            keyring="cuda-keyring_1.1-1_all.deb"
+            curl -fsSL -o "${keyring}" "https://developer.download.nvidia.com/compute/cuda/repos/${distro}/${repo_arch}/${keyring}"
+            sudo dpkg -i "${keyring}"
+            sudo apt-get update
+            # Toolkit only (nvcc + headers); the driver is already on the runner.
+            sudo apt-get install -y --no-install-recommends cuda-toolkit-12-6
+            echo "/usr/local/cuda-12.6/bin" >> "$GITHUB_PATH"
+            echo "CUDA_PATH=/usr/local/cuda-12.6" >> "$GITHUB_ENV"
+            echo "CUDA_HOME=/usr/local/cuda-12.6" >> "$GITHUB_ENV"
           fi
 
       - name: Verify nvcc
         run: nvcc --version
 
-      - name: Cache Cargo
+      - name: Setup ONNX Runtime
+        # candle-glm-ocr pulls layout-detection, which links ONNX Runtime.
+        if: matrix.model.name == 'glm-ocr'
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: ${{ env.ORT_VERSION }}
+
+      - name: Cache model weights
+        if: matrix.model.hf_repo != ''
+        id: model-cache
         uses: actions/cache@v5
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: candle-gpu-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            candle-gpu-${{ runner.os }}-
+          path: ${{ github.workspace }}/models/${{ matrix.model.name }}
+          key: hf-weights-${{ matrix.model.name }}-v1
 
-      - name: Run Candle registry and dispatch tests
-        run: |
-          cargo test --locked -p xberg --features "candle-vlm-ocr,candle-cuda" --test candle_backends -- --nocapture
+      - name: Download model weights
+        if: matrix.model.hf_repo != '' && steps.model-cache.outputs.cache-hit != 'true'
         env:
-          RUST_LOG: "xberg=debug"
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          set -euo pipefail
+          # The runner's system python3 has no pip and is externally-managed
+          # (PEP 668), so install huggingface_hub into an isolated venv.
+          # huggingface_hub 1.x dropped the `huggingface-cli` entrypoint (it now
+          # exits 1) and the `cli`/`hf_transfer` extras; the CLI is now `hf`.
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends python3-venv
+          python3 -m venv "$RUNNER_TEMP/hfvenv"
+          "$RUNNER_TEMP/hfvenv/bin/pip" install --quiet --upgrade "huggingface_hub"
+          "$RUNNER_TEMP/hfvenv/bin/hf" download \
+            "${{ matrix.model.hf_repo }}" \
+            --local-dir "${{ github.workspace }}/models/${{ matrix.model.name }}"
 
-      - name: Run Candle model inference integration tests
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          XBERG_NETWORK_TESTS=1 cargo test --locked -p xberg-candle-ocr --features "cuda,trocr,glm-ocr,hunyuan-ocr,paddleocr-vl,deepseek-ocr" -- --ignored --nocapture
+      - name: Run ${{ matrix.model.name }} GPU inference
+        # XBERG_REQUIRE_MODELS=1 turns a missing model/weights into a hard failure
+        # instead of a silent skip, so a misconfigured matrix entry cannot pass green.
         env:
+          XBERG_REQUIRE_MODELS: "1"
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
           RUST_LOG: "xberg=debug,xberg_candle_ocr=debug"
+          # Per-stage tensor stats for GLM-OCR, to bisect the CUDA-only empty-output
+          # (NaN/garbage) divergence. No-op for other models.
+          XBERG_GLM_DEBUG: "1"
+        run: |
+          set -euo pipefail
+          if [ -n "${{ matrix.model.env_var }}" ]; then
+            export ${{ matrix.model.env_var }}="${{ github.workspace }}/models/${{ matrix.model.name }}"
+          fi
+          cargo test --locked -p xberg \
+            --features "${{ matrix.model.feature }},candle-cuda" \
+            --test candle_backends ${{ matrix.model.test }} \
+            -- --ignored --nocapture

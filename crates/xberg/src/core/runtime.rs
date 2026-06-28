@@ -12,13 +12,16 @@
 //! no `Drop` ever runs, so the panic cannot occur, and runtime construction
 //! happens at most once per process.
 
-#[cfg(feature = "tokio-runtime")]
+// Gated to its only callers — `embed_texts` (feature `embeddings`) and `rerank`
+// (feature `reranker`); both imply `tokio-runtime`. Other feature sets that
+// enable `tokio-runtime` without these (e.g. candle-only) don't reference it.
+#[cfg(any(feature = "embeddings", feature = "reranker"))]
 use once_cell::sync::OnceCell;
 
 /// The shared runtime. Initialized on first use and intentionally never dropped
 /// (it lives for the remainder of the process), so it can never trigger the
 /// "drop a runtime in a blocking context" panic.
-#[cfg(feature = "tokio-runtime")]
+#[cfg(any(feature = "embeddings", feature = "reranker"))]
 static GLOBAL_RUNTIME: OnceCell<tokio::runtime::Runtime> = OnceCell::new();
 
 /// Returns a reference to the shared multi-thread Tokio runtime, building it on
@@ -33,7 +36,7 @@ static GLOBAL_RUNTIME: OnceCell<tokio::runtime::Runtime> = OnceCell::new();
 ///
 /// Returns an error if the runtime cannot be created (e.g. system resource
 /// exhaustion).
-#[cfg(feature = "tokio-runtime")]
+#[cfg(any(feature = "embeddings", feature = "reranker"))]
 pub(crate) fn global_runtime() -> crate::Result<&'static tokio::runtime::Runtime> {
     GLOBAL_RUNTIME.get_or_try_init(|| {
         tokio::runtime::Builder::new_multi_thread()

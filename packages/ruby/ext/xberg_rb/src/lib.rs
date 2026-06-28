@@ -20311,7 +20311,8 @@ impl xberg::plugins::Plugin for RbOcrBackendBridge {
 }
 
 
-#[async_trait::async_trait]impl xberg::OcrBackend for RbOcrBackendBridge {
+#[async_trait::async_trait]
+impl xberg::OcrBackend for RbOcrBackendBridge {
     async fn process_image(&self, image_bytes: &[u8], config: &xberg::OcrConfig) -> std::result::Result<xberg::ExtractedDocument, xberg::XbergError> {
         let inner = self.inner;
         let cached_name = self.cached_name.clone();
@@ -20334,10 +20335,13 @@ impl xberg::plugins::Plugin for RbOcrBackendBridge {
                 let val: magnus::Value = match value.funcall::<_, _, magnus::Value>("process_image", ({ let ruby = unsafe { magnus::Ruby::get_unchecked() }; ruby.str_new(String::from_utf8_lossy(AsRef::<[u8]>::as_ref(&image_bytes_owned)).as_ref()).as_value() }, { let ruby = unsafe { magnus::Ruby::get_unchecked() }; use magnus::IntoValue; OcrConfig::from(config_owned.clone()).into_value_with(&ruby) })) {
                     Ok(v) => v,
                     Err(e) => {                return Err(xberg::XbergError::Other(format!("Plugin '{}' method 'process_image' failed: {}", cached_name_for_blocking, e)));            }
-                };            // Native-object return: the binding struct's `TryConvert` accepts the host's native wrapped
-                    // object (and still a Hash/JSON via `to_json`); `From<ExtractedDocument>` yields core.            <ExtractedDocument as magnus::TryConvert>::try_convert(val)
-                        .map(Into::into)
-                        .map_err(|e| xberg::XbergError::Other(format!("Failed to convert Ruby 'process_image' return value: {}", e)))    }).await;
+                };
+                // Native-object return: the binding struct's `TryConvert` accepts the host's native wrapped
+                // object (and still a Hash/JSON via `to_json`); `From<ExtractedDocument>` yields core.
+                <ExtractedDocument as magnus::TryConvert>::try_convert(val)
+                    .map(|doc| doc.into())
+                    .map_err(|e| xberg::XbergError::Other(format!("Failed to convert Ruby 'process_image' return value: {}", e)))
+            }).await;
 
         match join {
             Ok(v) => v,    Err(e) => Err(xberg::XbergError::Other(format!("spawn_blocking failed for '{}': {}", cached_name, e))),}
@@ -20804,7 +20808,8 @@ impl xberg::plugins::Plugin for RbDocumentExtractorBridge {
 }
 
 
-#[async_trait::async_trait]impl xberg::DocumentExtractor for RbDocumentExtractorBridge {
+#[async_trait::async_trait]
+impl xberg::DocumentExtractor for RbDocumentExtractorBridge {
     async fn extract(&self, input: xberg::ExtractInput, config: &xberg::ExtractionConfig) -> std::result::Result<xberg::ExtractedDocument, xberg::XbergError> {
         let inner = self.inner;
         let cached_name = self.cached_name.clone();
@@ -20827,10 +20832,13 @@ impl xberg::plugins::Plugin for RbDocumentExtractorBridge {
                 let val: magnus::Value = match value.funcall::<_, _, magnus::Value>("extract", ({ let ruby = unsafe { magnus::Ruby::get_unchecked() }; use magnus::IntoValue; ExtractInput::from(input_owned.clone()).into_value_with(&ruby) }, { let ruby = unsafe { magnus::Ruby::get_unchecked() }; use magnus::IntoValue; ExtractionConfig::from(config_owned.clone()).into_value_with(&ruby) })) {
                     Ok(v) => v,
                     Err(e) => {                return Err(xberg::XbergError::Other(format!("Plugin '{}' method 'extract' failed: {}", cached_name_for_blocking, e)));            }
-                };            // Native-object return: the binding struct's `TryConvert` accepts the host's native wrapped
-                    // object (and still a Hash/JSON via `to_json`); `From<ExtractedDocument>` yields core.            <ExtractedDocument as magnus::TryConvert>::try_convert(val)
-                        .map(Into::into)
-                        .map_err(|e| xberg::XbergError::Other(format!("Failed to convert Ruby 'extract' return value: {}", e)))    }).await;
+                };
+                // Native-object return: the binding struct's `TryConvert` accepts the host's native wrapped
+                // object (and still a Hash/JSON via `to_json`); `From<ExtractedDocument>` yields core.
+                <ExtractedDocument as magnus::TryConvert>::try_convert(val)
+                    .map(|doc| doc.into())
+                    .map_err(|e| xberg::XbergError::Other(format!("Failed to convert Ruby 'extract' return value: {}", e)))
+            }).await;
 
         match join {
             Ok(v) => v,    Err(e) => Err(xberg::XbergError::Other(format!("spawn_blocking failed for '{}': {}", cached_name, e))),}
@@ -22100,7 +22108,42 @@ impl From<xberg::Entity> for Entity {
 
 #[allow(clippy::needless_update)]#[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<ExtractedDocument> for xberg::ExtractedDocument {
-    fn from(val: ExtractedDocument) -> Self {        Self {            content: val.content,            mime_type: val.mime_type.into(),            metadata: val.metadata.into(),            extraction_method: val.extraction_method.map(Into::into),            tables: val.tables.into_iter().map(Into::into).collect(),            detected_languages: val.detected_languages.map(|v| v.into_iter().collect()),            chunks: val.chunks.map(|v| v.into_iter().map(Into::into).collect()),            images: val.images.map(|v| v.into_iter().map(Into::into).collect()),            pages: val.pages.map(|v| v.into_iter().map(Into::into).collect()),            elements: val.elements.map(|v| v.into_iter().map(Into::into).collect()),            djot_content: val.djot_content.map(Into::into),            ocr_elements: val.ocr_elements.map(|v| v.into_iter().map(Into::into).collect()),            document: val.document.map(Into::into),            extracted_keywords: val.extracted_keywords.map(|v| v.into_iter().map(Into::into).collect()),            quality_score: val.quality_score,            processing_warnings: val.processing_warnings.into_iter().map(Into::into).collect(),            annotations: val.annotations.map(|v| v.into_iter().map(Into::into).collect()),            children: val.children.map(|v| v.into_iter().map(Into::into).collect()),            uris: val.uris.map(|v| v.into_iter().map(Into::into).collect()),            revisions: val.revisions.map(|v| v.into_iter().map(Into::into).collect()),            structured_output: val.structured_output.as_ref().and_then(|s| serde_json::from_str(s).ok()),            code_intelligence: val.code_intelligence.as_ref().and_then(|s| serde_json::from_str(s).ok()),            llm_usage: val.llm_usage.map(|v| v.into_iter().map(Into::into).collect()),            entities: val.entities.map(|v| v.into_iter().map(Into::into).collect()),            summary: val.summary.map(Into::into),            extraction_confidence: val.extraction_confidence.map(Into::into),            translation: val.translation.map(Into::into),            page_classifications: val.page_classifications.map(|v| v.into_iter().map(Into::into).collect()),            redaction_report: val.redaction_report.map(Into::into),            formulas: val.formulas.into_iter().map(Into::into).collect(),            form_fields: val.form_fields.into_iter().map(Into::into).collect(),            formatted_content: val.formatted_content,            ..Default::default()        }    }
+    fn from(val: ExtractedDocument) -> Self {
+        let mut doc = Self::default();
+        doc.content = val.content;
+        doc.mime_type = val.mime_type.into();
+        doc.metadata = val.metadata.into();
+        doc.extraction_method = val.extraction_method.map(Into::into);
+        doc.tables = val.tables.into_iter().map(Into::into).collect();
+        doc.detected_languages = val.detected_languages.map(|v| v.into_iter().collect());
+        doc.chunks = val.chunks.map(|v| v.into_iter().map(Into::into).collect());
+        doc.images = val.images.map(|v| v.into_iter().map(Into::into).collect());
+        doc.pages = val.pages.map(|v| v.into_iter().map(Into::into).collect());
+        doc.elements = val.elements.map(|v| v.into_iter().map(Into::into).collect());
+        doc.djot_content = val.djot_content.map(Into::into);
+        doc.ocr_elements = val.ocr_elements.map(|v| v.into_iter().map(Into::into).collect());
+        doc.document = val.document.map(Into::into);
+        doc.extracted_keywords = val.extracted_keywords.map(|v| v.into_iter().map(Into::into).collect());
+        doc.quality_score = val.quality_score;
+        doc.processing_warnings = val.processing_warnings.into_iter().map(Into::into).collect();
+        doc.annotations = val.annotations.map(|v| v.into_iter().map(Into::into).collect());
+        doc.children = val.children.map(|v| v.into_iter().map(Into::into).collect());
+        doc.uris = val.uris.map(|v| v.into_iter().map(Into::into).collect());
+        doc.revisions = val.revisions.map(|v| v.into_iter().map(Into::into).collect());
+        doc.structured_output = val.structured_output.as_ref().and_then(|s| serde_json::from_str(s).ok());
+        doc.code_intelligence = val.code_intelligence.as_ref().and_then(|s| serde_json::from_str(s).ok());
+        doc.llm_usage = val.llm_usage.map(|v| v.into_iter().map(Into::into).collect());
+        doc.entities = val.entities.map(|v| v.into_iter().map(Into::into).collect());
+        doc.summary = val.summary.map(Into::into);
+        doc.extraction_confidence = val.extraction_confidence.map(Into::into);
+        doc.translation = val.translation.map(Into::into);
+        doc.page_classifications = val.page_classifications.map(|v| v.into_iter().map(Into::into).collect());
+        doc.redaction_report = val.redaction_report.map(Into::into);
+        doc.formulas = val.formulas.into_iter().map(Into::into).collect();
+        doc.form_fields = val.form_fields.into_iter().map(Into::into).collect();
+        doc.formatted_content = val.formatted_content;
+        doc
+    }
 }
 
 

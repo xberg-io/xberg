@@ -253,16 +253,16 @@ impl HunyuanVLProcessor {
             .dim(1)
             .map_err(|e| CandleOcrError::InferenceFailed(format!("Seq len: {}", e)))?;
 
-        let position_ids = Tensor::arrange(0, seq_len as u32, &self.device)
+        let position_ids = Tensor::arange(0, seq_len as u32, &self.device)
             .map_err(|e| CandleOcrError::InferenceFailed(format!("Position IDs: {}", e)))?;
 
-        let mut position_ids_w = Tensor::arrange(0, seq_len as u32, &self.device)
+        let mut position_ids_w = Tensor::arange(0, seq_len as u32, &self.device)
             .map_err(|e| CandleOcrError::InferenceFailed(format!("Position IDs W: {}", e)))?;
 
-        let mut position_ids_h = Tensor::arrange(0, seq_len as u32, &self.device)
+        let mut position_ids_h = Tensor::arange(0, seq_len as u32, &self.device)
             .map_err(|e| CandleOcrError::InferenceFailed(format!("Position IDs H: {}", e)))?;
 
-        let mut position_ids_t = Tensor::arrange(0, seq_len as u32, &self.device)
+        let mut position_ids_t = Tensor::arange(0, seq_len as u32, &self.device)
             .map_err(|e| CandleOcrError::InferenceFailed(format!("Position IDs T: {}", e)))?;
 
         if !imgs.is_empty()

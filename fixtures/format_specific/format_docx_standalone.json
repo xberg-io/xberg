@@ -5,10 +5,22 @@
 	"tags": ["format_specific", "docx", "text_extraction"],
 	"call": "extract",
 	"input": {
-		"kind": "uri",
-		"uri": "docx/fake.docx",
-		"mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-		"filename": "fake.docx"
+		"mock_responses": [
+			{
+				"path": "/docx/fake.docx",
+				"status_code": 200,
+				"headers": {
+					"content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+				},
+				"body_file": "../test_documents/docx/fake.docx"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url/docx/fake.docx",
+			"mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			"filename": "fake.docx"
+		}
 	},
 	"assertions": [
 		{

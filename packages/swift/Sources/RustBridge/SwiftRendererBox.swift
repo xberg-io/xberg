@@ -39,8 +39,7 @@ public final class SwiftRendererBox {
     // MARK: Trait-specific shims
     public func alef_render_result(result: RustString) -> String {
         do {
-            let result_decoded = try JSONDecoder().decode(ExtractedDocument.self, from: Data(result.toString().utf8))
-            let result = try bridge.renderResult(result: result_decoded)
+            let result = try bridge.renderResult(result: result.toString())
             return encodeOkEnvelope(result)
         } catch { return encodeErrEnvelope("\(error)") }
     }

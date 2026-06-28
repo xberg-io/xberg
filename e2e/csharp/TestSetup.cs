@@ -13,11 +13,29 @@ internal static class TestSetup
 {
     private static Process? _mockServer;
 
+    // libc setenv — Environment.SetEnvironmentVariable does not reliably propagate to the
+    // native getenv that crawlberg reads, so set it through the C runtime directly.
+    [System.Runtime.InteropServices.DllImport("libc", SetLastError = true)]
+    private static extern int setenv(string name, string value, int overwrite);
+
+    private static void SetNativeEnv(string name, string value)
+    {
+        Environment.SetEnvironmentVariable(name, value);
+        if (!OperatingSystem.IsWindows())
+        {
+            try { setenv(name, value, 1); } catch { }
+        }
+    }
+
     [ModuleInitializer]
     internal static void Init()
     {
-        if (Environment.GetEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK") == null) {
-            Environment.SetEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
+        // Ensure SSRF policy allows private/loopback access for URL extraction tests.
+        // Mirror the other suites, which set the value to "true" (crawlberg's boolean
+        // parser does not accept "1").
+        var current = Environment.GetEnvironmentVariable("CRAWLBERG_ALLOW_PRIVATE_NETWORK");
+        if (string.IsNullOrEmpty(current)) {
+            SetNativeEnv("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true");
         }
 
         // Walk up from the assembly directory until we find the repo root.

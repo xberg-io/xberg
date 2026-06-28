@@ -72,6 +72,10 @@ pub struct SubprocessAdapter {
     supported_formats: Vec<String>,
     max_timeout: Option<Duration>,
     skip_files: Vec<String>,
+    /// When true, append --format=<output_format> to subprocess args
+    format_aware: bool,
+    /// When true (and format_aware=true), adapter uses native batch API via lit batch-parse
+    use_native_batch: bool,
 }
 
 impl SubprocessAdapter {
@@ -146,6 +150,8 @@ impl SubprocessAdapter {
             supported_formats,
             max_timeout: None,
             skip_files: vec![],
+            format_aware: false,
+            use_native_batch: false,
         }
     }
 
@@ -177,6 +183,8 @@ impl SubprocessAdapter {
             supported_formats,
             max_timeout: None,
             skip_files: vec![],
+            format_aware: false,
+            use_native_batch: false,
         }
     }
 
@@ -190,6 +198,19 @@ impl SubprocessAdapter {
     /// Set files to skip for this adapter.
     pub fn with_skip_files(mut self, files: Vec<String>) -> Self {
         self.skip_files = files;
+        self
+    }
+
+    /// Enable format awareness: append --format=<output_format> to subprocess args
+    pub fn with_format_aware(mut self, enabled: bool) -> Self {
+        self.format_aware = enabled;
+        self
+    }
+
+    /// Enable native batch mode: use framework's native batch API instead of looping extract()
+    /// Only meaningful when format_aware=true and supports_batch=true
+    pub fn with_native_batch(mut self, enabled: bool) -> Self {
+        self.use_native_batch = enabled;
         self
     }
 
@@ -210,7 +231,12 @@ impl SubprocessAdapter {
     }
 
     /// Execute the extraction subprocess
-    async fn execute_subprocess(&self, file_path: &Path, timeout: Duration) -> Result<(String, String, Duration)> {
+    async fn execute_subprocess(
+        &self,
+        file_path: &Path,
+        timeout: Duration,
+        output_format: OutputFormat,
+    ) -> Result<(String, String, Duration)> {
         let start = Instant::now();
 
         let absolute_path = if file_path.is_absolute() {
@@ -224,6 +250,12 @@ impl SubprocessAdapter {
             cmd.current_dir(dir);
         }
         cmd.args(&self.args);
+
+        // Append format flag if format_aware is enabled
+        if self.format_aware {
+            cmd.arg(format!("--format={}", output_format));
+        }
+
         cmd.arg(&*absolute_path.to_string_lossy());
 
         for (key, value) in &self.env {
@@ -278,14 +310,27 @@ impl SubprocessAdapter {
         &self,
         file_paths: &[&Path],
         timeout: Duration,
+        output_format: OutputFormat,
     ) -> Result<(String, String, Duration)> {
         let start = Instant::now();
+
+        // For liteparse with native batch, use lit batch-parse instead of shell wrapper
+        if self.use_native_batch && self.format_aware {
+            return self
+                .execute_liteparse_native_batch(file_paths, timeout, output_format)
+                .await;
+        }
 
         let mut cmd = Command::new(&self.command);
         if let Some(dir) = &self.working_dir {
             cmd.current_dir(dir);
         }
         cmd.args(&self.args);
+
+        // Append format flag if format_aware is enabled
+        if self.format_aware {
+            cmd.arg(format!("--format={}", output_format));
+        }
 
         let cwd = std::env::current_dir().map_err(Error::Io)?;
         for path in file_paths {
@@ -332,6 +377,138 @@ impl SubprocessAdapter {
                 stderr
             )));
         }
+
+        Ok((stdout, stderr, duration))
+    }
+
+    /// Execute liteparse native batch using lit batch-parse
+    /// Uses lit batch-parse with temp directories for optimal apples-to-apples comparison
+    async fn execute_liteparse_native_batch(
+        &self,
+        file_paths: &[&Path],
+        timeout: Duration,
+        output_format: OutputFormat,
+    ) -> Result<(String, String, Duration)> {
+        use std::fs;
+        use std::os::unix::fs as unix_fs;
+
+        let start = Instant::now();
+
+        // Create temp input/output directories
+        let temp_dir =
+            tempfile::tempdir().map_err(|e| Error::Benchmark(format!("Failed to create temp directory: {}", e)))?;
+        let input_dir = temp_dir.path().join("input");
+        let output_dir = temp_dir.path().join("output");
+
+        fs::create_dir(&input_dir).map_err(|e| Error::Benchmark(format!("Failed to create input directory: {}", e)))?;
+        fs::create_dir(&output_dir)
+            .map_err(|e| Error::Benchmark(format!("Failed to create output directory: {}", e)))?;
+
+        // Symlink all input files into the input directory to avoid copying large files.
+        // Prefix each link with its batch index so fixtures that share a basename
+        // (across categories) do not collide in the flat staging directory.
+        for (idx, path) in file_paths.iter().enumerate() {
+            let file_name = path
+                .file_name()
+                .ok_or_else(|| Error::Benchmark("Invalid file path".to_string()))?;
+
+            let src_absolute = if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                std::env::current_dir().map_err(Error::Io)?.join(path)
+            };
+
+            let staged_name = format!("{}_{}", idx, file_name.to_string_lossy());
+            let dest_link = input_dir.join(staged_name);
+            unix_fs::symlink(&src_absolute, &dest_link)
+                .map_err(|e| Error::Benchmark(format!("Failed to symlink file {}: {}", idx, e)))?;
+        }
+
+        // Build lit batch-parse command
+        let format_arg = match output_format {
+            OutputFormat::Markdown => "markdown",
+            OutputFormat::Plaintext => "text",
+        };
+
+        let mut cmd = Command::new("lit");
+        cmd.arg("batch-parse")
+            .arg(&input_dir)
+            .arg(&output_dir)
+            .arg("--format")
+            .arg(format_arg)
+            .arg("--num-workers")
+            .arg("4")
+            .arg("--quiet");
+
+        cmd.stdin(Stdio::null());
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
+
+        let child = cmd
+            .spawn()
+            .map_err(|e| Error::Benchmark(format!("Failed to spawn lit batch-parse: {}", e)))?;
+
+        let output = match tokio::time::timeout(timeout, child.wait_with_output()).await {
+            Ok(Ok(output)) => output,
+            Ok(Err(e)) => {
+                return Err(Error::Benchmark(format!("Failed to wait for lit batch-parse: {}", e)));
+            }
+            Err(_) => {
+                return Err(Error::Timeout(format!("lit batch-parse exceeded {:?}", timeout)));
+            }
+        };
+
+        let duration = start.elapsed();
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(Error::Benchmark(format!(
+                "lit batch-parse failed with exit code {:?}\nstderr: {}",
+                output.status.code(),
+                stderr
+            )));
+        }
+
+        // Read output files and construct per-file JSON results, in the same order
+        // as `file_paths` so the caller can zip results back to inputs by index.
+        let mut results = Vec::new();
+        for (idx, path) in file_paths.iter().enumerate() {
+            let file_name = path
+                .file_name()
+                .ok_or_else(|| Error::Benchmark("Invalid file path".to_string()))?
+                .to_string_lossy();
+
+            // lit batch-parse mirrors the input filename, replacing the last
+            // extension: `<idx>_<stem>.pdf` → `<idx>_<stem>.{txt|md}`.
+            let ext = match output_format {
+                OutputFormat::Markdown => "md",
+                OutputFormat::Plaintext => "txt",
+            };
+
+            // Stem = everything before the LAST '.', matching liteparse's
+            // `Path::with_extension` semantics (e.g. "a.b.pdf" → "a.b").
+            let file_stem = file_name.rsplit_once('.').map(|(stem, _)| stem).unwrap_or(&file_name);
+            let output_file_name = format!("{}_{}.{}", idx, file_stem, ext);
+            let output_file_path = output_dir.join(&output_file_name);
+
+            // Read the extracted content
+            let content = fs::read_to_string(&output_file_path).unwrap_or_else(|_| String::new());
+
+            // Build per-file JSON result in the expected format
+            let result_json = serde_json::json!({
+                "content": content,
+                "metadata": {
+                    "framework": "liteparse",
+                    "output_format": output_format.to_string()
+                }
+            });
+
+            results.push(result_json);
+        }
+
+        let stdout = serde_json::to_string(&results)
+            .map_err(|e| Error::Benchmark(format!("Failed to serialize results: {}", e)))?;
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
         Ok((stdout, stderr, duration))
     }
@@ -529,7 +706,7 @@ impl FrameworkAdapter for SubprocessAdapter {
         let sampling_ms = crate::monitoring::adaptive_sampling_interval_ms(file_size);
         monitor.start(Duration::from_millis(sampling_ms)).await;
 
-        let (stdout, _stderr, duration) = match self.execute_subprocess(file_path, timeout).await {
+        let (stdout, _stderr, duration) = match self.execute_subprocess(file_path, timeout, output_format).await {
             Ok(result) => result,
             Err(e) => {
                 let samples = monitor.stop().await;
@@ -723,7 +900,8 @@ impl FrameworkAdapter for SubprocessAdapter {
         let sampling_ms = crate::monitoring::adaptive_sampling_interval_ms(total_file_size);
         monitor.start(Duration::from_millis(sampling_ms)).await;
 
-        let (stdout, _stderr, duration) = match self.execute_subprocess_batch(file_paths, timeout).await {
+        let (stdout, _stderr, duration) = match self.execute_subprocess_batch(file_paths, timeout, output_format).await
+        {
             Ok(result) => result,
             Err(e) => {
                 let samples = monitor.stop().await;
@@ -1192,5 +1370,23 @@ mod tests {
             error_to_error_kind(&Error::Benchmark("test".into())),
             ErrorKind::HarnessError
         );
+    }
+
+    #[test]
+    fn test_format_aware_builder() {
+        let adapter =
+            SubprocessAdapter::new("test", "echo", vec![], vec![], vec!["pdf".to_string()]).with_format_aware(true);
+        assert!(adapter.format_aware);
+        assert!(!adapter.use_native_batch);
+    }
+
+    #[test]
+    fn test_native_batch_builder() {
+        let adapter = SubprocessAdapter::with_batch_support("test", "echo", vec![], vec![], vec!["pdf".to_string()])
+            .with_format_aware(true)
+            .with_native_batch(true);
+        assert!(adapter.supports_batch);
+        assert!(adapter.format_aware);
+        assert!(adapter.use_native_batch);
     }
 }

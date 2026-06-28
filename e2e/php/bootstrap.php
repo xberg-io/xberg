@@ -12,6 +12,12 @@ if (getenv('CRAWLBERG_ALLOW_PRIVATE_NETWORK') === false) {
     $_SERVER['CRAWLBERG_ALLOW_PRIVATE_NETWORK'] = 'true';
 }
 
+// Change to test_documents directory so relative file URIs (e.g. "pdf/fake_memo.pdf") resolve.
+// This mirrors Go's main_test.go and Python's conftest.py behavior.
+$docsDir = getenv('XBERG_TEST_DOCUMENTS_DIR') ?: (__DIR__ . '/../../test_documents');
+if (is_dir($docsDir)) {
+    chdir($docsDir);
+}
 
 // Load the e2e project autoloader (PHPUnit, test helpers).
 require_once __DIR__ . '/vendor/autoload.php';

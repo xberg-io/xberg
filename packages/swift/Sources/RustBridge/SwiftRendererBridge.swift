@@ -10,11 +10,11 @@ import RustBridge
 /// Conform your Swift class or struct to this protocol to implement
 /// a Rust trait from the host side.
 public protocol SwiftRendererBridge: SwiftPluginBridge {
-    func renderResult(result: ExtractedDocument) throws -> String
+    func renderResult(result: String) throws -> String
 }
 
 public extension SwiftRendererBridge {
-    func renderResult(result: ExtractedDocument) throws -> String {
+    func renderResult(result: String) throws -> String {
         return ""
     }
 }
@@ -48,7 +48,7 @@ final class SwiftRendererAdapter {
 
     // MARK: - FFI marshalling entry points
 
-    func renderResultCall(result: ExtractedDocument) throws -> String {
+    func renderResultCall(result: String) throws -> String {
         do {
             let result = try self.bridge.renderResult(result: result)
             return marshal_ok_result(String(result))

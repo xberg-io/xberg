@@ -112,8 +112,8 @@ namespace Xberg
     Assert.Contains("phi", result.Results[0].Content.ToString().ToLower());
     Assert.Contains("tor", result.Results[0].Content.ToString().ToLower());
     Assert.True(result.Results[0].Tables.Count >= 1, "expected at least 1 elements");
-    Assert.True(result.Results[0].Metadata.Format.Excel.SheetCount >= 2, "expected >= 2");
-    Assert.Contains("stanley cups", JsonSerializer.Serialize(result.Results[0].Metadata.Format.Excel.SheetNames).ToLower());
+    Assert.True(((FormatMetadata.Excel)result.Results[0].Metadata.Format!).Value.SheetCount >= 2, "expected >= 2");
+    Assert.Contains("stanley cups", JsonSerializer.Serialize(((FormatMetadata.Excel)result.Results[0].Metadata.Format!).Value.SheetNames).ToLower());
 
         }
 

@@ -14,6 +14,7 @@ on:
       - "Cargo.lock"
       - "rust-toolchain.toml"
       - ".github/workflows/ci-rust.yaml"
+      - "scripts/ci/rust/**"
   pull_request:
     branches: [main]
     paths:
@@ -27,6 +28,7 @@ on:
       - "Cargo.lock"
       - "rust-toolchain.toml"
       - ".github/workflows/ci-rust.yaml"
+      - "scripts/ci/rust/**"
   workflow_dispatch:
 
 concurrency:
@@ -94,14 +96,10 @@ jobs:
         uses: xberg-io/actions/install-task@v1
 
       - name: Run clippy
-        # xberg-php, xberg-node, xberg-wasm are Alef-generated binding crates.
-        # They are excluded here to match the canonical local lint scope
-        # (.task/languages/rust.yml `rust:lint`); their glue is regenerated and
-        # linted via the Alef/e2e pipelines, not the core Rust workspace lint.
-        run: >-
-          cargo clippy --workspace --all-targets
-          --exclude xberg-php --exclude xberg-node --exclude xberg-wasm
-          -- -D warnings
+        # Full workspace, all targets. sccache (wired by setup-rust above via
+        # use-sccache) wraps rustc for this step, so generated binding crates
+        # compile from cache on warm runs.
+        run: cargo clippy --workspace --all-targets -- -D warnings
         shell: bash
 
       - name: Run tests

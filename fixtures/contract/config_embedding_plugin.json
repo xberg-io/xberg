@@ -1,11 +1,28 @@
 {
 	"id": "config_embedding_plugin",
 	"description": "Tests EmbeddingModelType::Plugin variant deserialization in ChunkingConfig \u2014 config accepts the plugin variant shape; actual dispatch requires a host-language backend registered via register_embedding_backend at runtime",
-	"tags": ["contract", "config", "embeddings", "plugin"],
+	"tags": [
+		"contract",
+		"config",
+		"embeddings",
+		"plugin"
+	],
 	"call": "extract",
 	"input": {
-		"kind": "uri",
-		"uri": "pdf/fake_memo.pdf"
+		"mock_responses": [
+			{
+				"path": "/pdf/fake_memo.pdf",
+				"status_code": 200,
+				"headers": {
+					"content-type": "application/octet-stream"
+				},
+				"body_file": "../test_documents/pdf/fake_memo.pdf"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url/pdf/fake_memo.pdf"
+		}
 	},
 	"assertions": [
 		{

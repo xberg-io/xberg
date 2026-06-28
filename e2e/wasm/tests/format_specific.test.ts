@@ -59,16 +59,19 @@ function _alefE2eFormatMetadataDisplay(fm: unknown): string {
 
 describe("format_specific", () => {
 
-	it("format_docx_standalone: Standalone DOCX extraction using extract", async () => {
+	it.skip("format_docx_standalone: Standalone DOCX extraction using extract", async () => {
+		// WASM: Skipped - requires filesystem/URI access not available in WASM
 		const result = await extract((() => { const _u0 = new ExtractInput(); _u0.filename = "fake.docx"; _u0.kind = "uri"; _u0.mimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"; _u0.uri = "docx/fake.docx"; return _u0; })(), undefined);
     expect(result.results[0].content.length).toBeGreaterThanOrEqual(20);
 	}, 30000);
-	it("format_hwpx_standalone: Standalone HWPX extraction using extract", async () => {
+	it.skip("format_hwpx_standalone: Standalone HWPX extraction using extract", async () => {
+		// WASM: Skipped - requires filesystem/URI access not available in WASM
 		const result = await extract((() => { const _u0 = new ExtractInput(); _u0.filename = "simple.hwpx"; _u0.kind = "uri"; _u0.mimeType = "application/haansofthwpx"; _u0.uri = "hwpx/simple.hwpx"; return _u0; })(), undefined);
     expect(result.results[0].content.length).toBeGreaterThanOrEqual(20);
     expect(result.results[0].content).toContain("Hello from HWPX");
 	}, 30000);
-	it("format_pdf_text: Standalone PDF text extraction using extract", async () => {
+	it.skip("format_pdf_text: Standalone PDF text extraction using extract", async () => {
+		// WASM: Skipped - requires filesystem/URI access not available in WASM
 		const result = await extract((() => { const _u0 = new ExtractInput(); _u0.filename = "fake_memo.pdf"; _u0.kind = "uri"; _u0.mimeType = "application/pdf"; _u0.uri = "pdf/fake_memo.pdf"; return _u0; })(), undefined);
     expect(result.results[0].content.length).toBeGreaterThanOrEqual(50);
     expect(["Mallori", "May"].some((v) => result.results[0].content.includes(v))).toBe(true);

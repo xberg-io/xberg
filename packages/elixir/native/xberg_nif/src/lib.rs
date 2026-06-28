@@ -5001,6 +5001,21 @@ pub fn find_unmarked_claims(markdown: String) -> Vec<String> {
     xberg::find_unmarked_claims(&markdown)
 }
 
+/// Set an OS environment variable so native code reading via `getenv`
+/// (e.g. crawlberg's SSRF loopback policy) observes it. Elixir's `os:putenv`
+/// does not propagate to the C runtime, so the e2e harness calls this during
+/// setup to enable loopback URL fixtures.
+#[rustler::nif]
+pub fn set_env(key: String, value: String) -> bool {
+    // SAFETY: invoked once from the e2e test harness during setup, before any
+    // extraction NIFs run on other scheduler threads, so there is no concurrent
+    // access to the process environment.
+    unsafe {
+        std::env::set_var(&key, &value);
+    }
+    true
+}
+
 #[cfg(feature = "markdown-footnotes")]
 /// Verify that an excerpt appears verbatim in source text.
 ///
@@ -5072,7 +5087,7 @@ impl xberg::plugins::Plugin for RustlerOcrBackendBridge {
         let pid = self.inner;
         let method = "version";
 
-        drop(tokio::task::spawn_blocking(move || {
+        drop(std::thread::spawn(move || {
             let mut env = rustler::OwnedEnv::new();
             let _ = env.send_and_clear(&pid, |env| {
                 let args_map = rustler::Term::map_new(env);
@@ -5100,7 +5115,7 @@ impl xberg::plugins::Plugin for RustlerOcrBackendBridge {
         let pid = self.inner;
         let method = "initialize";
 
-        drop(tokio::task::spawn_blocking(move || {
+        drop(std::thread::spawn(move || {
             let mut env = rustler::OwnedEnv::new();
             let _ = env.send_and_clear(&pid, |env| {
                 let args_map = rustler::Term::map_new(env);
@@ -5132,7 +5147,7 @@ impl xberg::plugins::Plugin for RustlerOcrBackendBridge {
         let pid = self.inner;
         let method = "shutdown";
 
-        drop(tokio::task::spawn_blocking(move || {
+        drop(std::thread::spawn(move || {
             let mut env = rustler::OwnedEnv::new();
             let _ = env.send_and_clear(&pid, |env| {
                 let args_map = rustler::Term::map_new(env);
@@ -5214,7 +5229,7 @@ impl xberg::OcrBackend for RustlerOcrBackendBridge {
         let lang_arg = lang.to_string();
         let method = "supports_language";
 
-        drop(tokio::task::spawn_blocking(move || {
+        drop(std::thread::spawn(move || {
             let mut env = rustler::OwnedEnv::new();
             let _ = env.send_and_clear(&pid, |env| {
                 let mut args_map = rustler::Term::map_new(env);
@@ -5245,7 +5260,7 @@ impl xberg::OcrBackend for RustlerOcrBackendBridge {
         let pid = self.inner;
         let method = "backend_type";
 
-        drop(tokio::task::spawn_blocking(move || {
+        drop(std::thread::spawn(move || {
             let mut env = rustler::OwnedEnv::new();
             let _ = env.send_and_clear(&pid, |env| {
                 let args_map = rustler::Term::map_new(env);
@@ -5338,7 +5353,7 @@ impl xberg::plugins::Plugin for RustlerPostProcessorBridge {
         let pid = self.inner;
         let method = "version";
 
-        drop(tokio::task::spawn_blocking(move || {
+        drop(std::thread::spawn(move || {
             let mut env = rustler::OwnedEnv::new();
             let _ = env.send_and_clear(&pid, |env| {
                 let args_map = rustler::Term::map_new(env);
@@ -5366,7 +5381,7 @@ impl xberg::plugins::Plugin for RustlerPostProcessorBridge {
         let pid = self.inner;
         let method = "initialize";
 
-        drop(tokio::task::spawn_blocking(move || {
+        drop(std::thread::spawn(move || {
             let mut env = rustler::OwnedEnv::new();
             let _ = env.send_and_clear(&pid, |env| {
                 let args_map = rustler::Term::map_new(env);
@@ -5398,7 +5413,7 @@ impl xberg::plugins::Plugin for RustlerPostProcessorBridge {
         let pid = self.inner;
         let method = "shutdown";
 
-        drop(tokio::task::spawn_blocking(move || {
+        drop(std::thread::spawn(move || {
             let mut env = rustler::OwnedEnv::new();
             let _ = env.send_and_clear(&pid, |env| {
                 let args_map = rustler::Term::map_new(env);
@@ -5479,7 +5494,7 @@ impl xberg::PostProcessor for RustlerPostProcessorBridge {
         let pid = self.inner;
         let method = "processing_stage";
 
-        drop(tokio::task::spawn_blocking(move || {
+        drop(std::thread::spawn(move || {
             let mut env = rustler::OwnedEnv::new();
             let _ = env.send_and_clear(&pid, |env| {
                 let args_map = rustler::Term::map_new(env);
@@ -5572,7 +5587,7 @@ impl xberg::plugins::Plugin for RustlerValidatorBridge {
         let pid = self.inner;
         let method = "version";
 
-        drop(tokio::task::spawn_blocking(move || {
+        drop(std::thread::spawn(move || {
             let mut env = rustler::OwnedEnv::new();
             let _ = env.send_and_clear(&pid, |env| {
                 let args_map = rustler::Term::map_new(env);
@@ -5600,7 +5615,7 @@ impl xberg::plugins::Plugin for RustlerValidatorBridge {
         let pid = self.inner;
         let method = "initialize";
 
-        drop(tokio::task::spawn_blocking(move || {
+        drop(std::thread::spawn(move || {
             let mut env = rustler::OwnedEnv::new();
             let _ = env.send_and_clear(&pid, |env| {
                 let args_map = rustler::Term::map_new(env);
@@ -5632,7 +5647,7 @@ impl xberg::plugins::Plugin for RustlerValidatorBridge {
         let pid = self.inner;
         let method = "shutdown";
 
-        drop(tokio::task::spawn_blocking(move || {
+        drop(std::thread::spawn(move || {
             let mut env = rustler::OwnedEnv::new();
             let _ = env.send_and_clear(&pid, |env| {
                 let args_map = rustler::Term::map_new(env);
@@ -5775,7 +5790,7 @@ impl xberg::plugins::Plugin for RustlerDocumentExtractorBridge {
         let pid = self.inner;
         let method = "version";
 
-        drop(tokio::task::spawn_blocking(move || {
+        drop(std::thread::spawn(move || {
             let mut env = rustler::OwnedEnv::new();
             let _ = env.send_and_clear(&pid, |env| {
                 let args_map = rustler::Term::map_new(env);
@@ -5803,7 +5818,7 @@ impl xberg::plugins::Plugin for RustlerDocumentExtractorBridge {
         let pid = self.inner;
         let method = "initialize";
 
-        drop(tokio::task::spawn_blocking(move || {
+        drop(std::thread::spawn(move || {
             let mut env = rustler::OwnedEnv::new();
             let _ = env.send_and_clear(&pid, |env| {
                 let args_map = rustler::Term::map_new(env);
@@ -5835,7 +5850,7 @@ impl xberg::plugins::Plugin for RustlerDocumentExtractorBridge {
         let pid = self.inner;
         let method = "shutdown";
 
-        drop(tokio::task::spawn_blocking(move || {
+        drop(std::thread::spawn(move || {
             let mut env = rustler::OwnedEnv::new();
             let _ = env.send_and_clear(&pid, |env| {
                 let args_map = rustler::Term::map_new(env);
@@ -5917,7 +5932,7 @@ impl xberg::DocumentExtractor for RustlerDocumentExtractorBridge {
             let pid = self.inner;
             let method = "supported_mime_types";
 
-            drop(tokio::task::spawn_blocking(move || {
+            drop(std::thread::spawn(move || {
                 let mut env = rustler::OwnedEnv::new();
                 let _ = env.send_and_clear(&pid, |env| {
                     let args_map = rustler::Term::map_new(env);
@@ -6016,7 +6031,7 @@ impl xberg::plugins::Plugin for RustlerEmbeddingBackendBridge {
         let pid = self.inner;
         let method = "version";
 
-        drop(tokio::task::spawn_blocking(move || {
+        drop(std::thread::spawn(move || {
             let mut env = rustler::OwnedEnv::new();
             let _ = env.send_and_clear(&pid, |env| {
                 let args_map = rustler::Term::map_new(env);
@@ -6044,7 +6059,7 @@ impl xberg::plugins::Plugin for RustlerEmbeddingBackendBridge {
         let pid = self.inner;
         let method = "initialize";
 
-        drop(tokio::task::spawn_blocking(move || {
+        drop(std::thread::spawn(move || {
             let mut env = rustler::OwnedEnv::new();
             let _ = env.send_and_clear(&pid, |env| {
                 let args_map = rustler::Term::map_new(env);
@@ -6076,7 +6091,7 @@ impl xberg::plugins::Plugin for RustlerEmbeddingBackendBridge {
         let pid = self.inner;
         let method = "shutdown";
 
-        drop(tokio::task::spawn_blocking(move || {
+        drop(std::thread::spawn(move || {
             let mut env = rustler::OwnedEnv::new();
             let _ = env.send_and_clear(&pid, |env| {
                 let args_map = rustler::Term::map_new(env);
@@ -6111,7 +6126,7 @@ impl xberg::EmbeddingBackend for RustlerEmbeddingBackendBridge {
         let pid = self.inner;
         let method = "dimensions";
 
-        drop(tokio::task::spawn_blocking(move || {
+        drop(std::thread::spawn(move || {
             let mut env = rustler::OwnedEnv::new();
             let _ = env.send_and_clear(&pid, |env| {
                 let args_map = rustler::Term::map_new(env);
@@ -6242,7 +6257,7 @@ impl xberg::plugins::Plugin for RustlerRendererBridge {
         let pid = self.inner;
         let method = "version";
 
-        drop(tokio::task::spawn_blocking(move || {
+        drop(std::thread::spawn(move || {
             let mut env = rustler::OwnedEnv::new();
             let _ = env.send_and_clear(&pid, |env| {
                 let args_map = rustler::Term::map_new(env);
@@ -6270,7 +6285,7 @@ impl xberg::plugins::Plugin for RustlerRendererBridge {
         let pid = self.inner;
         let method = "initialize";
 
-        drop(tokio::task::spawn_blocking(move || {
+        drop(std::thread::spawn(move || {
             let mut env = rustler::OwnedEnv::new();
             let _ = env.send_and_clear(&pid, |env| {
                 let args_map = rustler::Term::map_new(env);
@@ -6302,7 +6317,7 @@ impl xberg::plugins::Plugin for RustlerRendererBridge {
         let pid = self.inner;
         let method = "shutdown";
 
-        drop(tokio::task::spawn_blocking(move || {
+        drop(std::thread::spawn(move || {
             let mut env = rustler::OwnedEnv::new();
             let _ = env.send_and_clear(&pid, |env| {
                 let args_map = rustler::Term::map_new(env);
@@ -6398,7 +6413,7 @@ impl xberg::plugins::Plugin for RustlerRerankerBackendBridge {
         let pid = self.inner;
         let method = "version";
 
-        drop(tokio::task::spawn_blocking(move || {
+        drop(std::thread::spawn(move || {
             let mut env = rustler::OwnedEnv::new();
             let _ = env.send_and_clear(&pid, |env| {
                 let args_map = rustler::Term::map_new(env);
@@ -6426,7 +6441,7 @@ impl xberg::plugins::Plugin for RustlerRerankerBackendBridge {
         let pid = self.inner;
         let method = "initialize";
 
-        drop(tokio::task::spawn_blocking(move || {
+        drop(std::thread::spawn(move || {
             let mut env = rustler::OwnedEnv::new();
             let _ = env.send_and_clear(&pid, |env| {
                 let args_map = rustler::Term::map_new(env);
@@ -6458,7 +6473,7 @@ impl xberg::plugins::Plugin for RustlerRerankerBackendBridge {
         let pid = self.inner;
         let method = "shutdown";
 
-        drop(tokio::task::spawn_blocking(move || {
+        drop(std::thread::spawn(move || {
             let mut env = rustler::OwnedEnv::new();
             let _ = env.send_and_clear(&pid, |env| {
                 let args_map = rustler::Term::map_new(env);
@@ -7028,6 +7043,19 @@ pub fn heuristicsconfig_validate(obj: HeuristicsConfig) -> Result<(), String> {
         .validate()
         .map_err(|e| e.to_string())?;
     Ok(result)
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize, rustler::NifStruct)]
+#[module = "Xberg.PageRange"]
+pub struct PageRange {
+    pub start: u32,
+    pub end: u32,
+}
+
+impl From<PageRange> for xberg::PageRange {
+    fn from(pr: PageRange) -> Self {
+        xberg::PageRange::new(pr.start, pr.end)
+    }
 }
 
 /// Get the number of pages in this range.
@@ -9220,49 +9248,11 @@ impl From<xberg::Entity> for Entity {
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<ExtractedDocument> for xberg::ExtractedDocument {
     fn from(val: ExtractedDocument) -> Self {
-        Self {
-            content: val.content,
-            mime_type: val.mime_type.into(),
-            metadata: val.metadata.into(),
-            extraction_method: val.extraction_method.map(Into::into),
-            tables: val.tables.into_iter().map(Into::into).collect(),
-            detected_languages: val.detected_languages.map(|v| v.into_iter().collect()),
-            chunks: val.chunks.map(|v| v.into_iter().map(Into::into).collect()),
-            images: val.images.map(|v| v.into_iter().map(Into::into).collect()),
-            pages: val.pages.map(|v| v.into_iter().map(Into::into).collect()),
-            elements: val.elements.map(|v| v.into_iter().map(Into::into).collect()),
-            djot_content: val.djot_content.map(Into::into),
-            ocr_elements: val.ocr_elements.map(|v| v.into_iter().map(Into::into).collect()),
-            document: val.document.map(Into::into),
-            extracted_keywords: val.extracted_keywords.map(|v| v.into_iter().map(Into::into).collect()),
-            quality_score: val.quality_score,
-            processing_warnings: val.processing_warnings.into_iter().map(Into::into).collect(),
-            annotations: val.annotations.map(|v| v.into_iter().map(Into::into).collect()),
-            children: val.children.map(|v| v.into_iter().map(Into::into).collect()),
-            uris: val.uris.map(|v| v.into_iter().map(Into::into).collect()),
-            revisions: val.revisions.map(|v| v.into_iter().map(Into::into).collect()),
-            structured_output: val
-                .structured_output
-                .as_ref()
-                .and_then(|s| serde_json::from_str(s).ok()),
-            code_intelligence: val
-                .code_intelligence
-                .as_ref()
-                .and_then(|s| serde_json::from_str(s).ok()),
-            llm_usage: val.llm_usage.map(|v| v.into_iter().map(Into::into).collect()),
-            entities: val.entities.map(|v| v.into_iter().map(Into::into).collect()),
-            summary: val.summary.map(Into::into),
-            extraction_confidence: val.extraction_confidence.map(Into::into),
-            translation: val.translation.map(Into::into),
-            page_classifications: val
-                .page_classifications
-                .map(|v| v.into_iter().map(Into::into).collect()),
-            redaction_report: val.redaction_report.map(Into::into),
-            formulas: val.formulas.into_iter().map(Into::into).collect(),
-            form_fields: val.form_fields.into_iter().map(Into::into).collect(),
-            formatted_content: val.formatted_content,
-            ..Default::default()
-        }
+        // Convert to JSON and deserialize to handle private fields correctly.
+        // Fields with #[serde(skip)] will use their Default values during deserialization.
+        serde_json::to_value(&val)
+            .and_then(|json_val| serde_json::from_value(json_val))
+            .unwrap_or_else(|_| xberg::ExtractedDocument::default())
     }
 }
 

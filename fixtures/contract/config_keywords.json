@@ -1,12 +1,30 @@
 {
 	"id": "config_keywords",
 	"description": "Tests keyword extraction via YAKE algorithm",
-	"tags": ["contract", "config", "keywords"],
+	"tags": [
+		"contract",
+		"config",
+		"keywords"
+	],
 	"call": "extract",
-	"assertion_recipes": ["keywords"],
+	"assertion_recipes": [
+		"keywords"
+	],
 	"input": {
-		"kind": "uri",
-		"uri": "pdf/fake_memo.pdf"
+		"mock_responses": [
+			{
+				"path": "/pdf/fake_memo.pdf",
+				"status_code": 200,
+				"headers": {
+					"content-type": "application/octet-stream"
+				},
+				"body_file": "../test_documents/pdf/fake_memo.pdf"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url/pdf/fake_memo.pdf"
+		}
 	},
 	"assertions": [
 		{
@@ -30,7 +48,9 @@
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
+		"languages": [
+			"wasm"
+		],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	},
 	"config": {

@@ -2,11 +2,27 @@
 	"id": "smoke_docx_basic",
 	"category": "smoke",
 	"description": "Smoke test: DOCX with formatted text",
-	"tags": ["smoke", "office", "docx"],
+	"tags": [
+		"smoke",
+		"office",
+		"docx"
+	],
 	"input": {
-		"kind": "uri",
-		"uri": "docx/fake.docx",
-		"mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+		"mock_responses": [
+			{
+				"path": "/docx/fake.docx",
+				"status_code": 200,
+				"headers": {
+					"content-type": "application/octet-stream"
+				},
+				"body_file": "../test_documents/docx/fake.docx"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url/docx/fake.docx",
+			"mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+		}
 	},
 	"assertions": [
 		{
@@ -22,11 +38,18 @@
 		{
 			"type": "contains_any",
 			"field": "results[0].content",
-			"values": ["Lorem", "ipsum", "document", "text"]
+			"values": [
+				"Lorem",
+				"ipsum",
+				"document",
+				"text"
+			]
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
+		"languages": [
+			"wasm"
+		],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	},
 	"call": "extract",

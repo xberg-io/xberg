@@ -1,0 +1,29 @@
+---
+name: xberg-cli-reference
+description: Use when invoking, documenting, or changing the Xberg command-line interface.
+---
+
+# Xberg CLI Reference
+
+Use this skill when working with the `xberg` CLI, its options, subcommands, docs, or examples.
+
+## Commands
+
+{% for command in cli.commands %}
+- `{{ command.path }}`{{ ": " ~ command.about if command.about else "" }}
+{% for subcommand in command.subcommands %}
+- `{{ subcommand.path }}`{{ ": " ~ subcommand.about if subcommand.about else "" }}
+{% endfor %}
+{% else %}
+- No CLI commands were discovered from the configured source paths.
+{% endfor %}
+
+## Source
+
+- CLI source: `crates/xberg-cli/src/main.rs`
+- Generated reference output: `docs/reference/cli.md`
+
+## Notes
+
+- Prefer Clap metadata as the source of truth for generated command reference.
+- Keep hand-written guides focused on workflows; let generated reference cover flags, options, and subcommands.

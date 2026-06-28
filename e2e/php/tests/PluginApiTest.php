@@ -22,8 +22,8 @@ final class PluginApiTest extends TestCase
     {
         $stub = new class implements \Xberg\EmbeddingBackend {
             public function name(): string { return 'test-embedding-backend'; }
-            public function dimensions(): mixed { return 1; }
-            public function embed($texts): mixed { return []; }
+            public function dimensions(): int { return 1; }
+            public function embed(mixed $texts): mixed { return []; }
             public function version(): mixed { return ''; }
             public function initialize(): mixed { return null; }
             public function shutdown(): mixed { return null; }
@@ -44,15 +44,15 @@ final class PluginApiTest extends TestCase
     {
         $stub = new class implements \Xberg\OcrBackend {
             public function name(): string { return 'test-backend'; }
-            public function process_image($image_bytes, $config): mixed { return '{}'; }
-            public function process_image_file($path, $config): mixed { return '{}'; }
-            public function supports_language($lang): mixed { return false; }
+            public function process_image(mixed $image_bytes, \Xberg\OcrConfig $config): \Xberg\ExtractedDocument { throw new \Exception('Not implemented in test'); }
+            public function process_image_file(mixed $path, \Xberg\OcrConfig $config): \Xberg\ExtractedDocument { throw new \Exception('Not implemented in test'); }
+            public function supports_language(string $lang): bool { return false; }
             public function backend_type(): mixed { return '{}'; }
             public function supported_languages(): mixed { return []; }
-            public function supports_table_detection(): mixed { return false; }
-            public function supports_document_processing(): mixed { return false; }
-            public function emits_structured_markdown(): mixed { return false; }
-            public function process_document($_path, $_config): mixed { return '{}'; }
+            public function supports_table_detection(): bool { return false; }
+            public function supports_document_processing(): bool { return false; }
+            public function emits_structured_markdown(): bool { return false; }
+            public function process_document(mixed $_path, \Xberg\OcrConfig $_config): \Xberg\ExtractedDocument { throw new \Exception('Not implemented in test'); }
             public function version(): mixed { return ''; }
             public function initialize(): mixed { return null; }
             public function shutdown(): mixed { return null; }
@@ -73,11 +73,11 @@ final class PluginApiTest extends TestCase
     {
         $stub = new class implements \Xberg\PostProcessor {
             public function name(): string { return 'test-processor'; }
-            public function process($result, $config): mixed { return null; }
+            public function process(\Xberg\ExtractedDocument $result, \Xberg\ExtractionConfig $config): mixed { return null; }
             public function processing_stage(): mixed { return '{}'; }
-            public function should_process($_result, $_config): mixed { return false; }
-            public function estimated_duration_ms($_result): mixed { return 1; }
-            public function priority(): mixed { return 1; }
+            public function should_process(\Xberg\ExtractedDocument $_result, \Xberg\ExtractionConfig $_config): bool { return false; }
+            public function estimated_duration_ms(\Xberg\ExtractedDocument $_result): int { return 1; }
+            public function priority(): int { return 1; }
             public function version(): mixed { return ''; }
             public function initialize(): mixed { return null; }
             public function shutdown(): mixed { return null; }
@@ -98,7 +98,7 @@ final class PluginApiTest extends TestCase
     {
         $stub = new class implements \Xberg\RerankerBackend {
             public function name(): string { return 'test-reranker-backend'; }
-            public function rerank($query, $documents): mixed { return []; }
+            public function rerank(string $query, mixed $documents): mixed { return []; }
             public function version(): mixed { return ''; }
             public function initialize(): mixed { return null; }
             public function shutdown(): mixed { return null; }
@@ -119,9 +119,9 @@ final class PluginApiTest extends TestCase
     {
         $stub = new class implements \Xberg\Validator {
             public function name(): string { return 'test-validator'; }
-            public function validate($result, $config): mixed { return null; }
-            public function should_validate($_result, $_config): mixed { return false; }
-            public function priority(): mixed { return 1; }
+            public function validate(\Xberg\ExtractedDocument $result, \Xberg\ExtractionConfig $config): mixed { return null; }
+            public function should_validate(\Xberg\ExtractedDocument $_result, \Xberg\ExtractionConfig $_config): bool { return false; }
+            public function priority(): int { return 1; }
             public function version(): mixed { return ''; }
             public function initialize(): mixed { return null; }
             public function shutdown(): mixed { return null; }

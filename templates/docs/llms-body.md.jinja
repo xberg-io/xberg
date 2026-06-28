@@ -1,0 +1,90 @@
+# Xberg
+
+> High-performance document intelligence library with a Rust core and polyglot SDKs. Extract text, metadata, and structured data from 96 file formats including PDF, DOCX, PPTX, XLSX, HTML, images with OCR, email, archives, and more.
+
+Xberg provides an async API, text chunking, language detection, keyword extraction, and an extensible plugin system, all on a Rust core with native bindings for 16 languages.
+
+## Getting Started
+
+- [Installation](https://docs.xberg.io/getting-started/installation/): Install Xberg for Python, TypeScript, Rust, Go, Java/Kotlin JVM, Kotlin Android, C#, Ruby, PHP, Elixir, R, Dart, Swift, Zig, C, or WebAssembly
+- [Quick Start](https://docs.xberg.io/getting-started/quickstart/): Get started with document extraction in minutes
+
+## Concepts
+
+- [Architecture](https://docs.xberg.io/concepts/architecture/): Rust core with polyglot bindings architecture
+- [Extraction Pipeline](https://docs.xberg.io/concepts/extraction-pipeline/): How document extraction works
+- [Plugin System](https://docs.xberg.io/concepts/plugin-system/): Extend Xberg with custom extractors and backends
+- [MIME Detection](https://docs.xberg.io/guides/extraction/#mime-type-detection): Automatic file format detection
+- [Performance](https://docs.xberg.io/guides/development/#performance): Performance characteristics and optimization
+
+## Guides
+
+- [Extraction Basics](https://docs.xberg.io/guides/extraction/): Core extraction functionality
+- [Configuration](https://docs.xberg.io/guides/configuration/): Configuration options
+- [OCR](https://docs.xberg.io/guides/ocr/): Optical character recognition setup with Tesseract, PaddleOCR, Candle, or VLM backends
+- [Element-Based Output](https://docs.xberg.io/guides/output-formats/#element-based-output): Structured element extraction
+- [Document Structure](https://docs.xberg.io/guides/output-formats/#document-structure): Hierarchical tree-based document output
+- [PDF Hierarchy](https://docs.xberg.io/guides/output-formats/#pdf-hierarchy-detection): PDF hierarchy detection using K-means clustering
+- [Keyword Extraction](https://docs.xberg.io/guides/keywords/): YAKE and RAKE keyword extraction
+- [Chunking](https://docs.xberg.io/guides/chunking/): Split text into overlapping chunks for RAG
+- [Embeddings](https://docs.xberg.io/guides/embeddings/): Local in-process semantic vectors via ONNX
+- [Language Detection](https://docs.xberg.io/guides/language-detection/): Detect languages in extracted text
+- [Token Reduction](https://docs.xberg.io/guides/token-reduction/): Reduce token count for LLM pipelines
+- [Quality Processing](https://docs.xberg.io/guides/quality-processing/): Score and filter text quality
+- [PDF Form Fields](https://docs.xberg.io/guides/pdf-form-fields/): Extract filled form field values
+- [Audio and Video Transcription](https://docs.xberg.io/guides/transcription/): Whisper ONNX transcription for MP3, M4A, WAV, WebM, and MP4 audio tracks
+- [Named-Entity Recognition](https://docs.xberg.io/guides/ner/): Detect people, organisations, locations, and zero-shot labels via xberg-gliner artifacts or LLM
+- [Reranking](https://docs.xberg.io/guides/reranking/): Cross-encoder document reranking for RAG retrieval
+- [Redaction and Anonymisation](https://docs.xberg.io/guides/redaction/): Strip PII from extracted text with the pattern engine plus optional NER backend
+- [Document Summarisation](https://docs.xberg.io/guides/summarization/): Extractive TextRank or LLM abstractive summaries
+- [Document Translation](https://docs.xberg.io/guides/translation/): Translate content into a BCP-47 target language via any liter-llm provider
+- [Page Classification](https://docs.xberg.io/guides/page-classification/): Per-page LLM classification against caller-supplied label sets
+- [VLM Image Captions](https://docs.xberg.io/guides/image-captions/): Caption every extracted image with a vision-capable LLM
+- [QR-Code Detection](https://docs.xberg.io/guides/qr-codes/): Pure-Rust QR decoding over extracted images
+- [Docker Deployment](https://docs.xberg.io/guides/docker/): Docker container deployment
+- [API Server](https://docs.xberg.io/guides/api-server/): REST API server setup
+- [Creating Plugins](https://docs.xberg.io/guides/plugins/): Build custom extractor plugins
+- [AI Coding Assistants](https://docs.xberg.io/guides/agent-skills/): Install the plugin from the xberg-io/plugins marketplace. It ships agent skills plus an MCP server and works with Claude Code, Codex, Cursor, Gemini, Copilot, and opencode.
+
+## CLI
+
+- [CLI Usage](https://docs.xberg.io/cli/usage/): Command-line interface reference
+
+## API Reference
+
+- [Python API](https://docs.xberg.io/reference/api-python/): Python binding reference
+- [TypeScript API](https://docs.xberg.io/reference/api-typescript/): TypeScript/Node.js binding reference
+- [WebAssembly API](https://docs.xberg.io/reference/api-wasm/): WebAssembly binding reference
+- [PHP API](https://docs.xberg.io/reference/api-php/): PHP binding reference
+- [C# API](https://docs.xberg.io/reference/api-csharp/): C# binding reference
+- [Go API](https://docs.xberg.io/reference/api-go/): Go binding reference
+- [Java API](https://docs.xberg.io/reference/api-java/): Java binding reference
+- [Kotlin Android API](https://docs.xberg.io/reference/api-kotlin-android/): Kotlin Android AAR binding reference
+- [Rust API](https://docs.xberg.io/reference/api-rust/): Rust core library reference
+- [Ruby API](https://docs.xberg.io/reference/api-ruby/): Ruby binding reference
+- [R API](https://docs.xberg.io/reference/api-r/): R binding reference
+- [Elixir API](https://docs.xberg.io/reference/api-elixir/): Elixir binding reference
+- [C API](https://docs.xberg.io/reference/api-c/): C FFI binding reference
+- [Configuration Reference](https://docs.xberg.io/reference/configuration/): Full configuration options
+- [Environment Variables](https://docs.xberg.io/reference/environment-variables/): XBERG_* environment variable reference
+- [File Size Limits](https://docs.xberg.io/reference/file-size-limits/): Upload and processing size limits
+- [Format Support](https://docs.xberg.io/reference/formats/): Supported file formats
+- [Types](https://docs.xberg.io/reference/types/): Type definitions
+- [Errors](https://docs.xberg.io/reference/errors/): Error types and handling
+
+## Xberg Ecosystem
+
+- [crawlberg](https://docs.crawlberg.xberg.io): Web crawling and scraping with HTML to Markdown and headless-Chrome fallback
+- [html-to-markdown](https://docs.html-to-markdown.xberg.io): Fast, lossless HTML to Markdown engine
+- [liter-llm](https://docs.liter-llm.xberg.io): Universal LLM API client with native bindings for 14 languages and 143 providers
+- [tree-sitter-language-pack](https://docs.tree-sitter-language-pack.xberg.io): Tree-sitter grammars and code-intelligence primitives
+
+## Migration
+
+- [From Unstructured](https://docs.xberg.io/migration/from-unstructured/): Migrate from the Unstructured library
+
+## Optional
+
+- [Features Overview](https://docs.xberg.io/features/): Complete feature list
+- [Changelog](https://docs.xberg.io/CHANGELOG/): Release history
+- [Contributing](https://docs.xberg.io/contributing/): Contribution guidelines

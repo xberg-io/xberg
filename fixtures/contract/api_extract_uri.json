@@ -1,10 +1,25 @@
 {
 	"id": "api_extract_uri",
 	"description": "Tests URI extraction API",
-	"tags": ["contract", "api"],
+	"tags": [
+		"contract",
+		"api"
+	],
 	"input": {
-		"kind": "uri",
-		"uri": "pdf/fake_memo.pdf"
+		"mock_responses": [
+			{
+				"path": "/pdf/fake_memo.pdf",
+				"status_code": 200,
+				"headers": {
+					"content-type": "application/octet-stream"
+				},
+				"body_file": "../test_documents/pdf/fake_memo.pdf"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url/pdf/fake_memo.pdf"
+		}
 	},
 	"assertions": [
 		{
@@ -20,11 +35,16 @@
 		{
 			"type": "contains_any",
 			"field": "results[0].content",
-			"values": ["May 5, 2023", "Mallori"]
+			"values": [
+				"May 5, 2023",
+				"Mallori"
+			]
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
+		"languages": [
+			"wasm"
+		],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	},
 	"category": "contract",

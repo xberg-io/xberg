@@ -11113,53 +11113,55 @@ impl From<Entity> for xberg::Entity {
 #[allow(clippy::needless_update)]
 impl From<ExtractedDocument> for xberg::ExtractedDocument {
     fn from(v: ExtractedDocument) -> Self {
-        xberg::ExtractedDocument {
-            content: v.content.into(),
-            mime_type: v.mime_type.into(),
-            metadata: v.metadata.into(),
-            extraction_method: v.extraction_method.map(Into::into),
-            tables: v.tables.into_iter().map(Into::into).collect(),
-            detected_languages: v
-                .detected_languages
-                .map(|vec| vec.into_iter().map(Into::into).collect()),
-            chunks: v.chunks.map(|vec| vec.into_iter().map(Into::into).collect()),
-            images: v.images.map(|vec| vec.into_iter().map(Into::into).collect()),
-            pages: v.pages.map(|vec| vec.into_iter().map(Into::into).collect()),
-            elements: v.elements.map(|vec| vec.into_iter().map(Into::into).collect()),
-            djot_content: v.djot_content.map(Into::into),
-            ocr_elements: v.ocr_elements.map(|vec| vec.into_iter().map(Into::into).collect()),
-            document: v.document.map(Into::into),
-            extracted_keywords: v
-                .extracted_keywords
-                .map(|vec| vec.into_iter().map(Into::into).collect()),
-            quality_score: v.quality_score.map(|x| x as _),
-            processing_warnings: v.processing_warnings.into_iter().map(Into::into).collect(),
-            annotations: v.annotations.map(|vec| vec.into_iter().map(Into::into).collect()),
-            children: v.children.map(|vec| vec.into_iter().map(Into::into).collect()),
-            uris: v.uris.map(|vec| vec.into_iter().map(Into::into).collect()),
-            revisions: v.revisions.map(|vec| vec.into_iter().map(Into::into).collect()),
-            structured_output: v
-                .structured_output
-                .as_deref()
-                .and_then(|s| serde_json::from_str(s).ok()),
-            code_intelligence: v
-                .code_intelligence
-                .as_deref()
-                .and_then(|s| serde_json::from_str(s).ok()),
-            llm_usage: v.llm_usage.map(|vec| vec.into_iter().map(Into::into).collect()),
-            entities: v.entities.map(|vec| vec.into_iter().map(Into::into).collect()),
-            summary: v.summary.map(Into::into),
-            extraction_confidence: v.extraction_confidence.map(Into::into),
-            translation: v.translation.map(Into::into),
-            page_classifications: v
-                .page_classifications
-                .map(|vec| vec.into_iter().map(Into::into).collect()),
-            redaction_report: v.redaction_report.map(Into::into),
-            formulas: v.formulas.into_iter().map(Into::into).collect(),
-            form_fields: v.form_fields.into_iter().map(Into::into).collect(),
-            formatted_content: v.formatted_content.map(Into::into),
-            ..Default::default()
-        }
+        // `xberg::ExtractedDocument` has private (`pub(crate)`) fields, so it
+        // cannot be built with struct-literal syntax (even with `..Default`).
+        // Start from `Default` and assign the public fields.
+        let mut out = xberg::ExtractedDocument::default();
+        out.content = v.content.into();
+        out.mime_type = v.mime_type.into();
+        out.metadata = v.metadata.into();
+        out.extraction_method = v.extraction_method.map(Into::into);
+        out.tables = v.tables.into_iter().map(Into::into).collect();
+        out.detected_languages = v
+            .detected_languages
+            .map(|vec| vec.into_iter().map(Into::into).collect());
+        out.chunks = v.chunks.map(|vec| vec.into_iter().map(Into::into).collect());
+        out.images = v.images.map(|vec| vec.into_iter().map(Into::into).collect());
+        out.pages = v.pages.map(|vec| vec.into_iter().map(Into::into).collect());
+        out.elements = v.elements.map(|vec| vec.into_iter().map(Into::into).collect());
+        out.djot_content = v.djot_content.map(Into::into);
+        out.ocr_elements = v.ocr_elements.map(|vec| vec.into_iter().map(Into::into).collect());
+        out.document = v.document.map(Into::into);
+        out.extracted_keywords = v
+            .extracted_keywords
+            .map(|vec| vec.into_iter().map(Into::into).collect());
+        out.quality_score = v.quality_score.map(|x| x as _);
+        out.processing_warnings = v.processing_warnings.into_iter().map(Into::into).collect();
+        out.annotations = v.annotations.map(|vec| vec.into_iter().map(Into::into).collect());
+        out.children = v.children.map(|vec| vec.into_iter().map(Into::into).collect());
+        out.uris = v.uris.map(|vec| vec.into_iter().map(Into::into).collect());
+        out.revisions = v.revisions.map(|vec| vec.into_iter().map(Into::into).collect());
+        out.structured_output = v
+            .structured_output
+            .as_deref()
+            .and_then(|s| serde_json::from_str(s).ok());
+        out.code_intelligence = v
+            .code_intelligence
+            .as_deref()
+            .and_then(|s| serde_json::from_str(s).ok());
+        out.llm_usage = v.llm_usage.map(|vec| vec.into_iter().map(Into::into).collect());
+        out.entities = v.entities.map(|vec| vec.into_iter().map(Into::into).collect());
+        out.summary = v.summary.map(Into::into);
+        out.extraction_confidence = v.extraction_confidence.map(Into::into);
+        out.translation = v.translation.map(Into::into);
+        out.page_classifications = v
+            .page_classifications
+            .map(|vec| vec.into_iter().map(Into::into).collect());
+        out.redaction_report = v.redaction_report.map(Into::into);
+        out.formulas = v.formulas.into_iter().map(Into::into).collect();
+        out.form_fields = v.form_fields.into_iter().map(Into::into).collect();
+        out.formatted_content = v.formatted_content.map(Into::into);
+        out
     }
 }
 

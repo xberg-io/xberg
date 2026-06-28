@@ -39,6 +39,45 @@ pub mod vision;
 
 use serde::{Deserialize, Serialize};
 
+/// Diagnostic helper: when `XBERG_GLM_DEBUG` is set, log per-stage tensor stats
+/// (shape, NaN/Inf counts, min/max/mean) to stderr. No-op otherwise.
+///
+/// Exists to bisect the CPU-vs-CUDA numerical divergence in the GLM-OCR
+/// pipeline: the F32 CPU path recognises text correctly, but the F32 CUDA path
+/// emits EOS first (empty output), so some op produces garbage/NaN only on CUDA.
+pub(crate) fn glm_debug_tensor(label: &str, t: &candle_core::Tensor) {
+    if std::env::var_os("XBERG_GLM_DEBUG").is_none() {
+        return;
+    }
+    let dims = t.dims().to_vec();
+    let flat = match t
+        .to_dtype(candle_core::DType::F32)
+        .and_then(|x| x.flatten_all())
+        .and_then(|x| x.to_vec1::<f32>())
+    {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("[glm-debug] {label}: shape={dims:?} (stat error: {e})");
+            return;
+        }
+    };
+    let nan = flat.iter().filter(|x| x.is_nan()).count();
+    let inf = flat.iter().filter(|x| x.is_infinite()).count();
+    let finite: Vec<f32> = flat.iter().copied().filter(|x| x.is_finite()).collect();
+    let (min, max, mean) = if finite.is_empty() {
+        (f32::NAN, f32::NAN, f32::NAN)
+    } else {
+        let min = finite.iter().copied().fold(f32::INFINITY, f32::min);
+        let max = finite.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+        let mean = finite.iter().sum::<f32>() / finite.len() as f32;
+        (min, max, mean)
+    };
+    eprintln!(
+        "[glm-debug] {label}: shape={dims:?} n={} nan={nan} inf={inf} min={min:.4} max={max:.4} mean={mean:.4}",
+        flat.len()
+    );
+}
+
 /// Per-region task selection. Each variant corresponds to an upstream prompt
 /// prefix understood by the GLM-OCR decoder.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -348,6 +387,7 @@ mod engine {
             let preprocess_config = preprocess::PreprocessConfig::default();
             let (pixel_values, grid_thw) =
                 preprocess::preprocess(image_bytes, &preprocess_config, &self.device, self.dtype)?;
+            super::glm_debug_tensor("pixel_values", &pixel_values);
 
             // Extract grid dimensions for token count calculation
             let grid_vec = grid_thw
@@ -364,6 +404,7 @@ mod engine {
                     .forward(&pixel_values)
                     .map_err(|e| CandleOcrError::InferenceFailed(format!("Vision encoding: {}", e)))?
             };
+            super::glm_debug_tensor("vision_embeds", &vision_embeds);
 
             // Project to text-hidden space: (B, num_image_tokens, text_hidden) or reduced via downsampling
             let projected = {
@@ -372,6 +413,7 @@ mod engine {
                     .forward(&vision_embeds, h_patches, w_patches)
                     .map_err(|e| CandleOcrError::InferenceFailed(format!("Vision projection: {}", e)))?
             };
+            super::glm_debug_tensor("projected", &projected);
 
             // The connector's downsample Conv2d uses kernel=stride=spatial_merge_size,
             // collapsing (h_patches, w_patches) → (h_patches/merge, w_patches/merge).
@@ -414,6 +456,8 @@ mod engine {
                 image_tokens_start,
                 num_image_tokens_after_merge,
             )?;
+            super::glm_debug_tensor("text_embeds", &text_embeds);
+            super::glm_debug_tensor("input_embeds", &input_embeds);
 
             // Build 3-axis M-RoPE position_ids: (3, 1, seq_len) where rows are
             // [t, h, w]. Layout per upstream `Glm4vRotaryEmbedding.get_rope_index`:

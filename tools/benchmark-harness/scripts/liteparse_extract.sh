@@ -2,9 +2,11 @@
 
 # LiteParse (run-llama/liteparse) CLI wrapper for the benchmark harness.
 #
-# Calls `lit parse <file> --format text` for the same fairness as the other
+# Calls `lit parse <file> --format text|markdown` for the same fairness as the other
 # competitor wrappers: default options only, no preloaded model server, no
 # OCR opt-out unless the caller explicitly asks.
+#
+# Supports both plaintext (--format=plaintext) and markdown (--format=markdown) output.
 
 set -euo pipefail
 
@@ -29,15 +31,26 @@ for arg in "$@"; do
 done
 
 if [ -z "$FILE_PATH" ]; then
-  echo "Usage: liteparse_extract.sh [--format=plaintext] [--ocr|--no-ocr] <file_path>" >&2
+  echo "Usage: liteparse_extract.sh [--format=plaintext|markdown] [--ocr|--no-ocr] <file_path>" >&2
   exit 1
 fi
 
-# liteparse v2 only supports 'text' and 'json'; we benchmark plaintext only.
-if [ "$FORMAT" != "plaintext" ]; then
-  echo "Error: liteparse only supports plaintext output; got '$FORMAT'" >&2
+# Map harness format to liteparse CLI format
+# plaintext -> "text", markdown -> "markdown"
+case "$FORMAT" in
+plaintext)
+  LIT_FORMAT="text"
+  LIT_EXTRA_FLAGS="--no-links"
+  ;;
+markdown)
+  LIT_FORMAT="markdown"
+  LIT_EXTRA_FLAGS=""
+  ;;
+*)
+  echo "Error: unsupported format '$FORMAT'; must be plaintext or markdown" >&2
   exit 64
-fi
+  ;;
+esac
 
 if [ ! -f "$FILE_PATH" ]; then
   echo "Error: File not found: $FILE_PATH" >&2
@@ -47,11 +60,11 @@ fi
 START=$(date +%s%N)
 
 if command -v timeout &>/dev/null; then
-  CONTENT=$(timeout 180s lit parse "$FILE_PATH" --format text $OCR_FLAG --quiet 2>/dev/null || echo "")
+  CONTENT=$(timeout 180s lit parse "$FILE_PATH" --format "$LIT_FORMAT" $LIT_EXTRA_FLAGS $OCR_FLAG --quiet 2>/dev/null || echo "")
 elif command -v gtimeout &>/dev/null; then
-  CONTENT=$(gtimeout 180s lit parse "$FILE_PATH" --format text $OCR_FLAG --quiet 2>/dev/null || echo "")
+  CONTENT=$(gtimeout 180s lit parse "$FILE_PATH" --format "$LIT_FORMAT" $LIT_EXTRA_FLAGS $OCR_FLAG --quiet 2>/dev/null || echo "")
 else
-  CONTENT=$(lit parse "$FILE_PATH" --format text $OCR_FLAG --quiet 2>/dev/null || echo "")
+  CONTENT=$(lit parse "$FILE_PATH" --format "$LIT_FORMAT" $LIT_EXTRA_FLAGS $OCR_FLAG --quiet 2>/dev/null || echo "")
 fi
 
 END=$(date +%s%N)

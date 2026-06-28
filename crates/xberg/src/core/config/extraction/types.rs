@@ -350,6 +350,7 @@ fn default_xberg_crawl_config() -> crawlberg::CrawlConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg(feature = "tokio-runtime")]
 pub(crate) struct BatchBytesItem {
     /// The content bytes to extract from
     pub content: Vec<u8>,

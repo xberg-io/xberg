@@ -131,6 +131,10 @@ pub trait DocumentExtractor: Plugin {
 /// [`InternalDocument`] representation; the blanket impl below derives the
 /// public [`DocumentExtractor`] surface from it. Exposed for white-box tests
 /// and advanced consumers that need the pre-derivation document.
+///
+/// Skipped by the binding surface: it returns the internal-only
+/// [`InternalDocument`], which is not part of the public binding API.
+#[cfg_attr(alef, alef(skip))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 pub trait InternalDocumentExtractor: Plugin {

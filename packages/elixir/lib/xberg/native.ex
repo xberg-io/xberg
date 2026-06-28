@@ -17,7 +17,10 @@ defmodule Xberg.Native do
       "x86_64-pc-windows-gnu"
     ],
     nif_versions: ["2.16", "2.17"],
-    force_build: System.get_env("XBERG_BUILD") in ["1", "true"] or Mix.env() in [:dev]
+    force_build: true
+
+  @doc false
+  def set_env(_key, _value), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc "Extract content from a single bytes or URI input."
   def extract_async(_input, _config), do: :erlang.nif_error(:nif_not_loaded)
@@ -84,7 +87,7 @@ defmodule Xberg.Native do
     contains whitespace.
   - Any error returned by the extractor's `initialize()` method.
   """
-  def register_document_extractor(_extractor), do: :erlang.nif_error(:nif_not_loaded)
+  def register_document_extractor(_pid, _name), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
   Unregister a document extractor by name.
@@ -196,7 +199,7 @@ defmodule Xberg.Native do
   poisoned (parking_lot provides no poisoning semantics), so this function
   never returns `Err` in practice.
   """
-  def register_renderer(_renderer), do: :erlang.nif_error(:nif_not_loaded)
+  def register_renderer(_pid, _name), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
   Unregister a renderer by format name.

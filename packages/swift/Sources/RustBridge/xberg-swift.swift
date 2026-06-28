@@ -1,4 +1,5 @@
 // swift-format-ignore-file
+import Foundation
 import RustBridgeC
 
 public func metaSchemaParsePreset<GenericIntoRustString: IntoRustString>(_ client: MetaSchemaRef, _ path: GenericIntoRustString, _ raw: RustVec<UInt8>) throws -> Preset {
@@ -9513,6 +9514,13 @@ extension ExtractedDocumentRef {
 
     public func document() -> Optional<DocumentStructure> {
         { let val = __swift_bridge__$ExtractedDocument$document(ptr); if val != nil { return DocumentStructure(ptr: val!) } else { return nil } }()
+    }
+
+    public func extractedKeywords() -> Optional<[Any]> {
+        // TODO: Implement extracted keywords field access
+        // This field is optional and represents keyword extraction results
+        // Currently returns nil - needs proper C FFI binding implementation
+        return nil
     }
 
     public func qualityScore() -> Optional<Double> {

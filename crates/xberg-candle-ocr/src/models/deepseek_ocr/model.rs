@@ -565,7 +565,7 @@ impl CLIPVisionEmbeddings {
         let num_patches = (image_size / patch_size).pow(2);
         let num_positions = num_patches + 1;
         let position_embedding = embedding(num_positions, hidden_size, vb.pp("position_embedding"))?;
-        let position_ids = Tensor::arrange(0u32, num_positions as u32, vb.device())?;
+        let position_ids = Tensor::arange(0u32, num_positions as u32, vb.device())?;
         let pos_embeds = position_embedding.forward(&position_ids)?;
         Ok(Self {
             class_embedding,

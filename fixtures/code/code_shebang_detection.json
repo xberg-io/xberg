@@ -2,12 +2,28 @@
 	"id": "code_shebang_detection",
 	"category": "code",
 	"description": "Test language detection from shebang line via bytes input",
-	"tags": ["code", "shebang", "tree-sitter"],
+	"tags": [
+		"code",
+		"shebang",
+		"tree-sitter"
+	],
 	"call": "extract",
 	"input": {
-		"kind": "uri",
-		"uri": "code/script.sh",
-		"mime_type": "text/x-source-code"
+		"mock_responses": [
+			{
+				"path": "/code/script.sh",
+				"status_code": 200,
+				"headers": {
+					"content-type": "application/octet-stream"
+				},
+				"body_file": "../test_documents/code/script.sh"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url/code/script.sh",
+			"mime_type": "text/x-source-code"
+		}
 	},
 	"assertions": [
 		{
@@ -23,7 +39,10 @@
 		{
 			"type": "contains_all",
 			"field": "results[0].content",
-			"values": ["build", "clean"]
+			"values": [
+				"build",
+				"clean"
+			]
 		}
 	],
 	"skip": {

@@ -2,11 +2,26 @@
 	"id": "smoke_html_basic",
 	"category": "smoke",
 	"description": "Smoke test: HTML table extraction",
-	"tags": ["smoke", "html"],
+	"tags": [
+		"smoke",
+		"html"
+	],
 	"input": {
-		"kind": "uri",
-		"uri": "html/simple_table.html",
-		"mime_type": "text/html"
+		"mock_responses": [
+			{
+				"path": "/html/simple_table.html",
+				"status_code": 200,
+				"headers": {
+					"content-type": "application/octet-stream"
+				},
+				"body_file": "../test_documents/html/simple_table.html"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url/html/simple_table.html",
+			"mime_type": "text/html"
+		}
 	},
 	"assertions": [
 		{
@@ -22,11 +37,18 @@
 		{
 			"type": "contains_any",
 			"field": "results[0].content",
-			"values": ["Sample Data Table", "Laptop", "Electronics", "Product"]
+			"values": [
+				"Sample Data Table",
+				"Laptop",
+				"Electronics",
+				"Product"
+			]
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
+		"languages": [
+			"wasm"
+		],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	},
 	"call": "extract",

@@ -5,10 +5,22 @@
 	"tags": ["format_specific", "hwpx", "text_extraction"],
 	"call": "extract",
 	"input": {
-		"kind": "uri",
-		"uri": "hwpx/simple.hwpx",
-		"mime_type": "application/haansofthwpx",
-		"filename": "simple.hwpx"
+		"mock_responses": [
+			{
+				"path": "/hwpx/simple.hwpx",
+				"status_code": 200,
+				"headers": {
+					"content-type": "application/haansofthwpx"
+				},
+				"body_file": "../test_documents/hwpx/simple.hwpx"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url/hwpx/simple.hwpx",
+			"mime_type": "application/haansofthwpx",
+			"filename": "simple.hwpx"
+		}
 	},
 	"assertions": [
 		{

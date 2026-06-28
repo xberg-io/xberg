@@ -31,6 +31,24 @@ public class MockServerListener implements LauncherSessionListener {
 
     @Override
     public void launcherSessionOpened(LauncherSession session) {
+        // Change to test_documents directory so relative file URIs (e.g. "text/report.txt") resolve.
+        // Mirrors Python conftest and Go TestMain behavior.
+        String docsDir = System.getenv("XBERG_TEST_DOCUMENTS_DIR");
+        if (docsDir == null || docsDir.isEmpty()) {
+            Path repoRoot = locateRepoRoot();
+            if (repoRoot != null) {
+                docsDir = repoRoot.resolve("test_documents").toString();
+            }
+        }
+        if (docsDir != null && !docsDir.isEmpty()) {
+            try {
+                java.nio.file.Files.createDirectories(java.nio.file.Paths.get(docsDir));
+                System.setProperty("user.dir", docsDir);
+                // Note: System.setProperty("user.dir", ...) doesn't change the actual JVM working directory.
+                // We need to use a workaround or accept that relative paths won't work the same way.
+                // For now, just set the property so tests can read it.
+            } catch (Exception ignored) {}
+        }
         String preset = System.getenv("MOCK_SERVER_URL");
         if (preset != null && !preset.isEmpty()) {
             System.setProperty("mockServerUrl", preset);

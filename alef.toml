@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.29.5"
+alef_version = "0.30.0"
 languages = [
   "python",
   "node",
@@ -69,6 +69,27 @@ async_wrappers = false
 
 [workspace.format]
 enabled = false
+
+[workspace.docs]
+reference_output = "docs/reference"
+
+[workspace.docs.cli]
+sources = ["crates/xberg-cli/src/main.rs"]
+
+[workspace.docs.mcp]
+sources = ["crates/xberg/src/mcp/server.rs"]
+
+[workspace.docs.llms]
+template = "templates/docs/llms.txt.jinja"
+output = "docs/llms.txt"
+adopt_existing = true
+
+[workspace.docs.skills]
+template_dir = "templates/docs/skills"
+outputs = [".codex/skills", ".agents/skills", ".github/skills", ".claude/skills"]
+
+[workspace.docs.snippets]
+dirs = ["docs/snippets"]
 
 # Disable the default format_generated pass for node (pnpm dlx oxfmt .) which runs
 # from the repo root and chokes on vendored HTML fixtures and deployment YAML.
@@ -1732,7 +1753,7 @@ cd packages/dart && flutter pub get && cd rust && \
 bash scripts/e2e/build-mock-server.sh
 """
 command = "cd packages/dart && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$PWD/../../target/release flutter pub get && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$PWD/../../target/release flutter test"
-e2e = "cd e2e/dart && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$PWD/../../target/release flutter pub get && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$PWD/../../target/release flutter test"
+e2e = "cd e2e/dart && for dir in docx html json pdf text xlsx images; do test -L $dir || ln -sf ../../test_documents/$dir $dir; done && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$PWD/../../target/release flutter pub get && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$PWD/../../target/release flutter test"
 
 [crates.test.zig]
 precondition = "command -v zig >/dev/null 2>&1"

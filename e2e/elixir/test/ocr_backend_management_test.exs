@@ -20,7 +20,7 @@ defmodule E2e.OcrBackendManagementTest do
 
   describe "ocr_backends_unregister" do
     test "ocr_backends_unregister" do
-      result = Xberg.unregister_ocr_backend(name: "nonexistent-backend-xyz")
+      result = Xberg.unregister_ocr_backend("nonexistent-backend-xyz")
     end
   end
 end

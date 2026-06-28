@@ -634,10 +634,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [single-file]
+        # liteparse is the primary head-to-head competitor: measured on the full
+        # grid (markdown/plaintext × single-file/batch), apples-to-apples with
+        # xberg. Batch uses liteparse's native `lit batch-parse` (see the harness
+        # liteparse adapter), mirroring xberg's native extract_batch.
+        mode: [single-file, batch]
         output_format: [markdown, plaintext]
-        exclude:
-          - output_format: markdown
     steps:
       - uses: actions/checkout@v6
         with:
@@ -713,8 +715,10 @@ jobs:
     runs-on: ubuntu-24.04-arm
     if: ${{ !cancelled() && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch') }}
     steps:
-      - uses: actions/create-github-app-token@v2
+      - name: Create GitHub App token (if credentials available)
         id: app-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
@@ -857,23 +861,26 @@ jobs:
           #   competitors  →  "{framework}:{output_format}:{mode}"
           #
           # xberg: 2 pipelines × 2 output formats × 2 modes = 8
-          # competitors: 10 entries (format varies per tool: docling/unstructured/mineru emit
-          #   both markdown+plaintext; markitdown/pymupdf4llm markdown-only; tika/liteparse plaintext-only)
-          # total expected: 18
+          # competitors: 13 entries (format varies per tool: docling/unstructured/mineru emit
+          #   both markdown+plaintext; markitdown/pymupdf4llm markdown-only; tika plaintext-only;
+          #   liteparse — the head-to-head competitor — emits both formats AND native batch)
+          # total expected: 21
           EXPECTED_FRAMEWORKS=(
             # xberg-* (slim keys — format encoded in name)
             "xberg-markdown-baseline:single"   "xberg-markdown-baseline:batch"
             "xberg-markdown-layout:single"     "xberg-markdown-layout:batch"
             "xberg-plaintext-baseline:single"   "xberg-plaintext-baseline:batch"
             "xberg-plaintext-layout:single"     "xberg-plaintext-layout:batch"
-            # competitors (format in key; single-file only — no batch API)
+            # competitors (format in key; single-file only unless noted)
             "docling:markdown:single"    "docling:plaintext:single"
             "markitdown:markdown:single"
             "unstructured:markdown:single" "unstructured:plaintext:single"
             "tika:plaintext:single"
             "pymupdf4llm:markdown:single"
             "mineru:markdown:single"     "mineru:plaintext:single"
-            "liteparse:plaintext:single"
+            # liteparse: full grid (markdown/plaintext × single/batch)
+            "liteparse:markdown:single"  "liteparse:plaintext:single"
+            "liteparse:markdown:batch"   "liteparse:plaintext:batch"
           )
 
           # Get actual frameworks from aggregated.json
@@ -910,7 +917,7 @@ jobs:
       - name: Create GitHub Release with benchmark results
         if: steps.validate-artifacts.outputs.has-artifacts == 'true'
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
 

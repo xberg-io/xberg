@@ -19937,7 +19937,7 @@ pub fn extract_batch<'py>(
 #[pyfunction]
 #[pyo3(signature = ())]
 pub fn list_supported_formats(py: Python<'_>) -> Vec<SupportedFormat> {
-    py.detach(|| xberg::list_supported_formats())
+    py.detach(xberg::list_supported_formats)
         .into_iter()
         .map(Into::into)
         .collect()
@@ -19947,7 +19947,7 @@ pub fn list_supported_formats(py: Python<'_>) -> Vec<SupportedFormat> {
 #[pyfunction]
 #[pyo3(signature = ())]
 pub fn clear_embedding_backends(py: Python<'_>) -> PyResult<()> {
-    py.detach(|| xberg::clear_embedding_backends())
+    py.detach(xberg::clear_embedding_backends)
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -19955,7 +19955,7 @@ pub fn clear_embedding_backends(py: Python<'_>) -> PyResult<()> {
 #[pyfunction]
 #[pyo3(signature = ())]
 pub fn list_embedding_backends(py: Python<'_>) -> PyResult<Vec<String>> {
-    py.detach(|| xberg::list_embedding_backends())
+    py.detach(xberg::list_embedding_backends)
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -19963,7 +19963,7 @@ pub fn list_embedding_backends(py: Python<'_>) -> PyResult<Vec<String>> {
 #[pyfunction]
 #[pyo3(signature = ())]
 pub fn list_document_extractors(py: Python<'_>) -> PyResult<Vec<String>> {
-    py.detach(|| xberg::list_document_extractors())
+    py.detach(xberg::list_document_extractors)
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -19971,7 +19971,7 @@ pub fn list_document_extractors(py: Python<'_>) -> PyResult<Vec<String>> {
 #[pyfunction]
 #[pyo3(signature = ())]
 pub fn clear_document_extractors(py: Python<'_>) -> PyResult<()> {
-    py.detach(|| xberg::clear_document_extractors())
+    py.detach(xberg::clear_document_extractors)
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -19979,7 +19979,7 @@ pub fn clear_document_extractors(py: Python<'_>) -> PyResult<()> {
 #[pyfunction]
 #[pyo3(signature = ())]
 pub fn list_ocr_backends(py: Python<'_>) -> PyResult<Vec<String>> {
-    py.detach(|| xberg::list_ocr_backends())
+    py.detach(xberg::list_ocr_backends)
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -19987,7 +19987,7 @@ pub fn list_ocr_backends(py: Python<'_>) -> PyResult<Vec<String>> {
 #[pyfunction]
 #[pyo3(signature = ())]
 pub fn clear_ocr_backends(py: Python<'_>) -> PyResult<()> {
-    py.detach(|| xberg::clear_ocr_backends())
+    py.detach(xberg::clear_ocr_backends)
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -19995,7 +19995,7 @@ pub fn clear_ocr_backends(py: Python<'_>) -> PyResult<()> {
 #[pyfunction]
 #[pyo3(signature = ())]
 pub fn list_post_processors(py: Python<'_>) -> PyResult<Vec<String>> {
-    py.detach(|| xberg::list_post_processors())
+    py.detach(xberg::list_post_processors)
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -20003,7 +20003,7 @@ pub fn list_post_processors(py: Python<'_>) -> PyResult<Vec<String>> {
 #[pyfunction]
 #[pyo3(signature = ())]
 pub fn clear_post_processors(py: Python<'_>) -> PyResult<()> {
-    py.detach(|| xberg::clear_post_processors())
+    py.detach(xberg::clear_post_processors)
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -20011,7 +20011,7 @@ pub fn clear_post_processors(py: Python<'_>) -> PyResult<()> {
 #[pyfunction]
 #[pyo3(signature = ())]
 pub fn list_renderers(py: Python<'_>) -> PyResult<Vec<String>> {
-    py.detach(|| xberg::list_renderers())
+    py.detach(xberg::list_renderers)
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -20019,7 +20019,7 @@ pub fn list_renderers(py: Python<'_>) -> PyResult<Vec<String>> {
 #[pyfunction]
 #[pyo3(signature = ())]
 pub fn clear_renderers(py: Python<'_>) -> PyResult<()> {
-    py.detach(|| xberg::clear_renderers())
+    py.detach(xberg::clear_renderers)
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -20027,7 +20027,7 @@ pub fn clear_renderers(py: Python<'_>) -> PyResult<()> {
 #[pyfunction]
 #[pyo3(signature = ())]
 pub fn clear_reranker_backends(py: Python<'_>) -> PyResult<()> {
-    py.detach(|| xberg::clear_reranker_backends())
+    py.detach(xberg::clear_reranker_backends)
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -20035,7 +20035,7 @@ pub fn clear_reranker_backends(py: Python<'_>) -> PyResult<()> {
 #[pyfunction]
 #[pyo3(signature = ())]
 pub fn list_reranker_backends(py: Python<'_>) -> PyResult<Vec<String>> {
-    py.detach(|| xberg::list_reranker_backends())
+    py.detach(xberg::list_reranker_backends)
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -20043,7 +20043,7 @@ pub fn list_reranker_backends(py: Python<'_>) -> PyResult<Vec<String>> {
 #[pyfunction]
 #[pyo3(signature = ())]
 pub fn list_validators(py: Python<'_>) -> PyResult<Vec<String>> {
-    py.detach(|| xberg::list_validators())
+    py.detach(xberg::list_validators)
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -20051,7 +20051,7 @@ pub fn list_validators(py: Python<'_>) -> PyResult<Vec<String>> {
 #[pyfunction]
 #[pyo3(signature = ())]
 pub fn clear_validators(py: Python<'_>) -> PyResult<()> {
-    py.detach(|| xberg::clear_validators())
+    py.detach(xberg::clear_validators)
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
