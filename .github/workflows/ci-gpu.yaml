@@ -252,6 +252,9 @@ jobs:
           XBERG_REQUIRE_MODELS: "1"
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           RUST_LOG: "xberg=debug,xberg_candle_ocr=debug"
+          # Per-stage tensor stats for GLM-OCR, to bisect the CUDA-only empty-output
+          # (NaN/garbage) divergence. No-op for other models.
+          XBERG_GLM_DEBUG: "1"
         run: |
           set -euo pipefail
           if [ -n "${{ matrix.model.env_var }}" ]; then

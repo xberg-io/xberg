@@ -75,6 +75,7 @@ mod imp {
         let mut logits = decoder
             .forward_embeds(input_embeds, prefill_position_ids)
             .map_err(|e| CandleOcrError::InferenceFailed(format!("Prefill forward: {}", e)))?;
+        super::super::glm_debug_tensor("prefill_logits", &logits);
 
         let mut next_text_pos = next_text_pos_start;
         let dev = input_embeds.device().clone();
@@ -97,6 +98,16 @@ mod imp {
                 sample_greedy(&penalized_logits)
             }
             .map_err(|e| CandleOcrError::InferenceFailed(format!("Sampling: {}", e)))?;
+
+            if output_ids.len() < 5 && std::env::var_os("XBERG_GLM_DEBUG").is_some() {
+                super::super::glm_debug_tensor(&format!("logits_step{}", output_ids.len()), &penalized_logits);
+                eprintln!(
+                    "[glm-debug] step{}: token_id={} is_eos={}",
+                    output_ids.len(),
+                    token_id,
+                    eos_token_ids.contains(&token_id)
+                );
+            }
 
             output_ids.push(token_id);
 
