@@ -157,6 +157,37 @@ jobs:
       - name: Install system dependencies
         uses: ./.github/actions/install-system-deps
 
+      - name: Setup CUDA toolkit (nvcc)
+        # candle-cuda compiles CUDA kernels via cudarc at build time, which needs
+        # nvcc. The L4 runner ships the driver (nvidia-smi) but nvcc is not on PATH.
+        # Locate an existing CUDA toolkit install and add it to PATH/CUDA_PATH;
+        # fail loudly if the toolkit is genuinely absent so we know to provision it.
+        run: |
+          if command -v nvcc >/dev/null 2>&1; then
+            echo "nvcc already on PATH: $(command -v nvcc)"
+          else
+            cuda_home=""
+            for d in /usr/local/cuda /usr/local/cuda-*; do
+              if [ -x "$d/bin/nvcc" ]; then
+                cuda_home="$d"
+                break
+              fi
+            done
+            if [ -z "$cuda_home" ]; then
+              echo "ERROR: nvcc not found. CUDA toolkit is not installed on this runner."
+              echo "Searched: /usr/local/cuda, /usr/local/cuda-*"
+              ls -d /usr/local/cuda* 2>/dev/null || echo "  (no /usr/local/cuda* directories)"
+              exit 1
+            fi
+            echo "Found CUDA toolkit at $cuda_home"
+            echo "$cuda_home/bin" >> "$GITHUB_PATH"
+            echo "CUDA_PATH=$cuda_home" >> "$GITHUB_ENV"
+            echo "CUDA_HOME=$cuda_home" >> "$GITHUB_ENV"
+          fi
+
+      - name: Verify nvcc
+        run: nvcc --version
+
       - name: Cache Cargo
         uses: actions/cache@v5
         with:
