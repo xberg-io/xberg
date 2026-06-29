@@ -103,13 +103,7 @@ public final class RendererBridge implements AutoCloseable {
     private void initStubRenderResult(long offset) throws ReflectiveOperationException {
         var stubRenderResult = LINKER.upcallStub(LOOKUP.bind(this, "handleRenderResult",
             MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class, MemorySegment.class)),
-            FunctionDescriptor.of(
-                ValueLayout.JAVA_INT,
-                ValueLayout.ADDRESS,
-                ValueLayout.ADDRESS,
-                ValueLayout.ADDRESS,
-                ValueLayout.ADDRESS
-            ),
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
             arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubRenderResult);
     }

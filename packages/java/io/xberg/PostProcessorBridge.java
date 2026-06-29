@@ -111,13 +111,7 @@ public final class PostProcessorBridge implements AutoCloseable {
     private void initStubProcess(long offset) throws ReflectiveOperationException {
         var stubProcess = LINKER.upcallStub(LOOKUP.bind(this, "handleProcess",
             MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class, MemorySegment.class)),
-            FunctionDescriptor.of(
-                ValueLayout.JAVA_INT,
-                ValueLayout.ADDRESS,
-                ValueLayout.ADDRESS,
-                ValueLayout.ADDRESS,
-                ValueLayout.ADDRESS
-            ),
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
             arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubProcess);
     }
@@ -155,13 +149,7 @@ public final class PostProcessorBridge implements AutoCloseable {
     private void initStubEstimatedDurationMs(long offset) throws ReflectiveOperationException {
         var stubEstimatedDurationMs = LINKER.upcallStub(LOOKUP.bind(this, "handleEstimatedDurationMs",
             MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class, MemorySegment.class)),
-            FunctionDescriptor.of(
-                ValueLayout.JAVA_INT,
-                ValueLayout.ADDRESS,
-                ValueLayout.ADDRESS,
-                ValueLayout.ADDRESS,
-                ValueLayout.ADDRESS
-            ),
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
             arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubEstimatedDurationMs);
     }

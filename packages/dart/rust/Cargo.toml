@@ -42,11 +42,11 @@ tree-sitter = ["xberg/tree-sitter"]
 url-config-types = ["xberg/url-config-types"]
 url-ingestion = ["xberg/url-ingestion"]
 xml = ["xberg/xml"]
-android-target = ["xberg/android-target", "api", "api-types", "auto-rotate-types", "chunking-tokenizers", "diff", "heuristics", "html", "keywords-rake", "keywords-yake", "layout-types", "liter-llm", "markdown-footnotes", "ocr", "office", "paddle-ocr-types", "pdf", "presets", "quality", "redaction", "reranker-presets", "svg", "transcription-types", "tree-sitter", "xml"]
+android-target = ["xberg/android-target", "api", "api-types", "auto-rotate-types", "chunking-tokenizers", "diff", "heuristics", "html", "keywords-rake", "keywords-yake", "layout-types", "liter-llm", "markdown-footnotes", "ocr", "office", "paddle-ocr-types", "pdf", "presets", "quality", "redaction", "reranker-presets", "svg", "transcription-types", "tree-sitter", "url-config-types", "xml"]
 
 [dependencies]
 async-trait = "0.1"
-crawlberg = { workspace = true }
+crawlberg = { default-features = false, version = "1.0.0" }
 flutter_rust_bridge = "=2.12.0"
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "sync"] }

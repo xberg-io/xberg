@@ -11,6 +11,8 @@ categories = []
 [package.metadata.cargo-machete]
 ignored = ["tokio", "async-trait", "alloc-no-stdlib", "alloc-stdlib", "brotli-decompressor"]
 
+[workspace]
+
 [lib]
 name = "xberg_nif"
 
@@ -53,7 +55,7 @@ alloc-no-stdlib = "=2.0.4"
 alloc-stdlib = "=0.2.2"
 async-trait = "0.1"
 brotli-decompressor = "=5.0.1"
-crawlberg = { version = "1.0.0", default-features = false }
+crawlberg = { default-features = false, version = "1.0.0" }
 rustler = "0.38"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

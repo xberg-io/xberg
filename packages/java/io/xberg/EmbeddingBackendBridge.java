@@ -114,13 +114,7 @@ public final class EmbeddingBackendBridge implements AutoCloseable {
     private void initStubEmbed(long offset) throws ReflectiveOperationException {
         var stubEmbed = LINKER.upcallStub(LOOKUP.bind(this, "handleEmbed",
             MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class, MemorySegment.class)),
-            FunctionDescriptor.of(
-                ValueLayout.JAVA_INT,
-                ValueLayout.ADDRESS,
-                ValueLayout.ADDRESS,
-                ValueLayout.ADDRESS,
-                ValueLayout.ADDRESS
-            ),
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
             arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubEmbed);
     }

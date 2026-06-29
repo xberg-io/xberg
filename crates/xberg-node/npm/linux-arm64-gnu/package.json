@@ -11,6 +11,6 @@
   "os": ["linux"],
   "cpu": ["arm64"],
   "libc": ["glibc"],
-  "engines": { "node": ">= 18" },
+  "engines": { "node": ">= 22" },
   "publishConfig": { "access": "public" }
 }

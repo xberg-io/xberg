@@ -6,13 +6,7 @@ defmodule E2eElixir.MixProject do
       app: :e2e_elixir,
       version: "0.1.0",
       elixir: "~> 1.14",
-      # Absolute test path so the suite still compiles after test_helper.exs
-      # chdir's into test_documents for relative file-URI resolution.
-      test_paths: [Path.expand("test", __DIR__)],
-      deps: deps(),
-      rustler_precompiled: [
-        force_build: System.get_env("XBERG_BUILD") in ["1", "true"] or Mix.env() in [:dev, :test]
-      ]
+      deps: deps()
     ]
   end
 

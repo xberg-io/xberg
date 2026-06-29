@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">= 22"
+  },
   "scripts": {
     "test": "NODE_OPTIONS=--max-old-space-size=4096 vitest run"
   },

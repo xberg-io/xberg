@@ -2,9 +2,9 @@ unless System.get_env("CRAWLBERG_ALLOW_PRIVATE_NETWORK") do
   System.put_env("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true")
 end
 
-# Elixir's os:putenv does not propagate to the native C runtime that crawlberg's
-# SSRF policy reads via getenv. Push the value through the NIF (libc setenv) so
-# loopback URL fixtures are permitted.
+# Erlang os:putenv does not propagate to the native C runtime that an FFI
+# library reads via getenv. Push each value through the binding's set_env NIF
+# (libc setenv) so the native side observes the same environment.
 try do
   Xberg.Native.set_env("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true")
 rescue
@@ -14,7 +14,7 @@ end
 # Run from the test-documents dir so relative file URIs (e.g. "text/report.txt")
 # resolve, mirroring the other language suites which chdir before running.
 test_documents_dir =
-  System.get_env("XBERG_TEST_DOCUMENTS_DIR") || Path.expand("../../../test_documents", __DIR__)
+  System.get_env("ALEF_TEST_DOCUMENTS_DIR") || Path.expand("../../../test_documents", __DIR__)
 
 if File.dir?(test_documents_dir), do: File.cd!(test_documents_dir)
 

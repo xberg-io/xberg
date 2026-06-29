@@ -22,6 +22,9 @@
   "main": "pkg/nodejs/xberg_wasm.js",
   "module": "pkg/web/xberg_wasm.js",
   "types": "pkg/nodejs/xberg_wasm.d.ts",
+  "engines": {
+    "node": ">= 22"
+  },
   "scripts": {
     "build": "wasm-pack build --target nodejs --out-dir pkg/nodejs",
     "build:ci": "wasm-pack build --release --target nodejs --out-dir pkg/nodejs",
