@@ -1,0 +1,22 @@
+[package]
+name = "xberg-rag-node"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "NAPI-RS bindings for xberg-rag"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = { version = "3", features = ["async", "serde-json"] }
+napi-derive = "3"
+xberg-rag = { workspace = true, features = ["sqlite", "pipeline", "pipeline-embeddings", "pipeline-reranker"] }
+xberg = { workspace = true, features = ["embeddings", "reranker", "ner-onnx", "redaction"] }
+xberg-gliner = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+
+[build-dependencies]
+napi-build = "2"

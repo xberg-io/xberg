@@ -12,6 +12,7 @@ members = [
     "crates/xberg-php",
     "crates/xberg-py",
     "crates/xberg-rag",
+    "crates/xberg-rag-node",
     "crates/xberg-tesseract",
     "crates/xberg-wasm",
     "packages/dart/rust",
