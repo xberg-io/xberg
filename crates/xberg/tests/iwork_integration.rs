@@ -4,10 +4,10 @@
 //! opened, parsed, and produce non-empty text output.
 
 mod helpers;
-use helpers::extract_bytes_document;
 
 #[cfg(feature = "iwork")]
 mod iwork_tests {
+    use crate::helpers::extract_bytes_document;
     use std::path::PathBuf;
     use xberg::core::config::ExtractionConfig;
 

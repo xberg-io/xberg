@@ -2,11 +2,28 @@
 	"id": "smoke_xlsx_basic",
 	"category": "smoke",
 	"description": "Smoke test: XLSX with basic spreadsheet data including tables",
-	"tags": ["smoke", "office", "xlsx", "tables"],
+	"tags": [
+		"smoke",
+		"office",
+		"xlsx",
+		"tables"
+	],
 	"input": {
-		"kind": "uri",
-		"uri": "xlsx/stanley_cups.xlsx",
-		"mime_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+		"mock_responses": [
+			{
+				"path": "/xlsx/stanley_cups.xlsx",
+				"status_code": 200,
+				"headers": {
+					"content-type": "application/octet-stream"
+				},
+				"body_file": "../test_documents/xlsx/stanley_cups.xlsx"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url/xlsx/stanley_cups.xlsx",
+			"mime_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+		}
 	},
 	"assertions": [
 		{
@@ -22,7 +39,17 @@
 		{
 			"type": "contains_all",
 			"field": "results[0].content",
-			"values": ["Team", "Location", "Stanley Cups", "Blues", "Flyers", "Maple Leafs", "STL", "PHI", "TOR"]
+			"values": [
+				"Team",
+				"Location",
+				"Stanley Cups",
+				"Blues",
+				"Flyers",
+				"Maple Leafs",
+				"STL",
+				"PHI",
+				"TOR"
+			]
 		},
 		{
 			"type": "count_min",
@@ -37,11 +64,15 @@
 		{
 			"type": "contains_all",
 			"field": "results[0].metadata.format.excel.sheet_names",
-			"values": ["Stanley Cups"]
+			"values": [
+				"Stanley Cups"
+			]
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
+		"languages": [
+			"wasm"
+		],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	},
 	"call": "extract",

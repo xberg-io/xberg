@@ -507,7 +507,7 @@ impl Ernie4_5Model {
 
         let position_ids = match position_ids {
             Some(ids) => ids.clone(),
-            None => Tensor::arrange(
+            None => Tensor::arange(
                 seqlen_offset as u32,
                 (seq_len + seqlen_offset) as u32,
                 inputs_embeds.device(),
@@ -674,7 +674,7 @@ impl PaddleOCRVLModel {
                                     0
                                 };
 
-                                let pos_ids = Tensor::arrange(start_idx, start_idx + text_len, input_ids_i.device())
+                                let pos_ids = Tensor::arange(start_idx, start_idx + text_len, input_ids_i.device())
                                     .map_err(|e| CandleOcrError::InferenceFailed(format!("Arrange: {}", e)))?
                                     .unsqueeze(0)
                                     .map_err(|e| CandleOcrError::InferenceFailed(format!("Unsqueeze: {}", e)))?
@@ -684,7 +684,7 @@ impl PaddleOCRVLModel {
                                 llm_pos_ids_list.push(pos_ids);
 
                                 // Vision patch position IDs
-                                let h_index = Tensor::arrange(
+                                let h_index = Tensor::arange(
                                     start_idx + text_len,
                                     start_idx + text_len + llm_grid_h,
                                     input_ids_i.device(),
@@ -697,7 +697,7 @@ impl PaddleOCRVLModel {
                                 .flatten_all()
                                 .map_err(|e| CandleOcrError::InferenceFailed(format!("H flatten: {}", e)))?;
 
-                                let w_index = Tensor::arrange(
+                                let w_index = Tensor::arange(
                                     start_idx + text_len,
                                     start_idx + text_len + llm_grid_w,
                                     input_ids_i.device(),
@@ -738,7 +738,7 @@ impl PaddleOCRVLModel {
                     };
 
                     let text_len = (input_len as u32) - text_start;
-                    let pos_ids = Tensor::arrange(start_idx, start_idx + text_len, input_ids_i.device())
+                    let pos_ids = Tensor::arange(start_idx, start_idx + text_len, input_ids_i.device())
                         .map_err(|e| CandleOcrError::InferenceFailed(format!("Arrange: {}", e)))?
                         .unsqueeze(0)
                         .map_err(|e| CandleOcrError::InferenceFailed(format!("Unsqueeze: {}", e)))?
@@ -780,7 +780,7 @@ impl PaddleOCRVLModel {
             Ok((position_ids.contiguous()?, mrope_position_deltas))
         } else {
             // No vision: simple text-only position IDs
-            let position_ids = Tensor::arrange(0_u32, input_ids.dim(D::Minus1)? as u32, input_ids.device())
+            let position_ids = Tensor::arange(0_u32, input_ids.dim(D::Minus1)? as u32, input_ids.device())
                 .map_err(|e| CandleOcrError::InferenceFailed(format!("Arrange: {}", e)))?
                 .unsqueeze(0)
                 .map_err(|e| CandleOcrError::InferenceFailed(format!("Unsqueeze 1: {}", e)))?
@@ -839,7 +839,7 @@ impl PaddleOCRVLModel {
                 let [t, h, w] = [grid_row[0], grid_row[1], grid_row[2]];
                 let numel = h * w;
 
-                let image_position_ids = Tensor::arrange(0, numel, pixel_values.device())
+                let image_position_ids = Tensor::arange(0, numel, pixel_values.device())
                     .map_err(|e| CandleOcrError::InferenceFailed(format!("Arrange: {}", e)))?
                     .repeat(t as usize)
                     .map_err(|e| CandleOcrError::InferenceFailed(format!("Repeat: {}", e)))?;
@@ -915,7 +915,7 @@ impl PaddleOCRVLModel {
                     .map_err(|e| CandleOcrError::InferenceFailed(format!("Zeros: {}", e)))?
             };
 
-            position_ids = Tensor::arrange(0u32, seq_len as u32, input_ids.device())
+            position_ids = Tensor::arange(0u32, seq_len as u32, input_ids.device())
                 .map_err(|e| CandleOcrError::InferenceFailed(format!("Arrange: {}", e)))?
                 .unsqueeze(0)
                 .map_err(|e| CandleOcrError::InferenceFailed(format!("Unsqueeze 1: {}", e)))?
@@ -1132,7 +1132,7 @@ mod tests {
         let batch = 1usize;
         let seq_len = 6usize;
         // All tokens are plain text (no vision_start_token_id among them).
-        let input_ids = Tensor::arrange(0u32, (batch * seq_len) as u32, &dev)
+        let input_ids = Tensor::arange(0u32, (batch * seq_len) as u32, &dev)
             .map_err(|e| crate::CandleOcrError::InferenceFailed(e.to_string()))?
             .reshape((batch, seq_len))
             .map_err(|e| crate::CandleOcrError::InferenceFailed(e.to_string()))?;

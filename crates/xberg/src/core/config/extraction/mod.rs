@@ -18,6 +18,7 @@ mod types;
 // Re-export all public types for backward compatibility
 pub use self::core::ExtractionConfig;
 pub use self::file_config::FileExtractionConfig;
+#[cfg(feature = "tokio-runtime")]
 pub(crate) use self::types::BatchBytesItem;
 #[cfg(feature = "tokio-runtime")]
 pub(crate) use self::types::BatchFileItem;

@@ -5,9 +5,21 @@
 	"tags": ["format_specific", "pptx", "text_extraction"],
 	"call": "extract",
 	"input": {
-		"kind": "uri",
-		"uri": "pptx/simple.pptx",
-		"mime_type": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+		"mock_responses": [
+			{
+				"path": "/pptx/simple.pptx",
+				"status_code": 200,
+				"headers": {
+					"content-type": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+				},
+				"body_file": "../test_documents/pptx/simple.pptx"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url/pptx/simple.pptx",
+			"mime_type": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+		}
 	},
 	"assertions": [
 		{

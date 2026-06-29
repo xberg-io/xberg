@@ -41,11 +41,9 @@ async fn translation_writes_translated_content_and_records_usage() {
         },
     };
 
-    let mut result = ExtractedDocument {
-        content: "Hello world. This is a test sentence.".to_string(),
-        mime_type: Cow::Borrowed("text/plain"),
-        ..Default::default()
-    };
+    let mut result = ExtractedDocument::default();
+    result.content = "Hello world. This is a test sentence.".to_string();
+    result.mime_type = Cow::Borrowed("text/plain");
 
     xberg::text::translation::translate_result(&mut result, &config)
         .await

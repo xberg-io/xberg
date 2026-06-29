@@ -2,10 +2,26 @@
 	"id": "smoke_image_png",
 	"category": "smoke",
 	"description": "Smoke test: PNG image (without OCR, metadata only)",
-	"tags": ["smoke", "image", "png"],
+	"tags": [
+		"smoke",
+		"image",
+		"png"
+	],
 	"input": {
-		"kind": "uri",
-		"uri": "images/sample.png"
+		"mock_responses": [
+			{
+				"path": "/images/sample.png",
+				"status_code": 200,
+				"headers": {
+					"content-type": "application/octet-stream"
+				},
+				"body_file": "../test_documents/images/sample.png"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url/images/sample.png"
+		}
 	},
 	"assertions": [
 		{
@@ -15,7 +31,9 @@
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
+		"languages": [
+			"wasm"
+		],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	},
 	"call": "extract",

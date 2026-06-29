@@ -23,7 +23,7 @@ echo "  CARGO_TERM_COLOR: ${CARGO_TERM_COLOR:-not set}"
 
 echo "Workspace information:"
 echo "  Repository: $REPO_ROOT"
-echo "  Excluded packages: xberg-e2e-generator, xberg-py, xberg-node (+ benchmark-harness on Windows)"
+echo "  Excluded packages: xberg-e2e-generator, xberg-py, xberg-node, xberg-candle-ocr, xberg-cli, benchmark-harness"
 
 if [ ! -d "$TESSDATA_PREFIX" ]; then
   echo "WARNING: TESSDATA_PREFIX directory not found: $TESSDATA_PREFIX"
@@ -70,9 +70,6 @@ if ! {
 
   echo "=== cargo test --workspace (all features, excluding xberg) ==="
   extra_excludes=()
-  if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
-    extra_excludes+=(--exclude benchmark-harness)
-  fi
   # Exclude xberg-candle-ocr and xberg-cli from --all-features on every
   # platform: both have platform-hostile accelerator features. xberg-candle-ocr
   # has `metal` (Apple-only, breaks Linux) and `cuda` (needs nvcc, absent on macOS).
@@ -82,6 +79,13 @@ if ! {
   # curated-feature job, not here.
   extra_excludes+=(--exclude xberg-candle-ocr)
   extra_excludes+=(--exclude xberg-cli)
+  # benchmark-harness is the only test target that depends on `xberg` with
+  # `features = ["full"]`, which forces candle-core 0.11 -> gemm 0.19 -> gemm-f16
+  # 0.19 into the unified build. gemm-f16 0.19 fails to compile on aarch64 (both
+  # CI runners are arm64: ubuntu-24.04-arm and macos Apple Silicon) and on Windows.
+  # Candle is exercised on x86_64 CUDA in ci-gpu, so drop the sole candle puller
+  # from this CPU workspace test on every platform.
+  extra_excludes+=(--exclude benchmark-harness)
   RUST_BACKTRACE=full cargo test --locked \
     --workspace \
     --exclude xberg \

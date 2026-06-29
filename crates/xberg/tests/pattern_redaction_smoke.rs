@@ -16,11 +16,9 @@ use xberg::types::ExtractedDocument;
 use xberg::types::redaction::{PiiCategory, RedactionStrategy};
 
 fn run(content: &str, strategy: RedactionStrategy) -> ExtractedDocument {
-    let mut result = ExtractedDocument {
-        content: content.to_string(),
-        mime_type: Cow::Borrowed("text/plain"),
-        ..Default::default()
-    };
+    let mut result = ExtractedDocument::default();
+    result.content = content.to_string();
+    result.mime_type = Cow::Borrowed("text/plain");
     let cfg = ExtractionConfig {
         redaction: Some(RedactionConfig {
             strategy,
@@ -90,11 +88,9 @@ fn redacts_visa_credit_card_with_luhn() {
 fn skips_invalid_luhn_credit_card() {
     // Restrict to credit-card category so phone/postcode regexes do not fire on the
     // 16-digit run. 1234-1234-1234-1234 fails Luhn → must not redact.
-    let mut result = ExtractedDocument {
-        content: "Card: 1234-1234-1234-1234.".to_string(),
-        mime_type: Cow::Borrowed("text/plain"),
-        ..Default::default()
-    };
+    let mut result = ExtractedDocument::default();
+    result.content = "Card: 1234-1234-1234-1234.".to_string();
+    result.mime_type = Cow::Borrowed("text/plain");
     let cfg = ExtractionConfig {
         redaction: Some(RedactionConfig {
             strategy: RedactionStrategy::Mask,
@@ -187,11 +183,9 @@ fn drop_strategy_deletes_the_match() {
 // ---- User-supplied custom terms / patterns ----------------------------------
 
 fn run_with_config(content: &str, redaction: RedactionConfig) -> ExtractedDocument {
-    let mut result = ExtractedDocument {
-        content: content.to_string(),
-        mime_type: Cow::Borrowed("text/plain"),
-        ..Default::default()
-    };
+    let mut result = ExtractedDocument::default();
+    result.content = content.to_string();
+    result.mime_type = Cow::Borrowed("text/plain");
     let cfg = ExtractionConfig {
         redaction: Some(redaction),
         ..Default::default()

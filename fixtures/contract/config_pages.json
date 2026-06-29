@@ -1,11 +1,26 @@
 {
 	"id": "config_pages",
 	"description": "Tests page extraction and page marker configuration",
-	"tags": ["contract", "config"],
+	"tags": [
+		"contract",
+		"config"
+	],
 	"call": "extract",
 	"input": {
-		"kind": "uri",
-		"uri": "pdf/fake_memo.pdf"
+		"mock_responses": [
+			{
+				"path": "/pdf/fake_memo.pdf",
+				"status_code": 200,
+				"headers": {
+					"content-type": "application/octet-stream"
+				},
+				"body_file": "../test_documents/pdf/fake_memo.pdf"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url/pdf/fake_memo.pdf"
+		}
 	},
 	"assertions": [
 		{
@@ -21,11 +36,15 @@
 		{
 			"type": "contains_any",
 			"field": "results[0].content",
-			"values": ["PAGE"]
+			"values": [
+				"PAGE"
+			]
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
+		"languages": [
+			"wasm"
+		],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	},
 	"config": {

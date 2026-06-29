@@ -468,11 +468,12 @@ async fn main() -> Result<()> {
             };
             eprintln!("[adapter] Xberg CLI: {}/{} available", xberg_count, total_requested);
 
-            // Skip third-party frameworks in batch mode — they don't have batch APIs,
-            // so benchmarking them sequentially alongside xberg's real batch is not apples-to-apples.
+            // Third-party frameworks: in batch mode, skip most (no native batch APIs),
+            // but allow liteparse through since it has native batch support via lit batch-parse.
             let mut external_count = 0;
 
             if !matches!(config.benchmark_mode, BenchmarkMode::Batch) {
+                // Single-file mode: register all external adapters
                 use benchmark_harness::adapters::{
                     create_docling_adapter, create_liteparse_adapter, create_markitdown_adapter, create_mineru_adapter,
                     create_pymupdf4llm_adapter, create_tika_adapter, create_unstructured_adapter,
@@ -486,7 +487,11 @@ async fn main() -> Result<()> {
                 try_register!("mineru", || create_mineru_adapter(ocr), external_count);
                 try_register!("liteparse", || create_liteparse_adapter(ocr), external_count);
             } else {
-                eprintln!("[adapter] Batch mode: skipping third-party frameworks (no batch API support)");
+                // Batch mode: only liteparse has native batch support (lit batch-parse)
+                use benchmark_harness::adapters::create_liteparse_adapter;
+                try_register!("liteparse", || create_liteparse_adapter(ocr), external_count);
+                eprintln!("[adapter] Batch mode: only liteparse available (uses native lit batch-parse API)");
+                eprintln!("[adapter] Other frameworks skipped: no native batch APIs");
             }
 
             eprintln!(

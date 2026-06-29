@@ -789,6 +789,28 @@ Bounding box coordinates for element positioning.
 
 ---
 
+#### BrowserConfig
+
+Browser fallback configuration.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `mode` | `BrowserMode` | `:auto` | When to use the headless browser fallback. |
+| `backend` | `BrowserBackend` | `:chromiumoxide` | Browser backend used to render JavaScript-heavy pages. |
+| `endpoint` | `String?` | `nil` | CDP WebSocket endpoint for connecting to an external browser instance. |
+| `timeout` | `Float` | `30000ms` | Timeout for browser page load and rendering (in milliseconds when serialized). |
+| `wait` | `BrowserWait` | `:network_idle` | Wait strategy after browser navigation. |
+| `wait_selector` | `String?` | `nil` | CSS selector to wait for when `wait` is `Selector`. |
+| `extra_wait` | `Float?` | `nil` | Extra time to wait after the wait condition is met. |
+| `proxy` | `ProxyConfig?` | `nil` | Proxy for browser fetches. Overrides `CrawlConfig.proxy` when set. Native backend supports http/https only (no SOCKS5). |
+| `block_url_patterns` | `Array<String>` | `\[\]` | URL patterns to block before the network request fires. Supports `*` wildcards. Useful for skipping ads/analytics/large images. Honored by `BrowserBackend.Native`; chromiumoxide ignores this field today. |
+| `eval_script` | `String?` | `nil` | JavaScript snippet evaluated after navigation completes. Scraping captures the native backend result in `ScrapeResult.browser.eval_result`. Interactions run this script before page actions on both browser backends but do not include the script result in `InteractionResult`. |
+| `robots_user_agent` | `String?` | `nil` | User-agent used when fetching robots.txt. Defaults to `BrowserConfig.user_agent` (or crawlberg's default) if unset. Native only. |
+| `capture_network_events` | `Boolean` | `false` | Capture the full network event stream into the result. Default false (only the document event is captured). Native only. |
+| `session_affinity` | `Boolean` | `true` | Enable session affinity: reuse chromiumoxide Pages for same-domain requests so cookies + fingerprint + solved challenges persist. Default: true. When false, each request gets a fresh Page. |
+
+---
+
 #### CacheStats
 
 Aggregate statistics for a xberg cache directory.
@@ -966,6 +988,31 @@ A single label + confidence pair.
 
 ---
 
+#### ContentConfig
+
+Content extraction and conversion configuration.
+
+Controls how HTML is converted to the output format. Uses
+html-to-markdown-rs as the conversion engine for all formats
+(markdown, plain text, djot).
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `output_format` | `String` | `"markdown"` | Output format: `"markdown"` (default), `"plain"`, `"djot"`. |
+| `preprocessing_preset` | `String` | `"standard"` | Preprocessing aggressiveness: `"minimal"`, `"standard"` (default), `"aggressive"`. - Minimal: only scripts/styles removed. - Standard: also removes nav, nav-hinted headers/footers/asides, forms. - Aggressive: removes all footers/asides unconditionally. |
+| `remove_navigation` | `Boolean` | `true` | Remove navigation elements (nav, breadcrumbs, menus). Default: `true`. |
+| `remove_forms` | `Boolean` | `true` | Remove form elements. Default: `true`. |
+| `strip_tags` | `Array<String>` | `\[\]` | HTML tag names to strip (render children only, remove the tag wrapper). Default: `\["noscript"\]`. |
+| `preserve_tags` | `Array<String>` | `\[\]` | HTML tag names to preserve as raw HTML in output. |
+| `exclude_selectors` | `Array<String>` | `\[\]` | CSS selectors for elements to exclude entirely (element + all content). Unlike `strip_tags` (which removes the wrapper but keeps children), excluded elements and all descendants are dropped. Supports CSS selectors: `.class`, `#id`, `\[attribute\]`, compound selectors. Example: `\[".cookie-banner", "#ad-container", "\[role='complementary'\]"\]` |
+| `skip_images` | `Boolean` | `false` | Skip image elements in output. Default: `false`. |
+| `max_depth` | `Integer?` | `nil` | Max DOM traversal depth. Prevents stack overflow on deeply nested HTML. |
+| `wrap` | `Boolean` | `false` | Enable line wrapping. Default: `false`. |
+| `wrap_width` | `Integer` | `80` | Wrap width when `wrap` is enabled. Default: `80`. |
+| `include_document_structure` | `Boolean` | `true` | Include document structure tree in output. Default: `true`. |
+
+---
+
 #### ContentFilterConfig
 
 Cross-extractor content filtering configuration.
@@ -1040,6 +1087,54 @@ and Office-specific extensions.
 | `identifier` | `String?` | `nil` | Unique identifier |
 | `version` | `String?` | `nil` | Document version |
 | `last_printed` | `String?` | `nil` | Last print timestamp (ISO 8601) |
+
+---
+
+#### CrawlConfig
+
+Configuration for crawl, scrape, and map operations.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `max_depth` | `Integer?` | `nil` | Maximum crawl depth (number of link hops from the start URL). |
+| `max_pages` | `Integer?` | `nil` | Maximum number of pages to crawl. |
+| `max_concurrent` | `Integer?` | `nil` | Maximum number of concurrent requests. |
+| `respect_robots_txt` | `Boolean` | `false` | Whether to respect robots.txt directives. |
+| `soft_http_errors` | `Boolean` | `false` | When true, HTTP-level error responses (404 NotFound, 403 Forbidden, WAF blocks) are surfaced as `ScrapeResult` records with the matching `status_code` rather than raised as `CrawlError`. Default `false` preserves the historical throw-on-error contract for direct fetches. Independently of this flag, 404s reached at the end of a redirect chain are *always* surfaced softly — the user opted into redirect-following, so receiving a 404 there is part of the normal flow rather than an unexpected error. |
+| `user_agent` | `String?` | `nil` | Custom user-agent string. |
+| `stay_on_domain` | `Boolean` | `false` | Whether to restrict crawling to the same domain. |
+| `allow_subdomains` | `Boolean` | `false` | Whether to allow subdomains when `stay_on_domain` is true. |
+| `include_paths` | `Array<String>` | `\[\]` | Regex patterns for paths to include during crawling. |
+| `exclude_paths` | `Array<String>` | `\[\]` | Regex patterns for paths to exclude during crawling. |
+| `custom_headers` | `Hash{String=>String}` | `{}` | Custom HTTP headers to send with each request. |
+| `request_timeout` | `Float` | `30000ms` | Timeout for individual HTTP requests (in milliseconds when serialized). |
+| `rate_limit_ms` | `Integer?` | `nil` | Per-domain rate limit in milliseconds. When set, enforces a minimum delay between requests to the same domain. Defaults to 200ms when `nil`. |
+| `max_redirects` | `Integer` | `10` | Maximum number of redirects to follow. |
+| `retry_count` | `Integer` | `0` | Number of retry attempts for failed requests. |
+| `retry_codes` | `Array<Integer>` | `\[\]` | HTTP status codes that should trigger a retry. |
+| `cookies_enabled` | `Boolean` | `false` | Whether to enable cookie handling. |
+| `auth` | `AuthConfig?` | `nil` | Authentication configuration. |
+| `max_body_size` | `Integer?` | `nil` | Maximum response body size in bytes. |
+| `remove_tags` | `Array<String>` | `\[\]` | CSS selectors for tags to remove from HTML before processing. |
+| `content` | `ContentConfig` | — | Content extraction and conversion configuration. |
+| `map_limit` | `Integer?` | `nil` | Maximum number of URLs to return from a map operation. |
+| `map_search` | `String?` | `nil` | Search filter for map results (case-insensitive substring match on URLs). |
+| `download_assets` | `Boolean` | `false` | Whether to download assets (CSS, JS, images, etc.) from the page. |
+| `asset_types` | `Array<AssetCategory>` | `\[\]` | Filter for asset categories to download. |
+| `max_asset_size` | `Integer?` | `nil` | Maximum size in bytes for individual asset downloads. |
+| `browser` | `BrowserConfig` | — | Browser configuration. |
+| `proxy` | `ProxyConfig?` | `nil` | Proxy configuration for HTTP requests. |
+| `user_agents` | `Array<String>` | `\[\]` | List of user-agent strings for rotation. If non-empty, overrides `user_agent`. |
+| `capture_screenshot` | `Boolean` | `false` | Whether to capture a screenshot when using the browser. |
+| `follow_document_urls` | `Boolean` | `false` | Re-enqueue discovered `LinkType.Document` URLs into the crawl frontier so the crawl follows links *from* document pages (PDFs, etc.) as it would from HTML pages. Default: `false` (documents terminate at materialisation). |
+| `document_url_depth` | `Integer?` | `nil` | Maximum document-depth (from the seed URL through document links only) when `follow_document_urls` is true. `nil` means inherit `max_depth`. Independent of `max_depth`: a document URL is enqueued only if BOTH the outer `max_depth` and (if set) `document_url_depth` permit it. |
+| `download_documents` | `Boolean` | `true` | Whether to download non-HTML documents (PDF, DOCX, images, code, etc.) instead of skipping them. |
+| `document_max_size` | `Integer?` | `nil` | Maximum size in bytes for document downloads. Defaults to 50 MB. |
+| `document_mime_types` | `Array<String>` | `\[\]` | Allowlist of MIME types to download. If empty, uses built-in defaults. |
+| `warc_output` | `String?` | `nil` | Path to write WARC output. If `nil`, WARC output is disabled. |
+| `browser_profile` | `String?` | `nil` | Named browser profile for persistent sessions (cookies, localStorage). |
+| `save_browser_profile` | `Boolean` | `false` | Whether to save changes back to the browser profile on exit. |
+| `ssrf` | `SsrfPolicy` | — | SSRF policy for outbound network requests. Default: deny private networks, allow http/https only, max 5 redirects. Phase 1: `deny_private` and `max_redirects` are exposed to all language bindings. `allowlist` is skipped (see `SsrfPolicy` fields) and will be added in a follow-up when `HostMatcher`'s tagged-enum FFI form is decided. |
 
 ---
 
@@ -2049,32 +2144,6 @@ Document extracted by the core extraction pipeline.
 | `formulas` | `Array<Formula>` | `\[\]` | Mathematical formulas recognized in the document. Populated by the layout-guided formula pipeline when the `layout-detection` feature is enabled and the document contains regions classified as formulas. Empty otherwise. |
 | `form_fields` | `Array<PdfFormField>` | `\[\]` | Form fields extracted from a PDF's AcroForm or XFA structure. Populated by the PDF extractor when `PdfConfig.extract_form_fields` is enabled (default) and the document is a fillable form. Empty otherwise. |
 | `formatted_content` | `String?` | `nil` | Pre-rendered content in the requested output format. Populated during `derive_extraction_result` before tree derivation consumes element data. `apply_output_format` swaps this into `content` at the end of the pipeline, after post-processors have operated on plain text. |
-
-##### Methods
-
-###### from_ocr()
-
-Convert from an OCR result.
-
-**Signature:**
-
-```ruby
-def self.from_ocr(ocr)
-```
-
-**Example:**
-
-```ruby
-result = ExtractedDocument.from_ocr(OcrExtractionResult.new)
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `ocr` | `OcrExtractionResult` | Yes | The ocr extraction result |
-
-**Returns:** `ExtractedDocument`
 
 ---
 
@@ -5043,6 +5112,18 @@ but may indicate degraded results.
 
 ---
 
+#### ProxyConfig
+
+Proxy configuration for HTTP requests.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `url` | `String` | — | Proxy URL (e.g. "<http://proxy:8080",> "socks5://proxy:1080"). |
+| `username` | `String?` | `nil` | Optional username for proxy authentication. |
+| `password` | `String?` | `nil` | Optional password for proxy authentication. |
+
+---
+
 #### PstMetadata
 
 Outlook PST archive metadata.
@@ -5937,6 +6018,17 @@ result = instance.max_multipart_field_mb()
 
 ---
 
+#### SsrfPolicy
+
+SSRF policy configuration.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `deny_private` | `Boolean` | `true` | If true, reject URLs that resolve to private/metadata IP ranges. |
+| `max_redirects` | `Integer` | `5` | Maximum number of HTTP redirects to follow during validation. |
+
+---
+
 #### StructuredData
 
 Structured data (Schema.org, microdata, RDFa) block.
@@ -6469,6 +6561,7 @@ URL ingestion and crawl configuration.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `mode` | `UrlExtractionMode` | `:auto` | URL extraction mode. |
+| `crawl` | `CrawlConfig` | — | Crawlberg crawl configuration used for HTTP(S) URL extraction. |
 | `document_url_pattern` | `String?` | `nil` | Optional regex filter for document-discovered URLs. |
 | `max_document_urls_per_result` | `Integer?` | `nil` | Maximum URLs to follow per extraction result. |
 | `max_total_urls` | `Integer?` | `nil` | Maximum URLs followed across the whole extraction call. |
@@ -7819,6 +7912,73 @@ Wire format is snake_case in all serializers (JSON, TOML, YAML).
 | `checkbox_unselected` | Checkbox in unselected state. |
 | `form` | Form field or form element. |
 | `key_value_region` | Key-value pair region (e.g. label + value in a form). |
+
+---
+
+#### BrowserMode
+
+When to use the headless browser fallback.
+
+| Value | Description |
+|-------|-------------|
+| `auto` | Automatically detect when JS rendering is needed and fall back to browser. |
+| `always` | Always use the browser for every request. |
+| `never` | Never use the browser fallback. |
+| `stealth` | Always use the browser with all stealth surfaces enabled. Behaves like `Always` for escalation purposes (every request is routed through the browser tier), but additionally enables: - browser JavaScript stealth patches - native-backend TLS fingerprint spoofing - stealth-aware default user-agent when no explicit UA is set - 1920×1080 viewport override Use this instead of setting the now-removed `BrowserConfig.stealth` boolean field. |
+
+---
+
+#### BrowserWait
+
+Wait strategy for browser page rendering.
+
+| Value | Description |
+|-------|-------------|
+| `network_idle` | Wait until network activity is idle. |
+| `selector` | Wait for a specific CSS selector to appear in the DOM. |
+| `fixed` | Wait for a fixed duration after navigation. |
+
+---
+
+#### BrowserBackend
+
+Browser backend used for JavaScript rendering.
+
+| Value | Description |
+|-------|-------------|
+| `chromiumoxide` | Existing Chromium/CDP backend powered by chromiumoxide. |
+| `native` | Crawlberg-owned native browser backend derived from Obscura. |
+
+---
+
+#### AuthConfig
+
+Authentication configuration.
+
+| Value | Description |
+|-------|-------------|
+| `basic` | HTTP Basic authentication. — Fields: `username`: `String`, `password`: `String` |
+| `bearer` | Bearer token authentication. — Fields: `token`: `String` |
+| `header` | Custom authentication header. — Fields: `name`: `String`, `value`: `String` |
+
+---
+
+#### AssetCategory
+
+The category of a downloaded asset.
+
+| Value | Description |
+|-------|-------------|
+| `document` | A document file (PDF, DOC, etc.). |
+| `image` | An image file. |
+| `audio` | An audio file. |
+| `video` | A video file. |
+| `font` | A font file. |
+| `stylesheet` | A CSS stylesheet. |
+| `script` | A JavaScript file. |
+| `archive` | An archive file (ZIP, TAR, etc.). |
+| `data` | A data file (JSON, XML, CSV, etc.). |
+| `other` | An unrecognized asset type. |
 
 ---
 

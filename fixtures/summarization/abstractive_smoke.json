@@ -2,11 +2,27 @@
 	"id": "summarization_abstractive_smoke",
 	"category": "summarization",
 	"description": "LLM-driven abstractive summary. Skipped automatically when XBERG_LLM_API_KEY (or OPENAI_API_KEY) is not set.",
-	"tags": ["summarization", "abstractive", "llm"],
+	"tags": [
+		"summarization",
+		"abstractive",
+		"llm"
+	],
 	"call": "extract",
 	"input": {
-		"kind": "uri",
-		"uri": "text/book_war_and_peace_1p.txt"
+		"mock_responses": [
+			{
+				"path": "/text/book_war_and_peace_1p.txt",
+				"status_code": 200,
+				"headers": {
+					"content-type": "application/octet-stream"
+				},
+				"body_file": "../test_documents/text/book_war_and_peace_1p.txt"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url/text/book_war_and_peace_1p.txt"
+		}
 	},
 	"assertions": [
 		{

@@ -1587,11 +1587,22 @@ mod tests {
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         };
 
+        // The unified extraction API records per-input failures in the result
+        // envelope's `errors` array rather than failing the whole job; a job
+        // only enters `Failed` on a top-level error or timeout.
         assert_eq!(
             final_status.state,
-            JobState::Failed,
-            "extraction of unsupported format must fail"
+            JobState::Completed,
+            "unsupported-format input is reported in the result envelope, not as a job failure"
         );
-        assert!(final_status.error.is_some(), "failed job must carry an error message");
+        let result = final_status.result.expect("completed job must carry an extraction result");
+        let errors = result
+            .get("errors")
+            .and_then(|value| value.as_array())
+            .expect("result envelope must contain an errors array");
+        assert!(
+            !errors.is_empty(),
+            "unsupported-format input must be reported as a per-input error"
+        );
     }
 }

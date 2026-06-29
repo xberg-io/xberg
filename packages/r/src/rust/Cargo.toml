@@ -13,19 +13,14 @@ crate-type = ["staticlib", "lib"]
 
 [dependencies]
 async-trait = "0.1"
+crawlberg = { workspace = true }
 extendr-api = "0.9"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread"] }
-# Aligned with the WASM binding's curated, pure-Rust feature set so the R package
-# builds on r-universe runners (no ONNX/ORT, Paddle, candle, or transcription
-# system deps). See packages/r/R-UNIVERSE.md. NOTE: the generated binding
-# (src/lib.rs) must be regenerated with wasm-target's type exclusions before this
-# compiles — it currently references ORT-only types (Embedding*/Layout*/Ner*/Reranker*).
-xberg = { version = "1.0.0-rc.1", path = "../../../../crates/xberg", default-features = false, features = ["wasm-target"] }
+xberg = { version = "1.0.0-rc.1", path = "../../../../crates/xberg", default-features = false, features = ["wasm-target", "url-ingestion"] }
 
 [features]
-default = ["api", "api-types", "auto-rotate-types", "chunking-tokenizers", "diff", "heic", "heuristics", "html", "keywords-rake", "keywords-yake", "layout-types", "liter-llm", "markdown-footnotes", "ocr", "ocr-wasm", "office", "paddle-ocr-types", "pdf", "presets", "quality", "redaction", "reranker", "reranker-presets", "svg", "transcription-types", "tree-sitter", "url-ingestion", "xml"]
 api = ["xberg/api"]
 api-types = ["xberg/api-types"]
 auto-rotate-types = ["xberg/auto-rotate-types"]
@@ -52,5 +47,6 @@ reranker-presets = ["xberg/reranker-presets"]
 svg = ["xberg/svg"]
 transcription-types = ["xberg/transcription-types"]
 tree-sitter = ["xberg/tree-sitter"]
+url-config-types = ["xberg/url-config-types"]
 url-ingestion = ["xberg/url-ingestion"]
 xml = ["xberg/xml"]

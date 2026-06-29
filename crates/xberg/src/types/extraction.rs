@@ -847,6 +847,7 @@ pub struct Element {
 
 impl ExtractedDocument {
     /// Convert from an OCR result.
+    #[cfg_attr(alef, alef(skip))]
     pub fn from_ocr(ocr: super::formats::OcrExtractionResult) -> Self {
         Self {
             content: ocr.content,

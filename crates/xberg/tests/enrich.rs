@@ -6,10 +6,9 @@ use xberg::{EnrichedResult, EnrichmentConfig, enrich};
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 fn bare_result(content: &str) -> ExtractedDocument {
-    ExtractedDocument {
-        content: content.to_string(),
-        ..Default::default()
-    }
+    let mut result = ExtractedDocument::default();
+    result.content = content.to_string();
+    result
 }
 
 // ── tests ─────────────────────────────────────────────────────────────────────

@@ -8,8 +8,8 @@
 #![cfg(feature = "office")]
 
 use std::io::{Cursor, Write};
+use xberg::ExtractInput;
 use xberg::core::config::{ExtractionConfig, OutputFormat};
-use xberg::extraction::derive::derive_extraction_result;
 use xberg::extractors::EpubExtractor;
 use xberg::plugins::DocumentExtractor;
 use zip::write::FileOptions;
@@ -95,12 +95,12 @@ async fn test_epub_markdown_output_keeps_headings() {
         output_format: OutputFormat::Markdown,
         ..Default::default()
     };
-
-    let doc = extractor
-        .extract_bytes(&bytes, "application/epub+zip", &config)
+    let input = ExtractInput::from_bytes(bytes, "application/epub+zip", None);
+    let result = extractor
+        .extract(input, &config)
         .await
         .expect("EPUB extraction should succeed");
-    let result = derive_extraction_result(doc, false, xberg::OutputFormat::Markdown);
+
     assert!(
         result.processing_warnings.is_empty(),
         "Expected no warnings, got: {:?}",
@@ -129,12 +129,11 @@ async fn test_epub_djot_output_keeps_headings() {
         output_format: OutputFormat::Djot,
         ..Default::default()
     };
-
-    let doc = extractor
-        .extract_bytes(&bytes, "application/epub+zip", &config)
+    let input = ExtractInput::from_bytes(bytes, "application/epub+zip", None);
+    let result = extractor
+        .extract(input, &config)
         .await
         .expect("EPUB extraction should succeed");
-    let result = derive_extraction_result(doc, false, xberg::OutputFormat::Djot);
 
     assert!(
         result.processing_warnings.is_empty(),
@@ -161,12 +160,11 @@ async fn test_epub_plain_output_does_not_inject_markdown_headings() {
     let extractor = EpubExtractor;
 
     let config = ExtractionConfig::default();
-
-    let doc = extractor
-        .extract_bytes(&bytes, "application/epub+zip", &config)
+    let input = ExtractInput::from_bytes(bytes, "application/epub+zip", None);
+    let result = extractor
+        .extract(input, &config)
         .await
         .expect("EPUB extraction should succeed");
-    let result = derive_extraction_result(doc, false, xberg::OutputFormat::Plain);
 
     assert!(
         result.processing_warnings.is_empty(),

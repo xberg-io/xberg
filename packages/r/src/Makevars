@@ -1,7 +1,6 @@
 CARGO_BUILD_ARGS = --release
 STATLIB = ./rust/target/release/libxberg_r.a
-HEIF_LIBS = $(shell pkg-config --libs libheif 2>/dev/null || echo "-lheif")
-PKG_LIBS = -L./rust/target/release -lxberg_r $(HEIF_LIBS) $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
+PKG_LIBS = -L./rust/target/release -lxberg_r $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
 
 all: $(SHLIB)
 

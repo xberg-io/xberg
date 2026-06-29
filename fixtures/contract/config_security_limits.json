@@ -1,17 +1,36 @@
 {
 	"id": "config_security_limits",
 	"description": "Tests archive extraction with custom security limits",
-	"tags": ["contract", "config", "security"],
+	"tags": [
+		"contract",
+		"config",
+		"security"
+	],
 	"call": "extract",
 	"input": {
-		"kind": "uri",
-		"uri": "archives/documents.zip"
+		"mock_responses": [
+			{
+				"path": "/archives/documents.zip",
+				"status_code": 200,
+				"headers": {
+					"content-type": "application/octet-stream"
+				},
+				"body_file": "../test_documents/archives/documents.zip"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url/archives/documents.zip"
+		}
 	},
 	"assertions": [
 		{
 			"type": "contains_any",
 			"field": "results[0].mime_type",
-			"values": ["application/zip", "application/x-zip-compressed"]
+			"values": [
+				"application/zip",
+				"application/x-zip-compressed"
+			]
 		},
 		{
 			"type": "min_length",
@@ -20,7 +39,9 @@
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
+		"languages": [
+			"wasm"
+		],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	},
 	"config": {

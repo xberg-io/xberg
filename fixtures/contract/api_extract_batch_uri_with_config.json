@@ -1,16 +1,31 @@
 {
 	"id": "api_extract_batch_uri_with_config",
 	"description": "Tests batch URI extraction with per-input config (extract_batch)",
-	"tags": ["contract", "api", "batch", "input_config"],
+	"tags": [
+		"contract",
+		"api",
+		"batch",
+		"input_config"
+	],
 	"call": "extract_batch",
 	"input": {
 		"inputs": [
 			{
 				"kind": "uri",
-				"uri": "pdf/fake_memo.pdf",
+				"uri": "$mock_url/pdf/fake_memo.pdf",
 				"config": {
 					"output_format": "markdown"
 				}
+			}
+		],
+		"mock_responses": [
+			{
+				"path": "/pdf/fake_memo.pdf",
+				"status_code": 200,
+				"headers": {
+					"content-type": "application/octet-stream"
+				},
+				"body_file": "../test_documents/pdf/fake_memo.pdf"
 			}
 		]
 	},
@@ -32,7 +47,9 @@
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
+		"languages": [
+			"wasm"
+		],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	}
 }

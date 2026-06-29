@@ -476,21 +476,16 @@ EmailConfig$from_json <- function(json) {
 #' @field chunking Text chunking configuration (None = chunking disabled)
 #' @field content_filter Content filtering configuration (None = use extractor defaults).
 #' @field images Image extraction configuration (None = no image extraction)
-#' @field pdf_options PDF-specific options (None = use defaults)
 #' @field token_reduction Token reduction configuration (None = no token reduction)
 #' @field language_detection Language detection configuration (None = no language detection)
 #' @field pages Page extraction configuration (None = no page tracking)
-#' @field keywords Keyword extraction configuration (None = no keyword extraction)
 #' @field postprocessor Post-processor configuration (None = use defaults)
-#' @field html_output Styled HTML output configuration.
 #' @field extraction_timeout_secs Default per-file timeout in seconds for batch extraction.
 #' @field max_concurrent_extractions Maximum concurrent extractions in batch operations (None = (num_cpus ×
 #' @field result_format Result structure format
 #' @field security_limits Security limits for archive extraction.
 #' @field max_embedded_file_bytes Maximum uncompressed size in bytes for a single embedded file before recursive
 #' @field output_format Content text format (default: Plain).
-#' @field layout Layout detection configuration (None = layout detection disabled).
-#' @field transcription Transcription (speech-to-text) configuration for audio/video files.
 #' @field use_layout_for_markdown Run layout detection on the non-OCR PDF markdown path.
 #' @field include_document_structure Enable structured document tree output.
 #' @field acceleration Hardware acceleration configuration for ONNX Runtime models.
@@ -499,7 +494,6 @@ EmailConfig$from_json <- function(json) {
 #' @field email Email extraction configuration (None = use defaults).
 #' @field url URL ingestion and crawl configuration.
 #' @field max_archive_depth Maximum recursion depth for archive extraction (default: 3). Set to 0 to disable recursive
-#' @field tree_sitter Tree-sitter language pack configuration (None = tree-sitter disabled).
 #' @field structured_extraction Structured extraction via LLM (None = disabled).
 #' @field ner Named-entity recognition configuration. When set, the NER post-processor runs at the Middle stage and
 #' @field redaction Redaction / anonymisation configuration. When set, the redaction post-processor runs at the Late
@@ -553,20 +547,14 @@ needs_image_processing.ExtractionConfig <- function(x, ...) x$needs_image_proces
 #' @field chunking Override chunking configuration for this file.
 #' @field content_filter Override content filtering configuration for this file.
 #' @field images Override image extraction configuration for this file.
-#' @field pdf_options Override PDF options for this file.
 #' @field token_reduction Override token reduction for this file.
 #' @field language_detection Override language detection for this file.
 #' @field pages Override page extraction for this file.
-#' @field keywords Override keyword extraction for this file.
 #' @field postprocessor Override post-processor for this file.
-#' @field html_output Override styled HTML output configuration for this file.
 #' @field result_format Override result format for this file.
 #' @field output_format Override output content format for this file.
 #' @field include_document_structure Override document structure output for this file.
-#' @field layout Override layout detection for this file.
-#' @field transcription Transcription configuration (see ExtractionConfig for docs).
 #' @field timeout_secs Override per-file extraction timeout in seconds.
-#' @field tree_sitter Override tree-sitter configuration for this file.
 #' @field structured_extraction Override structured extraction configuration for this file.
 #' @field url Override URL ingestion and crawl configuration for this file.
 #' @field ner Override named-entity recognition configuration for this file.
@@ -687,6 +675,7 @@ ExtractionSummary$from_json <- function(json) {
 `[[.ExtractionSummary` <- `$.ExtractionSummary`
 #' URL ingestion and crawl configuration
 #' @field mode URL extraction mode.
+#' @field crawl Crawlberg crawl configuration used for HTTP(S) URL extraction.
 #' @field document_url_pattern Optional regex filter for document-discovered URLs.
 #' @field max_document_urls_per_result Maximum URLs to follow per extraction result.
 #' @field max_total_urls Maximum URLs followed across the whole extraction call.
@@ -724,7 +713,6 @@ UrlExtractionConfig$from_json <- function(json) {
 #' @field ocr_text_only When `true`, image OCR results are rendered as plain text without the `![...](...)` markdown
 #' @field append_ocr_text When `true` and `ocr_text_only` is `false`, append the OCR text after the image placeholder
 #' @field output_format Target format for re-encoding extracted images.
-#' @field svg SVG-specific knobs for the image-encode pipeline.
 #' @field include_data_base64 When `true`, populate `ExtractedImage::data_base64` with a Base64-encoded copy of the raw
 #' @export
 ImageExtractionConfig <- new.env(parent = emptyenv())
@@ -889,28 +877,6 @@ StructuredExtractionConfig <- new.env(parent = emptyenv())
 }
 #' @export
 `[[.StructuredExtractionConfig` <- `$.StructuredExtractionConfig`
-#' Configuration for the NER post-processor
-#' @field backend Backend that runs the entity detection.
-#' @field categories Entity categories to detect. Defaults to a sensible PERSON/ORG/LOCATION/EMAIL set when empty.
-#' @field model Override the default model — only used by [`NerBackendKind::Onnx`]. `None` lets the backend pick its
-#' @field llm Optional LLM configuration — only used by [`NerBackendKind::Llm`]. Token usage for LLM backends is
-#' @field custom_labels Arbitrary user-supplied entity labels for zero-shot detection.
-#' @export
-NerConfig <- new.env(parent = emptyenv())
-NerConfig$from_json <- function(json) {
-  .Call("wrap__NerConfig__from_json", json, PACKAGE = "xberg")
-}
-#' @export
-`$.NerConfig` <- function(self, name) {
-  func <- NerConfig[[name]]
-  if (identical(names(formals(func))[1], "self")) {
-    function(...) func(self, ...)
-  } else {
-    func
-  }
-}
-#' @export
-`[[.NerConfig` <- `$.NerConfig`
 #' Quality thresholds for OCR fallback decisions and pipeline quality gating
 #'
 #' All fields default to the values that match the previous hardcoded behavior,
@@ -3237,25 +3203,6 @@ DiffOptions$from_json <- function(json) {
 }
 #' @export
 `[[.DiffOptions` <- `$.DiffOptions`
-#' A single contiguous hunk in a unified diff
-#' @field from_line Starting line number in the old content (0-indexed).
-#' @field from_count Number of lines from the old content in this hunk.
-#' @field to_line Starting line number in the new content (0-indexed).
-#' @field to_count Number of lines from the new content in this hunk.
-#' @field lines Lines that make up this hunk.
-#' @export
-DiffHunk <- new.env(parent = emptyenv())
-#' @export
-`$.DiffHunk` <- function(self, name) {
-  func <- DiffHunk[[name]]
-  if (identical(names(formals(func))[1], "self")) {
-    function(...) func(self, ...)
-  } else {
-    func
-  }
-}
-#' @export
-`[[.DiffHunk` <- `$.DiffHunk`
 #' Diff for a single embedded archive entry that appears in both results
 #' @field path Archive-relative path identifying this entry.
 #' @field diff The recursive diff of the entry's extraction result.
@@ -3338,8 +3285,6 @@ RakeParams$from_json <- function(json) {
 #' @field max_keywords Maximum number of keywords to extract (default: 10).
 #' @field min_score Minimum score threshold (0.0-1.0, default: 0.0).
 #' @field language Language code for stopword filtering (e.g., "en", "de", "fr").
-#' @field yake_params YAKE-specific tuning parameters.
-#' @field rake_params RAKE-specific tuning parameters.
 #' @export
 KeywordConfig <- new.env(parent = emptyenv())
 KeywordConfig$default <- function() .Call("wrap__KeywordConfig__default", PACKAGE = "xberg")
@@ -3872,6 +3817,108 @@ PdfMetadata$from_json <- function(json) {
 }
 #' @export
 `[[.PdfMetadata` <- `$.PdfMetadata`
+#' Proxy configuration for HTTP requests
+#' @field url Proxy URL (e.g. "http://proxy:8080", "socks5://proxy:1080").
+#' @field username Optional username for proxy authentication.
+#' @field password Optional password for proxy authentication.
+#' @export
+ProxyConfig <- new.env(parent = emptyenv())
+ProxyConfig$from_json <- function(json) {
+  .Call("wrap__ProxyConfig__from_json", json, PACKAGE = "xberg")
+}
+#' @export
+`$.ProxyConfig` <- function(self, name) {
+  func <- ProxyConfig[[name]]
+  if (identical(names(formals(func))[1], "self")) {
+    function(...) func(self, ...)
+  } else {
+    func
+  }
+}
+#' @export
+`[[.ProxyConfig` <- `$.ProxyConfig`
+#' Content extraction and conversion configuration
+#'
+#' Controls how HTML is converted to the output format. Uses
+#' html-to-markdown-rs as the conversion engine for all formats
+#' (markdown, plain text, djot).
+#' @field output_format Output format: `"markdown"` (default), `"plain"`, `"djot"`.
+#' @field preprocessing_preset Preprocessing aggressiveness: `"minimal"`, `"standard"` (default), `"aggressive"`.
+#' @field remove_navigation Remove navigation elements (nav, breadcrumbs, menus). Default: `true`.
+#' @field remove_forms Remove form elements. Default: `true`.
+#' @field strip_tags HTML tag names to strip (render children only, remove the tag wrapper). Default: `["noscript"]`.
+#' @field preserve_tags HTML tag names to preserve as raw HTML in output.
+#' @field exclude_selectors CSS selectors for elements to exclude entirely (element + all content).
+#' @field skip_images Skip image elements in output. Default: `false`.
+#' @field max_depth Max DOM traversal depth. Prevents stack overflow on deeply nested HTML.
+#' @field wrap Enable line wrapping. Default: `false`.
+#' @field wrap_width Wrap width when `wrap` is enabled. Default: `80`.
+#' @field include_document_structure Include document structure tree in output. Default: `true`.
+#' @export
+ContentConfig <- new.env(parent = emptyenv())
+ContentConfig$from_json <- function(json) {
+  .Call("wrap__ContentConfig__from_json", json, PACKAGE = "xberg")
+}
+#' @export
+`$.ContentConfig` <- function(self, name) {
+  func <- ContentConfig[[name]]
+  if (identical(names(formals(func))[1], "self")) {
+    function(...) func(self, ...)
+  } else {
+    func
+  }
+}
+#' @export
+`[[.ContentConfig` <- `$.ContentConfig`
+#' Browser fallback configuration
+#' @field mode When to use the headless browser fallback.
+#' @field backend Browser backend used to render JavaScript-heavy pages.
+#' @field endpoint CDP WebSocket endpoint for connecting to an external browser instance.
+#' @field timeout Timeout for browser page load and rendering (in milliseconds when serialized).
+#' @field wait Wait strategy after browser navigation.
+#' @field wait_selector CSS selector to wait for when `wait` is `Selector`.
+#' @field extra_wait Extra time to wait after the wait condition is met.
+#' @field proxy Proxy for browser fetches. Overrides `CrawlConfig.proxy` when set. Native backend supports http/https
+#' @field block_url_patterns URL patterns to block before the network request fires. Supports `*` wildcards. Useful for
+#' @field eval_script JavaScript snippet evaluated after navigation completes.
+#' @field robots_user_agent User-agent used when fetching robots.txt. Defaults to `BrowserConfig.user_agent` (or
+#' @field capture_network_events Capture the full network event stream into the result. Default false (only the
+#' @field session_affinity Enable session affinity: reuse chromiumoxide Pages for same-domain requests so cookies +
+#' @export
+BrowserConfig <- new.env(parent = emptyenv())
+BrowserConfig$from_json <- function(json) {
+  .Call("wrap__BrowserConfig__from_json", json, PACKAGE = "xberg")
+}
+#' @export
+`$.BrowserConfig` <- function(self, name) {
+  func <- BrowserConfig[[name]]
+  if (identical(names(formals(func))[1], "self")) {
+    function(...) func(self, ...)
+  } else {
+    func
+  }
+}
+#' @export
+`[[.BrowserConfig` <- `$.BrowserConfig`
+#' SSRF policy configuration
+#' @field deny_private If true, reject URLs that resolve to private/metadata IP ranges.
+#' @field max_redirects Maximum number of HTTP redirects to follow during validation.
+#' @export
+SsrfPolicy <- new.env(parent = emptyenv())
+SsrfPolicy$from_json <- function(json) {
+  .Call("wrap__SsrfPolicy__from_json", json, PACKAGE = "xberg")
+}
+#' @export
+`$.SsrfPolicy` <- function(self, name) {
+  func <- SsrfPolicy[[name]]
+  if (identical(names(formals(func))[1], "self")) {
+    function(...) func(self, ...)
+  } else {
+    func
+  }
+}
+#' @export
+`[[.SsrfPolicy` <- `$.SsrfPolicy`
 #' Target format for re-encoding extracted images
 #'
 #' Controls whether and how extracted images are normalised to a uniform
@@ -4392,6 +4439,34 @@ PaddleLanguage  <- function() list() |> structure(class = "PaddleLanguage")
 #' @return A LayoutClass enum value
 #' @export
 LayoutClass  <- function() list() |> structure(class = "LayoutClass")
+#' Create a BrowserMode enum value
+#'
+#' Returns the default BrowserMode variant.
+#'
+#' @return A BrowserMode enum value
+#' @export
+BrowserMode  <- function() list() |> structure(class = "BrowserMode")
+#' Create a BrowserWait enum value
+#'
+#' Returns the default BrowserWait variant.
+#'
+#' @return A BrowserWait enum value
+#' @export
+BrowserWait  <- function() list() |> structure(class = "BrowserWait")
+#' Create a BrowserBackend enum value
+#'
+#' Returns the default BrowserBackend variant.
+#'
+#' @return A BrowserBackend enum value
+#' @export
+BrowserBackend  <- function() list() |> structure(class = "BrowserBackend")
+#' Create a AssetCategory enum value
+#'
+#' Returns the default AssetCategory variant.
+#'
+#' @return A AssetCategory enum value
+#' @export
+AssetCategory  <- function() list() |> structure(class = "AssetCategory")
 #' How chunk size is measured
 #'
 #' Defaults to `Characters` (Unicode character count). When using token-based sizing,
@@ -4591,6 +4666,25 @@ ChunkingReason$large_and_many_pages <- function(size_bytes, page_count) .Call("w
 }
 #' @export
 `[[.ChunkingReason` <- `$.ChunkingReason`
+#' Authentication configuration
+#' @export
+AuthConfig <- new.env(parent = emptyenv())
+AuthConfig$default <- function() .Call("wrap__AuthConfig__default", PACKAGE = "xberg")
+AuthConfig$from_json <- function(json) .Call("wrap__AuthConfig__from_json", json, PACKAGE = "xberg")
+AuthConfig$basic <- function(username, password) .Call("wrap__AuthConfig___factory_basic", username, password, PACKAGE = "xberg")
+AuthConfig$bearer <- function(token) .Call("wrap__AuthConfig___factory_bearer", token, PACKAGE = "xberg")
+AuthConfig$header <- function(name, value) .Call("wrap__AuthConfig___factory_header", name, value, PACKAGE = "xberg")
+#' @export
+`$.AuthConfig` <- function(self, name) {
+  func <- AuthConfig[[name]]
+  if (identical(names(formals(func))[1], "self")) {
+    function(...) func(self, ...)
+  } else {
+    func
+  }
+}
+#' @export
+`[[.AuthConfig` <- `$.AuthConfig`
 #' @export
 cors_allows_all <- function(x, ...) UseMethod("cors_allows_all")
 #' @export

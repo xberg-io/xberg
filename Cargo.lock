@@ -954,9 +954,9 @@ dependencies = [
 
 [[package]]
 name = "camino"
-version = "1.2.3"
+version = "1.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4ce8d3bd5823c7504d3f579f13e7b2f3da252fcb938c594d5680ee508bf846f"
+checksum = "5f2d30e4173c4026932d51d31d6b0613b1fd3014bf3f9f8943d4ba139c437ba0"
 dependencies = [
  "serde_core",
 ]
@@ -2633,7 +2633,7 @@ dependencies = [
  "bitflags 2.13.0",
  "cexpr",
  "clang-sys",
- "itertools 0.10.5",
+ "itertools 0.14.0",
  "log",
  "prettyplease",
  "proc-macro2",
@@ -3884,9 +3884,9 @@ checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 
 [[package]]
 name = "hybrid-array"
-version = "0.4.12"
+version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9155a582abd142abc056962c29e3ce5ff2ad5469f4246b537ed42c5deba857da"
+checksum = "818356c5132c1fede50f837ca96afbe78ff42413047f4abb886217845e1b6c8c"
 dependencies = [
  "typenum",
 ]
@@ -7399,7 +7399,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ffbe87d9e8db95652c25ded2418150e00b08c2fde09e23ec15896d2c470c6631"
 dependencies = [
  "g2p",
- "image 0.24.9",
+ "image 0.25.10",
  "lru 0.16.4",
 ]
 
@@ -10891,7 +10891,7 @@ dependencies = [
  "xberg-libheif",
  "xberg-paddle-ocr",
  "xberg-tesseract",
- "zip 7.2.0",
+ "zip 8.6.0",
 ]
 
 [[package]]
@@ -10939,6 +10939,7 @@ name = "xberg-dart"
 version = "1.0.0-rc.1"
 dependencies = [
  "async-trait",
+ "crawlberg",
  "flutter_rust_bridge",
  "serde_json",
  "tokio",
@@ -10952,6 +10953,7 @@ dependencies = [
  "ahash 0.8.12",
  "async-trait",
  "cbindgen",
+ "crawlberg",
  "serde_json",
  "tempfile",
  "tokio",
@@ -10999,6 +11001,7 @@ name = "xberg-node"
 version = "1.0.0-rc.1"
 dependencies = [
  "async-trait",
+ "crawlberg",
  "napi",
  "napi-build",
  "napi-derive",
@@ -11028,6 +11031,7 @@ name = "xberg-php"
 version = "1.0.0-rc.1"
 dependencies = [
  "async-trait",
+ "crawlberg",
  "ext-php-rs",
  "serde",
  "serde_json",
@@ -11040,6 +11044,7 @@ name = "xberg-py"
 version = "1.0.0-rc.1"
 dependencies = [
  "async-trait",
+ "crawlberg",
  "pyo3",
  "pyo3-async-runtimes",
  "serde",
@@ -11071,6 +11076,7 @@ version = "1.0.0-rc.1"
 dependencies = [
  "ahash 0.8.12",
  "async-trait",
+ "crawlberg",
  "libc",
  "serde",
  "serde_json",
@@ -11089,7 +11095,7 @@ dependencies = [
  "image 0.25.10",
  "reqwest",
  "thiserror 2.0.18",
- "zip 7.2.0",
+ "zip 8.6.0",
 ]
 
 [[package]]
@@ -11097,6 +11103,7 @@ name = "xberg-wasm"
 version = "1.0.0-rc.1"
 dependencies = [
  "async-trait",
+ "crawlberg",
  "futures",
  "futures-util",
  "getrandom 0.2.17",

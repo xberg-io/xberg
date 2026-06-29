@@ -1,0 +1,42 @@
+---
+name: xberg-mcp-reference
+description: Use when integrating Xberg through Model Context Protocol tools, prompts, resources, or server docs.
+---
+
+# Xberg MCP Reference
+
+Use this skill when working with Xberg MCP server integration for AI agents.
+
+## Tools
+
+{% for tool in mcp.tools %}
+- `{{ tool.name }}`{{ ": " ~ tool.description if tool.description else "" }}
+{% else %}
+- No MCP tools were discovered from the configured source paths.
+{% endfor %}
+
+## Resources
+
+{% for resource in mcp.resources %}
+- `{{ resource.name }}`{{ ": " ~ resource.description if resource.description else "" }}
+{% else %}
+- No MCP resources were discovered from the configured source paths.
+{% endfor %}
+
+## Prompts
+
+{% for prompt in mcp.prompts %}
+- `{{ prompt.name }}`{{ ": " ~ prompt.description if prompt.description else "" }}
+{% else %}
+- No MCP prompts were discovered from the configured source paths.
+{% endfor %}
+
+## Source
+
+- MCP source: `crates/xberg/src/mcp/server.rs`
+- Generated reference output: `docs/reference/mcp.md`
+
+## Notes
+
+- Keep MCP docs aligned with REST API behavior, extraction configuration, and structured error handling.
+- Do not duplicate large tool schemas in prose; rely on generated reference where possible.

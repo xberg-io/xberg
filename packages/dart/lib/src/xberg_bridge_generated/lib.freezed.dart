@@ -236,7 +236,7 @@ return custom(_that.name,_that.value);case _:
 
 class AnnotationKind_Bold extends AnnotationKind {
   const AnnotationKind_Bold(): super._();
-  
+
 
 
 
@@ -268,7 +268,7 @@ String toString() {
 
 class AnnotationKind_Italic extends AnnotationKind {
   const AnnotationKind_Italic(): super._();
-  
+
 
 
 
@@ -300,7 +300,7 @@ String toString() {
 
 class AnnotationKind_Underline extends AnnotationKind {
   const AnnotationKind_Underline(): super._();
-  
+
 
 
 
@@ -332,7 +332,7 @@ String toString() {
 
 class AnnotationKind_Strikethrough extends AnnotationKind {
   const AnnotationKind_Strikethrough(): super._();
-  
+
 
 
 
@@ -364,7 +364,7 @@ String toString() {
 
 class AnnotationKind_Code extends AnnotationKind {
   const AnnotationKind_Code(): super._();
-  
+
 
 
 
@@ -396,7 +396,7 @@ String toString() {
 
 class AnnotationKind_Subscript extends AnnotationKind {
   const AnnotationKind_Subscript(): super._();
-  
+
 
 
 
@@ -428,7 +428,7 @@ String toString() {
 
 class AnnotationKind_Superscript extends AnnotationKind {
   const AnnotationKind_Superscript(): super._();
-  
+
 
 
 
@@ -460,7 +460,7 @@ String toString() {
 
 class AnnotationKind_Link extends AnnotationKind {
   const AnnotationKind_Link({required this.url, required this.title}): super._();
-  
+
 
 /// Hyperlink target URL.
  final  String url;
@@ -530,7 +530,7 @@ as String,
 
 class AnnotationKind_Highlight extends AnnotationKind {
   const AnnotationKind_Highlight(): super._();
-  
+
 
 
 
@@ -562,7 +562,7 @@ String toString() {
 
 class AnnotationKind_Color extends AnnotationKind {
   const AnnotationKind_Color({required this.value}): super._();
-  
+
 
 /// CSS-compatible color value (e.g. `"#ff0000"`, `"red"`).
  final  String value;
@@ -629,7 +629,7 @@ as String,
 
 class AnnotationKind_FontSize extends AnnotationKind {
   const AnnotationKind_FontSize({required this.value}): super._();
-  
+
 
 /// Font size including unit (e.g. `"12pt"`, `"1.2em"`, `"16px"`).
  final  String value;
@@ -696,7 +696,7 @@ as String,
 
 class AnnotationKind_Custom extends AnnotationKind {
   const AnnotationKind_Custom({required this.name, required this.value}): super._();
-  
+
 
 /// Name of the custom annotation kind.
  final  String name;
@@ -752,6 +752,379 @@ class _$AnnotationKind_CustomCopyWithImpl<$Res>
 /// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') $Res call({Object? name = null,Object? value = null,}) {
   return _then(AnnotationKind_Custom(
+name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
+as String,value: null == value ? _self.value : value // ignore: cast_nullable_to_non_nullable
+as String,
+  ));
+}
+
+
+}
+
+/// @nodoc
+mixin _$AuthConfig {
+
+
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AuthConfig);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+  return 'AuthConfig()';
+}
+
+
+}
+
+/// @nodoc
+class $AuthConfigCopyWith<$Res>  {
+$AuthConfigCopyWith(AuthConfig _, $Res Function(AuthConfig) __);
+}
+
+
+/// Adds pattern-matching-related methods to [AuthConfig].
+extension AuthConfigPatterns on AuthConfig {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( AuthConfig_Basic value)?  basic,TResult Function( AuthConfig_Bearer value)?  bearer,TResult Function( AuthConfig_Header value)?  header,required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case AuthConfig_Basic() when basic != null:
+return basic(_that);case AuthConfig_Bearer() when bearer != null:
+return bearer(_that);case AuthConfig_Header() when header != null:
+return header(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( AuthConfig_Basic value)  basic,required TResult Function( AuthConfig_Bearer value)  bearer,required TResult Function( AuthConfig_Header value)  header,}){
+final _that = this;
+switch (_that) {
+case AuthConfig_Basic():
+return basic(_that);case AuthConfig_Bearer():
+return bearer(_that);case AuthConfig_Header():
+return header(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( AuthConfig_Basic value)?  basic,TResult? Function( AuthConfig_Bearer value)?  bearer,TResult? Function( AuthConfig_Header value)?  header,}){
+final _that = this;
+switch (_that) {
+case AuthConfig_Basic() when basic != null:
+return basic(_that);case AuthConfig_Bearer() when bearer != null:
+return bearer(_that);case AuthConfig_Header() when header != null:
+return header(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String username,  String password)?  basic,TResult Function( String token)?  bearer,TResult Function( String name,  String value)?  header,required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case AuthConfig_Basic() when basic != null:
+return basic(_that.username,_that.password);case AuthConfig_Bearer() when bearer != null:
+return bearer(_that.token);case AuthConfig_Header() when header != null:
+return header(_that.name,_that.value);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String username,  String password)  basic,required TResult Function( String token)  bearer,required TResult Function( String name,  String value)  header,}) {final _that = this;
+switch (_that) {
+case AuthConfig_Basic():
+return basic(_that.username,_that.password);case AuthConfig_Bearer():
+return bearer(_that.token);case AuthConfig_Header():
+return header(_that.name,_that.value);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String username,  String password)?  basic,TResult? Function( String token)?  bearer,TResult? Function( String name,  String value)?  header,}) {final _that = this;
+switch (_that) {
+case AuthConfig_Basic() when basic != null:
+return basic(_that.username,_that.password);case AuthConfig_Bearer() when bearer != null:
+return bearer(_that.token);case AuthConfig_Header() when header != null:
+return header(_that.name,_that.value);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class AuthConfig_Basic extends AuthConfig {
+  const AuthConfig_Basic({required this.username, required this.password}): super._();
+
+
+/// Username sent in the `Authorization: Basic` header.
+ final  String username;
+/// Password sent in the `Authorization: Basic` header.
+ final  String password;
+
+/// Create a copy of AuthConfig
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$AuthConfig_BasicCopyWith<AuthConfig_Basic> get copyWith => _$AuthConfig_BasicCopyWithImpl<AuthConfig_Basic>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AuthConfig_Basic&&(identical(other.username, username) || other.username == username)&&(identical(other.password, password) || other.password == password));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,username,password);
+
+@override
+String toString() {
+  return 'AuthConfig.basic(username: $username, password: $password)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $AuthConfig_BasicCopyWith<$Res> implements $AuthConfigCopyWith<$Res> {
+  factory $AuthConfig_BasicCopyWith(AuthConfig_Basic value, $Res Function(AuthConfig_Basic) _then) = _$AuthConfig_BasicCopyWithImpl;
+@useResult
+$Res call({
+ String username, String password
+});
+
+
+
+
+}
+/// @nodoc
+class _$AuthConfig_BasicCopyWithImpl<$Res>
+    implements $AuthConfig_BasicCopyWith<$Res> {
+  _$AuthConfig_BasicCopyWithImpl(this._self, this._then);
+
+  final AuthConfig_Basic _self;
+  final $Res Function(AuthConfig_Basic) _then;
+
+/// Create a copy of AuthConfig
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? username = null,Object? password = null,}) {
+  return _then(AuthConfig_Basic(
+username: null == username ? _self.username : username // ignore: cast_nullable_to_non_nullable
+as String,password: null == password ? _self.password : password // ignore: cast_nullable_to_non_nullable
+as String,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class AuthConfig_Bearer extends AuthConfig {
+  const AuthConfig_Bearer({required this.token}): super._();
+
+
+/// Token sent in the `Authorization: Bearer` header.
+ final  String token;
+
+/// Create a copy of AuthConfig
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$AuthConfig_BearerCopyWith<AuthConfig_Bearer> get copyWith => _$AuthConfig_BearerCopyWithImpl<AuthConfig_Bearer>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AuthConfig_Bearer&&(identical(other.token, token) || other.token == token));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,token);
+
+@override
+String toString() {
+  return 'AuthConfig.bearer(token: $token)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $AuthConfig_BearerCopyWith<$Res> implements $AuthConfigCopyWith<$Res> {
+  factory $AuthConfig_BearerCopyWith(AuthConfig_Bearer value, $Res Function(AuthConfig_Bearer) _then) = _$AuthConfig_BearerCopyWithImpl;
+@useResult
+$Res call({
+ String token
+});
+
+
+
+
+}
+/// @nodoc
+class _$AuthConfig_BearerCopyWithImpl<$Res>
+    implements $AuthConfig_BearerCopyWith<$Res> {
+  _$AuthConfig_BearerCopyWithImpl(this._self, this._then);
+
+  final AuthConfig_Bearer _self;
+  final $Res Function(AuthConfig_Bearer) _then;
+
+/// Create a copy of AuthConfig
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? token = null,}) {
+  return _then(AuthConfig_Bearer(
+token: null == token ? _self.token : token // ignore: cast_nullable_to_non_nullable
+as String,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class AuthConfig_Header extends AuthConfig {
+  const AuthConfig_Header({required this.name, required this.value}): super._();
+
+
+/// HTTP header name to set on each request.
+ final  String name;
+/// HTTP header value to send.
+ final  String value;
+
+/// Create a copy of AuthConfig
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$AuthConfig_HeaderCopyWith<AuthConfig_Header> get copyWith => _$AuthConfig_HeaderCopyWithImpl<AuthConfig_Header>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AuthConfig_Header&&(identical(other.name, name) || other.name == name)&&(identical(other.value, value) || other.value == value));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,name,value);
+
+@override
+String toString() {
+  return 'AuthConfig.header(name: $name, value: $value)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $AuthConfig_HeaderCopyWith<$Res> implements $AuthConfigCopyWith<$Res> {
+  factory $AuthConfig_HeaderCopyWith(AuthConfig_Header value, $Res Function(AuthConfig_Header) _then) = _$AuthConfig_HeaderCopyWithImpl;
+@useResult
+$Res call({
+ String name, String value
+});
+
+
+
+
+}
+/// @nodoc
+class _$AuthConfig_HeaderCopyWithImpl<$Res>
+    implements $AuthConfig_HeaderCopyWith<$Res> {
+  _$AuthConfig_HeaderCopyWithImpl(this._self, this._then);
+
+  final AuthConfig_Header _self;
+  final $Res Function(AuthConfig_Header) _then;
+
+/// Create a copy of AuthConfig
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? name = null,Object? value = null,}) {
+  return _then(AuthConfig_Header(
 name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,value: null == value ? _self.value : value // ignore: cast_nullable_to_non_nullable
 as String,
@@ -926,7 +1299,7 @@ return tokenizer(_that.model,_that.cacheDir);case _:
 
 class ChunkSizing_Characters extends ChunkSizing {
   const ChunkSizing_Characters(): super._();
-  
+
 
 
 
@@ -958,7 +1331,7 @@ String toString() {
 
 class ChunkSizing_Tokenizer extends ChunkSizing {
   const ChunkSizing_Tokenizer({required this.model, required this.cacheDir}): super._();
-  
+
 
 /// HuggingFace model ID or path, e.g. "Xenova/gpt-4o", "bert-base-uncased".
  final  String model;
@@ -1202,7 +1575,7 @@ return largeAndManyPages(_that.sizeBytes,_that.pageCount);case _:
 
 class ChunkingReason_LargeFile extends ChunkingReason {
   const ChunkingReason_LargeFile({required this.sizeBytes, required this.thresholdBytes}): super._();
-  
+
 
 /// Actual size in bytes.
  final  PlatformInt64 sizeBytes;
@@ -1272,7 +1645,7 @@ as PlatformInt64,
 
 class ChunkingReason_ManyPages extends ChunkingReason {
   const ChunkingReason_ManyPages({required this.pageCount, required this.threshold}): super._();
-  
+
 
 /// Actual page count.
  final  PlatformInt64 pageCount;
@@ -1342,7 +1715,7 @@ as PlatformInt64,
 
 class ChunkingReason_OcrRequired extends ChunkingReason {
   const ChunkingReason_OcrRequired({required this.pageCount, required this.forceOcr}): super._();
-  
+
 
 /// Page count.
  final  PlatformInt64 pageCount;
@@ -1412,7 +1785,7 @@ as bool,
 
 class ChunkingReason_LargeAndManyPages extends ChunkingReason {
   const ChunkingReason_LargeAndManyPages({required this.sizeBytes, required this.pageCount}): super._();
-  
+
 
 /// Actual size in bytes.
  final  PlatformInt64 sizeBytes;
@@ -1679,7 +2052,7 @@ return removed(_that.field0);case _:
 
 class DiffLine_Context extends DiffLine {
   const DiffLine_Context({required this.field0}): super._();
-  
+
 
 @override final  String field0;
 
@@ -1745,7 +2118,7 @@ as String,
 
 class DiffLine_Added extends DiffLine {
   const DiffLine_Added({required this.field0}): super._();
-  
+
 
 @override final  String field0;
 
@@ -1811,7 +2184,7 @@ as String,
 
 class DiffLine_Removed extends DiffLine {
   const DiffLine_Removed({required this.field0}): super._();
-  
+
 
 @override final  String field0;
 
@@ -2049,7 +2422,7 @@ return plugin(_that.name);case _:
 
 class EmbeddingModelType_Preset extends EmbeddingModelType {
   const EmbeddingModelType_Preset({required this.name}): super._();
-  
+
 
 /// Preset name (e.g. "balanced", "multilingual", "large").
  final  String name;
@@ -2116,7 +2489,7 @@ as String,
 
 class EmbeddingModelType_Custom extends EmbeddingModelType {
   const EmbeddingModelType_Custom({required this.modelId, required this.dimensions}): super._();
-  
+
 
 /// HuggingFace model repository ID (e.g. "BAAI/bge-small-en-v1.5").
  final  String modelId;
@@ -2186,7 +2559,7 @@ as PlatformInt64,
 
 class EmbeddingModelType_Llm extends EmbeddingModelType {
   const EmbeddingModelType_Llm({required this.llm}): super._();
-  
+
 
 /// LLM provider configuration specifying the model and API credentials.
  final  LlmConfig llm;
@@ -2253,7 +2626,7 @@ as LlmConfig,
 
 class EmbeddingModelType_Plugin extends EmbeddingModelType {
   const EmbeddingModelType_Plugin({required this.name}): super._();
-  
+
 
 /// Name the backend was registered under via `register_embedding_backend`.
  final  String name;
@@ -2534,7 +2907,7 @@ return custom(_that.field0);case _:
 
 class EntityCategory_Person extends EntityCategory {
   const EntityCategory_Person(): super._();
-  
+
 
 
 
@@ -2566,7 +2939,7 @@ String toString() {
 
 class EntityCategory_Organization extends EntityCategory {
   const EntityCategory_Organization(): super._();
-  
+
 
 
 
@@ -2598,7 +2971,7 @@ String toString() {
 
 class EntityCategory_Location extends EntityCategory {
   const EntityCategory_Location(): super._();
-  
+
 
 
 
@@ -2630,7 +3003,7 @@ String toString() {
 
 class EntityCategory_Date extends EntityCategory {
   const EntityCategory_Date(): super._();
-  
+
 
 
 
@@ -2662,7 +3035,7 @@ String toString() {
 
 class EntityCategory_Time extends EntityCategory {
   const EntityCategory_Time(): super._();
-  
+
 
 
 
@@ -2694,7 +3067,7 @@ String toString() {
 
 class EntityCategory_Money extends EntityCategory {
   const EntityCategory_Money(): super._();
-  
+
 
 
 
@@ -2726,7 +3099,7 @@ String toString() {
 
 class EntityCategory_Percent extends EntityCategory {
   const EntityCategory_Percent(): super._();
-  
+
 
 
 
@@ -2758,7 +3131,7 @@ String toString() {
 
 class EntityCategory_Email extends EntityCategory {
   const EntityCategory_Email(): super._();
-  
+
 
 
 
@@ -2790,7 +3163,7 @@ String toString() {
 
 class EntityCategory_Phone extends EntityCategory {
   const EntityCategory_Phone(): super._();
-  
+
 
 
 
@@ -2822,7 +3195,7 @@ String toString() {
 
 class EntityCategory_Url extends EntityCategory {
   const EntityCategory_Url(): super._();
-  
+
 
 
 
@@ -2854,7 +3227,7 @@ String toString() {
 
 class EntityCategory_Custom extends EntityCategory {
   const EntityCategory_Custom({required this.field0}): super._();
-  
+
 
  final  String field0;
 
@@ -3194,7 +3567,7 @@ return code();case _:
 
 class FormatMetadata_Pdf extends FormatMetadata {
   const FormatMetadata_Pdf({required this.field0}): super._();
-  
+
 
  final  PdfMetadata field0;
 
@@ -3260,7 +3633,7 @@ as PdfMetadata,
 
 class FormatMetadata_Docx extends FormatMetadata {
   const FormatMetadata_Docx({required this.field0}): super._();
-  
+
 
  final  DocxMetadata field0;
 
@@ -3326,7 +3699,7 @@ as DocxMetadata,
 
 class FormatMetadata_Excel extends FormatMetadata {
   const FormatMetadata_Excel({required this.field0}): super._();
-  
+
 
  final  ExcelMetadata field0;
 
@@ -3392,7 +3765,7 @@ as ExcelMetadata,
 
 class FormatMetadata_Email extends FormatMetadata {
   const FormatMetadata_Email({required this.field0}): super._();
-  
+
 
  final  EmailMetadata field0;
 
@@ -3458,7 +3831,7 @@ as EmailMetadata,
 
 class FormatMetadata_Pptx extends FormatMetadata {
   const FormatMetadata_Pptx({required this.field0}): super._();
-  
+
 
  final  PptxMetadata field0;
 
@@ -3524,7 +3897,7 @@ as PptxMetadata,
 
 class FormatMetadata_Archive extends FormatMetadata {
   const FormatMetadata_Archive({required this.field0}): super._();
-  
+
 
  final  ArchiveMetadata field0;
 
@@ -3590,7 +3963,7 @@ as ArchiveMetadata,
 
 class FormatMetadata_Image extends FormatMetadata {
   const FormatMetadata_Image({required this.field0}): super._();
-  
+
 
  final  ImageMetadata field0;
 
@@ -3656,7 +4029,7 @@ as ImageMetadata,
 
 class FormatMetadata_Xml extends FormatMetadata {
   const FormatMetadata_Xml({required this.field0}): super._();
-  
+
 
  final  XmlMetadata field0;
 
@@ -3722,7 +4095,7 @@ as XmlMetadata,
 
 class FormatMetadata_Text extends FormatMetadata {
   const FormatMetadata_Text({required this.field0}): super._();
-  
+
 
  final  TextMetadata field0;
 
@@ -3788,7 +4161,7 @@ as TextMetadata,
 
 class FormatMetadata_Html extends FormatMetadata {
   const FormatMetadata_Html({required this.field0}): super._();
-  
+
 
  final  HtmlMetadata field0;
 
@@ -3854,7 +4227,7 @@ as HtmlMetadata,
 
 class FormatMetadata_Ocr extends FormatMetadata {
   const FormatMetadata_Ocr({required this.field0}): super._();
-  
+
 
  final  OcrMetadata field0;
 
@@ -3920,7 +4293,7 @@ as OcrMetadata,
 
 class FormatMetadata_Csv extends FormatMetadata {
   const FormatMetadata_Csv({required this.field0}): super._();
-  
+
 
  final  CsvMetadata field0;
 
@@ -3986,7 +4359,7 @@ as CsvMetadata,
 
 class FormatMetadata_Bibtex extends FormatMetadata {
   const FormatMetadata_Bibtex({required this.field0}): super._();
-  
+
 
  final  BibtexMetadata field0;
 
@@ -4052,7 +4425,7 @@ as BibtexMetadata,
 
 class FormatMetadata_Citation extends FormatMetadata {
   const FormatMetadata_Citation({required this.field0}): super._();
-  
+
 
  final  CitationMetadata field0;
 
@@ -4118,7 +4491,7 @@ as CitationMetadata,
 
 class FormatMetadata_FictionBook extends FormatMetadata {
   const FormatMetadata_FictionBook({required this.field0}): super._();
-  
+
 
  final  FictionBookMetadata field0;
 
@@ -4184,7 +4557,7 @@ as FictionBookMetadata,
 
 class FormatMetadata_Dbf extends FormatMetadata {
   const FormatMetadata_Dbf({required this.field0}): super._();
-  
+
 
  final  DbfMetadata field0;
 
@@ -4250,7 +4623,7 @@ as DbfMetadata,
 
 class FormatMetadata_Jats extends FormatMetadata {
   const FormatMetadata_Jats({required this.field0}): super._();
-  
+
 
  final  JatsMetadata field0;
 
@@ -4316,7 +4689,7 @@ as JatsMetadata,
 
 class FormatMetadata_Epub extends FormatMetadata {
   const FormatMetadata_Epub({required this.field0}): super._();
-  
+
 
  final  EpubMetadata field0;
 
@@ -4382,7 +4755,7 @@ as EpubMetadata,
 
 class FormatMetadata_Pst extends FormatMetadata {
   const FormatMetadata_Pst({required this.field0}): super._();
-  
+
 
  final  PstMetadata field0;
 
@@ -4448,7 +4821,7 @@ as PstMetadata,
 
 class FormatMetadata_Audio extends FormatMetadata {
   const FormatMetadata_Audio({required this.field0}): super._();
-  
+
 
  final  AudioMetadata field0;
 
@@ -4514,7 +4887,7 @@ as AudioMetadata,
 
 class FormatMetadata_Code extends FormatMetadata {
   const FormatMetadata_Code(): super._();
-  
+
 
 
 
@@ -4737,7 +5110,7 @@ return pdfAnalysisError(_that.field0);case _:
 
 class HeuristicsError_ConfigError extends HeuristicsError {
   const HeuristicsError_ConfigError({required this.field0}): super._();
-  
+
 
 @override final  String field0;
 
@@ -4803,7 +5176,7 @@ as String,
 
 class HeuristicsError_PdfAnalysisError extends HeuristicsError {
   const HeuristicsError_PdfAnalysisError({required this.field0}): super._();
-  
+
 
 @override final  String field0;
 
@@ -5053,7 +5426,7 @@ return svg();case _:
 
 class ImageOutputFormat_Native extends ImageOutputFormat {
   const ImageOutputFormat_Native(): super._();
-  
+
 
 
 
@@ -5085,7 +5458,7 @@ String toString() {
 
 class ImageOutputFormat_Png extends ImageOutputFormat {
   const ImageOutputFormat_Png(): super._();
-  
+
 
 
 
@@ -5117,7 +5490,7 @@ String toString() {
 
 class ImageOutputFormat_Jpeg extends ImageOutputFormat {
   const ImageOutputFormat_Jpeg({required this.quality}): super._();
-  
+
 
 /// JPEG quality (1–100, default 85).
  final  PlatformInt64 quality;
@@ -5184,7 +5557,7 @@ as PlatformInt64,
 
 class ImageOutputFormat_Webp extends ImageOutputFormat {
   const ImageOutputFormat_Webp({required this.quality}): super._();
-  
+
 
 /// WebP quality (1–100, default 80).
  final  PlatformInt64 quality;
@@ -5251,7 +5624,7 @@ as PlatformInt64,
 
 class ImageOutputFormat_Heif extends ImageOutputFormat {
   const ImageOutputFormat_Heif({required this.quality}): super._();
-  
+
 
 /// HEIF quality (1–100, default 80).
  final  PlatformInt64 quality;
@@ -5318,7 +5691,7 @@ as PlatformInt64,
 
 class ImageOutputFormat_Svg extends ImageOutputFormat {
   const ImageOutputFormat_Svg(): super._();
-  
+
 
 
 
@@ -5534,7 +5907,7 @@ return io(_that.field0);case _:
 
 class LoadError_Parse extends LoadError {
   const LoadError_Parse({required this.path}): super._();
-  
+
 
  final  String path;
 
@@ -5600,7 +5973,7 @@ as String,
 
 class LoadError_SchemaValidation extends LoadError {
   const LoadError_SchemaValidation({required this.path, required this.errors}): super._();
-  
+
 
  final  String path;
  final  String errors;
@@ -5668,7 +6041,7 @@ as String,
 
 class LoadError_Deserialize extends LoadError {
   const LoadError_Deserialize({required this.path}): super._();
-  
+
 
  final  String path;
 
@@ -5734,7 +6107,7 @@ as String,
 
 class LoadError_IdMismatch extends LoadError {
   const LoadError_IdMismatch({required this.path, required this.declared, required this.expected}): super._();
-  
+
 
  final  String path;
  final  String declared;
@@ -5804,7 +6177,7 @@ as String,
 
 class LoadError_BadMetaSchema extends LoadError {
   const LoadError_BadMetaSchema({required this.field0}): super._();
-  
+
 
  final  String field0;
 
@@ -5870,7 +6243,7 @@ as String,
 
 class LoadError_Io extends LoadError {
   const LoadError_Io({required this.field0}): super._();
-  
+
 
  final  String field0;
 
@@ -6120,7 +6493,7 @@ return fastTextExtraction();case _:
 
 class NoChunkingReason_SmallFile extends NoChunkingReason {
   const NoChunkingReason_SmallFile({required this.sizeBytes, required this.thresholdBytes}): super._();
-  
+
 
 /// Actual size in bytes.
  final  PlatformInt64 sizeBytes;
@@ -6190,7 +6563,7 @@ as PlatformInt64,
 
 class NoChunkingReason_FewPages extends NoChunkingReason {
   const NoChunkingReason_FewPages({required this.pageCount, required this.threshold}): super._();
-  
+
 
 /// Actual page count.
  final  PlatformInt64 pageCount;
@@ -6260,7 +6633,7 @@ as PlatformInt64,
 
 class NoChunkingReason_TextLayerDetected extends NoChunkingReason {
   const NoChunkingReason_TextLayerDetected({required this.textCoverage, required this.avgCharsPerPage}): super._();
-  
+
 
 /// Percentage of pages with text (0.0 to 1.0).
  final  double textCoverage;
@@ -6330,7 +6703,7 @@ as PlatformInt64,
 
 class NoChunkingReason_FormatNotChunkable extends NoChunkingReason {
   const NoChunkingReason_FormatNotChunkable({required this.mimeType}): super._();
-  
+
 
 /// MIME type of the document.
  final  String mimeType;
@@ -6397,7 +6770,7 @@ as String,
 
 class NoChunkingReason_ChunkingDisabled extends NoChunkingReason {
   const NoChunkingReason_ChunkingDisabled(): super._();
-  
+
 
 
 
@@ -6429,7 +6802,7 @@ String toString() {
 
 class NoChunkingReason_FastTextExtraction extends NoChunkingReason {
   const NoChunkingReason_FastTextExtraction(): super._();
-  
+
 
 
 
@@ -6729,7 +7102,7 @@ return metadataBlock();case _:
 
 class NodeContent_Title extends NodeContent {
   const NodeContent_Title({required this.text}): super._();
-  
+
 
 /// The title text content.
  final  String text;
@@ -6796,7 +7169,7 @@ as String,
 
 class NodeContent_Heading extends NodeContent {
   const NodeContent_Heading({required this.level, required this.text}): super._();
-  
+
 
 /// Heading depth (1 = h1, 2 = h2, …, 6 = h6).
  final  PlatformInt64 level;
@@ -6866,7 +7239,7 @@ as String,
 
 class NodeContent_Paragraph extends NodeContent {
   const NodeContent_Paragraph({required this.text}): super._();
-  
+
 
 /// The paragraph text content.
  final  String text;
@@ -6933,7 +7306,7 @@ as String,
 
 class NodeContent_List extends NodeContent {
   const NodeContent_List({required this.ordered}): super._();
-  
+
 
 /// `true` for ordered (numbered) lists; `false` for unordered (bullet) lists.
  final  bool ordered;
@@ -7000,7 +7373,7 @@ as bool,
 
 class NodeContent_ListItem extends NodeContent {
   const NodeContent_ListItem({required this.text}): super._();
-  
+
 
 /// The list item text content.
  final  String text;
@@ -7067,7 +7440,7 @@ as String,
 
 class NodeContent_Table extends NodeContent {
   const NodeContent_Table({required this.grid}): super._();
-  
+
 
 /// Structured grid of table cells.
  final  TableGrid grid;
@@ -7134,7 +7507,7 @@ as TableGrid,
 
 class NodeContent_Image extends NodeContent {
   const NodeContent_Image({required this.description, required this.imageIndex, required this.src}): super._();
-  
+
 
 /// Optional alt text or caption describing the image.
  final  String description;
@@ -7207,7 +7580,7 @@ as String,
 
 class NodeContent_Code extends NodeContent {
   const NodeContent_Code({required this.text, required this.language}): super._();
-  
+
 
 /// The source code text content.
  final  String text;
@@ -7277,7 +7650,7 @@ as String,
 
 class NodeContent_Quote extends NodeContent {
   const NodeContent_Quote(): super._();
-  
+
 
 
 
@@ -7309,7 +7682,7 @@ String toString() {
 
 class NodeContent_Formula extends NodeContent {
   const NodeContent_Formula({required this.text}): super._();
-  
+
 
 /// The formula source text (LaTeX or plain mathematical notation).
  final  String text;
@@ -7376,7 +7749,7 @@ as String,
 
 class NodeContent_Footnote extends NodeContent {
   const NodeContent_Footnote({required this.text}): super._();
-  
+
 
 /// The footnote body text.
  final  String text;
@@ -7443,7 +7816,7 @@ as String,
 
 class NodeContent_Group extends NodeContent {
   const NodeContent_Group({required this.label, required this.headingLevel, required this.headingText}): super._();
-  
+
 
 /// Optional display label for the group (e.g. section name).
  final  String label;
@@ -7516,7 +7889,7 @@ as String,
 
 class NodeContent_PageBreak extends NodeContent {
   const NodeContent_PageBreak(): super._();
-  
+
 
 
 
@@ -7548,7 +7921,7 @@ String toString() {
 
 class NodeContent_Slide extends NodeContent {
   const NodeContent_Slide({required this.number, required this.title}): super._();
-  
+
 
 /// 1-indexed slide number.
  final  PlatformInt64 number;
@@ -7618,7 +7991,7 @@ as String,
 
 class NodeContent_DefinitionList extends NodeContent {
   const NodeContent_DefinitionList(): super._();
-  
+
 
 
 
@@ -7650,7 +8023,7 @@ String toString() {
 
 class NodeContent_DefinitionItem extends NodeContent {
   const NodeContent_DefinitionItem({required this.term, required this.definition}): super._();
-  
+
 
 /// The term being defined.
  final  String term;
@@ -7720,7 +8093,7 @@ as String,
 
 class NodeContent_Citation extends NodeContent {
   const NodeContent_Citation({required this.key, required this.text}): super._();
-  
+
 
 /// Citation key (e.g. BibTeX key or reference ID).
  final  String key;
@@ -7790,7 +8163,7 @@ as String,
 
 class NodeContent_Admonition extends NodeContent {
   const NodeContent_Admonition({required this.kind, required this.title}): super._();
-  
+
 
 /// Kind of admonition (e.g. "note", "warning", "tip", "danger").
  final  String kind;
@@ -7860,7 +8233,7 @@ as String,
 
 class NodeContent_RawBlock extends NodeContent {
   const NodeContent_RawBlock({required this.format, required this.content}): super._();
-  
+
 
 /// Source format identifier (e.g. "html", "latex", "jsx").
  final  String format;
@@ -7930,7 +8303,7 @@ as String,
 
 class NodeContent_MetadataBlock extends NodeContent {
   const NodeContent_MetadataBlock(): super._();
-  
+
 
 
 
@@ -8122,7 +8495,7 @@ return quadrilateral();case _:
 
 class OcrBoundingGeometry_Rectangle extends OcrBoundingGeometry {
   const OcrBoundingGeometry_Rectangle({required this.left, required this.top, required this.width, required this.height}): super._();
-  
+
 
 /// Left x-coordinate in pixels
  final  PlatformInt64 left;
@@ -8198,7 +8571,7 @@ as PlatformInt64,
 
 class OcrBoundingGeometry_Quadrilateral extends OcrBoundingGeometry {
   const OcrBoundingGeometry_Quadrilateral(): super._();
-  
+
 
 
 
@@ -8420,7 +8793,7 @@ return custom(_that.field0);case _:
 
 class OutputFormat_Plain extends OutputFormat {
   const OutputFormat_Plain(): super._();
-  
+
 
 
 
@@ -8452,7 +8825,7 @@ String toString() {
 
 class OutputFormat_Markdown extends OutputFormat {
   const OutputFormat_Markdown(): super._();
-  
+
 
 
 
@@ -8484,7 +8857,7 @@ String toString() {
 
 class OutputFormat_Djot extends OutputFormat {
   const OutputFormat_Djot(): super._();
-  
+
 
 
 
@@ -8516,7 +8889,7 @@ String toString() {
 
 class OutputFormat_Html extends OutputFormat {
   const OutputFormat_Html(): super._();
-  
+
 
 
 
@@ -8548,7 +8921,7 @@ String toString() {
 
 class OutputFormat_Json extends OutputFormat {
   const OutputFormat_Json(): super._();
-  
+
 
 
 
@@ -8580,7 +8953,7 @@ String toString() {
 
 class OutputFormat_Structured extends OutputFormat {
   const OutputFormat_Structured(): super._();
-  
+
 
 
 
@@ -8612,7 +8985,7 @@ String toString() {
 
 class OutputFormat_Custom extends OutputFormat {
   const OutputFormat_Custom({required this.field0}): super._();
-  
+
 
  final  String field0;
 
@@ -8904,7 +9277,7 @@ return custom(_that.field0);case _:
 
 class PiiCategory_Email extends PiiCategory {
   const PiiCategory_Email(): super._();
-  
+
 
 
 
@@ -8936,7 +9309,7 @@ String toString() {
 
 class PiiCategory_Phone extends PiiCategory {
   const PiiCategory_Phone(): super._();
-  
+
 
 
 
@@ -8968,7 +9341,7 @@ String toString() {
 
 class PiiCategory_Ssn extends PiiCategory {
   const PiiCategory_Ssn(): super._();
-  
+
 
 
 
@@ -9000,7 +9373,7 @@ String toString() {
 
 class PiiCategory_CreditCard extends PiiCategory {
   const PiiCategory_CreditCard(): super._();
-  
+
 
 
 
@@ -9032,7 +9405,7 @@ String toString() {
 
 class PiiCategory_PostalCode extends PiiCategory {
   const PiiCategory_PostalCode(): super._();
-  
+
 
 
 
@@ -9064,7 +9437,7 @@ String toString() {
 
 class PiiCategory_IpAddress extends PiiCategory {
   const PiiCategory_IpAddress(): super._();
-  
+
 
 
 
@@ -9096,7 +9469,7 @@ String toString() {
 
 class PiiCategory_Iban extends PiiCategory {
   const PiiCategory_Iban(): super._();
-  
+
 
 
 
@@ -9128,7 +9501,7 @@ String toString() {
 
 class PiiCategory_SwiftBic extends PiiCategory {
   const PiiCategory_SwiftBic(): super._();
-  
+
 
 
 
@@ -9160,7 +9533,7 @@ String toString() {
 
 class PiiCategory_DateOfBirth extends PiiCategory {
   const PiiCategory_DateOfBirth(): super._();
-  
+
 
 
 
@@ -9192,7 +9565,7 @@ String toString() {
 
 class PiiCategory_Person extends PiiCategory {
   const PiiCategory_Person(): super._();
-  
+
 
 
 
@@ -9224,7 +9597,7 @@ String toString() {
 
 class PiiCategory_Organization extends PiiCategory {
   const PiiCategory_Organization(): super._();
-  
+
 
 
 
@@ -9256,7 +9629,7 @@ String toString() {
 
 class PiiCategory_Location extends PiiCategory {
   const PiiCategory_Location(): super._();
-  
+
 
 
 
@@ -9288,7 +9661,7 @@ String toString() {
 
 class PiiCategory_Custom extends PiiCategory {
   const PiiCategory_Custom({required this.field0}): super._();
-  
+
 
  final  String field0;
 
@@ -9526,7 +9899,7 @@ return plugin(_that.name);case _:
 
 class RerankerModelType_Preset extends RerankerModelType {
   const RerankerModelType_Preset({required this.name}): super._();
-  
+
 
 /// Preset name (e.g. "balanced", "fast", "quality", "multilingual").
  final  String name;
@@ -9593,7 +9966,7 @@ as String,
 
 class RerankerModelType_Custom extends RerankerModelType {
   const RerankerModelType_Custom({required this.modelId, required this.modelFile, required final  List<String> additionalFiles, required this.maxLength}): _additionalFiles = additionalFiles,super._();
-  
+
 
 /// HuggingFace model repository ID (e.g. "cross-encoder/ms-marco-MiniLM-L6-v2").
  final  String modelId;
@@ -9691,7 +10064,7 @@ as PlatformInt64,
 
 class RerankerModelType_Llm extends RerankerModelType {
   const RerankerModelType_Llm({required this.llm}): super._();
-  
+
 
 /// LLM provider configuration specifying the model and API credentials.
  final  LlmConfig llm;
@@ -9758,7 +10131,7 @@ as LlmConfig,
 
 class RerankerModelType_Plugin extends RerankerModelType {
   const RerankerModelType_Plugin({required this.name}): super._();
-  
+
 
 /// Name the backend was registered under via `register_reranker_backend`.
  final  String name;
@@ -10003,7 +10376,7 @@ return sheet(_that.index,_that.name);case _:
 
 class RevisionAnchor_Paragraph extends RevisionAnchor {
   const RevisionAnchor_Paragraph({required this.index}): super._();
-  
+
 
 /// Zero-based index of the paragraph in document order.
  final  PlatformInt64 index;
@@ -10070,7 +10443,7 @@ as PlatformInt64,
 
 class RevisionAnchor_TableCell extends RevisionAnchor {
   const RevisionAnchor_TableCell({required this.row, required this.col, required this.tableIndex}): super._();
-  
+
 
 /// Zero-based row index within the table.
  final  PlatformInt64 row;
@@ -10143,7 +10516,7 @@ as PlatformInt64,
 
 class RevisionAnchor_Page extends RevisionAnchor {
   const RevisionAnchor_Page({required this.index}): super._();
-  
+
 
 /// Zero-based page index.
  final  PlatformInt64 index;
@@ -10210,7 +10583,7 @@ as PlatformInt64,
 
 class RevisionAnchor_Slide extends RevisionAnchor {
   const RevisionAnchor_Slide({required this.index}): super._();
-  
+
 
 /// Zero-based slide index.
  final  PlatformInt64 index;
@@ -10277,7 +10650,7 @@ as PlatformInt64,
 
 class RevisionAnchor_Sheet extends RevisionAnchor {
   const RevisionAnchor_Sheet({required this.index, required this.name}): super._();
-  
+
 
 /// Zero-based sheet index.
  final  PlatformInt64 index;
@@ -10513,7 +10886,7 @@ return always();case _:
 
 class VlmFallbackPolicy_Disabled extends VlmFallbackPolicy {
   const VlmFallbackPolicy_Disabled(): super._();
-  
+
 
 
 
@@ -10545,7 +10918,7 @@ String toString() {
 
 class VlmFallbackPolicy_OnLowQuality extends VlmFallbackPolicy {
   const VlmFallbackPolicy_OnLowQuality({required this.qualityThreshold}): super._();
-  
+
 
 /// Minimum acceptable quality score from the classical backend.
 /// Pages scoring below this are retried with VLM.
@@ -10613,7 +10986,7 @@ as double,
 
 class VlmFallbackPolicy_Always extends VlmFallbackPolicy {
   const VlmFallbackPolicy_Always(): super._();
-  
+
 
 
 
@@ -10901,7 +11274,7 @@ return other(_that.field0);case _:
 
 class XbergError_Io extends XbergError {
   const XbergError_Io({required this.field0}): super._();
-  
+
 
  final  String field0;
 
@@ -10967,7 +11340,7 @@ as String,
 
 class XbergError_Parsing extends XbergError {
   const XbergError_Parsing({required this.message}): super._();
-  
+
 
  final  String message;
 
@@ -11033,7 +11406,7 @@ as String,
 
 class XbergError_Ocr extends XbergError {
   const XbergError_Ocr({required this.message}): super._();
-  
+
 
  final  String message;
 
@@ -11099,7 +11472,7 @@ as String,
 
 class XbergError_Validation extends XbergError {
   const XbergError_Validation({required this.message}): super._();
-  
+
 
  final  String message;
 
@@ -11165,7 +11538,7 @@ as String,
 
 class XbergError_Cache extends XbergError {
   const XbergError_Cache({required this.message}): super._();
-  
+
 
  final  String message;
 
@@ -11231,7 +11604,7 @@ as String,
 
 class XbergError_ImageProcessing extends XbergError {
   const XbergError_ImageProcessing({required this.message}): super._();
-  
+
 
  final  String message;
 
@@ -11297,7 +11670,7 @@ as String,
 
 class XbergError_Serialization extends XbergError {
   const XbergError_Serialization({required this.message}): super._();
-  
+
 
  final  String message;
 
@@ -11363,7 +11736,7 @@ as String,
 
 class XbergError_MissingDependency extends XbergError {
   const XbergError_MissingDependency({required this.field0}): super._();
-  
+
 
  final  String field0;
 
@@ -11429,7 +11802,7 @@ as String,
 
 class XbergError_Plugin extends XbergError {
   const XbergError_Plugin({required this.message, required this.pluginName}): super._();
-  
+
 
  final  String message;
  final  String pluginName;
@@ -11497,7 +11870,7 @@ as String,
 
 class XbergError_LockPoisoned extends XbergError {
   const XbergError_LockPoisoned({required this.field0}): super._();
-  
+
 
  final  String field0;
 
@@ -11563,7 +11936,7 @@ as String,
 
 class XbergError_UnsupportedFormat extends XbergError {
   const XbergError_UnsupportedFormat({required this.field0}): super._();
-  
+
 
  final  String field0;
 
@@ -11629,7 +12002,7 @@ as String,
 
 class XbergError_Embedding extends XbergError {
   const XbergError_Embedding({required this.message}): super._();
-  
+
 
  final  String message;
 
@@ -11695,7 +12068,7 @@ as String,
 
 class XbergError_Reranking extends XbergError {
   const XbergError_Reranking({required this.message}): super._();
-  
+
 
  final  String message;
 
@@ -11761,7 +12134,7 @@ as String,
 
 class XbergError_Transcription extends XbergError {
   const XbergError_Transcription({required this.message}): super._();
-  
+
 
  final  String message;
 
@@ -11827,7 +12200,7 @@ as String,
 
 class XbergError_Timeout extends XbergError {
   const XbergError_Timeout({required this.elapsedMs, required this.limitMs}): super._();
-  
+
 
  final  PlatformInt64 elapsedMs;
  final  PlatformInt64 limitMs;
@@ -11895,7 +12268,7 @@ as PlatformInt64,
 
 class XbergError_Cancelled extends XbergError {
   const XbergError_Cancelled(): super._();
-  
+
 
 
 
@@ -11927,7 +12300,7 @@ String toString() {
 
 class XbergError_Security extends XbergError {
   const XbergError_Security({required this.message}): super._();
-  
+
 
  final  String message;
 
@@ -11993,7 +12366,7 @@ as String,
 
 class XbergError_Other extends XbergError {
   const XbergError_Other({required this.field0}): super._();
-  
+
 
  final  String field0;
 

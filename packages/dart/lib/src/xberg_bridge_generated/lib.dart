@@ -9,7 +9,7 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'lib.freezed.dart';
 
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `DocumentExtractorDartCallbacks`, `EmbeddingBackendDartCallbacks`, `OcrBackendDartCallbacks`, `PostProcessorDartCallbacks`, `RendererDartCallbacks`, `RerankerBackendDartCallbacks`, `ValidatorDartCallbacks`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `can_handle`, `dimensions`, `embed`, `emits_structured_markdown`, `estimated_duration_ms`, `extract`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `priority`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render_result`, `rerank`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages`, `supported_mime_types`, `supports_document_processing`, `supports_language`, `supports_table_detection`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`, `version`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `can_handle`, `dimensions`, `embed`, `emits_structured_markdown`, `estimated_duration_ms`, `extract`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `priority`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render_result`, `rerank`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages`, `supported_mime_types`, `supports_document_processing`, `supports_language`, `supports_table_detection`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`, `version`
 
 /// Extract content from a single bytes or URI input.
 Future<ExtractionResult> extract({
@@ -746,6 +746,21 @@ Future<EmbeddedFile> createEmbeddedFileFromJson({required String json}) =>
 Future<PdfMetadata> createPdfMetadataFromJson({required String json}) =>
     RustLib.instance.api.crateCreatePdfMetadataFromJson(json: json);
 
+Future<ProxyConfig> createProxyConfigFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateProxyConfigFromJson(json: json);
+
+Future<ContentConfig> createContentConfigFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateContentConfigFromJson(json: json);
+
+Future<BrowserConfig> createBrowserConfigFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateBrowserConfigFromJson(json: json);
+
+Future<CrawlConfig> createCrawlConfigFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateCrawlConfigFromJson(json: json);
+
+Future<SsrfPolicy> createSsrfPolicyFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateSsrfPolicyFromJson(json: json);
+
 /// Construct a `OcrBackendDartImpl` from Dart callback closures.
 /// FRB synthesises a Dart-callable function type for each closure parameter,
 /// which is the whole point of taking them as `impl Fn(...) -> DartFnFuture<R>`
@@ -1331,6 +1346,39 @@ class ArchiveMetadata {
           compressedSize == other.compressedSize;
 }
 
+/// The category of a downloaded asset.
+enum AssetCategory {
+  /// A document file (PDF, DOC, etc.).
+  document,
+
+  /// An image file.
+  image,
+
+  /// An audio file.
+  audio,
+
+  /// A video file.
+  video,
+
+  /// A font file.
+  font,
+
+  /// A CSS stylesheet.
+  stylesheet,
+
+  /// A JavaScript file.
+  script,
+
+  /// An archive file (ZIP, TAR, etc.).
+  archive,
+
+  /// A data file (JSON, XML, CSV, etc.).
+  data,
+
+  /// An unrecognized asset type.
+  other,
+}
+
 /// Audio/video file metadata.
 ///
 /// Populated from container tags (ID3v2, MP4 atoms, Vorbis comments, etc.) and
@@ -1383,6 +1431,35 @@ class AudioMetadata {
           sampleRateHz == other.sampleRateHz &&
           channels == other.channels &&
           bitrate == other.bitrate;
+}
+
+@freezed
+sealed class AuthConfig with _$AuthConfig {
+  const AuthConfig._();
+
+  /// HTTP Basic authentication.
+  const factory AuthConfig.basic({
+    /// Username sent in the `Authorization: Basic` header.
+    required String username,
+
+    /// Password sent in the `Authorization: Basic` header.
+    required String password,
+  }) = AuthConfig_Basic;
+
+  /// Bearer token authentication.
+  const factory AuthConfig.bearer({
+    /// Token sent in the `Authorization: Bearer` header.
+    required String token,
+  }) = AuthConfig_Bearer;
+
+  /// Custom authentication header.
+  const factory AuthConfig.header({
+    /// HTTP header name to set on each request.
+    required String name,
+
+    /// HTTP header value to send.
+    required String value,
+  }) = AuthConfig_Header;
 }
 
 /// Bounding box in original image coordinates (x1, y1) top-left, (x2, y2) bottom-right.
@@ -1567,6 +1644,158 @@ class BoundingBox {
           y0 == other.y0 &&
           x1 == other.x1 &&
           y1 == other.y1;
+}
+
+/// Browser backend used for JavaScript rendering.
+enum BrowserBackend {
+  /// Existing Chromium/CDP backend powered by chromiumoxide.
+  chromiumoxide,
+
+  /// Crawlberg-owned native browser backend derived from Obscura.
+  native,
+}
+
+/// Browser fallback configuration.
+class BrowserConfig {
+  /// When to use the headless browser fallback.
+  final BrowserMode mode;
+
+  /// Browser backend used to render JavaScript-heavy pages.
+  final BrowserBackend backend;
+
+  /// CDP WebSocket endpoint for connecting to an external browser instance.
+  final String? endpoint;
+
+  /// Timeout for browser page load and rendering (in milliseconds when serialized).
+  final PlatformInt64 timeout;
+
+  /// Wait strategy after browser navigation.
+  final BrowserWait wait;
+
+  /// CSS selector to wait for when `wait` is `Selector`.
+  final String? waitSelector;
+
+  /// Extra time to wait after the wait condition is met.
+  final PlatformInt64? extraWait;
+
+  /// Proxy for browser fetches. Overrides `CrawlConfig.proxy` when set.
+  /// Native backend supports http/https only (no SOCKS5).
+  final ProxyConfig? proxy;
+
+  /// URL patterns to block before the network request fires. Supports `*`
+  /// wildcards. Useful for skipping ads/analytics/large images. Honored by
+  /// `BrowserBackend::Native`; chromiumoxide ignores this field today.
+  final List<String> blockUrlPatterns;
+
+  /// JavaScript snippet evaluated after navigation completes.
+  ///
+  /// Scraping captures the native backend result in `ScrapeResult.browser.eval_result`.
+  /// Interactions run this script before page actions on both browser backends but do
+  /// not include the script result in `InteractionResult`.
+  final String? evalScript;
+
+  /// User-agent used when fetching robots.txt. Defaults to `BrowserConfig.user_agent`
+  /// (or crawlberg's default) if unset. Native only.
+  final String? robotsUserAgent;
+
+  /// Capture the full network event stream into the result. Default false
+  /// (only the document event is captured). Native only.
+  final bool captureNetworkEvents;
+
+  /// Enable session affinity: reuse chromiumoxide Pages for same-domain
+  /// requests so cookies + fingerprint + solved challenges persist.
+  /// Default: true. When false, each request gets a fresh Page.
+  final bool sessionAffinity;
+
+  const BrowserConfig({
+    required this.mode,
+    required this.backend,
+    this.endpoint,
+    required this.timeout,
+    required this.wait,
+    this.waitSelector,
+    this.extraWait,
+    this.proxy,
+    required this.blockUrlPatterns,
+    this.evalScript,
+    this.robotsUserAgent,
+    required this.captureNetworkEvents,
+    required this.sessionAffinity,
+  });
+
+  @override
+  int get hashCode =>
+      mode.hashCode ^
+      backend.hashCode ^
+      endpoint.hashCode ^
+      timeout.hashCode ^
+      wait.hashCode ^
+      waitSelector.hashCode ^
+      extraWait.hashCode ^
+      proxy.hashCode ^
+      blockUrlPatterns.hashCode ^
+      evalScript.hashCode ^
+      robotsUserAgent.hashCode ^
+      captureNetworkEvents.hashCode ^
+      sessionAffinity.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is BrowserConfig &&
+          runtimeType == other.runtimeType &&
+          mode == other.mode &&
+          backend == other.backend &&
+          endpoint == other.endpoint &&
+          timeout == other.timeout &&
+          wait == other.wait &&
+          waitSelector == other.waitSelector &&
+          extraWait == other.extraWait &&
+          proxy == other.proxy &&
+          blockUrlPatterns == other.blockUrlPatterns &&
+          evalScript == other.evalScript &&
+          robotsUserAgent == other.robotsUserAgent &&
+          captureNetworkEvents == other.captureNetworkEvents &&
+          sessionAffinity == other.sessionAffinity;
+}
+
+/// When to use the headless browser fallback.
+enum BrowserMode {
+  /// Automatically detect when JS rendering is needed and fall back to browser.
+  auto,
+
+  /// Always use the browser for every request.
+  always,
+
+  /// Never use the browser fallback.
+  never,
+
+  /// Always use the browser with all stealth surfaces enabled.
+  ///
+  /// Behaves like [`Always`](BrowserMode::Always) for escalation purposes
+  /// (every request is routed through the browser tier), but additionally
+  /// enables:
+  ///
+  /// - browser JavaScript stealth patches
+  /// - native-backend TLS fingerprint spoofing
+  /// - stealth-aware default user-agent when no explicit UA is set
+  /// - 1920×1080 viewport override
+  ///
+  /// Use this instead of setting the now-removed `BrowserConfig.stealth`
+  /// boolean field.
+  stealth,
+}
+
+/// Wait strategy for browser page rendering.
+enum BrowserWait {
+  /// Wait until network activity is idle.
+  networkIdle,
+
+  /// Wait for a specific CSS selector to appear in the DOM.
+  selector,
+
+  /// Wait for a fixed duration after navigation.
+  fixed,
 }
 
 /// Aggregate statistics for a xberg cache directory.
@@ -2258,6 +2487,108 @@ enum CodeContentMode {
   structure,
 }
 
+/// Content extraction and conversion configuration.
+///
+/// Controls how HTML is converted to the output format. Uses
+/// html-to-markdown-rs as the conversion engine for all formats
+/// (markdown, plain text, djot).
+class ContentConfig {
+  /// Output format: `"markdown"` (default), `"plain"`, `"djot"`.
+  final String outputFormat;
+
+  /// Preprocessing aggressiveness: `"minimal"`, `"standard"` (default), `"aggressive"`.
+  ///
+  /// - Minimal: only scripts/styles removed.
+  /// - Standard: also removes nav, nav-hinted headers/footers/asides, forms.
+  /// - Aggressive: removes all footers/asides unconditionally.
+  final String preprocessingPreset;
+
+  /// Remove navigation elements (nav, breadcrumbs, menus). Default: `true`.
+  final bool removeNavigation;
+
+  /// Remove form elements. Default: `true`.
+  final bool removeForms;
+
+  /// HTML tag names to strip (render children only, remove the tag wrapper).
+  /// Default: `["noscript"]`.
+  final List<String> stripTags;
+
+  /// HTML tag names to preserve as raw HTML in output.
+  final List<String> preserveTags;
+
+  /// CSS selectors for elements to exclude entirely (element + all content).
+  ///
+  /// Unlike `strip_tags` (which removes the wrapper but keeps children),
+  /// excluded elements and all descendants are dropped. Supports CSS selectors:
+  /// `.class`, `#id`, `[attribute]`, compound selectors.
+  ///
+  /// Example: `[".cookie-banner", "#ad-container", "[role='complementary']"]`
+  final List<String> excludeSelectors;
+
+  /// Skip image elements in output. Default: `false`.
+  final bool skipImages;
+
+  /// Max DOM traversal depth. Prevents stack overflow on deeply nested HTML.
+  final PlatformInt64? maxDepth;
+
+  /// Enable line wrapping. Default: `false`.
+  final bool wrap;
+
+  /// Wrap width when `wrap` is enabled. Default: `80`.
+  final PlatformInt64 wrapWidth;
+
+  /// Include document structure tree in output. Default: `true`.
+  final bool includeDocumentStructure;
+
+  const ContentConfig({
+    required this.outputFormat,
+    required this.preprocessingPreset,
+    required this.removeNavigation,
+    required this.removeForms,
+    required this.stripTags,
+    required this.preserveTags,
+    required this.excludeSelectors,
+    required this.skipImages,
+    this.maxDepth,
+    required this.wrap,
+    required this.wrapWidth,
+    required this.includeDocumentStructure,
+  });
+
+  @override
+  int get hashCode =>
+      outputFormat.hashCode ^
+      preprocessingPreset.hashCode ^
+      removeNavigation.hashCode ^
+      removeForms.hashCode ^
+      stripTags.hashCode ^
+      preserveTags.hashCode ^
+      excludeSelectors.hashCode ^
+      skipImages.hashCode ^
+      maxDepth.hashCode ^
+      wrap.hashCode ^
+      wrapWidth.hashCode ^
+      includeDocumentStructure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ContentConfig &&
+          runtimeType == other.runtimeType &&
+          outputFormat == other.outputFormat &&
+          preprocessingPreset == other.preprocessingPreset &&
+          removeNavigation == other.removeNavigation &&
+          removeForms == other.removeForms &&
+          stripTags == other.stripTags &&
+          preserveTags == other.preserveTags &&
+          excludeSelectors == other.excludeSelectors &&
+          skipImages == other.skipImages &&
+          maxDepth == other.maxDepth &&
+          wrap == other.wrap &&
+          wrapWidth == other.wrapWidth &&
+          includeDocumentStructure == other.includeDocumentStructure;
+}
+
 /// Cross-extractor content filtering configuration.
 ///
 /// Controls whether "furniture" content (headers, footers, page numbers,
@@ -2484,6 +2815,272 @@ class CoreProperties {
           identifier == other.identifier &&
           version == other.version &&
           lastPrinted == other.lastPrinted;
+}
+
+/// Configuration for crawl, scrape, and map operations.
+class CrawlConfig {
+  /// Maximum crawl depth (number of link hops from the start URL).
+  final PlatformInt64? maxDepth;
+
+  /// Maximum number of pages to crawl.
+  final PlatformInt64? maxPages;
+
+  /// Maximum number of concurrent requests.
+  final PlatformInt64? maxConcurrent;
+
+  /// Whether to respect robots.txt directives.
+  final bool respectRobotsTxt;
+
+  /// When true, HTTP-level error responses (404 NotFound, 403 Forbidden, WAF blocks)
+  /// are surfaced as `ScrapeResult` records with the matching `status_code` rather
+  /// than raised as `CrawlError`. Default `false` preserves the historical
+  /// throw-on-error contract for direct fetches. Independently of this flag,
+  /// 404s reached at the end of a redirect chain are *always* surfaced softly —
+  /// the user opted into redirect-following, so receiving a 404 there is part of
+  /// the normal flow rather than an unexpected error.
+  final bool softHttpErrors;
+
+  /// Custom user-agent string.
+  final String? userAgent;
+
+  /// Whether to restrict crawling to the same domain.
+  final bool stayOnDomain;
+
+  /// Whether to allow subdomains when `stay_on_domain` is true.
+  final bool allowSubdomains;
+
+  /// Regex patterns for paths to include during crawling.
+  final List<String> includePaths;
+
+  /// Regex patterns for paths to exclude during crawling.
+  final List<String> excludePaths;
+
+  /// Custom HTTP headers to send with each request.
+  final Map<String, String> customHeaders;
+
+  /// Timeout for individual HTTP requests (in milliseconds when serialized).
+  final PlatformInt64 requestTimeout;
+
+  /// Per-domain rate limit in milliseconds. When set, enforces a minimum delay
+  /// between requests to the same domain. Defaults to 200ms when `None`.
+  final PlatformInt64? rateLimitMs;
+
+  /// Maximum number of redirects to follow.
+  final PlatformInt64 maxRedirects;
+
+  /// Number of retry attempts for failed requests.
+  final PlatformInt64 retryCount;
+
+  /// HTTP status codes that should trigger a retry.
+  final Int64List retryCodes;
+
+  /// Whether to enable cookie handling.
+  final bool cookiesEnabled;
+
+  /// Authentication configuration.
+  final AuthConfig? auth;
+
+  /// Maximum response body size in bytes.
+  final PlatformInt64? maxBodySize;
+
+  /// CSS selectors for tags to remove from HTML before processing.
+  final List<String> removeTags;
+
+  /// Content extraction and conversion configuration.
+  final ContentConfig content;
+
+  /// Maximum number of URLs to return from a map operation.
+  final PlatformInt64? mapLimit;
+
+  /// Search filter for map results (case-insensitive substring match on URLs).
+  final String? mapSearch;
+
+  /// Whether to download assets (CSS, JS, images, etc.) from the page.
+  final bool downloadAssets;
+
+  /// Filter for asset categories to download.
+  final List<AssetCategory> assetTypes;
+
+  /// Maximum size in bytes for individual asset downloads.
+  final PlatformInt64? maxAssetSize;
+
+  /// Browser configuration.
+  final BrowserConfig browser;
+
+  /// Proxy configuration for HTTP requests.
+  final ProxyConfig? proxy;
+
+  /// List of user-agent strings for rotation. If non-empty, overrides `user_agent`.
+  final List<String> userAgents;
+
+  /// Whether to capture a screenshot when using the browser.
+  final bool captureScreenshot;
+
+  /// Re-enqueue discovered `LinkType::Document` URLs into the crawl frontier so
+  /// the crawl follows links *from* document pages (PDFs, etc.) as it would
+  /// from HTML pages. Default: `false` (documents terminate at materialisation).
+  final bool followDocumentUrls;
+
+  /// Maximum document-depth (from the seed URL through document links only)
+  /// when `follow_document_urls` is true. `None` means inherit `max_depth`.
+  /// Independent of `max_depth`: a document URL is enqueued only if BOTH the
+  /// outer `max_depth` and (if set) `document_url_depth` permit it.
+  final PlatformInt64? documentUrlDepth;
+
+  /// Whether to download non-HTML documents (PDF, DOCX, images, code, etc.) instead of skipping them.
+  final bool downloadDocuments;
+
+  /// Maximum size in bytes for document downloads. Defaults to 50 MB.
+  final PlatformInt64? documentMaxSize;
+
+  /// Allowlist of MIME types to download. If empty, uses built-in defaults.
+  final List<String> documentMimeTypes;
+
+  /// Path to write WARC output. If `None`, WARC output is disabled.
+  final String? warcOutput;
+
+  /// Named browser profile for persistent sessions (cookies, localStorage).
+  final String? browserProfile;
+
+  /// Whether to save changes back to the browser profile on exit.
+  final bool saveBrowserProfile;
+
+  /// SSRF policy for outbound network requests. Default: deny private networks,
+  /// allow http/https only, max 5 redirects.
+  ///
+  /// Phase 1: `deny_private` and `max_redirects` are exposed to all language
+  /// bindings. `allowlist` is skipped (see `SsrfPolicy` fields) and will be
+  /// added in a follow-up when `HostMatcher`'s tagged-enum FFI form is decided.
+  final SsrfPolicy ssrf;
+
+  const CrawlConfig({
+    this.maxDepth,
+    this.maxPages,
+    this.maxConcurrent,
+    required this.respectRobotsTxt,
+    required this.softHttpErrors,
+    this.userAgent,
+    required this.stayOnDomain,
+    required this.allowSubdomains,
+    required this.includePaths,
+    required this.excludePaths,
+    required this.customHeaders,
+    required this.requestTimeout,
+    this.rateLimitMs,
+    required this.maxRedirects,
+    required this.retryCount,
+    required this.retryCodes,
+    required this.cookiesEnabled,
+    this.auth,
+    this.maxBodySize,
+    required this.removeTags,
+    required this.content,
+    this.mapLimit,
+    this.mapSearch,
+    required this.downloadAssets,
+    required this.assetTypes,
+    this.maxAssetSize,
+    required this.browser,
+    this.proxy,
+    required this.userAgents,
+    required this.captureScreenshot,
+    required this.followDocumentUrls,
+    this.documentUrlDepth,
+    required this.downloadDocuments,
+    this.documentMaxSize,
+    required this.documentMimeTypes,
+    this.warcOutput,
+    this.browserProfile,
+    required this.saveBrowserProfile,
+    required this.ssrf,
+  });
+
+  @override
+  int get hashCode =>
+      maxDepth.hashCode ^
+      maxPages.hashCode ^
+      maxConcurrent.hashCode ^
+      respectRobotsTxt.hashCode ^
+      softHttpErrors.hashCode ^
+      userAgent.hashCode ^
+      stayOnDomain.hashCode ^
+      allowSubdomains.hashCode ^
+      includePaths.hashCode ^
+      excludePaths.hashCode ^
+      customHeaders.hashCode ^
+      requestTimeout.hashCode ^
+      rateLimitMs.hashCode ^
+      maxRedirects.hashCode ^
+      retryCount.hashCode ^
+      retryCodes.hashCode ^
+      cookiesEnabled.hashCode ^
+      auth.hashCode ^
+      maxBodySize.hashCode ^
+      removeTags.hashCode ^
+      content.hashCode ^
+      mapLimit.hashCode ^
+      mapSearch.hashCode ^
+      downloadAssets.hashCode ^
+      assetTypes.hashCode ^
+      maxAssetSize.hashCode ^
+      browser.hashCode ^
+      proxy.hashCode ^
+      userAgents.hashCode ^
+      captureScreenshot.hashCode ^
+      followDocumentUrls.hashCode ^
+      documentUrlDepth.hashCode ^
+      downloadDocuments.hashCode ^
+      documentMaxSize.hashCode ^
+      documentMimeTypes.hashCode ^
+      warcOutput.hashCode ^
+      browserProfile.hashCode ^
+      saveBrowserProfile.hashCode ^
+      ssrf.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CrawlConfig &&
+          runtimeType == other.runtimeType &&
+          maxDepth == other.maxDepth &&
+          maxPages == other.maxPages &&
+          maxConcurrent == other.maxConcurrent &&
+          respectRobotsTxt == other.respectRobotsTxt &&
+          softHttpErrors == other.softHttpErrors &&
+          userAgent == other.userAgent &&
+          stayOnDomain == other.stayOnDomain &&
+          allowSubdomains == other.allowSubdomains &&
+          includePaths == other.includePaths &&
+          excludePaths == other.excludePaths &&
+          customHeaders == other.customHeaders &&
+          requestTimeout == other.requestTimeout &&
+          rateLimitMs == other.rateLimitMs &&
+          maxRedirects == other.maxRedirects &&
+          retryCount == other.retryCount &&
+          retryCodes == other.retryCodes &&
+          cookiesEnabled == other.cookiesEnabled &&
+          auth == other.auth &&
+          maxBodySize == other.maxBodySize &&
+          removeTags == other.removeTags &&
+          content == other.content &&
+          mapLimit == other.mapLimit &&
+          mapSearch == other.mapSearch &&
+          downloadAssets == other.downloadAssets &&
+          assetTypes == other.assetTypes &&
+          maxAssetSize == other.maxAssetSize &&
+          browser == other.browser &&
+          proxy == other.proxy &&
+          userAgents == other.userAgents &&
+          captureScreenshot == other.captureScreenshot &&
+          followDocumentUrls == other.followDocumentUrls &&
+          documentUrlDepth == other.documentUrlDepth &&
+          downloadDocuments == other.downloadDocuments &&
+          documentMaxSize == other.documentMaxSize &&
+          documentMimeTypes == other.documentMimeTypes &&
+          warcOutput == other.warcOutput &&
+          browserProfile == other.browserProfile &&
+          saveBrowserProfile == other.saveBrowserProfile &&
+          ssrf == other.ssrf;
 }
 
 /// CSV/TSV file metadata.
@@ -10858,6 +11455,32 @@ class ProcessingWarning {
           message == other.message;
 }
 
+/// Proxy configuration for HTTP requests.
+class ProxyConfig {
+  /// Proxy URL (e.g. "http://proxy:8080", "socks5://proxy:1080").
+  final String url;
+
+  /// Optional username for proxy authentication.
+  final String? username;
+
+  /// Optional password for proxy authentication.
+  final String? password;
+
+  const ProxyConfig({required this.url, this.username, this.password});
+
+  @override
+  int get hashCode => url.hashCode ^ username.hashCode ^ password.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProxyConfig &&
+          runtimeType == other.runtimeType &&
+          url == other.url &&
+          username == other.username &&
+          password == other.password;
+}
+
 /// Page Segmentation Mode for Tesseract OCR.
 enum PSMMode {
   /// Orientation and script detection only.
@@ -11840,6 +12463,28 @@ class ServerConfig {
           corsOrigins == other.corsOrigins &&
           maxRequestBodyBytes == other.maxRequestBodyBytes &&
           maxMultipartFieldBytes == other.maxMultipartFieldBytes;
+}
+
+/// SSRF policy configuration.
+class SsrfPolicy {
+  /// If true, reject URLs that resolve to private/metadata IP ranges.
+  final bool denyPrivate;
+
+  /// Maximum number of HTTP redirects to follow during validation.
+  final PlatformInt64 maxRedirects;
+
+  const SsrfPolicy({required this.denyPrivate, required this.maxRedirects});
+
+  @override
+  int get hashCode => denyPrivate.hashCode ^ maxRedirects.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SsrfPolicy &&
+          runtimeType == other.runtimeType &&
+          denyPrivate == other.denyPrivate &&
+          maxRedirects == other.maxRedirects;
 }
 
 /// Structured data (Schema.org, microdata, RDFa) block.
@@ -13061,6 +13706,9 @@ class UrlExtractionConfig {
   /// URL extraction mode.
   final UrlExtractionMode mode;
 
+  /// Crawlberg crawl configuration used for HTTP(S) URL extraction.
+  final CrawlConfig crawl;
+
   /// Optional regex filter for document-discovered URLs.
   final String? documentUrlPattern;
 
@@ -13078,6 +13726,7 @@ class UrlExtractionConfig {
 
   const UrlExtractionConfig({
     required this.mode,
+    required this.crawl,
     this.documentUrlPattern,
     this.maxDocumentUrlsPerResult,
     this.maxTotalUrls,
@@ -13088,6 +13737,7 @@ class UrlExtractionConfig {
   @override
   int get hashCode =>
       mode.hashCode ^
+      crawl.hashCode ^
       documentUrlPattern.hashCode ^
       maxDocumentUrlsPerResult.hashCode ^
       maxTotalUrls.hashCode ^
@@ -13100,6 +13750,7 @@ class UrlExtractionConfig {
       other is UrlExtractionConfig &&
           runtimeType == other.runtimeType &&
           mode == other.mode &&
+          crawl == other.crawl &&
           documentUrlPattern == other.documentUrlPattern &&
           maxDocumentUrlsPerResult == other.maxDocumentUrlsPerResult &&
           maxTotalUrls == other.maxTotalUrls &&

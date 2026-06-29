@@ -257,6 +257,27 @@ pub struct OcrExtractionResult {
     pub(crate) internal_document: Option<super::internal::InternalDocument>,
 }
 
+impl OcrExtractionResult {
+    /// Create an OCR extraction result without an internal hOCR document.
+    #[must_use]
+    pub fn new(
+        content: String,
+        mime_type: String,
+        metadata: HashMap<String, serde_json::Value>,
+        tables: Vec<OcrTable>,
+        ocr_elements: Option<Vec<super::OcrElement>>,
+    ) -> Self {
+        Self {
+            content,
+            mime_type,
+            metadata,
+            tables,
+            ocr_elements,
+            internal_document: None,
+        }
+    }
+}
+
 /// Table detected via OCR.
 ///
 /// Represents a table structure recognized during OCR processing.

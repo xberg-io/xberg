@@ -2,11 +2,27 @@
 	"id": "smoke_txt_basic",
 	"category": "smoke",
 	"description": "Smoke test: Plain text file",
-	"tags": ["smoke", "text", "plaintext"],
+	"tags": [
+		"smoke",
+		"text",
+		"plaintext"
+	],
 	"input": {
-		"kind": "uri",
-		"uri": "text/report.txt",
-		"mime_type": "text/plain"
+		"mock_responses": [
+			{
+				"path": "/text/report.txt",
+				"status_code": 200,
+				"headers": {
+					"content-type": "application/octet-stream"
+				},
+				"body_file": "../test_documents/text/report.txt"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url/text/report.txt",
+			"mime_type": "text/plain"
+		}
 	},
 	"assertions": [
 		{
@@ -21,7 +37,9 @@
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
+		"languages": [
+			"wasm"
+		],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	},
 	"call": "extract",

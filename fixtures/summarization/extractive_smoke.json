@@ -2,11 +2,27 @@
 	"id": "summarization_extractive_smoke",
 	"category": "summarization",
 	"description": "TextRank extractive summary over a multi-paragraph plain text document. Pure-Rust, deterministic, no external services required.",
-	"tags": ["summarization", "extractive", "textrank"],
+	"tags": [
+		"summarization",
+		"extractive",
+		"textrank"
+	],
 	"call": "extract",
 	"input": {
-		"kind": "uri",
-		"uri": "text/book_war_and_peace_1p.txt"
+		"mock_responses": [
+			{
+				"path": "/text/book_war_and_peace_1p.txt",
+				"status_code": 200,
+				"headers": {
+					"content-type": "application/octet-stream"
+				},
+				"body_file": "../test_documents/text/book_war_and_peace_1p.txt"
+			}
+		],
+		"extract_input": {
+			"kind": "uri",
+			"uri": "$mock_url/text/book_war_and_peace_1p.txt"
+		}
 	},
 	"assertions": [
 		{
@@ -28,7 +44,9 @@
 		}
 	],
 	"skip": {
-		"languages": ["wasm"],
+		"languages": [
+			"wasm"
+		],
 		"reason": "WASM cannot access filesystem; use bytes input with file content instead"
 	},
 	"config": {

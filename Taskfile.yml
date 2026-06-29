@@ -349,7 +349,7 @@ tasks:
       - alef test --e2e --lang rust
 
   python:e2e:
-    desc: "Run Python e2e tests (builds xberg-py via maturin first)"
+    desc: "Run Python e2e tests via Alef"
     cmds:
       - alef test --e2e --lang python
 
@@ -440,7 +440,7 @@ tasks:
     internal: true
     cmds:
       - cd e2e/swift_e2e && rm -rf .build
-      - cd e2e/swift_e2e && swift test
+      - bash scripts/e2e/run-with-mock-server.sh bash -c 'cd e2e/swift_e2e && swift test'
 
   zig:e2e:
     desc: "Run Zig e2e tests"
@@ -478,14 +478,14 @@ tasks:
   ruby:format:
     desc: "Format Ruby binding with rubocop"
     cmds:
-      - bundle exec rubocop --autocorrect
+      - export PATH="$HOME/.rbenv/shims:$HOME/.asdf/shims:$PATH" && ruby -S bundle exec rubocop --autocorrect
     dir: packages/ruby
 
   ruby:lint:
     desc: "Lint Ruby binding with rubocop and steep"
     cmds:
-      - bundle exec rubocop
-      - bundle exec steep check
+      - export PATH="$HOME/.rbenv/shims:$HOME/.asdf/shims:$PATH" && ruby -S bundle exec rubocop
+      - export PATH="$HOME/.rbenv/shims:$HOME/.asdf/shims:$PATH" && ruby -S bundle exec steep check
     dir: packages/ruby
 
   php:build:

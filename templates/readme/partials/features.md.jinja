@@ -20,15 +20,19 @@
 |----------|---------|----------|
 | **Raster** | `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`, `.tiff`, `.tif` | OCR, table detection, EXIF metadata, dimensions, color space |
 | **Advanced** | `.jp2`, `.jpx`, `.jpm`, `.mj2`, `.jbig2`, `.jb2`, `.pnm`, `.pbm`, `.pgm`, `.ppm` | OCR via hayro-jpeg2000 (pure Rust decoder), JBIG2 support, table detection, format-specific metadata |
+{% if language != "r" and language != "wasm" %}
 | **HEIC family** | `.heic`, `.heics`, `.heif`, `.avif`, `.avcs` | EXIF metadata, optional libheif pixel decoding |
+{% endif %}
 | **Vector** | `.svg` | DOM parsing, embedded text, graphics metadata |
 
+{% if language != "r" and language != "wasm" %}
 #### Audio & Video
 
 | Category | Formats | Features |
 |----------|---------|----------|
 | **Audio** | `.mp3`, `.mpga`, `.m4a`, `.wav`, `.webm` | Whisper transcription when native transcription is available |
 | **Video audio track** | `.mp4`, `.mpeg`, `.webm` | Audio-track transcription only |
+{% endif %}
 
 #### Web & Data
 
@@ -75,7 +79,9 @@ Powered by [tree-sitter-language-pack](https://github.com/xberg-io/tree-sitter-l
 - **Metadata Extraction** - Retrieve document properties, creation date, author, etc.
 - **Table Extraction** - Parse tables with structure and cell content preservation
 - **Image Extraction** - Extract embedded images and render page previews
+{% if language != "r" and language != "wasm" %}
 - **Audio/Video Transcription** - Extract speech transcripts from MP3, M4A, WAV, WebM, and MP4 inputs when the native transcription feature is available
+{% endif %}
 - **OCR Support** - Integrate multiple OCR backends for scanned documents
 {% if features.async %}
 - **Async/Await** - Non-blocking document processing with concurrent operations

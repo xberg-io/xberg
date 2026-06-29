@@ -310,7 +310,11 @@ def main() -> None:
             if len(file_paths) != 1:
                 print("Error: sync mode requires exactly one file", file=sys.stderr)
                 sys.exit(1)
-            payload = extract_sync(file_paths[0], ocr_enabled, output_format)
+            # Wrap sync extraction in timeout protection to handle hangs during initialization
+            if timeout is not None:
+                payload = _run_with_timeout(extract_sync, (file_paths[0], ocr_enabled, output_format), timeout)
+            else:
+                payload = extract_sync(file_paths[0], ocr_enabled, output_format)
             print(json.dumps(payload), end="")
 
         elif mode == "batch":

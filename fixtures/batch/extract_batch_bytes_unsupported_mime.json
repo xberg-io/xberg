@@ -7,12 +7,7 @@
 		"inputs": [
 			{
 				"kind": "bytes",
-				"bytes": [
-					100,
-					97,
-					116,
-					97
-				],
+				"bytes": [100, 97, 116, 97],
 				"mime_type": "application/x-unknown"
 			}
 		]

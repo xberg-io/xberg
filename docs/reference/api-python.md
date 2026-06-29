@@ -149,80 +149,6 @@ result = list_embedding_backends()
 
 ---
 
-#### register_document_extractor()
-
-Register a document extractor with the global registry.
-
-The extractor is keyed by `name` and indexed for
-every MIME type returned by
-`supported_mime_types`.
-
-**Errors:**
-
-- `Validation` if the plugin name is empty or
-  contains whitespace.
-
-- Any error returned by the extractor's `initialize()` method.
-
-**Signature:**
-
-```python
-def register_document_extractor(extractor: DocumentExtractor) -> None
-```
-
-**Example:**
-
-```python
-register_document_extractor(DocumentExtractor())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `extractor` | `DocumentExtractor` | Yes | The document extractor |
-
-**Returns:** No return value.
-
-**Errors:** Raises `Error`.
-
----
-
-#### unregister_document_extractor()
-
-Unregister a document extractor by name.
-
-Removes the extractor from the global registry and calls its `shutdown()`
-method. No-op if no extractor with that name is registered.
-
-**Errors:**
-
-- Any error returned by the extractor's `shutdown()` method.
-
-**Signature:**
-
-```python
-def unregister_document_extractor(name: str) -> None
-```
-
-**Example:**
-
-```python
-unregister_document_extractor("value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `name` | `str` | Yes | The name |
-
-**Returns:** No return value.
-
-**Errors:** Raises `Error`.
-
----
-
 #### list_document_extractors()
 
 List names of all registered document extractors.
@@ -376,77 +302,6 @@ def clear_post_processors() -> None
 ```python
 clear_post_processors()
 ```
-
-**Returns:** No return value.
-
-**Errors:** Raises `Error`.
-
----
-
-#### register_renderer()
-
-Register a renderer plugin with the global registry.
-
-The renderer's format name is taken from `Plugin.name`. Registering a
-renderer with a name that already exists replaces the previous renderer
-for that format.
-
-### Note on `Result` return type
-
-Returns `Result<()>` for cross-language API symmetry required by the alef
-trait-bridge codegen. The underlying `parking_lot.RwLock` cannot be
-poisoned (parking_lot provides no poisoning semantics), so this function
-never returns `Err` in practice.
-
-**Signature:**
-
-```python
-def register_renderer(renderer: Renderer) -> None
-```
-
-**Example:**
-
-```python
-register_renderer(Renderer())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `renderer` | `Renderer` | Yes | The renderer |
-
-**Returns:** No return value.
-
-**Errors:** Raises `Error`.
-
----
-
-#### unregister_renderer()
-
-Unregister a renderer by format name.
-
-**Errors:**
-
-Returns an error if the registry lock is poisoned.
-
-**Signature:**
-
-```python
-def unregister_renderer(name: str) -> None
-```
-
-**Example:**
-
-```python
-unregister_renderer("value")
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `name` | `str` | Yes | The name |
 
 **Returns:** No return value.
 
@@ -789,6 +644,28 @@ Bounding box coordinates for element positioning.
 
 ---
 
+#### BrowserConfig
+
+Browser fallback configuration.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `mode` | `BrowserMode` | `BrowserMode.AUTO` | When to use the headless browser fallback. |
+| `backend` | `BrowserBackend` | `BrowserBackend.CHROMIUMOXIDE` | Browser backend used to render JavaScript-heavy pages. |
+| `endpoint` | `str \| None` | `None` | CDP WebSocket endpoint for connecting to an external browser instance. |
+| `timeout` | `float` | `30000ms` | Timeout for browser page load and rendering (in milliseconds when serialized). |
+| `wait` | `BrowserWait` | `BrowserWait.NETWORK_IDLE` | Wait strategy after browser navigation. |
+| `wait_selector` | `str \| None` | `None` | CSS selector to wait for when `wait` is `Selector`. |
+| `extra_wait` | `float \| None` | `None` | Extra time to wait after the wait condition is met. |
+| `proxy` | `ProxyConfig \| None` | `None` | Proxy for browser fetches. Overrides `CrawlConfig.proxy` when set. Native backend supports http/https only (no SOCKS5). |
+| `block_url_patterns` | `list\[str\]` | `\[\]` | URL patterns to block before the network request fires. Supports `*` wildcards. Useful for skipping ads/analytics/large images. Honored by `BrowserBackend.Native`; chromiumoxide ignores this field today. |
+| `eval_script` | `str \| None` | `None` | JavaScript snippet evaluated after navigation completes. Scraping captures the native backend result in `ScrapeResult.browser.eval_result`. Interactions run this script before page actions on both browser backends but do not include the script result in `InteractionResult`. |
+| `robots_user_agent` | `str \| None` | `None` | User-agent used when fetching robots.txt. Defaults to `BrowserConfig.user_agent` (or crawlberg's default) if unset. Native only. |
+| `capture_network_events` | `bool` | `False` | Capture the full network event stream into the result. Default false (only the document event is captured). Native only. |
+| `session_affinity` | `bool` | `True` | Enable session affinity: reuse chromiumoxide Pages for same-domain requests so cookies + fingerprint + solved challenges persist. Default: true. When false, each request gets a fresh Page. |
+
+---
+
 #### CacheStats
 
 Aggregate statistics for a xberg cache directory.
@@ -967,6 +844,31 @@ A single label + confidence pair.
 
 ---
 
+#### ContentConfig
+
+Content extraction and conversion configuration.
+
+Controls how HTML is converted to the output format. Uses
+html-to-markdown-rs as the conversion engine for all formats
+(markdown, plain text, djot).
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `output_format` | `str` | `"markdown"` | Output format: `"markdown"` (default), `"plain"`, `"djot"`. |
+| `preprocessing_preset` | `str` | `"standard"` | Preprocessing aggressiveness: `"minimal"`, `"standard"` (default), `"aggressive"`. - Minimal: only scripts/styles removed. - Standard: also removes nav, nav-hinted headers/footers/asides, forms. - Aggressive: removes all footers/asides unconditionally. |
+| `remove_navigation` | `bool` | `True` | Remove navigation elements (nav, breadcrumbs, menus). Default: `True`. |
+| `remove_forms` | `bool` | `True` | Remove form elements. Default: `True`. |
+| `strip_tags` | `list\[str\]` | `\[\]` | HTML tag names to strip (render children only, remove the tag wrapper). Default: `\["noscript"\]`. |
+| `preserve_tags` | `list\[str\]` | `\[\]` | HTML tag names to preserve as raw HTML in output. |
+| `exclude_selectors` | `list\[str\]` | `\[\]` | CSS selectors for elements to exclude entirely (element + all content). Unlike `strip_tags` (which removes the wrapper but keeps children), excluded elements and all descendants are dropped. Supports CSS selectors: `.class`, `#id`, `\[attribute\]`, compound selectors. Example: `\[".cookie-banner", "#ad-container", "\[role='complementary'\]"\]` |
+| `skip_images` | `bool` | `False` | Skip image elements in output. Default: `False`. |
+| `max_depth` | `int \| None` | `None` | Max DOM traversal depth. Prevents stack overflow on deeply nested HTML. |
+| `wrap` | `bool` | `False` | Enable line wrapping. Default: `False`. |
+| `wrap_width` | `int` | `80` | Wrap width when `wrap` is enabled. Default: `80`. |
+| `include_document_structure` | `bool` | `True` | Include document structure tree in output. Default: `True`. |
+
+---
+
 #### ContentFilterConfig
 
 Cross-extractor content filtering configuration.
@@ -1042,6 +944,54 @@ and Office-specific extensions.
 | `identifier` | `str \| None` | `None` | Unique identifier |
 | `version` | `str \| None` | `None` | Document version |
 | `last_printed` | `str \| None` | `None` | Last print timestamp (ISO 8601) |
+
+---
+
+#### CrawlConfig
+
+Configuration for crawl, scrape, and map operations.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `max_depth` | `int \| None` | `None` | Maximum crawl depth (number of link hops from the start URL). |
+| `max_pages` | `int \| None` | `None` | Maximum number of pages to crawl. |
+| `max_concurrent` | `int \| None` | `None` | Maximum number of concurrent requests. |
+| `respect_robots_txt` | `bool` | `False` | Whether to respect robots.txt directives. |
+| `soft_http_errors` | `bool` | `False` | When true, HTTP-level error responses (404 NotFound, 403 Forbidden, WAF blocks) are surfaced as `ScrapeResult` records with the matching `status_code` rather than raised as `CrawlError`. Default `False` preserves the historical throw-on-error contract for direct fetches. Independently of this flag, 404s reached at the end of a redirect chain are *always* surfaced softly — the user opted into redirect-following, so receiving a 404 there is part of the normal flow rather than an unexpected error. |
+| `user_agent` | `str \| None` | `None` | Custom user-agent string. |
+| `stay_on_domain` | `bool` | `False` | Whether to restrict crawling to the same domain. |
+| `allow_subdomains` | `bool` | `False` | Whether to allow subdomains when `stay_on_domain` is true. |
+| `include_paths` | `list\[str\]` | `\[\]` | Regex patterns for paths to include during crawling. |
+| `exclude_paths` | `list\[str\]` | `\[\]` | Regex patterns for paths to exclude during crawling. |
+| `custom_headers` | `dict\[str, str\]` | `{}` | Custom HTTP headers to send with each request. |
+| `request_timeout` | `float` | `30000ms` | Timeout for individual HTTP requests (in milliseconds when serialized). |
+| `rate_limit_ms` | `int \| None` | `None` | Per-domain rate limit in milliseconds. When set, enforces a minimum delay between requests to the same domain. Defaults to 200ms when `None`. |
+| `max_redirects` | `int` | `10` | Maximum number of redirects to follow. |
+| `retry_count` | `int` | `0` | Number of retry attempts for failed requests. |
+| `retry_codes` | `list\[int\]` | `\[\]` | HTTP status codes that should trigger a retry. |
+| `cookies_enabled` | `bool` | `False` | Whether to enable cookie handling. |
+| `auth` | `AuthConfig \| None` | `None` | Authentication configuration. |
+| `max_body_size` | `int \| None` | `None` | Maximum response body size in bytes. |
+| `remove_tags` | `list\[str\]` | `\[\]` | CSS selectors for tags to remove from HTML before processing. |
+| `content` | `ContentConfig` | — | Content extraction and conversion configuration. |
+| `map_limit` | `int \| None` | `None` | Maximum number of URLs to return from a map operation. |
+| `map_search` | `str \| None` | `None` | Search filter for map results (case-insensitive substring match on URLs). |
+| `download_assets` | `bool` | `False` | Whether to download assets (CSS, JS, images, etc.) from the page. |
+| `asset_types` | `list\[AssetCategory\]` | `\[\]` | Filter for asset categories to download. |
+| `max_asset_size` | `int \| None` | `None` | Maximum size in bytes for individual asset downloads. |
+| `browser` | `BrowserConfig` | — | Browser configuration. |
+| `proxy` | `ProxyConfig \| None` | `None` | Proxy configuration for HTTP requests. |
+| `user_agents` | `list\[str\]` | `\[\]` | List of user-agent strings for rotation. If non-empty, overrides `user_agent`. |
+| `capture_screenshot` | `bool` | `False` | Whether to capture a screenshot when using the browser. |
+| `follow_document_urls` | `bool` | `False` | Re-enqueue discovered `LinkType.Document` URLs into the crawl frontier so the crawl follows links *from* document pages (PDFs, etc.) as it would from HTML pages. Default: `False` (documents terminate at materialisation). |
+| `document_url_depth` | `int \| None` | `None` | Maximum document-depth (from the seed URL through document links only) when `follow_document_urls` is true. `None` means inherit `max_depth`. Independent of `max_depth`: a document URL is enqueued only if BOTH the outer `max_depth` and (if set) `document_url_depth` permit it. |
+| `download_documents` | `bool` | `True` | Whether to download non-HTML documents (PDF, DOCX, images, code, etc.) instead of skipping them. |
+| `document_max_size` | `int \| None` | `None` | Maximum size in bytes for document downloads. Defaults to 50 MB. |
+| `document_mime_types` | `list\[str\]` | `\[\]` | Allowlist of MIME types to download. If empty, uses built-in defaults. |
+| `warc_output` | `str \| None` | `None` | Path to write WARC output. If `None`, WARC output is disabled. |
+| `browser_profile` | `str \| None` | `None` | Named browser profile for persistent sessions (cookies, localStorage). |
+| `save_browser_profile` | `bool` | `False` | Whether to save changes back to the browser profile on exit. |
+| `ssrf` | `SsrfPolicy` | — | SSRF policy for outbound network requests. Default: deny private networks, allow http/https only, max 5 redirects. Phase 1: `deny_private` and `max_redirects` are exposed to all language bindings. `allowlist` is skipped (see `SsrfPolicy` fields) and will be added in a follow-up when `HostMatcher`'s tagged-enum FFI form is decided. |
 
 ---
 
@@ -2057,33 +2007,6 @@ Document extracted by the core extraction pipeline.
 | `formulas` | `list\[Formula\]` | `\[\]` | Mathematical formulas recognized in the document. Populated by the layout-guided formula pipeline when the `layout-detection` feature is enabled and the document contains regions classified as formulas. Empty otherwise. |
 | `form_fields` | `list\[PdfFormField\]` | `\[\]` | Form fields extracted from a PDF's AcroForm or XFA structure. Populated by the PDF extractor when `PdfConfig.extract_form_fields` is enabled (default) and the document is a fillable form. Empty otherwise. |
 | `formatted_content` | `str \| None` | `None` | Pre-rendered content in the requested output format. Populated during `derive_extraction_result` before tree derivation consumes element data. `apply_output_format` swaps this into `content` at the end of the pipeline, after post-processors have operated on plain text. |
-
-##### Methods
-
-###### from_ocr()
-
-Convert from an OCR result.
-
-**Signature:**
-
-```python
-@staticmethod
-def from_ocr(ocr: OcrExtractionResult) -> ExtractedDocument
-```
-
-**Example:**
-
-```python
-result = ExtractedDocument.from_ocr(OcrExtractionResult())
-```
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `ocr` | `OcrExtractionResult` | Yes | The ocr extraction result |
-
-**Returns:** `ExtractedDocument`
 
 ---
 
@@ -5072,6 +4995,18 @@ but may indicate degraded results.
 
 ---
 
+#### ProxyConfig
+
+Proxy configuration for HTTP requests.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `url` | `str` | — | Proxy URL (e.g. "<http://proxy:8080",> "socks5://proxy:1080"). |
+| `username` | `str \| None` | `None` | Optional username for proxy authentication. |
+| `password` | `str \| None` | `None` | Optional password for proxy authentication. |
+
+---
+
 #### PstMetadata
 
 Outlook PST archive metadata.
@@ -5976,6 +5911,17 @@ result = instance.max_multipart_field_mb()
 
 ---
 
+#### SsrfPolicy
+
+SSRF policy configuration.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `deny_private` | `bool` | `True` | If true, reject URLs that resolve to private/metadata IP ranges. |
+| `max_redirects` | `int` | `5` | Maximum number of HTTP redirects to follow during validation. |
+
+---
+
 #### StructuredData
 
 Structured data (Schema.org, microdata, RDFa) block.
@@ -6516,6 +6462,7 @@ URL ingestion and crawl configuration.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `mode` | `UrlExtractionMode` | `UrlExtractionMode.AUTO` | URL extraction mode. |
+| `crawl` | `CrawlConfig` | — | Crawlberg crawl configuration used for HTTP(S) URL extraction. |
 | `document_url_pattern` | `str \| None` | `None` | Optional regex filter for document-discovered URLs. |
 | `max_document_urls_per_result` | `int \| None` | `None` | Maximum URLs to follow per extraction result. |
 | `max_total_urls` | `int \| None` | `None` | Maximum URLs followed across the whole extraction call. |
@@ -7868,6 +7815,73 @@ Wire format is snake_case in all serializers (JSON, TOML, YAML).
 | `CHECKBOX_UNSELECTED` | Checkbox in unselected state. |
 | `FORM` | Form field or form element. |
 | `KEY_VALUE_REGION` | Key-value pair region (e.g. label + value in a form). |
+
+---
+
+#### BrowserMode
+
+When to use the headless browser fallback.
+
+| Value | Description |
+|-------|-------------|
+| `AUTO` | Automatically detect when JS rendering is needed and fall back to browser. |
+| `ALWAYS` | Always use the browser for every request. |
+| `NEVER` | Never use the browser fallback. |
+| `STEALTH` | Always use the browser with all stealth surfaces enabled. Behaves like `Always` for escalation purposes (every request is routed through the browser tier), but additionally enables: - browser JavaScript stealth patches - native-backend TLS fingerprint spoofing - stealth-aware default user-agent when no explicit UA is set - 1920×1080 viewport override Use this instead of setting the now-removed `BrowserConfig.stealth` boolean field. |
+
+---
+
+#### BrowserWait
+
+Wait strategy for browser page rendering.
+
+| Value | Description |
+|-------|-------------|
+| `NETWORK_IDLE` | Wait until network activity is idle. |
+| `SELECTOR` | Wait for a specific CSS selector to appear in the DOM. |
+| `FIXED` | Wait for a fixed duration after navigation. |
+
+---
+
+#### BrowserBackend
+
+Browser backend used for JavaScript rendering.
+
+| Value | Description |
+|-------|-------------|
+| `CHROMIUMOXIDE` | Existing Chromium/CDP backend powered by chromiumoxide. |
+| `NATIVE` | Crawlberg-owned native browser backend derived from Obscura. |
+
+---
+
+#### AuthConfig
+
+Authentication configuration.
+
+| Value | Description |
+|-------|-------------|
+| `BASIC` | HTTP Basic authentication. — Fields: `username`: `str`, `password`: `str` |
+| `BEARER` | Bearer token authentication. — Fields: `token`: `str` |
+| `HEADER` | Custom authentication header. — Fields: `name`: `str`, `value`: `str` |
+
+---
+
+#### AssetCategory
+
+The category of a downloaded asset.
+
+| Value | Description |
+|-------|-------------|
+| `DOCUMENT` | A document file (PDF, DOC, etc.). |
+| `IMAGE` | An image file. |
+| `AUDIO` | An audio file. |
+| `VIDEO` | A video file. |
+| `FONT` | A font file. |
+| `STYLESHEET` | A CSS stylesheet. |
+| `SCRIPT` | A JavaScript file. |
+| `ARCHIVE` | An archive file (ZIP, TAR, etc.). |
+| `DATA` | A data file (JSON, XML, CSV, etc.). |
+| `OTHER` | An unrecognized asset type. |
 
 ---
 

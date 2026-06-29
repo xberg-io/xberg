@@ -4,10 +4,20 @@
 	"tags": ["contract", "api", "batch"],
 	"call": "extract_batch",
 	"input": {
+		"mock_responses": [
+			{
+				"path": "/pdf/fake_memo.pdf",
+				"status_code": 200,
+				"headers": {
+					"content-type": "application/pdf"
+				},
+				"body_file": "../test_documents/pdf/fake_memo.pdf"
+			}
+		],
 		"inputs": [
 			{
 				"kind": "uri",
-				"uri": "pdf/fake_memo.pdf"
+				"uri": "$mock_url/pdf/fake_memo.pdf"
 			}
 		]
 	},

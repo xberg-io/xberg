@@ -24,8 +24,10 @@ fn test_file_path(filename: &str) -> PathBuf {
 async fn extract_docbook4_file(filename: &str) -> xberg::Result<ExtractedDocument> {
     let extractor = xberg::extractors::DocbookExtractor;
     let path = test_file_path(filename);
-    let mut config = ExtractionConfig::default();
-    config.include_document_structure = true;
+    let config = ExtractionConfig {
+        include_document_structure: true,
+        ..Default::default()
+    };
     let mut input = ExtractInput::from_uri(path.to_string_lossy().into_owned());
     input.mime_type = Some("application/docbook+xml".to_string());
     extractor.extract(input, &config).await
@@ -35,8 +37,10 @@ async fn extract_docbook4_file(filename: &str) -> xberg::Result<ExtractedDocumen
 async fn extract_docbook5_file(filename: &str) -> xberg::Result<ExtractedDocument> {
     let extractor = xberg::extractors::DocbookExtractor;
     let path = test_file_path(filename);
-    let mut config = ExtractionConfig::default();
-    config.include_document_structure = true;
+    let config = ExtractionConfig {
+        include_document_structure: true,
+        ..Default::default()
+    };
     let mut input = ExtractInput::from_uri(path.to_string_lossy().into_owned());
     input.mime_type = Some("application/docbook+xml".to_string());
     extractor.extract(input, &config).await
@@ -45,8 +49,10 @@ async fn extract_docbook5_file(filename: &str) -> xberg::Result<ExtractedDocumen
 /// Helper to extract bytes directly
 async fn extract_docbook_bytes(content: &[u8], mime_type: &str) -> xberg::Result<ExtractedDocument> {
     let extractor = xberg::extractors::DocbookExtractor;
-    let mut config = ExtractionConfig::default();
-    config.include_document_structure = true;
+    let config = ExtractionConfig {
+        include_document_structure: true,
+        ..Default::default()
+    };
     let input = ExtractInput::from_bytes(content.to_vec(), mime_type.to_string(), None);
     extractor.extract(input, &config).await
 }

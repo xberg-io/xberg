@@ -68,11 +68,10 @@ impl OcrBackend for MockOcrBackend {
         }
 
         use std::borrow::Cow;
-        Ok(ExtractedDocument {
-            content: format!("{} (lang: {})", self.return_text, config.language.join(",")),
-            mime_type: Cow::Borrowed("text/plain"),
-            ..Default::default()
-        })
+        let mut document = ExtractedDocument::default();
+        document.content = format!("{} (lang: {})", self.return_text, config.language.join(","));
+        document.mime_type = Cow::Borrowed("text/plain");
+        Ok(document)
     }
 
     fn supports_language(&self, lang: &str) -> bool {
@@ -160,11 +159,10 @@ impl OcrBackend for ValidatingOcrBackend {
         }
 
         use std::borrow::Cow;
-        Ok(ExtractedDocument {
-            content: format!("Processed {} bytes", image_bytes.len()),
-            mime_type: Cow::Borrowed("text/plain"),
-            ..Default::default()
-        })
+        let mut document = ExtractedDocument::default();
+        document.content = format!("Processed {} bytes", image_bytes.len());
+        document.mime_type = Cow::Borrowed("text/plain");
+        Ok(document)
     }
 
     fn supports_language(&self, _lang: &str) -> bool {
@@ -216,12 +214,11 @@ impl OcrBackend for MetadataOcrBackend {
         );
 
         use std::borrow::Cow;
-        Ok(ExtractedDocument {
-            content: "OCR processed text".to_string(),
-            mime_type: Cow::Borrowed("text/plain"),
-            metadata,
-            ..Default::default()
-        })
+        let mut document = ExtractedDocument::default();
+        document.content = "OCR processed text".to_string();
+        document.mime_type = Cow::Borrowed("text/plain");
+        document.metadata = metadata;
+        Ok(document)
     }
 
     fn supports_language(&self, _lang: &str) -> bool {
@@ -264,11 +261,10 @@ impl OcrBackend for DocumentProcessingOcrBackend {
         self.image_call_count.fetch_add(1, Ordering::SeqCst);
 
         use std::borrow::Cow;
-        Ok(ExtractedDocument {
-            content: "Processed via image extraction".to_string(),
-            mime_type: Cow::Borrowed("text/plain"),
-            ..Default::default()
-        })
+        let mut document = ExtractedDocument::default();
+        document.content = "Processed via image extraction".to_string();
+        document.mime_type = Cow::Borrowed("text/plain");
+        Ok(document)
     }
 
     fn supports_document_processing(&self) -> bool {
@@ -283,11 +279,10 @@ impl OcrBackend for DocumentProcessingOcrBackend {
         self.document_call_count.fetch_add(1, Ordering::SeqCst);
 
         use std::borrow::Cow;
-        Ok(ExtractedDocument {
-            content: "Processed natively as document".to_string(),
-            mime_type: Cow::Borrowed("text/plain"),
-            ..Default::default()
-        })
+        let mut document = ExtractedDocument::default();
+        document.content = "Processed natively as document".to_string();
+        document.mime_type = Cow::Borrowed("text/plain");
+        Ok(document)
     }
 
     fn supports_language(&self, _lang: &str) -> bool {

@@ -28,6 +28,7 @@ const PYTHON_EXTRACTION_TIMEOUT_SECS: u64 = PERSISTENT_MAX_TIMEOUT_SECS - PYTHON
 fn get_supported_formats(framework_name: &str) -> Vec<String> {
     match framework_name {
         // LiteParse (run-llama/liteparse): PDF-only Rust CLI (`lit parse`).
+        // Supports both plaintext and markdown output formats.
         "liteparse" => vec!["pdf".to_string()],
 
         // PyMuPDF4LLM: PDF + formats via PyMuPDF/fitz
@@ -147,6 +148,9 @@ pub fn create_docling_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
     let supported_formats = get_supported_formats("docling");
     Ok(
         SubprocessAdapter::new("docling", command, args, vec![], supported_formats)
+            // docling_extract.py honors `--format=`; pass the requested format so
+            // plaintext vs markdown is real, not the script's default (markdown).
+            .with_format_aware(true)
             .with_max_timeout(Duration::from_secs(PERSISTENT_MAX_TIMEOUT_SECS)),
     )
 }
@@ -165,6 +169,9 @@ pub fn create_unstructured_adapter(ocr_enabled: bool) -> Result<SubprocessAdapte
     let supported_formats = get_supported_formats("unstructured");
     Ok(
         SubprocessAdapter::new("unstructured", command, args, vec![], supported_formats)
+            // unstructured_extract.py honors `--format=`; pass it for real
+            // plaintext vs markdown parity instead of the script default.
+            .with_format_aware(true)
             .with_max_timeout(Duration::from_secs(PERSISTENT_MAX_TIMEOUT_SECS)),
     )
 }
@@ -188,8 +195,11 @@ pub fn create_markitdown_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter>
 /// Creates a subprocess adapter for LiteParse (run-llama/liteparse) Rust CLI.
 ///
 /// Requires the `lit` binary on PATH. Install with `cargo install liteparse`.
-/// Wrapper invokes `lit parse <file> --format text` per file — no persistent
-/// server, default options only.
+///
+/// Supports:
+/// - Single-file mode: `lit parse <file> --format text|markdown` per file
+/// - Batch mode: `lit batch-parse <input_dir> <output_dir> --format text|markdown`
+/// - Both plaintext and markdown output formats
 pub fn create_liteparse_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
     which::which("lit").map_err(|_| {
         crate::Error::Config("lit (liteparse) not found. Install with: cargo install liteparse".to_string())
@@ -202,8 +212,10 @@ pub fn create_liteparse_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> 
 
     let supported_formats = get_supported_formats("liteparse");
     Ok(
-        SubprocessAdapter::new("liteparse", command, args, vec![], supported_formats)
-            .with_max_timeout(Duration::from_secs(PERSISTENT_MAX_TIMEOUT_SECS)),
+        SubprocessAdapter::with_batch_support("liteparse", command, args, vec![], supported_formats)
+            .with_max_timeout(Duration::from_secs(PERSISTENT_MAX_TIMEOUT_SECS))
+            .with_format_aware(true)
+            .with_native_batch(true),
     )
 }
 
@@ -400,13 +412,11 @@ pub fn create_tika_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
     let compile_dir = ensure_tika_extract_compiled(&command, &jar_path)?;
 
     // Build classpath: compiled classes directory + tika-app JAR
-    // Use the platform-appropriate path separator
-    let classpath = format!(
-        "{}{}{}",
-        compile_dir.display(),
-        std::path::MAIN_SEPARATOR,
-        jar_path.display()
-    );
+    // Use the platform-appropriate Java classpath separator (: on Unix, ; on Windows)
+    #[cfg(target_os = "windows")]
+    let classpath = format!("{};{}", compile_dir.display(), jar_path.display());
+    #[cfg(not(target_os = "windows"))]
+    let classpath = format!("{}:{}", compile_dir.display(), jar_path.display());
 
     let args = vec![
         "-server".to_string(),
@@ -455,6 +465,9 @@ pub fn create_mineru_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
     let supported_formats = get_supported_formats("mineru");
     Ok(
         SubprocessAdapter::new("mineru", command, args, vec![], supported_formats)
+            // mineru_extract.py honors `--format=`; pass it for real plaintext vs
+            // markdown parity instead of the script default.
+            .with_format_aware(true)
             .with_max_timeout(Duration::from_secs(SLOW_ML_TIMEOUT_SECS)),
     )
 }

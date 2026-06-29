@@ -1,0 +1,28 @@
+---
+name: xberg-api-reference
+description: Use when working with Xberg generated language APIs, public types, extraction configuration, errors, or binding docs.
+---
+
+# Xberg API Reference
+
+Use this skill when changing or explaining Xberg public APIs across Rust and generated language bindings.
+
+## Generated Reference Pages
+
+{% for ref in api_references %}
+- [{{ ref.title }}]({{ ref.path }})
+{% else %}
+- No generated API reference pages were provided in the Alef context.
+{% endfor %}
+
+## Languages
+
+{% for language in languages %}
+- `{{ language }}`
+{% endfor %}
+
+## Notes
+
+- Treat Rust source as the source of truth; generated language APIs should match the Alef extraction output.
+- Keep configuration, result, metadata, plugin, OCR, chunking, embedding, and error surfaces consistent across bindings.
+- When adding examples, prefer snippets under configured snippet roots so Alef can index and validate them.

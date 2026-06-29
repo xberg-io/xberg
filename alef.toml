@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.29.5"
+alef_version = "0.30.0"
 languages = [
   "python",
   "node",
@@ -69,6 +69,27 @@ async_wrappers = false
 
 [workspace.format]
 enabled = false
+
+[workspace.docs]
+reference_output = "docs/reference"
+
+[workspace.docs.cli]
+sources = ["crates/xberg-cli/src/main.rs"]
+
+[workspace.docs.mcp]
+sources = ["crates/xberg/src/mcp/server.rs"]
+
+[workspace.docs.llms]
+template = "templates/docs/llms.txt.jinja"
+output = "docs/llms.txt"
+adopt_existing = true
+
+[workspace.docs.skills]
+template_dir = "templates/docs/skills"
+outputs = [".codex/skills", ".agents/skills", ".github/skills", ".claude/skills"]
+
+[workspace.docs.snippets]
+dirs = ["docs/snippets"]
 
 # Disable the default format_generated pass for node (pnpm dlx oxfmt .) which runs
 # from the repo root and chokes on vendored HTML fixtures and deployment YAML.
@@ -186,6 +207,7 @@ sources = [
   "crates/xberg/src/plugins/processor/trait.rs",
   "crates/xberg/src/plugins/processor/mod.rs",
 ]
+
 features = [
   "full",
   "pdf",
@@ -237,6 +259,18 @@ features = [
   "url-ingestion",
 ]
 
+[[crates.source_crates]]
+name = "crawlberg"
+sources = [
+  "../crawlberg/crates/crawlberg/src/types/config.rs",
+  "../crawlberg/crates/crawlberg/src/types/discovery.rs",
+  "../crawlberg/crates/crawlberg/src/net/ssrf.rs",
+]
+roots = ["crawlberg::CrawlConfig"]
+
+[crates.extra_dependencies]
+crawlberg = { workspace = true }
+
 [crates.python]
 module_name = "_xberg"
 exclude_types = [
@@ -258,6 +292,12 @@ exclude_functions = [
   "batch_extract_bytes_sync",
   "batch_extract_files",
   "batch_extract_files_sync",
+  # Trait-bridge registration emits Python adapters for these plugin families.
+  # The raw Rust functions take Arc<dyn Trait> and duplicate the bridge names.
+  "register_document_extractor",
+  "register_renderer",
+  "unregister_document_extractor",
+  "unregister_renderer",
 ]
 reexported_types = [
   "ExtractionResult",
@@ -415,6 +455,7 @@ default_features = false
 
 [crates.wasm]
 package_name = "@xberg-io/xberg-wasm"
+features = ["wasm-target", "url-ingestion"]
 exclude_types = [
   # ORT/runtime-only types not available in the wasm-target feature set
   "OcrFallbackDecision",
@@ -508,7 +549,6 @@ exclude_functions = [
   "batch_extract_files",
   "batch_extract_files_sync",
 ]
-features = ["wasm-target"]
 
 [crates.wasm.extra_dependencies]
 async-trait = "0.1"
@@ -1144,18 +1184,90 @@ exclude_functions = [
 
 [crates.r]
 package_name = "xberg"
-# xberg-libheif transitively links libheif via libheif-sys; R CMD INSTALL needs
-# the same `-lheif` so the dlopen at package load doesn't fail on `_heif_check_filetype`.
-extra_makevars_prelude = ["HEIF_LIBS = $(shell pkg-config --libs libheif 2>/dev/null || echo \"-lheif\")"]
-extra_pkg_libs = ["$(HEIF_LIBS)"]
+features = ["wasm-target", "url-ingestion"]
+default_features = false
+exclude_types = [
+  # ORT/runtime-only types not available in the wasm-target feature set
+  "OcrFallbackDecision",
+  "OcrProcessor",
+  "OcrCacheStats",
+  "TessdataManager",
+  "PageLayoutResult",
+]
 exclude_functions = [
-  "calculate_quality_score",
-  "count_tokens",
+  # paddle-ocr / layout-detection / embeddings / auto-rotate
   "embed_texts",
-  # Vec<NamedStruct> return: extendr has no `From<Vec<T>> for Robj` for opaque struct
-  # types. Excluded until alef emits a manual list-based From impl.
-  "detect_qr_codes",
-  "find_all",
+  "embed_text",
+  "detect_layout",
+  "detect_orientation",
+  "run_ocr_pipeline",
+  "process_ocr_element",
+  "layout_runner",
+  "record_success_on_current_span",
+  "record_error_on_current_span",
+  # ocr module (requires full ocr, not ocr-wasm)
+  "compute_hash",
+  "assemble_ocr_markdown",
+  "validate_tesseract_version",
+  # paddle_ocr module
+  "is_language_supported",
+  "language_to_script_family",
+  "map_language_code",
+  # embeddings module
+  "normalize",
+  "list_presets",
+  # image module (ort-dependent preprocessing)
+  "calculate_optimal_dpi",
+  "calculate_smart_dpi",
+  # ort_discovery
+  "ensure_ort_available",
+  # pdf layout_runner
+  "run_layout_for_page",
+  "run_layout_for_pdf",
+  # telemetry internals
+  "sanitize_path",
+  # layout detection
+  "config_from_extraction",
+  "detect_layout_for_images",
+  # Uses excluded types WasmDetectionResult/WasmRecognizedTable
+  "recognize_page_tables",
+  # Functions using excluded types/modules
+  "generate_embeddings_for_chunks",
+  "apply_heuristics",
+  "greedy_nms",
+  # docx extraction functions (internal, not public API)
+  "detect_page_breaks_from_docx",
+  "detect_table_page_numbers",
+  # ooxml embedded object extraction (internal, returns complex types)
+  "extract_ooxml_embedded_objects",
+  "extract_and_process_embedded_files",
+  # markdown utility functions (internal)
+  "cells_to_text",
+  "cells_to_markdown",
+  # Table processing stubs (internal, incomplete implementations)
+  "calculate_quality_score",
+  "reconstruct_table",
+  "table_to_markdown",
+  "build_cell_grid",
+  "post_process_table",
+  "is_well_formed_table",
+  "parse_jotdown_attributes",
+  "parse_jotdown_inline",
+  # Vec<bool> params not supported by wasm-bindgen
+  "merge_segments",
+  # MCP server functions (not available in WASM)
+  "start_mcp_server_http",
+  "start_mcp_server_http_with_config",
+  # Vec<&str> vs &[String] / texts_refs scope — codegen type mismatch
+  "batch_reduce_tokens",
+  "chunk_texts_batch",
+  # Structured-extraction engine requires native HTTP (liter-llm) + PDF
+  # rendering; the `structured` feature is excluded from `wasm-target`, so the
+  # JSON bridge entry points do not exist on wasm32.
+  "extract_structured_json",
+  "split_and_extract_json",
+  # Rust-only utility — reuses the HF tokenizer cache; not generated into bindings
+  "count_tokens",
   "extract_sync",
   "extract_batch_sync",
   "extract_bytes",
@@ -1166,6 +1278,10 @@ exclude_functions = [
   "batch_extract_bytes_sync",
   "batch_extract_files",
   "batch_extract_files_sync",
+  # Vec<NamedStruct> return: extendr has no `From<Vec<T>> for Robj` for opaque struct
+  # types. Excluded until alef emits a manual list-based From impl.
+  "detect_qr_codes",
+  "find_all",
   # Vec<EnumVariant> param + Result<Vec<NamedStruct>> return: extendr cannot derive
   # `TryFrom<&Robj> for Vec<E>` or `From<Result<Vec<S>>> for Robj`. Excluded until alef
   # emits manual list-based conversions for these shapes.
@@ -1472,8 +1588,8 @@ check = "pnpm dlx oxlint crates/xberg-node"
 
 [crates.lint.ruby]
 precondition = "command -v bundle >/dev/null 2>&1"
-before = "cd packages/ruby && bundle install"
-format = "cd packages/ruby && bundle exec rubocop -a ."
+before = "export PATH=\"$HOME/.rbenv/shims:$HOME/.asdf/shims:$PATH\" && cd packages/ruby && ruby -S bundle install"
+format = "export PATH=\"$HOME/.rbenv/shims:$HOME/.asdf/shims:$PATH\" && cd packages/ruby && ruby -S bundle exec rubocop -a ."
 
 [crates.lint.php]
 precondition = "command -v composer >/dev/null 2>&1"
@@ -1545,18 +1661,15 @@ upgrade = "cd packages/zig && zig build --fetch"
 
 [crates.test.python]
 precondition = "command -v uv >/dev/null 2>&1"
-# `uv run --no-sync` in the e2e step never refreshes the e2e venv, and `uv sync`
-# installs `xberg` as a *copied* (non-editable) snapshot. A stale snapshot
-# built before the wrapper modules were generated leaves the venv with only
-# `_xberg.abi3.so` + `py.typed`, breaking `from xberg import ...`.
-# Force a clean rebuild of that snapshot from current source before testing.
-before = "cd packages/python && maturin develop --release && cd ../../e2e/python && uv sync --reinstall-package xberg"
-e2e = "cd e2e/python && uv run --no-sync pytest tests/ -q"
+# `uv sync --reinstall-package xberg` is the single Python e2e install path.
+# It refreshes the copied path dependency before `uv run --no-sync` executes tests.
+before = "bash scripts/e2e/build-mock-server.sh && cd e2e/python && uv sync --reinstall-package xberg"
+e2e = "cd e2e/python && uv run --no-sync python -m pytest tests/ -q"
 
 [crates.test.node]
 precondition = "command -v pnpm >/dev/null 2>&1"
-before = "cd crates/xberg-node && pnpm install && CARGO_BUILD_JOBS=1 pnpm exec napi build --output-dir . --release --platform"
-e2e = "cd e2e/node && pnpm install --frozen-lockfile=false && pnpm test"
+before = "bash scripts/e2e/build-mock-server.sh && cd crates/xberg-node && pnpm install && CARGO_BUILD_JOBS=1 pnpm exec napi build --output-dir . --release --platform && cd ../../e2e/node && pnpm install --frozen-lockfile=false"
+e2e = "cd e2e/node && pnpm test"
 
 [crates.test.go]
 precondition = "command -v go >/dev/null 2>&1"
@@ -1565,22 +1678,22 @@ e2e = "cd e2e/go && go test ./... -count=1"
 
 [crates.test.ruby]
 precondition = "command -v bundle >/dev/null 2>&1"
-before = "cd packages/ruby && bundle install && bundle exec rake compile && cd ../../e2e/ruby && bundle install"
-e2e = "cd e2e/ruby && bundle exec rspec"
+before = "export PATH=\"$HOME/.rbenv/shims:$HOME/.asdf/shims:$PATH\" && cd packages/ruby && ruby -S bundle install && ruby -S bundle exec rake compile && cd ../../e2e/ruby && ruby -S bundle install"
+e2e = "export PATH=\"$HOME/.rbenv/shims:$HOME/.asdf/shims:$PATH\" && cd e2e/ruby && ruby -S bundle exec rspec"
 
 [crates.test.php]
 precondition = "command -v composer >/dev/null 2>&1"
-before = "cargo build --release -p xberg-php && cd e2e/php && composer install"
+before = "bash scripts/e2e/build-mock-server.sh && cargo build --release -p xberg-php && cd e2e/php && composer install"
 e2e = "cd e2e/php && php run_tests.php"
 
 [crates.test.java]
 precondition = "command -v mvn >/dev/null 2>&1"
-before = "cargo build --release -p xberg-ffi && cd packages/java && mvn -T 1 package -DskipTests"
+before = "bash scripts/e2e/build-mock-server.sh && cargo build --release -p xberg-ffi && cd packages/java && mvn -T 1 package -DskipTests"
 e2e = "cd e2e/java && mvn test"
 
 [crates.test.csharp]
 precondition = "command -v dotnet >/dev/null 2>&1"
-before = "cargo build --release -p xberg-ffi && bash scripts/stage_csharp_native_local.sh"
+before = "bash scripts/e2e/build-mock-server.sh && cargo build --release -p xberg-ffi && bash scripts/stage_csharp_native_local.sh"
 e2e = "dotnet test e2e/csharp"
 
 [crates.test.elixir]
@@ -1591,8 +1704,7 @@ e2e = "cd e2e/elixir && XBERG_BUILD=1 mix test"
 [crates.test.r]
 precondition = "command -v Rscript >/dev/null 2>&1"
 before = "rm -f packages/r/src/xberg.so packages/r/src/entrypoint.o && cd packages/r/src/rust && cargo build --release"
-command = "cd e2e/r && Rscript -e \"devtools::load_all('../../packages/r'); testthat::set_max_fails(Inf); testthat::test_dir('tests')\""
-e2e = "cd e2e/r && Rscript -e \"devtools::load_all('../../packages/r'); testthat::set_max_fails(Inf); testthat::test_dir('tests')\""
+e2e = "bash scripts/e2e/run-with-mock-server.sh bash -c 'cd e2e/r && Rscript -e \"devtools::load_all(\\\"../../packages/r\\\"); testthat::set_max_fails(Inf); testthat::test_dir(\\\"tests\\\")\"'"
 
 [crates.test.wasm]
 precondition = "command -v wasm-pack >/dev/null 2>&1"
@@ -1610,15 +1722,15 @@ e2e = "cd e2e/rust && cargo test"
 
 [crates.test.kotlin_android]
 precondition = "command -v gradle >/dev/null 2>&1"
-before = ["cargo build --release -p xberg-ffi", "ln -sf libxberg_ffi.dylib target/release/libxberg_jni.dylib 2>/dev/null || ln -sf libxberg_ffi.so target/release/libxberg_jni.so 2>/dev/null || true"]
+before = ["bash scripts/e2e/build-mock-server.sh", "cargo build --release -p xberg-ffi", "ln -sf libxberg_ffi.dylib target/release/libxberg_jni.dylib 2>/dev/null || ln -sf libxberg_ffi.so target/release/libxberg_jni.so 2>/dev/null || true"]
 command = "cd packages/kotlin-android && gradle test --no-daemon"
-e2e = "cargo build --release -p xberg-ffi && (ln -sf libxberg_ffi.dylib target/release/libxberg_jni.dylib 2>/dev/null || ln -sf libxberg_ffi.so target/release/libxberg_jni.so 2>/dev/null || true) && cd e2e/kotlin_android && gradle test --no-daemon"
+e2e = "cd e2e/kotlin_android && gradle test --no-daemon"
 
 [crates.test.swift]
 precondition = "command -v swift >/dev/null 2>&1"
 before = ["cargo build --release -p xberg-swift", "bash scripts/setup-swift-bridge.sh"]
 command = "cd packages/swift && swift test"
-e2e = "cd e2e/swift_e2e && swift test"
+e2e = "bash scripts/e2e/run-with-mock-server.sh bash -c 'cd e2e/swift_e2e && swift test'"
 
 [crates.test.dart]
 # packages/dart is a Flutter plugin (pubspec declares `flutter:` SDK constraint
@@ -1637,14 +1749,15 @@ cd packages/dart && flutter pub get && cd rust && \
     flutter_rust_bridge_codegen generate --config-file flutter_rust_bridge.yaml && \
     echo "$INPUT_HASH" > "$HASH_FILE"; \
   fi; \
-} && cd ../../.. && cargo build --release -p xberg-dart
+} && cd ../../.. && cargo build --release -p xberg-dart && \
+bash scripts/e2e/build-mock-server.sh
 """
 command = "cd packages/dart && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$PWD/../../target/release flutter pub get && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$PWD/../../target/release flutter test"
-e2e = "cd e2e/dart && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$PWD/../../target/release flutter pub get && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$PWD/../../target/release flutter test"
+e2e = "cd e2e/dart && for dir in docx html json pdf text xlsx images; do test -L $dir || ln -sf ../../test_documents/$dir $dir; done && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$PWD/../../target/release flutter pub get && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$PWD/../../target/release flutter test"
 
 [crates.test.zig]
 precondition = "command -v zig >/dev/null 2>&1"
-before = "cargo build --release -p xberg-ffi"
+before = "bash scripts/e2e/build-mock-server.sh && cargo build --release -p xberg-ffi"
 # Pass absolute ffi_path/ffi_include_path: zig bakes DT_RUNPATH as a literal
 # string and the test binaries run with cwd=test_documents/, so the default
 # `../../target/release` resolves outside the repo at runtime.
@@ -3457,6 +3570,7 @@ authors = ["Na'aman Hirschfeld <naaman@xberg.io>"]
 keywords = ["document", "extraction", "pdf", "ocr", "text"]
 
 [crates.scaffold.cargo]
+rustc_wrapper = ".cargo/rustc-wrapper.sh"
 
 # Force dynamic CRT (/MD) for cc-rs MSVC builds. xberg-tesseract uses
 # cmake-rs which picks /MD, but cc-rs builds (e.g. esaxx-rs via gliner via
@@ -3633,10 +3747,10 @@ name = "R"
 package_name = "xberg"
 badge_url = "https://img.shields.io/badge/R-xberg-007ec6"
 docs_url = "https://xberg.io/"
-description = "Extract text, tables, images, metadata, and code intelligence from 96 file formats and 306 programming languages including PDF, Office documents, images, and audio/video transcripts where native transcription is available. R bindings with native R API, data frame integration, and high-performance document extraction."
+description = "Extract text, tables, images, metadata, and code intelligence from 96 file formats and 306 programming languages including PDF, Office documents, and images. R bindings with native R API, data frame integration, and high-performance document extraction."
 package_manager = ["install.packages"]
-features = { ocr = true, async = false, plugin_system = true, embeddings = true, code_intelligence = true }
-ocr_backends = ["tesseract", "paddleocr"]
+features = { ocr = true, async = false, plugin_system = true, embeddings = false, code_intelligence = true }
+ocr_backends = ["tesseract-wasm"]
 optional_sections = ["system_requirements"]
 snippets = { basic_extraction = "getting-started/basic_extraction.md", async_extraction = "getting-started/extract.md", batch_processing = "getting-started/extract_with_ocr.md", ocr_configuration = "ocr/ocr_extraction.md" }
 

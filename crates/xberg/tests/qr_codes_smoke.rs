@@ -122,16 +122,13 @@ fn detect_qr_codes_returns_all_grids_in_multi_code_image() {
 async fn qr_post_processor_populates_extracted_image() {
     // Build a synthetic image carrying our PNG payload.
     let png = render_qr_png(PAYLOAD);
-    let mut result = ExtractedDocument {
-        content: String::new(),
-        mime_type: Cow::Borrowed("application/octet-stream"),
-        images: Some(vec![ExtractedImage {
-            data: Bytes::from(png),
-            format: Cow::Borrowed("png"),
-            ..Default::default()
-        }]),
+    let mut result = ExtractedDocument::default();
+    result.mime_type = Cow::Borrowed("application/octet-stream");
+    result.images = Some(vec![ExtractedImage {
+        data: Bytes::from(png),
+        format: Cow::Borrowed("png"),
         ..Default::default()
-    };
+    }]);
     let config = ExtractionConfig {
         qr_codes: Some(true),
         ..Default::default()

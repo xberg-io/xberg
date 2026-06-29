@@ -16,7 +16,7 @@
 #![allow(clippy::field_reassign_with_default)]
 
 mod helpers;
-use helpers::{extract_bytes_document, extract_bytes_documents, extract_uri_document, extract_uri_document_blocking};
+use helpers::{extract_bytes_document, extract_uri_document_blocking};
 
 use serde_json::json;
 

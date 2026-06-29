@@ -270,6 +270,7 @@ fn test_extraction_config_no_unknown_fields_in_default() {
         "tree_sitter",
         "use_layout_for_markdown",
         "transcription",
+        "url",
     ];
 
     for key in obj.keys() {

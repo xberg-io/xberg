@@ -3,8 +3,12 @@
 //! This module provides shared utilities used across extraction modules.
 
 use crate::plugins::InternalDocumentExtractor;
+#[cfg(feature = "tokio-runtime")]
 use crate::types::{ErrorMetadata, ExtractedDocument, Metadata};
-use crate::{Result, XbergError};
+use crate::Result;
+#[cfg(feature = "tokio-runtime")]
+use crate::XbergError;
+#[cfg(feature = "tokio-runtime")]
 use std::borrow::Cow;
 use std::sync::Arc;
 
@@ -65,8 +69,9 @@ pub(in crate::core::extractor) fn get_extractor(mime_type: &str) -> Result<Arc<d
 /// ```
 /// Build an error `ExtractedDocument` for failed batch items.
 ///
-/// Used by both tokio-based batch functions and WASM synchronous fallbacks
-/// to construct a uniform error result.
+/// Used by the tokio-based concurrent batch functions to construct a uniform
+/// error result for a single failed input.
+#[cfg(feature = "tokio-runtime")]
 pub(crate) fn error_extraction_result(e: &XbergError, elapsed_ms: Option<u64>) -> ExtractedDocument {
     let metadata = Metadata {
         error: Some(ErrorMetadata {

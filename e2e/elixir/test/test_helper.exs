@@ -2,6 +2,22 @@ unless System.get_env("CRAWLBERG_ALLOW_PRIVATE_NETWORK") do
   System.put_env("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true")
 end
 
+# Elixir's os:putenv does not propagate to the native C runtime that crawlberg's
+# SSRF policy reads via getenv. Push the value through the NIF (libc setenv) so
+# loopback URL fixtures are permitted.
+try do
+  Xberg.Native.set_env("CRAWLBERG_ALLOW_PRIVATE_NETWORK", "true")
+rescue
+  _ -> :ok
+end
+
+# Run from the test-documents dir so relative file URIs (e.g. "text/report.txt")
+# resolve, mirroring the other language suites which chdir before running.
+test_documents_dir =
+  System.get_env("XBERG_TEST_DOCUMENTS_DIR") || Path.expand("../../../test_documents", __DIR__)
+
+if File.dir?(test_documents_dir), do: File.cd!(test_documents_dir)
+
 # Start a named Finch pool before ExUnit configured to use HTTP/1 only.
 # Tests pass `finch: AlefE2EFinch` on every Req call; the pool's protocol
 # selection (via `pools.default.protocols: [:http1]`) is the canonical place

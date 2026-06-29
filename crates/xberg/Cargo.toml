@@ -354,7 +354,8 @@ qr-codes = ["dep:rqrr", "dep:image"] # Pure-Rust QR decoding via rqrr.
 svg = ["dep:resvg", "image-encode"]
 
 tower-service = ["dep:tower", "tokio-runtime"]
-url-ingestion = ["tokio-runtime", "dep:crawlberg", "crawlberg/native-runtime"]
+url-config-types = ["dep:crawlberg"]
+url-ingestion = ["url-config-types", "crawlberg/native-runtime"]
 url-ingestion-browser = ["url-ingestion", "crawlberg/browser"]
 
 api-types = []
@@ -845,6 +846,10 @@ tokio-test = "0.4"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 wiremock = "0.6"
 zip = { version = ">=7.0.0, <8.7.0", default-features = false, features = ["deflate-flate2"] }
+
+[[test]]
+name = "captioning_smoke"
+required-features = ["captioning", "pdf"]
 
 [[test]]
 name = "structured_pipeline"

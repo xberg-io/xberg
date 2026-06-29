@@ -125,7 +125,7 @@ describe("plugins: document extractor registry", () => {
 		expect(listed).toEqual([]);
 	});
 
-	it("extract_after_unregister_uses_builtin: built-in extractor is used after custom removed", () => {
+	it("extract_after_unregister_uses_builtin: built-in extractor is used after custom removed", async () => {
 		const name = "_test_ts_unreg_plain";
 		registerDocumentExtractor(makeExtractor(name, "text/plain"));
 		unregisterDocumentExtractor(name);

@@ -18,11 +18,10 @@ fn init() {
 }
 
 fn build_result(text: &str) -> ExtractedDocument {
-    ExtractedDocument {
-        content: text.to_string(),
-        mime_type: Cow::Borrowed("text/plain"),
-        ..Default::default()
-    }
+    let mut result = ExtractedDocument::default();
+    result.content = text.to_string();
+    result.mime_type = Cow::Borrowed("text/plain");
+    result
 }
 
 #[tokio::test]

@@ -108,7 +108,12 @@ mod tests {
     #[tokio::test]
     async fn extract_from_tempfile() {
         let mut svc = ExtractionService::new();
-        let mut tmp = tempfile::NamedTempFile::new().expect("failed to create tempfile");
+        // Give the tempfile a `.txt` suffix: plain ASCII has no magic bytes, so
+        // MIME detection relies on the extension for extension-less paths.
+        let mut tmp = tempfile::Builder::new()
+            .suffix(".txt")
+            .tempfile()
+            .expect("failed to create tempfile");
         tmp.write_all(b"tempfile content").expect("failed to write");
         tmp.flush().expect("failed to flush");
 

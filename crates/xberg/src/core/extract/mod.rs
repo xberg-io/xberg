@@ -3,7 +3,7 @@
 use std::collections::{HashSet, VecDeque};
 use std::path::PathBuf;
 
-#[cfg(feature = "url-ingestion")]
+#[cfg(feature = "tokio-runtime")]
 use std::future::Future;
 #[cfg(feature = "tokio-runtime")]
 use std::sync::Arc;
@@ -33,7 +33,7 @@ const FILE_SCHEME: &str = "file://";
 pub async fn extract(input: ExtractInput, config: &ExtractionConfig) -> Result<ExtractionResult> {
     let mut seen = initial_seen_urls(std::slice::from_ref(&input));
     let seed_hosts = initial_seed_hosts(std::slice::from_ref(&input));
-    let mut output = extract_one(input, config, 0).await?;
+    let mut output = Box::pin(extract_one(input, config, 0)).await?;
     follow_recursive_document_urls(&mut output, config, &mut seen, &seed_hosts).await?;
     Ok(output)
 }
@@ -65,7 +65,7 @@ async fn extract_batch_sequential(inputs: Vec<ExtractInput>, config: &Extraction
 
     for (index, input) in inputs.into_iter().enumerate() {
         let source = input_source(&input);
-        match extract_one(input, config, index).await {
+        match Box::pin(extract_one(input, config, index)).await {
             Ok(item_output) => append_extraction_output(&mut output, item_output),
             Err(error) => output.errors.push(error_item(index, source, &error)),
         }
@@ -119,7 +119,7 @@ async fn extract_batch_concurrent(inputs: Vec<ExtractInput>, config: &Extraction
             let timeout_secs = resolved_config.extraction_timeout_secs;
             let cancel_token = resolved_config.cancel_token.clone();
             run_batch_item(index, source, semaphore, timeout_secs, cancel_token, || async move {
-                extract_one_resolved(input, &resolved_config, index).await
+                Box::pin(extract_one_resolved(input, &resolved_config, index)).await
             })
             .await
         });
@@ -189,7 +189,7 @@ where
         }
     };
     let start = Instant::now();
-    let extraction_future = crate::core::batch_mode::with_batch_mode(extract_fn());
+    let extraction_future = Box::pin(crate::core::batch_mode::with_batch_mode(Box::pin(extract_fn())));
 
     let mut result = match timeout_secs {
         Some(secs) => match tokio::time::timeout(std::time::Duration::from_secs(secs), extraction_future).await {
@@ -261,7 +261,7 @@ async fn extract_bytes_input(input: ExtractInput, config: &ExtractionConfig, ind
         .bytes
         .ok_or_else(|| XbergError::validation("extract input kind 'bytes' requires the 'bytes' field".to_string()))?;
     let mime_type = resolve_bytes_mime_type(input.mime_type.as_deref(), input.filename.as_deref(), &bytes)?;
-    let mut result = extract_bytes(&bytes, &mime_type, config).await?;
+    let mut result = Box::pin(extract_bytes(&bytes, &mime_type, config)).await?;
     annotate_source(
         &mut result,
         "bytes",
@@ -303,7 +303,7 @@ async fn extract_uri_input(input: ExtractInput, config: &ExtractionConfig, index
         PathBuf::from(&uri)
     };
 
-    let mut result = extract_file(&path, input.mime_type.as_deref(), config).await?;
+    let mut result = Box::pin(extract_file(&path, input.mime_type.as_deref(), config)).await?;
     annotate_source(&mut result, "uri", &uri, path.to_string_lossy().as_ref(), index);
     Ok(ExtractionResult::single(result))
 }
@@ -696,7 +696,7 @@ async fn follow_recursive_document_urls(
         let index = output.summary.inputs;
         output.summary.inputs += 1;
 
-        match extract_one(ExtractInput::from_uri(uri.clone()), config, index).await {
+        match Box::pin(extract_one(ExtractInput::from_uri(uri.clone()), config, index)).await {
             Ok(mut item_output) => {
                 if depth < max_depth {
                     enqueue_discovered_urls(&item_output, config, &pattern, seed_hosts, seen, &mut queue, depth + 1);

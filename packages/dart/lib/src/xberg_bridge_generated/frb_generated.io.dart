@@ -516,7 +516,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ArchiveMetadata dco_decode_archive_metadata(dynamic raw);
 
   @protected
+  AssetCategory dco_decode_asset_category(dynamic raw);
+
+  @protected
   AudioMetadata dco_decode_audio_metadata(dynamic raw);
+
+  @protected
+  AuthConfig dco_decode_auth_config(dynamic raw);
 
   @protected
   BBox dco_decode_b_box(dynamic raw);
@@ -544,6 +550,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   AudioMetadata dco_decode_box_autoadd_audio_metadata(dynamic raw);
+
+  @protected
+  AuthConfig dco_decode_box_autoadd_auth_config(dynamic raw);
 
   @protected
   BibtexMetadata dco_decode_box_autoadd_bibtex_metadata(dynamic raw);
@@ -757,6 +766,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PresetSample dco_decode_box_autoadd_preset_sample(dynamic raw);
 
   @protected
+  ProxyConfig dco_decode_box_autoadd_proxy_config(dynamic raw);
+
+  @protected
   PstMetadata dco_decode_box_autoadd_pst_metadata(dynamic raw);
 
   @protected
@@ -832,6 +844,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   YearRange dco_decode_box_autoadd_year_range(dynamic raw);
 
   @protected
+  BrowserBackend dco_decode_browser_backend(dynamic raw);
+
+  @protected
+  BrowserConfig dco_decode_browser_config(dynamic raw);
+
+  @protected
+  BrowserMode dco_decode_browser_mode(dynamic raw);
+
+  @protected
+  BrowserWait dco_decode_browser_wait(dynamic raw);
+
+  @protected
   CacheStats dco_decode_cache_stats(dynamic raw);
 
   @protected
@@ -880,6 +904,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CodeContentMode dco_decode_code_content_mode(dynamic raw);
 
   @protected
+  ContentConfig dco_decode_content_config(dynamic raw);
+
+  @protected
   ContentFilterConfig dco_decode_content_filter_config(dynamic raw);
 
   @protected
@@ -890,6 +917,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CoreProperties dco_decode_core_properties(dynamic raw);
+
+  @protected
+  CrawlConfig dco_decode_crawl_config(dynamic raw);
 
   @protected
   CsvMetadata dco_decode_csv_metadata(dynamic raw);
@@ -1192,6 +1222,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ArchiveEntry> dco_decode_list_archive_entry(dynamic raw);
+
+  @protected
+  List<AssetCategory> dco_decode_list_asset_category(dynamic raw);
 
   @protected
   List<CellChange> dco_decode_list_cell_change(dynamic raw);
@@ -1516,6 +1549,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  AuthConfig? dco_decode_opt_box_autoadd_auth_config(dynamic raw);
+
+  @protected
   bool? dco_decode_opt_box_autoadd_bool(dynamic raw);
 
   @protected
@@ -1680,6 +1716,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PresetSample? dco_decode_opt_box_autoadd_preset_sample(dynamic raw);
+
+  @protected
+  ProxyConfig? dco_decode_opt_box_autoadd_proxy_config(dynamic raw);
 
   @protected
   QrBoundingBox? dco_decode_opt_box_autoadd_qr_bounding_box(dynamic raw);
@@ -1918,6 +1957,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProcessingWarning dco_decode_processing_warning(dynamic raw);
 
   @protected
+  ProxyConfig dco_decode_proxy_config(dynamic raw);
+
+  @protected
   PSMMode dco_decode_psm_mode(dynamic raw);
 
   @protected
@@ -2011,6 +2053,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ServerConfig dco_decode_server_config(dynamic raw);
+
+  @protected
+  SsrfPolicy dco_decode_ssrf_policy(dynamic raw);
 
   @protected
   StructuredData dco_decode_structured_data(dynamic raw);
@@ -2487,7 +2532,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ArchiveMetadata sse_decode_archive_metadata(SseDeserializer deserializer);
 
   @protected
+  AssetCategory sse_decode_asset_category(SseDeserializer deserializer);
+
+  @protected
   AudioMetadata sse_decode_audio_metadata(SseDeserializer deserializer);
+
+  @protected
+  AuthConfig sse_decode_auth_config(SseDeserializer deserializer);
 
   @protected
   BBox sse_decode_b_box(SseDeserializer deserializer);
@@ -2521,6 +2572,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AudioMetadata sse_decode_box_autoadd_audio_metadata(
     SseDeserializer deserializer,
   );
+
+  @protected
+  AuthConfig sse_decode_box_autoadd_auth_config(SseDeserializer deserializer);
 
   @protected
   BibtexMetadata sse_decode_box_autoadd_bibtex_metadata(
@@ -2808,6 +2862,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProxyConfig sse_decode_box_autoadd_proxy_config(SseDeserializer deserializer);
+
+  @protected
   PstMetadata sse_decode_box_autoadd_pst_metadata(SseDeserializer deserializer);
 
   @protected
@@ -2915,6 +2972,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   YearRange sse_decode_box_autoadd_year_range(SseDeserializer deserializer);
 
   @protected
+  BrowserBackend sse_decode_browser_backend(SseDeserializer deserializer);
+
+  @protected
+  BrowserConfig sse_decode_browser_config(SseDeserializer deserializer);
+
+  @protected
+  BrowserMode sse_decode_browser_mode(SseDeserializer deserializer);
+
+  @protected
+  BrowserWait sse_decode_browser_wait(SseDeserializer deserializer);
+
+  @protected
   CacheStats sse_decode_cache_stats(SseDeserializer deserializer);
 
   @protected
@@ -2965,6 +3034,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CodeContentMode sse_decode_code_content_mode(SseDeserializer deserializer);
 
   @protected
+  ContentConfig sse_decode_content_config(SseDeserializer deserializer);
+
+  @protected
   ContentFilterConfig sse_decode_content_filter_config(
     SseDeserializer deserializer,
   );
@@ -2977,6 +3049,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CoreProperties sse_decode_core_properties(SseDeserializer deserializer);
+
+  @protected
+  CrawlConfig sse_decode_crawl_config(SseDeserializer deserializer);
 
   @protected
   CsvMetadata sse_decode_csv_metadata(SseDeserializer deserializer);
@@ -3311,6 +3386,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ArchiveEntry> sse_decode_list_archive_entry(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<AssetCategory> sse_decode_list_asset_category(
     SseDeserializer deserializer,
   );
 
@@ -3731,6 +3811,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  AuthConfig? sse_decode_opt_box_autoadd_auth_config(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   bool? sse_decode_opt_box_autoadd_bool(SseDeserializer deserializer);
 
   @protected
@@ -3957,6 +4042,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PresetSample? sse_decode_opt_box_autoadd_preset_sample(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProxyConfig? sse_decode_opt_box_autoadd_proxy_config(
     SseDeserializer deserializer,
   );
 
@@ -4263,6 +4353,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProcessingWarning sse_decode_processing_warning(SseDeserializer deserializer);
 
   @protected
+  ProxyConfig sse_decode_proxy_config(SseDeserializer deserializer);
+
+  @protected
   PSMMode sse_decode_psm_mode(SseDeserializer deserializer);
 
   @protected
@@ -4364,6 +4457,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ServerConfig sse_decode_server_config(SseDeserializer deserializer);
+
+  @protected
+  SsrfPolicy sse_decode_ssrf_policy(SseDeserializer deserializer);
 
   @protected
   StructuredData sse_decode_structured_data(SseDeserializer deserializer);
@@ -5037,7 +5133,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_asset_category(AssetCategory self, SseSerializer serializer);
+
+  @protected
   void sse_encode_audio_metadata(AudioMetadata self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_auth_config(AuthConfig self, SseSerializer serializer);
 
   @protected
   void sse_encode_b_box(BBox self, SseSerializer serializer);
@@ -5078,6 +5180,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_audio_metadata(
     AudioMetadata self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_auth_config(
+    AuthConfig self,
     SseSerializer serializer,
   );
 
@@ -5457,6 +5565,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_proxy_config(
+    ProxyConfig self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_pst_metadata(
     PstMetadata self,
     SseSerializer serializer,
@@ -5601,6 +5715,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_browser_backend(
+    BrowserBackend self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_browser_config(BrowserConfig self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_browser_mode(BrowserMode self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_browser_wait(BrowserWait self, SseSerializer serializer);
+
+  @protected
   void sse_encode_cache_stats(CacheStats self, SseSerializer serializer);
 
   @protected
@@ -5667,6 +5796,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_content_config(ContentConfig self, SseSerializer serializer);
+
+  @protected
   void sse_encode_content_filter_config(
     ContentFilterConfig self,
     SseSerializer serializer,
@@ -5686,6 +5818,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     CoreProperties self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_crawl_config(CrawlConfig self, SseSerializer serializer);
 
   @protected
   void sse_encode_csv_metadata(CsvMetadata self, SseSerializer serializer);
@@ -6137,6 +6272,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_archive_entry(
     List<ArchiveEntry> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_asset_category(
+    List<AssetCategory> self,
     SseSerializer serializer,
   );
 
@@ -6666,6 +6807,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_auth_config(
+    AuthConfig? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_bool(bool? self, SseSerializer serializer);
 
   @protected
@@ -6938,6 +7085,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_preset_sample(
     PresetSample? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_proxy_config(
+    ProxyConfig? self,
     SseSerializer serializer,
   );
 
@@ -7323,6 +7476,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_proxy_config(ProxyConfig self, SseSerializer serializer);
+
+  @protected
   void sse_encode_psm_mode(PSMMode self, SseSerializer serializer);
 
   @protected
@@ -7471,6 +7627,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_server_config(ServerConfig self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ssrf_policy(SsrfPolicy self, SseSerializer serializer);
 
   @protected
   void sse_encode_structured_data(

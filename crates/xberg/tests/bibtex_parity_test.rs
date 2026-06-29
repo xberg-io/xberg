@@ -1,8 +1,8 @@
 #![cfg(feature = "office")]
 //! Comprehensive test for BibTeX extractor parity with Pandoc
 
+use xberg::ExtractInput;
 use xberg::core::config::ExtractionConfig;
-use xberg::extraction::derive::derive_extraction_result;
 use xberg::extractors::BibtexExtractor;
 use xberg::plugins::DocumentExtractor;
 use xberg::types::metadata::FormatMetadata;
@@ -62,12 +62,13 @@ async fn test_all_entry_types() {
 
     for (bibtex_content, expected_type) in test_cases {
         let config = ExtractionConfig::default();
-        let doc_result = extractor
-            .extract_bytes(bibtex_content.as_bytes(), "application/x-bibtex", &config)
+        let input = ExtractInput::from_bytes(bibtex_content.as_bytes().to_vec(), "application/x-bibtex", None);
+        let result = extractor
+            .extract(input, &config)
             .await;
 
-        assert!(doc_result.is_ok(), "Failed to parse {} entry", expected_type);
-        let result = derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
+        assert!(result.is_ok(), "Failed to parse {} entry", expected_type);
+        let result = result.expect("Operation failed");
 
         if let Some(FormatMetadata::Bibtex(ref bibtex)) = result.metadata.format
             && let Some(ref entry_types) = bibtex.entry_types
@@ -115,12 +116,13 @@ async fn test_all_common_fields() {
 "#;
 
     let config = ExtractionConfig::default();
-    let doc_result = extractor
-        .extract_bytes(bibtex_content.as_bytes(), "application/x-bibtex", &config)
+    let input = ExtractInput::from_bytes(bibtex_content.as_bytes().to_vec(), "application/x-bibtex", None);
+    let result = extractor
+        .extract(input, &config)
         .await;
 
-    assert!(doc_result.is_ok());
-    let result = derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
+    assert!(result.is_ok());
+    let result = result.expect("Operation failed");
 
     let content = &result.content;
 
@@ -182,12 +184,13 @@ async fn test_author_parsing() {
         let bibtex = format!("@article{{test, {}, title={{Test}}, year={{2023}}}}", author_field);
 
         let config = ExtractionConfig::default();
-        let doc_result = extractor
-            .extract_bytes(bibtex.as_bytes(), "application/x-bibtex", &config)
+        let input = ExtractInput::from_bytes(bibtex.as_bytes().to_vec(), "application/x-bibtex", None);
+        let result = extractor
+            .extract(input, &config)
             .await;
 
-        assert!(doc_result.is_ok());
-        let result = derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
+        assert!(result.is_ok());
+        let result = result.expect("Operation failed");
 
         if let Some(authors) = &result.metadata.authors {
             for expected_author in &expected_authors {
@@ -216,12 +219,13 @@ async fn test_special_characters() {
 "#;
 
     let config = ExtractionConfig::default();
-    let doc_result = extractor
-        .extract_bytes(bibtex_content.as_bytes(), "application/x-bibtex", &config)
+    let input = ExtractInput::from_bytes(bibtex_content.as_bytes().to_vec(), "application/x-bibtex", None);
+    let result = extractor
+        .extract(input, &config)
         .await;
 
-    assert!(doc_result.is_ok());
-    let result = derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
+    assert!(result.is_ok());
+    let result = result.expect("Operation failed");
 
     if let Some(FormatMetadata::Bibtex(ref bibtex)) = result.metadata.format {
         assert_eq!(bibtex.entry_count, 1);
@@ -245,12 +249,13 @@ async fn test_year_range_extraction() {
 "#;
 
     let config = ExtractionConfig::default();
-    let doc_result = extractor
-        .extract_bytes(bibtex_content.as_bytes(), "application/x-bibtex", &config)
+    let input = ExtractInput::from_bytes(bibtex_content.as_bytes().to_vec(), "application/x-bibtex", None);
+    let result = extractor
+        .extract(input, &config)
         .await;
 
-    assert!(doc_result.is_ok());
-    let result = derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
+    assert!(result.is_ok());
+    let result = result.expect("Operation failed");
 
     if let Some(FormatMetadata::Bibtex(ref bibtex)) = result.metadata.format {
         let year_range = bibtex.year_range.as_ref().expect("Year range not extracted");
@@ -273,12 +278,13 @@ async fn test_citation_keys_extraction() {
 "#;
 
     let config = ExtractionConfig::default();
-    let doc_result = extractor
-        .extract_bytes(bibtex_content.as_bytes(), "application/x-bibtex", &config)
+    let input = ExtractInput::from_bytes(bibtex_content.as_bytes().to_vec(), "application/x-bibtex", None);
+    let result = extractor
+        .extract(input, &config)
         .await;
 
-    assert!(doc_result.is_ok());
-    let result = derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
+    assert!(result.is_ok());
+    let result = result.expect("Operation failed");
 
     if let Some(FormatMetadata::Bibtex(ref bibtex)) = result.metadata.format {
         assert_eq!(bibtex.citation_keys.len(), 3);
@@ -307,12 +313,13 @@ async fn test_entry_type_distribution() {
 "#;
 
     let config = ExtractionConfig::default();
-    let doc_result = extractor
-        .extract_bytes(bibtex_content.as_bytes(), "application/x-bibtex", &config)
+    let input = ExtractInput::from_bytes(bibtex_content.as_bytes().to_vec(), "application/x-bibtex", None);
+    let result = extractor
+        .extract(input, &config)
         .await;
 
-    assert!(doc_result.is_ok());
-    let result = derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
+    assert!(result.is_ok());
+    let result = result.expect("Operation failed");
 
     if let Some(FormatMetadata::Bibtex(ref bibtex)) = result.metadata.format {
         let entry_types = bibtex.entry_types.as_ref().expect("Entry types not extracted");
@@ -339,12 +346,13 @@ async fn test_unicode_support() {
 "#;
 
     let config = ExtractionConfig::default();
-    let doc_result = extractor
-        .extract_bytes(bibtex_content.as_bytes(), "application/x-bibtex", &config)
+    let input = ExtractInput::from_bytes(bibtex_content.as_bytes().to_vec(), "application/x-bibtex", None);
+    let result = extractor
+        .extract(input, &config)
         .await;
 
-    assert!(doc_result.is_ok());
-    let result = derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
+    assert!(result.is_ok());
+    let result = result.expect("Operation failed");
 
     if let Some(FormatMetadata::Bibtex(ref bibtex)) = result.metadata.format {
         assert_eq!(bibtex.entry_count, 1);
@@ -368,12 +376,13 @@ async fn test_empty_fields() {
 "#;
 
     let config = ExtractionConfig::default();
-    let doc_result = extractor
-        .extract_bytes(bibtex_content.as_bytes(), "application/x-bibtex", &config)
+    let input = ExtractInput::from_bytes(bibtex_content.as_bytes().to_vec(), "application/x-bibtex", None);
+    let result = extractor
+        .extract(input, &config)
         .await;
 
-    assert!(doc_result.is_ok());
-    let result = derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
+    assert!(result.is_ok());
+    let result = result.expect("Operation failed");
     if let Some(FormatMetadata::Bibtex(ref bibtex)) = result.metadata.format {
         assert_eq!(bibtex.entry_count, 1);
     } else {
@@ -390,12 +399,13 @@ async fn test_comprehensive_file() {
         .unwrap_or_else(|err| panic!("Failed to read test file at {}: {}", fixture_path.display(), err));
 
     let config = ExtractionConfig::default();
-    let doc_result = extractor
-        .extract_bytes(&bibtex_content, "application/x-bibtex", &config)
+    let input = ExtractInput::from_bytes(bibtex_content, "application/x-bibtex", None);
+    let result = extractor
+        .extract(input, &config)
         .await;
 
-    assert!(doc_result.is_ok());
-    let result = derive_extraction_result(doc_result.expect("Operation failed"), false, xberg::OutputFormat::Plain);
+    assert!(result.is_ok());
+    let result = result.expect("Operation failed");
 
     if let Some(FormatMetadata::Bibtex(ref bibtex)) = result.metadata.format {
         assert_eq!(bibtex.entry_count, 20);
