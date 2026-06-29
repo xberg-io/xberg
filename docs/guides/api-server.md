@@ -237,6 +237,12 @@ xberg mcp --config xberg.toml
 
 All extraction tools accept an optional `config` object. URI and byte payload details live in `ExtractInput` as `kind = "uri"` or `kind = "bytes"`.
 
+### Batch Extraction
+
+=== "Python"
+
+    --8<-- "snippets/python/mcp/mcp_batch_extract.md"
+
 ### AI Agent Integration
 
 === "Claude Desktop"
