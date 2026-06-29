@@ -449,6 +449,12 @@ android-target = [
     "classification",
     "captioning",
     "ner-llm",
+    # Same not-feature-aware-binding reason: the Dart/Kotlin bindings reference
+    # `UrlExtractionConfig.crawl` unconditionally, but that field is gated on
+    # `#[cfg(any(url-ingestion, url-config-types))]`. Use the type-only variant
+    # (pure-Rust crawlberg types, no native-runtime) so the field exists on the
+    # no-ORT Android surface without pulling a native HTTP runtime.
+    "url-config-types",
 ]
 # windows-target: curated feature set for Windows host builds across every
 # binding crate. Native libheif/libheif-sys is not installed on the standard
