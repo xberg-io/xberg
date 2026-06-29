@@ -13,10 +13,10 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "@xberg-io/xberg": "file:../crates/xberg-node",
     "xberg-rag-node": "file:../crates/xberg-rag-node",
     "docx": "^9.0.0",
     "pdf-lib": "^1.17.1",
-    "file-type": "^16.0.0",
     "zod": "^3.22.0"
   },
   "devDependencies": {

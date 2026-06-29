@@ -1,0 +1,10 @@
+{
+  "name": "xberg-rag-node",
+  "version": "0.1.0",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "napi": {
+    "name": "xberg_rag_node",
+    "triple": "x86_64-pc-windows-msvc"
+  }
+}
