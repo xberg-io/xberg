@@ -853,6 +853,7 @@ impl VectorStore for SqliteVectorStore {
     async fn retrieve(&self, collection: &str, query: &RetrieveQuery) -> RagResult<RetrieveOutput> {
         let collection = collection.to_string();
         let query = query.clone();
+        let backend_name = self.name.clone();
 
         self.with_conn(move |conn| {
             let row = get_collection_row(conn, &collection)
@@ -890,6 +891,12 @@ impl VectorStore for SqliteVectorStore {
                         .ok_or_else(|| RagError::InvalidQuery("hybrid mode requires query_text".to_string()))?;
                     let qv = query.query_vector.as_deref();
                     retrieve_hybrid(conn, &vt, &ft, qt, qv, candidate_k, &query)?
+                }
+                RetrieveMode::Graph => {
+                    return Err(RagError::UnsupportedMode {
+                        backend: backend_name.clone(),
+                        mode: mode.as_str().to_string(),
+                    })
                 }
             };
 

@@ -21,6 +21,8 @@ pub enum RetrieveMode {
     FullText,
     /// Hybrid (vector + full-text fused).
     Hybrid,
+    /// Graph-based retrieval.
+    Graph,
 }
 
 impl RetrieveMode {
@@ -30,6 +32,7 @@ impl RetrieveMode {
             RetrieveMode::Vector => "vector",
             RetrieveMode::FullText => "full_text",
             RetrieveMode::Hybrid => "hybrid",
+            RetrieveMode::Graph => "graph",
         }
     }
 }
@@ -64,6 +67,9 @@ pub struct RetrieveQuery {
     /// Include the parent document summary in results.
     #[serde(default)]
     pub include_document: bool,
+    /// Graph traversal depth (graph mode only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub graph_depth: Option<u32>,
 }
 
 impl RetrieveQuery {
@@ -79,6 +85,7 @@ impl RetrieveQuery {
             group_by_document: false,
             include_content: true,
             include_document: false,
+            graph_depth: None,
         }
     }
 
@@ -135,6 +142,13 @@ impl RetrieveQuery {
             RetrieveMode::Hybrid => {
                 if self.query_text.is_none() {
                     return Err(RagError::InvalidQuery("hybrid mode requires query_text".to_string()));
+                }
+            }
+            RetrieveMode::Graph => {
+                if self.query_text.is_none() && self.query_vector.is_none() {
+                    return Err(RagError::InvalidQuery(
+                        "graph mode requires query_text or query_vector".to_string(),
+                    ));
                 }
             }
         }
