@@ -1440,6 +1440,40 @@ types = [
   "EngineBuilder",
   "xberg::engine::Engine",
   "xberg::engine::EngineBuilder",
+
+  # Rust-only engine extension seams (crates/xberg/src/engine/seams/). Same
+  # isolation as Engine/EngineBuilder above: traits + in-core defaults that live
+  # under the bare `pub mod engine;`, are not listed in `sources`, and are not
+  # re-exported from lib.rs. Listed here as belt-and-suspenders against a future
+  # codegen pass re-emitting them as transitive container fields.
+  "CacheBackend",
+  "NoopCache",
+  "ProgressSink",
+  "ProgressEvent",
+  "NoopProgressSink",
+  "StructuredPolicy",
+  "DefaultStructuredPolicy",
+  "PresetResolver",
+  "CorePresetResolver",
+  "LlmClient",
+  "LiterLlmClient",
+  "ModelProvider",
+  "DefaultModelProvider",
+  "ModelId",
+  "xberg::engine::seams::CacheBackend",
+  "xberg::engine::seams::NoopCache",
+  "xberg::engine::seams::ProgressSink",
+  "xberg::engine::seams::ProgressEvent",
+  "xberg::engine::seams::NoopProgressSink",
+  "xberg::engine::seams::StructuredPolicy",
+  "xberg::engine::seams::DefaultStructuredPolicy",
+  "xberg::engine::seams::PresetResolver",
+  "xberg::engine::seams::CorePresetResolver",
+  "xberg::engine::seams::LlmClient",
+  "xberg::engine::seams::LiterLlmClient",
+  "xberg::engine::seams::ModelProvider",
+  "xberg::engine::seams::DefaultModelProvider",
+  "xberg::engine::seams::ModelId",
 ]
 methods = [
   # From<T> trait impls — auto-emitted by derive/trait-bridge
