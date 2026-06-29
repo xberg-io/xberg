@@ -69,56 +69,24 @@ impl TesseractBackend {
         self.processor.get().is_some()
     }
 
-    /// Convert public API TesseractConfig to internal TesseractConfig.
-    ///
-    /// The public API types (crate::types) use i32 for compatibility with PyO3,
-    /// while internal types (crate::ocr::types) use u8/u32 for efficiency.
-    ///
-    /// Joins the language Vec into a "+" separated string for Tesseract.
-    fn convert_config(public_config: &crate::types::TesseractConfig) -> InternalTesseractConfig {
-        InternalTesseractConfig {
-            language: public_config.language.join("+"),
-            psm: public_config.psm as u8,
-            output_format: public_config.output_format.clone(),
-            oem: public_config.oem as u8,
-            min_confidence: public_config.min_confidence,
-            preprocessing: public_config.preprocessing.clone(),
-            enable_table_detection: public_config.enable_table_detection,
-            table_min_confidence: public_config.table_min_confidence,
-            table_column_threshold: public_config.table_column_threshold as u32,
-            table_row_threshold_ratio: public_config.table_row_threshold_ratio,
-            use_cache: public_config.use_cache,
-            classify_use_pre_adapted_templates: public_config.classify_use_pre_adapted_templates,
-            language_model_ngram_on: public_config.language_model_ngram_on,
-            tessedit_dont_blkrej_good_wds: public_config.tessedit_dont_blkrej_good_wds,
-            tessedit_dont_rowrej_good_wds: public_config.tessedit_dont_rowrej_good_wds,
-            tessedit_enable_dict_correction: public_config.tessedit_enable_dict_correction,
-            tessedit_char_whitelist: public_config.tessedit_char_whitelist.clone(),
-            tessedit_char_blacklist: public_config.tessedit_char_blacklist.clone(),
-            tessedit_use_primary_params_model: public_config.tessedit_use_primary_params_model,
-            textord_space_size_is_variable: public_config.textord_space_size_is_variable,
-            thresholding_method: public_config.thresholding_method,
-            auto_rotate: public_config
-                .preprocessing
-                .as_ref()
-                .map(|p| p.auto_rotate)
-                .unwrap_or(false),
-            tessdata_path: None,
-        }
-    }
-
     /// Convert OcrConfig to internal TesseractConfig.
     ///
     /// Uses tesseract_config from OcrConfig if provided, otherwise uses defaults
     /// with the language from OcrConfig. Multi-language configs are joined with "+".
     fn config_to_tesseract(&self, config: &OcrConfig) -> InternalTesseractConfig {
         let mut internal = match &config.tesseract_config {
-            Some(tess_config) => Self::convert_config(tess_config),
+            Some(tess_config) => InternalTesseractConfig::from(tess_config),
             None => InternalTesseractConfig {
-                language: config.language.join("+"),
+                language: config.effective_languages().join("+"),
                 ..Default::default()
             },
         };
+        // The `None` branch is already defaulted by `effective_languages`. An explicit
+        // `tesseract_config` carries its own language list, which may be empty; guard that
+        // case too so an empty language never reaches Tesseract as a pack named "".
+        if internal.language.trim().is_empty() {
+            internal.language = crate::core::config::ocr::DEFAULT_OCR_LANGUAGE.to_string();
+        }
         // Propagate top-level OcrConfig.auto_rotate (OR with any preprocessing setting)
         if config.auto_rotate {
             internal.auto_rotate = true;
@@ -511,6 +479,33 @@ mod tests {
     }
 
     #[test]
+    fn test_config_to_tesseract_defaults_empty_language_to_eng() {
+        let backend = TesseractBackend::new();
+
+        // No tesseract_config: empty language list (e.g. `language=[]`) must default to "eng"
+        // rather than producing an empty language string. Regression test for the image OCR
+        // path failing with "Failed to download language pack ''".
+        let ocr_config = OcrConfig {
+            backend: "tesseract".to_string(),
+            language: vec![],
+            ..Default::default()
+        };
+        assert_eq!(backend.config_to_tesseract(&ocr_config).language, "eng");
+
+        // With a tesseract_config whose language is also empty, the same default applies.
+        let ocr_config_with_tess = OcrConfig {
+            backend: "tesseract".to_string(),
+            language: vec![],
+            tesseract_config: Some(crate::types::TesseractConfig {
+                language: vec![],
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert_eq!(backend.config_to_tesseract(&ocr_config_with_tess).language, "eng");
+    }
+
+    #[test]
     fn test_tesseract_backend_default() {
         let backend = TesseractBackend::default();
         assert_eq!(backend.name(), "tesseract");
@@ -575,7 +570,7 @@ mod tests {
             ..Default::default()
         };
 
-        let internal_config = TesseractBackend::convert_config(&public_config);
+        let internal_config = InternalTesseractConfig::from(&public_config);
 
         assert_eq!(internal_config.psm, 6u8);
         assert_eq!(internal_config.oem, 3u8);

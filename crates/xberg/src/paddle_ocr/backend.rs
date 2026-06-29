@@ -449,7 +449,8 @@ impl OcrBackend for PaddleOcrBackend {
 
         // Map the first language code to PaddleOCR language (PaddleOCR supports single language per call)
         // Multi-language support would require multiple passes, which is beyond scope for this release.
-        let primary_lang = config.language.first().map(|s| s.as_str()).unwrap_or("eng");
+        let languages = config.effective_languages();
+        let primary_lang = languages[0].as_str();
         let paddle_lang = map_language_code(primary_lang).unwrap_or("en");
 
         // Auto-rotate: detect page orientation and rotate image if needed
@@ -551,7 +552,7 @@ impl OcrBackend for PaddleOcrBackend {
 
         let metadata = Metadata {
             format: Some(FormatMetadata::Ocr(OcrMetadata {
-                language: config.language.join("+"),
+                language: config.effective_languages().join("+"),
                 psm: 3,
                 output_format: "text".to_string(),
                 table_count,
@@ -574,7 +575,7 @@ impl OcrBackend for PaddleOcrBackend {
             mime_type: Cow::Borrowed("text/plain"),
             metadata,
             tables,
-            detected_languages: Some(config.language.clone()),
+            detected_languages: Some(config.effective_languages()),
             ocr_elements: ocr_elements_opt,
             ocr_internal_document: Some(ocr_doc),
             ..Default::default()

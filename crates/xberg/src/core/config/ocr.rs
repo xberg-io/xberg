@@ -565,6 +565,34 @@ impl OcrConfig {
         Ok(())
     }
 
+    /// Effective OCR languages, with the documented default applied.
+    ///
+    /// Blank entries are dropped and an empty list falls back to
+    /// [`DEFAULT_OCR_LANGUAGE`]. OCR backends call this instead of reading
+    /// [`language`](Self::language) directly so an unset language never reaches
+    /// an engine as an empty language string — which Tesseract would otherwise
+    /// try to load as a language pack named `""`, surfacing as a confusing
+    /// "Failed to download language pack ''" error.
+    #[cfg(any(
+        feature = "ocr",
+        feature = "paddle-ocr",
+        all(feature = "liter-llm", not(target_arch = "wasm32")),
+    ))]
+    pub(crate) fn effective_languages(&self) -> Vec<String> {
+        let langs: Vec<String> = self
+            .language
+            .iter()
+            .map(|lang| lang.trim())
+            .filter(|lang| !lang.is_empty())
+            .map(str::to_string)
+            .collect();
+        if langs.is_empty() {
+            vec![DEFAULT_OCR_LANGUAGE.to_string()]
+        } else {
+            langs
+        }
+    }
+
     /// Returns the effective quality thresholds, using configured values or defaults.
     #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
     pub(crate) fn effective_thresholds(&self) -> OcrQualityThresholds {
@@ -722,8 +750,15 @@ fn default_tesseract_backend() -> String {
     "tesseract".to_string()
 }
 
+/// Default OCR language (Tesseract/ISO 639 naming): English.
+///
+/// Single source of truth for the empty-language fallback shared by every OCR
+/// backend. Use [`OcrConfig::effective_languages`] rather than this constant
+/// directly when a defaulted language list is needed.
+pub(crate) const DEFAULT_OCR_LANGUAGE: &str = "eng";
+
 fn default_eng() -> Vec<String> {
-    vec!["eng".to_string()]
+    vec![DEFAULT_OCR_LANGUAGE.to_string()]
 }
 
 #[cfg(test)]
@@ -843,6 +878,31 @@ mod tests {
     fn test_validate_default_backend() {
         let config = OcrConfig::default();
         assert!(config.validate().is_ok());
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn test_effective_languages_defaults_and_filters() {
+        // Empty list falls back to the documented default.
+        let empty = OcrConfig {
+            language: vec![],
+            ..Default::default()
+        };
+        assert_eq!(empty.effective_languages(), vec!["eng".to_string()]);
+
+        // A list of only blank entries also falls back rather than producing "".
+        let blank = OcrConfig {
+            language: vec![String::new(), "   ".to_string()],
+            ..Default::default()
+        };
+        assert_eq!(blank.effective_languages(), vec!["eng".to_string()]);
+
+        // Real entries are trimmed and blank entries dropped.
+        let mixed = OcrConfig {
+            language: vec!["eng".to_string(), " ".to_string(), " deu".to_string()],
+            ..Default::default()
+        };
+        assert_eq!(mixed.effective_languages(), vec!["eng".to_string(), "deu".to_string()]);
     }
 
     // ── effective_pipeline tests ──
