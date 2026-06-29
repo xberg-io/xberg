@@ -1,7 +1,40 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
+import { z } from "zod";
 
 // Lightweight smoke tests — verify tool registration runs without native bindings.
 // Full integration tests require the NAPI bindings to be built.
+
+describe("ExtractionConfigSchema shape", () => {
+  it("accepts chunking config with bounds", () => {
+    const ChunkingConfigSchema = z.object({
+      max_size: z.number().int().min(64).max(16384).optional(),
+      overlap: z.number().int().min(0).max(1024).optional(),
+    });
+    expect(ChunkingConfigSchema.safeParse({ max_size: 512, overlap: 64 }).success).toBe(true);
+    expect(ChunkingConfigSchema.safeParse({ max_size: 10 }).success).toBe(false);
+    expect(ChunkingConfigSchema.safeParse({ overlap: -1 }).success).toBe(false);
+  });
+
+  it("accepts keyword config with algorithm enum", () => {
+    const KeywordConfigSchema = z.object({
+      algorithm: z.enum(["yake", "rake"]).optional(),
+      max_keywords: z.number().int().min(1).max(100).optional(),
+    });
+    expect(KeywordConfigSchema.safeParse({ algorithm: "yake", max_keywords: 10 }).success).toBe(true);
+    expect(KeywordConfigSchema.safeParse({ algorithm: "invalid" }).success).toBe(false);
+    expect(KeywordConfigSchema.safeParse({ max_keywords: 0 }).success).toBe(false);
+  });
+
+  it("accepts ocr config with backend enum and language list", () => {
+    const OcrConfigSchema = z.object({
+      backend: z.enum(["tesseract", "paddleocr"]).optional(),
+      languages: z.array(z.string()).optional(),
+    });
+    expect(OcrConfigSchema.safeParse({ backend: "tesseract", languages: ["eng", "deu"] }).success).toBe(true);
+    expect(OcrConfigSchema.safeParse({ backend: "unknown_engine" }).success).toBe(false);
+    expect(OcrConfigSchema.safeParse({ languages: ["eng"] }).success).toBe(true);
+  });
+});
 
 describe("tool registration", () => {
   it("PII detect and redact modules export expected functions", async () => {

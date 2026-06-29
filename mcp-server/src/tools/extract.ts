@@ -16,10 +16,28 @@ const ExtractInputSchema = z.object({
   filename: z.string().optional(),
 });
 
+const ChunkingConfigSchema = z.object({
+  max_size: z.number().int().min(64).max(16384).optional(),
+  overlap: z.number().int().min(0).max(1024).optional(),
+});
+
+const KeywordConfigSchema = z.object({
+  algorithm: z.enum(["yake", "rake"]).optional(),
+  max_keywords: z.number().int().min(1).max(100).optional(),
+});
+
+const OcrConfigSchema = z.object({
+  backend: z.enum(["tesseract", "paddleocr"]).optional(),
+  languages: z.array(z.string()).optional(),
+});
+
 const ExtractionConfigSchema = z.object({
   force_ocr: z.boolean().optional(),
   disable_ocr: z.boolean().optional(),
   use_cache: z.boolean().optional(),
+  chunking: ChunkingConfigSchema.optional(),
+  keywords: KeywordConfigSchema.optional(),
+  ocr: OcrConfigSchema.optional(),
 });
 
 function toNativeConfig(config: z.infer<typeof ExtractionConfigSchema> | undefined): ExtractionConfig | null {
@@ -28,13 +46,26 @@ function toNativeConfig(config: z.infer<typeof ExtractionConfigSchema> | undefin
     forceOcr: config.force_ocr,
     disableOcr: config.disable_ocr,
     useCache: config.use_cache,
+    chunking: config.chunking
+      ? { maxSize: config.chunking.max_size, overlap: config.chunking.overlap }
+      : undefined,
+    keywords: config.keywords
+      ? { algorithm: config.keywords.algorithm, maxKeywords: config.keywords.max_keywords }
+      : undefined,
+    ocr: config.ocr
+      ? { backend: config.ocr.backend, language: config.ocr.languages }
+      : undefined,
   };
 }
 
 export function registerExtractTools(server: McpServer): void {
   server.tool(
     "extract_document",
-    "Extract text, tables, and metadata from a document (91+ formats: PDF, DOCX, XLSX, images with OCR, HTML, email, code, and more). Provide uri (file path/URL/HTTPS) or bytes (base64 array).",
+    "Extract text, tables, and metadata from a document (91+ formats: PDF, DOCX, XLSX, images with OCR, HTML, email, code, and more). " +
+    "Provide uri (file path or HTTPS URL) or bytes (number array). " +
+    "Config: force_ocr, disable_ocr, use_cache, " +
+    "chunking {max_size, overlap}, keywords {algorithm: yake|rake, max_keywords}, " +
+    "ocr {backend: tesseract|paddleocr, languages: [eng, deu, ...]}.",
     {
       input: ExtractInputSchema.optional(),
       config: ExtractionConfigSchema.optional(),
@@ -71,6 +102,10 @@ export function registerExtractTools(server: McpServer): void {
             chunks: (doc.chunks ?? []).map((c: Chunk) => ({
               content: c.content,
               index: c.metadata.chunkIndex,
+            })),
+            keywords: (doc.extractedKeywords ?? []).map((k: { text: string; score?: number }) => ({
+              text: k.text,
+              score: k.score ?? null,
             })),
             confidence: doc.metadata?.additional?.quality_score ?? null,
           })),
