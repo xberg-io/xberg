@@ -30,7 +30,10 @@ MCP server for document intelligence, RAG, and GDPR-compliant PII redaction. Wra
 | **Stats** | `collection_stats` | Document and chunk counts |
 | | `list_collections` | List tracked collections |
 | | `export_collection` | Export collection metadata |
+| | `import_collection` | Import documents from JSON/JSONL file |
 | | `update_metadata` | Update document metadata |
+| | `get_audit_log` | Audit trail of PII detection operations |
+| | `get_extraction_stats` | Extraction performance metrics |
 | **Cache** | `rag_cache_warm` | Download ONNX models (BGE-M3, reranker, GLiNER) |
 | | `rag_cache_status` | Check model cache status |
 
