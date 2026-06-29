@@ -624,6 +624,57 @@ tasks:
       - zig build test
     dir: packages/zig
 
+  # === MCP Server (mcp-server/) ===
+  mcp:build:
+    desc: "Build the TypeScript MCP server (outputs to mcp-server/dist/)"
+    cmds:
+      - npm run build
+    dir: mcp-server
+
+  mcp:dev:
+    desc: "Run the MCP server in development mode with tsx (hot reload)"
+    cmds:
+      - npm run dev
+    dir: mcp-server
+
+  mcp:test:
+    desc: "Run MCP server unit tests (vitest)"
+    cmds:
+      - npm test -- run
+    dir: mcp-server
+
+  mcp:lint:
+    desc: "Type-check and lint the MCP server TypeScript"
+    cmds:
+      - node_modules/.bin/tsc --noEmit
+      - node_modules/.bin/oxlint --quiet .
+    dir: mcp-server
+
+  mcp:start:
+    desc: "Start the compiled MCP server (requires task mcp:build first)"
+    cmds:
+      - node dist/index.js
+    dir: mcp-server
+
+  # === xberg-rag-node (NAPI-RS RAG bindings) ===
+  rag-node:build:
+    desc: "Build xberg-rag-node NAPI-RS binding (Windows: requires VCPKG_ROOT unset — no libheif dep)"
+    cmds:
+      - cargo build --locked --release -p xberg-rag-node
+      - cmd: |
+          if [ "$(uname -s)" = "Linux" ] || [ "$(uname -s)" = "Darwin" ]; then
+            cp target/release/libxberg_rag_node.so crates/xberg-rag-node/xberg_rag_node.linux-x64-gnu.node 2>/dev/null || \
+            cp target/release/libxberg_rag_node.dylib crates/xberg-rag-node/xberg_rag_node.darwin-arm64.node 2>/dev/null || true
+          fi
+        platforms: [linux, darwin]
+
+  rag-node:build:windows:
+    desc: "Build xberg-rag-node on Windows (requires VCPKG_ROOT unset — no libheif dep)"
+    cmds:
+      - cargo build --locked --release -p xberg-rag-node
+      - powershell -Command "Copy-Item 'E:/cargo-target/release/xberg_rag_node.dll' 'crates/xberg-rag-node/xberg_rag_node.win32-x64-msvc.node' -Force"
+    platforms: [windows]
+
   # === Clean ===
   clean:
     desc: "Remove build artifacts across all languages"

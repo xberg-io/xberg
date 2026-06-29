@@ -17,6 +17,8 @@ Version source of truth: root `Cargo.toml` `[workspace.package] version`.
 - `xberg-wasm` — wasm-bindgen WASM bindings; uses `wasm-target` feature set
 - `xberg-paddle-ocr` — PaddleOCR via ONNX Runtime; not available on WASM or Windows
 - `xberg-tesseract` — Rust bindings for Tesseract OCR
+- `xberg-rag` — RAG base layer: `RagStore` trait, SQLite + graphqlite backends, `RetrieveMode` (Vector/FullText/Hybrid/Graph), embedding pipeline (fork-local, added by us)
+- `xberg-rag-node` — NAPI-RS Node.js bindings for `xberg-rag`; exports `openSqlite`, `embedTexts` (fork-local)
 
 ## Out-of-workspace bindings (`packages/`)
 
@@ -33,3 +35,11 @@ Version source of truth: root `Cargo.toml` `[workspace.package] version`.
 
 - `tools/e2e-generator` — reads JSON fixtures, generates runnable test suites per language into `e2e/`
 - `tools/benchmark-harness` — criterion-based benchmark runner
+
+## Fork-local TypeScript server (`mcp-server/`)
+
+TypeScript MCP server (30 tools) wrapping xberg extraction and xberg-rag over NAPI-RS bindings.
+Not a workspace crate — built with `npm run build` / `task mcp:build`.
+See `.ai-rulez/context/local-additions.md` for the full file map.
+
+Tasks: `task mcp:build`, `task mcp:test`, `task mcp:dev`, `task mcp:lint`, `task rag-node:build`

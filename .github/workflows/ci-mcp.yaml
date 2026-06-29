@@ -1,0 +1,117 @@
+name: CI MCP Server
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "mcp-server/**"
+      - "crates/xberg-rag/**"
+      - "crates/xberg-rag-node/**"
+      - ".github/workflows/ci-mcp.yaml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "mcp-server/**"
+      - "crates/xberg-rag/**"
+      - "crates/xberg-rag-node/**"
+      - ".github/workflows/ci-mcp.yaml"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-mcp-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  mcp-typecheck:
+    name: MCP TypeScript type-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: mcp-server
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: mcp-server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: node_modules/.bin/tsc --noEmit
+
+  mcp-test:
+    name: MCP unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: mcp-server
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: mcp-server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test -- run
+
+  mcp-build:
+    name: MCP build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: mcp-server
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: mcp-server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+  rag-lint:
+    name: xberg-rag Rust lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: rag-lint
+
+      - name: cargo fmt
+        run: cargo fmt -p xberg-rag -p xberg-rag-node -- --check
+
+      - name: cargo clippy
+        run: cargo clippy -p xberg-rag -p xberg-rag-node -- -D warnings
