@@ -57,8 +57,11 @@ async fn run_ocr_with_layout(
 
     // Check for pipeline configuration
     if let Some(pipeline) = ocr_config.effective_pipeline() {
+        // Box::pin the deep OCR future so its persisted state lives on the heap
+        // instead of inflating this frame. The OCR await chain is large and
+        // stack-sensitive; keeping it inline contributes to worker-stack overflow.
         let (text, _ocr_tables, ocr_elements, pipeline_doc, llm_usage, ocr_pts, pipeline_rasters, pipeline_formulas) =
-            ocr::run_ocr_pipeline(
+            Box::pin(ocr::run_ocr_pipeline(
                 Some(content),
                 None,
                 #[cfg(feature = "layout-detection")]
@@ -66,7 +69,7 @@ async fn run_ocr_with_layout(
                 config,
                 &pipeline,
                 path,
-            )
+            ))
             .await?;
         return Ok((
             text,
@@ -80,15 +83,18 @@ async fn run_ocr_with_layout(
         ));
     }
 
+    // Box::pin the deep OCR future so its persisted state lives on the heap
+    // instead of inflating this frame. The OCR await chain is large and
+    // stack-sensitive; keeping it inline contributes to worker-stack overflow.
     let (text, _mean_conf, ocr_tables, ocr_elements, ocr_doc, llm_usage, ocr_pts, ocr_rasters, formulas) =
-        extract_with_ocr(
+        Box::pin(extract_with_ocr(
             Some(content),
             None,
             #[cfg(feature = "layout-detection")]
             layout_detections.as_deref(),
             config,
             path,
-        )
+        ))
         .await?;
     Ok((
         text,

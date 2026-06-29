@@ -1445,14 +1445,17 @@ pub(crate) async fn run_ocr_pipeline(
             "Pipeline: trying OCR backend"
         );
 
-        let result = extract_with_ocr(
+        // Box::pin so this large OCR future lives on the heap rather than being
+        // held inline in the pipeline-loop frame, which is already deep. Keeps the
+        // OCR await chain's stack footprint down.
+        let result = Box::pin(extract_with_ocr(
             content,
             images,
             #[cfg(feature = "layout-detection")]
             layout_detections,
             &stage_config,
             path,
-        )
+        ))
         .await;
 
         match result {

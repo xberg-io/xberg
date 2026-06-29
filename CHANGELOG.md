@@ -11,6 +11,21 @@ The changelog starts fresh at `1.0.0-rc.1`. For the Kreuzberg v1–v4 history, s
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- **`OcrExtractionResult` now derives `Default`.** Downstream bindings and callers can
+  construct and extend it without spelling out every field.
+
+### Fixed
+
+- **PDF/OCR worker-stack overflow.** The deep per-page OCR extraction futures are now
+  boxed (`Box::pin`) so their large state lives on the heap instead of inflating the
+  worker-thread stack frame. Together with the stack the binding runtimes provision for
+  the async path, this stops scanned / image-only PDFs from aborting the process with a
+  stack overflow (SIGBUS) during OCR.
+
 ## [1.0.0-rc.1] - 2026-06-26
 
 Initial Xberg release candidate. Xberg continues the Kreuzberg document-intelligence
