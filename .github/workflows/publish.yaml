@@ -1444,6 +1444,14 @@ jobs:
         shell: bash
         run: command -v cargo-zigbuild || cargo install --locked cargo-zigbuild
 
+      - name: Disable sccache wrapper on Windows
+        # cargo cannot exec the Alef-scaffolded `.cargo/rustc-wrapper.sh` on
+        # Windows ("%1 is not a valid Win32 application"). Empty RUSTC_WRAPPER
+        # disables the shim for this build only.
+        if: contains(matrix.target, 'windows')
+        shell: bash
+        run: echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
+
       - uses: xberg-io/actions/build-elixir-natives@v1
         with:
           target: ${{ matrix.target }}
