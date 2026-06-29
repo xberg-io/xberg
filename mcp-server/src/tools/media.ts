@@ -24,11 +24,8 @@ export function registerMediaTools(server: McpServer): void {
         .default("base")
         .describe("Whisper model size. 'base' is fast and accurate for most use cases."),
       language: z.string().optional().describe("ISO 639-1 code e.g. 'en', 'fr', 'de'. Omit for auto-detect."),
-      translate_to_english: z.boolean().optional().default(false).describe(
-        "Translate non-English audio to English during transcription."
-      ),
     },
-    async ({ uri, bytes, mime_type, filename, model, language, translate_to_english }) => {
+    async ({ uri, bytes, mime_type, filename, model, language }) => {
       try {
         let extractInput;
         if (bytes) {
@@ -48,7 +45,6 @@ export function registerMediaTools(server: McpServer): void {
             enabled: true,
             model,
             language,
-            translateToEnglish: translate_to_english,
           },
         };
 

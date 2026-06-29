@@ -12,7 +12,7 @@ describe("mergeNerEntities", () => {
   it("appends NER entity as new finding when no span overlap with regex", () => {
     const text = "Contact Alice Smith for details.";
     const regex = detectPii(text);
-    const entities: NerEntity[] = [{ text: "Alice Smith", label: "PERSON", score: 0.92, start: 8, end: 19 }];
+    const entities: NerEntity[] = [{ category: "person", text: "Alice Smith", confidence: 0.92, start: 8, end: 19 }];
     const merged = mergeNerEntities(regex, entities, text);
     const names = merged.filter((f) => f.category === "NAME");
     expect(names).toHaveLength(1);
@@ -20,18 +20,18 @@ describe("mergeNerEntities", () => {
     expect(names[0]?.confidence).toBe(0.92);
   });
 
-  it("maps NER label PERSON to category NAME", () => {
+  it("maps entity category 'person' to PII category NAME", () => {
     const text = "Bob Jones signed.";
-    const entities: NerEntity[] = [{ text: "Bob Jones", label: "PERSON", score: 0.88, start: 0, end: 9 }];
+    const entities: NerEntity[] = [{ category: "person", text: "Bob Jones", confidence: 0.88, start: 0, end: 9 }];
     const merged = mergeNerEntities([], entities, text);
     expect(merged[0]?.category).toBe("NAME");
   });
 
-  it("maps ORG and GPE labels to ORG and LOCATION categories", () => {
+  it("maps 'organization' and 'location' to ORG and LOCATION categories", () => {
     const text = "Acme Corp in Berlin.";
     const entities: NerEntity[] = [
-      { text: "Acme Corp", label: "ORG", score: 0.9, start: 0, end: 9 },
-      { text: "Berlin", label: "GPE", score: 0.87, start: 13, end: 19 },
+      { category: "organization", text: "Acme Corp", confidence: 0.9, start: 0, end: 9 },
+      { category: "location", text: "Berlin", confidence: 0.87, start: 13, end: 19 },
     ];
     const merged = mergeNerEntities([], entities, text);
     expect(merged.find((f) => f.category === "ORG")?.original).toBe("Acme Corp");
@@ -45,7 +45,7 @@ describe("mergeNerEntities", () => {
     expect(phoneRegex).toBeDefined();
 
     const highConfidenceEntity: NerEntity[] = [
-      { text: "555-123-4567", label: "PHONE", score: 0.99, start: phoneRegex!.start, end: phoneRegex!.end },
+      { category: "phone", text: "555-123-4567", confidence: 0.99, start: phoneRegex!.start, end: phoneRegex!.end },
     ];
     const merged = mergeNerEntities(regex, highConfidenceEntity, text);
     const phones = merged.filter((f) => f.category === "PHONE");
@@ -61,7 +61,7 @@ describe("mergeNerEntities", () => {
     const originalConfidence = ssn!.confidence;
 
     const lowConfidenceEntity: NerEntity[] = [
-      { text: "123-45-6789", label: "SSN", score: 0.5, start: ssn!.start, end: ssn!.end },
+      { category: "custom", text: "123-45-6789", confidence: 0.5, start: ssn!.start, end: ssn!.end },
     ];
     const merged = mergeNerEntities(regex, lowConfidenceEntity, text);
     const ssns = merged.filter((f) => f.category === "SSN");
@@ -72,8 +72,8 @@ describe("mergeNerEntities", () => {
   it("assigns sequential token format [CATEGORY_N] to NER-added findings", () => {
     const text = "Hello from Alice and Bob.";
     const entities: NerEntity[] = [
-      { text: "Alice", label: "PERSON", score: 0.9, start: 11, end: 16 },
-      { text: "Bob", label: "PERSON", score: 0.88, start: 21, end: 24 },
+      { category: "person", text: "Alice", confidence: 0.9, start: 11, end: 16 },
+      { category: "person", text: "Bob", confidence: 0.88, start: 21, end: 24 },
     ];
     const merged = mergeNerEntities([], entities, text);
     const tokens = merged.map((f) => f.token);

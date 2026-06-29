@@ -47,7 +47,7 @@ function toNativeConfig(config: z.infer<typeof ExtractionConfigSchema> | undefin
     disableOcr: config.disable_ocr,
     useCache: config.use_cache,
     chunking: config.chunking
-      ? { maxSize: config.chunking.max_size, overlap: config.chunking.overlap }
+      ? { max_chars: config.chunking.max_size, max_overlap: config.chunking.overlap }
       : undefined,
     keywords: config.keywords
       ? { algorithm: config.keywords.algorithm, maxKeywords: config.keywords.max_keywords }

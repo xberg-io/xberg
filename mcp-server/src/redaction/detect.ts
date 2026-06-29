@@ -46,30 +46,32 @@ export function detectPii(text: string, filterCategories?: string[]): PiiFinding
   return findings.sort((a, b) => a.start - b.start);
 }
 
+/** Shape of Entity objects returned by xberg's NER pipeline. */
 export interface NerEntity {
+  /** EntityCategory enum value, e.g. 'person', 'organization', 'location'. */
+  category: string;
   text: string;
-  label: string;
-  score: number;
-  start?: number;
-  end?: number;
+  start: number;
+  end: number;
+  confidence?: number;
 }
 
-const NER_LABEL_TO_CATEGORY: Record<string, string> = {
-  PERSON: "NAME",
-  PER: "NAME",
-  ORG: "ORG",
-  GPE: "LOCATION",
-  LOC: "LOCATION",
-  LOCATION: "LOCATION",
-  EMAIL: "EMAIL",
-  PHONE: "PHONE",
+const NER_CATEGORY_TO_PII: Record<string, string> = {
+  person: "NAME",
+  organization: "ORG",
+  location: "LOCATION",
+  email: "EMAIL",
+  phone: "PHONE",
+  date: "DATE",
+  money: "MONEY",
+  url: "URL",
 };
 
 function spansOverlap(a: PiiFinding, b: { start: number; end: number }): boolean {
   return a.start < b.end && b.start < a.end;
 }
 
-export function mergeNerEntities(regex: PiiFinding[], entities: NerEntity[], text: string): PiiFinding[] {
+export function mergeNerEntities(regex: PiiFinding[], entities: NerEntity[], _text: string): PiiFinding[] {
   const findings = [...regex];
   const counters: Record<string, number> = {};
   for (const f of findings) {
@@ -77,26 +79,15 @@ export function mergeNerEntities(regex: PiiFinding[], entities: NerEntity[], tex
   }
 
   for (const entity of entities) {
-    const category = NER_LABEL_TO_CATEGORY[entity.label.toUpperCase()] ?? `NER_${entity.label.toUpperCase()}`;
-    const entityText = entity.text;
-
-    let start: number;
-    let end: number;
-    if (entity.start != null && entity.end != null) {
-      start = entity.start;
-      end = entity.end;
-    } else {
-      const idx = text.indexOf(entityText);
-      if (idx < 0) continue;
-      start = idx;
-      end = idx + entityText.length;
-    }
+    const category = NER_CATEGORY_TO_PII[entity.category.toLowerCase()] ?? `NER_${entity.category.toUpperCase()}`;
+    const { text: entityText, start, end } = entity;
+    const entityConfidence = entity.confidence ?? 0.8;
 
     const overlap = findings.find((f) => spansOverlap(f, { start, end }));
     if (overlap) {
-      if (entity.score > overlap.confidence) {
+      if (entityConfidence > overlap.confidence) {
         overlap.category = category;
-        overlap.confidence = entity.score;
+        overlap.confidence = entityConfidence;
         overlap.original = entityText;
         overlap.start = start;
         overlap.end = end;
@@ -111,7 +102,7 @@ export function mergeNerEntities(regex: PiiFinding[], entities: NerEntity[], tex
       original: entityText,
       start,
       end,
-      confidence: entity.score,
+      confidence: entityConfidence,
     });
   }
 

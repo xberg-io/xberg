@@ -131,7 +131,7 @@ export function registerIngestTools(server: McpServer): void {
           try {
             const input = extractInputFromUri(filePath);
             const extractConfig: ExtractionConfig | null = use_ner
-              ? { ner: { backend: "onnx" as const, categories: ner_categories as never } }
+              ? { ner: { backend: "onnx" as const, categories: ner_categories as ExtractionConfig["ner"]["categories"] } }
               : null;
             const result = await extract(input, extractConfig);
             const doc = (result.results ?? [])[0];
