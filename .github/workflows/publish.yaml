@@ -862,19 +862,19 @@ jobs:
     needs: [prepare, check-cli]
     if: ${{ needs.prepare.outputs.release_cli == 'true' && (needs.check-cli.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true') }}
     runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          # gnu CLI builds natively (no zigbuild): the executable statically
-          # links C++ deps (tesseract/leptonica/libheif) that reference GNU
-          # libstdc++ `__cxx11` symbols, which zig's bundled libc++ does not
-          # provide — a PIE executable link then fails on undefined symbols.
-          # Native gcc links real libstdc++ and lets ORT's glibc prebuilt load
-          # at runtime. Floor = the runner's glibc (2.35); older/Alpine systems
-          # are served by the static musl CLI below.
-          - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu }
-          - { os: ubuntu-22.04-arm, target: aarch64-unknown-linux-gnu }
+          # gnu CLI builds in manylinux_2_28 containers for glibc 2.28 floor.
+          # The executable statically links C++ deps (tesseract/leptonica/libheif)
+          # that reference GNU libstdc++ `__cxx11` symbols. CFLAGS/CXXFLAGS prevent
+          # GCC 14+ from emitting C23-versioned glibc symbols (__isoc23_strtoll etc.)
+          # that require glibc ≥ 2.38, ensuring compatibility with Debian 12/Ubuntu 22.04/RHEL 8.
+          # Older/Alpine systems are served by the static musl CLI below.
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu, container: quay.io/pypa/manylinux_2_28_x86_64:latest }
+          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, container: quay.io/pypa/manylinux_2_28_aarch64:latest }
           - { os: macos-latest, target: aarch64-apple-darwin }
           - { os: windows-latest, target: x86_64-pc-windows-msvc }
     steps:
@@ -888,7 +888,38 @@ jobs:
         with:
           target: ${{ matrix.target }}
 
+      - name: Install system dependencies (manylinux)
+        if: contains(matrix.target, '-linux-gnu')
+        shell: bash
+        run: |
+          set -euxo pipefail
+          # manylinux_2_28 is AlmaLinux 8. EPEL + CRB/PowerTools provide the HEIF
+          # codec -devel packages libheif needs (libde265/libaom/libdav1d/libx265).
+          yum install -y epel-release || dnf install -y epel-release || true
+          yum install -y dnf-plugins-core yum-utils || true
+          dnf config-manager --set-enabled powertools 2>/dev/null \
+            || dnf config-manager --set-enabled crb 2>/dev/null \
+            || yum-config-manager --enable powertools 2>/dev/null || true
+          yum install -y \
+            gcc gcc-c++ make cmake pkgconfig \
+            openssl-devel libmagic-devel libuv-devel \
+            libde265-devel libaom-devel libx265-devel libdav1d-devel libnuma-devel \
+            tesseract-devel
+          # Apply the C23-symbol-prevention flags (#588) to THIS glibc-gnu build
+          # only — written to GITHUB_ENV inside the linux-gnu-gated step so they
+          # never reach the macOS (clang) or Windows (MSVC) matrix entries.
+          {
+            echo "CFLAGS=-std=gnu11"
+            echo "CXXFLAGS=-std=gnu++17"
+            echo "CPPFLAGS=-std=gnu11"
+            echo "CMAKE_C_FLAGS=-std=gnu11"
+            echo "CMAKE_CXX_FLAGS=-std=gnu++17"
+            echo "CC=gcc -std=gnu11"
+            echo "CXX=g++ -std=gnu++17"
+          } >> "$GITHUB_ENV"
+
       - name: Install system dependencies
+        if: "!contains(matrix.target, '-linux-gnu')"
         uses: ./.github/actions/install-system-deps
 
       - uses: xberg-io/actions/build-rust-cli@v1
