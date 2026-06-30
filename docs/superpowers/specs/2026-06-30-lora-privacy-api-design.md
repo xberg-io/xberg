@@ -76,7 +76,7 @@ Two layers: a new isolated engine crate, and config/dispatch wiring in the core.
 │   AdapterRegistry (LRU of merged engines, keyed by name)      │
 ├──────────────────────────────────────────────────────────────┤
 │ Engine: xberg-gliner-candle  (NEW crate)                      │
-│   DeBERTa-v2 encoder + 7 heads + PEFT lora merge-at-load      │
+│   DeBERTa-v2 encoder + 6 heads + PEFT lora merge-at-load      │
 │   reuses xberg-gliner: Span, SpanOutput, GlinerError, schema  │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -98,7 +98,7 @@ fully isolated and feature-gated at the workspace edge. It depends on
 | File | Responsibility |
 |------|----------------|
 | `encoder.rs` | Thin wrapper over `candle_transformers::models::debertav2::DebertaV2Model` |
-| `heads/mod.rs` + 7 heads | token_gather, span_rep, schema_gather, count_pred, count_lstm, scorer, classifier |
+| `heads/mod.rs` + 6 heads | token_gather, span_rep, schema_gather, count_pred, count_lstm, scorer (the `classifier` head is excluded — `extract_structure`/`classify` are out of scope) |
 | `lora.rs` | PEFT `adapter_config.json` + `adapter_model.safetensors` load; `W += (α/r)·Bᵀ·A` merge-at-load; `fan_in_fan_out` transpose handling |
 | `processor.rs` | schema-prompt construction (`[P]`/`[E]`/`[SEP]` markers, text/schema position maps) |
 | `decoder.rs` | span scoring → entities (reuse NMS/greedy-merge from `xberg-gliner` where contracts match) |
@@ -234,7 +234,10 @@ kernel of the original plan.
 - **`POST /v1/documents/{id}/rehydrate`** — reuses the existing rehydration map
   logic; design owes a decision on *where* encrypted maps are persisted/looked
   up by document id (deferred to the implementation plan).
-- **`POST /v1/search`** — reuses `xberg-rag`; thin HTTP wrapper.
+- **`POST /v1/search`** — reuses `xberg-rag`; thin HTTP wrapper. **Descoped from
+  this plan** to avoid two plans implementing the same endpoint differently: it
+  is owned by `2026-06-29-xberg-privacy-api.md` Phase 4. Listed here only to show
+  where it fits the surface.
 
 These endpoints modify `crates/xberg/` (which `CLAUDE.md` marks "never modify").
 This is an accepted, deliberate fork-local exception — there is no upstream
