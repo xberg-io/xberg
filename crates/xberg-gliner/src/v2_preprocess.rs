@@ -6,11 +6,11 @@ const SCHEMA_TOKEN_P: &str = "[P]";
 const SCHEMA_TOKEN_E: &str = "[E]";
 const SEP_TEXT_TOKEN: &str = "[SEP_TEXT]";
 
-pub(crate) struct V2Encoded {
-    pub(crate) input_ids: Vec<i64>,
-    pub(crate) text_positions: Vec<i64>,
-    pub(crate) schema_positions: Vec<i64>,
-    pub(crate) words: Vec<Token>,
+pub struct V2Encoded {
+    pub input_ids: Vec<i64>,
+    pub text_positions: Vec<i64>,
+    pub schema_positions: Vec<i64>,
+    pub words: Vec<Token>,
 }
 
 /// Build the GLiNER2 schema-prompt token sequence: `( [P] entities ( [E] label1 [E] label2 ... ) )`.
@@ -34,7 +34,7 @@ fn build_schema_tokens(labels: &[String]) -> Vec<String> {
     schema
 }
 
-pub(crate) fn encode_v2(
+pub fn encode_v2(
     text: &str,
     labels: &[String],
     tokenizer: &impl PretokenizingTokenizer,
@@ -114,7 +114,9 @@ mod tests {
         let schema = build_schema_tokens(&labels);
         assert_eq!(
             schema,
-            vec!["(", "[P]", "entities", "(", "[E]", "person", "[E]", "company", "name", ")", ")"]
+            vec![
+                "(", "[P]", "entities", "(", "[E]", "person", "[E]", "company", "name", ")", ")"
+            ]
         );
     }
 

@@ -29,7 +29,10 @@ pub use error::{GlinerError, Result};
 pub use input::{TextInput, Token};
 pub use session::{INPUT_NAMES, OUTPUT_NAMES};
 pub use v2_engine::Gliner2;
+pub use v2_preprocess::{V2Encoded, encode_v2};
 pub use v2_session::{INPUT_NAMES_V2, OUTPUT_NAMES_V2};
+pub use v2_splitter::V2Splitter;
+pub use v2_tokenizer::{PretokenizedEncoding, PretokenizingTokenizer, V2Tokenizer};
 
 pub(crate) use decode::EntityContext;
 pub(crate) use preprocess::EncodedInput;

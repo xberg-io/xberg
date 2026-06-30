@@ -14,7 +14,7 @@ pub struct Span {
 }
 
 impl Span {
-    pub(crate) fn new(
+    pub fn new(
         sequence: usize,
         start: usize,
         end: usize,
@@ -222,7 +222,7 @@ pub(crate) fn decode_logits(
     Ok(SpanOutput::new(context.texts, context.entities, decoded))
 }
 
-pub(crate) fn greedy_search(spans: &[Span], flat_ner: bool, dup_label: bool, multi_label: bool) -> Vec<Span> {
+pub fn greedy_search(spans: &[Span], flat_ner: bool, dup_label: bool, multi_label: bool) -> Vec<Span> {
     if spans.is_empty() {
         return Vec::new();
     }

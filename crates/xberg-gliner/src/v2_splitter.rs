@@ -13,18 +13,18 @@ pub(crate) const V2_SPLITTER_REGEX: &str =
 /// whose lowercase form changes byte length (e.g. Turkish dotted İ) can yield
 /// misaligned spans — the upstream reference implementation has the same
 /// limitation, so this preserves parity rather than diverging from it.
-pub(crate) struct V2Splitter {
+pub struct V2Splitter {
     regex: Regex,
 }
 
 impl V2Splitter {
-    pub(crate) fn new() -> Result<Self> {
+    pub fn new() -> Result<Self> {
         Ok(Self {
             regex: Regex::new(V2_SPLITTER_REGEX)?,
         })
     }
 
-    pub(crate) fn split(&self, input: &str) -> Vec<Token> {
+    pub fn split(&self, input: &str) -> Vec<Token> {
         let lowered = input.to_lowercase();
         self.regex
             .find_iter(&lowered)
