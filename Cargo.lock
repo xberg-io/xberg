@@ -10973,6 +10973,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "xberg-gliner-candle"
+version = "1.0.0-rc.1"
+dependencies = [
+ "candle-core",
+ "candle-nn",
+ "candle-transformers",
+ "ndarray 0.17.2",
+ "safetensors 0.4.5",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokenizers 0.23.1",
+ "xberg-gliner",
+]
+
+[[package]]
 name = "xberg-jni"
 version = "1.0.0-rc.1"
 dependencies = [

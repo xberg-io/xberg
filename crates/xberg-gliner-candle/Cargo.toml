@@ -1,0 +1,39 @@
+[package]
+name = "xberg-gliner-candle"
+version.workspace = true
+edition = "2024"
+rust-version.workspace = true
+authors.workspace = true
+description = "Candle-based GLiNER2 inference with runtime PEFT LoRA adapter merge-at-load."
+license = "Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+keywords = ["nlp", "ner", "gliner", "candle", "lora"]
+categories = ["text-processing"]
+
+[lib]
+name = "xberg_gliner_candle"
+path = "src/lib.rs"
+
+[features]
+default = []
+cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda"]
+metal = ["candle-core/metal", "candle-nn/metal", "candle-transformers/metal"]
+
+[dependencies]
+candle-core = { workspace = true }
+candle-nn = { workspace = true }
+candle-transformers = { workspace = true }
+ndarray = "0.17"
+safetensors = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokenizers = { version = "0.23", default-features = false, features = ["fancy-regex"] }
+xberg-gliner = { workspace = true, default-features = false }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

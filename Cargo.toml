@@ -2,6 +2,7 @@
 members = [
     "crates/xberg",
     "crates/xberg-gliner",
+    "crates/xberg-gliner-candle",
     "crates/xberg-cli",
     "crates/xberg-ffi",
     "crates/xberg-jni",
@@ -71,7 +72,9 @@ itertools = "0.15"
 js-sys = "0.3"
 xberg = { path = "./crates/xberg", version = "1.0.0-rc.1", default-features = false }
 xberg-gliner = { path = "./crates/xberg-gliner", version = "1.0.0-rc.1", default-features = false }
+xberg-gliner-candle = { path = "./crates/xberg-gliner-candle", version = "1.0.0-rc.1", default-features = false }
 xberg-rag = { path = "./crates/xberg-rag", version = "1.0.0-rc.1", default-features = false }
+safetensors = "0.4"
 
 lazy_static = "1.5.0"
 libc = "0.2.186"
@@ -134,6 +137,7 @@ web-sys = { version = "0.3", features = [
 [patch.crates-io]
 xberg = { path = "crates/xberg" }
 xberg-gliner = { path = "crates/xberg-gliner" }
+xberg-gliner-candle = { path = "crates/xberg-gliner-candle" }
 xberg-rag = { path = "crates/xberg-rag" }
 xberg-tesseract = { path = "crates/xberg-tesseract" }
 xberg-paddle-ocr = { path = "crates/xberg-paddle-ocr" }
