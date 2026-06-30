@@ -15,7 +15,7 @@ use async_trait::async_trait;
 
 use crate::Result;
 use crate::XbergError;
-use crate::layout::LayoutModelManager;
+use crate::layout::{LayoutError, LayoutModelManager};
 
 /// Minimal identifier for a downloadable model.
 ///
@@ -71,12 +71,15 @@ impl Default for DefaultModelProvider {
     }
 }
 
-/// Route a model-type key through the matching public manager entry point.
+/// Route a model-type key through the matching public manager entry point,
+/// re-categorizing the manager's [`LayoutError`] into an [`XbergError`].
 ///
 /// `ensure_slanet_model` is the public by-variant entry point; it delegates to
 /// the same private `ensure_model(model_type)` lookup as the named helpers, so
-/// it correctly handles the `slanet_*` variants and yields an identical
-/// "unknown model type" error for any unrecognized key.
+/// it correctly handles the `slanet_*` variants and rejects any unrecognized
+/// key. The resulting [`LayoutError`] is not preserved verbatim: see
+/// [`map_layout_error`] for how an unknown key becomes a validation error while
+/// download/verify failures become a dependency error.
 fn ensure_by_kind(manager: &LayoutModelManager, kind: &str) -> Result<PathBuf> {
     let resolved = match kind {
         "rtdetr" => manager.ensure_rtdetr_model(),
@@ -85,7 +88,27 @@ fn ensure_by_kind(manager: &LayoutModelManager, kind: &str) -> Result<PathBuf> {
         "pp_doclayout_v3" => manager.ensure_pp_doclayout_v3_model(),
         variant => manager.ensure_slanet_model(variant),
     };
-    resolved.map_err(|error| XbergError::validation(format!("layout model '{kind}' unavailable: {error}")))
+    resolved.map_err(|error| map_layout_error(kind, error))
+}
+
+/// Re-categorize a model-manager [`LayoutError`] into the closest [`XbergError`]
+/// kind so a caller can branch on the failure mode.
+///
+/// The manager reports every failure as [`LayoutError::ModelDownload`] and
+/// distinguishes the unknown-model-type case only by a message prefix. An
+/// unrecognized key is genuine bad input, so it maps to
+/// [`XbergError::Validation`]. Every other failure — HuggingFace download,
+/// SHA-256 verification, cache-directory I/O — is an operational failure to
+/// obtain a required dependency, so it maps to [`XbergError::MissingDependency`]
+/// rather than overloading `Validation` (which implies a client-input error).
+fn map_layout_error(kind: &str, error: LayoutError) -> XbergError {
+    let message = format!("layout model '{kind}' unavailable: {error}");
+    match &error {
+        LayoutError::ModelDownload(detail) if detail.starts_with("Unknown model type:") => {
+            XbergError::validation(message)
+        }
+        _ => XbergError::MissingDependency(message),
+    }
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
