@@ -1140,4 +1140,34 @@ mod tests {
             "expected at least one known entity, got: {texts:?}"
         );
     }
+
+    /// Smoke test — downloads a real GLiNER2 ONNX export and runs one inference.
+    /// `lion-ai/gliner2-base-v1-onnx` is the only publicly available monolithic
+    /// single-file GLiNER2 ONNX export found (most GLiNER2 model cards ship
+    /// safetensors only). Excluded from normal CI; run with:
+    ///   cargo test -p xberg --features ner-onnx,ner --lib ner::gline -- --ignored gliner2
+    #[ignore]
+    #[tokio::test]
+    async fn smoke_test_gliner2_real_inference() {
+        let source = CustomGlinerSource {
+            repo: "lion-ai/gliner2-base-v1-onnx".to_string(),
+            model_file: "model.onnx".to_string(),
+            tokenizer_file: "tokenizer.json".to_string(),
+            architecture: crate::core::config::ner::GlinerArchitecture::Gliner2,
+        };
+        let backend = GlineBackend::new_with_custom_source(&source).expect("GlineBackend::new_with_custom_source failed");
+        let entities = backend
+            .detect(
+                "Steve Jobs founded Apple Inc. in Cupertino, California on April 1, 1976.",
+                &[],
+            )
+            .await
+            .expect("detect failed");
+        assert!(!entities.is_empty(), "expected at least one entity");
+        let texts: Vec<&str> = entities.iter().map(|entity| entity.text.as_str()).collect();
+        assert!(
+            texts.iter().any(|text| text.eq_ignore_ascii_case("steve jobs") || text.eq_ignore_ascii_case("apple inc")),
+            "expected at least one known entity, got: {texts:?}"
+        );
+    }
 }
