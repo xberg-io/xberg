@@ -1,0 +1,62 @@
+name: CI Windows
+
+on:
+  push:
+    branches: [main, "feature/**", "fix/**"]
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".github/workflows/ci-windows.yaml"
+  pull_request:
+    branches: [main, "feature/**", "fix/**"]
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".github/workflows/ci-windows.yaml"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  windows-check:
+    name: Windows cargo check (windows-target)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: windows-check
+
+      # windows-target is the upstream-maintained aggregate for Windows:
+      # no heic (needs libheif/vcpkg), no ORT features (no prebuilts on windows-latest).
+      - name: cargo check (windows-target)
+        run: cargo check -p xberg --features windows-target --target x86_64-pc-windows-msvc
+
+      - name: cargo check xberg-gliner
+        run: cargo check -p xberg-gliner --target x86_64-pc-windows-msvc
+
+      - name: cargo check xberg-rag
+        run: cargo check -p xberg-rag --target x86_64-pc-windows-msvc
+
+      - name: cargo clippy (windows-target)
+        run: cargo clippy -p xberg --features windows-target --target x86_64-pc-windows-msvc -- -D warnings
