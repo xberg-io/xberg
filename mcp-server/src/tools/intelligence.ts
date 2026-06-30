@@ -57,6 +57,9 @@ export function registerIntelligenceTools(server: McpServer): void {
       hf_tokenizer_file: z.string().optional().describe(
         "Only used when hf_repo is set. Path to the tokenizer file within hf_repo, e.g. 'tokenizer.json'."
       ),
+      hf_architecture: z.enum(["gliner1", "gliner2"]).optional().describe(
+        "Only used when hf_repo is set. Which GLiNER tensor contract hf_repo uses. Defaults to 'gliner1'. Most GLiNER2 model cards ship safetensors only (no ONNX export) — confirm an .onnx file exists in hf_repo before setting this to 'gliner2'."
+      ),
       llm_model: z.string().optional().default("anthropic/claude-haiku-4-5").describe(
         "Only used when backend='llm'. Provider/model string, e.g. 'anthropic/claude-haiku-4-5' or 'openai/gpt-4o-mini'."
       ),
@@ -64,7 +67,7 @@ export function registerIntelligenceTools(server: McpServer): void {
         "Skip OCR when document has a text layer (faster for most docs)."
       ),
     },
-    async ({ input, backend, categories, model, hf_repo, hf_model_file, hf_tokenizer_file, llm_model, disable_ocr }) => {
+    async ({ input, backend, categories, model, hf_repo, hf_model_file, hf_tokenizer_file, hf_architecture, llm_model, disable_ocr }) => {
       try {
         const extractInput = buildExtractInput(input);
         if (!extractInput) {
@@ -78,6 +81,7 @@ export function registerIntelligenceTools(server: McpServer): void {
           hfRepo: backend === "onnx" ? hf_repo : undefined,
           hfModelFile: backend === "onnx" ? hf_model_file : undefined,
           hfTokenizerFile: backend === "onnx" ? hf_tokenizer_file : undefined,
+          hfArchitecture: backend === "onnx" ? hf_architecture : undefined,
           llm: backend === "llm" ? { model: llm_model } : undefined,
         };
 

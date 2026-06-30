@@ -112,6 +112,9 @@ export function registerIngestTools(server: McpServer): void {
       ner_hf_tokenizer_file: z.string().optional().describe(
         "Only used when ner_hf_repo is set. Path to the tokenizer file within ner_hf_repo, e.g. 'tokenizer.json'."
       ),
+      ner_hf_architecture: z.enum(["gliner1", "gliner2"]).optional().describe(
+        "Only used when ner_hf_repo is set. Which GLiNER tensor contract ner_hf_repo uses. Defaults to 'gliner1'. Most GLiNER2 model cards ship safetensors only (no ONNX export) — confirm an .onnx file exists in ner_hf_repo before setting this to 'gliner2'."
+      ),
       ner_llm_model: z.string().optional().default("anthropic/claude-haiku-4-5").describe(
         "Only used when ner_backend='llm'. Provider/model string, e.g. 'anthropic/claude-haiku-4-5' or 'openai/gpt-4o-mini'."
       ),
@@ -119,7 +122,7 @@ export function registerIngestTools(server: McpServer): void {
         "NER categories to detect, e.g. ['PERSON', 'ORG', 'LOCATION']. Defaults to all if use_ner is enabled."
       ),
     },
-    async ({ source_folder, redacted_folder, collection, redaction_strategy, rehydration_passphrase, use_ner, ner_backend, ner_model, ner_hf_repo, ner_hf_model_file, ner_hf_tokenizer_file, ner_llm_model, ner_categories }) => {
+    async ({ source_folder, redacted_folder, collection, redaction_strategy, rehydration_passphrase, use_ner, ner_backend, ner_model, ner_hf_repo, ner_hf_model_file, ner_hf_tokenizer_file, ner_hf_architecture, ner_llm_model, ner_categories }) => {
       try {
         if (!fs.existsSync(source_folder)) {
           return { content: [{ type: "text" as const, text: "Error: source_folder does not exist" }], isError: true };
@@ -157,6 +160,7 @@ export function registerIngestTools(server: McpServer): void {
                     hfRepo: ner_backend === "onnx" ? ner_hf_repo : undefined,
                     hfModelFile: ner_backend === "onnx" ? ner_hf_model_file : undefined,
                     hfTokenizerFile: ner_backend === "onnx" ? ner_hf_tokenizer_file : undefined,
+                    hfArchitecture: ner_backend === "onnx" ? ner_hf_architecture : undefined,
                     llm: ner_backend === "llm" ? { model: ner_llm_model } : undefined,
                   },
                 }

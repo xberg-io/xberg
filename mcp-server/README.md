@@ -88,6 +88,18 @@ If you don't have access to that private catalog, point `hf_repo` / `hf_model_fi
 
 `HF_TOKEN` is still required if `hf_repo` is itself private; it's optional for public repos. Files downloaded from a custom `hf_repo` are not checksum-verified, unlike the pinned catalog.
 
+GLiNER2 models (`fastino/gliner2` lineage) use a different ONNX tensor contract than GLiNER1 — set `hf_architecture: "gliner2"` (or `ner_hf_architecture` on `ingest_folder`) when pointing at one. Most GLiNER2 model cards on HuggingFace ship `safetensors` only with no ONNX export; check the repo's file list for a `.onnx` file before trying this. `lion-ai/gliner2-base-v1-onnx` is a confirmed-working monolithic single-file GLiNER2 ONNX export:
+
+```jsonc
+{
+  "backend": "onnx",
+  "hf_repo": "lion-ai/gliner2-base-v1-onnx",
+  "hf_model_file": "model.onnx",
+  "hf_tokenizer_file": "tokenizer.json",
+  "hf_architecture": "gliner2"
+}
+```
+
 ## Environment Variables
 
 | Variable | Default | Description |
