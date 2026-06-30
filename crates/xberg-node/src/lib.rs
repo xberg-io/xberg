@@ -1295,6 +1295,11 @@ pub struct JsNerConfig {
     #[napi(js_name = "hfTokenizerFile")]
     #[serde(rename = "hfTokenizerFile")]
     pub hf_tokenizer_file: Option<String>,
+    /// Which GLiNER tensor I/O contract `hfRepo` uses. Ignored when `hfRepo` is unset.
+    /// Defaults to `gliner1` when `hfRepo` is set and this is omitted.
+    #[napi(js_name = "hfArchitecture")]
+    #[serde(rename = "hfArchitecture")]
+    pub hf_architecture: Option<JsGlinerArchitecture>,
     /// Optional LLM configuration — only used by `NerBackendKind.Llm`. Token usage
     /// for LLM backends is recorded in `ExtractedDocument.llm_usage`.
     pub llm: Option<JsLlmConfig>,
@@ -7220,6 +7225,23 @@ impl Default for JsNerBackendKind {
     }
 }
 
+/// GLiNER ONNX architecture family.
+#[napi(string_enum = "snake_case", js_name = "GlinerArchitecture")]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub enum JsGlinerArchitecture {
+    /// Span-mode GLiNER (the pinned catalog and most GLiNER fine-tunes).
+    Gliner1,
+    /// Schema-prompt GLiNER2 (`fastino/gliner2` lineage).
+    Gliner2,
+}
+
+#[allow(clippy::derivable_impls)]
+impl Default for JsGlinerArchitecture {
+    fn default() -> Self {
+        Self::Gliner1
+    }
+}
+
 /// Policy controlling when VLM (Vision Language Model) OCR is used as a fallback.
 ///
 /// This knob is syntactic sugar over the explicit `OcrPipelineConfig` stage
@@ -12426,6 +12448,7 @@ impl From<JsNerConfig> for xberg::NerConfig {
         __result.hf_repo = val.hf_repo;
         __result.hf_model_file = val.hf_model_file;
         __result.hf_tokenizer_file = val.hf_tokenizer_file;
+        __result.hf_architecture = val.hf_architecture.map(Into::into);
         __result.llm = val.llm.map(Into::into);
         if let Some(__v) = val.custom_labels {
             __result.custom_labels = __v.into_iter().collect();
@@ -12444,6 +12467,7 @@ impl From<xberg::NerConfig> for JsNerConfig {
             hf_repo: val.hf_repo.map(|v| v.to_string()),
             hf_model_file: val.hf_model_file.map(|v| v.to_string()),
             hf_tokenizer_file: val.hf_tokenizer_file.map(|v| v.to_string()),
+            hf_architecture: val.hf_architecture.map(Into::into),
             llm: val.llm.map(Into::into),
             custom_labels: Some(val.custom_labels.into_iter().collect()),
         }
@@ -17520,6 +17544,24 @@ impl From<xberg::NerBackendKind> for JsNerBackendKind {
         match val {
             xberg::NerBackendKind::Onnx => Self::Onnx,
             xberg::NerBackendKind::Llm => Self::Llm,
+        }
+    }
+}
+
+impl From<JsGlinerArchitecture> for xberg::GlinerArchitecture {
+    fn from(val: JsGlinerArchitecture) -> Self {
+        match val {
+            JsGlinerArchitecture::Gliner1 => Self::Gliner1,
+            JsGlinerArchitecture::Gliner2 => Self::Gliner2,
+        }
+    }
+}
+
+impl From<xberg::GlinerArchitecture> for JsGlinerArchitecture {
+    fn from(val: xberg::GlinerArchitecture) -> Self {
+        match val {
+            xberg::GlinerArchitecture::Gliner1 => Self::Gliner1,
+            xberg::GlinerArchitecture::Gliner2 => Self::Gliner2,
         }
     }
 }

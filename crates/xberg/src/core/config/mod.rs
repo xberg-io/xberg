@@ -64,7 +64,7 @@ pub use tree_sitter::{CodeContentMode, TreeSitterConfig, TreeSitterProcessConfig
 // OSS v5 follow-up feature configs.
 pub use captioning::CaptioningConfig;
 pub use classification::PageClassificationConfig;
-pub use ner::{NerBackendKind, NerConfig};
+pub use ner::{GlinerArchitecture, NerBackendKind, NerConfig};
 pub use redaction::{RedactionConfig, RedactionPattern, RedactionTerm};
 pub use summarization::SummarizationConfig;
 pub use translation::TranslationConfig;

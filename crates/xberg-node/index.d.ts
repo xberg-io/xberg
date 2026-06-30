@@ -4061,6 +4061,14 @@ export declare enum NerBackendKind {
   Llm = 'llm'
 }
 
+/** GLiNER ONNX architecture family. */
+export declare enum GlinerArchitecture {
+  /** Span-mode GLiNER (the pinned catalog and most GLiNER fine-tunes). */
+  Gliner1 = 'gliner1',
+  /** Schema-prompt GLiNER2 (`fastino/gliner2` lineage). */
+  Gliner2 = 'gliner2'
+}
+
 /** Configuration for the NER post-processor. */
 export interface NerConfig {
   /** Backend that runs the entity detection. */
@@ -4094,6 +4102,11 @@ export interface NerConfig {
    * Required when `hfRepo` is set.
    */
   hfTokenizerFile?: string
+  /**
+   * Which GLiNER tensor I/O contract `hfRepo` uses. Ignored when `hfRepo` is unset.
+   * Defaults to `gliner1` when `hfRepo` is set and this is omitted.
+   */
+  hfArchitecture?: GlinerArchitecture
   /**
    * Optional LLM configuration — only used by `NerBackendKind.Llm`. Token usage
    * for LLM backends is recorded in `ExtractedDocument.llm_usage`.
