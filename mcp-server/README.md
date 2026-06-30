@@ -9,6 +9,10 @@ MCP server for document intelligence, RAG, and GDPR-compliant PII redaction. Wra
 | **Extraction** | `extract_document` | Extract text/tables/metadata from file URI or URL |
 | | `extract_batch` | Extract from multiple files in parallel |
 | | `list_formats` | List all supported MIME types |
+| | `extract_entities` | GLiNER NER or LLM-based named entity extraction |
+| | `structured_extract` | LLM JSON-schema structured extraction |
+| **Media** | `transcribe_audio` | Whisper ONNX offline audio/video transcription |
+| **Web** | `scrape_url` | HTTP/headless web scraping → Markdown |
 | **Collections** | `create_collection` | Create a vector store collection |
 | | `get_collection` | Get collection spec |
 | | `drop_collection` | Delete a collection |
@@ -61,12 +65,28 @@ npm run build
       "args": ["path/to/mcp-server/dist/index.js"],
       "env": {
         "XBERG_STORE_PATH": "/path/to/store.db",
-        "XBERG_CACHE_DIR": "/path/to/model-cache"
+        "XBERG_CACHE_DIR": "/path/to/model-cache",
+        "HF_TOKEN": "hf_xxxxxxxxxxxxxxxxxxxx"
       }
     }
   }
 }
 ```
+
+`HF_TOKEN` is only needed for the **default** ONNX NER path (`extract_entities` with `backend: "onnx"`, or `ingest_folder` with `use_ner: true` and `ner_backend: "onnx"`), which pulls from the private `xberg-io/gliner-models` catalog. The model downloads once (~200 MB) and is then cached.
+
+If you don't have access to that private catalog, point `hf_repo` / `hf_model_file` / `hf_tokenizer_file` (or `ner_hf_repo` / `ner_hf_model_file` / `ner_hf_tokenizer_file` on `ingest_folder`) at any public or private GLiNER ONNX export of your own instead — e.g. [`knowledgator/gliner-pii-base-v1.0`](https://huggingface.co/knowledgator/gliner-pii-base-v1.0):
+
+```jsonc
+{
+  "backend": "onnx",
+  "hf_repo": "knowledgator/gliner-pii-base-v1.0",
+  "hf_model_file": "onnx/model_fp16.onnx",
+  "hf_tokenizer_file": "tokenizer.json"
+}
+```
+
+`HF_TOKEN` is still required if `hf_repo` is itself private; it's optional for public repos. Files downloaded from a custom `hf_repo` are not checksum-verified, unlike the pinned catalog.
 
 ## Environment Variables
 
@@ -74,6 +94,7 @@ npm run build
 |---|---|---|
 | `XBERG_STORE_PATH` | platform cache dir | SQLite database path |
 | `XBERG_CACHE_DIR` | platform cache dir | ONNX model cache directory |
+| `HF_TOKEN` | — | HuggingFace read token for GLiNER model download ([get one](https://huggingface.co/settings/tokens)) |
 | `XBERG_MCP_PORT` | `8080` | HTTP transport port |
 | `XBERG_MCP_HOST` | `127.0.0.1` | HTTP transport host |
 

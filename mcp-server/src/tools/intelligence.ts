@@ -33,20 +33,38 @@ export function registerIntelligenceTools(server: McpServer): void {
   server.tool(
     "extract_entities",
     "Run named-entity recognition (NER) on a document. Returns persons, organizations, locations, emails, and custom label categories. " +
-    "Backend 'onnx' uses GLiNER (fast, offline, ~200MB model download on first use). " +
-    "Backend 'llm' uses the configured LLM (higher accuracy, requires XBERG_LLM_* env vars). " +
+    "Backend 'onnx' uses GLiNER — by default the pinned xberg-io/gliner-models catalog (requires HF_TOKEN + repo access), or pass hf_repo/hf_model_file/hf_tokenizer_file " +
+    "to point at any public or private GLiNER ONNX export of your own instead (no access to the private catalog needed; downloads from a custom repo are not checksum-verified). " +
+    "Backend 'llm' uses any LLM provider via llm_model (no GLiNER/HF_TOKEN needed — only the provider's own API key, e.g. ANTHROPIC_API_KEY or OPENAI_API_KEY). " +
     "Provide uri (file path or HTTPS URL) or bytes.",
     {
       input: InputSchema,
-      backend: z.enum(["onnx", "llm"]).optional().default("onnx"),
+      backend: z.enum(["onnx", "llm"]).optional().default("llm").describe(
+        "'llm' works out of the box with any provider API key. 'onnx' requires either HF_TOKEN + access to the private xberg-io/gliner-models repo, or hf_repo/hf_model_file/hf_tokenizer_file pointing at your own GLiNER ONNX export."
+      ),
       categories: z.array(z.string()).optional().describe(
         "Entity categories to detect, e.g. ['PERSON', 'ORG', 'LOCATION', 'EMAIL']. Defaults to all."
+      ),
+      model: z.string().optional().describe(
+        "Only used when backend='onnx' and hf_repo is unset. Pinned catalog model alias, e.g. 'fast' | 'balanced' | 'gliner_large-v2.5'."
+      ),
+      hf_repo: z.string().optional().describe(
+        "Only used when backend='onnx'. Custom HuggingFace repo id (e.g. 'knowledgator/gliner-pii-base-v1.0') to load a GLiNER ONNX export from, bypassing the pinned private catalog. Must be set together with hf_model_file and hf_tokenizer_file."
+      ),
+      hf_model_file: z.string().optional().describe(
+        "Only used when hf_repo is set. Path to the .onnx model file within hf_repo, e.g. 'onnx/model_fp16.onnx'."
+      ),
+      hf_tokenizer_file: z.string().optional().describe(
+        "Only used when hf_repo is set. Path to the tokenizer file within hf_repo, e.g. 'tokenizer.json'."
+      ),
+      llm_model: z.string().optional().default("anthropic/claude-haiku-4-5").describe(
+        "Only used when backend='llm'. Provider/model string, e.g. 'anthropic/claude-haiku-4-5' or 'openai/gpt-4o-mini'."
       ),
       disable_ocr: z.boolean().optional().default(true).describe(
         "Skip OCR when document has a text layer (faster for most docs)."
       ),
     },
-    async ({ input, backend, categories, disable_ocr }) => {
+    async ({ input, backend, categories, model, hf_repo, hf_model_file, hf_tokenizer_file, llm_model, disable_ocr }) => {
       try {
         const extractInput = buildExtractInput(input);
         if (!extractInput) {
@@ -56,6 +74,11 @@ export function registerIntelligenceTools(server: McpServer): void {
         const nerConfig: NerConfig = {
           backend: backend as NerConfig["backend"],
           categories: categories as NerConfig["categories"],
+          model: backend === "onnx" ? model : undefined,
+          hfRepo: backend === "onnx" ? hf_repo : undefined,
+          hfModelFile: backend === "onnx" ? hf_model_file : undefined,
+          hfTokenizerFile: backend === "onnx" ? hf_tokenizer_file : undefined,
+          llm: backend === "llm" ? { model: llm_model } : undefined,
         };
 
         const config: ExtractionConfig = {

@@ -4073,8 +4073,27 @@ export interface NerConfig {
   /**
    * Override the default model — only used by `NerBackendKind.Onnx`.
    * `None` lets the backend pick its pinned default xberg GLiNER model alias.
+   * Ignored when `hfRepo` is set.
    */
   model?: string
+  /**
+   * Custom Hugging Face repository to load a GLiNER ONNX export from, bypassing
+   * the pinned `xberg-io/gliner-models` catalog — only used by `NerBackendKind.Onnx`.
+   * Must be set together with `hfModelFile` and `hfTokenizerFile`, or left unset.
+   * Files downloaded from a custom repo are **not** checksum-verified, unlike the
+   * pinned catalog models.
+   */
+  hfRepo?: string
+  /**
+   * Path to the ONNX model file within `hfRepo` (e.g. `"onnx/model.onnx"`).
+   * Required when `hfRepo` is set.
+   */
+  hfModelFile?: string
+  /**
+   * Path to the tokenizer file within `hfRepo` (e.g. `"tokenizer.json"`).
+   * Required when `hfRepo` is set.
+   */
+  hfTokenizerFile?: string
   /**
    * Optional LLM configuration — only used by `NerBackendKind.Llm`. Token usage
    * for LLM backends is recorded in `ExtractedDocument.llm_usage`.

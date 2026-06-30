@@ -21,8 +21,27 @@ pub struct NerConfig {
     pub categories: Vec<EntityCategory>,
     /// Override the default model — only used by [`NerBackendKind::Onnx`].
     /// `None` lets the backend pick its pinned default xberg GLiNER model alias.
+    /// Ignored when `hf_repo` is set.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    /// Custom Hugging Face repository to load a GLiNER ONNX export from, bypassing
+    /// the pinned `xberg-io/gliner-models` catalog — only used by [`NerBackendKind::Onnx`].
+    /// Must be set together with `hf_model_file` and `hf_tokenizer_file`, or left unset.
+    /// Files downloaded from a custom repo are **not** checksum-verified, unlike the
+    /// pinned catalog models.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "alef-meta", alef(since = "5.1.0"))]
+    pub hf_repo: Option<String>,
+    /// Path to the ONNX model file within `hf_repo` (e.g. `"onnx/model.onnx"`).
+    /// Required when `hf_repo` is set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "alef-meta", alef(since = "5.1.0"))]
+    pub hf_model_file: Option<String>,
+    /// Path to the tokenizer file within `hf_repo` (e.g. `"tokenizer.json"`).
+    /// Required when `hf_repo` is set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "alef-meta", alef(since = "5.1.0"))]
+    pub hf_tokenizer_file: Option<String>,
     /// Optional LLM configuration — only used by [`NerBackendKind::Llm`]. Token usage
     /// for LLM backends is recorded in `ExtractedDocument::llm_usage`.
     #[serde(skip_serializing_if = "Option::is_none")]

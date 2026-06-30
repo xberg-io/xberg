@@ -1275,7 +1275,26 @@ pub struct JsNerConfig {
     pub categories: Option<Vec<JsEntityCategory>>,
     /// Override the default model — only used by `NerBackendKind.Onnx`.
     /// `None` lets the backend pick its pinned default xberg GLiNER model alias.
+    /// Ignored when `hfRepo` is set.
     pub model: Option<String>,
+    /// Custom Hugging Face repository to load a GLiNER ONNX export from, bypassing
+    /// the pinned `xberg-io/gliner-models` catalog — only used by `NerBackendKind.Onnx`.
+    /// Must be set together with `hfModelFile` and `hfTokenizerFile`, or left unset.
+    /// Files downloaded from a custom repo are **not** checksum-verified, unlike the
+    /// pinned catalog models.
+    #[napi(js_name = "hfRepo")]
+    #[serde(rename = "hfRepo")]
+    pub hf_repo: Option<String>,
+    /// Path to the ONNX model file within `hfRepo` (e.g. `"onnx/model.onnx"`).
+    /// Required when `hfRepo` is set.
+    #[napi(js_name = "hfModelFile")]
+    #[serde(rename = "hfModelFile")]
+    pub hf_model_file: Option<String>,
+    /// Path to the tokenizer file within `hfRepo` (e.g. `"tokenizer.json"`).
+    /// Required when `hfRepo` is set.
+    #[napi(js_name = "hfTokenizerFile")]
+    #[serde(rename = "hfTokenizerFile")]
+    pub hf_tokenizer_file: Option<String>,
     /// Optional LLM configuration — only used by `NerBackendKind.Llm`. Token usage
     /// for LLM backends is recorded in `ExtractedDocument.llm_usage`.
     pub llm: Option<JsLlmConfig>,
@@ -12404,6 +12423,9 @@ impl From<JsNerConfig> for xberg::NerConfig {
             __result.categories = __v.into_iter().map(Into::into).collect();
         }
         __result.model = val.model;
+        __result.hf_repo = val.hf_repo;
+        __result.hf_model_file = val.hf_model_file;
+        __result.hf_tokenizer_file = val.hf_tokenizer_file;
         __result.llm = val.llm.map(Into::into);
         if let Some(__v) = val.custom_labels {
             __result.custom_labels = __v.into_iter().collect();
@@ -12419,6 +12441,9 @@ impl From<xberg::NerConfig> for JsNerConfig {
             backend: Some(val.backend.into()),
             categories: Some(val.categories.into_iter().map(Into::into).collect()),
             model: val.model.map(|v| v.to_string()),
+            hf_repo: val.hf_repo.map(|v| v.to_string()),
+            hf_model_file: val.hf_model_file.map(|v| v.to_string()),
+            hf_tokenizer_file: val.hf_tokenizer_file.map(|v| v.to_string()),
             llm: val.llm.map(Into::into),
             custom_labels: Some(val.custom_labels.into_iter().collect()),
         }

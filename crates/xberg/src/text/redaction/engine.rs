@@ -411,7 +411,15 @@ fn make_ner_backend(
         NerBackendKind::Onnx => {
             #[cfg(feature = "ner-onnx")]
             {
-                Ok(crate::text::ner::gline::get_or_init_backend(config.model.as_deref())?)
+                let custom_source = crate::text::ner::gline::custom_source_from_parts(
+                    config.hf_repo.as_deref(),
+                    config.hf_model_file.as_deref(),
+                    config.hf_tokenizer_file.as_deref(),
+                )?;
+                Ok(crate::text::ner::gline::get_or_init_backend(
+                    config.model.as_deref(),
+                    custom_source.as_ref(),
+                )?)
             }
             #[cfg(not(feature = "ner-onnx"))]
             {

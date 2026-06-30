@@ -95,13 +95,31 @@ export function registerIngestTools(server: McpServer): void {
       preserve_structure: z.boolean().optional().default(true),
       rehydration_passphrase: z.string().optional().describe("AES-256-GCM passphrase for encrypting rehydration maps (GDPR Art. 32). Omit for plaintext (dev only)."),
       use_ner: z.boolean().optional().default(false).describe(
-        "Run GLiNER NER on each document and merge detected persons, orgs, and locations into PII findings before redaction. Adds ~200ms per page; model downloads on first use (~200MB)."
+        "Run NER on each document and merge detected persons, orgs, and locations into PII findings before redaction."
+      ),
+      ner_backend: z.enum(["onnx", "llm"]).optional().default("llm").describe(
+        "'llm' works out of the box with any provider API key (e.g. ANTHROPIC_API_KEY). 'onnx' uses GLiNER — by default the pinned private xberg-io/gliner-models catalog (requires HF_TOKEN), or pass ner_hf_repo/ner_hf_model_file/ner_hf_tokenizer_file to use your own GLiNER ONNX export instead."
+      ),
+      ner_model: z.string().optional().describe(
+        "Only used when ner_backend='onnx' and ner_hf_repo is unset. Pinned catalog model alias, e.g. 'fast' | 'balanced' | 'gliner_large-v2.5'."
+      ),
+      ner_hf_repo: z.string().optional().describe(
+        "Only used when ner_backend='onnx'. Custom HuggingFace repo id (e.g. 'knowledgator/gliner-pii-base-v1.0') to load a GLiNER ONNX export from, bypassing the pinned private catalog. Must be set together with ner_hf_model_file and ner_hf_tokenizer_file."
+      ),
+      ner_hf_model_file: z.string().optional().describe(
+        "Only used when ner_hf_repo is set. Path to the .onnx model file within ner_hf_repo, e.g. 'onnx/model_fp16.onnx'."
+      ),
+      ner_hf_tokenizer_file: z.string().optional().describe(
+        "Only used when ner_hf_repo is set. Path to the tokenizer file within ner_hf_repo, e.g. 'tokenizer.json'."
+      ),
+      ner_llm_model: z.string().optional().default("anthropic/claude-haiku-4-5").describe(
+        "Only used when ner_backend='llm'. Provider/model string, e.g. 'anthropic/claude-haiku-4-5' or 'openai/gpt-4o-mini'."
       ),
       ner_categories: z.array(z.string()).optional().describe(
         "NER categories to detect, e.g. ['PERSON', 'ORG', 'LOCATION']. Defaults to all if use_ner is enabled."
       ),
     },
-    async ({ source_folder, redacted_folder, collection, redaction_strategy, rehydration_passphrase, use_ner, ner_categories }) => {
+    async ({ source_folder, redacted_folder, collection, redaction_strategy, rehydration_passphrase, use_ner, ner_backend, ner_model, ner_hf_repo, ner_hf_model_file, ner_hf_tokenizer_file, ner_llm_model, ner_categories }) => {
       try {
         if (!fs.existsSync(source_folder)) {
           return { content: [{ type: "text" as const, text: "Error: source_folder does not exist" }], isError: true };
@@ -131,7 +149,17 @@ export function registerIngestTools(server: McpServer): void {
           try {
             const input = extractInputFromUri(filePath);
             const extractConfig: ExtractionConfig | null = use_ner
-              ? { ner: { backend: "onnx" as const, categories: ner_categories as ExtractionConfig["ner"]["categories"] } }
+              ? {
+                  ner: {
+                    backend: ner_backend as ExtractionConfig["ner"]["backend"],
+                    categories: ner_categories as ExtractionConfig["ner"]["categories"],
+                    model: ner_backend === "onnx" ? ner_model : undefined,
+                    hfRepo: ner_backend === "onnx" ? ner_hf_repo : undefined,
+                    hfModelFile: ner_backend === "onnx" ? ner_hf_model_file : undefined,
+                    hfTokenizerFile: ner_backend === "onnx" ? ner_hf_tokenizer_file : undefined,
+                    llm: ner_backend === "llm" ? { model: ner_llm_model } : undefined,
+                  },
+                }
               : null;
             const result = await extract(input, extractConfig);
             const doc = (result.results ?? [])[0];
