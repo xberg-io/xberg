@@ -114,6 +114,12 @@ jobs:
         run: cargo check --locked -p xberg --no-default-features
         shell: bash
 
+      # The WASM Tesseract backend is gated to `ocr-wasm` without `ocr`, a combo no other
+      # job builds; check it here so it can't bit-rot until release-time WASM publish.
+      - name: Check ocr-wasm backend
+        run: cargo check --locked -p xberg --no-default-features --features ocr-wasm --lib
+        shell: bash
+
   live-hf:
     name: Live HF preset tests
     if: github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]'

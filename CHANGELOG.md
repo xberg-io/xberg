@@ -31,6 +31,10 @@ The changelog starts fresh at `1.0.0-rc.1`. For the Kreuzberg v1–v4 history, s
   An empty language now defaults to English consistently across every OCR backend, matching the
   documented `OcrConfig` default. PaddleOCR results also report English in their metadata instead
   of an empty language when none is configured.
+- **WASM Tesseract backend builds again.** It still treated the OCR `language` config as a single
+  string after it became a list, so the WebAssembly build stopped compiling. It now uses the
+  primary language (the in-memory WASI Tesseract handles one language at a time, like the PaddleOCR
+  and VLM backends) and warns when more than one is requested.
 
 ## [1.0.0-rc.1] - 2026-06-26
 
