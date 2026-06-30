@@ -214,8 +214,10 @@ async fn extract_py_local_uri_returns_source_code_mime() {
         .write_all(b"def greet(name):\n    return f'Hello, {name}!'\n")
         .unwrap();
 
-    let mut config = ExtractionConfig::default();
-    config.tree_sitter = Some(TreeSitterConfig::default());
+    let config = ExtractionConfig {
+        tree_sitter: Some(TreeSitterConfig::default()),
+        ..Default::default()
+    };
 
     let output = extract(ExtractInput::from_uri(path.to_string_lossy()), &config)
         .await
