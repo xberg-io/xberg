@@ -10,5 +10,5 @@ permissions:
 
 jobs:
   validate:
-    uses: xberg-io/actions/.github/workflows/reusable-validate-issues.yml@v1
+    uses: jamon8888/actions/.github/workflows/reusable-validate-issues.yml@v1
     secrets: inherit

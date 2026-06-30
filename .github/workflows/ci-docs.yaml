@@ -11,7 +11,7 @@ on:
       - "alef.toml"
       - ".github/workflows/ci-docs.yaml"
   push:
-    branches: [main]
+    branches: [main, "feature/**", "fix/**"]
     paths:
       - "docs/**"
       - "packages/**"
@@ -40,7 +40,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Lint documentation + validate snippets
-        uses: xberg-io/actions/lint-docs@v1
+        uses: jamon8888/actions/lint-docs@v1
         with:
           working-directory: .
           strict: "true"
@@ -57,7 +57,7 @@ jobs:
           fetch-depth: 0
 
       - name: Build documentation
-        uses: xberg-io/actions/build-docs@v1
+        uses: jamon8888/actions/build-docs@v1
         with:
           working-directory: .
           strict: "true"

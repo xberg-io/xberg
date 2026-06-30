@@ -57,7 +57,7 @@ jobs:
 
           submodules: recursive
       - name: Free disk space
-        uses: xberg-io/actions/free-disk-space-linux@v1
+        uses: jamon8888/actions/free-disk-space-linux@v1
 
       - name: Ensure benchmark harness exists
         run: scripts/benchmarks/ensure-benchmark-harness-exists.sh
@@ -66,7 +66,7 @@ jobs:
         uses: ./.github/actions/install-system-deps
 
       - name: Setup Rust
-        uses: xberg-io/actions/setup-rust@v1
+        uses: jamon8888/actions/setup-rust@v1
         with:
           cache-key-prefix: benchmarks-setup
           use-sccache: "true"
@@ -81,7 +81,7 @@ jobs:
         uses: ./.github/actions/setup-layout-models
 
       - name: Install Task
-        uses: xberg-io/actions/install-task@v1
+        uses: jamon8888/actions/install-task@v1
 
       - name: Cache benchmark harness
         uses: ./.github/actions/cache-benchmark-harness
@@ -141,13 +141,13 @@ jobs:
 
           submodules: recursive
       - name: Free disk space
-        uses: xberg-io/actions/free-disk-space-linux@v1
+        uses: jamon8888/actions/free-disk-space-linux@v1
 
       - name: Install system dependencies
         uses: ./.github/actions/install-system-deps
 
       - name: Setup Rust toolchain
-        uses: xberg-io/actions/setup-rust@v1
+        uses: jamon8888/actions/setup-rust@v1
         with:
           cache-key-prefix: benchmarks-rust-${{ matrix.pipeline }}
           use-sccache: "true"
@@ -209,7 +209,7 @@ jobs:
 
           submodules: recursive
       - name: Free disk space
-        uses: xberg-io/actions/free-disk-space-linux@v1
+        uses: jamon8888/actions/free-disk-space-linux@v1
 
       - name: Download benchmark harness binary
         uses: actions/download-artifact@v8
@@ -229,7 +229,7 @@ jobs:
           ort-version: ${{ env.ORT_VERSION }}
 
       - name: Setup Python
-        uses: xberg-io/actions/setup-python-env@v1
+        uses: jamon8888/actions/setup-python-env@v1
         with:
           python-version: "3.11"
           cache-prefix: benchmark-docling
@@ -282,7 +282,7 @@ jobs:
 
           submodules: recursive
       - name: Free disk space
-        uses: xberg-io/actions/free-disk-space-linux@v1
+        uses: jamon8888/actions/free-disk-space-linux@v1
 
       - name: Download benchmark harness binary
         uses: actions/download-artifact@v8
@@ -302,7 +302,7 @@ jobs:
           ort-version: ${{ env.ORT_VERSION }}
 
       - name: Setup Python
-        uses: xberg-io/actions/setup-python-env@v1
+        uses: jamon8888/actions/setup-python-env@v1
         with:
           python-version: "3.11"
           cache-prefix: benchmark-markitdown
@@ -349,7 +349,7 @@ jobs:
 
           submodules: recursive
       - name: Free disk space
-        uses: xberg-io/actions/free-disk-space-linux@v1
+        uses: jamon8888/actions/free-disk-space-linux@v1
 
       - name: Download benchmark harness binary
         uses: actions/download-artifact@v8
@@ -374,7 +374,7 @@ jobs:
           sudo apt-get install -y tesseract-ocr tesseract-ocr-eng libmagic-dev poppler-utils libreoffice pandoc
 
       - name: Setup Python
-        uses: xberg-io/actions/setup-python-env@v1
+        uses: jamon8888/actions/setup-python-env@v1
         with:
           python-version: "3.11"
           cache-prefix: benchmark-unstructured
@@ -422,7 +422,7 @@ jobs:
 
           submodules: recursive
       - name: Free disk space
-        uses: xberg-io/actions/free-disk-space-linux@v1
+        uses: jamon8888/actions/free-disk-space-linux@v1
 
       - name: Download benchmark harness binary
         uses: actions/download-artifact@v8
@@ -495,7 +495,7 @@ jobs:
 
           submodules: recursive
       - name: Free disk space
-        uses: xberg-io/actions/free-disk-space-linux@v1
+        uses: jamon8888/actions/free-disk-space-linux@v1
 
       - name: Download benchmark harness binary
         uses: actions/download-artifact@v8
@@ -520,7 +520,7 @@ jobs:
           sudo apt-get install -y tesseract-ocr tesseract-ocr-eng libjpeg-dev libpng-dev libtiff-dev
 
       - name: Setup Python
-        uses: xberg-io/actions/setup-python-env@v1
+        uses: jamon8888/actions/setup-python-env@v1
         with:
           python-version: "3.11"
           cache-prefix: benchmark-pymupdf4llm
@@ -573,7 +573,7 @@ jobs:
 
           submodules: recursive
       - name: Free disk space
-        uses: xberg-io/actions/free-disk-space-linux@v1
+        uses: jamon8888/actions/free-disk-space-linux@v1
 
       - name: Download benchmark harness binary
         uses: actions/download-artifact@v8
@@ -593,7 +593,7 @@ jobs:
           ort-version: ${{ env.ORT_VERSION }}
 
       - name: Setup Python
-        uses: xberg-io/actions/setup-python-env@v1
+        uses: jamon8888/actions/setup-python-env@v1
         with:
           python-version: "3.11"
           cache-prefix: benchmark-mineru
@@ -647,7 +647,7 @@ jobs:
 
           submodules: recursive
       - name: Free disk space
-        uses: xberg-io/actions/free-disk-space-linux@v1
+        uses: jamon8888/actions/free-disk-space-linux@v1
 
       - name: Download benchmark harness binary
         uses: actions/download-artifact@v8
@@ -667,7 +667,7 @@ jobs:
           ort-version: ${{ env.ORT_VERSION }}
 
       - name: Setup Rust toolchain
-        uses: xberg-io/actions/setup-rust@v1
+        uses: jamon8888/actions/setup-rust@v1
         with:
           cache-key-prefix: benchmarks-liteparse
           use-sccache: "true"
@@ -729,7 +729,7 @@ jobs:
           submodules: recursive
 
       - name: Setup Rust
-        uses: xberg-io/actions/setup-rust@v1
+        uses: jamon8888/actions/setup-rust@v1
         with:
           cache-key-prefix: aggregate
 

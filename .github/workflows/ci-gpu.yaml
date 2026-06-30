@@ -55,7 +55,7 @@ jobs:
             gpu-build-${{ runner.os }}-
 
       - name: Build GPU test binary
-        uses: xberg-io/actions/build-gpu-test-binary@v1
+        uses: jamon8888/actions/build-gpu-test-binary@v1
         with:
           package: xberg
           test-name: gpu_acceleration
@@ -96,7 +96,7 @@ jobs:
           name: gpu-test-binary
 
       - name: Download ONNX Runtime (GPU/CUDA)
-        uses: xberg-io/actions/setup-onnx-runtime-gpu@v1
+        uses: jamon8888/actions/setup-onnx-runtime-gpu@v1
         with:
           version: ${{ env.ORT_VERSION }}
 
@@ -141,7 +141,7 @@ jobs:
           submodules: recursive
 
       - name: Setup Rust
-        uses: xberg-io/actions/setup-rust@v1
+        uses: jamon8888/actions/setup-rust@v1
         with:
           toolchain: "1.95"
           cache-key-prefix: candle-build-${{ matrix.model.name }}
@@ -191,7 +191,7 @@ jobs:
           ort-version: ${{ env.ORT_VERSION }}
 
       - name: Build candle test binary
-        uses: xberg-io/actions/build-gpu-test-binary@v1
+        uses: jamon8888/actions/build-gpu-test-binary@v1
         with:
           package: xberg
           test-name: candle_backends

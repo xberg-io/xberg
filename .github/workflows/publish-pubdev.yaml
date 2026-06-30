@@ -41,6 +41,6 @@ jobs:
           run-id: ${{ inputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: xberg-io/actions/publish-pub@v1
+      - uses: jamon8888/actions/publish-pub@v1
         with:
           package-dir: packages/dart

@@ -62,7 +62,7 @@ jobs:
 
       - name: Resolve release metadata
         id: meta
-        uses: xberg-io/actions/prepare-release-metadata@v1
+        uses: jamon8888/actions/prepare-release-metadata@v1
         with:
           tag: ${{ inputs.tag }}
           ref: ${{ inputs.ref }}
@@ -188,7 +188,7 @@ jobs:
           submodules: recursive
 
       - name: Free up disk space
-        uses: xberg-io/actions/free-disk-space-linux@v1
+        uses: jamon8888/actions/free-disk-space-linux@v1
 
       - name: Ensure target commit
         if: ${{ needs.prepare.outputs.target_sha != '' }}

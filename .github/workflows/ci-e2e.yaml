@@ -2,7 +2,7 @@ name: CI E2E
 
 on:
   push:
-    branches: [main]
+    branches: [main, "feature/**", "fix/**"]
     paths:
       - "crates/**"
       - "packages/**"
@@ -15,7 +15,7 @@ on:
       - "pnpm-workspace.yaml"
       - ".github/workflows/ci-e2e.yaml"
   pull_request:
-    branches: [main]
+    branches: [main, "feature/**", "fix/**"]
     paths:
       - "crates/**"
       - "packages/**"
@@ -50,7 +50,7 @@ permissions:
 jobs:
   build-ffi:
     name: Build FFI (${{ matrix.target }})
-    if: github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]'
+    if: github.actor != 'dependabot[bot]'
     runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ matrix.os == 'windows-latest' && 120 || 60 }}
     strategy:
@@ -104,7 +104,7 @@ jobs:
 
       - name: Setup Rust
         if: steps.ffi-cache.outputs.cache-hit != 'true'
-        uses: xberg-io/actions/setup-rust@v1
+        uses: jamon8888/actions/setup-rust@v1
         with:
           cache-key-prefix: build-ffi-${{ matrix.target }}
           target: ${{ matrix.target }}
@@ -115,13 +115,13 @@ jobs:
 
       - name: Build FFI library
         if: steps.ffi-cache.outputs.cache-hit != 'true'
-        uses: xberg-io/actions/build-rust-ffi@v1
+        uses: jamon8888/actions/build-rust-ffi@v1
         with:
           crate-name: xberg-ffi
 
       - name: Build CLI
         if: steps.ffi-cache.outputs.cache-hit != 'true'
-        uses: xberg-io/actions/build-rust-cli@v1
+        uses: jamon8888/actions/build-rust-cli@v1
         with:
           package-name: xberg-cli
           binary-name: xberg
@@ -144,7 +144,7 @@ jobs:
 
   e2e-tests:
     name: E2E (${{ matrix.lang }})
-    if: github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]'
+    if: github.actor != 'dependabot[bot]'
     needs: [build-ffi]
     runs-on: ${{ matrix.runs-on }}
     timeout-minutes: 60
@@ -218,7 +218,7 @@ jobs:
           submodules: recursive
 
       - name: Setup Rust
-        uses: xberg-io/actions/setup-rust@v1
+        uses: jamon8888/actions/setup-rust@v1
         with:
           cache-key-prefix: e2e-${{ matrix.lang }}
           use-sccache: "true"
@@ -316,18 +316,18 @@ jobs:
 
       - name: Install WASI SDK
         if: matrix.lang == 'wasm'
-        uses: xberg-io/actions/install-wasi-sdk@v1
+        uses: jamon8888/actions/install-wasi-sdk@v1
 
       - name: Setup Python
         if: matrix.python-version
-        uses: xberg-io/actions/setup-python-env@v1
+        uses: jamon8888/actions/setup-python-env@v1
         with:
           python-version: ${{ matrix.python-version }}
           cache-prefix: e2e-py-${{ matrix.python-version }}
 
       - name: Setup Node
         if: matrix.node-version
-        uses: xberg-io/actions/setup-node-workspace@v1
+        uses: jamon8888/actions/setup-node-workspace@v1
 
       - name: Setup Go
         if: matrix.go-version
@@ -371,7 +371,7 @@ jobs:
 
       - name: Setup Gradle
         if: matrix.lang == 'kotlin-android'
-        uses: xberg-io/actions/setup-gradle@v1
+        uses: jamon8888/actions/setup-gradle@v1
         with:
           gradle-version: "9.6.0"
 
@@ -383,21 +383,21 @@ jobs:
 
       - name: Setup PHP
         if: matrix.php-version
-        uses: xberg-io/actions/setup-php@v1
+        uses: jamon8888/actions/setup-php@v1
         with:
           php-version: ${{ matrix.php-version }}
           tools: composer
 
       - name: Setup Elixir
         if: matrix.elixir-version
-        uses: xberg-io/actions/setup-elixir@v1
+        uses: jamon8888/actions/setup-elixir@v1
         with:
           elixir-version: ${{ matrix.elixir-version }}
           otp-version: ${{ matrix.otp-version }}
 
       - name: Setup R
         if: matrix.r-version
-        uses: xberg-io/actions/setup-r@v1
+        uses: jamon8888/actions/setup-r@v1
         with:
           r-version: ${{ matrix.r-version }}
 
@@ -413,13 +413,13 @@ jobs:
 
       - name: Setup Swift
         if: matrix.swift-version
-        uses: xberg-io/actions/setup-swift@v1
+        uses: jamon8888/actions/setup-swift@v1
         with:
           swift-version: ${{ matrix.swift-version }}
 
       - name: Setup Zig
         if: matrix.zig-version
-        uses: xberg-io/actions/setup-zig@v1
+        uses: jamon8888/actions/setup-zig@v1
         with:
           version: ${{ matrix.zig-version }}
 
@@ -440,10 +440,10 @@ jobs:
           echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
 
       - name: Install Task
-        uses: xberg-io/actions/install-task@v1
+        uses: jamon8888/actions/install-task@v1
 
       - name: Install alef CLI
-        uses: xberg-io/actions/install-alef@v1
+        uses: jamon8888/actions/install-alef@v1
 
       - name: Compile Ruby native extension
         if: matrix.lang == 'ruby'

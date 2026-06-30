@@ -2,7 +2,7 @@ name: CI Rust
 
 on:
   push:
-    branches: [main]
+    branches: [main, "feature/**", "fix/**"]
     paths:
       - "crates/**"
       - "packages/dart/rust/**"
@@ -16,7 +16,7 @@ on:
       - ".github/workflows/ci-rust.yaml"
       - "scripts/ci/rust/**"
   pull_request:
-    branches: [main]
+    branches: [main, "feature/**", "fix/**"]
     paths:
       - "crates/**"
       - "packages/dart/rust/**"
@@ -52,7 +52,7 @@ permissions:
 jobs:
   rust:
     name: Rust (${{ matrix.os }})
-    if: github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]'
+    if: github.actor != 'dependabot[bot]'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     strategy:
@@ -68,13 +68,13 @@ jobs:
 
       - name: Free disk space
         if: runner.os == 'Linux'
-        uses: xberg-io/actions/free-disk-space-linux@v1
+        uses: jamon8888/actions/free-disk-space-linux@v1
         with:
           show-initial: "false"
           show-final: "true"
 
       - name: Setup Rust
-        uses: xberg-io/actions/setup-rust@v1
+        uses: jamon8888/actions/setup-rust@v1
         with:
           cache-key-prefix: rust-${{ matrix.os }}
           use-sccache: "true"
@@ -93,7 +93,7 @@ jobs:
           label: ${{ matrix.os }}
 
       - name: Install Task
-        uses: xberg-io/actions/install-task@v1
+        uses: jamon8888/actions/install-task@v1
 
       - name: Run clippy
         # Full workspace, all targets. sccache (wired by setup-rust above via
@@ -116,7 +116,7 @@ jobs:
 
   live-hf:
     name: Live HF preset tests
-    if: github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]'
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
     steps:
@@ -125,13 +125,13 @@ jobs:
           submodules: recursive
 
       - name: Free disk space
-        uses: xberg-io/actions/free-disk-space-linux@v1
+        uses: jamon8888/actions/free-disk-space-linux@v1
         with:
           show-initial: "false"
           show-final: "true"
 
       - name: Setup Rust
-        uses: xberg-io/actions/setup-rust@v1
+        uses: jamon8888/actions/setup-rust@v1
         with:
           cache-key-prefix: rust-live-hf
           use-sccache: "true"

@@ -2,7 +2,7 @@ name: CI Lint
 
 on:
   push:
-    branches: [main]
+    branches: [main, "feature/**", "fix/**"]
     paths:
       - "crates/**"
       - "packages/**"
@@ -18,7 +18,7 @@ on:
       - "alef.toml"
       - "pyproject.toml"
   pull_request:
-    branches: [main]
+    branches: [main, "feature/**", "fix/**"]
     paths:
       - "crates/**"
       - "packages/**"
@@ -45,7 +45,7 @@ permissions:
 jobs:
   lint:
     name: Lint
-    if: github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]'
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     env:
@@ -63,7 +63,7 @@ jobs:
           submodules: recursive
 
       - name: Setup Rust
-        uses: xberg-io/actions/setup-rust@v1
+        uses: jamon8888/actions/setup-rust@v1
         with:
           cache-key-prefix: lint
 
@@ -71,14 +71,14 @@ jobs:
         uses: ./.github/actions/install-system-deps
 
       - name: Setup Python
-        uses: xberg-io/actions/setup-python-env@v1
+        uses: jamon8888/actions/setup-python-env@v1
         with:
           python-version: "3.13"
           cache-prefix: lint-py
           install-command: "uv sync --group dev --no-install-project --no-install-workspace --frozen"
 
       - name: Setup Node
-        uses: xberg-io/actions/setup-node-workspace@v1
+        uses: jamon8888/actions/setup-node-workspace@v1
 
       - name: Setup Go
         uses: actions/setup-go@v6
@@ -92,7 +92,7 @@ jobs:
           java-version: "25"
 
       - name: Setup Elixir
-        uses: xberg-io/actions/setup-elixir@v1
+        uses: jamon8888/actions/setup-elixir@v1
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
@@ -108,7 +108,7 @@ jobs:
           bundle install --jobs 4
 
       - name: Setup PHP
-        uses: xberg-io/actions/setup-php@v1
+        uses: jamon8888/actions/setup-php@v1
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -116,16 +116,16 @@ jobs:
           dotnet-version: "10.0.x"
 
       - name: Setup R
-        uses: xberg-io/actions/setup-r@v1
+        uses: jamon8888/actions/setup-r@v1
         with:
           r-version: "release"
           install-deps: "false"
 
       - name: Install Task
-        uses: xberg-io/actions/install-task@v1
+        uses: jamon8888/actions/install-task@v1
 
       - name: Install alef CLI
-        uses: xberg-io/actions/install-alef@v1
+        uses: jamon8888/actions/install-alef@v1
 
       - name: Run all prek hooks
         uses: j178/prek-action@v2
