@@ -55,7 +55,7 @@ pub struct BuiltPrompt {
 /// - System prompt is `system_prompt` with `{{var}}` substitution from `user_context`.
 /// - `citation_instruction` is appended to the system prompt when `Some`.
 /// - User text includes `context_template` (if present) + the extracted excerpt,
-///   truncated at `max_excerpt_bytes` and fenced with a per-call nonce.
+///   truncated at `max_excerpt_bytes`.
 /// - VisionOnly / Skip modes set `user_text` to None.
 pub fn build_prompt(
     system_prompt: &str,
@@ -90,18 +90,10 @@ pub fn build_prompt(
 
             let excerpt = truncate_to_char_boundary(extracted_text_excerpt, max_excerpt_bytes);
 
-            // Fence the untrusted document excerpt with a per-call nonce so planted
-            // content cannot close the fence and inject instructions at the same
-            // nesting level (the same scheme the vision-fallback prompt uses).
-            if !excerpt.is_empty() {
-                let nonce = fence_nonce();
-                if !content.is_empty() {
-                    content.push_str("\n\n");
-                }
-                content.push_str(&format!("--- BEGIN EXTRACTED_TEXT_{nonce} ---\n"));
-                content.push_str(excerpt);
-                content.push_str(&format!("\n--- END EXTRACTED_TEXT_{nonce} ---\n"));
+            if !content.is_empty() && !excerpt.is_empty() {
+                content.push_str("\n\n---\n\n");
             }
+            content.push_str(excerpt);
 
             Some(content)
         }
@@ -571,12 +563,9 @@ mod tests {
             max_bytes,
         );
         let user_text = prompt.user_text.expect("text-only mode yields user text");
-        // The excerpt is fenced, so the user text is fence scaffolding (ASCII) plus
-        // the truncated '世' run. Truncation must not panic and must respect the
-        // byte budget: each '世' is 3 bytes, so at most `max_bytes / 3` survive.
-        let world_count = user_text.matches('世').count();
-        assert!(world_count > 0, "excerpt should retain some content");
-        assert!(world_count * 3 <= max_bytes, "excerpt truncated within the byte budget");
+        // Truncated at a char boundary: at most `max_bytes` bytes, all valid UTF-8.
+        assert!(user_text.len() <= max_bytes);
+        assert!(user_text.chars().all(|c| c == '世'));
 
         // Same for the vision-fallback assembly.
         let confidence = ExtractionConfidence {
