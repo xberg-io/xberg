@@ -14,6 +14,7 @@ mod session;
 mod splitter;
 mod tensor;
 mod tokenizer;
+mod v2_tokenizer;
 
 pub use config::{Parameters, RuntimeConfig};
 pub use decode::{Span, SpanOutput};
