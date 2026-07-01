@@ -976,7 +976,7 @@ fn main() -> Result<()> {
                 };
                 let categories: Vec<xberg::types::entity::EntityCategory> = ner_categories
                     .iter()
-                    .map(|s| s.parse().unwrap())
+                    .map(|s| s.parse().unwrap_or_default())
                     .collect();
                 config.ner = Some(NerConfig {
                     backend,
@@ -988,10 +988,11 @@ fn main() -> Result<()> {
 
             // Redaction
             if redact {
-                let strategy: RedactionStrategy = redact_strategy.parse().unwrap();
+                let strategy: RedactionStrategy = redact_strategy.parse().unwrap_or_default();
+                // Empty set means "all detectable categories" per RedactionConfig semantics.
                 let categories: std::collections::HashSet<PiiCategory> = redact_categories
                     .iter()
-                    .map(|s| s.parse().unwrap())
+                    .map(|s| s.parse().unwrap_or_default())
                     .collect();
                 config.redaction = Some(RedactionConfig {
                     strategy,
