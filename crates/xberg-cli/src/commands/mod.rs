@@ -20,6 +20,7 @@ pub mod extract;
 #[cfg(feature = "ner-onnx")]
 pub mod ner;
 pub mod overrides;
+#[cfg(any(feature = "ner-onnx", feature = "ner-llm", feature = "ner-candle"))]
 pub mod process;
 #[cfg(any(feature = "api", feature = "mcp"))]
 pub mod server;

@@ -25,7 +25,7 @@ pub fn process_command(
             if data.is_empty() {
                 anyhow::bail!("No input received from stdin.");
             }
-            ExtractInput::from_bytes(data, "text/plain", None)
+            ExtractInput::from_bytes(data, "application/octet-stream", None)
         }
     };
 
