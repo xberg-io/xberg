@@ -5,7 +5,7 @@
 //! session management.
 
 mod config;
-mod decode;
+pub mod decode;
 mod engine;
 mod error;
 mod input;

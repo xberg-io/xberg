@@ -79,7 +79,7 @@ pub struct Token {
 }
 
 impl Token {
-    pub(crate) fn new(start: usize, end: usize, text: &str) -> Self {
+    pub fn new(start: usize, end: usize, text: &str) -> Self {
         Self {
             start,
             end,
