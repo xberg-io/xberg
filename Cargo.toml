@@ -123,9 +123,6 @@ web-sys = { version = "0.3", features = [
 ] }
 
 [patch.crates-io]
-# DEV-ONLY (uncommitted): local tslp override while fixing wasm32 grammar build.
-# Remove once the fix is published to crates.io and the version floor is bumped.
-tree-sitter-language-pack = { path = "../tree-sitter-language-pack" }
 xberg = { path = "crates/xberg" }
 xberg-gliner = { path = "crates/xberg-gliner" }
 xberg-rag = { path = "crates/xberg-rag" }
