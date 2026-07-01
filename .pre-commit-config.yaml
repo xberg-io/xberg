@@ -112,7 +112,7 @@ repos:
       exclude: ^(docs/|audit-notes/|skills/|templates/|tools/|scripts/|docker/|\.ai-rulez/|\.github/|crates/[^/]+/(README|patches/README)\.md$|ATTRIBUTIONS\.md$|SECURITY\.md$|CONTRIBUTING\.md$|CHANGELOG\.md$|README\.md$)
     - id: textlint
       files: ^docs/.*\.md$
-      exclude: ^docs/(reference/|api-|snippets/|migration/)
+      exclude: ^docs/(reference/|api-|snippets/|migration/|superpowers/)
       args:
       - --fix
       - --config
