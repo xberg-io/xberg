@@ -22,8 +22,9 @@ pub(crate) struct ScorerOutput {
 ///
 /// For each `(start_word, width_idx)` pair where `width_idx ∈ 0..MAX_WIDTH`,
 /// emits `(start, start + width_idx)`. Out-of-range pairs (`end >= num_words`)
-/// are zero-padded.
-pub(crate) fn build_span_idx(num_words: usize) -> Array3<i64> {
+/// are zero-padded — those slots carry score `0.0` after the heads' forward
+/// pass and are always skipped by `decode_span_scores`.
+pub(crate) fn build_span_idx(num_words: usize) -> crate::Result<Array3<i64>> {
     let num_spans = num_words * MAX_WIDTH;
     let mut data = Vec::with_capacity(num_spans * 2);
     for start in 0..num_words {
@@ -37,7 +38,8 @@ pub(crate) fn build_span_idx(num_words: usize) -> Array3<i64> {
             }
         }
     }
-    Array3::from_shape_vec((1, num_spans, 2), data).expect("span_idx shape consistent by construction")
+    Array3::from_shape_vec((1, num_spans, 2), data)
+        .map_err(|e| crate::GlinerCandleError::Backend(format!("build_span_idx shape: {e}")))
 }
 
 /// Decode the scorer's `[MAX_COUNT, num_words, MAX_WIDTH, num_labels]` tensor
@@ -63,7 +65,12 @@ pub(crate) fn decode_span_scores(
     for c_idx in 0..pred_count.min(MAX_COUNT) {
         for start in 0..num_words {
             for width_idx in 0..MAX_WIDTH {
-                let end_word = (start + width_idx + 1).min(num_words);
+                // Skip slots where the span-index entry was zero-padded.
+                let end_idx = start + width_idx;
+                if end_idx >= num_words {
+                    continue;
+                }
+                let end_word = end_idx + 1; // exclusive
                 for m in 0..num_labels {
                     let prob = scores[[c_idx, start, width_idx, m]];
                     if prob <= threshold {
@@ -107,11 +114,16 @@ mod tests {
 
     #[test]
     fn build_span_idx_zero_pads_overflow() {
-        let idx = build_span_idx(2);
+        let idx = build_span_idx(2).expect("build_span_idx must not fail");
         assert_eq!(idx.shape(), &[1, 2 * MAX_WIDTH, 2]);
+        // start=0, width=0: end=0 < 2 → valid (0,0)
         assert_eq!((idx[[0, 0, 0]], idx[[0, 0, 1]]), (0, 0));
+        // start=0, width=1: end=1 < 2 → valid (0,1)
         assert_eq!((idx[[0, 1, 0]], idx[[0, 1, 1]]), (0, 1));
-        assert_eq!((idx[[0, 2, 0]], idx[[0, 2, 1]]), (0, 0)); // overflow → (0,0)
+        // start=0, width=2: end=2 >= 2 → zero-padded (0,0)
+        assert_eq!((idx[[0, 2, 0]], idx[[0, 2, 1]]), (0, 0));
+        // start=1, width=0: end=1 < 2 → valid (1,1) — second word
+        assert_eq!((idx[[0, MAX_WIDTH, 0]], idx[[0, MAX_WIDTH, 1]]), (1, 1));
     }
 
     #[test]
