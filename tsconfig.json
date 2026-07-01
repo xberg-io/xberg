@@ -37,5 +37,5 @@
 		"noEmit": true
 	},
 	"files": [],
-	"references": [{ "path": "./packages/node" }, { "path": "./e2e/node" }, { "path": "./e2e/wasm" }]
+	"references": [{ "path": "./e2e/node" }, { "path": "./e2e/wasm" }]
 }
