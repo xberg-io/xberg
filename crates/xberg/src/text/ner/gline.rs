@@ -297,24 +297,41 @@ fn ensure_custom_model(source: &CustomGlinerSource, cache_dir: Option<PathBuf>) 
     }
 
     std::fs::create_dir_all(&model_dir).map_err(|error| crate::XbergError::Plugin {
-        message: format!("Failed to create custom GLiNER cache dir '{}': {error}", model_dir.display()),
+        message: format!(
+            "Failed to create custom GLiNER cache dir '{}': {error}",
+            model_dir.display()
+        ),
         plugin_name: "ner-gliner".to_string(),
     })?;
 
-    let cached_model = crate::model_download::hf_download(repo, model_file).map_err(|error| crate::XbergError::Plugin {
-        message: format!("Failed to download custom GLiNER model '{model_file}' from {repo}: {error}"),
-        plugin_name: "ner-gliner".to_string(),
+    let cached_model =
+        crate::model_download::hf_download(repo, model_file).map_err(|error| crate::XbergError::Plugin {
+            message: format!("Failed to download custom GLiNER model '{model_file}' from {repo}: {error}"),
+            plugin_name: "ner-gliner".to_string(),
+        })?;
+    atomic_publish(&cached_model, &model_path, &model_dir, "", "ner-gliner-custom-model").map_err(|error| {
+        crate::XbergError::Plugin {
+            message: error,
+            plugin_name: "ner-gliner".to_string(),
+        }
     })?;
-    atomic_publish(&cached_model, &model_path, &model_dir, "", "ner-gliner-custom-model")
-        .map_err(|error| crate::XbergError::Plugin { message: error, plugin_name: "ner-gliner".to_string() })?;
 
     let cached_tokenizer =
         crate::model_download::hf_download(repo, tokenizer_file).map_err(|error| crate::XbergError::Plugin {
             message: format!("Failed to download custom GLiNER tokenizer '{tokenizer_file}' from {repo}: {error}"),
             plugin_name: "ner-gliner".to_string(),
         })?;
-    atomic_publish(&cached_tokenizer, &tokenizer_path, &model_dir, "", "ner-gliner-custom-tokenizer")
-        .map_err(|error| crate::XbergError::Plugin { message: error, plugin_name: "ner-gliner".to_string() })?;
+    atomic_publish(
+        &cached_tokenizer,
+        &tokenizer_path,
+        &model_dir,
+        "",
+        "ner-gliner-custom-tokenizer",
+    )
+    .map_err(|error| crate::XbergError::Plugin {
+        message: error,
+        plugin_name: "ner-gliner".to_string(),
+    })?;
 
     tracing::info!(
         repo,
@@ -515,7 +532,10 @@ fn backend_cache_key(
             resolve_model(&requested)?.id.to_string()
         }
     };
-    Ok(GlineBackendCacheKey { model_id, thread_budget })
+    Ok(GlineBackendCacheKey {
+        model_id,
+        thread_budget,
+    })
 }
 
 fn available_model_names() -> Vec<&'static str> {
@@ -735,9 +755,7 @@ impl GlineBackend {
                 ensure_model(&requested, None)?
             }
         };
-        let architecture = custom_source
-            .map(|source| source.architecture)
-            .unwrap_or_default();
+        let architecture = custom_source.map(|source| source.architecture).unwrap_or_default();
         let engine = match architecture {
             crate::core::config::ner::GlinerArchitecture::Gliner1 => GlinerEngine::V1(
                 Gliner::with_runtime(
@@ -1039,10 +1057,16 @@ mod tests {
             tokenizer_file: "tokenizer.json".to_string(),
             architecture: GlinerArchitecture::Gliner1,
         };
-        let v2 = CustomGlinerSource { architecture: GlinerArchitecture::Gliner2, ..v1.clone() };
+        let v2 = CustomGlinerSource {
+            architecture: GlinerArchitecture::Gliner2,
+            ..v1.clone()
+        };
         let k1 = backend_cache_key(None, Some(&v1), 4).expect("v1 key");
         let k2 = backend_cache_key(None, Some(&v2), 4).expect("v2 key");
-        assert_ne!(k1, k2, "Gliner1 and Gliner2 must produce different cache keys for the same model files");
+        assert_ne!(
+            k1, k2,
+            "Gliner1 and Gliner2 must produce different cache keys for the same model files"
+        );
     }
 
     #[test]
@@ -1179,7 +1203,8 @@ mod tests {
             tokenizer_file: "tokenizer.json".to_string(),
             architecture: crate::core::config::ner::GlinerArchitecture::Gliner2,
         };
-        let backend = GlineBackend::new_with_custom_source(&source).expect("GlineBackend::new_with_custom_source failed");
+        let backend =
+            GlineBackend::new_with_custom_source(&source).expect("GlineBackend::new_with_custom_source failed");
         let entities = backend
             .detect(
                 "Steve Jobs founded Apple Inc. in Cupertino, California on April 1, 1976.",
@@ -1190,7 +1215,9 @@ mod tests {
         assert!(!entities.is_empty(), "expected at least one entity");
         let texts: Vec<&str> = entities.iter().map(|entity| entity.text.as_str()).collect();
         assert!(
-            texts.iter().any(|text| text.eq_ignore_ascii_case("steve jobs") || text.eq_ignore_ascii_case("apple inc")),
+            texts
+                .iter()
+                .any(|text| text.eq_ignore_ascii_case("steve jobs") || text.eq_ignore_ascii_case("apple inc")),
             "expected at least one known entity, got: {texts:?}"
         );
     }
