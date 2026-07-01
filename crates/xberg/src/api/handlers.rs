@@ -1192,7 +1192,7 @@ pub(crate) async fn rehydrate_handler(
         .map_err(|e| ApiError::new(axum::http::StatusCode::FORBIDDEN, e))?;
 
     #[cfg(not(feature = "redaction-rehydrate"))]
-    let restored = {
+    let restored: std::collections::HashMap<String, String> = {
         let _ = encrypted;
         let _ = request.passphrase;
         return Err(ApiError {
@@ -1257,30 +1257,30 @@ pub(crate) async fn process_handler(
     let rehydrate = request.operations.redact.as_ref().map(|r| r.rehydrate).unwrap_or(false);
 
     if rehydrate {
-        let redact_op = request.operations.redact.as_ref().expect("checked above");
-        let passphrase = redact_op.passphrase.as_deref().ok_or_else(|| {
-            ApiError::validation(crate::error::XbergError::validation(
-                "operations.redact.passphrase is required when operations.redact.rehydrate is true",
-            ))
-        })?;
-
         let mut config = (*state.default_config).clone();
         config.ner = request.operations.ner.clone();
 
         let mut results = extract_unified_inputs(vec![input], config).await?;
-        let mut document = results.results.pop().ok_or_else(|| {
+        let document = results.results.pop().ok_or_else(|| {
             ApiError::internal(crate::error::XbergError::Other(
                 "extraction produced no document".into(),
             ))
         })?;
 
         #[cfg(feature = "redaction-rehydrate")]
-        let rehydration_key = {
+        let (document, rehydration_key) = {
+            let redact_op = request.operations.redact.as_ref().expect("checked above");
+            let passphrase = redact_op.passphrase.as_deref().ok_or_else(|| {
+                ApiError::validation(crate::error::XbergError::validation(
+                    "operations.redact.passphrase is required when operations.redact.rehydrate is true",
+                ))
+            })?;
+            let mut document = document;
             let map = crate::text::redaction::redact_capturing_rehydration_map(&mut document, &redact_op.config)
                 .await
                 .map_err(ApiError::from)?;
             let encrypted = crate::text::redaction::encrypt_map(&map, passphrase).map_err(ApiError::from)?;
-            Some(state.rehydration_store.store(encrypted))
+            (document, Some(state.rehydration_store.store(encrypted)))
         };
         #[cfg(not(feature = "redaction-rehydrate"))]
         let rehydration_key: Option<String> = None;
