@@ -40,11 +40,11 @@ pub(crate) fn run_pipeline(
 
     // 3. Token gather. `text_positions` are already per-word token indices
     //    from `encode_v2` — filter to the truncated sequence.
-    let filtered_positions: Vec<i64> = encoded
+    let filtered_positions: Vec<u32> = encoded
         .text_positions
         .iter()
         .filter(|&&pos| (pos as usize) < seq_len)
-        .copied()
+        .map(|&p| p as u32)
         .collect();
     let num_words = filtered_positions.len();
     if num_words == 0 {
@@ -56,7 +56,8 @@ pub(crate) fn run_pipeline(
 
     // 4. Span rep.
     let span_idx_arr = build_span_idx(num_words)?;
-    let span_idx_data: Vec<i64> = span_idx_arr.iter().copied().collect();
+    // index_select requires U32 indices on the CPU backend.
+    let span_idx_data: Vec<u32> = span_idx_arr.iter().map(|&v| v as u32).collect();
     let span_idx =
         Tensor::from_slice(&span_idx_data[..], (1, num_words * MAX_WIDTH, 2), device)?;
     let span_rep_out = heads.span_rep.forward(&text_emb, &span_idx)?; // [1, num_words, MAX_WIDTH, H]
@@ -68,7 +69,7 @@ pub(crate) fn run_pipeline(
             "schema_positions empty — encode_v2 must emit at least the [P] marker".to_string(),
         ));
     }
-    let schema_idx: Vec<i64> = encoded.schema_positions.clone();
+    let schema_idx: Vec<u32> = encoded.schema_positions.iter().map(|&p| p as u32).collect();
     let schema_idx_t =
         Tensor::from_slice(&schema_idx[..], (schema_idx.len(),), device)?;
     let sg_out = SchemaGather.forward(&hidden, &schema_idx_t)?;
