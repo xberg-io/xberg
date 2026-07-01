@@ -29,7 +29,7 @@ pub fn process_command(
         }
     };
 
-    let mut out = rt.block_on(extract(ext_input, config)).context("Extraction failed")?;
+    let mut out = rt.block_on(extract(ext_input, &config)).context("Extraction failed")?;
 
     let doc = out
         .results

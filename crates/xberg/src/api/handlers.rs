@@ -1205,13 +1205,16 @@ pub(crate) async fn rehydrate_handler(
         });
     }
 
-    tracing::info!(
-        rehydration_key = %rehydration_key,
-        restored_count = restored.len(),
-        "PII rehydration performed"
-    );
+    #[cfg(feature = "redaction-rehydrate")]
+    {
+        tracing::info!(
+            rehydration_key = %rehydration_key,
+            restored_count = restored.len(),
+            "PII rehydration performed"
+        );
 
-    Ok(Json(super::types::RehydrateResponse { restored }))
+        Ok(Json(super::types::RehydrateResponse { restored }))
+    }
 }
 
 /// Process endpoint handler.

@@ -55,6 +55,7 @@ pub struct NerConfig {
     /// and `model.safetensors`. Only used by [`NerBackendKind::Candle`].
     /// Takes precedence over `hf_repo` for the Candle backend.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "api", schema(value_type = Option<String>))]
     #[cfg_attr(feature = "alef-meta", alef(since = "5.3.0"))]
     pub model_dir: Option<std::path::PathBuf>,
 
@@ -62,6 +63,7 @@ pub struct NerConfig {
     /// The directory must contain `adapter_config.json` and `adapter_model.safetensors`.
     /// When `None`, the base model weights are used as-is.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "api", schema(value_type = Option<String>))]
     #[cfg_attr(feature = "alef-meta", alef(since = "5.3.0"))]
     pub lora_adapter_dir: Option<std::path::PathBuf>,
 

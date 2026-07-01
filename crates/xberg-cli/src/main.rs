@@ -969,9 +969,12 @@ fn main() -> Result<()> {
             // NER
             if ner {
                 let backend = match ner_backend.as_str() {
+                    "onnx" | "" => NerBackendKind::Onnx,
                     "llm" => NerBackendKind::Llm,
                     "candle" => NerBackendKind::Candle,
-                    _ => NerBackendKind::Onnx,
+                    other => anyhow::bail!(
+                        "unknown --ner-backend value: {other:?}; expected onnx, llm, or candle"
+                    ),
                 };
                 let categories: Vec<xberg::types::entity::EntityCategory> =
                     ner_categories.iter().map(|s| s.parse().unwrap_or_default()).collect();
