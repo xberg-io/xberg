@@ -117,6 +117,27 @@ fn make_backend(config: &NerConfig) -> Result<Arc<dyn NerBackend>> {
                 ))
             }
         }
+        NerBackendKind::Candle => {
+            #[cfg(feature = "ner-candle")]
+            {
+                let model_dir = config.model_dir.as_deref().ok_or_else(|| {
+                    crate::XbergError::validation(
+                        "Candle NER backend requires NerConfig.model_dir set to a local \
+                         directory containing tokenizer.json and model.safetensors",
+                    )
+                })?;
+                let lora_dir = config.lora_adapter_dir.as_deref();
+                Ok(Arc::new(crate::text::ner::candle::CandleBackend::from_local(
+                    model_dir, lora_dir,
+                )?))
+            }
+            #[cfg(not(feature = "ner-candle"))]
+            {
+                Err(crate::XbergError::MissingDependency(
+                    "ner-candle feature is not enabled — rebuild xberg with --features ner-candle".to_string(),
+                ))
+            }
+        }
     }
 }
 

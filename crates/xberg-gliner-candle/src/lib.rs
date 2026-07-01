@@ -16,6 +16,10 @@ mod pipeline;
 
 pub use error::{GlinerCandleError, Result};
 pub use model::Gliner2Candle;
+/// Re-export [`xberg_gliner::Span`] so downstream crates that depend only on
+/// `xberg-gliner-candle` (without a direct `xberg-gliner` dep) can work with
+/// the type returned by [`Gliner2Candle::extract_ner`].
+pub use xberg_gliner::Span;
 
 #[cfg(test)]
 mod tests;

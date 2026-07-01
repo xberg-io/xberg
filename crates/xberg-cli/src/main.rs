@@ -370,9 +370,9 @@ enum Commands {
     /// Extracts text, optionally detects named entities (persons, orgs, locations, emails, …),
     /// and optionally redacts PII — all in one pass without starting the HTTP server.
     ///
-    /// NER requires the `ner-onnx` or `ner-llm` feature.
+    /// NER requires the `ner-onnx`, `ner-llm`, or `ner-candle` feature.
     /// Redaction requires the `redaction` feature.
-    #[cfg(any(feature = "ner-onnx", feature = "ner-llm"))]
+    #[cfg(any(feature = "ner-onnx", feature = "ner-llm", feature = "ner-candle"))]
     Process {
         /// URI or local path to process.
         #[arg(value_name = "URI", required_unless_present = "stdin")]
@@ -395,7 +395,6 @@ enum Commands {
         config_json_base64: Option<String>,
 
         // --- NER flags ---
-
         /// Enable NER with default settings (ONNX backend, standard categories).
         #[arg(long)]
         ner: bool,
@@ -416,7 +415,6 @@ enum Commands {
         ner_model: Option<String>,
 
         // --- Redaction flags ---
-
         /// Enable redaction. At least one of --ner or --redact must be set for
         /// the process command to do anything beyond plain extraction.
         #[arg(long)]
@@ -936,7 +934,7 @@ fn main() -> Result<()> {
             chunk_command(input, chunking_config, format)?;
         }
 
-        #[cfg(any(feature = "ner-onnx", feature = "ner-llm"))]
+        #[cfg(any(feature = "ner-onnx", feature = "ner-llm", feature = "ner-candle"))]
         Commands::Process {
             uri,
             stdin,
@@ -972,12 +970,11 @@ fn main() -> Result<()> {
             if ner {
                 let backend = match ner_backend.as_str() {
                     "llm" => NerBackendKind::Llm,
+                    "candle" => NerBackendKind::Candle,
                     _ => NerBackendKind::Onnx,
                 };
-                let categories: Vec<xberg::types::entity::EntityCategory> = ner_categories
-                    .iter()
-                    .map(|s| s.parse().unwrap_or_default())
-                    .collect();
+                let categories: Vec<xberg::types::entity::EntityCategory> =
+                    ner_categories.iter().map(|s| s.parse().unwrap_or_default()).collect();
                 config.ner = Some(NerConfig {
                     backend,
                     categories,

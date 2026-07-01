@@ -58,6 +58,8 @@ url-ingestion = ["xberg/url-ingestion"]
 liter-llm = ["xberg/liter-llm"]
 tree-sitter = ["xberg/tree-sitter", "dep:tree-sitter-language-pack"]
 ner-onnx = ["xberg/ner-onnx"]
+ner-llm = ["xberg/ner-llm"]
+ner-candle = ["xberg/ner-candle"]
 heic = ["xberg/heic"]
 all = [
     "default",

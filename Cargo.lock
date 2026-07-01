@@ -10994,6 +10994,7 @@ dependencies = [
  "wiremock",
  "xberg-candle-ocr",
  "xberg-gliner",
+ "xberg-gliner-candle",
  "xberg-libheif",
  "xberg-paddle-ocr",
  "xberg-tesseract",

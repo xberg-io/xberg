@@ -51,6 +51,20 @@ pub struct NerConfig {
     /// for LLM backends is recorded in `ExtractedDocument::llm_usage`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub llm: Option<super::llm::LlmConfig>,
+    /// Local filesystem path to a model directory containing `tokenizer.json`
+    /// and `model.safetensors`. Only used by [`NerBackendKind::Candle`].
+    /// Takes precedence over `hf_repo` for the Candle backend.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "alef-meta", alef(since = "5.3.0"))]
+    pub model_dir: Option<std::path::PathBuf>,
+
+    /// Path to a PEFT LoRA adapter directory. Only used by [`NerBackendKind::Candle`].
+    /// The directory must contain `adapter_config.json` and `adapter_model.safetensors`.
+    /// When `None`, the base model weights are used as-is.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "alef-meta", alef(since = "5.3.0"))]
+    pub lora_adapter_dir: Option<std::path::PathBuf>,
+
     /// Arbitrary user-supplied entity labels for zero-shot detection.
     ///
     /// `xberg-gliner` natively supports zero-shot inference over caller-supplied
@@ -76,6 +90,10 @@ pub enum NerBackendKind {
     /// liter-llm zero-shot NER via structured-output prompts. Requires `ner-llm`
     /// feature. Useful when domain-specific categories outstrip the ONNX taxonomy.
     Llm,
+    /// GLiNER2 safetensors via Candle (CPU). Requires `ner-candle` feature.
+    /// Set [`NerConfig::model_dir`] to a local directory containing
+    /// `tokenizer.json` and `model.safetensors`.
+    Candle,
 }
 
 /// GLiNER ONNX architecture family. Determines which tensor I/O contract and
