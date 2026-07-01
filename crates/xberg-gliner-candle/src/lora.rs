@@ -53,6 +53,7 @@ pub struct LoraConfig {
     /// May be `None` if the adapter sets `target_modules: null` and
     /// matching is implicit (rare).
     #[serde(default)]
+    #[allow(dead_code)]
     pub target_modules: Option<Vec<String>>,
     /// Base model identifier this adapter was trained on.
     #[serde(default)]
@@ -215,20 +216,18 @@ pub(crate) fn merge_into_base(
             .map_err(|e| crate::GlinerCandleError::Backend(format!("lora_merge: decode {key}: {e}")))?;
 
         // Match key against adapter modules: strip `.weight` suffix, look up.
-        if let Some(mod_path) = key.strip_suffix(".weight") {
-            if let Some(lora_mod) = adapter.modules.get(mod_path) {
-                tensor = apply_lora_delta(
-                    &tensor,
-                    &lora_mod.lora_a,
-                    &lora_mod.lora_b,
-                    scale,
-                    adapter.config.fan_in_fan_out,
-                )
-                .map_err(|e| {
-                    crate::GlinerCandleError::Backend(format!("lora_merge: apply delta to {mod_path}: {e}"))
-                })?;
-                applied.insert(mod_path.to_string());
-            }
+        if let Some(mod_path) = key.strip_suffix(".weight")
+            && let Some(lora_mod) = adapter.modules.get(mod_path)
+        {
+            tensor = apply_lora_delta(
+                &tensor,
+                &lora_mod.lora_a,
+                &lora_mod.lora_b,
+                scale,
+                adapter.config.fan_in_fan_out,
+            )
+            .map_err(|e| crate::GlinerCandleError::Backend(format!("lora_merge: apply delta to {mod_path}: {e}")))?;
+            applied.insert(mod_path.to_string());
         }
 
         out.insert(key.to_string(), tensor);

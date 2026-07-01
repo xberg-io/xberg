@@ -79,6 +79,7 @@ impl Encoder {
 
     /// Hidden size (read from config). Matches the encoder's output
     /// last-dim and is passed to the heads at construction time.
+    #[allow(dead_code)]
     pub fn hidden_size(&self) -> usize {
         self.config.hidden_size
     }

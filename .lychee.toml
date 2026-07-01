@@ -51,6 +51,9 @@ max_retries = 3
 # Max concurrent requests
 max_concurrency = 10
 
+# Exclude internal planning/spec directories (not user-facing docs)
+exclude_path = ["docs/superpowers"]
+
 # Do not check email addresses
 include_mail = false
 

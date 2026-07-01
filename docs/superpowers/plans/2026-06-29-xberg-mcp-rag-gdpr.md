@@ -1978,7 +1978,7 @@ npm start
 
 ## Tools
 
-See [docs/tools.md](docs/tools.md) for available tools.
+See `docs/tools.md` for available tools.
 ```
 
 - [ ] **Step 2: Commit**

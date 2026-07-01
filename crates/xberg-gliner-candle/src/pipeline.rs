@@ -29,7 +29,7 @@ pub(crate) fn run_pipeline(
     let encoded = encode_v2(text, labels, tokenizer, splitter)?;
 
     // 1. Truncate to the encoder's position-embedding limit.
-    let max_seq = encoder.config.max_position_embeddings as usize;
+    let max_seq = encoder.config.max_position_embeddings;
     let seq_len = encoded.input_ids.len().min(max_seq);
     let input_ids = Tensor::from_slice(&encoded.input_ids[..seq_len], (1, seq_len), device)?;
     let attn_data: Vec<i64> = vec![1_i64; seq_len];

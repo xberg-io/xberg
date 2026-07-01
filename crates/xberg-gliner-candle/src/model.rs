@@ -52,15 +52,16 @@ impl Gliner2Candle {
     pub fn load_adapter(&mut self, name: &str, adapter_dir: &Path) -> Result<()> {
         let adapter = lora::LoraAdapter::load(adapter_dir, &self.device)?;
 
-        if let Some(adapter_base) = adapter.config.base_model_name_or_path.as_deref() {
-            if !self.model_id.contains(adapter_base) && !adapter_base.contains(&self.model_id) {
-                return Err(GlinerCandleError::Backend(format!(
-                    "load_adapter: adapter trained on '{adapter_base}', current model is \
-                     '{}'. Refusing to merge — remove base_model_name_or_path from \
-                     adapter_config.json to bypass.",
-                    self.model_id
-                )));
-            }
+        if let Some(adapter_base) = adapter.config.base_model_name_or_path.as_deref()
+            && !self.model_id.contains(adapter_base)
+            && !adapter_base.contains(&self.model_id)
+        {
+            return Err(GlinerCandleError::Backend(format!(
+                "load_adapter: adapter trained on '{adapter_base}', current model is \
+                 '{}'. Refusing to merge — remove base_model_name_or_path from \
+                 adapter_config.json to bypass.",
+                self.model_id
+            )));
         }
 
         let base_safetensors = self.base_model_dir.join("model.safetensors");

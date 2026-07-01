@@ -39,6 +39,7 @@ impl SpanRep {
 
     /// * `text_emb` — `[1, T, 768]` per-word pooled hidden states.
     /// * `span_idx` — `[1, T*MAX_WIDTH, 2]` int64 (start, end) indices.
+    ///
     /// Returns `[1, T, MAX_WIDTH, 768]`.
     pub fn forward(&self, text_emb: &Tensor, span_idx: &Tensor) -> candle_core::Result<Tensor> {
         let (b, t, _h) = text_emb.dims3()?;

@@ -23,6 +23,7 @@ impl CountPred {
     }
 
     /// * `p_emb` — pooled prompt embedding `[1, 768]` (or `[768]`).
+    ///
     /// Returns the predicted count as a host-side `usize`, clamped to `[0, 19]`.
     pub fn forward(&self, p_emb: &Tensor) -> candle_core::Result<usize> {
         let p_emb_2d = match p_emb.rank() {

@@ -11,6 +11,7 @@ pub struct Scorer;
 impl Scorer {
     /// * `span_rep`: `[T, W, H]` (per-sample slice of `[1, T, W, H]`).
     /// * `struct_proj`: `[count, F, H]`.
+    ///
     /// Returns `[count, F, T, W]` sigmoid scores.
     pub fn forward(&self, span_rep: &Tensor, struct_proj: &Tensor) -> Result<Tensor> {
         let (t, w, h) = span_rep.dims3()?;
