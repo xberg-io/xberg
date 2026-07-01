@@ -477,3 +477,28 @@ pub struct ProcessResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rehydration_key: Option<String>,
 }
+
+// ---------------------------------------------------------------------------
+// POST /v1/documents/{id}/rehydrate types
+// ---------------------------------------------------------------------------
+
+/// Request body for `POST /v1/documents/{rehydration_key}/rehydrate`.
+#[cfg_attr(alef, alef(skip))]
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+pub struct RehydrateRequest {
+    /// Passphrase the map was encrypted with (`operations.redact.passphrase`
+    /// from the originating `/v1/process` call). Never logged or cached
+    /// beyond this request.
+    pub passphrase: String,
+}
+
+/// Response body for `POST /v1/documents/{rehydration_key}/rehydrate`:
+/// the decrypted token → original-text map. Callers substitute tokens back
+/// into their own copy of the redacted document.
+#[cfg_attr(alef, alef(skip))]
+#[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+pub struct RehydrateResponse {
+    pub restored: std::collections::HashMap<String, String>,
+}

@@ -1155,6 +1155,70 @@ pub(crate) async fn job_status_handler(
     }
 }
 
+/// Rehydration endpoint handler.
+///
+/// POST /v1/documents/{rehydration_key}/rehydrate
+///
+/// Retrieves the encrypted rehydration map stored by `POST /v1/process`,
+/// decrypts it with the caller-supplied passphrase, and returns the
+/// token → original-text map. Returns 404 if the key is absent or expired,
+/// 403 if the passphrase is wrong.
+#[cfg(feature = "api")]
+#[cfg_attr(
+    feature = "otel",
+    tracing::instrument(
+        name = "api.rehydrate",
+        skip(state, request),
+        fields(rehydration_key = %rehydration_key)
+    )
+)]
+pub(crate) async fn rehydrate_handler(
+    State(state): State<ApiState>,
+    axum::extract::Path(rehydration_key): axum::extract::Path<String>,
+    Json(request): Json<super::types::RehydrateRequest>,
+) -> Result<Json<super::types::RehydrateResponse>, ApiError> {
+    let encrypted = state
+        .rehydration_store
+        .get(&rehydration_key)
+        .ok_or_else(|| ApiError {
+            status: axum::http::StatusCode::NOT_FOUND,
+            body: super::types::ErrorResponse {
+                error_type: "NotFoundError".to_string(),
+                message: format!("Rehydration key '{rehydration_key}' not found or expired"),
+                traceback: None,
+                status_code: axum::http::StatusCode::NOT_FOUND.as_u16(),
+            },
+        })?;
+
+    #[cfg(feature = "redaction")]
+    let restored =
+        crate::text::redaction::rehydration::decrypt_map(&encrypted, &request.passphrase)
+            .map_err(|e| ApiError::new(axum::http::StatusCode::FORBIDDEN, e))?;
+
+    #[cfg(not(feature = "redaction"))]
+    let restored = {
+        let _ = encrypted;
+        let _ = request.passphrase;
+        return Err(ApiError {
+            status: axum::http::StatusCode::NOT_IMPLEMENTED,
+            body: super::types::ErrorResponse {
+                error_type: "NotImplementedError".to_string(),
+                message: "Rehydration requires the `redaction` feature".to_string(),
+                traceback: None,
+                status_code: axum::http::StatusCode::NOT_IMPLEMENTED.as_u16(),
+            },
+        });
+    };
+
+    tracing::info!(
+        rehydration_key = %rehydration_key,
+        restored_count = restored.len(),
+        "PII rehydration performed"
+    );
+
+    Ok(Json(super::types::RehydrateResponse { restored }))
+}
+
 /// Process endpoint handler.
 ///
 /// POST /v1/process
@@ -1696,6 +1760,66 @@ mod tests {
         };
         let result = process_handler(axum::extract::State(state), axum::extract::Json(request)).await;
         assert!(result.is_err(), "must reject when both text and url are set");
+    }
+
+    #[cfg(feature = "api")]
+    #[tokio::test]
+    async fn rehydrate_handler_returns_404_for_unknown_key() {
+        let state = make_api_state();
+        let result = rehydrate_handler(
+            axum::extract::State(state),
+            axum::extract::Path("reh_does_not_exist".to_string()),
+            axum::extract::Json(super::types::RehydrateRequest { passphrase: "anything".to_string() }),
+        )
+        .await;
+        let err = result.expect_err("unknown key must error");
+        assert_eq!(err.status, axum::http::StatusCode::NOT_FOUND);
+    }
+
+    #[cfg(all(feature = "api", feature = "redaction"))]
+    #[tokio::test]
+    async fn rehydrate_handler_round_trips_a_stored_map() {
+        let state = make_api_state();
+        let mut map = std::collections::HashMap::new();
+        map.insert("[EMAIL_1]".to_string(), "alice@example.com".to_string());
+        let encrypted =
+            crate::text::redaction::rehydration::encrypt_map(&map, "test-passphrase")
+                .expect("encrypt");
+        let key = state.rehydration_store.store(encrypted);
+        let response = rehydrate_handler(
+            axum::extract::State(state),
+            axum::extract::Path(key),
+            axum::extract::Json(super::types::RehydrateRequest {
+                passphrase: "test-passphrase".to_string(),
+            }),
+        )
+        .await
+        .expect("rehydrate must succeed");
+        assert_eq!(
+            response.0.restored.get("[EMAIL_1]"),
+            Some(&"alice@example.com".to_string())
+        );
+    }
+
+    #[cfg(all(feature = "api", feature = "redaction"))]
+    #[tokio::test]
+    async fn rehydrate_handler_rejects_wrong_passphrase() {
+        let state = make_api_state();
+        let mut map = std::collections::HashMap::new();
+        map.insert("[EMAIL_1]".to_string(), "alice@example.com".to_string());
+        let encrypted =
+            crate::text::redaction::rehydration::encrypt_map(&map, "correct").expect("encrypt");
+        let key = state.rehydration_store.store(encrypted);
+        let result = rehydrate_handler(
+            axum::extract::State(state),
+            axum::extract::Path(key),
+            axum::extract::Json(super::types::RehydrateRequest {
+                passphrase: "wrong".to_string(),
+            }),
+        )
+        .await;
+        let err = result.expect_err("wrong passphrase must error");
+        assert_eq!(err.status, axum::http::StatusCode::FORBIDDEN);
     }
 
     #[cfg(feature = "api")]
