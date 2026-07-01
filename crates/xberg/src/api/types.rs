@@ -461,6 +461,7 @@ pub struct ProcessRedactOperation {
     /// Passphrase used to encrypt the rehydration map.
     /// Required when `rehydrate` is `true`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[allow(dead_code)]
     pub passphrase: Option<String>,
 }
 

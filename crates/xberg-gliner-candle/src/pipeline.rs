@@ -113,6 +113,7 @@ fn empty_scorer_output() -> ScorerOutput {
 mod tests {
     #[test]
     fn run_pipeline_is_declared() {
+        #[allow(clippy::type_complexity)]
         fn _assert_signature(
             f: fn(
                 &xberg_gliner::V2Tokenizer,

@@ -1192,19 +1192,18 @@ pub(crate) async fn rehydrate_handler(
         .map_err(|e| ApiError::new(axum::http::StatusCode::FORBIDDEN, e))?;
 
     #[cfg(not(feature = "redaction-rehydrate"))]
-    let restored: std::collections::HashMap<String, String> = {
-        let _ = encrypted;
-        let _ = request.passphrase;
+    {
+        let _ = (&encrypted, &request.passphrase);
         return Err(ApiError {
             status: axum::http::StatusCode::NOT_IMPLEMENTED,
             body: super::types::ErrorResponse {
                 error_type: "NotImplementedError".to_string(),
-                message: "Rehydration requires the `redaction` feature".to_string(),
+                message: "Rehydration requires the `redaction-rehydrate` feature".to_string(),
                 traceback: None,
                 status_code: axum::http::StatusCode::NOT_IMPLEMENTED.as_u16(),
             },
         });
-    };
+    }
 
     tracing::info!(
         rehydration_key = %rehydration_key,
