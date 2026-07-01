@@ -4,6 +4,7 @@ import {
   extract,
   extractInputFromBytes,
   extractInputFromUri,
+  GlinerArchitecture,
   type ExtractionConfig,
   type NerConfig,
 } from "@xberg-io/xberg";
@@ -81,7 +82,9 @@ export function registerIntelligenceTools(server: McpServer): void {
           hfRepo: backend === "onnx" ? hf_repo : undefined,
           hfModelFile: backend === "onnx" ? hf_model_file : undefined,
           hfTokenizerFile: backend === "onnx" ? hf_tokenizer_file : undefined,
-          hfArchitecture: backend === "onnx" ? hf_architecture : undefined,
+          hfArchitecture: backend === "onnx" && hf_architecture
+            ? GlinerArchitecture[hf_architecture === "gliner2" ? "Gliner2" : "Gliner1"]
+            : undefined,
           llm: backend === "llm" ? { model: llm_model } : undefined,
         };
 
