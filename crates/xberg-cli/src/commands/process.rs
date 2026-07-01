@@ -29,11 +29,12 @@ pub fn process_command(
         }
     };
 
-    let mut out = rt
-        .block_on(extract(ext_input, config))
-        .context("Extraction failed")?;
+    let mut out = rt.block_on(extract(ext_input, config)).context("Extraction failed")?;
 
-    let doc = out.results.pop().ok_or_else(|| anyhow::anyhow!("No document produced"))?;
+    let doc = out
+        .results
+        .pop()
+        .ok_or_else(|| anyhow::anyhow!("No document produced"))?;
 
     match format {
         WireFormat::Text => {
@@ -87,19 +88,16 @@ mod tests {
         assert!(doc.content.contains("Hello world"));
     }
 
-    fn run_process(
-        input: ExtractInputSource,
-        config: &ExtractionConfig,
-    ) -> xberg::Result<xberg::ExtractedDocument> {
+    fn run_process(input: ExtractInputSource, config: &ExtractionConfig) -> xberg::Result<xberg::ExtractedDocument> {
         use xberg::{ExtractInput, extract};
         let rt = tokio::runtime::Runtime::new().unwrap();
         match input {
             ExtractInputSource::Uri(uri) => {
                 let ext_input = ExtractInput::from_uri(uri);
                 let mut out = rt.block_on(extract(ext_input, config.clone()))?;
-                out.results.pop().ok_or_else(|| {
-                    xberg::error::XbergError::Other("no document produced".into())
-                })
+                out.results
+                    .pop()
+                    .ok_or_else(|| xberg::error::XbergError::Other("no document produced".into()))
             }
             ExtractInputSource::Stdin => unreachable!("stdin not tested here"),
         }
