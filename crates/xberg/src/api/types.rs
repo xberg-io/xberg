@@ -189,6 +189,9 @@ pub struct ApiState {
     /// In-memory job store for async extraction polling.
     #[cfg(feature = "api")]
     pub job_store: Arc<super::jobs::JobStore>,
+    /// In-memory store for encrypted rehydration map blobs.
+    #[cfg(feature = "api")]
+    pub rehydration_store: Arc<super::rehydration_store::RehydrationStore>,
 }
 
 /// Response from `POST /extract-async`: a job identifier the client polls.

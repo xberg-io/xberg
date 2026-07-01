@@ -337,6 +337,7 @@ presets = [
 structured = ["liter-llm", "tokio-runtime"]
 
 redaction = ["dep:sha2"] # Pattern-based PII engine; pure-Rust.
+redaction-rehydrate = ["redaction", "dep:aes-gcm", "dep:scrypt"] # Encrypted rehydration map capture.
 redaction-ml = ["redaction", "ner"] # Couple in NER for PERSON/ORG/LOC redaction.
 
 summarization = ["stopwords"] # TextRank extractive only; pure-Rust (uses stopword tables).
@@ -696,6 +697,8 @@ serde_json = { workspace = true }
 serde_toon_format = { workspace = true }
 serde_yaml_ng = "0.10.0"
 sevenz-rust2 = { version = "0.20.2", optional = true }
+aes-gcm = { version = "0.10", optional = true }
+scrypt = { version = "0.11", optional = true, default-features = false, features = ["std"] }
 sha2 = { version = "0.11", optional = true }
 simdutf8 = { version = "0.1", optional = true }
 similar = { workspace = true, optional = true }

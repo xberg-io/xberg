@@ -1183,6 +1183,8 @@ mod tests {
             extraction_service: std::sync::Arc::new(std::sync::Mutex::new(extraction_service)),
             #[cfg(feature = "api")]
             job_store: std::sync::Arc::new(crate::api::jobs::JobStore::new()),
+            #[cfg(feature = "api")]
+            rehydration_store: std::sync::Arc::new(crate::api::rehydration_store::RehydrationStore::new()),
         };
         #[allow(unused_mut)]
         let mut router = Router::new()
@@ -1595,7 +1597,9 @@ mod tests {
             JobState::Completed,
             "unsupported-format input is reported in the result envelope, not as a job failure"
         );
-        let result = final_status.result.expect("completed job must carry an extraction result");
+        let result = final_status
+            .result
+            .expect("completed job must carry an extraction result");
         let errors = result
             .get("errors")
             .and_then(|value| value.as_array())

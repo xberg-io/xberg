@@ -10,6 +10,12 @@
 
 pub mod engine;
 pub mod patterns;
+#[cfg(feature = "redaction-rehydrate")]
+pub mod rehydration;
 pub mod strategy;
 
 pub use engine::redact;
+#[cfg(feature = "redaction-rehydrate")]
+pub use engine::redact_capturing_rehydration_map;
+#[cfg(feature = "redaction-rehydrate")]
+pub use rehydration::{RehydrationMap, decrypt_map, encrypt_map};

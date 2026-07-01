@@ -134,6 +134,8 @@ pub(crate) fn create_router_with_limits_and_server_config(
         extraction_service: Arc::new(std::sync::Mutex::new(extraction_service)),
         #[cfg(feature = "api")]
         job_store: Arc::new(super::jobs::JobStore::new()),
+        #[cfg(feature = "api")]
+        rehydration_store: Arc::new(super::rehydration_store::RehydrationStore::new()),
     };
 
     // CORS configuration based on ServerConfig
