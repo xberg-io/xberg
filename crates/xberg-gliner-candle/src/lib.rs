@@ -11,9 +11,11 @@ mod encoder;
 mod error;
 mod heads;
 mod lora;
+mod model;
 mod pipeline;
 
 pub use error::{GlinerCandleError, Result};
+pub use model::Gliner2Candle;
 
 #[cfg(test)]
 mod tests;
