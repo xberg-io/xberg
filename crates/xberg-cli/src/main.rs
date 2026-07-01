@@ -399,7 +399,7 @@ enum Commands {
         #[arg(long)]
         ner: bool,
 
-        /// NER backend: onnx (default) or llm.
+        /// NER backend: onnx (default), llm, or candle.
         #[arg(long, default_value = "onnx", requires = "ner")]
         ner_backend: String,
 

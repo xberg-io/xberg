@@ -71,8 +71,9 @@ impl NerBackend for CandleBackend {
             .lock()
             .map_err(|_| crate::XbergError::Other("CandleBackend: model mutex poisoned".into()))?;
 
-        let spans = model
-            .extract_ner(text, &labels, DEFAULT_THRESHOLD)
+        // extract_ner is CPU-bound (tensor inference). block_in_place signals tokio to
+        // move other tasks off this thread for the duration without requiring Send.
+        let spans = tokio::task::block_in_place(|| model.extract_ner(text, &labels, DEFAULT_THRESHOLD))
             .map_err(|e| crate::XbergError::Other(format!("CandleBackend inference: {e}")))?;
 
         Ok(spans_to_entities(spans))
@@ -121,5 +122,20 @@ mod tests {
     fn spans_to_entities_is_empty_for_no_spans() {
         let entities = spans_to_entities(vec![]);
         assert!(entities.is_empty());
+    }
+
+    #[test]
+    fn spans_to_entities_converts_fields_correctly() {
+        let span = xberg_gliner_candle::Span::new(0, 0, 5, "Alice".to_string(), "person".to_string(), 0.92)
+            .expect("valid span");
+        let entities = spans_to_entities(vec![span]);
+
+        assert_eq!(entities.len(), 1);
+        let e = &entities[0];
+        assert_eq!(e.text, "Alice");
+        assert_eq!(e.category, EntityCategory::Person);
+        assert_eq!(e.start, 0);
+        assert_eq!(e.end, 5);
+        assert!((e.confidence.unwrap() - 0.92).abs() < 1e-5);
     }
 }
