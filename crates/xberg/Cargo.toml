@@ -450,6 +450,20 @@ windows-target = [
     "structured",
     "quality",
 ]
+# macos-intel-target: native Intel macOS (x86_64-apple-darwin). FULL feature
+# parity with every other platform — including all ONNX Runtime ML (paddle-ocr,
+# layout-detection, embeddings, reranker, transcription, ner-onnx, auto-rotate).
+#
+# ort dropped its prebuilt x86_64-apple-darwin *static* binaries in v2.0.0-rc.11
+# and Microsoft stopped shipping onnxruntime-osx-x86_64 after 1.23, so the
+# `download-binaries` (static) strategy has no artifact for this target. Instead
+# we select `ort-dynamic` (ort/load-dynamic): ONNX Runtime is loaded at runtime
+# from a bundled libonnxruntime.dylib via ORT_DYLIB_PATH, so no build-time
+# prebuilt is needed. ort-sys `disable-linking` (pulled by load-dynamic) short-
+# circuits its build script before any download resolution, so pairing it with
+# `full` (whose ML features still name `ort-bundled`) is safe: dynamic wins
+# workspace-wide. Same combo CI already exercises in ci-gpu.yaml.
+macos-intel-target = ["full", "ort-dynamic"]
 # Mobile deployment preset — formats + analysis + Tesseract OCR + code intelligence + API types.
 # Excludes ORT-dependent features (paddle-ocr, layout-detection, embeddings, reranker,
 # auto-rotate, transcription)

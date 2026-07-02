@@ -56,7 +56,7 @@ detect_target() {
   case "${os}-${arch}" in
   linux-x86_64) echo "x86_64-unknown-linux-musl" ;;
   linux-aarch64) echo "aarch64-unknown-linux-musl" ;;
-  darwin-x86_64) echo "aarch64-apple-darwin" ;; # Rosetta compatible
+  darwin-x86_64) echo "x86_64-apple-darwin" ;; # native Intel build
   darwin-aarch64) echo "aarch64-apple-darwin" ;;
   *) error "unsupported platform: ${os}-${arch}" ;;
   esac
@@ -159,6 +159,16 @@ install() {
     cp "${stage_dir}/lib/"* "${install_dir}/lib/"
     info "Installed runtime libraries to ${install_dir}/lib/"
   fi
+
+  # Install runtime dylibs bundled next to the binary. The native Intel-macOS
+  # build loads ONNX Runtime dynamically and ships libonnxruntime.dylib (and its
+  # vendored deps) alongside the executable; ort resolves the dylib relative to
+  # the binary, so they must land in the same directory as the installed binary.
+  for dylib in "${stage_dir}"/*.dylib; do
+    [ -f "$dylib" ] || continue
+    cp "$dylib" "${install_dir}/"
+    info "Installed runtime library $(basename "$dylib") to ${install_dir}/"
+  done
 
   info "Installed ${BINARY_NAME} to ${install_dir}/${BINARY_NAME}"
 

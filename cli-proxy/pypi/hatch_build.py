@@ -106,7 +106,15 @@ class CustomBuildHook(BuildHookInterface):
 
         # force_include maps absolute source paths -> in-wheel relative paths.
         relative = f"xberg_cli/bin/{target}/{binary.name}"
-        build_data.setdefault("force_include", {})[str(binary)] = relative
+        force_include = build_data.setdefault("force_include", {})
+        force_include[str(binary)] = relative
+
+        # Bundle runtime dylibs staged next to the binary. The native Intel-macOS
+        # build loads ONNX Runtime dynamically and ships libonnxruntime.dylib (plus
+        # its vendored deps) alongside the executable; ort resolves them relative to
+        # the binary, so they must sit in the same in-wheel directory.
+        for lib in sorted(binary.parent.glob("*.dylib")):
+            force_include[str(lib)] = f"xberg_cli/bin/{target}/{lib.name}"
 
         # Make it a platform wheel (not pure-python, not py3-none-any).
         build_data["pure_python"] = False

@@ -32,6 +32,21 @@ default = [
     "tree-sitter",
 ]
 ort-bundled = ["xberg/ort-bundled"]
+# Load ONNX Runtime at runtime (dlopen) instead of static-linking a prebuilt.
+# The x86_64-apple-darwin CLI is built with the normal default features PLUS
+# this, so it keeps full feature parity with the aarch64 CLI: ort-sys
+# `disable-linking` (pulled by load-dynamic) short-circuits its build script
+# before the (nonexistent) x86_64-mac prebuilt is ever resolved. ort finds
+# libonnxruntime.dylib relative to the executable, so the release tarball just
+# ships the dylib next to the `xberg` binary — no ORT_DYLIB_PATH needed.
+ort-dynamic = ["xberg/ort-dynamic"]
+
+# Native Intel macOS (x86_64-apple-darwin) platform aggregate. Passthrough to
+# the xberg `macos-intel-target` set (full feature parity, ort loaded
+# dynamically). Used by the bindings via alef target overrides; the CLI release
+# build instead keeps its default features and adds `ort-dynamic` for exact
+# parity with the aarch64 CLI.
+macos-intel = ["xberg/macos-intel-target"]
 
 ocr = ["xberg/ocr"]
 

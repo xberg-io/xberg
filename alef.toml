@@ -438,6 +438,15 @@ cfg = 'target_os = "windows"'
 features = ["windows-target"]
 default_features = false
 
+# Intel macOS: ort ships no static x86_64-apple-darwin prebuilt (dropped rc.11;
+# Microsoft dropped onnxruntime-osx-x86_64 after 1.23), so this arch loads ONNX
+# Runtime dynamically via `macos-intel-target` (full + ort-dynamic). arm64 macOS
+# keeps the default ort-bundled path. The wheel must vendor libonnxruntime.dylib.
+[[crates.python.target_dep_overrides]]
+cfg = 'all(target_os = "macos", target_arch = "x86_64")'
+features = ["macos-intel-target"]
+default_features = false
+
 [crates.node]
 package_name = "@xberg-io/xberg"
 exclude_types = [
@@ -473,6 +482,12 @@ cfg = 'target_os = "windows"'
 features = ["windows-target"]
 default_features = false
 
+# Intel macOS: dynamic ONNX Runtime (see the python override above).
+[[crates.node.target_dep_overrides]]
+cfg = 'all(target_os = "macos", target_arch = "x86_64")'
+features = ["macos-intel-target"]
+default_features = false
+
 [crates.ruby]
 gem_name = "xberg"
 exclude_functions = [
@@ -499,6 +514,12 @@ output = "packages/ruby/sig/"
 [[crates.ruby.target_dep_overrides]]
 cfg = 'target_os = "windows"'
 features = ["windows-target"]
+default_features = false
+
+# Intel macOS: dynamic ONNX Runtime (see the python override above).
+[[crates.ruby.target_dep_overrides]]
+cfg = 'all(target_os = "macos", target_arch = "x86_64")'
+features = ["macos-intel-target"]
 default_features = false
 
 [crates.php]
@@ -547,8 +568,24 @@ cfg = 'target_os = "windows"'
 features = ["windows-target"]
 default_features = false
 
+# Intel macOS: dynamic ONNX Runtime (see the python override above).
+[[crates.php.target_dep_overrides]]
+cfg = 'all(target_os = "macos", target_arch = "x86_64")'
+features = ["macos-intel-target"]
+default_features = false
+
 [crates.elixir]
 app_name = "xberg"
+# RustlerPrecompiled targets emitted into lib/xberg/native.ex. Overrides alef's
+# default (which omits x86_64-apple-darwin) so the Intel-macOS NIF built by the
+# elixir-natives CI matrix is downloadable by consumers.
+nif_targets = [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-unknown-linux-gnu",
+    "x86_64-pc-windows-gnu",
+]
 exclude_functions = [
     "calculate_quality_score",
     "count_tokens",
@@ -574,6 +611,12 @@ exclude_types = [
 [[crates.elixir.target_dep_overrides]]
 cfg = 'target_os = "windows"'
 features = ["windows-target"]
+default_features = false
+
+# Intel macOS: dynamic ONNX Runtime (see the python override above).
+[[crates.elixir.target_dep_overrides]]
+cfg = 'all(target_os = "macos", target_arch = "x86_64")'
+features = ["macos-intel-target"]
 default_features = false
 
 [crates.wasm]
@@ -795,6 +838,12 @@ cfg = 'target_os = "windows"'
 features = ["windows-target"]
 default_features = false
 
+# Intel macOS: dynamic ONNX Runtime (see the python override above).
+[[crates.ffi.target_dep_overrides]]
+cfg = 'all(target_os = "macos", target_arch = "x86_64")'
+features = ["macos-intel-target"]
+default_features = false
+
 [crates.go]
 module = "github.com/xberg-io/xberg"
 package_name = "xberg"
@@ -948,6 +997,12 @@ cfg = 'target_os = "windows"'
 features = ["windows-target"]
 default_features = false
 
+# Intel macOS: dynamic ONNX Runtime (see the python override above).
+[[crates.java.target_dep_overrides]]
+cfg = 'all(target_os = "macos", target_arch = "x86_64")'
+features = ["macos-intel-target"]
+default_features = false
+
 [crates.dart]
 pubspec_name = "xberg"
 lib_name = "xberg"
@@ -1050,6 +1105,12 @@ cfg = 'target_os = "windows"'
 features = ["windows-target"]
 default_features = false
 
+# Intel macOS: dynamic ONNX Runtime (see the python override above).
+[[crates.dart.target_dep_overrides]]
+cfg = 'all(target_os = "macos", target_arch = "x86_64")'
+features = ["macos-intel-target"]
+default_features = false
+
 [crates.kotlin_android]
 # Self-contained Android library project at packages/kotlin-android/. Server-
 # side Kotlin/JVM consumers use the Java binding directly (Kotlin interops
@@ -1132,6 +1193,12 @@ default_features = false
 [[crates.jni.target_dep_overrides]]
 cfg = 'target_os = "windows"'
 features = ["windows-target"]
+default_features = false
+
+# Intel macOS: dynamic ONNX Runtime (see the python override above).
+[[crates.jni.target_dep_overrides]]
+cfg = 'all(target_os = "macos", target_arch = "x86_64")'
+features = ["macos-intel-target"]
 default_features = false
 
 [crates.swift]
@@ -1272,6 +1339,12 @@ default_features = false
 [[crates.swift.target_dep_overrides]]
 cfg = 'target_os = "windows"'
 features = ["windows-target"]
+default_features = false
+
+# Intel macOS: dynamic ONNX Runtime (see the python override above).
+[[crates.swift.target_dep_overrides]]
+cfg = 'all(target_os = "macos", target_arch = "x86_64")'
+features = ["macos-intel-target"]
 default_features = false
 
 [crates.csharp]
