@@ -102,8 +102,24 @@ fn return_api_to_cache(api: TesseractAPI, tessdata_path: String, language: Strin
     });
 }
 
+/// Process-global document-orientation classifier (ONNX PP-LCNet), shared by
+/// every tesseract-backend auto-rotate call. Session initialization is lazy and
+/// internally synchronized; `detect` is thread-safe.
+#[cfg(feature = "auto-rotate")]
+fn doc_orientation_detector() -> &'static crate::doc_orientation::DocOrientationDetector {
+    static DETECTOR: std::sync::LazyLock<crate::doc_orientation::DocOrientationDetector> =
+        std::sync::LazyLock::new(|| {
+            crate::doc_orientation::DocOrientationDetector::with_acceleration(
+                crate::doc_orientation::resolve_cache_dir(),
+                None,
+            )
+        });
+    &DETECTOR
+}
+
 use crate::types::OcrElement;
 
+#[cfg(feature = "auto-rotate")]
 /// Rotate raw RGB image data by the given degrees (0, 90, 180, 270).
 ///
 /// Returns the rotated pixel data and the new (width, height).
@@ -728,6 +744,7 @@ pub(super) fn perform_ocr(
     // holding a dangling Pix pointer — the Pix is already freed at that point, and
     // Tesseract's internal reference to it has been cleared by `api.clear()` (called at
     // the top of `get_or_init_api` on the next reuse). No dangling pointer issue.
+    #[cfg_attr(not(feature = "auto-rotate"), allow(unused_mut))]
     let mut pix_guard: Option<xberg_tesseract::Pix> = {
         match xberg_tesseract::Pix::from_raw_rgb(&image_data, width, height) {
             Ok(mut pix) => {
@@ -790,31 +807,47 @@ pub(super) fn perform_ocr(
     });
 
     // Orientation detection and auto-rotation.
-    // DetectOrientationScript requires PSM_OSD_ONLY (0) or PSM_AUTO_OSD (1).
-    // We temporarily switch PSM, detect orientation, rotate if needed, then restore.
+    //
+    // Detection uses the ONNX PP-LCNet document-orientation classifier
+    // (`doc_orientation`, shared with the PaddleOCR backend) — NEVER Tesseract's
+    // `DetectOrientationScript`: that API corrupts engine memory in this build
+    // (out-of-range vector access on LSTM-only models; freed BLOCK/ROW walks on
+    // the legacy `osd` model) and kills the whole process past any exception
+    // barrier. When the `auto-rotate` feature is not compiled in, the request is
+    // honored with a warning and no rotation.
+    #[cfg_attr(not(feature = "auto-rotate"), allow(unused_mut))]
     let mut detected_orientation: Option<(i32, f32, String, f32)> = None;
     let auto_rotate_enabled =
         config.preprocessing.as_ref().map(|p| p.auto_rotate).unwrap_or(false) || config.auto_rotate;
 
+    #[cfg(not(feature = "auto-rotate"))]
     if auto_rotate_enabled {
-        // Save current PSM and switch to OSD_ONLY for orientation detection
-        let original_psm = psm_mode;
-        api.set_page_seg_mode(TessPageSegMode::PSM_OSD_ONLY)
-            .map_err(|e| OcrError::ProcessingFailed(format!("Failed to set PSM for OSD: {}", e)))?;
+        tracing::warn!(
+            "auto_rotate requested but the `auto-rotate` feature is not compiled in; skipping orientation detection"
+        );
+    }
 
-        match api.detect_os() {
-            Ok((orient_deg, orient_conf, script_name, script_conf)) => {
+    #[cfg(feature = "auto-rotate")]
+    if auto_rotate_enabled {
+        let orientation_result = image::RgbImage::from_raw(width, height, image_data.clone())
+            .ok_or_else(|| crate::error::XbergError::Ocr {
+                message: "auto_rotate: image buffer does not match dimensions".to_string(),
+                source: None,
+            })
+            .and_then(|img| doc_orientation_detector().detect(&img));
+
+        match orientation_result {
+            Err(e) => {
+                tracing::warn!("Orientation detection failed, proceeding without rotation: {}", e);
+            }
+            Ok(orientation) => {
+                let orient_deg = orientation.degrees as i32;
+                let orient_conf = orientation.confidence;
                 log_ci_debug(ci_debug_enabled, "orientation_detection", || {
-                    format!(
-                        "orientation={}° confidence={:.2} script={} script_confidence={:.2}",
-                        orient_deg, orient_conf, script_name, script_conf
-                    )
+                    format!("orientation={}° confidence={:.2}", orient_deg, orient_conf)
                 });
-                detected_orientation = Some((orient_deg, orient_conf, script_name, script_conf));
-
-                // Restore original PSM
-                api.set_page_seg_mode(original_psm)
-                    .map_err(|e| OcrError::ProcessingFailed(format!("Failed to restore PSM: {}", e)))?;
+                // The classifier detects orientation only; script fields stay empty.
+                detected_orientation = Some((orient_deg, orient_conf, String::new(), 0.0));
 
                 // If orientation is non-zero with sufficient confidence, rotate the image
                 if orient_deg != 0 && orient_conf > MIN_ORIENTATION_CONFIDENCE {
@@ -824,8 +857,11 @@ pub(super) fn perform_ocr(
                         orient_conf
                     );
 
+                    // `degrees` is the image's clockwise skew; correct by rotating
+                    // the complement clockwise.
+                    let correction_deg = (360 - orient_deg).rem_euclid(360);
                     let (rotated_data, new_width, new_height) =
-                        rotate_rgb_image_data(&image_data, width, height, orient_deg);
+                        rotate_rgb_image_data(&image_data, width, height, correction_deg);
                     let new_bytes_per_line = new_width * bytes_per_pixel;
 
                     // Re-apply Leptonica preprocessing to the rotated image so the same
@@ -874,11 +910,6 @@ pub(super) fn perform_ocr(
                         format!("rotated={}° new_dimensions={}x{}", orient_deg, new_width, new_height)
                     });
                 }
-            }
-            Err(e) => {
-                tracing::warn!("Orientation detection failed, proceeding without rotation: {}", e);
-                // Restore original PSM
-                let _ = api.set_page_seg_mode(original_psm);
             }
         }
     }
