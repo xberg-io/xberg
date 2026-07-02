@@ -11,26 +11,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-
-      - uses: astral-sh/setup-uv@v7
-
-      - name: Install dependencies
-        run: uv sync
-
-      - name: Install poly
-        uses: Goldziher/polylint@v0
-      - name: Format check
-        run: poly fmt --check .
-      - name: Lint
-        run: poly lint .
+  validate:
+    uses: xberg-io/actions/.github/workflows/reusable-validate.yml@v1
+    with:
+      setup-python: true
 
   test:
     runs-on: ubuntu-latest
