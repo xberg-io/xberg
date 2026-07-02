@@ -25,10 +25,12 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
-      - name: Run prek hooks
-        uses: j178/prek-action@v2.0.4
-        with:
-          extra-args: --all-files
+      - name: Install poly
+        uses: Goldziher/polylint@v0
+      - name: Format check
+        run: poly fmt --check .
+      - name: Lint
+        run: poly lint .
 
   test:
     runs-on: ubuntu-latest

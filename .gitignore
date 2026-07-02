@@ -16,6 +16,9 @@ build/
 .gemini/
 GEMINI.md
 
+# polylint local cache
+.polylint/
+
 # BEGIN ai-rulez (DO NOT EDIT - managed by ai-rulez)
 .agents/
 .ai-rulez/.generated-manifest.json
