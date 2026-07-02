@@ -2,6 +2,7 @@
 
 from typing import TYPE_CHECKING, Any, cast
 
+from surrealdb import RecordID
 from xberg import (
     ChunkingConfig,
     EmbeddingConfig,
@@ -11,7 +12,6 @@ from xberg import (
     extract_bytes,
     get_embedding_preset,
 )
-from surrealdb import RecordID
 
 from xberg_surrealdb._base import (
     AsyncSurrealQueryable,

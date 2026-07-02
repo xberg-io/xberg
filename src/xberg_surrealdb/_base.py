@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 from anyio import Path as AsyncPath
-from xberg import ExtractionConfig, ExtractionResult, extract_bytes, extract_file
 from surrealdb import RecordID, Value
+from xberg import ExtractionConfig, ExtractionResult, extract_bytes, extract_file
 
 from xberg_surrealdb.exceptions import DimensionMismatchError, IngestionError, SchemaNotInitializedError
 from xberg_surrealdb.types import DocumentRecord

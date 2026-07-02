@@ -16,9 +16,9 @@ from unittest.mock import AsyncMock
 import pytest
 from surrealdb import AsyncSurreal
 
+from tests.conftest import FIXTURES_DIR
 from xberg_surrealdb import AsyncSurrealQueryable, DocumentConnector, DocumentPipeline
 from xberg_surrealdb.exceptions import SchemaNotInitializedError
-from tests.conftest import FIXTURES_DIR
 
 pytestmark = pytest.mark.integration
 
