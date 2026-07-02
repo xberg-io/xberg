@@ -22,7 +22,7 @@ const MAX_CAPACITY: u64 = 10_000;
 /// this is the default backend when `XBERG_REHYDRATION_DB_PATH` is unset.
 #[derive(Clone)]
 pub struct InMemoryRehydrationStore {
-    blobs: Cache<String, Vec<u8>>,
+    blobs: Cache<(String, String), Vec<u8>>,
 }
 
 impl Default for InMemoryRehydrationStore {
@@ -41,8 +41,8 @@ impl InMemoryRehydrationStore {
         Self { blobs }
     }
 
-    fn namespaced_key(ctx: &TenantCtx, id: &str) -> String {
-        format!("{}/{}", ctx.tenant.0, id)
+    fn namespaced_key(ctx: &TenantCtx, id: &str) -> (String, String) {
+        (ctx.tenant.0.clone(), id.to_string())
     }
 }
 
