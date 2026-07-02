@@ -54,6 +54,14 @@ pub fn rehydration_store_from_env() -> StoreResult<std::sync::Arc<dyn Rehydratio
         tracing::info!(path = %path, "rehydration store: durable SQLite backend");
         return Ok(std::sync::Arc::new(store));
     }
+    #[cfg(not(feature = "sqlite"))]
+    if std::env::var("XBERG_REHYDRATION_DB_PATH").is_ok() {
+        tracing::warn!(
+            "XBERG_REHYDRATION_DB_PATH is set but this binary was built without the \
+             `sqlite` feature; rehydration maps will NOT be durable — rebuild with \
+             `doc-store-sqlite` enabled for the configured path to take effect"
+        );
+    }
     tracing::warn!(
         "rehydration store: ephemeral in-memory backend (24h TTL, lost on restart); \
          set XBERG_REHYDRATION_DB_PATH for durability"
