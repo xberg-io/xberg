@@ -189,9 +189,13 @@ pub struct ApiState {
     /// In-memory job store for async extraction polling.
     #[cfg(feature = "api")]
     pub job_store: Arc<super::jobs::JobStore>,
-    /// In-memory store for encrypted rehydration map blobs.
+    /// Tenant-scoped store for encrypted rehydration map blobs.
+    ///
+    /// Backend selected at startup by `xberg_doc_store::rehydration_store_from_env`:
+    /// durable SQLite when `XBERG_REHYDRATION_DB_PATH` is set (requires the
+    /// `doc-store-sqlite` feature), ephemeral in-memory (24h TTL) otherwise.
     #[cfg(feature = "api")]
-    pub rehydration_store: Arc<super::rehydration_store::RehydrationStore>,
+    pub rehydration_store: Arc<dyn xberg_doc_store::RehydrationStore>,
 }
 
 /// Response from `POST /extract-async`: a job identifier the client polls.

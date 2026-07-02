@@ -135,7 +135,8 @@ pub(crate) fn create_router_with_limits_and_server_config(
         #[cfg(feature = "api")]
         job_store: Arc::new(super::jobs::JobStore::new()),
         #[cfg(feature = "api")]
-        rehydration_store: Arc::new(super::rehydration_store::RehydrationStore::new()),
+        rehydration_store: xberg_doc_store::rehydration_store_from_env()
+            .expect("rehydration store must initialize (check XBERG_REHYDRATION_DB_PATH)"),
     };
 
     // CORS configuration based on ServerConfig
