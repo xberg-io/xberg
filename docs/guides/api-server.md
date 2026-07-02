@@ -264,6 +264,10 @@ All extraction tools accept an optional `config` object. URI and byte payload de
 
     --8<-- "snippets/python/mcp/mcp_custom_client.md"
 
+=== "Python (HTTP)"
+
+    --8<-- "snippets/python/mcp/mcp_http_client.md"
+
 === "LangChain"
 
     --8<-- "snippets/python/mcp/mcp_langchain_integration.md"
