@@ -976,29 +976,46 @@ fn main() -> Result<()> {
                         "unknown --ner-backend value: {other:?}; expected onnx, llm, or candle"
                     ),
                 };
-                let categories: Vec<xberg::types::entity::EntityCategory> =
-                    ner_categories.iter().map(|s| s.parse().unwrap_or_default()).collect();
-                config.ner = Some(NerConfig {
-                    backend,
-                    categories,
-                    model: ner_model,
-                    ..NerConfig::default()
-                });
+                // Merge into the config-file/JSON-sourced NerConfig (if any) instead of
+                // replacing it wholesale, so file-only settings like hf_repo/model_dir/
+                // lora_adapter_dir survive alongside these CLI flags.
+                let mut ner_config = config.ner.take().unwrap_or_default();
+                ner_config.backend = backend;
+                if !ner_categories.is_empty() {
+                    ner_config.categories = ner_categories
+                        .iter()
+                        .map(|s| {
+                            s.parse::<xberg::types::entity::EntityCategory>()
+                                .map_err(|_| anyhow::anyhow!("unknown --ner-categories value: {s:?}"))
+                        })
+                        .collect::<anyhow::Result<_>>()?;
+                }
+                if ner_model.is_some() {
+                    ner_config.model = ner_model;
+                }
+                config.ner = Some(ner_config);
             }
 
             // Redaction
             if redact {
-                let strategy: RedactionStrategy = redact_strategy.parse().unwrap_or_default();
-                // Empty set means "all detectable categories" per RedactionConfig semantics.
-                let categories: std::collections::HashSet<PiiCategory> = redact_categories
-                    .iter()
-                    .map(|s| s.parse().unwrap_or_default())
-                    .collect();
-                config.redaction = Some(RedactionConfig {
-                    strategy,
-                    categories,
-                    ..RedactionConfig::default()
-                });
+                // Merge into the config-file/JSON-sourced RedactionConfig (if any) instead
+                // of replacing it wholesale, so file-only settings like custom_terms/
+                // custom_patterns/ner survive alongside these CLI flags.
+                let mut redaction_config = config.redaction.take().unwrap_or_default();
+                redaction_config.strategy = redact_strategy
+                    .parse()
+                    .map_err(|_| anyhow::anyhow!("unknown --redact-strategy value: {redact_strategy:?}"))?;
+                if !redact_categories.is_empty() {
+                    // Empty set means "all detectable categories" per RedactionConfig semantics.
+                    redaction_config.categories = redact_categories
+                        .iter()
+                        .map(|s| {
+                            s.parse::<PiiCategory>()
+                                .map_err(|_| anyhow::anyhow!("unknown --redact-categories value: {s:?}"))
+                        })
+                        .collect::<anyhow::Result<_>>()?;
+                }
+                config.redaction = Some(redaction_config);
             }
 
             process_command(input, config, format)?;
