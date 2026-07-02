@@ -15,5 +15,7 @@
 //!   `rusqlite`, tenant + id primary key).
 
 pub mod error;
+pub mod tenant;
 
 pub use error::{StoreError, StoreResult};
+pub use tenant::{ActorId, TenantCtx, TenantId};
