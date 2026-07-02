@@ -1,7 +1,7 @@
 //! Heading classification for paragraphs using font-size clustering.
 
 use super::constants::{MAX_BOLD_HEADING_WORD_COUNT, MAX_HEADING_DISTANCE_MULTIPLIER, MAX_HEADING_WORD_COUNT};
-use super::regions::looks_like_figure_label;
+use super::regions::{looks_like_bare_url, looks_like_figure_label};
 use super::types::{LayoutHintClass, PdfParagraph};
 
 /// Classify paragraphs as headings or body using the global heading map and bold heuristic.
@@ -58,6 +58,7 @@ pub(super) fn classify_paragraphs(paragraphs: &mut [PdfParagraph], heading_map: 
         if let Some(level) = heading_level
             && word_count <= MAX_HEADING_WORD_COUNT
             && !super::layout_classify::is_separator_text(&para_text)
+            && !looks_like_bare_url(&para_text)
         {
             para.heading_level = Some(level);
             continue;
@@ -103,6 +104,7 @@ pub(super) fn classify_paragraphs(paragraphs: &mut [PdfParagraph], heading_map: 
                 && period_ok
                 && colon_ok
                 && !looks_like_figure_label(t)
+                && !looks_like_bare_url(t)
                 && !super::layout_classify::is_separator_text(t)
             {
                 // Use font-size ratio to body to differentiate H2 vs H3:
@@ -653,6 +655,7 @@ pub(super) fn refine_heading_hierarchy(all_pages: &mut [Vec<PdfParagraph>]) {
                 && first_wc <= 10
                 && first_wc > 0
                 && !first.is_page_furniture
+                && !looks_like_bare_url(&first_text)
             {
                 all_pages[0][0].heading_level = Some(1);
             }
