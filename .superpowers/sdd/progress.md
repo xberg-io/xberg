@@ -49,3 +49,16 @@ Task 1: complete (commits d6a17dc5c8..ba93c69, review clean — Approved.
   PASSES, in-binary Candle-NER remains feasible. Minor note (non-blocking,
   for a later task): Parameters::validate() has no wasm-side equivalent
   if Parameters ever becomes part of the wasm-facing API.)
+Task 2: complete (commits ba93c69..7282897, review clean — Approved.
+  Added Encoder::from_buffered_safetensors, AllHeads::from_buffered_safetensors
+  (both via candle_core::safetensors::load_buffer), Gliner2Candle::from_bytes
+  (in-memory model load, no filesystem), V2Tokenizer::from_bytes in
+  xberg-gliner. Gated from_local/from_local_with_device/load_adapter/
+  unload_adapter #[cfg(not(target_arch="wasm32"))] — fs-only, item-level
+  per Task 1's pattern. Correctly used the real config type
+  candle_transformers::models::debertav2::Config (not the fictitious
+  EncoderConfig name); AllHeads::from_buffered_safetensors calls Self::load
+  directly (not the now-gated from_var_builder), avoiding a self-inflicted
+  wasm break. Native: tests pass, clippy clean. wasm32 build 0 errors,
+  clippy -D warnings clean — SECOND major risk gate (candle-on-wasm)
+  PASSES. TDD evidence (RED/GREEN) verified genuine against diff.)
