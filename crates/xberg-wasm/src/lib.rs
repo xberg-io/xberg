@@ -20,7 +20,8 @@
     clippy::clone_on_copy,
     clippy::should_implement_trait,
     clippy::await_holding_refcell_ref,
-    clippy::new_without_default
+    clippy::new_without_default,
+    clippy::redundant_field_names
 )]
 
 use std::sync::Arc;

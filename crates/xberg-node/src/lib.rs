@@ -19,7 +19,8 @@
     clippy::arc_with_non_send_sync,
     clippy::collapsible_if,
     clippy::clone_on_copy,
-    clippy::should_implement_trait
+    clippy::should_implement_trait,
+    clippy::redundant_field_names
 )]
 #![allow(
     clippy::cast_possible_wrap,

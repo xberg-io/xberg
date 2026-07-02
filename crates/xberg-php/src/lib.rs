@@ -20,7 +20,8 @@
     clippy::collapsible_if,
     clippy::clone_on_copy,
     clippy::should_implement_trait,
-    clippy::useless_conversion
+    clippy::useless_conversion,
+    clippy::redundant_field_names
 )]
 #![cfg_attr(windows, feature(abi_vectorcall))]
 

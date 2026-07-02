@@ -10,7 +10,8 @@
     clippy::too_many_arguments,
     clippy::unit_arg,
     clippy::type_complexity,
-    clippy::useless_conversion
+    clippy::useless_conversion,
+    clippy::redundant_field_names
 )]
 mod frb_generated;
 pub use flutter_rust_bridge::DartFnFuture;
