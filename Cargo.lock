@@ -10993,6 +10993,7 @@ dependencies = [
  "whatlang",
  "wiremock",
  "xberg-candle-ocr",
+ "xberg-doc-store",
  "xberg-gliner",
  "xberg-gliner-candle",
  "xberg-libheif",

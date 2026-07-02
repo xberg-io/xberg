@@ -19,3 +19,9 @@ Task 11 (plan): complete (commit f64e31c — encrypted rehydration map + Rehydra
 Task 12: complete (commit 9d506d9f23 — POST /v1/process, 3 handler tests pass; agent also applied fmt/bindings/docs/Cargo.lock fixups)
 Task 13: complete (commit 680b341 — POST /v1/documents/{id}/rehydrate, 3 tests pass; reviewer findings were false positives caused by agent being on wrong branch — correct branch (feature/gliner2-onnx-backend) already had moka TTL store and no RwLock::expect; non-blocking: encrypt_map uses XbergError::validation for internal crypto errors, noted for follow-up)
 # PLAN COMPLETE — all 13 tasks shipped on feature/gliner2-onnx-backend
+Fix: removed xberg-rag dependency cycle from xberg-doc-store (commits d9fbb9c043..62757c4de6, review clean; cargo tree independently verified — no xberg-rag edge). Amends Tasks 1 & 3.
+Task 7: complete (commits 62757c4de6..e437f8593b, review clean; xberg intentionally non-compiling until Task 11, errors confined to router.rs/types.rs as expected)
+Task 8: complete (commits 330babd640..b76fb312f7, review clean; error surface now confined to handlers.rs as expected)
+Task 9: complete (commits b76fb312f7..4bcbaafd42, review clean; error surface now confined to rehydrate_handler + test helpers as expected)
+Task 10: complete (commits 4bcbaafd42..0f77da606c, review clean; error surface now confined to #[cfg(test)] module only, as expected)
+Task 11: complete (commits 0f77da606c..9cad2dfcca, review clean; crates/xberg fully compiles again, 18/18 api::handlers tests pass, independently re-verified. Note: first implementer session ended abnormally without committing; a second finishing agent verified+committed the correct pre-existing edits. Filed separate out-of-scope task_245f6e1e for pre-existing unused-import debt in markdown_lint_quality.rs, unrelated to this plan.)
