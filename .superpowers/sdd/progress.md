@@ -25,3 +25,27 @@ Task 8: complete (commits 330babd640..b76fb312f7, review clean; error surface no
 Task 9: complete (commits b76fb312f7..4bcbaafd42, review clean; error surface now confined to rehydrate_handler + test helpers as expected)
 Task 10: complete (commits 4bcbaafd42..0f77da606c, review clean; error surface now confined to #[cfg(test)] module only, as expected)
 Task 11: complete (commits 0f77da606c..9cad2dfcca, review clean; crates/xberg fully compiles again, 18/18 api::handlers tests pass, independently re-verified. Note: first implementer session ended abnormally without committing; a second finishing agent verified+committed the correct pre-existing edits. Filed separate out-of-scope task_245f6e1e for pre-existing unused-import debt in markdown_lint_quality.rs, unrelated to this plan.)
+
+# ==========================================================================
+# ner-candle-wasm Plan — SDD Progress (NEW PLAN, separate from the above)
+# Plan: docs/superpowers/plans/2026-07-02-ner-candle-wasm.md
+# Worktree: .worktrees/ner-candle-wasm
+# Branch: feature/ner-candle-wasm (from feature/gliner2-onnx-backend @ d6a17dc5c8)
+# Started: 2026-07-02
+# Baseline: cargo build -p xberg-gliner -p xberg-gliner-candle --features
+#           xberg-gliner-candle/ort-bundled — green (57 crates, 2m22s)
+# ==========================================================================
+Task 1: complete (commits d6a17dc5c8..ba93c69, review clean — Approved.
+  Original dispatched implementer hit monthly spend limit mid-task with
+  uncommitted partial progress; controller resumed manually, found+fixed a
+  real bug in the plan's own Cargo.toml snippet (default=["ort-backend"]
+  would have broken all default-feature linking; restored
+  default=["ort-bundled"]), chased a dead-code cascade under
+  `clippy -D warnings` on wasm32 beyond the brief's literal file list
+  (splitter.rs, v2_decode.rs modules + item-level gates in config.rs/
+  decode.rs/input.rs), all item-scoped with doc comments naming the sole
+  consumer. Native: 23/23 tests pass, clippy clean. wasm32: build 0
+  errors, clippy -D warnings clean — the tokenizers-on-wasm risk gate
+  PASSES, in-binary Candle-NER remains feasible. Minor note (non-blocking,
+  for a later task): Parameters::validate() has no wasm-side equivalent
+  if Parameters ever becomes part of the wasm-facing API.)
