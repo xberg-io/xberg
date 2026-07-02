@@ -4,6 +4,7 @@
 //! hidden states. Deliberately uses the upstream Candle implementation rather
 //! than rolling a custom DeBERTa-v2 disentangled-attention module.
 
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
 
 use candle_core::{Device, Tensor};
@@ -19,6 +20,11 @@ pub struct Encoder {
 
 impl Encoder {
     /// Load the encoder from a `model.safetensors` + `config.json` pair.
+    ///
+    /// Only used by [`crate::Gliner2Candle::from_local_with_device`] and
+    /// [`crate::Gliner2Candle::unload_adapter`] — dead weight on wasm32
+    /// (no filesystem).
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn from_safetensors(weights_path: &Path, config_path: &Path, device: &Device) -> crate::Result<Self> {
         let cfg_str = std::fs::read_to_string(config_path).map_err(|e| {
             crate::GlinerCandleError::Backend(format!("encoder config read {}: {e}", config_path.display()))
@@ -41,6 +47,16 @@ impl Encoder {
             .map_err(|e| crate::GlinerCandleError::Backend(format!("encoder DebertaV2Model::load: {e}")))?;
 
         Ok(Self { model, config })
+    }
+
+    /// Load the encoder from in-memory safetensors bytes + parsed config
+    /// (wasm/no-fs path). Mirrors [`Self::from_safetensors`] but reads the
+    /// weights from a buffer instead of mmap'ing a path.
+    pub fn from_buffered_safetensors(bytes: &[u8], config: &DebertaV2Config, device: &Device) -> crate::Result<Self> {
+        let tensors = candle_core::safetensors::load_buffer(bytes, device)
+            .map_err(|e| crate::GlinerCandleError::Backend(format!("encoder safetensors load_buffer: {e}")))?;
+        let vb = VarBuilder::from_tensors(tensors, candle_core::DType::F32, device);
+        Self::from_var_builder(vb.pp("encoder"), config)
     }
 
     /// Load the encoder from an already-built [`VarBuilder`] + parsed config.

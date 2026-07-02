@@ -17,6 +17,7 @@ pub mod token_gather;
 /// see Global Constraints.
 pub(crate) const MAX_WIDTH: usize = 8;
 
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
 
 use candle_core::{DType, Device};
@@ -31,6 +32,11 @@ pub struct AllHeads {
 
 impl AllHeads {
     /// Load all heads' weights from a single safetensors file.
+    ///
+    /// Only used by [`crate::Gliner2Candle::from_local_with_device`] and
+    /// [`crate::Gliner2Candle::unload_adapter`] — dead weight on wasm32
+    /// (no filesystem).
+    #[cfg(not(target_arch = "wasm32"))]
     #[allow(unsafe_code)]
     pub fn from_safetensors(weights_path: &Path, device: &Device) -> crate::Result<Self> {
         // SAFETY: mmap-reads the weights file; safe as long as it isn't
@@ -41,7 +47,20 @@ impl AllHeads {
     }
 
     /// Load all heads from an already-built [`VarBuilder`] (post-LoRA-merge path).
+    ///
+    /// Only used by [`crate::Gliner2Candle::load_adapter`] — dead weight on
+    /// wasm32 (no filesystem, and LoRA merge is fs-driven).
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn from_var_builder(vb: VarBuilder<'_>, device: &Device) -> crate::Result<Self> {
+        Self::load(vb, device)
+    }
+
+    /// Load all heads' weights from in-memory safetensors bytes (wasm/no-fs
+    /// path). Mirrors [`Self::from_safetensors`] but reads from a buffer.
+    pub fn from_buffered_safetensors(bytes: &[u8], device: &Device) -> crate::Result<Self> {
+        let tensors = candle_core::safetensors::load_buffer(bytes, device)
+            .map_err(|e| crate::GlinerCandleError::Backend(format!("heads safetensors load_buffer: {e}")))?;
+        let vb = VarBuilder::from_tensors(tensors, DType::F32, device);
         Self::load(vb, device)
     }
 

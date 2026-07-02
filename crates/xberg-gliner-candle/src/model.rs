@@ -2,11 +2,15 @@
 //! Adapted from `anno::backends::gliner2_fastino_candle::GLiNER2FastinoCandle`,
 //! trimmed to `extract_ner`-only scope (see plan Global Constraints).
 
-use std::path::{Path, PathBuf};
+#[cfg(not(target_arch = "wasm32"))]
+use std::path::Path;
+use std::path::PathBuf;
 
 use candle_core::Device;
 
-use crate::{GlinerCandleError, Result, decode, encoder, heads, lora, pipeline};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::lora;
+use crate::{GlinerCandleError, Result, decode, encoder, heads, pipeline};
 
 /// Candle-based GLiNER2 backend with PEFT LoRA adapter merge-at-load support.
 pub struct Gliner2Candle {
@@ -15,7 +19,9 @@ pub struct Gliner2Candle {
     pub(crate) device: Device,
     /// Directory containing the base model's `tokenizer.json`, `config.json`
     /// (or `encoder_config/config.json`), and `model.safetensors`. Used to
-    /// re-merge from disk on `load_adapter`/`unload_adapter`.
+    /// re-merge from disk on `load_adapter`/`unload_adapter` — only read on
+    /// non-wasm32 targets; empty (`PathBuf::new()`) on the `from_bytes` path.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     base_model_dir: PathBuf,
     pub(crate) encoder: encoder::Encoder,
     pub(crate) heads: heads::AllHeads,
@@ -48,6 +54,69 @@ impl Gliner2Candle {
         self.approx_bytes
     }
 
+    /// Load from in-memory model bytes (browser/OPFS, wasm — no filesystem).
+    /// `encoder_config_json` is the `config.json` (or `encoder_config/config.json`)
+    /// contents; `tokenizer_json` is the HF `tokenizer.json` contents;
+    /// `safetensors` is the `model.safetensors` contents.
+    pub fn from_bytes(safetensors: &[u8], tokenizer_json: &[u8], encoder_config_json: &[u8]) -> Result<Self> {
+        let device = Device::Cpu;
+        let tokenizer = xberg_gliner::V2Tokenizer::from_bytes(tokenizer_json)?;
+        let splitter = xberg_gliner::V2Splitter::new()?;
+        let config: candle_transformers::models::debertav2::Config = serde_json::from_slice(encoder_config_json)
+            .map_err(|e| GlinerCandleError::Backend(format!("encoder config parse: {e}")))?;
+        let encoder = encoder::Encoder::from_buffered_safetensors(safetensors, &config, &device)?;
+        let heads_loaded = heads::AllHeads::from_buffered_safetensors(safetensors, &device)?;
+
+        Ok(Self {
+            tokenizer,
+            splitter,
+            device,
+            base_model_dir: PathBuf::new(),
+            encoder,
+            heads: heads_loaded,
+            active_adapter: None,
+            model_id: "gliner2_candle_bytes".to_string(),
+            approx_bytes: safetensors.len() as u64,
+        })
+    }
+
+    /// Extract entities for the given zero-shot `labels`.
+    pub fn extract_ner(&self, text: &str, labels: &[&str], threshold: f32) -> Result<Vec<xberg_gliner::Span>> {
+        if labels.is_empty() {
+            return Ok(vec![]);
+        }
+        let owned_labels: Vec<String> = labels.iter().map(|s| s.to_string()).collect();
+        let (scorer_out, pred_count, encoded) = pipeline::run_pipeline(
+            &self.tokenizer,
+            &self.splitter,
+            &self.device,
+            &self.encoder,
+            &self.heads,
+            text,
+            &owned_labels,
+        )?;
+        if pred_count == 0 {
+            return Ok(vec![]);
+        }
+        let output = decode::decode_span_scores(
+            text,
+            &encoded.words,
+            &owned_labels,
+            &scorer_out,
+            pred_count,
+            threshold,
+            /* flat_ner = */ true,
+            /* dup_label = */ false,
+            /* multi_label = */ false,
+        )?;
+        Ok(output.spans.into_iter().next().unwrap_or_default())
+    }
+}
+
+/// Filesystem-only API: base model loading from a local directory and PEFT
+/// LoRA adapter merge-at-load. Not available on wasm32 (no filesystem).
+#[cfg(not(target_arch = "wasm32"))]
+impl Gliner2Candle {
     /// Load a PEFT-format LoRA adapter and merge it into the base weights.
     pub fn load_adapter(&mut self, name: &str, adapter_dir: &Path) -> Result<()> {
         let adapter = lora::LoraAdapter::load(adapter_dir, &self.device)?;
@@ -132,40 +201,9 @@ impl Gliner2Candle {
             approx_bytes,
         })
     }
-
-    /// Extract entities for the given zero-shot `labels`.
-    pub fn extract_ner(&self, text: &str, labels: &[&str], threshold: f32) -> Result<Vec<xberg_gliner::Span>> {
-        if labels.is_empty() {
-            return Ok(vec![]);
-        }
-        let owned_labels: Vec<String> = labels.iter().map(|s| s.to_string()).collect();
-        let (scorer_out, pred_count, encoded) = pipeline::run_pipeline(
-            &self.tokenizer,
-            &self.splitter,
-            &self.device,
-            &self.encoder,
-            &self.heads,
-            text,
-            &owned_labels,
-        )?;
-        if pred_count == 0 {
-            return Ok(vec![]);
-        }
-        let output = decode::decode_span_scores(
-            text,
-            &encoded.words,
-            &owned_labels,
-            &scorer_out,
-            pred_count,
-            threshold,
-            /* flat_ner = */ true,
-            /* dup_label = */ false,
-            /* multi_label = */ false,
-        )?;
-        Ok(output.spans.into_iter().next().unwrap_or_default())
-    }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn resolve_encoder_config_path(model_dir: &Path) -> PathBuf {
     let nested = model_dir.join("encoder_config").join("config.json");
     if nested.exists() {
@@ -179,10 +217,19 @@ fn resolve_encoder_config_path(model_dir: &Path) -> PathBuf {
 mod tests {
     use super::*;
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn from_local_with_device_rejects_missing_weights() {
         let dir = tempfile::tempdir().expect("tempdir");
         let err = Gliner2Candle::from_local_with_device(dir.path(), &Device::Cpu).expect_err("empty dir must fail");
         assert!(err.to_string().contains("model.safetensors"));
+    }
+
+    #[test]
+    fn from_bytes_rejects_empty_safetensors() {
+        let err = Gliner2Candle::from_bytes(&[], b"{}", b"{}").expect_err("empty weights must fail");
+        assert!(
+            err.to_string().to_lowercase().contains("safetensors") || err.to_string().to_lowercase().contains("load")
+        );
     }
 }
