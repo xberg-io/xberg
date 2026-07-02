@@ -113,27 +113,25 @@ impl GraphStore {
 
         let params: Vec<String> = (0..start_ids.len()).map(|i| format!("?{}", i + 1)).collect();
         query.push_str(&params.join(", "));
-        query.push_str(")\n        UNION\n        SELECT traversal.path || '/' || e.target, ");
+        query.push_str(
+            ")
+        UNION
+        SELECT traversal.path || '/' || e.target, e.target, traversal.depth + 1
+                FROM traversal
+                JOIN _graph_edges e ON e.source = traversal.node_id",
+        );
 
         if !edge_labels.is_empty() {
-            query.push_str(
-                "CASE WHEN e.label IN (",
-            );
             let label_params: Vec<String> = (start_ids.len() + 1..start_ids.len() + 1 + edge_labels.len())
                 .map(|i| format!("?{}", i))
                 .collect();
+            query.push_str(" AND e.label IN (");
             query.push_str(&label_params.join(", "));
-            query.push_str(
-                ") THEN 1 ELSE 0 END ",
-            );
+            query.push(')');
         }
 
-        query.push_str(
-            "e.target, traversal.depth + 1
-                FROM traversal
-                JOIN _graph_edges e ON e.source = traversal.node_id
-                WHERE traversal.depth < ?",
-        );
+        query.push_str("
+                WHERE traversal.depth < ?");
         query.push_str(&(start_ids.len() + edge_labels.len() + 1).to_string());
 
         query.push_str(
@@ -362,9 +360,10 @@ impl GraphStore {
         let mut stmt = self
             .conn
             .prepare(
-                "SELECT id FROM _graph_nodes WHERE json_array_length(labels) > 0
-                 AND id IN (
-                     SELECT id FROM _graph_nodes, json_each(labels) WHERE json_each.value = ?1
+                "SELECT n.id FROM _graph_nodes n
+                 WHERE json_array_length(n.labels) > 0
+                 AND EXISTS (
+                     SELECT 1 FROM json_each(n.labels) WHERE json_each.value = ?1
                  )",
             )
             .map_err(|e| RagError::Backend(Box::new(e)))?;
