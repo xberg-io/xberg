@@ -87,8 +87,6 @@ pub(crate) mod jobs;
 #[cfg(feature = "api")]
 pub mod openapi;
 mod openweb;
-#[cfg(feature = "api")]
-pub(crate) mod rehydration_store;
 mod router;
 mod startup;
 mod types;

@@ -372,11 +372,16 @@ api = [
     "dep:tower-http",
     "dep:utoipa",
     "dep:uuid",
+    "dep:xberg-doc-store",
     "tokio-runtime",
     # SIGTERM/SIGINT graceful shutdown for the api + mcp-http servers (#1147).
     "tokio?/signal",
     "chunking",
 ]
+# Durable (SQLite) rehydration-map storage, selected at runtime via
+# XBERG_REHYDRATION_DB_PATH. Additive to `api` — without it the ephemeral
+# in-memory backend (24h TTL) is used.
+doc-store-sqlite = ["api", "xberg-doc-store/sqlite"]
 mcp = ["tower-service", "dep:rmcp", "tokio-runtime"]
 mcp-http = ["mcp", "api"]
 
@@ -661,6 +666,7 @@ memmap2 = { workspace = true }
 mime_guess = "2.0"
 minijinja = { workspace = true, optional = true }
 moka = { version = "0.12", features = ["sync"], optional = true }
+xberg-doc-store = { workspace = true, optional = true, features = ["in-memory"] }
 ndarray = { version = "0.17", optional = true }
 nom-exif = { workspace = true, optional = true }
 num_cpus = { workspace = true }
