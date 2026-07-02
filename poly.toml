@@ -39,11 +39,9 @@ exclude = [
 ]
 
 [lint.python.ruff]
+line_length = 120
 select = ["ALL"]
-# E501: poly's bundled ruff hardcodes pycodestyle line-length at 88 with no config override, while this
-# repo's pyproject sets line-length = 120. `ruff check` at 120 reports zero E501; every poly E501 here is a
-# sub-120 line. Ignored to compensate for the missing line-length knob, not to mask genuine over-length lines.
-ignore = ["ANN401", "COM812", "D100", "D104", "D107", "D203", "D213", "E501", "ISC001", "PLR0913"]
+ignore = ["ANN401", "COM812", "D100", "D104", "D107", "D203", "D213", "ISC001", "PLR0913"]
 
 [hooks]
 stages = ["pre-commit"]
