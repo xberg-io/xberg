@@ -30,7 +30,7 @@ bench-pymupdf4llm = ["pillow>=10.0.0", "pymupdf-layout>=0.0.1", "pymupdf4llm>=0.
 # benchmark uses (pdfminer/python-docx/python-pptx/openpyxl). Avoids the
 # `[all-docs]` `unstructured-inference`/`pypdfium2>=5` stack that pulled the
 # Python-3.11-incompatible llvmlite 0.36 and conflicted with mineru's pypdfium2.
-bench-unstructured = ["unstructured[docx,pdf,pptx,xlsx]==0.18.32"]
+bench-unstructured = ["unstructured[docx,pdf,pptx,xlsx,md,odt,rtf,epub,org,rst]==0.18.32"]
 doc = ["mkdocstrings>=1.0.4", "mkdocstrings-python>=2.0.3", "zensical"]
 
 [tool.uv]

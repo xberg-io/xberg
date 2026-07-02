@@ -29,17 +29,31 @@ def _get_peak_memory_bytes() -> int:
 
 
 def create_converter(ocr_enabled: bool) -> DocumentConverter:
-    """Create a DocumentConverter with appropriate settings."""
-    if not ocr_enabled:
-        try:
-            from docling.datamodel.pipeline_options import PipelineOptions
+    """Create a DocumentConverter with OCR explicitly toggled.
 
-            options = PipelineOptions(do_ocr=False)
-            return DocumentConverter(pipeline_options=options)
-        except (ImportError, TypeError):
-            # Fallback if PipelineOptions API not available
-            return DocumentConverter()
-    return DocumentConverter()
+    In docling 2.x, ``DocumentConverter`` does not accept a ``pipeline_options``
+    kwarg; per-format pipeline options must be passed via ``format_options``.
+    Passing ``pipeline_options`` is silently wrong: the converter falls back to
+    its default PDF pipeline, which pulls an incompatible PP-OCRv6 torch model
+    and fails every PDF/image extraction. We build explicit PDF and image
+    format options with ``do_ocr`` set from ``ocr_enabled``.
+    """
+    try:
+        from docling.datamodel.base_models import InputFormat
+        from docling.datamodel.pipeline_options import PdfPipelineOptions
+        from docling.document_converter import ImageFormatOption, PdfFormatOption
+
+        pdf_options = PdfPipelineOptions()
+        pdf_options.do_ocr = ocr_enabled
+        return DocumentConverter(
+            format_options={
+                InputFormat.PDF: PdfFormatOption(pipeline_options=pdf_options),
+                InputFormat.IMAGE: ImageFormatOption(pipeline_options=pdf_options),
+            }
+        )
+    except (ImportError, TypeError):
+        # Fallback if the format-options API is unavailable on this version.
+        return DocumentConverter()
 
 
 def _render(document: Any, output_format: str) -> str:
