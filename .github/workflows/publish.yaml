@@ -560,11 +560,6 @@ jobs:
         with:
           output-dir: dist
           dry-run: ${{ needs.prepare.outputs.dry_run }}
-          # Pre-releases build against the workspace path: the core crate is not
-          # on the registry yet, so rewriting path-deps to registry versions and
-          # regenerating the lock (--require-registry) fails. Skip the rewrite for
-          # pre-releases and keep it for real releases (core published first).
-          rewrite-native-deps: ${{ needs.prepare.outputs.is_prerelease == 'true' && 'false' || 'true' }}
 
       - uses: actions/upload-artifact@v7
         with:
@@ -767,9 +762,6 @@ jobs:
         with:
           package-dir: packages/ruby
           dry-run: ${{ needs.prepare.outputs.dry_run }}
-          # Pre-releases build against the workspace path (core crate not yet on
-          # the registry); skip the path->registry rewrite for pre-releases.
-          rewrite-native-deps: ${{ needs.prepare.outputs.is_prerelease == 'true' && 'false' || 'true' }}
 
       - name: Package platform gem
         # `rake compile` builds the native extension for this runner's platform;
@@ -848,9 +840,6 @@ jobs:
           php-version: ${{ matrix.php }}
           php-ts: nts
           dry-run: ${{ needs.prepare.outputs.dry_run }}
-          # Pre-releases build against the workspace path (core crate not yet on
-          # the registry); skip the path->registry rewrite for pre-releases.
-          rewrite-native-deps: ${{ needs.prepare.outputs.is_prerelease == 'true' && 'false' || 'true' }}
 
       - uses: xberg-io/actions/install-alef@v1
 
@@ -1484,9 +1473,6 @@ jobs:
           nif-api-version: ${{ matrix.nif }}
           glibc-version: ${{ contains(matrix.target, '-linux-gnu') && '2.28' || '' }}
           dry-run: ${{ needs.prepare.outputs.dry_run }}
-          # Pre-releases build against the workspace path (core crate not yet on
-          # the registry); skip the path->registry rewrite for pre-releases.
-          rewrite-native-deps: ${{ needs.prepare.outputs.is_prerelease == 'true' && 'false' || 'true' }}
 
       - uses: actions/upload-artifact@v7
         with:
@@ -2656,9 +2642,7 @@ jobs:
         with:
           package-dir: packages/elixir
           nif-crate-path: packages/elixir/native/xberg_nif
-          # Pre-releases build against the workspace path (core crate not yet on
-          # the registry); skip the path->registry rewrite for pre-releases.
-          rewrite-native-deps: ${{ needs.prepare.outputs.is_prerelease == 'true' && 'false' || 'true' }}
+          rewrite-native-deps: "true"
           dry-run: ${{ needs.prepare.outputs.dry_run }}
 
       - uses: xberg-io/actions/publish-hex@v1
