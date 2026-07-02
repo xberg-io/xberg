@@ -1352,7 +1352,9 @@ mod tests {
             #[cfg(feature = "api")]
             job_store: std::sync::Arc::new(crate::api::jobs::JobStore::new()),
             #[cfg(feature = "api")]
-            rehydration_store: std::sync::Arc::new(crate::api::rehydration_store::RehydrationStore::new()),
+            rehydration_store: std::sync::Arc::new(
+                xberg_doc_store::backends::memory::InMemoryRehydrationStore::new(),
+            ),
         };
         #[allow(unused_mut)]
         let mut router = Router::new()
@@ -1700,7 +1702,9 @@ mod tests {
             default_config: std::sync::Arc::new(crate::ExtractionConfig::default()),
             extraction_service: std::sync::Arc::new(std::sync::Mutex::new(extraction_service)),
             job_store: std::sync::Arc::new(crate::api::jobs::JobStore::new()),
-            rehydration_store: std::sync::Arc::new(crate::api::rehydration_store::RehydrationStore::new()),
+            rehydration_store: std::sync::Arc::new(
+                xberg_doc_store::backends::memory::InMemoryRehydrationStore::new(),
+            ),
         }
     }
 
@@ -1795,10 +1799,14 @@ mod tests {
         let mut map = std::collections::HashMap::new();
         map.insert("[EMAIL_1]".to_string(), "alice@example.com".to_string());
         let encrypted = crate::text::redaction::rehydration::encrypt_map(&map, "test-passphrase").expect("encrypt");
-        let key = state.rehydration_store.store(encrypted);
+        let doc_id = state
+            .rehydration_store
+            .put_map(&xberg_doc_store::TenantCtx::default_tenant(), encrypted)
+            .await
+            .expect("put_map");
         let response = rehydrate_handler(
             axum::extract::State(state),
-            axum::extract::Path(key),
+            axum::extract::Path(doc_id.0),
             axum::extract::Json(crate::api::types::RehydrateRequest {
                 passphrase: "test-passphrase".to_string(),
             }),
@@ -1818,10 +1826,14 @@ mod tests {
         let mut map = std::collections::HashMap::new();
         map.insert("[EMAIL_1]".to_string(), "alice@example.com".to_string());
         let encrypted = crate::text::redaction::rehydration::encrypt_map(&map, "correct").expect("encrypt");
-        let key = state.rehydration_store.store(encrypted);
+        let doc_id = state
+            .rehydration_store
+            .put_map(&xberg_doc_store::TenantCtx::default_tenant(), encrypted)
+            .await
+            .expect("put_map");
         let result = rehydrate_handler(
             axum::extract::State(state),
-            axum::extract::Path(key),
+            axum::extract::Path(doc_id.0),
             axum::extract::Json(crate::api::types::RehydrateRequest {
                 passphrase: "wrong".to_string(),
             }),
