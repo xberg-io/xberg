@@ -2,8 +2,8 @@
 //! a backend-assigned [`DocumentId`].
 
 use async_trait::async_trait;
-use xberg_rag::types::DocumentId;
 
+use crate::DocumentId;
 use crate::error::StoreResult;
 use crate::tenant::TenantCtx;
 

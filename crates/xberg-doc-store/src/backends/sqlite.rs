@@ -12,8 +12,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
 use rusqlite::{Connection, params};
-use xberg_rag::types::DocumentId;
 
+use crate::DocumentId;
 use crate::error::{StoreError, StoreResult};
 use crate::rehydration::RehydrationStore;
 use crate::tenant::TenantCtx;

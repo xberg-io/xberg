@@ -18,11 +18,11 @@ sqlite = ["dep:rusqlite", "dep:tokio"]
 async-trait = { workspace = true }
 moka = { version = "0.12", features = ["sync"], optional = true }
 rusqlite = { workspace = true, optional = true }
+serde = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true }
 tracing = { workspace = true }
 uuid = { version = "1", features = ["v4"] }
-xberg-rag = { workspace = true, default-features = false, features = ["vector-store"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }

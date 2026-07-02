@@ -11054,6 +11054,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "xberg-doc-store"
+version = "1.0.0-rc.1"
+dependencies = [
+ "async-trait",
+ "moka",
+ "rusqlite",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "xberg-ffi"
 version = "1.0.0-rc.1"
 dependencies = [

@@ -22,7 +22,18 @@ pub mod tenant;
 pub use error::{StoreError, StoreResult};
 pub use rehydration::RehydrationStore;
 pub use tenant::{ActorId, TenantCtx, TenantId};
-pub use xberg_rag::types::DocumentId;
+
+/// Opaque identifier for a document, assigned by the backend.
+///
+/// Structurally identical to `xberg_rag::types::DocumentId`, but defined
+/// locally to avoid a manifest-level dependency on `xberg-rag` (which would
+/// otherwise create a `xberg -> xberg-doc-store -> xberg-rag -> xberg` cycle
+/// once `xberg` depends on this crate). Nothing in this crate's current
+/// scope requires the two `DocumentId` types to be identical; a future plan
+/// will reconcile identity if the corpus / `DocumentStore` integration ever
+/// needs it.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+pub struct DocumentId(pub String);
 
 /// Build the process-wide [`RehydrationStore`] from environment configuration.
 ///

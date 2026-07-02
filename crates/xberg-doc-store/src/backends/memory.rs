@@ -10,10 +10,10 @@ use std::time::Duration;
 use async_trait::async_trait;
 use moka::sync::Cache;
 
+use crate::DocumentId;
 use crate::error::StoreResult;
 use crate::rehydration::RehydrationStore;
 use crate::tenant::TenantCtx;
-use xberg_rag::types::DocumentId;
 
 const REHYDRATION_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 const MAX_CAPACITY: u64 = 10_000;
