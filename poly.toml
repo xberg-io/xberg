@@ -27,6 +27,13 @@ exclude = [
     "**/pkg/**",
     "**/.next/**",
     "**/*.min.js",
+    "**/vendored/**",
+    "**/stopwords/**",
+    "**/testdata/**",
+    "e2e/**",
+    "**/*.diff",
+    "**/*.patch",
+    "**/frb_generated.rs",
 ]
 
 [lint.markdown.rumdl]
@@ -72,6 +79,83 @@ pylint_max_returns = 10
 select = ["correctness", "security"]
 ignore = ["strict-assertions", "use-specific-assertions", "no-redundant-variable", "sensitive-parameter"]
 php_version = "8.2"
+
+[lint.typos.extend_words]
+ake = "ake"
+algoritmos = "algoritmos"
+arange = "arange"
+bre = "bre"
+caf = "caf"
+charater = "charater"
+chlidren = "chlidren"
+cliper = "cliper"
+cursos = "cursos"
+delocate = "delocate"
+docling = "docling"
+edn = "edn"
+ein = "ein"
+excepcional = "excepcional"
+execpt = "execpt"
+extention = "extention"
+faiure = "faiure"
+fith = "fith"
+flate = "flate"
+formated = "formated"
+headerr = "headerr"
+helo = "helo"
+hocr = "hocr"
+hom = "hom"
+inh = "inh"
+internacional = "internacional"
+ist = "ist"
+kreuzberg = "kreuzberg"
+legt = "legt"
+markitdown = "markitdown"
+ment = "ment"
+mis = "mis"
+mkdocs = "mkdocs"
+mkdocstrings = "mkdocstrings"
+mmaped = "mmaped"
+multline = "multline"
+odf = "odf"
+onnx = "onnx"
+openwebui = "openwebui"
+opf = "opf"
+ove = "ove"
+pard = "pard"
+portait = "portait"
+programa = "programa"
+pymupdf = "pymupdf"
+relatie = "relatie"
+rumdl = "rumdl"
+ser = "ser"
+similarily = "similarily"
+siz = "siz"
+specifing = "specifing"
+splitted = "splitted"
+substract = "substract"
+surrealdb = "surrealdb"
+tesseract = "tesseract"
+tha = "tha"
+thr = "thr"
+threed = "threed"
+ths = "ths"
+thw = "thw"
+traineddata = "traineddata"
+tre = "tre"
+unparseable = "unparseable"
+utiliza = "utiliza"
+webui = "webui"
+yor = "yor"
+zensical = "zensical"
+
+[lint.typos.extend_identifiers]
+MarkItDown = "MarkItDown"
+PDFium = "PDFium"
+PyMuPDF = "PyMuPDF"
+SurrealDB = "SurrealDB"
+WebUI = "WebUI"
+traineddata = "traineddata"
 
 [per-file-ignores]
 "**/api.py" = ["F401", "I001", "TC006", "UP035"]
@@ -201,7 +285,11 @@ php_version = "8.2"
     "A001",
     "N801",
 ]
+"**/text_repair.rs" = ["typo"]
 "cli-proxy/pypi/**/*.py" = ["ANN001", "ANN202", "S310", "T201"]
+"crates/xberg-node/format-metadata-wrapper.js" = ["no-unused-vars"]
+"crates/xberg-node/index.js" = ["no-unused-vars"]
+"docker/**" = ["DL3006", "DL3059"]
 "e2e/**/*.py" = ["A001", "N801"]
 "packages/python/build.py" = ["INP001"]
 "packages/python/xberg/options.py" = ["I001"]
@@ -335,6 +423,13 @@ polylint = { exclude = [
     "**/pkg/**",
     "**/.next/**",
     "**/*.min.js",
+    "**/vendored/**",
+    "**/stopwords/**",
+    "**/testdata/**",
+    "e2e/**",
+    "**/*.diff",
+    "**/*.patch",
+    "**/frb_generated.rs",
 ] }
 polyfmt = { exclude = [
     "**/*.freezed.dart",
@@ -364,6 +459,13 @@ polyfmt = { exclude = [
     "**/pkg/**",
     "**/.next/**",
     "**/*.min.js",
+    "**/vendored/**",
+    "**/stopwords/**",
+    "**/testdata/**",
+    "e2e/**",
+    "**/*.diff",
+    "**/*.patch",
+    "**/frb_generated.rs",
 ] }
 file_safety = { exclude = [
     "**/*.freezed.dart",
@@ -393,6 +495,13 @@ file_safety = { exclude = [
     "**/pkg/**",
     "**/.next/**",
     "**/*.min.js",
+    "**/vendored/**",
+    "**/stopwords/**",
+    "**/testdata/**",
+    "e2e/**",
+    "**/*.diff",
+    "**/*.patch",
+    "**/frb_generated.rs",
 ] }
 cargo = true
 commit = { stages = ["commit-msg"] }

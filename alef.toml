@@ -123,9 +123,126 @@ extra_paths = [
 # Ported from .oxlintrc.json ignorePatterns (injected/vendored/generated JS +
 # build output). docs/snippets, dist, node_modules, target are already excluded
 # by poly's default discovery set.
-exclude = ["**/_generated/**", "**/coverage/**", "**/pkg/**", "**/.next/**", "**/*.min.js"]
+exclude = [
+    "**/_generated/**",
+    "**/coverage/**",
+    "**/pkg/**",
+    "**/.next/**",
+    "**/*.min.js",
+    # Data/corpus + generated trees poly must not lint or format (restored on the
+    # 0.30.17 poly-management migration — these were alef built-in defaults pre-0.30.17).
+    "**/vendored/**",
+    "**/stopwords/**",
+    "**/testdata/**",
+    "e2e/**",
+    "**/*.diff",
+    "**/*.patch",
+    "**/frb_generated.rs",
+]
+
+# Spell-checker allowlist. Key = the spelling typos would flag; value = intended
+# spelling. Set both equal to suppress a false-positive without auto-correcting
+# (the original bug: the `flate2` crate got "corrected" to `flat2`). Emitted as
+# `[lint.typos.extend_words]` in the generated poly.toml (alphabetically sorted).
+[workspace.poly.typos.extend-words]
+# flate2 crate + PDF FlateDecode filter (THE ORIGINAL BUG: flate -> flat)
+flate = "flate"
+# macOS wheel-vendoring tool (publish.yaml)
+delocate = "delocate"
+# candle-ocr ML tensor/API terms
+thw = "thw"
+arange = "arange"
+mmaped = "mmaped"
+# binding / keyword-algorithm split tokens
+ser = "ser"
+ake = "ake"
+algoritmos = "algoritmos"
+# Project / product / tool names
+kreuzberg = "kreuzberg"
+zensical = "zensical"
+tesseract = "tesseract"
+onnx = "onnx"
+surrealdb = "surrealdb"
+docling = "docling"
+markitdown = "markitdown"
+pymupdf = "pymupdf"
+openwebui = "openwebui"
+webui = "webui"
+mkdocs = "mkdocs"
+mkdocstrings = "mkdocstrings"
+rumdl = "rumdl"
+# Document-format domain terms
+opf = "opf"
+hocr = "hocr"
+odf = "odf"
+multline = "multline"
+headerr = "headerr"
+pard = "pard"
+edn = "edn"
+siz = "siz"
+# ISO-639 / OCR language codes
+inh = "inh"
+bre = "bre"
+yor = "yor"
+# Upstream (Tesseract / PDFium / PaddleOCR) API/constant spellings
+extention = "extention"
+portait = "portait"
+fith = "fith"
+threed = "threed"
+chlidren = "chlidren"
+formated = "formated"
+specifing = "specifing"
+similarily = "similarily"
+execpt = "execpt"
+faiure = "faiure"
+substract = "substract"
+charater = "charater"
+cliper = "cliper"
+splitted = "splitted"
+unparseable = "unparseable"
+relatie = "relatie"
+traineddata = "traineddata"
+# Language codes / foreign-language test strings in real source
+tha = "tha"
+ist = "ist"
+internacional = "internacional"
+utiliza = "utiliza"
+# Short domain fragments flagged in real source
+caf = "caf"
+hom = "hom"
+ths = "ths"
+ment = "ment"
+mis = "mis"
+helo = "helo"
+ove = "ove"
+tre = "tre"
+thr = "thr"
+# Foreign-language words in test strings / translation guide
+programa = "programa"
+cursos = "cursos"
+excepcional = "excepcional"
+ein = "ein"
+legt = "legt"
+
+[workspace.poly.typos.extend-identifiers]
+PyMuPDF = "PyMuPDF"
+MarkItDown = "MarkItDown"
+SurrealDB = "SurrealDB"
+PDFium = "PDFium"
+WebUI = "WebUI"
+traineddata = "traineddata"
 
 [workspace.poly.per-file-ignores]
+# text_repair.rs contains intentionally broken/split words as test fixtures
+# (hyphenation-rejoin cases) — ignore typos there rather than globally allowlisting.
+"**/text_repair.rs" = ["typo"]
+# alef/napi-generated JS loader + wrapper — unused-var nits are generator output
+# (fix belongs in alef's napi backend, not hand-editable here).
+"crates/xberg-node/index.js" = ["no-unused-vars"]
+"crates/xberg-node/format-metadata-wrapper.js" = ["no-unused-vars"]
+# Dockerfiles: DL3006 fires only on unpinnable `FROM scratch` (false positive);
+# DL3059 (consecutive RUN) is stylistic — multi-stage RUNs kept split on purpose.
+"docker/**" = ["DL3006", "DL3059"]
 # GENERATED-code emitter gaps in alef 0.30.2 (remove once alef's TEST_IGNORES /
 # options.py glob cover them in a future release): A001 — generated e2e tests
 # take an `input` param shadowing the builtin; N801 — generated plugin
