@@ -59,7 +59,9 @@ async fn rehydration_map_survives_router_rebuild_against_same_db_file() {
         .await
         .expect("handler responded");
     assert_eq!(response.status(), StatusCode::OK, "expected /v1/process to succeed");
-    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX).await.expect("body bytes");
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("body bytes");
     let process_json: serde_json::Value = serde_json::from_slice(&bytes).expect("valid json");
     let rehydration_key = process_json["rehydration_key"]
         .as_str()
@@ -89,7 +91,9 @@ async fn rehydration_map_survives_router_rebuild_against_same_db_file() {
         StatusCode::OK,
         "rehydration must succeed after a simulated restart against the same DB file"
     );
-    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX).await.expect("body bytes");
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("body bytes");
     let rehydrate_json: serde_json::Value = serde_json::from_slice(&bytes).expect("valid json");
     assert_eq!(
         rehydrate_json["restored"]["[EMAIL_1]"].as_str(),

@@ -1,7 +1,6 @@
 /// GraphQLite graph backend for xberg-rag.
 /// Provides Cypher-like graph traversal, Louvain community detection,
 /// and PageRank scoring — all backed by SQLite's recursive CTEs.
-
 use crate::{RagError, RagResult};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
@@ -29,8 +28,9 @@ impl GraphStore {
 
     /// Initialize graph schema tables.
     fn init_schema(&self) -> RagResult<()> {
-        self.conn.execute_batch(
-            "CREATE TABLE IF NOT EXISTS _graph_nodes (
+        self.conn
+            .execute_batch(
+                "CREATE TABLE IF NOT EXISTS _graph_nodes (
                 id TEXT PRIMARY KEY,
                 labels TEXT NOT NULL DEFAULT '[]',
                 properties TEXT NOT NULL DEFAULT '{}'
@@ -52,18 +52,13 @@ impl GraphStore {
                 value TEXT NOT NULL,
                 PRIMARY KEY (node_id, key)
             ) STRICT;",
-        )
-        .map_err(|e| RagError::Backend(Box::new(e)))?;
+            )
+            .map_err(|e| RagError::Backend(Box::new(e)))?;
         Ok(())
     }
 
     /// Create a node with optional properties.
-    pub fn create_node(
-        &self,
-        id: &str,
-        labels: &[&str],
-        properties: &serde_json::Value,
-    ) -> RagResult<()> {
+    pub fn create_node(&self, id: &str, labels: &[&str], properties: &serde_json::Value) -> RagResult<()> {
         let labels_json = serde_json::to_string(labels).unwrap_or_default();
         let props_json = serde_json::to_string(properties).unwrap_or_default();
         self.conn
@@ -96,12 +91,7 @@ impl GraphStore {
 
     /// BFS traversal from seed node IDs up to a given depth.
     /// Returns all reachable node IDs.
-    pub fn traverse_bfs(
-        &self,
-        start_ids: &[String],
-        depth: u32,
-        edge_labels: &[&str],
-    ) -> RagResult<Vec<String>> {
+    pub fn traverse_bfs(&self, start_ids: &[String], depth: u32, edge_labels: &[&str]) -> RagResult<Vec<String>> {
         if start_ids.is_empty() {
             return Ok(vec![]);
         }
@@ -130,8 +120,10 @@ impl GraphStore {
             query.push(')');
         }
 
-        query.push_str("
-                WHERE traversal.depth < ?");
+        query.push_str(
+            "
+                WHERE traversal.depth < ?",
+        );
         query.push_str(&(start_ids.len() + edge_labels.len() + 1).to_string());
 
         query.push_str(
@@ -150,10 +142,7 @@ impl GraphStore {
 
         let param_refs: Vec<&dyn rusqlite::types::ToSql> = all_params.iter().map(|p| p.as_ref()).collect();
 
-        let mut stmt = self
-            .conn
-            .prepare(&query)
-            .map_err(|e| RagError::Backend(Box::new(e)))?;
+        let mut stmt = self.conn.prepare(&query).map_err(|e| RagError::Backend(Box::new(e)))?;
         let rows = stmt
             .query_map(param_refs.as_slice(), |row| row.get::<_, String>(0))
             .map_err(|e| RagError::Backend(Box::new(e)))?;
@@ -194,18 +183,13 @@ impl GraphStore {
             })
             .map_err(|e| RagError::Backend(Box::new(e)))?;
 
-        let mut adjacency: std::collections::HashMap<String, Vec<String>> =
-            std::collections::HashMap::new();
+        let mut adjacency: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
         for row in rows {
             let entry = row.map_err(|e| RagError::Backend(Box::new(e)))?;
-            adjacency
-                .entry(entry.node_id)
-                .or_default()
-                .push(entry.neighbor);
+            adjacency.entry(entry.node_id).or_default().push(entry.neighbor);
         }
 
-        let mut communities: std::collections::HashMap<String, u32> =
-            std::collections::HashMap::new();
+        let mut communities: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
         for (i, node) in adjacency.keys().enumerate() {
             communities.insert(node.clone(), i as u32);
         }
@@ -219,8 +203,7 @@ impl GraphStore {
             let nodes: Vec<String> = adjacency.keys().cloned().collect();
             for node in &nodes {
                 if let Some(neighbors) = adjacency.get(node) {
-                    let mut label_counts: std::collections::HashMap<u32, u32> =
-                        std::collections::HashMap::new();
+                    let mut label_counts: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
                     for neighbor in neighbors {
                         if let Some(&label) = communities.get(neighbor) {
                             *label_counts.entry(label).or_default() += 1;
@@ -236,8 +219,7 @@ impl GraphStore {
             }
         }
 
-        let mut community_map: std::collections::HashMap<u32, Vec<String>> =
-            std::collections::HashMap::new();
+        let mut community_map: std::collections::HashMap<u32, Vec<String>> = std::collections::HashMap::new();
         for (node, label) in &communities {
             community_map.entry(*label).or_default().push(node.clone());
         }
@@ -256,9 +238,7 @@ impl GraphStore {
     pub fn pagerank(&self, damping: f64, max_iterations: u32) -> RagResult<Vec<(String, f64)>> {
         let mut stmt = self
             .conn
-            .prepare(
-                "SELECT source, target FROM _graph_edges",
-            )
+            .prepare("SELECT source, target FROM _graph_edges")
             .map_err(|e| RagError::Backend(Box::new(e)))?;
 
         struct Edge {
@@ -275,10 +255,8 @@ impl GraphStore {
             })
             .map_err(|e| RagError::Backend(Box::new(e)))?;
 
-        let mut out_degree: std::collections::HashMap<String, f64> =
-            std::collections::HashMap::new();
-        let mut incoming: std::collections::HashMap<String, Vec<String>> =
-            std::collections::HashMap::new();
+        let mut out_degree: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+        let mut incoming: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
         let mut all_nodes: std::collections::HashSet<String> = std::collections::HashSet::new();
 
         for row in rows {
@@ -305,10 +283,8 @@ impl GraphStore {
         }
 
         let n = all_nodes.len() as f64;
-        let mut scores: std::collections::HashMap<String, f64> = all_nodes
-            .iter()
-            .map(|node| (node.clone(), 1.0 / n))
-            .collect();
+        let mut scores: std::collections::HashMap<String, f64> =
+            all_nodes.iter().map(|node| (node.clone(), 1.0 / n)).collect();
 
         for node in &all_nodes {
             out_degree.entry(node.clone()).or_insert(0.0);
@@ -317,8 +293,7 @@ impl GraphStore {
         let teleport = (1.0 - damping) / n;
 
         for _ in 0..max_iterations {
-            let mut new_scores: std::collections::HashMap<String, f64> =
-                std::collections::HashMap::new();
+            let mut new_scores: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
             for node in &all_nodes {
                 let mut sum = 0.0;
                 if let Some(incoming_nodes) = incoming.get(node) {
@@ -412,7 +387,9 @@ mod tests {
     fn test_create_edge() {
         let conn = Connection::open_in_memory().unwrap();
         let store = GraphStore::new(conn).unwrap();
-        store.create_node("doc1", &["Document"], &serde_json::json!({})).unwrap();
+        store
+            .create_node("doc1", &["Document"], &serde_json::json!({}))
+            .unwrap();
         store.create_node("chunk1", &["Chunk"], &serde_json::json!({})).unwrap();
         store
             .create_edge("e1", "doc1", "chunk1", "HAS_CHUNK", &serde_json::json!({"ordinal": 1}))
@@ -424,9 +401,15 @@ mod tests {
     fn test_traverse_bfs() {
         let conn = Connection::open_in_memory().unwrap();
         let store = GraphStore::new(conn).unwrap();
-        store.create_node("doc1", &["Document"], &serde_json::json!({})).unwrap();
-        store.create_node("doc2", &["Document"], &serde_json::json!({})).unwrap();
-        store.create_node("doc3", &["Document"], &serde_json::json!({})).unwrap();
+        store
+            .create_node("doc1", &["Document"], &serde_json::json!({}))
+            .unwrap();
+        store
+            .create_node("doc2", &["Document"], &serde_json::json!({}))
+            .unwrap();
+        store
+            .create_node("doc3", &["Document"], &serde_json::json!({}))
+            .unwrap();
         store
             .create_edge("e1", "doc1", "doc2", "COOCCURS", &serde_json::json!({}))
             .unwrap();
@@ -434,9 +417,7 @@ mod tests {
             .create_edge("e2", "doc2", "doc3", "COOCCURS", &serde_json::json!({}))
             .unwrap();
 
-        let result = store
-            .traverse_bfs(&["doc1".to_string()], 2, &["COOCCURS"])
-            .unwrap();
+        let result = store.traverse_bfs(&["doc1".to_string()], 2, &["COOCCURS"]).unwrap();
         assert!(result.contains(&"doc2".to_string()));
         assert!(result.contains(&"doc3".to_string()));
     }
@@ -482,10 +463,18 @@ mod tests {
                 .create_node(&format!("b{}", i), &["Entity"], &serde_json::json!({}))
                 .unwrap();
         }
-        store.create_edge("ea1", "a1", "a2", "RELATED", &serde_json::json!({})).unwrap();
-        store.create_edge("ea2", "a2", "a3", "RELATED", &serde_json::json!({})).unwrap();
-        store.create_edge("eb1", "b1", "b2", "RELATED", &serde_json::json!({})).unwrap();
-        store.create_edge("eb2", "b2", "b3", "RELATED", &serde_json::json!({})).unwrap();
+        store
+            .create_edge("ea1", "a1", "a2", "RELATED", &serde_json::json!({}))
+            .unwrap();
+        store
+            .create_edge("ea2", "a2", "a3", "RELATED", &serde_json::json!({}))
+            .unwrap();
+        store
+            .create_edge("eb1", "b1", "b2", "RELATED", &serde_json::json!({}))
+            .unwrap();
+        store
+            .create_edge("eb2", "b2", "b3", "RELATED", &serde_json::json!({}))
+            .unwrap();
 
         let communities = store.louvain(1.0).unwrap();
         assert_eq!(communities.len(), 2);
@@ -495,8 +484,12 @@ mod tests {
     fn test_delete_node() {
         let conn = Connection::open_in_memory().unwrap();
         let store = GraphStore::new(conn).unwrap();
-        store.create_node("doc1", &["Document"], &serde_json::json!({})).unwrap();
-        store.create_node("doc2", &["Document"], &serde_json::json!({})).unwrap();
+        store
+            .create_node("doc1", &["Document"], &serde_json::json!({}))
+            .unwrap();
+        store
+            .create_node("doc2", &["Document"], &serde_json::json!({}))
+            .unwrap();
         store
             .create_edge("e1", "doc1", "doc2", "COOCCURS", &serde_json::json!({}))
             .unwrap();
@@ -509,7 +502,9 @@ mod tests {
     fn test_get_nodes_by_label() {
         let conn = Connection::open_in_memory().unwrap();
         let store = GraphStore::new(conn).unwrap();
-        store.create_node("doc1", &["Document"], &serde_json::json!({})).unwrap();
+        store
+            .create_node("doc1", &["Document"], &serde_json::json!({}))
+            .unwrap();
         store.create_node("ent1", &["Entity"], &serde_json::json!({})).unwrap();
         let docs = store.get_nodes_by_label("Document").unwrap();
         assert_eq!(docs.len(), 1);
