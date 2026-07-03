@@ -87,3 +87,29 @@ Task 3: complete (commits 7282897..77656d3d42, review clean — Approved.
   candle.rs itself is wasm32-clean; the crate-wide build remains blocked
   by that pre-existing, out-of-scope infra bug — noted, not silently
   dropped.)
+Task 4: complete (commit 0a5959f72a, review clean — Approved. Controller
+  pre-empted an environment gap (wasm-pack not installed, no
+  cargo-binstall) by approving a substitution: dropped
+  wasm_bindgen_test_configure!(run_in_browser) since the test touches no
+  DOM API, ran via wasm-bindgen-test-runner under Node.js instead
+  (wasm-bindgen-cli pinned to 0.2.126 to match Cargo.lock's resolved
+  wasm-bindgen crate version). Test ACTUALLY EXECUTED AND PASSED on real
+  wasm32-unknown-unknown ("1 passed; 0 failed") — the load-bearing proof
+  that the full Task 1-3 stack links and runs, not just compiles.
+  wasm-bindgen-test correctly dev-dependency-only. Implementer flagged +
+  controller independently re-verified (git stash isolation) a second,
+  narrower pre-existing bug: tests/smoke.rs and src/tests.rs call the
+  now-native-only from_local/from_safetensors (gated by Task 2), breaking
+  `--tests`/`cargo test --target wasm32` for this crate — does not affect
+  the plain build/clippy gates Tasks 1-4 used and passed. Filed
+  task_71b413e1 as a scoped follow-up (much smaller than Task 3's
+  extractor.rs finding, task_706665c3).)
+# PLAN COMPLETE — all 4 tasks (A: ner-candle-wasm enablement) shipped on
+# feature/ner-candle-wasm. THREE major risk gates all PASSED:
+#   1. tokenizers-on-wasm (Task 1)
+#   2. candle-on-wasm (Task 2)
+#   3. full xberg-core NER integration on wasm, executed+verified (Tasks 3-4)
+# Two narrow, independently-verified pre-existing bugs found and filed as
+# separate follow-ups (task_706665c3, task_71b413e1) — NEITHER blocks this
+# plan's own deliverables or was introduced by this plan's changes.
+# Next: final whole-branch review, then superpowers:finishing-a-development-branch.
