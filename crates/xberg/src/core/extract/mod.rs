@@ -293,7 +293,16 @@ async fn extract_uri_input(input: ExtractInput, config: &ExtractionConfig, index
                 "file:// URI inputs are disabled by configuration".to_string(),
             ));
         }
-        file_uri_to_path(&uri)?
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            file_uri_to_path(&uri)?
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            return Err(XbergError::UnsupportedFormat(
+                "file:// URIs are not supported on wasm32".to_string(),
+            ));
+        }
     } else {
         if !config.url.allow_local_file_inputs {
             return Err(XbergError::validation(
@@ -326,6 +335,7 @@ fn resolve_bytes_mime_type(mime_type: Option<&str>, filename: Option<&str>, byte
     Ok("application/octet-stream".to_string())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn file_uri_to_path(uri: &str) -> Result<PathBuf> {
     let parsed = url::Url::parse(uri)
         .map_err(|error| XbergError::validation(format!("invalid file URI for extraction input: {error}")))?;

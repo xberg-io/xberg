@@ -7,6 +7,7 @@
 //! cargo test -p xberg-gliner-candle --test smoke -- --ignored
 //! ```
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 #[ignore = "requires real GLiNER2 safetensors model + PEFT adapter on disk"]
 fn base_model_extracts_entities_and_adapter_changes_output() {

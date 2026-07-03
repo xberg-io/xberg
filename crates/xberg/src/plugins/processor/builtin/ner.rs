@@ -40,7 +40,8 @@ impl Plugin for NerProcessor {
     }
 }
 
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl PostProcessor for NerProcessor {
     async fn process(&self, result: &mut ExtractedDocument, config: &ExtractionConfig) -> Result<()> {
         let Some(ner_config) = config.ner.as_ref() else {

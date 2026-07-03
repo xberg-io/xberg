@@ -1,7 +1,7 @@
-use candle_core::Device;
-
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn encoder_from_safetensors_rejects_missing_weights() {
+    use candle_core::Device;
     let dir = tempfile::tempdir().expect("tempdir");
     let weights = dir.path().join("model.safetensors");
     let config = dir.path().join("config.json");
@@ -33,6 +33,7 @@ fn token_gather_selects_word_start_positions() {
     assert_eq!(v, vec![1., 1., 3., 3.]);
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn from_local_rejects_missing_weights() {
     let dir = tempfile::tempdir().expect("tempdir");
