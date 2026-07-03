@@ -1019,6 +1019,9 @@ public func htmlThemeFromJson<GenericIntoRustString: IntoRustString>(_ json: Gen
 public func tableModelFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> TableModel {
   try { let val = __swift_bridge__$table_model_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return TableModel(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
+public func tableOverlapPreferenceFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> TableOverlapPreference {
+  try { let val = __swift_bridge__$table_overlap_preference_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return TableOverlapPreference(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
+}
 public func callModeFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> CallMode {
   try { let val = __swift_bridge__$call_mode_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return CallMode(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
@@ -1912,6 +1915,9 @@ public func __alef_phantom_vec_html_theme() -> RustVec<HtmlTheme> {
 }
 public func __alef_phantom_vec_table_model() -> RustVec<TableModel> {
   RustVec(ptr: __swift_bridge__$__alef_phantom_vec_table_model())
+}
+public func __alef_phantom_vec_table_overlap_preference() -> RustVec<TableOverlapPreference> {
+  RustVec(ptr: __swift_bridge__$__alef_phantom_vec_table_overlap_preference())
 }
 public func __alef_phantom_vec_whisper_model() -> RustVec<WhisperModel> {
   RustVec(ptr: __swift_bridge__$__alef_phantom_vec_whisper_model())
@@ -3995,8 +4001,8 @@ public class LayoutDetectionConfig: LayoutDetectionConfigRefMut {
   }
 }
 extension LayoutDetectionConfig {
-  public convenience init(_ confidence_threshold: Optional<Float>, _ apply_heuristics: Bool, _ table_model: TableModel, _ acceleration: Optional<AccelerationConfig>, _ enable_chart_understanding: Bool) {
-    self.init(ptr: __swift_bridge__$LayoutDetectionConfig$new(confidence_threshold.intoFfiRepr(), apply_heuristics, {table_model.isOwned = false; return table_model.ptr;}(), { if let val = acceleration { val.isOwned = false; return val.ptr } else { return nil } }(), enable_chart_understanding))
+  public convenience init(_ confidence_threshold: Optional<Float>, _ apply_heuristics: Bool, _ table_model: TableModel, _ table_overlap_preference: TableOverlapPreference, _ acceleration: Optional<AccelerationConfig>, _ enable_chart_understanding: Bool) {
+    self.init(ptr: __swift_bridge__$LayoutDetectionConfig$new(confidence_threshold.intoFfiRepr(), apply_heuristics, {table_model.isOwned = false; return table_model.ptr;}(), {table_overlap_preference.isOwned = false; return table_overlap_preference.ptr;}(), { if let val = acceleration { val.isOwned = false; return val.ptr } else { return nil } }(), enable_chart_understanding))
   }
 }
 public class LayoutDetectionConfigRefMut: LayoutDetectionConfigRef {
@@ -4022,6 +4028,10 @@ extension LayoutDetectionConfigRef {
 
   public func tableModel() -> RustString {
     RustString(ptr: __swift_bridge__$LayoutDetectionConfig$table_model(ptr))
+  }
+
+  public func tableOverlapPreference() -> RustString {
+    RustString(ptr: __swift_bridge__$LayoutDetectionConfig$table_overlap_preference(ptr))
   }
 
   public func acceleration() -> Optional<AccelerationConfig> {
@@ -21664,6 +21674,86 @@ extension TableModel: Vectorizable {
 
   public static func vecOfSelfLen(vecPtr: UnsafeMutableRawPointer) -> UInt {
     __swift_bridge__$Vec_TableModel$len(vecPtr)
+  }
+}
+
+
+public class TableOverlapPreference: TableOverlapPreferenceRefMut {
+  public var isOwned: Bool = true
+
+  public override init(ptr: UnsafeMutableRawPointer) {
+    super.init(ptr: ptr)
+  }
+
+  deinit {
+    if isOwned {
+      __swift_bridge__$TableOverlapPreference$_free(ptr)
+    }
+  }
+}
+public class TableOverlapPreferenceRefMut: TableOverlapPreferenceRef {
+  public override init(ptr: UnsafeMutableRawPointer) {
+    super.init(ptr: ptr)
+  }
+}
+public class TableOverlapPreferenceRef {
+  public var ptr: UnsafeMutableRawPointer
+
+  public init(ptr: UnsafeMutableRawPointer) {
+    self.ptr = ptr
+  }
+}
+extension TableOverlapPreferenceRef {
+  public func to_string() -> RustString {
+    RustString(ptr: __swift_bridge__$TableOverlapPreference$to_string(ptr))
+  }
+}
+extension TableOverlapPreference: Vectorizable {
+  public static func vecOfSelfNew() -> UnsafeMutableRawPointer {
+    __swift_bridge__$Vec_TableOverlapPreference$new()
+  }
+
+  public static func vecOfSelfFree(vecPtr: UnsafeMutableRawPointer) {
+    __swift_bridge__$Vec_TableOverlapPreference$drop(vecPtr)
+  }
+
+  public static func vecOfSelfPush(vecPtr: UnsafeMutableRawPointer, value: TableOverlapPreference) {
+    __swift_bridge__$Vec_TableOverlapPreference$push(vecPtr, {value.isOwned = false; return value.ptr;}())
+  }
+
+  public static func vecOfSelfPop(vecPtr: UnsafeMutableRawPointer) -> Optional<Self> {
+    let pointer = __swift_bridge__$Vec_TableOverlapPreference$pop(vecPtr)
+    if pointer == nil {
+      return nil
+    } else {
+      return (TableOverlapPreference(ptr: pointer!) as! Self)
+    }
+  }
+
+  public static func vecOfSelfGet(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<TableOverlapPreferenceRef> {
+    let pointer = __swift_bridge__$Vec_TableOverlapPreference$get(vecPtr, index)
+    if pointer == nil {
+      return nil
+    } else {
+      return TableOverlapPreferenceRef(ptr: pointer!)
+    }
+  }
+
+  public static func vecOfSelfGetMut(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<TableOverlapPreferenceRefMut> {
+    let pointer = __swift_bridge__$Vec_TableOverlapPreference$get_mut(vecPtr, index)
+    if pointer == nil {
+      return nil
+    } else {
+      return TableOverlapPreferenceRefMut(ptr: pointer!)
+    }
+  }
+
+  public static func vecOfSelfAsPtr(vecPtr: UnsafeMutableRawPointer) -> UnsafePointer<TableOverlapPreferenceRef> {
+    UnsafePointer<TableOverlapPreferenceRef>(OpaquePointer(__swift_bridge__$Vec_TableOverlapPreference$as_ptr(vecPtr)))
+  }
+
+  public static func vecOfSelfLen(vecPtr: UnsafeMutableRawPointer) -> UInt {
+    __swift_bridge__$Vec_TableOverlapPreference$len(vecPtr)
   }
 }
 

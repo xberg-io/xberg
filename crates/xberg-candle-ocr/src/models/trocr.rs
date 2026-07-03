@@ -273,7 +273,11 @@ impl TrocrEngine {
         // Logits processor for sampling
         let mut logits_processor = candle_transformers::generation::LogitsProcessor::new(1337, None, None);
 
-        tracing::debug!(start_token = decoder_start_token_id, eos_token = eos_token_id, "TrOCR: beginning decoding loop");
+        tracing::debug!(
+            start_token = decoder_start_token_id,
+            eos_token = eos_token_id,
+            "TrOCR: beginning decoding loop"
+        );
 
         // Decoding loop (max 1000 iterations)
         for index in 0..1000 {
@@ -310,12 +314,21 @@ impl TrocrEngine {
             token_ids.push(token);
 
             if index < 5 {
-                tracing::trace!(iteration = index, token = token, num_tokens = token_ids.len(), "TrOCR: decode iteration");
+                tracing::trace!(
+                    iteration = index,
+                    token = token,
+                    num_tokens = token_ids.len(),
+                    "TrOCR: decode iteration"
+                );
             }
 
             // Stop on EOS token
             if token == eos_token_id {
-                tracing::debug!(iterations = index + 1, num_tokens = token_ids.len(), "TrOCR: reached EOS token");
+                tracing::debug!(
+                    iterations = index + 1,
+                    num_tokens = token_ids.len(),
+                    "TrOCR: reached EOS token"
+                );
                 break;
             }
         }
@@ -329,7 +342,11 @@ impl TrocrEngine {
         if decoded_text.trim().is_empty() {
             tracing::warn!(num_tokens = token_ids.len(), "TrOCR: decoded text is empty");
         } else {
-            tracing::debug!(text_len = decoded_text.len(), num_tokens = token_ids.len(), "TrOCR: decoding complete");
+            tracing::debug!(
+                text_len = decoded_text.len(),
+                num_tokens = token_ids.len(),
+                "TrOCR: decoding complete"
+            );
         }
 
         Ok(CandleOcrOutput {

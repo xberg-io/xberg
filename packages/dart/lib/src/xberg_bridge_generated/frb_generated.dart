@@ -22,7 +22,6 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   static final instance = RustLib._();
 
   RustLib._();
-
   /// Resolve the prebuilt native library from environment variable,
   /// package-relative location, or defer to flutter_rust_bridge's default loader.
   /// Returns `null` to defer to flutter_rust_bridge's default loader.
@@ -65,8 +64,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 
       // Check FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR env var first.
       // This allows test harnesses to override library location for development.
-      final envDir =
-      Platform.environment['FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR'];
+      final envDir = Platform.environment['FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR'];
       if (envDir != null && envDir.isNotEmpty) {
         final absEnvDir = Directory(envDir).absolute.path;
         final libDir = Directory(absEnvDir);
@@ -107,9 +105,8 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 
       final rid = computeRid();
       if (rid != null) {
-        final packageRoot = await Isolate.resolvePackageUri(
-          _DartCore.Uri.parse('package:xberg/xberg.dart'),
-        );
+        final packageRoot =
+        await Isolate.resolvePackageUri(_DartCore.Uri.parse('package:xberg/xberg.dart'));
         if (packageRoot != null) {
           final ridDir = packageRoot.resolve('src/native/$rid/');
           for (final candidate in candidates) {
@@ -123,9 +120,8 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
       }
 
       // Check legacy package-installed location as fallback.
-      final packageRoot = await Isolate.resolvePackageUri(
-        _DartCore.Uri.parse('package:xberg/xberg.dart'),
-      );
+      final packageRoot =
+      await Isolate.resolvePackageUri(_DartCore.Uri.parse('package:xberg/xberg.dart'));
       if (packageRoot != null) {
         final libDir = packageRoot.resolve('src/xberg_bridge_generated/');
         for (final candidate in candidates) {
@@ -151,8 +147,8 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
       try {
         final scriptPath = Platform.script.toFilePath();
         var dir = File(scriptPath).absolute.parent;
-        while (dir.parent.path != dir.path &&
-          !File('${dir.path}/pubspec.yaml').existsSync()) {
+        while (dir.parent.path != dir.path
+          && !File('${dir.path}/pubspec.yaml').existsSync()) {
           dir = dir.parent;
         }
         if (File('${dir.path}/pubspec.yaml').existsSync()) {
@@ -13634,14 +13630,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   LayoutDetectionConfig dco_decode_layout_detection_config(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-    throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 6)
+    throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return LayoutDetectionConfig(
       confidenceThreshold: dco_decode_opt_box_autoadd_f_64(arr[0]),
       applyHeuristics: dco_decode_bool(arr[1]),
       tableModel: dco_decode_table_model(arr[2]),
-      acceleration: dco_decode_opt_box_autoadd_acceleration_config(arr[3]),
-      enableChartUnderstanding: dco_decode_bool(arr[4]),
+      tableOverlapPreference: dco_decode_table_overlap_preference(arr[3]),
+      acceleration: dco_decode_opt_box_autoadd_acceleration_config(arr[4]),
+      enableChartUnderstanding: dco_decode_bool(arr[5]),
     );
   }
 
@@ -16364,6 +16361,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TableModel dco_decode_table_model(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return TableModel.values[raw as int];
+  }
+
+  @protected
+  TableOverlapPreference dco_decode_table_overlap_preference(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return TableOverlapPreference.values[raw as int];
   }
 
   @protected
@@ -20674,6 +20677,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_confidenceThreshold = sse_decode_opt_box_autoadd_f_64(deserializer);
     var var_applyHeuristics = sse_decode_bool(deserializer);
     var var_tableModel = sse_decode_table_model(deserializer);
+    var var_tableOverlapPreference = sse_decode_table_overlap_preference(
+      deserializer,
+    );
     var var_acceleration = sse_decode_opt_box_autoadd_acceleration_config(
       deserializer,
     );
@@ -20682,6 +20688,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       confidenceThreshold: var_confidenceThreshold,
       applyHeuristics: var_applyHeuristics,
       tableModel: var_tableModel,
+      tableOverlapPreference: var_tableOverlapPreference,
       acceleration: var_acceleration,
       enableChartUnderstanding: var_enableChartUnderstanding,
     );
@@ -24753,6 +24760,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_i_32(deserializer);
     return TableModel.values[inner];
+  }
+
+  @protected
+  TableOverlapPreference sse_decode_table_overlap_preference(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return TableOverlapPreference.values[inner];
   }
 
   @protected
@@ -28853,6 +28869,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_f_64(self.confidenceThreshold, serializer);
     sse_encode_bool(self.applyHeuristics, serializer);
     sse_encode_table_model(self.tableModel, serializer);
+    sse_encode_table_overlap_preference(
+      self.tableOverlapPreference,
+      serializer,
+    );
     sse_encode_opt_box_autoadd_acceleration_config(
       self.acceleration,
       serializer,
@@ -32366,6 +32386,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @protected
   void sse_encode_table_model(TableModel self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_table_overlap_preference(
+    TableOverlapPreference self,
+    SseSerializer serializer,
+  ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.index, serializer);
   }

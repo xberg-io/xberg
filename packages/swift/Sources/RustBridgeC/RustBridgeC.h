@@ -2501,6 +2501,18 @@ void* __swift_bridge__$Vec_TableModel$get_mut(void* vec_ptr, uintptr_t index);
 uintptr_t __swift_bridge__$Vec_TableModel$len(void* vec_ptr);
 void* __swift_bridge__$Vec_TableModel$as_ptr(void* vec_ptr);
 
+typedef struct TableOverlapPreference TableOverlapPreference;
+void __swift_bridge__$TableOverlapPreference$_free(void* self);
+
+void* __swift_bridge__$Vec_TableOverlapPreference$new(void);
+void __swift_bridge__$Vec_TableOverlapPreference$drop(void* vec_ptr);
+void __swift_bridge__$Vec_TableOverlapPreference$push(void* vec_ptr, void* item_ptr);
+void* __swift_bridge__$Vec_TableOverlapPreference$pop(void* vec_ptr);
+void* __swift_bridge__$Vec_TableOverlapPreference$get(void* vec_ptr, uintptr_t index);
+void* __swift_bridge__$Vec_TableOverlapPreference$get_mut(void* vec_ptr, uintptr_t index);
+uintptr_t __swift_bridge__$Vec_TableOverlapPreference$len(void* vec_ptr);
+void* __swift_bridge__$Vec_TableOverlapPreference$as_ptr(void* vec_ptr);
+
 typedef struct CallMode CallMode;
 void __swift_bridge__$CallMode$_free(void* self);
 
@@ -3455,10 +3467,11 @@ void* __swift_bridge__$HtmlOutputConfig$css_file(void* self);
 void* __swift_bridge__$HtmlOutputConfig$theme(void* self);
 void* __swift_bridge__$HtmlOutputConfig$class_prefix(void* self);
 bool __swift_bridge__$HtmlOutputConfig$embed_css(void* self);
-void* __swift_bridge__$LayoutDetectionConfig$new(struct __private__OptionF32 confidence_threshold, bool apply_heuristics, void* table_model, void* acceleration, bool enable_chart_understanding);
+void* __swift_bridge__$LayoutDetectionConfig$new(struct __private__OptionF32 confidence_threshold, bool apply_heuristics, void* table_model, void* table_overlap_preference, void* acceleration, bool enable_chart_understanding);
 struct __private__OptionF32 __swift_bridge__$LayoutDetectionConfig$confidence_threshold(void* self);
 bool __swift_bridge__$LayoutDetectionConfig$apply_heuristics(void* self);
 void* __swift_bridge__$LayoutDetectionConfig$table_model(void* self);
+void* __swift_bridge__$LayoutDetectionConfig$table_overlap_preference(void* self);
 void* __swift_bridge__$LayoutDetectionConfig$acceleration(void* self);
 bool __swift_bridge__$LayoutDetectionConfig$enable_chart_understanding(void* self);
 void* __swift_bridge__$LlmConfig$new(void* model, void* api_key, void* base_url, struct __private__OptionU64 timeout_secs, struct __private__OptionU32 max_retries, struct __private__OptionF64 temperature, struct __private__OptionU64 max_tokens);
@@ -4520,6 +4533,7 @@ void* __swift_bridge__$UrlExtractionMode$to_string(void* self);
 void* __swift_bridge__$OutputFormat$to_string(void* self);
 void* __swift_bridge__$HtmlTheme$to_string(void* self);
 void* __swift_bridge__$TableModel$to_string(void* self);
+void* __swift_bridge__$TableOverlapPreference$to_string(void* self);
 void* __swift_bridge__$CallMode$to_string(void* self);
 void* __swift_bridge__$MergeMode$to_string(void* self);
 void* __swift_bridge__$NerBackendKind$to_string(void* self);
@@ -4822,6 +4836,7 @@ struct __private__ResultPtrAndPtr __swift_bridge__$url_extraction_mode_from_json
 struct __private__ResultPtrAndPtr __swift_bridge__$output_format_from_json(void* json);
 struct __private__ResultPtrAndPtr __swift_bridge__$html_theme_from_json(void* json);
 struct __private__ResultPtrAndPtr __swift_bridge__$table_model_from_json(void* json);
+struct __private__ResultPtrAndPtr __swift_bridge__$table_overlap_preference_from_json(void* json);
 struct __private__ResultPtrAndPtr __swift_bridge__$call_mode_from_json(void* json);
 struct __private__ResultPtrAndPtr __swift_bridge__$merge_mode_from_json(void* json);
 struct __private__ResultPtrAndPtr __swift_bridge__$ner_backend_kind_from_json(void* json);
@@ -5120,6 +5135,7 @@ void* __swift_bridge__$__alef_phantom_vec_embedded_file(void);
 void* __swift_bridge__$__alef_phantom_vec_pdf_metadata(void);
 void* __swift_bridge__$__alef_phantom_vec_html_theme(void);
 void* __swift_bridge__$__alef_phantom_vec_table_model(void);
+void* __swift_bridge__$__alef_phantom_vec_table_overlap_preference(void);
 void* __swift_bridge__$__alef_phantom_vec_whisper_model(void);
 void* __swift_bridge__$__alef_phantom_vec_code_content_mode(void);
 void* __swift_bridge__$__alef_phantom_vec_reduction_level(void);

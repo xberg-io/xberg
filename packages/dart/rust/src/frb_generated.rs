@@ -8645,6 +8645,7 @@ const _: fn() = || {
         let _: Option<f64> = LayoutDetectionConfig.confidence_threshold;
         let _: bool = LayoutDetectionConfig.apply_heuristics;
         let _: crate::TableModel = LayoutDetectionConfig.table_model;
+        let _: crate::TableOverlapPreference = LayoutDetectionConfig.table_overlap_preference;
         let _: Option<crate::AccelerationConfig> = LayoutDetectionConfig.acceleration;
         let _: bool = LayoutDetectionConfig.enable_chart_understanding;
     }
@@ -13416,12 +13417,14 @@ impl SseDecode for crate::LayoutDetectionConfig {
         let mut var_confidenceThreshold = <Option<f64>>::sse_decode(deserializer);
         let mut var_applyHeuristics = <bool>::sse_decode(deserializer);
         let mut var_tableModel = <crate::TableModel>::sse_decode(deserializer);
+        let mut var_tableOverlapPreference = <crate::TableOverlapPreference>::sse_decode(deserializer);
         let mut var_acceleration = <Option<crate::AccelerationConfig>>::sse_decode(deserializer);
         let mut var_enableChartUnderstanding = <bool>::sse_decode(deserializer);
         return crate::LayoutDetectionConfig {
             confidence_threshold: var_confidenceThreshold,
             apply_heuristics: var_applyHeuristics,
             table_model: var_tableModel,
+            table_overlap_preference: var_tableOverlapPreference,
             acceleration: var_acceleration,
             enable_chart_understanding: var_enableChartUnderstanding,
         };
@@ -17558,6 +17561,19 @@ impl SseDecode for crate::TableModel {
     }
 }
 
+impl SseDecode for crate::TableOverlapPreference {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::TableOverlapPreference::Content,
+            1 => crate::TableOverlapPreference::Native,
+            2 => crate::TableOverlapPreference::Layout,
+            _ => unreachable!("Invalid variant for TableOverlapPreference: {}", inner),
+        };
+    }
+}
+
 impl SseDecode for crate::TesseractConfig {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -21390,6 +21406,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::LayoutDetectionConfig> 
             self.0.confidence_threshold.into_into_dart().into_dart(),
             self.0.apply_heuristics.into_into_dart().into_dart(),
             self.0.table_model.into_into_dart().into_dart(),
+            self.0.table_overlap_preference.into_into_dart().into_dart(),
             self.0.acceleration.into_into_dart().into_dart(),
             self.0.enable_chart_understanding.into_into_dart().into_dart(),
         ]
@@ -23604,6 +23621,23 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::TableModel> {
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for FrbWrapper<crate::TableModel> {}
 impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::TableModel>> for crate::TableModel {
     fn into_into_dart(self) -> FrbWrapper<crate::TableModel> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::TableOverlapPreference> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self.0 {
+            crate::TableOverlapPreference::Content => 0.into_dart(),
+            crate::TableOverlapPreference::Native => 1.into_dart(),
+            crate::TableOverlapPreference::Layout => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for FrbWrapper<crate::TableOverlapPreference> {}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::TableOverlapPreference>> for crate::TableOverlapPreference {
+    fn into_into_dart(self) -> FrbWrapper<crate::TableOverlapPreference> {
         self.into()
     }
 }
@@ -26566,6 +26600,7 @@ impl SseEncode for crate::LayoutDetectionConfig {
         <Option<f64>>::sse_encode(self.confidence_threshold, serializer);
         <bool>::sse_encode(self.apply_heuristics, serializer);
         <crate::TableModel>::sse_encode(self.table_model, serializer);
+        <crate::TableOverlapPreference>::sse_encode(self.table_overlap_preference, serializer);
         <Option<crate::AccelerationConfig>>::sse_encode(self.acceleration, serializer);
         <bool>::sse_encode(self.enable_chart_understanding, serializer);
     }
@@ -29952,6 +29987,23 @@ impl SseEncode for crate::TableModel {
                 crate::TableModel::SlanetPlus => 3,
                 crate::TableModel::SlanetAuto => 4,
                 crate::TableModel::Disabled => 5,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::TableOverlapPreference {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::TableOverlapPreference::Content => 0,
+                crate::TableOverlapPreference::Native => 1,
+                crate::TableOverlapPreference::Layout => 2,
                 _ => {
                     unimplemented!("");
                 }

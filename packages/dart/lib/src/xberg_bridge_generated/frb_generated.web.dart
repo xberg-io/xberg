@@ -2104,6 +2104,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TableModel dco_decode_table_model(dynamic raw);
 
   @protected
+  TableOverlapPreference dco_decode_table_overlap_preference(dynamic raw);
+
+  @protected
   TesseractConfig dco_decode_tesseract_config(dynamic raw);
 
   @protected
@@ -4514,6 +4517,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TableModel sse_decode_table_model(SseDeserializer deserializer);
+
+  @protected
+  TableOverlapPreference sse_decode_table_overlap_preference(
+    SseDeserializer deserializer,
+  );
 
   @protected
   TesseractConfig sse_decode_tesseract_config(SseDeserializer deserializer);
@@ -7698,6 +7706,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_table_model(TableModel self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_table_overlap_preference(
+    TableOverlapPreference self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_tesseract_config(

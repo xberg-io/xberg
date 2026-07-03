@@ -540,7 +540,12 @@ mod engine {
             if output_text.trim().is_empty() {
                 tracing::warn!(num_output_tokens = output_ids.len(), "GLM-OCR: output is empty");
             } else {
-                tracing::debug!(text_len = output_text.len(), num_output_tokens = output_ids.len(), is_markdown = Self::detect_structured_markdown(&output_text), "GLM-OCR: decoding complete");
+                tracing::debug!(
+                    text_len = output_text.len(),
+                    num_output_tokens = output_ids.len(),
+                    is_markdown = Self::detect_structured_markdown(&output_text),
+                    "GLM-OCR: decoding complete"
+                );
             }
 
             Ok(CandleOcrOutput {

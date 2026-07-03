@@ -20,37 +20,7 @@ ignored = ["serde_json", "async-trait", "tokio-util"]
 crate-type = ["cdylib"]
 
 [features]
-default = [
-    "api",
-    "api-types",
-    "auto-rotate-types",
-    "chunking-tokenizers",
-    "diff",
-    "heic",
-    "heuristics",
-    "html",
-    "keywords-rake",
-    "keywords-yake",
-    "layout-types",
-    "liter-llm",
-    "markdown-footnotes",
-    "ocr",
-    "ocr-wasm",
-    "office",
-    "paddle-ocr-types",
-    "pdf",
-    "presets",
-    "quality",
-    "redaction",
-    "reranker",
-    "reranker-presets",
-    "svg",
-    "transcription-types",
-    "tree-sitter",
-    "url-config-types",
-    "url-ingestion",
-    "xml",
-]
+default = ["api", "api-types", "auto-rotate-types", "chunking-tokenizers", "diff", "heic", "heuristics", "html", "keywords-rake", "keywords-yake", "layout-types", "liter-llm", "markdown-footnotes", "ocr", "ocr-wasm", "office", "paddle-ocr-types", "pdf", "presets", "quality", "redaction", "reranker", "reranker-presets", "svg", "transcription-types", "tree-sitter", "url-config-types", "url-ingestion", "xml"]
 api = ["xberg/api"]
 api-types = ["xberg/api-types"]
 auto-rotate-types = ["xberg/auto-rotate-types"]
@@ -92,52 +62,7 @@ serde_with = "3"
 tokio-util = { version = "0.7", features = ["rt"] }
 
 [target.'cfg(not(any(target_os = "windows", all(target_os = "macos", target_arch = "x86_64"))))'.dependencies]
-xberg = { version = "1.0.0-rc.5", path = "../xberg", features = [
-    "full",
-    "pdf",
-    "ocr",
-    "paddle-ocr",
-    "paddle-ocr-types",
-    "layout-detection",
-    "layout-types",
-    "embeddings",
-    "embedding-presets",
-    "reranker",
-    "reranker-presets",
-    "chunking",
-    "keywords-yake",
-    "keywords-rake",
-    "language-detection",
-    "html",
-    "tree-sitter",
-    "office",
-    "email",
-    "archives",
-    "stopwords",
-    "auto-rotate",
-    "auto-rotate-types",
-    "tokio-runtime",
-    "api",
-    "api-types",
-    "mcp",
-    "liter-llm",
-    "quality",
-    "svg",
-    "transcription",
-    "transcription-types",
-    "classification",
-    "captioning",
-    "ner-onnx",
-    "ner-llm",
-    "diff",
-    "markdown-footnotes",
-    "redaction",
-    "enrichment",
-    "heuristics",
-    "presets",
-    "structured",
-    "url-ingestion",
-] }
+xberg = { version = "1.0.0-rc.5", path = "../xberg", features = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "reranker", "reranker-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "api-types", "mcp", "liter-llm", "quality", "svg", "transcription", "transcription-types", "classification", "captioning", "ner-onnx", "ner-llm", "diff", "markdown-footnotes", "redaction", "enrichment", "heuristics", "presets", "structured", "url-ingestion"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 xberg = { version = "1.0.0-rc.5", path = "../xberg", features = ["windows-target"] }

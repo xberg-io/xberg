@@ -6,14 +6,10 @@
     "type": "git",
     "url": "git+https://github.com/xberg-io/xberg.git"
   },
+  "main": "xberg-node.win32-x64-msvc.node",
   "files": ["xberg-node.win32-x64-msvc.node"],
   "os": ["win32"],
   "cpu": ["x64"],
-  "main": "xberg-node.win32-x64-msvc.node",
-  "publishConfig": {
-    "access": "public"
-  },
-  "engines": {
-    "node": ">= 22"
-  }
+  "engines": { "node": ">= 22" },
+  "publishConfig": { "access": "public" }
 }

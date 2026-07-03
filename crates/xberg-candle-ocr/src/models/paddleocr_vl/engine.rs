@@ -208,7 +208,13 @@ impl PaddleOcrVlEngine {
         let spatial_merge = self.config.vision_config.spatial_merge_size;
         let num_image_tokens = (h_patches / spatial_merge) * (w_patches / spatial_merge);
 
-        tracing::debug!(h_patches = h_patches, w_patches = w_patches, spatial_merge = spatial_merge, num_image_tokens = num_image_tokens, "PaddleOCR-VL: grid dimensions");
+        tracing::debug!(
+            h_patches = h_patches,
+            w_patches = w_patches,
+            spatial_merge = spatial_merge,
+            num_image_tokens = num_image_tokens,
+            "PaddleOCR-VL: grid dimensions"
+        );
 
         let input_ids = self.build_input_tokens(num_image_tokens)?;
 
@@ -231,7 +237,11 @@ impl PaddleOcrVlEngine {
         if output_trimmed.is_empty() {
             tracing::warn!(num_tokens = generated_tokens.len(), "PaddleOCR-VL: output is empty");
         } else {
-            tracing::debug!(text_len = output_trimmed.len(), num_tokens = generated_tokens.len(), "PaddleOCR-VL: decoding complete");
+            tracing::debug!(
+                text_len = output_trimmed.len(),
+                num_tokens = generated_tokens.len(),
+                "PaddleOCR-VL: decoding complete"
+            );
         }
 
         Ok(CandleOcrOutput {
@@ -293,7 +303,12 @@ impl PaddleOcrVlEngine {
             .next()
             .ok_or_else(|| CandleOcrError::InferenceFailed("Empty input".to_string()))?;
 
-        tracing::debug!(initial_tokens = generated_tokens.len(), max_length = max_length, eos_token = self.eos_token_id, "PaddleOCR-VL: starting greedy decoding");
+        tracing::debug!(
+            initial_tokens = generated_tokens.len(),
+            max_length = max_length,
+            eos_token = self.eos_token_id,
+            "PaddleOCR-VL: starting greedy decoding"
+        );
 
         for step in 0..max_length {
             if generated_tokens.len() >= max_length {
@@ -340,11 +355,20 @@ impl PaddleOcrVlEngine {
             generated_tokens.push(next_token);
 
             if step < 5 {
-                tracing::trace!(step = step, token = next_token, num_tokens = generated_tokens.len(), "PaddleOCR-VL: decode iteration");
+                tracing::trace!(
+                    step = step,
+                    token = next_token,
+                    num_tokens = generated_tokens.len(),
+                    "PaddleOCR-VL: decode iteration"
+                );
             }
 
             if next_token == self.eos_token_id {
-                tracing::debug!(step = step, num_tokens = generated_tokens.len(), "PaddleOCR-VL: reached EOS token");
+                tracing::debug!(
+                    step = step,
+                    num_tokens = generated_tokens.len(),
+                    "PaddleOCR-VL: reached EOS token"
+                );
                 break;
             }
         }

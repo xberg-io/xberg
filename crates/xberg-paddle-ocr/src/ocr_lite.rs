@@ -169,7 +169,11 @@ impl OcrLite {
         let padding_src = OcrUtils::make_padding(img_src, padding)?;
 
         let scale = ScaleParam::get_scale_param(&padding_src, resize);
-        tracing::debug!(resize_width = scale.dst_width, resize_height = scale.dst_height, "PaddleOCR: image resized");
+        tracing::debug!(
+            resize_width = scale.dst_width,
+            resize_height = scale.dst_height,
+            "PaddleOCR: image resized"
+        );
 
         self.detect_once(
             &padding_src,
@@ -355,7 +359,10 @@ impl OcrLite {
 
         if do_angle {
             let rotated_count = angles.iter().filter(|a| a.index != 0).count();
-            tracing::debug!(rotated_regions = rotated_count, "PaddleOCR: angle classification complete");
+            tracing::debug!(
+                rotated_regions = rotated_count,
+                "PaddleOCR: angle classification complete"
+            );
         }
 
         let mut rotated_images: Vec<image::RgbImage> = Vec::with_capacity(part_images.len());
@@ -375,7 +382,10 @@ impl OcrLite {
             rotated_images.push(part_image);
         }
 
-        tracing::debug!(num_regions = rotated_images.len(), "PaddleOCR: running CRNN text recognition");
+        tracing::debug!(
+            num_regions = rotated_images.len(),
+            "PaddleOCR: running CRNN text recognition"
+        );
         let text_lines = self.crnn_net.get_text_lines(
             &rotated_images,
             &angle_rollback_records,

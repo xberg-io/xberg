@@ -174,7 +174,11 @@ impl DeepseekOCREngine {
     /// - Inference fails
     /// - Token decoding fails
     pub fn process_image(&mut self, image_bytes: &[u8], prompt: Option<&str>) -> Result<String> {
-        tracing::debug!(image_size = image_bytes.len(), version = self.version, "DeepSeek-OCR: starting inference");
+        tracing::debug!(
+            image_size = image_bytes.len(),
+            version = self.version,
+            "DeepSeek-OCR: starting inference"
+        );
         // 1. Decode image bytes to DynamicImage
         let img = image::load_from_memory(image_bytes)
             .map_err(|e| CandleOcrError::InferenceFailed(format!("Image decode: {}", e)))?;
@@ -222,7 +226,11 @@ impl DeepseekOCREngine {
             .map_err(|e| CandleOcrError::Tokenizer(format!("Encode prompt: {}", e)))?;
 
         let prompt_ids: Vec<i64> = encoding.get_ids().iter().map(|&id| id as i64).collect();
-        tracing::debug!(prompt_len = prompt_ids.len(), prompt = prompt_text, "DeepSeek-OCR: prompt tokenization");
+        tracing::debug!(
+            prompt_len = prompt_ids.len(),
+            prompt = prompt_text,
+            "DeepSeek-OCR: prompt tokenization"
+        );
 
         let input_ids = Tensor::new(prompt_ids.as_slice(), &self.device)
             .map_err(|e| CandleOcrError::InferenceFailed(format!("Token tensor: {}", e)))?
@@ -251,7 +259,11 @@ impl DeepseekOCREngine {
         let stop_ids = self.model.stop_token_ids();
         let mut output_tokens = prompt_ids.iter().map(|&id| id as u32).collect::<Vec<_>>();
 
-        tracing::debug!(max_tokens = MAX_NEW_TOKENS, num_stop_ids = stop_ids.len(), "DeepSeek-OCR: starting decoding loop");
+        tracing::debug!(
+            max_tokens = MAX_NEW_TOKENS,
+            num_stop_ids = stop_ids.len(),
+            "DeepSeek-OCR: starting decoding loop"
+        );
 
         for step in 0..MAX_NEW_TOKENS {
             let seq_len = logits
@@ -277,7 +289,11 @@ impl DeepseekOCREngine {
 
             // Check for stop token
             if stop_ids.contains(&next_token) {
-                tracing::debug!(step = step, num_tokens = output_tokens.len(), "DeepSeek-OCR: reached stop token");
+                tracing::debug!(
+                    step = step,
+                    num_tokens = output_tokens.len(),
+                    "DeepSeek-OCR: reached stop token"
+                );
                 break;
             }
 
@@ -304,7 +320,11 @@ impl DeepseekOCREngine {
         if output_text.is_empty() {
             tracing::warn!(num_tokens = output_tokens.len(), "DeepSeek-OCR: output is empty");
         } else {
-            tracing::debug!(text_len = output_text.len(), num_tokens = output_tokens.len(), "DeepSeek-OCR: decoding complete");
+            tracing::debug!(
+                text_len = output_text.len(),
+                num_tokens = output_tokens.len(),
+                "DeepSeek-OCR: decoding complete"
+            );
         }
 
         Ok(output_text)

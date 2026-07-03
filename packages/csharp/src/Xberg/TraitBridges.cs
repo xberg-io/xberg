@@ -14,8 +14,7 @@ namespace Xberg;
 /// <summary>
 /// Bridge interface for OcrBackend trait implementation via native FFI
 /// </summary>
-public interface IOcrBackend
-{
+public interface IOcrBackend {
 
     /// <summary>Get the plugin name.</summary>
     string Name { get; }
@@ -60,8 +59,7 @@ public interface IOcrBackend
 /// <summary>
 /// Manages the FFI vtable and delegates for a OcrBackend implementation
 /// </summary>
-public sealed class OcrBackendBridge : IDisposable
-{
+public sealed class OcrBackendBridge : IDisposable {
 
     internal readonly IOcrBackend _impl;
     private readonly GCHandle _implHandle;
@@ -127,8 +125,7 @@ public sealed class OcrBackendBridge : IDisposable
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate void FreeUserDataFn(IntPtr userData);
 
-    public OcrBackendBridge(IOcrBackend impl)
-    {
+    public OcrBackendBridge(IOcrBackend impl) {
         _impl = impl ?? throw new ArgumentNullException(nameof(impl));
         // Keep impl alive via normal GCHandle (sufficient for callback rooting).
         // The impl instance itself is not pinned, just kept in the GC root set.
@@ -139,15 +136,13 @@ public sealed class OcrBackendBridge : IDisposable
         _vtable = IntPtr.Zero;
         _disposed = false;
         // Allocate unique bridge ID for registry lookup during callbacks
-        lock (_registryLock)
-        {
+        lock (_registryLock) {
             _bridgeId = new IntPtr(_nextBridgeId++);
         }
         BuildVtable();
     }
 
-    private void BuildVtable()
-    {
+    private void BuildVtable() {
         // Allocate unmanaged vtable struct (array of function pointers)
         _vtable = global::System.Runtime.InteropServices.Marshal.AllocHGlobal(IntPtr.Size * 15);
 
@@ -228,60 +223,46 @@ public sealed class OcrBackendBridge : IDisposable
 
     }
 
-    private static string ToJsonString<T>(T value)
-    {
+    private static string ToJsonString<T>(T value) {
         return JsonSerializer.Serialize(value, FfiJsonExtensions.FfiJsonOptions);
     }
 
     /// <summary>Called by Rust via FreeUserDataCallback when done with this bridge</summary>
-    internal static void FreeUserData(IntPtr bridgeId)
-    {
-        lock (_registryLock)
-        {
+    internal static void FreeUserData(IntPtr bridgeId) {
+        lock (_registryLock) {
             // Mark bridge as disposed but DON'T remove from registry yet.
             // Callbacks in flight will still be able to look it up and execute safely.
             // The bridge will stay alive as long as _callbackRefCount > 0.
-            if (_bridgeRegistry.TryGetValue(bridgeId, out var bridge))
-            {
+            if (_bridgeRegistry.TryGetValue(bridgeId, out var bridge)) {
                 bridge._disposed = true;
             }
         }
     }
 
-    private void IncrementCallbackRef()
-    {
-        lock (_registryLock)
-        {
+    private void IncrementCallbackRef() {
+        lock (_registryLock) {
             _callbackRefCount++;
         }
     }
 
-    private void DecrementCallbackRef()
-    {
-        lock (_registryLock)
-        {
-            if (_callbackRefCount > 0)
-            {
+    private void DecrementCallbackRef() {
+        lock (_registryLock) {
+            if (_callbackRefCount > 0) {
                 _callbackRefCount--;
             }
             // Once refcount reaches 0 and bridge is disposed, remove from registry
-            if (_callbackRefCount == 0 && _disposed)
-            {
+            if (_callbackRefCount == 0 && _disposed) {
                 _bridgeRegistry.Remove(_bridgeId);
             }
         }
     }
 
-    private int NameFnCallback(IntPtr userData, out IntPtr outName, out IntPtr outError)
-    {
-        try
-        {
+    private int NameFnCallback(IntPtr userData, out IntPtr outName, out IntPtr outError) {
+        try {
             outError = IntPtr.Zero;
             string _name = null!;
-            lock (OcrBackendBridge._registryLock)
-            {
-                if (!OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+            lock (OcrBackendBridge._registryLock) {
+                if (!OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outName = IntPtr.Zero;
                     return 1;
                 }
@@ -289,25 +270,19 @@ public sealed class OcrBackendBridge : IDisposable
             }
             outName = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_name);
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outName = IntPtr.Zero;
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int VersionFnCallback(IntPtr userData, out IntPtr outVersion, out IntPtr outError)
-    {
-        try
-        {
+    private int VersionFnCallback(IntPtr userData, out IntPtr outVersion, out IntPtr outError) {
+        try {
             outError = IntPtr.Zero;
             string _version = null!;
-            lock (OcrBackendBridge._registryLock)
-            {
-                if (!OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+            lock (OcrBackendBridge._registryLock) {
+                if (!OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outVersion = IntPtr.Zero;
                     return 1;
                 }
@@ -315,23 +290,17 @@ public sealed class OcrBackendBridge : IDisposable
             }
             outVersion = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_version);
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outVersion = IntPtr.Zero;
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int InitializeFnCallback(IntPtr userData, out IntPtr outError)
-    {
-        try
-        {
-            lock (OcrBackendBridge._registryLock)
-            {
-                if (!OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+    private int InitializeFnCallback(IntPtr userData, out IntPtr outError) {
+        try {
+            lock (OcrBackendBridge._registryLock) {
+                if (!OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outError = IntPtr.Zero;
                     return 1;
                 }
@@ -339,22 +308,16 @@ public sealed class OcrBackendBridge : IDisposable
             }
             outError = IntPtr.Zero;
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int ShutdownFnCallback(IntPtr userData, out IntPtr outError)
-    {
-        try
-        {
-            lock (OcrBackendBridge._registryLock)
-            {
-                if (!OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+    private int ShutdownFnCallback(IntPtr userData, out IntPtr outError) {
+        try {
+            lock (OcrBackendBridge._registryLock) {
+                if (!OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outError = IntPtr.Zero;
                     return 1;
                 }
@@ -362,552 +325,403 @@ public sealed class OcrBackendBridge : IDisposable
             }
             outError = IntPtr.Zero;
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int ProcessImageFnCallback(IntPtr userData, IntPtr imageBytes, UIntPtr imageBytesLen, IntPtr config, out IntPtr outResult, out IntPtr outError)
-    {
+    private int ProcessImageFnCallback(IntPtr userData, IntPtr imageBytes, UIntPtr imageBytesLen, IntPtr config, out IntPtr outResult, out IntPtr outError) {
         OcrBackendBridge? _bridgeFromRegistry = null;
-        lock (OcrBackendBridge._registryLock)
-        {
-            if (OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry))
-            {
+        lock (OcrBackendBridge._registryLock) {
+            if (OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
                 _bridgeFromRegistry = bridgeFromRegistry;
                 // Increment callback refcount to prevent GC while callback executes
                 _bridgeFromRegistry.IncrementCallbackRef();
             }
         }
-        if (_bridgeFromRegistry == null)
-        {
+        if (_bridgeFromRegistry == null) {
             outResult = IntPtr.Zero;
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8($"Bridge not found for userData (likely unregistered): {userData}");
             return 1;
         }
-        try
-        {
+        try {
             var bridge = _bridgeFromRegistry!;
             var managed_imageBytes = new byte[(int)imageBytesLen];
             Marshal.Copy(imageBytes, managed_imageBytes, 0, (int)imageBytesLen);
             var json_config = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(config) ?? "{}";
             var managed_config = JsonSerializer.Deserialize<OcrConfig>(json_config, FfiJsonExtensions.FfiJsonOptions)!;
             var methodResult = bridge._impl.ProcessImage(managed_imageBytes, managed_config);
-            try
-            {
+            try {
                 string __result_str = (methodResult.ToFfiJson()) ?? string.Empty;
                 outResult = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(__result_str);
-            }
-            catch
-            {
+            } catch {
                 outResult = IntPtr.Zero;
                 throw;
             }
             outError = IntPtr.Zero;
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outResult = IntPtr.Zero;
             outError = IntPtr.Zero;
             // Attempt to marshal exception message, but on ANY failure just leave outError null
-            try
-            {
+            try {
                 string _errMsg = null!;
-                try
-                {
+                try {
                     _errMsg = ex?.Message ?? ex?.GetType()?.Name ?? "Unknown exception";
-                }
-                catch
-                {
+                } catch {
                     _errMsg = "Callback failed";
                 }
-                if (!string.IsNullOrEmpty(_errMsg))
-                {
+                if (!string.IsNullOrEmpty(_errMsg)) {
                     outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_errMsg);
                 }
-            }
-            catch
-            {
+            } catch {
                 // Marshalling failed; outError stays null — Rust will see return code 1
             }
             return 1;
-        }
-        finally
-        {
-            if (_bridgeFromRegistry != null)
-            {
+        } finally {
+            if (_bridgeFromRegistry != null) {
                 try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
             }
         }
     }
 
-    private int ProcessImageFileFnCallback(IntPtr userData, IntPtr path, IntPtr config, out IntPtr outResult, out IntPtr outError)
-    {
+    private int ProcessImageFileFnCallback(IntPtr userData, IntPtr path, IntPtr config, out IntPtr outResult, out IntPtr outError) {
         OcrBackendBridge? _bridgeFromRegistry = null;
-        lock (OcrBackendBridge._registryLock)
-        {
-            if (OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry))
-            {
+        lock (OcrBackendBridge._registryLock) {
+            if (OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
                 _bridgeFromRegistry = bridgeFromRegistry;
                 // Increment callback refcount to prevent GC while callback executes
                 _bridgeFromRegistry.IncrementCallbackRef();
             }
         }
-        if (_bridgeFromRegistry == null)
-        {
+        if (_bridgeFromRegistry == null) {
             outResult = IntPtr.Zero;
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8($"Bridge not found for userData (likely unregistered): {userData}");
             return 1;
         }
-        try
-        {
+        try {
             var bridge = _bridgeFromRegistry!;
             var json_path = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(path) ?? "{}";
             var managed_path = JsonSerializer.Deserialize<string>(json_path, FfiJsonExtensions.FfiJsonOptions)!;
             var json_config = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(config) ?? "{}";
             var managed_config = JsonSerializer.Deserialize<OcrConfig>(json_config, FfiJsonExtensions.FfiJsonOptions)!;
             var methodResult = bridge._impl.ProcessImageFile(managed_path, managed_config);
-            try
-            {
+            try {
                 string __result_str = (methodResult.ToFfiJson()) ?? string.Empty;
                 outResult = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(__result_str);
-            }
-            catch
-            {
+            } catch {
                 outResult = IntPtr.Zero;
                 throw;
             }
             outError = IntPtr.Zero;
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outResult = IntPtr.Zero;
             outError = IntPtr.Zero;
             // Attempt to marshal exception message, but on ANY failure just leave outError null
-            try
-            {
+            try {
                 string _errMsg = null!;
-                try
-                {
+                try {
                     _errMsg = ex?.Message ?? ex?.GetType()?.Name ?? "Unknown exception";
-                }
-                catch
-                {
+                } catch {
                     _errMsg = "Callback failed";
                 }
-                if (!string.IsNullOrEmpty(_errMsg))
-                {
+                if (!string.IsNullOrEmpty(_errMsg)) {
                     outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_errMsg);
                 }
-            }
-            catch
-            {
+            } catch {
                 // Marshalling failed; outError stays null — Rust will see return code 1
             }
             return 1;
-        }
-        finally
-        {
-            if (_bridgeFromRegistry != null)
-            {
+        } finally {
+            if (_bridgeFromRegistry != null) {
                 try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
             }
         }
     }
 
-    private int SupportsLanguageFnCallback(IntPtr userData, IntPtr lang)
-    {
+    private int SupportsLanguageFnCallback(IntPtr userData, IntPtr lang) {
         OcrBackendBridge? _bridgeFromRegistry = null;
-        lock (OcrBackendBridge._registryLock)
-        {
-            if (OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry))
-            {
+        lock (OcrBackendBridge._registryLock) {
+            if (OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
                 _bridgeFromRegistry = bridgeFromRegistry;
                 // Increment callback refcount to prevent GC while callback executes
                 _bridgeFromRegistry.IncrementCallbackRef();
             }
         }
-        if (_bridgeFromRegistry == null)
-        {
+        if (_bridgeFromRegistry == null) {
             return 0;
         }
-        try
-        {
+        try {
             var bridge = _bridgeFromRegistry!;
             var managed_lang = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(lang) ?? string.Empty;
             var methodResult = bridge._impl.SupportsLanguage(managed_lang);
             return methodResult ? 1 : 0;
-        }
-        catch (Exception)
-        {
+        } catch (Exception) {
             return 0;
-        }
-        finally
-        {
-            if (_bridgeFromRegistry != null)
-            {
+        } finally {
+            if (_bridgeFromRegistry != null) {
                 try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
             }
         }
     }
 
-    private int BackendTypeFnCallback(IntPtr userData, out IntPtr outResult, out IntPtr outError)
-    {
+    private int BackendTypeFnCallback(IntPtr userData, out IntPtr outResult, out IntPtr outError) {
         OcrBackendBridge? _bridgeFromRegistry = null;
-        lock (OcrBackendBridge._registryLock)
-        {
-            if (OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry))
-            {
+        lock (OcrBackendBridge._registryLock) {
+            if (OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
                 _bridgeFromRegistry = bridgeFromRegistry;
                 // Increment callback refcount to prevent GC while callback executes
                 _bridgeFromRegistry.IncrementCallbackRef();
             }
         }
-        if (_bridgeFromRegistry == null)
-        {
+        if (_bridgeFromRegistry == null) {
             outResult = IntPtr.Zero;
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8($"Bridge not found for userData (likely unregistered): {userData}");
             return 1;
         }
-        try
-        {
+        try {
             var bridge = _bridgeFromRegistry!;
             var methodResult = bridge._impl.BackendType;
-            try
-            {
+            try {
                 string __result_str = (methodResult.ToFfiJson()) ?? string.Empty;
                 outResult = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(__result_str);
-            }
-            catch
-            {
+            } catch {
                 outResult = IntPtr.Zero;
                 throw;
             }
             outError = IntPtr.Zero;
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outResult = IntPtr.Zero;
             outError = IntPtr.Zero;
             // Attempt to marshal exception message, but on ANY failure just leave outError null
-            try
-            {
+            try {
                 string _errMsg = null!;
-                try
-                {
+                try {
                     _errMsg = ex?.Message ?? ex?.GetType()?.Name ?? "Unknown exception";
-                }
-                catch
-                {
+                } catch {
                     _errMsg = "Callback failed";
                 }
-                if (!string.IsNullOrEmpty(_errMsg))
-                {
+                if (!string.IsNullOrEmpty(_errMsg)) {
                     outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_errMsg);
                 }
-            }
-            catch
-            {
+            } catch {
                 // Marshalling failed; outError stays null — Rust will see return code 1
             }
             return 1;
-        }
-        finally
-        {
-            if (_bridgeFromRegistry != null)
-            {
+        } finally {
+            if (_bridgeFromRegistry != null) {
                 try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
             }
         }
     }
 
-    private int SupportedLanguagesFnCallback(IntPtr userData, out IntPtr outResult, out IntPtr outError)
-    {
+    private int SupportedLanguagesFnCallback(IntPtr userData, out IntPtr outResult, out IntPtr outError) {
         OcrBackendBridge? _bridgeFromRegistry = null;
-        lock (OcrBackendBridge._registryLock)
-        {
-            if (OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry))
-            {
+        lock (OcrBackendBridge._registryLock) {
+            if (OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
                 _bridgeFromRegistry = bridgeFromRegistry;
                 // Increment callback refcount to prevent GC while callback executes
                 _bridgeFromRegistry.IncrementCallbackRef();
             }
         }
-        if (_bridgeFromRegistry == null)
-        {
+        if (_bridgeFromRegistry == null) {
             outResult = IntPtr.Zero;
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8($"Bridge not found for userData (likely unregistered): {userData}");
             return 1;
         }
-        try
-        {
+        try {
             var bridge = _bridgeFromRegistry!;
             var methodResult = bridge._impl.SupportedLanguages;
-            try
-            {
+            try {
                 string __result_str = (ToJsonString(methodResult)) ?? string.Empty;
                 outResult = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(__result_str);
-            }
-            catch
-            {
+            } catch {
                 outResult = IntPtr.Zero;
                 throw;
             }
             outError = IntPtr.Zero;
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outResult = IntPtr.Zero;
             outError = IntPtr.Zero;
             // Attempt to marshal exception message, but on ANY failure just leave outError null
-            try
-            {
+            try {
                 string _errMsg = null!;
-                try
-                {
+                try {
                     _errMsg = ex?.Message ?? ex?.GetType()?.Name ?? "Unknown exception";
-                }
-                catch
-                {
+                } catch {
                     _errMsg = "Callback failed";
                 }
-                if (!string.IsNullOrEmpty(_errMsg))
-                {
+                if (!string.IsNullOrEmpty(_errMsg)) {
                     outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_errMsg);
                 }
-            }
-            catch
-            {
+            } catch {
                 // Marshalling failed; outError stays null — Rust will see return code 1
             }
             return 1;
-        }
-        finally
-        {
-            if (_bridgeFromRegistry != null)
-            {
+        } finally {
+            if (_bridgeFromRegistry != null) {
                 try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
             }
         }
     }
 
-    private int SupportsTableDetectionFnCallback(IntPtr userData)
-    {
+    private int SupportsTableDetectionFnCallback(IntPtr userData) {
         OcrBackendBridge? _bridgeFromRegistry = null;
-        lock (OcrBackendBridge._registryLock)
-        {
-            if (OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry))
-            {
+        lock (OcrBackendBridge._registryLock) {
+            if (OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
                 _bridgeFromRegistry = bridgeFromRegistry;
                 // Increment callback refcount to prevent GC while callback executes
                 _bridgeFromRegistry.IncrementCallbackRef();
             }
         }
-        if (_bridgeFromRegistry == null)
-        {
+        if (_bridgeFromRegistry == null) {
             return 0;
         }
-        try
-        {
+        try {
             var bridge = _bridgeFromRegistry!;
             var methodResult = bridge._impl.SupportsTableDetection;
             return methodResult ? 1 : 0;
-        }
-        catch (Exception)
-        {
+        } catch (Exception) {
             return 0;
-        }
-        finally
-        {
-            if (_bridgeFromRegistry != null)
-            {
+        } finally {
+            if (_bridgeFromRegistry != null) {
                 try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
             }
         }
     }
 
-    private int SupportsDocumentProcessingFnCallback(IntPtr userData)
-    {
+    private int SupportsDocumentProcessingFnCallback(IntPtr userData) {
         OcrBackendBridge? _bridgeFromRegistry = null;
-        lock (OcrBackendBridge._registryLock)
-        {
-            if (OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry))
-            {
+        lock (OcrBackendBridge._registryLock) {
+            if (OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
                 _bridgeFromRegistry = bridgeFromRegistry;
                 // Increment callback refcount to prevent GC while callback executes
                 _bridgeFromRegistry.IncrementCallbackRef();
             }
         }
-        if (_bridgeFromRegistry == null)
-        {
+        if (_bridgeFromRegistry == null) {
             return 0;
         }
-        try
-        {
+        try {
             var bridge = _bridgeFromRegistry!;
             var methodResult = bridge._impl.SupportsDocumentProcessing;
             return methodResult ? 1 : 0;
-        }
-        catch (Exception)
-        {
+        } catch (Exception) {
             return 0;
-        }
-        finally
-        {
-            if (_bridgeFromRegistry != null)
-            {
+        } finally {
+            if (_bridgeFromRegistry != null) {
                 try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
             }
         }
     }
 
-    private int EmitsStructuredMarkdownFnCallback(IntPtr userData)
-    {
+    private int EmitsStructuredMarkdownFnCallback(IntPtr userData) {
         OcrBackendBridge? _bridgeFromRegistry = null;
-        lock (OcrBackendBridge._registryLock)
-        {
-            if (OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry))
-            {
+        lock (OcrBackendBridge._registryLock) {
+            if (OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
                 _bridgeFromRegistry = bridgeFromRegistry;
                 // Increment callback refcount to prevent GC while callback executes
                 _bridgeFromRegistry.IncrementCallbackRef();
             }
         }
-        if (_bridgeFromRegistry == null)
-        {
+        if (_bridgeFromRegistry == null) {
             return 0;
         }
-        try
-        {
+        try {
             var bridge = _bridgeFromRegistry!;
             var methodResult = bridge._impl.EmitsStructuredMarkdown;
             return methodResult ? 1 : 0;
-        }
-        catch (Exception)
-        {
+        } catch (Exception) {
             return 0;
-        }
-        finally
-        {
-            if (_bridgeFromRegistry != null)
-            {
+        } finally {
+            if (_bridgeFromRegistry != null) {
                 try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
             }
         }
     }
 
-    private int ProcessDocumentFnCallback(IntPtr userData, IntPtr path, IntPtr config, out IntPtr outResult, out IntPtr outError)
-    {
+    private int ProcessDocumentFnCallback(IntPtr userData, IntPtr path, IntPtr config, out IntPtr outResult, out IntPtr outError) {
         OcrBackendBridge? _bridgeFromRegistry = null;
-        lock (OcrBackendBridge._registryLock)
-        {
-            if (OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry))
-            {
+        lock (OcrBackendBridge._registryLock) {
+            if (OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
                 _bridgeFromRegistry = bridgeFromRegistry;
                 // Increment callback refcount to prevent GC while callback executes
                 _bridgeFromRegistry.IncrementCallbackRef();
             }
         }
-        if (_bridgeFromRegistry == null)
-        {
+        if (_bridgeFromRegistry == null) {
             outResult = IntPtr.Zero;
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8($"Bridge not found for userData (likely unregistered): {userData}");
             return 1;
         }
-        try
-        {
+        try {
             var bridge = _bridgeFromRegistry!;
             var json_path = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(path) ?? "{}";
             var managed_path = JsonSerializer.Deserialize<string>(json_path, FfiJsonExtensions.FfiJsonOptions)!;
             var json_config = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(config) ?? "{}";
             var managed_config = JsonSerializer.Deserialize<OcrConfig>(json_config, FfiJsonExtensions.FfiJsonOptions)!;
             var methodResult = bridge._impl.ProcessDocument(managed_path, managed_config);
-            try
-            {
+            try {
                 string __result_str = (methodResult.ToFfiJson()) ?? string.Empty;
                 outResult = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(__result_str);
-            }
-            catch
-            {
+            } catch {
                 outResult = IntPtr.Zero;
                 throw;
             }
             outError = IntPtr.Zero;
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outResult = IntPtr.Zero;
             outError = IntPtr.Zero;
             // Attempt to marshal exception message, but on ANY failure just leave outError null
-            try
-            {
+            try {
                 string _errMsg = null!;
-                try
-                {
+                try {
                     _errMsg = ex?.Message ?? ex?.GetType()?.Name ?? "Unknown exception";
-                }
-                catch
-                {
+                } catch {
                     _errMsg = "Callback failed";
                 }
-                if (!string.IsNullOrEmpty(_errMsg))
-                {
+                if (!string.IsNullOrEmpty(_errMsg)) {
                     outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_errMsg);
                 }
-            }
-            catch
-            {
+            } catch {
                 // Marshalling failed; outError stays null — Rust will see return code 1
             }
             return 1;
-        }
-        finally
-        {
-            if (_bridgeFromRegistry != null)
-            {
+        } finally {
+            if (_bridgeFromRegistry != null) {
                 try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
             }
         }
     }
 
-    private void FreeStringCallback(IntPtr ptr)
-    {
-        if (ptr != IntPtr.Zero)
-        {
+    private void FreeStringCallback(IntPtr ptr) {
+        if (ptr != IntPtr.Zero) {
             global::System.Runtime.InteropServices.Marshal.FreeCoTaskMem(ptr);
         }
     }
 
-    private void FreeUserDataCallback(IntPtr userData)
-    {
-        if (userData != IntPtr.Zero)
-        {
+    private void FreeUserDataCallback(IntPtr userData) {
+        if (userData != IntPtr.Zero) {
             OcrBackendBridge.FreeUserData(userData);
         }
     }
 
 
-    public void Dispose()
-    {
+    public void Dispose() {
         if (_disposed) return;
         _disposed = true;
 
-        if (_vtable != IntPtr.Zero)
-        {
+        if (_vtable != IntPtr.Zero) {
             global::System.Runtime.InteropServices.Marshal.FreeHGlobal(_vtable);
             _vtable = IntPtr.Zero;
         }
 
-        if (_implHandle.IsAllocated)
-        {
+        if (_implHandle.IsAllocated) {
             _implHandle.Free();
         }
 
@@ -916,8 +730,7 @@ public sealed class OcrBackendBridge : IDisposable
     }
 
     /// <summary>Register a OcrBackend implementation and return its native handle</summary>
-    public static IntPtr Register(IOcrBackend impl)
-    {
+    public static IntPtr Register(IOcrBackend impl) {
         if (impl == null)
         throw new ArgumentNullException(nameof(impl));
 
@@ -926,12 +739,10 @@ public sealed class OcrBackendBridge : IDisposable
 
         var bridge = new OcrBackendBridge(impl);
 
-        try
-        {
+        try {
             // Register bridge in the static registry using its unique ID.
             // This keeps the bridge alive while Rust holds the ID (userData).
-            lock (_registryLock)
-            {
+            lock (_registryLock) {
                 _bridgeRegistry[bridge._bridgeId] = bridge;
             }
 
@@ -939,10 +750,8 @@ public sealed class OcrBackendBridge : IDisposable
             var userData = bridge._bridgeId;
 
             var result = NativeMethods.RegisterOcrBackend(name, vtablePtr, userData, out var outError);
-            if (result != 0)
-            {
-                lock (_registryLock)
-                {
+            if (result != 0) {
+                lock (_registryLock) {
                     _bridgeRegistry.Remove(bridge._bridgeId);
                 }
                 bridge.Dispose();
@@ -954,11 +763,8 @@ public sealed class OcrBackendBridge : IDisposable
             // Return the bridge ID (userData).
             // The FFI layer holds this ID and will call FreeUserDataCallback with it when done.
             return userData;
-        }
-        catch
-        {
-            lock (_registryLock)
-            {
+        } catch {
+            lock (_registryLock) {
                 _bridgeRegistry.Remove(bridge._bridgeId);
             }
             bridge.Dispose();
@@ -968,15 +774,13 @@ public sealed class OcrBackendBridge : IDisposable
 }
 
 /// <summary>Static helpers for registering trait implementations</summary>
-public static class OcrBackendRegistry
-{
+public static class OcrBackendRegistry {
 
     private static readonly ConcurrentDictionary<string, OcrBackendBridge> _bridges =
     new ConcurrentDictionary<string, OcrBackendBridge>();
 
     /// <summary>Register a OcrBackend implementation and return its native handle</summary>
-    public static IntPtr RegisterOcrBackend(IOcrBackend impl)
-    {
+    public static IntPtr RegisterOcrBackend(IOcrBackend impl) {
         if (impl == null)
         throw new ArgumentNullException(nameof(impl));
 
@@ -984,8 +788,7 @@ public static class OcrBackendRegistry
         var userData = bridge._bridgeId;
         var name = impl.Name;
 
-        lock (OcrBackendBridge._registryLock)
-        {
+        lock (OcrBackendBridge._registryLock) {
             OcrBackendBridge._bridgeRegistry[userData] = bridge;
         }
         return userData;
@@ -993,8 +796,7 @@ public static class OcrBackendRegistry
 
     /// <summary>Register a OcrBackend implementation and return its native handle</summary>
 
-    public static IntPtr Register(IOcrBackend impl)
-    {
+    public static IntPtr Register(IOcrBackend impl) {
         if (impl == null)
         throw new ArgumentNullException(nameof(impl));
 
@@ -1003,23 +805,19 @@ public static class OcrBackendRegistry
 
         var bridge = new OcrBackendBridge(impl);
 
-        try
-        {
+        try {
             var userData = bridge._bridgeId;
             var vtablePtr = bridge._vtable;
 
             // Register bridge in the static registry using its unique ID.
             // This keeps the bridge alive while Rust holds the ID (userData).
-            lock (OcrBackendBridge._registryLock)
-            {
+            lock (OcrBackendBridge._registryLock) {
                 OcrBackendBridge._bridgeRegistry[userData] = bridge;
             }
 
             var result = NativeMethods.RegisterOcrBackend(name, vtablePtr, userData, out var outError);
-            if (result != 0)
-            {
-                lock (OcrBackendBridge._registryLock)
-                {
+            if (result != 0) {
+                lock (OcrBackendBridge._registryLock) {
                     OcrBackendBridge._bridgeRegistry.Remove(userData);
                 }
                 bridge.Dispose();
@@ -1029,11 +827,8 @@ public static class OcrBackendRegistry
             }
 
             return userData;
-        }
-        catch
-        {
-            lock (OcrBackendBridge._registryLock)
-            {
+        } catch {
+            lock (OcrBackendBridge._registryLock) {
                 OcrBackendBridge._bridgeRegistry.Remove(bridge._bridgeId);
             }
             bridge.Dispose();
@@ -1042,31 +837,26 @@ public static class OcrBackendRegistry
     }
 
     /// <summary>Unregister a OcrBackend implementation</summary>
-    public static void Unregister(string name)
-    {
+    public static void Unregister(string name) {
         if (string.IsNullOrEmpty(name))
         throw new ArgumentException("Name cannot be empty", nameof(name));
 
         var result = NativeMethods.UnregisterOcrBackend(name, out var outError);
-        if (result != 0)
-        {
+        if (result != 0) {
             var errorMsg = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(outError) ?? "Unknown error";
             global::System.Runtime.InteropServices.Marshal.FreeCoTaskMem(outError);
             throw new InvalidOperationException($"Failed to unregister {name}: {errorMsg}");
         }
 
-        if (_bridges.TryRemove(name, out var bridge))
-        {
+        if (_bridges.TryRemove(name, out var bridge)) {
             bridge.Dispose();
         }
     }
 
     /// <summary>Clear all registered OcrBackend implementations</summary>
-    public static void Clear()
-    {
+    public static void Clear() {
         var result = NativeMethods.ClearOcrBackend(out var outError);
-        if (result != 0)
-        {
+        if (result != 0) {
             var errorMsg = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(outError) ?? "Unknown error";
             global::System.Runtime.InteropServices.Marshal.FreeCoTaskMem(outError);
             throw new InvalidOperationException($"Failed to clear OcrBackend registry: {errorMsg}");
@@ -1079,8 +869,7 @@ public static class OcrBackendRegistry
 /// <summary>
 /// Bridge interface for PostProcessor trait implementation via native FFI
 /// </summary>
-public interface IPostProcessor
-{
+public interface IPostProcessor {
 
     /// <summary>Get the plugin name.</summary>
     string Name { get; }
@@ -1113,8 +902,7 @@ public interface IPostProcessor
 /// <summary>
 /// Manages the FFI vtable and delegates for a PostProcessor implementation
 /// </summary>
-public sealed class PostProcessorBridge : IDisposable
-{
+public sealed class PostProcessorBridge : IDisposable {
 
     internal readonly IPostProcessor _impl;
     private readonly GCHandle _implHandle;
@@ -1168,8 +956,7 @@ public sealed class PostProcessorBridge : IDisposable
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate void FreeUserDataFn(IntPtr userData);
 
-    public PostProcessorBridge(IPostProcessor impl)
-    {
+    public PostProcessorBridge(IPostProcessor impl) {
         _impl = impl ?? throw new ArgumentNullException(nameof(impl));
         // Keep impl alive via normal GCHandle (sufficient for callback rooting).
         // The impl instance itself is not pinned, just kept in the GC root set.
@@ -1180,15 +967,13 @@ public sealed class PostProcessorBridge : IDisposable
         _vtable = IntPtr.Zero;
         _disposed = false;
         // Allocate unique bridge ID for registry lookup during callbacks
-        lock (_registryLock)
-        {
+        lock (_registryLock) {
             _bridgeId = new IntPtr(_nextBridgeId++);
         }
         BuildVtable();
     }
 
-    private void BuildVtable()
-    {
+    private void BuildVtable() {
         // Allocate unmanaged vtable struct (array of function pointers)
         _vtable = global::System.Runtime.InteropServices.Marshal.AllocHGlobal(IntPtr.Size * 11);
 
@@ -1249,60 +1034,46 @@ public sealed class PostProcessorBridge : IDisposable
 
     }
 
-    private static string ToJsonString<T>(T value)
-    {
+    private static string ToJsonString<T>(T value) {
         return JsonSerializer.Serialize(value, FfiJsonExtensions.FfiJsonOptions);
     }
 
     /// <summary>Called by Rust via FreeUserDataCallback when done with this bridge</summary>
-    internal static void FreeUserData(IntPtr bridgeId)
-    {
-        lock (_registryLock)
-        {
+    internal static void FreeUserData(IntPtr bridgeId) {
+        lock (_registryLock) {
             // Mark bridge as disposed but DON'T remove from registry yet.
             // Callbacks in flight will still be able to look it up and execute safely.
             // The bridge will stay alive as long as _callbackRefCount > 0.
-            if (_bridgeRegistry.TryGetValue(bridgeId, out var bridge))
-            {
+            if (_bridgeRegistry.TryGetValue(bridgeId, out var bridge)) {
                 bridge._disposed = true;
             }
         }
     }
 
-    private void IncrementCallbackRef()
-    {
-        lock (_registryLock)
-        {
+    private void IncrementCallbackRef() {
+        lock (_registryLock) {
             _callbackRefCount++;
         }
     }
 
-    private void DecrementCallbackRef()
-    {
-        lock (_registryLock)
-        {
-            if (_callbackRefCount > 0)
-            {
+    private void DecrementCallbackRef() {
+        lock (_registryLock) {
+            if (_callbackRefCount > 0) {
                 _callbackRefCount--;
             }
             // Once refcount reaches 0 and bridge is disposed, remove from registry
-            if (_callbackRefCount == 0 && _disposed)
-            {
+            if (_callbackRefCount == 0 && _disposed) {
                 _bridgeRegistry.Remove(_bridgeId);
             }
         }
     }
 
-    private int NameFnCallback(IntPtr userData, out IntPtr outName, out IntPtr outError)
-    {
-        try
-        {
+    private int NameFnCallback(IntPtr userData, out IntPtr outName, out IntPtr outError) {
+        try {
             outError = IntPtr.Zero;
             string _name = null!;
-            lock (PostProcessorBridge._registryLock)
-            {
-                if (!PostProcessorBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+            lock (PostProcessorBridge._registryLock) {
+                if (!PostProcessorBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outName = IntPtr.Zero;
                     return 1;
                 }
@@ -1310,25 +1081,19 @@ public sealed class PostProcessorBridge : IDisposable
             }
             outName = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_name);
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outName = IntPtr.Zero;
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int VersionFnCallback(IntPtr userData, out IntPtr outVersion, out IntPtr outError)
-    {
-        try
-        {
+    private int VersionFnCallback(IntPtr userData, out IntPtr outVersion, out IntPtr outError) {
+        try {
             outError = IntPtr.Zero;
             string _version = null!;
-            lock (PostProcessorBridge._registryLock)
-            {
-                if (!PostProcessorBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+            lock (PostProcessorBridge._registryLock) {
+                if (!PostProcessorBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outVersion = IntPtr.Zero;
                     return 1;
                 }
@@ -1336,23 +1101,17 @@ public sealed class PostProcessorBridge : IDisposable
             }
             outVersion = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_version);
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outVersion = IntPtr.Zero;
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int InitializeFnCallback(IntPtr userData, out IntPtr outError)
-    {
-        try
-        {
-            lock (PostProcessorBridge._registryLock)
-            {
-                if (!PostProcessorBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+    private int InitializeFnCallback(IntPtr userData, out IntPtr outError) {
+        try {
+            lock (PostProcessorBridge._registryLock) {
+                if (!PostProcessorBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outError = IntPtr.Zero;
                     return 1;
                 }
@@ -1360,22 +1119,16 @@ public sealed class PostProcessorBridge : IDisposable
             }
             outError = IntPtr.Zero;
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int ShutdownFnCallback(IntPtr userData, out IntPtr outError)
-    {
-        try
-        {
-            lock (PostProcessorBridge._registryLock)
-            {
-                if (!PostProcessorBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+    private int ShutdownFnCallback(IntPtr userData, out IntPtr outError) {
+        try {
+            lock (PostProcessorBridge._registryLock) {
+                if (!PostProcessorBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outError = IntPtr.Zero;
                     return 1;
                 }
@@ -1383,32 +1136,25 @@ public sealed class PostProcessorBridge : IDisposable
             }
             outError = IntPtr.Zero;
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int ProcessFnCallback(IntPtr userData, IntPtr result, IntPtr config)
-    {
+    private int ProcessFnCallback(IntPtr userData, IntPtr result, IntPtr config) {
         PostProcessorBridge? _bridgeFromRegistry = null;
-        lock (PostProcessorBridge._registryLock)
-        {
-            if (PostProcessorBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry))
-            {
+        lock (PostProcessorBridge._registryLock) {
+            if (PostProcessorBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
                 _bridgeFromRegistry = bridgeFromRegistry;
                 // Increment callback refcount to prevent GC while callback executes
                 _bridgeFromRegistry.IncrementCallbackRef();
             }
         }
-        if (_bridgeFromRegistry == null)
-        {
+        if (_bridgeFromRegistry == null) {
             return 0;
         }
-        try
-        {
+        try {
             var bridge = _bridgeFromRegistry!;
             var json_result = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(result) ?? "{}";
             var managed_result = JsonSerializer.Deserialize<ExtractedDocument>(json_result, FfiJsonExtensions.FfiJsonOptions)!;
@@ -1416,109 +1162,79 @@ public sealed class PostProcessorBridge : IDisposable
             var managed_config = JsonSerializer.Deserialize<ExtractionConfig>(json_config, FfiJsonExtensions.FfiJsonOptions)!;
             bridge._impl.Process(managed_result, managed_config);
             return 0;
-        }
-        catch (Exception)
-        {
+        } catch (Exception) {
             return 0;
-        }
-        finally
-        {
-            if (_bridgeFromRegistry != null)
-            {
+        } finally {
+            if (_bridgeFromRegistry != null) {
                 try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
             }
         }
     }
 
-    private int ProcessingStageFnCallback(IntPtr userData, out IntPtr outResult, out IntPtr outError)
-    {
+    private int ProcessingStageFnCallback(IntPtr userData, out IntPtr outResult, out IntPtr outError) {
         PostProcessorBridge? _bridgeFromRegistry = null;
-        lock (PostProcessorBridge._registryLock)
-        {
-            if (PostProcessorBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry))
-            {
+        lock (PostProcessorBridge._registryLock) {
+            if (PostProcessorBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
                 _bridgeFromRegistry = bridgeFromRegistry;
                 // Increment callback refcount to prevent GC while callback executes
                 _bridgeFromRegistry.IncrementCallbackRef();
             }
         }
-        if (_bridgeFromRegistry == null)
-        {
+        if (_bridgeFromRegistry == null) {
             outResult = IntPtr.Zero;
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8($"Bridge not found for userData (likely unregistered): {userData}");
             return 1;
         }
-        try
-        {
+        try {
             var bridge = _bridgeFromRegistry!;
             var methodResult = bridge._impl.ProcessingStage;
-            try
-            {
+            try {
                 string __result_str = (methodResult.ToFfiJson()) ?? string.Empty;
                 outResult = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(__result_str);
-            }
-            catch
-            {
+            } catch {
                 outResult = IntPtr.Zero;
                 throw;
             }
             outError = IntPtr.Zero;
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outResult = IntPtr.Zero;
             outError = IntPtr.Zero;
             // Attempt to marshal exception message, but on ANY failure just leave outError null
-            try
-            {
+            try {
                 string _errMsg = null!;
-                try
-                {
+                try {
                     _errMsg = ex?.Message ?? ex?.GetType()?.Name ?? "Unknown exception";
-                }
-                catch
-                {
+                } catch {
                     _errMsg = "Callback failed";
                 }
-                if (!string.IsNullOrEmpty(_errMsg))
-                {
+                if (!string.IsNullOrEmpty(_errMsg)) {
                     outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_errMsg);
                 }
-            }
-            catch
-            {
+            } catch {
                 // Marshalling failed; outError stays null — Rust will see return code 1
             }
             return 1;
-        }
-        finally
-        {
-            if (_bridgeFromRegistry != null)
-            {
+        } finally {
+            if (_bridgeFromRegistry != null) {
                 try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
             }
         }
     }
 
-    private int ShouldProcessFnCallback(IntPtr userData, IntPtr result, IntPtr config)
-    {
+    private int ShouldProcessFnCallback(IntPtr userData, IntPtr result, IntPtr config) {
         PostProcessorBridge? _bridgeFromRegistry = null;
-        lock (PostProcessorBridge._registryLock)
-        {
-            if (PostProcessorBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry))
-            {
+        lock (PostProcessorBridge._registryLock) {
+            if (PostProcessorBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
                 _bridgeFromRegistry = bridgeFromRegistry;
                 // Increment callback refcount to prevent GC while callback executes
                 _bridgeFromRegistry.IncrementCallbackRef();
             }
         }
-        if (_bridgeFromRegistry == null)
-        {
+        if (_bridgeFromRegistry == null) {
             return 0;
         }
-        try
-        {
+        try {
             var bridge = _bridgeFromRegistry!;
             var json_result = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(result) ?? "{}";
             var managed_result = JsonSerializer.Deserialize<ExtractedDocument>(json_result, FfiJsonExtensions.FfiJsonOptions)!;
@@ -1526,122 +1242,90 @@ public sealed class PostProcessorBridge : IDisposable
             var managed_config = JsonSerializer.Deserialize<ExtractionConfig>(json_config, FfiJsonExtensions.FfiJsonOptions)!;
             var methodResult = bridge._impl.ShouldProcess(managed_result, managed_config);
             return methodResult ? 1 : 0;
-        }
-        catch (Exception)
-        {
+        } catch (Exception) {
             return 0;
-        }
-        finally
-        {
-            if (_bridgeFromRegistry != null)
-            {
+        } finally {
+            if (_bridgeFromRegistry != null) {
                 try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
             }
         }
     }
 
-    private ulong EstimatedDurationMsFnCallback(IntPtr userData, IntPtr result)
-    {
+    private ulong EstimatedDurationMsFnCallback(IntPtr userData, IntPtr result) {
         PostProcessorBridge? _bridgeFromRegistry = null;
-        lock (PostProcessorBridge._registryLock)
-        {
-            if (PostProcessorBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry))
-            {
+        lock (PostProcessorBridge._registryLock) {
+            if (PostProcessorBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
                 _bridgeFromRegistry = bridgeFromRegistry;
                 // Increment callback refcount to prevent GC while callback executes
                 _bridgeFromRegistry.IncrementCallbackRef();
             }
         }
-        if (_bridgeFromRegistry == null)
-        {
+        if (_bridgeFromRegistry == null) {
             return 0;
         }
-        try
-        {
+        try {
             var bridge = _bridgeFromRegistry!;
             var json_result = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(result) ?? "{}";
             var managed_result = JsonSerializer.Deserialize<ExtractedDocument>(json_result, FfiJsonExtensions.FfiJsonOptions)!;
             var methodResult = bridge._impl.EstimatedDurationMs(managed_result);
             return methodResult;
-        }
-        catch (Exception)
-        {
+        } catch (Exception) {
             return 0;
-        }
-        finally
-        {
-            if (_bridgeFromRegistry != null)
-            {
+        } finally {
+            if (_bridgeFromRegistry != null) {
                 try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
             }
         }
     }
 
-    private int PriorityFnCallback(IntPtr userData)
-    {
+    private int PriorityFnCallback(IntPtr userData) {
         PostProcessorBridge? _bridgeFromRegistry = null;
-        lock (PostProcessorBridge._registryLock)
-        {
-            if (PostProcessorBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry))
-            {
+        lock (PostProcessorBridge._registryLock) {
+            if (PostProcessorBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
                 _bridgeFromRegistry = bridgeFromRegistry;
                 // Increment callback refcount to prevent GC while callback executes
                 _bridgeFromRegistry.IncrementCallbackRef();
             }
         }
-        if (_bridgeFromRegistry == null)
-        {
+        if (_bridgeFromRegistry == null) {
             return 0;
         }
-        try
-        {
+        try {
             var bridge = _bridgeFromRegistry!;
             var methodResult = bridge._impl.Priority;
             return methodResult;
-        }
-        catch (Exception)
-        {
+        } catch (Exception) {
             return 0;
-        }
-        finally
-        {
-            if (_bridgeFromRegistry != null)
-            {
+        } finally {
+            if (_bridgeFromRegistry != null) {
                 try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
             }
         }
     }
 
-    private void FreeStringCallback(IntPtr ptr)
-    {
-        if (ptr != IntPtr.Zero)
-        {
+    private void FreeStringCallback(IntPtr ptr) {
+        if (ptr != IntPtr.Zero) {
             global::System.Runtime.InteropServices.Marshal.FreeCoTaskMem(ptr);
         }
     }
 
-    private void FreeUserDataCallback(IntPtr userData)
-    {
-        if (userData != IntPtr.Zero)
-        {
+    private void FreeUserDataCallback(IntPtr userData) {
+        if (userData != IntPtr.Zero) {
             PostProcessorBridge.FreeUserData(userData);
         }
     }
 
 
-    public void Dispose()
-    {
+    public void Dispose() {
         if (_disposed) return;
         _disposed = true;
 
-        if (_vtable != IntPtr.Zero)
-        {
+        if (_vtable != IntPtr.Zero) {
             global::System.Runtime.InteropServices.Marshal.FreeHGlobal(_vtable);
             _vtable = IntPtr.Zero;
         }
 
-        if (_implHandle.IsAllocated)
-        {
+        if (_implHandle.IsAllocated) {
             _implHandle.Free();
         }
 
@@ -1650,8 +1334,7 @@ public sealed class PostProcessorBridge : IDisposable
     }
 
     /// <summary>Register a PostProcessor implementation and return its native handle</summary>
-    public static IntPtr Register(IPostProcessor impl)
-    {
+    public static IntPtr Register(IPostProcessor impl) {
         if (impl == null)
         throw new ArgumentNullException(nameof(impl));
 
@@ -1660,12 +1343,10 @@ public sealed class PostProcessorBridge : IDisposable
 
         var bridge = new PostProcessorBridge(impl);
 
-        try
-        {
+        try {
             // Register bridge in the static registry using its unique ID.
             // This keeps the bridge alive while Rust holds the ID (userData).
-            lock (_registryLock)
-            {
+            lock (_registryLock) {
                 _bridgeRegistry[bridge._bridgeId] = bridge;
             }
 
@@ -1673,10 +1354,8 @@ public sealed class PostProcessorBridge : IDisposable
             var userData = bridge._bridgeId;
 
             var result = NativeMethods.RegisterPostProcessor(name, vtablePtr, userData, out var outError);
-            if (result != 0)
-            {
-                lock (_registryLock)
-                {
+            if (result != 0) {
+                lock (_registryLock) {
                     _bridgeRegistry.Remove(bridge._bridgeId);
                 }
                 bridge.Dispose();
@@ -1688,11 +1367,8 @@ public sealed class PostProcessorBridge : IDisposable
             // Return the bridge ID (userData).
             // The FFI layer holds this ID and will call FreeUserDataCallback with it when done.
             return userData;
-        }
-        catch
-        {
-            lock (_registryLock)
-            {
+        } catch {
+            lock (_registryLock) {
                 _bridgeRegistry.Remove(bridge._bridgeId);
             }
             bridge.Dispose();
@@ -1702,15 +1378,13 @@ public sealed class PostProcessorBridge : IDisposable
 }
 
 /// <summary>Static helpers for registering trait implementations</summary>
-public static class PostProcessorRegistry
-{
+public static class PostProcessorRegistry {
 
     private static readonly ConcurrentDictionary<string, PostProcessorBridge> _bridges =
     new ConcurrentDictionary<string, PostProcessorBridge>();
 
     /// <summary>Register a PostProcessor implementation and return its native handle</summary>
-    public static IntPtr RegisterPostProcessor(IPostProcessor impl)
-    {
+    public static IntPtr RegisterPostProcessor(IPostProcessor impl) {
         if (impl == null)
         throw new ArgumentNullException(nameof(impl));
 
@@ -1718,8 +1392,7 @@ public static class PostProcessorRegistry
         var userData = bridge._bridgeId;
         var name = impl.Name;
 
-        lock (PostProcessorBridge._registryLock)
-        {
+        lock (PostProcessorBridge._registryLock) {
             PostProcessorBridge._bridgeRegistry[userData] = bridge;
         }
         return userData;
@@ -1727,8 +1400,7 @@ public static class PostProcessorRegistry
 
     /// <summary>Register a PostProcessor implementation and return its native handle</summary>
 
-    public static IntPtr Register(IPostProcessor impl)
-    {
+    public static IntPtr Register(IPostProcessor impl) {
         if (impl == null)
         throw new ArgumentNullException(nameof(impl));
 
@@ -1737,23 +1409,19 @@ public static class PostProcessorRegistry
 
         var bridge = new PostProcessorBridge(impl);
 
-        try
-        {
+        try {
             var userData = bridge._bridgeId;
             var vtablePtr = bridge._vtable;
 
             // Register bridge in the static registry using its unique ID.
             // This keeps the bridge alive while Rust holds the ID (userData).
-            lock (PostProcessorBridge._registryLock)
-            {
+            lock (PostProcessorBridge._registryLock) {
                 PostProcessorBridge._bridgeRegistry[userData] = bridge;
             }
 
             var result = NativeMethods.RegisterPostProcessor(name, vtablePtr, userData, out var outError);
-            if (result != 0)
-            {
-                lock (PostProcessorBridge._registryLock)
-                {
+            if (result != 0) {
+                lock (PostProcessorBridge._registryLock) {
                     PostProcessorBridge._bridgeRegistry.Remove(userData);
                 }
                 bridge.Dispose();
@@ -1763,11 +1431,8 @@ public static class PostProcessorRegistry
             }
 
             return userData;
-        }
-        catch
-        {
-            lock (PostProcessorBridge._registryLock)
-            {
+        } catch {
+            lock (PostProcessorBridge._registryLock) {
                 PostProcessorBridge._bridgeRegistry.Remove(bridge._bridgeId);
             }
             bridge.Dispose();
@@ -1776,31 +1441,26 @@ public static class PostProcessorRegistry
     }
 
     /// <summary>Unregister a PostProcessor implementation</summary>
-    public static void Unregister(string name)
-    {
+    public static void Unregister(string name) {
         if (string.IsNullOrEmpty(name))
         throw new ArgumentException("Name cannot be empty", nameof(name));
 
         var result = NativeMethods.UnregisterPostProcessor(name, out var outError);
-        if (result != 0)
-        {
+        if (result != 0) {
             var errorMsg = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(outError) ?? "Unknown error";
             global::System.Runtime.InteropServices.Marshal.FreeCoTaskMem(outError);
             throw new InvalidOperationException($"Failed to unregister {name}: {errorMsg}");
         }
 
-        if (_bridges.TryRemove(name, out var bridge))
-        {
+        if (_bridges.TryRemove(name, out var bridge)) {
             bridge.Dispose();
         }
     }
 
     /// <summary>Clear all registered PostProcessor implementations</summary>
-    public static void Clear()
-    {
+    public static void Clear() {
         var result = NativeMethods.ClearPostProcessor(out var outError);
-        if (result != 0)
-        {
+        if (result != 0) {
             var errorMsg = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(outError) ?? "Unknown error";
             global::System.Runtime.InteropServices.Marshal.FreeCoTaskMem(outError);
             throw new InvalidOperationException($"Failed to clear PostProcessor registry: {errorMsg}");
@@ -1813,8 +1473,7 @@ public static class PostProcessorRegistry
 /// <summary>
 /// Bridge interface for Validator trait implementation via native FFI
 /// </summary>
-public interface IValidator
-{
+public interface IValidator {
 
     /// <summary>Get the plugin name.</summary>
     string Name { get; }
@@ -1841,8 +1500,7 @@ public interface IValidator
 /// <summary>
 /// Manages the FFI vtable and delegates for a Validator implementation
 /// </summary>
-public sealed class ValidatorBridge : IDisposable
-{
+public sealed class ValidatorBridge : IDisposable {
 
     internal readonly IValidator _impl;
     private readonly GCHandle _implHandle;
@@ -1890,8 +1548,7 @@ public sealed class ValidatorBridge : IDisposable
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate void FreeUserDataFn(IntPtr userData);
 
-    public ValidatorBridge(IValidator impl)
-    {
+    public ValidatorBridge(IValidator impl) {
         _impl = impl ?? throw new ArgumentNullException(nameof(impl));
         // Keep impl alive via normal GCHandle (sufficient for callback rooting).
         // The impl instance itself is not pinned, just kept in the GC root set.
@@ -1902,15 +1559,13 @@ public sealed class ValidatorBridge : IDisposable
         _vtable = IntPtr.Zero;
         _disposed = false;
         // Allocate unique bridge ID for registry lookup during callbacks
-        lock (_registryLock)
-        {
+        lock (_registryLock) {
             _bridgeId = new IntPtr(_nextBridgeId++);
         }
         BuildVtable();
     }
 
-    private void BuildVtable()
-    {
+    private void BuildVtable() {
         // Allocate unmanaged vtable struct (array of function pointers)
         _vtable = global::System.Runtime.InteropServices.Marshal.AllocHGlobal(IntPtr.Size * 9);
 
@@ -1961,60 +1616,46 @@ public sealed class ValidatorBridge : IDisposable
 
     }
 
-    private static string ToJsonString<T>(T value)
-    {
+    private static string ToJsonString<T>(T value) {
         return JsonSerializer.Serialize(value, FfiJsonExtensions.FfiJsonOptions);
     }
 
     /// <summary>Called by Rust via FreeUserDataCallback when done with this bridge</summary>
-    internal static void FreeUserData(IntPtr bridgeId)
-    {
-        lock (_registryLock)
-        {
+    internal static void FreeUserData(IntPtr bridgeId) {
+        lock (_registryLock) {
             // Mark bridge as disposed but DON'T remove from registry yet.
             // Callbacks in flight will still be able to look it up and execute safely.
             // The bridge will stay alive as long as _callbackRefCount > 0.
-            if (_bridgeRegistry.TryGetValue(bridgeId, out var bridge))
-            {
+            if (_bridgeRegistry.TryGetValue(bridgeId, out var bridge)) {
                 bridge._disposed = true;
             }
         }
     }
 
-    private void IncrementCallbackRef()
-    {
-        lock (_registryLock)
-        {
+    private void IncrementCallbackRef() {
+        lock (_registryLock) {
             _callbackRefCount++;
         }
     }
 
-    private void DecrementCallbackRef()
-    {
-        lock (_registryLock)
-        {
-            if (_callbackRefCount > 0)
-            {
+    private void DecrementCallbackRef() {
+        lock (_registryLock) {
+            if (_callbackRefCount > 0) {
                 _callbackRefCount--;
             }
             // Once refcount reaches 0 and bridge is disposed, remove from registry
-            if (_callbackRefCount == 0 && _disposed)
-            {
+            if (_callbackRefCount == 0 && _disposed) {
                 _bridgeRegistry.Remove(_bridgeId);
             }
         }
     }
 
-    private int NameFnCallback(IntPtr userData, out IntPtr outName, out IntPtr outError)
-    {
-        try
-        {
+    private int NameFnCallback(IntPtr userData, out IntPtr outName, out IntPtr outError) {
+        try {
             outError = IntPtr.Zero;
             string _name = null!;
-            lock (ValidatorBridge._registryLock)
-            {
-                if (!ValidatorBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+            lock (ValidatorBridge._registryLock) {
+                if (!ValidatorBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outName = IntPtr.Zero;
                     return 1;
                 }
@@ -2022,25 +1663,19 @@ public sealed class ValidatorBridge : IDisposable
             }
             outName = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_name);
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outName = IntPtr.Zero;
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int VersionFnCallback(IntPtr userData, out IntPtr outVersion, out IntPtr outError)
-    {
-        try
-        {
+    private int VersionFnCallback(IntPtr userData, out IntPtr outVersion, out IntPtr outError) {
+        try {
             outError = IntPtr.Zero;
             string _version = null!;
-            lock (ValidatorBridge._registryLock)
-            {
-                if (!ValidatorBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+            lock (ValidatorBridge._registryLock) {
+                if (!ValidatorBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outVersion = IntPtr.Zero;
                     return 1;
                 }
@@ -2048,23 +1683,17 @@ public sealed class ValidatorBridge : IDisposable
             }
             outVersion = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_version);
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outVersion = IntPtr.Zero;
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int InitializeFnCallback(IntPtr userData, out IntPtr outError)
-    {
-        try
-        {
-            lock (ValidatorBridge._registryLock)
-            {
-                if (!ValidatorBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+    private int InitializeFnCallback(IntPtr userData, out IntPtr outError) {
+        try {
+            lock (ValidatorBridge._registryLock) {
+                if (!ValidatorBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outError = IntPtr.Zero;
                     return 1;
                 }
@@ -2072,22 +1701,16 @@ public sealed class ValidatorBridge : IDisposable
             }
             outError = IntPtr.Zero;
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int ShutdownFnCallback(IntPtr userData, out IntPtr outError)
-    {
-        try
-        {
-            lock (ValidatorBridge._registryLock)
-            {
-                if (!ValidatorBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+    private int ShutdownFnCallback(IntPtr userData, out IntPtr outError) {
+        try {
+            lock (ValidatorBridge._registryLock) {
+                if (!ValidatorBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outError = IntPtr.Zero;
                     return 1;
                 }
@@ -2095,32 +1718,25 @@ public sealed class ValidatorBridge : IDisposable
             }
             outError = IntPtr.Zero;
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int ValidateFnCallback(IntPtr userData, IntPtr result, IntPtr config)
-    {
+    private int ValidateFnCallback(IntPtr userData, IntPtr result, IntPtr config) {
         ValidatorBridge? _bridgeFromRegistry = null;
-        lock (ValidatorBridge._registryLock)
-        {
-            if (ValidatorBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry))
-            {
+        lock (ValidatorBridge._registryLock) {
+            if (ValidatorBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
                 _bridgeFromRegistry = bridgeFromRegistry;
                 // Increment callback refcount to prevent GC while callback executes
                 _bridgeFromRegistry.IncrementCallbackRef();
             }
         }
-        if (_bridgeFromRegistry == null)
-        {
+        if (_bridgeFromRegistry == null) {
             return 0;
         }
-        try
-        {
+        try {
             var bridge = _bridgeFromRegistry!;
             var json_result = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(result) ?? "{}";
             var managed_result = JsonSerializer.Deserialize<ExtractedDocument>(json_result, FfiJsonExtensions.FfiJsonOptions)!;
@@ -2128,38 +1744,28 @@ public sealed class ValidatorBridge : IDisposable
             var managed_config = JsonSerializer.Deserialize<ExtractionConfig>(json_config, FfiJsonExtensions.FfiJsonOptions)!;
             bridge._impl.Validate(managed_result, managed_config);
             return 0;
-        }
-        catch (Exception)
-        {
+        } catch (Exception) {
             return 0;
-        }
-        finally
-        {
-            if (_bridgeFromRegistry != null)
-            {
+        } finally {
+            if (_bridgeFromRegistry != null) {
                 try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
             }
         }
     }
 
-    private int ShouldValidateFnCallback(IntPtr userData, IntPtr result, IntPtr config)
-    {
+    private int ShouldValidateFnCallback(IntPtr userData, IntPtr result, IntPtr config) {
         ValidatorBridge? _bridgeFromRegistry = null;
-        lock (ValidatorBridge._registryLock)
-        {
-            if (ValidatorBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry))
-            {
+        lock (ValidatorBridge._registryLock) {
+            if (ValidatorBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
                 _bridgeFromRegistry = bridgeFromRegistry;
                 // Increment callback refcount to prevent GC while callback executes
                 _bridgeFromRegistry.IncrementCallbackRef();
             }
         }
-        if (_bridgeFromRegistry == null)
-        {
+        if (_bridgeFromRegistry == null) {
             return 0;
         }
-        try
-        {
+        try {
             var bridge = _bridgeFromRegistry!;
             var json_result = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(result) ?? "{}";
             var managed_result = JsonSerializer.Deserialize<ExtractedDocument>(json_result, FfiJsonExtensions.FfiJsonOptions)!;
@@ -2167,85 +1773,63 @@ public sealed class ValidatorBridge : IDisposable
             var managed_config = JsonSerializer.Deserialize<ExtractionConfig>(json_config, FfiJsonExtensions.FfiJsonOptions)!;
             var methodResult = bridge._impl.ShouldValidate(managed_result, managed_config);
             return methodResult ? 1 : 0;
-        }
-        catch (Exception)
-        {
+        } catch (Exception) {
             return 0;
-        }
-        finally
-        {
-            if (_bridgeFromRegistry != null)
-            {
+        } finally {
+            if (_bridgeFromRegistry != null) {
                 try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
             }
         }
     }
 
-    private int PriorityFnCallback(IntPtr userData)
-    {
+    private int PriorityFnCallback(IntPtr userData) {
         ValidatorBridge? _bridgeFromRegistry = null;
-        lock (ValidatorBridge._registryLock)
-        {
-            if (ValidatorBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry))
-            {
+        lock (ValidatorBridge._registryLock) {
+            if (ValidatorBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
                 _bridgeFromRegistry = bridgeFromRegistry;
                 // Increment callback refcount to prevent GC while callback executes
                 _bridgeFromRegistry.IncrementCallbackRef();
             }
         }
-        if (_bridgeFromRegistry == null)
-        {
+        if (_bridgeFromRegistry == null) {
             return 0;
         }
-        try
-        {
+        try {
             var bridge = _bridgeFromRegistry!;
             var methodResult = bridge._impl.Priority;
             return methodResult;
-        }
-        catch (Exception)
-        {
+        } catch (Exception) {
             return 0;
-        }
-        finally
-        {
-            if (_bridgeFromRegistry != null)
-            {
+        } finally {
+            if (_bridgeFromRegistry != null) {
                 try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
             }
         }
     }
 
-    private void FreeStringCallback(IntPtr ptr)
-    {
-        if (ptr != IntPtr.Zero)
-        {
+    private void FreeStringCallback(IntPtr ptr) {
+        if (ptr != IntPtr.Zero) {
             global::System.Runtime.InteropServices.Marshal.FreeCoTaskMem(ptr);
         }
     }
 
-    private void FreeUserDataCallback(IntPtr userData)
-    {
-        if (userData != IntPtr.Zero)
-        {
+    private void FreeUserDataCallback(IntPtr userData) {
+        if (userData != IntPtr.Zero) {
             ValidatorBridge.FreeUserData(userData);
         }
     }
 
 
-    public void Dispose()
-    {
+    public void Dispose() {
         if (_disposed) return;
         _disposed = true;
 
-        if (_vtable != IntPtr.Zero)
-        {
+        if (_vtable != IntPtr.Zero) {
             global::System.Runtime.InteropServices.Marshal.FreeHGlobal(_vtable);
             _vtable = IntPtr.Zero;
         }
 
-        if (_implHandle.IsAllocated)
-        {
+        if (_implHandle.IsAllocated) {
             _implHandle.Free();
         }
 
@@ -2254,8 +1838,7 @@ public sealed class ValidatorBridge : IDisposable
     }
 
     /// <summary>Register a Validator implementation and return its native handle</summary>
-    public static IntPtr Register(IValidator impl)
-    {
+    public static IntPtr Register(IValidator impl) {
         if (impl == null)
         throw new ArgumentNullException(nameof(impl));
 
@@ -2264,12 +1847,10 @@ public sealed class ValidatorBridge : IDisposable
 
         var bridge = new ValidatorBridge(impl);
 
-        try
-        {
+        try {
             // Register bridge in the static registry using its unique ID.
             // This keeps the bridge alive while Rust holds the ID (userData).
-            lock (_registryLock)
-            {
+            lock (_registryLock) {
                 _bridgeRegistry[bridge._bridgeId] = bridge;
             }
 
@@ -2277,10 +1858,8 @@ public sealed class ValidatorBridge : IDisposable
             var userData = bridge._bridgeId;
 
             var result = NativeMethods.RegisterValidator(name, vtablePtr, userData, out var outError);
-            if (result != 0)
-            {
-                lock (_registryLock)
-                {
+            if (result != 0) {
+                lock (_registryLock) {
                     _bridgeRegistry.Remove(bridge._bridgeId);
                 }
                 bridge.Dispose();
@@ -2292,11 +1871,8 @@ public sealed class ValidatorBridge : IDisposable
             // Return the bridge ID (userData).
             // The FFI layer holds this ID and will call FreeUserDataCallback with it when done.
             return userData;
-        }
-        catch
-        {
-            lock (_registryLock)
-            {
+        } catch {
+            lock (_registryLock) {
                 _bridgeRegistry.Remove(bridge._bridgeId);
             }
             bridge.Dispose();
@@ -2306,15 +1882,13 @@ public sealed class ValidatorBridge : IDisposable
 }
 
 /// <summary>Static helpers for registering trait implementations</summary>
-public static class ValidatorRegistry
-{
+public static class ValidatorRegistry {
 
     private static readonly ConcurrentDictionary<string, ValidatorBridge> _bridges =
     new ConcurrentDictionary<string, ValidatorBridge>();
 
     /// <summary>Register a Validator implementation and return its native handle</summary>
-    public static IntPtr RegisterValidator(IValidator impl)
-    {
+    public static IntPtr RegisterValidator(IValidator impl) {
         if (impl == null)
         throw new ArgumentNullException(nameof(impl));
 
@@ -2322,8 +1896,7 @@ public static class ValidatorRegistry
         var userData = bridge._bridgeId;
         var name = impl.Name;
 
-        lock (ValidatorBridge._registryLock)
-        {
+        lock (ValidatorBridge._registryLock) {
             ValidatorBridge._bridgeRegistry[userData] = bridge;
         }
         return userData;
@@ -2331,8 +1904,7 @@ public static class ValidatorRegistry
 
     /// <summary>Register a Validator implementation and return its native handle</summary>
 
-    public static IntPtr Register(IValidator impl)
-    {
+    public static IntPtr Register(IValidator impl) {
         if (impl == null)
         throw new ArgumentNullException(nameof(impl));
 
@@ -2341,23 +1913,19 @@ public static class ValidatorRegistry
 
         var bridge = new ValidatorBridge(impl);
 
-        try
-        {
+        try {
             var userData = bridge._bridgeId;
             var vtablePtr = bridge._vtable;
 
             // Register bridge in the static registry using its unique ID.
             // This keeps the bridge alive while Rust holds the ID (userData).
-            lock (ValidatorBridge._registryLock)
-            {
+            lock (ValidatorBridge._registryLock) {
                 ValidatorBridge._bridgeRegistry[userData] = bridge;
             }
 
             var result = NativeMethods.RegisterValidator(name, vtablePtr, userData, out var outError);
-            if (result != 0)
-            {
-                lock (ValidatorBridge._registryLock)
-                {
+            if (result != 0) {
+                lock (ValidatorBridge._registryLock) {
                     ValidatorBridge._bridgeRegistry.Remove(userData);
                 }
                 bridge.Dispose();
@@ -2367,11 +1935,8 @@ public static class ValidatorRegistry
             }
 
             return userData;
-        }
-        catch
-        {
-            lock (ValidatorBridge._registryLock)
-            {
+        } catch {
+            lock (ValidatorBridge._registryLock) {
                 ValidatorBridge._bridgeRegistry.Remove(bridge._bridgeId);
             }
             bridge.Dispose();
@@ -2380,31 +1945,26 @@ public static class ValidatorRegistry
     }
 
     /// <summary>Unregister a Validator implementation</summary>
-    public static void Unregister(string name)
-    {
+    public static void Unregister(string name) {
         if (string.IsNullOrEmpty(name))
         throw new ArgumentException("Name cannot be empty", nameof(name));
 
         var result = NativeMethods.UnregisterValidator(name, out var outError);
-        if (result != 0)
-        {
+        if (result != 0) {
             var errorMsg = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(outError) ?? "Unknown error";
             global::System.Runtime.InteropServices.Marshal.FreeCoTaskMem(outError);
             throw new InvalidOperationException($"Failed to unregister {name}: {errorMsg}");
         }
 
-        if (_bridges.TryRemove(name, out var bridge))
-        {
+        if (_bridges.TryRemove(name, out var bridge)) {
             bridge.Dispose();
         }
     }
 
     /// <summary>Clear all registered Validator implementations</summary>
-    public static void Clear()
-    {
+    public static void Clear() {
         var result = NativeMethods.ClearValidator(out var outError);
-        if (result != 0)
-        {
+        if (result != 0) {
             var errorMsg = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(outError) ?? "Unknown error";
             global::System.Runtime.InteropServices.Marshal.FreeCoTaskMem(outError);
             throw new InvalidOperationException($"Failed to clear Validator registry: {errorMsg}");
@@ -2417,8 +1977,7 @@ public static class ValidatorRegistry
 /// <summary>
 /// Bridge interface for DocumentExtractor trait implementation via native FFI
 /// </summary>
-public interface IDocumentExtractor
-{
+public interface IDocumentExtractor {
 
     /// <summary>Get the plugin name.</summary>
     string Name { get; }
@@ -2448,8 +2007,7 @@ public interface IDocumentExtractor
 /// <summary>
 /// Manages the FFI vtable and delegates for a DocumentExtractor implementation
 /// </summary>
-public sealed class DocumentExtractorBridge : IDisposable
-{
+public sealed class DocumentExtractorBridge : IDisposable {
 
     internal readonly IDocumentExtractor _impl;
     private readonly GCHandle _implHandle;
@@ -2500,8 +2058,7 @@ public sealed class DocumentExtractorBridge : IDisposable
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate void FreeUserDataFn(IntPtr userData);
 
-    public DocumentExtractorBridge(IDocumentExtractor impl)
-    {
+    public DocumentExtractorBridge(IDocumentExtractor impl) {
         _impl = impl ?? throw new ArgumentNullException(nameof(impl));
         // Keep impl alive via normal GCHandle (sufficient for callback rooting).
         // The impl instance itself is not pinned, just kept in the GC root set.
@@ -2512,15 +2069,13 @@ public sealed class DocumentExtractorBridge : IDisposable
         _vtable = IntPtr.Zero;
         _disposed = false;
         // Allocate unique bridge ID for registry lookup during callbacks
-        lock (_registryLock)
-        {
+        lock (_registryLock) {
             _bridgeId = new IntPtr(_nextBridgeId++);
         }
         BuildVtable();
     }
 
-    private void BuildVtable()
-    {
+    private void BuildVtable() {
         // Allocate unmanaged vtable struct (array of function pointers)
         _vtable = global::System.Runtime.InteropServices.Marshal.AllocHGlobal(IntPtr.Size * 10);
 
@@ -2576,60 +2131,46 @@ public sealed class DocumentExtractorBridge : IDisposable
 
     }
 
-    private static string ToJsonString<T>(T value)
-    {
+    private static string ToJsonString<T>(T value) {
         return JsonSerializer.Serialize(value, FfiJsonExtensions.FfiJsonOptions);
     }
 
     /// <summary>Called by Rust via FreeUserDataCallback when done with this bridge</summary>
-    internal static void FreeUserData(IntPtr bridgeId)
-    {
-        lock (_registryLock)
-        {
+    internal static void FreeUserData(IntPtr bridgeId) {
+        lock (_registryLock) {
             // Mark bridge as disposed but DON'T remove from registry yet.
             // Callbacks in flight will still be able to look it up and execute safely.
             // The bridge will stay alive as long as _callbackRefCount > 0.
-            if (_bridgeRegistry.TryGetValue(bridgeId, out var bridge))
-            {
+            if (_bridgeRegistry.TryGetValue(bridgeId, out var bridge)) {
                 bridge._disposed = true;
             }
         }
     }
 
-    private void IncrementCallbackRef()
-    {
-        lock (_registryLock)
-        {
+    private void IncrementCallbackRef() {
+        lock (_registryLock) {
             _callbackRefCount++;
         }
     }
 
-    private void DecrementCallbackRef()
-    {
-        lock (_registryLock)
-        {
-            if (_callbackRefCount > 0)
-            {
+    private void DecrementCallbackRef() {
+        lock (_registryLock) {
+            if (_callbackRefCount > 0) {
                 _callbackRefCount--;
             }
             // Once refcount reaches 0 and bridge is disposed, remove from registry
-            if (_callbackRefCount == 0 && _disposed)
-            {
+            if (_callbackRefCount == 0 && _disposed) {
                 _bridgeRegistry.Remove(_bridgeId);
             }
         }
     }
 
-    private int NameFnCallback(IntPtr userData, out IntPtr outName, out IntPtr outError)
-    {
-        try
-        {
+    private int NameFnCallback(IntPtr userData, out IntPtr outName, out IntPtr outError) {
+        try {
             outError = IntPtr.Zero;
             string _name = null!;
-            lock (DocumentExtractorBridge._registryLock)
-            {
-                if (!DocumentExtractorBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+            lock (DocumentExtractorBridge._registryLock) {
+                if (!DocumentExtractorBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outName = IntPtr.Zero;
                     return 1;
                 }
@@ -2637,25 +2178,19 @@ public sealed class DocumentExtractorBridge : IDisposable
             }
             outName = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_name);
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outName = IntPtr.Zero;
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int VersionFnCallback(IntPtr userData, out IntPtr outVersion, out IntPtr outError)
-    {
-        try
-        {
+    private int VersionFnCallback(IntPtr userData, out IntPtr outVersion, out IntPtr outError) {
+        try {
             outError = IntPtr.Zero;
             string _version = null!;
-            lock (DocumentExtractorBridge._registryLock)
-            {
-                if (!DocumentExtractorBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+            lock (DocumentExtractorBridge._registryLock) {
+                if (!DocumentExtractorBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outVersion = IntPtr.Zero;
                     return 1;
                 }
@@ -2663,23 +2198,17 @@ public sealed class DocumentExtractorBridge : IDisposable
             }
             outVersion = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_version);
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outVersion = IntPtr.Zero;
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int InitializeFnCallback(IntPtr userData, out IntPtr outError)
-    {
-        try
-        {
-            lock (DocumentExtractorBridge._registryLock)
-            {
-                if (!DocumentExtractorBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+    private int InitializeFnCallback(IntPtr userData, out IntPtr outError) {
+        try {
+            lock (DocumentExtractorBridge._registryLock) {
+                if (!DocumentExtractorBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outError = IntPtr.Zero;
                     return 1;
                 }
@@ -2687,22 +2216,16 @@ public sealed class DocumentExtractorBridge : IDisposable
             }
             outError = IntPtr.Zero;
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int ShutdownFnCallback(IntPtr userData, out IntPtr outError)
-    {
-        try
-        {
-            lock (DocumentExtractorBridge._registryLock)
-            {
-                if (!DocumentExtractorBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+    private int ShutdownFnCallback(IntPtr userData, out IntPtr outError) {
+        try {
+            lock (DocumentExtractorBridge._registryLock) {
+                if (!DocumentExtractorBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outError = IntPtr.Zero;
                     return 1;
                 }
@@ -2710,263 +2233,194 @@ public sealed class DocumentExtractorBridge : IDisposable
             }
             outError = IntPtr.Zero;
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int ExtractFnCallback(IntPtr userData, IntPtr input, IntPtr config, out IntPtr outResult, out IntPtr outError)
-    {
+    private int ExtractFnCallback(IntPtr userData, IntPtr input, IntPtr config, out IntPtr outResult, out IntPtr outError) {
         DocumentExtractorBridge? _bridgeFromRegistry = null;
-        lock (DocumentExtractorBridge._registryLock)
-        {
-            if (DocumentExtractorBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry))
-            {
+        lock (DocumentExtractorBridge._registryLock) {
+            if (DocumentExtractorBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
                 _bridgeFromRegistry = bridgeFromRegistry;
                 // Increment callback refcount to prevent GC while callback executes
                 _bridgeFromRegistry.IncrementCallbackRef();
             }
         }
-        if (_bridgeFromRegistry == null)
-        {
+        if (_bridgeFromRegistry == null) {
             outResult = IntPtr.Zero;
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8($"Bridge not found for userData (likely unregistered): {userData}");
             return 1;
         }
-        try
-        {
+        try {
             var bridge = _bridgeFromRegistry!;
             var json_input = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(input) ?? "{}";
             var managed_input = JsonSerializer.Deserialize<ExtractInput>(json_input, FfiJsonExtensions.FfiJsonOptions)!;
             var json_config = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(config) ?? "{}";
             var managed_config = JsonSerializer.Deserialize<ExtractionConfig>(json_config, FfiJsonExtensions.FfiJsonOptions)!;
             var methodResult = bridge._impl.Extract(managed_input, managed_config);
-            try
-            {
+            try {
                 string __result_str = (methodResult.ToFfiJson()) ?? string.Empty;
                 outResult = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(__result_str);
-            }
-            catch
-            {
+            } catch {
                 outResult = IntPtr.Zero;
                 throw;
             }
             outError = IntPtr.Zero;
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outResult = IntPtr.Zero;
             outError = IntPtr.Zero;
             // Attempt to marshal exception message, but on ANY failure just leave outError null
-            try
-            {
+            try {
                 string _errMsg = null!;
-                try
-                {
+                try {
                     _errMsg = ex?.Message ?? ex?.GetType()?.Name ?? "Unknown exception";
-                }
-                catch
-                {
+                } catch {
                     _errMsg = "Callback failed";
                 }
-                if (!string.IsNullOrEmpty(_errMsg))
-                {
+                if (!string.IsNullOrEmpty(_errMsg)) {
                     outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_errMsg);
                 }
-            }
-            catch
-            {
+            } catch {
                 // Marshalling failed; outError stays null — Rust will see return code 1
             }
             return 1;
-        }
-        finally
-        {
-            if (_bridgeFromRegistry != null)
-            {
+        } finally {
+            if (_bridgeFromRegistry != null) {
                 try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
             }
         }
     }
 
-    private int SupportedMimeTypesFnCallback(IntPtr userData, out IntPtr outResult, out IntPtr outError)
-    {
+    private int SupportedMimeTypesFnCallback(IntPtr userData, out IntPtr outResult, out IntPtr outError) {
         DocumentExtractorBridge? _bridgeFromRegistry = null;
-        lock (DocumentExtractorBridge._registryLock)
-        {
-            if (DocumentExtractorBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry))
-            {
+        lock (DocumentExtractorBridge._registryLock) {
+            if (DocumentExtractorBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
                 _bridgeFromRegistry = bridgeFromRegistry;
                 // Increment callback refcount to prevent GC while callback executes
                 _bridgeFromRegistry.IncrementCallbackRef();
             }
         }
-        if (_bridgeFromRegistry == null)
-        {
+        if (_bridgeFromRegistry == null) {
             outResult = IntPtr.Zero;
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8($"Bridge not found for userData (likely unregistered): {userData}");
             return 1;
         }
-        try
-        {
+        try {
             var bridge = _bridgeFromRegistry!;
             var methodResult = bridge._impl.SupportedMimeTypes;
-            try
-            {
+            try {
                 string __result_str = (ToJsonString(methodResult)) ?? string.Empty;
                 outResult = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(__result_str);
-            }
-            catch
-            {
+            } catch {
                 outResult = IntPtr.Zero;
                 throw;
             }
             outError = IntPtr.Zero;
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outResult = IntPtr.Zero;
             outError = IntPtr.Zero;
             // Attempt to marshal exception message, but on ANY failure just leave outError null
-            try
-            {
+            try {
                 string _errMsg = null!;
-                try
-                {
+                try {
                     _errMsg = ex?.Message ?? ex?.GetType()?.Name ?? "Unknown exception";
-                }
-                catch
-                {
+                } catch {
                     _errMsg = "Callback failed";
                 }
-                if (!string.IsNullOrEmpty(_errMsg))
-                {
+                if (!string.IsNullOrEmpty(_errMsg)) {
                     outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_errMsg);
                 }
-            }
-            catch
-            {
+            } catch {
                 // Marshalling failed; outError stays null — Rust will see return code 1
             }
             return 1;
-        }
-        finally
-        {
-            if (_bridgeFromRegistry != null)
-            {
+        } finally {
+            if (_bridgeFromRegistry != null) {
                 try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
             }
         }
     }
 
-    private int PriorityFnCallback(IntPtr userData)
-    {
+    private int PriorityFnCallback(IntPtr userData) {
         DocumentExtractorBridge? _bridgeFromRegistry = null;
-        lock (DocumentExtractorBridge._registryLock)
-        {
-            if (DocumentExtractorBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry))
-            {
+        lock (DocumentExtractorBridge._registryLock) {
+            if (DocumentExtractorBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
                 _bridgeFromRegistry = bridgeFromRegistry;
                 // Increment callback refcount to prevent GC while callback executes
                 _bridgeFromRegistry.IncrementCallbackRef();
             }
         }
-        if (_bridgeFromRegistry == null)
-        {
+        if (_bridgeFromRegistry == null) {
             return 0;
         }
-        try
-        {
+        try {
             var bridge = _bridgeFromRegistry!;
             var methodResult = bridge._impl.Priority;
             return methodResult;
-        }
-        catch (Exception)
-        {
+        } catch (Exception) {
             return 0;
-        }
-        finally
-        {
-            if (_bridgeFromRegistry != null)
-            {
+        } finally {
+            if (_bridgeFromRegistry != null) {
                 try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
             }
         }
     }
 
-    private int CanHandleFnCallback(IntPtr userData, IntPtr path, IntPtr mimeType)
-    {
+    private int CanHandleFnCallback(IntPtr userData, IntPtr path, IntPtr mimeType) {
         DocumentExtractorBridge? _bridgeFromRegistry = null;
-        lock (DocumentExtractorBridge._registryLock)
-        {
-            if (DocumentExtractorBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry))
-            {
+        lock (DocumentExtractorBridge._registryLock) {
+            if (DocumentExtractorBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
                 _bridgeFromRegistry = bridgeFromRegistry;
                 // Increment callback refcount to prevent GC while callback executes
                 _bridgeFromRegistry.IncrementCallbackRef();
             }
         }
-        if (_bridgeFromRegistry == null)
-        {
+        if (_bridgeFromRegistry == null) {
             return 0;
         }
-        try
-        {
+        try {
             var bridge = _bridgeFromRegistry!;
             var json_path = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(path) ?? "{}";
             var managed_path = JsonSerializer.Deserialize<string>(json_path, FfiJsonExtensions.FfiJsonOptions)!;
             var managed_mimeType = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(mimeType) ?? string.Empty;
             var methodResult = bridge._impl.CanHandle(managed_path, managed_mimeType);
             return methodResult ? 1 : 0;
-        }
-        catch (Exception)
-        {
+        } catch (Exception) {
             return 0;
-        }
-        finally
-        {
-            if (_bridgeFromRegistry != null)
-            {
+        } finally {
+            if (_bridgeFromRegistry != null) {
                 try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
             }
         }
     }
 
-    private void FreeStringCallback(IntPtr ptr)
-    {
-        if (ptr != IntPtr.Zero)
-        {
+    private void FreeStringCallback(IntPtr ptr) {
+        if (ptr != IntPtr.Zero) {
             global::System.Runtime.InteropServices.Marshal.FreeCoTaskMem(ptr);
         }
     }
 
-    private void FreeUserDataCallback(IntPtr userData)
-    {
-        if (userData != IntPtr.Zero)
-        {
+    private void FreeUserDataCallback(IntPtr userData) {
+        if (userData != IntPtr.Zero) {
             DocumentExtractorBridge.FreeUserData(userData);
         }
     }
 
 
-    public void Dispose()
-    {
+    public void Dispose() {
         if (_disposed) return;
         _disposed = true;
 
-        if (_vtable != IntPtr.Zero)
-        {
+        if (_vtable != IntPtr.Zero) {
             global::System.Runtime.InteropServices.Marshal.FreeHGlobal(_vtable);
             _vtable = IntPtr.Zero;
         }
 
-        if (_implHandle.IsAllocated)
-        {
+        if (_implHandle.IsAllocated) {
             _implHandle.Free();
         }
 
@@ -2975,8 +2429,7 @@ public sealed class DocumentExtractorBridge : IDisposable
     }
 
     /// <summary>Register a DocumentExtractor implementation and return its native handle</summary>
-    public static IntPtr Register(IDocumentExtractor impl)
-    {
+    public static IntPtr Register(IDocumentExtractor impl) {
         if (impl == null)
         throw new ArgumentNullException(nameof(impl));
 
@@ -2985,12 +2438,10 @@ public sealed class DocumentExtractorBridge : IDisposable
 
         var bridge = new DocumentExtractorBridge(impl);
 
-        try
-        {
+        try {
             // Register bridge in the static registry using its unique ID.
             // This keeps the bridge alive while Rust holds the ID (userData).
-            lock (_registryLock)
-            {
+            lock (_registryLock) {
                 _bridgeRegistry[bridge._bridgeId] = bridge;
             }
 
@@ -2998,10 +2449,8 @@ public sealed class DocumentExtractorBridge : IDisposable
             var userData = bridge._bridgeId;
 
             var result = NativeMethods.RegisterDocumentExtractor(name, vtablePtr, userData, out var outError);
-            if (result != 0)
-            {
-                lock (_registryLock)
-                {
+            if (result != 0) {
+                lock (_registryLock) {
                     _bridgeRegistry.Remove(bridge._bridgeId);
                 }
                 bridge.Dispose();
@@ -3013,11 +2462,8 @@ public sealed class DocumentExtractorBridge : IDisposable
             // Return the bridge ID (userData).
             // The FFI layer holds this ID and will call FreeUserDataCallback with it when done.
             return userData;
-        }
-        catch
-        {
-            lock (_registryLock)
-            {
+        } catch {
+            lock (_registryLock) {
                 _bridgeRegistry.Remove(bridge._bridgeId);
             }
             bridge.Dispose();
@@ -3027,15 +2473,13 @@ public sealed class DocumentExtractorBridge : IDisposable
 }
 
 /// <summary>Static helpers for registering trait implementations</summary>
-public static class DocumentExtractorRegistry
-{
+public static class DocumentExtractorRegistry {
 
     private static readonly ConcurrentDictionary<string, DocumentExtractorBridge> _bridges =
     new ConcurrentDictionary<string, DocumentExtractorBridge>();
 
     /// <summary>Register a DocumentExtractor implementation and return its native handle</summary>
-    public static IntPtr RegisterDocumentExtractor(IDocumentExtractor impl)
-    {
+    public static IntPtr RegisterDocumentExtractor(IDocumentExtractor impl) {
         if (impl == null)
         throw new ArgumentNullException(nameof(impl));
 
@@ -3043,8 +2487,7 @@ public static class DocumentExtractorRegistry
         var userData = bridge._bridgeId;
         var name = impl.Name;
 
-        lock (DocumentExtractorBridge._registryLock)
-        {
+        lock (DocumentExtractorBridge._registryLock) {
             DocumentExtractorBridge._bridgeRegistry[userData] = bridge;
         }
         return userData;
@@ -3052,8 +2495,7 @@ public static class DocumentExtractorRegistry
 
     /// <summary>Register a DocumentExtractor implementation and return its native handle</summary>
 
-    public static IntPtr Register(IDocumentExtractor impl)
-    {
+    public static IntPtr Register(IDocumentExtractor impl) {
         if (impl == null)
         throw new ArgumentNullException(nameof(impl));
 
@@ -3062,23 +2504,19 @@ public static class DocumentExtractorRegistry
 
         var bridge = new DocumentExtractorBridge(impl);
 
-        try
-        {
+        try {
             var userData = bridge._bridgeId;
             var vtablePtr = bridge._vtable;
 
             // Register bridge in the static registry using its unique ID.
             // This keeps the bridge alive while Rust holds the ID (userData).
-            lock (DocumentExtractorBridge._registryLock)
-            {
+            lock (DocumentExtractorBridge._registryLock) {
                 DocumentExtractorBridge._bridgeRegistry[userData] = bridge;
             }
 
             var result = NativeMethods.RegisterDocumentExtractor(name, vtablePtr, userData, out var outError);
-            if (result != 0)
-            {
-                lock (DocumentExtractorBridge._registryLock)
-                {
+            if (result != 0) {
+                lock (DocumentExtractorBridge._registryLock) {
                     DocumentExtractorBridge._bridgeRegistry.Remove(userData);
                 }
                 bridge.Dispose();
@@ -3088,11 +2526,8 @@ public static class DocumentExtractorRegistry
             }
 
             return userData;
-        }
-        catch
-        {
-            lock (DocumentExtractorBridge._registryLock)
-            {
+        } catch {
+            lock (DocumentExtractorBridge._registryLock) {
                 DocumentExtractorBridge._bridgeRegistry.Remove(bridge._bridgeId);
             }
             bridge.Dispose();
@@ -3101,31 +2536,26 @@ public static class DocumentExtractorRegistry
     }
 
     /// <summary>Unregister a DocumentExtractor implementation</summary>
-    public static void Unregister(string name)
-    {
+    public static void Unregister(string name) {
         if (string.IsNullOrEmpty(name))
         throw new ArgumentException("Name cannot be empty", nameof(name));
 
         var result = NativeMethods.UnregisterDocumentExtractor(name, out var outError);
-        if (result != 0)
-        {
+        if (result != 0) {
             var errorMsg = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(outError) ?? "Unknown error";
             global::System.Runtime.InteropServices.Marshal.FreeCoTaskMem(outError);
             throw new InvalidOperationException($"Failed to unregister {name}: {errorMsg}");
         }
 
-        if (_bridges.TryRemove(name, out var bridge))
-        {
+        if (_bridges.TryRemove(name, out var bridge)) {
             bridge.Dispose();
         }
     }
 
     /// <summary>Clear all registered DocumentExtractor implementations</summary>
-    public static void Clear()
-    {
+    public static void Clear() {
         var result = NativeMethods.ClearDocumentExtractor(out var outError);
-        if (result != 0)
-        {
+        if (result != 0) {
             var errorMsg = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(outError) ?? "Unknown error";
             global::System.Runtime.InteropServices.Marshal.FreeCoTaskMem(outError);
             throw new InvalidOperationException($"Failed to clear DocumentExtractor registry: {errorMsg}");
@@ -3138,8 +2568,7 @@ public static class DocumentExtractorRegistry
 /// <summary>
 /// Bridge interface for EmbeddingBackend trait implementation via native FFI
 /// </summary>
-public interface IEmbeddingBackend
-{
+public interface IEmbeddingBackend {
 
     /// <summary>Get the plugin name.</summary>
     string Name { get; }
@@ -3163,8 +2592,7 @@ public interface IEmbeddingBackend
 /// <summary>
 /// Manages the FFI vtable and delegates for a EmbeddingBackend implementation
 /// </summary>
-public sealed class EmbeddingBackendBridge : IDisposable
-{
+public sealed class EmbeddingBackendBridge : IDisposable {
 
     internal readonly IEmbeddingBackend _impl;
     private readonly GCHandle _implHandle;
@@ -3209,8 +2637,7 @@ public sealed class EmbeddingBackendBridge : IDisposable
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate void FreeUserDataFn(IntPtr userData);
 
-    public EmbeddingBackendBridge(IEmbeddingBackend impl)
-    {
+    public EmbeddingBackendBridge(IEmbeddingBackend impl) {
         _impl = impl ?? throw new ArgumentNullException(nameof(impl));
         // Keep impl alive via normal GCHandle (sufficient for callback rooting).
         // The impl instance itself is not pinned, just kept in the GC root set.
@@ -3221,15 +2648,13 @@ public sealed class EmbeddingBackendBridge : IDisposable
         _vtable = IntPtr.Zero;
         _disposed = false;
         // Allocate unique bridge ID for registry lookup during callbacks
-        lock (_registryLock)
-        {
+        lock (_registryLock) {
             _bridgeId = new IntPtr(_nextBridgeId++);
         }
         BuildVtable();
     }
 
-    private void BuildVtable()
-    {
+    private void BuildVtable() {
         // Allocate unmanaged vtable struct (array of function pointers)
         _vtable = global::System.Runtime.InteropServices.Marshal.AllocHGlobal(IntPtr.Size * 8);
 
@@ -3275,60 +2700,46 @@ public sealed class EmbeddingBackendBridge : IDisposable
 
     }
 
-    private static string ToJsonString<T>(T value)
-    {
+    private static string ToJsonString<T>(T value) {
         return JsonSerializer.Serialize(value, FfiJsonExtensions.FfiJsonOptions);
     }
 
     /// <summary>Called by Rust via FreeUserDataCallback when done with this bridge</summary>
-    internal static void FreeUserData(IntPtr bridgeId)
-    {
-        lock (_registryLock)
-        {
+    internal static void FreeUserData(IntPtr bridgeId) {
+        lock (_registryLock) {
             // Mark bridge as disposed but DON'T remove from registry yet.
             // Callbacks in flight will still be able to look it up and execute safely.
             // The bridge will stay alive as long as _callbackRefCount > 0.
-            if (_bridgeRegistry.TryGetValue(bridgeId, out var bridge))
-            {
+            if (_bridgeRegistry.TryGetValue(bridgeId, out var bridge)) {
                 bridge._disposed = true;
             }
         }
     }
 
-    private void IncrementCallbackRef()
-    {
-        lock (_registryLock)
-        {
+    private void IncrementCallbackRef() {
+        lock (_registryLock) {
             _callbackRefCount++;
         }
     }
 
-    private void DecrementCallbackRef()
-    {
-        lock (_registryLock)
-        {
-            if (_callbackRefCount > 0)
-            {
+    private void DecrementCallbackRef() {
+        lock (_registryLock) {
+            if (_callbackRefCount > 0) {
                 _callbackRefCount--;
             }
             // Once refcount reaches 0 and bridge is disposed, remove from registry
-            if (_callbackRefCount == 0 && _disposed)
-            {
+            if (_callbackRefCount == 0 && _disposed) {
                 _bridgeRegistry.Remove(_bridgeId);
             }
         }
     }
 
-    private int NameFnCallback(IntPtr userData, out IntPtr outName, out IntPtr outError)
-    {
-        try
-        {
+    private int NameFnCallback(IntPtr userData, out IntPtr outName, out IntPtr outError) {
+        try {
             outError = IntPtr.Zero;
             string _name = null!;
-            lock (EmbeddingBackendBridge._registryLock)
-            {
-                if (!EmbeddingBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+            lock (EmbeddingBackendBridge._registryLock) {
+                if (!EmbeddingBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outName = IntPtr.Zero;
                     return 1;
                 }
@@ -3336,25 +2747,19 @@ public sealed class EmbeddingBackendBridge : IDisposable
             }
             outName = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_name);
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outName = IntPtr.Zero;
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int VersionFnCallback(IntPtr userData, out IntPtr outVersion, out IntPtr outError)
-    {
-        try
-        {
+    private int VersionFnCallback(IntPtr userData, out IntPtr outVersion, out IntPtr outError) {
+        try {
             outError = IntPtr.Zero;
             string _version = null!;
-            lock (EmbeddingBackendBridge._registryLock)
-            {
-                if (!EmbeddingBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+            lock (EmbeddingBackendBridge._registryLock) {
+                if (!EmbeddingBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outVersion = IntPtr.Zero;
                     return 1;
                 }
@@ -3362,23 +2767,17 @@ public sealed class EmbeddingBackendBridge : IDisposable
             }
             outVersion = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_version);
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outVersion = IntPtr.Zero;
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int InitializeFnCallback(IntPtr userData, out IntPtr outError)
-    {
-        try
-        {
-            lock (EmbeddingBackendBridge._registryLock)
-            {
-                if (!EmbeddingBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+    private int InitializeFnCallback(IntPtr userData, out IntPtr outError) {
+        try {
+            lock (EmbeddingBackendBridge._registryLock) {
+                if (!EmbeddingBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outError = IntPtr.Zero;
                     return 1;
                 }
@@ -3386,22 +2785,16 @@ public sealed class EmbeddingBackendBridge : IDisposable
             }
             outError = IntPtr.Zero;
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int ShutdownFnCallback(IntPtr userData, out IntPtr outError)
-    {
-        try
-        {
-            lock (EmbeddingBackendBridge._registryLock)
-            {
-                if (!EmbeddingBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+    private int ShutdownFnCallback(IntPtr userData, out IntPtr outError) {
+        try {
+            lock (EmbeddingBackendBridge._registryLock) {
+                if (!EmbeddingBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outError = IntPtr.Zero;
                     return 1;
                 }
@@ -3409,152 +2802,113 @@ public sealed class EmbeddingBackendBridge : IDisposable
             }
             outError = IntPtr.Zero;
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private ulong DimensionsFnCallback(IntPtr userData)
-    {
+    private ulong DimensionsFnCallback(IntPtr userData) {
         EmbeddingBackendBridge? _bridgeFromRegistry = null;
-        lock (EmbeddingBackendBridge._registryLock)
-        {
-            if (EmbeddingBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry))
-            {
+        lock (EmbeddingBackendBridge._registryLock) {
+            if (EmbeddingBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
                 _bridgeFromRegistry = bridgeFromRegistry;
                 // Increment callback refcount to prevent GC while callback executes
                 _bridgeFromRegistry.IncrementCallbackRef();
             }
         }
-        if (_bridgeFromRegistry == null)
-        {
+        if (_bridgeFromRegistry == null) {
             return 0;
         }
-        try
-        {
+        try {
             var bridge = _bridgeFromRegistry!;
             var methodResult = bridge._impl.Dimensions;
             return methodResult;
-        }
-        catch (Exception)
-        {
+        } catch (Exception) {
             return 0;
-        }
-        finally
-        {
-            if (_bridgeFromRegistry != null)
-            {
+        } finally {
+            if (_bridgeFromRegistry != null) {
                 try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
             }
         }
     }
 
-    private int EmbedFnCallback(IntPtr userData, IntPtr texts, out IntPtr outResult, out IntPtr outError)
-    {
+    private int EmbedFnCallback(IntPtr userData, IntPtr texts, out IntPtr outResult, out IntPtr outError) {
         EmbeddingBackendBridge? _bridgeFromRegistry = null;
-        lock (EmbeddingBackendBridge._registryLock)
-        {
-            if (EmbeddingBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry))
-            {
+        lock (EmbeddingBackendBridge._registryLock) {
+            if (EmbeddingBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
                 _bridgeFromRegistry = bridgeFromRegistry;
                 // Increment callback refcount to prevent GC while callback executes
                 _bridgeFromRegistry.IncrementCallbackRef();
             }
         }
-        if (_bridgeFromRegistry == null)
-        {
+        if (_bridgeFromRegistry == null) {
             outResult = IntPtr.Zero;
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8($"Bridge not found for userData (likely unregistered): {userData}");
             return 1;
         }
-        try
-        {
+        try {
             var bridge = _bridgeFromRegistry!;
             var json_texts = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(texts) ?? "{}";
             var managed_texts = JsonSerializer.Deserialize<List<string>>(json_texts, FfiJsonExtensions.FfiJsonOptions)!;
             var methodResult = bridge._impl.Embed(managed_texts);
-            try
-            {
+            try {
                 string __result_str = (ToJsonString(methodResult)) ?? string.Empty;
                 outResult = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(__result_str);
-            }
-            catch
-            {
+            } catch {
                 outResult = IntPtr.Zero;
                 throw;
             }
             outError = IntPtr.Zero;
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outResult = IntPtr.Zero;
             outError = IntPtr.Zero;
             // Attempt to marshal exception message, but on ANY failure just leave outError null
-            try
-            {
+            try {
                 string _errMsg = null!;
-                try
-                {
+                try {
                     _errMsg = ex?.Message ?? ex?.GetType()?.Name ?? "Unknown exception";
-                }
-                catch
-                {
+                } catch {
                     _errMsg = "Callback failed";
                 }
-                if (!string.IsNullOrEmpty(_errMsg))
-                {
+                if (!string.IsNullOrEmpty(_errMsg)) {
                     outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_errMsg);
                 }
-            }
-            catch
-            {
+            } catch {
                 // Marshalling failed; outError stays null — Rust will see return code 1
             }
             return 1;
-        }
-        finally
-        {
-            if (_bridgeFromRegistry != null)
-            {
+        } finally {
+            if (_bridgeFromRegistry != null) {
                 try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
             }
         }
     }
 
-    private void FreeStringCallback(IntPtr ptr)
-    {
-        if (ptr != IntPtr.Zero)
-        {
+    private void FreeStringCallback(IntPtr ptr) {
+        if (ptr != IntPtr.Zero) {
             global::System.Runtime.InteropServices.Marshal.FreeCoTaskMem(ptr);
         }
     }
 
-    private void FreeUserDataCallback(IntPtr userData)
-    {
-        if (userData != IntPtr.Zero)
-        {
+    private void FreeUserDataCallback(IntPtr userData) {
+        if (userData != IntPtr.Zero) {
             EmbeddingBackendBridge.FreeUserData(userData);
         }
     }
 
 
-    public void Dispose()
-    {
+    public void Dispose() {
         if (_disposed) return;
         _disposed = true;
 
-        if (_vtable != IntPtr.Zero)
-        {
+        if (_vtable != IntPtr.Zero) {
             global::System.Runtime.InteropServices.Marshal.FreeHGlobal(_vtable);
             _vtable = IntPtr.Zero;
         }
 
-        if (_implHandle.IsAllocated)
-        {
+        if (_implHandle.IsAllocated) {
             _implHandle.Free();
         }
 
@@ -3563,8 +2917,7 @@ public sealed class EmbeddingBackendBridge : IDisposable
     }
 
     /// <summary>Register a EmbeddingBackend implementation and return its native handle</summary>
-    public static IntPtr Register(IEmbeddingBackend impl)
-    {
+    public static IntPtr Register(IEmbeddingBackend impl) {
         if (impl == null)
         throw new ArgumentNullException(nameof(impl));
 
@@ -3573,12 +2926,10 @@ public sealed class EmbeddingBackendBridge : IDisposable
 
         var bridge = new EmbeddingBackendBridge(impl);
 
-        try
-        {
+        try {
             // Register bridge in the static registry using its unique ID.
             // This keeps the bridge alive while Rust holds the ID (userData).
-            lock (_registryLock)
-            {
+            lock (_registryLock) {
                 _bridgeRegistry[bridge._bridgeId] = bridge;
             }
 
@@ -3586,10 +2937,8 @@ public sealed class EmbeddingBackendBridge : IDisposable
             var userData = bridge._bridgeId;
 
             var result = NativeMethods.RegisterEmbeddingBackend(name, vtablePtr, userData, out var outError);
-            if (result != 0)
-            {
-                lock (_registryLock)
-                {
+            if (result != 0) {
+                lock (_registryLock) {
                     _bridgeRegistry.Remove(bridge._bridgeId);
                 }
                 bridge.Dispose();
@@ -3601,11 +2950,8 @@ public sealed class EmbeddingBackendBridge : IDisposable
             // Return the bridge ID (userData).
             // The FFI layer holds this ID and will call FreeUserDataCallback with it when done.
             return userData;
-        }
-        catch
-        {
-            lock (_registryLock)
-            {
+        } catch {
+            lock (_registryLock) {
                 _bridgeRegistry.Remove(bridge._bridgeId);
             }
             bridge.Dispose();
@@ -3615,15 +2961,13 @@ public sealed class EmbeddingBackendBridge : IDisposable
 }
 
 /// <summary>Static helpers for registering trait implementations</summary>
-public static class EmbeddingBackendRegistry
-{
+public static class EmbeddingBackendRegistry {
 
     private static readonly ConcurrentDictionary<string, EmbeddingBackendBridge> _bridges =
     new ConcurrentDictionary<string, EmbeddingBackendBridge>();
 
     /// <summary>Register a EmbeddingBackend implementation and return its native handle</summary>
-    public static IntPtr RegisterEmbeddingBackend(IEmbeddingBackend impl)
-    {
+    public static IntPtr RegisterEmbeddingBackend(IEmbeddingBackend impl) {
         if (impl == null)
         throw new ArgumentNullException(nameof(impl));
 
@@ -3631,8 +2975,7 @@ public static class EmbeddingBackendRegistry
         var userData = bridge._bridgeId;
         var name = impl.Name;
 
-        lock (EmbeddingBackendBridge._registryLock)
-        {
+        lock (EmbeddingBackendBridge._registryLock) {
             EmbeddingBackendBridge._bridgeRegistry[userData] = bridge;
         }
         return userData;
@@ -3640,8 +2983,7 @@ public static class EmbeddingBackendRegistry
 
     /// <summary>Register a EmbeddingBackend implementation and return its native handle</summary>
 
-    public static IntPtr Register(IEmbeddingBackend impl)
-    {
+    public static IntPtr Register(IEmbeddingBackend impl) {
         if (impl == null)
         throw new ArgumentNullException(nameof(impl));
 
@@ -3650,23 +2992,19 @@ public static class EmbeddingBackendRegistry
 
         var bridge = new EmbeddingBackendBridge(impl);
 
-        try
-        {
+        try {
             var userData = bridge._bridgeId;
             var vtablePtr = bridge._vtable;
 
             // Register bridge in the static registry using its unique ID.
             // This keeps the bridge alive while Rust holds the ID (userData).
-            lock (EmbeddingBackendBridge._registryLock)
-            {
+            lock (EmbeddingBackendBridge._registryLock) {
                 EmbeddingBackendBridge._bridgeRegistry[userData] = bridge;
             }
 
             var result = NativeMethods.RegisterEmbeddingBackend(name, vtablePtr, userData, out var outError);
-            if (result != 0)
-            {
-                lock (EmbeddingBackendBridge._registryLock)
-                {
+            if (result != 0) {
+                lock (EmbeddingBackendBridge._registryLock) {
                     EmbeddingBackendBridge._bridgeRegistry.Remove(userData);
                 }
                 bridge.Dispose();
@@ -3676,11 +3014,8 @@ public static class EmbeddingBackendRegistry
             }
 
             return userData;
-        }
-        catch
-        {
-            lock (EmbeddingBackendBridge._registryLock)
-            {
+        } catch {
+            lock (EmbeddingBackendBridge._registryLock) {
                 EmbeddingBackendBridge._bridgeRegistry.Remove(bridge._bridgeId);
             }
             bridge.Dispose();
@@ -3689,31 +3024,26 @@ public static class EmbeddingBackendRegistry
     }
 
     /// <summary>Unregister a EmbeddingBackend implementation</summary>
-    public static void Unregister(string name)
-    {
+    public static void Unregister(string name) {
         if (string.IsNullOrEmpty(name))
         throw new ArgumentException("Name cannot be empty", nameof(name));
 
         var result = NativeMethods.UnregisterEmbeddingBackend(name, out var outError);
-        if (result != 0)
-        {
+        if (result != 0) {
             var errorMsg = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(outError) ?? "Unknown error";
             global::System.Runtime.InteropServices.Marshal.FreeCoTaskMem(outError);
             throw new InvalidOperationException($"Failed to unregister {name}: {errorMsg}");
         }
 
-        if (_bridges.TryRemove(name, out var bridge))
-        {
+        if (_bridges.TryRemove(name, out var bridge)) {
             bridge.Dispose();
         }
     }
 
     /// <summary>Clear all registered EmbeddingBackend implementations</summary>
-    public static void Clear()
-    {
+    public static void Clear() {
         var result = NativeMethods.ClearEmbeddingBackend(out var outError);
-        if (result != 0)
-        {
+        if (result != 0) {
             var errorMsg = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(outError) ?? "Unknown error";
             global::System.Runtime.InteropServices.Marshal.FreeCoTaskMem(outError);
             throw new InvalidOperationException($"Failed to clear EmbeddingBackend registry: {errorMsg}");
@@ -3726,8 +3056,7 @@ public static class EmbeddingBackendRegistry
 /// <summary>
 /// Bridge interface for Renderer trait implementation via native FFI
 /// </summary>
-public interface IRenderer
-{
+public interface IRenderer {
 
     /// <summary>Get the plugin name.</summary>
     string Name { get; }
@@ -3748,8 +3077,7 @@ public interface IRenderer
 /// <summary>
 /// Manages the FFI vtable and delegates for a Renderer implementation
 /// </summary>
-public sealed class RendererBridge : IDisposable
-{
+public sealed class RendererBridge : IDisposable {
 
     internal readonly IRenderer _impl;
     private readonly GCHandle _implHandle;
@@ -3791,8 +3119,7 @@ public sealed class RendererBridge : IDisposable
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate void FreeUserDataFn(IntPtr userData);
 
-    public RendererBridge(IRenderer impl)
-    {
+    public RendererBridge(IRenderer impl) {
         _impl = impl ?? throw new ArgumentNullException(nameof(impl));
         // Keep impl alive via normal GCHandle (sufficient for callback rooting).
         // The impl instance itself is not pinned, just kept in the GC root set.
@@ -3803,15 +3130,13 @@ public sealed class RendererBridge : IDisposable
         _vtable = IntPtr.Zero;
         _disposed = false;
         // Allocate unique bridge ID for registry lookup during callbacks
-        lock (_registryLock)
-        {
+        lock (_registryLock) {
             _bridgeId = new IntPtr(_nextBridgeId++);
         }
         BuildVtable();
     }
 
-    private void BuildVtable()
-    {
+    private void BuildVtable() {
         // Allocate unmanaged vtable struct (array of function pointers)
         _vtable = global::System.Runtime.InteropServices.Marshal.AllocHGlobal(IntPtr.Size * 7);
 
@@ -3852,60 +3177,46 @@ public sealed class RendererBridge : IDisposable
 
     }
 
-    private static string ToJsonString<T>(T value)
-    {
+    private static string ToJsonString<T>(T value) {
         return JsonSerializer.Serialize(value, FfiJsonExtensions.FfiJsonOptions);
     }
 
     /// <summary>Called by Rust via FreeUserDataCallback when done with this bridge</summary>
-    internal static void FreeUserData(IntPtr bridgeId)
-    {
-        lock (_registryLock)
-        {
+    internal static void FreeUserData(IntPtr bridgeId) {
+        lock (_registryLock) {
             // Mark bridge as disposed but DON'T remove from registry yet.
             // Callbacks in flight will still be able to look it up and execute safely.
             // The bridge will stay alive as long as _callbackRefCount > 0.
-            if (_bridgeRegistry.TryGetValue(bridgeId, out var bridge))
-            {
+            if (_bridgeRegistry.TryGetValue(bridgeId, out var bridge)) {
                 bridge._disposed = true;
             }
         }
     }
 
-    private void IncrementCallbackRef()
-    {
-        lock (_registryLock)
-        {
+    private void IncrementCallbackRef() {
+        lock (_registryLock) {
             _callbackRefCount++;
         }
     }
 
-    private void DecrementCallbackRef()
-    {
-        lock (_registryLock)
-        {
-            if (_callbackRefCount > 0)
-            {
+    private void DecrementCallbackRef() {
+        lock (_registryLock) {
+            if (_callbackRefCount > 0) {
                 _callbackRefCount--;
             }
             // Once refcount reaches 0 and bridge is disposed, remove from registry
-            if (_callbackRefCount == 0 && _disposed)
-            {
+            if (_callbackRefCount == 0 && _disposed) {
                 _bridgeRegistry.Remove(_bridgeId);
             }
         }
     }
 
-    private int NameFnCallback(IntPtr userData, out IntPtr outName, out IntPtr outError)
-    {
-        try
-        {
+    private int NameFnCallback(IntPtr userData, out IntPtr outName, out IntPtr outError) {
+        try {
             outError = IntPtr.Zero;
             string _name = null!;
-            lock (RendererBridge._registryLock)
-            {
-                if (!RendererBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+            lock (RendererBridge._registryLock) {
+                if (!RendererBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outName = IntPtr.Zero;
                     return 1;
                 }
@@ -3913,25 +3224,19 @@ public sealed class RendererBridge : IDisposable
             }
             outName = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_name);
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outName = IntPtr.Zero;
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int VersionFnCallback(IntPtr userData, out IntPtr outVersion, out IntPtr outError)
-    {
-        try
-        {
+    private int VersionFnCallback(IntPtr userData, out IntPtr outVersion, out IntPtr outError) {
+        try {
             outError = IntPtr.Zero;
             string _version = null!;
-            lock (RendererBridge._registryLock)
-            {
-                if (!RendererBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+            lock (RendererBridge._registryLock) {
+                if (!RendererBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outVersion = IntPtr.Zero;
                     return 1;
                 }
@@ -3939,23 +3244,17 @@ public sealed class RendererBridge : IDisposable
             }
             outVersion = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_version);
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outVersion = IntPtr.Zero;
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int InitializeFnCallback(IntPtr userData, out IntPtr outError)
-    {
-        try
-        {
-            lock (RendererBridge._registryLock)
-            {
-                if (!RendererBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+    private int InitializeFnCallback(IntPtr userData, out IntPtr outError) {
+        try {
+            lock (RendererBridge._registryLock) {
+                if (!RendererBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outError = IntPtr.Zero;
                     return 1;
                 }
@@ -3963,22 +3262,16 @@ public sealed class RendererBridge : IDisposable
             }
             outError = IntPtr.Zero;
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int ShutdownFnCallback(IntPtr userData, out IntPtr outError)
-    {
-        try
-        {
-            lock (RendererBridge._registryLock)
-            {
-                if (!RendererBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+    private int ShutdownFnCallback(IntPtr userData, out IntPtr outError) {
+        try {
+            lock (RendererBridge._registryLock) {
+                if (!RendererBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outError = IntPtr.Zero;
                     return 1;
                 }
@@ -3986,117 +3279,88 @@ public sealed class RendererBridge : IDisposable
             }
             outError = IntPtr.Zero;
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int RenderResultFnCallback(IntPtr userData, IntPtr result, out IntPtr outResult, out IntPtr outError)
-    {
+    private int RenderResultFnCallback(IntPtr userData, IntPtr result, out IntPtr outResult, out IntPtr outError) {
         RendererBridge? _bridgeFromRegistry = null;
-        lock (RendererBridge._registryLock)
-        {
-            if (RendererBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry))
-            {
+        lock (RendererBridge._registryLock) {
+            if (RendererBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
                 _bridgeFromRegistry = bridgeFromRegistry;
                 // Increment callback refcount to prevent GC while callback executes
                 _bridgeFromRegistry.IncrementCallbackRef();
             }
         }
-        if (_bridgeFromRegistry == null)
-        {
+        if (_bridgeFromRegistry == null) {
             outResult = IntPtr.Zero;
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8($"Bridge not found for userData (likely unregistered): {userData}");
             return 1;
         }
-        try
-        {
+        try {
             var bridge = _bridgeFromRegistry!;
             var json_result = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(result) ?? "{}";
             var managed_result = JsonSerializer.Deserialize<ExtractedDocument>(json_result, FfiJsonExtensions.FfiJsonOptions)!;
             var methodResult = bridge._impl.RenderResult(managed_result);
-            try
-            {
+            try {
                 string __result_str = (ToJsonString(methodResult)) ?? string.Empty;
                 outResult = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(__result_str);
-            }
-            catch
-            {
+            } catch {
                 outResult = IntPtr.Zero;
                 throw;
             }
             outError = IntPtr.Zero;
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outResult = IntPtr.Zero;
             outError = IntPtr.Zero;
             // Attempt to marshal exception message, but on ANY failure just leave outError null
-            try
-            {
+            try {
                 string _errMsg = null!;
-                try
-                {
+                try {
                     _errMsg = ex?.Message ?? ex?.GetType()?.Name ?? "Unknown exception";
-                }
-                catch
-                {
+                } catch {
                     _errMsg = "Callback failed";
                 }
-                if (!string.IsNullOrEmpty(_errMsg))
-                {
+                if (!string.IsNullOrEmpty(_errMsg)) {
                     outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_errMsg);
                 }
-            }
-            catch
-            {
+            } catch {
                 // Marshalling failed; outError stays null — Rust will see return code 1
             }
             return 1;
-        }
-        finally
-        {
-            if (_bridgeFromRegistry != null)
-            {
+        } finally {
+            if (_bridgeFromRegistry != null) {
                 try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
             }
         }
     }
 
-    private void FreeStringCallback(IntPtr ptr)
-    {
-        if (ptr != IntPtr.Zero)
-        {
+    private void FreeStringCallback(IntPtr ptr) {
+        if (ptr != IntPtr.Zero) {
             global::System.Runtime.InteropServices.Marshal.FreeCoTaskMem(ptr);
         }
     }
 
-    private void FreeUserDataCallback(IntPtr userData)
-    {
-        if (userData != IntPtr.Zero)
-        {
+    private void FreeUserDataCallback(IntPtr userData) {
+        if (userData != IntPtr.Zero) {
             RendererBridge.FreeUserData(userData);
         }
     }
 
 
-    public void Dispose()
-    {
+    public void Dispose() {
         if (_disposed) return;
         _disposed = true;
 
-        if (_vtable != IntPtr.Zero)
-        {
+        if (_vtable != IntPtr.Zero) {
             global::System.Runtime.InteropServices.Marshal.FreeHGlobal(_vtable);
             _vtable = IntPtr.Zero;
         }
 
-        if (_implHandle.IsAllocated)
-        {
+        if (_implHandle.IsAllocated) {
             _implHandle.Free();
         }
 
@@ -4105,8 +3369,7 @@ public sealed class RendererBridge : IDisposable
     }
 
     /// <summary>Register a Renderer implementation and return its native handle</summary>
-    public static IntPtr Register(IRenderer impl)
-    {
+    public static IntPtr Register(IRenderer impl) {
         if (impl == null)
         throw new ArgumentNullException(nameof(impl));
 
@@ -4115,12 +3378,10 @@ public sealed class RendererBridge : IDisposable
 
         var bridge = new RendererBridge(impl);
 
-        try
-        {
+        try {
             // Register bridge in the static registry using its unique ID.
             // This keeps the bridge alive while Rust holds the ID (userData).
-            lock (_registryLock)
-            {
+            lock (_registryLock) {
                 _bridgeRegistry[bridge._bridgeId] = bridge;
             }
 
@@ -4128,10 +3389,8 @@ public sealed class RendererBridge : IDisposable
             var userData = bridge._bridgeId;
 
             var result = NativeMethods.RegisterRenderer(name, vtablePtr, userData, out var outError);
-            if (result != 0)
-            {
-                lock (_registryLock)
-                {
+            if (result != 0) {
+                lock (_registryLock) {
                     _bridgeRegistry.Remove(bridge._bridgeId);
                 }
                 bridge.Dispose();
@@ -4143,11 +3402,8 @@ public sealed class RendererBridge : IDisposable
             // Return the bridge ID (userData).
             // The FFI layer holds this ID and will call FreeUserDataCallback with it when done.
             return userData;
-        }
-        catch
-        {
-            lock (_registryLock)
-            {
+        } catch {
+            lock (_registryLock) {
                 _bridgeRegistry.Remove(bridge._bridgeId);
             }
             bridge.Dispose();
@@ -4157,15 +3413,13 @@ public sealed class RendererBridge : IDisposable
 }
 
 /// <summary>Static helpers for registering trait implementations</summary>
-public static class RendererRegistry
-{
+public static class RendererRegistry {
 
     private static readonly ConcurrentDictionary<string, RendererBridge> _bridges =
     new ConcurrentDictionary<string, RendererBridge>();
 
     /// <summary>Register a Renderer implementation and return its native handle</summary>
-    public static IntPtr RegisterRenderer(IRenderer impl)
-    {
+    public static IntPtr RegisterRenderer(IRenderer impl) {
         if (impl == null)
         throw new ArgumentNullException(nameof(impl));
 
@@ -4173,8 +3427,7 @@ public static class RendererRegistry
         var userData = bridge._bridgeId;
         var name = impl.Name;
 
-        lock (RendererBridge._registryLock)
-        {
+        lock (RendererBridge._registryLock) {
             RendererBridge._bridgeRegistry[userData] = bridge;
         }
         return userData;
@@ -4182,8 +3435,7 @@ public static class RendererRegistry
 
     /// <summary>Register a Renderer implementation and return its native handle</summary>
 
-    public static IntPtr Register(IRenderer impl)
-    {
+    public static IntPtr Register(IRenderer impl) {
         if (impl == null)
         throw new ArgumentNullException(nameof(impl));
 
@@ -4192,23 +3444,19 @@ public static class RendererRegistry
 
         var bridge = new RendererBridge(impl);
 
-        try
-        {
+        try {
             var userData = bridge._bridgeId;
             var vtablePtr = bridge._vtable;
 
             // Register bridge in the static registry using its unique ID.
             // This keeps the bridge alive while Rust holds the ID (userData).
-            lock (RendererBridge._registryLock)
-            {
+            lock (RendererBridge._registryLock) {
                 RendererBridge._bridgeRegistry[userData] = bridge;
             }
 
             var result = NativeMethods.RegisterRenderer(name, vtablePtr, userData, out var outError);
-            if (result != 0)
-            {
-                lock (RendererBridge._registryLock)
-                {
+            if (result != 0) {
+                lock (RendererBridge._registryLock) {
                     RendererBridge._bridgeRegistry.Remove(userData);
                 }
                 bridge.Dispose();
@@ -4218,11 +3466,8 @@ public static class RendererRegistry
             }
 
             return userData;
-        }
-        catch
-        {
-            lock (RendererBridge._registryLock)
-            {
+        } catch {
+            lock (RendererBridge._registryLock) {
                 RendererBridge._bridgeRegistry.Remove(bridge._bridgeId);
             }
             bridge.Dispose();
@@ -4231,31 +3476,26 @@ public static class RendererRegistry
     }
 
     /// <summary>Unregister a Renderer implementation</summary>
-    public static void Unregister(string name)
-    {
+    public static void Unregister(string name) {
         if (string.IsNullOrEmpty(name))
         throw new ArgumentException("Name cannot be empty", nameof(name));
 
         var result = NativeMethods.UnregisterRenderer(name, out var outError);
-        if (result != 0)
-        {
+        if (result != 0) {
             var errorMsg = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(outError) ?? "Unknown error";
             global::System.Runtime.InteropServices.Marshal.FreeCoTaskMem(outError);
             throw new InvalidOperationException($"Failed to unregister {name}: {errorMsg}");
         }
 
-        if (_bridges.TryRemove(name, out var bridge))
-        {
+        if (_bridges.TryRemove(name, out var bridge)) {
             bridge.Dispose();
         }
     }
 
     /// <summary>Clear all registered Renderer implementations</summary>
-    public static void Clear()
-    {
+    public static void Clear() {
         var result = NativeMethods.ClearRenderer(out var outError);
-        if (result != 0)
-        {
+        if (result != 0) {
             var errorMsg = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(outError) ?? "Unknown error";
             global::System.Runtime.InteropServices.Marshal.FreeCoTaskMem(outError);
             throw new InvalidOperationException($"Failed to clear Renderer registry: {errorMsg}");
@@ -4268,8 +3508,7 @@ public static class RendererRegistry
 /// <summary>
 /// Bridge interface for RerankerBackend trait implementation via native FFI
 /// </summary>
-public interface IRerankerBackend
-{
+public interface IRerankerBackend {
 
     /// <summary>Get the plugin name.</summary>
     string Name { get; }
@@ -4290,8 +3529,7 @@ public interface IRerankerBackend
 /// <summary>
 /// Manages the FFI vtable and delegates for a RerankerBackend implementation
 /// </summary>
-public sealed class RerankerBackendBridge : IDisposable
-{
+public sealed class RerankerBackendBridge : IDisposable {
 
     internal readonly IRerankerBackend _impl;
     private readonly GCHandle _implHandle;
@@ -4333,8 +3571,7 @@ public sealed class RerankerBackendBridge : IDisposable
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate void FreeUserDataFn(IntPtr userData);
 
-    public RerankerBackendBridge(IRerankerBackend impl)
-    {
+    public RerankerBackendBridge(IRerankerBackend impl) {
         _impl = impl ?? throw new ArgumentNullException(nameof(impl));
         // Keep impl alive via normal GCHandle (sufficient for callback rooting).
         // The impl instance itself is not pinned, just kept in the GC root set.
@@ -4345,15 +3582,13 @@ public sealed class RerankerBackendBridge : IDisposable
         _vtable = IntPtr.Zero;
         _disposed = false;
         // Allocate unique bridge ID for registry lookup during callbacks
-        lock (_registryLock)
-        {
+        lock (_registryLock) {
             _bridgeId = new IntPtr(_nextBridgeId++);
         }
         BuildVtable();
     }
 
-    private void BuildVtable()
-    {
+    private void BuildVtable() {
         // Allocate unmanaged vtable struct (array of function pointers)
         _vtable = global::System.Runtime.InteropServices.Marshal.AllocHGlobal(IntPtr.Size * 7);
 
@@ -4394,60 +3629,46 @@ public sealed class RerankerBackendBridge : IDisposable
 
     }
 
-    private static string ToJsonString<T>(T value)
-    {
+    private static string ToJsonString<T>(T value) {
         return JsonSerializer.Serialize(value, FfiJsonExtensions.FfiJsonOptions);
     }
 
     /// <summary>Called by Rust via FreeUserDataCallback when done with this bridge</summary>
-    internal static void FreeUserData(IntPtr bridgeId)
-    {
-        lock (_registryLock)
-        {
+    internal static void FreeUserData(IntPtr bridgeId) {
+        lock (_registryLock) {
             // Mark bridge as disposed but DON'T remove from registry yet.
             // Callbacks in flight will still be able to look it up and execute safely.
             // The bridge will stay alive as long as _callbackRefCount > 0.
-            if (_bridgeRegistry.TryGetValue(bridgeId, out var bridge))
-            {
+            if (_bridgeRegistry.TryGetValue(bridgeId, out var bridge)) {
                 bridge._disposed = true;
             }
         }
     }
 
-    private void IncrementCallbackRef()
-    {
-        lock (_registryLock)
-        {
+    private void IncrementCallbackRef() {
+        lock (_registryLock) {
             _callbackRefCount++;
         }
     }
 
-    private void DecrementCallbackRef()
-    {
-        lock (_registryLock)
-        {
-            if (_callbackRefCount > 0)
-            {
+    private void DecrementCallbackRef() {
+        lock (_registryLock) {
+            if (_callbackRefCount > 0) {
                 _callbackRefCount--;
             }
             // Once refcount reaches 0 and bridge is disposed, remove from registry
-            if (_callbackRefCount == 0 && _disposed)
-            {
+            if (_callbackRefCount == 0 && _disposed) {
                 _bridgeRegistry.Remove(_bridgeId);
             }
         }
     }
 
-    private int NameFnCallback(IntPtr userData, out IntPtr outName, out IntPtr outError)
-    {
-        try
-        {
+    private int NameFnCallback(IntPtr userData, out IntPtr outName, out IntPtr outError) {
+        try {
             outError = IntPtr.Zero;
             string _name = null!;
-            lock (RerankerBackendBridge._registryLock)
-            {
-                if (!RerankerBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+            lock (RerankerBackendBridge._registryLock) {
+                if (!RerankerBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outName = IntPtr.Zero;
                     return 1;
                 }
@@ -4455,25 +3676,19 @@ public sealed class RerankerBackendBridge : IDisposable
             }
             outName = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_name);
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outName = IntPtr.Zero;
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int VersionFnCallback(IntPtr userData, out IntPtr outVersion, out IntPtr outError)
-    {
-        try
-        {
+    private int VersionFnCallback(IntPtr userData, out IntPtr outVersion, out IntPtr outError) {
+        try {
             outError = IntPtr.Zero;
             string _version = null!;
-            lock (RerankerBackendBridge._registryLock)
-            {
-                if (!RerankerBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+            lock (RerankerBackendBridge._registryLock) {
+                if (!RerankerBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outVersion = IntPtr.Zero;
                     return 1;
                 }
@@ -4481,23 +3696,17 @@ public sealed class RerankerBackendBridge : IDisposable
             }
             outVersion = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_version);
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outVersion = IntPtr.Zero;
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int InitializeFnCallback(IntPtr userData, out IntPtr outError)
-    {
-        try
-        {
-            lock (RerankerBackendBridge._registryLock)
-            {
-                if (!RerankerBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+    private int InitializeFnCallback(IntPtr userData, out IntPtr outError) {
+        try {
+            lock (RerankerBackendBridge._registryLock) {
+                if (!RerankerBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outError = IntPtr.Zero;
                     return 1;
                 }
@@ -4505,22 +3714,16 @@ public sealed class RerankerBackendBridge : IDisposable
             }
             outError = IntPtr.Zero;
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int ShutdownFnCallback(IntPtr userData, out IntPtr outError)
-    {
-        try
-        {
-            lock (RerankerBackendBridge._registryLock)
-            {
-                if (!RerankerBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridge))
-                {
+    private int ShutdownFnCallback(IntPtr userData, out IntPtr outError) {
+        try {
+            lock (RerankerBackendBridge._registryLock) {
+                if (!RerankerBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridge)) {
                     outError = IntPtr.Zero;
                     return 1;
                 }
@@ -4528,118 +3731,89 @@ public sealed class RerankerBackendBridge : IDisposable
             }
             outError = IntPtr.Zero;
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
             return 1;
         }
     }
 
-    private int RerankFnCallback(IntPtr userData, IntPtr query, IntPtr documents, out IntPtr outResult, out IntPtr outError)
-    {
+    private int RerankFnCallback(IntPtr userData, IntPtr query, IntPtr documents, out IntPtr outResult, out IntPtr outError) {
         RerankerBackendBridge? _bridgeFromRegistry = null;
-        lock (RerankerBackendBridge._registryLock)
-        {
-            if (RerankerBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry))
-            {
+        lock (RerankerBackendBridge._registryLock) {
+            if (RerankerBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
                 _bridgeFromRegistry = bridgeFromRegistry;
                 // Increment callback refcount to prevent GC while callback executes
                 _bridgeFromRegistry.IncrementCallbackRef();
             }
         }
-        if (_bridgeFromRegistry == null)
-        {
+        if (_bridgeFromRegistry == null) {
             outResult = IntPtr.Zero;
             outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8($"Bridge not found for userData (likely unregistered): {userData}");
             return 1;
         }
-        try
-        {
+        try {
             var bridge = _bridgeFromRegistry!;
             var managed_query = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(query) ?? string.Empty;
             var json_documents = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(documents) ?? "{}";
             var managed_documents = JsonSerializer.Deserialize<List<string>>(json_documents, FfiJsonExtensions.FfiJsonOptions)!;
             var methodResult = bridge._impl.Rerank(managed_query, managed_documents);
-            try
-            {
+            try {
                 string __result_str = (ToJsonString(methodResult)) ?? string.Empty;
                 outResult = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(__result_str);
-            }
-            catch
-            {
+            } catch {
                 outResult = IntPtr.Zero;
                 throw;
             }
             outError = IntPtr.Zero;
             return 0;
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             outResult = IntPtr.Zero;
             outError = IntPtr.Zero;
             // Attempt to marshal exception message, but on ANY failure just leave outError null
-            try
-            {
+            try {
                 string _errMsg = null!;
-                try
-                {
+                try {
                     _errMsg = ex?.Message ?? ex?.GetType()?.Name ?? "Unknown exception";
-                }
-                catch
-                {
+                } catch {
                     _errMsg = "Callback failed";
                 }
-                if (!string.IsNullOrEmpty(_errMsg))
-                {
+                if (!string.IsNullOrEmpty(_errMsg)) {
                     outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_errMsg);
                 }
-            }
-            catch
-            {
+            } catch {
                 // Marshalling failed; outError stays null — Rust will see return code 1
             }
             return 1;
-        }
-        finally
-        {
-            if (_bridgeFromRegistry != null)
-            {
+        } finally {
+            if (_bridgeFromRegistry != null) {
                 try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
             }
         }
     }
 
-    private void FreeStringCallback(IntPtr ptr)
-    {
-        if (ptr != IntPtr.Zero)
-        {
+    private void FreeStringCallback(IntPtr ptr) {
+        if (ptr != IntPtr.Zero) {
             global::System.Runtime.InteropServices.Marshal.FreeCoTaskMem(ptr);
         }
     }
 
-    private void FreeUserDataCallback(IntPtr userData)
-    {
-        if (userData != IntPtr.Zero)
-        {
+    private void FreeUserDataCallback(IntPtr userData) {
+        if (userData != IntPtr.Zero) {
             RerankerBackendBridge.FreeUserData(userData);
         }
     }
 
 
-    public void Dispose()
-    {
+    public void Dispose() {
         if (_disposed) return;
         _disposed = true;
 
-        if (_vtable != IntPtr.Zero)
-        {
+        if (_vtable != IntPtr.Zero) {
             global::System.Runtime.InteropServices.Marshal.FreeHGlobal(_vtable);
             _vtable = IntPtr.Zero;
         }
 
-        if (_implHandle.IsAllocated)
-        {
+        if (_implHandle.IsAllocated) {
             _implHandle.Free();
         }
 
@@ -4648,8 +3822,7 @@ public sealed class RerankerBackendBridge : IDisposable
     }
 
     /// <summary>Register a RerankerBackend implementation and return its native handle</summary>
-    public static IntPtr Register(IRerankerBackend impl)
-    {
+    public static IntPtr Register(IRerankerBackend impl) {
         if (impl == null)
         throw new ArgumentNullException(nameof(impl));
 
@@ -4658,12 +3831,10 @@ public sealed class RerankerBackendBridge : IDisposable
 
         var bridge = new RerankerBackendBridge(impl);
 
-        try
-        {
+        try {
             // Register bridge in the static registry using its unique ID.
             // This keeps the bridge alive while Rust holds the ID (userData).
-            lock (_registryLock)
-            {
+            lock (_registryLock) {
                 _bridgeRegistry[bridge._bridgeId] = bridge;
             }
 
@@ -4671,10 +3842,8 @@ public sealed class RerankerBackendBridge : IDisposable
             var userData = bridge._bridgeId;
 
             var result = NativeMethods.RegisterRerankerBackend(name, vtablePtr, userData, out var outError);
-            if (result != 0)
-            {
-                lock (_registryLock)
-                {
+            if (result != 0) {
+                lock (_registryLock) {
                     _bridgeRegistry.Remove(bridge._bridgeId);
                 }
                 bridge.Dispose();
@@ -4686,11 +3855,8 @@ public sealed class RerankerBackendBridge : IDisposable
             // Return the bridge ID (userData).
             // The FFI layer holds this ID and will call FreeUserDataCallback with it when done.
             return userData;
-        }
-        catch
-        {
-            lock (_registryLock)
-            {
+        } catch {
+            lock (_registryLock) {
                 _bridgeRegistry.Remove(bridge._bridgeId);
             }
             bridge.Dispose();
@@ -4700,15 +3866,13 @@ public sealed class RerankerBackendBridge : IDisposable
 }
 
 /// <summary>Static helpers for registering trait implementations</summary>
-public static class RerankerBackendRegistry
-{
+public static class RerankerBackendRegistry {
 
     private static readonly ConcurrentDictionary<string, RerankerBackendBridge> _bridges =
     new ConcurrentDictionary<string, RerankerBackendBridge>();
 
     /// <summary>Register a RerankerBackend implementation and return its native handle</summary>
-    public static IntPtr RegisterRerankerBackend(IRerankerBackend impl)
-    {
+    public static IntPtr RegisterRerankerBackend(IRerankerBackend impl) {
         if (impl == null)
         throw new ArgumentNullException(nameof(impl));
 
@@ -4716,8 +3880,7 @@ public static class RerankerBackendRegistry
         var userData = bridge._bridgeId;
         var name = impl.Name;
 
-        lock (RerankerBackendBridge._registryLock)
-        {
+        lock (RerankerBackendBridge._registryLock) {
             RerankerBackendBridge._bridgeRegistry[userData] = bridge;
         }
         return userData;
@@ -4725,8 +3888,7 @@ public static class RerankerBackendRegistry
 
     /// <summary>Register a RerankerBackend implementation and return its native handle</summary>
 
-    public static IntPtr Register(IRerankerBackend impl)
-    {
+    public static IntPtr Register(IRerankerBackend impl) {
         if (impl == null)
         throw new ArgumentNullException(nameof(impl));
 
@@ -4735,23 +3897,19 @@ public static class RerankerBackendRegistry
 
         var bridge = new RerankerBackendBridge(impl);
 
-        try
-        {
+        try {
             var userData = bridge._bridgeId;
             var vtablePtr = bridge._vtable;
 
             // Register bridge in the static registry using its unique ID.
             // This keeps the bridge alive while Rust holds the ID (userData).
-            lock (RerankerBackendBridge._registryLock)
-            {
+            lock (RerankerBackendBridge._registryLock) {
                 RerankerBackendBridge._bridgeRegistry[userData] = bridge;
             }
 
             var result = NativeMethods.RegisterRerankerBackend(name, vtablePtr, userData, out var outError);
-            if (result != 0)
-            {
-                lock (RerankerBackendBridge._registryLock)
-                {
+            if (result != 0) {
+                lock (RerankerBackendBridge._registryLock) {
                     RerankerBackendBridge._bridgeRegistry.Remove(userData);
                 }
                 bridge.Dispose();
@@ -4761,11 +3919,8 @@ public static class RerankerBackendRegistry
             }
 
             return userData;
-        }
-        catch
-        {
-            lock (RerankerBackendBridge._registryLock)
-            {
+        } catch {
+            lock (RerankerBackendBridge._registryLock) {
                 RerankerBackendBridge._bridgeRegistry.Remove(bridge._bridgeId);
             }
             bridge.Dispose();
@@ -4774,31 +3929,26 @@ public static class RerankerBackendRegistry
     }
 
     /// <summary>Unregister a RerankerBackend implementation</summary>
-    public static void Unregister(string name)
-    {
+    public static void Unregister(string name) {
         if (string.IsNullOrEmpty(name))
         throw new ArgumentException("Name cannot be empty", nameof(name));
 
         var result = NativeMethods.UnregisterRerankerBackend(name, out var outError);
-        if (result != 0)
-        {
+        if (result != 0) {
             var errorMsg = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(outError) ?? "Unknown error";
             global::System.Runtime.InteropServices.Marshal.FreeCoTaskMem(outError);
             throw new InvalidOperationException($"Failed to unregister {name}: {errorMsg}");
         }
 
-        if (_bridges.TryRemove(name, out var bridge))
-        {
+        if (_bridges.TryRemove(name, out var bridge)) {
             bridge.Dispose();
         }
     }
 
     /// <summary>Clear all registered RerankerBackend implementations</summary>
-    public static void Clear()
-    {
+    public static void Clear() {
         var result = NativeMethods.ClearRerankerBackend(out var outError);
-        if (result != 0)
-        {
+        if (result != 0) {
             var errorMsg = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(outError) ?? "Unknown error";
             global::System.Runtime.InteropServices.Marshal.FreeCoTaskMem(outError);
             throw new InvalidOperationException($"Failed to clear RerankerBackend registry: {errorMsg}");
@@ -4809,8 +3959,7 @@ public static class RerankerBackendRegistry
 }
 
 /// <summary>FFI JSON serialization extension methods and options</summary>
-internal static class FfiJsonExtensions
-{
+internal static class FfiJsonExtensions {
 
     /// <summary>Global JsonSerializerOptions for FFI marshalling with relaxed numeric handling.
     /// Supports: enum-to-snake_case conversion, ignoring default values, and reading numeric values from strings.
@@ -4823,8 +3972,7 @@ internal static class FfiJsonExtensions
     };
 
     /// <summary>Serialize any object to JSON for FFI marshalling</summary>
-    internal static string ToFfiJson<T>(this T value)
-    {
+    internal static string ToFfiJson<T>(this T value) {
         return JsonSerializer.Serialize(value, FfiJsonOptions);
     }
 

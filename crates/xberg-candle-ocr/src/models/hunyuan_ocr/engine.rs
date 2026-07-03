@@ -219,7 +219,11 @@ impl HunyuanOCREngine {
         if output_text.is_empty() {
             tracing::warn!("Hunyuan-OCR: output is empty");
         } else {
-            tracing::debug!(text_len = output_text.len(), num_tokens = token_id.len(), "Hunyuan-OCR: decoding complete");
+            tracing::debug!(
+                text_len = output_text.len(),
+                num_tokens = token_id.len(),
+                "Hunyuan-OCR: decoding complete"
+            );
         }
 
         Ok(CandleOcrOutput {

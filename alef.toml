@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.30.14"
+alef_version = "0.30.17"
 # alef codegen emits non-shorthand struct init (`name: name`) in generated
 # binding lib.rs files; allow it repo-wide so workspace clippy passes under
 # -D warnings (emitted into every generated Rust binding as #![allow(...)]).
