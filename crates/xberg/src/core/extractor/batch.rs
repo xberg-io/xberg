@@ -34,10 +34,17 @@ where
         return Ok(vec![]);
     }
 
-    let max_concurrent = config
-        .max_concurrent_extractions
-        .or_else(|| config.concurrency.as_ref().and_then(|c| c.max_threads))
-        .unwrap_or_else(|| crate::core::config::concurrency::resolve_thread_budget(config.concurrency.as_ref()));
+    // An explicit `max_concurrent_extractions` always wins. Otherwise derive the limit
+    // from the thread budget, capping it when layout detection is active so that
+    // `concurrency × ONNX intra-op threads` does not oversubscribe the CPU (which makes
+    // batch slower than serial single-file processing).
+    #[cfg(feature = "layout-types")]
+    let layout_active = config.layout.is_some();
+    #[cfg(not(feature = "layout-types"))]
+    let layout_active = false;
+    let max_concurrent = config.max_concurrent_extractions.unwrap_or_else(|| {
+        crate::core::config::concurrency::resolve_batch_concurrency(config.concurrency.as_ref(), layout_active)
+    });
     let semaphore = Arc::new(Semaphore::new(max_concurrent));
 
     let mut tasks = JoinSet::new();

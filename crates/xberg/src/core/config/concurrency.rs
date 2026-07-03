@@ -54,6 +54,44 @@ pub(crate) fn resolve_thread_budget(config: Option<&ConcurrencyConfig>) -> usize
     num_cpus::get().min(8)
 }
 
+/// Resolve the batch concurrency limit, accounting for layout ONNX oversubscription.
+///
+/// Without layout, batch concurrency is just the thread budget (each extraction is
+/// largely single-threaded on the hot path). With layout enabled, every concurrent
+/// extraction builds ONNX sessions configured with [`resolve_thread_budget`] intra-op
+/// threads. Running `budget` extractions concurrently therefore spawns `budget²`
+/// compute threads (e.g. 8×8 = 64 on an 8-core host), thrashing the CPU and making
+/// batch slower than serial single-file processing.
+///
+/// When layout is active this caps concurrency so `concurrency × intra_threads` stays
+/// within the machine's core count. Single-file extraction does not go through the
+/// batch path, so its latency is unaffected. An explicit
+/// `max_concurrent_extractions` on the config always overrides this and is applied by
+/// the caller.
+///
+/// # Example
+///
+/// ```ignore
+/// use xberg::core::config::concurrency::resolve_batch_concurrency;
+///
+/// // Without layout: full thread budget is used for concurrency.
+/// let plain = resolve_batch_concurrency(None, false);
+/// // With layout: concurrency is capped so it does not oversubscribe ONNX threads.
+/// let layout = resolve_batch_concurrency(None, true);
+/// assert!(layout <= plain);
+/// assert!(layout >= 1);
+/// ```
+pub(crate) fn resolve_batch_concurrency(config: Option<&ConcurrencyConfig>, layout_active: bool) -> usize {
+    let budget = resolve_thread_budget(config);
+    if !layout_active {
+        return budget;
+    }
+    // Each concurrent layout extraction uses `budget` intra-op threads. Bound the
+    // product `concurrency × budget` by the core count to avoid oversubscription.
+    let cores = num_cpus::get().max(1);
+    (cores / budget.max(1)).max(1).min(budget)
+}
+
 /// Initialize the global Rayon thread pool with the given budget.
 ///
 /// Safe to call multiple times — only the first call takes effect (subsequent
@@ -119,6 +157,36 @@ mod tests {
         let budget = resolve_thread_budget(Some(&config));
         assert!(budget >= 1);
         assert!(budget <= 8);
+    }
+
+    #[test]
+    fn test_batch_concurrency_without_layout_equals_budget() {
+        // No layout: concurrency is the full thread budget.
+        assert_eq!(resolve_batch_concurrency(None, false), resolve_thread_budget(None));
+    }
+
+    #[test]
+    fn test_batch_concurrency_with_layout_does_not_exceed_no_layout() {
+        // Layout must never raise concurrency above the plain budget, and stays >= 1.
+        let plain = resolve_batch_concurrency(None, false);
+        let layout = resolve_batch_concurrency(None, true);
+        assert!(layout >= 1);
+        assert!(layout <= plain, "layout concurrency {layout} exceeded plain {plain}");
+    }
+
+    #[test]
+    fn test_batch_concurrency_with_layout_bounds_thread_product() {
+        // concurrency × intra-op threads must stay within the core count so the
+        // layout ONNX sessions do not oversubscribe the CPU.
+        let config = ConcurrencyConfig { max_threads: Some(4) };
+        let intra = resolve_thread_budget(Some(&config));
+        let concurrency = resolve_batch_concurrency(Some(&config), true);
+        assert!(concurrency >= 1);
+        assert!(
+            concurrency * intra <= num_cpus::get().max(intra),
+            "product {} exceeded cores",
+            concurrency * intra
+        );
     }
 
     #[test]
