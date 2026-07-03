@@ -1266,39 +1266,10 @@ pub(crate) async fn process_handler(
     let rehydrate = request.operations.redact.as_ref().map(|r| r.rehydrate).unwrap_or(false);
 
     if rehydrate {
-        let mut config = (*state.default_config).clone();
-        config.ner = request.operations.ner.clone();
-
-        let mut results = extract_unified_inputs(vec![input], config).await?;
-        let document = results.results.pop().ok_or_else(|| {
-            ApiError::internal(crate::error::XbergError::Other(
-                "extraction produced no document".into(),
-            ))
-        })?;
-
-        #[cfg(feature = "redaction-rehydrate")]
-        let (document, rehydration_key) = {
-            let redact_op = request.operations.redact.as_ref().expect("checked above");
-            let passphrase = redact_op.passphrase.as_deref().ok_or_else(|| {
-                ApiError::validation(crate::error::XbergError::validation(
-                    "operations.redact.passphrase is required when operations.redact.rehydrate is true",
-                ))
-            })?;
-            let mut document = document;
-            let map = crate::text::redaction::redact_capturing_rehydration_map(&mut document, &redact_op.config)
-                .await
-                .map_err(ApiError::from)?;
-            let encrypted = crate::text::redaction::encrypt_map(&map, passphrase).map_err(ApiError::from)?;
-            let doc_id = state
-                .rehydration_store
-                .put_map(&xberg_doc_store::TenantCtx::default_tenant(), encrypted)
-                .await
-                .map_err(|e| ApiError::internal(crate::error::XbergError::Other(e.to_string())))?;
-            (document, Some(doc_id.0))
-        };
+        // Fail fast on both gating checks — missing feature or missing passphrase —
+        // before running the (potentially expensive) extraction.
         #[cfg(not(feature = "redaction-rehydrate"))]
         {
-            let _ = document;
             return Err(ApiError {
                 status: axum::http::StatusCode::NOT_IMPLEMENTED,
                 body: super::types::ErrorResponse {
@@ -1312,9 +1283,36 @@ pub(crate) async fn process_handler(
 
         #[cfg(feature = "redaction-rehydrate")]
         {
+            let redact_op = request.operations.redact.as_ref().expect("checked above");
+            let passphrase = redact_op.passphrase.as_deref().ok_or_else(|| {
+                ApiError::validation(crate::error::XbergError::validation(
+                    "operations.redact.passphrase is required when operations.redact.rehydrate is true",
+                ))
+            })?;
+
+            let mut config = (*state.default_config).clone();
+            config.ner = request.operations.ner.clone();
+
+            let mut results = extract_unified_inputs(vec![input], config).await?;
+            let mut document = results.results.pop().ok_or_else(|| {
+                ApiError::internal(crate::error::XbergError::Other(
+                    "extraction produced no document".into(),
+                ))
+            })?;
+
+            let map = crate::text::redaction::redact_capturing_rehydration_map(&mut document, &redact_op.config)
+                .await
+                .map_err(ApiError::from)?;
+            let encrypted = crate::text::redaction::encrypt_map(&map, passphrase).map_err(ApiError::from)?;
+            let doc_id = state
+                .rehydration_store
+                .put_map(&xberg_doc_store::TenantCtx::default_tenant(), encrypted)
+                .await
+                .map_err(|e| ApiError::internal(crate::error::XbergError::Other(e.to_string())))?;
+
             Ok(Json(super::types::ProcessResponse {
                 document,
-                rehydration_key,
+                rehydration_key: Some(doc_id.0),
             }))
         }
     } else {
@@ -1366,9 +1364,7 @@ mod tests {
             #[cfg(feature = "api")]
             job_store: std::sync::Arc::new(crate::api::jobs::JobStore::new()),
             #[cfg(feature = "api")]
-            rehydration_store: std::sync::Arc::new(
-                xberg_doc_store::backends::memory::InMemoryRehydrationStore::new(),
-            ),
+            rehydration_store: std::sync::Arc::new(xberg_doc_store::backends::memory::InMemoryRehydrationStore::new()),
         };
         #[allow(unused_mut)]
         let mut router = Router::new()
@@ -1716,9 +1712,7 @@ mod tests {
             default_config: std::sync::Arc::new(crate::ExtractionConfig::default()),
             extraction_service: std::sync::Arc::new(std::sync::Mutex::new(extraction_service)),
             job_store: std::sync::Arc::new(crate::api::jobs::JobStore::new()),
-            rehydration_store: std::sync::Arc::new(
-                xberg_doc_store::backends::memory::InMemoryRehydrationStore::new(),
-            ),
+            rehydration_store: std::sync::Arc::new(xberg_doc_store::backends::memory::InMemoryRehydrationStore::new()),
         }
     }
 
