@@ -1,6 +1,9 @@
+#[cfg(feature = "ort-backend")]
 use ndarray::{ArrayViewD, Ix4};
 
-use crate::{GlinerError, Result, Token};
+#[cfg(feature = "ort-backend")]
+use crate::Token;
+use crate::{GlinerError, Result};
 
 /// A decoded entity span.
 #[derive(Debug, Clone, PartialEq)]
@@ -81,6 +84,9 @@ pub struct SpanOutput {
 }
 
 impl SpanOutput {
+    /// Only constructed by the ORT decode paths ([`decode_logits`] and
+    /// `v2_decode::decode_span_scores`) — dead weight without `ort-backend`.
+    #[cfg(feature = "ort-backend")]
     pub(crate) fn new(texts: Vec<String>, entities: Vec<String>, spans: Vec<Vec<Span>>) -> Self {
         Self { texts, entities, spans }
     }
@@ -104,6 +110,9 @@ impl std::fmt::Display for SpanOutput {
     }
 }
 
+/// Only used by [`decode_logits`] (the ORT V1 decode path) — dead weight
+/// without `ort-backend`.
+#[cfg(feature = "ort-backend")]
 pub(crate) struct EntityContext {
     pub(crate) texts: Vec<String>,
     pub(crate) tokens: Vec<Vec<Token>>,
@@ -111,6 +120,7 @@ pub(crate) struct EntityContext {
     pub(crate) num_words: usize,
 }
 
+#[cfg(feature = "ort-backend")]
 impl EntityContext {
     fn create_span(
         &self,
@@ -162,6 +172,9 @@ impl EntityContext {
     }
 }
 
+/// Only called by [`crate::engine::Gliner`] (the ORT V1 engine) — dead
+/// weight without `ort-backend`.
+#[cfg(feature = "ort-backend")]
 pub(crate) fn decode_logits(
     logits: ArrayViewD<'_, f32>,
     context: EntityContext,
@@ -259,6 +272,8 @@ fn accept_span(first: &Span, second: &Span, flat_ner: bool, dup_label: bool, mul
     }
 }
 
+/// Only called by [`decode_logits`] — dead weight without `ort-backend`.
+#[cfg(feature = "ort-backend")]
 fn sigmoid(value: f32) -> f32 {
     1.0 / (1.0 + (-value).exp())
 }

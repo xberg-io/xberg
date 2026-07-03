@@ -31,6 +31,13 @@ impl V2Tokenizer {
             .map_err(|error| GlinerError::Tokenizer(format!("failed to load tokenizer from file: {error}")))?;
         Ok(Self { inner })
     }
+
+    /// Load from in-memory `tokenizer.json` bytes (wasm/no-fs path).
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        let inner = tokenizers::Tokenizer::from_bytes(bytes)
+            .map_err(|error| GlinerError::Tokenizer(format!("failed to load tokenizer from bytes: {error}")))?;
+        Ok(Self { inner })
+    }
 }
 
 impl PretokenizingTokenizer for V2Tokenizer {

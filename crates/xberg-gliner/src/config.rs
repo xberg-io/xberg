@@ -1,16 +1,31 @@
+#[cfg(feature = "ort-backend")]
 use crate::{GlinerError, Result};
 
-/// Maximum batch size accepted by the span-mode runtime.
+/// Maximum batch size accepted by the span-mode runtime. Only used by
+/// [`crate::input::TextInput::new`] — dead weight without `ort-backend`.
+#[cfg(feature = "ort-backend")]
 pub const MAX_BATCH_SIZE: usize = 32;
-/// Maximum number of entity labels accepted per inference call.
+/// Maximum number of entity labels accepted per inference call. Only used
+/// by [`crate::input::TextInput::new`] — dead weight without `ort-backend`.
+#[cfg(feature = "ort-backend")]
 pub const MAX_ENTITY_LABELS: usize = 256;
-/// Maximum label length in Unicode scalar values.
+/// Maximum label length in Unicode scalar values. Only used by
+/// [`crate::input::TextInput::new`] — dead weight without `ort-backend`.
+#[cfg(feature = "ort-backend")]
 pub const MAX_ENTITY_LABEL_CHARS: usize = 128;
 /// Maximum number of split words per sequence.
+///
+/// Only consumed by the ORT preprocessing/validation paths — dead weight
+/// without `ort-backend`.
+#[cfg(feature = "ort-backend")]
 pub const MAX_WORDS_PER_SEQUENCE: usize = 4096;
-/// Maximum span width in words.
+/// Maximum span width in words. Only used by [`Parameters::validate`] —
+/// dead weight without `ort-backend`.
+#[cfg(feature = "ort-backend")]
 pub const MAX_SPAN_WIDTH: usize = 128;
-/// Maximum span candidates per sequence.
+/// Maximum span candidates per sequence. Only consumed by the ORT tensor
+/// builders — dead weight without `ort-backend`.
+#[cfg(feature = "ort-backend")]
 pub const MAX_SPANS_PER_SEQUENCE: usize = 262_144;
 
 /// Processing parameters for GLiNER span-mode inference.
@@ -44,6 +59,9 @@ impl Default for Parameters {
 }
 
 impl Parameters {
+    /// Only called by the ORT engines ([`crate::engine::Gliner`],
+    /// [`crate::v2_engine::Gliner2`]) — dead weight without `ort-backend`.
+    #[cfg(feature = "ort-backend")]
     pub(crate) fn validate(&self) -> Result<()> {
         if !(0.0..=1.0).contains(&self.threshold) || !self.threshold.is_finite() {
             return Err(GlinerError::InvalidInput(format!(

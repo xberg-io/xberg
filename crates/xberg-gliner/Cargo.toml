@@ -16,17 +16,29 @@ name = "xberg_gliner"
 path = "src/lib.rs"
 
 [features]
+# Preserves prior default behavior exactly: plain `cargo build`/`cargo test`
+# (no --features flag) still auto-provisions ONNX Runtime via download.
+# `ort-backend` alone only compiles the `ort` crate in — it has no binary
+# provisioning strategy, so it must NOT be the default (linking would fail
+# for any default-feature consumer, e.g. `cargo test -p xberg-gliner`).
 default = ["ort-bundled"]
-ort-bundled = ["ort/download-binaries", "ort/tls-rustls"]
-ort-dynamic = ["ort/load-dynamic"]
+ort-backend = ["dep:ort"]
+ort-bundled = ["ort-backend", "ort/download-binaries", "ort/tls-rustls"]
+ort-dynamic = ["ort-backend", "ort/load-dynamic"]
 
 [dependencies]
 ndarray = "0.17"
-ort = { workspace = true, features = ["ndarray"] }
+ort = { workspace = true, features = ["ndarray"], optional = true }
 parking_lot = { workspace = true }
 regex = "1.12"
 thiserror = { workspace = true }
 tokenizers = { version = "0.23", default-features = false, features = ["fancy-regex"] }
+
+# tokenizers pulls getrandom transitively (via ahash, rand); force-enable the
+# wasm_js backend for every getrandom major in the graph so wasm32 links.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
+getrandom_03 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }
 
 [lints]
 workspace = true

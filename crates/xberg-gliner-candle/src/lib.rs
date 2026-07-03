@@ -10,6 +10,10 @@ mod decode;
 mod encoder;
 mod error;
 mod heads;
+/// PEFT LoRA adapter loading and merge-at-load. Only used by
+/// [`Gliner2Candle::load_adapter`]/[`Gliner2Candle::unload_adapter`] — dead
+/// weight on wasm32 (no filesystem, and LoRA merge is fs-driven).
+#[cfg(not(target_arch = "wasm32"))]
 mod lora;
 mod model;
 mod pipeline;

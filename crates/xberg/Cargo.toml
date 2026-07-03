@@ -328,6 +328,10 @@ ner-onnx = [
 # GLiNER2 Candle (CPU) backend — local safetensors, optional PEFT LoRA adapter.
 # No ORT dependency; pure-Rust transformer inference via candle.
 ner-candle = ["ner", "dep:xberg-gliner-candle", "tokio-runtime"]
+# GLiNER2 Candle (CPU) backend for wasm32: same in-binary inference as `ner-candle`,
+# minus `tokio-runtime` (block_in_place requires a multi-threaded tokio runtime, which
+# does not exist on wasm32). Loads models via `CandleBackend::from_bytes` (no filesystem).
+ner-candle-wasm = ["ner", "dep:xberg-gliner-candle"]
 
 presets = [
     "dep:include_dir",
@@ -435,7 +439,7 @@ no-ort-target = [
 # reduce memory spikes. Long-term fix: add tree-sitter-wasm-lite feature to tree-sitter-language-pack
 # with curated parser set (markdown, javascript, python, rust, json, yaml, html, css, sql, c, etc.)
 # and update this aggregate to use it instead of the full tree-sitter feature.
-wasm-target = ["no-ort-target", "excel-wasm", "tree-sitter-wasm", "ocr-wasm"]
+wasm-target = ["no-ort-target", "excel-wasm", "tree-sitter-wasm", "ocr-wasm", "ner-candle-wasm"]
 # android-target: no-ort-target plus native-Linux variants that work on Android ABI
 # (excel with tokio, native tree-sitter, Tesseract OCR, and API/MCP transport).
 # Excludes ORT-dependent features (paddle-ocr, layout-detection, embeddings, reranker,

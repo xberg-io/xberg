@@ -1,16 +1,26 @@
+#[cfg(feature = "ort-backend")]
 use crate::config::{MAX_BATCH_SIZE, MAX_ENTITY_LABEL_CHARS, MAX_ENTITY_LABELS};
+#[cfg(feature = "ort-backend")]
 use crate::{GlinerError, Result};
 
+#[cfg(feature = "ort-backend")]
 const ENTITY_TOKEN: &str = "<<ENT>>";
+#[cfg(feature = "ort-backend")]
 const SEP_TOKEN: &str = "<<SEP>>";
 
 /// Raw text input and zero-shot entity labels.
+///
+/// Only consumed by the ORT-backed engines ([`crate::engine::Gliner`],
+/// [`crate::v2_engine::Gliner2`]) and their preprocessing — dead weight
+/// without `ort-backend`.
+#[cfg(feature = "ort-backend")]
 #[derive(Debug, Clone)]
 pub struct TextInput {
     pub(crate) texts: Vec<String>,
     pub(crate) entities: Vec<String>,
 }
 
+#[cfg(feature = "ort-backend")]
 impl TextInput {
     /// Construct a text batch.
     pub fn new(texts: Vec<String>, entities: Vec<String>) -> Result<Self> {

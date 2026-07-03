@@ -40,6 +40,7 @@ xberg-gliner = { workspace = true, default-features = false }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+wasm-bindgen-test = "0.3"
 
 [lints]
 workspace = true
