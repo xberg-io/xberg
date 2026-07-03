@@ -115,8 +115,48 @@ pub(crate) fn apply_execution_providers(
     use crate::core::config::acceleration::ExecutionProviderType;
     use ort::ep::ExecutionProvider;
 
-    let provider = accel.map(|a| &a.provider).unwrap_or(&ExecutionProviderType::Auto);
+    // Resolve the execution provider. An `XBERG_ORT_EP` env override wins over the
+    // configured provider so operators can force (and A/B) an EP without a recompile,
+    // across every ORT subsystem that shares this function (layout, embeddings,
+    // PaddleOCR, reranker, auto-rotate, transcription).
+    let provider = std::env::var("XBERG_ORT_EP")
+        .ok()
+        .and_then(|e| match e.trim().to_ascii_lowercase().as_str() {
+            "cpu" => Some(ExecutionProviderType::Cpu),
+            "coreml" => Some(ExecutionProviderType::CoreMl),
+            "cuda" => Some(ExecutionProviderType::Cuda),
+            "tensorrt" => Some(ExecutionProviderType::TensorRt),
+            "auto" => Some(ExecutionProviderType::Auto),
+            _ => None,
+        })
+        .unwrap_or_else(|| accel.map(|a| a.provider.clone()).unwrap_or(ExecutionProviderType::Auto));
     let device_id = accel.map(|a| a.device_id).unwrap_or(0);
+
+    // Build a CoreML EP, honoring optional env tuning for A/B experiments. Defaults to
+    // ORT's own defaults (NeuralNetwork format / All compute units) when unset, so the
+    // committed behavior is unchanged. `XBERG_COREML_FORMAT` = mlprogram|neuralnetwork;
+    // `XBERG_COREML_UNITS` = all|cpu_and_ne|cpu_and_gpu|cpu_only.
+    fn build_coreml_ep() -> ort::ep::CoreML {
+        use ort::ep::coreml::{ComputeUnits, ModelFormat};
+        let mut ep = ort::ep::CoreML::default();
+        if let Ok(fmt) = std::env::var("XBERG_COREML_FORMAT") {
+            match fmt.trim().to_ascii_lowercase().as_str() {
+                "mlprogram" => ep = ep.with_model_format(ModelFormat::MLProgram),
+                "neuralnetwork" | "nn" => ep = ep.with_model_format(ModelFormat::NeuralNetwork),
+                other => tracing::warn!(value = other, "ignoring unknown XBERG_COREML_FORMAT"),
+            }
+        }
+        if let Ok(units) = std::env::var("XBERG_COREML_UNITS") {
+            match units.trim().to_ascii_lowercase().as_str() {
+                "all" => ep = ep.with_compute_units(ComputeUnits::All),
+                "cpu_and_ne" => ep = ep.with_compute_units(ComputeUnits::CPUAndNeuralEngine),
+                "cpu_and_gpu" => ep = ep.with_compute_units(ComputeUnits::CPUAndGPU),
+                "cpu_only" => ep = ep.with_compute_units(ComputeUnits::CPUOnly),
+                other => tracing::warn!(value = other, "ignoring unknown XBERG_COREML_UNITS"),
+            }
+        }
+        ep
+    }
 
     let builder = match provider {
         ExecutionProviderType::Cpu => {
@@ -124,7 +164,7 @@ pub(crate) fn apply_execution_providers(
             builder
         }
         ExecutionProviderType::CoreMl => {
-            let ep = ort::ep::CoreML::default();
+            let ep = build_coreml_ep();
             if ep.is_available().unwrap_or(false) {
                 tracing::info!("ORT session: CoreML execution provider available, using GPU");
                 builder
@@ -176,7 +216,7 @@ pub(crate) fn apply_execution_providers(
         ExecutionProviderType::Auto => {
             #[cfg(target_os = "macos")]
             let builder = {
-                let ep = ort::ep::CoreML::default();
+                let ep = build_coreml_ep();
                 if ep.is_available().unwrap_or(false) {
                     tracing::info!("ORT session: auto — CoreML available, using GPU");
                     builder
