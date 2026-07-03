@@ -454,10 +454,13 @@ jobs:
         # wheel tag; bump both together when intentionally raising the floor.
         #
         # macos-15-intel (x86_64): re-added. ort has no static x86_64-apple-darwin
-        # prebuilt, so maturin picks up the macos-intel-target features
-        # (ort-dynamic) via the alef target override in xberg-py's Cargo.toml, and
-        # the wheel build vendors libonnxruntime.dylib (delocate won't see the
-        # runtime dlopen dependency, so it is copied in explicitly).
+        # prebuilt, so this leg builds once xberg-py's Cargo.toml carries the
+        # alef macos-intel-target override (pending alef target_dep_overrides
+        # support for the pyo3 scaffold, then `alef generate`). The wheel does
+        # not yet bundle libonnxruntime.dylib (delocate cannot see the runtime
+        # dlopen dependency), so ML features on the Intel wheel need
+        # ORT_DYLIB_PATH pointing at an installed ONNX Runtime until explicit
+        # vendoring lands.
         os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-15, macos-15-intel]
     steps:
       - uses: actions/checkout@v6
@@ -584,8 +587,9 @@ jobs:
           - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
           - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
           - { os: macos-latest, target: aarch64-apple-darwin }
-          # Intel macOS: native x86_64 build; ort loaded dynamically (features via
-          # the alef macos-intel-target override). Node binary bundles the dylib.
+          # Intel macOS: native x86_64 build; ONNX Runtime staged by
+          # setup-onnx-runtime (Homebrew on x86_64) and linked dynamically,
+          # same as the macos-arm64 leg.
           - { os: macos-15-intel, target: x86_64-apple-darwin }
           - { os: windows-latest, target: x86_64-pc-windows-msvc }
     steps:
@@ -1028,25 +1032,44 @@ jobs:
             cp "$BINARY_PATH" "$STAGE/xberg"
             # Intel macOS: bundle libonnxruntime.dylib next to the binary. ort
             # resolves the default dylib name relative to the executable, so no
-            # ORT_DYLIB_PATH is needed. Copy the dylib's own non-system
-            # dependencies too and repoint every install name at @loader_path so
-            # the bundle is self-contained (no Homebrew required at runtime).
+            # ORT_DYLIB_PATH is needed. Vendor the dylib's FULL non-system
+            # dependency closure — Homebrew's onnxruntime links abseil, onnx,
+            # protobuf and re2, which in turn link each other — and repoint
+            # every install name at @loader_path so the bundle is
+            # self-contained (no Homebrew required at runtime). Each staged
+            # copy gets its @loader_path ID set immediately so its own
+            # LC_ID_DYLIB line (which otool -L prints first) drops out of the
+            # Homebrew-path grep instead of being re-vendored under its
+            # versioned name.
             if [[ "$TARGET" == "x86_64-apple-darwin" && -n "${ORT_VENDOR_LIB:-}" ]]; then
               cp "$ORT_VENDOR_LIB" "$STAGE/libonnxruntime.dylib"
               chmod u+w "$STAGE/libonnxruntime.dylib"
-              # Vendor transitive Homebrew deps (skip /usr/lib + /System).
-              otool -L "$STAGE/libonnxruntime.dylib" | tail -n +2 | awk '{print $1}' \
-                | grep -E '^(/opt/homebrew|/usr/local|@rpath)/' | while read -r dep; do
-                  base="$(basename "$dep")"
-                  src="$dep"
-                  [[ "$dep" == @rpath/* ]] && src="$(brew --prefix onnxruntime)/lib/$base"
-                  [[ -f "$src" ]] || continue
-                  cp -n "$src" "$STAGE/$base" || true
-                  chmod u+w "$STAGE/$base"
-                  install_name_tool -change "$dep" "@loader_path/$base" "$STAGE/libonnxruntime.dylib" || true
+              install_name_tool -id "@loader_path/libonnxruntime.dylib" "$STAGE/libonnxruntime.dylib"
+              # Iterate to a fixpoint: each pass copies newly referenced
+              # dylibs and rewrites references in everything staged so far.
+              changed=1
+              while [[ "$changed" == 1 ]]; do
+                changed=0
+                for lib in "$STAGE"/*.dylib; do
+                  while IFS= read -r dep; do
+                    base="$(basename "$dep")"
+                    src="$dep"
+                    [[ "$dep" == @rpath/* ]] && src="$(brew --prefix onnxruntime)/lib/$base"
+                    if [[ ! -f "$STAGE/$base" ]]; then
+                      [[ -f "$src" ]] || continue
+                      cp "$src" "$STAGE/$base"
+                      chmod u+w "$STAGE/$base"
+                      install_name_tool -id "@loader_path/$base" "$STAGE/$base"
+                      changed=1
+                    fi
+                    install_name_tool -change "$dep" "@loader_path/$base" "$lib" || true
+                  done < <(otool -L "$lib" | tail -n +2 | awk '{print $1}' \
+                    | grep -E '^(/opt/homebrew|/usr/local|@rpath)/' || true)
                 done
-              install_name_tool -id "@loader_path/libonnxruntime.dylib" "$STAGE/libonnxruntime.dylib" || true
-              codesign --force -s - "$STAGE/libonnxruntime.dylib" || true
+              done
+              for lib in "$STAGE"/*.dylib; do
+                codesign --force -s - "$lib" || true
+              done
             fi
             tar -czf "${STAGE}.tar.gz" "$STAGE"
           fi
