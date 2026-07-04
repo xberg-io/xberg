@@ -1,0 +1,12 @@
+{
+	"id": "tokenizer_backends_clear",
+	"category": "tokenizer_backend_management",
+	"description": "Clear all tokenizer backends and verify list is empty",
+	"tags": ["tokenizer", "plugin_management", "clear", "trait-bridge"],
+	"call": "clear_tokenizer_backends",
+	"assertions": [
+		{
+			"type": "not_error"
+		}
+	]
+}

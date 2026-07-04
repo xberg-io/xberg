@@ -401,6 +401,7 @@ sources = [
     "crates/xberg/src/plugins/traits.rs",
     "crates/xberg/src/plugins/embedding.rs",
     "crates/xberg/src/plugins/reranker.rs",
+    "crates/xberg/src/plugins/tokenizer.rs",
     "crates/xberg/src/plugins/registry/mod.rs",
     "crates/xberg/src/plugins/registry/reranker.rs",
     "crates/xberg/src/core/config/reranker.rs",
@@ -2412,6 +2413,22 @@ returns_result = true
 function = "listEmbeddingBackends"
 module = "xberg"
 
+[crates.e2e.calls.list_tokenizer_backends]
+result_is_simple = true
+function = "list_tokenizer_backends"
+module = "xberg"
+async = false
+args = []
+
+[crates.e2e.calls.list_tokenizer_backends.overrides.go]
+result_is_simple = true
+returns_result = true
+
+[crates.e2e.calls.list_tokenizer_backends.overrides.dart]
+function = "listTokenizerBackends"
+module = "xberg"
+
+
 [crates.e2e.calls.list_reranker_backends]
 result_is_simple = true
 function = "list_reranker_backends"
@@ -3457,6 +3474,211 @@ class = "RerankerBackendBridge"
 
 # ── rerank call ───────────────────────────────────────────────────────────────
 
+
+# ── Tokenizer backend lifecycle calls ────────────────────────────────────────────────────────────────
+
+[crates.e2e.calls.register_tokenizer_backend]
+# Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
+result_is_simple = true
+function = ""
+module = ""
+async = false
+returns_result = false
+returns_void = true
+args = []
+
+[crates.e2e.calls.register_tokenizer_backend.overrides.python]
+function = "register_tokenizer_backend"
+module = "xberg"
+
+[crates.e2e.calls.register_tokenizer_backend.overrides.rust]
+function = "register_tokenizer_backend"
+module = "xberg"
+
+[crates.e2e.calls.register_tokenizer_backend.overrides.node]
+function = "registerTokenizerBackend"
+module = "xberg"
+
+[crates.e2e.calls.register_tokenizer_backend.overrides.go]
+function = "RegisterTokenizerBackend"
+module = "xberg"
+
+[crates.e2e.calls.register_tokenizer_backend.overrides.ruby]
+function = "register_tokenizer_backend"
+module = "Xberg"
+
+[crates.e2e.calls.register_tokenizer_backend.overrides.php]
+function = "registerTokenizerBackend"
+module = "Xberg"
+
+[crates.e2e.calls.register_tokenizer_backend.overrides.java]
+function = "registerTokenizerBackend"
+module = "io.xberg.Xberg"
+
+[crates.e2e.calls.register_tokenizer_backend.overrides.csharp]
+function = "RegisterTokenizerBackend"
+module = "Xberg"
+
+
+[crates.e2e.calls.register_tokenizer_backend.overrides.swift]
+function = "registerTokenizerBackend"
+module = "Xberg"
+
+[crates.e2e.calls.register_tokenizer_backend.overrides.dart]
+function = "registerTokenizerBackend"
+module = "xberg"
+
+[crates.e2e.calls.register_tokenizer_backend.overrides.wasm]
+function = "registerTokenizerBackend"
+module = "xberg"
+
+[crates.e2e.calls.register_tokenizer_backend.overrides.elixir]
+function = "register_tokenizer_backend"
+module = "Xberg"
+
+[crates.e2e.calls.register_tokenizer_backend.overrides.zig]
+function = "register_tokenizer_backend"
+module = "xberg"
+returns_result = false
+
+[crates.e2e.calls.register_tokenizer_backend.overrides.kotlin_android]
+function = "register"
+class = "TokenizerBackendBridge"
+
+[crates.e2e.calls.unregister_tokenizer_backend]
+# Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
+result_is_simple = true
+function = ""
+module = ""
+async = false
+returns_result = false
+returns_void = true
+args = [{ name = "name", field = "input.name", type = "string" }]
+
+[crates.e2e.calls.unregister_tokenizer_backend.overrides.python]
+function = "unregister_tokenizer_backend"
+module = "xberg"
+
+[crates.e2e.calls.unregister_tokenizer_backend.overrides.rust]
+function = "unregister_tokenizer_backend"
+module = "xberg"
+
+[crates.e2e.calls.unregister_tokenizer_backend.overrides.node]
+function = "unregisterTokenizerBackend"
+module = "xberg"
+
+[crates.e2e.calls.unregister_tokenizer_backend.overrides.go]
+function = "UnregisterTokenizerBackend"
+module = "xberg"
+
+[crates.e2e.calls.unregister_tokenizer_backend.overrides.ruby]
+function = "unregister_tokenizer_backend"
+module = "Xberg"
+
+[crates.e2e.calls.unregister_tokenizer_backend.overrides.php]
+function = "unregisterTokenizerBackend"
+module = "Xberg"
+
+[crates.e2e.calls.unregister_tokenizer_backend.overrides.java]
+function = "unregisterTokenizerBackend"
+module = "io.xberg.Xberg"
+
+[crates.e2e.calls.unregister_tokenizer_backend.overrides.csharp]
+function = "UnregisterTokenizerBackend"
+module = "Xberg"
+
+
+[crates.e2e.calls.unregister_tokenizer_backend.overrides.swift]
+function = "unregisterTokenizerBackend"
+module = "Xberg"
+
+[crates.e2e.calls.unregister_tokenizer_backend.overrides.dart]
+function = "unregisterTokenizerBackend"
+module = "xberg"
+
+[crates.e2e.calls.unregister_tokenizer_backend.overrides.wasm]
+function = "unregisterTokenizerBackend"
+module = "xberg"
+
+[crates.e2e.calls.unregister_tokenizer_backend.overrides.elixir]
+function = "unregister_tokenizer_backend"
+module = "Xberg"
+
+[crates.e2e.calls.unregister_tokenizer_backend.overrides.zig]
+function = "unregister_tokenizer_backend"
+module = "xberg"
+
+[crates.e2e.calls.unregister_tokenizer_backend.overrides.kotlin_android]
+function = "unregister"
+class = "TokenizerBackendBridge"
+
+[crates.e2e.calls.clear_tokenizer_backends]
+# Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
+result_is_simple = true
+function = ""
+module = ""
+async = false
+returns_result = false
+returns_void = true
+args = []
+
+[crates.e2e.calls.clear_tokenizer_backends.overrides.python]
+function = "clear_tokenizer_backends"
+module = "xberg"
+
+[crates.e2e.calls.clear_tokenizer_backends.overrides.rust]
+function = "clear_tokenizer_backends"
+module = "xberg"
+
+[crates.e2e.calls.clear_tokenizer_backends.overrides.node]
+function = "clearTokenizerBackends"
+module = "xberg"
+
+[crates.e2e.calls.clear_tokenizer_backends.overrides.go]
+function = "ClearTokenizerBackends"
+module = "xberg"
+
+[crates.e2e.calls.clear_tokenizer_backends.overrides.ruby]
+function = "clear_tokenizer_backends"
+module = "Xberg"
+
+[crates.e2e.calls.clear_tokenizer_backends.overrides.php]
+function = "clearTokenizerBackends"
+module = "Xberg"
+
+[crates.e2e.calls.clear_tokenizer_backends.overrides.java]
+function = "clearTokenizerBackends"
+module = "io.xberg.Xberg"
+
+[crates.e2e.calls.clear_tokenizer_backends.overrides.csharp]
+function = "ClearTokenizerBackends"
+module = "Xberg"
+
+
+[crates.e2e.calls.clear_tokenizer_backends.overrides.swift]
+function = "clearTokenizerBackends"
+module = "Xberg"
+
+[crates.e2e.calls.clear_tokenizer_backends.overrides.dart]
+function = "clearTokenizerBackends"
+module = "xberg"
+
+[crates.e2e.calls.clear_tokenizer_backends.overrides.wasm]
+function = "clearTokenizerBackends"
+module = "xberg"
+
+[crates.e2e.calls.clear_tokenizer_backends.overrides.elixir]
+function = "clear_tokenizer_backends"
+module = "Xberg"
+
+[crates.e2e.calls.clear_tokenizer_backends.overrides.zig]
+function = "clear_tokenizer_backends"
+module = "xberg"
+
+[crates.e2e.calls.clear_tokenizer_backends.overrides.kotlin_android]
+function = "clearAll"
+class = "TokenizerBackendBridge"
+
 [crates.e2e.calls.register_renderer]
 # Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
 result_is_simple = true
@@ -4046,3 +4268,11 @@ registry_getter = "xberg::plugins::registry::get_reranker_backend_registry"
 register_fn = "register_reranker_backend"
 unregister_fn = "unregister_reranker_backend"
 clear_fn = "clear_reranker_backends"
+
+[[crates.trait_bridges]]
+trait_name = "TokenizerBackend"
+super_trait = "xberg::plugins::Plugin"
+registry_getter = "xberg::plugins::registry::get_tokenizer_backend_registry"
+register_fn = "register_tokenizer_backend"
+unregister_fn = "unregister_tokenizer_backend"
+clear_fn = "clear_tokenizer_backends"

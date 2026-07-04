@@ -1,0 +1,27 @@
+{
+	"id": "register_tokenizer_backend_trait_bridge",
+	"category": "plugin_api",
+	"description": "register_tokenizer_backend: trait bridge",
+	"tags": ["trait-bridge"],
+	"call": "register_tokenizer_backend",
+	"input": {
+		"backend": {
+			"type": "test",
+			"name": "test-tokenizer-backend",
+			"count_tokens": 3
+		}
+	},
+	"args": [
+		{
+			"name": "backend",
+			"field": "backend",
+			"arg_type": "test_backend",
+			"trait": "TokenizerBackend"
+		}
+	],
+	"assertions": [
+		{
+			"type": "not_error"
+		}
+	]
+}

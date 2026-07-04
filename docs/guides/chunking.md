@@ -78,7 +78,17 @@ Each chunk in `result.chunks` contains:
 | `metadata.heading_path` | Flattened RAG-shaped heading breadcrumb (e.g., `["Title", "Section", "Subsection"]`) for vector database retrieval and context. |
 | `embedding`                             | Embedding vector (when configured)               |
 
-Chunks can be sized by token count instead of characters — enable the `chunking-tokenizers` feature and set `sizing` to `token`.
+Chunks can be sized by token count instead of characters — enable the `chunking-tokenizers` feature and set `sizing` to `tokenizer`.
+
+## Token Sizing with Your Own Tokenizer (Plugin Variant)
+
+Token budgets only protect the embedder when they are counted with the tokenizer the embedder actually uses. When that tokenizer isn't available as a HuggingFace `tokenizer.json` (llama.cpp/GGUF vocabularies, SentencePiece models, custom vocabs), plug it in — Xberg calls back into the registered backend to count tokens instead of loading one from the Hub. The `chunking-tokenizers` feature is still required (it gates the `tokenizer` sizing variant itself); language bindings ship with it enabled.
+
+1. Register the backend once at startup via `xberg::plugins::register_tokenizer_backend(Arc::new(MyTokenizer))`. The backend implements `TokenizerBackend` (a `Plugin`-inheriting trait with a synchronous `count_tokens(text) -> usize` — it runs inside the splitter's boundary search, so keep it cheap).
+2. Reference it by name in the chunking config: `{ "sizing": { "type": "tokenizer", "model": "my-tokenizer" } }`. A registered name takes precedence over a HuggingFace id; unregistered names fall back to the Hub as before.
+3. `max_characters` is then the chunk budget in that backend's tokens.
+
+Language bindings register through the same API — implement the trait's methods (`name`, `initialize`, `shutdown`, `count_tokens`) on a host-language object and pass it to `register_tokenizer_backend`.
 
 ## RAG Pipeline Example
 

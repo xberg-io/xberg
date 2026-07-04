@@ -13,6 +13,15 @@ The changelog starts fresh at `1.0.0-rc.1`. For the Kreuzberg v1–v4 history, s
 
 ## [Unreleased]
 
+### Added
+
+- **Bring your own tokenizer for token-budgeted chunking.** Register a `TokenizerBackend`
+  plugin (`register_tokenizer_backend`) — from Rust or any language binding — and reference
+  it by name from `ChunkSizing::Tokenizer { model }`. The registry is checked before the
+  HuggingFace path, so chunks are sized with the exact tokenizer the consumer's embedder
+  uses (llama.cpp/GGUF vocabularies, SentencePiece models, custom vocabs). Existing
+  HuggingFace-id configs behave unchanged.
+
 ### Changed
 
 - **`OcrExtractionResult` now derives `Default`.** Downstream bindings and callers can

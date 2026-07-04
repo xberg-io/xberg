@@ -1,0 +1,15 @@
+{
+	"id": "unregister_tokenizer_backend_after_register",
+	"category": "plugin_api",
+	"description": "unregister_tokenizer_backend",
+	"call": "unregister_tokenizer_backend",
+	"input": {
+		"name": "test-tokenizer-backend"
+	},
+	"assertions": [
+		{
+			"type": "not_error"
+		}
+	],
+	"tags": ["plugin-lifecycle", "trait-bridge"]
+}

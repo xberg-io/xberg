@@ -1,0 +1,12 @@
+{
+	"id": "tokenizer_backends_list",
+	"category": "tokenizer_backend_management",
+	"description": "List all registered tokenizer backends",
+	"tags": ["tokenizer", "plugin_management", "list"],
+	"call": "list_tokenizer_backends",
+	"assertions": [
+		{
+			"type": "not_error"
+		}
+	]
+}
