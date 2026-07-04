@@ -7,15 +7,19 @@ use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 
 use crate::bridge::embedder::JsEmbedder;
+use crate::bridge::ner::resolve_ner;
+use crate::bridge::ocr::resolve_ocr;
 use crate::bridge::store::JsVectorStore;
+use xberg_rag::query::{RetrieveMode, RetrieveQuery};
 
 /// Rehydration map type (token → original PII text).
 type RehydrationMap = HashMap<String, String>;
 
 /// Stateful engine handle exposed to JS.
 ///
-/// Constructed via `XbergEngine.new(injections)` where `injections` is a
-/// plain object with optional `embedder`, `store`, `ner`, and `ocr` keys.
+/// Constructed via `XbergEngine.new(config, injection)` where `config` is
+/// reserved for future use and `injection` is a plain object with optional
+/// `embedder`, `store`, `ner`, and `ocr` keys.
 #[wasm_bindgen]
 pub struct XbergEngine {
     embedder: Option<Arc<JsEmbedder>>,
@@ -28,19 +32,23 @@ pub struct XbergEngine {
 impl XbergEngine {
     /// Create a new engine with injected bridges.
     ///
-    /// `injections` may contain:
+    /// `config` is reserved for future use (currently ignored).
+    /// `injection` may contain:
     /// - `embedder` — object with `embed(texts: string[]): Promise<number[][]>`
     /// - `store`    — object implementing the VectorStore JS protocol
     /// - `ner`      — object with `ner(text, categories): Promise<...>`
     /// - `ocr`      — object with `ocr(imageBytes, opts): Promise<string>`
     #[wasm_bindgen(constructor)]
-    pub fn new(injections: JsValue) -> Result<XbergEngine, JsValue> {
-        let obj: js_sys::Object = if injections.is_undefined() || injections.is_null() {
+    pub fn new(config: JsValue, injection: JsValue) -> Result<XbergEngine, JsValue> {
+        // `config` is reserved for future use; ignore for now.
+        let _ = config;
+
+        let obj: js_sys::Object = if injection.is_undefined() || injection.is_null() {
             js_sys::Object::new()
         } else {
-            injections
+            injection
                 .dyn_into::<js_sys::Object>()
-                .map_err(|_| JsValue::from_str("injections must be an object"))?
+                .map_err(|_| JsValue::from_str("injection must be an object"))?
         };
 
         let embedder = js_sys::Reflect::get(&obj, &"embedder".into())
@@ -119,9 +127,9 @@ impl XbergEngine {
     ///
     /// Requires both an `embedder` and a `store` to have been injected.
     #[allow(clippy::missing_errors_doc)]
-    pub async fn ingest(&self, request: JsValue) -> Result<JsValue, JsValue> {
+    pub async fn ingest(&self, doc: JsValue, collection: String) -> Result<JsValue, JsValue> {
         let ingest_req: xberg_rag::pipeline::IngestRequest =
-            serde_wasm_bindgen::from_value(request)
+            serde_wasm_bindgen::from_value(doc)
                 .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
         let embedder = self
@@ -136,14 +144,137 @@ impl XbergEngine {
         let pipeline_config = xberg_rag::pipeline::RagPipelineConfig::default();
         let result = xberg_rag::pipeline::ingest_document_local(
             store.clone(),
+            &collection,
             ingest_req,
-            pipeline_config,
+            &pipeline_config,
             embedder.as_ref(),
         )
         .await
         .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
         serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+
+    /// Perform OCR on image bytes, returning extracted text.
+    #[allow(clippy::missing_errors_doc)]
+    pub async fn ocr(&self, bytes: Vec<u8>, opts: JsValue) -> Result<JsValue, JsValue> {
+        let language = if opts.is_undefined() || opts.is_null() {
+            "eng".to_string()
+        } else {
+            js_sys::Reflect::get(&opts, &JsValue::from_str("language"))
+                .ok()
+                .and_then(|v| v.as_string())
+                .unwrap_or_else(|| "eng".to_string())
+        };
+
+        let text = resolve_ocr(self.ocr.clone(), &bytes, &language)
+            .await
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+        Ok(JsValue::from_str(&text))
+    }
+
+    /// Decrypt a rehydration map and substitute tokens in `doc`.
+    ///
+    /// Returns the dehydrated text with original PII values restored.
+    #[allow(clippy::missing_errors_doc)]
+    pub fn rehydrate(
+        &self,
+        doc: String,
+        map_bytes: Vec<u8>,
+        passphrase: String,
+    ) -> Result<String, JsValue> {
+        let map: RehydrationMap =
+            xberg::text::redaction::rehydration::decrypt_map(&map_bytes, &passphrase)
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+        let mut result = doc;
+        for (token, original) in &map {
+            result = result.replace(token, original);
+        }
+        Ok(result)
+    }
+
+    /// Perform Named Entity Recognition on `text`.
+    ///
+    /// Returns entities as a JSON-serializable JsValue array.
+    #[allow(clippy::missing_errors_doc)]
+    pub async fn ner(&self, text: String, opts: JsValue) -> Result<JsValue, JsValue> {
+        // Parse categories from opts if provided, otherwise use empty list.
+        let categories: Vec<xberg::types::entity::EntityCategory> =
+            if !opts.is_undefined() && !opts.is_null() {
+                if let Ok(cats_val) = js_sys::Reflect::get(&opts, &JsValue::from_str("categories"))
+                {
+                    if let Ok(arr) = cats_val.dyn_into::<js_sys::Array>() {
+                        let mut cats = Vec::new();
+                        for i in 0..arr.length() {
+                            if let Some(s) = arr.get(i).as_string() {
+                                if let Ok(cat) = serde_json::from_str::<xberg::types::entity::EntityCategory>(
+                                    &format!("\"{}\"", s),
+                                ) {
+                                    cats.push(cat);
+                                }
+                            }
+                        }
+                        cats
+                    } else {
+                        Vec::new()
+                    }
+                } else {
+                    Vec::new()
+                }
+            } else {
+                Vec::new()
+            };
+
+        let entities = resolve_ner(self.ner.clone(), &text, &categories)
+            .await
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+        serde_wasm_bindgen::to_value(&entities).map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+
+    /// Query the RAG vector store with `q` in `collection`, returning top `k` results.
+    ///
+    /// Requires a `store` injection. If an `embedder` is also available, the query
+    /// text will be embedded for vector similarity; otherwise full-text mode is used.
+    #[allow(clippy::missing_errors_doc)]
+    pub async fn query(
+        &self,
+        q: String,
+        collection: String,
+        k: u32,
+    ) -> Result<JsValue, JsValue> {
+        let store = self
+            .store
+            .as_ref()
+            .ok_or_else(|| JsValue::from_str("store not injected"))?;
+
+        let mode = if self.embedder.is_some() {
+            RetrieveMode::Vector
+        } else {
+            RetrieveMode::FullText
+        };
+
+        let retrieve_query = RetrieveQuery {
+            mode,
+            query_text: Some(q),
+            query_vector: None,
+            top_k: k,
+            filter: None,
+            candidate_multiplier: None,
+            group_by_document: false,
+            include_content: true,
+            include_document: false,
+            graph_depth: None,
+        };
+
+        let output = store
+            .retrieve(&collection, &retrieve_query)
+            .await
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+        serde_wasm_bindgen::to_value(&output).map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
     /// Detect PII in `text`. Returns an array of `{ start, end, category, text }`.
@@ -165,6 +296,10 @@ impl XbergEngine {
     /// Redact PII from `text` using the given `strategy`.
     ///
     /// Returns `{ redacted: string, rehydrationMap: { token: original } }`.
+    ///
+    /// NOTE: This method reimplements redaction logic inline rather than delegating
+    /// to `xberg::text::redaction::redact`. In a future pass this should be replaced
+    /// with a direct call to the core redaction API to avoid duplication.
     #[allow(clippy::missing_errors_doc)]
     pub fn redact(
         &self,
