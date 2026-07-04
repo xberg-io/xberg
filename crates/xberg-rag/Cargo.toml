@@ -64,9 +64,11 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sqlite-vec = { workspace = true, optional = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, optional = true }
 tracing = { workspace = true }
 xberg = { workspace = true, optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { workspace = true, optional = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }

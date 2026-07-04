@@ -28,14 +28,16 @@ use crate::types::{ChunkRecord, DocumentId, DocumentRecord, RetrievedChunk};
 
 /// Embeds a batch of texts into dense float vectors.
 ///
-/// Implementations must be `Send + Sync + 'static` so they can be held behind
-/// `Arc` and passed across thread and task boundaries.
+/// Implementations must be `Send + Sync + 'static` off-wasm so they can be held
+/// behind `Arc` and passed across thread and task boundaries. On wasm32, the
+/// `?Send` bound allows non-Send futures (e.g., JSPI bridges over async JS).
 ///
 /// # Errors
 ///
 /// Returns [`RagError::Backend`] or [`RagError::Core`] on failure.
-#[async_trait]
-pub trait Embedder: Send + Sync + 'static {
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+pub trait Embedder: 'static {
     /// Embed `texts`, returning one vector per input string.
     async fn embed(&self, texts: Vec<String>) -> RagResult<Vec<Vec<f32>>>;
 }
@@ -112,6 +114,7 @@ pub fn chunk_to_record(chunk: xberg::Chunk, ordinal: u32, embedding: Vec<f32>) -
 ///
 /// Propagates chunking, embedding, or store errors wrapped in
 /// [`RagError`].
+#[cfg(not(target_arch = "wasm32"))]
 pub async fn ingest_document(
     store: Arc<dyn VectorStore>,
     collection: &str,
@@ -132,6 +135,103 @@ pub async fn ingest_document(
     let embeddings = embedder.embed(texts).await?;
 
     // Guard the embedder contract: zip would silently drop chunks on a mismatch.
+    if embeddings.len() != chunks.len() {
+        return Err(RagError::EmbeddingCountMismatch {
+            expected: chunks.len(),
+            got: embeddings.len(),
+        });
+    }
+
+    let chunk_records: Vec<ChunkRecord> = chunks
+        .into_iter()
+        .zip(embeddings)
+        .enumerate()
+        .map(|(i, (chunk, emb))| chunk_to_record(chunk, i as u32, emb))
+        .collect();
+
+    let document = DocumentRecord {
+        external_id: request.external_id,
+        title: request.title,
+        mime: request.mime,
+        source_uri: request.source_uri,
+        full_text: request.full_text,
+        keywords: request.keywords,
+        entities: request.entities,
+        labels: request.labels,
+        metadata: request.metadata,
+    };
+
+    store.upsert_document(collection, &document, &chunk_records).await
+}
+
+/// Like [`ingest_document`] but chunks inline (no `tokio::task::spawn_blocking`),
+/// so it compiles and runs on `wasm32` where the multi-thread runtime is absent.
+#[cfg(not(target_arch = "wasm32"))]
+pub async fn ingest_document_local(
+    store: Arc<dyn VectorStore>,
+    collection: &str,
+    request: IngestRequest,
+    config: &RagPipelineConfig<'_>,
+    embedder: &dyn Embedder,
+) -> RagResult<DocumentId> {
+    let text = request.full_text.clone();
+    let chunking_config = config.chunking.clone();
+
+    let chunks = tokio::task::spawn_blocking(move || xberg::chunking::chunk_for_rag(&text, &chunking_config))
+        .await
+        .map_err(|e| RagError::Backend(Box::new(e)))?
+        .map_err(RagError::Core)?
+        .chunks;
+
+    let texts: Vec<String> = chunks.iter().map(|c| c.content.clone()).collect();
+    let embeddings = embedder.embed(texts).await?;
+
+    if embeddings.len() != chunks.len() {
+        return Err(RagError::EmbeddingCountMismatch {
+            expected: chunks.len(),
+            got: embeddings.len(),
+        });
+    }
+
+    let chunk_records: Vec<ChunkRecord> = chunks
+        .into_iter()
+        .zip(embeddings)
+        .enumerate()
+        .map(|(i, (chunk, emb))| chunk_to_record(chunk, i as u32, emb))
+        .collect();
+
+    let document = DocumentRecord {
+        external_id: request.external_id,
+        title: request.title,
+        mime: request.mime,
+        source_uri: request.source_uri,
+        full_text: request.full_text,
+        keywords: request.keywords,
+        entities: request.entities,
+        labels: request.labels,
+        metadata: request.metadata,
+    };
+
+    store.upsert_document(collection, &document, &chunk_records).await
+}
+
+/// Like [`ingest_document`] but chunks inline (no `tokio::task::spawn_blocking`),
+/// so it compiles and runs on `wasm32` where the multi-thread runtime is absent.
+#[cfg(target_arch = "wasm32")]
+pub async fn ingest_document_local(
+    store: Arc<dyn VectorStore>,
+    collection: &str,
+    request: IngestRequest,
+    config: &RagPipelineConfig<'_>,
+    embedder: &dyn Embedder,
+) -> RagResult<DocumentId> {
+    let chunks = xberg::chunking::chunk_for_rag(&request.full_text, config.chunking)
+        .map_err(RagError::Core)?
+        .chunks;
+
+    let texts: Vec<String> = chunks.iter().map(|c| c.content.clone()).collect();
+    let embeddings = embedder.embed(texts).await?;
+
     if embeddings.len() != chunks.len() {
         return Err(RagError::EmbeddingCountMismatch {
             expected: chunks.len(),
@@ -416,5 +516,27 @@ mod tests {
         assert_eq!(record.content, "Hello");
         assert_eq!(record.embedding, vec![0.1, 0.2, 0.3]);
         assert!(record.external_id.is_none());
+    }
+
+    #[tokio::test]
+    async fn ingest_document_local_upserts_without_spawn_blocking() {
+        const DIM: u32 = 4;
+        let store: Arc<dyn VectorStore> = make_store("test-local");
+        store.ensure_collection(&make_collection("docs", DIM)).await.unwrap();
+
+        let embedder = StubEmbedder { dim: DIM as usize };
+        let chunking = xberg::ChunkingConfig::default();
+        let config = RagPipelineConfig { chunking: &chunking };
+
+        let request = IngestRequest {
+            full_text: "hello world. second sentence.".into(),
+            ..Default::default()
+        };
+
+        let id = ingest_document_local(Arc::clone(&store), "docs", request, &config, &embedder)
+            .await
+            .unwrap();
+
+        assert!(!id.0.is_empty());
     }
 }
