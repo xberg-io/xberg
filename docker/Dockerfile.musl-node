@@ -24,19 +24,21 @@ WORKDIR /build
 # so tesseract C++ compilation works without glibc conflicts. nodejs + npm are
 # needed to run the napi CLI (via npx).
 #
-# Alpine 3.22 ships with OpenSSL 3.4+ (released May 2026), providing the
-# EVP_MD_CTX_get_size_ex symbol required by Node.js. Using 3.22 stable
-# (pinned) avoids version skew while ensuring compatibility with Node + ONNX
-# Runtime built for OpenSSL 3.4+. The Rust build itself uses rustls
-# (no openssl), so only the runtime shared libs are needed here — not
-# openssl-dev / openssl-libs-static.
+# Base is Alpine 3.22 (OpenSSL 3.4+ — provides EVP_MD_CTX_get_size_ex required
+# by Node.js; see ba4f1588ed). Alpine 3.22 stable dropped onnxruntime-dev from
+# main/community, so the edge repos are added to source onnxruntime-dev for
+# system ORT linking (ort-sys uses ORT_SKIP_DOWNLOAD + ORT_LIB_LOCATION below).
+# The Rust build itself uses rustls (no openssl), so only the runtime shared
+# libs are needed here — not openssl-dev / openssl-libs-static.
 RUN apk add --no-cache \
     curl musl-dev cmake make pkgconf \
     perl linux-headers git file && \
     apk add --no-cache \
         gcc g++ libstdc++ libstdc++-dev \
         nodejs npm libssl3 libcrypto3 \
-        onnxruntime-dev libheif-dev libde265-dev aom-dev x265-dev dav1d-dev
+        onnxruntime-dev libheif-dev libde265-dev aom-dev x265-dev dav1d-dev \
+    --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community \
+    --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main
 
 # Install Rust via rustup (Alpine's packaged Rust may be too old / not nightly)
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
