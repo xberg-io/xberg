@@ -63,19 +63,25 @@ pub enum ChunkerType {
 /// Defaults to `Characters` (Unicode character count). When using token-based sizing,
 /// chunks are sized by token count according to the specified tokenizer.
 ///
-/// Token-based sizing uses HuggingFace tokenizers loaded at runtime. Any tokenizer
-/// available on HuggingFace Hub can be used, including OpenAI-compatible tokenizers
-/// (e.g., `Xenova/gpt-4o`, `Xenova/cl100k_base`).
+/// Token-based sizing uses HuggingFace tokenizers loaded at runtime, or a tokenizer
+/// backend you register yourself. Any tokenizer available on HuggingFace Hub can be
+/// used, including OpenAI-compatible tokenizers (e.g., `Xenova/gpt-4o`,
+/// `Xenova/cl100k_base`). To size chunks with your own tokenizer instead (llama.cpp/GGUF
+/// vocabularies, SentencePiece models, custom vocabs), register a `TokenizerBackend`
+/// with `register_tokenizer_backend` and set `model` to the registered name.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ChunkSizing {
     /// Size measured in Unicode characters (default).
     #[default]
     Characters,
-    /// Size measured in tokens from a HuggingFace tokenizer.
+    /// Size measured in tokens from a HuggingFace tokenizer or a registered
+    /// tokenizer backend.
     #[cfg(feature = "chunking-tokenizers")]
     Tokenizer {
-        /// HuggingFace model ID or path, e.g. "Xenova/gpt-4o", "bert-base-uncased".
+        /// Name of a tokenizer backend registered via `register_tokenizer_backend`,
+        /// or a HuggingFace model ID, e.g. "Xenova/gpt-4o", "bert-base-uncased".
+        /// A registered backend name takes precedence over a HuggingFace ID.
         model: String,
         /// Optional cache directory override for tokenizer files.
         /// Defaults to hf-hub's standard cache (`~/.cache/huggingface/`).

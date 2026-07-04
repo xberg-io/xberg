@@ -171,6 +171,7 @@ pub mod registry;
 pub mod renderer;
 pub(crate) mod reranker;
 pub mod startup_validation;
+pub(crate) mod tokenizer;
 mod traits;
 pub mod validator;
 
@@ -194,6 +195,10 @@ pub use renderer::{Renderer, clear_renderers, list_renderers, register_renderer,
 pub use reranker::{
     RerankerBackend, clear_reranker_backends, list_reranker_backends, register_reranker_backend,
     unregister_reranker_backend,
+};
+pub use tokenizer::{
+    TokenizerBackend, clear_tokenizer_backends, list_tokenizer_backends, register_tokenizer_backend,
+    unregister_tokenizer_backend,
 };
 pub use traits::Plugin;
 pub use validator::{Validator, clear_validators, list_validators, register_validator, unregister_validator};
@@ -230,6 +235,13 @@ pub mod reranker_backend {
     pub use super::{
         RerankerBackend, clear_reranker_backends, list_reranker_backends, register_reranker_backend,
         unregister_reranker_backend,
+    };
+}
+/// Re-exports for the tokenizer backend plugin type, used by alef-generated bindings.
+pub mod tokenizer_backend {
+    pub use super::{
+        TokenizerBackend, clear_tokenizer_backends, list_tokenizer_backends, register_tokenizer_backend,
+        unregister_tokenizer_backend,
     };
 }
 /// Re-exports for the document extractor plugin type, used by alef-generated bindings.

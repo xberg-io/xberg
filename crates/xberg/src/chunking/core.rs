@@ -93,13 +93,41 @@ pub(crate) fn chunk_text_with_heading_source(
     let text_chunks: Vec<&str> = match &config.sizing {
         #[cfg(feature = "chunking-tokenizers")]
         crate::core::config::ChunkSizing::Tokenizer { model, .. } => {
-            let tokenizer = super::tokenizer_cache::get_or_init_tokenizer(model)?;
-            let chunk_config = ChunkConfig::new(ChunkCapacity::new(config.max_characters))
-                .with_sizer((*tokenizer).clone())
-                .with_overlap(config.overlap)
-                .map(|c| c.with_trim(config.trim))
-                .map_err(|e| crate::XbergError::validation(format!("Invalid chunking configuration: {}", e)))?;
-            split_with_config(text, &config.chunker_type, chunk_config)
+            // A tokenizer backend registered under this name takes precedence
+            // over a HuggingFace model id, so callers can size chunks with the
+            // exact tokenizer their embedder uses.
+            let registered = crate::plugins::registry::get_tokenizer_backend_registry()
+                .read()
+                .lookup(model);
+            if let Some(backend) = registered {
+                let chunk_config = ChunkConfig::new(ChunkCapacity::new(config.max_characters))
+                    .with_sizer(TokenizerBackendSizer(backend))
+                    .with_overlap(config.overlap)
+                    .map(|c| c.with_trim(config.trim))
+                    .map_err(|e| crate::XbergError::validation(format!("Invalid chunking configuration: {}", e)))?;
+                split_with_config(text, &config.chunker_type, chunk_config)
+            } else {
+                // `load_tokenizer` already names the tokenizer and the load failure;
+                // append the registration hint to validation failures and pass any
+                // other error (e.g. a poisoned cache lock) through untouched.
+                let tokenizer = super::tokenizer_cache::get_or_init_tokenizer(model).map_err(|e| match e {
+                    crate::XbergError::Validation { message, source } => crate::XbergError::Validation {
+                        message: format!(
+                            "{message}. No tokenizer backend is registered under '{model}' either; \
+                             use a HuggingFace model id, or register your own tokenizer with \
+                             register_tokenizer_backend."
+                        ),
+                        source,
+                    },
+                    other => other,
+                })?;
+                let chunk_config = ChunkConfig::new(ChunkCapacity::new(config.max_characters))
+                    .with_sizer((*tokenizer).clone())
+                    .with_overlap(config.overlap)
+                    .map(|c| c.with_trim(config.trim))
+                    .map_err(|e| crate::XbergError::validation(format!("Invalid chunking configuration: {}", e)))?;
+                split_with_config(text, &config.chunker_type, chunk_config)
+            }
         }
         // Characters sizing (default) — also matches when no token features are enabled
         _ => {
@@ -186,6 +214,36 @@ fn strip_leading_heading<'a>(text: &'a str, level: u8, title: &str) -> &'a str {
     let rest = &after_prefix[title.len()..];
     let line_end = rest.find('\n').unwrap_or(rest.len());
     rest[line_end..].trim_start_matches('\n')
+}
+
+/// Adapts a registered [`crate::plugins::TokenizerBackend`] to the splitter's
+/// [`ChunkSizer`] interface: chunk size is the backend's token count.
+///
+/// A backend reporting zero tokens for non-empty text is not trusted: a zero
+/// count would make every span appear to fit any budget and silently produce
+/// oversized chunks. Host-language bridges surface backend exceptions as a
+/// zero count, so this is also the failure mode of a backend that starts
+/// erroring mid-run. The sizer falls back to the character count — tokens
+/// don't exceed characters for practical tokenizers, so the budget degrades
+/// to the conservative `max_characters` semantics instead of an unbounded
+/// chunk — and logs the substitution.
+#[cfg(feature = "chunking-tokenizers")]
+struct TokenizerBackendSizer(std::sync::Arc<dyn crate::plugins::TokenizerBackend>);
+
+#[cfg(feature = "chunking-tokenizers")]
+impl ChunkSizer for TokenizerBackendSizer {
+    fn size(&self, chunk: &str) -> usize {
+        let count = self.0.count_tokens(chunk);
+        if count == 0 && !chunk.is_empty() {
+            tracing::warn!(
+                backend = self.0.name(),
+                chunk_len = chunk.len(),
+                "Tokenizer backend reported zero tokens for non-empty text; using character count instead"
+            );
+            return chunk.chars().count();
+        }
+        count
+    }
 }
 
 /// Split text using the appropriate splitter type with a generic sizer.

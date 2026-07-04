@@ -456,12 +456,13 @@ pub use pdf::render::{pdf_page_count, render_pdf_page_to_png};
 #[cfg_attr(alef, alef(skip))]
 pub use plugins::{
     clear_document_extractors, clear_embedding_backends, clear_ocr_backends, clear_post_processors, clear_renderers,
-    clear_reranker_backends, clear_validators, list_document_extractors, list_embedding_backends, list_ocr_backends,
-    list_post_processors, list_renderers, list_reranker_backends, list_validators, register_document_extractor,
-    register_embedding_backend, register_ocr_backend, register_post_processor, register_renderer,
-    register_reranker_backend, register_validator, unregister_document_extractor, unregister_embedding_backend,
+    clear_reranker_backends, clear_tokenizer_backends, clear_validators, list_document_extractors,
+    list_embedding_backends, list_ocr_backends, list_post_processors, list_renderers, list_reranker_backends,
+    list_tokenizer_backends, list_validators, register_document_extractor, register_embedding_backend,
+    register_ocr_backend, register_post_processor, register_renderer, register_reranker_backend,
+    register_tokenizer_backend, register_validator, unregister_document_extractor, unregister_embedding_backend,
     unregister_ocr_backend, unregister_post_processor, unregister_renderer, unregister_reranker_backend,
-    unregister_validator,
+    unregister_tokenizer_backend, unregister_validator,
 };
 
 // ── Plugin Traits — public API (for plugin implementors) ─────────────────────
@@ -470,7 +471,7 @@ pub use plugins::{
 #[cfg_attr(alef, alef(skip))]
 pub use plugins::{
     DocumentExtractor, EmbeddingBackend, OcrBackend, OcrBackendType, PostProcessor, ProcessingStage, Renderer,
-    RerankerBackend, Validator,
+    RerankerBackend, TokenizerBackend, Validator,
 };
 
 // ── Embeddings — public API (4 functions + 1 type, feature-gated) ────────────

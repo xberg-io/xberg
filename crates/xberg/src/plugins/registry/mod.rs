@@ -10,6 +10,7 @@ mod ocr;
 mod processor;
 mod renderer;
 mod reranker;
+mod tokenizer;
 mod validator;
 
 pub use embedding::EmbeddingBackendRegistry;
@@ -18,6 +19,7 @@ pub use ocr::OcrBackendRegistry;
 pub use processor::PostProcessorRegistry;
 pub use renderer::RendererRegistry;
 pub use reranker::RerankerBackendRegistry;
+pub use tokenizer::TokenizerBackendRegistry;
 pub use validator::ValidatorRegistry;
 
 use crate::{Result, XbergError};
@@ -68,6 +70,10 @@ pub static EMBEDDING_BACKEND_REGISTRY: LazyLock<Arc<RwLock<EmbeddingBackendRegis
 pub static RERANKER_BACKEND_REGISTRY: LazyLock<Arc<RwLock<RerankerBackendRegistry>>> =
     LazyLock::new(|| Arc::new(RwLock::new(RerankerBackendRegistry::new())));
 
+/// Global tokenizer backend registry singleton.
+pub static TOKENIZER_BACKEND_REGISTRY: LazyLock<Arc<RwLock<TokenizerBackendRegistry>>> =
+    LazyLock::new(|| Arc::new(RwLock::new(TokenizerBackendRegistry::new())));
+
 /// Global document extractor registry singleton.
 pub static DOCUMENT_EXTRACTOR_REGISTRY: LazyLock<Arc<RwLock<DocumentExtractorRegistry>>> =
     LazyLock::new(|| Arc::new(RwLock::new(DocumentExtractorRegistry::new())));
@@ -102,6 +108,12 @@ pub fn get_embedding_backend_registry() -> Arc<RwLock<EmbeddingBackendRegistry>>
 #[cfg_attr(alef, alef(skip))]
 pub fn get_reranker_backend_registry() -> Arc<RwLock<RerankerBackendRegistry>> {
     RERANKER_BACKEND_REGISTRY.clone()
+}
+
+/// Get the global tokenizer backend registry.
+#[cfg_attr(alef, alef(skip))]
+pub fn get_tokenizer_backend_registry() -> Arc<RwLock<TokenizerBackendRegistry>> {
+    TOKENIZER_BACKEND_REGISTRY.clone()
 }
 
 /// Get the global document extractor registry.
