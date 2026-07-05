@@ -439,7 +439,7 @@ no-ort-target = [
 # reduce memory spikes. Long-term fix: add tree-sitter-wasm-lite feature to tree-sitter-language-pack
 # with curated parser set (markdown, javascript, python, rust, json, yaml, html, css, sql, c, etc.)
 # and update this aggregate to use it instead of the full tree-sitter feature.
-wasm-target = ["no-ort-target", "excel-wasm", "tree-sitter-wasm", "ocr-wasm", "ner-candle-wasm"]
+wasm-target = ["no-ort-target", "excel-wasm", "tree-sitter-wasm", "ocr-wasm", "ner-candle-wasm", "redaction-rehydrate"]
 # android-target: no-ort-target plus native-Linux variants that work on Android ABI
 # (excel with tokio, native tree-sitter, Tesseract OCR, and API/MCP transport).
 # Excludes ORT-dependent features (paddle-ocr, layout-detection, embeddings, reranker,
