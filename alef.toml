@@ -722,6 +722,12 @@ exclude_functions = [
     "batch_extract_bytes_sync",
     "batch_extract_files",
     "batch_extract_files_sync",
+    # Trait-bridge registration emits Elixir adapters for these plugin families.
+    # The raw Rust functions take Arc<dyn Trait> and duplicate the bridge names.
+    "register_document_extractor",
+    "register_renderer",
+    "unregister_document_extractor",
+    "unregister_renderer",
 ]
 exclude_types = [
     # Trait types cannot be FFI-bound
@@ -3936,7 +3942,7 @@ path = "../../packages/zig"
 # Placeholder until v5.0.0-rc.4 ships and the tarball SHA is known.
 # Update post-release with the real Zig multihash for
 # https://github.com/xberg-io/xberg/releases/download/v{version}/xberg-zig-v{version}.tar.gz
-hash = "xberg-1.0.0-rc.8-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+hash = "xberg-1.0.0-rc.9-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 
 # Point WASM e2e at the wasm-pack `nodejs` target. The default `pkg/` is the
 # bundler target whose JS glue uses `import * as foo from "env"` statements
@@ -3984,7 +3990,6 @@ authors = ["Na'aman Hirschfeld <naaman@xberg.io>"]
 keywords = ["document", "extraction", "pdf", "ocr", "text"]
 
 [crates.scaffold.cargo]
-rustc_wrapper = ".cargo/rustc-wrapper.sh"
 
 # Force dynamic CRT (/MD) for cc-rs MSVC builds. xberg-tesseract uses
 # cmake-rs which picks /MD, but cc-rs builds (e.g. esaxx-rs via gliner via
