@@ -149,7 +149,7 @@ pub(crate) fn detect_rows(words: &[HocrWord], row_threshold_ratio: f64) -> Vec<u
         .filter(|group| !group.is_empty())
         .map(|group| {
             let mut sorted = group.clone();
-            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            sorted.sort_by(|a, b| a.total_cmp(b));
             let mid = sorted.len() / 2;
             sorted[mid] as u32
         })
@@ -347,9 +347,13 @@ mod tests {
 
     #[test]
     fn test_nan_safe_sort_does_not_panic() {
+        // total_cmp is a proper total order; NaN sorts after all finite values (ascending).
         let mut values: Vec<f64> = vec![1.0, f64::NAN, 2.0];
-        values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        values.sort_by(|a, b| a.total_cmp(b));
         assert_eq!(values.len(), 3);
+        assert!(!values[0].is_nan());
+        assert!(!values[1].is_nan());
+        assert!(values[2].is_nan(), "NaN sorts last in ascending total_cmp order");
     }
 
     #[test]

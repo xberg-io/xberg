@@ -40,7 +40,7 @@ fn detect_columns(regions: &[RegionProjection]) -> Vec<usize> {
     let mut x_centers: Vec<f32> = regions.iter().map(|r| (r.left + r.right) / 2.0).collect();
 
     // Sort to identify cluster boundaries
-    x_centers.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    x_centers.sort_by(|a, b| a.total_cmp(b));
 
     // Deduplicate x_centers (merge nearly-identical values)
     let mut unique_centers: Vec<f32> = Vec::new();
@@ -222,7 +222,7 @@ pub(crate) fn reorder_segments_by_layout(
 
     // Detect columns from region x-centers: merge centers within the threshold.
     let mut x_centers: Vec<f32> = active.iter().map(|(r, _)| (r.left + r.right) / 2.0).collect();
-    x_centers.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    x_centers.sort_by(|a, b| a.total_cmp(b));
     let mut unique_centers: Vec<f32> = Vec::new();
     for &center in &x_centers {
         match unique_centers.last() {
@@ -248,10 +248,7 @@ pub(crate) fn reorder_segments_by_layout(
     }
 
     // Column-major (left-to-right), then top-to-bottom (descending y in PDF coords).
-    ordered.sort_by(|a, b| match a.0.cmp(&b.0) {
-        std::cmp::Ordering::Equal => b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal),
-        other => other,
-    });
+    ordered.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| b.1.total_cmp(&a.1)));
 
     // Emit segments in sorted-region order (each at most once), then append any
     // segments that projected to no region, in their original order.
@@ -267,10 +264,7 @@ pub(crate) fn reorder_segments_by_layout(
             // Sort by top coordinate (y + height) descending, then x ascending
             let top_a = seg_a.y + seg_a.height;
             let top_b = seg_b.y + seg_b.height;
-            match top_b.partial_cmp(&top_a).unwrap_or(std::cmp::Ordering::Equal) {
-                std::cmp::Ordering::Equal => seg_a.x.partial_cmp(&seg_b.x).unwrap_or(std::cmp::Ordering::Equal),
-                other => other,
-            }
+            top_b.total_cmp(&top_a).then_with(|| seg_a.x.total_cmp(&seg_b.x))
         });
 
         for &idx in &sorted_indices {
@@ -302,7 +296,7 @@ fn reorder_spans_geometric(spans: &[TextSpan]) -> Vec<usize> {
 
     // Assign each span to a column based on x-center clustering
     let mut x_centers: Vec<f32> = spans.iter().map(|s| s.x + s.width / 2.0).collect();
-    x_centers.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    x_centers.sort_by(|a, b| a.total_cmp(b));
 
     // Deduplicate to find distinct column centers
     let mut unique_centers: Vec<f32> = Vec::new();
@@ -336,15 +330,7 @@ fn reorder_spans_geometric(spans: &[TextSpan]) -> Vec<usize> {
     }
 
     // Sort by (column_id ascending, top_y descending)
-    span_columns.sort_by(|a, b| {
-        match a.0.cmp(&b.0) {
-            std::cmp::Ordering::Equal => {
-                // Same column: sort by y descending (top-to-bottom in PDF coords)
-                b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
-            }
-            other => other,
-        }
-    });
+    span_columns.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| b.1.total_cmp(&a.1)));
 
     span_columns.into_iter().map(|(_, _, idx)| idx).collect()
 }
@@ -394,15 +380,7 @@ pub(crate) fn reorder_spans_by_layout(spans: &[TextSpan], hints: &[LayoutHint]) 
         .collect();
 
     // Sort by (column_id ascending, top_y descending)
-    sorted_regions.sort_by(|a, b| {
-        match a.0.cmp(&b.0) {
-            std::cmp::Ordering::Equal => {
-                // Same column: sort by y descending (top-to-bottom in PDF coords)
-                b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
-            }
-            other => other,
-        }
-    });
+    sorted_regions.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| b.1.total_cmp(&a.1)));
 
     // Emit spans in sorted region order.
     // Within each region, sort spans by y (top coordinate) descending, x ascending.
@@ -418,10 +396,7 @@ pub(crate) fn reorder_spans_by_layout(spans: &[TextSpan], hints: &[LayoutHint]) 
             // Sort by top coordinate (y + height) descending, then x ascending
             let top_a = span_a.y + span_a.height;
             let top_b = span_b.y + span_b.height;
-            match top_b.partial_cmp(&top_a).unwrap_or(std::cmp::Ordering::Equal) {
-                std::cmp::Ordering::Equal => span_a.x.partial_cmp(&span_b.x).unwrap_or(std::cmp::Ordering::Equal),
-                other => other,
-            }
+            top_b.total_cmp(&top_a).then_with(|| span_a.x.total_cmp(&span_b.x))
         });
 
         for &span_idx in &sorted_span_indices {
@@ -929,6 +904,63 @@ mod tests {
             "Spans within a region must be ordered by top coordinate descending: \
              index 3 (y=450) first, then 0, 1, 2 (y=200, 180, 160)"
         );
+    }
+
+    /// Regression for issue #1198: NaN f32 coordinates in PDF spans create a cyclic
+    /// comparison with `partial_cmp + unwrap_or(Equal)`, causing Rust's driftsort to
+    /// panic with "comparison function does not correctly implement a total order".
+    ///
+    /// Concrete cycle produced by the old comparator (all 3 spans land in column 0
+    /// because their x-centers are within COLUMN_MERGE_THRESHOLD_PTS):
+    ///
+    ///   A: top=NaN  x=1.0    B: top=17.0  x=0.0    C: top=22.0  x=2.0
+    ///
+    ///   compare(A, B): primary NaN→Equal, secondary x_A(1.0)>x_B(0.0) → Greater  (B before A)
+    ///   compare(B, C): primary 17.0<22.0 → Greater                               (C before B)
+    ///   compare(A, C): primary NaN→Equal, secondary x_A(1.0)<x_C(2.0) → Less    (A before C)
+    ///
+    /// → cycle  B < A,  C < B,  A < C  →  B < A < C < B  — driftsort panics.
+    ///
+    /// Fixed by using f32::total_cmp which places NaN after +inf, eliminating all
+    /// non-finite ambiguity.  With total_cmp: NaN > 22.0 > 17.0, so A sorts first.
+    #[test]
+    fn test_geometric_sort_with_nan_top_does_not_panic() {
+        let spans = vec![
+            TextSpan {
+                text: "A".to_string(),
+                x: 1.0,
+                y: f32::NAN,
+                width: 10.0,
+                height: 12.0,
+            },
+            TextSpan {
+                text: "B".to_string(),
+                x: 0.0,
+                y: 5.0,
+                width: 10.0,
+                height: 12.0,
+            },
+            TextSpan {
+                text: "C".to_string(),
+                x: 2.0,
+                y: 10.0,
+                width: 10.0,
+                height: 12.0,
+            },
+        ];
+        // Must not panic. All three x-centers (6, 5, 7) lie within
+        // COLUMN_MERGE_THRESHOLD_PTS=20 of each other → single column.
+        let order = reorder_spans_geometric(&spans);
+        assert_eq!(order.len(), 3, "all spans must be returned");
+        // total_cmp: NaN > +inf > finite, so span A (NaN top) ranks highest in the
+        // descending-top sort and must appear first.
+        assert_eq!(
+            order[0], 0,
+            "span with NaN top must sort first (NaN > finite in total_cmp)"
+        );
+        // C has top=22, B has top=17 → C before B.
+        assert_eq!(order[1], 2, "C (top=22) must precede B (top=17)");
+        assert_eq!(order[2], 1, "B (top=17) must be last");
     }
 
     /// Test geometric column detection when layout hints are absent
