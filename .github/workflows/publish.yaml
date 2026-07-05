@@ -586,7 +586,7 @@ jobs:
         include:
           - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
           - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
-          - { os: macos-latest, target: aarch64-apple-darwin }
+          - { os: macos-15, target: aarch64-apple-darwin }
           # Intel macOS: native x86_64 build; ONNX Runtime staged by
           # setup-onnx-runtime (Homebrew on x86_64) and linked dynamically,
           # same as the macos-arm64 leg.
@@ -752,7 +752,7 @@ jobs:
         include:
           - { os: ubuntu-latest, label: linux-x86_64 }
           - { os: ubuntu-24.04-arm, label: linux-aarch64 }
-          - { os: macos-latest, label: macos-arm64 }
+          - { os: macos-15, label: macos-arm64 }
           # Intel macOS: native x86_64 gem; dynamic ort (alef macos-intel-target).
           - { os: macos-15-intel, label: macos-x86_64 }
           # Ruby on Windows is MinGW (rb-sys → x86_64-pc-windows-gnu) but ort-sys
@@ -835,7 +835,7 @@ jobs:
         platform:
           - { os: ubuntu-latest, label: linux-x86_64, target: x86_64-unknown-linux-gnu }
           - { os: ubuntu-24.04-arm, label: linux-arm64, target: aarch64-unknown-linux-gnu }
-          - { os: macos-latest, label: macos-arm64, target: aarch64-apple-darwin }
+          - { os: macos-15, label: macos-arm64, target: aarch64-apple-darwin }
           # Intel macOS: native x86_64; dynamic ort (alef macos-intel-target).
           - { os: macos-15-intel, label: macos-x86_64, target: x86_64-apple-darwin }
           - { os: windows-latest, label: windows-x86_64, target: x86_64-pc-windows-msvc }
@@ -914,7 +914,7 @@ jobs:
               target: aarch64-unknown-linux-gnu,
               container: quay.io/pypa/manylinux_2_28_aarch64:latest,
             }
-          - { os: macos-latest, target: aarch64-apple-darwin }
+          - { os: macos-15, target: aarch64-apple-darwin }
           # Native Intel macOS. ort has no static x86_64-apple-darwin prebuilt
           # (dropped rc.11; Microsoft dropped onnxruntime-osx-x86_64 after 1.23),
           # so this target keeps the default features but swaps ort-bundled for
@@ -1020,6 +1020,12 @@ jobs:
       - name: Install system dependencies
         if: "!contains(matrix.target, '-linux-gnu')"
         uses: ./.github/actions/install-system-deps
+
+      - name: Setup ONNX Runtime
+        if: contains(matrix.target, 'windows')
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: "1.24.2"
 
       - uses: xberg-io/actions/build-rust-cli@v1
         id: build
@@ -1181,7 +1187,7 @@ jobs:
         include:
           - { os: ubuntu-latest, platform: linux-x86_64, target: x86_64-unknown-linux-gnu }
           - { os: ubuntu-24.04-arm, platform: linux-aarch64, target: aarch64-unknown-linux-gnu }
-          - { os: macos-latest, platform: macos-arm64, target: aarch64-apple-darwin }
+          - { os: macos-15, platform: macos-arm64, target: aarch64-apple-darwin }
           # Intel macOS: native x86_64; dynamic ort (alef macos-intel-target).
           - { os: macos-15-intel, platform: macos-x86_64, target: x86_64-apple-darwin }
           - { os: windows-latest, platform: windows-x86_64, target: x86_64-pc-windows-msvc }
@@ -1235,7 +1241,7 @@ jobs:
         include:
           - { os: ubuntu-latest, platform: linux-x86_64, target: x86_64-unknown-linux-gnu }
           - { os: ubuntu-24.04-arm, platform: linux-aarch64, target: aarch64-unknown-linux-gnu }
-          - { os: macos-latest, platform: macos-arm64, target: aarch64-apple-darwin }
+          - { os: macos-15, platform: macos-arm64, target: aarch64-apple-darwin }
           # Intel macOS: native x86_64; dynamic ort (alef macos-intel-target).
           - { os: macos-15-intel, platform: macos-x86_64, target: x86_64-apple-darwin }
           - { os: windows-latest, platform: windows-x86_64, target: x86_64-pc-windows-msvc }
@@ -1304,7 +1310,7 @@ jobs:
         include:
           - { os: ubuntu-latest, classifier: linux-x86_64, target: x86_64-unknown-linux-gnu }
           - { os: ubuntu-24.04-arm, classifier: linux-aarch64, target: aarch64-unknown-linux-gnu }
-          - { os: macos-latest, classifier: macos-arm64, target: aarch64-apple-darwin }
+          - { os: macos-15, classifier: macos-arm64, target: aarch64-apple-darwin }
           # Intel macOS: native x86_64; dynamic ort (alef macos-intel-target).
           - { os: macos-15-intel, classifier: macos-x86_64, target: x86_64-apple-darwin }
           - { os: windows-latest, classifier: windows-x86_64, target: x86_64-pc-windows-msvc }
@@ -1432,7 +1438,7 @@ jobs:
         include:
           - { os: ubuntu-latest, rid: linux-x64, target: x86_64-unknown-linux-gnu }
           - { os: ubuntu-24.04-arm, rid: linux-arm64, target: aarch64-unknown-linux-gnu }
-          - { os: macos-latest, rid: osx-arm64, target: aarch64-apple-darwin }
+          - { os: macos-15, rid: osx-arm64, target: aarch64-apple-darwin }
           # Intel macOS: native x86_64; dynamic ort (alef macos-intel-target).
           - { os: macos-15-intel, rid: osx-x64, target: x86_64-apple-darwin }
           - { os: windows-latest, rid: win-x64, target: x86_64-pc-windows-msvc }
@@ -1530,7 +1536,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest]
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-latest]
         nif: ["2.16", "2.17"]
         include:
           - os: ubuntu-latest
@@ -1543,7 +1549,7 @@ jobs:
           - os: macos-15-intel
             label: macos-x86_64
             target: x86_64-apple-darwin
-          - os: macos-latest
+          - os: macos-15
             label: macos-arm64
             target: aarch64-apple-darwin
           - os: windows-latest
@@ -1717,7 +1723,7 @@ jobs:
     name: Build Dart iOS XCFramework
     needs: [prepare, check-pub]
     if: ${{ needs.prepare.outputs.release_dart == 'true' && (needs.check-pub.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true') }}
-    runs-on: macos-latest
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1760,7 +1766,7 @@ jobs:
               lib: libxberg_dart.so,
             }
           - {
-              os: macos-latest,
+              os: macos-15,
               target: aarch64-apple-darwin,
               blob: macos-arm64,
               lib: libxberg_dart.dylib,
@@ -1872,7 +1878,7 @@ jobs:
     name: Build Swift artifact bundle
     needs: prepare
     if: ${{ needs.prepare.outputs.release_swift == 'true' }}
-    runs-on: macos-latest
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1912,7 +1918,7 @@ jobs:
     name: Build Swift package
     needs: prepare
     if: ${{ needs.prepare.outputs.release_swift == 'true' }}
-    runs-on: macos-latest
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v6
         with:
