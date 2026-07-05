@@ -1519,7 +1519,10 @@ namespace this_thread {
     fn build_leptonica_wasm(leptonica_src: &Path, leptonica_install: &Path, wasi_sdk_dir: &Path) {
         let toolchain_file = find_wasi_toolchain(wasi_sdk_dir);
         let sysroot = wasi_sdk_dir.join("share/wasi-sysroot");
-        let clang = wasi_sdk_dir.join("bin/clang");
+        // `.exe` on Windows — CMake's CMAKE_C_COMPILER must be a full path to
+        // an existing file; `bin/clang` alone doesn't resolve on Windows,
+        // where the binary is `bin/clang.exe`.
+        let clang = wasi_sdk_dir.join(format!("bin/clang{}", std::env::consts::EXE_SUFFIX));
 
         let mut config = Config::new(leptonica_src);
 
@@ -1608,7 +1611,10 @@ Installation instructions:
 
         let tesseract_dir = if third_party_dir.join("tesseract").exists() {
             eprintln!("Using existing tesseract source");
-            third_party_dir.join("tesseract")
+            let dir = third_party_dir.join("tesseract");
+            apply_tesseract_wasm_patch(&dir);
+            apply_wasm_noop_mutex_patch(&dir);
+            dir
         } else {
             fs::create_dir_all(&third_party_dir).expect("Failed to create third_party directory");
             let dir = download_and_extract(&third_party_dir, &tesseract_url(), "tesseract");
@@ -1717,8 +1723,9 @@ Installation instructions:
         // that deadlock in single-threaded WASM environments without SharedArrayBuffer).
         let toolchain_file = find_wasi_toolchain(wasi_sdk_dir);
         let sysroot = wasi_sdk_dir.join("share/wasi-sysroot");
-        let clang = wasi_sdk_dir.join("bin/clang");
-        let clangxx = wasi_sdk_dir.join("bin/clang++");
+        // `.exe` on Windows — see build_leptonica_wasm for why this is required.
+        let clang = wasi_sdk_dir.join(format!("bin/clang{}", std::env::consts::EXE_SUFFIX));
+        let clangxx = wasi_sdk_dir.join(format!("bin/clang++{}", std::env::consts::EXE_SUFFIX));
 
         let mut config = Config::new(src_dir);
 
