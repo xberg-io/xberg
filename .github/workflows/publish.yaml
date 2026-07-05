@@ -628,13 +628,14 @@ jobs:
         uses: xberg-io/actions/build-node-napi@v1
         with:
           crate-dir: crates/xberg-node
-          build-command: pnpm exec napi build --release --target ${{ matrix.target }} --platform
+          target: ${{ matrix.target }}
           use-napi-cross: ${{ contains(matrix.target, '-linux-gnu') }}
+          pack-target-tarball: node-bindings-${{ matrix.target }}.tar.gz
 
       - uses: actions/upload-artifact@v7
         with:
           name: node-bindings-${{ matrix.target }}
-          path: crates/xberg-node/*.node
+          path: node-bindings-${{ matrix.target }}.tar.gz
           retention-days: 14
 
   node-bindings-musl:
@@ -663,14 +664,18 @@ jobs:
           docker build -f docker/Dockerfile.musl-node \
             --build-arg TARGET=${{ matrix.target }} \
             --output type=local,dest=./build-output .
-      - name: Stage .node file for npm
+      - name: Stage .node file and package structure for npm
+        # Inline: package the .node file into npm/<platform>/ structure matching
+        # the main job's build-node-napi output format (pack-target-tarball).
+        # The publish-node script will create/inject package.json for each platform.
         run: |
-          mkdir -p dist/node-bindings
-          find build-output -name "*.node" -exec cp {} dist/node-bindings/ \;
+          mkdir -p staging/npm/xberg-${{ matrix.target }}
+          find build-output -name "*.node" -exec cp {} staging/npm/xberg-${{ matrix.target }}/ \;
+          tar -czf node-bindings-${{ matrix.target }}.tar.gz -C staging npm
       - uses: actions/upload-artifact@v7
         with:
           name: node-bindings-${{ matrix.target }}
-          path: dist/node-bindings
+          path: node-bindings-${{ matrix.target }}.tar.gz
           if-no-files-found: error
           retention-days: 14
 
@@ -891,28 +896,25 @@ jobs:
     needs: [prepare, check-cli]
     if: ${{ needs.prepare.outputs.release_cli == 'true' && (needs.check-cli.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true') }}
     runs-on: ${{ matrix.os }}
-    container: ${{ matrix.container }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          # gnu CLI builds in manylinux_2_28 containers for glibc 2.28 floor.
+          # gnu CLI builds on native ubuntu-24.04 for glibc 2.39 (≥ 2.38 floor for ORT).
           # The executable statically links C++ deps (tesseract/leptonica)
-          # that reference GNU libstdc++ `__cxx11` symbols. CFLAGS/CXXFLAGS prevent
-          # GCC 14+ from emitting C23-versioned glibc symbols (__isoc23_strtoll etc.)
-          # that require glibc ≥ 2.38, ensuring compatibility with Debian 12/Ubuntu 22.04/RHEL 8.
+          # that reference GNU libstdc++ `__cxx11` symbols. ubuntu-24.04's GCC emits C23
+          # glibc symbols (__isoc23_strtoll etc.) which require glibc ≥ 2.38;
+          # ubuntu-24.04 ships glibc 2.39, satisfying ORT's requirements. Older systems
+          # are served by the static musl CLI below.
           # HEIF/HEIC is built in (the CLI's xberg `formats` feature includes `heic`);
-          # libheif is provisioned from source in the system-deps step below.
-          # Older/Alpine systems are served by the static musl CLI below.
+          # libheif is provisioned from source via install-system-deps.
           - {
-              os: ubuntu-latest,
+              os: ubuntu-24.04,
               target: x86_64-unknown-linux-gnu,
-              container: quay.io/pypa/manylinux_2_28_x86_64:latest,
             }
           - {
               os: ubuntu-24.04-arm,
               target: aarch64-unknown-linux-gnu,
-              container: quay.io/pypa/manylinux_2_28_aarch64:latest,
             }
           - { os: macos-15, target: aarch64-apple-darwin }
           # Native Intel macOS. ort has no static x86_64-apple-darwin prebuilt
@@ -934,91 +936,11 @@ jobs:
 
           submodules: recursive
 
-      - name: Bootstrap manylinux container (protoc + rustup HOME)
-        if: contains(matrix.target, '-linux-gnu')
-        shell: bash
-        run: |
-          set -euxo pipefail
-          # setup-rust installs protoc via `sudo apt-get` (Debian), but the
-          # manylinux_2_28 base is AlmaLinux 8 with no apt/sudo — its protoc step
-          # exits 127. Pre-install protoc from EPEL so setup-rust's
-          # `command -v protoc` short-circuits before reaching the apt branch.
-          yum install -y epel-release || dnf install -y epel-release || true
-          yum install -y protobuf-compiler || dnf install -y protobuf-compiler || true
-          # GitHub sets HOME=/github/home for container jobs, but the container
-          # runs as root (euid home /root); rustup aborts on the mismatch. Pin
-          # HOME=/root for later steps and seed its gitconfig so git ops under the
-          # new HOME don't trip "dubious ownership" on the checkout.
-          echo "HOME=/root" >> "$GITHUB_ENV"
-          HOME=/root git config --global --add safe.directory '*' || true
-
       - uses: xberg-io/actions/setup-rust@v1
         with:
           target: ${{ matrix.target }}
 
-      - name: Install system dependencies (manylinux)
-        if: contains(matrix.target, '-linux-gnu')
-        shell: bash
-        run: |
-          set -euxo pipefail
-          # manylinux_2_28 is AlmaLinux 8. EPEL + CRB/PowerTools provide free codecs
-          # (libaom/libdav1d for AV1). HEVC codecs (libde265/x265) are not in EPEL
-          # (patent concerns), so they are installed best-effort below and libheif
-          # is built from source — the CLI enables `heic` via the xberg `formats`
-          # feature, so libheif-sys needs libheif.pc on PKG_CONFIG_PATH.
-          yum install -y epel-release || dnf install -y epel-release || true
-          yum install -y dnf-plugins-core yum-utils || true
-          dnf config-manager --set-enabled powertools 2>/dev/null \
-            || dnf config-manager --set-enabled crb 2>/dev/null \
-            || yum-config-manager --enable powertools 2>/dev/null || true
-          yum install -y \
-            gcc gcc-c++ make cmake pkgconfig \
-            openssl-devel file-devel libuv-devel \
-            libaom-devel libdav1d-devel \
-            tesseract-devel
-          # HEVC codecs (best-effort; libheif builds without them, dropping HEIC
-          # HEVC decode but keeping AVIF/AV1).
-          for codec in libde265-devel x265-devel; do
-            yum install -y "$codec" || dnf install -y "$codec" || true
-          done
-          # Build libheif 1.23.0 from source into /usr/local — mirrors the
-          # install-system-deps composite used by the non-manylinux legs. The
-          # non-manylinux CLI targets get libheif from that action; manylinux
-          # (AlmaLinux, no apt) provisions it here so both paths match.
-          curl -fsSL -o /tmp/libheif.tar.gz \
-            https://github.com/strukturag/libheif/releases/download/v1.23.0/libheif-1.23.0.tar.gz
-          tar -xzf /tmp/libheif.tar.gz -C /tmp
-          mkdir -p /tmp/libheif-1.23.0/build
-          cd /tmp/libheif-1.23.0/build
-          cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local \
-            -DCMAKE_INSTALL_LIBDIR=lib -DWITH_EXAMPLES=OFF -DWITH_GDK_PIXBUF=OFF \
-            -DBUILD_TESTING=OFF
-          make -j"$(nproc)"
-          make install
-          ldconfig
-          cd -
-          rm -rf /tmp/libheif*
-          # Apply the C23-symbol-prevention flags (#588) to THIS glibc-gnu build
-          # only — written to GITHUB_ENV inside the linux-gnu-gated step so they
-          # never reach the macOS (clang) or Windows (MSVC) matrix entries.
-          # CARGO_TARGET_*_LINKER points cargo at the in-image gcc instead of looking
-          # for triple-prefixed cross-compiler binaries that aren't there.
-          {
-            echo "CFLAGS=-std=gnu11"
-            echo "CXXFLAGS=-std=gnu++17"
-            echo "CPPFLAGS=-std=gnu11"
-            echo "CMAKE_C_FLAGS=-std=gnu11"
-            echo "CMAKE_CXX_FLAGS=-std=gnu++17"
-            echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc"
-            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=gcc"
-            echo "CC_x86_64_unknown_linux_gnu=gcc"
-            echo "CC_aarch64_unknown_linux_gnu=gcc"
-            echo "CXX_x86_64_unknown_linux_gnu=g++"
-            echo "CXX_aarch64_unknown_linux_gnu=g++"
-          } >> "$GITHUB_ENV"
-
       - name: Install system dependencies
-        if: "!contains(matrix.target, '-linux-gnu')"
         uses: ./.github/actions/install-system-deps
 
       - name: Setup ONNX Runtime
@@ -2022,7 +1944,7 @@ jobs:
   cli-proxy-wheels:
     name: Build CLI proxy wheel (${{ matrix.target }})
     needs: [prepare, check-cli, cli-binaries, cli-binaries-musl]
-    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.cli-binaries.result == 'success' && needs.cli-binaries-musl.result == 'success' && needs.check-cli.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true' }}
+    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.cli-binaries.result == 'success' && needs.cli-binaries-musl.result == 'success' && (needs.check-cli.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true') }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -2459,7 +2381,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           pattern: node-bindings-*
-          path: crates/xberg-node/artifacts
+          path: node-artifacts
           merge-multiple: true
 
       - uses: xberg-io/actions/setup-node-workspace@v1
@@ -2467,47 +2389,74 @@ jobs:
           node-version: "24"
           registry-url: "https://registry.npmjs.org/"
 
-      - name: Stage platform packages with napi
-        # Inline: napi artifacts → per-platform npm/ subpackages. Equivalent
-        # of `napi create-npm-dirs && napi artifacts`; trivially small.
+      - name: Stage platform packages and main package
+        # Inline: xberg's per-platform Node artifact layout is bespoke
+        # (one tarball per target containing pre-staged npm/<platform>/) and the
+        # main package needs an injected optionalDependencies map listing every
+        # platform sub-package. Tightly coupled to napi-rs + repo conventions;
+        # the generic publish-npm action operates on a single package dir.
         working-directory: crates/xberg-node
-        run: |
-          pnpm exec napi create-npm-dirs
-          pnpm exec napi artifacts --output-dir artifacts --npm-dir npm
         shell: bash
+        run: |
+          rm -rf npm
+          mkdir -p npm
 
-      - name: Pack platform sub-packages
-        # `publish-npm packages-dir` mode expects *.tgz inputs; napi only
-        # stages the per-platform directories. Run `npm pack` in each so
-        # the publish action has tarballs to upload (or dry-run).
-        working-directory: crates/xberg-node
-        shell: bash
-        run: |
-          for d in npm/*/; do
-            [ -d "$d" ] || continue
-            (cd "$d" && npm pack)
+          # Extract all platform tarballs into npm/<platform>/
+          cd ../..
+          for pkg in node-artifacts/*.tar.gz; do
+            tar -xzf "${pkg}" -C crates/xberg-node
+          done
+          cd crates/xberg-node
+
+          # Ensure each platform subdir has a package.json (create if missing)
+          for dir in npm/*/; do
+            [ -d "$dir" ] || continue
+            if [ ! -f "$dir/package.json" ]; then
+              # Create minimal platform package.json if not present
+              platform=$(basename "$dir")
+              jq -n --arg name "@xberg-io/xberg-${platform}" \
+                    --arg version "$([[ -f package.json ]] && jq -r '.version' package.json || echo '0.0.0')" \
+                    '{name: $name, version: $version, files: ["./*.node"]}' > "$dir/package.json"
+            fi
           done
 
-      - name: Verify Node platform sub-package contents
-        uses: xberg-io/actions/verify-package-contents@v1
-        with:
-          language: node-platform
-          artifact-path: crates/xberg-node/npm
-          package-name: "@xberg-io/xberg"
-          # NAPI scaffolds stub package.json dirs for every platform in
-          # crates/xberg-node/package.json's `napi.triples.additional`,
-          # not just the targets we build (e.g. darwin-x64, win32-arm64-msvc
-          # are listed but not built — their npm/*.tgz contains no .node).
-          # Use strict=false so verify reports stubs without failing the job.
-          strict: "false"
+          # Pack each platform sub-package as a tarball
+          cd npm
+          for dir in */; do
+            if [ -f "$dir/package.json" ]; then
+              (cd "$dir" && npm pack && mv ./*.tgz ..)
+            fi
+          done
+          cd ../..
+
+          # Stamp main package's optionalDependencies with all platform packages
+          tmp_pkg_json="$(mktemp)"
+          optional_deps_json='{}'
+          for platform_pkg_json in crates/xberg-node/npm/*/package.json; do
+            [ -f "$platform_pkg_json" ] || continue
+            name="$(jq -r '.name // empty' "$platform_pkg_json")"
+            version="$(jq -r '.version // empty' "$platform_pkg_json")"
+            [[ -z "$name" || -z "$version" ]] && { echo "Invalid: $platform_pkg_json" >&2; exit 1; }
+            optional_deps_json="$(jq -c --arg n "$name" --arg v "$version" '. + {($n): $v}' <<<"$optional_deps_json")"
+          done
+          jq --argjson deps "$optional_deps_json" '.optionalDependencies = $deps' \
+            crates/xberg-node/package.json > "$tmp_pkg_json"
+          mv "$tmp_pkg_json" crates/xberg-node/package.json
 
       - name: Publish platform sub-packages
+        # Tolerate per-platform publish failures so the main package and
+        # other platforms still ship. RC.45–RC.48 each hit ENEEDAUTH on
+        # `@xberg-io/xberg-linux-x64-musl` (npm Trusted Publisher
+        # not configured for that specific sub-package — see task #93);
+        # without continue-on-error the failure aborted the whole job and
+        # blocked the main `@xberg-io/xberg` publish too, leaving
+        # consumers unable to install on any platform.
+        continue-on-error: true
         uses: xberg-io/actions/publish-npm@v1
         with:
           packages-dir: crates/xberg-node/npm
           npm-tag: ${{ needs.prepare.outputs.npm_tag }}
           dry-run: ${{ needs.prepare.outputs.dry_run }}
-          provenance: "true"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

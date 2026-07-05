@@ -21,8 +21,12 @@ on:
         required: false
         type: boolean
         default: false
-  release:
-    types: [published]
+  # NOTE: intentionally no `release: [published]` trigger. The GitHub release is
+  # created as a draft and only un-drafted after every binding upload succeeds,
+  # so relying on `release: published` would mean Docker never builds when any
+  # binding fails. The publish pipeline fires this workflow explicitly via
+  # repository_dispatch (see publish.yaml `trigger-docker-publish`). Re-adding
+  # `release: [published]` would double-fire this workflow.
   repository_dispatch:
     types: [publish-docker]
 
