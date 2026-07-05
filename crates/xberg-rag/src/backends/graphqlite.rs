@@ -209,11 +209,11 @@ impl GraphStore {
                             *label_counts.entry(label).or_default() += 1;
                         }
                     }
-                    if let Some((&best_label, _)) = label_counts.iter().max_by_key(|&(_, count)| count) {
-                        if communities.get(node) != Some(&best_label) {
-                            communities.insert(node.clone(), best_label);
-                            changed = true;
-                        }
+                    if let Some((&best_label, _)) = label_counts.iter().max_by_key(|&(_, count)| count)
+                        && communities.get(node) != Some(&best_label)
+                    {
+                        communities.insert(node.clone(), best_label);
+                        changed = true;
                     }
                 }
             }
