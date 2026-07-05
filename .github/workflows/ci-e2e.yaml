@@ -431,6 +431,16 @@ jobs:
       - name: Install alef CLI
         uses: xberg-io/actions/install-alef@v1
 
+      - name: Pre-build mock-server for Go e2e
+        if: matrix.lang == 'go'
+        shell: bash
+        run: |
+          echo "Pre-building mock-server for Go e2e tests..."
+          cargo build --release --manifest-path e2e/rust/Cargo.toml --bin mock-server
+          mkdir -p /tmp/xberg-e2e
+          cp e2e/rust/target/release/mock-server /tmp/xberg-e2e/mock-server
+          echo "XBERG_E2E_MOCK_SERVER_BIN=/tmp/xberg-e2e/mock-server" >> "$GITHUB_ENV"
+
       - name: Compile Ruby native extension
         if: matrix.lang == 'ruby'
         working-directory: packages/ruby
