@@ -217,14 +217,16 @@ impl Attention {
         let key_states = qkv.i(1)?.contiguous()?;
         let value_states = qkv.i(2)?.contiguous()?;
         let xs = if self.use_rel_pos {
+            // use_rel_pos implies the decomposed rel-pos tables were loaded; surface a
+            // clear error instead of panicking if a checkpoint set the flag without them.
+            let rel_pos_h = self.rel_pos_h.as_ref().ok_or_else(|| {
+                CandleOcrError::InferenceFailed("SAM attention: use_rel_pos set but rel_pos_h is missing".into())
+            })?;
+            let rel_pos_w = self.rel_pos_w.as_ref().ok_or_else(|| {
+                CandleOcrError::InferenceFailed("SAM attention: use_rel_pos set but rel_pos_w is missing".into())
+            })?;
             let q_reshape = query_states.reshape((b * self.num_heads, h * w, ()))?;
-            let (rel_h, rel_w) = self.add_decomposed_rel_pos(
-                &q_reshape,
-                self.rel_pos_h.as_ref().unwrap(),
-                self.rel_pos_w.as_ref().unwrap(),
-                (h, w),
-                (h, w),
-            )?;
+            let (rel_h, rel_w) = self.add_decomposed_rel_pos(&q_reshape, rel_pos_h, rel_pos_w, (h, w), (h, w))?;
             let (_, rel_h_dim1, rel_h_dim2, rel_h_dim3) = rel_h.dims4()?;
             let rel_h = rel_h.reshape((b, self.num_heads, rel_h_dim1, rel_h_dim2, rel_h_dim3))?;
             let (_, rel_w_dim1, rel_w_dim2, rel_w_dim3) = rel_w.dims4()?;
@@ -781,7 +783,14 @@ impl VitModel {
             ffn_hidden_size,
             eps,
         )?;
-        let pre_layernorm = get_layer_norm(vb.pp("pre_layernorm"), eps, hidden_size, true)?;
+        // HuggingFace CLIP genuinely names this "pre_layrnorm" (sic) and the released
+        // DeepSeek-OCR checkpoint keeps that spelling; accept both the misspelled and
+        // the corrected key, like view_seperator below.
+        let pre_layernorm = if vb.contains_tensor("pre_layrnorm.weight") {
+            get_layer_norm(vb.pp("pre_layrnorm"), eps, hidden_size, true)?
+        } else {
+            get_layer_norm(vb.pp("pre_layernorm"), eps, hidden_size, true)?
+        };
         Ok(Self {
             embeddings,
             transformer,
@@ -850,7 +859,9 @@ impl MoEGate {
                 self.scoring_func
             )));
         };
-        let (topk_weight, topk_idx) = if self.topk_method == "greedy" {
+        // topk returns (indices, weights) in that order; keep them straight so the
+        // U32 expert indices feed onehot/gather and the F32 weights get normalized.
+        let (topk_idx, topk_weight) = if self.topk_method == "greedy" {
             topk(&scores, self.top_k)?
         } else {
             return Err(CandleOcrError::UnsupportedConfig(format!(
@@ -1288,7 +1299,15 @@ impl DeepseekOCRModel {
             config.vision_config.width.sam_vit_b.global_attn_indexes.clone(),
             version,
         )?;
-        let (vision_model, image_newline) = if version == 2 {
+        // The SAM neck version (net_3 = 896 vs 1024) and the second vision-encoder
+        // type (CLIP ViT vs Qwen2) are independent axes: the released
+        // deepseek-ai/DeepSeek-OCR checkpoint pairs a v2 SAM neck (net_3 = 1024)
+        // with a CLIP tower at model.vision_model and has no model.qwen2_model.
+        // Select the tower by which tensors are actually present rather than by the
+        // SAM version, so a v2-neck + CLIP checkpoint loads the CLIP path.
+        let has_qwen2_tower =
+            vb_m.contains_tensor("qwen2_model.model.model.layers.0.self_attn.q_proj.weight");
+        let (vision_model, image_newline) = if has_qwen2_tower {
             let qwen2 = Qwen2Decoder2Encoder::new(vb_m.pp("qwen2_model"))?;
             (VisionModel::Qwen2(qwen2), None)
         } else {
@@ -1303,7 +1322,13 @@ impl DeepseekOCRModel {
             vb_m.pp("projector.layers"),
         )?;
 
-        let view_separator = vb_m.get_with_hints(1280, "view_separator", Init::Const(0.))?;
+        // The released checkpoint stores this as "view_seperator" (sic); accept
+        // both the misspelled and the corrected key.
+        let view_separator = if vb_m.contains_tensor("view_seperator") {
+            vb_m.get_with_hints(1280, "view_seperator", Init::Const(0.))?
+        } else {
+            vb_m.get_with_hints(1280, "view_separator", Init::Const(0.))?
+        };
         let language_model = DeepseekV2Model::new(vb_m, config.language_config.clone())?;
         let lm_head = linear_no_bias(config.hidden_size, config.vocab_size, vb.pp("lm_head"))?;
         let stop_token_ids = vec![config.eos_token_id, config.bos_token_id];

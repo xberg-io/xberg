@@ -14,6 +14,27 @@ use crate::vendor::aha::InferenceModel;
 
 use super::{config::DeepseekOCRConfig, model::DeepseekOCRModel, processor::DeepseekOCRProcessor};
 
+// DeepSeek-OCR "deepencoder" preprocessing constants, taken from the reference
+// (`base_size`, `patch_size`, `downsample_ratio` and the BasicImageTransform in
+// deepseek-ai/DeepSeek-OCR's modeling code). The vision towers turn the padded
+// global view into a fixed square grid of image tokens; `input_ids` has to carry
+// exactly that many image tokens so the vision features scatter into the right slots.
+
+/// Side length the global view is padded to before the SAM + CLIP towers.
+const BASE_SIZE: u32 = 1024;
+/// ViT patch size and the projector's token-merge downsample.
+const PATCH_SIZE: u32 = 16;
+const DOWNSAMPLE_RATIO: u32 = 4;
+/// Image tokens per side for the global view:
+/// `ceil((base_size / patch_size) / downsample_ratio)` = `(1024 / 16) / 4` = 16.
+const NUM_QUERIES_BASE: usize = (BASE_SIZE / PATCH_SIZE / DOWNSAMPLE_RATIO) as usize;
+/// Channel mean and std for normalization (reference BasicImageTransform uses 0.5).
+const IMAGE_MEAN_STD: f32 = 0.5;
+/// Default plain-OCR instruction. In the reference this is `"<image>\nFree OCR."`;
+/// the `<image>` placeholder is materialized as the image-token run built below, so
+/// only the trailing text lives here.
+const DEFAULT_OCR_PROMPT: &str = "\nFree OCR.";
+
 /// DeepSeek-OCR inference engine.
 ///
 /// Manages model initialization, input processing, and generation.
@@ -235,56 +256,73 @@ impl DeepseekOCREngine {
         let (img_width, img_height) = (img.width(), img.height());
         tracing::debug!(width = img_width, height = img_height, "DeepSeek-OCR: image dimensions");
 
-        // 2. Simple preprocessing: create placeholder tensors for the image inputs
-        // For Phase 5, we skip complex crop/mask logic and use minimal tensors
-        let batch_size = 1usize;
-        let img_h = 384usize;
-        let img_w = 384usize;
+        // 2. Preprocess the image into DeepSeek-OCR's "deepencoder" inputs. The global
+        // view is aspect-preserving-padded to BASE_SIZE and normalized (see the module
+        // constants). The test path uses the global view only (no dynamic 640 crops),
+        // which the forward's no-crop branch handles.
         let channels = 3usize;
+        let image_token_id = self.processor.image_token_id();
 
-        // Resize image to standard size using simple bilinear resize
-        let resized = img.resize_exact(img_w as u32, img_h as u32, image::imageops::FilterType::Triangle);
-        let rgb_img = resized.to_rgb8();
+        let mean = Tensor::from_slice(&[IMAGE_MEAN_STD; 3], (3, 1, 1), &self.device)
+            .and_then(|t| t.to_dtype(self.dtype))
+            .map_err(|e| CandleOcrError::InferenceFailed(format!("Mean tensor: {}", e)))?;
+        let std = Tensor::from_slice(&[IMAGE_MEAN_STD; 3], (3, 1, 1), &self.device)
+            .and_then(|t| t.to_dtype(self.dtype))
+            .map_err(|e| CandleOcrError::InferenceFailed(format!("Std tensor: {}", e)))?;
 
-        // Convert to tensor (batch, channels, height, width)
-        let mut pixels = vec![];
-        for pixel in rgb_img.pixels() {
-            pixels.push(pixel[0] as f32 / 255.0);
-            pixels.push(pixel[1] as f32 / 255.0);
-            pixels.push(pixel[2] as f32 / 255.0);
-        }
+        // Pad with the mean grey (mean * 255), matching the reference ImageOps.pad(color=mean).
+        let pad = (IMAGE_MEAN_STD * 255.0) as u8;
+        let global_view =
+            crate::vendor::aha::image::resize_with_edge_padding(&img, BASE_SIZE, BASE_SIZE, [pad, pad, pad]);
+        let images_ori = crate::vendor::aha::image::img_transform(&global_view, &mean, &std, &self.device, self.dtype)
+            .map_err(|e| CandleOcrError::InferenceFailed(format!("Global transform: {}", e)))?
+            .unsqueeze(0)
+            .map_err(|e| CandleOcrError::InferenceFailed(format!("Global batch: {}", e)))?;
 
-        let images_ori = Tensor::from_slice(&pixels, (batch_size, channels, img_h, img_w), &self.device)
-            .map_err(|e| CandleOcrError::InferenceFailed(format!("Images tensor: {}", e)))?;
-
-        // Placeholder tensors for crop, mask, spatial_crop (all zeros for Phase 5)
-        let image_crop = Tensor::zeros((0, channels, 64, 64), self.dtype, &self.device)
+        // No dynamic crops on this path: an empty crop tensor selects the forward's
+        // global-only branch (image_crop.sum() == 0).
+        let image_crop = Tensor::zeros((0, channels, BASE_SIZE as usize, BASE_SIZE as usize), self.dtype, &self.device)
             .map_err(|e| CandleOcrError::InferenceFailed(format!("Image crop tensor: {}", e)))?;
-
-        let images_seq_mask = Tensor::ones((batch_size, 1), self.dtype, &self.device)
-            .map_err(|e| CandleOcrError::InferenceFailed(format!("Seq mask tensor: {}", e)))?;
-
-        let images_spatial_crop = Tensor::zeros((batch_size, 2), candle_core::DType::U32, &self.device)
+        let images_spatial_crop = Tensor::new(&[[1u32, 1u32]], &self.device)
             .map_err(|e| CandleOcrError::InferenceFailed(format!("Spatial crop tensor: {}", e)))?;
 
-        // 3. Tokenize prompt
-        let prompt_text = prompt.unwrap_or("OCR this image.");
-        let encoding = self
+        // 3. Build input_ids and the image-token mask. The global view is an
+        // NUM_QUERIES_BASE x NUM_QUERIES_BASE grid; the reference appends one
+        // image_newline per row plus a trailing view_separator, giving
+        // `n * (n + 1) + 1` = 16 * 17 + 1 = 273 image tokens (the model inserts the
+        // learned image_newline / view_separator at these positions during the
+        // forward). Layout: BOS, the image tokens, then the OCR prompt.
+        let num_image_tokens = NUM_QUERIES_BASE * (NUM_QUERIES_BASE + 1) + 1;
+        let prompt_text = prompt.unwrap_or(DEFAULT_OCR_PROMPT);
+        let text_ids: Vec<u32> = self
             .tokenizer
             .encode(prompt_text, false)
-            .map_err(|e| CandleOcrError::Tokenizer(format!("Encode prompt: {}", e)))?;
+            .map_err(|e| CandleOcrError::Tokenizer(format!("Encode prompt: {}", e)))?
+            .get_ids()
+            .to_vec();
 
-        let prompt_ids: Vec<i64> = encoding.get_ids().iter().map(|&id| id as i64).collect();
+        let mut ids: Vec<i64> = Vec::with_capacity(1 + num_image_tokens + text_ids.len());
+        let mut mask: Vec<u32> = Vec::with_capacity(ids.capacity());
+        ids.push(self.config.bos_token_id as i64);
+        mask.push(0);
+        ids.extend(std::iter::repeat_n(image_token_id as i64, num_image_tokens));
+        mask.extend(std::iter::repeat_n(1u32, num_image_tokens));
+        ids.extend(text_ids.iter().map(|&t| t as i64));
+        mask.extend(std::iter::repeat_n(0u32, text_ids.len()));
+
         tracing::debug!(
-            prompt_len = prompt_ids.len(),
-            prompt = prompt_text,
-            "DeepSeek-OCR: prompt tokenization"
+            seq_len = ids.len(),
+            num_image_tokens,
+            "DeepSeek-OCR: input construction"
         );
 
-        let input_ids = Tensor::new(prompt_ids.as_slice(), &self.device)
+        let input_ids = Tensor::new(ids.as_slice(), &self.device)
             .map_err(|e| CandleOcrError::InferenceFailed(format!("Token tensor: {}", e)))?
             .unsqueeze(0)
             .map_err(|e| CandleOcrError::InferenceFailed(format!("Unsqueeze batch: {}", e)))?;
+        let prompt_ids: Vec<i64> = ids;
+        let images_seq_mask = Tensor::new(mask.as_slice(), &self.device)
+            .map_err(|e| CandleOcrError::InferenceFailed(format!("Seq mask tensor: {}", e)))?;
 
         // 4. Prepare multimodal data for forward pass
         let mm_data = crate::vendor::aha::MultiModalData::new(vec![
@@ -298,12 +336,13 @@ impl DeepseekOCREngine {
         tracing::debug!("DeepSeek-OCR: clearing cache and running forward_initial");
         self.model.clear_kv_cache();
 
-        let logits = self
+        let mut logits = self
             .model
             .forward_initial(&input_ids, 0, mm_data)
             .map_err(|e| CandleOcrError::InferenceFailed(format!("Initial forward: {}", e)))?;
 
-        // 6. Greedy decoding loop (Phase 5: limit to small token count for stability)
+        // 6. Greedy decoding loop, capped so a degenerate image (no stop token) can't
+        // run unbounded.
         const MAX_NEW_TOKENS: usize = 128;
         let stop_ids = self.model.stop_token_ids();
         let mut output_tokens = prompt_ids.iter().map(|&id| id as u32).collect::<Vec<_>>();
@@ -324,12 +363,14 @@ impl DeepseekOCREngine {
                 .narrow(1, seq_len - 1, 1)
                 .map_err(|e| CandleOcrError::InferenceFailed(format!("Narrow last: {}", e)))?;
 
+            // last_logits is [1, 1, vocab]; argmax over the vocab dim yields [1, 1],
+            // so squeeze the two length-1 dims to a scalar token id.
             let next_token = last_logits
                 .argmax(2)
                 .map_err(|e| CandleOcrError::InferenceFailed(format!("Argmax: {}", e)))?
-                .squeeze(2)
-                .map_err(|e| CandleOcrError::InferenceFailed(format!("Squeeze: {}", e)))?
                 .squeeze(1)
+                .map_err(|e| CandleOcrError::InferenceFailed(format!("Squeeze seq: {}", e)))?
+                .squeeze(0)
                 .map_err(|e| CandleOcrError::InferenceFailed(format!("Squeeze batch: {}", e)))?
                 .to_scalar::<u32>()
                 .map_err(|e| CandleOcrError::InferenceFailed(format!("To scalar: {}", e)))?;
@@ -346,22 +387,27 @@ impl DeepseekOCREngine {
                 break;
             }
 
-            // Forward step for next token
+            // Feed the token back and take ITS logits for the next iteration; the
+            // seqlen_offset is the token's absolute position (the prompt occupies
+            // 0..prompt_len), which drives RoPE. Discarding the step logits (or
+            // restarting the offset near zero) re-reads the initial forward's logits
+            // every iteration and emits the same token MAX_NEW_TOKENS times.
             let next_token_tensor = Tensor::new(&[next_token as i64], &self.device)
                 .map_err(|e| CandleOcrError::InferenceFailed(format!("Next token tensor: {}", e)))?
                 .unsqueeze(0)
                 .map_err(|e| CandleOcrError::InferenceFailed(format!("Unsqueeze next: {}", e)))?;
 
-            let _ = self
+            logits = self
                 .model
-                .forward_step(&next_token_tensor, step + 1)
+                .forward_step(&next_token_tensor, prompt_ids.len() + step)
                 .map_err(|e| CandleOcrError::InferenceFailed(format!("Forward step {}: {}", step, e)))?;
         }
 
-        // 7. Decode tokens back to text
+        // 7. Decode only the newly generated tokens (skip the prompt + image tokens).
+        let generated = output_tokens.get(prompt_ids.len()..).unwrap_or(&[]);
         let output_text = self
             .tokenizer
-            .decode(&output_tokens, false)
+            .decode(generated, true)
             .map_err(|e| CandleOcrError::Tokenizer(format!("Decode error: {}", e)))?
             .trim()
             .to_string();
