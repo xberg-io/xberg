@@ -155,11 +155,28 @@ fn build_document_structure(doc: &crate::extraction::docx::parser::Document) -> 
             crate::extraction::docx::parser::DocumentElement::Table(idx) => {
                 let table = &doc.tables[*idx];
                 let rows = table.rows.len() as u32;
-                let cols = table.rows.first().map_or(0, |r| r.cells.len()) as u32;
+                // True column count accounts for horizontal merges: a row's width
+                // is the sum of its cells' grid_span, not its cell count.
+                let cols = table
+                    .rows
+                    .iter()
+                    .map(|r| {
+                        r.cells
+                            .iter()
+                            .map(|c| c.properties.as_ref().and_then(|p| p.grid_span).unwrap_or(1))
+                            .sum::<u32>()
+                    })
+                    .max()
+                    .unwrap_or(0);
                 let mut cells = Vec::new();
                 let mut cell_style_attrs = AHashMap::new();
                 for (row_idx, row) in table.rows.iter().enumerate() {
                     let is_header = row.properties.as_ref().is_some_and(|p| p.is_header) || row_idx == 0;
+                    // Running column offset so a cell after a grid_span=2 cell lands
+                    // in the correct column instead of the enumerate index, which
+                    // ignored preceding merges and broke column association
+                    // (xberg-io/xberg#1223, #1212).
+                    let mut col_offset: u32 = 0;
                     for (col_idx, cell) in row.cells.iter().enumerate() {
                         let content: String = cell
                             .paragraphs
@@ -173,12 +190,13 @@ fn build_document_structure(doc: &crate::extraction::docx::parser::Document) -> 
                         cells.push(GridCell {
                             content,
                             row: row_idx as u32,
-                            col: col_idx as u32,
+                            col: col_offset,
                             row_span: 1,
                             col_span,
                             is_header,
                             bbox: None,
                         });
+                        col_offset += col_span;
 
                         // Collect cell styling as attributes keyed by "cell_R_C_..."
                         if let Some(ref props) = cell.properties {
