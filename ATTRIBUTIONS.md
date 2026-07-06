@@ -388,6 +388,7 @@ Rust-native VLM-OCR backends vendored into `crates/xberg-candle-ocr/`:
 - `paddleocr_vl::model::get_rope_index`: vision-block position ids restored to aha's (t, h, w) mrope layout after the vendoring rewrite transposed the h index and dropped the t row (crashed on non-square grids); images always carry a single frame so the t row is constant
 - `paddleocr_vl::model::forward`: restored aha's seqlen_offset-based position continuation for cache_position-less decode steps (dropped during vendoring, failing every decode step with a dtype mismatch)
 - `paddleocr_vl::engine::generate`: rewritten from a full-sequence re-feed (which double-appended the KV cache each step and read the argmax at the wrong rank) to aha's prefill + cached single-token step loop, matching the Hunyuan-OCR engine
+- `paddleocr_vl::model::Ernie4_5Model::forward`: restored aha's causal attention mask for the multi-token prefill (dropped during vendoring; bidirectional prefill degenerated generation into single-token repetition)
 - `hunyuan_ocr::config::HunYuanVLConfig::tie_word_embeddings`: serde default `true` (later released-checkpoint revisions omit the field)
 
 ### License Compatibility

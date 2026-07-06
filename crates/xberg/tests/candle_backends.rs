@@ -360,6 +360,14 @@ async fn candle_hunyuan_ocr_e2e_extraction() {
         !result.content.is_empty(),
         "Hunyuan-OCR extraction returned empty content"
     );
+    // The fixture reads "Hello World"; anything else means the pipeline is
+    // producing text but not the text on the page (degenerate decoding passes
+    // a bare non-empty check).
+    assert!(
+        result.content.to_lowercase().contains("hello world"),
+        "Hunyuan-OCR should read the fixture text, got: {}",
+        result.content
+    );
     assert_eq!(
         result.mime_type.as_ref(),
         "text/markdown",
@@ -454,6 +462,14 @@ async fn candle_paddleocr_vl_e2e_extraction() {
     assert!(
         !result.content.is_empty(),
         "PaddleOCR-VL extraction returned empty content"
+    );
+    // The fixture reads "Hello World"; anything else means the pipeline is
+    // producing text but not the text on the page (degenerate decoding passes
+    // a bare non-empty check).
+    assert!(
+        result.content.to_lowercase().contains("hello world"),
+        "PaddleOCR-VL should read the fixture text, got: {}",
+        result.content
     );
     assert_eq!(
         result.mime_type.as_ref(),

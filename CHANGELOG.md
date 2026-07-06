@@ -42,6 +42,11 @@ The changelog starts fresh at `1.0.0-rc.1`. For the Kreuzberg v1–v4 history, s
   cached decode path at its absolute position, like the other Candle OCR engines,
   and returns only newly generated tokens so the prompt is never echoed into the
   OCR output.
+- **PaddleOCR-VL prefill attended bidirectionally, degenerating generation.** The
+  ERNIE decoder ran the multi-token prefill without a causal mask, so every prompt
+  token attended to future positions, the KV cache was built from contaminated
+  hidden states, and generation collapsed into repeating a single token. The prefill
+  now applies the standard additive causal mask, like the other Candle OCR decoders.
 - **Hunyuan-OCR failed to load checkpoints whose `config.json` omits
   `tie_word_embeddings`.** Later revisions of the released checkpoint drop the field
   (transformers defaults it to `true`); the config parser now does the same instead

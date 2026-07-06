@@ -39,6 +39,22 @@ fn get_vision_next_indices(input_ids: &Tensor, vision_start_token_id: u32) -> Re
         .map_err(|e| CandleOcrError::InferenceFailed(format!("create tensor: {}", e)))
 }
 
+/// Additive causal attention mask: 0 for visible positions, `-inf` for future
+/// ones, shaped `(batch, 1, seq, seq)` so it broadcasts over attention heads
+/// when `eager_attention_forward` adds it to the raw attention scores.
+fn prepare_causal_attention_mask(batch_size: usize, seq_len: usize, device: &candle_core::Device) -> Result<Tensor> {
+    let mut mask_data = vec![0f32; seq_len * seq_len];
+    for i in 0..seq_len {
+        for j in (i + 1)..seq_len {
+            mask_data[i * seq_len + j] = f32::NEG_INFINITY;
+        }
+    }
+    Tensor::from_vec(mask_data, (1, 1, seq_len, seq_len), device)
+        .map_err(|e| CandleOcrError::InferenceFailed(format!("Create mask: {}", e)))?
+        .expand((batch_size, 1, seq_len, seq_len))
+        .map_err(|e| CandleOcrError::InferenceFailed(format!("Expand mask: {}", e)))
+}
+
 /// Spatial merge projector for vision embeddings.
 pub struct Projector {
     merge_size: usize,
@@ -575,9 +591,17 @@ impl Ernie4_5Model {
 
         let mut xs = inputs_embeds.clone();
 
+        // Causal mask for the multi-token prefill; single-token decode steps
+        // attend over the whole KV cache, which is exactly the visible past.
+        let attention_mask: Option<Tensor> = if seq_len <= 1 {
+            None
+        } else {
+            Some(prepare_causal_attention_mask(b_size, seq_len, inputs_embeds.device())?)
+        };
+
         for layer in self.layers.iter_mut() {
             xs = layer
-                .forward(&xs, &cos, &sin, None)
+                .forward(&xs, &cos, &sin, attention_mask.as_ref())
                 .map_err(|e| CandleOcrError::InferenceFailed(format!("Layer forward: {}", e)))?;
         }
 
@@ -1483,6 +1507,37 @@ mod tests {
             &[1, 1, cfg.vocab_size],
             "decode step should return last-position logits"
         );
+        Ok(())
+    }
+
+    /// The prefill causal mask hides future positions (-inf) and keeps the
+    /// visible past at 0, broadcast-ready over attention heads.
+    ///
+    /// Regression test for the GPU CI degenerate-output failure: the vendored
+    /// ERNIE decoder dropped the causal mask upstream aha passes during the
+    /// multi-token prefill, so prompt tokens attended bidirectionally, the KV
+    /// cache was built from contaminated hidden states, and generation
+    /// collapsed into repeating a single token.
+    #[test]
+    fn prepare_causal_attention_mask_hides_future_positions() -> crate::error::Result<()> {
+        let dev = Device::Cpu;
+        let mask = prepare_causal_attention_mask(1, 4, &dev)?;
+        assert_eq!(mask.dims(), &[1, 1, 4, 4], "mask should be (batch, 1, seq, seq)");
+
+        let rows = mask
+            .squeeze(0)
+            .and_then(|m| m.squeeze(0))
+            .and_then(|m| m.to_vec2::<f32>())
+            .map_err(|e| crate::CandleOcrError::InferenceFailed(e.to_string()))?;
+        for (i, row) in rows.iter().enumerate() {
+            for (j, &v) in row.iter().enumerate() {
+                if j > i {
+                    assert!(v == f32::NEG_INFINITY, "future position ({i},{j}) should be masked");
+                } else {
+                    assert_eq!(v, 0.0, "visible position ({i},{j}) should be unmasked");
+                }
+            }
+        }
         Ok(())
     }
 
