@@ -56,11 +56,14 @@ const PRIMITIVE_GEOMETRY_FLOOR: f32 = 5.0;
 /// 0×507pt/7.2pt column rules in pdfplumber's la-precinct fixture — is
 /// already a valid primitive and must keep its geometric bbox).
 fn expand_hairline_stroke(path: &mut pdf_oxide::elements::PathContent) {
-    if path.stroke_color.is_none() || path.stroke_width <= PRIMITIVE_GEOMETRY_FLOOR {
+    if path.stroke_color.is_none() || !path.stroke_width.is_finite() || path.stroke_width <= PRIMITIVE_GEOMETRY_FLOOR {
         return;
     }
     let width = path.bbox.width.abs();
     let height = path.bbox.height.abs();
+    if !(width.is_finite() && height.is_finite()) {
+        return; // degenerate glyph geometry (see #1198): don't grow NaN boxes
+    }
     if width.max(height) > PRIMITIVE_GEOMETRY_FLOOR {
         return; // real geometric extent: the detector already sees this path
     }
@@ -654,7 +657,10 @@ mod tests {
         assert_eq!(path.bbox.width, 1.0);
         assert_eq!(path.bbox.height, 430.0);
         assert_eq!(path.bbox.y, 402.0 - 215.0);
-        assert!(path.is_table_primitive(), "expanded rule must classify as a table primitive");
+        assert!(
+            path.is_table_primitive(),
+            "expanded rule must classify as a table primitive"
+        );
     }
 
     /// The mirrored trick — a short vertical segment with a huge stroke width —
@@ -694,6 +700,21 @@ mod tests {
             "long stroked rules keep their geometric bbox"
         );
         assert!(path.is_table_primitive(), "still a primitive on geometry alone");
+    }
+
+    /// Non-finite geometry or stroke width (NaN glyph pathology, #1198) must
+    /// never be expanded — growing a NaN bbox propagates NaN into the
+    /// detector's sort keys.
+    #[test]
+    fn expand_hairline_stroke_skips_non_finite_geometry() {
+        let mut nan_box = stroked_line(10.0, 10.0, f32::NAN, 0.0, 430.0);
+        expand_hairline_stroke(&mut nan_box);
+        assert!(nan_box.bbox.width.is_nan(), "bbox untouched");
+        assert_eq!(nan_box.bbox.height, 0.0, "bbox untouched");
+
+        let mut nan_stroke = stroked_line(10.0, 10.0, 1.0, 0.0, f32::NAN);
+        expand_hairline_stroke(&mut nan_stroke);
+        assert_eq!((nan_stroke.bbox.width, nan_stroke.bbox.height), (1.0, 0.0));
     }
 
     /// Non-line-like shapes (both dimensions above hairline) and unstroked
