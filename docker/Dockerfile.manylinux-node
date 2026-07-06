@@ -1,0 +1,143 @@
+# =============================================================================
+# manylinux_2_28 (AlmaLinux 8, glibc 2.28) builder for the glibc-linked Node.js
+# NAPI binding (.node) with a low glibc floor (RHEL 8 / Ubuntu 20.04+).
+#
+# WHY THIS EXISTS
+# The native node-bindings gnu legs drove `napi build --use-napi-cross`, whose
+# cross-toolchain gcc ships without the C11 compiler headers (`stdatomic.h`),
+# so building aws-lc-sys (rustls → reqwest → liter-llm) fails with
+#   fatal error: stdatomic.h: No such file or directory
+# Both gnu targets already run on native-arch runners, so a full manylinux_2_28
+# toolchain compiles the C deps natively (complete headers) while keeping a
+# glibc 2.28 floor — the same floor napi-cross targeted (RHEL 8, #803). This
+# mirrors docker/Dockerfile.musl-node for the musl legs.
+#
+# Usage (one arch per invocation, on the matching native-arch runner):
+#   docker build -f docker/Dockerfile.manylinux-node \
+#     --build-arg MANYLINUX_IMAGE=quay.io/pypa/manylinux_2_28_x86_64 \
+#     --build-arg TARGET=x86_64-unknown-linux-gnu \
+#     --output type=local,dest=./dist .
+#
+# napi-rs selects gnu vs musl at runtime via the package `libc` field, so this
+# gnu `.node` flows into the existing napi prepublish path as the
+# `@xberg-io/xberg-linux-{x64,arm64}-gnu` package.
+# =============================================================================
+ARG MANYLINUX_IMAGE=quay.io/pypa/manylinux_2_28_x86_64
+FROM ${MANYLINUX_IMAGE} AS builder
+
+ARG RUST_TOOLCHAIN=nightly-2026-03-10
+# Rust target triple (x86_64-unknown-linux-gnu | aarch64-unknown-linux-gnu).
+ARG TARGET=x86_64-unknown-linux-gnu
+ARG ONNXRUNTIME_VERSION=1.24.2
+
+WORKDIR /build
+
+# manylinux_2_28 is AlmaLinux 8. It ships a gcc-toolset (modern gcc/g++ with
+# full C11/C++17 headers) already on PATH via the image's default profile, plus
+# dnf/AppStream. Enable EPEL for the HEIF decode codecs (libde265 for HEVC,
+# dav1d for AVIF); encoders (x265/aom) are intentionally omitted — xberg only
+# DECODES HEIC/AVIF, and x265 is not reliably packaged on EL8. Node.js comes
+# from the AppStream nodejs:20 module (needed to run the napi CLI).
+RUN dnf -y install epel-release || \
+    dnf -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
+RUN dnf -y module enable nodejs:20 && \
+    dnf -y install \
+        cmake make pkgconfig git file curl \
+        openssl-devel \
+        libde265-devel dav1d-devel \
+        libpng-devel libjpeg-turbo-devel libtiff-devel zlib-devel \
+        nodejs npm && \
+    dnf clean all
+
+# Source-build libheif 1.23.0 (libheif-sys 5.3 needs >= 1.21; EL8 ships older).
+# DECODE-ONLY: enable the libde265 (HEVC) and dav1d (AVIF) decoders, disable the
+# x265/aom encoders so the build needs no encoder -devel packages on EL8.
+RUN cd /tmp && \
+    curl -fsSL -o libheif.tar.gz https://github.com/strukturag/libheif/releases/download/v1.23.0/libheif-1.23.0.tar.gz && \
+    tar -xzf libheif.tar.gz && \
+    cd libheif-1.23.0 && \
+    cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local \
+        -DCMAKE_INSTALL_LIBDIR=lib -DWITH_EXAMPLES=OFF -DWITH_GDK_PIXBUF=OFF \
+        -DBUILD_TESTING=OFF \
+        -DWITH_X265=OFF -DWITH_AOM_ENCODER=OFF -DWITH_AOM_DECODER=OFF \
+        -DWITH_LIBDE265=ON -DWITH_DAV1D=ON && \
+    cmake --build build -j"$(nproc)" && \
+    cmake --install build && \
+    ldconfig && \
+    cd / && rm -rf /tmp/libheif*
+
+# Download ONNX Runtime and point ort-sys at it (system strategy, no download),
+# matching docker/Dockerfile.core. ort v2 links libonnxruntime dynamically.
+RUN mkdir -p /build/onnxruntime && \
+    if [ "$TARGET" = "aarch64-unknown-linux-gnu" ]; then ORT_ARCH="aarch64"; else ORT_ARCH="x64"; fi && \
+    curl -fL "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-${ORT_ARCH}-${ONNXRUNTIME_VERSION}.tgz" \
+        -o /build/onnxruntime.tgz && \
+    tar -xzf /build/onnxruntime.tgz -C /build/onnxruntime --strip-components=1 && \
+    cp /build/onnxruntime/lib/libonnxruntime.so* /usr/local/lib/ && \
+    ldconfig && \
+    rm /build/onnxruntime.tgz
+ENV ORT_LIB_LOCATION=/build/onnxruntime/lib \
+    ORT_PREFER_DYNAMIC_LINK=1 \
+    ORT_SKIP_DOWNLOAD=1 \
+    ORT_STRATEGY=system \
+    PKG_CONFIG_PATH=/usr/local/lib/pkgconfig \
+    LD_LIBRARY_PATH=/usr/local/lib
+
+# Install Rust via rustup (EL8's packaged Rust is too old / not nightly).
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+    | sh -s -- -y --default-toolchain "${RUST_TOOLCHAIN}" --component rust-src
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Copy workspace manifests and crates (mirrors Dockerfile.musl-node — KEEP
+# xberg-node, drop the members not in the node graph).
+COPY Cargo.toml Cargo.lock ./
+COPY crates/xberg/ crates/xberg/
+COPY crates/xberg-gliner/ crates/xberg-gliner/
+COPY crates/xberg-node/ crates/xberg-node/
+COPY crates/xberg-ffi/ crates/xberg-ffi/
+COPY crates/xberg-tesseract/ crates/xberg-tesseract/
+COPY crates/xberg-paddle-ocr/ crates/xberg-paddle-ocr/
+COPY crates/xberg-candle-ocr/ crates/xberg-candle-ocr/
+COPY crates/xberg-libheif/ crates/xberg-libheif/
+
+# Drop workspace members outside the node graph. The wasm member is matched via
+# the quoted "crates/xberg-wasm" form so the broad header match does NOT delete
+# the [profile.release.package.xberg-wasm] line out from under the range delete
+# (which would orphan its body keys → "duplicate key"). Mirrors Dockerfile.musl-node.
+RUN sed -i '/xberg-py/d; /xberg_rb/d; /xberg-cli/d; /xberg-jni/d; /xberg-php/d; /xberg-rag/d; /xberg_rustler/d; /xberg_nif/d; /packages\/dart\/rust/d; /packages\/swift\/rust/d; /"crates\/xberg-wasm"/d; /^\[profile\.release\.package\.xberg-wasm\]$/,$d; /benchmark-harness/d; /e2e-generator/d; /snippet-runner/d; /e2e\/rust/d' Cargo.toml
+
+# napi build passes an explicit --target, so cargo/cc-rs treat it as a
+# cross-compile and search for a triple-prefixed toolchain. The gcc-toolset
+# compiler is native and unprefixed, so point the per-target linker + CC/CXX at
+# plain gcc/g++ (only the pair matching TARGET is consulted). Mirrors the
+# CARGO_TARGET_*/CC_* wiring in Dockerfile.musl-node.
+ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc \
+    CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=gcc \
+    CC_x86_64_unknown_linux_gnu=gcc \
+    CXX_x86_64_unknown_linux_gnu=g++ \
+    CC_aarch64_unknown_linux_gnu=gcc \
+    CXX_aarch64_unknown_linux_gnu=g++
+
+# Build the NAPI binding. napi build wraps `cargo build` and emits
+# xberg.<platform>.node. Run via npx (matching crates/xberg-node/package.json's
+# build script) so no pnpm workspace install is needed. No --use-napi-cross:
+# the native gcc-toolset has the C11 headers aws-lc-sys needs. Neither --offline
+# nor --locked (the sed above edits Cargo.toml without touching Cargo.lock).
+RUN rustup target add "${TARGET}" && \
+    cd crates/xberg-node && \
+    npx --yes -p @napi-rs/cli@^3.6.2 napi build --platform --release --target "${TARGET}" && \
+    cp ./*.node /build/ && \
+    strip /build/*.node
+
+# Verify the artifact and its glibc floor (highest GLIBC_ symbol version).
+RUN file /build/*.node && \
+    echo "=== Dynamic dependencies ===" && \
+    readelf -d /build/*.node 2>/dev/null | grep NEEDED && \
+    echo "=== Max GLIBC symbol version (floor) ===" && \
+    { objdump -T /build/*.node 2>/dev/null | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -V | tail -1 || true; }
+
+# =============================================================================
+# Output stage — just the .node artifact(s)
+# =============================================================================
+FROM scratch
+COPY --from=builder /build/*.node /

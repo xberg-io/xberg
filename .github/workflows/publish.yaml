@@ -584,8 +584,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
-          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
+          # linux-gnu legs build in manylinux_2_28 containers (node-bindings-manylinux
+          # below) — napi-cross's cross gcc lacks the C11 headers aws-lc-sys needs.
           - { os: macos-15, target: aarch64-apple-darwin }
           # Intel macOS: native x86_64 build; ONNX Runtime staged by
           # setup-onnx-runtime (Homebrew on x86_64) and linked dynamically,
@@ -615,21 +615,14 @@ jobs:
         with:
           ort-version: "1.24.2"
 
-      - name: Setup Zig for glibc 2.28 floor
-        if: contains(matrix.target, '-linux-gnu')
-        uses: xberg-io/actions/setup-zig@v1
-
-      - name: Install cargo-zigbuild for glibc 2.28 floor
-        if: contains(matrix.target, '-linux-gnu')
-        shell: bash
-        run: command -v cargo-zigbuild || cargo install --locked cargo-zigbuild
-
       - name: Build NAPI binding
         uses: xberg-io/actions/build-node-napi@v1
         with:
           crate-dir: crates/xberg-node
           target: ${{ matrix.target }}
-          use-napi-cross: ${{ contains(matrix.target, '-linux-gnu') }}
+          # Only macOS + Windows native targets here; linux-gnu moved to the
+          # manylinux container job, so napi-cross is never needed.
+          use-napi-cross: "false"
           pack-target-tarball: node-bindings-${{ matrix.target }}.tar.gz
 
       - uses: actions/upload-artifact@v7
@@ -671,6 +664,68 @@ jobs:
         run: |
           mkdir -p staging/npm/xberg-${{ matrix.target }}
           find build-output -name "*.node" -exec cp {} staging/npm/xberg-${{ matrix.target }}/ \;
+          tar -czf node-bindings-${{ matrix.target }}.tar.gz -C staging npm
+      - uses: actions/upload-artifact@v7
+        with:
+          name: node-bindings-${{ matrix.target }}
+          path: node-bindings-${{ matrix.target }}.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+  node-bindings-manylinux:
+    # glibc (linux-gnu) NAPI build in a manylinux_2_28 container via
+    # docker/Dockerfile.manylinux-node. napi-cross's cross gcc ships without the
+    # C11 headers (stdatomic.h) aws-lc-sys needs, so the gnu legs failed at
+    # `napi build --use-napi-cross`. A full manylinux toolchain compiles the C
+    # deps natively while keeping a glibc 2.28 (RHEL 8) floor. aarch64 builds on a
+    # native arm64 runner (matching node-bindings-musl) so the arm64 manylinux
+    # image is pulled and no cross-assembly is needed.
+    name: Build Node bindings (linux-gnu-${{ matrix.arch }})
+    needs: [prepare, check-npm]
+    if: ${{ needs.prepare.outputs.release_node == 'true' && (needs.check-npm.outputs.node_exists != 'true' || needs.prepare.outputs.force_republish == 'true') }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {
+              os: ubuntu-latest,
+              arch: x86_64,
+              napi_arch: x64,
+              target: x86_64-unknown-linux-gnu,
+              image: quay.io/pypa/manylinux_2_28_x86_64,
+            }
+          - {
+              os: ubuntu-24.04-arm,
+              arch: aarch64,
+              napi_arch: arm64,
+              target: aarch64-unknown-linux-gnu,
+              image: quay.io/pypa/manylinux_2_28_aarch64,
+            }
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
+          fetch-depth: 0
+          submodules: recursive
+      - name: Build Node NAPI binding via manylinux Docker
+        run: |
+          docker build -f docker/Dockerfile.manylinux-node \
+            --build-arg MANYLINUX_IMAGE=${{ matrix.image }} \
+            --build-arg TARGET=${{ matrix.target }} \
+            --output type=local,dest=./build-output .
+      - name: Stage .node into napi platform dir for npm
+        # publish-node derives each platform sub-package's name from its
+        # npm/<dir>/package.json (falling back to @xberg-io/xberg-<dirname>), and
+        # explicitly waits on @xberg-io/xberg-linux-{x64,arm64}-gnu. Stage the
+        # container's .node under the exact napi platform dir so the fallback
+        # yields that name — matching the native job's `napi artifacts` layout.
+        run: |
+          platform="linux-${{ matrix.napi_arch }}-gnu"
+          mkdir -p "staging/npm/${platform}"
+          find build-output -name "*.node" -exec cp {} "staging/npm/${platform}/" \;
+          test -n "$(find "staging/npm/${platform}" -name '*.node')" || {
+            echo "::error::no .node produced by manylinux build for ${platform}"; exit 1; }
           tar -czf node-bindings-${{ matrix.target }}.tar.gz -C staging npm
       - uses: actions/upload-artifact@v7
         with:
@@ -2369,7 +2424,7 @@ jobs:
 
   publish-node:
     name: Publish Node packages
-    needs: [prepare, node-bindings, node-bindings-musl, check-npm]
+    needs: [prepare, node-bindings, node-bindings-musl, node-bindings-manylinux, check-npm]
     if: ${{ needs.prepare.outputs.release_node == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-npm.outputs.node_exists != 'true' || needs.prepare.outputs.force_republish == 'true') }}
     runs-on: ubuntu-latest
     permissions:
