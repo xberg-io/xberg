@@ -113,9 +113,10 @@ pub(crate) fn extract_7z_text_content(bytes: &[u8], limits: &SecurityLimits) -> 
 
             if !entry.is_directory() && TEXT_EXTENSIONS.iter().any(|ext| path.to_lowercase().ends_with(ext)) {
                 let mut content = Vec::new();
-                if let Ok(_) = reader.read_to_end(&mut content)
-                    && let Ok(text) = String::from_utf8(content)
-                {
+                if reader.read_to_end(&mut content).is_ok() {
+                    // Decode with charset detection so a non-UTF-8 member is
+                    // recovered rather than silently dropped (xberg-io/xberg#1223).
+                    let text = super::decode_archive_text(&content, &path);
                     total_content_size = total_content_size.saturating_add(text.len());
                     if total_content_size > max_content_size {
                         return Ok(false);
