@@ -1020,6 +1020,22 @@ impl PaddleOCRVLModel {
                     .map_err(|e| CandleOcrError::InferenceFailed(format!("Contiguous: {}", e)))?
                     .to_dtype(candle_core::DType::U32)
                     .map_err(|e| CandleOcrError::InferenceFailed(format!("U32: {}", e)))?
+            } else if let Some(rope_deltas) = self.rope_deltas.as_ref() {
+                // Decode steps arrive without an explicit cache_position (the
+                // InferenceModel::forward_step path); the token's absolute position
+                // is seqlen_offset, so continue the mrope positions from there.
+                Tensor::from_vec(vec![seqlen_offset as u32], 1, inputs_embeds.device())
+                    .map_err(|e| CandleOcrError::InferenceFailed(format!("Offset tensor: {}", e)))?
+                    .i(0)
+                    .map_err(|e| CandleOcrError::InferenceFailed(format!("Index: {}", e)))?
+                    .to_dtype(rope_deltas.dtype())
+                    .map_err(|e| CandleOcrError::InferenceFailed(format!("Dtype: {}", e)))?
+                    .broadcast_add(rope_deltas)
+                    .map_err(|e| CandleOcrError::InferenceFailed(format!("Add: {}", e)))?
+                    .contiguous()
+                    .map_err(|e| CandleOcrError::InferenceFailed(format!("Contiguous: {}", e)))?
+                    .to_dtype(candle_core::DType::U32)
+                    .map_err(|e| CandleOcrError::InferenceFailed(format!("U32: {}", e)))?
             } else {
                 Tensor::zeros(1, inputs_embeds.dtype(), inputs_embeds.device())
                     .map_err(|e| CandleOcrError::InferenceFailed(format!("Zeros: {}", e)))?
@@ -1417,6 +1433,55 @@ mod tests {
             delta,
             i64::from(trail_start) + 2 - seq_len as i64,
             "mrope delta should be max position + 1 - seq_len"
+        );
+        Ok(())
+    }
+
+    /// A cached decode step (single new token, no cache_position, nonzero
+    /// seqlen_offset) succeeds after a prefill has populated `rope_deltas`.
+    ///
+    /// Regression test for the GPU CI failure in `PaddleOcrVlEngine::generate`:
+    /// the position-continuation branch for cache_position-less decode steps was
+    /// dropped during vendoring, so the fallback built the position delta as an
+    /// F32 zeros tensor and adding it to the U32 position range failed every
+    /// decode step with a dtype mismatch.
+    #[test]
+    fn forward_decode_step_after_prefill_continues_positions() -> crate::error::Result<()> {
+        let dev = Device::Cpu;
+        let cfg = tiny_model_config();
+        let vb = VarBuilder::zeros(DType::F32, &dev);
+
+        let mut model = PaddleOCRVLModel::new(cfg.clone(), vb, vec![2])?;
+
+        // Text-only prefill with cache_position starting at 0: computes the rope
+        // index and caches rope_deltas.
+        let prompt_len = 5usize;
+        let input_ids = Tensor::arange(1u32, 1 + prompt_len as u32, &dev)
+            .map_err(|e| crate::CandleOcrError::InferenceFailed(e.to_string()))?
+            .reshape((1, prompt_len))
+            .map_err(|e| crate::CandleOcrError::InferenceFailed(e.to_string()))?;
+        let cache_position = Tensor::arange(0u32, prompt_len as u32, &dev)
+            .map_err(|e| crate::CandleOcrError::InferenceFailed(e.to_string()))?;
+
+        let logits = model.forward(&input_ids, None, None, None, Some(&cache_position), 0)?;
+        assert_eq!(
+            logits.dims(),
+            &[1, 1, cfg.vocab_size],
+            "prefill should return last-position logits"
+        );
+
+        // Decode step: one new token, no cache_position — the token's absolute
+        // position is carried by seqlen_offset alone.
+        let next_input = Tensor::new(&[7u32], &dev)
+            .map_err(|e| crate::CandleOcrError::InferenceFailed(e.to_string()))?
+            .reshape((1, 1))
+            .map_err(|e| crate::CandleOcrError::InferenceFailed(e.to_string()))?;
+
+        let logits = model.forward(&next_input, None, None, None, None, prompt_len)?;
+        assert_eq!(
+            logits.dims(),
+            &[1, 1, cfg.vocab_size],
+            "decode step should return last-position logits"
         );
         Ok(())
     }

@@ -34,6 +34,14 @@ The changelog starts fresh at `1.0.0-rc.1`. For the Kreuzberg v1–v4 history, s
   temporal row, so any image whose patch grid wasn't square failed inference with
   `cannot broadcast [1, N] to [N, M]`. Position ids now follow the reference
   Qwen2-VL layout (t constant per frame, h per grid row, w per grid column).
+- **PaddleOCR-VL generation never decoded a token.** The greedy loop read the argmax
+  as a rank-1 tensor where the model returns `[1, 1]`, re-fed the full sequence every
+  step while the attention KV cache kept appending (duplicating keys), and the
+  position-continuation branch for cached decode steps was missing, failing with a
+  dtype mismatch. The loop now prefills once and feeds each new token through the
+  cached decode path at its absolute position, like the other Candle OCR engines,
+  and returns only newly generated tokens so the prompt is never echoed into the
+  OCR output.
 - **Hunyuan-OCR failed to load checkpoints whose `config.json` omits
   `tie_word_embeddings`.** Later revisions of the released checkpoint drop the field
   (transformers defaults it to `true`); the config parser now does the same instead

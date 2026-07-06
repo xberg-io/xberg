@@ -288,7 +288,12 @@ impl PaddleOcrVlEngine {
         Ok(tensor)
     }
 
-    /// Generate tokens using the model (simple greedy decoding).
+    /// Generate tokens using the model (greedy decoding with KV cache).
+    ///
+    /// Prefills once with the full prompt (vision features injected), then feeds
+    /// each new token back through the cached decode path at its absolute
+    /// position, mirroring the Hunyuan-OCR generation loop. Returns only the
+    /// newly generated tokens, so decoding the result never echoes the prompt.
     fn generate(
         &mut self,
         input_ids: &Tensor,
@@ -296,69 +301,73 @@ impl PaddleOcrVlEngine {
         grid_thw: &Tensor,
         max_length: usize,
     ) -> Result<Vec<u32>> {
-        let mut generated_tokens = input_ids
+        let prompt_tokens = input_ids
             .to_vec2::<u32>()
             .map_err(|e| CandleOcrError::InferenceFailed(format!("Input to_vec2: {}", e)))?
             .into_iter()
             .next()
             .ok_or_else(|| CandleOcrError::InferenceFailed("Empty input".to_string()))?;
+        let prompt_len = prompt_tokens.len();
 
         tracing::debug!(
-            initial_tokens = generated_tokens.len(),
+            initial_tokens = prompt_len,
             max_length = max_length,
             eos_token = self.eos_token_id,
             "PaddleOCR-VL: starting greedy decoding"
         );
 
-        for step in 0..max_length {
-            if generated_tokens.len() >= max_length {
-                break;
-            }
+        // Image mask over the prompt (1 for image tokens, 0 for text).
+        let image_mask: Vec<u32> = prompt_tokens
+            .iter()
+            .map(|&token| u32::from(token == self.config.image_token_id))
+            .collect();
+        let image_mask = Tensor::new(image_mask.as_slice(), &self.device)
+            .map_err(|e| CandleOcrError::InferenceFailed(format!("Mask tensor: {}", e)))?
+            .unsqueeze(0)
+            .map_err(|e| CandleOcrError::InferenceFailed(format!("Unsqueeze mask: {}", e)))?;
 
-            let input_tensor = Tensor::new(generated_tokens.as_slice(), &self.device)
-                .map_err(|e| CandleOcrError::InferenceFailed(format!("Create tensor: {}", e)))?
-                .unsqueeze(0)
-                .map_err(|e| CandleOcrError::InferenceFailed(format!("Unsqueeze: {}", e)))?;
+        // cache_position starting at 0 makes the forward pass compute the full
+        // multimodal rope index for the prompt (and reset any cached rope delta
+        // from a previous image).
+        let cache_position = Tensor::arange(0u32, prompt_len as u32, &self.device)
+            .map_err(|e| CandleOcrError::InferenceFailed(format!("Cache position: {}", e)))?;
 
-            // Create image mask (1 for image tokens, 0 for text)
-            let image_mask: Vec<u32> = generated_tokens
-                .iter()
-                .map(|&token| if token == self.config.image_token_id { 1 } else { 0 })
-                .collect();
-            let image_mask = Tensor::new(image_mask.as_slice(), &self.device)
-                .map_err(|e| CandleOcrError::InferenceFailed(format!("Mask tensor: {}", e)))?
-                .unsqueeze(0)
-                .map_err(|e| CandleOcrError::InferenceFailed(format!("Unsqueeze mask: {}", e)))?;
+        let mut logits = self
+            .model
+            .forward(
+                input_ids,
+                Some(pixel_values),
+                Some(grid_thw),
+                Some(&image_mask),
+                Some(&cache_position),
+                0,
+            )
+            .map_err(|e| CandleOcrError::InferenceFailed(format!("Forward: {}", e)))?;
 
-            let logits = self
-                .model
-                .forward(
-                    &input_tensor,
-                    Some(pixel_values),
-                    Some(grid_thw),
-                    Some(&image_mask),
-                    None,
-                    0,
-                )
-                .map_err(|e| CandleOcrError::InferenceFailed(format!("Forward: {}", e)))?;
+        let mut generated: Vec<u32> = Vec::new();
+        let max_new_tokens = max_length.saturating_sub(prompt_len);
 
-            // Greedy decoding: take argmax of last token
-            let logits_last = logits
-                .narrow(1, logits.dim(1)? - 1, 1)
-                .map_err(|e| CandleOcrError::InferenceFailed(format!("Narrow: {}", e)))?;
-            let next_token = logits_last
+        for step in 0..max_new_tokens {
+            // The forward pass narrows to the last position, so logits is
+            // [1, 1, vocab]; argmax over the vocab dim yields [1, 1] — squeeze
+            // the two length-1 dims to a scalar token id.
+            let next_token = logits
                 .argmax(candle_core::D::Minus1)
                 .map_err(|e| CandleOcrError::InferenceFailed(format!("Argmax: {}", e)))?
-                .to_vec1::<u32>()
-                .map_err(|e| CandleOcrError::InferenceFailed(format!("To vec1: {}", e)))?[0];
+                .squeeze(1)
+                .map_err(|e| CandleOcrError::InferenceFailed(format!("Squeeze seq: {}", e)))?
+                .squeeze(0)
+                .map_err(|e| CandleOcrError::InferenceFailed(format!("Squeeze batch: {}", e)))?
+                .to_scalar::<u32>()
+                .map_err(|e| CandleOcrError::InferenceFailed(format!("Token scalar: {}", e)))?;
 
-            generated_tokens.push(next_token);
+            generated.push(next_token);
 
             if step < 5 {
                 tracing::trace!(
                     step = step,
                     token = next_token,
-                    num_tokens = generated_tokens.len(),
+                    num_tokens = generated.len(),
                     "PaddleOCR-VL: decode iteration"
                 );
             }
@@ -366,14 +375,30 @@ impl PaddleOcrVlEngine {
             if next_token == self.eos_token_id {
                 tracing::debug!(
                     step = step,
-                    num_tokens = generated_tokens.len(),
+                    num_tokens = generated.len(),
                     "PaddleOCR-VL: reached EOS token"
                 );
                 break;
             }
+
+            if step + 1 == max_new_tokens {
+                break;
+            }
+
+            // Feed the new token back at its absolute position; the KV cache
+            // holds the prompt and all previously generated tokens.
+            let next_input = Tensor::new(&[next_token], &self.device)
+                .map_err(|e| CandleOcrError::InferenceFailed(format!("Next token tensor: {}", e)))?
+                .unsqueeze(0)
+                .map_err(|e| CandleOcrError::InferenceFailed(format!("Unsqueeze next: {}", e)))?;
+
+            logits = self
+                .model
+                .forward(&next_input, None, None, None, None, prompt_len + step)
+                .map_err(|e| CandleOcrError::InferenceFailed(format!("Forward step {}: {}", step, e)))?;
         }
 
-        Ok(generated_tokens)
+        Ok(generated)
     }
 }
 
