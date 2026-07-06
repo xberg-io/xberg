@@ -35,7 +35,7 @@ pub async fn redact(result: &mut ExtractedDocument, config: &RedactionConfig) ->
 /// to the original PII text it replaced. Only populated for `TokenReplace` strategy
 /// tokens; `Mask` and `Hash` replacements are not reversible and are not included.
 #[cfg(feature = "redaction-rehydrate")]
-pub async fn redact_capturing_rehydration_map(
+pub(crate) async fn redact_capturing_rehydration_map(
     result: &mut ExtractedDocument,
     config: &RedactionConfig,
 ) -> Result<RehydrationMap> {

@@ -1835,6 +1835,14 @@ typedef struct XBERGTableGrid XBERGTableGrid;
  */
 typedef struct XBERGTableModel XBERGTableModel;
 /**
+ * How to resolve overlapping native vs layout (TATR/SLANeXT) tables.
+ *
+ * When both native oxide detection and the layout table model produce a table for
+ * the same page region, one must be dropped. This controls which one wins. Wire
+ * format is snake_case in all serializers (JSON, TOML, YAML).
+ */
+typedef struct XBERGTableOverlapPreference XBERGTableOverlapPreference;
+/**
  * Tesseract OCR configuration.
  *
  * Provides fine-grained control over Tesseract OCR engine parameters.
@@ -3554,6 +3562,13 @@ XBERGCaptioningConfig *xberg_extraction_config_captioning(const XBERGExtractionC
 int32_t xberg_extraction_config_qr_codes(const XBERGExtractionConfig *ptr);
 
 /**
+ * Get the `source_name` field from a `ExtractionConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_extraction_config_source_name(const XBERGExtractionConfig *ptr);
+
+/**
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
  * freed with the appropriate free function.
  */
@@ -4580,6 +4595,13 @@ int32_t xberg_layout_detection_config_apply_heuristics(const XBERGLayoutDetectio
  * Pointer must be a valid handle returned by this library.
  */
 XBERGTableModel *xberg_layout_detection_config_table_model(const XBERGLayoutDetectionConfig *ptr);
+
+/**
+ * Get the `table_overlap_preference` field from a `LayoutDetectionConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGTableOverlapPreference *xberg_layout_detection_config_table_overlap_preference(const XBERGLayoutDetectionConfig *ptr);
 
 /**
  * Get the `acceleration` field from a `LayoutDetectionConfig`.
@@ -16065,6 +16087,21 @@ int32_t xberg_table_model_from_i32(int32_t value);
 int32_t xberg_table_model_from_str(const char *name);
 
 /**
+ * Convert an integer to a `TableOverlapPreference` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+int32_t xberg_table_overlap_preference_from_i32(int32_t value);
+
+/**
+ * Convert a `TableOverlapPreference` serde wire value (C string) to its integer discriminant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
+ */
+int32_t xberg_table_overlap_preference_from_str(const char *name);
+
+/**
  * Convert an integer to a `CallMode` variant. Returns -1 on invalid input.
  * # Safety
  * Caller must ensure all pointer arguments are valid or null.
@@ -17123,6 +17160,31 @@ char *xberg_table_model_to_json(const XBERGTableModel *ptr);
  * The returned string must be freed with `xberg_free_string`.
  */
 char *xberg_table_model_to_string(const XBERGTableModel *ptr);
+
+/**
+ * Free a heap-allocated `TableOverlapPreference` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void xberg_table_overlap_preference_free(XBERGTableOverlapPreference *ptr);
+
+/**
+ * Serialize a heap-allocated `TableOverlapPreference` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_table_overlap_preference_to_json(const XBERGTableOverlapPreference *ptr);
+
+/**
+ * Render a heap-allocated `TableOverlapPreference` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_table_overlap_preference_to_string(const XBERGTableOverlapPreference *ptr);
 
 /**
  * Free a heap-allocated `CallMode` returned by a pointer-returning FFI function.
