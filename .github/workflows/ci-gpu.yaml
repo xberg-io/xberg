@@ -325,10 +325,10 @@ jobs:
         with:
           ort-version: ${{ env.ORT_VERSION }}
 
-      - name: Cache model weights
+      - name: Restore cached model weights
         if: matrix.model.hf_repo != '' || matrix.model.ms_repo != ''
         id: model-cache
-        uses: actions/cache@v5
+        uses: actions/cache/restore@v5
         with:
           path: ${{ github.workspace }}/models/${{ matrix.model.name }}
           # Manifest-verified entries key on the manifest content, so changing
@@ -336,6 +336,7 @@ jobs:
           key: hf-weights-${{ matrix.model.name }}-${{ matrix.model.manifest != '' && hashFiles(matrix.model.manifest) || 'v1' }}
 
       - name: Download model weights (Hugging Face)
+        id: download-hf
         if: matrix.model.hf_repo != '' && steps.model-cache.outputs.cache-hit != 'true'
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -354,6 +355,7 @@ jobs:
             --local-dir "${{ github.workspace }}/models/${{ matrix.model.name }}"
 
       - name: Download model weights (ModelScope, checksum-verified)
+        id: download-ms
         if: matrix.model.ms_repo != '' && steps.model-cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
@@ -400,3 +402,17 @@ jobs:
           # Run the binary compiled in build-candle (no recompile on the GPU runner).
           chmod +x "candle-test-${{ matrix.model.name }}"
           "./candle-test-${{ matrix.model.name }}" "${{ matrix.model.test }}" --ignored --nocapture
+
+      - name: Save model weights cache
+        # actions/cache's built-in post-save is skipped when the job fails, so a
+        # red run re-downloads multi-GB weights on every iteration. Save
+        # explicitly whenever a download step succeeded — even if inference
+        # failed — but never after a failed download, so a partial directory
+        # cannot poison the cache.
+        if: >-
+          always() && steps.model-cache.outputs.cache-hit != 'true' &&
+          (steps.download-hf.outcome == 'success' || steps.download-ms.outcome == 'success')
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ github.workspace }}/models/${{ matrix.model.name }}
+          key: hf-weights-${{ matrix.model.name }}-${{ matrix.model.manifest != '' && hashFiles(matrix.model.manifest) || 'v1' }}
