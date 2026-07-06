@@ -731,14 +731,9 @@ impl PaddleOCRVLModel {
                                 // decoder splits by rope_scaling.mrope_section. Images carry a
                                 // single frame with no temporal stride, so every patch shares the
                                 // frame position start_idx + text_len.
-                                let grid_numel =
-                                    (llm_grid_t as usize) * (llm_grid_h as usize) * (llm_grid_w as usize);
-                                let t_index = Tensor::full(
-                                    start_idx + text_len,
-                                    grid_numel,
-                                    input_ids_i.device(),
-                                )
-                                .map_err(|e| CandleOcrError::InferenceFailed(format!("T full: {}", e)))?;
+                                let grid_numel = (llm_grid_t as usize) * (llm_grid_h as usize) * (llm_grid_w as usize);
+                                let t_index = Tensor::full(start_idx + text_len, grid_numel, input_ids_i.device())
+                                    .map_err(|e| CandleOcrError::InferenceFailed(format!("T full: {}", e)))?;
 
                                 let h_index = Tensor::arange(
                                     start_idx + text_len,
@@ -1371,8 +1366,7 @@ mod tests {
         let image_grid_thw = Tensor::new(&[[grid_t, grid_h, grid_w]], &dev)
             .map_err(|e| crate::CandleOcrError::InferenceFailed(e.to_string()))?;
 
-        let (position_ids, mrope_deltas) =
-            model.get_rope_index(&input_ids, Some(&image_grid_thw), None, None, None)?;
+        let (position_ids, mrope_deltas) = model.get_rope_index(&input_ids, Some(&image_grid_thw), None, None, None)?;
 
         assert_eq!(
             position_ids.dims(),

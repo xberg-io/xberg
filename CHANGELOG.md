@@ -29,6 +29,15 @@ The changelog starts fresh at `1.0.0-rc.1`. For the Kreuzberg v1–v4 history, s
 
 ### Fixed
 
+- **PaddleOCR-VL crashed on non-square pages.** The multimodal rope index built the
+  vision-block position tensors with a transposed height/width layout and dropped the
+  temporal row, so any image whose patch grid wasn't square failed inference with
+  `cannot broadcast [1, N] to [N, M]`. Position ids now follow the reference
+  Qwen2-VL layout (t constant per frame, h per grid row, w per grid column).
+- **Hunyuan-OCR failed to load checkpoints whose `config.json` omits
+  `tie_word_embeddings`.** Later revisions of the released checkpoint drop the field
+  (transformers defaults it to `true`); the config parser now does the same instead
+  of rejecting the whole model.
 - **PDF/OCR worker-stack overflow.** The deep per-page OCR extraction futures are now
   boxed (`Box::pin`) so their large state lives on the heap instead of inflating the
   worker-thread stack frame. Together with the stack the binding runtimes provision for

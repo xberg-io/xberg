@@ -1169,6 +1169,113 @@ mod tests {
         assert_eq!(cfg.interpolate_mode, "bilinear", "interpolate_mode mismatch");
     }
 
+    /// The released HunyuanOCR checkpoint's `config.json` deserializes even when
+    /// `tie_word_embeddings` is absent, defaulting it to `true` (the transformers
+    /// default, and what the checkpoint actually does — it ships no lm_head weight).
+    ///
+    /// Regression test for the GPU CI failure "Parse config: missing field
+    /// `tie_word_embeddings`": later revisions of the official checkpoint dropped
+    /// the field, turning a benign omission into a hard model-load failure.
+    #[test]
+    fn should_deserialize_released_config_without_tie_word_embeddings() {
+        // The released HunyuanOCR config.json (Tencent-Hunyuan/HunyuanOCR), with
+        // tie_word_embeddings removed as in later checkpoint revisions.
+        let json = r#"{
+            "architectures": ["HunYuanVLForConditionalGeneration"],
+            "attention_bias": false,
+            "attention_dropout": 0.0,
+            "attention_head_dim": 128,
+            "bos_token_id": 120000,
+            "eod_token_id": 120020,
+            "eos_token_id": 120020,
+            "head_dim": 128,
+            "hidden_act": "silu",
+            "hidden_size": 1024,
+            "image_start_token_id": 120118,
+            "image_end_token_id": 120119,
+            "image_token_id": 120120,
+            "image_newline_token_id": 120121,
+            "initializer_range": 0.02,
+            "intermediate_size": 3584,
+            "max_position_embeddings": 32768,
+            "mlp_bias": false,
+            "model_type": "hunyuan_vl",
+            "norm_type": "rms",
+            "num_attention_heads": 16,
+            "num_experts": 1,
+            "num_hidden_layers": 24,
+            "num_key_value_heads": 8,
+            "org_vocab_size": 120818,
+            "pad_id": 120002,
+            "pad_token_id": -1,
+            "pretraining_tp": 1,
+            "rms_norm_eps": 1e-05,
+            "rope_scaling": {
+                "alpha": 1000.0,
+                "beta_fast": 32,
+                "beta_slow": 1,
+                "factor": 1.0,
+                "mscale": 1.0,
+                "mscale_all_dim": 1.0,
+                "type": "xdrope",
+                "xdrope_section": [16, 16, 16, 16]
+            },
+            "rope_theta": 10000.0,
+            "routed_scaling_factor": 1.0,
+            "sep_token_id": 0,
+            "text_end_id": 8,
+            "text_start_id": 7,
+            "dtype": "bfloat16",
+            "transformers_version": "4.49.0",
+            "use_cache": true,
+            "use_qk_norm": true,
+            "use_cla": false,
+            "vision_config": {
+                "add_patchemb_bias": true,
+                "attention_dropout": 0.0,
+                "cat_extra_token": 1,
+                "hidden_act": "gelu",
+                "hidden_dropout": 0.0,
+                "hidden_size": 1152,
+                "img_max_token_num": 4096,
+                "intermediate_size": 4304,
+                "interpolate_mode": "bilinear",
+                "max_image_size": 2048,
+                "max_vit_seq_len": 16384,
+                "num_attention_heads": 16,
+                "num_channels": 3,
+                "num_hidden_layers": 27,
+                "out_hidden_size": 1024,
+                "patch_size": 16,
+                "rms_norm_eps": 1e-05,
+                "spatial_merge_size": 2
+            },
+            "vocab_size": 120818
+        }"#;
+
+        let cfg: HunYuanVLConfig =
+            serde_json::from_str(json).expect("released config without tie_word_embeddings should deserialize");
+        assert!(
+            cfg.tie_word_embeddings,
+            "tie_word_embeddings should default to true when absent"
+        );
+        assert_eq!(cfg.hidden_size, 1024, "hidden_size mismatch");
+        assert_eq!(cfg.vision_config.spatial_merge_size, 2, "spatial_merge_size mismatch");
+
+        // An explicit value is still honored.
+        let json_explicit = json.replacen(
+            "\"dtype\": \"bfloat16\",",
+            "\"tie_word_embeddings\": false, \"dtype\": \"bfloat16\",",
+            1,
+        );
+        let cfg: HunYuanVLConfig = serde_json::from_str(&json_explicit)
+            .expect("released config with explicit tie_word_embeddings should deserialize");
+        assert!(
+            !cfg.tie_word_embeddings,
+            "explicit tie_word_embeddings=false should be honored"
+        );
+    }
+
     // -----------------------------------------------------------------------
     // E1-3: Vision transformer construction with zero-weights
     // -----------------------------------------------------------------------

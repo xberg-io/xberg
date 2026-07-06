@@ -241,7 +241,12 @@ jobs:
           - name: hunyuan-ocr
             feature: candle-hunyuan-ocr
             test: candle_hunyuan_ocr_e2e_extraction
-            hf_repo: tencent/HunyuanOCR
+            # tencent/HunyuanOCR was pulled from the HF Hub on 2026-07-06 (401 even
+            # authenticated), so use a mirror pinned to a fixed revision. All four
+            # safetensors shards of this revision are sha256-identical to Tencent's
+            # official ModelScope release (Tencent-Hunyuan/HunyuanOCR).
+            hf_repo: lvyufeng/HunyuanOCR
+            hf_revision: d5f20ba920ce6ed161baca846b59a950269418d0
             env_var: XBERG_HUNYUAN_OCR_MODEL_PATH
             debug_env: XBERG_HUNYUAN_DEBUG
           - name: deepseek-ocr
@@ -324,12 +329,15 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ github.workspace }}/models/${{ matrix.model.name }}
-          key: hf-weights-${{ matrix.model.name }}-v1
+          # Revision-pinned entries get their own key so a stale unpinned
+          # snapshot can never satisfy a pinned download.
+          key: hf-weights-${{ matrix.model.name }}-${{ matrix.model.hf_revision != '' && matrix.model.hf_revision || 'v1' }}
 
       - name: Download model weights
         if: matrix.model.hf_repo != '' && steps.model-cache.outputs.cache-hit != 'true'
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_REVISION: ${{ matrix.model.hf_revision }}
         run: |
           set -euo pipefail
           # The runner's system python3 has no pip and is externally-managed
@@ -340,8 +348,13 @@ jobs:
           sudo apt-get install -y --no-install-recommends python3-venv
           python3 -m venv "$RUNNER_TEMP/hfvenv"
           "$RUNNER_TEMP/hfvenv/bin/pip" install --quiet --upgrade "huggingface_hub"
+          revision_args=()
+          if [ -n "${HF_REVISION:-}" ]; then
+            revision_args=(--revision "$HF_REVISION")
+          fi
           "$RUNNER_TEMP/hfvenv/bin/hf" download \
             "${{ matrix.model.hf_repo }}" \
+            "${revision_args[@]}" \
             --local-dir "${{ github.workspace }}/models/${{ matrix.model.name }}"
 
       - name: Download candle test binary

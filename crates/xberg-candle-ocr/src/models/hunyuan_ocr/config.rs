@@ -3,6 +3,10 @@
 use candle_nn::Activation;
 use serde::{Deserialize, Serialize};
 
+fn default_tie_word_embeddings() -> bool {
+    true
+}
+
 /// Hunyuan-VL main model configuration.
 #[cfg_attr(alef, alef(skip))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -73,7 +77,11 @@ pub struct HunYuanVLConfig {
     pub text_end_id: u32,
     /// Text start token ID.
     pub text_start_id: u32,
-    /// Tie word embeddings between input and output.
+    /// Tie word embeddings between input and output. Later revisions of the
+    /// released HunyuanOCR checkpoint omit this field (transformers defaults
+    /// it to `true`, and the checkpoint ships no separate lm_head weight), so
+    /// treat it as optional rather than failing the whole config parse.
+    #[serde(default = "default_tie_word_embeddings")]
     pub tie_word_embeddings: bool,
     /// Data type (typically "float32" or "bfloat16").
     pub dtype: String,
