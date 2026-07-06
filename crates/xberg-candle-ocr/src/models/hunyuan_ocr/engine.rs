@@ -4,14 +4,33 @@
 
 use candle_core::{DType, Device, Tensor};
 use candle_nn::VarBuilder;
-use tokenizers::Tokenizer;
 
 use crate::CandleOcrOutput;
 use crate::error::{CandleOcrError, Result};
 use crate::models::hunyuan_ocr::config::{HunYuanVLConfig, HunyuanOCRGenerationConfig};
 use crate::models::hunyuan_ocr::model::HunyuanVLModel;
-use crate::models::hunyuan_ocr::processor::HunyuanVLProcessor;
+use crate::models::hunyuan_ocr::processor::{HunyuanVLProcessor, IMAGE_TOKEN};
 use crate::vendor::aha::InferenceModel;
+
+/// Plain OCR instruction placed in the user turn of the chat template, the analog of
+/// GLM-OCR's `GlmOcrTask::Ocr` prompt (`"Text Recognition:"`). Kept separate from the
+/// chat-template scaffolding built in [`build_ocr_prompt`].
+const OCR_INSTRUCTION: &str = "OCR this image.";
+
+/// Build HunyuanOCR's chat-template prompt around `instruction`, mirroring the model's
+/// own chat_template (like GLM-OCR's `tokenizer::build_input_ids`). The scaffolding is,
+/// in order: begin-of-sentence, a format token, the image_start / image-placeholder /
+/// image_end triple, the instruction, then the user turn. The image placeholder is the
+/// processor's [`IMAGE_TOKEN`]; the processor expands it to one token per patch and
+/// tokenizes the result, so `input_ids` carries the image tokens the mask and
+/// vision-merge depend on. A bare "Image OCR:" prompt has no image tokens, so
+/// image-position indexing narrows an empty tensor and inference fails.
+fn build_ocr_prompt(instruction: &str) -> String {
+    format!(
+        "<｜hy_begin▁of▁sentence｜><｜hy_place▁holder▁no▁3｜><｜hy_place▁holder▁no▁100｜>\
+         {IMAGE_TOKEN}<｜hy_place▁holder▁no▁101｜>{instruction}<｜hy_User｜>"
+    )
+}
 
 /// Hunyuan-OCR inference engine: manages model, processor, and generation config.
 #[cfg_attr(alef, alef(skip))]
@@ -21,7 +40,6 @@ pub struct HunyuanOCREngine {
     device: Device,
     generation_config: HunyuanOCRGenerationConfig,
     model_name: String,
-    tokenizer: Tokenizer,
 }
 
 impl HunyuanOCREngine {
@@ -52,12 +70,8 @@ impl HunyuanOCREngine {
             _ => DType::F32,
         });
 
+        // The processor owns the tokenizer; the engine reads it back for decoding.
         let processor = HunyuanVLProcessor::new(path, &device, dtype)?;
-
-        // Load tokenizer
-        let tokenizer_path = format!("{}/tokenizer.json", path);
-        let tokenizer = Tokenizer::from_file(&tokenizer_path)
-            .map_err(|e| CandleOcrError::Tokenizer(format!("Tokenizer load error: {}", e)))?;
 
         // Find and mmap safetensors files.
         let model_files: Vec<String> = std::fs::read_dir(path)?
@@ -72,6 +86,9 @@ impl HunyuanOCREngine {
             ));
         }
 
+        // SAFETY: mmaped_safetensors is called with valid, existence-checked file paths.
+        // The files are opened read-only and the mmap is held by the returned VarBuilder
+        // for as long as the weights are in use, so the mapping outlives every tensor read.
         #[allow(unsafe_code)]
         let vb = unsafe {
             VarBuilder::from_mmaped_safetensors(&model_files, dtype, &device)
@@ -97,7 +114,6 @@ impl HunyuanOCREngine {
             device,
             generation_config,
             model_name,
-            tokenizer,
         })
     }
 
@@ -149,28 +165,11 @@ impl HunyuanOCREngine {
         let (img_width, img_height) = (img.width(), img.height());
         tracing::debug!(width = img_width, height = img_height, "Hunyuan-OCR: image dimensions");
 
-        // Build OCR prompt that matches the model's expected input template
-        let prompt_text = "Image OCR:";
-
-        // Tokenize the prompt to get input IDs
-        let encoding = self
-            .tokenizer
-            .encode(prompt_text, false)
-            .map_err(|e| CandleOcrError::Tokenizer(format!("Encode prompt: {}", e)))?;
-        let prompt_ids: Vec<i64> = encoding.get_ids().iter().map(|&id| id as i64).collect();
-
-        tracing::debug!(prompt_len = prompt_ids.len(), "Hunyuan-OCR: prompt tokenization");
-
-        let input_ids = Tensor::new(prompt_ids.as_slice(), &self.device)
-            .map_err(|e| CandleOcrError::InferenceFailed(format!("Token tensor: {}", e)))?
-            .unsqueeze(0)
-            .map_err(|e| CandleOcrError::InferenceFailed(format!("Unsqueeze batch: {}", e)))?;
-
-        // Use the processor to build full multimodal data with image preprocessing, mask and position IDs
+        // Preprocess the image and build multimodal data; the processor expands the
+        // image placeholder and tokenizes to produce input_ids, image mask and position IDs.
         tracing::debug!("Hunyuan-OCR: processing image and text to multimodal data");
-        let hunyuan_data = self
-            .processor
-            .process_images_and_text(&[img], input_ids.clone(), prompt_text)?;
+        let prompt = build_ocr_prompt(OCR_INSTRUCTION);
+        let hunyuan_data = self.processor.process_images_and_text(&[img], &prompt)?;
 
         // Prepare multimodal data for the model's forward_initial call
         // The model expects: [pixel_values, image_grid_thw, image_mask, position_ids]
@@ -185,33 +184,70 @@ impl HunyuanOCREngine {
         tracing::debug!("Hunyuan-OCR: clearing cache and running forward pass");
         self.model.clear_kv_cache();
 
-        let output_ids = self
+        let mut logits = self
             .model
             .forward_initial(&hunyuan_data.input_ids, 0, mm_data)
             .map_err(|e| CandleOcrError::InferenceFailed(format!("Initial forward: {}", e)))?;
 
-        // For a simple first implementation, use the logits from forward_initial to get the next token
-        // In a full implementation, this would be an autoregressive loop
-        let seq_len = output_ids
+        // Greedy autoregressive decode, mirroring the reference generation loop:
+        // take a token from the initial forward's logits, then feed each token back
+        // through forward_step at its absolute position (the prompt occupies
+        // 0..prompt_len). Decode steps use the standard offset-based RoPE
+        // (no position_ids); the XD-RoPE positions only shape the prompt pass, and
+        // generated text tokens continue sequentially after it. Capped so a
+        // degenerate image (no stop token) can't run unbounded.
+        const MAX_NEW_TOKENS: usize = 128;
+        let prompt_len = hunyuan_data
+            .input_ids
             .dim(1)
-            .map_err(|e| CandleOcrError::InferenceFailed(format!("Output seq len: {}", e)))?;
+            .map_err(|e| CandleOcrError::InferenceFailed(format!("Prompt len: {}", e)))?;
+        let stop_ids = self.model.stop_token_ids();
+        let mut generated: Vec<u32> = Vec::new();
 
-        let last_logits = output_ids
-            .narrow(1, seq_len - 1, 1)
-            .map_err(|e| CandleOcrError::InferenceFailed(format!("Narrow last: {}", e)))?;
+        for step in 0..MAX_NEW_TOKENS {
+            let seq_len = logits
+                .dim(1)
+                .map_err(|e| CandleOcrError::InferenceFailed(format!("Output seq len: {}", e)))?;
 
-        let token_id = last_logits
-            .argmax(2)
-            .map_err(|e| CandleOcrError::InferenceFailed(format!("Argmax: {}", e)))?
-            .squeeze(2)
-            .map_err(|e| CandleOcrError::InferenceFailed(format!("Squeeze: {}", e)))?
-            .to_vec1::<u32>()
-            .map_err(|e| CandleOcrError::InferenceFailed(format!("To vec: {}", e)))?;
+            let last_logits = logits
+                .narrow(1, seq_len - 1, 1)
+                .map_err(|e| CandleOcrError::InferenceFailed(format!("Narrow last: {}", e)))?;
 
-        // Decode the generated token to text
+            // last_logits is [1, 1, vocab]; argmax over the vocab dim yields [1, 1],
+            // so squeeze the two length-1 dims to a scalar token id.
+            let next_token = last_logits
+                .argmax(2)
+                .map_err(|e| CandleOcrError::InferenceFailed(format!("Argmax: {}", e)))?
+                .squeeze(1)
+                .map_err(|e| CandleOcrError::InferenceFailed(format!("Squeeze seq: {}", e)))?
+                .squeeze(0)
+                .map_err(|e| CandleOcrError::InferenceFailed(format!("Squeeze batch: {}", e)))?
+                .to_scalar::<u32>()
+                .map_err(|e| CandleOcrError::InferenceFailed(format!("To scalar: {}", e)))?;
+
+            generated.push(next_token);
+
+            if stop_ids.contains(&next_token) {
+                tracing::debug!(step = step, num_tokens = generated.len(), "Hunyuan-OCR: reached stop token");
+                break;
+            }
+
+            let next_token_tensor = Tensor::new(&[next_token as i64], &self.device)
+                .map_err(|e| CandleOcrError::InferenceFailed(format!("Next token tensor: {}", e)))?
+                .unsqueeze(0)
+                .map_err(|e| CandleOcrError::InferenceFailed(format!("Unsqueeze next: {}", e)))?;
+
+            logits = self
+                .model
+                .forward_step(&next_token_tensor, prompt_len + step)
+                .map_err(|e| CandleOcrError::InferenceFailed(format!("Forward step {}: {}", step, e)))?;
+        }
+
+        // Decode the generated tokens, skipping the stop/special tokens.
         let output_text = self
-            .tokenizer
-            .decode(&token_id, false)
+            .processor
+            .tokenizer()
+            .decode(&generated, true)
             .map_err(|e| CandleOcrError::Tokenizer(format!("Decode error: {}", e)))?
             .trim()
             .to_string();
@@ -221,7 +257,7 @@ impl HunyuanOCREngine {
         } else {
             tracing::debug!(
                 text_len = output_text.len(),
-                num_tokens = token_id.len(),
+                num_tokens = generated.len(),
                 "Hunyuan-OCR: decoding complete"
             );
         }
@@ -231,5 +267,25 @@ impl HunyuanOCREngine {
             is_structured_markdown: false,
             confidence: None,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_ocr_prompt_carries_exactly_one_image_token_and_the_instruction() {
+        let prompt = build_ocr_prompt(OCR_INSTRUCTION);
+        // The processor's expansion loop finds image positions by this exact token;
+        // zero occurrences reintroduces the empty-tensor crash, two would double the
+        // image-token run.
+        assert_eq!(prompt.matches(IMAGE_TOKEN).count(), 1);
+        assert!(prompt.contains(OCR_INSTRUCTION));
+        assert!(prompt.ends_with("<｜hy_User｜>"));
+        // The line-continuation in the template must not leak whitespace into the
+        // special-token scaffolding.
+        let scaffolding = prompt.replace(OCR_INSTRUCTION, "");
+        assert!(!scaffolding.contains(' ') && !scaffolding.contains('\n'));
     }
 }
