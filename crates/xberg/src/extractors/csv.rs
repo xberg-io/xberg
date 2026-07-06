@@ -342,6 +342,23 @@ fn decode_csv_bytes_fallback(content: &[u8]) -> String {
 /// - It has at least 2 columns
 /// - No cell in the first row looks numeric (all text/labels)
 /// - At least one cell in the data rows (rows 1-5) is numeric
+/// Whether a CSV cell is a real number. `str::parse::<f64>` also accepts the
+/// tokens "NaN", "inf", "infinity" (case-insensitive), so a header cell or a
+/// column of those words would be misclassified as numeric — flipping header
+/// and column-type detection (xberg-io/xberg#1223). Reject those spellings.
+fn is_csv_number(cell: &str) -> bool {
+    let trimmed = cell.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    let lower = lower.strip_prefix(['+', '-']).unwrap_or(&lower);
+    if matches!(lower, "nan" | "inf" | "infinity") {
+        return false;
+    }
+    trimmed.parse::<f64>().is_ok()
+}
+
 fn detect_header(rows: &[Vec<String>]) -> bool {
     if rows.len() < 2 {
         return false;
@@ -353,24 +370,14 @@ fn detect_header(rows: &[Vec<String>]) -> bool {
     }
 
     // Check if first row has no numeric values
-    let first_row_has_number = first_row.iter().any(|cell| {
-        let trimmed = cell.trim();
-        !trimmed.is_empty() && trimmed.parse::<f64>().is_ok()
-    });
-
-    if first_row_has_number {
+    if first_row.iter().any(|cell| is_csv_number(cell)) {
         return false;
     }
 
     // Check if at least one data row has numeric values
     let data_rows = &rows[1..rows.len().min(6)];
 
-    data_rows.iter().any(|row| {
-        row.iter().any(|cell| {
-            let trimmed = cell.trim();
-            !trimmed.is_empty() && trimmed.parse::<f64>().is_ok()
-        })
-    })
+    data_rows.iter().any(|row| row.iter().any(|cell| is_csv_number(cell)))
 }
 
 /// Infer column types by scanning the first N data rows.
@@ -410,7 +417,7 @@ fn infer_column_types(rows: &[Vec<String>], has_header: bool) -> Vec<String> {
                 }
                 non_empty_count += 1;
 
-                if cell.parse::<f64>().is_ok() {
+                if is_csv_number(cell) {
                     numeric_count += 1;
                 } else {
                     for re in date_patterns {
@@ -750,6 +757,32 @@ mod tests {
         assert!(
             !detect_header(&rows),
             "Should not detect header when first row has numbers"
+        );
+    }
+
+    #[test]
+    fn nan_inf_are_not_numeric() {
+        // "NaN"/"inf"/"Infinity" must not read as numbers (str::parse accepts them).
+        assert!(!is_csv_number("NaN"));
+        assert!(!is_csv_number("inf"));
+        assert!(!is_csv_number("-Infinity"));
+        assert!(!is_csv_number("nan"));
+        assert!(is_csv_number("42"));
+        assert!(is_csv_number("-3.14"));
+        assert!(is_csv_number("1e6"));
+    }
+
+    #[test]
+    fn header_row_of_nan_inf_labels_still_detected_as_header() {
+        // A header like "NaN,inf,count" must not be mistaken for a numeric data
+        // row, so the table is still recognized as having a header.
+        let rows = vec![
+            vec!["NaN".to_string(), "inf".to_string(), "label".to_string()],
+            vec!["1".to_string(), "2".to_string(), "x".to_string()],
+        ];
+        assert!(
+            detect_header(&rows),
+            "header of NaN/inf/label words must be treated as a header, not numeric data"
         );
     }
 
