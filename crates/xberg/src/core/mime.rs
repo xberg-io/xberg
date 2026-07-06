@@ -727,12 +727,54 @@ pub(crate) fn detect_or_validate(path: Option<&str>, mime_type: Option<&str>) ->
         validate_mime_type(mime)
     } else if let Some(p) = path.map(Path::new) {
         let detected = detect_mime_type(p, true)?;
-        tracing::debug!(path = %p.display(), detected = %detected, "detected MIME, now validating");
-        validate_mime_type(&detected)
+        // The path detector trusts the extension. Cross-check against the file's
+        // magic bytes so a misnamed file (e.g. a DOCX named report.pdf) routes to
+        // the right extractor — the bytes entry point already sniffs magic first,
+        // and the two must agree (xberg-io/xberg#1223). Only override when the
+        // content gives a confident, *different* supported type; formats without
+        // a magic signature (plain text/CSV/code) keep the extension result.
+        let resolved = match magic_override(p, &detected) {
+            Some(from_magic) => {
+                tracing::debug!(path = %p.display(), extension_mime = %detected, magic_mime = %from_magic,
+                    "extension/content MIME disagree; preferring content");
+                from_magic
+            }
+            None => detected,
+        };
+        validate_mime_type(&resolved)
     } else {
         Err(XbergError::validation(
             "Must provide either path or mime_type".to_string(),
         ))
+    }
+}
+
+/// If the file's magic bytes confidently indicate a different supported MIME
+/// type than the extension did, return it. Returns `None` when the content has
+/// no signature, the read fails, or content and extension agree.
+fn magic_override(path: &Path, extension_mime: &str) -> Option<String> {
+    use std::io::Read;
+
+    let mut file = std::fs::File::open(path).ok()?;
+    // 4 KB is enough for magic signatures and the ZIP central-directory sniff.
+    let mut header = vec![0u8; 4096];
+    let n = file.read(&mut header).ok()?;
+    header.truncate(n);
+    if header.is_empty() {
+        return None;
+    }
+
+    let from_magic = detect_mime_type_from_bytes(&header).ok()?;
+    // Only override on a confident *binary* signature. `text/plain` is the
+    // content sniffer's fallback for anything without magic, so it must not
+    // override the extension (a .pdf with no header, a text file named .csv).
+    if from_magic == PLAIN_TEXT_MIME_TYPE {
+        return None;
+    }
+    if from_magic != extension_mime && validate_mime_type(&from_magic).is_ok() {
+        Some(from_magic)
+    } else {
+        None
     }
 }
 
@@ -1144,6 +1186,29 @@ mod tests {
         let result = detect_or_validate(file_path.to_str(), None);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "application/pdf");
+    }
+
+    /// Regression for #1223: a file whose content is a DOCX but whose extension
+    /// says .pdf must route by content, matching the bytes entry point — the
+    /// path detector previously trusted the extension and picked the PDF
+    /// extractor.
+    #[test]
+    fn misnamed_file_routes_by_content_not_extension() {
+        // Minimal real DOCX (a ZIP whose first member is word/document.xml).
+        let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/office/merged_cells.docx");
+        let Ok(docx_bytes) = std::fs::read(&fixture) else {
+            eprintln!("skipping: fixture not present at {fixture:?}");
+            return;
+        };
+        let dir = tempdir().unwrap();
+        let misnamed = dir.path().join("report.pdf");
+        std::fs::write(&misnamed, &docx_bytes).unwrap();
+
+        let detected = detect_or_validate(misnamed.to_str(), None).unwrap();
+        assert_eq!(
+            detected, "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "DOCX content named .pdf must detect as DOCX, not PDF"
+        );
     }
 
     #[test]
