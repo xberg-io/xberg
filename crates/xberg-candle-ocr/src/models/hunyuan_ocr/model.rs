@@ -964,8 +964,20 @@ fn prepare_causal_attention_mask(batch_size: usize, seq_len: usize, device: &can
 
 /// Scatter image embeddings into position placeholders using a mask.
 fn masked_scatter_dim0(base: &Tensor, image_embeds: &Tensor, mask: &Tensor) -> Result<Tensor> {
+    // The forward passes a batched [1, seq, hidden]; the scatter replaces rows along
+    // the sequence axis, so drop the leading batch dim, scatter, then restore it.
+    // Without this base_len is the batch size (1) and every text row past position 0
+    // is dropped while image rows keep a stale rank, so Tensor::stack sees mixed ranks.
+    let batched = base.rank() == 3;
+    let base = if batched {
+        base.squeeze(0)
+            .map_err(|e| CandleOcrError::InferenceFailed(format!("Base squeeze: {}", e)))?
+    } else {
+        base.clone()
+    };
     let mask_vec = mask
-        .to_vec1::<u32>()
+        .flatten_all()
+        .and_then(|t| t.to_vec1::<u32>())
         .map_err(|e| CandleOcrError::InferenceFailed(format!("Mask vec: {}", e)))?;
     let base_len = base
         .dim(0)
@@ -995,7 +1007,14 @@ fn masked_scatter_dim0(base: &Tensor, image_embeds: &Tensor, mask: &Tensor) -> R
         }
     }
 
-    Tensor::stack(&result_rows, 0).map_err(|e| CandleOcrError::InferenceFailed(format!("Stack: {}", e)))
+    let out = Tensor::stack(&result_rows, 0)
+        .map_err(|e| CandleOcrError::InferenceFailed(format!("Stack: {}", e)))?;
+    if batched {
+        out.unsqueeze(0)
+            .map_err(|e| CandleOcrError::InferenceFailed(format!("Scatter unsqueeze: {}", e)))
+    } else {
+        Ok(out)
+    }
 }
 
 #[cfg(test)]

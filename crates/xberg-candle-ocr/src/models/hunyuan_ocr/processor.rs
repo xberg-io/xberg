@@ -4,10 +4,23 @@
 
 use candle_core::{DType, Device, IndexOp, Shape, Tensor};
 use image::DynamicImage;
+use tokenizers::Tokenizer;
 
 use crate::error::{CandleOcrError, Result};
 use crate::models::hunyuan_ocr::config::HunyuanOCRPreprocessorConfig;
 use crate::vendor::aha::image::{img_smart_resize, img_transform};
+
+/// Vocabulary id of HunyuanOCR's image token (`<｜hy_place▁holder▁no▁102｜>`). The
+/// image mask and vision-merge locate image positions by matching this id.
+const IMAGE_TOKEN_ID: u32 = 120_120;
+/// The image token in text form; each one is expanded to N tokens (one per patch).
+/// Shared with the engine's prompt builder, which must emit exactly this token for
+/// the expansion loop to find it.
+pub(crate) const IMAGE_TOKEN: &str = "<｜hy_place▁holder▁no▁102｜>";
+/// A scratch token used only during expansion so the freshly written run isn't
+/// re-matched by the `contains(IMAGE_TOKEN)` loop; swapped back to IMAGE_TOKEN before
+/// tokenizing.
+const PLACEHOLDER_TOKEN: &str = "<｜hy_place▁holder▁no▁799｜>";
 
 /// Processed multimodal data: input IDs, position IDs, image embeddings, and masks.
 pub struct HunyuanData {
@@ -28,12 +41,18 @@ pub struct HunyuanVLProcessor {
     image_token_id: u32,
     image_token: String,
     placeholder_token: String,
+    tokenizer: Tokenizer,
     pub process_cfg: HunyuanOCRPreprocessorConfig,
     device: Device,
     dtype: DType,
 }
 
 impl HunyuanVLProcessor {
+    /// Return the tokenizer (also used by the engine for output decoding).
+    pub fn tokenizer(&self) -> &Tokenizer {
+        &self.tokenizer
+    }
+
     /// Create a new Hunyuan-VL processor.
     ///
     /// # Arguments
@@ -63,14 +82,20 @@ impl HunyuanVLProcessor {
         let process_cfg: HunyuanOCRPreprocessorConfig = serde_json::from_slice(&config_bytes)
             .map_err(|e| CandleOcrError::ModelLoadFailed(format!("Parse preprocessor_config.json: {}", e)))?;
 
-        let image_token_id = 120120u32;
-        let image_token = "<｜hy_place▁holder▁no▁102｜>".to_string();
-        let placeholder_token = "<｜hy_place▁holder▁no▁799｜>".to_string();
+        let image_token_id = IMAGE_TOKEN_ID;
+        let image_token = IMAGE_TOKEN.to_string();
+        let placeholder_token = PLACEHOLDER_TOKEN.to_string();
+
+        // Needed to tokenize the image-expanded prompt (one image token per patch)
+        // so input_ids actually carries the image tokens the merge/mask rely on.
+        let tokenizer = Tokenizer::from_file(format!("{}/tokenizer.json", path))
+            .map_err(|e| CandleOcrError::Tokenizer(format!("Tokenizer load error: {}", e)))?;
 
         Ok(Self {
             image_token_id,
             image_token,
             placeholder_token,
+            tokenizer,
             process_cfg,
             device: device.clone(),
             dtype,
@@ -192,8 +217,9 @@ impl HunyuanVLProcessor {
     /// 3. Builds position IDs for XD-RoPE
     /// 4. Creates image mask
     ///
-    /// Note: Tokenization is not performed here; callers must provide pre-tokenized `input_ids`.
-    pub fn process_images_and_text(&self, imgs: &[DynamicImage], input_ids: Tensor, text: &str) -> Result<HunyuanData> {
+    /// `text` is the raw prompt containing one image token per image; each is expanded
+    /// to one token per patch and the result is tokenized here to produce `input_ids`.
+    pub fn process_images_and_text(&self, imgs: &[DynamicImage], text: &str) -> Result<HunyuanData> {
         let img_mean = Tensor::from_slice(&self.process_cfg.image_mean, (3, 1, 1), &self.device)
             .map_err(|e| CandleOcrError::InferenceFailed(format!("Mean tensor: {}", e)))?
             .to_dtype(self.dtype)
@@ -247,7 +273,22 @@ impl HunyuanVLProcessor {
             }
         }
 
-        let _text = text.replace(&self.placeholder_token, &self.image_token);
+        // Expansion replaced each image token with N scratch placeholders (one per
+        // patch); swap them back to the real image token and tokenize THIS text, so
+        // input_ids carries one image token per patch. Tokenizing the un-expanded
+        // prompt (as the caller used to) left input_ids with no image tokens at all,
+        // so the image-position indexing narrowed an empty tensor and the image mask
+        // was all-false (vision features never merged).
+        let expanded_text = text.replace(&self.placeholder_token, &self.image_token);
+        let encoding = self
+            .tokenizer
+            .encode(expanded_text.as_str(), false)
+            .map_err(|e| CandleOcrError::Tokenizer(format!("Encode expanded prompt: {}", e)))?;
+        let ids: Vec<i64> = encoding.get_ids().iter().map(|&id| id as i64).collect();
+        let input_ids = Tensor::new(ids.as_slice(), &self.device)
+            .map_err(|e| CandleOcrError::InferenceFailed(format!("Input IDs tensor: {}", e)))?
+            .unsqueeze(0)
+            .map_err(|e| CandleOcrError::InferenceFailed(format!("Input IDs batch: {}", e)))?;
 
         let seq_len = input_ids
             .dim(1)
@@ -391,9 +432,12 @@ fn get_eq_indices(tensor: &Tensor, target: u32) -> Result<Tensor> {
 
 /// Create a binary mask where positions equal to target are 1, others are 0.
 fn get_equal_mask(tensor: &Tensor, target: u32) -> Result<Tensor> {
-    // `input_ids` arrive as I64 from the tokenizer; normalise to U32 first.
+    // `input_ids` arrive as I64 from the tokenizer; normalise to U32 first, and
+    // flatten so a batched [1, seq] tensor reads as the rank-1 [seq] mask that
+    // masked_scatter_dim0 expects (the caller passes the full batched input_ids).
     let vec = tensor
-        .to_dtype(DType::U32)
+        .flatten_all()
+        .and_then(|t| t.to_dtype(DType::U32))
         .and_then(|t| t.to_vec1::<u32>())
         .map_err(|e| CandleOcrError::InferenceFailed(format!("To vec: {}", e)))?;
 

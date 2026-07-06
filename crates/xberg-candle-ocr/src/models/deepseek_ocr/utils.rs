@@ -68,26 +68,30 @@ pub fn interpolate_bicubic(
     Tensor::stack(&rows, 2).map_err(|e| CandleOcrError::InferenceFailed(format!("stack failed: {e}")))
 }
 
-/// Select 2D indices from tensor.
+/// Advanced 2D gather: `t` is a `[num, dim]` lookup table and `index` is an
+/// `[ih, iw]` grid of row indices; returns `t[index]` shaped `[ih, iw, dim]`.
+///
+/// This is the SAM decomposed relative-position lookup (`rel_pos[coords]`): the
+/// caller passes the rank-2 `[2*max-1, head_dim]` rel-pos table, not a rank-3
+/// tensor, so gather rows and restore the `[ih, iw]` grid on the result.
 pub fn index_select_2d(t: &Tensor, index: &Tensor) -> Result<Tensor> {
-    let (h, _w, _dim) = t.dims3()?;
-    let (ih, iw) = index.dims2()?;
-    let mut result = Vec::new();
-    for i in 0..ih {
-        for j in 0..iw {
-            let idx = index.i((i, j))?.to_scalar::<u32>()? as usize;
-            if idx < h {
-                let val = t.i(idx)?;
-                result.push(val);
-            }
-        }
-    }
-    if result.is_empty() {
+    let (num, dim) = t.dims2()?;
+    if num == 0 {
         return Err(CandleOcrError::InferenceFailed(
-            "index_select_2d produced empty result".to_string(),
+            "index_select_2d: lookup table has no rows".to_string(),
         ));
     }
-    Tensor::stack(&result, 0).map_err(|e| CandleOcrError::InferenceFailed(format!("stack failed: {e}")))
+    let (ih, iw) = index.dims2()?;
+    let mut result = Vec::with_capacity(ih * iw);
+    for i in 0..ih {
+        for j in 0..iw {
+            let idx = (index.i((i, j))?.to_scalar::<u32>()? as usize).min(num - 1);
+            result.push(t.i(idx)?);
+        }
+    }
+    Tensor::stack(&result, 0)
+        .and_then(|r| r.reshape((ih, iw, dim)))
+        .map_err(|e| CandleOcrError::InferenceFailed(format!("index_select_2d: {e}")))
 }
 
 /// One-hot encoding.
@@ -153,10 +157,17 @@ pub fn attn_masked_fill(on_true: &Tensor, mask: &Tensor, on_false: f32) -> Resul
 }
 
 /// Masked scatter on dimension 0.
+///
+/// Replaces the rows of `dst` where `mask` is set with successive rows of `src`.
+/// `dst` arrives batched as `[1, seq, hidden]` from the language embeddings, so the
+/// batch dim is dropped for the row scatter and restored afterwards; `mask` is
+/// flattened to a rank-1 `[seq]`. Without this the sequence rows past the batch
+/// dimension are dropped and Tensor::stack sees mixed ranks.
 pub fn masked_scatter_dim0(dst: &Tensor, src: &Tensor, mask: &Tensor) -> Result<Tensor> {
-    // Simple implementation: iterate and gather where mask == 1
+    let batched = dst.rank() == 3;
+    let dst = if batched { dst.squeeze(0)? } else { dst.clone() };
     let mut output_rows = Vec::new();
-    let mask_vec = mask.to_vec1::<u32>()?;
+    let mask_vec = mask.flatten_all()?.to_vec1::<u32>()?;
     let mut src_idx = 0;
     for (i, &m) in mask_vec.iter().enumerate() {
         if m != 0 && src_idx < src.dim(0)? {
@@ -169,12 +180,17 @@ pub fn masked_scatter_dim0(dst: &Tensor, src: &Tensor, mask: &Tensor) -> Result<
         }
     }
     if output_rows.is_empty() {
-        return Ok(dst.clone());
+        return Ok(if batched { dst.unsqueeze(0)? } else { dst });
     }
-    Tensor::stack(&output_rows, 0).map_err(|e| CandleOcrError::InferenceFailed(format!("stack failed: {e}")))
+    let out = Tensor::stack(&output_rows, 0)
+        .map_err(|e| CandleOcrError::InferenceFailed(format!("stack failed: {e}")))?;
+    if batched { Ok(out.unsqueeze(0)?) } else { Ok(out) }
 }
 
 /// Top-k selection.
+///
+/// Returns `(indices, weights)` in that order: U32 positions of the k largest
+/// values per row, then the F32 values themselves.
 pub fn topk(input: &Tensor, k: usize) -> Result<(Tensor, Tensor)> {
     let shape = input.shape().dims();
     let flattened = input.reshape((shape[0], ()))?;
@@ -205,4 +221,51 @@ pub fn topk(input: &Tensor, k: usize) -> Result<(Tensor, Tensor)> {
     let indices = Tensor::new(top_indices_flat.as_slice(), input.device())?.reshape((batch_size, k))?;
 
     Ok((indices, weights))
+}
+
+#[cfg(test)]
+mod tests {
+    use candle_core::Device;
+
+    use super::*;
+
+    #[test]
+    fn index_select_2d_gathers_rows_into_grid() {
+        let dev = Device::Cpu;
+        let table = Tensor::new(&[[0f32, 1.], [10., 11.], [20., 21.]], &dev).expect("table");
+        let index = Tensor::new(&[[2u32, 0], [1, 2]], &dev).expect("index");
+        let out = index_select_2d(&table, &index).expect("gather");
+        assert_eq!(out.dims(), &[2, 2, 2]);
+        let rows = out.reshape((4, 2)).and_then(|t| t.to_vec2::<f32>()).expect("read");
+        assert_eq!(rows, vec![vec![20., 21.], vec![0., 1.], vec![10., 11.], vec![20., 21.]]);
+    }
+
+    #[test]
+    fn index_select_2d_rejects_empty_table() {
+        let dev = Device::Cpu;
+        let table = Tensor::zeros((0usize, 4usize), DType::F32, &dev).expect("empty table");
+        let index = Tensor::new(&[[0u32]], &dev).expect("index");
+        assert!(index_select_2d(&table, &index).is_err());
+    }
+
+    #[test]
+    fn masked_scatter_dim0_replaces_masked_rows_and_keeps_batch_dim() {
+        let dev = Device::Cpu;
+        let dst = Tensor::new(&[[[0f32, 0.], [1., 1.], [2., 2.], [3., 3.]]], &dev).expect("dst");
+        let src = Tensor::new(&[[10f32, 10.], [20., 20.]], &dev).expect("src");
+        let mask = Tensor::new(&[[0u32, 1, 1, 0]], &dev).expect("mask");
+        let out = masked_scatter_dim0(&dst, &src, &mask).expect("scatter");
+        assert_eq!(out.dims(), &[1, 4, 2]);
+        let rows = out.reshape((4, 2)).and_then(|t| t.to_vec2::<f32>()).expect("read");
+        assert_eq!(rows, vec![vec![0., 0.], vec![10., 10.], vec![20., 20.], vec![3., 3.]]);
+    }
+
+    #[test]
+    fn topk_returns_indices_then_weights() {
+        let dev = Device::Cpu;
+        let input = Tensor::new(&[[0.1f32, 0.7, 0.2]], &dev).expect("input");
+        let (indices, weights) = topk(&input, 2).expect("topk");
+        assert_eq!(indices.to_vec2::<u32>().expect("idx"), vec![vec![1, 2]]);
+        assert_eq!(weights.to_vec2::<f32>().expect("w"), vec![vec![0.7, 0.2]]);
+    }
 }

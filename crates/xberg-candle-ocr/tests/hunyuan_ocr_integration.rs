@@ -71,7 +71,11 @@ fn hunyuan_ocr_extracts_text_from_sample_image() {
     let image_bytes = include_bytes!("../../../fixtures/images/test_hello_world.png");
 
     eprintln!("Constructing Hunyuan-OCR engine from {}…", model_path);
-    let mut engine = HunyuanOCREngine::init(&model_path, None, None)
+    // Run the reference-correctness path on CPU in F32, like the DeepSeek-OCR e2e test.
+    // The checkpoint is bfloat16, but candle has no BF16 matmul on this backend, so
+    // leaving dtype unset (which defaults to the config's BF16) makes every matmul fail.
+    let device = candle_core::Device::Cpu;
+    let mut engine = HunyuanOCREngine::init(&model_path, Some(&device), Some(candle_core::DType::F32))
         .expect("HunyuanOCREngine::init should succeed with a valid model directory");
 
     eprintln!("Engine ready. Running inference on test fixture…");
