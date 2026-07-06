@@ -336,12 +336,6 @@ fn decode_csv_bytes_fallback(content: &[u8]) -> String {
     String::from_utf8_lossy(content).into_owned()
 }
 
-/// Detect whether the first row is a header row.
-///
-/// Heuristic: the first row is considered a header if:
-/// - It has at least 2 columns
-/// - No cell in the first row looks numeric (all text/labels)
-/// - At least one cell in the data rows (rows 1-5) is numeric
 /// Whether a CSV cell is a real number. `str::parse::<f64>` also accepts the
 /// tokens "NaN", "inf", "infinity" (case-insensitive), so a header cell or a
 /// column of those words would be misclassified as numeric — flipping header
@@ -359,6 +353,12 @@ fn is_csv_number(cell: &str) -> bool {
     trimmed.parse::<f64>().is_ok()
 }
 
+/// Detect whether the first row is a header row.
+///
+/// Heuristic: the first row is considered a header if:
+/// - It has at least 2 columns
+/// - No cell in the first row looks numeric (all text/labels)
+/// - At least one cell in the data rows (rows 1-5) is numeric
 fn detect_header(rows: &[Vec<String>]) -> bool {
     if rows.len() < 2 {
         return false;
