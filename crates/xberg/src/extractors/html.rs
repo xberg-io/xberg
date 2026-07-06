@@ -133,15 +133,21 @@ impl HtmlExtractor {
                     budget.leave();
                 }
                 HC::Table { grid } => {
+                    use crate::extraction::grid_flatten::{SpanCell, flatten_spanned_rows};
                     let cell_count = grid.cells.len();
                     budget.add_cells(cell_count)?;
-                    // Convert grid to 2D cells for the builder
-                    let mut cells = vec![vec![String::new(); grid.cols as usize]; grid.rows as usize];
+                    // Group the crate's cells by source row, then flatten with
+                    // span-aware occupancy. The crate assigns `col` naively (no
+                    // rowspan reservation), so a cell under a rowspan would shift
+                    // left into the spanning column (xberg-io/xberg#1223); the
+                    // helper re-derives the true column positions.
+                    let n_rows = grid.rows as usize;
+                    let mut rows: Vec<Vec<SpanCell>> = (0..n_rows.max(1)).map(|_| Vec::new()).collect();
                     for cell in &grid.cells {
-                        if (cell.row as usize) < cells.len() && (cell.col as usize) < cells[0].len() {
-                            cells[cell.row as usize][cell.col as usize] = cell.content.clone();
-                        }
+                        let r = (cell.row as usize).min(rows.len().saturating_sub(1));
+                        rows[r].push(SpanCell::new(cell.content.clone(), cell.row_span, cell.col_span));
                     }
+                    let cells = flatten_spanned_rows(&rows);
                     b.push_table_from_cells(&cells, None, None);
                 }
                 HC::Image { description, src, .. } => {
