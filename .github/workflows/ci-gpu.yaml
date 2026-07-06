@@ -242,11 +242,13 @@ jobs:
             feature: candle-hunyuan-ocr
             test: candle_hunyuan_ocr_e2e_extraction
             # tencent/HunyuanOCR was pulled from the HF Hub on 2026-07-06 (401 even
-            # authenticated), so use a mirror pinned to a fixed revision. All four
-            # safetensors shards of this revision are sha256-identical to Tencent's
-            # official ModelScope release (Tencent-Hunyuan/HunyuanOCR).
-            hf_repo: lvyufeng/HunyuanOCR
-            hf_revision: d5f20ba920ce6ed161baca846b59a950269418d0
+            # authenticated). Stage the weights from Tencent's official ModelScope
+            # release instead, with every file verified against the checked-in
+            # sha256 manifest — an upstream change fails loudly instead of
+            # silently altering what CI tests.
+            hf_repo: ""
+            ms_repo: Tencent-Hunyuan/HunyuanOCR
+            manifest: .github/models/hunyuan-ocr.sha256
             env_var: XBERG_HUNYUAN_OCR_MODEL_PATH
             debug_env: XBERG_HUNYUAN_DEBUG
           - name: deepseek-ocr
@@ -324,20 +326,19 @@ jobs:
           ort-version: ${{ env.ORT_VERSION }}
 
       - name: Cache model weights
-        if: matrix.model.hf_repo != ''
+        if: matrix.model.hf_repo != '' || matrix.model.ms_repo != ''
         id: model-cache
         uses: actions/cache@v5
         with:
           path: ${{ github.workspace }}/models/${{ matrix.model.name }}
-          # Revision-pinned entries get their own key so a stale unpinned
-          # snapshot can never satisfy a pinned download.
-          key: hf-weights-${{ matrix.model.name }}-${{ matrix.model.hf_revision != '' && matrix.model.hf_revision || 'v1' }}
+          # Manifest-verified entries key on the manifest content, so changing
+          # the expected bytes can never be satisfied by a stale snapshot.
+          key: hf-weights-${{ matrix.model.name }}-${{ matrix.model.manifest != '' && hashFiles(matrix.model.manifest) || 'v1' }}
 
-      - name: Download model weights
+      - name: Download model weights (Hugging Face)
         if: matrix.model.hf_repo != '' && steps.model-cache.outputs.cache-hit != 'true'
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_REVISION: ${{ matrix.model.hf_revision }}
         run: |
           set -euo pipefail
           # The runner's system python3 has no pip and is externally-managed
@@ -348,14 +349,29 @@ jobs:
           sudo apt-get install -y --no-install-recommends python3-venv
           python3 -m venv "$RUNNER_TEMP/hfvenv"
           "$RUNNER_TEMP/hfvenv/bin/pip" install --quiet --upgrade "huggingface_hub"
-          revision_args=()
-          if [ -n "${HF_REVISION:-}" ]; then
-            revision_args=(--revision "$HF_REVISION")
-          fi
           "$RUNNER_TEMP/hfvenv/bin/hf" download \
             "${{ matrix.model.hf_repo }}" \
-            "${revision_args[@]}" \
             --local-dir "${{ github.workspace }}/models/${{ matrix.model.name }}"
+
+      - name: Download model weights (ModelScope, checksum-verified)
+        if: matrix.model.ms_repo != '' && steps.model-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          # Stage each file named in the manifest from the publisher's official
+          # ModelScope repo, then verify every byte against the checked-in
+          # sha256 manifest. Trust attaches to the hashes, not the host: a
+          # changed or tampered upstream file fails the job instead of silently
+          # altering what CI tests.
+          dest="${{ github.workspace }}/models/${{ matrix.model.name }}"
+          mkdir -p "$dest"
+          while read -r _hash file; do
+            [ -n "$file" ] || continue
+            echo "downloading $file"
+            curl -fSL --retry 5 --retry-delay 10 --retry-all-errors \
+              "https://modelscope.cn/models/${{ matrix.model.ms_repo }}/resolve/master/$file" \
+              -o "$dest/$file"
+          done < "${{ matrix.model.manifest }}"
+          (cd "$dest" && sha256sum --check --strict "${{ github.workspace }}/${{ matrix.model.manifest }}")
 
       - name: Download candle test binary
         uses: actions/download-artifact@v8
