@@ -2495,7 +2495,10 @@ jobs:
   publish-wasm:
     name: Publish WASM package
     needs: [prepare, wasm-bindings, check-npm]
-    if: ${{ needs.prepare.outputs.release_wasm == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-npm.outputs.wasm_exists != 'true' || needs.prepare.outputs.force_republish == 'true') }}
+    # wasm-bindings is continue-on-error (best-effort until the wasm-lite fix), so a failed
+    # WASM build uploads no wasm-bundle artifact. Gate on its success — otherwise this job
+    # runs and hard-fails at download-artifact with "Artifact not found: wasm-bundle".
+    if: ${{ needs.wasm-bindings.result == 'success' && needs.prepare.outputs.release_wasm == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-npm.outputs.wasm_exists != 'true' || needs.prepare.outputs.force_republish == 'true') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

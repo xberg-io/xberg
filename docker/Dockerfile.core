@@ -190,5 +190,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # Use tini as PID 1 to properly forward SIGTERM/SIGINT signals
 # This enables graceful shutdown: docker stop → SIGTERM → clean shutdown
-ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["xberg", "serve", "--host", "0.0.0.0", "--port", "8000"]
+# xberg is part of the entrypoint so CLI subcommand overrides (docker run img detect …)
+# still resolve to the binary; CMD only supplies the default serve args.
+ENTRYPOINT ["/usr/bin/tini", "--", "xberg"]
+CMD ["serve", "--host", "0.0.0.0", "--port", "8000"]
