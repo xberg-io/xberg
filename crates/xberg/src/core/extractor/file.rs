@@ -236,6 +236,30 @@ fn hash_extraction_config(config: &ExtractionConfig, mime_type: &str) -> String 
     if let Ok(bytes) = rmp_serde::to_vec(&normalized) {
         hasher.update(&bytes);
     }
+
+    // `#[serde(skip)]` fields are absent from the MessagePack bytes above but DO
+    // change the extraction output, so they must enter the key or the cache
+    // serves stale results across config changes (xberg-io/xberg#1223):
+    //   - source_name drives extension-based language detection for code files.
+    //   - ocr.tessdata_bytes selects the OCR language data (WASM path).
+    hasher.update(b"\x00source_name\x00");
+    if let Some(name) = normalized.source_name.as_deref() {
+        hasher.update(name.as_bytes());
+    }
+    hasher.update(b"\x00tessdata\x00");
+    if let Some(ocr) = normalized.ocr.as_ref()
+        && let Some(tessdata) = ocr.tessdata_bytes.as_ref()
+    {
+        // Deterministic order: sort by language key before folding in.
+        let mut keys: Vec<&String> = tessdata.keys().collect();
+        keys.sort();
+        for key in keys {
+            hasher.update(key.as_bytes());
+            hasher.update(&(tessdata[key].len() as u64).to_le_bytes());
+            hasher.update(&tessdata[key]);
+        }
+    }
+
     let hash = hasher.finalize();
     hex::encode(&hash.as_bytes()[..16])
 }
@@ -276,4 +300,51 @@ pub(in crate::core::extractor) async fn extract_bytes_with_extractor(
     let doc = Box::pin(extractor.extract_content(content, mime_type, config)).await?;
     let result = Box::pin(crate::core::pipeline::run_pipeline(doc, config)).await?;
     Ok(result)
+}
+
+#[cfg(test)]
+mod cache_key_tests {
+    use super::hash_extraction_config;
+    use crate::core::config::ExtractionConfig;
+
+    #[test]
+    fn source_name_changes_the_cache_key() {
+        let mut a = ExtractionConfig::default();
+        a.source_name = Some("snippet.py".to_string());
+        let mut b = ExtractionConfig::default();
+        b.source_name = Some("snippet.rb".to_string());
+        assert_ne!(
+            hash_extraction_config(&a, "text/x-source-code"),
+            hash_extraction_config(&b, "text/x-source-code"),
+            "source_name (serde-skipped) must be part of the cache key"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "ocr")]
+    fn tessdata_bytes_changes_the_cache_key() {
+        use crate::core::config::OcrConfig;
+        use std::collections::HashMap;
+
+        let mut eng = HashMap::new();
+        eng.insert("eng".to_string(), vec![1u8, 2, 3]);
+        let mut deu = HashMap::new();
+        deu.insert("eng".to_string(), vec![9u8, 9, 9]);
+
+        let mut a = ExtractionConfig::default();
+        a.ocr = Some(OcrConfig {
+            tessdata_bytes: Some(eng),
+            ..OcrConfig::default()
+        });
+        let mut b = ExtractionConfig::default();
+        b.ocr = Some(OcrConfig {
+            tessdata_bytes: Some(deu),
+            ..OcrConfig::default()
+        });
+        assert_ne!(
+            hash_extraction_config(&a, "image/png"),
+            hash_extraction_config(&b, "image/png"),
+            "tessdata_bytes (serde-skipped) must be part of the cache key"
+        );
+    }
 }
