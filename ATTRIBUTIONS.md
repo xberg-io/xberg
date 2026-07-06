@@ -385,6 +385,8 @@ Rust-native VLM-OCR backends vendored into `crates/xberg-candle-ocr/`:
 - Generation loop routed through `xberg_candle_ocr::models::glm_ocr::mtp::generate_mrope` (with a new `forward_step_with_position_ids` trait extension per A3) — NOT aha's `common/generate.rs`
 - rustdoc on every `pub` item
 - Dead code blocks dropped (specific examples: aha `modules.rs:214-230, 265-266`)
+- `paddleocr_vl::model::get_rope_index`: vision-block position ids restored to aha's (t, h, w) mrope layout after the vendoring rewrite transposed the h index and dropped the t row (crashed on non-square grids); images always carry a single frame so the t row is constant
+- `hunyuan_ocr::config::HunYuanVLConfig::tie_word_embeddings`: serde default `true` (later released-checkpoint revisions omit the field)
 
 ### License Compatibility
 
