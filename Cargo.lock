@@ -6028,9 +6028,9 @@ dependencies = [
 
 [[package]]
 name = "pdf_oxide"
-version = "0.3.72"
+version = "0.3.73"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b7fe525ccb850888a423bd211c1efd1af704761a7084e83edae1b99d0c7d2b4"
+checksum = "cf6730b3cabd41b9e813c9ab1e536c99e685adc8c06d6755b82b66dcedd49a95"
 dependencies = [
  "aes 0.9.1",
  "base64 0.22.1",

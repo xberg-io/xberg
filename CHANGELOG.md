@@ -44,6 +44,11 @@ The changelog starts fresh at `1.0.0-rc.1`. For the Kreuzberg v1–v4 history, s
   string after it became a list, so the WebAssembly build stopped compiling. It now uses the
   primary language (the in-memory WASI Tesseract handles one language at a time, like the PaddleOCR
   and VLM backends) and warns when more than one is requested.
+- **Vertical-text (tategaki) PDF pages return their text again.** pdf_oxide's reading-order
+  sort panicked on pages whose vertical-mode spans sit closer together than the median span
+  width — scanned pages with vertical OCR layers, typeset tategaki books. The panic guard kept
+  extraction alive, but the affected page came back as a per-page error with its text lost.
+  pdf_oxide 0.3.73 fixes the sort, so those pages now extract normally.
 
 ## [1.0.0-rc.1] - 2026-06-26
 
