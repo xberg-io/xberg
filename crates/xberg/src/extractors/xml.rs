@@ -11,6 +11,38 @@ use crate::types::metadata::Metadata;
 use ahash::AHashMap;
 use async_trait::async_trait;
 
+/// Decode raw XML bytes to a UTF-8 string, honoring the `<?xml encoding=...?>`
+/// declaration when present and falling back to charset detection otherwise.
+/// Strips a leading BOM.
+fn decode_xml_to_utf8(content: &[u8]) -> String {
+    // Read the declared encoding from the prolog (first ~256 bytes) without
+    // decoding — the declaration itself is ASCII.
+    let prolog_len = content.len().min(256);
+    let prolog = String::from_utf8_lossy(&content[..prolog_len]);
+    let declared = prolog
+        .split_once("encoding")
+        .and_then(|(_, rest)| rest.split_once(['"', '\'']))
+        .and_then(|(_, rest)| rest.split(['"', '\'']).next())
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+
+    let decoded = if let Some(label) = declared
+        && let Some(encoding) = encoding_rs::Encoding::for_label(label.as_bytes())
+    {
+        encoding.decode(content).0.into_owned()
+    } else {
+        #[cfg(feature = "quality")]
+        {
+            crate::utils::safe_decode(content, None)
+        }
+        #[cfg(not(feature = "quality"))]
+        {
+            String::from_utf8_lossy(content).into_owned()
+        }
+    };
+    crate::utils::strip_bom(&decoded).to_string()
+}
+
 /// Build an `InternalDocument` from XML content by parsing element hierarchy.
 ///
 /// Maps XML elements to headings (for parent elements with children) and
@@ -28,7 +60,13 @@ fn build_internal_document(content: &[u8], mime_type: &str, budget: &mut Securit
     let mut doc = InternalDocument::new("xml");
     let is_svg = mime_type == "image/svg+xml";
 
-    let mut reader = Reader::from_reader(content);
+    // Decode to UTF-8 up front, honoring the `<?xml encoding=...?>` declaration
+    // and any BOM. quick_xml's byte reader otherwise yields raw bytes that this
+    // function lossily interprets as UTF-8, so ISO-8859-1 / Shift_JIS-declared
+    // XML lost every non-ASCII character to U+FFFD (xberg-io/xberg#1223). After
+    // this, the per-event `from_utf8_lossy` calls below are lossless.
+    let decoded = decode_xml_to_utf8(content);
+    let mut reader = Reader::from_reader(decoded.as_bytes());
     reader.config_mut().trim_text(true);
     reader.config_mut().check_end_names = false;
 

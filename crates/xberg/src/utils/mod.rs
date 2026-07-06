@@ -13,6 +13,15 @@ pub mod quality;
 /// String utilities: mojibake repair, encoding detection, safe truncation.
 pub mod string_utils;
 
+/// Strip a leading Unicode byte-order mark (U+FEFF) if present.
+///
+/// `encoding_rs` removes a BOM when it drives the encoding choice, but detected
+/// / fast-path decodes can leave it in, where it pollutes the first token (e.g.
+/// an Excel-exported UTF-8 CSV's first header cell — xberg-io/xberg#1223).
+pub(crate) fn strip_bom(s: &str) -> &str {
+    s.strip_prefix('\u{FEFF}').unwrap_or(s)
+}
+
 /// JSON helper utilities for safe value traversal and extraction.
 pub mod json_utils;
 /// Markdown post-processing helpers used by extractors that emit Markdown output.

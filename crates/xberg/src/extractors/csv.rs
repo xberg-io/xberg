@@ -276,15 +276,17 @@ fn parse_csv(text: &str, delimiter: char) -> Vec<Vec<String>> {
 /// When the `quality` feature is enabled, uses chardetng for more sophisticated
 /// encoding detection. Without it, tries common encodings in order.
 fn decode_csv_bytes(content: &[u8]) -> String {
-    // Fast path: valid UTF-8.
+    // Fast path: valid UTF-8. Strip a leading BOM so it doesn't ride along into
+    // the first header cell — Excel exports UTF-8 CSV with a BOM by default
+    // (xberg-io/xberg#1223).
     if let Ok(s) = utf8_validation::from_utf8(content) {
-        return s.to_string();
+        return crate::utils::strip_bom(s).to_string();
     }
 
     // Non-UTF-8 content: use encoding detection.
     #[cfg(feature = "quality")]
     {
-        crate::utils::safe_decode(content, None)
+        crate::utils::strip_bom(&crate::utils::safe_decode(content, None)).to_string()
     }
 
     #[cfg(not(feature = "quality"))]
@@ -299,14 +301,18 @@ fn decode_csv_bytes(content: &[u8]) -> String {
 /// selecting the first one that decodes without errors.
 #[cfg(not(feature = "quality"))]
 fn decode_csv_bytes_fallback(content: &[u8]) -> String {
-    // Common encoding labels used in CSV files, especially in East Asia
+    // Multibyte encodings first: they reject invalid byte sequences, so a
+    // no-errors decode is real evidence. windows-1252 / iso-8859-1 map all 256
+    // bytes and therefore *never* report errors, so if they came first they
+    // would shadow gb18030 / big5 and every Chinese CSV would decode as Latin-1
+    // mojibake (xberg-io/xberg#1223).
     let encoding_labels = [
         "shift_jis",    // Japanese Shift-JIS (common for CSV from Japanese systems)
         "windows-31j",  // Windows CP932 (Microsoft's Shift-JIS variant)
-        "windows-1252", // Western European (common default)
-        "iso-8859-1",   // Latin-1 fallback
         "gb18030",      // Simplified Chinese
         "big5",         // Traditional Chinese
+        "windows-1252", // Western European catch-all (decodes any bytes)
+        "iso-8859-1",   // Latin-1 catch-all (decodes any bytes)
     ];
 
     // Try each encoding and use the first one that decodes without errors

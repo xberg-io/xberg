@@ -85,11 +85,23 @@ impl InternalDocumentExtractor for PlainTextExtractor {
         mime_type: &str,
         _config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
-        let text = String::from_utf8_lossy(content).into_owned();
-        let text = text.trim_end_matches('\n').trim_end_matches('\r').to_string();
+        // Detect the charset instead of assuming UTF-8: a Latin-1 / Shift-JIS /
+        // UTF-16 text file decoded lossily is a wall of U+FFFD, while the same
+        // bytes as .csv decode correctly (xberg-io/xberg#1223). BOM-strip so a
+        // leading U+FEFF doesn't ride along into the content.
+        #[cfg(feature = "quality")]
+        let decoded = crate::utils::safe_decode(content, None);
+        #[cfg(not(feature = "quality"))]
+        let decoded = String::from_utf8_lossy(content).into_owned();
+        let text = crate::utils::strip_bom(&decoded)
+            .trim_end_matches('\n')
+            .trim_end_matches('\r')
+            .to_string();
         let line_count = text.lines().count();
         let word_count = text.split_whitespace().count();
-        let character_count = text.len();
+        // Character count, not byte count — multibyte scripts overstated ~3x
+        // otherwise (xberg-io/xberg#1223).
+        let character_count = text.chars().count();
 
         let mut doc = Self::build_internal_document(&text);
 
