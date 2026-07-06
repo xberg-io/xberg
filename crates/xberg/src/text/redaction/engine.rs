@@ -168,6 +168,13 @@ pub async fn redact(result: &mut ExtractedDocument, config: &RedactionConfig) ->
         }
     }
 
+    // 11b. Walk every remaining text-bearing field. Redaction previously
+    // rewrote only content/formatted_content/chunks/entities/summary/translation
+    // and left ~12 serialized fields carrying the original PII while the report
+    // claimed success (xberg-io/xberg#1223). Every field a consumer can read
+    // must be masked, or the report is a lie.
+    redact_secondary_text_fields(result, &categories_vec, config, &custom_regexes, &mut counter);
+
     // 12. Populate redaction_report.
     let total = findings.len() as u32;
     result.redaction_report = Some(RedactionReport {
@@ -347,6 +354,175 @@ fn redact_string(
     apply_replacements_reverse(text, &matches, &findings)
 }
 
+/// Redact every string in a JSON value tree in place (keys are left alone;
+/// only values are masked). Used for `structured_output` and
+/// `code_intelligence`, which hold LLM-distilled / derived text.
+fn redact_json_value(
+    value: &mut serde_json::Value,
+    categories: &[PiiCategory],
+    config: &RedactionConfig,
+    custom_regexes: &[(String, regex::Regex)],
+    counter: &mut TokenCounter,
+) {
+    match value {
+        serde_json::Value::String(s) => {
+            *s = redact_string(s, categories, config, custom_regexes, counter);
+        }
+        serde_json::Value::Array(items) => {
+            for item in items.iter_mut() {
+                redact_json_value(item, categories, config, custom_regexes, counter);
+            }
+        }
+        serde_json::Value::Object(map) => {
+            for v in map.values_mut() {
+                redact_json_value(v, categories, config, custom_regexes, counter);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Mask PII in every text-bearing output field beyond the primary
+/// content/chunk/entity set. Recurses into image OCR sub-documents.
+///
+/// This is an allowlist of *fields*, but it is meant to be exhaustive over the
+/// text surfaces of [`ExtractedDocument`]; when a new text field is added there,
+/// it must be added here too (see the field-coverage test in this module).
+fn redact_secondary_text_fields(
+    doc: &mut ExtractedDocument,
+    categories: &[PiiCategory],
+    config: &RedactionConfig,
+    custom_regexes: &[(String, regex::Regex)],
+    counter: &mut TokenCounter,
+) {
+    macro_rules! rd {
+        ($s:expr) => {{
+            let redacted = redact_string(&$s, categories, config, custom_regexes, counter);
+            $s = redacted;
+        }};
+    }
+    macro_rules! rd_opt {
+        ($o:expr) => {
+            if let Some(s) = $o.as_mut() {
+                rd!(*s);
+            }
+        };
+    }
+
+    // Top-level tables.
+    for table in doc.tables.iter_mut() {
+        for row in table.cells.iter_mut() {
+            for cell in row.iter_mut() {
+                rd!(*cell);
+            }
+        }
+        rd!(table.markdown);
+    }
+
+    // Per-page content and per-page tables (Arc-shared, so make_mut to write).
+    if let Some(pages) = doc.pages.as_mut() {
+        for page in pages.iter_mut() {
+            rd!(page.content);
+            for table in page.tables.iter_mut() {
+                let table = std::sync::Arc::make_mut(table);
+                for row in table.cells.iter_mut() {
+                    for cell in row.iter_mut() {
+                        rd!(*cell);
+                    }
+                }
+                rd!(table.markdown);
+            }
+        }
+    }
+
+    // Element stream.
+    if let Some(elements) = doc.elements.as_mut() {
+        for el in elements.iter_mut() {
+            rd!(el.text);
+        }
+    }
+
+    // OCR elements.
+    if let Some(ocr_elements) = doc.ocr_elements.as_mut() {
+        for el in ocr_elements.iter_mut() {
+            rd!(el.text);
+        }
+    }
+
+    // Djot plain-text projection.
+    if let Some(djot) = doc.djot_content.as_mut() {
+        rd!(djot.plain_text);
+    }
+
+    // Images: captions, descriptions, and nested OCR sub-documents.
+    if let Some(images) = doc.images.as_mut() {
+        for image in images.iter_mut() {
+            rd_opt!(image.caption);
+            rd_opt!(image.description);
+            if let Some(ocr_doc) = image.ocr_result.as_mut() {
+                rd!(ocr_doc.content);
+                redact_secondary_text_fields(ocr_doc, categories, config, custom_regexes, counter);
+            }
+        }
+    }
+
+    // Hyperlinks and their labels — Email is an always-on category, so the very
+    // addresses redaction claims to remove were being returned here verbatim.
+    if let Some(uris) = doc.uris.as_mut() {
+        for uri in uris.iter_mut() {
+            rd!(uri.url);
+            rd_opt!(uri.label);
+        }
+    }
+
+    // PDF annotation / comment text.
+    if let Some(annotations) = doc.annotations.as_mut() {
+        for annotation in annotations.iter_mut() {
+            rd_opt!(annotation.content);
+        }
+    }
+
+    // Interactive form field values — the canonical PII surface on filled
+    // tax / medical / loan forms.
+    for field in doc.form_fields.iter_mut() {
+        rd!(field.name);
+        rd_opt!(field.value);
+        rd_opt!(field.default_value);
+        rd_opt!(field.tooltip);
+    }
+
+    // Derived keyword text.
+    #[cfg(any(feature = "keywords-yake", feature = "keywords-rake"))]
+    if let Some(keywords) = doc.extracted_keywords.as_mut() {
+        for kw in keywords.iter_mut() {
+            rd!(kw.text);
+        }
+    }
+
+    // Document metadata.
+    rd_opt!(doc.metadata.title);
+    rd_opt!(doc.metadata.subject);
+    if let Some(authors) = doc.metadata.authors.as_mut() {
+        for author in authors.iter_mut() {
+            rd!(*author);
+        }
+    }
+    if let Some(keywords) = doc.metadata.keywords.as_mut() {
+        for kw in keywords.iter_mut() {
+            rd!(*kw);
+        }
+    }
+
+    // LLM-distilled structured output and code-intelligence JSON.
+    if let Some(structured) = doc.structured_output.as_mut() {
+        redact_json_value(structured, categories, config, custom_regexes, counter);
+    }
+    #[cfg(feature = "tree-sitter")]
+    if let Some(code) = doc.code_intelligence.as_mut() {
+        redact_json_value(code, categories, config, custom_regexes, counter);
+    }
+}
+
 /// Convert NER-detected entities into pattern matches so the same offset
 /// machinery can rewrite them. Only Person / Organization / Location are
 /// considered redactable — Email / Phone / Url etc. flow through the pattern
@@ -499,5 +675,86 @@ mod tests {
         ];
         let out = apply_replacements_reverse(text, &matches, &findings);
         assert_eq!(out, "Email me at [REDACTED] or [REDACTED].");
+    }
+
+    /// Regression for xberg-io/xberg#1223: redaction must mask PII on every
+    /// structured surface, not just `content`. Builds a document that carries
+    /// the same email in a table cell, a page, an element, a URI, a form field,
+    /// metadata, and structured_output, then asserts none survive.
+    #[tokio::test]
+    async fn redacts_every_text_bearing_field() {
+        use crate::types::form_field::PdfFormField;
+        use crate::types::uri::{ExtractedUri, UriKind};
+
+        let email = "alice@example.com";
+        let mut doc = ExtractedDocument::default();
+        doc.content = format!("Contact {email} for details.");
+        doc.tables = vec![crate::types::tables::Table {
+            cells: vec![vec!["Name".into(), email.into()]],
+            markdown: format!("| Name | {email} |"),
+            page_number: 1,
+            bounding_box: None,
+        }];
+        doc.pages = Some(vec![crate::types::PageContent {
+            page_number: 1,
+            content: format!("Page mentions {email}."),
+            tables: Vec::new(),
+            image_indices: Vec::new(),
+            hierarchy: None,
+            is_blank: None,
+            layout_regions: None,
+            speaker_notes: None,
+            section_name: None,
+            sheet_name: None,
+        }]);
+        doc.uris = Some(vec![ExtractedUri {
+            url: format!("mailto:{email}"),
+            label: Some(email.into()),
+            page: None,
+            kind: UriKind::Email,
+        }]);
+        doc.form_fields = vec![PdfFormField {
+            name: "applicant_email".into(),
+            full_name: "form.applicant_email".into(),
+            field_type: crate::types::form_field::FormFieldType::Text,
+            value: Some(email.into()),
+            default_value: None,
+            flags: 0,
+            page: None,
+            bbox: None,
+            max_length: None,
+            tooltip: None,
+        }];
+        doc.metadata.subject = Some(format!("Re: {email}"));
+        doc.structured_output = Some(serde_json::json!({ "email": email }));
+
+        let config = RedactionConfig::default();
+        redact(&mut doc, &config).await.expect("redaction must succeed");
+
+        // Everything the extractor returns must be clean.
+        let mut leaks: Vec<&str> = Vec::new();
+        if doc.content.contains(email) {
+            leaks.push("content");
+        }
+        if doc.tables[0].cells.iter().flatten().any(|c| c.contains(email)) || doc.tables[0].markdown.contains(email) {
+            leaks.push("tables");
+        }
+        if doc.pages.as_ref().unwrap()[0].content.contains(email) {
+            leaks.push("pages");
+        }
+        let uri = &doc.uris.as_ref().unwrap()[0];
+        if uri.url.contains(email) || uri.label.as_deref().unwrap_or("").contains(email) {
+            leaks.push("uris");
+        }
+        if doc.form_fields[0].value.as_deref().unwrap_or("").contains(email) {
+            leaks.push("form_fields");
+        }
+        if doc.metadata.subject.as_deref().unwrap_or("").contains(email) {
+            leaks.push("metadata");
+        }
+        if doc.structured_output.as_ref().unwrap().to_string().contains(email) {
+            leaks.push("structured_output");
+        }
+        assert!(leaks.is_empty(), "PII leaked on fields: {leaks:?}");
     }
 }
