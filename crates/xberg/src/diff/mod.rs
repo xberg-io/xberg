@@ -167,6 +167,8 @@ fn apply_truncation(text: &str, limit: Option<usize>) -> Option<String> {
 fn diff_tables(a_tables: &[Table], b_tables: &[Table]) -> (Vec<Table>, Vec<Table>, Vec<TableDiff>) {
     let min_len = a_tables.len().min(b_tables.len());
     let mut tables_changed = Vec::new();
+    let mut tables_removed = Vec::new();
+    let mut tables_added = Vec::new();
 
     for idx in 0..min_len {
         let a_t = &a_tables[idx];
@@ -182,30 +184,23 @@ fn diff_tables(a_tables: &[Table], b_tables: &[Table]) -> (Vec<Table>, Vec<Table
                 });
             }
         } else {
-            // Different shape — treat the pair as remove + add.
-            // The "removed" side is reported in tables_removed and "added" in tables_added.
-            // We handle this by falling through to the asymmetric slice handling below.
-            // But we need to signal that these shouldn't be counted as "paired" — so we
-            // emit them as add + remove even though they share the same index.
-            tables_changed.push(TableDiff {
-                from_index: idx,
-                to_index: idx,
-                // No cell-level changes: shapes differ; report as a structural replacement.
-                cell_changes: vec![],
-            });
+            // Different shape — a structural replacement. Report the old table as
+            // removed and the new one as added so the diff carries what actually
+            // changed. The previous code emitted an empty TableDiff (no cell
+            // changes, and the tables never surfaced in added/removed), so a
+            // table that gained a row or column produced an information-free
+            // "changed" entry (xberg-io/xberg#1223).
+            tables_removed.push(a_t.clone());
+            tables_added.push(b_t.clone());
         }
     }
 
-    let tables_removed: Vec<Table> = if a_tables.len() > b_tables.len() {
-        a_tables[min_len..].to_vec()
-    } else {
-        vec![]
-    };
-    let tables_added: Vec<Table> = if b_tables.len() > a_tables.len() {
-        b_tables[min_len..].to_vec()
-    } else {
-        vec![]
-    };
+    // Trailing tables present on only one side.
+    if a_tables.len() > b_tables.len() {
+        tables_removed.extend(a_tables[min_len..].iter().cloned());
+    } else if b_tables.len() > a_tables.len() {
+        tables_added.extend(b_tables[min_len..].iter().cloned());
+    }
 
     (tables_added, tables_removed, tables_changed)
 }
@@ -467,6 +462,26 @@ mod tests {
     }
 
     // ── table diff ───────────────────────────────────────────────────────────
+
+    /// Regression for #1223: a table that changes shape (gains a column) at the
+    /// same index must be reported as removed + added, not as an information-free
+    /// empty `tables_changed` entry.
+    #[test]
+    fn shape_change_reports_removed_and_added_not_empty_change() {
+        let a = result_with_tables(vec![simple_table(vec![vec!["A", "B"], vec!["1", "2"]])]);
+        let b = result_with_tables(vec![simple_table(vec![vec!["A", "B", "C"], vec!["1", "2", "3"]])]);
+        let diff = compare(&a, &b, &DiffOptions::default());
+
+        assert!(
+            diff.tables_changed.is_empty(),
+            "a shape change must not produce an empty 'changed' entry; got: {:?}",
+            diff.tables_changed
+        );
+        assert_eq!(diff.tables_removed.len(), 1, "old-shape table must be reported removed");
+        assert_eq!(diff.tables_added.len(), 1, "new-shape table must be reported added");
+        assert_eq!(diff.tables_removed[0].cells[0].len(), 2);
+        assert_eq!(diff.tables_added[0].cells[0].len(), 3);
+    }
 
     #[test]
     fn should_detect_single_cell_change_in_same_table() {
