@@ -141,13 +141,14 @@ fn process_node(
                 }
             }
             crate::types::NodeContent::Table { grid } => {
-                // Convert TableGrid to Vec<Vec<String>> for InternalDocumentBuilder
-                let mut rows = vec![vec![String::new(); grid.cols as usize]; grid.rows as usize];
-                for cell in &grid.cells {
-                    if (cell.row as usize) < rows.len() && (cell.col as usize) < rows[0].len() {
-                        rows[cell.row as usize][cell.col as usize] = cell.content.clone();
-                    }
-                }
+                // Span-aware flatten so merged cells keep column alignment
+                // (xberg-io/xberg#1223).
+                let rows = crate::extraction::grid_flatten::flatten_positioned_cells(
+                    grid.rows as usize,
+                    grid.cells
+                        .iter()
+                        .map(|c| (c.row, c.row_span, c.col_span, c.content.clone())),
+                );
                 builder.push_table_from_cells(&rows, None, None);
             }
             crate::types::NodeContent::Code { text, language } => {

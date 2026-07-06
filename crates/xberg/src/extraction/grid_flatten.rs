@@ -68,6 +68,24 @@ pub(crate) fn flatten_spanned_rows(rows: &[Vec<SpanCell>]) -> Vec<Vec<String>> {
     grid
 }
 
+/// Flatten a stream of span-carrying cells whose per-row order is known but
+/// whose column index is naive (does not reserve rowspan columns) — the shape
+/// `html_to_markdown_rs` grids arrive in. Groups by row, then re-derives true
+/// positions with [`flatten_spanned_rows`].
+///
+/// `cells` yields `(row, row_span, col_span, content)` in document order.
+pub(crate) fn flatten_positioned_cells(
+    num_rows: usize,
+    cells: impl Iterator<Item = (u32, u32, u32, String)>,
+) -> Vec<Vec<String>> {
+    let mut rows: Vec<Vec<SpanCell>> = (0..num_rows.max(1)).map(|_| Vec::new()).collect();
+    for (row, row_span, col_span, content) in cells {
+        let r = (row as usize).min(rows.len().saturating_sub(1));
+        rows[r].push(SpanCell::new(content, row_span, col_span));
+    }
+    flatten_spanned_rows(&rows)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

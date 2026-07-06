@@ -185,13 +185,14 @@ fn extract_tables_from_document(result: &html_to_markdown_rs::types::ConversionR
         .iter()
         .filter_map(|node| {
             if let html_to_markdown_rs::types::NodeContent::Table { ref grid } = node.content {
-                // Build markdown from the grid
-                let mut cells_2d: Vec<Vec<String>> = vec![vec![String::new(); grid.cols as usize]; grid.rows as usize];
-                for cell in &grid.cells {
-                    if (cell.row as usize) < cells_2d.len() && (cell.col as usize) < cells_2d[0].len() {
-                        cells_2d[cell.row as usize][cell.col as usize] = cell.content.clone();
-                    }
-                }
+                // Build markdown from the grid. The crate's `col` does not reserve
+                // rowspan columns, so re-derive positions (xberg-io/xberg#1223).
+                let cells_2d = crate::extraction::grid_flatten::flatten_positioned_cells(
+                    grid.rows as usize,
+                    grid.cells
+                        .iter()
+                        .map(|c| (c.row, c.row_span, c.col_span, c.content.clone())),
+                );
                 let markdown = cells_to_markdown(&cells_2d);
                 Some(TableData {
                     grid: grid.clone(),
