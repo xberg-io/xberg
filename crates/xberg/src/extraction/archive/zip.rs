@@ -117,17 +117,24 @@ pub(crate) fn extract_zip_text_content(bytes: &[u8], limits: &SecurityLimits) ->
 
         if !file.is_dir() && TEXT_EXTENSIONS.iter().any(|ext| path.to_lowercase().ends_with(ext)) {
             let estimated_size = (file.size() as usize).min(10 * 1024 * 1024);
-            let mut content = String::with_capacity(estimated_size);
-            if file.read_to_string(&mut content).is_ok() {
-                total_content_size = total_content_size.saturating_add(content.len());
-                if total_content_size > limits.max_content_size {
-                    return Err(XbergError::validation(format!(
-                        "ZIP archive text content exceeds limit: {} bytes (max: {} bytes)",
-                        total_content_size, limits.max_content_size
-                    )));
-                }
-                contents.insert(path, content);
+            // Read bytes then decode, so a non-UTF-8 member (legacy-encoded
+            // .txt/.csv) is recovered instead of silently dropped
+            // (xberg-io/xberg#1223). read_to_string would have failed and the
+            // member would have vanished with no signal.
+            let mut raw = Vec::with_capacity(estimated_size);
+            if let Err(e) = file.read_to_end(&mut raw) {
+                tracing::warn!(member = %path, error = %e, "skipping ZIP member: read failed");
+                continue;
             }
+            let content = super::decode_archive_text(&raw, &path);
+            total_content_size = total_content_size.saturating_add(content.len());
+            if total_content_size > limits.max_content_size {
+                return Err(XbergError::validation(format!(
+                    "ZIP archive text content exceeds limit: {} bytes (max: {} bytes)",
+                    total_content_size, limits.max_content_size
+                )));
+            }
+            contents.insert(path, content);
         }
     }
 

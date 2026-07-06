@@ -134,17 +134,22 @@ pub(crate) fn extract_tar_text_content(bytes: &[u8], limits: &SecurityLimits) ->
         if !entry.header().entry_type().is_dir() && TEXT_EXTENSIONS.iter().any(|ext| path.to_lowercase().ends_with(ext))
         {
             let estimated_size = (entry.size().min(10 * 1024 * 1024)) as usize;
-            let mut content = String::with_capacity(estimated_size);
-            if entry.read_to_string(&mut content).is_ok() {
-                total_content_size = total_content_size.saturating_add(content.len());
-                if total_content_size > limits.max_content_size {
-                    return Err(XbergError::validation(format!(
-                        "TAR archive text content exceeds limit: {} bytes (max: {} bytes)",
-                        total_content_size, limits.max_content_size
-                    )));
-                }
-                contents.insert(path, content);
+            // Read bytes then decode so a non-UTF-8 member is recovered rather
+            // than silently dropped (xberg-io/xberg#1223).
+            let mut raw = Vec::with_capacity(estimated_size);
+            if let Err(e) = entry.read_to_end(&mut raw) {
+                tracing::warn!(member = %path, error = %e, "skipping TAR member: read failed");
+                continue;
             }
+            let content = super::decode_archive_text(&raw, &path);
+            total_content_size = total_content_size.saturating_add(content.len());
+            if total_content_size > limits.max_content_size {
+                return Err(XbergError::validation(format!(
+                    "TAR archive text content exceeds limit: {} bytes (max: {} bytes)",
+                    total_content_size, limits.max_content_size
+                )));
+            }
+            contents.insert(path, content);
         }
     }
 

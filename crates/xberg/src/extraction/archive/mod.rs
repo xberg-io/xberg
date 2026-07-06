@@ -53,6 +53,26 @@ pub(crate) const TEXT_EXTENSIONS: &[&str] = &[
     ".txt", ".md", ".json", ".xml", ".html", ".csv", ".log", ".yaml", ".toml",
 ];
 
+/// Decode an archive text member's bytes to a string, detecting the charset
+/// instead of dropping non-UTF-8 members. Warns when the bytes weren't clean
+/// UTF-8 so a mojibake member is at least visible (xberg-io/xberg#1223).
+pub(crate) fn decode_archive_text(bytes: &[u8], member: &str) -> String {
+    match std::str::from_utf8(bytes) {
+        Ok(s) => crate::utils::strip_bom(s).to_string(),
+        Err(_) => {
+            tracing::warn!(member = %member, "archive member is not valid UTF-8; decoding with charset detection");
+            #[cfg(feature = "quality")]
+            {
+                crate::utils::strip_bom(&crate::utils::safe_decode(bytes, None)).to_string()
+            }
+            #[cfg(not(feature = "quality"))]
+            {
+                crate::utils::strip_bom(&String::from_utf8_lossy(bytes)).to_string()
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -144,6 +164,29 @@ mod tests {
         assert_eq!(contents.len(), 2);
         assert_eq!(contents.get("test.txt").unwrap(), "Hello, World!");
         assert_eq!(contents.get("readme.md").unwrap(), "# README");
+    }
+
+    /// Regression for #1223: a non-UTF-8 (Latin-1) text member must be recovered,
+    /// not silently dropped by a failed read_to_string.
+    #[test]
+    fn non_utf8_zip_member_is_recovered_not_dropped() {
+        let mut cursor = Cursor::new(Vec::new());
+        {
+            let mut zip = ZipWriter::new(&mut cursor);
+            let options = FileOptions::<'_, ()>::default();
+            zip.start_file("latin1.txt", options).unwrap();
+            // "café" in ISO-8859-1 (0xe9 is é) — invalid UTF-8.
+            zip.write_all(b"caf\xe9").unwrap();
+            zip.finish().unwrap();
+        }
+        let bytes = cursor.into_inner();
+        let contents = extract_zip_text_content(&bytes, &default_limits()).unwrap();
+        assert!(
+            contents.contains_key("latin1.txt"),
+            "non-UTF-8 member must not be dropped"
+        );
+        let text = contents.get("latin1.txt").unwrap();
+        assert!(!text.is_empty(), "recovered content must be non-empty: {text:?}");
     }
 
     #[test]
