@@ -38,6 +38,13 @@ const PRIMITIVE_GEOMETRY_FLOOR: f32 = 5.0;
 
 /// Expand a stroke-width-encoded rule's bounding box to its rendered geometry.
 ///
+/// INTERIM WORKAROUND — remove once yfedoseev/pdf_oxide#812 lands (PR #814).
+/// This reimplements part of pdf_oxide's table pipeline to inject a bbox
+/// expansion; once pdf_oxide's path bounding boxes account for stroke width,
+/// `extract_tables_with_config` detects these rules natively and this module
+/// reverts to calling it directly. Kept on a dedicated branch, not merged,
+/// precisely because it duplicates upstream internals.
+///
 /// Some print-era PDF generators draw vertical table rules as a ~1pt
 /// horizontal segment stroked with a line width equal to the table height
 /// (`430 w` + `0 0 m 1 0 l S` renders as a 1×430pt vertical bar). pdf_oxide's
