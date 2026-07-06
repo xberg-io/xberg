@@ -22,7 +22,7 @@ mcp-server/ (existing package, retargeted)
   src/tools/*           — retargeted: call engine.* instead of native @xberg-io/xberg
 ```
 
-- Node hosts the wasm engine directly (V8 has JSPI); no browser, no COOP/COEP needed.
+- Node hosts the wasm engine directly via standard async `wasm-bindgen` (`JsFuture`) — no JSPI dependency (see the Mechanism Correction below), no browser, no COOP/COEP needed.
 - C's Node variants: `onnxruntime-node` for embedder/NER/OCR, wa-sqlite or (optionally) native SQLite for the store, `~/.cache/xberg` for model cache. **Same C interfaces as the browser**, different backend selection.
 
 ## Migration of the 13 tool groups
