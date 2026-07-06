@@ -82,7 +82,12 @@ fn detect_multiple_languages(text: &str, config: &LanguageDetectionConfig) -> Re
     }
 
     let mut lang_counts = ahash::AHashMap::new();
-    let threshold = config.min_confidence.min(0.35);
+    // Honor the caller's configured threshold. Per-chunk confidence on 200-char
+    // windows runs lower than whole-document confidence, so a high threshold may
+    // yield no multi-language hits — in which case we fall back to single-language
+    // detection below. Previously the threshold was silently capped at 0.35,
+    // admitting low-confidence chunks the caller had asked to exclude (#1223).
+    let threshold = config.min_confidence;
 
     for chunk in &chunk_strings {
         if let Some(info) = detect(chunk)
@@ -97,7 +102,13 @@ fn detect_multiple_languages(text: &str, config: &LanguageDetectionConfig) -> Re
     }
 
     let mut lang_vec: Vec<(Lang, usize)> = lang_counts.into_iter().collect();
-    lang_vec.sort_by_key(|b| std::cmp::Reverse(b.1));
+    // Sort by count descending, then by ISO code ascending so equal-frequency
+    // languages have a stable order (HashMap iteration order is nondeterministic,
+    // which made detected_languages[0] flip between runs — #1223).
+    lang_vec.sort_by(|a, b| {
+        b.1.cmp(&a.1)
+            .then_with(|| lang_to_iso639_3(a.0).cmp(&lang_to_iso639_3(b.0)))
+    });
 
     let languages: Vec<String> = lang_vec.iter().map(|(lang, _)| lang_to_iso639_3(*lang)).collect();
 
@@ -358,6 +369,64 @@ mod tests {
                 || langs.contains(&"spa".to_string())
                 || langs.contains(&"fra".to_string());
             assert!(has_expected, "Should detect at least one of the languages in the text");
+        }
+    }
+
+    /// Regression for #1223: raising `min_confidence` in multi-language mode must
+    /// only ever remove languages, never add them. The old code capped the
+    /// threshold at 0.35, so a caller raising it above 0.35 saw no effect; the
+    /// fix honors the configured value, making the filter monotonic. (A confidence
+    /// value cannot be asserted exactly — whatlang scores are input-dependent — so
+    /// this checks the invariant rather than a specific count.)
+    #[test]
+    fn test_confidence_threshold_is_honored_and_monotonic() {
+        let text = format!(
+            "{}{}{}",
+            "Hello world! This is English text. The quick brown fox jumps over the lazy dog. ".repeat(6),
+            "Hola mundo! Este es texto en español. El rápido zorro marrón salta sobre el perro perezoso. ".repeat(6),
+            "Bonjour le monde! Ceci est un texte français. Le renard brun rapide saute par-dessus le chien. ".repeat(6)
+        );
+        let cfg = |c: f64| LanguageDetectionConfig {
+            enabled: true,
+            min_confidence: c,
+            detect_multiple: true,
+        };
+        let low: std::collections::HashSet<String> = detect_languages(&text, &cfg(0.30))
+            .unwrap()
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
+        let high: std::collections::HashSet<String> = detect_languages(&text, &cfg(0.95))
+            .unwrap()
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
+        assert!(
+            high.is_subset(&low),
+            "raising the threshold must not add languages: low={low:?} high={high:?}"
+        );
+    }
+
+    /// Equal-frequency languages must come back in a stable order across runs.
+    #[test]
+    fn test_multiple_languages_deterministic_order() {
+        let text = format!(
+            "{}{}",
+            "Hello world! This is English text. The quick brown fox jumps over the lazy dog. ".repeat(8),
+            "Hola mundo! Este es texto en español. El rápido zorro marrón salta sobre el perro perezoso. ".repeat(8)
+        );
+        let config = LanguageDetectionConfig {
+            enabled: true,
+            min_confidence: 0.3,
+            detect_multiple: true,
+        };
+        let first = detect_languages(&text, &config).unwrap();
+        for _ in 0..8 {
+            assert_eq!(
+                detect_languages(&text, &config).unwrap(),
+                first,
+                "order must be stable across runs"
+            );
         }
     }
 
