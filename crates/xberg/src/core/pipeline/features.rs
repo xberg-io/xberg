@@ -346,21 +346,34 @@ pub(super) fn execute_token_reduction(result: &mut ExtractedDocument, config: &E
                 ..Default::default()
             };
 
-            let lang_hint: Option<&str> = result
+            let lang_owned = result
                 .detected_languages
                 .as_deref()
-                .and_then(|langs| langs.first().map(|s| s.as_str()));
+                .and_then(|langs| langs.first().cloned());
+            let lang_hint: Option<&str> = lang_owned.as_deref();
+
+            let mut warnings: Vec<String> = Vec::new();
 
             match crate::text::token_reduction::reduce_tokens(&result.content, &impl_config, lang_hint) {
-                Ok(reduced) => {
-                    result.content = reduced;
+                Ok(reduced) => result.content = reduced,
+                Err(e) => warnings.push(e.to_string()),
+            }
+            // For non-plain output, `apply_output_format` later replaces `content`
+            // with `formatted_content`, which would discard the reduction above.
+            // Reduce it too so token reduction actually takes effect for
+            // Markdown/Djot/HTML output (xberg-io/xberg#1223).
+            if let Some(formatted) = result.formatted_content.as_deref() {
+                match crate::text::token_reduction::reduce_tokens(formatted, &impl_config, lang_hint) {
+                    Ok(reduced) => result.formatted_content = Some(reduced),
+                    Err(e) => warnings.push(e.to_string()),
                 }
-                Err(e) => {
-                    result.processing_warnings.push(ProcessingWarning {
-                        source: Cow::Borrowed("token_reduction"),
-                        message: Cow::Owned(e.to_string()),
-                    });
-                }
+            }
+
+            for message in warnings {
+                result.processing_warnings.push(ProcessingWarning {
+                    source: Cow::Borrowed("token_reduction"),
+                    message: Cow::Owned(message),
+                });
             }
         }
     }
