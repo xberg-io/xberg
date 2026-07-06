@@ -15,6 +15,14 @@ The changelog starts fresh at `1.0.0-rc.1`. For the Kreuzberg v1–v4 history, s
 
 ### Added
 
+- **EU/GDPR structured PII detection.** `ingest_folder`'s new opt-in
+  `eu_patterns` flag scans for checksum-validated EU national IDs (FR INSEE,
+  ES DNI/NIE, IT Codice Fiscale, PL PESEL, NL BSN, BE Registre National),
+  FR SIRET/SIREN, EU VAT numbers, EU license plates, and GDPR Art. 9
+  special-category keywords (health, biometric, genetic, political,
+  religious, union, criminal, sexual orientation, ethnic origin), plus a
+  k-anonymity risk report via `buildPiiReport()`. Default is unchanged
+  (`eu_patterns: false`) for existing callers.
 - **Durable rehydration-map storage.** `POST /v1/process` (with
   `operations.redact.rehydrate=true`) and `POST
   /v1/documents/{id}/rehydrate` now persist encrypted PII rehydration maps

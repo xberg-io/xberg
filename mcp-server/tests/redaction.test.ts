@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { detectPii, groupByCategory } from "../src/redaction/detect.js";
+import { detectPii, groupByCategory, detectPiiEu, dedupOverlapping, buildPiiReport } from "../src/redaction/detect.js";
 import { applyRedaction } from "../src/redaction/redact.js";
 
 describe("detectPii", () => {
@@ -106,3 +106,111 @@ describe("applyRedaction", () => {
   });
 });
 
+describe("dedupOverlapping", () => {
+  it("keeps the longest span when two findings overlap", () => {
+    const findings = [
+      { token: "[A_1]", category: "A", original: "John", start: 0, end: 4, confidence: 0.5 },
+      { token: "[B_1]", category: "B", original: "John Smith", start: 0, end: 10, confidence: 0.6 },
+    ];
+    const result = dedupOverlapping(findings);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.category).toBe("B");
+  });
+
+  it("keeps non-overlapping findings", () => {
+    const findings = [
+      { token: "[A_1]", category: "A", original: "foo", start: 0, end: 3, confidence: 0.5 },
+      { token: "[B_1]", category: "B", original: "bar", start: 5, end: 8, confidence: 0.5 },
+    ];
+    expect(dedupOverlapping(findings)).toHaveLength(2);
+  });
+});
+
+describe("detectPiiEu", () => {
+  it("includes both generic and EU findings", () => {
+    const result = detectPiiEu("Email: bob@example.com. He was diagnosed with cancer.");
+    expect(result.some((f) => f.category === "EMAIL")).toBe(true);
+    expect(result.some((f) => f.category === "SPECIAL_CATEGORY_HEALTH")).toBe(true);
+  });
+
+  it("does not change detectPii's own output", () => {
+    // detectPii() itself must remain unaffected by this addition.
+    const before = detectPii("bob@example.com").filter((f) => f.category === "EMAIL");
+    expect(before).toHaveLength(1);
+  });
+
+  it("respects filterCategories across both scans", () => {
+    const result = detectPiiEu("Email: bob@example.com. He was diagnosed with cancer.", ["EMAIL"]);
+    expect(result.some((f) => f.category === "EMAIL")).toBe(true);
+    expect(result.some((f) => f.category === "SPECIAL_CATEGORY_HEALTH")).toBe(false);
+  });
+});
+
+describe("buildPiiReport", () => {
+  it("counts findings by pii-report category", () => {
+    const findings = [
+      { token: "[NAME_1]", category: "NAME", original: "John", start: 0, end: 4, confidence: 0.6 },
+      {
+        token: "[ID_NUMBER_1]",
+        category: "SSN",
+        original: "123-45-6789",
+        start: 10,
+        end: 21,
+        confidence: 0.9,
+      },
+    ];
+    const report = buildPiiReport(findings);
+    expect(report.personCount).toBe(1);
+    expect(report.idNumberCount).toBe(1);
+    expect(report.specialCategoryCount).toBe(0);
+    expect(report.kAnonymityRisk).toBe("CRITICAL (direct identifiers or special-category data present)");
+  });
+
+  it("reports LOW risk when nothing sensitive is present", () => {
+    const report = buildPiiReport([]);
+    expect(report.specialCategoryCount).toBe(0);
+    expect(report.kAnonymityRisk).toBe("LOW");
+  });
+
+  it("counts GDPR Art. 9 special-category findings and escalates risk to CRITICAL", () => {
+    const findings = [
+      {
+        token: "[SPECIAL_CATEGORY_HEALTH_1]",
+        category: "SPECIAL_CATEGORY_HEALTH",
+        original: "diagnosed with",
+        start: 0,
+        end: 14,
+        confidence: 0.97,
+      },
+      { token: "[NAME_1]", category: "NAME", original: "Alice", start: 20, end: 25, confidence: 0.6 },
+    ];
+    const report = buildPiiReport(findings);
+    expect(report.specialCategoryCount).toBe(1);
+    expect(report.idNumberCount).toBe(0);
+    expect(report.kAnonymityRisk).toBe("CRITICAL (direct identifiers or special-category data present)");
+  });
+
+  it("reports HIGH risk for a quasi-identifier combination", () => {
+    const makeName = (i: number) => ({
+      token: `[NAME_${i}]`,
+      category: "NAME",
+      original: `Person${i}`,
+      start: i * 10,
+      end: i * 10 + 8,
+      confidence: 0.6,
+    });
+    const findings = [
+      ...[1, 2, 3, 4, 5, 6].map(makeName),
+      { token: "[DATE_1]", category: "DATE", original: "1990-01-01", start: 100, end: 110, confidence: 0.7 },
+      {
+        token: "[LOCATION_1]",
+        category: "LOCATION",
+        original: "Springfield",
+        start: 120,
+        end: 131,
+        confidence: 0.7,
+      },
+    ];
+    expect(buildPiiReport(findings).kAnonymityRisk).toBe("HIGH (quasi-identifier combination)");
+  });
+});

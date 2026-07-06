@@ -1,3 +1,5 @@
+import { scanEuPatterns } from "./eu-patterns.js";
+
 export interface PiiFinding {
   token: string;
   category: string;
@@ -5,6 +7,17 @@ export interface PiiFinding {
   start: number;
   end: number;
   confidence: number;
+}
+
+export interface PiiReport {
+  personCount: number;
+  dateCount: number;
+  locationCount: number;
+  contactCount: number;
+  idNumberCount: number;
+  specialCategoryCount: number;
+  entities: PiiFinding[];
+  kAnonymityRisk: string;
 }
 
 const PATTERNS: Array<{ category: string; pattern: RegExp; confidence: number }> = [
@@ -115,4 +128,115 @@ export function groupByCategory(findings: PiiFinding[]): Record<string, number> 
     grouped[f.category] = (grouped[f.category] ?? 0) + 1;
   }
   return grouped;
+}
+
+/**
+ * Remove duplicate and overlapping findings, keeping the longest span at
+ * each start position. Used to merge `detectPii()` and `scanEuPatterns()`
+ * output, which can both match overlapping spans (e.g. a digit-heavy string
+ * matched by both a generic pattern and an EU-specific one).
+ */
+export function dedupOverlapping(findings: PiiFinding[]): PiiFinding[] {
+  const sorted = [...findings].sort((a, b) => a.start - b.start || b.end - a.end);
+  const deduped: PiiFinding[] = [];
+  let maxEnd = 0;
+  for (const finding of sorted) {
+    if (finding.start < maxEnd) continue;
+    maxEnd = finding.end;
+    deduped.push(finding);
+  }
+  return deduped;
+}
+
+/**
+ * `detectPii()` plus EU-specific structured and Art. 9 detection, deduplicated.
+ * Opt-in entrypoint -- `detectPii()` itself is unchanged for existing callers.
+ */
+export function detectPiiEu(text: string, filterCategories?: string[]): PiiFinding[] {
+  const generic = detectPii(text, filterCategories);
+  const eu = scanEuPatterns(text).filter((f) => !filterCategories || filterCategories.includes(f.category));
+  return dedupOverlapping([...generic, ...eu].sort((a, b) => a.start - b.start));
+}
+
+/**
+ * Route a document through `detectPiiEu` or `detectPii` based on the caller's
+ * `eu_patterns` opt-in flag. Used by `ingest_folder` -- pulled out as its own
+ * function so the routing decision is unit-testable without the native
+ * extraction/embedding bindings `ingest.ts` otherwise pulls in.
+ */
+export function selectPiiScan(rawText: string, euPatterns: boolean, filterCategories?: string[]): PiiFinding[] {
+  return euPatterns ? detectPiiEu(rawText, filterCategories) : detectPii(rawText, filterCategories);
+}
+
+const ID_NUMBER_CATEGORIES = new Set([
+  "SSN",
+  "CREDIT_CARD",
+  "IBAN",
+  "NATIONAL_ID_FR",
+  "NATIONAL_ID_ES",
+  "NATIONAL_ID_IT",
+  "NATIONAL_ID_PL",
+  "NATIONAL_ID_NL",
+  "NATIONAL_ID_BE",
+  "TAX_ID_SIRET",
+  "TAX_ID_SIREN",
+  "TAX_ID_VAT",
+  "LICENSE_PLATE_EU",
+]);
+
+/** GDPR Art. 9 special-category keyword categories emitted by `scanArt9Keywords`. */
+const SPECIAL_CATEGORY_PREFIX = "SPECIAL_CATEGORY_";
+
+/**
+ * Summarize detected PII, including a k-anonymity risk assessment based on
+ * the presence and combination of direct/quasi identifiers. Mirrors anno's
+ * `pii::report()`.
+ */
+export function buildPiiReport(findings: PiiFinding[]): PiiReport {
+  let personCount = 0;
+  let dateCount = 0;
+  let locationCount = 0;
+  let contactCount = 0;
+  let idNumberCount = 0;
+  let specialCategoryCount = 0;
+  const uniqueNames = new Set<string>();
+
+  for (const finding of findings) {
+    if (finding.category === "NAME") {
+      personCount += 1;
+      uniqueNames.add(finding.original.toLowerCase());
+    } else if (finding.category === "DATE" || finding.category === "DATE_ISO" || finding.category === "DATE_MDY") {
+      dateCount += 1;
+    } else if (finding.category === "LOCATION") {
+      locationCount += 1;
+    } else if (finding.category === "EMAIL" || finding.category === "PHONE") {
+      contactCount += 1;
+    } else if (ID_NUMBER_CATEGORIES.has(finding.category)) {
+      idNumberCount += 1;
+    } else if (finding.category.startsWith(SPECIAL_CATEGORY_PREFIX)) {
+      specialCategoryCount += 1;
+    }
+  }
+
+  let kAnonymityRisk: string;
+  if (idNumberCount > 0 || specialCategoryCount > 0) {
+    kAnonymityRisk = "CRITICAL (direct identifiers or special-category data present)";
+  } else if (uniqueNames.size > 5 && dateCount > 0 && locationCount > 0) {
+    kAnonymityRisk = "HIGH (quasi-identifier combination)";
+  } else if (uniqueNames.size > 3) {
+    kAnonymityRisk = "MEDIUM (multiple names)";
+  } else {
+    kAnonymityRisk = "LOW";
+  }
+
+  return {
+    personCount,
+    dateCount,
+    locationCount,
+    contactCount,
+    idNumberCount,
+    specialCategoryCount,
+    entities: findings,
+    kAnonymityRisk,
+  };
 }

@@ -88,7 +88,7 @@ fn load_tokenizer(source: &TokenizerSource<'_>) -> crate::Result<tokenizers::Tok
             .map_err(|e| XbergError::validation(format!("Failed to load tokenizer '{model}': {e}"))),
         #[cfg(target_arch = "wasm32")]
         TokenizerSource::Pretrained(model) => Err(XbergError::validation(format!(
-            "pretrained tokenizer '{model}' requires network access, unavailable on this platform"
+            "Pretrained tokenizer loading is not supported on wasm32: {model}"
         ))),
         TokenizerSource::File(path) => tokenizers::Tokenizer::from_file(path)
             .map_err(|e| XbergError::validation(format!("Failed to load tokenizer from '{}': {e}", path.display()))),

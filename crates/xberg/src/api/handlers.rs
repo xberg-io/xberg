@@ -1201,7 +1201,7 @@ pub(crate) async fn rehydrate_handler(
     #[cfg(not(feature = "redaction-rehydrate"))]
     {
         let _ = (&encrypted, &request.passphrase);
-        Err(ApiError {
+        return Err(ApiError {
             status: axum::http::StatusCode::NOT_IMPLEMENTED,
             body: super::types::ErrorResponse {
                 error_type: "NotImplementedError".to_string(),
@@ -1209,7 +1209,7 @@ pub(crate) async fn rehydrate_handler(
                 traceback: None,
                 status_code: axum::http::StatusCode::NOT_IMPLEMENTED.as_u16(),
             },
-        })
+        });
     }
 
     #[cfg(feature = "redaction-rehydrate")]
@@ -1270,7 +1270,7 @@ pub(crate) async fn process_handler(
         // before running the (potentially expensive) extraction.
         #[cfg(not(feature = "redaction-rehydrate"))]
         {
-            Err(ApiError {
+            return Err(ApiError {
                 status: axum::http::StatusCode::NOT_IMPLEMENTED,
                 body: super::types::ErrorResponse {
                     error_type: "NotImplementedError".to_string(),
@@ -1278,7 +1278,7 @@ pub(crate) async fn process_handler(
                     traceback: None,
                     status_code: axum::http::StatusCode::NOT_IMPLEMENTED.as_u16(),
                 },
-            })
+            });
         }
 
         #[cfg(feature = "redaction-rehydrate")]

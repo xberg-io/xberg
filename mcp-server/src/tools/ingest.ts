@@ -3,7 +3,7 @@ import { z } from "zod";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { extract, NerBackendKind, GlinerArchitecture, type ExtractionConfig, type NerConfig, type ExtractInput, type ExtractInputKind } from "@xberg-io/xberg";
-import { detectPii, mergeNerEntities, type NerEntity } from "../redaction/detect.js";
+import { buildPiiReport, mergeNerEntities, selectPiiScan, type NerEntity } from "../redaction/detect.js";
 import { applyRedaction } from "../redaction/redact.js";
 import { writeRedactedDocx } from "../redaction/output/docx.js";
 import { writeRedactedPdf } from "../redaction/output/pdf.js";
@@ -94,6 +94,9 @@ export function registerIngestTools(server: McpServer): void {
       redaction_strategy: z.enum(["token_replace", "mask", "hash"]).optional().default("token_replace"),
       preserve_structure: z.boolean().optional().default(true),
       rehydration_passphrase: z.string().optional().describe("AES-256-GCM passphrase for encrypting rehydration maps (GDPR Art. 32). Omit for plaintext (dev only)."),
+      eu_patterns: z.boolean().optional().default(false).describe(
+        "Additionally scan for EU-specific structured PII (checksum-validated national IDs for FR/ES/IT/PL/NL/BE, FR SIRET/SIREN, EU VAT numbers, EU license plates) and GDPR Art. 9 special-category keywords (health, biometric, genetic, political, religious, union, criminal, sexual orientation, ethnic origin)."
+      ),
       use_ner: z.boolean().optional().default(false).describe(
         "Run NER on each document and merge detected persons, orgs, and locations into PII findings before redaction."
       ),
@@ -122,7 +125,7 @@ export function registerIngestTools(server: McpServer): void {
         "NER categories to detect, e.g. ['PERSON', 'ORG', 'LOCATION']. Defaults to all if use_ner is enabled."
       ),
     },
-    async ({ source_folder, redacted_folder, collection, redaction_strategy, rehydration_passphrase, use_ner, ner_backend, ner_model, ner_hf_repo, ner_hf_model_file, ner_hf_tokenizer_file, ner_hf_architecture, ner_llm_model, ner_categories }) => {
+    async ({ source_folder, redacted_folder, collection, redaction_strategy, rehydration_passphrase, eu_patterns, use_ner, ner_backend, ner_model, ner_hf_repo, ner_hf_model_file, ner_hf_tokenizer_file, ner_hf_architecture, ner_llm_model, ner_categories }) => {
       try {
         if (!fs.existsSync(source_folder)) {
           return { content: [{ type: "text" as const, text: "Error: source_folder does not exist" }], isError: true };
@@ -141,7 +144,16 @@ export function registerIngestTools(server: McpServer): void {
           };
         }
 
-        const results: Array<{ original: string; redacted: string; report: string; pii_count: number; doc_id: string | null; chunks: number }> = [];
+        const results: Array<{
+          original: string;
+          redacted: string;
+          report: string;
+          pii_count: number;
+          doc_id: string | null;
+          chunks: number;
+          k_anonymity_risk: string | null;
+          special_category_count: number;
+        }> = [];
         let totalPii = 0;
 
         for (const filename of supportedFiles) {
@@ -175,11 +187,12 @@ export function registerIngestTools(server: McpServer): void {
             if (!doc) continue;
 
             const rawText = doc.content ?? "";
-            const regexFindings = detectPii(rawText);
+            const regexFindings = selectPiiScan(rawText, eu_patterns);
             const findings = use_ner
               ? mergeNerEntities(regexFindings, (doc.entities ?? []) as NerEntity[], rawText)
               : regexFindings;
             totalPii += findings.length;
+            const piiReport = buildPiiReport(findings);
 
             const { redacted: redactedText, token_map } = applyRedaction(rawText, findings, redaction_strategy);
             const redactedPath = path.join(redacted_folder, `${baseName}_REDACTED${ext}`);
@@ -252,9 +265,27 @@ export function registerIngestTools(server: McpServer): void {
               docId = await store.upsertDocument(collection, JSON.stringify(document), JSON.stringify(chunks));
             }
 
-            results.push({ original: filename, redacted: redactedPath, report: reportPath, pii_count: findings.length, doc_id: docId, chunks: textChunks.length });
+            results.push({
+              original: filename,
+              redacted: redactedPath,
+              report: reportPath,
+              pii_count: findings.length,
+              doc_id: docId,
+              chunks: textChunks.length,
+              k_anonymity_risk: piiReport.kAnonymityRisk,
+              special_category_count: piiReport.specialCategoryCount,
+            });
           } catch {
-            results.push({ original: filename, redacted: "", report: "", pii_count: 0, doc_id: null, chunks: 0 });
+            results.push({
+              original: filename,
+              redacted: "",
+              report: "",
+              pii_count: 0,
+              doc_id: null,
+              chunks: 0,
+              k_anonymity_risk: null,
+              special_category_count: 0,
+            });
           }
         }
 

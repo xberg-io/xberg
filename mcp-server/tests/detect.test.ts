@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { detectPii, mergeNerEntities, type NerEntity } from "../src/redaction/detect.js";
+import { detectPii, mergeNerEntities, selectPiiScan, type NerEntity } from "../src/redaction/detect.js";
 
 describe("mergeNerEntities", () => {
   it("returns sorted regex findings unchanged when entities list is empty", () => {
@@ -79,5 +79,23 @@ describe("mergeNerEntities", () => {
     const tokens = merged.map((f) => f.token);
     expect(tokens).toContain("[NAME_1]");
     expect(tokens).toContain("[NAME_2]");
+  });
+});
+
+describe("selectPiiScan (ingest_folder's eu_patterns routing)", () => {
+  it("routes through detectPii when euPatterns is false", () => {
+    const result = selectPiiScan("He was diagnosed with cancer.", false);
+    expect(result.some((f) => f.category === "SPECIAL_CATEGORY_HEALTH")).toBe(false);
+  });
+
+  it("routes through detectPiiEu when euPatterns is true", () => {
+    const result = selectPiiScan("He was diagnosed with cancer.", true);
+    expect(result.some((f) => f.category === "SPECIAL_CATEGORY_HEALTH")).toBe(true);
+  });
+
+  it("still applies filterCategories when euPatterns is true", () => {
+    const result = selectPiiScan("Email: bob@example.com. He was diagnosed with cancer.", true, ["EMAIL"]);
+    expect(result.some((f) => f.category === "EMAIL")).toBe(true);
+    expect(result.some((f) => f.category === "SPECIAL_CATEGORY_HEALTH")).toBe(false);
   });
 });
