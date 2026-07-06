@@ -263,6 +263,26 @@ enum Commands {
         model_b: String,
     },
 
+    /// Multi-document PDF split-boundary benchmark (Auto boundary accuracy,
+    /// reconstruction fidelity, single-parse timing)
+    SplitBenchmark {
+        /// Directory scanned recursively for `*.split.json` manifests
+        #[arg(short, long, default_value = "tools/benchmark-harness/fixtures/split")]
+        fixtures: PathBuf,
+
+        /// Also run the MultidocThresholds sweep grid
+        #[arg(long)]
+        sweep: bool,
+
+        /// Write a split-boundary-guardrails.json to this path (from default-threshold results)
+        #[arg(long)]
+        guardrails_out: Option<PathBuf>,
+
+        /// Generate a CPU flamegraph SVG for the single-parse path at this path
+        #[arg(long)]
+        profile_out: Option<PathBuf>,
+    },
+
     /// Embedding throughput and batch-size benchmark across all presets
     EmbedBenchmark,
 
@@ -886,6 +906,49 @@ async fn main() -> Result<()> {
 
             let results = run_model_benchmark(&config).await?;
             print_model_table(&results, &model_a, &model_b);
+            Ok(())
+        }
+
+        Commands::SplitBenchmark {
+            fixtures,
+            sweep,
+            guardrails_out,
+            profile_out,
+        } => {
+            use benchmark_harness::split_benchmark::{
+                SplitBenchmarkConfig, print_split_table, print_sweep_table, run_split_benchmark, run_threshold_sweep,
+            };
+
+            let config = SplitBenchmarkConfig {
+                fixtures_dir: fixtures,
+                sweep,
+                guardrails_out,
+            };
+
+            // Optional CPU profiling of the single-parse path (no-op without the
+            // `profiling` feature).
+            let results = if let Some(ref svg_path) = profile_out {
+                use benchmark_harness::profiling::ProfileGuard;
+                if let Some(parent) = svg_path.parent() {
+                    std::fs::create_dir_all(parent).map_err(benchmark_harness::Error::Io)?;
+                }
+                let guard = ProfileGuard::new(1000)?;
+                let results = run_split_benchmark(&config).await?;
+                let profiling_result = guard.finish()?;
+                profiling_result.generate_flamegraph(svg_path)?;
+                eprintln!("Flamegraph written to {}", svg_path.display());
+                results
+            } else {
+                run_split_benchmark(&config).await?
+            };
+
+            print_split_table(&results);
+
+            if sweep {
+                let cells = run_threshold_sweep(&config).await?;
+                print_sweep_table(&cells);
+            }
+
             Ok(())
         }
 

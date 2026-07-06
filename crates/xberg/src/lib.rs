@@ -187,6 +187,8 @@ pub use extraction::office_metadata::{CoreProperties, DocxAppProperties};
 #[cfg(feature = "url-ingestion")]
 pub use core::extract::map_url;
 pub use core::extract::{extract, extract_batch};
+#[cfg(feature = "pdf")]
+pub use core::split::{SplitConfig, SplitSegment, SplitStrategy, split_and_extract};
 
 // ── Extraction config types ───────────────────────────────────────────────────
 pub use core::config::{

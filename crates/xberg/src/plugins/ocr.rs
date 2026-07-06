@@ -474,10 +474,13 @@ pub fn clear_ocr_backends() -> crate::Result<()> {
 ///
 /// This function is the self-healing counterpart, mirroring
 /// `crate::extractors::ensure_initialized` for the document extractor registry:
-/// if the registry is empty it re-registers the built-in backends so that
-/// callers always see a usable registry. It is a no-op when the registry
-/// already has at least one backend, so callers may invoke it cheaply before
-/// every OCR dispatch.
+/// it re-registers the built-in backends whenever the built-in default is
+/// missing so that callers always see a usable registry. It re-seeds not only
+/// when the registry is empty but also when it is non-empty yet missing the
+/// built-in default (e.g. after [`clear_ocr_backends`] followed by registering
+/// a *different* backend) — the plain "empty" check would leave default-config
+/// OCR without a backend. Re-seeding is non-destructive (user-registered
+/// backends are kept) and cheap to invoke before every OCR dispatch.
 #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
 pub(crate) fn ensure_ocr_backends_initialized() {
     use crate::plugins::registry::get_ocr_backend_registry;
@@ -486,17 +489,14 @@ pub(crate) fn ensure_ocr_backends_initialized() {
 
     {
         let registry = registry.read();
-        if !registry.list().is_empty() {
+        if !registry.is_missing_default_backend() {
             return;
         }
     }
 
-    let mut registry = registry.write();
     // Re-check under the write lock: another thread may have re-seeded the
     // registry between dropping the read lock and acquiring the write lock.
-    if registry.list().is_empty() {
-        registry.register_defaults();
-    }
+    registry.write().ensure_defaults();
 }
 
 #[cfg(test)]

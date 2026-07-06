@@ -272,6 +272,10 @@ pub async fn run_pipeline(mut doc: InternalDocument, config: &ExtractionConfig) 
     // Apply output format conversion as the final step
     result = apply_output_format(result, config.output_format.clone());
 
+    // Populate cheap structural counts (pages/tables/images). Runs on every
+    // extraction path regardless of feature flags — see `DocumentCounts`.
+    populate_document_counts(&mut result);
+
     // Populate the typed extraction-quality confidence (P5). Downstream
     // consumers read a real `ocr_aggregate` — the mean of OCR recognition
     // confidences — from this typed field instead of reparsing JSON. The core
@@ -415,6 +419,10 @@ pub fn run_pipeline_sync(doc: InternalDocument, config: &ExtractionConfig) -> Re
     // Apply output format conversion as the final step
     result = apply_output_format(result, config.output_format.clone());
 
+    // Populate cheap structural counts (pages/tables/images). Runs on every
+    // extraction path regardless of feature flags — see `DocumentCounts`.
+    populate_document_counts(&mut result);
+
     // Populate the typed extraction-quality confidence (P5). Downstream
     // consumers read a real `ocr_aggregate` — the mean of OCR recognition
     // confidences — from this typed field instead of reparsing JSON. The core
@@ -433,6 +441,29 @@ pub fn run_pipeline_sync(doc: InternalDocument, config: &ExtractionConfig) -> Re
     }
 
     Ok(result)
+}
+
+/// Populate [`ExtractedDocument::counts`] with cheap structural counts.
+///
+/// The page count is read from the parse-time page inventory
+/// (`metadata.pages.total_count`) so it is available even when per-page content
+/// extraction is disabled; it falls back to the materialized `pages` length and
+/// finally `0` for inputs that are not page-addressable (plain text, etc.).
+/// Table and image counts are the lengths of the already-populated collections.
+fn populate_document_counts(result: &mut ExtractedDocument) {
+    let pages = result
+        .metadata
+        .pages
+        .as_ref()
+        .map(|p| p.total_count as usize)
+        .filter(|&n| n > 0)
+        .or_else(|| result.pages.as_ref().map(Vec::len))
+        .unwrap_or(0);
+    result.counts = crate::types::DocumentCounts {
+        pages,
+        tables: result.tables.len(),
+        images: result.images.as_ref().map_or(0, Vec::len),
+    };
 }
 
 /// Re-encode all images in `result` to the format requested by `config.output_format`.

@@ -322,6 +322,21 @@ typedef struct XBERGDjotLink XBERGDjotLink;
  */
 typedef struct XBERGDocumentBoundary XBERGDocumentBoundary;
 /**
+ * Cheap structural counts for an extracted document.
+ *
+ * Populated on every `ExtractedDocument` returned by `extract` /
+ * `extract_batch`, regardless of whether the heavy `pages` / `images`
+ * collections are materialized. A caller that only needs "how many pages /
+ * tables / images did this document have?" (reporting, cost estimation,
+ * progress, quotas) can read these without enabling per-page or per-image
+ * extraction.
+ *
+ * The page count comes from the parse (the extractor already walks the page
+ * tree); it does not require opting into per-page content. `pages` is `0` for
+ * inputs that are not page-addressable (e.g. plain text).
+ */
+typedef struct XBERGDocumentCounts XBERGDocumentCounts;
+/**
  * Trait for document extractor plugins.
  *
  * Implement this trait to add support for new document formats or override
@@ -8420,6 +8435,50 @@ uint32_t xberg_entity_end(const XBERGEntity *ptr);
 float xberg_entity_confidence(const XBERGEntity *ptr);
 
 /**
+ * Create a `DocumentCounts` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_document_counts_free`.
+ */
+XBERGDocumentCounts *xberg_document_counts_from_json(const char *json);
+
+/**
+ * Serialize a `DocumentCounts` to a JSON string. Returns null on failure.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_document_counts_to_json(const XBERGDocumentCounts *ptr);
+
+/**
+ * Free a `DocumentCounts` handle.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void xberg_document_counts_free(XBERGDocumentCounts *ptr);
+
+/**
+ * Get the `pages` field from a `DocumentCounts`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uintptr_t xberg_document_counts_pages(const XBERGDocumentCounts *ptr);
+
+/**
+ * Get the `tables` field from a `DocumentCounts`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uintptr_t xberg_document_counts_tables(const XBERGDocumentCounts *ptr);
+
+/**
+ * Get the `images` field from a `DocumentCounts`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uintptr_t xberg_document_counts_images(const XBERGDocumentCounts *ptr);
+
+/**
  * Create a `ExtractedDocument` from a JSON string. Returns null on failure.
  * # Safety
  * JSON string must be valid UTF-8 and null-terminated.
@@ -8476,6 +8535,13 @@ XBERGExtractionMethod *xberg_extracted_document_extraction_method(const XBERGExt
  * Pointer must be a valid handle returned by this library.
  */
 char *xberg_extracted_document_tables(const XBERGExtractedDocument *ptr);
+
+/**
+ * Get the `counts` field from a `ExtractedDocument`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGDocumentCounts *xberg_extracted_document_counts(const XBERGExtractedDocument *ptr);
 
 /**
  * Get the `detected_languages` field from a `ExtractedDocument`.

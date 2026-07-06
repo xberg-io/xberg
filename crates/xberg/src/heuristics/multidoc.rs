@@ -294,11 +294,14 @@ fn detect_signature_block(text: &str) -> bool {
 /// # Text density
 ///
 /// [`crate::types::PageContent`] does not carry a pre-computed density score.
-/// This function approximates density as
-/// `non_whitespace_chars / total_chars` (clamped to `[0.0, 1.0]`), which is a
-/// reasonable proxy for how text-dense a page is relative to itself.  Pass a
-/// custom [`MultidocInput`] to [`detect_boundaries`] directly when you need a
-/// higher-fidelity density measurement (e.g. chars-per-pt² from a PDF extractor).
+/// This function approximates density from the *amount* of visible text on the
+/// page (see [`approximate_text_density`]): a saturating curve over the
+/// non-whitespace character count, so a sparse page (a one-page memo or form)
+/// scores low and a dense page (paper body text) scores high.  A raw
+/// non-whitespace *ratio* was near-constant across text pages and left the
+/// `DensityShift` rule inert.  Pass a custom [`MultidocInput`] to
+/// [`detect_boundaries`] directly when you need a higher-fidelity measurement
+/// (e.g. chars-per-pt² from a PDF extractor that also knows page geometry).
 ///
 /// # Arguments
 ///
@@ -347,16 +350,27 @@ pub fn boundaries_from_extraction_result(
     )
 }
 
-/// Approximate text density as the fraction of non-whitespace characters.
+/// Density scale (visible chars): a page reaches ~0.63 density at this many
+/// non-whitespace characters and saturates toward 1.0 beyond it. Chosen so a
+/// short memo/form page (a few hundred visible chars) scores well below a dense
+/// paper body page (thousands), producing a large delta at a document seam.
+const DENSITY_CHAR_SCALE: f32 = 800.0;
+
+/// Approximate per-page text density on a saturating `[0.0, 1.0]` scale from the
+/// count of visible (non-whitespace) characters.
 ///
-/// Returns a value in `[0.0, 1.0]`.  Returns `0.0` for empty strings.
+/// `density = 1 - exp(-visible_chars / DENSITY_CHAR_SCALE)`. This measures *how
+/// much* text a page carries, which discriminates sparse pages (memos, forms,
+/// cover pages) from dense body pages — unlike the non-whitespace *ratio*, which
+/// is ~0.8 on virtually every text page and never triggered the `DensityShift`
+/// rule. Consecutive pages within one document have similar amounts of text, so
+/// their delta stays small; the strict bigram-overlap gate in
+/// [`detect_page_transition`] further suppresses intra-document false positives.
+///
+/// Returns `0.0` for empty strings.
 fn approximate_text_density(text: &str) -> f32 {
-    let total = text.chars().count();
-    if total == 0 {
-        return 0.0;
-    }
-    let non_ws = text.chars().filter(|c| !c.is_whitespace()).count();
-    (non_ws as f32 / total as f32).clamp(0.0, 1.0)
+    let visible = text.chars().filter(|c| !c.is_whitespace()).count() as f32;
+    (1.0 - (-visible / DENSITY_CHAR_SCALE).exp()).clamp(0.0, 1.0)
 }
 
 /// Detect document boundaries in a multi-document PDF.
@@ -511,6 +525,33 @@ mod tests {
     }
 
     // ── PageSignals::from_page_text ───────────────────────────────────────────
+
+    #[test]
+    fn density_is_sparse_for_short_pages_and_dense_for_long_pages() {
+        let empty = approximate_text_density("");
+        let sparse = approximate_text_density(&"word ".repeat(40)); // ~160 visible chars (a memo)
+        let dense = approximate_text_density(&"word ".repeat(1000)); // ~4000 visible chars (a paper page)
+        assert_eq!(empty, 0.0, "empty page has zero density");
+        assert!(sparse < 0.3, "a short memo page should score low, got {sparse}");
+        assert!(dense > 0.9, "a dense paper page should saturate high, got {dense}");
+        // The seam delta must clear the default density_shift_threshold (0.3).
+        assert!(
+            dense - sparse > MultidocThresholds::default().density_shift_threshold,
+            "sparse→dense delta must exceed the density-shift threshold"
+        );
+    }
+
+    #[test]
+    fn density_delta_between_two_dense_pages_stays_small() {
+        // Two body pages of the same paper should NOT look like a document seam.
+        let page_a = approximate_text_density(&"lorem ipsum ".repeat(300));
+        let page_b = approximate_text_density(&"dolor sit amet ".repeat(300));
+        assert!(
+            (page_a - page_b).abs() < MultidocThresholds::default().density_shift_threshold,
+            "dense→dense delta {} must stay below the threshold",
+            (page_a - page_b).abs()
+        );
+    }
 
     #[test]
     fn from_page_text_detects_letterhead() {

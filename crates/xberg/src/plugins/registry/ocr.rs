@@ -310,6 +310,36 @@ impl OcrBackendRegistry {
     pub fn clear(&mut self) -> Result<()> {
         self.shutdown_all()
     }
+
+    /// True when the registry lacks a usable built-in default and should be
+    /// re-seeded.
+    ///
+    /// This is the case when the registry is completely empty, or — when a
+    /// Tesseract built-in is compiled in — when the built-in default backend
+    /// (`tesseract`, the fallback dispatch target) is absent. The latter can
+    /// happen after [`clear`](Self::clear) followed by registering a *different*
+    /// backend: the registry is non-empty, yet default-config OCR has no usable
+    /// backend.
+    pub(crate) fn is_missing_default_backend(&self) -> bool {
+        #[cfg(any(feature = "ocr", feature = "ocr-wasm"))]
+        const DEFAULT: Option<&str> = Some("tesseract");
+        #[cfg(not(any(feature = "ocr", feature = "ocr-wasm")))]
+        const DEFAULT: Option<&str> = None;
+
+        self.backends.is_empty() || DEFAULT.is_some_and(|name| !self.backends.contains_key(name))
+    }
+
+    /// Non-destructively re-seed the built-in default backends when they are
+    /// missing.
+    ///
+    /// Keeps any user-registered backends; a no-op when the built-in default is
+    /// already present. Used by the self-healing dispatch path so a registry
+    /// left without a default (via clear + register-other) heals itself.
+    pub(crate) fn ensure_defaults(&mut self) {
+        if self.is_missing_default_backend() {
+            self.register_defaults();
+        }
+    }
 }
 
 impl Default for OcrBackendRegistry {
@@ -392,6 +422,41 @@ mod tests {
     fn test_ocr_backend_registry_new_empty() {
         let registry = OcrBackendRegistry::new_empty();
         assert_eq!(registry.list().len(), 0);
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn ensure_defaults_reseeds_when_default_missing_but_registry_nonempty() {
+        // Simulate `clear_ocr_backends()` followed by registering a *different*
+        // backend: the registry is non-empty but has no built-in default. The
+        // self-heal must still restore the default — the old "empty registry"
+        // check skipped healing here, leaving default-config OCR unusable.
+        let mut registry = OcrBackendRegistry::new_empty();
+        registry
+            .register(Arc::new(MockOcrBackend {
+                name: "custom-ocr".to_string(),
+                languages: vec!["eng".to_string()],
+            }))
+            .unwrap();
+        assert!(
+            !registry.list().iter().any(|n| n == "tesseract"),
+            "precondition: no built-in default present"
+        );
+        assert!(
+            registry.is_missing_default_backend(),
+            "a non-empty registry without the built-in default must report missing"
+        );
+
+        registry.ensure_defaults();
+
+        assert!(
+            registry.list().iter().any(|n| n == "tesseract"),
+            "ensure_defaults should re-seed the built-in default even when the registry is non-empty"
+        );
+        assert!(
+            registry.list().iter().any(|n| n == "custom-ocr"),
+            "ensure_defaults must be non-destructive: the user backend is kept"
+        );
     }
 
     #[test]

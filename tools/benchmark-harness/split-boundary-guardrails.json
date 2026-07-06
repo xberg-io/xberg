@@ -1,0 +1,38 @@
+{
+  "version": "1.0",
+  "threshold_factor": 0.9,
+  "contracts": [
+    {
+      "doc": "forms_batch",
+      "min_f1": 0.6
+    },
+    {
+      "doc": "marketing_memo",
+      "min_f1": 0.0
+    },
+    {
+      "doc": "memo_form_memo",
+      "min_f1": 0.0
+    },
+    {
+      "doc": "memo_marketing_form",
+      "min_f1": 0.45
+    },
+    {
+      "doc": "memo_paper",
+      "min_f1": 0.0
+    },
+    {
+      "doc": "paper_memo_form",
+      "min_f1": 0.0
+    },
+    {
+      "doc": "single_paper",
+      "min_f1": 0.9
+    },
+    {
+      "doc": "two_papers",
+      "min_f1": 0.0
+    }
+  ]
+}

@@ -50,6 +50,29 @@ impl ExtractionMethod {
     }
 }
 
+/// Cheap structural counts for an extracted document.
+///
+/// Populated on every [`ExtractedDocument`] returned by `extract` /
+/// `extract_batch`, regardless of whether the heavy `pages` / `images`
+/// collections are materialized. A caller that only needs "how many pages /
+/// tables / images did this document have?" (reporting, cost estimation,
+/// progress, quotas) can read these without enabling per-page or per-image
+/// extraction.
+///
+/// The page count comes from the parse (the extractor already walks the page
+/// tree); it does not require opting into per-page content. `pages` is `0` for
+/// inputs that are not page-addressable (e.g. plain text).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+pub struct DocumentCounts {
+    /// Total pages in the source document (`0` when not page-addressable).
+    pub pages: usize,
+    /// Tables detected in the document.
+    pub tables: usize,
+    /// Images detected in the document.
+    pub images: usize,
+}
+
 /// Document extracted by the core extraction pipeline.
 ///
 /// `extract` and `extract_batch` return an `ExtractionResult` envelope whose
@@ -74,6 +97,14 @@ pub struct ExtractedDocument {
     pub extraction_method: Option<ExtractionMethod>,
     /// Tables extracted from the document, each with structured cell data.
     pub tables: Vec<Table>,
+
+    /// Cheap structural counts (pages, tables, images).
+    ///
+    /// Always populated by the extraction pipeline, even when the `pages` /
+    /// `images` collections are `None`. See [`DocumentCounts`].
+    #[serde(default)]
+    pub counts: DocumentCounts,
+
     /// ISO 639-1 language codes detected in the document content.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detected_languages: Option<Vec<String>>,
@@ -920,6 +951,36 @@ mod tests {
             result.form_fields.is_empty(),
             "omitted form_fields must default to empty vec"
         );
+    }
+
+    #[test]
+    fn extraction_result_omitting_counts_defaults_to_zero() {
+        // `counts` uses `#[serde(default)]`; stored JSON predating the field must
+        // deserialize to `DocumentCounts::default()` (all zeros), not error.
+        let json = r#"{
+            "content": "hello",
+            "mime_type": "text/plain",
+            "metadata": {},
+            "tables": []
+        }"#;
+        let result: ExtractedDocument = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            result.counts,
+            DocumentCounts::default(),
+            "omitted counts must default to all-zero DocumentCounts"
+        );
+    }
+
+    #[test]
+    fn document_counts_round_trip() {
+        let counts = DocumentCounts {
+            pages: 7,
+            tables: 3,
+            images: 2,
+        };
+        let json = serde_json::to_string(&counts).unwrap();
+        let back: DocumentCounts = serde_json::from_str(&json).unwrap();
+        assert_eq!(counts, back);
     }
 
     #[test]

@@ -1008,6 +1008,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   DocumentBoundary dco_decode_document_boundary(dynamic raw);
 
   @protected
+  DocumentCounts dco_decode_document_counts(dynamic raw);
+
+  @protected
   DocumentMetadata dco_decode_document_metadata(dynamic raw);
 
   @protected
@@ -3186,6 +3189,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   DocumentBoundary sse_decode_document_boundary(SseDeserializer deserializer);
+
+  @protected
+  DocumentCounts sse_decode_document_counts(SseDeserializer deserializer);
 
   @protected
   DocumentMetadata sse_decode_document_metadata(SseDeserializer deserializer);
@@ -6024,6 +6030,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_document_boundary(
     DocumentBoundary self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_document_counts(
+    DocumentCounts self,
     SseSerializer serializer,
   );
 

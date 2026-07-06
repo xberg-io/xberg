@@ -1,0 +1,4 @@
+{
+  "document": "two_papers.pdf",
+  "boundaries": [{"start_page":1,"end_page":3},{"start_page":4,"end_page":5}]
+}

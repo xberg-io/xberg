@@ -1025,6 +1025,18 @@ void* __swift_bridge__$Vec_Entity$get_mut(void* vec_ptr, uintptr_t index);
 uintptr_t __swift_bridge__$Vec_Entity$len(void* vec_ptr);
 void* __swift_bridge__$Vec_Entity$as_ptr(void* vec_ptr);
 
+typedef struct DocumentCounts DocumentCounts;
+void __swift_bridge__$DocumentCounts$_free(void* self);
+
+void* __swift_bridge__$Vec_DocumentCounts$new(void);
+void __swift_bridge__$Vec_DocumentCounts$drop(void* vec_ptr);
+void __swift_bridge__$Vec_DocumentCounts$push(void* vec_ptr, void* item_ptr);
+void* __swift_bridge__$Vec_DocumentCounts$pop(void* vec_ptr);
+void* __swift_bridge__$Vec_DocumentCounts$get(void* vec_ptr, uintptr_t index);
+void* __swift_bridge__$Vec_DocumentCounts$get_mut(void* vec_ptr, uintptr_t index);
+uintptr_t __swift_bridge__$Vec_DocumentCounts$len(void* vec_ptr);
+void* __swift_bridge__$Vec_DocumentCounts$as_ptr(void* vec_ptr);
+
 typedef struct ExtractedDocument ExtractedDocument;
 void __swift_bridge__$ExtractedDocument$_free(void* self);
 
@@ -3864,12 +3876,17 @@ void* __swift_bridge__$Entity$text(void* self);
 uint32_t __swift_bridge__$Entity$start(void* self);
 uint32_t __swift_bridge__$Entity$end(void* self);
 struct __private__OptionF32 __swift_bridge__$Entity$confidence(void* self);
-void* __swift_bridge__$ExtractedDocument$new(void* content, void* mime_type, void* metadata, void* extraction_method, void* tables, void* detected_languages, void* chunks, void* images, void* pages, void* elements, void* djot_content, void* ocr_elements, void* document, struct __private__OptionF64 quality_score, void* processing_warnings, void* annotations, void* children, void* uris, void* revisions, void* structured_output, void* code_intelligence, void* llm_usage, void* entities, void* summary, void* extraction_confidence, void* translation, void* page_classifications, void* redaction_report, void* formulas, void* form_fields, void* formatted_content);
+void* __swift_bridge__$DocumentCounts$new(uintptr_t pages, uintptr_t tables, uintptr_t images);
+uintptr_t __swift_bridge__$DocumentCounts$pages(void* self);
+uintptr_t __swift_bridge__$DocumentCounts$tables(void* self);
+uintptr_t __swift_bridge__$DocumentCounts$images(void* self);
+void* __swift_bridge__$ExtractedDocument$new(void* content, void* mime_type, void* metadata, void* extraction_method, void* tables, void* counts, void* detected_languages, void* chunks, void* images, void* pages, void* elements, void* djot_content, void* ocr_elements, void* document, struct __private__OptionF64 quality_score, void* processing_warnings, void* annotations, void* children, void* uris, void* revisions, void* structured_output, void* code_intelligence, void* llm_usage, void* entities, void* summary, void* extraction_confidence, void* translation, void* page_classifications, void* redaction_report, void* formulas, void* form_fields, void* formatted_content);
 void* __swift_bridge__$ExtractedDocument$content(void* self);
 void* __swift_bridge__$ExtractedDocument$mime_type(void* self);
 void* __swift_bridge__$ExtractedDocument$metadata(void* self);
 void* __swift_bridge__$ExtractedDocument$extraction_method(void* self);
 void* __swift_bridge__$ExtractedDocument$tables(void* self);
+void* __swift_bridge__$ExtractedDocument$counts(void* self);
 void* __swift_bridge__$ExtractedDocument$detected_languages(void* self);
 void* __swift_bridge__$ExtractedDocument$chunks(void* self);
 void* __swift_bridge__$ExtractedDocument$images(void* self);
@@ -4791,6 +4808,7 @@ struct __private__ResultPtrAndPtr __swift_bridge__$table_grid_from_json(void* js
 struct __private__ResultPtrAndPtr __swift_bridge__$grid_cell_from_json(void* json);
 struct __private__ResultPtrAndPtr __swift_bridge__$text_annotation_from_json(void* json);
 struct __private__ResultPtrAndPtr __swift_bridge__$entity_from_json(void* json);
+struct __private__ResultPtrAndPtr __swift_bridge__$document_counts_from_json(void* json);
 struct __private__ResultPtrAndPtr __swift_bridge__$archive_entry_from_json(void* json);
 struct __private__ResultPtrAndPtr __swift_bridge__$processing_warning_from_json(void* json);
 struct __private__ResultPtrAndPtr __swift_bridge__$llm_usage_from_json(void* json);
@@ -5026,6 +5044,7 @@ void* __swift_bridge__$__alef_phantom_vec_table_grid(void);
 void* __swift_bridge__$__alef_phantom_vec_grid_cell(void);
 void* __swift_bridge__$__alef_phantom_vec_text_annotation(void);
 void* __swift_bridge__$__alef_phantom_vec_entity(void);
+void* __swift_bridge__$__alef_phantom_vec_document_counts(void);
 void* __swift_bridge__$__alef_phantom_vec_extracted_document(void);
 void* __swift_bridge__$__alef_phantom_vec_archive_entry(void);
 void* __swift_bridge__$__alef_phantom_vec_processing_warning(void);

@@ -46,6 +46,10 @@ pub mod pipeline;
 pub(crate) mod runtime;
 #[cfg(feature = "api-types")]
 pub mod server_config;
+/// Split-and-extract for multi-document PDFs. Core-only, not part of the
+/// binding surface (see `alef.toml` `[crates.exclude]`).
+#[cfg(feature = "pdf")]
+pub mod split;
 
 #[cfg(feature = "pdf")]
 pub use config::HierarchyConfig;

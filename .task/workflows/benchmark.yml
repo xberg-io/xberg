@@ -82,6 +82,25 @@ tasks:
     cmds:
       - cargo run --locked -p benchmark-harness -- model-benchmark --fixtures "{{.FIXTURES_DIR}}"
 
+  split:
+    desc: "Multi-document split-boundary benchmark (Auto accuracy, reconstruction, single-parse timing)"
+    vars:
+      SPLIT_FIXTURES_DIR: '{{ .SPLIT_FIXTURES_DIR | default "tools/benchmark-harness/fixtures/split" }}'
+    cmds:
+      - cargo run --locked -p benchmark-harness -- split-benchmark --fixtures "{{.SPLIT_FIXTURES_DIR}}"
+
+  split:sweep:
+    desc: "Split-boundary benchmark with the MultidocThresholds sweep grid"
+    vars:
+      SPLIT_FIXTURES_DIR: '{{ .SPLIT_FIXTURES_DIR | default "tools/benchmark-harness/fixtures/split" }}'
+    cmds:
+      - cargo run --locked -p benchmark-harness -- split-benchmark --fixtures "{{.SPLIT_FIXTURES_DIR}}" --sweep
+
+  split:gen-fixtures:
+    desc: "Regenerate synthesized multi-document split fixtures from the test_documents submodule"
+    cmds:
+      - bash tools/benchmark-harness/scripts/gen_split_fixtures.sh
+
   generate-gt:
     desc: "Generate markdown ground truth from PDFs using Gemini"
     cmds:

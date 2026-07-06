@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.32.7"
+alef_version = "0.32.9"
 # alef codegen emits non-shorthand struct init (`name: name`) in generated
 # binding lib.rs files; allow it repo-wide so workspace clippy passes under
 # -D warnings (emitted into every generated Rust binding as #![allow(...)]).
@@ -1542,6 +1542,18 @@ types = [
     # Generic types — alef(skip) source annotation not picked up for generic structs
     # (alef-extract does not propagate cfg_attr through type-parameter bounds).
     "Pool",
+
+    # split_and_extract config/result types (core-only, like extract_structured).
+    # The `split_and_extract*` functions are already excluded below; these types
+    # are only reachable through them, and `core/split.rs` is not in [crate].sources,
+    # so they are never generated. Listed here to defend against future codegen
+    # passes that might re-emit them as transitive container fields.
+    "SplitConfig",
+    "SplitStrategy",
+    "SplitSegment",
+    "xberg::core::split::SplitConfig",
+    "xberg::core::split::SplitStrategy",
+    "xberg::core::split::SplitSegment",
 
     # Internal docx/hwp parser types — kept hidden from bindings (still
     # alef(skip)-annotated in source); serde derives added in Phase 1 but

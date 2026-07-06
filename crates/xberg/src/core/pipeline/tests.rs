@@ -1375,3 +1375,97 @@ async fn test_pdf_run_fallback_not_suppressed_without_images_config() {
         "RunFallback must be suppressed when images.run_ocr_on_images=true"
     );
 }
+
+// ── DocumentCounts population (#1185) ────────────────────────────────────────
+
+mod document_counts {
+    use super::super::populate_document_counts;
+    use crate::types::page::{PageContent, PageStructure, PageUnitType};
+    use crate::types::{ExtractedDocument, ExtractedImage, Metadata, Table};
+
+    fn page_structure(total_count: u32) -> PageStructure {
+        PageStructure {
+            total_count,
+            unit_type: PageUnitType::Page,
+            boundaries: None,
+            pages: None,
+        }
+    }
+
+    fn page(page_number: u32) -> PageContent {
+        PageContent {
+            page_number,
+            content: String::new(),
+            tables: Vec::new(),
+            image_indices: Vec::new(),
+            hierarchy: None,
+            is_blank: None,
+            layout_regions: None,
+            speaker_notes: None,
+            section_name: None,
+            sheet_name: None,
+        }
+    }
+
+    #[test]
+    fn pages_come_from_metadata_page_count() {
+        // Page count is knowable from the parse-time inventory even when the
+        // heavy per-page `pages` vector is not materialized.
+        let mut result = ExtractedDocument {
+            metadata: Metadata {
+                pages: Some(page_structure(5)),
+                ..Default::default()
+            },
+            tables: vec![Table::default(), Table::default()],
+            images: Some(vec![ExtractedImage::default()]),
+            pages: None,
+            ..Default::default()
+        };
+        populate_document_counts(&mut result);
+        assert_eq!(result.counts.pages, 5, "pages must read metadata.total_count");
+        assert_eq!(result.counts.tables, 2);
+        assert_eq!(result.counts.images, 1);
+    }
+
+    #[test]
+    fn pages_fall_back_to_materialized_pages_len() {
+        // No metadata page inventory: fall back to the materialized pages length.
+        let mut result = ExtractedDocument {
+            metadata: Metadata::default(),
+            pages: Some(vec![page(1), page(2), page(3)]),
+            ..Default::default()
+        };
+        populate_document_counts(&mut result);
+        assert_eq!(result.counts.pages, 3);
+        assert_eq!(result.counts.tables, 0);
+        assert_eq!(result.counts.images, 0);
+    }
+
+    #[test]
+    fn non_paginated_input_reports_zero_pages() {
+        let mut result = ExtractedDocument {
+            content: "plain text".to_string(),
+            ..Default::default()
+        };
+        populate_document_counts(&mut result);
+        assert_eq!(result.counts.pages, 0);
+        assert_eq!(result.counts.tables, 0);
+        assert_eq!(result.counts.images, 0);
+    }
+
+    #[test]
+    fn zero_metadata_page_count_falls_back_to_pages_len() {
+        // A present-but-empty page inventory (total_count == 0) must not mask a
+        // materialized pages vector.
+        let mut result = ExtractedDocument {
+            metadata: Metadata {
+                pages: Some(page_structure(0)),
+                ..Default::default()
+            },
+            pages: Some(vec![page(1), page(2)]),
+            ..Default::default()
+        };
+        populate_document_counts(&mut result);
+        assert_eq!(result.counts.pages, 2);
+    }
+}
