@@ -47,7 +47,12 @@ pub(crate) fn extract_all_from_oxide_document(
 ) -> Result<PdfExtractionPhaseResult> {
     let _span = tracing::debug_span!("extract_pdf_oxide").entered();
 
-    let mut doc = crate::pdf::oxide::OxideDocument::open_bytes(content)?;
+    let passwords = config
+        .pdf_options
+        .as_ref()
+        .and_then(|o| o.passwords.as_deref())
+        .unwrap_or(&[]);
+    let mut doc = crate::pdf::oxide::OxideDocument::open_bytes_with_passwords(content, passwords)?;
 
     // --- Text + metadata (single pass) ---
     #[cfg_attr(not(feature = "layout-detection"), allow(unused_mut))]

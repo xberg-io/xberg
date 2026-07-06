@@ -59,12 +59,51 @@ pub(crate) struct OxideDocument {
 }
 
 impl OxideDocument {
-    /// Open a PDF from in-memory bytes.
+    /// Open a PDF from in-memory bytes with no password.
     pub(crate) fn open_bytes(bytes: &[u8]) -> Result<Self> {
+        Self::open_bytes_with_passwords(bytes, &[])
+    }
+
+    /// Open a PDF from in-memory bytes, trying each candidate password for
+    /// encrypted documents.
+    ///
+    /// pdf_oxide auto-authenticates with the empty password (the common default
+    /// for lightly-encrypted PDFs). When that fails and the document is
+    /// user-password protected, extraction previously returned an empty success
+    /// because `PdfConfig.passwords` was never consulted (xberg-io/xberg#1223).
+    /// Each candidate is tried in order; the first that authenticates wins. If
+    /// the document is encrypted and none work, an error is returned rather than
+    /// silently yielding empty text.
+    pub(crate) fn open_bytes_with_passwords(bytes: &[u8], passwords: &[String]) -> Result<Self> {
         let doc = pdf_oxide::PdfDocument::from_bytes(bytes.to_vec()).map_err(|e| XbergError::Parsing {
             message: format!("pdf_oxide: failed to load bytes: {e}"),
             source: None,
         })?;
+
+        // `authenticate(b"")` returns Ok(true) for unencrypted PDFs and for
+        // encrypted ones that open with the empty password. Only fall through to
+        // the configured passwords when the empty one does not authenticate.
+        let opened = doc.authenticate(b"").unwrap_or(false);
+        if !opened {
+            let mut authenticated = false;
+            for password in passwords {
+                if doc.authenticate(password.as_bytes()).unwrap_or(false) {
+                    authenticated = true;
+                    break;
+                }
+            }
+            if !authenticated {
+                return Err(XbergError::Parsing {
+                    message: if passwords.is_empty() {
+                        "PDF is encrypted and requires a password; set pdf_options.passwords".to_string()
+                    } else {
+                        "PDF is encrypted and none of the supplied passwords authenticated".to_string()
+                    },
+                    source: None,
+                });
+            }
+        }
+
         Ok(Self { doc })
     }
 }
