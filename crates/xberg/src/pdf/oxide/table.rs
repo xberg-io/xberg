@@ -2,8 +2,9 @@
 //!
 //! Three entry points:
 //!
-//! - [`extract_tables_native`] — pdf_oxide's built-in `extract_tables_with_config`
-//!   in strict mode. High precision, requires explicit table grid with 3+ columns.
+//! - [`extract_tables_native`] — pdf_oxide's spatial detector in strict mode
+//!   (via the stroke-aware wrapper [`extract_tables_stroke_aware`]). High
+//!   precision, requires explicit table grid with 3+ columns.
 //! - [`extract_tables_bordered`] — relaxed Lines-strategy pass for bordered tables
 //!   with 2+ columns. Catches 2-column data tables (label/value) whose cells are
 //!   delimited by stroke lines that `strict()` skips due to `min_table_columns=3`.
@@ -28,6 +29,102 @@ use std::collections::HashSet;
 /// the validation chain is fast.
 const MAX_REGIONS_PER_PAGE: usize = 20;
 
+/// Geometry floor of `PathContent::is_table_primitive`: both its thin-line
+/// branches require the long dimension to exceed 5pt, and its box branch
+/// requires both dimensions to. A path whose longest dimension is at or below
+/// this can never register as a table primitive on geometry alone — its only
+/// possible rendered extent lives in the stroke width.
+const PRIMITIVE_GEOMETRY_FLOOR: f32 = 5.0;
+
+/// Expand a stroke-width-encoded rule's bounding box to its rendered geometry.
+///
+/// Some print-era PDF generators draw vertical table rules as a ~1pt
+/// horizontal segment stroked with a line width equal to the table height
+/// (`430 w` + `0 0 m 1 0 l S` renders as a 1×430pt vertical bar). pdf_oxide's
+/// `bbox` covers the path geometry only, so such a rule is a 1×0pt speck that
+/// fails `is_table_primitive` — the Lines-strategy detector then sees no
+/// vertical rulings and misses the whole table (xberg-io/xberg#1213).
+///
+/// Stroking widens a segment by half the line width on each side
+/// perpendicular to its direction; mirror that on the minor axis so the
+/// detector sees what the reader sees. Expansion is deliberately limited to
+/// geometric *specks* — paths whose longest dimension is under the
+/// [`PRIMITIVE_GEOMETRY_FLOOR`] and which therefore can never pass the
+/// primitive filter on geometry. Such paths contribute nothing to detection
+/// today, so expanding them can only add rulings, never perturb a grid that
+/// already works (a long thin separator with a thick stroke — e.g. the
+/// 0×507pt/7.2pt column rules in pdfplumber's la-precinct fixture — is
+/// already a valid primitive and must keep its geometric bbox).
+fn expand_hairline_stroke(path: &mut pdf_oxide::elements::PathContent) {
+    if path.stroke_color.is_none() || path.stroke_width <= PRIMITIVE_GEOMETRY_FLOOR {
+        return;
+    }
+    let width = path.bbox.width.abs();
+    let height = path.bbox.height.abs();
+    if width.max(height) > PRIMITIVE_GEOMETRY_FLOOR {
+        return; // real geometric extent: the detector already sees this path
+    }
+    let stroke = path.stroke_width;
+    if height <= width {
+        // Horizontal-ish segment: the stroke extends above and below.
+        path.bbox.y -= stroke / 2.0;
+        path.bbox.height += stroke;
+    } else {
+        // Vertical-ish segment: the stroke extends left and right.
+        path.bbox.x -= stroke / 2.0;
+        path.bbox.width += stroke;
+    }
+}
+
+/// Detect tables on one page with stroke-rendered rule geometry.
+///
+/// Mirrors `pdf_oxide::PdfDocument::extract_tables_with_config` (words →
+/// spans, paths → table primitives → `detect_tables_with_lines`), inserting
+/// [`expand_hairline_stroke`] between path extraction and the
+/// `is_table_primitive` filter so stroke-width-rendered rules survive it.
+fn extract_tables_stroke_aware(
+    doc: &pdf_oxide::PdfDocument,
+    page_idx: usize,
+    config: &pdf_oxide::structure::spatial_table_detector::TableDetectionConfig,
+) -> std::result::Result<Vec<pdf_oxide::structure::table_extractor::Table>, pdf_oxide::Error> {
+    use pdf_oxide::layout::{FontWeight, TextSpan};
+    use pdf_oxide::structure::spatial_table_detector::detect_tables_with_lines;
+
+    let words = doc.extract_words(page_idx)?;
+    let lines: Vec<_> = doc
+        .extract_paths(page_idx)?
+        .into_iter()
+        .map(|mut p| {
+            expand_hairline_stroke(&mut p);
+            p
+        })
+        .filter(|p| p.is_table_primitive())
+        .collect();
+
+    // Word → TextSpan conversion matching extract_tables_with_config: words
+    // (not spans) so space-separated strings split into their own columns.
+    let spans: Vec<TextSpan> = words
+        .into_iter()
+        .map(|w| TextSpan {
+            text: w.text,
+            bbox: w.bbox,
+            font_name: w.dominant_font,
+            font_size: w.avg_font_size,
+            font_weight: if w.is_bold {
+                FontWeight::Bold
+            } else {
+                FontWeight::Normal
+            },
+            is_italic: w.is_italic,
+            mcid: w.mcid,
+            horizontal_scaling: 1.0,
+            ..TextSpan::default()
+        })
+        .collect();
+
+    Ok(detect_tables_with_lines(&spans, &lines, config))
+}
+
 /// Extract tables from all pages using pdf_oxide's native table detection.
 ///
 /// Uses `TableDetectionConfig::strict()` to reduce false positives from
@@ -50,7 +147,7 @@ pub(crate) fn extract_tables_native(doc: &mut OxideDocument) -> Result<Vec<Table
     let mut all_tables = Vec::new();
 
     for page_idx in 0..page_count {
-        let extracted = match doc.doc.extract_tables_with_config(page_idx, config.clone()) {
+        let extracted = match extract_tables_stroke_aware(&doc.doc, page_idx, &config) {
             Ok(tables) => tables,
             Err(e) => {
                 tracing::warn!(page = page_idx, "pdf_oxide extract_tables failed: {e}");
@@ -151,7 +248,7 @@ pub(crate) fn extract_tables_bordered(doc: &mut OxideDocument, skip_pages: &Hash
             continue;
         }
 
-        let extracted = match doc.doc.extract_tables_with_config(page_idx, config.clone()) {
+        let extracted = match extract_tables_stroke_aware(&doc.doc, page_idx, &config) {
             Ok(tables) => tables,
             Err(e) => {
                 tracing::warn!(page = page_idx, "pdf_oxide bordered extract_tables failed: {e}");
@@ -540,6 +637,82 @@ fn convert_extracted_table(table: &pdf_oxide::structure::table_extractor::Table)
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn stroked_line(x: f32, y: f32, w: f32, h: f32, stroke_width: f32) -> pdf_oxide::elements::PathContent {
+        let mut path = pdf_oxide::elements::PathContent::new(pdf_oxide::geometry::Rect::new(x, y, w, h));
+        path.stroke_color = Some(pdf_oxide::layout::Color::black());
+        path.stroke_width = stroke_width;
+        path
+    }
+
+    /// A ~1pt horizontal segment with a table-height stroke width must expand
+    /// vertically into a full-height bar (the #1213 vertical-rule pattern).
+    #[test]
+    fn expand_hairline_stroke_expands_horizontal_speck_vertically() {
+        let mut path = stroked_line(236.0, 402.0, 1.0, 0.0, 430.0);
+        expand_hairline_stroke(&mut path);
+        assert_eq!(path.bbox.width, 1.0);
+        assert_eq!(path.bbox.height, 430.0);
+        assert_eq!(path.bbox.y, 402.0 - 215.0);
+        assert!(path.is_table_primitive(), "expanded rule must classify as a table primitive");
+    }
+
+    /// The mirrored trick — a short vertical segment with a huge stroke width —
+    /// must expand horizontally.
+    #[test]
+    fn expand_hairline_stroke_expands_vertical_speck_horizontally() {
+        let mut path = stroked_line(100.0, 300.0, 0.0, 1.0, 322.0);
+        expand_hairline_stroke(&mut path);
+        assert_eq!(path.bbox.height, 1.0);
+        assert_eq!(path.bbox.width, 322.0);
+        assert_eq!(path.bbox.x, 100.0 - 161.0);
+        assert!(path.is_table_primitive());
+    }
+
+    /// Ordinary hairline rules (stroke ≤ 5pt) must pass through unchanged —
+    /// this is every normal ruled table in the wild.
+    #[test]
+    fn expand_hairline_stroke_leaves_ordinary_rules_alone() {
+        let mut path = stroked_line(50.0, 700.0, 322.0, 0.0, 1.0);
+        expand_hairline_stroke(&mut path);
+        assert_eq!((path.bbox.width, path.bbox.height, path.bbox.y), (322.0, 0.0, 700.0));
+    }
+
+    /// A rule with real geometric extent must keep its bbox even when its
+    /// stroke is thick: it is already a valid primitive, and widening it
+    /// perturbs a grid that already works. Regression test for the
+    /// la-precinct fixture (0×507pt column separators stroked 7.2pt wide),
+    /// where expansion flipped a correctly detected 47-row results table
+    /// into a false-positive header table.
+    #[test]
+    fn expand_hairline_stroke_leaves_long_thick_stroked_rules_alone() {
+        let mut path = stroked_line(212.4, 28.8, 0.0, 507.6, 7.2);
+        expand_hairline_stroke(&mut path);
+        assert_eq!(
+            (path.bbox.x, path.bbox.width, path.bbox.height),
+            (212.4, 0.0, 507.6),
+            "long stroked rules keep their geometric bbox"
+        );
+        assert!(path.is_table_primitive(), "still a primitive on geometry alone");
+    }
+
+    /// Non-line-like shapes (both dimensions above hairline) and unstroked
+    /// paths must pass through unchanged regardless of stroke width.
+    #[test]
+    fn expand_hairline_stroke_leaves_boxes_and_fills_alone() {
+        let mut boxy = stroked_line(50.0, 550.0, 350.0, 200.0, 8.0);
+        expand_hairline_stroke(&mut boxy);
+        assert_eq!((boxy.bbox.width, boxy.bbox.height), (350.0, 200.0));
+
+        // Fill-only path (the extractor sets stroke_color: None for `f`-painted
+        // paths): stroke width is inert without a stroke.
+        let mut filled = pdf_oxide::elements::PathContent::new(pdf_oxide::geometry::Rect::new(0.0, 0.0, 1.0, 0.0));
+        filled.stroke_color = None;
+        filled.fill_color = Some(pdf_oxide::layout::Color::black());
+        filled.stroke_width = 430.0;
+        expand_hairline_stroke(&mut filled);
+        assert_eq!((filled.bbox.width, filled.bbox.height), (1.0, 0.0));
+    }
 
     #[test]
     fn test_convert_extracted_table_basic() {
@@ -1059,6 +1232,85 @@ mod tests {
         assert!(
             tables.is_empty(),
             "skip_pages={{1}} must suppress the only page; got: {tables:?}"
+        );
+    }
+
+    /// Build a 3-column bordered table whose vertical rules are drawn the way
+    /// some print-era PDF generators emit them: a ~1pt horizontal segment
+    /// stroked with a line width equal to the table height, which renders as a
+    /// full-height vertical bar. Geometrically the path is a speck (bbox
+    /// 1×0pt), so a stroke-unaware reader sees no vertical rulings at all.
+    /// Mirrors the fuse-chart tables in xberg-io/xberg#1213.
+    fn build_stroke_width_vertical_rules_table_pdf() -> Vec<u8> {
+        use pdf_oxide::geometry::Rect;
+        use pdf_oxide::writer::{DocumentBuilder, LineStyle, TextAlign};
+
+        let thin = LineStyle::new(1.0, 0.0, 0.0, 0.0);
+        // Table: x=50..400, y=510..750 (PDF y-up), 6 rows of 40pt.
+        // Column edges at x = 50, 150, 250, 400.
+        let rows: [[&str; 3]; 6] = [
+            ["Location", "Rating", "Circuit"],
+            ["6", "15A*", "Alternator regulator"],
+            ["7", "30A*", "PCM relay feed"],
+            ["11", "15A*", "A/C clutch relay feed"],
+            ["24", "10A*", "Heated mirrors"],
+            ["101", "40A**", "Blower relay feed"],
+        ];
+
+        let mut doc = DocumentBuilder::new();
+        let mut page = doc.a4_page();
+        // Horizontal rules: ordinary 1pt strokes at every row boundary.
+        for i in 0..=6u32 {
+            let y = 510.0 + 40.0 * i as f32;
+            page = page.stroke_line(50.0, y, 400.0, y, thin.clone());
+        }
+        // Vertical rules: 1pt-long horizontal segments at the table's vertical
+        // midpoint, stroked with the full table height (240pt).
+        for x in [50.0_f32, 150.0, 250.0, 400.0] {
+            page = page.stroke_line(x - 0.5, 630.0, x + 0.5, 630.0, LineStyle::new(240.0, 0.0, 0.0, 0.0));
+        }
+        // Cell text, top row first (row i occupies y = 750-40*(i+1) .. 750-40*i).
+        let col_x = [50.0_f32, 150.0, 250.0];
+        let col_w = [100.0_f32, 100.0, 150.0];
+        for (i, row) in rows.iter().enumerate() {
+            let y = 750.0 - 40.0 * (i as f32 + 1.0);
+            for (c, text) in row.iter().enumerate() {
+                page = page.text_in_rect(Rect::new(col_x[c], y, col_w[c], 40.0), text, TextAlign::Left);
+            }
+        }
+        page.done();
+        doc.build().expect("DocumentBuilder must produce valid PDF bytes")
+    }
+
+    /// A 3-column grid whose vertical rules are stroke-width-rendered must be
+    /// detected by `extract_tables_native` (strict tier) with its rows intact.
+    /// Regression test for xberg-io/xberg#1213: previously the vertical rules'
+    /// geometry-only bboxes (1×0pt) failed `is_table_primitive`, the detector
+    /// saw no vertical rulings, and the table text flowed out column-major.
+    #[test]
+    fn extract_tables_native_detects_stroke_width_vertical_rules_table() {
+        let bytes = build_stroke_width_vertical_rules_table_pdf();
+        let mut doc = OxideDocument::open_bytes(&bytes).expect("open synthetic PDF");
+        let tables = extract_tables_native(&mut doc).expect("extract_tables_native must not error");
+        assert!(
+            !tables.is_empty(),
+            "extract_tables_native must detect the stroke-width-ruled 3-column table"
+        );
+        let table = &tables[0];
+        assert_eq!(table.page_number, 1);
+        assert!(
+            table.cells.iter().all(|row| row.len() == 3),
+            "all rows must have 3 columns; rows: {:?}",
+            table.cells.iter().map(|r| r.len()).collect::<Vec<_>>()
+        );
+        let fuse_row: Vec<&str> = vec!["101", "40A**", "Blower relay feed"];
+        assert!(
+            table
+                .cells
+                .iter()
+                .any(|row| row.iter().map(String::as_str).collect::<Vec<_>>() == fuse_row),
+            "row association must survive: expected a row {fuse_row:?}; got cells: {:?}",
+            table.cells
         );
     }
 }

@@ -49,6 +49,15 @@ The changelog starts fresh at `1.0.0-rc.1`. For the Kreuzberg v1–v4 history, s
   width — scanned pages with vertical OCR layers, typeset tategaki books. The panic guard kept
   extraction alive, but the affected page came back as a per-page error with its text lost.
   pdf_oxide 0.3.73 fixes the sort, so those pages now extract normally.
+- **Bordered tables with stroke-width-rendered rules are detected (#1213).** Some
+  print-era PDF generators draw a vertical table rule as a ~1pt segment stroked with a line
+  width equal to the table height, so the rule's geometric bounding box is a speck and the
+  Lines-strategy detector saw no vertical rulings — whole fuse-chart-style tables were missed
+  (their only detected "table" being a false-positive page footer) and their text flowed out
+  column-major, destroying row associations. Table detection now expands such stroke-width-encoded
+  rules to their rendered geometry before filtering, so these grids are detected with rows
+  intact. Expansion applies only to paths with no usable geometric extent of their own, so
+  documents that don't use this drawing trick extract identically.
 
 ## [1.0.0-rc.1] - 2026-06-26
 

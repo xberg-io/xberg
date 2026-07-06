@@ -157,3 +157,73 @@ fn test_bordered_two_column_table_detected_via_pipeline() {
         "table must produce non-empty markdown"
     );
 }
+
+/// Integration test for xberg-io/xberg#1213: a 3-column grid whose vertical
+/// rules are drawn as ~1pt segments stroked with a table-height line width
+/// (the rendered geometry is a full-height vertical bar, but the path's
+/// geometric bounding box is a speck). The native tier must detect it through
+/// the full public API path with row associations intact, and the heuristic
+/// tier must not add competing tables on that page.
+#[test]
+fn test_stroke_width_vertical_rules_table_detected_via_pipeline() {
+    use pdf_oxide::geometry::Rect;
+    use pdf_oxide::writer::{DocumentBuilder, LineStyle, TextAlign};
+
+    let thin = LineStyle::new(1.0, 0.0, 0.0, 0.0);
+    let rows: [[&str; 3]; 6] = [
+        ["Location", "Rating", "Circuit"],
+        ["6", "15A*", "Alternator regulator"],
+        ["7", "30A*", "PCM relay feed"],
+        ["11", "15A*", "A/C clutch relay feed"],
+        ["24", "10A*", "Heated mirrors"],
+        ["101", "40A**", "Blower relay feed"],
+    ];
+
+    let mut doc = DocumentBuilder::new();
+    let mut page = doc.a4_page();
+    // Horizontal rules: ordinary 1pt strokes at every row boundary.
+    for i in 0..=6u32 {
+        let y = 510.0 + 40.0 * i as f32;
+        page = page.stroke_line(50.0, y, 400.0, y, thin.clone());
+    }
+    // Vertical rules: 1pt-long horizontal segments at the table's vertical
+    // midpoint, stroked with the full table height (240pt).
+    for x in [50.0_f32, 150.0, 250.0, 400.0] {
+        page = page.stroke_line(x - 0.5, 630.0, x + 0.5, 630.0, LineStyle::new(240.0, 0.0, 0.0, 0.0));
+    }
+    let col_x = [50.0_f32, 150.0, 250.0];
+    let col_w = [100.0_f32, 100.0, 150.0];
+    for (i, row) in rows.iter().enumerate() {
+        let y = 750.0 - 40.0 * (i as f32 + 1.0);
+        for (c, text) in row.iter().enumerate() {
+            page = page.text_in_rect(Rect::new(col_x[c], y, col_w[c], 40.0), text, TextAlign::Left);
+        }
+    }
+    page.done();
+    let bytes = doc.build().expect("build synthetic PDF");
+
+    let config = ExtractionConfig::default();
+    let result = extract_bytes_document_blocking(&bytes, PDF_MIME, &config).expect("extraction must succeed");
+
+    assert_eq!(
+        result.tables.len(),
+        1,
+        "pipeline must detect exactly the stroke-width-ruled table (no heuristic duplicates); got: {:?}",
+        result.tables.iter().map(|t| &t.markdown).collect::<Vec<_>>()
+    );
+    let table = &result.tables[0];
+    assert!(
+        table.cells.iter().all(|row| row.len() == 3),
+        "all rows must have 3 columns; got: {:?}",
+        table.cells.iter().map(|r| r.len()).collect::<Vec<_>>()
+    );
+    let fuse_row = ["101", "40A**", "Blower relay feed"];
+    assert!(
+        table
+            .cells
+            .iter()
+            .any(|row| row.iter().map(String::as_str).eq(fuse_row)),
+        "row association must survive extraction; got cells: {:?}",
+        table.cells
+    );
+}
