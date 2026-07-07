@@ -21,6 +21,12 @@ The changelog starts fresh at `1.0.0-rc.1`. For the Kreuzberg v1–v4 history, s
   HuggingFace path, so chunks are sized with the exact tokenizer the consumer's embedder
   uses (llama.cpp/GGUF vocabularies, SentencePiece models, custom vocabs). Existing
   HuggingFace-id configs behave unchanged.
+- **Configurable embedding truncation length.** `EmbeddingConfig.max_sequence_length` sets how
+  many tokens a chunk keeps before the tokenizer truncates it (default 512, always capped at the
+  model's own `model_max_length`). Point it at a long-context model's window — e.g. 8192 for
+  Jina/Nomic — so long chunks embed in full instead of only their first 512 tokens. It also
+  participates in the embedding-engine cache key, so two configs that differ only in truncation
+  length don't share a tokenizer.
 
 ### Changed
 
@@ -49,6 +55,39 @@ The changelog starts fresh at `1.0.0-rc.1`. For the Kreuzberg v1–v4 history, s
   width — scanned pages with vertical OCR layers, typeset tategaki books. The panic guard kept
   extraction alive, but the affected page came back as a per-page error with its text lost.
   pdf_oxide 0.3.73 fixes the sort, so those pages now extract normally.
+- **Redaction now scrubs every text-bearing field.** The redaction pass rewrote the main content
+  and a handful of fields but left table cells, page content, form-field values, image captions,
+  URIs, metadata, and structured output carrying the original text — while still reporting success.
+  All of these are now redacted before the result is returned.
+- **Encrypted PDFs honor the configured passwords.** `PdfConfig.passwords` had no effect, so a
+  password-protected PDF came back as an empty success even with the right password supplied. Each
+  configured password is now tried, and a still-locked document returns an error instead of empty text.
+- **Merged table cells keep their column.** A cell following a horizontal merge (or under a vertical
+  merge) shifted left into the spanning column in HTML, DOCX, and the document-structure grid,
+  misaligning every following row against its headers. Cells now keep their true column position.
+- **Text encoding is detected per document, not assumed UTF-8.** Latin-1 plain text and CSV no longer
+  turn accented characters into replacement characters, XML honors its `encoding=` declaration, and a
+  UTF-8 BOM is stripped from the first CSV header instead of being glued onto the field name.
+- **Files are routed by content, not just their extension.** A misnamed file (e.g. a DOCX named
+  `report.pdf`) is now detected from its bytes and sent to the correct extractor.
+- **Token reduction applies to Markdown and HTML output.** The reduction was computed and then
+  discarded for non-plain output formats; it now takes effect for the formatted content too.
+- **Non-UTF-8 text inside archives is recovered.** Text members of zip/tar/7z archives whose bytes
+  weren't valid UTF-8 were silently dropped; they are now decoded with the same detection used elsewhere.
+- **OCR failures surface instead of returning empty text.** A failed or empty OCR pass no longer masks
+  itself as a clean empty result, and an empty OCR result no longer wipes a page's native text; a
+  `ProcessingWarning` is attached so callers can tell the page fell back.
+- **Dense unruled tables are no longer dropped by the density guard.** A real reference table with many
+  short-valued rows and few columns was rejected on row count alone; it is kept when its cells are
+  short values, while columned prose is still rejected.
+- **Language detection honors `min_confidence` and orders results deterministically.** The confidence
+  threshold was silently capped, and equal-frequency languages came back in a nondeterministic order.
+- **Config changes that alter output no longer serve a stale cached result.** The source name and OCR
+  tessdata now participate in the cache key.
+- **CSV `NaN`/`inf`/`infinity` are treated as text, not numbers**, so they no longer flip header and
+  column-type detection.
+- **Table diffs report shape changes.** A table whose row/column shape changed produced an
+  information-free empty diff instead of showing the old table removed and the new one added.
 
 ## [1.0.0-rc.1] - 2026-06-26
 
