@@ -705,46 +705,31 @@ impl<'a, 'b> HtmlWalker<'a, 'b> {
         }
 
         // Place cells on a grid that reserves the columns still occupied by a
-        // rowspan started in an earlier row. `occupied_until[col]` is the
-        // (exclusive) row index up to which the column is covered by such a
-        // rowspan; a cell may only land in a column whose coverage has ended.
-        // Without this, a cell under a rowspan shifted left into the spanning
-        // column, misaligning every following row against its headers
-        // (xberg-io/xberg#1223).
-        let mut occupied_until: Vec<u32> = Vec::new();
+        // rowspan started in an earlier row, so a cell under a rowspan does not
+        // shift left into the spanning column and misalign every following row
+        // against its headers (xberg-io/xberg#1223). The placement algorithm is
+        // shared with the flattening helpers so the geometry cannot drift.
         let mut grid_cells = Vec::new();
-        for (row_idx, row) in rows.iter().enumerate() {
-            let row_idx = row_idx as u32;
-            let mut col = 0usize;
-            for cell in row {
-                // Skip columns still covered by a rowspan from above.
-                while col < occupied_until.len() && occupied_until[col] > row_idx {
-                    col += 1;
-                }
-                let end_row = row_idx + cell.row_span.max(1);
-                let span = cell.col_span.max(1) as usize;
-                for c in col..col + span {
-                    if c >= occupied_until.len() {
-                        occupied_until.resize(c + 1, 0);
-                    }
-                    occupied_until[c] = end_row;
-                }
+        let cols = crate::extraction::grid_flatten::resolve_span_grid(
+            rows,
+            |c| c.col_span,
+            |c| c.row_span,
+            |row_idx, col, cell| {
                 grid_cells.push(GridCell {
                     content: cell.text.clone(),
                     row: row_idx,
-                    col: col as u32,
+                    col,
                     row_span: cell.row_span,
                     col_span: cell.col_span,
                     is_header: cell.is_header,
                     bbox: None,
                 });
-                col += span;
-            }
-        }
+            },
+        );
 
         let grid = TableGrid {
             rows: num_rows,
-            cols: occupied_until.len() as u32,
+            cols,
             cells: grid_cells,
         };
         self.builder.push_table(grid, None, None);
