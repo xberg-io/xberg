@@ -480,7 +480,13 @@ fn post_process_table_inner(
                 .flat_map(|row| row.iter())
                 .filter(|cell| !cell.trim().is_empty())
                 .count();
-            if total_data_cells > 0 && filled_cells * 100 > total_data_cells * 80 {
+            // Only reject a dense, few-column grid when it also reads as prose.
+            // A dense ledger (Account | Amount | Note, 30+ rows) is a real table
+            // — density alone must not disqualify it (xberg-io/xberg#1223).
+            if total_data_cells > 0
+                && filled_cells * 100 > total_data_cells * 80
+                && looks_like_prose_in_columns(&processed[1..], num_cols)
+            {
                 return None;
             }
         }
@@ -554,6 +560,42 @@ fn post_process_table_inner(
     }
 
     Some(processed)
+}
+
+/// Decide whether a dense grid of data rows is prose laid out in columns rather
+/// than a real table. The signal is words-per-cell: a table cell holds a value (a
+/// number, a code, a short label), while columned prose (a two-column article, a
+/// wrapped paragraph) fills each cell with a phrase. This gates the density guard
+/// so that a dense numeric ledger (Account | Amount | Note, 30+ rows) is not cut by
+/// row-count alone; genuinely alphabetic prose is still caught downstream by the
+/// alpha-ratio row-coherence check in `is_well_formed_table` (xberg-io/xberg#1223).
+fn looks_like_prose_in_columns(data_rows: &[Vec<String>], num_cols: usize) -> bool {
+    /// A cell averaging this many words or more reads as a phrase, not a value.
+    const PROSE_WORDS_PER_CELL: f64 = 4.0;
+
+    if num_cols < 2 {
+        return false;
+    }
+    let mut prose_rows = 0usize;
+    let mut eligible_rows = 0usize;
+    for row in data_rows {
+        let cells: Vec<&str> = row.iter().map(|c| c.trim()).filter(|c| !c.is_empty()).collect();
+        // Prose-in-columns needs multiple columns of text on the same row.
+        if cells.len() < 2 {
+            continue;
+        }
+        let total_len: usize = cells.iter().map(|c| c.len()).sum();
+        if total_len < 15 {
+            continue;
+        }
+        eligible_rows += 1;
+        let total_words: usize = cells.iter().map(|c| c.split_whitespace().count()).sum();
+        let avg_words = total_words as f64 / cells.len() as f64;
+        if avg_words >= PROSE_WORDS_PER_CELL {
+            prose_rows += 1;
+        }
+    }
+    eligible_rows >= 3 && prose_rows * 2 > eligible_rows
 }
 
 /// Validate whether a reconstructed table grid represents a well-formed table
