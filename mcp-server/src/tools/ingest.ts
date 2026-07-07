@@ -11,7 +11,7 @@ import { writeRedactedText } from "../redaction/output/text.js";
 import { writeReport } from "../redaction/output/report.js";
 import { encryptMapFile } from "../redaction/rehydration.js";
 import { embedTexts } from "xberg-rag-node";
-import { getStore } from "../store.js";
+import { getStore, ensureCollectionWithDim, withTimeout } from "../store.js";
 
 const SUPPORTED_EXTS = [".pdf", ".docx", ".txt", ".md", ".html", ".xlsx", ".csv", ".json"];
 
@@ -49,9 +49,13 @@ export function registerIngestTools(server: McpServer): void {
 
         const chunks: Array<{ ordinal: number; content: string; embedding: number[]; chunk_metadata: unknown }> = [];
         if (textChunks.length > 0) {
-          const embJson = await embedTexts(
-            JSON.stringify(textChunks),
-            JSON.stringify({ model: { type: "preset", name: "balanced" } }),
+          const embJson = await withTimeout(
+            embedTexts(
+              JSON.stringify(textChunks),
+              JSON.stringify({ model: { type: "preset", name: "balanced" } }),
+            ),
+            60_000,
+            "embedTexts",
           );
           const embeddings = JSON.parse(embJson) as number[][];
           for (let i = 0; i < textChunks.length; i++) {
@@ -72,6 +76,9 @@ export function registerIngestTools(server: McpServer): void {
         };
 
         const store = await getStore();
+        if (chunks.length > 0) {
+          await ensureCollectionWithDim(store, collection, chunks[0]!.embedding.length);
+        }
         const docId = await store.upsertDocument(collection, JSON.stringify(document), JSON.stringify(chunks));
 
         return {
@@ -210,9 +217,13 @@ export function registerIngestTools(server: McpServer): void {
 
             let docId: string | null = null;
             if (textChunks.length > 0) {
-              const embJson = await embedTexts(
-                JSON.stringify(textChunks),
-                JSON.stringify({ model: { type: "preset", name: "balanced" } }),
+              const embJson = await withTimeout(
+                embedTexts(
+                  JSON.stringify(textChunks),
+                  JSON.stringify({ model: { type: "preset", name: "balanced" } }),
+                ),
+                60_000,
+                "embedTexts",
               );
               const embeddings = JSON.parse(embJson) as number[][];
               const chunks = textChunks.map((content, i) => ({
@@ -248,6 +259,7 @@ export function registerIngestTools(server: McpServer): void {
               };
 
               const store = await getStore();
+              await ensureCollectionWithDim(store, collection, chunks[0]!.embedding.length);
               docId = await store.upsertDocument(collection, JSON.stringify(document), JSON.stringify(chunks));
             }
 

@@ -5,10 +5,10 @@ import { getStore, trackCollection, untrackCollection } from "../store.js";
 export function registerCollectionTools(server: McpServer): void {
   server.tool(
     "create_collection",
-    "Create a RAG vector collection. Use embedding_dim=1024 for BGE-M3 (default model).",
+    "Create a RAG vector collection. Default embedding_dim=768 matches the 'balanced' preset (bge-base) the ingest/query tools embed with. Use 1024 if you embed with the 'quality' preset.",
     {
       name: z.string().describe("Collection name"),
-      embedding_dim: z.number().int().positive().default(1024),
+      embedding_dim: z.number().int().positive().default(768).describe("Embedding dimension. Must match the embedder preset the tools use — the default 768 matches the 'balanced' preset (bge-base). Use 1024 for the 'quality' preset (bge-large)."),
       distance_metric: z.enum(["cosine", "l2", "inner_product"]).optional().default("cosine"),
       index_method: z.enum(["flat", "hnsw", "diskann"]).optional().default("flat"),
     },

@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { embedTexts, rerank } from "xberg-rag-node";
-import { getStore } from "../store.js";
+import { getStore, withTimeout } from "../store.js";
 
 const RetrieveModeSchema = z.enum(["vector", "full_text", "hybrid", "graph"]);
 const FilterSchema: z.ZodType<unknown> = z.lazy(() =>
@@ -71,9 +71,13 @@ export function registerQueryTools(server: McpServer): void {
         let queryVector: number[] | null = null;
 
         if (mode === "vector" || mode === "hybrid") {
-          const embJson = await embedTexts(
-            JSON.stringify([query]),
-            JSON.stringify({ model: { type: "preset", name: embedding_preset } })
+          const embJson = await withTimeout(
+            embedTexts(
+              JSON.stringify([query]),
+              JSON.stringify({ model: { type: "preset", name: embedding_preset } }),
+            ),
+            60_000,
+            "embedTexts",
           );
           const vecs = JSON.parse(embJson) as number[][];
           queryVector = vecs[0] ?? null;

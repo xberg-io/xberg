@@ -18,6 +18,7 @@ pub enum RetrieveMode {
     #[default]
     Vector,
     /// Full-text search only.
+    #[serde(rename = "full_text", alias = "fulltext")]
     FullText,
     /// Hybrid (vector + full-text fused).
     Hybrid,

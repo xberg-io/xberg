@@ -95,8 +95,8 @@ export type Filter =
   | { or: { filters: Filter[] } }
   | { not: { filter: Filter } };
 
-export interface RagStore {
-  openSqlite(name: string, dbPath: string): Promise<RagStore>;
+export class RagStore {
+  static openSqlite(name: string, dbPath: string): Promise<RagStore>;
   ensureCollection(specJson: string): Promise<void>;
   dropCollection(name: string): Promise<void>;
   getCollection(name: string): Promise<string | null>;
