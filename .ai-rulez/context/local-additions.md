@@ -68,6 +68,52 @@ mcp-server/
 
 Dependencies: `@modelcontextprotocol/sdk`, `@xberg-io/xberg` (file dep), `xberg-rag-node` (file dep), `zod`, `docx`, `pdf-lib`.
 
+## packages/xberg-wasm-runtime
+
+Shared JS/TS runtime layer for the `xberg-wasm` engine's injected dependencies (embedder, vector
+store, NER, OCR, model caching). Consumed by both the browser UI and the MCP server. Fork-local,
+built via `docs/superpowers/plans/2026-07-02-xberg-wasm-runtime-layer.md` ("Plan C"), 12/12 tasks
+complete on branch `worktree-wasm-runtime-layer` (PR #10). Full task-by-task history —
+including a real cross-cutting ONNX Runtime version-conflict bug found and fixed, and a
+scope-creep regression caught and reverted during a lint-fix round — is in
+`.superpowers/sdd/progress.md` (Plan C section).
+
+```
+packages/xberg-wasm-runtime/
+  src/
+    types.ts        — InjectionDescriptor, CacheConfig, and per-component interfaces
+    validation.ts    — zod schema, validateInjectionDescriptor
+    embedder.ts      — transformers.js v3 feature-extraction pipeline, L2-normalized output
+    store.ts         — in-memory JS cosine-similarity vector store (sqlite-vec/wa-sqlite pending)
+    ner.ts           — transformers.js token-classification (Xenova/bert-base-NER), optional
+    ocr.ts           — ppu-paddle-ocr v6 (PaddleOcrService/.recognize()), optional
+    cache.ts         — CacheManager: model cache status/warm/wasm-path config (mirrors MCP WarmupManager)
+    async_shim.ts    — SingleFlightGuard, documents the engine's &self-across-await constraint
+    factory.ts       — createXbergRuntimeFactory: thin composition over all of the above
+    contract.test.ts — exercises the real factory output against each interface's contract
+  README.md
+```
+
+Optional components (`ner`, `ocr`) return `null` on load/init failure rather than throwing —
+`createXbergRuntimeFactory` omits them from the returned descriptor entirely (not a `null`-valued
+key, per the zod schema's `.optional()`/non-`.nullable()` fields). The consuming `xberg-wasm`
+engine, not this package, is responsible for any native fallback when a component is absent.
+
+**Known constraint — do not casually bump ORT versions.** `pnpm-workspace.yaml`'s `overrides`
+pins `onnxruntime-node` to `1.21.0` and `onnxruntime-web` to `1.22.0-dev.20250409-89f8206ba4`,
+matching what `@huggingface/transformers` (embedder/NER) already resolves to. `ppu-paddle-ocr@6.x`
+peer-resolves to a newer `onnxruntime-web@1.27.0` by default; having both ORT native builds
+resident in one Node process causes a native SIGSEGV (API-version mismatch), not a catchable JS
+exception. If either package's dependency on `onnxruntime-*` is updated, re-verify both
+`embedder.test.ts`/`ner.test.ts` and `ocr.test.ts` still pass together in the same process before
+removing or changing the pin.
+
+Coverage as of Task 11: 79.38% lines / 62.5% branches / 71.11% functions / 76.72% statements —
+below the repo's 80%/75% bindings targets. The gap is traced to legitimate optional-injection and
+platform-gated branches (browser-only OPFS paths, native backend failure catches, OCR
+language-model switching) rather than untested business logic; closing it fully was estimated at
+~200-300 LOC of mock infrastructure and deferred as documented follow-up.
+
 ## Windows Build Notes
 
 - Cargo target dir: `E:/cargo-target` (set in `~/.cargo/config.toml`)

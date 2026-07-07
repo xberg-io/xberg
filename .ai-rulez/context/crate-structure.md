@@ -42,3 +42,10 @@ Not a workspace crate — built with `npm run build` / `task mcp:build`.
 See `.ai-rulez/context/local-additions.md` for the full file map.
 
 Tasks: `task mcp:build`, `task mcp:test`, `task mcp:dev`, `task mcp:lint`, `task rag-node:build`
+
+## Fork-local WASM runtime layer (`packages/xberg-wasm-runtime/`)
+
+Shared JS/TS injected-dependency layer (embedder, vector store, NER, OCR, model cache) for the
+`xberg-wasm` engine; consumed by the browser UI and MCP server. Not a workspace crate — pnpm
+package with its own `package.json`/`vitest.config.ts`. See `.ai-rulez/context/local-additions.md`
+for the full file map and the ONNX Runtime version-pin constraint.
