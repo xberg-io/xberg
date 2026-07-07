@@ -3,13 +3,29 @@
 //! Used by both layout detection and PaddleOCR model managers.
 
 use std::io::{BufReader, Read};
-use std::path::{Path, PathBuf};
+use std::path::Path;
+// `PathBuf` is only referenced by the HF-download and cache-dir helpers, which are
+// gated to the features that use them; a candle-only build stages via ModelScope
+// and doesn't compile them.
+#[cfg(any(
+    feature = "paddle-ocr",
+    feature = "layout-detection",
+    feature = "auto-rotate",
+    feature = "ner-onnx"
+))]
+use std::path::PathBuf;
 
 use sha2::{Digest, Sha256};
 
 /// Download a file from a HuggingFace Hub repository.
 ///
 /// Uses `hf-hub`'s built-in caching so repeated calls for the same file are fast.
+#[cfg(any(
+    feature = "paddle-ocr",
+    feature = "layout-detection",
+    feature = "auto-rotate",
+    feature = "ner-onnx"
+))]
 pub(crate) fn hf_download(repo_id: &str, remote_filename: &str) -> Result<PathBuf, String> {
     tracing::info!(repo = repo_id, filename = remote_filename, "Downloading via hf-hub");
 

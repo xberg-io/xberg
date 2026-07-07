@@ -18,6 +18,11 @@ pub mod glm_ocr_backend;
 #[cfg(all(feature = "candle-hunyuan-ocr", not(target_arch = "wasm32")))]
 pub mod hunyuan_ocr_backend;
 
+// Checksum-verified weight staging for backends whose checkpoints can't be fetched
+// through hf-hub at runtime (currently Hunyuan-OCR — pulled from the HF Hub upstream).
+#[cfg(all(feature = "candle-hunyuan-ocr", not(target_arch = "wasm32")))]
+mod model_stager;
+
 #[cfg(all(feature = "candle-deepseek-ocr", not(target_arch = "wasm32")))]
 pub mod deepseek_ocr_backend;
 

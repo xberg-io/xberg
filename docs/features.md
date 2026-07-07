@@ -248,11 +248,11 @@ Pure-Rust VLM OCR via the `candle-hunyuan-ocr` feature. Tencent Hunyuan-OCR visi
 
 **Model & performance:**
 
-- Model size: ~2 GB on first download; cached at `~/.cache/huggingface/`
+- Model size: ~2 GB, downloaded on first use from Tencent's official ModelScope release, checksum-verified, and cached under the xberg cache directory (`XBERG_CACHE_DIR` or the platform cache dir, e.g. `~/.cache/xberg/`)
 - Detects layout and text regions, outputs merged into reading-order markdown
 - CPU dtype: F32; CUDA dtype: F16
 
-Configure via `--ocr-backend candle-hunyuan-ocr` or `ocr.backend = "candle-hunyuan-ocr"` in config. Set device via `backend_options`: `{"device":"metal"}`, `{"device":"cuda"}`.
+Configure via `--ocr-backend candle-hunyuan-ocr` or `ocr.backend = "candle-hunyuan-ocr"` in config. Set device via `backend_options`: `{"device":"metal"}`, `{"device":"cuda"}`. To use pre-staged or offline weights, set `{"model_path":"/path/to/hunyuan-ocr"}`.
 
 **Attribution:** Model vendored from [jhqxxx/aha](https://github.com/jhqxxx/aha) (Apache-2.0). See [ATTRIBUTIONS.md](https://github.com/xberg-io/xberg/blob/main/ATTRIBUTIONS.md).
 

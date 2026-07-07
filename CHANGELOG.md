@@ -29,6 +29,14 @@ The changelog starts fresh at `1.0.0-rc.1`. For the Kreuzberg v1–v4 history, s
 
 ### Fixed
 
+- **Hunyuan-OCR auto-downloads its weights instead of requiring a local `model_path`.**
+  The docs said the model downloads on first use, but the backend errored unless
+  `backend_options.model_path` pointed at a pre-staged directory — and the checkpoint's
+  Hugging Face repo was pulled upstream, so there was nowhere obvious to stage it from.
+  The backend now fetches the weights on first use from Tencent's official ModelScope
+  release, verifies every file against a checked-in sha256 manifest, and caches them
+  under the xberg cache directory. An explicit `model_path` still takes precedence for
+  offline or custom weights.
 - **PaddleOCR-VL crashed on non-square pages.** The multimodal rope index built the
   vision-block position tensors with a transposed height/width layout and dropped the
   temporal row, so any image whose patch grid wasn't square failed inference with

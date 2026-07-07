@@ -423,7 +423,7 @@ Tencent Hunyuan-OCR — vision-language model for comprehensive document parsing
 
 === "Native bindings (Rust, Go, TypeScript, Node.js, Java, C#, Ruby, PHP, Elixir)"
 
-    Built in via the `candle-hunyuan-ocr` feature flag or the `candle-vlm-ocr` umbrella feature. The model downloads automatically on first use (~3.5 GB) and is cached at `~/.cache/huggingface/`.
+    Built in via the `candle-hunyuan-ocr` feature flag or the `candle-vlm-ocr` umbrella feature. The weights (~2 GB) download automatically on first use from Tencent's official ModelScope release, are checksum-verified, and cached under the xberg cache directory (`XBERG_CACHE_DIR`, or the platform cache dir, e.g. `~/.cache/xberg/` on Linux). To use pre-staged or offline weights, set `model_path` in `backend_options` to a local model directory.
 
     ```toml title="Cargo.toml (Rust example)"
     [dependencies]

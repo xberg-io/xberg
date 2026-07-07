@@ -142,7 +142,8 @@ pub mod ort_discovery;
     feature = "paddle-ocr",
     feature = "layout-detection",
     feature = "auto-rotate",
-    feature = "ner-onnx"
+    feature = "ner-onnx",
+    feature = "candle-ocr"
 ))]
 pub(crate) mod model_download;
 

@@ -109,7 +109,11 @@ fn get_or_init_engine(model_path: &str, preference: DevicePreference, dtype: DTy
 /// ```
 ///
 /// - `device` (string): `"auto"` (default), `"cpu"`, `"cuda"`, `"metal"`
-/// - `model_path` (string): path to the local model directory (required)
+/// - `model_path` (string, optional): path to a local model directory. When
+///   omitted, the weights are downloaded on first use from the model's official
+///   ModelScope release, checksum-verified, and cached under the xberg cache
+///   directory — no manual staging required. Set it to point at pre-staged or
+///   custom weights (offline use).
 #[cfg_attr(alef, alef(skip))]
 pub struct HunyuanOcrBackend {
     dtype: DType,
@@ -180,10 +184,9 @@ impl OcrBackend for HunyuanOcrBackend {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::XbergError::Validation`] if `image_bytes` is empty
-    /// or `model_path` is not provided in `backend_options`.
-    /// Returns [`crate::XbergError::Ocr`] if device selection, engine
-    /// initialisation, or inference fails.
+    /// Returns [`crate::XbergError::Validation`] if `image_bytes` is empty.
+    /// Returns [`crate::XbergError::Ocr`] if weight download, device selection,
+    /// engine initialisation, or inference fails.
     async fn process_image(&self, image_bytes: &[u8], config: &OcrConfig) -> Result<ExtractedDocument> {
         let (model_path, device) = Self::parse_options(config);
 
@@ -195,17 +198,23 @@ impl OcrBackend for HunyuanOcrBackend {
             });
         }
 
-        let model_path = model_path.ok_or_else(|| crate::XbergError::Validation {
-            message: "Hunyuan-OCR requires `model_path` in backend_options pointing to the local model directory"
-                .to_string(),
-            source: None,
-        })?;
-
         let image_bytes = image_bytes.to_vec();
         let dtype = self.dtype;
 
         // Run inference in a blocking task to avoid blocking the async runtime.
         let content = tokio::task::spawn_blocking(move || {
+            // An explicit model_path wins (offline / custom weights); otherwise
+            // auto-stage the checksum-verified weights into the shared cache. Both
+            // do blocking I/O, so this runs inside spawn_blocking.
+            let model_path = match model_path {
+                Some(p) => p,
+                None => super::model_stager::ensure_hunyuan_ocr()
+                    .map(|dir| dir.to_string_lossy().into_owned())
+                    .map_err(|e| crate::XbergError::Ocr {
+                        message: format!("Hunyuan-OCR weight download failed: {e}"),
+                        source: None,
+                    })?,
+            };
             let engine = get_or_init_engine(&model_path, device, dtype)?;
 
             // Run the Hunyuan-OCR inference pipeline: image preprocessing → vision encoding →

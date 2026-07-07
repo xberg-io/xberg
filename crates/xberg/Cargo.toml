@@ -162,7 +162,10 @@ candle-paddleocr-vl = ["candle-ocr", "xberg-candle-ocr/paddleocr-vl"]
 # GLM-OCR backend: aggregate feature enabling candle-ocr with glm-ocr sub-feature; requires layout-detection for paired dispatch
 candle-glm-ocr = ["candle-ocr", "xberg-candle-ocr/glm-ocr", "layout-detection"]
 # Hunyuan-OCR backend: aggregate feature enabling candle-ocr with hunyuan-ocr sub-feature
-candle-hunyuan-ocr = ["candle-ocr", "xberg-candle-ocr/hunyuan-ocr"]
+# `dep:ureq` powers the checksum-verified ModelScope weight staging: tencent/HunyuanOCR
+# was pulled from the HF Hub, so the weights can't be fetched through hf-hub like the
+# other Candle backends. Native-only (the Hunyuan backend is `not(target_arch = wasm32)`).
+candle-hunyuan-ocr = ["candle-ocr", "xberg-candle-ocr/hunyuan-ocr", "dep:ureq"]
 # DeepSeek-OCR backend: aggregate feature enabling candle-ocr with deepseek-ocr sub-feature
 candle-deepseek-ocr = ["candle-ocr", "xberg-candle-ocr/deepseek-ocr"]
 # Umbrella aggregate for all candle VLM OCR backends (not in full/formats/wasm-target/android-target)
