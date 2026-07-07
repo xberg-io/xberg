@@ -635,6 +635,11 @@ biblib = { version = "=0.4.3", default-features = false, features = ["ris", "pub
 bitvec = "1.1"
 blake3 = { workspace = true }
 bytes = { workspace = true }
+# Pinned to 0.35.x: calamine 0.36 requires quick-xml 0.41 with the `encoding`
+# feature, which unifies with our office_oxide (via pdf_oxide) quick-xml 0.41
+# and compiles out `Attribute::unescape_value` (it is `cfg(not(encoding))`),
+# breaking office_oxide 0.1.3. calamine 0.35 needs quick-xml 0.39, keeping the
+# versions split. Revert this pin only once office_oxide drops unescape_value.
 calamine = { version = "0.35.0", features = ["dates"], optional = true }
 cfb = { workspace = true, optional = true }
 chardetng = { version = "1.0.0", optional = true }
