@@ -1,7 +1,7 @@
 //! Encrypted rehydration map: token → original PII text.
 //!
 //! Wire format: `XPII\x01` magic + 16-byte salt + 12-byte nonce + 16-byte GCM
-//! tag + ciphertext. Key derivation is scrypt(passphrase, salt, N=2^15,
+//! tag + ciphertext. Key derivation is scrypt(passphrase, salt, N=2^14,
 //! r=8, p=1) → 32 bytes.
 
 use std::collections::HashMap;
@@ -21,7 +21,11 @@ const SALT_LEN: usize = 16;
 const NONCE_LEN: usize = 12;
 const TAG_LEN: usize = 16;
 const KEY_LEN: usize = 32;
-const SCRYPT_LOG_N: u8 = 15;
+/// Must stay in sync with the shipped TypeScript rehydration module
+/// (`mcp-server/src/redaction/rehydration.ts`), which uses Node's
+/// `crypto.scryptSync` defaults (N = 2^14, r = 8, p = 1).
+/// Changing this value breaks wire-format compatibility with existing TS maps.
+const SCRYPT_LOG_N: u8 = 14;
 const SCRYPT_R: u32 = 8;
 const SCRYPT_P: u32 = 1;
 
@@ -132,5 +136,26 @@ mod tests {
         let map = HashMap::new();
         let encrypted = encrypt_map(&map, "x").expect("encrypt empty map");
         assert_eq!(&encrypted[..5], b"XPII\x01");
+    }
+
+    #[test]
+    fn decrypts_map_produced_by_typescript() {
+        let hex = include_str!("../testdata/ts_map_fixture.hex");
+        let bytes = hex_decode(hex.trim());
+        let map = decrypt_map(&bytes, "test-passphrase").expect("Rust decrypts TS-encrypted map");
+        assert_eq!(map.get("[EMAIL_1]").map(String::as_str), Some("a@b.com"));
+        assert_eq!(map.get("[PERSON_1]").map(String::as_str), Some("Jane Doe"));
+    }
+
+    fn hex_decode(s: &str) -> Vec<u8> {
+        assert!(
+            s.len() % 2 == 0,
+            "hex input must have even length, got {}",
+            s.len()
+        );
+        (0..s.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&s[i..i + 2], 16).expect("valid hex"))
+            .collect()
     }
 }
