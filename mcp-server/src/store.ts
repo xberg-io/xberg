@@ -58,6 +58,10 @@ export async function ensureCollectionWithDim(
   collection: string,
   dim: number,
 ): Promise<void> {
+  if (dim <= 0) {
+    throw new Error(`Embedding dimension must be greater than 0, received ${dim}`);
+  }
+
   const existing = await store.getCollection(collection);
   if (existing === null) {
     await store.ensureCollection(
@@ -79,17 +83,27 @@ export async function ensureCollectionWithDim(
  */
 export function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const t = setTimeout(
-      () => reject(new Error(`${label} timed out after ${ms}ms (model may be missing or slow to load)`)),
-      ms,
-    );
+    let timedOut = false;
+    const t = setTimeout(() => {
+      timedOut = true;
+      console.warn(`${label} timed out after ${ms}ms; underlying work is still running`);
+      reject(new Error(`${label} timed out after ${ms}ms (model may be missing or slow to load)`));
+    }, ms);
     p.then(
       (v) => {
         clearTimeout(t);
+        if (timedOut) {
+          console.warn(`${label} resolved after timing out`);
+          return;
+        }
         resolve(v);
       },
       (e) => {
         clearTimeout(t);
+        if (timedOut) {
+          console.warn(`${label} rejected after timing out`, e);
+          return;
+        }
         reject(e);
       },
     );

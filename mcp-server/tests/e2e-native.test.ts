@@ -29,36 +29,34 @@ const HAVE_NATIVE = nativeBindingAvailable();
 // ingestion is impossible without producing embeddings — see insights report).
 
 const COLLECTION = "it_test_collection";
+const EMBEDDING_PROBE_TIMEOUT_MS = Number(process.env.EMBEDDING_PROBE_TIMEOUT_MS ?? "20000");
 let dbPath: string;
 let store: import("xberg-rag-node").RagStore;
 let embeddingsWork = false;
+let originalStorePath: string | undefined;
 
 describe.skipIf(!HAVE_NATIVE)("native RAG store end-to-end", () => {
   beforeAll(async () => {
     const native = await import("xberg-rag-node");
-    const { getStore } = await import("../src/store.js");
+    const { getStore, withTimeout } = await import("../src/store.js");
 
     dbPath = join(tmpdir(), `xberg-it-${Date.now()}.db`);
     // Route getStore() to a temp db instead of the real user store.
+    originalStorePath = process.env.XBERG_STORE_PATH;
     process.env.XBERG_STORE_PATH = dbPath;
     // Bug 1: store.ts must use the static RagStore.openSqlite, not a
     // non-existent module-level openSqlite. getStore() is the real server path.
     store = await getStore();
 
     try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 4000);
-      const p = native.embedTexts(
-        JSON.stringify(["probe"]),
-        JSON.stringify({ model: { type: "preset", name: "balanced" } }),
-      );
-      const r = await Promise.race([
-        p,
-        new Promise<never>((_, rej) =>
-          ctrl.signal.addEventListener("abort", () => rej(new Error("timeout"))),
+      const r = await withTimeout(
+        native.embedTexts(
+          JSON.stringify(["probe"]),
+          JSON.stringify({ model: { type: "preset", name: "balanced" } }),
         ),
-      ]);
-      clearTimeout(t);
+        EMBEDDING_PROBE_TIMEOUT_MS,
+        "embedding probe",
+      );
       const v = JSON.parse(r as string) as number[][];
       embeddingsWork = Array.isArray(v) && v[0]?.length === 768;
     } catch {
@@ -72,6 +70,12 @@ describe.skipIf(!HAVE_NATIVE)("native RAG store end-to-end", () => {
       if (existsSync(dbPath)) unlinkSync(dbPath);
     } catch {
       /* ignore */
+    } finally {
+      if (originalStorePath === undefined) {
+        delete process.env.XBERG_STORE_PATH;
+      } else {
+        process.env.XBERG_STORE_PATH = originalStorePath;
+      }
     }
   });
 
