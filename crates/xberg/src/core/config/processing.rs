@@ -376,6 +376,21 @@ pub struct EmbeddingConfig {
     /// hardware.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_embed_duration_secs: Option<u64>,
+
+    /// Maximum number of tokens fed to the tokenizer before truncation when
+    /// embedding a chunk with a local ONNX model (Preset/Custom).
+    ///
+    /// A chunk longer than this many tokens has its tail dropped before
+    /// inference, so only the prefix contributes to the stored vector. `None`
+    /// falls back to 512 (the historical default). The effective value is
+    /// always capped at the model's own `model_max_length`, so raising it past
+    /// what the model supports has no effect — set it to match a long-context
+    /// model (e.g. 8192 for Jina/Nomic) so long chunks embed in full.
+    ///
+    /// Ignored by the `Llm` and `Plugin` model types, which own their own
+    /// tokenization.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_sequence_length: Option<usize>,
 }
 
 impl Default for EmbeddingConfig {
@@ -390,6 +405,7 @@ impl Default for EmbeddingConfig {
             cache_dir: None,
             acceleration: None,
             max_embed_duration_secs: Some(60),
+            max_sequence_length: None,
         }
     }
 }
@@ -648,6 +664,7 @@ mod tests {
             cache_dir: None,
             acceleration: None,
             max_embed_duration_secs: Some(60),
+            max_sequence_length: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();

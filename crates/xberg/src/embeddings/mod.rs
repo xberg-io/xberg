@@ -222,6 +222,12 @@ fn resolve_cache_dir(cache_dir: Option<std::path::PathBuf>) -> std::path::PathBu
 
 /// Resolve model info (repo, model file, pooling) from an EmbeddingModelType config.
 #[cfg(feature = "embeddings")]
+/// Default tokenizer truncation length when `EmbeddingConfig.max_sequence_length`
+/// is unset. Matches the historical hardcoded value; the effective length is still
+/// capped at the model's own `model_max_length` in [`load_tokenizer`].
+#[cfg(feature = "embeddings")]
+const DEFAULT_EMBEDDING_MAX_SEQUENCE_LENGTH: usize = 512;
+
 fn resolve_model_info(
     model_type: &crate::core::config::EmbeddingModelType,
 ) -> crate::Result<(String, String, engine::Pooling)> {
@@ -611,12 +617,16 @@ fn get_or_init_engine(
     repo_name: &str,
     model_file: &str,
     pooling: engine::Pooling,
+    max_sequence_length: usize,
     cache_dir: Option<std::path::PathBuf>,
     accel: Option<crate::core::config::acceleration::AccelerationConfig>,
 ) -> crate::Result<Arc<EmbeddingEngine>> {
     let cache_directory = resolve_cache_dir(cache_dir);
+    // max_sequence_length participates in the cache key: two configs that only
+    // differ in truncation length must not share a tokenizer (otherwise the first
+    // one initialized would silently cap the other).
     let engine_key = format!(
-        "{repo_name}_{model_file}_{cache_directory}",
+        "{repo_name}_{model_file}_{max_sequence_length}_{cache_directory}",
         cache_directory = cache_directory.display()
     );
 
@@ -671,7 +681,7 @@ fn get_or_init_engine(
             &config_path,
             &special_tokens_path,
             &tokenizer_config_path,
-            512, // default max_length
+            max_sequence_length,
         )?;
 
         // Create ORT session
@@ -757,7 +767,15 @@ pub fn warm_model(
     cache_dir: Option<std::path::PathBuf>,
 ) -> crate::Result<()> {
     let (repo, model_file, pooling) = resolve_model_info(model_type)?;
-    get_or_init_engine(&repo, &model_file, pooling, cache_dir, None).map(|_| ())
+    get_or_init_engine(
+        &repo,
+        &model_file,
+        pooling,
+        DEFAULT_EMBEDDING_MAX_SEQUENCE_LENGTH,
+        cache_dir,
+        None,
+    )
+    .map(|_| ())
 }
 
 /// Normalize an embedding vector in-place (L2 normalization).
@@ -1007,6 +1025,9 @@ pub fn embed_texts<T: AsRef<str>>(
                 &repo,
                 &model_file,
                 pooling,
+                config
+                    .max_sequence_length
+                    .unwrap_or(DEFAULT_EMBEDDING_MAX_SEQUENCE_LENGTH),
                 config.cache_dir.clone(),
                 config.acceleration.clone(),
             )?;
