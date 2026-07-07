@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("xberg-rag-node", () => ({
-  RagStore: class {},
+  RagStore: vi.fn(),
 }));
 
 import { ensureCollectionWithDim, withTimeout } from "../src/store.js";
