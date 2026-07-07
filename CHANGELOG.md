@@ -29,6 +29,12 @@ The changelog starts fresh at `1.0.0-rc.1`. For the Kreuzberg v1–v4 history, s
 
 ### Fixed
 
+- **Concurrent model downloads no longer race the Hugging Face cache lock.** When two
+  threads needed the same cold model at once — e.g. parallel-page OCR workers, or two
+  GPU tests sharing a layout model — hf-hub errored one of them with `Lock acquisition
+  failed` instead of waiting. Downloads of the same file now serialize above hf-hub, so
+  the first populates the cache and the rest get the warm copy; different files still
+  download in parallel.
 - **Hunyuan-OCR auto-downloads its weights instead of requiring a local `model_path`.**
   The docs said the model downloads on first use, but the backend errored unless
   `backend_options.model_path` pointed at a pre-staged directory — and the checkpoint's
