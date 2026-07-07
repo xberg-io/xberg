@@ -84,7 +84,7 @@ pub(crate) fn hf_download(repo_id: &str, remote_filename: &str) -> Result<PathBu
 ///
 /// Shared by every checksum-manifest consumer (GLiNER model checksums, Candle VLM-OCR
 /// weight staging) so the format and validation live in one place.
-#[cfg(any(feature = "ner-onnx", feature = "candle-ocr"))]
+#[cfg(any(feature = "ner-onnx", feature = "candle-hunyuan-ocr"))]
 pub(crate) fn parse_sha256_manifest(content: &str) -> Result<Vec<(String, String)>, String> {
     let mut entries = Vec::new();
     for (index, line) in content.lines().enumerate() {
@@ -167,7 +167,7 @@ pub(crate) fn resolve_cache_dir(module: &str) -> PathBuf {
 mod tests {
     use super::*;
 
-    #[cfg(any(feature = "ner-onnx", feature = "candle-ocr"))]
+    #[cfg(any(feature = "ner-onnx", feature = "candle-hunyuan-ocr"))]
     #[test]
     fn parse_sha256_manifest_reads_entries_and_normalizes() {
         let entries = parse_sha256_manifest(
@@ -183,7 +183,7 @@ mod tests {
         assert!(parse_sha256_manifest("# only comments\n").unwrap().is_empty());
     }
 
-    #[cfg(any(feature = "ner-onnx", feature = "candle-ocr"))]
+    #[cfg(any(feature = "ner-onnx", feature = "candle-hunyuan-ocr"))]
     #[test]
     fn parse_sha256_manifest_rejects_malformed_lines() {
         assert!(
