@@ -63,10 +63,6 @@ See [KeywordConfig reference](../reference/configuration.md#keywordconfig) for a
 
     --8<-- "snippets/ruby/config/keyword_extraction_config.md"
 
-=== "R"
-
-    --8<-- "snippets/r/config/keyword_extraction_config.md"
-
 === "C#"
 
     --8<-- "snippets/csharp/advanced/keyword_extraction_config.md"

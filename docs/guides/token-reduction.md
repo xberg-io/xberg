@@ -38,10 +38,6 @@ Reduce token count while preserving meaning for LLM pipelines.
 
     --8<-- "snippets/ruby/config/token_reduction_config.md"
 
-=== "R"
-
-    --8<-- "snippets/r/config/token_reduction_config.md"
-
 ## Example
 
 === "Python"
@@ -71,10 +67,6 @@ Reduce token count while preserving meaning for LLM pipelines.
 === "Ruby"
 
     --8<-- "snippets/ruby/advanced/token_reduction_example.md"
-
-=== "R"
-
-    --8<-- "snippets/r/advanced/token_reduction_example.md"
 
 ## See also
 

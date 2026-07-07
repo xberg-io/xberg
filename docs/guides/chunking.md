@@ -56,10 +56,6 @@ Use `topic_threshold` to control sensitivity: higher values (0.7–0.9) preserve
 
     --8<-- "snippets/ruby/config/chunking_config.md"
 
-=== "R"
-
-    --8<-- "snippets/r/config/chunking_config.md"
-
 === "Wasm"
 
     --8<-- "snippets/wasm/config/chunking_config.md"
@@ -109,10 +105,6 @@ Chunks can be sized by token count instead of characters — enable the `chunkin
 === "Ruby"
 
     --8<-- "snippets/ruby/advanced/chunking_rag.md"
-
-=== "R"
-
-    --8<-- "snippets/r/advanced/chunking_rag.md"
 
 ## See also
 

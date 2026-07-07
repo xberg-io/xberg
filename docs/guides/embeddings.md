@@ -51,10 +51,6 @@ Rust extraction configuration and `XBERG_EMBEDDING_PLUGIN_NAME` accept the Plugi
 
     --8<-- "snippets/ruby/advanced/embedding_with_chunking.md"
 
-=== "R"
-
-    --8<-- "snippets/r/advanced/embedding_with_chunking.md"
-
 ## Vector Database Integration
 
 === "Python"
@@ -84,10 +80,6 @@ Rust extraction configuration and `XBERG_EMBEDDING_PLUGIN_NAME` accept the Plugi
 === "Ruby"
 
     --8<-- "snippets/ruby/advanced/vector_database_integration.md"
-
-=== "R"
-
-    --8<-- "snippets/r/advanced/vector_database_integration.md"
 
 ## See also
 

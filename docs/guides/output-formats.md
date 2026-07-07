@@ -151,10 +151,6 @@ Use for RAG chunking, semantic search, or Unstructured.io-compatible pipelines.
 
     --8<-- "snippets/ruby/config/element_based_output.md"
 
-=== "R"
-
-    --8<-- "snippets/r/config/element_based_output.md"
-
 === "PHP"
 
     --8<-- "snippets/php/config/element_based_output.md"
@@ -280,10 +276,6 @@ Use when you need hierarchical relationships between sections.
 === "Ruby"
 
     --8<-- "snippets/ruby/config/document_structure_config.md"
-
-=== "R"
-
-    --8<-- "snippets/r/config/document_structure_config.md"
 
 ### Node Shape
 

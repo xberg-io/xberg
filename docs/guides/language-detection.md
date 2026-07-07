@@ -32,10 +32,6 @@ Detect languages in extracted text using [`whatlang`](https://crates.io/crates/w
 
     --8<-- "snippets/ruby/config/language_detection_config.md"
 
-=== "R"
-
-    --8<-- "snippets/r/config/language_detection_config.md"
-
 ## Multilingual Example
 
 === "Python"
@@ -65,10 +61,6 @@ Detect languages in extracted text using [`whatlang`](https://crates.io/crates/w
 === "Ruby"
 
     --8<-- "snippets/ruby/advanced/language_detection_multilingual.md"
-
-=== "R"
-
-    --8<-- "snippets/r/advanced/language_detection_multilingual.md"
 
 ## See also
 

@@ -116,10 +116,6 @@ tesseract --list-langs
 
     --8<-- "snippets/ruby/ocr/ocr_extraction.md"
 
-=== "R"
-
-    --8<-- "snippets/r/ocr/ocr_extraction.md"
-
 === "Wasm"
 
     --8<-- "snippets/wasm/ocr/ocr_extraction.md"
@@ -151,10 +147,6 @@ Specify multiple language codes separated by `+` (Tesseract) or as a list (Paddl
 === "Ruby"
 
     --8<-- "snippets/ruby/ocr/ocr_multi_language.md"
-
-=== "R"
-
-    --8<-- "snippets/r/ocr/ocr_multi_language.md"
 
 === "Wasm"
 
@@ -206,10 +198,6 @@ Process PDFs with OCR even when they have a text layer:
 === "Ruby"
 
     --8<-- "snippets/ruby/ocr/ocr_force_all_pages.md"
-
-=== "R"
-
-    --8<-- "snippets/r/ocr/ocr_force_all_pages.md"
 
 ### Disable OCR
 
@@ -278,10 +266,6 @@ When `disable_ocr` is set, image files return empty content instead of raising `
 === "Ruby"
 
     --8<-- "snippets/ruby/ocr/ocr_paddleocr.md"
-
-=== "R"
-
-    --8<-- "snippets/r/ocr/ocr_paddleocr.md"
 
 ### Candle GLM-OCR
 
@@ -775,10 +759,6 @@ Higher DPI improves accuracy but increases processing time and memory.
 === "Ruby"
 
     --8<-- "snippets/ruby/config/ocr_dpi_config.md"
-
-=== "R"
-
-    --8<-- "snippets/r/config/ocr_dpi_config.md"
 
 ## PaddleOCR Script Families
 

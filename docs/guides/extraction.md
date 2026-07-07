@@ -479,10 +479,6 @@ All extraction functions raise typed exceptions on failure. Catch specific excep
 
     --8<-- "snippets/ruby/api/error_handling.md"
 
-=== "R"
-
-    --8<-- "snippets/r/api/error_handling.md"
-
 === "C"
 
     --8<-- "snippets/c/api/error_handling.md"

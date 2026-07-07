@@ -59,10 +59,6 @@ implement `initialize()` / `shutdown()` lifecycle methods.
 
     --8<-- "snippets/ruby/plugins/extractor_registration.md"
 
-=== "R"
-
-    --8<-- "snippets/r/plugins/extractor_registration.md"
-
 ### Priority System
 
 When multiple extractors support the same MIME type, the highest priority wins:
@@ -138,10 +134,6 @@ Processors execute in three stages:
 === "Ruby"
 
     --8<-- "snippets/ruby/ocr/cloud_ocr_backend.md"
-
-=== "R"
-
-    --8<-- "snippets/r/ocr/cloud_ocr_backend.md"
 
 ### Registration
 
@@ -336,7 +328,3 @@ Register the backend and set its name in `OcrConfig`:
 === "Ruby"
 
     --8<-- "snippets/ruby/plugins/pdf_metadata_extractor.md"
-
-=== "R"
-
-    --8<-- "snippets/r/plugins/pdf_metadata_extractor.md"

@@ -42,10 +42,6 @@ Score ranges: `0.0–0.3` very low, `0.3–0.6` low, `0.6–0.8` moderate, `0.8�
 
     --8<-- "snippets/ruby/config/quality_processing_config.md"
 
-=== "R"
-
-    --8<-- "snippets/r/config/quality_processing_config.md"
-
 ## Example
 
 === "Python"
@@ -75,10 +71,6 @@ Score ranges: `0.0–0.3` very low, `0.3–0.6` low, `0.6–0.8` moderate, `0.8�
 === "Ruby"
 
     --8<-- "snippets/ruby/advanced/quality_processing_example.md"
-
-=== "R"
-
-    --8<-- "snippets/r/advanced/quality_processing_example.md"
 
 ## See also
 

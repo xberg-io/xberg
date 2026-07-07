@@ -43,10 +43,6 @@ or HTTP(S) URL. `extract` returns an `ExtractionResult` with a `results` list:
 
     --8<-- "snippets/ruby/api/extract.md"
 
-=== "R"
-
-    --8<-- "snippets/r/api/extract.md"
-
 === "Rust"
 
     --8<-- "snippets/rust/api/extract.md"
@@ -112,10 +108,6 @@ exceptions for missing files, parse failures, and OCR problems:
 
     --8<-- "snippets/ruby/api/error_handling.md"
 
-=== "R"
-
-    --8<-- "snippets/r/api/error_handling.md"
-
 === "Rust"
 
     --8<-- "snippets/rust/api/error_handling.md"
@@ -176,10 +168,6 @@ You can also force OCR on any document:
 === "Ruby"
 
     --8<-- "snippets/ruby/ocr/ocr_extraction.md"
-
-=== "R"
-
-    --8<-- "snippets/r/ocr/ocr_extraction.md"
 
 === "Rust"
 
@@ -246,10 +234,6 @@ Pass a list of `ExtractInput` values to `extract_batch`. Mix `kind = "uri"` and
 
     --8<-- "snippets/ruby/api/extract_batch.md"
 
-=== "R"
-
-    --8<-- "snippets/r/api/extract_batch.md"
-
 === "Rust"
 
     --8<-- "snippets/rust/api/extract_batch.md"
@@ -315,10 +299,6 @@ names for Excel, dimensions for images:
 === "Ruby"
 
     --8<-- "snippets/ruby/metadata/metadata.md"
-
-=== "R"
-
-    --8<-- "snippets/r/metadata/metadata.md"
 
 === "Rust"
 
@@ -447,10 +427,6 @@ from PDFs, spreadsheets, and HTML:
 
     --8<-- "snippets/ruby/metadata/tables.md"
 
-=== "R"
-
-    --8<-- "snippets/r/metadata/tables.md"
-
 === "Rust"
 
     --8<-- "snippets/rust/metadata/tables.md"
@@ -562,10 +538,6 @@ non-blocking I/O:
 === "Ruby"
 
     --8<-- "snippets/ruby/api/extract.md"
-
-=== "R"
-
-    --8<-- "snippets/r/api/extract.md"
 
 === "Rust"
 

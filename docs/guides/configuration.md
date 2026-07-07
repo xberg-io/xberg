@@ -32,10 +32,6 @@ All extraction behavior is controlled through `ExtractionConfig`. Pass it direct
 
     --8<-- "snippets/ruby/config/config_basic.md"
 
-=== "R"
-
-    --8<-- "snippets/r/config/config_basic.md"
-
 ## Configuration Files
 
 Three formats are supported. TOML is recommended.
@@ -115,10 +111,6 @@ When no `--config` path is supplied, Xberg walks up from the current working dir
 
     --8<-- "snippets/ruby/config/config_discover.md"
 
-=== "R"
-
-    --8<-- "snippets/r/config/config_discover.md"
-
 === "Wasm"
 
     --8<-- "snippets/wasm/config/config_discover.md"
@@ -155,10 +147,6 @@ When no `--config` path is supplied, Xberg walks up from the current working dir
 
     --8<-- "snippets/ruby/config/config_ocr.md"
 
-=== "R"
-
-    --8<-- "snippets/r/config/config_ocr.md"
-
 For backend selection and language packs, see [OCR Guide](ocr.md). For fine-grained Tesseract tuning, see [TesseractConfig Reference](../reference/configuration.md#tesseractconfig).
 
 ### Chunking for RAG
@@ -190,10 +178,6 @@ For backend selection and language packs, see [OCR Guide](ocr.md). For fine-grai
 === "Ruby"
 
     --8<-- "snippets/ruby/utils/chunking.md"
-
-=== "R"
-
-    --8<-- "snippets/r/utils/chunking.md"
 
 ## All Configuration Categories
 
