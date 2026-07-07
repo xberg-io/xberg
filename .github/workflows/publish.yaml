@@ -1519,7 +1519,7 @@ jobs:
           retention-days: 14
 
   elixir-natives:
-    name: Build Elixir NIF (${{ matrix.label }})
+    name: Build Elixir NIF (${{ matrix.label }} nif-${{ matrix.nif }})
     # build-elixir-natives@v1 rewrites path-deps to registry versions before
     # building (so the hex source fallback resolves); needs published crates. The
     # status guard lets the build run when publish-crates is skipped, blocking only
@@ -1532,7 +1532,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-latest]
-        nif: ["2.16", "2.17"]
+        nif: ["2.16"]
         include:
           - os: ubuntu-latest
             label: linux-x86_64
@@ -1636,7 +1636,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm]
-        nif: ["2.16", "2.17"]
+        nif: ["2.16"]
         include:
           - os: ubuntu-latest
             arch: x86_64

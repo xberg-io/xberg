@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.33.0"
+alef_version = "0.34.0"
 # alef codegen emits non-shorthand struct init (`name: name`) in generated
 # binding lib.rs files; allow it repo-wide so workspace clippy passes under
 # -D warnings (emitted into every generated Rust binding as #![allow(...)]).
@@ -2089,7 +2089,7 @@ vendor_mode = "registry"
 
 [crates.publish.languages.elixir]
 vendor_mode = "registry"
-nif_versions = ["2.16", "2.17"]
+nif_versions = ["2.16"]
 
 [crates.publish.languages.dart]
 # dart/rust/Cargo.toml carries path deps on xberg; rewrite to registry on publish.
