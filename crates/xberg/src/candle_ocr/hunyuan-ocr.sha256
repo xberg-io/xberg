@@ -1,12 +1,13 @@
-# Hunyuan-OCR weight manifest — Tencent's official ModelScope release
-# (Tencent-Hunyuan/HunyuanOCR). Single source of truth: the runtime staging
-# path (model_stager.rs, via include_str!) and CI (.github/workflows/ci-gpu.yaml,
-# via sha256sum --check) both read this file. Update the model → edit here only.
+# Hunyuan-OCR weight manifest — re-hosted at xberg-io/hunyuan-ocr. Single source
+# of truth: the runtime staging path (model_stager.rs, via include_str!) and CI
+# (.github/workflows/ci-gpu.yaml, via sha256sum --check) both read this file.
+# Update the model → edit here only.
 #
-# The four safetensors shards are sha256-identical to the (now Hub-unavailable)
-# tencent/HunyuanOCR weights. Only the files the engine and processor read are
-# listed; model.safetensors.index.json is omitted because the loader discovers
-# the shards by directory scan, not through the index.
+# The four safetensors shards are sha256-identical to the original (now
+# Hub-unavailable) tencent/HunyuanOCR weights, so these checksums are unchanged
+# by the re-host. Only the files the engine and processor read are listed;
+# model.safetensors.index.json is omitted because the loader discovers the shards
+# by directory scan, not through the index.
 57d825203dbe1317eab32d16dc8b36c06892062765e9c5718dd740ab936cc245  config.json
 ffd5f09e1d57b14b3e0130de5be1aa6b4475b0f97fee442c3e2c8a6d68ba0de1  generation_config.json
 bb37f765bf675500b9a8de70a27b1d973347ee1315c7abbfd231783b64a2f322  preprocessor_config.json

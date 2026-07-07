@@ -5,13 +5,13 @@
 use std::io::{BufReader, Read};
 use std::path::Path;
 // `PathBuf` is only referenced by the HF-download and cache-dir helpers, which are
-// gated to the features that use them; a candle-only build stages via ModelScope
-// and doesn't compile them.
+// gated to the features that use them.
 #[cfg(any(
     feature = "paddle-ocr",
     feature = "layout-detection",
     feature = "auto-rotate",
-    feature = "ner-onnx"
+    feature = "ner-onnx",
+    feature = "candle-hunyuan-ocr"
 ))]
 use std::path::PathBuf;
 
@@ -29,7 +29,8 @@ use sha2::{Digest, Sha256};
     feature = "paddle-ocr",
     feature = "layout-detection",
     feature = "auto-rotate",
-    feature = "ner-onnx"
+    feature = "ner-onnx",
+    feature = "candle-hunyuan-ocr"
 ))]
 fn download_lock(key: &str) -> std::sync::Arc<std::sync::Mutex<()>> {
     use std::collections::HashMap;
@@ -52,7 +53,8 @@ fn download_lock(key: &str) -> std::sync::Arc<std::sync::Mutex<()>> {
     feature = "paddle-ocr",
     feature = "layout-detection",
     feature = "auto-rotate",
-    feature = "ner-onnx"
+    feature = "ner-onnx",
+    feature = "candle-hunyuan-ocr"
 ))]
 pub(crate) fn hf_download(repo_id: &str, remote_filename: &str) -> Result<PathBuf, String> {
     tracing::info!(repo = repo_id, filename = remote_filename, "Downloading via hf-hub");

@@ -242,12 +242,12 @@ jobs:
             feature: candle-hunyuan-ocr
             test: candle_hunyuan_ocr_e2e_extraction
             # tencent/HunyuanOCR was pulled from the HF Hub on 2026-07-06 (401 even
-            # authenticated). Stage the weights from Tencent's official ModelScope
-            # release instead, verified against the same checked-in sha256 manifest
-            # the runtime staging path uses (single source of truth) — an upstream
-            # change fails loudly instead of silently altering what CI tests.
-            hf_repo: ""
-            ms_repo: Tencent-Hunyuan/HunyuanOCR
+            # authenticated), so the weights are re-hosted at xberg-io/hunyuan-ocr
+            # (byte-identical shards). Fetched via the normal HF path and still
+            # verified against the checked-in sha256 manifest the runtime staging
+            # path uses (single source of truth) — a changed byte fails loudly
+            # instead of silently altering what CI tests.
+            hf_repo: xberg-io/hunyuan-ocr
             manifest: crates/xberg/src/candle_ocr/hunyuan-ocr.sha256
             env_var: XBERG_HUNYUAN_OCR_MODEL_PATH
             debug_env: XBERG_HUNYUAN_DEBUG
@@ -326,7 +326,7 @@ jobs:
           ort-version: ${{ env.ORT_VERSION }}
 
       - name: Restore cached model weights
-        if: matrix.model.hf_repo != '' || matrix.model.ms_repo != ''
+        if: matrix.model.hf_repo != ''
         id: model-cache
         uses: actions/cache/restore@v5
         with:
@@ -354,28 +354,17 @@ jobs:
             "${{ matrix.model.hf_repo }}" \
             --local-dir "${{ github.workspace }}/models/${{ matrix.model.name }}"
 
-      - name: Download model weights (ModelScope, checksum-verified)
-        id: download-ms
-        if: matrix.model.ms_repo != '' && steps.model-cache.outputs.cache-hit != 'true'
+      - name: Verify model weight checksums (sha256 manifest)
+        id: verify-weights
+        if: matrix.model.manifest != '' && steps.model-cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
-          # Stage each file named in the manifest from the publisher's official
-          # ModelScope repo, then verify every byte against the checked-in
-          # sha256 manifest. Trust attaches to the hashes, not the host: a
-          # changed or tampered upstream file fails the job instead of silently
-          # altering what CI tests.
+          # A checked-in sha256 manifest pins the exact bytes we expect from the
+          # (self-hosted) HF repo. Trust attaches to the hashes, not the host: a
+          # changed or tampered file fails the job instead of silently altering
+          # what CI tests. sha256sum -c checks only the listed files and ignores
+          # '#' comment lines; --strict fails on malformed ones.
           dest="${{ github.workspace }}/models/${{ matrix.model.name }}"
-          mkdir -p "$dest"
-          while read -r _hash file; do
-            # Skip blank lines and '#' comments in the sha256sum-format manifest.
-            case "${_hash}" in ''|'#'*) continue ;; esac
-            [ -n "$file" ] || continue
-            echo "downloading $file"
-            curl -fSL --retry 5 --retry-delay 10 --retry-all-errors \
-              "https://modelscope.cn/models/${{ matrix.model.ms_repo }}/resolve/master/$file" \
-              -o "$dest/$file"
-          done < "${{ matrix.model.manifest }}"
-          # sha256sum -c ignores '#' comment lines; --strict fails on malformed ones.
           (cd "$dest" && sha256sum --check --strict "${{ github.workspace }}/${{ matrix.model.manifest }}")
 
       - name: Download candle test binary
@@ -414,7 +403,7 @@ jobs:
         # cannot poison the cache.
         if: >-
           always() && steps.model-cache.outputs.cache-hit != 'true' &&
-          (steps.download-hf.outcome == 'success' || steps.download-ms.outcome == 'success')
+          steps.download-hf.outcome == 'success' && steps.verify-weights.outcome != 'failure'
         uses: actions/cache/save@v5
         with:
           path: ${{ github.workspace }}/models/${{ matrix.model.name }}
