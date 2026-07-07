@@ -687,46 +687,48 @@ mod tests {
         use crate::types::uri::{ExtractedUri, UriKind};
 
         let email = "alice@example.com";
-        let mut doc = ExtractedDocument::default();
-        doc.content = format!("Contact {email} for details.");
-        doc.tables = vec![crate::types::tables::Table {
-            cells: vec![vec!["Name".into(), email.into()]],
-            markdown: format!("| Name | {email} |"),
-            page_number: 1,
-            bounding_box: None,
-        }];
-        doc.pages = Some(vec![crate::types::PageContent {
-            page_number: 1,
-            content: format!("Page mentions {email}."),
-            tables: Vec::new(),
-            image_indices: Vec::new(),
-            hierarchy: None,
-            is_blank: None,
-            layout_regions: None,
-            speaker_notes: None,
-            section_name: None,
-            sheet_name: None,
-        }]);
-        doc.uris = Some(vec![ExtractedUri {
-            url: format!("mailto:{email}"),
-            label: Some(email.into()),
-            page: None,
-            kind: UriKind::Email,
-        }]);
-        doc.form_fields = vec![PdfFormField {
-            name: "applicant_email".into(),
-            full_name: "form.applicant_email".into(),
-            field_type: crate::types::form_field::FormFieldType::Text,
-            value: Some(email.into()),
-            default_value: None,
-            flags: 0,
-            page: None,
-            bbox: None,
-            max_length: None,
-            tooltip: None,
-        }];
+        let mut doc = ExtractedDocument {
+            content: format!("Contact {email} for details."),
+            tables: vec![crate::types::tables::Table {
+                cells: vec![vec!["Name".into(), email.into()]],
+                markdown: format!("| Name | {email} |"),
+                page_number: 1,
+                bounding_box: None,
+            }],
+            pages: Some(vec![crate::types::PageContent {
+                page_number: 1,
+                content: format!("Page mentions {email}."),
+                tables: Vec::new(),
+                image_indices: Vec::new(),
+                hierarchy: None,
+                is_blank: None,
+                layout_regions: None,
+                speaker_notes: None,
+                section_name: None,
+                sheet_name: None,
+            }]),
+            uris: Some(vec![ExtractedUri {
+                url: format!("mailto:{email}"),
+                label: Some(email.into()),
+                page: None,
+                kind: UriKind::Email,
+            }]),
+            form_fields: vec![PdfFormField {
+                name: "applicant_email".into(),
+                full_name: "form.applicant_email".into(),
+                field_type: crate::types::form_field::FormFieldType::Text,
+                value: Some(email.into()),
+                default_value: None,
+                flags: 0,
+                page: None,
+                bbox: None,
+                max_length: None,
+                tooltip: None,
+            }],
+            structured_output: Some(serde_json::json!({ "email": email })),
+            ..Default::default()
+        };
         doc.metadata.subject = Some(format!("Re: {email}"));
-        doc.structured_output = Some(serde_json::json!({ "email": email }));
 
         let config = RedactionConfig::default();
         redact(&mut doc, &config).await.expect("redaction must succeed");

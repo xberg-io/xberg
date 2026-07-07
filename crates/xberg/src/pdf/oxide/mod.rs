@@ -59,7 +59,10 @@ pub(crate) struct OxideDocument {
 }
 
 impl OxideDocument {
-    /// Open a PDF from in-memory bytes with no password.
+    /// Open a PDF from in-memory bytes with no password. Test-only convenience;
+    /// production opens through `open_bytes_with_passwords` so configured
+    /// passwords are always consulted.
+    #[cfg(test)]
     pub(crate) fn open_bytes(bytes: &[u8]) -> Result<Self> {
         Self::open_bytes_with_passwords(bytes, &[])
     }
