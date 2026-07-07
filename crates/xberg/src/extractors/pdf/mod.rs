@@ -301,6 +301,12 @@ impl PdfExtractor {
         let mut ocr_page_rasters: Option<Vec<crate::types::ExtractedImage>> = None;
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         let mut ocr_formulas: Vec<crate::types::Formula> = Vec::new();
+        // Warnings raised when an OCR fallback was required (native text failed the
+        // quality gate) but the fallback itself failed or was unavailable, so the
+        // returned native text is known-degraded. Drained into the document below so
+        // consumers can tell an empty/poor result apart from a clean extraction.
+        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+        let mut ocr_fallback_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         let (text, extraction_method) = if config.effective_disable_ocr() {
@@ -430,6 +436,14 @@ impl PdfExtractor {
                                     error = %e,
                                     "OCR fallback failed; using native text extraction result"
                                 );
+                                ocr_fallback_warnings.push(crate::types::ProcessingWarning {
+                                    source: std::borrow::Cow::Borrowed("ocr"),
+                                    message: std::borrow::Cow::Owned(format!(
+                                        "OCR fallback failed ({e}); returning native text that was below the \
+                                         quality threshold which triggered OCR. Extracted content may be empty \
+                                         or incomplete."
+                                    )),
+                                });
                                 (native_text, ExtractionMethod::Native)
                             }
                         }
@@ -458,6 +472,14 @@ impl PdfExtractor {
                                     failing_pages = ?pages,
                                     "Targeted OCR fallback failed; using native text extraction result"
                                 );
+                                ocr_fallback_warnings.push(crate::types::ProcessingWarning {
+                                    source: std::borrow::Cow::Borrowed("ocr"),
+                                    message: std::borrow::Cow::Owned(format!(
+                                        "Targeted OCR fallback failed ({e}) for pages {pages:?}; those pages \
+                                         retain native text that was below the OCR-trigger quality threshold \
+                                         and may be empty or incomplete."
+                                    )),
+                                });
                                 (native_text, ExtractionMethod::Native)
                             }
                         }
@@ -467,6 +489,14 @@ impl PdfExtractor {
                             failing_pages = ?pages,
                             "Targeted OCR requested but no page boundaries available; using native text"
                         );
+                        ocr_fallback_warnings.push(crate::types::ProcessingWarning {
+                            source: std::borrow::Cow::Borrowed("ocr"),
+                            message: std::borrow::Cow::Owned(format!(
+                                "Targeted OCR was required for pages {pages:?} but no page boundaries were \
+                                 available; those pages retain native text that was below the OCR-trigger \
+                                 quality threshold and may be empty or incomplete."
+                            )),
+                        });
                         (native_text, ExtractionMethod::Native)
                     }
                 },
@@ -620,6 +650,11 @@ impl PdfExtractor {
             }
             d
         };
+
+        // Surface any degraded-native-text warnings raised while OCR fallback was
+        // attempted, so an empty/incomplete result is flagged rather than silent.
+        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+        doc.processing_warnings.append(&mut ocr_fallback_warnings);
 
         doc.metadata = Metadata {
             output_format: pre_formatted_output,

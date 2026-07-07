@@ -636,7 +636,31 @@ pub(crate) async fn extract_mixed_ocr_native(
     }
 
     // Assemble final text by replacing OCR pages in-place within the native text.
-    // Process boundaries in reverse byte order so offsets remain valid after replacement.
+    let result = merge_ocr_pages_into_native(native_text, boundaries, &ocr_results);
+
+    Ok((
+        result,
+        ocr_results,
+        accumulated_llm_usage,
+        if capture_rasters { Some(captured_rasters) } else { None },
+        accumulated_formulas,
+    ))
+}
+
+/// Merge per-page OCR text into the native text, replacing each OCR'd page's
+/// byte range in place.
+///
+/// Boundaries are processed in reverse byte order so earlier offsets stay valid
+/// after each replacement. An OCR entry that is empty (or whitespace-only) is
+/// skipped rather than applied: an empty OCR result must never overwrite a page's
+/// native text, or a page whose backend produced nothing would silently lose its
+/// already-extracted content.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) fn merge_ocr_pages_into_native(
+    native_text: &str,
+    boundaries: &[crate::types::PageBoundary],
+    ocr_results: &ahash::AHashMap<u32, String>,
+) -> String {
     let mut result = native_text.to_string();
 
     let mut sorted_boundaries: Vec<&crate::types::PageBoundary> = boundaries
@@ -647,17 +671,14 @@ pub(crate) async fn extract_mixed_ocr_native(
 
     for boundary in sorted_boundaries {
         if let Some(ocr_text) = ocr_results.get(&boundary.page_number) {
+            if ocr_text.trim().is_empty() {
+                continue;
+            }
             result.replace_range(boundary.byte_start..boundary.byte_end, ocr_text);
         }
     }
 
-    Ok((
-        result,
-        ocr_results,
-        accumulated_llm_usage,
-        if capture_rasters { Some(captured_rasters) } else { None },
-        accumulated_formulas,
-    ))
+    result
 }
 
 /// Extract text from PDF using OCR on pre-rendered page images.
@@ -1587,16 +1608,44 @@ pub(crate) async fn run_ocr_pipeline(
     // Return best result (with warning) or error if all backends failed entirely
     match best_result {
         Some((text, score, tables, elements, doc, page_texts, rasters, formulas)) => {
+            let threshold = pipeline.quality_thresholds.pipeline_min_quality;
             tracing::warn!(
                 score,
-                threshold = pipeline.quality_thresholds.pipeline_min_quality,
+                threshold,
                 "All OCR pipeline backends produced suboptimal quality, using best result"
             );
+            // Attach a ProcessingWarning so consumers can tell the returned text is
+            // best-effort/below the configured quality threshold rather than clean.
+            // If the winning stage produced no InternalDocument (document-level bypass
+            // path), build a minimal one from the text so the warning still surfaces
+            // instead of being dropped when the caller reconstructs the document.
+            let mut doc = doc.unwrap_or_else(|| {
+                let mut d = crate::types::internal::InternalDocument::new("pdf");
+                for paragraph in text.split("\n\n") {
+                    let trimmed = paragraph.trim();
+                    if !trimmed.is_empty() {
+                        d.push_element(crate::types::internal::InternalElement::text(
+                            crate::types::internal::ElementKind::Paragraph,
+                            trimmed,
+                            0,
+                        ));
+                    }
+                }
+                d
+            });
+            doc.processing_warnings.push(crate::types::ProcessingWarning {
+                source: std::borrow::Cow::Borrowed("ocr_pipeline"),
+                message: std::borrow::Cow::Owned(format!(
+                    "All OCR pipeline backends scored below the configured quality threshold \
+                     (best score {score:.3} < {threshold:.3}); returning the best-effort result, \
+                     which may be inaccurate or incomplete."
+                )),
+            });
             Ok((
                 text,
                 tables,
                 elements,
-                doc,
+                Some(doc),
                 accumulated_usage,
                 page_texts,
                 rasters,
@@ -1740,6 +1789,66 @@ mod tests {
         ];
         let decision = evaluate_per_page_ocr(text, Some(&boundaries), Some(2), &t());
         assert!(decision.fallback);
+    }
+
+    // --- Mixed-page OCR/native merge (issue #1223) ---
+
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    #[test]
+    fn test_merge_empty_ocr_result_keeps_native_text() {
+        use crate::types::PageBoundary;
+
+        // Page 1 has good native text; page 2 was flagged for OCR but the backend
+        // produced an empty result. The page-2 native text must be preserved, not wiped.
+        let native = "PAGE ONE NATIVE\nPAGE TWO NATIVE";
+        let boundaries = vec![
+            PageBoundary {
+                page_number: 1,
+                byte_start: 0,
+                byte_end: 16, // "PAGE ONE NATIVE\n"
+            },
+            PageBoundary {
+                page_number: 2,
+                byte_start: 16,
+                byte_end: native.len(),
+            },
+        ];
+        let mut ocr_results: ahash::AHashMap<u32, String> = ahash::AHashMap::new();
+        ocr_results.insert(2, String::new()); // empty OCR result for page 2
+
+        let merged = merge_ocr_pages_into_native(native, &boundaries, &ocr_results);
+        assert_eq!(
+            merged, native,
+            "an empty OCR result must not overwrite the page's native text"
+        );
+        assert!(merged.contains("PAGE TWO NATIVE"));
+    }
+
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    #[test]
+    fn test_merge_nonempty_ocr_result_replaces_native_text() {
+        use crate::types::PageBoundary;
+
+        let native = "PAGE ONE NATIVE\ngarbage page two";
+        let boundaries = vec![
+            PageBoundary {
+                page_number: 1,
+                byte_start: 0,
+                byte_end: 16,
+            },
+            PageBoundary {
+                page_number: 2,
+                byte_start: 16,
+                byte_end: native.len(),
+            },
+        ];
+        let mut ocr_results: ahash::AHashMap<u32, String> = ahash::AHashMap::new();
+        ocr_results.insert(2, "CLEAN OCR PAGE TWO".to_string());
+
+        let merged = merge_ocr_pages_into_native(native, &boundaries, &ocr_results);
+        assert!(merged.contains("PAGE ONE NATIVE"));
+        assert!(merged.contains("CLEAN OCR PAGE TWO"));
+        assert!(!merged.contains("garbage page two"));
     }
 
     #[cfg(feature = "ocr")]
