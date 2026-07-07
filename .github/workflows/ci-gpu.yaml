@@ -243,12 +243,12 @@ jobs:
             test: candle_hunyuan_ocr_e2e_extraction
             # tencent/HunyuanOCR was pulled from the HF Hub on 2026-07-06 (401 even
             # authenticated). Stage the weights from Tencent's official ModelScope
-            # release instead, with every file verified against the checked-in
-            # sha256 manifest — an upstream change fails loudly instead of
-            # silently altering what CI tests.
+            # release instead, verified against the same checked-in sha256 manifest
+            # the runtime staging path uses (single source of truth) — an upstream
+            # change fails loudly instead of silently altering what CI tests.
             hf_repo: ""
             ms_repo: Tencent-Hunyuan/HunyuanOCR
-            manifest: .github/models/hunyuan-ocr.sha256
+            manifest: crates/xberg/src/candle_ocr/hunyuan-ocr.sha256
             env_var: XBERG_HUNYUAN_OCR_MODEL_PATH
             debug_env: XBERG_HUNYUAN_DEBUG
           - name: deepseek-ocr
@@ -367,12 +367,15 @@ jobs:
           dest="${{ github.workspace }}/models/${{ matrix.model.name }}"
           mkdir -p "$dest"
           while read -r _hash file; do
+            # Skip blank lines and '#' comments in the sha256sum-format manifest.
+            case "${_hash}" in ''|'#'*) continue ;; esac
             [ -n "$file" ] || continue
             echo "downloading $file"
             curl -fSL --retry 5 --retry-delay 10 --retry-all-errors \
               "https://modelscope.cn/models/${{ matrix.model.ms_repo }}/resolve/master/$file" \
               -o "$dest/$file"
           done < "${{ matrix.model.manifest }}"
+          # sha256sum -c ignores '#' comment lines; --strict fails on malformed ones.
           (cd "$dest" && sha256sum --check --strict "${{ github.workspace }}/${{ matrix.model.manifest }}")
 
       - name: Download candle test binary

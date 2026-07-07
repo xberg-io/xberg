@@ -15,67 +15,68 @@ use std::path::{Path, PathBuf};
 
 use crate::model_download::verify_sha256;
 
-/// One file in a model manifest: its name (used as both the cache filename and the
-/// remote resolve path) and the sha256 the downloaded bytes must match.
-struct ManifestFile {
-    name: &'static str,
-    sha256: &'static str,
-}
-
 /// A checksum-pinned VLM-OCR model hosted on ModelScope.
 struct ModelScopeModel {
     /// ModelScope repo id, e.g. `Tencent-Hunyuan/HunyuanOCR`.
     repo: &'static str,
     /// Cache subdirectory under the xberg cache root.
     cache_key: &'static str,
-    /// Every file the engine reads from the model directory, with its expected hash.
-    files: &'static [ManifestFile],
+    /// `sha256sum`-format manifest: `<sha256>  <filename>` per line, `#` comments.
+    /// One entry per file the engine reads, checked in as the single source of truth.
+    manifest: &'static str,
 }
 
-/// Hunyuan-OCR manifest — Tencent's official ModelScope release
-/// (`Tencent-Hunyuan/HunyuanOCR`). The four safetensors shards are sha256-identical
-/// to the (now Hub-unavailable) `tencent/HunyuanOCR` weights. Only the files the
-/// engine and processor actually read are listed; the `model.safetensors.index.json`
-/// is intentionally omitted because the loader discovers the shards by directory
-/// scan, not through the index.
+/// Hunyuan-OCR — Tencent's official ModelScope release (`Tencent-Hunyuan/HunyuanOCR`).
+/// The file list and checksums live in the checked-in `.sha256` manifest, which CI
+/// (`sha256sum --check`) reads too — updating the model means editing one file.
 const HUNYUAN_OCR: ModelScopeModel = ModelScopeModel {
     repo: "Tencent-Hunyuan/HunyuanOCR",
     cache_key: "candle-ocr/hunyuan-ocr",
-    files: &[
-        ManifestFile {
-            name: "config.json",
-            sha256: "57d825203dbe1317eab32d16dc8b36c06892062765e9c5718dd740ab936cc245",
-        },
-        ManifestFile {
-            name: "generation_config.json",
-            sha256: "ffd5f09e1d57b14b3e0130de5be1aa6b4475b0f97fee442c3e2c8a6d68ba0de1",
-        },
-        ManifestFile {
-            name: "preprocessor_config.json",
-            sha256: "bb37f765bf675500b9a8de70a27b1d973347ee1315c7abbfd231783b64a2f322",
-        },
-        ManifestFile {
-            name: "tokenizer.json",
-            sha256: "cde511cfdf641d7340731f174362d6ab7329ac4b7543cf41f42457aa84e25484",
-        },
-        ManifestFile {
-            name: "model-00001-of-00004.safetensors",
-            sha256: "e7a0f4cb7fdfe4dc2686f8554310a34b4859ae464ec948f89d954318e382382d",
-        },
-        ManifestFile {
-            name: "model-00002-of-00004.safetensors",
-            sha256: "fbfd70bed291d7920c65aacf4f07c8ea55e60dda253a529860880c5a7e4c00bd",
-        },
-        ManifestFile {
-            name: "model-00003-of-00004.safetensors",
-            sha256: "53d0b9f9a85aa21b3454f16f19845294fff7bab8e13aeaf3f7992b85fd35c473",
-        },
-        ManifestFile {
-            name: "model-00004-of-00004.safetensors",
-            sha256: "fd82d09583ee16037f04532808d0f00332301fc6ed18aa0b75b902fa014402aa",
-        },
-    ],
+    manifest: include_str!("hunyuan-ocr.sha256"),
 };
+
+/// One file in a parsed manifest: the name (both cache filename and remote resolve
+/// path) and the sha256 the downloaded bytes must match.
+struct ManifestFile {
+    name: String,
+    sha256: String,
+}
+
+/// Parse a `sha256sum`-format manifest into an ordered file list.
+///
+/// Skips blank lines and `#` comments; each remaining line must be
+/// `<64-hex-sha256>  <path>`. Mirrors the GLiNER checksum parser
+/// ([`crate::text::ner`]) so the format is consistent across the codebase.
+fn parse_manifest(content: &str) -> Result<Vec<ManifestFile>, String> {
+    let mut files = Vec::new();
+    for (index, line) in content.lines().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        let mut parts = trimmed.split_whitespace();
+        let sha256 = parts
+            .next()
+            .ok_or_else(|| format!("Invalid manifest line {}: missing checksum", index + 1))?;
+        let name = parts
+            .next()
+            .ok_or_else(|| format!("Invalid manifest line {}: missing filename", index + 1))?;
+        if sha256.len() != 64 || !sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Err(format!(
+                "Invalid manifest line {}: checksum must be SHA256 hex",
+                index + 1
+            ));
+        }
+        files.push(ManifestFile {
+            name: name.trim_start_matches("./").to_string(),
+            sha256: sha256.to_ascii_lowercase(),
+        });
+    }
+    if files.is_empty() {
+        return Err("Manifest lists no files".to_string());
+    }
+    Ok(files)
+}
 
 /// Monotonic counter giving each staged download a unique temp filename so
 /// concurrent stagers of the same file never collide on the staging path.
@@ -95,19 +96,20 @@ pub(crate) fn ensure_hunyuan_ocr() -> Result<PathBuf, String> {
 }
 
 fn ensure_model(model: &ModelScopeModel, dir: &Path) -> Result<PathBuf, String> {
+    let files = parse_manifest(model.manifest)?;
     std::fs::create_dir_all(dir).map_err(|e| format!("Failed to create model cache dir {}: {e}", dir.display()))?;
 
-    for file in model.files {
-        let dst = dir.join(file.name);
+    for file in &files {
+        let dst = dir.join(&file.name);
 
         // A file already present with the right bytes needs no network round-trip.
-        if dst.exists() && verify_sha256(&dst, file.sha256, file.name).is_ok() {
+        if dst.exists() && verify_sha256(&dst, &file.sha256, &file.name).is_ok() {
             continue;
         }
 
-        let url = modelscope_url(model.repo, file.name);
-        tracing::info!(file = file.name, %url, "Staging Hunyuan-OCR weight");
-        stage_file(&url, dir, file.name, file.sha256)?;
+        let url = modelscope_url(model.repo, &file.name);
+        tracing::info!(file = %file.name, %url, "Staging Hunyuan-OCR weight");
+        stage_file(&url, dir, &file.name, &file.sha256)?;
     }
 
     Ok(dir.to_path_buf())
@@ -181,7 +183,8 @@ mod tests {
 
     #[test]
     fn hunyuan_manifest_covers_every_file_the_engine_reads() {
-        let names: Vec<&str> = HUNYUAN_OCR.files.iter().map(|f| f.name).collect();
+        let files = parse_manifest(HUNYUAN_OCR.manifest).expect("bundled manifest must parse");
+        let names: Vec<&str> = files.iter().map(|f| f.name.as_str()).collect();
         // The engine reads config + generation_config + the four shards; the
         // processor reads preprocessor_config + tokenizer.
         for required in [
@@ -196,9 +199,36 @@ mod tests {
         ] {
             assert!(names.contains(&required), "manifest missing {required}");
         }
-        for file in HUNYUAN_OCR.files {
-            assert_eq!(file.sha256.len(), 64, "{} sha256 must be 64 hex chars", file.name);
-        }
+        assert_eq!(
+            files.len(),
+            8,
+            "manifest should list exactly the 8 files the engine reads"
+        );
+    }
+
+    #[test]
+    fn parse_manifest_reads_entries_and_normalizes() {
+        let files = parse_manifest(
+            "# comment\n\
+             AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA  ./config.json\n\
+             bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  tokenizer.json\n",
+        )
+        .expect("valid manifest");
+        assert_eq!(files.len(), 2);
+        // `./` stripped, order preserved, checksum lowercased.
+        assert_eq!(files[0].name, "config.json");
+        assert_eq!(files[0].sha256, "a".repeat(64));
+        assert_eq!(files[1].name, "tokenizer.json");
+    }
+
+    #[test]
+    fn parse_manifest_rejects_malformed_lines() {
+        assert!(
+            parse_manifest("not-a-sha256  config.json").is_err(),
+            "short/invalid hash"
+        );
+        assert!(parse_manifest(&"a".repeat(64)).is_err(), "missing filename");
+        assert!(parse_manifest("# only comments\n").is_err(), "no files");
     }
 
     #[test]
@@ -212,19 +242,16 @@ mod tests {
     #[test]
     fn ensure_model_skips_download_when_cache_is_valid() {
         // A model whose one manifest file already exists with the right bytes must
-        // not attempt any network access (the URL below is unreachable in tests).
+        // not attempt any network access (the repo below is unreachable in tests).
         let dir = tempfile::tempdir().unwrap();
         let payload = b"cached weight bytes";
         std::fs::write(dir.path().join("config.json"), payload).unwrap();
 
-        let leaked: &'static str = Box::leak(sha256_hex(payload).into_boxed_str());
+        let manifest: &'static str = Box::leak(format!("{}  config.json\n", sha256_hex(payload)).into_boxed_str());
         let model = ModelScopeModel {
             repo: "unreachable/repo",
             cache_key: "unused",
-            files: Box::leak(Box::new([ManifestFile {
-                name: "config.json",
-                sha256: leaked,
-            }])),
+            manifest,
         };
 
         let out = ensure_model(&model, dir.path()).expect("valid cache must short-circuit");
@@ -238,27 +265,28 @@ mod tests {
     #[ignore = "hits modelscope.cn; run with --ignored"]
     fn stages_hunyuan_config_files_from_modelscope() {
         let dir = tempfile::tempdir().unwrap();
-        // The first four manifest entries are the small JSON files.
-        let small = &HUNYUAN_OCR.files[..4];
+        // A sub-manifest of just the small JSON files (the first four bundled entries).
+        let bundled = parse_manifest(HUNYUAN_OCR.manifest).unwrap();
+        let small = &bundled[..4];
+        let manifest: &'static str = Box::leak(
+            small
+                .iter()
+                .map(|f| format!("{}  {}", f.sha256, f.name))
+                .collect::<Vec<_>>()
+                .join("\n")
+                .into_boxed_str(),
+        );
         let model = ModelScopeModel {
             repo: HUNYUAN_OCR.repo,
             cache_key: "unused",
-            files: Box::leak(
-                small
-                    .iter()
-                    .map(|f| ManifestFile {
-                        name: f.name,
-                        sha256: f.sha256,
-                    })
-                    .collect(),
-            ),
+            manifest,
         };
 
         let out = ensure_model(&model, dir.path()).expect("staging must succeed");
         for f in small {
-            let path = out.join(f.name);
+            let path = out.join(&f.name);
             assert!(path.exists(), "{} should be staged", f.name);
-            verify_sha256(&path, f.sha256, f.name).expect("staged file must match manifest checksum");
+            verify_sha256(&path, &f.sha256, &f.name).expect("staged file must match manifest checksum");
         }
 
         // A second call with a warm cache must not re-download (and still succeed).
