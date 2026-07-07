@@ -16,12 +16,14 @@ foxes and dogs together. Furthermore, in addition to that, it should be noted th
 remarkably agile and nimble in its movements across the wide open field.";
 
 fn extract_len(output_format: OutputFormat) -> usize {
-    let mut cfg = ExtractionConfig::default();
-    cfg.output_format = output_format;
-    cfg.token_reduction = Some(TokenReductionOptions {
-        mode: "aggressive".parse().unwrap_or_default(),
+    let cfg = ExtractionConfig {
+        output_format,
+        token_reduction: Some(TokenReductionOptions {
+            mode: "aggressive".parse().unwrap_or_default(),
+            ..Default::default()
+        }),
         ..Default::default()
-    });
+    };
     extract_bytes_document_blocking(TEXT, "text/plain", &cfg)
         .expect("extraction must succeed")
         .content

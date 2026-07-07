@@ -309,10 +309,14 @@ mod cache_key_tests {
 
     #[test]
     fn source_name_changes_the_cache_key() {
-        let mut a = ExtractionConfig::default();
-        a.source_name = Some("snippet.py".to_string());
-        let mut b = ExtractionConfig::default();
-        b.source_name = Some("snippet.rb".to_string());
+        let a = ExtractionConfig {
+            source_name: Some("snippet.py".to_string()),
+            ..Default::default()
+        };
+        let b = ExtractionConfig {
+            source_name: Some("snippet.rb".to_string()),
+            ..Default::default()
+        };
         assert_ne!(
             hash_extraction_config(&a, "text/x-source-code"),
             hash_extraction_config(&b, "text/x-source-code"),
@@ -331,16 +335,20 @@ mod cache_key_tests {
         let mut deu = HashMap::new();
         deu.insert("eng".to_string(), vec![9u8, 9, 9]);
 
-        let mut a = ExtractionConfig::default();
-        a.ocr = Some(OcrConfig {
-            tessdata_bytes: Some(eng),
-            ..OcrConfig::default()
-        });
-        let mut b = ExtractionConfig::default();
-        b.ocr = Some(OcrConfig {
-            tessdata_bytes: Some(deu),
-            ..OcrConfig::default()
-        });
+        let a = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                tessdata_bytes: Some(eng),
+                ..OcrConfig::default()
+            }),
+            ..Default::default()
+        };
+        let b = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                tessdata_bytes: Some(deu),
+                ..OcrConfig::default()
+            }),
+            ..Default::default()
+        };
         assert_ne!(
             hash_extraction_config(&a, "image/png"),
             hash_extraction_config(&b, "image/png"),
