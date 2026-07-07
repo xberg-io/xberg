@@ -77,7 +77,7 @@
   </a>
 </div>
 
-One Rust engine — 96 file formats, 306 programming languages, **native bindings for 15 languages**, dual model runtimes, 6 output formats, OCR from any backend, embeddings, structured LLM extraction, token reduction, and more.
+Extract clean text, tables, and structured data from documents and code — no format detection, no OCR setup, no stitched-together libraries. **One engine, 15 language bindings, runs anywhere.**
 
 > **Xberg is the next iteration of [Kreuzberg](https://github.com/kreuzberg-dev/kreuzberg-v4-lts).** Same document-intelligence engine, rebuilt and rebranded under a fresh v1 line.
 
@@ -109,7 +109,7 @@ Documents · Images · Spreadsheets · Email · Archives · Code · Audio · Vid
 
 ## What you get
 
-Xberg is a full content-intelligence engine. One Rust core with fast, accurate extraction from 96 file formats and 306 programming languages. Language bindings for Rust, Python, Node.js, Go, Java, C#, Ruby, PHP, Elixir, Dart, Swift, Zig, WASM, Kotlin, and C FFI. Use it as a library, CLI tool, REST API, or MCP server.
+Point Xberg at anything — a PDF, a spreadsheet, a scanned image, an audio file, a source tree — and get back clean, structured content you can use right away. One core does the format detection, reading, and extraction, so you don't assemble a pipeline yourself. Call it from Rust, Python, Node.js, Go, Java, C#, Ruby, PHP, Elixir, Dart, Swift, Zig, WASM, Kotlin, or C FFI, and run it as a library, CLI tool, REST API, or MCP server.
 
 | What it does | How |
 |---|---|

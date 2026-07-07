@@ -36,7 +36,52 @@ export default defineConfig({
           "bindings for 15 languages.",
         githubUrl: "https://github.com/xberg-io/xberg",
         editBaseUrl: "https://github.com/xberg-io/xberg/edit/main/docs-site/",
-        plugins: [starlightLlmsTxt()],
+        plugins: [
+          starlightLlmsTxt({
+            customSets: [
+              {
+                label: "Get Started",
+                description: "Installation and quick-start guides.",
+                paths: ["getting-started/**"],
+              },
+              {
+                label: "Guides",
+                description:
+                  "Task-oriented guides: extraction, configuration, OCR, chunking, embeddings, " +
+                  "transcription, structured extraction, code intelligence, and deployment.",
+                paths: ["guides/**", "cli/**"],
+              },
+              {
+                label: "Concepts",
+                description: "Architecture, the extraction pipeline, and the plugin system.",
+                paths: ["concepts/**", "features"],
+              },
+              {
+                label: "Integrations",
+                description: "Connecting Xberg to Open WebUI, SurrealDB, and other tools.",
+                paths: ["integrations/**"],
+              },
+              {
+                label: "Reference",
+                description:
+                  "Per-language API docs, configuration schema, types, errors, formats, and CLI/MCP " + "reference.",
+                paths: ["reference/**"],
+              },
+              {
+                label: "More",
+                description: "Migration, changelog, contributing, and ecosystem.",
+                paths: ["migration/**", "changelog", "contributing", "ecosystem"],
+              },
+            ],
+            optionalLinks: [
+              {
+                label: "GitHub",
+                url: "https://github.com/xberg-io/xberg",
+                description: "Source code and issues",
+              },
+            ],
+          }),
+        ],
         sidebar: [
           { label: "Home", link: "/" },
           {
@@ -95,7 +140,7 @@ export default defineConfig({
                   { label: "Docker", slug: "guides/docker" },
                   { label: "API Server", slug: "guides/api-server" },
                   { label: "MCP Integration", slug: "guides/mcp-integration" },
-                  { label: "AI Coding Assistants", slug: "guides/agent-skills" },
+                  { label: "AI Coding Assistants", slug: "guides/ai-coding-assistants" },
                 ],
               },
               {

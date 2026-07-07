@@ -7,9 +7,10 @@ description: >-
 template: splash
 hero:
   tagline: >-
-    Full content intelligence from one engine. Turn documents, URLs, code, and media into clean,
-    structured output — text, tables, entities, code structure, and embeddings, with automatic OCR,
-    transcription, enrichment, and LLM-powered extraction. Available natively in 15 languages.
+    Point Xberg at a document, URL, code file, or audio clip and get back clean, structured output —
+    text, tables, entities, code structure, and embeddings — ready to use. One engine handles format
+    detection, reading scanned pages, and transcribing audio, so you never stitch libraries together.
+    Works natively in 15 languages.
   image:
     dark: ../../assets/hero-logo.svg
     light: ../../assets/hero-logo-light.svg
@@ -38,28 +39,28 @@ import { Card, CardGrid, LinkCard, Tabs, TabItem } from "@astrojs/starlight/comp
 
 <CardGrid>
 	<Card title="One engine for everything" icon="random">
-		Feed documents, URLs, code, images, and audio into one API. Get clean Markdown, entities, code
-		structure, embeddings, and enrichment without stitching libraries together.
+		Feed documents, URLs, code, images, and audio into one API and get clean Markdown, entities, code
+		structure, and embeddings back — no stitching libraries together.
 	</Card>
-	<Card title="96+ document formats" icon="document">
-		PDFs, Office documents, images, email, archives, and academic publications all standardize to
-		clean Markdown plus five other output formats.
+	<Card title="Extract from any document type" icon="document">
+		PDFs, Office files, images, email, archives, and academic papers all come out as clean Markdown or
+		one of five other formats, with no per-format setup.
 	</Card>
-	<Card title="OCR and transcription" icon="magnifier">
-		Tesseract, PaddleOCR, and VLM models for scans; Whisper for audio and video. Confidence scores,
-		language detection, and automatic fallback chains.
+	<Card title="Text from images and audio, automatically" icon="magnifier">
+		Scanned pages and spoken audio become searchable text with confidence scores and language
+		detection, falling back across OCR and transcription backends when one struggles.
 	</Card>
-	<Card title="Structured LLM extraction" icon="laptop">
-		Extract entities, JSON schemas, and structured data using local LLM servers (Ollama, LM Studio,
-		vLLM) or 143+ remote providers — no custom prompting required.
+	<Card title="Get structured data without custom prompting" icon="laptop">
+		Pull entities and JSON that matches your schema straight from any document, using a local or
+		hosted LLM — no prompt engineering.
 	</Card>
-	<Card title="Code intelligence & embeddings" icon="setting">
-		Extract functions, classes, imports, and symbols across 306 languages. Vectorize with local ONNX
-		models or provider-hosted embeddings for RAG pipelines.
+	<Card title="Understand code across 306 languages" icon="setting">
+		Extract functions, classes, imports, and symbols from source, then turn any content into
+		embeddings for search and RAG.
 	</Card>
-	<Card title="15-language native SDKs" icon="translate">
-		Python, TypeScript, Rust, Go, Java, C#, Ruby, PHP, Elixir, Dart, Swift, Zig, and C FFI — plus a
-		CLI, REST API, MCP server, Docker, and WASM.
+	<Card title="Use your language, native performance" icon="translate">
+		Call Xberg from Python, TypeScript, Rust, Go, Java, C#, Ruby, PHP, Elixir, and more — plus a CLI,
+		REST API, MCP server, Docker, and WASM.
 	</Card>
 </CardGrid>
 
