@@ -13,7 +13,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::model_download::verify_sha256;
+use crate::model_download::{parse_sha256_manifest, verify_sha256};
 
 /// A checksum-pinned VLM-OCR model hosted on ModelScope.
 struct ModelScopeModel {
@@ -35,43 +35,11 @@ const HUNYUAN_OCR: ModelScopeModel = ModelScopeModel {
     manifest: include_str!("hunyuan-ocr.sha256"),
 };
 
-/// One file in a parsed manifest: the name (both cache filename and remote resolve
-/// path) and the sha256 the downloaded bytes must match.
-struct ManifestFile {
-    name: String,
-    sha256: String,
-}
-
-/// Parse a `sha256sum`-format manifest into an ordered file list.
-///
-/// Skips blank lines and `#` comments; each remaining line must be
-/// `<64-hex-sha256>  <path>`. Mirrors the GLiNER checksum parser
-/// ([`crate::text::ner`]) so the format is consistent across the codebase.
-fn parse_manifest(content: &str) -> Result<Vec<ManifestFile>, String> {
-    let mut files = Vec::new();
-    for (index, line) in content.lines().enumerate() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with('#') {
-            continue;
-        }
-        let mut parts = trimmed.split_whitespace();
-        let sha256 = parts
-            .next()
-            .ok_or_else(|| format!("Invalid manifest line {}: missing checksum", index + 1))?;
-        let name = parts
-            .next()
-            .ok_or_else(|| format!("Invalid manifest line {}: missing filename", index + 1))?;
-        if sha256.len() != 64 || !sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
-            return Err(format!(
-                "Invalid manifest line {}: checksum must be SHA256 hex",
-                index + 1
-            ));
-        }
-        files.push(ManifestFile {
-            name: name.trim_start_matches("./").to_string(),
-            sha256: sha256.to_ascii_lowercase(),
-        });
-    }
+/// Parse the model manifest into an ordered `(filename, sha256)` list, requiring at
+/// least one entry. Format/validation live in [`parse_sha256_manifest`], shared with
+/// the other checksum-manifest consumers.
+fn manifest_files(content: &str) -> Result<Vec<(String, String)>, String> {
+    let files = parse_sha256_manifest(content)?;
     if files.is_empty() {
         return Err("Manifest lists no files".to_string());
     }
@@ -96,20 +64,20 @@ pub(crate) fn ensure_hunyuan_ocr() -> Result<PathBuf, String> {
 }
 
 fn ensure_model(model: &ModelScopeModel, dir: &Path) -> Result<PathBuf, String> {
-    let files = parse_manifest(model.manifest)?;
+    let files = manifest_files(model.manifest)?;
     std::fs::create_dir_all(dir).map_err(|e| format!("Failed to create model cache dir {}: {e}", dir.display()))?;
 
-    for file in &files {
-        let dst = dir.join(&file.name);
+    for (name, sha256) in &files {
+        let dst = dir.join(name);
 
         // A file already present with the right bytes needs no network round-trip.
-        if dst.exists() && verify_sha256(&dst, &file.sha256, &file.name).is_ok() {
+        if dst.exists() && verify_sha256(&dst, sha256, name).is_ok() {
             continue;
         }
 
-        let url = modelscope_url(model.repo, &file.name);
-        tracing::info!(file = %file.name, %url, "Staging Hunyuan-OCR weight");
-        stage_file(&url, dir, &file.name, &file.sha256)?;
+        let url = modelscope_url(model.repo, name);
+        tracing::info!(file = %name, %url, "Staging Hunyuan-OCR weight");
+        stage_file(&url, dir, name, sha256)?;
     }
 
     Ok(dir.to_path_buf())
@@ -183,8 +151,8 @@ mod tests {
 
     #[test]
     fn hunyuan_manifest_covers_every_file_the_engine_reads() {
-        let files = parse_manifest(HUNYUAN_OCR.manifest).expect("bundled manifest must parse");
-        let names: Vec<&str> = files.iter().map(|f| f.name.as_str()).collect();
+        let files = manifest_files(HUNYUAN_OCR.manifest).expect("bundled manifest must parse");
+        let names: Vec<&str> = files.iter().map(|(name, _)| name.as_str()).collect();
         // The engine reads config + generation_config + the four shards; the
         // processor reads preprocessor_config + tokenizer.
         for required in [
@@ -207,28 +175,14 @@ mod tests {
     }
 
     #[test]
-    fn parse_manifest_reads_entries_and_normalizes() {
-        let files = parse_manifest(
-            "# comment\n\
-             AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA  ./config.json\n\
-             bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  tokenizer.json\n",
-        )
-        .expect("valid manifest");
-        assert_eq!(files.len(), 2);
-        // `./` stripped, order preserved, checksum lowercased.
-        assert_eq!(files[0].name, "config.json");
-        assert_eq!(files[0].sha256, "a".repeat(64));
-        assert_eq!(files[1].name, "tokenizer.json");
-    }
-
-    #[test]
-    fn parse_manifest_rejects_malformed_lines() {
-        assert!(
-            parse_manifest("not-a-sha256  config.json").is_err(),
-            "short/invalid hash"
+    fn manifest_files_requires_at_least_one_entry() {
+        assert!(manifest_files("# only comments\n").is_err(), "no files");
+        assert_eq!(
+            manifest_files(&format!("{}  config.json\n", "a".repeat(64)))
+                .unwrap()
+                .len(),
+            1
         );
-        assert!(parse_manifest(&"a".repeat(64)).is_err(), "missing filename");
-        assert!(parse_manifest("# only comments\n").is_err(), "no files");
     }
 
     #[test]
@@ -266,12 +220,12 @@ mod tests {
     fn stages_hunyuan_config_files_from_modelscope() {
         let dir = tempfile::tempdir().unwrap();
         // A sub-manifest of just the small JSON files (the first four bundled entries).
-        let bundled = parse_manifest(HUNYUAN_OCR.manifest).unwrap();
+        let bundled = manifest_files(HUNYUAN_OCR.manifest).unwrap();
         let small = &bundled[..4];
         let manifest: &'static str = Box::leak(
             small
                 .iter()
-                .map(|f| format!("{}  {}", f.sha256, f.name))
+                .map(|(name, sha256)| format!("{sha256}  {name}"))
                 .collect::<Vec<_>>()
                 .join("\n")
                 .into_boxed_str(),
@@ -283,10 +237,10 @@ mod tests {
         };
 
         let out = ensure_model(&model, dir.path()).expect("staging must succeed");
-        for f in small {
-            let path = out.join(&f.name);
-            assert!(path.exists(), "{} should be staged", f.name);
-            verify_sha256(&path, &f.sha256, &f.name).expect("staged file must match manifest checksum");
+        for (name, sha256) in small {
+            let path = out.join(name);
+            assert!(path.exists(), "{name} should be staged");
+            verify_sha256(&path, sha256, name).expect("staged file must match manifest checksum");
         }
 
         // A second call with a warm cache must not re-download (and still succeed).

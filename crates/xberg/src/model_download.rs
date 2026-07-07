@@ -75,6 +75,41 @@ pub(crate) fn hf_download(repo_id: &str, remote_filename: &str) -> Result<PathBu
     Ok(cached_path)
 }
 
+/// Parse a `sha256sum`-format manifest into ordered `(path, sha256)` pairs.
+///
+/// Skips blank lines and `#` comments; each remaining line must be
+/// `<64-hex-sha256>  <path>`. Leading `./` is stripped from paths and checksums are
+/// lowercased. Returns the pairs in file order (may be empty if the content is all
+/// comments — callers that require at least one entry check that themselves).
+///
+/// Shared by every checksum-manifest consumer (GLiNER model checksums, Candle VLM-OCR
+/// weight staging) so the format and validation live in one place.
+#[cfg(any(feature = "ner-onnx", feature = "candle-ocr"))]
+pub(crate) fn parse_sha256_manifest(content: &str) -> Result<Vec<(String, String)>, String> {
+    let mut entries = Vec::new();
+    for (index, line) in content.lines().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        let mut parts = trimmed.split_whitespace();
+        let checksum = parts
+            .next()
+            .ok_or_else(|| format!("Invalid checksum line {}: missing checksum", index + 1))?;
+        let path = parts
+            .next()
+            .ok_or_else(|| format!("Invalid checksum line {}: missing path", index + 1))?;
+        if checksum.len() != 64 || !checksum.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Err(format!(
+                "Invalid checksum line {}: checksum must be SHA256 hex",
+                index + 1
+            ));
+        }
+        entries.push((path.trim_start_matches("./").to_string(), checksum.to_ascii_lowercase()));
+    }
+    Ok(entries)
+}
+
 /// Verify the SHA256 checksum of a file using streaming reads.
 ///
 /// Streams the file in 64 KiB chunks to avoid loading large model files (100MB+) entirely
@@ -131,6 +166,32 @@ pub(crate) fn resolve_cache_dir(module: &str) -> PathBuf {
 ))]
 mod tests {
     use super::*;
+
+    #[cfg(any(feature = "ner-onnx", feature = "candle-ocr"))]
+    #[test]
+    fn parse_sha256_manifest_reads_entries_and_normalizes() {
+        let entries = parse_sha256_manifest(
+            "# comment\n\
+             AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA  ./config.json\n\
+             bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  tokenizer.json\n",
+        )
+        .expect("valid manifest");
+        // `./` stripped, order preserved, checksum lowercased.
+        assert_eq!(entries[0], ("config.json".to_string(), "a".repeat(64)));
+        assert_eq!(entries[1].0, "tokenizer.json");
+        // All comments → empty (callers decide whether that is an error).
+        assert!(parse_sha256_manifest("# only comments\n").unwrap().is_empty());
+    }
+
+    #[cfg(any(feature = "ner-onnx", feature = "candle-ocr"))]
+    #[test]
+    fn parse_sha256_manifest_rejects_malformed_lines() {
+        assert!(
+            parse_sha256_manifest("not-a-sha256  config.json").is_err(),
+            "invalid hash"
+        );
+        assert!(parse_sha256_manifest(&"a".repeat(64)).is_err(), "missing path");
+    }
 
     #[test]
     fn download_lock_is_stable_per_key_and_distinct_across_keys() {

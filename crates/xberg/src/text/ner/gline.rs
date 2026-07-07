@@ -295,28 +295,11 @@ fn read_gliner_checksums(path: &Path) -> Result<HashMap<String, String>> {
 }
 
 fn parse_checksums(content: &str) -> Result<HashMap<String, String>> {
-    let mut checksums = HashMap::new();
-    for (index, line) in content.lines().enumerate() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with('#') {
-            continue;
-        }
-        let mut parts = trimmed.split_whitespace();
-        let checksum = parts.next().ok_or_else(|| {
-            crate::XbergError::validation(format!("Invalid GLiNER checksum line {}: missing checksum", index + 1))
-        })?;
-        let path = parts.next().ok_or_else(|| {
-            crate::XbergError::validation(format!("Invalid GLiNER checksum line {}: missing path", index + 1))
-        })?;
-        if checksum.len() != 64 || !checksum.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-            return Err(crate::XbergError::validation(format!(
-                "Invalid GLiNER checksum line {}: checksum must be SHA256 hex",
-                index + 1
-            )));
-        }
-        checksums.insert(path.trim_start_matches("./").to_string(), checksum.to_ascii_lowercase());
-    }
-    Ok(checksums)
+    // Format + validation live in the shared `sha256sum` manifest parser; GLiNER just
+    // needs the entries as a path→checksum map for lookup by artifact.
+    let entries = crate::model_download::parse_sha256_manifest(content)
+        .map_err(|e| crate::XbergError::validation(format!("Invalid GLiNER checksums file: {e}")))?;
+    Ok(entries.into_iter().collect())
 }
 
 fn required_checksum<'a>(checksums: &'a HashMap<String, String>, path: &str) -> Result<&'a str> {
