@@ -94,13 +94,13 @@ Extract text, tables, images, metadata, and code intelligence from 96 file forma
 Kotlin DSL (`build.gradle.kts`):
 
 ```kotlin
-implementation("io.xberg:xberg-android:1.0.0-rc.15")
+implementation("io.xberg:xberg-android:1.0.0-rc.16")
 ```
 
 Groovy DSL (`build.gradle`):
 
 ```groovy
-implementation 'io.xberg:xberg-android:1.0.0-rc.15'
+implementation 'io.xberg:xberg-android:1.0.0-rc.16'
 ```
 
 Add to your `pom.xml`:
@@ -109,7 +109,7 @@ Add to your `pom.xml`:
 <dependency>
     <groupId>io.xberg</groupId>
     <artifactId>xberg-android</artifactId>
-    <version>1.0.0-rc.15</version>
+    <version>1.0.0-rc.16</version>
 </dependency>
 ```
 

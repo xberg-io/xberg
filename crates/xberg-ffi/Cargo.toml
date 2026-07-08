@@ -82,6 +82,9 @@ crawlberg = { default-features = false, version = "1.0.3" }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 
+[target.'cfg(all(target_os = "macos", target_arch = "x86_64"))'.dependencies]
+xberg = { path = "../xberg", version = "1.0.0-rc.16", features = ["macos-intel-target"] }
+
 [target.'cfg(not(any(target_os = "android", target_os = "ios", target_os = "windows", all(target_os = "macos", target_arch = "x86_64"))))'.dependencies]
 xberg = { path = "../xberg", version = "1.0.0-rc.16", features = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "reranker", "reranker-presets", "sparse-embeddings", "sparse-embedding-presets", "late-interaction", "late-interaction-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "api-types", "mcp", "liter-llm", "quality", "svg", "transcription", "transcription-types", "classification", "captioning", "ner-onnx", "ner-llm", "diff", "markdown-footnotes", "redaction", "enrichment", "heuristics", "presets", "structured", "url-ingestion"] }
 
@@ -93,9 +96,6 @@ xberg = { path = "../xberg", version = "1.0.0-rc.16", features = ["android-targe
 
 [target.'cfg(target_os = "windows")'.dependencies]
 xberg = { path = "../xberg", version = "1.0.0-rc.16", features = ["windows-target"] }
-
-[target.'cfg(all(target_os = "macos", target_arch = "x86_64"))'.dependencies]
-xberg = { path = "../xberg", version = "1.0.0-rc.16", features = ["macos-intel-target"] }
 
 
 [build-dependencies]

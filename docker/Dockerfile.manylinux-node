@@ -127,17 +127,18 @@ ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc \
 # ort links libonnxruntime dynamically; the .so is downloaded from Microsoft and
 # is NOT present on consumer machines. Bake an `$ORIGIN` RUNPATH into the .node
 # so the dynamic loader resolves its vendored dependencies (staged next to the
-# .node in the npm platform package) at load time. `$ORIGIN` must reach the
-# linker literally — escape the `$` so neither Docker (build-arg expansion) nor
-# the RUN shell substitutes it here.
-ENV RUSTFLAGS="-C link-arg=-Wl,-rpath,\$ORIGIN"
-
+# .node in the npm platform package) at load time. RUSTFLAGS is exported inside
+# the build RUN with single quotes so `$ORIGIN` reaches the linker literally —
+# Docker does no variable substitution on RUN and the single quotes stop the
+# shell from expanding it (an ENV would need a `\$` escape poly's parser rejects).
+#
 # Build the NAPI binding. napi build wraps `cargo build` and emits
 # xberg.<platform>.node. Run via npx (matching crates/xberg-node/package.json's
 # build script) so no pnpm workspace install is needed. No --use-napi-cross:
 # the native gcc-toolset has the C11 headers aws-lc-sys needs. Neither --offline
 # nor --locked (the sed above edits Cargo.toml without touching Cargo.lock).
-RUN rustup target add "${TARGET}" && \
+RUN export RUSTFLAGS='-C link-arg=-Wl,-rpath,$ORIGIN' && \
+    rustup target add "${TARGET}" && \
     cd crates/xberg-node && \
     npx --yes -p @napi-rs/cli@^3.6.2 napi build --platform --release --target "${TARGET}" && \
     cp ./*.node /build/ && \

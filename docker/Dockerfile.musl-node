@@ -53,12 +53,13 @@ ENV ORT_PREFER_DYNAMIC_LINK=1
 ENV ORT_SKIP_DOWNLOAD=1
 ENV ORT_STRATEGY=system
 # Allow cdylib output on musl targets (default is +crt-static which blocks shared
-# libs). Also bake an `$ORIGIN` RUNPATH so the .node resolves its vendored
+# libs) and bake an `$ORIGIN` RUNPATH so the .node resolves its vendored
 # shared-lib closure (libonnxruntime + image codecs, sourced from Alpine edge and
 # absent on consumer machines) from beside itself in the npm platform package.
-# `$ORIGIN` must reach the linker literally — escape the `$` so Docker does not
-# treat it as a build-arg reference.
-ENV RUSTFLAGS="-C target-feature=-crt-static -C link-arg=-Wl,-rpath,\$ORIGIN"
+# RUSTFLAGS is exported inside the build RUN with single quotes so `$ORIGIN`
+# reaches the linker literally — Docker does no variable substitution on RUN and
+# the single quotes stop the shell expanding it (an ENV would need a `\$` escape
+# poly's dockerfile parser rejects).
 
 # Copy workspace manifests and crates
 COPY Cargo.toml Cargo.lock ./
@@ -106,7 +107,8 @@ ENV CXX_x86_64_unknown_linux_musl=g++
 #
 # Neither --offline nor --locked: the `sed -i Cargo.toml` above removes workspace
 # members without touching Cargo.lock (see Dockerfile.musl-ffi for the rationale).
-RUN rustup target add "${TARGET}" && \
+RUN export RUSTFLAGS='-C target-feature=-crt-static -C link-arg=-Wl,-rpath,$ORIGIN' && \
+    rustup target add "${TARGET}" && \
     cd crates/xberg-node && \
     npx --yes -p @napi-rs/cli@^3.6.2 napi build --platform --release --target "${TARGET}" && \
     cp ./*.node /build/ && \
