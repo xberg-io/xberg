@@ -1,3 +1,4 @@
+export * from "./types";
 export * from "./embedder";
 export * from "./store";
 export * from "./ner";

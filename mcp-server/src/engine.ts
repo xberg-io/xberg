@@ -1,9 +1,11 @@
 import type { XbergEngine } from "@xberg-io/xberg-wasm";
 import { createXbergRuntimeFactory } from "xberg-wasm-runtime";
+import type { InjectionDescriptor } from "xberg-wasm-runtime";
 import { homedir } from "os";
 import { join } from "path";
 
 let _engine: XbergEngine | null = null;
+let _injection: InjectionDescriptor | null = null;
 
 /**
  * Build the `XbergEngine` (B) once, wiring it to C's shared runtime factory.
@@ -24,6 +26,7 @@ export async function initializeEngine(): Promise<XbergEngine> {
     process.env.XBERG_CACHE_DIR ?? join(homedir(), ".cache", "xberg");
 
   const injection = await createXbergRuntimeFactory({ nodeCachePath: cacheDir });
+  _injection = injection;
 
   // Per Task 1 spec, engine construction uses default config.
   const { XbergEngine } = await import("@xberg-io/xberg-wasm");
@@ -38,4 +41,12 @@ export function getEngine(): XbergEngine {
     throw new Error("Engine not initialized. Call initializeEngine() first.");
   }
   return _engine;
+}
+
+/** Return the injected runtime descriptor (embedder/store/ner/ocr), or throw if not yet initialized. */
+export function getRuntime(): InjectionDescriptor {
+  if (_injection === null) {
+    throw new Error("Engine not initialized. Call initializeEngine() first.");
+  }
+  return _injection;
 }
