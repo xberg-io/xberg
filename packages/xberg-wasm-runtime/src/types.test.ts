@@ -10,12 +10,14 @@ describe("injectionDescriptor validation", () => {
         },
       },
       store: {
-        upsertDocument: async () => ({ documentId: "1", chunksCount: 1 }),
-        query: async () => [],
-        delete: async () => {},
-        listCollections: async () => [],
-        dropCollection: async () => {},
         ensureCollection: async () => {},
+        dropCollection: async () => {},
+        getCollection: async () => null,
+        upsertDocument: async () => "doc-1",
+        deleteDocuments: async () => 0,
+        deleteByFilter: async () => 0,
+        retrieve: async () => ({ mode: "vector", chunks: [] }),
+        collectionStats: async () => ({ documents: 0, chunks: 0 }),
       },
     };
     const result = injectionDescriptorSchema.safeParse(descriptor);
@@ -25,12 +27,14 @@ describe("injectionDescriptor validation", () => {
   it("rejects missing embedder", () => {
     const descriptor = {
       store: {
-        upsertDocument: async () => ({ documentId: "1", chunksCount: 1 }),
-        query: async () => [],
-        delete: async () => {},
-        listCollections: async () => [],
-        dropCollection: async () => {},
         ensureCollection: async () => {},
+        dropCollection: async () => {},
+        getCollection: async () => null,
+        upsertDocument: async () => "doc-1",
+        deleteDocuments: async () => 0,
+        deleteByFilter: async () => 0,
+        retrieve: async () => ({ mode: "vector", chunks: [] }),
+        collectionStats: async () => ({ documents: 0, chunks: 0 }),
       },
     };
     const result = injectionDescriptorSchema.safeParse(descriptor);
@@ -43,12 +47,14 @@ describe("injectionDescriptor validation", () => {
         embed: async (texts: string[]) => texts.map(() => new Float32Array([0.1])),
       },
       store: {
-        upsertDocument: async () => ({ documentId: "1", chunksCount: 1 }),
-        query: async () => [],
-        delete: async () => {},
-        listCollections: async () => [],
-        dropCollection: async () => {},
         ensureCollection: async () => {},
+        dropCollection: async () => {},
+        getCollection: async () => null,
+        upsertDocument: async () => "doc-1",
+        deleteDocuments: async () => 0,
+        deleteByFilter: async () => 0,
+        retrieve: async () => ({ mode: "vector", chunks: [] }),
+        collectionStats: async () => ({ documents: 0, chunks: 0 }),
       },
       ner: {
         ner: async (text: string) => [],
