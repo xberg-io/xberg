@@ -26,6 +26,13 @@ export function encryptMapFile(
   writeFileSync(filePath, Buffer.concat([MAGIC, salt, iv, tag, enc]));
 }
 
+/**
+ * @deprecated The `rehydrate_document` tool now decrypts rehydration maps
+ * in-wasm via `engine.decrypt_map` for parity with the Rust/wasm crypto
+ * implementation. This TS Node-crypto path is retained for direct callers
+ * and test coverage of the on-disk wire format, but is no longer used by
+ * any MCP tool handler.
+ */
 export function decryptMapFile(
   filePath: string,
   passphrase: string
