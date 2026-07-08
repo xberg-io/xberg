@@ -70,7 +70,10 @@ serde_json = "1"
 sha2 = "0.10"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
-xberg = { path = "../xberg", default-features = false, features = ["wasm-target", "url-ingestion"] }
+# `wasm-target` expanded minus `ocr-wasm`: the MCP/Node host injects OCR via the
+# `ocr` bridge, so in-binary Tesseract (which pulls Leptonica + WASI fd/path/mkstemp/
+# system imports that wasm-bindgen's nodejs target can't satisfy) is unnecessary here.
+xberg = { path = "../xberg", default-features = false, features = ["no-ort-target", "excel-wasm", "tree-sitter-wasm", "ner-candle-wasm", "url-ingestion"] }
 xberg-rag = { default-features = false, features = ["vector-store", "pipeline"], path = "../xberg-rag" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
