@@ -571,33 +571,71 @@ fn download_model_files(
         .build()
         .map_err(|e| crate::XbergError::embedding(format!("Failed to create HF API client: {e}")))?;
 
-    let repo = api.model(repo_name.to_string());
+    // Every fetch runs under the wall-clock watchdog: hf-hub sets no read/connect timeout, so a
+    // firewalled host would otherwise wedge the whole pipeline at 0% CPU. `ApiRepo` is not `Clone`
+    // in hf-hub 0.4, but `Api` is — so each closure captures a cheap `Api` clone and rebuilds its
+    // `ApiRepo` via `api.model(..)` inside. The `LockAcquisition` hint is computed inside the
+    // closure (where the typed `ApiError` is still available) and folded into the returned string;
+    // the outer map adds the "Failed to download …" framing.
+    let model_path = {
+        let api = api.clone();
+        let file = model_file.to_string();
+        let cache_dir = cache_directory.to_path_buf();
+        let repo_name = repo_name.to_string();
+        crate::model_download::with_download_deadline(&format!("{repo_name}/{model_file}"), move || {
+            api.model(repo_name.clone()).get(&file).map_err(|e| {
+                let hint = if matches!(e, hf_hub::api::sync::ApiError::LockAcquisition(_)) {
+                    lock_acquisition_hint(&cache_dir, &repo_name)
+                } else {
+                    String::new()
+                };
+                format!("{e}{hint}")
+            })
+        })
+    }
+    .map_err(|e| crate::XbergError::embedding(format!("Failed to download {model_file}: {e}")))?;
 
-    let model_path = repo.get(model_file).map_err(|e| {
-        let hint = if matches!(e, hf_hub::api::sync::ApiError::LockAcquisition(_)) {
-            lock_acquisition_hint(cache_directory, repo_name)
-        } else {
-            String::new()
-        };
-        crate::XbergError::embedding(format!("Failed to download {model_file}: {e}{hint}"))
-    })?;
+    let tokenizer_path = {
+        let api = api.clone();
+        let repo_name = repo_name.to_string();
+        crate::model_download::with_download_deadline(&format!("{repo_name}/tokenizer.json"), move || {
+            api.model(repo_name).get("tokenizer.json").map_err(|e| e.to_string())
+        })
+    }
+    .map_err(|e| crate::XbergError::embedding(format!("Failed to download tokenizer.json: {e}")))?;
 
-    let tokenizer_path = repo
-        .get("tokenizer.json")
-        .map_err(|e| crate::XbergError::embedding(format!("Failed to download tokenizer.json: {e}")))?;
+    let config_path = {
+        let api = api.clone();
+        let repo_name = repo_name.to_string();
+        crate::model_download::with_download_deadline(&format!("{repo_name}/config.json"), move || {
+            api.model(repo_name).get("config.json").map_err(|e| e.to_string())
+        })
+    }
+    .map_err(|e| crate::XbergError::embedding(format!("Failed to download config.json: {e}")))?;
 
-    let config_path = repo
-        .get("config.json")
-        .map_err(|e| crate::XbergError::embedding(format!("Failed to download config.json: {e}")))?;
+    // These are optional — fall back to empty paths that load_tokenizer handles gracefully. Still
+    // wrapped in the deadline so a hang on an optional file cannot stall the pipeline either.
+    let special_tokens_path = {
+        let api = api.clone();
+        let repo_name = repo_name.to_string();
+        crate::model_download::with_download_deadline(&format!("{repo_name}/special_tokens_map.json"), move || {
+            api.model(repo_name)
+                .get("special_tokens_map.json")
+                .map_err(|e| e.to_string())
+        })
+    }
+    .unwrap_or_else(|_| std::path::PathBuf::new());
 
-    // These are optional — fall back to empty paths that load_tokenizer handles gracefully
-    let special_tokens_path = repo
-        .get("special_tokens_map.json")
-        .unwrap_or_else(|_| std::path::PathBuf::new());
-
-    let tokenizer_config_path = repo
-        .get("tokenizer_config.json")
-        .unwrap_or_else(|_| std::path::PathBuf::new());
+    let tokenizer_config_path = {
+        let api = api.clone();
+        let repo_name = repo_name.to_string();
+        crate::model_download::with_download_deadline(&format!("{repo_name}/tokenizer_config.json"), move || {
+            api.model(repo_name)
+                .get("tokenizer_config.json")
+                .map_err(|e| e.to_string())
+        })
+    }
+    .unwrap_or_else(|_| std::path::PathBuf::new());
 
     Ok((
         model_path,

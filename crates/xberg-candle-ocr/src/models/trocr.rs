@@ -148,8 +148,20 @@ impl TrocrEngine {
         let branch = variant.branch().to_string();
         let model_repo = hf_hub::Repo::with_revision(repo_id.clone(), RepoType::Model, branch.clone());
 
+        // hf-hub sets no read/connect timeout, so a firewalled host would hang these blocking
+        // `.get()` calls forever. Run each under the wall-clock watchdog. `ApiRepo` is not `Clone`
+        // in hf-hub 0.4, but `Api` and `Repo` are, so each closure rebuilds its repo via
+        // `api.repo(..)` inside from cheap clones.
+
         // Download model weights (~1.4GB for base variants)
-        let model_file = api.repo(model_repo.clone()).get("model.safetensors").map_err(|e| {
+        let model_file = {
+            let api = api.clone();
+            let model_repo = model_repo.clone();
+            crate::download_guard::with_download_deadline(&format!("{}/model.safetensors", repo_id), move || {
+                api.repo(model_repo).get("model.safetensors").map_err(|e| e.to_string())
+            })
+        }
+        .map_err(|e| {
             CandleOcrError::ModelLoadFailed(format!(
                 "Failed to download model weights for {} (branch {}): {}",
                 variant, branch, e
@@ -159,7 +171,14 @@ impl TrocrEngine {
         tracing::info!("Downloaded model weights to: {}", model_file.display());
 
         // Download and parse config.json to get both encoder and decoder configs
-        let config_file = api.repo(model_repo).get("config.json").map_err(|e| {
+        let config_file = {
+            let api = api.clone();
+            let model_repo = model_repo.clone();
+            crate::download_guard::with_download_deadline(&format!("{}/config.json", repo_id), move || {
+                api.repo(model_repo).get("config.json").map_err(|e| e.to_string())
+            })
+        }
+        .map_err(|e| {
             CandleOcrError::ModelLoadFailed(format!("Failed to download config.json for {}: {}", variant, e))
         })?;
 
@@ -191,9 +210,11 @@ impl TrocrEngine {
 
         // Download and load tokenizer from ToluClassics/candle-trocr-tokenizer
         let tokenizer_repo = api.model("ToluClassics/candle-trocr-tokenizer".to_string());
-        let tokenizer_file = tokenizer_repo
-            .get("tokenizer.json")
-            .map_err(|e| CandleOcrError::ModelLoadFailed(format!("Failed to download tokenizer: {}", e)))?;
+        let tokenizer_file = crate::download_guard::with_download_deadline(
+            "ToluClassics/candle-trocr-tokenizer/tokenizer.json",
+            move || tokenizer_repo.get("tokenizer.json").map_err(|e| e.to_string()),
+        )
+        .map_err(|e| CandleOcrError::ModelLoadFailed(format!("Failed to download tokenizer: {}", e)))?;
 
         let tokenizer = Tokenizer::from_file(&tokenizer_file)
             .map_err(|e| CandleOcrError::ModelLoadFailed(format!("Failed to load tokenizer: {}", e)))?;

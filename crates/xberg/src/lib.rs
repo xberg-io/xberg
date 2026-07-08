@@ -138,15 +138,11 @@ pub mod ocr;
 ))]
 pub mod ort_discovery;
 
-#[cfg(any(
-    feature = "paddle-ocr",
-    feature = "layout-detection",
-    feature = "auto-rotate",
-    feature = "ner-onnx",
-    // Only Hunyuan-OCR stages weights through model_download; other candle
-    // backends fetch via hf-hub directly or take a local model_path.
-    feature = "candle-hunyuan-ocr"
-))]
+// Always compiled: besides the checksummed model-manager helpers (feature-gated
+// inside the module), it hosts `with_download_deadline`, the network-agnostic
+// watchdog every hf-hub `.get()` site wraps itself in. That guard has no hf-hub
+// dependency and must be reachable from every download feature (embeddings,
+// reranker, transcription, …) without threading a shared cfg through each one.
 pub(crate) mod model_download;
 
 #[cfg(any(feature = "paddle-ocr", feature = "paddle-ocr-types"))]

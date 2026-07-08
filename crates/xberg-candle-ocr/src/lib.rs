@@ -22,6 +22,10 @@
 #![allow(clippy::too_many_arguments)]
 
 pub mod device;
+// Wall-clock watchdog for hf-hub `.get()` downloads. Only compiled for the model backends that
+// actually fetch weights from HuggingFace, so a default (no-model) build stays warning-clean.
+#[cfg(any(feature = "trocr", feature = "glm-ocr"))]
+pub(crate) mod download_guard;
 pub mod error;
 pub mod models;
 pub(crate) mod vendor;

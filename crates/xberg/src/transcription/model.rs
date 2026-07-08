@@ -390,8 +390,6 @@ pub fn ensure_whisper_model(
         .build()
         .map_err(|error| WhisperModelError::Download(format!("Failed to initialise hf-hub API: {error}")))?;
 
-    let repo = api.model(hf_repo(model).to_string());
-
     for (remote_path, local_name) in model_files(model) {
         let local_path = target_dir.join(local_name);
 
@@ -409,7 +407,18 @@ pub fn ensure_whisper_model(
             "Downloading Whisper model file",
         );
 
-        let downloaded = repo.get(remote_path).map_err(|error| {
+        // Run the blocking fetch under the wall-clock watchdog: hf-hub sets no read/connect
+        // timeout, so a firewalled host would otherwise wedge the pipeline forever at 0% CPU.
+        // `ApiRepo` is not `Clone` in hf-hub 0.4, but `Api` is, so rebuild the repo inside.
+        let downloaded = {
+            let api = api.clone();
+            let remote = remote_path.to_string();
+            let repo_id = hf_repo(model).to_string();
+            crate::model_download::with_download_deadline(&format!("{}/{remote_path}", hf_repo(model)), move || {
+                api.model(repo_id).get(&remote).map_err(|e| e.to_string())
+            })
+        }
+        .map_err(|error| {
             WhisperModelError::Download(format!(
                 "Failed to download '{remote_path}' from {}: {error}",
                 hf_repo(model)

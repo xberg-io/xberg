@@ -13,6 +13,17 @@ The changelog starts fresh at `1.0.0-rc.1`. For the Kreuzberg v1–v4 history, s
 
 ## [Unreleased]
 
+### Fixed
+
+- **Model downloads can no longer hang the extraction pipeline on a blocked network.** hf-hub
+  builds its ureq agent with no read/connect timeout, so a firewalled or stalled HuggingFace
+  connection made the blocking `ApiRepo::get()` block forever — wedging the whole pipeline at 0%
+  CPU with no error. Every model-file fetch (embeddings, reranker, transcription, PaddleOCR/layout
+  managers, and the Candle TrOCR / GLM-OCR backends) now runs under a wall-clock watchdog: on
+  expiry it logs a warning and returns an error so the caller degrades (skips the model-backed
+  backend) instead of hanging. Default ceiling 300s; override with
+  `XBERG_MODEL_DOWNLOAD_TIMEOUT_SECS`.
+
 ### Added
 
 - **Bring your own tokenizer for token-budgeted chunking.** Register a `TokenizerBackend`

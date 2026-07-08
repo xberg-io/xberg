@@ -218,16 +218,25 @@ mod engine {
             let api = hf_hub::api::sync::Api::new()
                 .map_err(|e| CandleOcrError::ModelLoadFailed(format!("HF API init: {}", e)))?;
 
-            let repo = api.repo(hf_hub::Repo::with_revision(
+            // `ApiRepo` is not `Clone` in hf-hub 0.4, but `Api` and `Repo` are, so keep the repo
+            // spec around and let each watchdog closure rebuild its `ApiRepo` via `api.repo(..)`.
+            let repo_spec = hf_hub::Repo::with_revision(
                 "zai-org/GLM-OCR".to_string(),
                 hf_hub::RepoType::Model,
                 "main".to_string(),
-            ));
+            );
 
+            // hf-hub sets no read/connect timeout, so a firewalled host would hang these blocking
+            // `.get()` calls forever. Run each under the wall-clock watchdog.
             // Load and parse config.json
-            let config_file = repo
-                .get("config.json")
-                .map_err(|e| CandleOcrError::ModelLoadFailed(format!("Failed to get config: {}", e)))?;
+            let config_file = {
+                let api = api.clone();
+                let repo_spec = repo_spec.clone();
+                crate::download_guard::with_download_deadline("zai-org/GLM-OCR/config.json", move || {
+                    api.repo(repo_spec).get("config.json").map_err(|e| e.to_string())
+                })
+            }
+            .map_err(|e| CandleOcrError::ModelLoadFailed(format!("Failed to get config: {}", e)))?;
             let config_str = std::fs::read_to_string(&config_file)
                 .map_err(|e| CandleOcrError::ModelLoadFailed(format!("Failed to read config: {}", e)))?;
             let config: GlmOcrConfig = serde_json::from_str(&config_str)
@@ -242,18 +251,42 @@ mod engine {
             // if/when fine-tunes ship divergent settings.
 
             // Load tokenizer
-            let tokenizer_file = repo
-                .get("tokenizer.json")
-                .map_err(|e| CandleOcrError::ModelLoadFailed(format!("Failed to get tokenizer: {}", e)))?;
+            let tokenizer_file = {
+                let api = api.clone();
+                let repo_spec = repo_spec.clone();
+                crate::download_guard::with_download_deadline("zai-org/GLM-OCR/tokenizer.json", move || {
+                    api.repo(repo_spec).get("tokenizer.json").map_err(|e| e.to_string())
+                })
+            }
+            .map_err(|e| CandleOcrError::ModelLoadFailed(format!("Failed to get tokenizer: {}", e)))?;
             let tokenizer = Tokenizer::from_file(&tokenizer_file)
                 .map_err(|e| CandleOcrError::Tokenizer(format!("Tokenizer load error: {}", e)))?;
 
             // Load model weights: try model.safetensors first, fall back to index if sharded
-            let model_files = match repo.get("model.safetensors") {
+            let single_weight = {
+                let api = api.clone();
+                let repo_spec = repo_spec.clone();
+                crate::download_guard::with_download_deadline("zai-org/GLM-OCR/model.safetensors", move || {
+                    api.repo(repo_spec).get("model.safetensors").map_err(|e| e.to_string())
+                })
+            };
+            let model_files = match single_weight {
                 Ok(f) => vec![f],
                 Err(_) => {
                     // Try loading sharded weights via index file
-                    let index_file = repo.get("model.safetensors.index.json").map_err(|e| {
+                    let index_file = {
+                        let api = api.clone();
+                        let repo_spec = repo_spec.clone();
+                        crate::download_guard::with_download_deadline(
+                            "zai-org/GLM-OCR/model.safetensors.index.json",
+                            move || {
+                                api.repo(repo_spec)
+                                    .get("model.safetensors.index.json")
+                                    .map_err(|e| e.to_string())
+                            },
+                        )
+                    }
+                    .map_err(|e| {
                         CandleOcrError::ModelLoadFailed(format!("Failed to get model.safetensors or index: {}", e))
                     })?;
 
@@ -278,7 +311,16 @@ mod engine {
                     // Download all shards
                     let mut result = Vec::new();
                     for filename in files {
-                        let shard_file = repo.get(&filename).map_err(|e| {
+                        let shard_file = {
+                            let api = api.clone();
+                            let repo_spec = repo_spec.clone();
+                            let shard = filename.clone();
+                            crate::download_guard::with_download_deadline(
+                                &format!("zai-org/GLM-OCR/{filename}"),
+                                move || api.repo(repo_spec).get(&shard).map_err(|e| e.to_string()),
+                            )
+                        }
+                        .map_err(|e| {
                             CandleOcrError::ModelLoadFailed(format!("Failed to get shard {}: {}", filename, e))
                         })?;
                         result.push(shard_file);
