@@ -2,7 +2,6 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { ExtractionConfig, NerConfig } from "@xberg-io/xberg";
 import { detectPii, mergeNerEntities, type NerEntity } from "../redaction/detect.js";
 import { applyRedaction } from "../redaction/redact.js";
 import { writeRedactedDocx } from "../redaction/output/docx.js";
@@ -10,8 +9,83 @@ import { writeRedactedPdf } from "../redaction/output/pdf.js";
 import { writeRedactedText } from "../redaction/output/text.js";
 import { writeReport } from "../redaction/output/report.js";
 import { encryptMapFile } from "../redaction/rehydration.js";
-import { embedTexts } from "xberg-rag-node";
-import { getStore, ensureCollectionWithDim, withTimeout } from "../store.js";
+import { getEngine } from "../engine.js";
+
+// Minimal shape for the wasm-bindgen `WasmExtractionResult` handle read from
+// `engine.extract(...)`. Mirrors the same narrow typing approach used in
+// src/tools/extract.ts (the engine's `extract` is typed `Promise<any>`).
+interface WasmExtractedDocumentLike {
+  content?: string;
+  mimeType?: string;
+  entities?: unknown[];
+  extractedKeywords?: Array<{ text: string }>;
+}
+
+interface WasmExtractionResultLike {
+  results?: WasmExtractedDocumentLike[];
+}
+
+/**
+ * Build the snake_case `IngestRequest`-shaped object consumed by
+ * `engine.ingest(doc, collection, config?)`. `doc` is deserialized via serde
+ * directly into `xberg_rag::pipeline::IngestRequest`
+ * (crates/xberg-wasm/src/engine.rs), whose fields are plain snake_case with
+ * no `#[serde(rename_all = ...)]`. `entities`/`labels`/`metadata` are
+ * free-form `serde_json::Value` — default to `{}` when omitted so the
+ * required-but-nullable convention used elsewhere in this file doesn't send
+ * `null` into a struct that expects a JSON value.
+ */
+function toIngestRequest(fields: {
+  full_text: string;
+  title?: string;
+  mime?: string;
+  source_uri?: string;
+  external_id?: string;
+  keywords?: string[];
+  metadata?: Record<string, unknown>;
+}): Record<string, unknown> {
+  return {
+    full_text: fields.full_text,
+    title: fields.title,
+    mime: fields.mime,
+    source_uri: fields.source_uri,
+    external_id: fields.external_id,
+    keywords: fields.keywords ?? [],
+    entities: {},
+    labels: {},
+    metadata: fields.metadata ?? {},
+  };
+}
+
+// NOTE: `engine.ingest`'s optional 3rd arg (`config`) supports camelCase
+// `chunking.maxCharacters` / `chunking.overlap` (parsed manually, not via
+// serde — see crates/xberg-wasm/src/engine.rs `ingest`), but neither
+// `ingest_document` nor `ingest_folder`'s Zod schema exposes a chunking
+// config field, so no `config` argument is built or passed here — both call
+// sites below rely on the engine's default `ChunkingConfig`.
+
+/**
+ * Extract the document id from `engine.ingest`'s resolved value.
+ *
+ * The Rust return type is `RagResult<DocumentId>` where `DocumentId` is a
+ * newtype tuple struct `DocumentId(pub String)` with a plain
+ * `#[derive(Serialize)]` (no custom serde attrs) — serde serializes newtype
+ * structs transparently, so `serde_wasm_bindgen::to_value` produces a bare
+ * JS string. Handle object/Map shapes defensively in case that changes.
+ */
+function extractDocumentId(result: unknown): string | null {
+  if (typeof result === "string") return result;
+  if (result instanceof Map) {
+    const v = result.get("0") ?? result.values().next().value;
+    return typeof v === "string" ? v : null;
+  }
+  if (result && typeof result === "object") {
+    const obj = result as Record<string, unknown>;
+    const v = obj.documentId ?? obj.document_id ?? obj["0"];
+    return typeof v === "string" ? v : null;
+  }
+  return null;
+}
 
 const SUPPORTED_EXTS = [".pdf", ".docx", ".txt", ".md", ".html", ".xlsx", ".csv", ".json"];
 
@@ -40,49 +114,17 @@ export function registerIngestTools(server: McpServer): void {
     },
     async ({ collection, full_text, title, mime, source_uri, external_id, keywords, metadata }) => {
       try {
-        const textChunks: string[] = [];
-        let start = 0;
-        while (start < full_text.length) {
-          textChunks.push(full_text.slice(start, start + 512));
-          start += 512;
-        }
+        const engine = getEngine();
+        const doc = toIngestRequest({ full_text, title, mime, source_uri, external_id, keywords, metadata });
+        const result = await engine.ingest(doc, collection);
+        const docId = extractDocumentId(result);
 
-        const chunks: Array<{ ordinal: number; content: string; embedding: number[]; chunk_metadata: unknown }> = [];
-        if (textChunks.length > 0) {
-          const embJson = await withTimeout(
-            embedTexts(
-              JSON.stringify(textChunks),
-              JSON.stringify({ model: { type: "preset", name: "balanced" } }),
-            ),
-            60_000,
-            "embedTexts",
-          );
-          const embeddings = JSON.parse(embJson) as number[][];
-          for (let i = 0; i < textChunks.length; i++) {
-            chunks.push({ ordinal: i, content: textChunks[i] ?? "", embedding: embeddings[i] ?? [], chunk_metadata: { chunk_index: i, total_chunks: textChunks.length } });
-          }
-        }
-
-        const document = {
-          external_id: external_id ?? null,
-          title: title ?? null,
-          mime: mime ?? null,
-          source_uri: source_uri ?? null,
-          full_text,
-          keywords: keywords ?? [],
-          entities: null,
-          labels: null,
-          metadata: metadata ?? null,
-        };
-
-        const store = await getStore();
-        if (chunks.length > 0) {
-          await ensureCollectionWithDim(store, collection, chunks[0]!.embedding.length);
-        }
-        const docId = await store.upsertDocument(collection, JSON.stringify(document), JSON.stringify(chunks));
-
+        // `chunks_ingested` (previously `chunks_created`) is not available
+        // from the engine — `engine.ingest` returns only a `DocumentId`, not
+        // a chunk count. Set to `null` rather than dropping the key, to
+        // minimize the response-shape break for existing callers.
         return {
-          content: [{ type: "text" as const, text: JSON.stringify({ doc_id: docId, chunks_created: chunks.length }) }],
+          content: [{ type: "text" as const, text: JSON.stringify({ doc_id: docId, chunks_created: null }) }],
         };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -131,7 +173,7 @@ export function registerIngestTools(server: McpServer): void {
     },
     async ({ source_folder, redacted_folder, collection, redaction_strategy, rehydration_passphrase, use_ner, ner_backend, ner_model, ner_hf_repo, ner_hf_model_file, ner_hf_tokenizer_file, ner_hf_architecture, ner_llm_model, ner_categories }) => {
       try {
-        const { extract, extractInputFromUri, GlinerArchitecture } = await import("@xberg-io/xberg") as any;
+        const engine = getEngine();
         if (!fs.existsSync(source_folder)) {
           return { content: [{ type: "text" as const, text: "Error: source_folder does not exist" }], isError: true };
         }
@@ -149,7 +191,7 @@ export function registerIngestTools(server: McpServer): void {
           };
         }
 
-        const results: Array<{ original: string; redacted: string; report: string; pii_count: number; doc_id: string | null; chunks: number }> = [];
+        const results: Array<{ original: string; redacted: string; report: string; pii_count: number; doc_id: string | null; chunks: number | null }> = [];
         let totalPii = 0;
 
         for (const filename of supportedFiles) {
@@ -158,25 +200,43 @@ export function registerIngestTools(server: McpServer): void {
           const baseName = path.basename(filename, ext);
 
           try {
-            const input = extractInputFromUri(filePath);
-            const nerConfig: NerConfig = use_ner
+            // The wasm engine has no filesystem access (see extract.ts's
+            // buildUriExtractInput doc comment) — read the local file in
+            // Node and forward it as `kind: "bytes"`.
+            const fileBytes = fs.readFileSync(filePath);
+            const extractInput: Record<string, unknown> = {
+              kind: "bytes",
+              bytes: Uint8Array.from(fileBytes),
+              mime_type: null,
+              filename: filename,
+            };
+
+            // `engine.extract`'s `config` deserializes via serde directly into
+            // the plain Rust `xberg::ExtractionConfig` struct (snake_case,
+            // `deny_unknown_fields` — see extract.ts's toWasmConfig doc
+            // comment), whose `ner: Option<NerConfig>` field mirrors the
+            // native `@xberg-io/xberg` NerConfig shape but in snake_case, and
+            // its backend/architecture enums serialize as snake_case strings
+            // (e.g. "onnx", "llm", "gliner1") rather than the native
+            // camelCase-property / PascalCase-enum shape.
+            const nerConfig = use_ner
               ? {
-                  backend: ner_backend as NerConfig["backend"],
-                  categories: ner_categories as NerConfig["categories"],
+                  backend: ner_backend,
+                  categories: ner_categories ?? [],
                   model: ner_backend === "onnx" ? ner_model : undefined,
-                  hfRepo: ner_backend === "onnx" ? ner_hf_repo : undefined,
-                  hfModelFile: ner_backend === "onnx" ? ner_hf_model_file : undefined,
-                  hfTokenizerFile: ner_backend === "onnx" ? ner_hf_tokenizer_file : undefined,
-                  hfArchitecture: ner_backend === "onnx" && ner_hf_architecture
-                    ? GlinerArchitecture[
-                        ner_hf_architecture === "gliner2" ? "Gliner2" : "Gliner1"
-                      ]
-                    : undefined,
+                  hf_repo: ner_backend === "onnx" ? ner_hf_repo : undefined,
+                  hf_model_file: ner_backend === "onnx" ? ner_hf_model_file : undefined,
+                  hf_tokenizer_file: ner_backend === "onnx" ? ner_hf_tokenizer_file : undefined,
+                  hf_architecture: ner_backend === "onnx" ? ner_hf_architecture : undefined,
                   llm: ner_backend === "llm" ? { model: ner_llm_model } : undefined,
                 }
-              : ({} as NerConfig);
-            const extractConfig: ExtractionConfig | null = use_ner ? { ner: nerConfig } : null;
-            const result = await extract(input, extractConfig);
+              : undefined;
+            const extractConfig: Record<string, unknown> = {
+              extraction_timeout_secs: null,
+              ...(nerConfig ? { ner: nerConfig } : {}),
+            };
+
+            const result = (await engine.extract(extractInput, extractConfig)) as WasmExtractionResultLike;
             const doc = (result.results ?? [])[0];
             if (!doc) continue;
 
@@ -208,40 +268,15 @@ export function registerIngestTools(server: McpServer): void {
               fs.writeFileSync(mapPath, JSON.stringify(token_map), "utf-8");
             }
 
-            const textChunks: string[] = [];
-            let start = 0;
-            while (start < redactedText.length) {
-              textChunks.push(redactedText.slice(start, start + 512));
-              start += 512;
-            }
-
             let docId: string | null = null;
-            if (textChunks.length > 0) {
-              const embJson = await withTimeout(
-                embedTexts(
-                  JSON.stringify(textChunks),
-                  JSON.stringify({ model: { type: "preset", name: "balanced" } }),
-                ),
-                60_000,
-                "embedTexts",
-              );
-              const embeddings = JSON.parse(embJson) as number[][];
-              const chunks = textChunks.map((content, i) => ({
-                ordinal: i,
-                content,
-                embedding: embeddings[i] ?? [],
-                chunk_metadata: { chunk_index: i, total_chunks: textChunks.length },
-              }));
-
-              const document = {
-                external_id: `${collection}-${baseName}`,
-                title: filename,
-                mime: doc.mimeType ?? null,
-                source_uri: filePath,
+            if (redactedText.length > 0) {
+              const ingestDoc = toIngestRequest({
                 full_text: redactedText,
-                keywords: doc.extractedKeywords?.map((k: { text: string }) => k.text) ?? [],
-                entities: null,
-                labels: null,
+                title: filename,
+                mime: doc.mimeType,
+                source_uri: filePath,
+                external_id: `${collection}-${baseName}`,
+                keywords: doc.extractedKeywords?.map((k) => k.text) ?? [],
                 metadata: {
                   original_filename: filename,
                   pii_count: findings.length,
@@ -256,14 +291,23 @@ export function registerIngestTools(server: McpServer): void {
                   ingestion_date: new Date().toISOString(),
                   ner_enabled: use_ner,
                 },
-              };
+              });
 
-              const store = await getStore();
-              await ensureCollectionWithDim(store, collection, chunks[0]!.embedding.length);
-              docId = await store.upsertDocument(collection, JSON.stringify(document), JSON.stringify(chunks));
+              // engine methods hold `&self` across `await` and are not
+              // re-entrant — this loop already awaits sequentially per file
+              // (no Promise.all), which is required here too.
+              const ingestResult = await engine.ingest(ingestDoc, collection);
+              docId = extractDocumentId(ingestResult);
             }
 
-            results.push({ original: filename, redacted: redactedPath, report: reportPath, pii_count: findings.length, doc_id: docId, chunks: textChunks.length });
+            // `chunks` in the per-file result summary previously counted
+            // manually-split 512-char text chunks; the engine's internal
+            // chunk count is not surfaced by `engine.ingest` (it returns only
+            // a DocumentId — see extractDocumentId's doc comment), so this is
+            // now `null` when a document was ingested, matching
+            // `ingest_document`'s `chunks_created: null`. Kept as a numeric
+            // 0 when nothing was ingested to preserve the "no doc" signal.
+            results.push({ original: filename, redacted: redactedPath, report: reportPath, pii_count: findings.length, doc_id: docId, chunks: docId !== null ? null : 0 });
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             console.error(`Error processing ${filename}: ${msg}`);
@@ -279,7 +323,14 @@ export function registerIngestTools(server: McpServer): void {
               files_processed: results.length,
               total_pii_detected: totalPii,
               documents_ingested: results.filter((r) => r.doc_id !== null).length,
-              chunks_created: results.reduce((sum, r) => sum + r.chunks, 0),
+              // `chunks_created` at the top level previously summed
+              // per-file chunk counts. That count is no longer available
+              // from `engine.ingest` (see per-file `chunks: null` above),
+              // so this is `null` whenever at least one file was ingested,
+              // and `0` only when nothing was ingested at all.
+              chunks_created: results.some((r) => r.chunks !== null && r.chunks > 0 || r.doc_id !== null)
+                ? null
+                : 0,
               files: results,
               output_locations: { redacted: redacted_folder, reports: `${redacted_folder}/*_REPORT.docx`, rehydration_maps: rehydrationDir },
             }),
