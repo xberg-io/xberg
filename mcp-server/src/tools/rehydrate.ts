@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import * as fs from "fs";
 import * as path from "path";
-import { getCacheDir } from "../store.js";
+import { getCacheDir } from "../paths.js";
 import { getEngine } from "../engine.js";
 
 export function registerRehydrateTools(server: McpServer): void {
