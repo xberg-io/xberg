@@ -156,35 +156,31 @@ jobs:
           SUMMARY_LABEL: cli
         run: scripts/publish/check-docker-tag.sh
 
-  publish-docker:
-    name: Publish Docker image (${{ matrix.variant }})
+  # Build each (variant, arch) on a NATIVE runner — no QEMU. Emulated arm64 builds
+  # were taking ~4h and hanging at tesseract static-linking, tripping the 6h cap.
+  # Each job builds + tests its single-arch image, then pushes it to GHCR by digest;
+  # the merge-docker job assembles the multi-arch manifest from the per-arch digests.
+  build-docker:
+    name: Build ${{ matrix.variant }} (${{ matrix.platform.name }})
     needs:
       - prepare
       - check-docker
-    runs-on: ubuntu-latest
-    timeout-minutes: 360
+    runs-on: ${{ matrix.platform.runner }}
+    timeout-minutes: 90
     permissions:
       contents: read
       packages: write
     strategy:
       fail-fast: false
       matrix:
+        variant: [core, full, cli]
+        platform:
+          - { name: amd64, docker: linux/amd64, runner: ubuntu-latest }
+          - { name: arm64, docker: linux/arm64, runner: ubuntu-24.04-arm }
         include:
-          - variant: core
-            dockerfile: docker/Dockerfile.core
-            image: ghcr.io/xberg-io/xberg
-            tag_suffix: "-core"
-            extra_tag: "core"
-          - variant: full
-            dockerfile: docker/Dockerfile.full
-            image: ghcr.io/xberg-io/xberg
-            tag_suffix: ""
-            extra_tag: "latest"
-          - variant: cli
-            dockerfile: docker/Dockerfile.cli
-            image: ghcr.io/xberg-io/xberg-cli
-            tag_suffix: ""
-            extra_tag: "latest"
+          - { variant: core, dockerfile: docker/Dockerfile.core, image: ghcr.io/xberg-io/xberg, tag_suffix: "-core" }
+          - { variant: full, dockerfile: docker/Dockerfile.full, image: ghcr.io/xberg-io/xberg, tag_suffix: "" }
+          - { variant: cli, dockerfile: docker/Dockerfile.cli, image: ghcr.io/xberg-io/xberg-cli, tag_suffix: "" }
     if: ${{ needs.prepare.outputs.release_docker == 'true' }}
     steps:
       - name: Checkout
@@ -201,63 +197,87 @@ jobs:
         if: ${{ needs.prepare.outputs.target_sha != '' }}
         run: git checkout --progress --force ${{ needs.prepare.outputs.target_sha }}
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
+      # Build unless this variant's tag already exists (and we aren't force-republishing).
+      - name: Decide whether to build
+        id: gate
+        env:
+          FORCE: ${{ needs.prepare.outputs.force_republish }}
+          VARIANT: ${{ matrix.variant }}
+          CORE_EXISTS: ${{ needs.check-docker.outputs.core_exists }}
+          FULL_EXISTS: ${{ needs.check-docker.outputs.full_exists }}
+          CLI_EXISTS: ${{ needs.check-docker.outputs.cli_exists }}
+        run: |
+          go=false
+          if [ "$FORCE" = "true" ]; then
+            go=true
+          else
+            case "$VARIANT" in
+              core) if [ "$CORE_EXISTS" != "true" ]; then go=true; fi ;;
+              full) if [ "$FULL_EXISTS" != "true" ]; then go=true; fi ;;
+              cli)  if [ "$CLI_EXISTS"  != "true" ]; then go=true; fi ;;
+            esac
+          fi
+          echo "go=$go" >> "$GITHUB_OUTPUT"
+          if [ "$go" != "true" ]; then
+            echo "Docker tag already exists for variant $VARIANT; skipping build." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Set up Docker Buildx
+        if: ${{ steps.gate.outputs.go == 'true' }}
         uses: docker/setup-buildx-action@v4
 
-      - name: Skip because tag already exists
-        if: ${{ needs.prepare.outputs.force_republish != 'true' && ((matrix.variant == 'core' && needs.check-docker.outputs.core_exists == 'true') || (matrix.variant == 'full' && needs.check-docker.outputs.full_exists == 'true') || (matrix.variant == 'cli' && needs.check-docker.outputs.cli_exists == 'true')) }}
-        run: echo "Docker tag already exists for variant ${{ matrix.variant }}; skipping publish." >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Build AMD64 test image
-        if: ${{ needs.prepare.outputs.force_republish == 'true' || (matrix.variant == 'core' && needs.check-docker.outputs.core_exists != 'true') || (matrix.variant == 'full' && needs.check-docker.outputs.full_exists != 'true') || (matrix.variant == 'cli' && needs.check-docker.outputs.cli_exists != 'true') }}
-        run: docker build -f ${{ matrix.dockerfile }} --build-arg ONNXRUNTIME_VERSION=${{ env.ORT_VERSION }} -t xberg-publish:${{ matrix.variant }}-test .
+      - name: Build test image
+        if: ${{ steps.gate.outputs.go == 'true' }}
+        run: docker build -f ${{ matrix.dockerfile }} --platform ${{ matrix.platform.docker }} --build-arg ONNXRUNTIME_VERSION=${{ env.ORT_VERSION }} -t xberg-publish:${{ matrix.variant }}-test .
 
       - name: Run Docker tests
-        if: ${{ needs.prepare.outputs.force_republish == 'true' || (matrix.variant == 'core' && needs.check-docker.outputs.core_exists != 'true') || (matrix.variant == 'full' && needs.check-docker.outputs.full_exists != 'true') || (matrix.variant == 'cli' && needs.check-docker.outputs.cli_exists != 'true') }}
+        if: ${{ steps.gate.outputs.go == 'true' }}
         run: python3 scripts/ci/docker/test_docker.py --image xberg-publish:${{ matrix.variant }}-test --variant ${{ matrix.variant }} --verbose
 
       - name: Log in to GitHub Container Registry
-        if: ${{ needs.prepare.outputs.dry_run != 'true' && (needs.prepare.outputs.force_republish == 'true' || (matrix.variant == 'core' && needs.check-docker.outputs.core_exists != 'true') || (matrix.variant == 'full' && needs.check-docker.outputs.full_exists != 'true') || (matrix.variant == 'cli' && needs.check-docker.outputs.cli_exists != 'true')) }}
+        if: ${{ steps.gate.outputs.go == 'true' && needs.prepare.outputs.dry_run != 'true' }}
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract Docker metadata
-        if: ${{ needs.prepare.outputs.dry_run != 'true' && (needs.prepare.outputs.force_republish == 'true' || (matrix.variant == 'core' && needs.check-docker.outputs.core_exists != 'true') || (matrix.variant == 'full' && needs.check-docker.outputs.full_exists != 'true') || (matrix.variant == 'cli' && needs.check-docker.outputs.cli_exists != 'true')) }}
-        id: docker_meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ matrix.image }}
-          tags: |
-            type=raw,value=${{ needs.prepare.outputs.version }}${{ matrix.tag_suffix }}
-            type=raw,value=${{ matrix.extra_tag }},enable=${{ needs.prepare.outputs.is_prerelease != 'true' }}
-
-      - name: Build and push image
-        if: ${{ needs.prepare.outputs.dry_run != 'true' && (needs.prepare.outputs.force_republish == 'true' || (matrix.variant == 'core' && needs.check-docker.outputs.core_exists != 'true') || (matrix.variant == 'full' && needs.check-docker.outputs.full_exists != 'true') || (matrix.variant == 'cli' && needs.check-docker.outputs.cli_exists != 'true')) }}
+      - name: Build and push by digest
+        id: build
+        if: ${{ steps.gate.outputs.go == 'true' && needs.prepare.outputs.dry_run != 'true' }}
         uses: docker/build-push-action@v7
         with:
           context: .
           file: ${{ matrix.dockerfile }}
-          push: true
+          platforms: ${{ matrix.platform.docker }}
           build-args: |
             ONNXRUNTIME_VERSION=${{ env.ORT_VERSION }}
-          tags: ${{ steps.docker_meta.outputs.tags }}
           labels: |
-            ${{ steps.docker_meta.outputs.labels }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.description=Xberg document intelligence - ${{ matrix.variant }} variant
             org.opencontainers.image.licenses=MIT
-          platforms: linux/amd64,linux/arm64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max,scope=publish-docker-${{ matrix.variant }}
+          outputs: type=image,name=${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=publish-docker-${{ matrix.variant }}-${{ matrix.platform.name }}
+          cache-to: type=gha,mode=max,scope=publish-docker-${{ matrix.variant }}-${{ matrix.platform.name }}
+
+      - name: Export digest
+        if: ${{ steps.gate.outputs.go == 'true' && needs.prepare.outputs.dry_run != 'true' }}
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        if: ${{ steps.gate.outputs.go == 'true' && needs.prepare.outputs.dry_run != 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: digest-${{ matrix.variant }}-${{ matrix.platform.name }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Docker dry-run summary
-        if: ${{ needs.prepare.outputs.dry_run == 'true' }}
+        if: ${{ steps.gate.outputs.go == 'true' && needs.prepare.outputs.dry_run == 'true' && matrix.platform.name == 'amd64' }}
         env:
           IMAGE: ${{ matrix.image }}
           VERSION: ${{ needs.prepare.outputs.version }}
@@ -267,3 +287,86 @@ jobs:
       - name: Clean up local Docker images
         if: ${{ always() }}
         run: docker rmi xberg-publish:${{ matrix.variant }}-test || true
+
+  # Assemble and push the multi-arch manifest from the per-arch digests.
+  merge-docker:
+    name: Publish ${{ matrix.variant }} manifest
+    needs:
+      - prepare
+      - check-docker
+      - build-docker
+    if: ${{ needs.prepare.outputs.release_docker == 'true' && needs.prepare.outputs.dry_run != 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { variant: core, image: ghcr.io/xberg-io/xberg, tag_suffix: "-core", extra_tag: "core" }
+          - { variant: full, image: ghcr.io/xberg-io/xberg, tag_suffix: "", extra_tag: "latest" }
+          - { variant: cli, image: ghcr.io/xberg-io/xberg-cli, tag_suffix: "", extra_tag: "latest" }
+    steps:
+      - name: Decide whether to publish
+        id: gate
+        env:
+          FORCE: ${{ needs.prepare.outputs.force_republish }}
+          VARIANT: ${{ matrix.variant }}
+          CORE_EXISTS: ${{ needs.check-docker.outputs.core_exists }}
+          FULL_EXISTS: ${{ needs.check-docker.outputs.full_exists }}
+          CLI_EXISTS: ${{ needs.check-docker.outputs.cli_exists }}
+        run: |
+          go=false
+          if [ "$FORCE" = "true" ]; then
+            go=true
+          else
+            case "$VARIANT" in
+              core) if [ "$CORE_EXISTS" != "true" ]; then go=true; fi ;;
+              full) if [ "$FULL_EXISTS" != "true" ]; then go=true; fi ;;
+              cli)  if [ "$CLI_EXISTS"  != "true" ]; then go=true; fi ;;
+            esac
+          fi
+          echo "go=$go" >> "$GITHUB_OUTPUT"
+
+      - name: Download digests
+        if: ${{ steps.gate.outputs.go == 'true' }}
+        uses: actions/download-artifact@v8
+        with:
+          path: /tmp/digests
+          pattern: digest-${{ matrix.variant }}-*
+          merge-multiple: true
+
+      - name: Log in to GitHub Container Registry
+        if: ${{ steps.gate.outputs.go == 'true' }}
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        if: ${{ steps.gate.outputs.go == 'true' }}
+        uses: docker/setup-buildx-action@v4
+
+      - name: Extract Docker metadata
+        id: docker_meta
+        if: ${{ steps.gate.outputs.go == 'true' }}
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ matrix.image }}
+          tags: |
+            type=raw,value=${{ needs.prepare.outputs.version }}${{ matrix.tag_suffix }}
+            type=raw,value=${{ matrix.extra_tag }},enable=${{ needs.prepare.outputs.is_prerelease != 'true' }}
+
+      - name: Create and push manifest
+        if: ${{ steps.gate.outputs.go == 'true' }}
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ matrix.image }}@sha256:%s ' *)
+
+      - name: Inspect published manifest
+        if: ${{ steps.gate.outputs.go == 'true' }}
+        run: docker buildx imagetools inspect ${{ matrix.image }}:${{ needs.prepare.outputs.version }}${{ matrix.tag_suffix }}
