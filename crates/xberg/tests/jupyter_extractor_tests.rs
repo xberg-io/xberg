@@ -702,3 +702,130 @@ async fn test_jupyter_pandoc_baseline_alignment() {
         );
     }
 }
+
+/// Configurable code-source vs output rendering (issue #1204).
+///
+/// These run only with the `notebook` feature, which registers the Jupyter
+/// extractor. A code cell carries a distinctive source token (`compute_answer`)
+/// and a distinctive output token (`42`) so each rendering mode is unambiguous.
+#[cfg(feature = "notebook")]
+mod rendering_modes {
+    use xberg::core::config::{ExtractionConfig, JupyterCellRendering};
+
+    use super::helpers::extract_bytes_document;
+
+    const NOTEBOOK: &[u8] = br#"{
+        "cells": [
+            {
+                "cell_type": "code",
+                "source": ["compute_answer()"],
+                "execution_count": 1,
+                "outputs": [
+                    {"output_type": "stream", "name": "stdout", "text": ["42\n"]}
+                ],
+                "metadata": {}
+            }
+        ],
+        "metadata": {"kernelspec": {"name": "python3", "language": "python"}},
+        "nbformat": 4,
+        "nbformat_minor": 5
+    }"#;
+
+    async fn extract_with(rendering: JupyterCellRendering) -> String {
+        let config = ExtractionConfig {
+            jupyter_cell_rendering: rendering,
+            ..Default::default()
+        };
+        extract_bytes_document(NOTEBOOK, "application/x-ipynb+json", &config)
+            .await
+            .expect("notebook extraction should succeed")
+            .content
+    }
+
+    #[tokio::test]
+    async fn source_mode_renders_code_without_outputs() {
+        let content = extract_with(JupyterCellRendering::Source).await;
+        assert!(content.contains("compute_answer"), "source is rendered");
+        assert!(!content.contains("[output_type"), "output markers are suppressed");
+        assert!(!content.contains("42"), "output text is suppressed");
+    }
+
+    #[tokio::test]
+    async fn outputs_mode_renders_outputs_without_code() {
+        let content = extract_with(JupyterCellRendering::Outputs).await;
+        assert!(content.contains("42"), "output text is rendered");
+        assert!(content.contains("[output_type: stream"), "output markers are rendered");
+        assert!(!content.contains("compute_answer"), "code source is suppressed");
+    }
+
+    #[tokio::test]
+    async fn both_mode_renders_code_and_outputs() {
+        let content = extract_with(JupyterCellRendering::Both).await;
+        assert!(content.contains("compute_answer"), "source is rendered");
+        assert!(content.contains("42"), "output text is rendered");
+    }
+
+    #[tokio::test]
+    async fn default_config_matches_both() {
+        let default_content = extract_with(JupyterCellRendering::default()).await;
+        let both_content = extract_with(JupyterCellRendering::Both).await;
+        assert_eq!(
+            default_content, both_content,
+            "default rendering is Both (no behavior change)"
+        );
+    }
+
+    // A code cell whose only output is a saved PNG (1x1 transparent).
+    const NOTEBOOK_WITH_IMAGE: &[u8] = br#"{
+        "cells": [
+            {
+                "cell_type": "code",
+                "source": ["render_plot()"],
+                "execution_count": 1,
+                "outputs": [
+                    {
+                        "output_type": "display_data",
+                        "data": {"image/png": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="},
+                        "metadata": {}
+                    }
+                ],
+                "metadata": {}
+            }
+        ],
+        "metadata": {"kernelspec": {"name": "python3", "language": "python"}},
+        "nbformat": 4,
+        "nbformat_minor": 5
+    }"#;
+
+    async fn image_count(rendering: JupyterCellRendering) -> usize {
+        let config = ExtractionConfig {
+            jupyter_cell_rendering: rendering,
+            ..Default::default()
+        };
+        extract_bytes_document(NOTEBOOK_WITH_IMAGE, "application/x-ipynb+json", &config)
+            .await
+            .expect("notebook extraction should succeed")
+            .images
+            .map(|imgs| imgs.len())
+            .unwrap_or(0)
+    }
+
+    #[tokio::test]
+    async fn source_mode_suppresses_output_images() {
+        // Images only come from cell outputs, so Source mode must drop them,
+        // keeping the image collection consistent with suppressed Image elements.
+        assert_eq!(
+            image_count(JupyterCellRendering::Source).await,
+            0,
+            "source mode drops output images"
+        );
+        assert!(
+            image_count(JupyterCellRendering::Outputs).await >= 1,
+            "outputs mode retains output images"
+        );
+        assert!(
+            image_count(JupyterCellRendering::Both).await >= 1,
+            "both mode retains output images"
+        );
+    }
+}

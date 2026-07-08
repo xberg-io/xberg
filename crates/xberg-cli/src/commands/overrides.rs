@@ -7,7 +7,30 @@
 use anyhow::{Context as _, Result, bail};
 use xberg::{ChunkingConfig, ExecutionProviderType, ExtractionConfig, LanguageDetectionConfig, LlmConfig, OcrConfig};
 
+use xberg::JupyterCellRendering;
+
 use crate::ContentOutputFormatArg;
+
+/// Which parts of a Jupyter code cell to render during extraction.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum JupyterCellRenderingArg {
+    /// Render only the code source; omit saved outputs.
+    Source,
+    /// Render only the saved cell outputs; omit the code source.
+    Outputs,
+    /// Render both the code source and the saved outputs (default).
+    Both,
+}
+
+impl From<JupyterCellRenderingArg> for JupyterCellRendering {
+    fn from(arg: JupyterCellRenderingArg) -> Self {
+        match arg {
+            JupyterCellRenderingArg::Source => JupyterCellRendering::Source,
+            JupyterCellRenderingArg::Outputs => JupyterCellRendering::Outputs,
+            JupyterCellRenderingArg::Both => JupyterCellRendering::Both,
+        }
+    }
+}
 
 /// Accepted values for `--ocr-backend`.
 const VALID_OCR_BACKENDS: &[&str] = &[
@@ -172,6 +195,11 @@ pub struct ExtractionOverrides {
     /// Include hierarchical document structure in results.
     #[arg(long)]
     pub include_structure: Option<bool>,
+
+    /// For Jupyter notebooks: render code cells as source, outputs, or both (default: both).
+    /// Cells are never executed — outputs come only from those saved in the notebook.
+    #[arg(long, value_enum)]
+    pub jupyter_cell_rendering: Option<JupyterCellRenderingArg>,
 
     // ── Quality & detection ──────────────────────────────────────────
     /// Enable quality post-processing.
@@ -436,6 +464,7 @@ impl ExtractionOverrides {
         self.apply_quality_and_detection(config);
         self.apply_output_format(config);
         self.apply_include_structure(config);
+        self.apply_jupyter_cell_rendering(config);
         self.apply_layout(config);
         self.apply_acceleration(config);
         self.apply_concurrency(config);
@@ -673,6 +702,12 @@ impl ExtractionOverrides {
     fn apply_include_structure(&self, config: &mut ExtractionConfig) {
         if let Some(flag) = self.include_structure {
             config.include_document_structure = flag;
+        }
+    }
+
+    fn apply_jupyter_cell_rendering(&self, config: &mut ExtractionConfig) {
+        if let Some(rendering) = self.jupyter_cell_rendering {
+            config.jupyter_cell_rendering = rendering.into();
         }
     }
 

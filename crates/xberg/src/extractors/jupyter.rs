@@ -614,7 +614,14 @@ impl InternalDocumentExtractor for JupyterExtractor {
             metadata_additional.insert(key, json!(value));
         }
 
-        let images = extracted_images;
+        // Images are only ever produced by code-cell outputs (display_data /
+        // execute_result). When outputs are suppressed, drop them so the image
+        // collection stays consistent with the suppressed `Image` elements.
+        let images = if config.jupyter_cell_rendering.includes_outputs() {
+            extracted_images
+        } else {
+            Vec::new()
+        };
 
         // Build InternalDocument from already-parsed notebook (no re-parse)
         let mut doc = Self::build_internal_document(&notebook_json, config.jupyter_cell_rendering)

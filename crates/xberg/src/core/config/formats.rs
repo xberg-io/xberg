@@ -88,12 +88,17 @@ impl FromStr for OutputFormat {
 /// the notebook. Callers ingesting notebooks for AI agents want different slices of
 /// this depending on the task. Xberg never executes cells — `Outputs` and `Both`
 /// only surface outputs already stored in the `.ipynb`.
+///
+/// This toggle governs a code cell's **source body** and its **saved outputs**.
+/// Markdown (prose) cells and structural markers (kernel language, cell id, tags,
+/// execution count) are unaffected — prose always renders and markers orient the
+/// reader regardless of mode.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum JupyterCellRendering {
-    /// Render only the code source as a fenced code block; omit saved outputs.
+    /// Render the code source as a fenced code block; omit saved outputs.
     Source,
-    /// Render only the saved cell outputs; omit the code source.
+    /// Omit the code source; render only the saved cell outputs.
     Outputs,
     /// Render both the code source and the saved outputs (default; preserves the
     /// historical behavior).

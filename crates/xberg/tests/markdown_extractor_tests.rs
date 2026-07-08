@@ -9,10 +9,13 @@
 
 use std::path::PathBuf;
 
-use xberg::core::config::{ExtractInput, ExtractionConfig};
+use xberg::core::config::{ExtractInput, ExtractionConfig, OutputFormat};
 use xberg::extractors::markdown::MarkdownExtractor;
 use xberg::plugins::DocumentExtractor;
 use xberg::types::ExtractedDocument;
+
+mod helpers;
+use helpers::extract_bytes_document;
 
 fn markdown_fixture_path(relative: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -399,4 +402,93 @@ async fn test_special_characters_in_metadata() {
     let title = result.metadata.title.as_deref();
     assert!(title.is_some());
     assert!(title.expect("Operation failed").contains("&") || title.expect("Operation failed").contains("Part"));
+}
+
+// ── Quarto / R Markdown / pandoc-flavored markdown (issue #1203) ──────────────
+
+/// Extract through the full pipeline (registry routing + output-format renderer)
+/// so the rendered `content` reflects the chosen `OutputFormat`.
+async fn extract_markdown_as(
+    content: &[u8],
+    mime_type: &str,
+    format: OutputFormat,
+) -> xberg::Result<ExtractedDocument> {
+    let config = ExtractionConfig {
+        output_format: format,
+        ..Default::default()
+    };
+    extract_bytes_document(content, mime_type, &config).await
+}
+
+/// A Quarto `.qmd` is a Markdown superset: YAML frontmatter plus executable code
+/// cells (` ```{python} `) that xberg renders as clean fenced code — never executed.
+#[tokio::test]
+async fn test_quarto_qmd_extraction_end_to_end() {
+    let qmd = b"---\ntitle: Quarto Report\nauthor: Jane Doe\n---\n\n# Analysis\n\nSome prose before the cell.\n\n```{python}\nimport pandas as pd\nprint('hello')\n```\n\nMore prose.\n\n```{r, echo=FALSE}\nsummary(cars)\n```\n";
+
+    let result = extract_markdown_as(qmd, "text/x-quarto", OutputFormat::Markdown)
+        .await
+        .expect("should extract Quarto document");
+
+    assert_eq!(result.metadata.title.as_deref(), Some("Quarto Report"));
+    // Executable cell braces are stripped to the bare kernel name.
+    assert!(
+        result.content.contains("```python"),
+        "python cell renders with clean language tag"
+    );
+    assert!(
+        result.content.contains("```r"),
+        "r cell renders with clean language tag"
+    );
+    assert!(
+        !result.content.contains("```{python}"),
+        "brace-wrapped language must be normalized"
+    );
+    assert!(
+        !result.content.contains("echo=FALSE"),
+        "chunk options are dropped from the language tag"
+    );
+    // Code body is preserved verbatim; nothing is executed.
+    assert!(result.content.contains("import pandas as pd"));
+    assert!(result.content.contains("summary(cars)"));
+}
+
+/// R Markdown `.Rmd` has the same structure as Quarto and routes to the same extractor.
+#[tokio::test]
+async fn test_r_markdown_rmd_extraction_end_to_end() {
+    let rmd = b"---\ntitle: RMarkdown Doc\n---\n\n# Section\n\n```{r}\nx <- c(1, 2, 3)\nmean(x)\n```\n";
+
+    let result = extract_markdown_as(rmd, "text/x-r-markdown", OutputFormat::Markdown)
+        .await
+        .expect("should extract R Markdown document");
+
+    assert_eq!(result.metadata.title.as_deref(), Some("RMarkdown Doc"));
+    assert!(
+        result.content.contains("```r"),
+        "r cell renders with clean language tag"
+    );
+    assert!(!result.content.contains("```{r}"));
+    assert!(result.content.contains("mean(x)"));
+}
+
+/// Pandoc-flavored constructs (definition lists, math, task lists) parse through the
+/// full pulldown-cmark option set.
+#[tokio::test]
+async fn test_pandoc_flavored_markdown_end_to_end() {
+    let pandoc = b"# Pandoc\n\nTerm 1\n\n:   Definition of term 1.\n\nInline math $E = mc^2$ and a display block:\n\n$$\\int_0^1 x^2 dx$$\n\n- [x] done task\n- [ ] pending task\n";
+
+    let result = extract_markdown_as(pandoc, "text/x-pandoc", OutputFormat::Markdown)
+        .await
+        .expect("should extract pandoc-flavored markdown");
+
+    // Definition list, math, and task list all survive extraction.
+    assert!(
+        result.content.contains("Definition of term 1"),
+        "definition list body present"
+    );
+    assert!(result.content.contains("\\int"), "display math present");
+    assert!(
+        result.content.contains("done task") && result.content.contains("pending task"),
+        "task list items present"
+    );
 }

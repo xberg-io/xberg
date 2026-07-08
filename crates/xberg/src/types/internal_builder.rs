@@ -517,7 +517,10 @@ impl InternalDocumentBuilder {
         for mut element in other.elements {
             match &mut element.kind {
                 ElementKind::Table { table_index } => *table_index += table_offset,
-                ElementKind::Image { image_index } => *image_index += image_offset,
+                // `u32::MAX` is the sentinel for an inline image reference with no
+                // stored bytes (e.g. a remote `http` image). Leave it untouched —
+                // offsetting it would overflow and corrupt the index.
+                ElementKind::Image { image_index } if *image_index != u32::MAX => *image_index += image_offset,
                 _ => {}
             }
             self.node_count += 1;
@@ -1202,5 +1205,71 @@ mod tests {
         // Verify heading anchors
         assert_eq!(doc.elements[0].anchor.as_deref(), Some("introduction"));
         assert_eq!(doc.elements[2].anchor.as_deref(), Some("details"));
+    }
+
+    fn stub_image(index: u32) -> ExtractedImage {
+        ExtractedImage {
+            data: Bytes::from_static(&[0xFF, 0xD8]),
+            format: Cow::Borrowed("jpeg"),
+            image_index: index,
+            page_number: None,
+            width: None,
+            height: None,
+            colorspace: None,
+            bits_per_component: None,
+            is_mask: false,
+            description: None,
+            ocr_result: None,
+            bounding_box: None,
+            source_path: None,
+            image_kind: None,
+            kind_confidence: None,
+            cluster_id: None,
+            caption: None,
+            qr_codes: None,
+            data_base64: None,
+        }
+    }
+
+    #[test]
+    fn test_append_document_remaps_indices() {
+        // Destination already holds one image, so the append offset is 1.
+        let mut dst = InternalDocumentBuilder::new("jupyter");
+        dst.push_image(Some("existing"), stub_image(0), None, None);
+
+        // Source fragment: a real (stored) image plus a sentinel inline image
+        // reference (u32::MAX = remote image with no stored bytes).
+        let mut src_builder = InternalDocumentBuilder::new("markdown");
+        src_builder.push_paragraph("prose", vec![], None, None);
+        src_builder.push_image(Some("stored"), stub_image(0), None, None);
+        src_builder.push_element(InternalElement::text(
+            ElementKind::Image { image_index: u32::MAX },
+            "remote.png",
+            0,
+        ));
+        let src = src_builder.build();
+
+        dst.append_document(src);
+        let doc = dst.build();
+
+        // Stored image element is offset by 1; sentinel is left untouched.
+        let image_indices: Vec<u32> = doc
+            .elements
+            .iter()
+            .filter_map(|e| match e.kind {
+                ElementKind::Image { image_index } => Some(image_index),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            image_indices,
+            vec![0, 1, u32::MAX],
+            "existing=0, appended stored=1, sentinel unchanged"
+        );
+        assert!(
+            doc.elements.iter().any(|e| e.text == "prose"),
+            "prose element carried over"
+        );
+        assert_eq!(doc.images.len(), 2, "both stored images retained");
     }
 }
