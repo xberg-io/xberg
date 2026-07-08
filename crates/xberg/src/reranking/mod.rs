@@ -99,6 +99,13 @@ pub struct RerankerPreset {
     pub max_length: usize,
     /// Human-readable description of the preset's intended use case.
     pub description: String,
+    /// Scoring head for the ONNX model's output tensor.
+    ///
+    /// Defaults to [`crate::core::config::reranker::RerankerHead::CrossEncoder`]
+    /// for all existing presets. Set to `Qwen3Generative` for Qwen3
+    /// generative-reranker checkpoints.
+    #[serde(default)]
+    pub head: crate::core::config::reranker::RerankerHead,
 }
 
 /// All available reranker presets.
@@ -127,6 +134,7 @@ pub static RERANKER_PRESETS: LazyLock<Vec<RerankerPreset>> = LazyLock::new(|| {
             description: "BGE cross-encoder base (~278M params, EN + ZH). Best for: \
                 general-purpose RAG, production deployments, English or Chinese documents."
                 .to_string(),
+            head: crate::core::config::reranker::RerankerHead::CrossEncoder,
         },
         RerankerPreset {
             name: "bge-reranker-v2-m3".to_string(),
@@ -138,6 +146,7 @@ pub static RERANKER_PRESETS: LazyLock<Vec<RerankerPreset>> = LazyLock::new(|| {
                 Best for: international documents, mixed-language retrieval. \
                 Mirror of the official BAAI model; the weight is split into model.onnx + model.onnx.data."
                 .to_string(),
+            head: crate::core::config::reranker::RerankerHead::CrossEncoder,
         },
         RerankerPreset {
             name: "jina-reranker-v1-turbo-en".to_string(),
@@ -148,16 +157,26 @@ pub static RERANKER_PRESETS: LazyLock<Vec<RerankerPreset>> = LazyLock::new(|| {
             description: "Jina reranker v1 turbo English (~37M params, 8192 max-len). \
                 Best for: low-latency reranking, English documents, long-context retrieval."
                 .to_string(),
+            head: crate::core::config::reranker::RerankerHead::CrossEncoder,
         },
+        // NOTE: `jina-reranker-v2-base-multilingual` was REMOVED — its license is
+        // CC-BY-NC-4.0 (non-commercial, verified from the model card), which cannot
+        // ship in a permissively-licensed library. The "multilingual" alias now
+        // resolves to `bge-reranker-v2-m3` (Apache-2.0, 100+ languages) instead.
+        // `jina-reranker-v1-turbo-en` above is retained: it is Apache-2.0.
         RerankerPreset {
-            name: "jina-reranker-v2-base-multilingual".to_string(),
-            model_repo: "jinaai/jina-reranker-v2-base-multilingual".to_string(),
+            name: "qwen3-reranker-0.6b".to_string(),
+            // TODO(model-hosting): repoint at an xberg-io/* mirror once re-hosted.
+            // Qwen3-Reranker-0.6B is Apache-2.0 licensed.
+            model_repo: "Qwen/Qwen3-Reranker-0.6B".to_string(),
             model_file: "onnx/model.onnx".to_string(),
             additional_files: Vec::new(),
-            max_length: 1024,
-            description: "Jina reranker v2 base multilingual (~278M params, 1024 max-len, 100+ languages). \
-                Best for: multilingual retrieval, balanced latency/quality."
+            max_length: 512,
+            description: "Qwen3 generative reranker (0.6B params, multilingual). Best for: \
+                instruction-aware relevance judgment via a causal-LM yes/no head, higher quality \
+                at higher latency than classic cross-encoders."
                 .to_string(),
+            head: crate::core::config::reranker::RerankerHead::Qwen3Generative,
         },
     ]
 });
@@ -175,7 +194,9 @@ const PRESET_ALIASES: &[(&str, &str)] = &[
     ("fast", "jina-reranker-v1-turbo-en"),
     ("balanced", "bge-reranker-base"),
     ("quality", "bge-reranker-v2-m3"),
-    ("multilingual", "jina-reranker-v2-base-multilingual"),
+    // Was jina-reranker-v2-base-multilingual (CC-BY-NC, removed) — now the
+    // Apache-2.0 bge-reranker-v2-m3, which is also 100+ languages.
+    ("multilingual", "bge-reranker-v2-m3"),
 ];
 
 /// Get a preset by name (returns an owned clone for FFI compatibility).
@@ -583,6 +604,62 @@ fn resolve_cache_dir(cache_dir: Option<std::path::PathBuf>) -> std::path::PathBu
     cache_dir.unwrap_or_else(|| crate::cache_dir::resolve_cache_dir("rerankers"))
 }
 
+/// Resolve the single-token vocabulary id for an answer word (`"yes"`/`"no"`),
+/// robust to how different tokenizers encode a leading word.
+///
+/// Qwen3's reference reranker looks up the bare `"yes"`/`"no"` vocab entry, which
+/// works for its own checkpoint. BPE/SentencePiece tokenizers, however, may only
+/// carry the word as a leading-space variant (`"Ġyes"`, `"▁yes"`) or capitalized,
+/// so this tries those direct vocab hits before falling back to encoding the bare
+/// word and taking its id when it tokenizes to exactly one token — mirroring how
+/// the model actually sees the answer token in context.
+#[cfg(feature = "reranker")]
+fn resolve_answer_token_id(tokenizer: &tokenizers::Tokenizer, word: &str) -> Option<u32> {
+    let capitalized = {
+        let mut chars = word.chars();
+        match chars.next() {
+            Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+            None => word.to_string(),
+        }
+    };
+    // Most-specific-first direct vocabulary lookups.
+    let variants = [
+        word.to_string(),
+        format!("\u{0120}{word}"), // GPT-2/Qwen BPE leading-space marker (Ġ)
+        format!("\u{2581}{word}"), // SentencePiece leading-space marker (▁)
+        capitalized,
+    ];
+    for variant in &variants {
+        if let Some(id) = tokenizer.token_to_id(variant) {
+            return Some(id);
+        }
+    }
+    // Fall back to encoding the bare word; accept it only if it is a single token.
+    let encoding = tokenizer.encode(word, false).ok()?;
+    match encoding.get_ids() {
+        [single] => Some(*single),
+        _ => None,
+    }
+}
+
+/// Resolve the tokenizer ids for "yes" / "no" used by the Qwen3 generative-reranker head.
+///
+/// Looked up from the tokenizer rather than hardcoded, since the exact ids are
+/// checkpoint-specific. Returns `(true_id, false_id)`.
+///
+/// # Errors
+///
+/// Returns `XbergError::Reranking` if either token cannot be resolved — this
+/// would indicate an incompatible checkpoint.
+#[cfg(feature = "reranker")]
+fn resolve_qwen3_token_ids(tokenizer: &tokenizers::Tokenizer) -> crate::Result<(u32, u32)> {
+    let true_id = resolve_answer_token_id(tokenizer, "yes")
+        .ok_or_else(|| crate::XbergError::reranking("Qwen3 tokenizer cannot resolve a single-token id for \"yes\""))?;
+    let false_id = resolve_answer_token_id(tokenizer, "no")
+        .ok_or_else(|| crate::XbergError::reranking("Qwen3 tokenizer cannot resolve a single-token id for \"no\""))?;
+    Ok((true_id, false_id))
+}
+
 /// Get or initialize a reranker engine from cache.
 ///
 /// Downloads model files from HuggingFace if needed, loads the tokenizer,
@@ -595,10 +672,15 @@ fn get_or_init_engine(
     max_length: usize,
     cache_dir: Option<std::path::PathBuf>,
     accel: Option<crate::core::config::acceleration::AccelerationConfig>,
+    head: crate::core::config::reranker::RerankerHead,
 ) -> crate::Result<Arc<RerankerEngine>> {
     let cache_directory = resolve_cache_dir(cache_dir);
+    // `head` is part of the cache key: the same repo/model_file could in principle
+    // be requested under different heads across calls (e.g. a Custom config that
+    // toggles `head`), and each needs its own engine with correctly resolved
+    // true/false token ids.
     let engine_key = format!(
-        "{repo_name}_{model_file}_{cache_directory}",
+        "{repo_name}_{model_file}_{cache_directory}_{head:?}",
         cache_directory = cache_directory.display()
     );
 
@@ -686,18 +768,38 @@ fn get_or_init_engine(
             }
         })?;
 
-        let new_engine = Arc::new(RerankerEngine::new(tokenizer, session));
+        let (true_token_id, false_token_id) = match head {
+            crate::core::config::reranker::RerankerHead::Qwen3Generative => {
+                let (true_id, false_id) = resolve_qwen3_token_ids(&tokenizer)?;
+                (Some(true_id), Some(false_id))
+            }
+            crate::core::config::reranker::RerankerHead::CrossEncoder => (None, None),
+        };
+
+        let new_engine = Arc::new(RerankerEngine::new(
+            tokenizer,
+            session,
+            head,
+            true_token_id,
+            false_token_id,
+        ));
         cache.insert(engine_key, Arc::clone(&new_engine));
 
         Ok(new_engine)
     }
 }
 
-/// Resolve model info (repo, model file, additional_files, max_length) from a RerankerModelType config.
+/// Resolve model info (repo, model file, additional_files, max_length, head) from a RerankerModelType config.
 #[cfg(feature = "reranker")]
 fn resolve_model_info(
     model_type: &crate::core::config::RerankerModelType,
-) -> crate::Result<(String, String, Vec<String>, usize)> {
+) -> crate::Result<(
+    String,
+    String,
+    Vec<String>,
+    usize,
+    crate::core::config::reranker::RerankerHead,
+)> {
     match model_type {
         crate::core::config::RerankerModelType::Preset { name } => {
             let preset = get_preset(name)
@@ -707,6 +809,7 @@ fn resolve_model_info(
                 preset.model_file,
                 preset.additional_files,
                 preset.max_length,
+                preset.head,
             ))
         }
         crate::core::config::RerankerModelType::Custom {
@@ -714,6 +817,7 @@ fn resolve_model_info(
             model_file,
             additional_files,
             max_length,
+            head,
         } => {
             let len = match max_length.unwrap_or(512) {
                 n if n <= 0 => {
@@ -725,7 +829,7 @@ fn resolve_model_info(
                 n => n as usize,
             };
             let file = model_file.clone().unwrap_or_else(|| "onnx/model.onnx".to_string());
-            Ok((model_id.clone(), file, additional_files.clone(), len))
+            Ok((model_id.clone(), file, additional_files.clone(), len, *head))
         }
         crate::core::config::RerankerModelType::Llm { .. } => Err(crate::XbergError::reranking(
             "LLM rerankers have no local model to warm or download — the provider serves them over HTTP.",
@@ -759,15 +863,64 @@ pub(crate) fn sigmoid_f32(x: f32) -> f32 {
 }
 
 /// Build the sorted, optionally truncated result vector from raw logits.
+///
+/// Always applies sigmoid — used by callers (the Plugin backend path) that are
+/// guaranteed to hand back raw cross-encoder-style logits. The local ONNX path
+/// uses [`build_results_for_head`] instead, since its Qwen3 head already
+/// returns a `[0, 1]` probability that must NOT be sigmoided a second time.
 #[cfg(any(feature = "reranker", test))]
 fn build_results(documents: &[String], logits: Vec<f32>, top_k: Option<usize>) -> Vec<RerankedDocument> {
+    build_results_from_scores(documents, logits, top_k, sigmoid_f32)
+}
+
+/// Build the sorted, optionally truncated result vector from the local ONNX
+/// engine's raw output, applying the score transform appropriate to `head`.
+///
+/// - [`crate::core::config::reranker::RerankerHead::CrossEncoder`] — the engine
+///   returns raw logits; sigmoid is applied here to reach `[0, 1]`, exactly as
+///   the original single-head implementation did.
+/// - [`crate::core::config::reranker::RerankerHead::Qwen3Generative`] — the
+///   engine's `qwen3_scores` already performs a softmax internally and returns
+///   `P(yes)` in `[0, 1]`. Applying sigmoid again here would double-transform
+///   an already-bounded probability, compressing the score distribution toward
+///   0.5 and corrupting ranking. This path is a pass-through (identity) instead.
+#[cfg(any(feature = "reranker", test))]
+fn build_results_for_head(
+    documents: &[String],
+    raw_scores: Vec<f32>,
+    top_k: Option<usize>,
+    head: crate::core::config::reranker::RerankerHead,
+) -> Vec<RerankedDocument> {
+    match head {
+        crate::core::config::reranker::RerankerHead::CrossEncoder => {
+            build_results_from_scores(documents, raw_scores, top_k, sigmoid_f32)
+        }
+        crate::core::config::reranker::RerankerHead::Qwen3Generative => {
+            build_results_from_scores(documents, raw_scores, top_k, |already_a_probability| {
+                already_a_probability
+            })
+        }
+    }
+}
+
+/// Shared sort/truncate core for both [`build_results`] and [`build_results_for_head`].
+///
+/// Applies `transform` to each raw value to produce the final `[0, 1]` score,
+/// then sorts descending and truncates to `top_k`.
+#[cfg(any(feature = "reranker", test))]
+fn build_results_from_scores(
+    documents: &[String],
+    raw_scores: Vec<f32>,
+    top_k: Option<usize>,
+    transform: impl Fn(f32) -> f32,
+) -> Vec<RerankedDocument> {
     let mut results: Vec<RerankedDocument> = documents
         .iter()
         .enumerate()
-        .zip(logits.iter())
-        .map(|((index, document), &logit)| RerankedDocument {
+        .zip(raw_scores.iter())
+        .map(|((index, document), &raw)| RerankedDocument {
             index,
-            score: sigmoid_f32(logit),
+            score: transform(raw),
             document: document.clone(),
         })
         .collect();
@@ -890,7 +1043,7 @@ pub fn rerank(
         }
         crate::core::config::RerankerModelType::Preset { .. }
         | crate::core::config::RerankerModelType::Custom { .. } => {
-            let (repo, model_file, additional_files, max_length) = resolve_model_info(&config.model)?;
+            let (repo, model_file, additional_files, max_length, head) = resolve_model_info(&config.model)?;
             let engine = get_or_init_engine(
                 &repo,
                 &model_file,
@@ -898,14 +1051,15 @@ pub fn rerank(
                 max_length,
                 config.cache_dir.clone(),
                 config.acceleration.clone(),
+                head,
             )?;
 
             let doc_refs: Vec<&str> = documents.iter().map(|d| d.as_str()).collect();
-            let logits = engine
+            let raw_scores = engine
                 .rerank(&query, &doc_refs, config.batch_size)
                 .map_err(|e| crate::XbergError::reranking(format!("ONNX inference failed: {e}")))?;
 
-            Ok(build_results(&documents, logits, config.top_k))
+            Ok(build_results_for_head(&documents, raw_scores, config.top_k, head))
         }
     }
 }
@@ -1052,6 +1206,70 @@ mod tests {
     }
 
     #[test]
+    fn build_results_for_head_cross_encoder_applies_sigmoid() {
+        use crate::core::config::reranker::RerankerHead;
+
+        let documents = vec!["doc0".to_string(), "doc1".to_string()];
+        let raw_logits = vec![0.0_f32, 2.0_f32];
+        let results = build_results_for_head(&documents, raw_logits.clone(), None, RerankerHead::CrossEncoder);
+
+        // Must match build_results (sigmoid applied) byte-for-byte for the cross-encoder head.
+        let expected = build_results(&documents, raw_logits, None);
+        assert_eq!(results.len(), expected.len());
+        for (a, b) in results.iter().zip(expected.iter()) {
+            assert_eq!(a.index, b.index);
+            assert!((a.score - b.score).abs() < 1e-9);
+        }
+        // Sanity: sigmoid(0.0) == 0.5, not left as a raw logit.
+        let doc0 = results.iter().find(|r| r.index == 0).unwrap();
+        assert!(
+            (doc0.score - 0.5).abs() < 1e-6,
+            "cross-encoder head must sigmoid, got {}",
+            doc0.score
+        );
+    }
+
+    #[test]
+    fn build_results_for_head_qwen3_does_not_double_sigmoid() {
+        use crate::core::config::reranker::RerankerHead;
+
+        // Qwen3 scores are ALREADY probabilities in [0, 1] (post-softmax).
+        // A probability of 0.9 must remain 0.9, not be pushed toward
+        // sigmoid(0.9) ~= 0.7109 by a second transform.
+        let documents = vec!["doc0".to_string(), "doc1".to_string()];
+        let already_probabilities = vec![0.9_f32, 0.1_f32];
+        let results = build_results_for_head(
+            &documents,
+            already_probabilities.clone(),
+            None,
+            RerankerHead::Qwen3Generative,
+        );
+
+        let doc0 = results.iter().find(|r| r.index == 0).unwrap();
+        let doc1 = results.iter().find(|r| r.index == 1).unwrap();
+        assert!(
+            (doc0.score - 0.9).abs() < 1e-6,
+            "Qwen3 score must pass through unchanged, got {}",
+            doc0.score
+        );
+        assert!(
+            (doc1.score - 0.1).abs() < 1e-6,
+            "Qwen3 score must pass through unchanged, got {}",
+            doc1.score
+        );
+
+        // Explicitly assert this differs from what double-sigmoiding would produce.
+        let wrongly_double_sigmoided = sigmoid_f32(0.9);
+        assert!(
+            (doc0.score - wrongly_double_sigmoided).abs() > 0.01,
+            "Qwen3 score must NOT be re-sigmoided"
+        );
+
+        // Ordering must still be descending by score.
+        assert!(doc0.score > doc1.score);
+    }
+
+    #[test]
     fn reranked_document_serde_roundtrip() {
         let doc = RerankedDocument {
             index: 3,
@@ -1069,16 +1287,38 @@ mod tests {
     #[test]
     fn preset_list_exposes_catalog_plus_aliases() {
         let presets = list_presets();
-        // 4 catalog + 4 friendly aliases.
+        // 4 catalog (3 cross-encoders + 1 Qwen3 generative) + 4 friendly aliases.
         assert_eq!(presets.len(), RERANKER_PRESETS.len() + PRESET_ALIASES.len());
-        // Catalog names present.
+        // Catalog names present (all permissive-licensed).
         assert!(presets.iter().any(|n| n == "bge-reranker-base"));
         assert!(presets.iter().any(|n| n == "bge-reranker-v2-m3"));
         assert!(presets.iter().any(|n| n == "jina-reranker-v1-turbo-en"));
-        assert!(presets.iter().any(|n| n == "jina-reranker-v2-base-multilingual"));
+        assert!(presets.iter().any(|n| n == "qwen3-reranker-0.6b"));
+        // The CC-BY-NC jina v2 multilingual must NOT be present.
+        assert!(!presets.iter().any(|n| n == "jina-reranker-v2-base-multilingual"));
         // Friendly aliases present.
         for (alias, _) in PRESET_ALIASES {
             assert!(presets.iter().any(|n| n == *alias), "missing alias: {alias}");
+        }
+    }
+
+    #[cfg(feature = "reranker-presets")]
+    #[test]
+    fn qwen3_preset_uses_generative_head() {
+        use crate::core::config::reranker::RerankerHead;
+
+        let preset = get_preset("qwen3-reranker-0.6b").expect("qwen3 preset must exist");
+        assert_eq!(preset.model_repo, "Qwen/Qwen3-Reranker-0.6B");
+        assert_eq!(preset.head, RerankerHead::Qwen3Generative);
+
+        // All pre-existing presets must remain on the original cross-encoder head.
+        for name in ["bge-reranker-base", "bge-reranker-v2-m3", "jina-reranker-v1-turbo-en"] {
+            let preset = get_preset(name).expect(name);
+            assert_eq!(
+                preset.head,
+                RerankerHead::CrossEncoder,
+                "{name} must remain on the original cross-encoder head"
+            );
         }
     }
 
@@ -1107,28 +1347,26 @@ mod tests {
 
     #[cfg(feature = "reranker-presets")]
     #[test]
-    fn catalog_paths_match_fastembed_rs() {
-        // Source of truth: fastembed-rs `src/models/reranking.rs`. Lock these to
-        // catch accidental drift; if fastembed-rs updates we mirror it here.
+    fn catalog_paths_are_stable() {
+        // Lock the source repos/files to catch accidental drift. These currently
+        // mirror upstream permissive repos; at vendoring time (model-hosting task)
+        // they repoint to xberg-io/* mirrors and this test switches to a sha256
+        // manifest. All entries here are Apache-2.0 or MIT (verified from cards).
         let by_name = |n: &str| get_preset(n).expect(n);
 
-        let base = by_name("bge-reranker-base");
+        let base = by_name("bge-reranker-base"); // MIT
         assert_eq!(base.model_repo, "BAAI/bge-reranker-base");
         assert_eq!(base.model_file, "onnx/model.onnx");
         assert!(base.additional_files.is_empty());
 
-        let m3 = by_name("bge-reranker-v2-m3");
+        let m3 = by_name("bge-reranker-v2-m3"); // Apache-2.0 (weights); rozgo ONNX mirror
         assert_eq!(m3.model_repo, "rozgo/bge-reranker-v2-m3");
         assert_eq!(m3.model_file, "model.onnx");
         assert_eq!(m3.additional_files, vec!["model.onnx.data".to_string()]);
 
-        let turbo = by_name("jina-reranker-v1-turbo-en");
+        let turbo = by_name("jina-reranker-v1-turbo-en"); // Apache-2.0
         assert_eq!(turbo.model_repo, "jinaai/jina-reranker-v1-turbo-en");
         assert_eq!(turbo.model_file, "onnx/model.onnx");
-
-        let multi = by_name("jina-reranker-v2-base-multilingual");
-        assert_eq!(multi.model_repo, "jinaai/jina-reranker-v2-base-multilingual");
-        assert_eq!(multi.model_file, "onnx/model.onnx");
     }
 
     #[cfg(all(feature = "reranker", feature = "tokio-runtime"))]

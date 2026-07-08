@@ -167,33 +167,9 @@ async fn jina_reranker_v1_turbo_en_english_top_ranks_first() {
     }
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn jina_reranker_v2_base_multilingual_top_ranks_first() {
-    if should_skip() {
-        eprintln!("XBERG_SKIP_LIVE_HF=1, skipping");
-        return;
-    }
-
-    let fixture = load_fixture();
-    let suites = pick_suites(&fixture.suites, &["en", "fr", "es", "de", "zh"]);
-
-    let preset = get_reranker_preset("jina-reranker-v2-base-multilingual").expect("preset must exist");
-    assert_eq!(preset.model_repo, "jinaai/jina-reranker-v2-base-multilingual");
-
-    for suite in suites {
-        let results = run_preset_inference("jina-reranker-v2-base-multilingual", suite)
-            .await
-            .unwrap_or_else(|e| panic!("jina-v2-multilingual on {}: {e}", suite.id));
-
-        assert_scores_in_unit_interval(&results, &format!("jina-v2-multilingual / {}", suite.id));
-        assert_top_is_expected(
-            &results,
-            suite.expected_top_index,
-            &suite.id,
-            "jina-reranker-v2-base-multilingual",
-        );
-    }
-}
+// The `jina-reranker-v2-base-multilingual` preset was removed (CC-BY-NC license);
+// its multilingual coverage is served by the Apache/MIT `bge-reranker-v2-m3`
+// preset exercised below and aliased as `multilingual`.
 
 /// `bge-reranker-v2-m3` ships the weights split into `model.onnx` +
 /// `model.onnx.data`. This test exists primarily to exercise the
@@ -279,6 +255,7 @@ async fn preset_and_custom_are_equivalent_for_same_repo() {
                 model_file: Some(preset.model_file.clone()),
                 additional_files: preset.additional_files.clone(),
                 max_length: Some(preset.max_length as i64),
+                head: xberg::core::config::reranker::RerankerHead::CrossEncoder,
             },
             cache_dir: cache_dir(),
             batch_size: 8,
