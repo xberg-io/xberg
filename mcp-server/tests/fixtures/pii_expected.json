@@ -1,0 +1,44 @@
+{
+  "findings": [
+    {
+      "token": "[EMAIL_1]",
+      "category": "EMAIL",
+      "original": "jane.doe@example.com",
+      "start": 20,
+      "end": 40,
+      "confidence": 0.95
+    },
+    {
+      "token": "[PHONE_1]",
+      "category": "PHONE",
+      "original": "555-123-4567",
+      "start": 44,
+      "end": 56,
+      "confidence": 0.85
+    },
+    {
+      "token": "[SSN_1]",
+      "category": "SSN",
+      "original": "123-45-6789",
+      "start": 63,
+      "end": 74,
+      "confidence": 0.9
+    },
+    {
+      "token": "[CREDIT_CARD_1]",
+      "category": "CREDIT_CARD",
+      "original": "4111 1111 1111 1111",
+      "start": 82,
+      "end": 101,
+      "confidence": 0.9
+    },
+    {
+      "token": "[IP_ADDRESS_1]",
+      "category": "IP_ADDRESS",
+      "original": "192.168.1.100",
+      "start": 114,
+      "end": 127,
+      "confidence": 0.8
+    }
+  ]
+}
