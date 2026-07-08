@@ -1,5 +1,45 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { getEngine } from "../engine.js";
+
+/**
+ * Public category strings accepted by this tool's Zod schema (documented,
+ * human-facing form) mapped to the snake_case strings the wasm engine's
+ * `PiiCategory::from(String)` recognizes (see
+ * `crates/xberg/src/types/redaction.rs`). Any category not in this map falls
+ * through to `PiiCategory::Custom` in the engine and will never match,
+ * so we normalize here before calling into the engine.
+ */
+const CATEGORY_TO_ENGINE: Record<string, string> = {
+  EMAIL: "email",
+  PHONE: "phone",
+  SSN: "ssn",
+  CREDIT_CARD: "credit_card",
+  IP_ADDRESS: "ip_address",
+  DATE: "date_of_birth",
+  PERSON: "person",
+  ORGANIZATION: "organization",
+  LOCATION: "location",
+};
+
+function toEngineCategories(categories?: string[]): string[] | undefined {
+  if (!categories || categories.length === 0) return undefined;
+  return categories.map((c) => CATEGORY_TO_ENGINE[c] ?? c.toLowerCase());
+}
+
+interface EnginePiiMatch {
+  start: number;
+  end: number;
+  category: string;
+  text: string;
+}
+
+interface EngineRedactResult {
+  redacted: string;
+  // serde_wasm_bindgen serializes the Rust HashMap as a JS `Map`, not a
+  // plain object.
+  rehydrationMap: Map<string, string>;
+}
 
 export function registerPiiTools(server: McpServer): void {
   server.tool(
@@ -14,20 +54,23 @@ export function registerPiiTools(server: McpServer): void {
     },
     async ({ text, categories }) => {
       try {
-        const findings = detectPiiPattern(text, categories);
+        const engine = getEngine();
+        const matches = (await engine.detect_pii(text, toEngineCategories(categories))) as EnginePiiMatch[];
+
+        const findings = matches.map((m) => ({
+          entity_type: m.category,
+          text: m.text,
+          start: m.start,
+          end: m.end,
+          score: 1,
+        }));
 
         return {
           content: [
             {
               type: "text" as const,
               text: JSON.stringify({
-                findings: findings.map((f) => ({
-                  entity_type: f.category,
-                  text: f.original,
-                  start: f.start,
-                  end: f.end,
-                  score: f.confidence,
-                })),
+                findings,
                 total: findings.length,
               }, null, 2),
             },
@@ -56,8 +99,22 @@ export function registerPiiTools(server: McpServer): void {
     },
     async ({ text, strategy }) => {
       try {
-        const findings = detectPiiPattern(text, undefined);
-        const { redacted, token_map } = applyRedaction(text, findings, strategy);
+        const engine = getEngine();
+        const { redacted, rehydrationMap } = (await engine.redact(text, strategy)) as EngineRedactResult;
+        const token_map = Object.fromEntries(rehydrationMap);
+
+        // Preserve the pre-migration public fields `entities_redacted` and
+        // `categories` (per-category counts). The engine's redact does not
+        // expose them, so recompute from a pattern scan — mirrors the old
+        // detect-then-group behaviour and covers every strategy (mask/hash
+        // included, not just token_replace). Categories are upper-cased to
+        // match the tool's documented public form (e.g. `credit_card` -> `CREDIT_CARD`).
+        const matches = engine.detect_pii(text) as EnginePiiMatch[];
+        const categories: Record<string, number> = {};
+        for (const m of matches) {
+          const cat = m.category.toUpperCase();
+          categories[cat] = (categories[cat] ?? 0) + 1;
+        }
 
         return {
           content: [
@@ -66,8 +123,8 @@ export function registerPiiTools(server: McpServer): void {
               text: JSON.stringify({
                 redacted_text: redacted,
                 token_map,
-                entities_redacted: findings.length,
-                categories: groupByCategory(findings),
+                entities_redacted: matches.length,
+                categories,
               }, null, 2),
             },
           ],
@@ -81,91 +138,4 @@ export function registerPiiTools(server: McpServer): void {
       }
     }
   );
-}
-
-interface PiiFinding {
-  category: string;
-  original: string;
-  start: number;
-  end: number;
-  confidence: number;
-}
-
-const ALL_PATTERNS: Array<{ category: string; pattern: RegExp; confidence: number }> = [
-  { category: "EMAIL", pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, confidence: 0.95 },
-  { category: "PHONE", pattern: /\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g, confidence: 0.85 },
-  { category: "SSN", pattern: /\b\d{3}-\d{2}-\d{4}\b/g, confidence: 0.9 },
-  { category: "CREDIT_CARD", pattern: /\b(?:\d{4}[-\s]?){3}\d{4}\b/g, confidence: 0.9 },
-  { category: "IP_ADDRESS", pattern: /\b(?:\d{1,3}\.){3}\d{1,3}\b/g, confidence: 0.8 },
-  { category: "DATE_ISO", pattern: /\b\d{4}-\d{2}-\d{2}\b/g, confidence: 0.7 },
-  { category: "DATE_MDY", pattern: /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g, confidence: 0.7 },
-  { category: "IBAN", pattern: /\b[A-Z]{2}\d{2}[A-Z0-9]{4,30}\b/g, confidence: 0.85 },
-  { category: "SWIFT_BIC", pattern: /\b[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?\b/g, confidence: 0.8 },
-  { category: "POSTAL_CODE_US", pattern: /\b\d{5}(?:-\d{4})?\b/g, confidence: 0.75 },
-  { category: "POSTAL_CODE_UK", pattern: /\b[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}\b/g, confidence: 0.75 },
-];
-
-function detectPiiPattern(text: string, filterCategories?: string[]): PiiFinding[] {
-  const findings: PiiFinding[] = [];
-  const categoryCounters: Record<string, number> = {};
-
-  for (const { category, pattern, confidence } of ALL_PATTERNS) {
-    if (filterCategories && !filterCategories.includes(category)) continue;
-
-    const regex = new RegExp(pattern.source, pattern.flags);
-    let match: RegExpExecArray | null;
-
-    while ((match = regex.exec(text)) !== null) {
-      const token = `[${category}_${(categoryCounters[category] ?? 0) + 1}]`;
-      categoryCounters[category] = (categoryCounters[category] ?? 0) + 1;
-      findings.push({
-        category,
-        original: match[0],
-        start: match.index,
-        end: match.index + match[0].length,
-        confidence,
-      });
-    }
-  }
-
-  return findings.sort((a, b) => a.start - b.start);
-}
-
-function groupByCategory(findings: PiiFinding[]): Record<string, number> {
-  const grouped: Record<string, number> = {};
-  for (const f of findings) {
-    grouped[f.category] = (grouped[f.category] ?? 0) + 1;
-  }
-  return grouped;
-}
-
-function applyRedaction(
-  text: string,
-  findings: PiiFinding[],
-  strategy: string
-): { redacted: string; token_map: Record<string, string> } {
-  const tokenMap: Record<string, string> = {};
-  const sorted = [...findings].sort((a, b) => b.start - a.start);
-
-  let result = text;
-  for (const f of sorted) {
-    const token = `[${f.category}_${Object.keys(tokenMap).filter((k) => k.startsWith(f.category)).length + 1}]`;
-
-    if (strategy === "mask") {
-      result = result.slice(0, f.start) + "*".repeat(f.original.length) + result.slice(f.end);
-    } else if (strategy === "hash") {
-      let hash = 0;
-      for (let i = 0; i < f.original.length; i++) {
-        hash = (hash << 5) - hash + f.original.charCodeAt(i);
-        hash |= 0;
-      }
-      result = result.slice(0, f.start) + `HASH_${Math.abs(hash).toString(16)}` + result.slice(f.end);
-      tokenMap[token] = f.original;
-    } else {
-      result = result.slice(0, f.start) + token + result.slice(f.end);
-      tokenMap[token] = f.original;
-    }
-  }
-
-  return { redacted: result, token_map: tokenMap };
 }
