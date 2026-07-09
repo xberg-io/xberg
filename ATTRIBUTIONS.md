@@ -398,6 +398,80 @@ Apache-2.0 is compatible with Xberg's Elastic License 2.0 (ELv2). Original Apach
 
 ---
 
+## Self-hosted retrieval models
+
+xberg re-hosts ONNX weights for 17 upstream retrieval models across four `xberg-io/*` Hugging Face
+repos and serves them as embedding/reranker/sparse/late-interaction presets. Weights are re-hosted
+unmodified (unchanged upstream weights, xberg-added ONNX export/manifest/tokenizer artifacts only)
+under the `xberg-io` org. All upstream licenses are permissive (Apache-2.0 or MIT), consistent with
+xberg's permissive-only dependency policy.
+
+### xberg-io/embedding-models
+
+Dense sentence-embedding presets:
+
+- **Runtime artifact repository**: <https://huggingface.co/xberg-io/embedding-models>
+- **Usage**: ONNX weights, tokenizer files, and manifests for xberg's embeddings engine
+
+| Upstream model | License | Preset |
+| --- | --- | --- |
+| [sentence-transformers/all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) | Apache-2.0 | `fast` |
+| [BAAI/bge-base-en-v1.5](https://huggingface.co/BAAI/bge-base-en-v1.5) | MIT | `balanced` |
+| [BAAI/bge-large-en-v1.5](https://huggingface.co/BAAI/bge-large-en-v1.5) | MIT | `quality` |
+| [intfloat/multilingual-e5-base](https://huggingface.co/intfloat/multilingual-e5-base) | MIT | `multilingual` |
+| [Alibaba-NLP/gte-modernbert-base](https://huggingface.co/Alibaba-NLP/gte-modernbert-base) | Apache-2.0 | `gte-modernbert-base` (default) |
+| [minishlab/potion-base-8M](https://huggingface.co/minishlab/potion-base-8M) | MIT | `lightweight` (model2vec static) |
+| [Snowflake/snowflake-arctic-embed-m-v2.0](https://huggingface.co/Snowflake/snowflake-arctic-embed-m-v2.0) | Apache-2.0 | `arctic-embed-m-v2.0` |
+| [Qwen/Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B) | Apache-2.0 | `qwen3-embedding-0.6b` |
+
+### xberg-io/reranker-models
+
+Cross-encoder reranker presets:
+
+- **Runtime artifact repository**: <https://huggingface.co/xberg-io/reranker-models>
+- **Usage**: ONNX weights, tokenizer files, and manifests for xberg's reranking engine
+
+| Upstream model | License | Preset |
+| --- | --- | --- |
+| [BAAI/bge-reranker-base](https://huggingface.co/BAAI/bge-reranker-base) | MIT | — |
+| [BAAI/bge-reranker-v2-m3](https://huggingface.co/BAAI/bge-reranker-v2-m3) | Apache-2.0 | — |
+| [jinaai/jina-reranker-v1-turbo-en](https://huggingface.co/jinaai/jina-reranker-v1-turbo-en) | Apache-2.0 | — |
+| [Qwen/Qwen3-Reranker-0.6B](https://huggingface.co/Qwen/Qwen3-Reranker-0.6B) | Apache-2.0 | — |
+| [cross-encoder/ettin-reranker-150m-v1](https://huggingface.co/cross-encoder/ettin-reranker-150m-v1) | Apache-2.0 | `balanced` (default alias) |
+
+### xberg-io/sparse-embeddings
+
+SPLADE-family sparse embedding presets:
+
+- **Runtime artifact repository**: <https://huggingface.co/xberg-io/sparse-embeddings>
+- **Usage**: ONNX weights, tokenizer files, and manifests for xberg's sparse embeddings engine
+
+| Upstream model | License | Preset |
+| --- | --- | --- |
+| [prithivida/Splade_PP_en_v1](https://huggingface.co/prithivida/Splade_PP_en_v1) | Apache-2.0 | `splade` |
+| [opensearch-project/opensearch-neural-sparse-encoding-doc-v3-distill](https://huggingface.co/opensearch-project/opensearch-neural-sparse-encoding-doc-v3-distill) | Apache-2.0 | `opensearch-v3-distill` (default) |
+
+### xberg-io/late-interaction-models
+
+ColBERT-family late-interaction presets:
+
+- **Runtime artifact repository**: <https://huggingface.co/xberg-io/late-interaction-models>
+- **Usage**: ONNX weights, tokenizer files, and manifests for xberg's late-interaction engine
+
+| Upstream model | License | Preset |
+| --- | --- | --- |
+| [answerdotai/answerai-colbert-small-v1](https://huggingface.co/answerdotai/answerai-colbert-small-v1) | Apache-2.0 | `colbert` |
+| [lightonai/GTE-ModernColBERT-v1](https://huggingface.co/lightonai/GTE-ModernColBERT-v1) | Apache-2.0 | `gte-moderncolbert` (default) |
+
+### Policy
+
+Model weights are not committed to this repository; verified artifacts are downloaded into the
+xberg model cache at runtime, matching the GLiNER Models policy above.
+
+**Last Updated**: 2026-07-08
+
+---
+
 **Last Updated**: June 17, 2026
 **Pandoc Version Used**: 3.8.3
 **Baseline Generation Date**: December 6, 2025
