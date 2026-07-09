@@ -27,6 +27,47 @@ use std::path::Path;
 use extraction::extract_all_from_oxide_document;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 use ocr::extract_with_ocr;
+
+/// Pages to OCR under `OcrStrategy::ScannedPages`, 1-indexed.
+///
+/// The union of detected scans and pages failing the text-quality gate, so never
+/// a subset of what `Auto` would OCR.
+///
+/// `None` means fall through to the `Auto` gate: wrong strategy, no page
+/// qualifies, or the gate wants the whole document rather than a page subset.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn scanned_pages_to_ocr(
+    config: &ExtractionConfig,
+    pdf_metadata: &crate::pdf::metadata::PdfExtractionMetadata,
+    native_text: &str,
+    boundaries: Option<&[crate::types::PageBoundary]>,
+) -> Option<Vec<u32>> {
+    use crate::core::config::OcrStrategy;
+
+    if !matches!(config.ocr_strategy, OcrStrategy::ScannedPages { .. }) {
+        return None;
+    }
+
+    let mut pages = pdf_metadata.pdf_specific.scanned_pages.clone()?;
+
+    if let Some(ocr_config) = config.ocr.as_ref() {
+        let decision = ocr::evaluate_per_page_ocr(
+            native_text,
+            boundaries,
+            pdf_metadata.pdf_specific.page_count,
+            &ocr_config.effective_thresholds(),
+        );
+        if decision.whole_doc_failure {
+            return None;
+        }
+        pages.extend(decision.failing_pages);
+    }
+
+    pages.sort_unstable();
+    pages.dedup();
+
+    if pages.is_empty() { None } else { Some(pages) }
+}
 use pages::{assign_hierarchy_to_pages, assign_tables_and_images_to_pages};
 
 /// Run OCR with optional layout detection on PDF bytes.
@@ -325,6 +366,27 @@ impl PdfExtractor {
                     (native_text, ExtractionMethod::Native)
                 }
             } else {
+                (native_text, ExtractionMethod::Native)
+            }
+        } else if let Some(scanned_pages) =
+            scanned_pages_to_ocr(config, &pdf_metadata, &native_text, boundaries.as_deref())
+        {
+            // A scanner's invisible sidecar passes the gate below, so detected
+            // pages are selected before it runs.
+            if let Some(ref bounds) = boundaries
+                && !bounds.is_empty()
+            {
+                let (mixed, results_map, mixed_llm_usage, mixed_rstrs, mixed_formulas) =
+                    ocr::extract_mixed_ocr_native(&native_text, bounds, &scanned_pages, content, config, path).await?;
+                ocr_llm_usage = mixed_llm_usage;
+                ocr_results_map = Some(results_map);
+                ocr_page_rasters = mixed_rstrs;
+                if !mixed_formulas.is_empty() {
+                    ocr_formulas = mixed_formulas;
+                }
+                (mixed, ExtractionMethod::Mixed)
+            } else {
+                tracing::warn!("scanned pages detected but no page boundaries available; using native text");
                 (native_text, ExtractionMethod::Native)
             }
         } else if let Some(ocr_config) = config.ocr.as_ref() {

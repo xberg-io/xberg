@@ -17,6 +17,7 @@ pub fn merge_configs(base: &mut ExtractionConfig, override_config: &ExtractionCo
     base.use_cache = override_config.use_cache;
     base.enable_quality_processing = override_config.enable_quality_processing;
     base.force_ocr = override_config.force_ocr;
+    base.ocr_strategy = override_config.ocr_strategy.clone();
     if override_config.force_ocr_pages.is_some() {
         base.force_ocr_pages = override_config.force_ocr_pages.clone();
     }

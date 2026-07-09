@@ -13,6 +13,26 @@ The changelog starts fresh at `1.0.0-rc.1`. For the Kreuzberg v1–v4 history, s
 
 ## [Unreleased]
 
+### Added
+
+- **Scanned PDFs are now detectable, and can be OCR'd without forcing OCR on the whole file.**
+  PDF metadata gains `scanned_confidence` (0.0–1.0) and `scanned_pages`, so you can tell whether a
+  document is a scan before deciding how to extract it. The new `ocr_strategy` config selects which
+  pages get OCR'd: the default `auto` keeps today's behaviour, while
+  `scanned_pages { min_confidence }` also OCRs pages that look like scans and leaves the rest on
+  native text. On the CLI this is `--ocr-scanned-pages [--scanned-min-confidence 0.7]`.
+
+  This closes a gap that had no workaround. Consumer scanners embed an invisible OCR text layer
+  whose words are well-formed but wrong (`Tbe` for `The`, `rn` for `m`, `l2,45O.OO` for `12,450.00`).
+  Every quality check kreuzberg applied to a native text layer was lexical, so that text passed and
+  OCR never ran; the only escape was `force_ocr`, which degrades clean PDFs. Detection instead asks
+  whether the page is a picture of a document — how much of it is raster, whether its text layer is
+  hidden or absent, its image codec, and the producer. A born-digital slide with a full-bleed
+  background image scores 0.50 and is never OCR'd by default.
+
+  Detection cannot judge whether a scanner's text is *accurate*, only that a scanner produced it, so
+  a page carrying a good hidden text layer is OCR'd too.
+
 ### Fixed
 
 - **Model downloads can no longer hang the extraction pipeline on a blocked network.** hf-hub

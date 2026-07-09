@@ -51,7 +51,10 @@ pub use late_interaction::{LateInteractionConfig, LateInteractionModelType};
 #[cfg(feature = "layout-types")]
 pub use layout::{LayoutDetectionConfig, TableModel};
 pub use llm::{CallMode, LlmConfig, MergeMode, StructuredExtractionConfig};
-pub use ocr::{OcrConfig, OcrPipelineConfig, OcrPipelineStage, OcrQualityThresholds, VlmFallbackPolicy};
+pub use ocr::{
+    DEFAULT_SCANNED_MIN_CONFIDENCE, OcrConfig, OcrPipelineConfig, OcrPipelineStage, OcrQualityThresholds, OcrStrategy,
+    VlmFallbackPolicy,
+};
 pub use page::PageConfig;
 #[cfg(feature = "pdf")]
 pub use pdf::{HierarchyConfig, PdfConfig};

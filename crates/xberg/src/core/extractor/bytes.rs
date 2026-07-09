@@ -78,6 +78,17 @@ pub(crate) async fn extract_bytes(
             });
         }
 
+        if matches!(
+            config.ocr_strategy,
+            crate::core::config::OcrStrategy::ScannedPages { .. }
+        ) && config.effective_disable_ocr()
+        {
+            return Err(crate::XbergError::Validation {
+                message: "ocr_strategy selects scanned pages for OCR, but disable_ocr is true".to_string(),
+                source: None,
+            });
+        }
+
         let validated_mime = if mime_type == "application/octet-stream" {
             #[cfg(feature = "tree-sitter")]
             {

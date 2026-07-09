@@ -18,8 +18,9 @@ pub(crate) fn extract_metadata_from_oxide_document(
     doc: &mut OxideDocument,
     page_boundaries: Option<&[PageBoundary]>,
     content: &str,
+    scanned_min_confidence: f64,
 ) -> Result<PdfExtractionMetadata> {
-    let pdf_specific = extract_pdf_specific_metadata(doc)?;
+    let pdf_specific = extract_pdf_specific_metadata(doc, scanned_min_confidence)?;
     let common = extract_common_metadata(doc)?;
 
     let page_structure = if let Some(boundaries) = page_boundaries {
@@ -42,7 +43,7 @@ pub(crate) fn extract_metadata_from_oxide_document(
 }
 
 /// Extract only PDF-specific metadata (version, producer, encryption, dimensions, page count).
-fn extract_pdf_specific_metadata(doc: &mut OxideDocument) -> Result<PdfMetadata> {
+fn extract_pdf_specific_metadata(doc: &mut OxideDocument, scanned_min_confidence: f64) -> Result<PdfMetadata> {
     let (major, minor) = doc.doc.version();
     let pdf_version = if major > 0 {
         Some(format!("{}.{}", major, minor))
@@ -72,6 +73,16 @@ fn extract_pdf_specific_metadata(doc: &mut OxideDocument) -> Result<PdfMetadata>
 
     let producer = get_info_string(&mut doc.doc, "Producer");
 
+    // Advisory: a document we cannot grade reports no scan evidence.
+    let detection = crate::pdf::scan_detect::detect(&doc.doc);
+    let scanned_confidence = detection.as_ref().map(|d| d.confidence);
+    let scanned_pages = detection.as_ref().map(|d| {
+        d.scanned_page_indices(scanned_min_confidence as f32)
+            .into_iter()
+            .map(|index| index as u32 + 1)
+            .collect()
+    });
+
     Ok(PdfMetadata {
         pdf_version,
         producer,
@@ -79,6 +90,8 @@ fn extract_pdf_specific_metadata(doc: &mut OxideDocument) -> Result<PdfMetadata>
         width,
         height,
         page_count: Some(page_count as u32),
+        scanned_confidence,
+        scanned_pages,
     })
 }
 

@@ -31,6 +31,9 @@ pub(crate) mod oxide_text;
 /// PDF page rendering to raster images.
 pub mod render;
 #[cfg(feature = "pdf")]
+/// Scanned-page detection.
+pub(crate) mod scan_detect;
+#[cfg(feature = "pdf")]
 /// PDF logical structure extraction (tagged PDF support).
 pub mod structure;
 #[cfg(feature = "pdf")]

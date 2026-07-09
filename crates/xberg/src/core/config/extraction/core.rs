@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use super::super::acceleration::AccelerationConfig;
 use super::super::content_filter::ContentFilterConfig;
 use super::super::formats::{JupyterCellRendering, OutputFormat};
-use super::super::ocr::OcrConfig;
+use super::super::ocr::{OcrConfig, OcrStrategy};
 use super::super::page::PageConfig;
 use super::super::processing::{ChunkingConfig, PostProcessorConfig};
 use super::file_config::FileExtractionConfig;
@@ -48,6 +48,14 @@ pub struct ExtractionConfig {
     /// Force OCR even for searchable PDFs
     #[serde(default)]
     pub force_ocr: bool,
+
+    /// Which pages get OCR'd when neither `force_ocr` nor `force_ocr_pages` applies.
+    ///
+    /// Defaults to [`OcrStrategy::Auto`], which OCRs only pages whose native text
+    /// fails a quality check. Only applies to PDF documents. Cannot be
+    /// [`OcrStrategy::ScannedPages`] while `disable_ocr` is `true`.
+    #[serde(default)]
+    pub ocr_strategy: OcrStrategy,
 
     /// Force OCR on specific pages only (1-indexed page numbers, must be >= 1).
     ///
@@ -404,6 +412,7 @@ impl Default for ExtractionConfig {
             enable_quality_processing: true,
             ocr: None,
             force_ocr: false,
+            ocr_strategy: OcrStrategy::default(),
             force_ocr_pages: None,
             disable_ocr: false,
             chunking: None,
@@ -483,6 +492,7 @@ impl ExtractionConfig {
             ref enable_quality_processing,
             ref ocr,
             ref force_ocr,
+            ref ocr_strategy,
             ref force_ocr_pages,
             ref disable_ocr,
             ref chunking,
@@ -531,6 +541,9 @@ impl ExtractionConfig {
         }
         if let Some(v) = force_ocr {
             config.force_ocr = *v;
+        }
+        if let Some(v) = ocr_strategy {
+            config.ocr_strategy = v.clone();
         }
         if let Some(v) = force_ocr_pages {
             config.force_ocr_pages = Some(v.clone());

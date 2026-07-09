@@ -34,7 +34,15 @@ pub(crate) fn extract_text_and_metadata(
     let page_config = extraction_config.and_then(|c| c.pages.as_ref());
     let (text, boundaries, page_contents) = extract_text_from_oxide_document(doc, page_config, extraction_config)?;
 
-    let metadata = super::metadata::extract_metadata_from_oxide_document(doc, boundaries.as_deref(), &text)?;
+    let scanned_min_confidence = extraction_config
+        .map(|c| c.ocr_strategy.effective_min_confidence())
+        .unwrap_or(crate::core::config::DEFAULT_SCANNED_MIN_CONFIDENCE);
+    let metadata = super::metadata::extract_metadata_from_oxide_document(
+        doc,
+        boundaries.as_deref(),
+        &text,
+        scanned_min_confidence,
+    )?;
 
     Ok((text, boundaries, page_contents, metadata))
 }

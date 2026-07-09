@@ -357,6 +357,67 @@ pub enum VlmFallbackPolicy {
     Always,
 }
 
+/// Default confidence a page must reach before [`OcrStrategy::ScannedPages`] OCRs it.
+///
+/// A slide with a full-bleed background image scores `0.50`; values below `0.55`
+/// start sending such slides to OCR.
+pub const DEFAULT_SCANNED_MIN_CONFIDENCE: f64 = 0.70;
+
+/// Which pages of a PDF get OCR'd when neither `force_ocr` nor `force_ocr_pages` applies.
+///
+/// # Examples
+///
+/// ```
+/// use xberg::{ExtractionConfig, OcrStrategy};
+///
+/// // OCR pages that look like scans; keep native text everywhere else.
+/// let config = ExtractionConfig {
+///     ocr_strategy: OcrStrategy::ScannedPages { min_confidence: 0.7 },
+///     ..Default::default()
+/// };
+/// assert!(matches!(config.ocr_strategy, OcrStrategy::ScannedPages { .. }));
+/// ```
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "mode", rename_all = "snake_case")]
+pub enum OcrStrategy {
+    /// OCR only when the native text layer fails a quality check (default).
+    ///
+    /// A scanner's invisible OCR sidecar passes that check, so scanned pages
+    /// carrying one are extracted natively. Use [`OcrStrategy::ScannedPages`]
+    /// to OCR them instead.
+    #[default]
+    Auto,
+
+    /// Additionally OCR every page that looks like a scan.
+    ///
+    /// Pages are graded on raster coverage, whether the text layer is invisible
+    /// or absent, the image codec, and the producer. Pages at or above
+    /// `min_confidence` are OCR'd; the rest keep native text and still go through
+    /// the `Auto` quality check.
+    ///
+    /// Detects that a text layer came from a scanner, not whether it is accurate,
+    /// so a page carrying a good sidecar is OCR'd too.
+    ScannedPages {
+        /// Minimum scan confidence, in `[0.0, 1.0]`. Values outside the range are
+        /// clamped. See [`DEFAULT_SCANNED_MIN_CONFIDENCE`] for how to pick one.
+        min_confidence: f64,
+    },
+}
+
+impl OcrStrategy {
+    /// Confidence a page must reach to count as a scan, clamped to `[0.0, 1.0]`.
+    ///
+    /// [`OcrStrategy::Auto`] uses the default: it does not select pages by scan
+    /// confidence, but `scanned_pages` metadata still needs a threshold.
+    #[must_use]
+    pub fn effective_min_confidence(&self) -> f64 {
+        match self {
+            Self::Auto => DEFAULT_SCANNED_MIN_CONFIDENCE,
+            Self::ScannedPages { min_confidence } => min_confidence.clamp(0.0, 1.0),
+        }
+    }
+}
+
 /// OCR configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OcrConfig {
@@ -984,6 +1045,30 @@ mod tests {
     fn test_vlm_fallback_policy_default_is_disabled() {
         let config = OcrConfig::default();
         assert_eq!(config.vlm_fallback, VlmFallbackPolicy::Disabled);
+    }
+
+    #[test]
+    fn auto_strategy_reports_the_default_scan_threshold() {
+        assert_eq!(
+            OcrStrategy::Auto.effective_min_confidence(),
+            DEFAULT_SCANNED_MIN_CONFIDENCE
+        );
+    }
+
+    #[test]
+    fn scanned_pages_strategy_clamps_its_threshold_into_the_unit_interval() {
+        assert_eq!(
+            OcrStrategy::ScannedPages { min_confidence: -0.5 }.effective_min_confidence(),
+            0.0
+        );
+        assert_eq!(
+            OcrStrategy::ScannedPages { min_confidence: 1.5 }.effective_min_confidence(),
+            1.0
+        );
+        assert_eq!(
+            OcrStrategy::ScannedPages { min_confidence: 0.42 }.effective_min_confidence(),
+            0.42
+        );
     }
 
     #[test]

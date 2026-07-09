@@ -10,7 +10,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::super::formats::OutputFormat;
-use super::super::ocr::OcrConfig;
+use super::super::ocr::{OcrConfig, OcrStrategy};
 use super::super::page::PageConfig;
 use super::super::processing::{ChunkingConfig, PostProcessorConfig};
 use super::types::{ImageExtractionConfig, LanguageDetectionConfig, TokenReductionOptions, UrlExtractionConfig};
@@ -55,6 +55,10 @@ pub struct FileExtractionConfig {
     /// Override force OCR for this file.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub force_ocr: Option<bool>,
+
+    /// Override the OCR page-selection strategy for this file.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ocr_strategy: Option<OcrStrategy>,
 
     /// Override force OCR pages for this file (1-indexed page numbers).
     #[serde(skip_serializing_if = "Option::is_none")]

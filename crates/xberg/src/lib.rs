@@ -362,7 +362,7 @@ pub use layout::types::RecognizedTable;
 #[cfg(any(feature = "ocr", feature = "ocr-wasm"))]
 pub use ocr::types::PSMMode;
 
-pub use core::config::{OcrPipelineConfig, OcrPipelineStage, OcrQualityThresholds, VlmFallbackPolicy};
+pub use core::config::{OcrPipelineConfig, OcrPipelineStage, OcrQualityThresholds, OcrStrategy, VlmFallbackPolicy};
 
 #[cfg(feature = "auto-rotate-types")]
 pub use doc_orientation::OrientationResult;

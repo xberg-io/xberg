@@ -38,6 +38,20 @@ pub struct PdfMetadata {
     /// Total number of pages in the PDF document
     #[serde(skip_serializing_if = "Option::is_none")]
     pub page_count: Option<u32>,
+
+    /// How strongly the document's most scan-like page resembles a scan, in `[0.0, 1.0]`.
+    ///
+    /// `None` when the document could not be inspected. A full-page raster with no
+    /// visible text scores at least `0.85`; a born-digital slide with a full-bleed
+    /// background image scores `0.50`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scanned_confidence: Option<f32>,
+
+    /// Pages that look like scans (1-indexed), using the default confidence threshold.
+    ///
+    /// `None` when the document could not be inspected; empty when no page qualifies.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scanned_pages: Option<Vec<u32>>,
 }
 /// Complete PDF extraction metadata including common and PDF-specific fields.
 ///

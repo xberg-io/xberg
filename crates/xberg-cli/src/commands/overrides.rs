@@ -125,6 +125,20 @@ pub struct ExtractionOverrides {
     #[arg(long)]
     pub force_ocr: Option<bool>,
 
+    /// OCR pages that look like scans, keeping native text elsewhere.
+    ///
+    /// Detects pages that are full-page images, including scans whose hidden
+    /// text layer would otherwise pass the default quality check.
+    #[arg(long)]
+    pub ocr_scanned_pages: bool,
+
+    /// Minimum scan confidence (0.0-1.0) for --ocr-scanned-pages. Default: 0.7.
+    ///
+    /// Values below 0.55 also OCR born-digital slides that use a full-bleed
+    /// background image.
+    #[arg(long, requires = "ocr_scanned_pages")]
+    pub scanned_min_confidence: Option<f64>,
+
     /// Disable OCR entirely (even for images)
     #[arg(long)]
     pub disable_ocr: Option<bool>,
@@ -374,6 +388,15 @@ impl ExtractionOverrides {
             }
         }
 
+        if self.ocr_scanned_pages && self.disable_ocr == Some(true) {
+            bail!("--ocr-scanned-pages cannot be combined with --disable-ocr");
+        }
+        if let Some(confidence) = self.scanned_min_confidence
+            && !(0.0..=1.0).contains(&confidence)
+        {
+            bail!("Invalid scan confidence: {confidence}. Value must be between 0.0 and 1.0.");
+        }
+
         #[cfg(not(feature = "chunking-tokenizers"))]
         if self.chunking_tokenizer.is_some() {
             bail!(
@@ -516,6 +539,13 @@ impl ExtractionOverrides {
         }
         if let Some(disable_ocr_flag) = self.disable_ocr {
             config.disable_ocr = disable_ocr_flag;
+        }
+        if self.ocr_scanned_pages {
+            config.ocr_strategy = xberg::OcrStrategy::ScannedPages {
+                min_confidence: self
+                    .scanned_min_confidence
+                    .unwrap_or(xberg::core::config::DEFAULT_SCANNED_MIN_CONFIDENCE),
+            };
         }
         if let Some(no_cache_flag) = self.no_cache {
             config.use_cache = !no_cache_flag;

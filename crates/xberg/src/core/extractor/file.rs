@@ -92,6 +92,17 @@ pub(crate) async fn extract_file(
             });
         }
 
+        if matches!(
+            config.ocr_strategy,
+            crate::core::config::OcrStrategy::ScannedPages { .. }
+        ) && config.effective_disable_ocr()
+        {
+            return Err(crate::XbergError::Validation {
+                message: "ocr_strategy selects scanned pages for OCR, but disable_ocr is true".to_string(),
+                source: None,
+            });
+        }
+
         let detected_mime = mime::detect_or_validate(path.to_str(), mime_type)?;
 
         #[cfg(not(feature = "office"))]
@@ -326,6 +337,41 @@ mod cache_key_tests {
             hash_extraction_config(&a, "image/png"),
             hash_extraction_config(&b, "image/png"),
             "tessdata_bytes (serde-skipped) must be part of the cache key"
+        );
+    }
+
+    #[test]
+    fn ocr_strategy_changes_the_cache_key() {
+        use crate::core::config::OcrStrategy;
+
+        let auto = ExtractionConfig::default();
+        let scanned = ExtractionConfig {
+            ocr_strategy: OcrStrategy::ScannedPages { min_confidence: 0.7 },
+            ..Default::default()
+        };
+        assert_ne!(
+            hash_extraction_config(&auto, "application/pdf"),
+            hash_extraction_config(&scanned, "application/pdf"),
+            "ocr_strategy selects different pages for OCR and must be part of the cache key"
+        );
+    }
+
+    #[test]
+    fn scanned_pages_min_confidence_changes_the_cache_key() {
+        use crate::core::config::OcrStrategy;
+
+        let lenient = ExtractionConfig {
+            ocr_strategy: OcrStrategy::ScannedPages { min_confidence: 0.6 },
+            ..Default::default()
+        };
+        let strict = ExtractionConfig {
+            ocr_strategy: OcrStrategy::ScannedPages { min_confidence: 0.9 },
+            ..Default::default()
+        };
+        assert_ne!(
+            hash_extraction_config(&lenient, "application/pdf"),
+            hash_extraction_config(&strict, "application/pdf"),
+            "min_confidence selects different pages for OCR and must be part of the cache key"
         );
     }
 }
