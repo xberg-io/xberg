@@ -27,6 +27,21 @@ function toEngineCategories(categories?: string[]): string[] | undefined {
   return categories.map((c) => CATEGORY_TO_ENGINE[c] ?? c.toLowerCase());
 }
 
+/** Reverse of `CATEGORY_TO_ENGINE`: engine snake_case -> public category string. */
+const ENGINE_TO_CATEGORY: Record<string, string> = Object.fromEntries(
+  Object.entries(CATEGORY_TO_ENGINE).map(([publicName, engineName]) => [engineName, publicName])
+);
+
+/**
+ * Map an engine category back to its documented public form (e.g.
+ * `date_of_birth` -> `DATE`). Falls back to an upper-cased passthrough for
+ * categories with no explicit mapping so `credit_card` still reads as
+ * `CREDIT_CARD`.
+ */
+function toPublicCategory(category: string): string {
+  return ENGINE_TO_CATEGORY[category] ?? category.toUpperCase();
+}
+
 interface EnginePiiMatch {
   start: number;
   end: number;
@@ -58,7 +73,7 @@ export function registerPiiTools(server: McpServer): void {
         const matches = (await engine.detect_pii(text, toEngineCategories(categories))) as EnginePiiMatch[];
 
         const findings = matches.map((m) => ({
-          entity_type: m.category,
+          entity_type: toPublicCategory(m.category),
           text: m.text,
           start: m.start,
           end: m.end,
@@ -107,12 +122,13 @@ export function registerPiiTools(server: McpServer): void {
         // `categories` (per-category counts). The engine's redact does not
         // expose them, so recompute from a pattern scan — mirrors the old
         // detect-then-group behaviour and covers every strategy (mask/hash
-        // included, not just token_replace). Categories are upper-cased to
-        // match the tool's documented public form (e.g. `credit_card` -> `CREDIT_CARD`).
+        // included, not just token_replace). Engine categories are mapped back
+        // to the tool's documented public form (e.g. `date_of_birth` -> `DATE`,
+        // `credit_card` -> `CREDIT_CARD`).
         const matches = engine.detect_pii(text) as EnginePiiMatch[];
         const categories: Record<string, number> = {};
         for (const m of matches) {
-          const cat = m.category.toUpperCase();
+          const cat = toPublicCategory(m.category);
           categories[cat] = (categories[cat] ?? 0) + 1;
         }
 

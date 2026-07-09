@@ -33,11 +33,6 @@ describe("rehydration TS-encrypt <-> wasm-decrypt parity", () => {
       const engine = getEngine();
       const decrypted = engine.decrypt_map(new Uint8Array(bytes), passphrase);
 
-      // Confirm actual shape returned by serde_wasm_bindgen for a Rust HashMap.
-      const tag = Object.prototype.toString.call(decrypted);
-      // eslint-disable-next-line no-console
-      console.log("decrypt_map result type:", tag, decrypted instanceof Map);
-
       const tokenMap: Record<string, string> =
         decrypted instanceof Map ? Object.fromEntries(decrypted) : decrypted;
 

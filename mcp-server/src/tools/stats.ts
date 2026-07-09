@@ -54,7 +54,17 @@ export function registerStatsTools(server: McpServer): void {
           try {
             const spec = await store.getCollection(name);
             if (spec) {
-              collections.push({ name, spec });
+              // R3: expose the public "inner_product" spelling, not the runtime "innerproduct".
+              collections.push({
+                name,
+                spec: {
+                  ...spec,
+                  distance_metric:
+                    spec.distance_metric === "innerproduct"
+                      ? "inner_product"
+                      : spec.distance_metric,
+                },
+              });
             } else {
               collections.push({ name });
             }

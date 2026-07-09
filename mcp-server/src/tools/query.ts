@@ -42,7 +42,7 @@ const FilterSchema: z.ZodType<unknown> = z.lazy(() =>
 export function registerQueryTools(server: McpServer): void {
   server.tool(
     "query_corpus",
-    "Search a RAG corpus with vector, full-text, hybrid, or graph retrieval + optional reranking. query_text is auto-embedded for vector/hybrid modes. Use graph_depth to control traversal depth in graph mode.",
+    "Search a RAG corpus using the current wasm runtime's vector retrieval. query_text is auto-embedded. Note: full_text and graph modes are unsupported (rejected); hybrid is accepted for compatibility but runs as vector; rerank_results, graph_depth, and embedding_preset are currently accepted but ignored.",
     {
       collection: z.string().describe("Collection name"),
       query: z.string().describe("Search query text"),

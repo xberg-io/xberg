@@ -54,22 +54,15 @@ describe("engine.ingest (Task 5 core behavior)", () => {
     expect((documentId as string).length).toBeGreaterThan(0);
   }, 60_000);
 
-  // KNOWN BUG, out of scope here (flagged separately against
-  // crates/xberg-rag/src/types.rs): `PrimaryScore` is an internally-tagged
-  // enum (`#[serde(tag = "kind")]`) whose `Vector`/`FullText` variants wrap a
-  // bare `f32`. Internally-tagged newtype variants can only deserialize when
-  // their inner type is itself a struct/map whose fields flatten alongside
-  // the tag key — a bare scalar has nothing to flatten, so this shape is
-  // provably unconstructible from JS via `serde_wasm_bindgen` in either
-  // direction (confirmed with a standalone wasm-bindgen round-trip: both
-  // `to_value` and `from_value` fail for `PrimaryScore::Vector(_)`, and
-  // `serde_json` fails identically, so this isn't wasm-specific). Every
-  // `RetrievedChunk` returned by a JS-backed `VectorStore.retrieve()` hits
-  // this the moment it includes a non-`Hybrid` `primary_score` — i.e. always,
-  // for ordinary vector search. This is unfixable from the TS store side;
-  // `store.ts`'s `retrieve()` implements everything else per the real
-  // protocol (collection lookup, cosine scoring, top_k, filtering) and would
-  // work end-to-end once the Rust type is corrected.
+  // Regression test for the PrimaryScore serde fix (crates/xberg-rag/src/types.rs):
+  // `PrimaryScore` was an internally-tagged enum (`#[serde(tag = "kind")]`) whose
+  // `Vector`/`FullText` variants wrapped a bare `f32`. Internally-tagged newtype
+  // scalar variants have nothing to flatten alongside the tag key, so serde could
+  // (de)serialize neither direction — every JS-backed `VectorStore.retrieve()`
+  // returning a non-`Hybrid` `primary_score` failed with "invalid type: map,
+  // expected f32". The variants are now struct variants `{ score }`, so the wire
+  // shape `{ kind: "vector", score }` round-trips and the JS-backed store works
+  // end-to-end. See the inline note below.
   it("engine.query returns scored chunks with a deserializable primary_score", async () => {
     await store.ensureCollection({ name: "test_col_query", embedding_dim: EMBEDDING_DIM });
     const doc = {

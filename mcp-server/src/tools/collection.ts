@@ -68,8 +68,15 @@ export function registerCollectionTools(server: McpServer): void {
             isError: true,
           };
         }
+        // R3: normalize the runtime "innerproduct" spelling back to the public
+        // schema "inner_product" so the response round-trips into create_collection.
+        const publicSpec = {
+          ...spec,
+          distance_metric:
+            spec.distance_metric === "innerproduct" ? "inner_product" : spec.distance_metric,
+        };
         return {
-          content: [{ type: "text" as const, text: JSON.stringify(spec) }],
+          content: [{ type: "text" as const, text: JSON.stringify(publicSpec) }],
         };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

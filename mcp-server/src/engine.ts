@@ -1,11 +1,11 @@
 import type { XbergEngine } from "@xberg-io/xberg-wasm";
 import { createXbergRuntimeFactory } from "xberg-wasm-runtime";
 import type { InjectionDescriptor } from "xberg-wasm-runtime";
-import { homedir } from "os";
-import { join } from "path";
+import { getCacheDir } from "./paths.js";
 
 let _engine: XbergEngine | null = null;
 let _injection: InjectionDescriptor | null = null;
+let _initPromise: Promise<XbergEngine> | null = null;
 
 /**
  * Build the `XbergEngine` (B) once, wiring it to C's shared runtime factory.
@@ -19,20 +19,28 @@ let _injection: InjectionDescriptor | null = null;
  * location option: the vector-store backend location is C's internal concern
  * (currently an in-memory store), so we only pass `nodeCachePath`.
  */
-export async function initializeEngine(): Promise<XbergEngine> {
-  if (_engine !== null) return _engine;
+export function initializeEngine(): Promise<XbergEngine> {
+  // Guard the async startup with a cached promise so concurrent callers share a
+  // single initialization instead of each racing past the `_engine === null`
+  // check and constructing a duplicate engine.
+  if (_initPromise !== null) return _initPromise;
 
-  const cacheDir =
-    process.env.XBERG_CACHE_DIR ?? join(homedir(), ".cache", "xberg");
+  _initPromise = (async () => {
+    if (_engine !== null) return _engine;
 
-  const injection = await createXbergRuntimeFactory({ nodeCachePath: cacheDir });
-  _injection = injection;
+    const cacheDir = getCacheDir();
 
-  // Per Task 1 spec, engine construction uses default config.
-  const { XbergEngine } = await import("@xberg-io/xberg-wasm");
-  _engine = new XbergEngine({}, injection);
+    const injection = await createXbergRuntimeFactory({ nodeCachePath: cacheDir });
+    _injection = injection;
 
-  return _engine;
+    // Per Task 1 spec, engine construction uses default config.
+    const { XbergEngine } = await import("@xberg-io/xberg-wasm");
+    _engine = new XbergEngine({}, injection);
+
+    return _engine;
+  })();
+
+  return _initPromise;
 }
 
 /** Return the initialized singleton engine, or throw if not yet initialized. */

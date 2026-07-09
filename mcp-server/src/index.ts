@@ -15,6 +15,7 @@ import { registerMediaTools } from "./tools/media.js";
 import { registerWebTools } from "./tools/web.js";
 import { WarmupManager } from "./warmup.js";
 import { initializeEngine } from "./engine.js";
+import { getCacheDir } from "./paths.js";
 
 const server = new McpServer({
   name: "xberg-mcp",
@@ -36,7 +37,7 @@ registerMediaTools(server);
 registerWebTools(server);
 
 async function main() {
-  const cacheDir = process.env.XBERG_CACHE_DIR ?? `${process.env.HOME ?? process.env.USERPROFILE ?? "~"}/.cache/xberg`;
+  const cacheDir = getCacheDir();
   const warmup = new WarmupManager(cacheDir);
   const missing = warmup.getMissingModels();
   if (missing.length > 0) {

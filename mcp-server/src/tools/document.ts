@@ -90,26 +90,29 @@ export function registerDocumentTools(server: McpServer): void {
 
   server.tool(
     "get_document",
-    "Retrieve a document by its external ID or document ID using a filter.",
+    "Retrieve a document by its external ID, or by an explicit filter. Note: the vector-only wasm store has no internal-document-id index (mirroring the Rust backend's filter fields, which expose doc.external_id but not an internal id), so lookups resolve against the document's external_id. Pass a custom `filter` for anything else.",
     {
       collection: z.string(),
-      document_id: z.string().optional(),
-      external_id: z.string().optional(),
+      external_id: z.string().optional().describe("The document's external_id (as supplied to upsert_document)."),
+      document_id: z.string().optional().describe("Alias for external_id — matched against the document's external_id. The internal doc_id returned by upsert_document is not directly queryable in the vector-only store; pass it via external_id semantics or use a filter."),
       filter: FilterConditionSchema.optional(),
     },
     async ({ collection, document_id, external_id, filter }) => {
       try {
         const { embedder, store } = getRuntime();
 
-        const retrieveFilter = filter ?? (document_id
-          ? { eq: { field: "doc.external_id", value: document_id } }
-          : external_id
-          ? { eq: { field: "doc.external_id", value: external_id } }
+        // Both `external_id` and its `document_id` alias resolve to a
+        // doc.external_id match: the wasm store mirrors the Rust backend's
+        // filter fields (`crates/xberg-rag/src/backends/memory.rs` resolve_field),
+        // which has no internal-id field.
+        const idValue = external_id ?? document_id;
+        const retrieveFilter = filter ?? (idValue
+          ? { eq: { field: "doc.external_id", value: idValue } }
           : null);
 
         if (!retrieveFilter) {
           return {
-            content: [{ type: "text" as const, text: JSON.stringify({ error: "Must provide document_id, external_id, or filter" }) }],
+            content: [{ type: "text" as const, text: JSON.stringify({ error: "Must provide external_id, document_id, or filter" }) }],
             isError: true,
           };
         }
@@ -118,7 +121,7 @@ export function registerDocumentTools(server: McpServer): void {
         // is expressed as a filtered vector query — the filter does the actual
         // selection, the vector score only orders the (at most one matching
         // group of) chunks.
-        const queryText = document_id ?? external_id ?? "document";
+        const queryText = idValue ?? "document";
         const vecs = await embedder.embed([queryText]);
         const queryVector = vecs[0] ? Array.from(vecs[0]) : undefined;
 

@@ -224,7 +224,7 @@ export function registerExtractTools(server: McpServer): void {
         // per input instead so every document goes through the same bridges as
         // `extract_document`.
         const results: ReturnType<typeof toStructuredDocument>[] = [];
-        for (const inp of inputs) {
+        for (const [index, inp] of inputs.entries()) {
           let extractInput: Record<string, unknown>;
           if (inp.bytes) {
             extractInput = {
@@ -233,8 +233,15 @@ export function registerExtractTools(server: McpServer): void {
               mime_type: inp.mime_type ?? "application/octet-stream",
               filename: inp.filename ?? null,
             };
+          } else if (inp.uri) {
+            extractInput = buildUriExtractInput(inp.uri);
           } else {
-            extractInput = buildUriExtractInput(inp.uri ?? "");
+            // ExtractInputSchema permits `{}`; guard here so a missing uri/bytes
+            // is a clear per-item error rather than readFileSync("").
+            return {
+              content: [{ type: "text" as const, text: `Error: inputs[${index}] must provide either uri or bytes` }],
+              isError: true,
+            };
           }
 
           const result = (await engine.extract(extractInput, wasmConfig)) as WasmExtractionResultLike;
