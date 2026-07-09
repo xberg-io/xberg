@@ -353,3 +353,12 @@
 #   - Rust core chips: task_544b8b78 (extraction_timeout_secs), task_df55eaad (keywords wiring), task_f23bad12 (was PrimaryScore, FIXED).
 #
 # BRANCH worktree-wasm-mcp-server ready. NOT merged/PR'd (awaiting user decision).
+
+# ---- FINAL VERIFICATION 2026-07-09 (volume remonté) ----
+# Suite complète (1 passe, singleFork): 127 tests passed, 0 assertion failure.
+#   Seul "fail" = timeout beforeAll (>180s) sur pii_parity SOUS CHARGE (14 fichiers ré-init moteur
+#   depuis SSD externe lent, 762s total). Confirmé environnemental: pii_parity relancé isolément = 1 passed.
+#   => 128/128 verts, migration entièrement vérifiée.
+# Bench capturé (commit 33ffd0b): extract 0.21ms / ingest 14.64ms / query 3.09ms (médianes warmed).
+# Commits session 2 = 11 (9 tâches + ledger + bench-numbers). Total depuis 4bcb885 = 21.
+# Branche prête. PR non ouverte (décision user).
