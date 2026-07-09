@@ -113,15 +113,27 @@ pub enum FormatMetadata {
     /// the chunking pipeline to emit structure-aware `Chunk`s instead of falling back to
     /// text-based splitting.
     ///
-    /// Modelled as a struct variant (rather than `Code(Vec<CodeChunkInfo>)`) because
+    /// Wraps [`CodeMetadata`] (a named struct) rather than `Vec<CodeChunkInfo>` directly:
     /// `FormatMetadata` is internally tagged (`#[serde(tag = "format_type")]`), and serde
-    /// cannot serialize an internally-tagged newtype variant that wraps a sequence — the
-    /// tag has no map to live in. A named `chunks` field gives serde a map to tag.
+    /// cannot serialize a tagged newtype variant that wraps a sequence — the tag has no
+    /// map to live in. Wrapping a struct gives serde a map to hold the tag, and keeps this
+    /// variant shape consistent with every sibling (`Variant(XMetadata)`) so the derived
+    /// OpenAPI discriminator can reference a named component schema.
     #[cfg(feature = "tree-sitter")]
-    Code {
-        /// Structural code chunks (function/class/module boundaries).
-        chunks: Vec<CodeChunkInfo>,
-    },
+    Code(CodeMetadata),
+}
+
+/// Code-format metadata: the structural chunks produced by tree-sitter parsing.
+///
+/// Wrapped by [`FormatMetadata::Code`]. Kept as a named struct (rather than an inline
+/// enum-variant body) so serde can tag it under internal tagging and utoipa can emit a
+/// referenceable `CodeMetadata` component in the OpenAPI schema.
+#[cfg(feature = "tree-sitter")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+pub struct CodeMetadata {
+    /// Structural code chunks (function/class/module boundaries).
+    pub chunks: Vec<CodeChunkInfo>,
 }
 
 /// A single structurally-meaningful code chunk produced by tree-sitter parsing.
@@ -199,7 +211,7 @@ impl std::fmt::Display for FormatMetadata {
             #[cfg(feature = "transcription-types")]
             Self::Audio(_) => f.write_str("audio"),
             #[cfg(feature = "tree-sitter")]
-            Self::Code { .. } => f.write_str("code"),
+            Self::Code(_) => f.write_str("code"),
         }
     }
 }
@@ -250,6 +262,8 @@ impl utoipa::PartialSchema for FormatMetadata {
                     ("pst", "#/components/schemas/PstMetadata"),
                     #[cfg(feature = "transcription-types")]
                     ("audio", "#/components/schemas/AudioMetadata"),
+                    #[cfg(feature = "tree-sitter")]
+                    ("code", "#/components/schemas/CodeMetadata"),
                 ],
             )));
 
@@ -298,6 +312,11 @@ impl utoipa::PartialSchema for FormatMetadata {
             #[cfg(not(feature = "transcription-types"))]
             let builder = builder;
 
+            #[cfg(feature = "tree-sitter")]
+            let builder = builder.item(Ref::from_schema_name("CodeMetadata"));
+            #[cfg(not(feature = "tree-sitter"))]
+            let builder = builder;
+
             builder
         };
 
@@ -343,6 +362,8 @@ impl utoipa::ToSchema for FormatMetadata {
         push_schema!(PstMetadata);
         #[cfg(feature = "transcription-types")]
         push_schema!(AudioMetadata);
+        #[cfg(feature = "tree-sitter")]
+        push_schema!(CodeMetadata);
     }
 }
 
@@ -1235,15 +1256,15 @@ pub struct AudioMetadata {
 
 #[cfg(all(test, feature = "tree-sitter"))]
 mod code_metadata_serde_tests {
-    use super::{CodeChunkInfo, FormatMetadata};
+    use super::{CodeChunkInfo, CodeMetadata, FormatMetadata};
 
-    /// `FormatMetadata` is internally tagged, so the `Code` variant must be a
-    /// struct variant — a newtype variant wrapping a `Vec` cannot be serialized
-    /// under internal tagging (serde errors: "cannot serialize tagged newtype
-    /// variant ... containing a sequence"). This guards that regression.
+    /// `FormatMetadata` is internally tagged, so the `Code` variant wraps a named
+    /// struct (`CodeMetadata`) — a newtype variant wrapping a `Vec` cannot be
+    /// serialized under internal tagging (serde errors: "cannot serialize tagged
+    /// newtype variant ... containing a sequence"). This guards that regression.
     #[test]
     fn code_variant_round_trips_through_json() {
-        let value = FormatMetadata::Code {
+        let value = FormatMetadata::Code(CodeMetadata {
             chunks: vec![CodeChunkInfo {
                 text: "fn main() {}".to_string(),
                 context_path: vec!["main".to_string()],
@@ -1251,7 +1272,7 @@ mod code_metadata_serde_tests {
                 byte_start: 0,
                 byte_end: 12,
             }],
-        };
+        });
 
         let json = serde_json::to_string(&value).expect("Code metadata must serialize");
         assert!(
@@ -1261,7 +1282,7 @@ mod code_metadata_serde_tests {
         assert!(json.contains("\"chunks\""), "chunks field present: {json}");
 
         let back: FormatMetadata = serde_json::from_str(&json).expect("Code metadata must deserialize");
-        let FormatMetadata::Code { chunks } = back else {
+        let FormatMetadata::Code(CodeMetadata { chunks }) = back else {
             panic!("expected Code variant after round-trip");
         };
         assert_eq!(chunks.len(), 1);

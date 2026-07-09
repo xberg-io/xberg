@@ -18,7 +18,7 @@ use crate::internal_builder::InternalDocumentBuilder;
 use crate::plugins::InternalDocumentExtractor;
 use crate::plugins::Plugin;
 use crate::types::internal::InternalDocument;
-use crate::types::metadata::{CodeChunkInfo, FormatMetadata, Metadata};
+use crate::types::metadata::{CodeChunkInfo, CodeMetadata, FormatMetadata, Metadata};
 #[cfg_attr(alef, alef(skip))]
 /// Source code extractor using tree-sitter language pack.
 ///
@@ -102,7 +102,7 @@ impl CodeExtractor {
 
         let mut doc = builder.build();
         doc.metadata = Metadata {
-            format: Some(FormatMetadata::Code { chunks: code_chunks }),
+            format: Some(FormatMetadata::Code(CodeMetadata { chunks: code_chunks })),
             ..Default::default()
         };
         doc.mime_type = SOURCE_CODE_MIME_TYPE.to_string();

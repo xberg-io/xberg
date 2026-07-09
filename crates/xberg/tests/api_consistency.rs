@@ -570,14 +570,14 @@ fn test_tree_sitter_process_config_all_fields_serialized() {
 #[cfg(feature = "tree-sitter")]
 #[test]
 fn test_format_metadata_code_variant_serialization() {
-    use xberg::types::metadata::FormatMetadata;
+    use xberg::types::metadata::{CodeMetadata, FormatMetadata};
 
-    let metadata = FormatMetadata::Code { chunks: Vec::new() };
+    let metadata = FormatMetadata::Code(CodeMetadata { chunks: Vec::new() });
     let json = serde_json::to_value(&metadata).expect("Failed to serialize FormatMetadata::Code");
 
-    // Code is a struct variant carrying `chunks`; under internal tagging it
-    // serializes the `format_type` discriminant alongside the chunks array.
-    // (A newtype variant wrapping the Vec could not be serialized at all.)
+    // Code is a newtype variant wrapping `CodeMetadata`; under internal tagging
+    // serde flattens the inner struct, so the `format_type` discriminant serializes
+    // alongside the `chunks` array at the top level.
     assert_eq!(json["format_type"], "code", "format_type tag should be 'code'");
     assert!(json["chunks"].is_array(), "chunks should serialize as an array");
 }

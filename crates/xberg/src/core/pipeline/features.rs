@@ -175,9 +175,9 @@ fn classify_code_chunk(node_types: &[String]) -> crate::types::extraction::Chunk
 #[cfg(all(feature = "tree-sitter", feature = "chunking"))]
 fn try_code_chunks(result: &ExtractedDocument) -> Option<Vec<crate::types::extraction::Chunk>> {
     use crate::types::extraction::{Chunk, ChunkMetadata};
-    use crate::types::metadata::FormatMetadata;
+    use crate::types::metadata::{CodeMetadata, FormatMetadata};
 
-    let FormatMetadata::Code { chunks: code_chunks } = result.metadata.format.as_ref()? else {
+    let FormatMetadata::Code(CodeMetadata { chunks: code_chunks }) = result.metadata.format.as_ref()? else {
         return None;
     };
 
