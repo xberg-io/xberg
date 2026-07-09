@@ -134,8 +134,8 @@ pub struct ExtractionOverrides {
 
     /// Minimum scan confidence (0.0-1.0) for --ocr-scanned-pages. Default: 0.7.
     ///
-    /// Values below 0.55 also OCR born-digital slides that use a full-bleed
-    /// background image.
+    /// A threshold of 0.50 or lower also OCRs born-digital slides that use a
+    /// full-bleed background image.
     #[arg(long, requires = "ocr_scanned_pages")]
     pub scanned_min_confidence: Option<f64>,
 

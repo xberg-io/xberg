@@ -359,8 +359,8 @@ pub enum VlmFallbackPolicy {
 
 /// Default confidence a page must reach before [`OcrStrategy::ScannedPages`] OCRs it.
 ///
-/// A slide with a full-bleed background image scores `0.50`; values below `0.55`
-/// start sending such slides to OCR.
+/// A slide with a full-bleed background image scores `0.50`, so a threshold of
+/// `0.50` or lower also sends such slides to OCR.
 pub const DEFAULT_SCANNED_MIN_CONFIDENCE: f64 = 0.70;
 
 /// Which pages of a PDF get OCR'd when neither `force_ocr` nor `force_ocr_pages` applies.

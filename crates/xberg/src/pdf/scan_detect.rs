@@ -301,6 +301,22 @@ mod tests {
         assert_eq!(detection.scanned_page_indices(0.95), Vec::<usize>::new());
     }
 
+    /// The doc-comment on `DEFAULT_SCANNED_MIN_CONFIDENCE` claims a slide is only
+    /// OCR'd at a threshold of 0.50 or lower. Pin that boundary.
+    #[test]
+    fn a_full_bleed_slide_is_selected_only_at_a_threshold_of_0_50_or_lower() {
+        let slide = ScanDetection {
+            confidence: SCORE_FULL_PAGE_RASTER,
+            page_confidence: vec![SCORE_FULL_PAGE_RASTER],
+        };
+        assert_eq!(slide.scanned_page_indices(0.50), vec![0]);
+        assert_eq!(slide.scanned_page_indices(0.51), Vec::<usize>::new());
+        assert_eq!(
+            slide.scanned_page_indices(DEFAULT_SCANNED_MIN_CONFIDENCE as f32),
+            Vec::<usize>::new()
+        );
+    }
+
     #[test]
     fn scanned_page_indices_clamps_an_out_of_range_threshold() {
         let detection = ScanDetection {
