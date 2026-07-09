@@ -70,18 +70,31 @@ pub struct SparseEmbeddingPreset {
 
 /// Bundled SPLADE presets.
 ///
-/// Self-hosted on `xberg-io/sparse-embeddings` (mirror of the Apache-2.0
-/// `prithivida/Splade_PP_en_v1`, weights unmodified); pinned via the checked-in
-/// `presets.sha256sum` manifest.
+/// Self-hosted on `xberg-io/sparse-embeddings` (weights unmodified from their
+/// Apache-2.0 upstreams); pinned via the checked-in `presets.sha256sum` manifest.
+/// Both produce MLM-logit `[B, S, vocab]` output that the SPLADE engine max-pools
+/// into a 30522-dim sparse vector.
 pub static SPARSE_EMBEDDING_PRESETS: LazyLock<Vec<SparseEmbeddingPreset>> = LazyLock::new(|| {
-    vec![SparseEmbeddingPreset {
-        name: "splade".to_string(),
-        model_repo: "xberg-io/sparse-embeddings".to_string(),
-        model_file: "splade/model.onnx".to_string(),
-        additional_files: Vec::new(),
-        max_length: 256,
-        description: "SPLADE++ EN v1 — English learned sparse retrieval (Apache-2.0).".to_string(),
-    }]
+    vec![
+        SparseEmbeddingPreset {
+            name: "splade".to_string(),
+            model_repo: "xberg-io/sparse-embeddings".to_string(),
+            model_file: "splade/model.onnx".to_string(),
+            additional_files: Vec::new(),
+            max_length: 256,
+            description: "SPLADE++ EN v1 — English learned sparse retrieval (Apache-2.0).".to_string(),
+        },
+        SparseEmbeddingPreset {
+            name: "opensearch-v3-distill".to_string(),
+            model_repo: "xberg-io/sparse-embeddings".to_string(),
+            model_file: "opensearch-v3-distill/model.onnx".to_string(),
+            additional_files: vec!["opensearch-v3-distill/model.onnx.data".to_string()],
+            max_length: 512,
+            description: "OpenSearch neural-sparse v3 distill (DistilBERT MLM, 2026-gen, Apache-2.0). \
+                Exported with its MLM head; 30522-dim SPLADE sparse vectors, 512 max-len."
+                .to_string(),
+        },
+    ]
 });
 
 /// Look up a bundled SPLADE preset by exact name.
