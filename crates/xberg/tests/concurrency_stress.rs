@@ -211,7 +211,7 @@ async fn test_concurrent_ocr_processing() {
         let config = config.clone();
 
         handles.push(tokio::task::spawn_blocking(move || {
-            extract_uri_document_blocking(&file_path, None, &config)
+            helpers::extract_uri_document_blocking(&file_path, None, &config)
         }));
     }
 
@@ -274,7 +274,7 @@ fn test_concurrent_ocr_cache_stress() {
 
     let file_path = get_test_file_path("images/ocr_image.jpg");
 
-    let first_result = extract_uri_document_blocking(&file_path, None, &config);
+    let first_result = helpers::extract_uri_document_blocking(&file_path, None, &config);
     assert!(first_result.is_ok(), "Initial OCR should succeed");
 
     let cache_hit_count = Arc::new(AtomicUsize::new(0));
@@ -287,7 +287,7 @@ fn test_concurrent_ocr_cache_stress() {
 
         handles.push(std::thread::spawn(move || {
             let start = std::time::Instant::now();
-            let result = extract_uri_document_blocking(&file_path, None, &config);
+            let result = helpers::extract_uri_document_blocking(&file_path, None, &config);
             let duration = start.elapsed();
 
             if duration < Duration::from_millis(500) {
