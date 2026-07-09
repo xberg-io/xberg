@@ -203,6 +203,7 @@ pub(crate) fn resolve_cache_dir() -> PathBuf {
 /// Returns `Ok(Some(rotated_bytes))` if rotation was applied,
 /// `Ok(None)` if no rotation needed (0° or low confidence).
 #[cfg_attr(alef, alef(skip))]
+#[cfg(feature = "paddle-ocr")]
 pub(crate) fn detect_and_rotate(detector: &DocOrientationDetector, image_bytes: &[u8]) -> Result<Option<Vec<u8>>> {
     let img = image::load_from_memory(image_bytes)
         .map_err(|e| XbergError::Ocr {

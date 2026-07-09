@@ -10,6 +10,8 @@ use xberg::core::config::{ExtractionConfig, OutputFormat};
 
 mod helpers;
 use helpers::extract_uri_document;
+#[cfg(feature = "ocr")]
+use helpers::extract_uri_document_blocking;
 
 fn test_documents_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

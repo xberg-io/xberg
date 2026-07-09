@@ -315,7 +315,7 @@ impl OcrElement {
     }
 
     /// Set rotation information.
-    #[cfg(test)]
+    #[cfg(all(test, feature = "paddle-ocr"))]
     pub(crate) fn with_rotation(mut self, rotation: OcrRotation) -> Self {
         self.rotation = Some(rotation);
         self
