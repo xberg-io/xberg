@@ -20,7 +20,10 @@ pub(crate) fn extract_usage_from_chat(response: &liter_llm::ChatCompletionRespon
 }
 
 /// Extract usage metadata from an embedding response.
-#[cfg(feature = "embeddings")]
+// Matches `embed_via_llm`'s own gate (its only caller): `tokio-runtime` because
+// `liter-llm` alone doesn't imply it (unlike `embeddings`), and `not(wasm32)`
+// since wasm32 has no LLM-hosted embedding path yet.
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 pub(crate) fn extract_usage_from_embedding(response: &liter_llm::EmbeddingResponse, source: &str) -> Option<LlmUsage> {
     Some(LlmUsage {
         model: response.model.clone(),

@@ -343,13 +343,20 @@ fn download_model_files_inner(
         crate::model_download::with_download_deadline(&format!("{repo}/{sibling}"), move || {
             api.model(repo).get(&sib).map_err(|e| e.to_string())
         })
-        .map_err(|e| err(format!("Failed to download sibling file {sibling} from {repo_name}: {e}")))?;
+        .map_err(|e| {
+            err(format!(
+                "Failed to download sibling file {sibling} from {repo_name}: {e}"
+            ))
+        })?;
     }
 
     // Companion files (tokenizer/config) live beside the model: in the model's
     // own `<name>/` subdir for consolidated xberg-io repos, or at the repo root
     // for standard HF layouts. `fetch_companion` tries the model dir then root.
-    let model_dir = Path::new(model_file).parent().and_then(|p| p.to_str()).filter(|s| !s.is_empty());
+    let model_dir = Path::new(model_file)
+        .parent()
+        .and_then(|p| p.to_str())
+        .filter(|s| !s.is_empty());
 
     let tokenizer = fetch_companion(&api, repo_name, model_dir, "tokenizer.json")
         .map_err(|e| err(format!("Failed to download tokenizer.json: {e}")))?;
@@ -358,11 +365,9 @@ fn download_model_files_inner(
         .map_err(|e| err(format!("Failed to download config.json: {e}")))?;
 
     // Optional — fall back to empty paths that load_tokenizer handles gracefully.
-    let special_tokens =
-        fetch_companion(&api, repo_name, model_dir, "special_tokens_map.json").unwrap_or_default();
+    let special_tokens = fetch_companion(&api, repo_name, model_dir, "special_tokens_map.json").unwrap_or_default();
 
-    let tokenizer_config =
-        fetch_companion(&api, repo_name, model_dir, "tokenizer_config.json").unwrap_or_default();
+    let tokenizer_config = fetch_companion(&api, repo_name, model_dir, "tokenizer_config.json").unwrap_or_default();
 
     Ok(DownloadedModel {
         model,

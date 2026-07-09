@@ -502,31 +502,39 @@ pub use embeddings::EmbeddingPreset;
 /// Embed a list of texts using the configured embedding model.
 ///
 /// Returns a 2D vector where each inner vector is the embedding for the corresponding text.
-#[cfg(feature = "embeddings")]
+#[cfg(any(feature = "embeddings", feature = "static-embeddings"))]
 #[cfg_attr(alef, alef(skip))]
 pub fn embed_texts(texts: Vec<String>, config: &core::config::EmbeddingConfig) -> crate::Result<Vec<Vec<f32>>> {
     embeddings::embed_texts(&texts, config)
 }
 
-/// Stub for builds without the `embeddings` feature — keeps the symbol available
-/// on no-ORT targets (Android x86_64 emulator, WASM) so language bindings that
-/// mirror the public API compile; the runtime call returns an unsupported error.
-#[cfg(all(feature = "embedding-presets", not(feature = "embeddings")))]
+/// Stub for builds without the `embeddings` or `static-embeddings` feature —
+/// keeps the symbol available so language bindings that mirror the public API
+/// compile; the runtime call returns an unsupported error.
+#[cfg(all(
+    feature = "embedding-presets",
+    not(feature = "embeddings"),
+    not(feature = "static-embeddings")
+))]
 #[cfg_attr(alef, alef(skip))]
 pub fn embed_texts(_texts: Vec<String>, _config: &core::config::EmbeddingConfig) -> crate::Result<Vec<Vec<f32>>> {
     Err(XbergError::validation(
-        "embed_texts requires the `embeddings` feature, which depends on ONNX Runtime; \
-         not available on this target (Android x86_64 emulator or WASM)",
+        "embed_texts requires the `embeddings` (ONNX Runtime) or `static-embeddings` (pure-Rust) feature; \
+         neither is enabled on this build",
     ))
 }
 
-#[cfg(all(feature = "embeddings", feature = "tokio-runtime"))]
+#[cfg(all(
+    feature = "tokio-runtime",
+    any(feature = "embeddings", feature = "static-embeddings")
+))]
 #[cfg_attr(alef, alef(skip))]
 pub use embeddings::embed_texts_async;
 
 #[cfg(all(
     feature = "embedding-presets",
     not(feature = "embeddings"),
+    not(feature = "static-embeddings"),
     feature = "tokio-runtime"
 ))]
 #[cfg_attr(alef, alef(skip))]
@@ -535,8 +543,8 @@ pub async fn embed_texts_async(
     _config: &core::config::EmbeddingConfig,
 ) -> crate::Result<Vec<Vec<f32>>> {
     Err(XbergError::validation(
-        "embed_texts_async requires the `embeddings` feature, which depends on ONNX Runtime; \
-         not available on this target (Android x86_64 emulator or WASM)",
+        "embed_texts_async requires the `embeddings` (ONNX Runtime) or `static-embeddings` (pure-Rust) feature; \
+         neither is enabled on this build",
     ))
 }
 
@@ -557,6 +565,16 @@ pub fn get_embedding_preset(name: &str) -> Option<embeddings::EmbeddingPreset> {
 #[cfg_attr(alef, alef(skip))]
 pub fn list_embedding_presets() -> Vec<String> {
     embeddings::list_presets()
+}
+
+/// Query-side instruction prefix for an embedding config, if its preset defines
+/// one (asymmetric retrieval models such as Arctic-Embed). The RAG query path
+/// prepends this to query text; document text is embedded verbatim. Returns
+/// `None` for symmetric presets, custom models, and non-preset backends.
+#[cfg(feature = "embedding-presets")]
+#[cfg_attr(alef, alef(skip))]
+pub fn embedding_query_prefix(config: &EmbeddingConfig) -> Option<String> {
+    embeddings::embedding_query_prefix(config)
 }
 
 // ── Embedding-preset stubs for builds without the feature ────────────────────

@@ -23,6 +23,10 @@ pub enum Pooling {
     Cls,
     /// Mean of all token embeddings, weighted by attention mask.
     Mean,
+    /// Use the last non-padding token embedding. Decoder-style embedding models
+    /// (e.g. Qwen3-Embedding) place the pooled representation on the final
+    /// content token rather than a prepended `[CLS]`.
+    Last,
 }
 #[cfg_attr(alef, alef(skip))]
 /// Text embedding model with thread-safe inference.
@@ -115,8 +119,8 @@ impl EmbeddingEngine {
 
         let mask_nd = ndarray::Array::from_shape_vec((batch_size, encoding_length), mask_array)
             .map_err(|e| EmbedError::Shape(e.to_string()))?;
-        // Clone mask only when mean pooling needs it for post-processing.
-        let attention_mask_for_pooling = if self.pooling == Pooling::Mean {
+        // Clone mask only when mean/last pooling needs it for post-processing.
+        let attention_mask_for_pooling = if matches!(self.pooling, Pooling::Mean | Pooling::Last) {
             Some(mask_nd.clone())
         } else {
             None
@@ -150,9 +154,20 @@ impl EmbeddingEngine {
         let tensor: ArrayView<f32, Dim<IxDynImpl>> = output_value.try_extract_array().map_err(EmbedError::Ort)?;
 
         // Pool (without normalization — caller controls normalization)
-        let pooled = match attention_mask_for_pooling {
-            Some(mask) => mean_pool(&tensor, mask)?,
-            None => cls_pool(&tensor)?,
+        let pooled = match self.pooling {
+            Pooling::Cls => cls_pool(&tensor)?,
+            Pooling::Mean => {
+                let mask = attention_mask_for_pooling.ok_or_else(|| {
+                    EmbedError::Shape("mean pooling requires the attention mask".to_string())
+                })?;
+                mean_pool(&tensor, mask)?
+            }
+            Pooling::Last => {
+                let mask = attention_mask_for_pooling.ok_or_else(|| {
+                    EmbedError::Shape("last-token pooling requires the attention mask".to_string())
+                })?;
+                last_pool(&tensor, mask)?
+            }
         };
 
         let embeddings: Vec<Vec<f32>> = pooled
@@ -218,6 +233,37 @@ fn mean_pool(tensor: &ArrayView<f32, Dim<IxDynImpl>>, attention_mask: Array2<i64
     let mask_sum = mask_sum.mapv(|x| if x == 0.0 { 1.0 } else { x });
 
     Ok(&sum / &mask_sum)
+}
+
+/// Last-token pooling — extract the final non-padding token's embedding per row.
+///
+/// Decoder-style embedding models (Qwen3-Embedding) carry the pooled
+/// representation on the last content token. The last real token is located via
+/// the attention mask (scanning from the end for the last `1`), so this is
+/// robust to either left- or right-padding. A row whose mask is entirely zero
+/// falls back to the final position.
+fn last_pool(tensor: &ArrayView<f32, Dim<IxDynImpl>>, attention_mask: Array2<i64>) -> Result<Array2<f32>, EmbedError> {
+    if tensor.dim().ndim() == 2 {
+        return Ok(tensor.slice(s![.., ..]).to_owned());
+    }
+    if tensor.dim().ndim() != 3 {
+        return Err(EmbedError::Shape(format!(
+            "Expected 2D or 3D tensor, got {:?}",
+            tensor.dim()
+        )));
+    }
+
+    let tensor3 = tensor.slice(s![.., .., ..]);
+    let (batch, seq_len, hidden) = tensor3.dim();
+    let mut pooled = Array2::<f32>::zeros((batch, hidden));
+    for b in 0..batch {
+        let last_index = (0..seq_len)
+            .rev()
+            .find(|&t| attention_mask[[b, t]] != 0)
+            .unwrap_or(seq_len - 1);
+        pooled.row_mut(b).assign(&tensor3.slice(s![b, last_index, ..]));
+    }
+    Ok(pooled)
 }
 
 /// L2-normalize a vector.

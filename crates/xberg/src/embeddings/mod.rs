@@ -37,6 +37,15 @@
 //! **Windows MinGW builds are not supported**. ONNX Runtime requires the MSVC toolchain on Windows.
 //! Please use Windows MSVC builds or disable the embeddings feature.
 //!
+//! # Static (model2vec) Embeddings
+//!
+//! The `"lightweight"` preset (and any future `Static`-backend preset) runs
+//! through a pure-Rust model2vec engine instead of ONNX Runtime, gated behind
+//! the `static-embeddings` feature. It requires no native ONNX dependency and is
+//! the only dense-embedding backend available on `no-ort-target` (WASM, Android
+//! x86_64 emulator). Select it the same way as any other preset:
+//! `EmbeddingConfig { model: EmbeddingModelType::Preset { name: "lightweight".into() }, .. }`.
+//!
 //! # Example
 //!
 //! ```rust,ignore
@@ -64,6 +73,11 @@
 /// Core ONNX embedding inference engine with thread-safe concurrent inference.
 pub mod engine;
 
+/// Pure-Rust static (model2vec) embedding inference engine — no ONNX Runtime.
+/// The only dense-embedding backend available on `no-ort-target` (WASM/Android).
+#[cfg(feature = "static-embeddings")]
+pub mod static_engine;
+
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
 
@@ -72,7 +86,17 @@ use ahash::AHashMap;
 #[cfg(feature = "embeddings")]
 use engine::EmbeddingEngine;
 #[cfg(feature = "embeddings")]
-use std::sync::{Arc, RwLock};
+use std::sync::RwLock;
+// Used by the ONNX engine cache (embeddings) and by the shared semaphore /
+// spawn_blocking config wrapper, both of which additionally require
+// `tokio-runtime` — a `static-embeddings`-only build (no tokio) never
+// references bare `Arc` here (the static engine cache uses fully-qualified
+// `std::sync::Arc`).
+#[cfg(any(
+    feature = "embeddings",
+    all(feature = "static-embeddings", feature = "tokio-runtime")
+))]
+use std::sync::Arc;
 
 #[cfg(feature = "embeddings")]
 type CachedEngine = Arc<EmbeddingEngine>;
@@ -83,16 +107,38 @@ static ENGINE_CACHE: LazyLock<RwLock<AHashMap<String, CachedEngine>>> = LazyLock
 /// Global semaphore that limits concurrent ONNX embedding inference calls.
 ///
 /// Prevents resource exhaustion when many async callers invoke `embed_texts_async`
-/// against the ONNX path (Preset/Custom variants) simultaneously. The Llm and
-/// Plugin variants short-circuit out of `embed_texts_async` before reaching the
-/// semaphore — they don't share the local-inference resource pool. The permit
+/// against the local (Preset/Custom, ONNX or static) path simultaneously. The Llm
+/// and Plugin variants short-circuit out of `embed_texts_async` before reaching
+/// the semaphore — they don't share the local-inference resource pool. The permit
 /// count is set once on first access using the thread budget, matching the pattern
 /// used elsewhere (e.g., image OCR, batch extraction).
-#[cfg(all(feature = "embeddings", feature = "tokio-runtime"))]
+#[cfg(all(
+    any(feature = "embeddings", feature = "static-embeddings"),
+    feature = "tokio-runtime"
+))]
 static EMBED_SEMAPHORE: LazyLock<Arc<tokio::sync::Semaphore>> = LazyLock::new(|| {
     let budget = crate::core::config::concurrency::resolve_thread_budget(None);
     Arc::new(tokio::sync::Semaphore::new(budget))
 });
+
+/// Inference backend that an [`EmbeddingPreset`] runs on.
+///
+/// `Onnx` presets require the `embeddings` feature (ONNX Runtime, not available on
+/// WASM/Android x86_64 emulator). `Static` presets require `static-embeddings`
+/// (pure-Rust model2vec inference, no ORT — the only dense-embedding backend
+/// available on `no-ort-target`).
+///
+/// Defaults to `Onnx` via `#[serde(default)]` so every existing preset payload
+/// (which predates this field) keeps deserializing without change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EmbeddingBackend {
+    /// ONNX Runtime transformer inference (the historical, default backend).
+    #[default]
+    Onnx,
+    /// Pure-Rust static (model2vec) inference — no ONNX Runtime.
+    Static,
+}
 
 /// Preset configurations for common RAG use cases.
 ///
@@ -111,14 +157,31 @@ pub struct EmbeddingPreset {
     pub overlap: usize,
     /// HuggingFace repository name for the model.
     pub model_repo: String,
-    /// Pooling strategy: "cls" or "mean".
+    /// Pooling strategy: "cls" or "mean". Static (model2vec) presets always mean-pool.
     pub pooling: String,
-    /// Path to the ONNX model file within the repo.
+    /// Path to the model file within the repo (ONNX file for `Onnx`, model2vec
+    /// `model.safetensors` for `Static`).
     pub model_file: String,
     /// Embedding vector dimension produced by this model.
     pub dimensions: usize,
     /// Human-readable description of the preset's intended use case.
     pub description: String,
+    /// Which inference backend this preset runs on. Defaults to `Onnx` for
+    /// back-compat with presets/payloads that predate this field.
+    #[serde(default)]
+    pub backend: EmbeddingBackend,
+    /// Sibling files downloaded alongside `model_file`. Large fp32 ONNX exports
+    /// (Qwen3-Embedding, Arctic-Embed-v2.0) store weights in an external-data
+    /// `model.onnx.data` blob that ORT loads by relative path; single-file
+    /// models leave this empty.
+    #[serde(default)]
+    pub additional_files: Vec<String>,
+    /// Instruction prefix prepended to *query-side* text before encoding.
+    /// Asymmetric retrieval models (Arctic-Embed, E5) are trained with a
+    /// `"query: "`-style prefix on queries only; document text is never
+    /// prefixed. `None` for symmetric models.
+    #[serde(default)]
+    pub query_prefix: Option<String>,
 }
 
 /// All available embedding presets.
@@ -133,6 +196,9 @@ pub static EMBEDDING_PRESETS: LazyLock<Vec<EmbeddingPreset>> = LazyLock::new(|| 
             model_file: "all-MiniLM-L6-v2/model_quantized.onnx".to_string(),
             dimensions: 384,
             description: "Fast embedding with quantized model (384 dims, ~22M params). Best for: Quick prototyping, development, resource-constrained environments.".to_string(),
+            backend: EmbeddingBackend::Onnx,
+            additional_files: Vec::new(),
+            query_prefix: None,
         },
         EmbeddingPreset {
             name: "balanced".to_string(),
@@ -143,6 +209,9 @@ pub static EMBEDDING_PRESETS: LazyLock<Vec<EmbeddingPreset>> = LazyLock::new(|| 
             model_file: "bge-base-en-v1.5/model.onnx".to_string(),
             dimensions: 768,
             description: "Balanced quality and speed (768 dims, ~109M params). Best for: General-purpose RAG, production deployments, English documents.".to_string(),
+            backend: EmbeddingBackend::Onnx,
+            additional_files: Vec::new(),
+            query_prefix: None,
         },
         EmbeddingPreset {
             name: "quality".to_string(),
@@ -153,6 +222,9 @@ pub static EMBEDDING_PRESETS: LazyLock<Vec<EmbeddingPreset>> = LazyLock::new(|| 
             model_file: "bge-large-en-v1.5/model.onnx".to_string(),
             dimensions: 1024,
             description: "High quality with larger context (1024 dims, ~335M params). Best for: Complex documents, maximum accuracy, sufficient compute resources.".to_string(),
+            backend: EmbeddingBackend::Onnx,
+            additional_files: Vec::new(),
+            query_prefix: None,
         },
         EmbeddingPreset {
             name: "multilingual".to_string(),
@@ -163,6 +235,9 @@ pub static EMBEDDING_PRESETS: LazyLock<Vec<EmbeddingPreset>> = LazyLock::new(|| 
             model_file: "multilingual-e5-base/model.onnx".to_string(),
             dimensions: 768,
             description: "Multilingual support (768 dims, 100+ languages). Best for: International documents, mixed-language content, global applications.".to_string(),
+            backend: EmbeddingBackend::Onnx,
+            additional_files: Vec::new(),
+            query_prefix: None,
         },
         EmbeddingPreset {
             name: "gte-modernbert-base".to_string(),
@@ -173,6 +248,48 @@ pub static EMBEDDING_PRESETS: LazyLock<Vec<EmbeddingPreset>> = LazyLock::new(|| 
             model_file: "gte-modernbert-base/model.onnx".to_string(),
             dimensions: 768,
             description: "GTE ModernBERT base (768 dims, 2026-gen, 8192 context). Best for: general-purpose English RAG with long-context ModernBERT tokenization.".to_string(),
+            backend: EmbeddingBackend::Onnx,
+            additional_files: Vec::new(),
+            query_prefix: None,
+        },
+        EmbeddingPreset {
+            name: "lightweight".to_string(),
+            chunk_size: 512,
+            overlap: 50,
+            model_repo: "xberg-io/embedding-models".to_string(),
+            pooling: "mean".to_string(),
+            model_file: "potion-base-8m/model.safetensors".to_string(),
+            dimensions: 256,
+            description: "Static (model2vec) embedding — pure Rust, no ONNX Runtime (256 dims, ~7.5M params). Best for: WASM, Android, and other no-ORT targets; extremely fast CPU-only inference.".to_string(),
+            backend: EmbeddingBackend::Static,
+            additional_files: Vec::new(),
+            query_prefix: None,
+        },
+        EmbeddingPreset {
+            name: "arctic-embed-m-v2.0".to_string(),
+            chunk_size: 1024,
+            overlap: 100,
+            model_repo: "xberg-io/embedding-models".to_string(),
+            pooling: "cls".to_string(),
+            model_file: "arctic-embed-m-v2.0/model.onnx".to_string(),
+            dimensions: 768,
+            description: "Snowflake Arctic-Embed-M v2.0 (768 dims, multilingual, 2026-gen). Asymmetric retrieval: queries are prefixed with \"query: \". Best for: multilingual RAG where query/document roles are known.".to_string(),
+            backend: EmbeddingBackend::Onnx,
+            additional_files: vec!["arctic-embed-m-v2.0/model.onnx.data".to_string()],
+            query_prefix: Some("query: ".to_string()),
+        },
+        EmbeddingPreset {
+            name: "qwen3-embedding-0.6b".to_string(),
+            chunk_size: 2000,
+            overlap: 200,
+            model_repo: "xberg-io/embedding-models".to_string(),
+            pooling: "last".to_string(),
+            model_file: "qwen3-embedding-0.6b/model.onnx".to_string(),
+            dimensions: 1024,
+            description: "Qwen3-Embedding 0.6B (1024 dims, decoder-style last-token pooling, 32k context, multilingual, 2026-gen). Best for: highest-quality multilingual/long-context retrieval when compute allows.".to_string(),
+            backend: EmbeddingBackend::Onnx,
+            additional_files: vec!["qwen3-embedding-0.6b/model.onnx.data".to_string()],
+            query_prefix: None,
         },
     ]
 });
@@ -180,6 +297,21 @@ pub static EMBEDDING_PRESETS: LazyLock<Vec<EmbeddingPreset>> = LazyLock::new(|| 
 /// Get a preset by name (returns an owned clone for FFI compatibility).
 pub(crate) fn get_preset(name: &str) -> Option<EmbeddingPreset> {
     EMBEDDING_PRESETS.iter().find(|p| p.name == name).cloned()
+}
+
+/// Query-side instruction prefix for the given embedding config, if the
+/// resolved preset defines one.
+///
+/// Asymmetric retrieval models (e.g. Arctic-Embed) are trained with a
+/// `"query: "`-style prefix on the query only — the RAG query path prepends
+/// this before embedding, while document text is embedded verbatim. Returns
+/// `None` for symmetric presets, custom models, and non-preset backends.
+#[cfg_attr(alef, alef(skip))]
+pub fn embedding_query_prefix(config: &crate::core::config::EmbeddingConfig) -> Option<String> {
+    match &config.model {
+        crate::core::config::EmbeddingModelType::Preset { name } => get_preset(name).and_then(|p| p.query_prefix),
+        _ => None,
+    }
 }
 
 /// Get the chunk_size for a preset by name.
@@ -212,24 +344,40 @@ fn embed_err(msg: String) -> crate::XbergError {
 const DEFAULT_EMBEDDING_MAX_SEQUENCE_LENGTH: usize = 512;
 
 /// Resolve model info (repo, model file, pooling) from an EmbeddingModelType config.
+///
+/// Only handles the ONNX path — callers must reject `Static`-backend presets
+/// before calling this (see [`embed_texts`]'s dispatch, which branches on
+/// `preset.backend` first).
 #[cfg(feature = "embeddings")]
 fn resolve_model_info(
     model_type: &crate::core::config::EmbeddingModelType,
-) -> crate::Result<(String, String, engine::Pooling)> {
+) -> crate::Result<(String, String, Vec<String>, engine::Pooling)> {
     match model_type {
         crate::core::config::EmbeddingModelType::Preset { name } => {
             let preset = get_preset(name)
                 .ok_or_else(|| crate::XbergError::embedding(format!("Unknown embedding preset: {name}")))?;
+            if preset.backend == EmbeddingBackend::Static {
+                return Err(crate::XbergError::embedding(format!(
+                    "Preset '{name}' uses the static (model2vec) backend, which has no ONNX model to warm or download. Rebuild with --features static-embeddings and call embed_texts directly."
+                )));
+            }
             let pooling = match preset.pooling.as_str() {
                 "cls" => engine::Pooling::Cls,
+                "last" => engine::Pooling::Last,
                 _ => engine::Pooling::Mean,
             };
-            Ok((preset.model_repo, preset.model_file, pooling))
+            Ok((preset.model_repo, preset.model_file, preset.additional_files, pooling))
         }
         crate::core::config::EmbeddingModelType::Custom { model_id, .. } => {
-            // For custom models, default to mean pooling and standard model path.
+            // For custom models, default to mean pooling and standard model path
+            // (single self-contained ONNX file — no sibling weight blobs).
             // Users providing custom HF models should ensure the repo has the expected layout.
-            Ok((model_id.clone(), "onnx/model.onnx".to_string(), engine::Pooling::Mean))
+            Ok((
+                model_id.clone(),
+                "onnx/model.onnx".to_string(),
+                Vec::new(),
+                engine::Pooling::Mean,
+            ))
         }
         crate::core::config::EmbeddingModelType::Llm { .. } => Err(crate::XbergError::embedding(
             "LLM embeddings have no local model to warm or download — the provider serves them over HTTP at embed time.",
@@ -248,6 +396,7 @@ fn resolve_model_info(
 fn get_or_init_engine(
     repo_name: &str,
     model_file: &str,
+    additional_files: &[String],
     pooling: engine::Pooling,
     max_sequence_length: usize,
     cache_dir: Option<std::path::PathBuf>,
@@ -293,9 +442,12 @@ fn get_or_init_engine(
 
         crate::ort_discovery::ensure_ort_available();
 
-        // Download, tokenize, and build the ORT session via the shared onnx helpers
-        // (embeddings download no sibling weight blobs, so `additional_files` is empty).
-        let files = crate::onnx::download_model_files(repo_name, model_file, &[], &cache_directory, embed_err)?;
+        // Download, tokenize, and build the ORT session via the shared onnx helpers.
+        // Most presets are a single self-contained ONNX file; large fp32 exports
+        // (Qwen3-Embedding, Arctic-v2.0) additionally ship an external-data
+        // `model.onnx.data` sibling that ORT loads by relative path at session build.
+        let files =
+            crate::onnx::download_model_files(repo_name, model_file, additional_files, &cache_directory, embed_err)?;
         let tokenizer = crate::onnx::load_tokenizer(&files, max_sequence_length, embed_err)?;
         let session = crate::onnx::build_session(&files.model, accel.as_ref(), embed_err)?;
 
@@ -319,10 +471,11 @@ pub fn warm_model(
     model_type: &crate::core::config::EmbeddingModelType,
     cache_dir: Option<std::path::PathBuf>,
 ) -> crate::Result<()> {
-    let (repo, model_file, pooling) = resolve_model_info(model_type)?;
+    let (repo, model_file, additional_files, pooling) = resolve_model_info(model_type)?;
     get_or_init_engine(
         &repo,
         &model_file,
+        &additional_files,
         pooling,
         DEFAULT_EMBEDDING_MAX_SEQUENCE_LENGTH,
         cache_dir,
@@ -332,7 +485,7 @@ pub fn warm_model(
 }
 
 /// Normalize an embedding vector in-place (L2 normalization).
-#[cfg(feature = "embeddings")]
+#[cfg(any(feature = "embeddings", feature = "static-embeddings"))]
 fn normalize_in_place(embedding: &mut [f32]) {
     let magnitude: f32 = embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
     if magnitude > f32::EPSILON {
@@ -353,7 +506,7 @@ fn normalize_in_place(embedding: &mut [f32]) {
 ///
 /// - [`crate::XbergError::Validation`] if `embeddings.len() != expected_count`.
 /// - [`crate::XbergError::Validation`] if any `embeddings[i].len() != expected_dim`.
-#[cfg(feature = "embeddings")]
+#[cfg(any(feature = "embeddings", feature = "static-embeddings"))]
 fn validate_embedding_shape(
     embeddings: &[Vec<f32>],
     expected_count: usize,
@@ -387,7 +540,7 @@ fn validate_embedding_shape(
 }
 
 /// Apply normalization to a batch of embeddings (parallel for large batches).
-#[cfg(feature = "embeddings")]
+#[cfg(any(feature = "embeddings", feature = "static-embeddings"))]
 fn normalize_embeddings(embeddings: &mut [Vec<f32>]) {
     const PARALLEL_THRESHOLD: usize = 64;
     if embeddings.len() >= PARALLEL_THRESHOLD {
@@ -467,7 +620,7 @@ pub(crate) fn generate_embeddings_for_chunks(
 /// assert_eq!(embeddings.len(), 2);
 /// assert_eq!(embeddings[0].len(), 768); // balanced preset = 768 dims
 /// ```
-#[cfg(feature = "embeddings")]
+#[cfg(any(feature = "embeddings", feature = "static-embeddings"))]
 #[doc(hidden)]
 pub fn embed_texts<T: AsRef<str>>(
     texts: &[T],
@@ -492,7 +645,12 @@ pub fn embed_texts<T: AsRef<str>>(
     match &config.model {
         // TODO(wasm-llm): liter-llm has a wasm-http backend, but embedding
         // dispatch still needs a wasm runtime path before this cfg can include wasm32.
-        #[cfg(all(feature = "liter-llm", not(target_arch = "wasm32")))]
+        // `tokio-runtime` is required in addition to `liter-llm` — this arm drives
+        // `tokio::runtime::Handle`/`block_in_place`/`global_runtime` directly, and
+        // `liter-llm`'s own feature definition does not imply `tokio-runtime` (unlike
+        // `embeddings`, which always does). A `static-embeddings + liter-llm` build
+        // without `tokio-runtime` falls through to the arm below instead.
+        #[cfg(all(feature = "liter-llm", feature = "tokio-runtime", not(target_arch = "wasm32")))]
         crate::core::config::EmbeddingModelType::Llm { llm } => {
             let normalize = config.normalize;
             // If we're already inside an async runtime (e.g. server mode),
@@ -513,10 +671,15 @@ pub fn embed_texts<T: AsRef<str>>(
         }
         // TODO(wasm-llm): keep wasm in the MissingDependency branch until hosted
         // embedding calls are wired for wasm runtimes.
-        #[cfg(any(not(feature = "liter-llm"), target_arch = "wasm32"))]
+        #[cfg(any(not(feature = "liter-llm"), not(feature = "tokio-runtime"), target_arch = "wasm32"))]
         crate::core::config::EmbeddingModelType::Llm { .. } => Err(crate::XbergError::MissingDependency(
-            "LLM embeddings require the 'liter-llm' feature. Rebuild with --features liter-llm".into(),
+            "LLM embeddings require the 'liter-llm' and 'tokio-runtime' features. Rebuild with --features liter-llm"
+                .into(),
         )),
+        // The Plugin arm's `embed` is an async trait method, so driving it requires
+        // a tokio executor. A `static-embeddings`-only build (no `tokio-runtime`)
+        // cannot reach this arm — see the fallback arm below.
+        #[cfg(feature = "tokio-runtime")]
         crate::core::config::EmbeddingModelType::Plugin { name } => {
             let registry = crate::plugins::get_embedding_backend_registry();
             // Clone the Arc out of the lock along with the dimensions captured
@@ -569,37 +732,188 @@ pub fn embed_texts<T: AsRef<str>>(
 
             Ok(embeddings)
         }
+        #[cfg(not(feature = "tokio-runtime"))]
+        crate::core::config::EmbeddingModelType::Plugin { .. } => Err(crate::XbergError::MissingDependency(
+            "Plugin embedding backends require the 'tokio-runtime' feature. Rebuild with --features tokio-runtime"
+                .into(),
+        )),
         crate::core::config::EmbeddingModelType::Preset { .. }
-        | crate::core::config::EmbeddingModelType::Custom { .. } => {
-            // Local ONNX path for Preset and Custom model types.
-            let chunk_count = texts.len();
-            let (repo, model_file, pooling) = resolve_model_info(&config.model)?;
-            let engine = get_or_init_engine(
-                &repo,
-                &model_file,
-                pooling,
-                config
-                    .max_sequence_length
-                    .unwrap_or(DEFAULT_EMBEDDING_MAX_SEQUENCE_LENGTH),
-                config.cache_dir.clone(),
-                config.acceleration.clone(),
-            )?;
+        | crate::core::config::EmbeddingModelType::Custom { .. } => embed_texts_local(texts, config),
+    }
+}
 
-            let text_refs: Vec<&str> = texts.iter().map(|t| t.as_ref()).collect();
-            let mut embeddings = engine.embed(&text_refs, config.batch_size).map_err(|e| {
-                crate::XbergError::embedding(format!(
-                    "Failed to generate embeddings for {chunk_count} texts (model={:?}, batch_size={}): {e}",
-                    config.model, config.batch_size
-                ))
-            })?;
+/// Local (non-hosted) dispatch for `Preset`/`Custom` model types: resolves the
+/// preset's [`EmbeddingBackend`] and routes to either the ONNX engine or the
+/// pure-Rust static (model2vec) engine.
+///
+/// Split out of [`embed_texts`] so each backend's `#[cfg]` block stays a single
+/// self-contained arm instead of interleaving `cfg` attributes mid-match.
+#[cfg(any(feature = "embeddings", feature = "static-embeddings"))]
+fn embed_texts_local<T: AsRef<str>>(
+    texts: &[T],
+    config: &crate::core::config::EmbeddingConfig,
+) -> crate::Result<Vec<Vec<f32>>> {
+    let backend = resolve_local_backend(&config.model)?;
 
-            if config.normalize {
-                normalize_embeddings(&mut embeddings);
-            }
+    match backend {
+        #[cfg(feature = "embeddings")]
+        EmbeddingBackend::Onnx => embed_texts_onnx(texts, config),
+        #[cfg(not(feature = "embeddings"))]
+        EmbeddingBackend::Onnx => Err(crate::XbergError::MissingDependency(
+            "ONNX-backed embedding presets require the 'embeddings' feature. Rebuild with --features embeddings".into(),
+        )),
+        #[cfg(feature = "static-embeddings")]
+        EmbeddingBackend::Static => embed_texts_static(texts, config),
+        #[cfg(not(feature = "static-embeddings"))]
+        EmbeddingBackend::Static => Err(crate::XbergError::MissingDependency(
+            "Static (model2vec) embedding presets require the 'static-embeddings' feature. \
+             Rebuild with --features static-embeddings"
+                .into(),
+        )),
+    }
+}
 
-            Ok(embeddings)
+/// Resolve which [`EmbeddingBackend`] a `Preset`/`Custom` model type runs on.
+///
+/// `Custom` model types have no preset metadata to consult — they always
+/// target the ONNX path (matches the historical behavior of `resolve_model_info`
+/// / `get_or_init_engine`, which assume an ONNX-shaped custom HF repo).
+#[cfg(any(feature = "embeddings", feature = "static-embeddings"))]
+fn resolve_local_backend(model_type: &crate::core::config::EmbeddingModelType) -> crate::Result<EmbeddingBackend> {
+    match model_type {
+        crate::core::config::EmbeddingModelType::Preset { name } => get_preset(name)
+            .map(|p| p.backend)
+            .ok_or_else(|| crate::XbergError::embedding(format!("Unknown embedding preset: {name}"))),
+        crate::core::config::EmbeddingModelType::Custom { .. } => Ok(EmbeddingBackend::Onnx),
+        // Llm/Plugin never reach this helper — embed_texts/embed_texts_async
+        // dispatch them before falling through to embed_texts_local.
+        crate::core::config::EmbeddingModelType::Llm { .. }
+        | crate::core::config::EmbeddingModelType::Plugin { .. } => {
+            unreachable!("Llm and Plugin model types are dispatched before embed_texts_local is called")
         }
     }
+}
+
+/// ONNX-backed local embedding path (the historical `Preset`/`Custom` behavior).
+#[cfg(feature = "embeddings")]
+fn embed_texts_onnx<T: AsRef<str>>(
+    texts: &[T],
+    config: &crate::core::config::EmbeddingConfig,
+) -> crate::Result<Vec<Vec<f32>>> {
+    let chunk_count = texts.len();
+    let (repo, model_file, additional_files, pooling) = resolve_model_info(&config.model)?;
+    let engine = get_or_init_engine(
+        &repo,
+        &model_file,
+        &additional_files,
+        pooling,
+        config
+            .max_sequence_length
+            .unwrap_or(DEFAULT_EMBEDDING_MAX_SEQUENCE_LENGTH),
+        config.cache_dir.clone(),
+        config.acceleration.clone(),
+    )?;
+
+    let text_refs: Vec<&str> = texts.iter().map(|t| t.as_ref()).collect();
+    let mut embeddings = engine.embed(&text_refs, config.batch_size).map_err(|e| {
+        crate::XbergError::embedding(format!(
+            "Failed to generate embeddings for {chunk_count} texts (model={:?}, batch_size={}): {e}",
+            config.model, config.batch_size
+        ))
+    })?;
+
+    if config.normalize {
+        normalize_embeddings(&mut embeddings);
+    }
+
+    Ok(embeddings)
+}
+
+/// Pure-Rust static (model2vec) local embedding path — no ONNX Runtime. The
+/// only dense-embedding backend available on `no-ort-target` (WASM, Android
+/// x86_64 emulator).
+#[cfg(feature = "static-embeddings")]
+fn embed_texts_static<T: AsRef<str>>(
+    texts: &[T],
+    config: &crate::core::config::EmbeddingConfig,
+) -> crate::Result<Vec<Vec<f32>>> {
+    let crate::core::config::EmbeddingModelType::Preset { name } = &config.model else {
+        return Err(crate::XbergError::embedding(
+            "Static embedding backend only supports EmbeddingModelType::Preset, not Custom".to_string(),
+        ));
+    };
+    let preset =
+        get_preset(name).ok_or_else(|| crate::XbergError::embedding(format!("Unknown embedding preset: {name}")))?;
+
+    let cache_directory = static_engine_cache_dir(config.cache_dir.clone());
+    let engine = get_or_init_static_engine(&preset.model_repo, &preset.model_file, &cache_directory)?;
+
+    let text_refs: Vec<&str> = texts.iter().map(|t| t.as_ref()).collect();
+    let mut embeddings = engine.embed(&text_refs, config.batch_size, config.max_sequence_length);
+
+    validate_embedding_shape(&embeddings, texts.len(), preset.dimensions, &preset.name)?;
+
+    if config.normalize {
+        normalize_embeddings(&mut embeddings);
+    }
+
+    Ok(embeddings)
+}
+
+/// Resolve the cache directory for static-embedding models (own subdir so a
+/// `lightweight` download doesn't collide with `embeddings`' ONNX cache keys).
+#[cfg(feature = "static-embeddings")]
+fn static_engine_cache_dir(cache_dir: Option<std::path::PathBuf>) -> std::path::PathBuf {
+    cache_dir.unwrap_or_else(|| crate::cache_dir::resolve_cache_dir("static-embeddings"))
+}
+
+#[cfg(feature = "static-embeddings")]
+type CachedStaticEngine = std::sync::Arc<static_engine::StaticEmbeddingEngine>;
+
+#[cfg(feature = "static-embeddings")]
+static STATIC_ENGINE_CACHE: LazyLock<std::sync::RwLock<ahash::AHashMap<String, CachedStaticEngine>>> =
+    LazyLock::new(|| std::sync::RwLock::new(ahash::AHashMap::new()));
+
+/// Get or initialize a static-embedding engine from cache, downloading model
+/// files on first use (native/Android only — see [`static_engine`]).
+#[cfg(feature = "static-embeddings")]
+fn get_or_init_static_engine(
+    repo_name: &str,
+    model_file: &str,
+    cache_directory: &std::path::Path,
+) -> crate::Result<CachedStaticEngine> {
+    let engine_key = format!("{repo_name}_{model_file}_{}", cache_directory.display());
+
+    {
+        match STATIC_ENGINE_CACHE.read() {
+            Ok(cache) => {
+                if let Some(cached) = cache.get(&engine_key) {
+                    return Ok(std::sync::Arc::clone(cached));
+                }
+            }
+            Err(poison) => {
+                if let Some(cached) = poison.get_ref().get(&engine_key) {
+                    return Ok(std::sync::Arc::clone(cached));
+                }
+            }
+        }
+    }
+
+    let mut cache = match STATIC_ENGINE_CACHE.write() {
+        Ok(guard) => guard,
+        Err(poison) => poison.into_inner(),
+    };
+    if let Some(cached) = cache.get(&engine_key) {
+        return Ok(std::sync::Arc::clone(cached));
+    }
+
+    let engine = std::sync::Arc::new(static_engine::download_and_build(
+        repo_name,
+        model_file,
+        cache_directory,
+    )?);
+    cache.insert(engine_key, std::sync::Arc::clone(&engine));
+    Ok(engine)
 }
 
 /// Generate embeddings asynchronously for a list of text strings.
@@ -631,7 +945,10 @@ pub fn embed_texts<T: AsRef<str>>(
 ///     &EmbeddingConfig::default(),
 /// ).await?;
 /// ```
-#[cfg(all(feature = "tokio-runtime", feature = "embeddings"))]
+#[cfg(all(
+    feature = "tokio-runtime",
+    any(feature = "embeddings", feature = "static-embeddings")
+))]
 #[cfg_attr(alef, alef(skip))]
 pub async fn embed_texts_async<T: AsRef<str> + Send + 'static>(
     texts: Vec<T>,
@@ -656,7 +973,8 @@ pub async fn embed_texts_async<T: AsRef<str> + Send + 'static>(
 
     // Dispatch is exhaustive over EmbeddingModelType so a future variant must add an arm here.
     // Llm is cfg-gated; Plugin awaits the host-language backend directly (no spawn_blocking
-    // round-trip since the trait is async); Preset/Custom fall through to the local ONNX path.
+    // round-trip since the trait is async); Preset/Custom fall through to the local path
+    // (ONNX or static, resolved by embed_texts -> embed_texts_local's backend dispatch).
     match &config.model {
         // TODO(wasm-llm): liter-llm has a wasm-http backend, but embedding
         // dispatch still needs a wasm runtime path before this cfg can include wasm32.
@@ -706,11 +1024,11 @@ pub async fn embed_texts_async<T: AsRef<str> + Send + 'static>(
         }
         crate::core::config::EmbeddingModelType::Preset { .. }
         | crate::core::config::EmbeddingModelType::Custom { .. } => {
-            // Fall through to ONNX path below.
+            // Fall through to the local (ONNX or static) path below.
         }
     }
 
-    // Acquire a permit from the global semaphore to limit concurrent ONNX
+    // Acquire a permit from the global semaphore to limit concurrent local
     // inference calls, preventing resource exhaustion under high fan-out.
     let _permit = EMBED_SEMAPHORE
         .acquire()
@@ -735,17 +1053,78 @@ mod tests {
         assert!(get_preset("fast").is_some());
         assert!(get_preset("quality").is_some());
         assert!(get_preset("multilingual").is_some());
+        assert!(get_preset("gte-modernbert-base").is_some());
+        assert!(get_preset("lightweight").is_some());
         assert!(get_preset("nonexistent").is_none());
     }
 
     #[test]
     fn test_list_presets() {
         let presets = list_presets();
-        assert_eq!(presets.len(), 4);
+        // Kept as an exact count (not just "contains") so this test fails loudly
+        // whenever a preset is added or removed without an update here.
+        assert_eq!(presets.len(), 8, "expected exactly 8 presets, got: {presets:?}");
         assert!(presets.iter().any(|n| n == "fast"));
         assert!(presets.iter().any(|n| n == "balanced"));
         assert!(presets.iter().any(|n| n == "quality"));
         assert!(presets.iter().any(|n| n == "multilingual"));
+        assert!(presets.iter().any(|n| n == "gte-modernbert-base"));
+        assert!(presets.iter().any(|n| n == "lightweight"));
+        assert!(presets.iter().any(|n| n == "arctic-embed-m-v2.0"));
+        assert!(presets.iter().any(|n| n == "qwen3-embedding-0.6b"));
+    }
+
+    #[test]
+    fn asymmetric_presets_carry_query_prefix_and_external_data() {
+        let arctic = get_preset("arctic-embed-m-v2.0").expect("arctic preset must exist");
+        assert_eq!(arctic.query_prefix.as_deref(), Some("query: "));
+        assert_eq!(arctic.pooling, "cls");
+        assert_eq!(arctic.dimensions, 768);
+        assert_eq!(arctic.additional_files, vec!["arctic-embed-m-v2.0/model.onnx.data".to_string()]);
+
+        let qwen3 = get_preset("qwen3-embedding-0.6b").expect("qwen3-embedding preset must exist");
+        assert_eq!(qwen3.query_prefix, None);
+        assert_eq!(qwen3.pooling, "last");
+        assert_eq!(qwen3.dimensions, 1024);
+        assert_eq!(qwen3.additional_files, vec!["qwen3-embedding-0.6b/model.onnx.data".to_string()]);
+    }
+
+    #[test]
+    fn lightweight_preset_uses_static_backend() {
+        let preset = get_preset("lightweight").expect("lightweight preset must exist");
+        assert_eq!(preset.backend, EmbeddingBackend::Static);
+        assert_eq!(preset.dimensions, 256);
+        assert_eq!(preset.model_repo, "xberg-io/embedding-models");
+    }
+
+    #[test]
+    fn every_onnx_preset_defaults_to_onnx_backend() {
+        for preset in EMBEDDING_PRESETS.iter().filter(|p| p.name != "lightweight") {
+            assert_eq!(
+                preset.backend,
+                EmbeddingBackend::Onnx,
+                "preset '{}' should default to the Onnx backend",
+                preset.name
+            );
+        }
+    }
+
+    #[test]
+    fn embedding_backend_deserializes_missing_field_as_onnx() {
+        // Back-compat: a preset payload predating the `backend` field must still
+        // deserialize, defaulting to Onnx via #[serde(default)].
+        let json = r#"{
+            "name": "custom",
+            "chunk_size": 512,
+            "overlap": 50,
+            "model_repo": "org/repo",
+            "pooling": "mean",
+            "model_file": "model.onnx",
+            "dimensions": 384,
+            "description": "test"
+        }"#;
+        let preset: EmbeddingPreset = serde_json::from_str(json).expect("should deserialize without backend field");
+        assert_eq!(preset.backend, EmbeddingBackend::Onnx);
     }
 
     #[test]
@@ -855,7 +1234,12 @@ mod tests {
     }
 
     // --- Plugin variant dispatch tests -----------------------------------
-
+    // Requires `tokio-runtime`: the Plugin dispatch arm and `embed_texts_async`
+    // (exercised below) are only compiled with tokio present, and this module
+    // uses `#[tokio::test]` throughout. A `static-embeddings`-only build (no
+    // `embeddings`, no `tokio-runtime`) would otherwise fail to compile this
+    // module even though it never reaches Plugin dispatch at runtime.
+    #[cfg(feature = "tokio-runtime")]
     mod plugin_dispatch {
         use crate::plugins::embedding::{register_embedding_backend, unregister_embedding_backend};
         use crate::plugins::{EmbeddingBackend, Plugin};

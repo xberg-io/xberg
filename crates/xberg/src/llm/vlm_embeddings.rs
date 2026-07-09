@@ -6,10 +6,19 @@
 //! and is useful when a provider-hosted model is preferred or when ONNX
 //! Runtime is not available.
 
-#[cfg(feature = "embeddings")]
+// Module is already gated on `liter-llm` by `llm/mod.rs`. `tokio-runtime` and
+// `not(wasm32)` match `embed_texts`'s Llm dispatch arm, this module's only
+// caller: that arm drives `tokio::runtime::Handle`/`block_in_place`/
+// `global_runtime` directly, and `liter-llm`'s own feature definition does not
+// imply `tokio-runtime` (unlike `embeddings`, which always does) — so a
+// `static-embeddings + liter-llm` build without `tokio-runtime` must not
+// compile this module in, or it goes dead-code (the caller falls back to the
+// MissingDependency arm instead). wasm32 has no LLM-hosted embedding transport
+// wired up yet (see the TODO(wasm-llm) notes at each call site).
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 use liter_llm::{EmbeddingInput, EmbeddingRequest, LlmClient};
 
-#[cfg(feature = "embeddings")]
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 use crate::core::config::LlmConfig;
 
 /// Generate embeddings using a provider-hosted model via liter-llm.
@@ -31,7 +40,7 @@ use crate::core::config::LlmConfig;
 ///
 /// - `XbergError::Embedding` if the API call fails or returns unexpected data
 /// - `XbergError::MissingDependency` if the liter-llm client cannot be created
-#[cfg(feature = "embeddings")]
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 pub(crate) async fn embed_via_llm<T: AsRef<str>>(
     texts: &[T],
     config: &LlmConfig,
@@ -85,7 +94,7 @@ pub(crate) async fn embed_via_llm<T: AsRef<str>>(
 }
 
 /// L2-normalize an embedding vector in-place.
-#[cfg(any(feature = "embeddings", test))]
+#[cfg(any(all(feature = "tokio-runtime", not(target_arch = "wasm32")), test))]
 fn normalize_l2(embedding: &mut [f32]) {
     let magnitude: f32 = embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
     if magnitude > f32::EPSILON {
