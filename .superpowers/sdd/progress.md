@@ -238,3 +238,118 @@
 #   - Boucle: dispatch Sonnet 5 (brief auto-suffisant, pas de commit) -> review Opus -> commit.
 #   - Chips Rust NON bloquants: task_544b8b78 (extraction_timeout_secs), task_df55eaad (keywords wiring dans xberg::extract).
 #     Chip BLOQUANT query: task_f23bad12 (PrimaryScore) -> à faire en 1er (cf ci-dessus).
+
+# ============================================================
+# ★★★ SESSION 2 — 2026-07-08 ~17:20 ★★★
+# ============================================================
+# 1ER GESTE ✅ DONE + COMMITÉ (5c1b4ee, 9e commit) — QUERY DÉBLOQUÉ.
+#   Fix Rust PrimaryScore: variantes newtype scalaires Vector(f32)/FullText(f32)
+#   -> struct variants { score } (sérialisables en internally-tagged tag="kind").
+#   Alignés: types.rs, backends/sqlite.rs, backends/memory.rs, store.ts, types.ts.
+#   Test ingest.test.ts flippé (throws -> success): engine.query renvoie
+#   { mode:"vector", chunks:[{...,score,primary_score:{kind:"vector",score}}], primary_latency_ms }.
+#   Vérif: npx vitest run tests/ingest.test.ts -> 3 passed, 1 skipped (native-gated). END-TO-END OK.
+#
+# INCIDENT BUILD (résolu): wasm-pack a échoué à auto-installer wasm-bindgen-cli 0.2.126
+#   (cargo install -> timeouts réseau IPv6/broken-pipe). FIX DURABLE: binaire précompilé
+#   téléchargé en IPv4 -> ~/.cargo/bin/wasm-bindgen (0.2.126). Rebuild OK (11m). Shim env recréé.
+#   -> au prochain rebuild B, PAS besoin de refaire: wasm-bindgen est sur le PATH.
+#
+# PREK/HOOKS: `prek` PAS sur PATH -> `uvx prek` (binaire installé dans ~/.cache/uv OK) MAIS
+#   `prek run` stalle sur setup des envs de hooks distants (réseau). AUCUN git hook pre-commit
+#   installé (.git/hooks/pre-commit absent) -> git commit ne déclenche rien (comme les 8 commits
+#   précédents). Checks équivalents lancés en offline: cargo fmt --check + cargo check (Rust) OK,
+#   tsc via `npm run build` de C OK, vitest transforme/typecheck le test. oxfmt/oxlint (style pur)
+#   non lançables offline -> sautés, sans gate.
+#
+# TASK 6 (query) — DÉCISION D'ARCHI (réconciliation, à implémenter):
+#   engine.query(q,collection,k) est LOSSY: force mode=vector, jette filter/include_document,
+#   pas de rerank. Le store C in-memory ne supporte QUE mode "vector" (throw sinon), injection
+#   n'a PAS de reranker. DONC pour honorer le contrat query_corpus au mieux:
+#   -> exposer store+embedder depuis engine.ts (getRuntimeStore()/getEmbedder() ou getInjection()),
+#      embed la query via embedder, construire RetrieveQuery {mode:"vector"(coercé, documenté),
+#      top_k, filter, include_content, include_document, group_by_document:false}, appeler
+#      store.retrieve(collection, query). Préserve filter+include_document (correctness).
+#      rerank_results / mode hybrid|full_text|graph / graph_depth: dégrader proprement
+#      (impossibles avec ce backend) -> chip de suivi pour quand le store wasm gagnera ces capacités.
+#   Fichiers: mcp-server/src/tools/query.ts (retarget), mcp-server/src/engine.ts (+export injection),
+#             mcp-server/tests/query.test.ts (créer). Garder Zod schema IDENTIQUE (public API).
+#
+# BOUCLE: dispatch Sonnet 5 (brief auto-suffisant) -> review Opus -> commit. Toujours source env.sh.
+
+# ---- TASK 7 ✅ (2026-07-08 ~17:55) ----
+# 7a DONE + COMMITÉ (df8efe0, 11e commit): collection/document/stats/reports retargetés
+#   vers getRuntime().store. Nouveau collection-registry.ts. Réconciliations R1-R7 (object API,
+#   error-string ensureCollection/dropCollection, distance_metric inner_product->innerproduct,
+#   default embedding_dim 768->384 [wasm embedder MiniLM fixe], fetch-by-id full_text->vector+filter).
+#   tests/collections.test.ts 4/4, tsc clean.
+# 7b = DÉCISION: intelligence.ts + media.ts + web.ts RESTENT NATIFS (conforme au plan
+#   "keep native where engine has no equivalent"). Preuves:
+#     - intelligence.ts: extract_entities backend llm/onnx-custom + structured_extract => LLM.
+#       engine.ner n'accepte QUE {categories} (NER injecté GLiNER2-PII fixe), pas de backend/hfRepo/llm.
+#       structured_extraction (LLM) indisponible en wasm.
+#     - media.ts transcribe_audio: Whisper ONNX => build wasm est no-ort-target (pas d'ORT). Absent.
+#     - web.ts scrape_url: crawl navigateur headless => pas de browser en wasm (url-ingestion couvre
+#       juste le fetch single-page HTTP, pas le crawl/browser).
+#   Ces 3 fichiers n'importent PAS store.js (seulement `import type` de @xberg-io/xberg, effacé au build)
+#   -> non impactés par la suppression de store.ts (Task 12). Ils register OK, erreur seulement à l'appel
+#   si natif absent (statu quo).
+#   CHIP: quand le moteur wasm gagnera transcription/LLM-NER/structured/browser -> retarger. (task à créer)
+#   Note CHANGELOG (Task 11): documenter que intelligence/media/web restent sur le chemin natif.
+# cache.ts: getCacheDir relocation -> à faire dans Task 12 (qui supprime store.ts), cf plan Task 12 Step 3.
+
+# ---- TASK 8 ✅ + TASK 11 ✅ (2026-07-08 ~18:10) ----
+# 8: caa1169 - tests/pii_parity.test.ts. Ancres EMAIL/SSN/CREDIT_CARD/IP_ADDRESS matchent exact
+#    (count+span EMAIL) engine.detect_pii vs TS detect.ts. PHONE soft: engine=2 vs ts=1 (over-match
+#    digit runs adjacents) -> chip non-bloquant. Fixtures pii_input.txt + pii_expected.json committées.
+# 11: c9684c5 - CHANGELOG Unreleased. OCR = PaddleOCR (ppu-paddle-ocr/ORT) VÉRIFIÉ dans C ocr.ts.
+#    Documenté: migration MCP, dim 384, query vector-only, groupes natifs restants, rehydrate in-wasm, PrimaryScore.
+#
+# ---- TASK 9 ⏳ EN COURS (Sonnet 5): tests/e2e.test.ts (13 groupes register + pipeline wasm ingest->query->pii->redact->stats)
+#
+# ---- TASK 12 PLAN (cartographié read-only, à faire inline après T9) ----
+#   store.ts exports: getStore/ensureCollectionWithDim/withTimeout = MORTS (0 ref hors store.ts).
+#   Seul getCacheDir vivant (rehydrate.ts + cache.ts, 5 refs). track/untrack/listTracked -> déjà migrés
+#   vers collection-registry.ts (T7a), les defs de store.ts sont mortes.
+#   PLAN: 1) créer src/paths.ts avec getCacheDir (copie exacte) 2) rehydrate.ts+cache.ts importent de ../paths.js
+#         3) rm src/store.ts 4) rm tests/store.test.ts (teste ensureCollectionWithDim/withTimeout supprimés)
+#         5) verif: tsc --noEmit + full vitest + grep plus aucun import store.js.
+#   NOTE Task 12 Step 1 du plan (grep @xberg-io/xberg dans tools/ => attend NONE): FAUX POSITIF attendu sur
+#   intelligence/media/web (import TYPE gardé volontairement, natif). Ajuster le check: exclure ces 3 fichiers.
+# ---- TASK 10 (bench): optionnel, env réseau bruité (download modèle domine) -> version minimale ou noter.
+# ---- TASK 13: store.test.ts supprimé (T12). Vérifier redaction/tools/detect.test = TS pur (restent).
+
+# ============================================================
+# ★★★ SESSION 2 COMPLETE — 2026-07-09 — PLAN 100% (Tasks 1-13) ★★★
+# ============================================================
+# NEW COMMITS SESSION 2 (9, base session-1 @ 762eeb3):
+#   5c1b4ee fix(rag): PrimaryScore serializable (unblock query)     [1er geste]
+#   ceb0cf4 refactor(mcp): query_corpus -> wasm runtime store        [Task 6]
+#   df8efe0 refactor(mcp): collection/document/stats/reports         [Task 7a]
+#   caa1169 test(mcp): PII detection parity                          [Task 8]
+#   c9684c5 docs(changelog): MCP WASM migration                      [Task 11]
+#   a3c2d49 test(mcp): e2e registration + wasm pipeline              [Task 9]
+#   e84487d chore(mcp): remove native store.ts singleton            [Task 12]
+#   b462c75 test(mcp): un-gate tests no longer needing native        [Task 13]
+#   853c716 perf(mcp): wasm engine latency bench + results doc       [Task 10]
+#
+# TASK STATUS:
+#   1(fix) 6 7a 8 9 11 12 13 = DONE + committed + per-task verified (vitest+tsc while volume mounted).
+#   7b = intelligence/media/web STAY NATIVE (no wasm equiv: LLM NER/structured, Whisper, browser crawl). Documented.
+#   10 = bench file + doc committed; NUMBERS NOT CAPTURED (env: /Volumes/xberg-build model-cache image
+#        detached mid-session -> embedder can't load offline [dangling .cache symlink] and HF re-fetch fails.
+#        Also vitest 1.6.1 bench() under-reports async). Doc gives repro harness+commands for a stable env.
+#
+# VERIFICATION NOTE: each task's tests were run green individually while the SSD cache volume was mounted
+#   (last full-suite green after T12: 121 passed/5 skipped/0 failed; T13 un-gated files: 20 passed/0 skipped).
+#   A final consolidated full-suite re-run is currently BLOCKED by the external cache volume being unmounted
+#   (engine-loading tests need the cached embedder model). Remount: hdiutil attach "/Volumes/Extreme SSD/xberg-build.sparsebundle".
+#
+# CHIPS (non-blocking follow-ups, for when the wasm store/engine grows capability):
+#   - query_corpus: full_text/hybrid/graph modes + reranking (store is vector-only; no reranker injected).
+#   - filter/rerank restoration once engine.query gains params OR store exposed more directly.
+#   - engine phone PII pattern over-matches digit runs (parity soft-fail: engine=2 vs ts=1).
+#   - retarget intelligence/media/web when wasm gains LLM/transcription/browser.
+#   - Rust core chips: task_544b8b78 (extraction_timeout_secs), task_df55eaad (keywords wiring), task_f23bad12 (was PrimaryScore, FIXED).
+#
+# BRANCH worktree-wasm-mcp-server ready. NOT merged/PR'd (awaiting user decision).
