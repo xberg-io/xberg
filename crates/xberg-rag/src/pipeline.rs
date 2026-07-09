@@ -36,8 +36,18 @@ use crate::types::{ChunkRecord, DocumentId, DocumentRecord, RetrievedChunk};
 /// Returns [`RagError::Backend`] or [`RagError::Core`] on failure.
 #[async_trait]
 pub trait Embedder: Send + Sync + 'static {
-    /// Embed `texts`, returning one vector per input string.
+    /// Embed `texts`, returning one vector per input string. This is the
+    /// document-side path — text is embedded verbatim.
     async fn embed(&self, texts: Vec<String>) -> RagResult<Vec<Vec<f32>>>;
+
+    /// Embed query-side `texts`.
+    ///
+    /// Defaults to [`Embedder::embed`]. Asymmetric retrieval models (e.g.
+    /// Arctic-Embed) override this to prepend a query instruction prefix so
+    /// queries and documents land in the same trained embedding space.
+    async fn embed_query(&self, texts: Vec<String>) -> RagResult<Vec<Vec<f32>>> {
+        self.embed(texts).await
+    }
 }
 
 // ─── IngestRequest ───────────────────────────────────────────────────────────
@@ -187,7 +197,7 @@ pub async fn retrieve(
     if query.query_vector.is_none() {
         let needs_embedding = matches!(query.mode, RetrieveMode::Vector | RetrieveMode::Hybrid);
         if needs_embedding && let (Some(embedder), Some(text)) = (embedder, &query.query_text) {
-            let mut vecs = embedder.embed(vec![text.clone()]).await?;
+            let mut vecs = embedder.embed_query(vec![text.clone()]).await?;
             query.query_vector = vecs.pop();
         }
     }
@@ -210,6 +220,18 @@ pub struct CoreEmbedder {
 #[async_trait]
 impl Embedder for CoreEmbedder {
     async fn embed(&self, texts: Vec<String>) -> RagResult<Vec<Vec<f32>>> {
+        xberg::embed_texts_async(texts, &self.config)
+            .await
+            .map_err(RagError::Core)
+    }
+
+    async fn embed_query(&self, texts: Vec<String>) -> RagResult<Vec<Vec<f32>>> {
+        // Asymmetric models (e.g. Arctic-Embed) prepend a query instruction
+        // prefix; symmetric models resolve `None` and embed verbatim.
+        let texts = match xberg::embedding_query_prefix(&self.config) {
+            Some(prefix) => texts.into_iter().map(|text| format!("{prefix}{text}")).collect(),
+            None => texts,
+        };
         xberg::embed_texts_async(texts, &self.config)
             .await
             .map_err(RagError::Core)
