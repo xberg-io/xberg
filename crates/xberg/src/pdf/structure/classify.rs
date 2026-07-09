@@ -2069,7 +2069,11 @@ mod tests {
         assert!(is_math_character('∞'));
         assert!(!is_math_character('a'));
         assert!(!is_math_character('1'));
-        assert!(!is_math_character('+'));
+        // '+', '=' and '^' are math characters: `a2 + 8 = 12` must classify as a
+        // formula (test_formula_detection_ascii_operators).
+        assert!(is_math_character('+'));
+        assert!(is_math_character('='));
+        assert!(is_math_character('^'));
     }
 
     #[test]
