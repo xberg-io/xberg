@@ -33,6 +33,14 @@ The changelog starts fresh at `1.0.0-rc.1`. For the Kreuzberg v1–v4 history, s
   Detection cannot judge whether a scanner's text is *accurate*, only that a scanner produced it, so
   a page carrying a good hidden text layer is OCR'd too.
 
+### Removed
+
+- **`HierarchyConfig.ocr_coverage_threshold`.** The field promised to "trigger OCR if less than 50%
+  of page has text" and was documented that way in every language binding, but nothing ever read it —
+  setting it did nothing. Its only test had been disabled since the alef migration. `ocr_strategy`
+  now provides the behaviour it advertised. Existing config files that still set the key keep loading;
+  the key is ignored.
+
 ### Fixed
 
 - **Model downloads can no longer hang the extraction pipeline on a blocked network.** hf-hub

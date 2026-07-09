@@ -41,7 +41,6 @@ async fn test_full_hierarchy_extraction() {
                 enabled: true,
                 k_clusters: 6,
                 include_bbox: true,
-                ocr_coverage_threshold: None,
             }),
             extract_annotations: false,
             ..Default::default()
@@ -145,7 +144,6 @@ async fn test_hierarchy_disabled() {
                 enabled: false,
                 k_clusters: 6,
                 include_bbox: true,
-                ocr_coverage_threshold: None,
             }),
             extract_annotations: false,
             ..Default::default()
@@ -199,7 +197,6 @@ async fn test_hierarchy_with_explicit_disabled() {
                 enabled: false,
                 k_clusters: 6,
                 include_bbox: true,
-                ocr_coverage_threshold: None,
             }),
             extract_annotations: false,
             ..Default::default()
@@ -254,7 +251,6 @@ async fn test_hierarchy_different_k_clusters() {
                     enabled: true,
                     k_clusters: *k,
                     include_bbox: true,
-                    ocr_coverage_threshold: None,
                 }),
                 extract_annotations: false,
                 ..Default::default()
