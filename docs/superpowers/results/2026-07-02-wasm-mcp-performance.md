@@ -23,23 +23,22 @@ pre-migration server and building the `.node` artifact, which is out of scope he
 
 ## Numbers
 
-**Not captured in this session.** The measurement run could not complete in this
-environment for reasons unrelated to the migrated code:
+Captured 2026-07-09, macOS (darwin-x64), model cache on an external-SSD APFS image.
+Steady-state: engine + 384-dim embedder warmed once; each figure is over 20 iterations
+after 3 warmup iterations, via a `performance.now()` harness (Vitest 1.6.1's experimental
+`bench()` under-reports `async` functions — 0 samples — so it is not used for the numbers).
 
-- The embedder model cache lives on an external SSD image mounted at
-  `/Volumes/xberg-build` (the repo's `node_modules/.pnpm/@huggingface+transformers@*/
-  .../.cache` is a symlink into it). That volume **detached mid-session**, leaving the
-  symlink dangling — so `initializeEngine()` can neither load the cached model
-  (offline: `ENOTDIR` on the dangling cache path) nor re-fetch it (online:
-  `TypeError: fetch failed` — Hugging Face is unreachable over this env's constrained,
-  IPv6/NAT64-restricted network).
-- Note also that Vitest 1.6.1's **experimental** `bench()` under-reports `async`
-  benchmark functions here (0 samples / `NaN` hz). The reliable way to capture numbers
-  is a `performance.now()` harness (see below), not `vitest bench`.
+| Operation | median (ms) | mean (ms) | min–max (ms) | notes |
+|---|---|---|---|---|
+| `engine.extract` (284 B text) | 0.21 | 0.27 | 0.19–0.91 | pure wasm text parse |
+| `engine.ingest` (extract+embed+store) | 14.64 | 14.56 | 11.6–24.2 | dominated by embedding inference |
+| `engine.query` (embed+retrieve, k=5) | 3.09 | 3.70 | 2.6–13.3 | embed query + cosine over a small collection |
 
-The functional correctness of all three paths is already proven by the test suite
-(`tests/ingest.test.ts`, `tests/query.test.ts`, `tests/e2e.test.ts`) — this document is
-strictly about latency.
+Reading: `extract` is sub-millisecond (in-wasm parse of a small text doc). `ingest` and
+`query` are governed by embedder inference (transformers.js on CPU), not the store
+backend — consistent with the expectation below. These are relative, machine- and
+cache-dependent figures for regression tracking, not absolute SLAs.
+
 
 ## How to capture numbers (stable environment)
 
@@ -61,13 +60,7 @@ strictly about latency.
    // time(20, () => engine.query("…", "bench_col", 5))
    ```
 
-Record the median/mean per path in the table below and commit.
-
-| Operation | median (ms) | mean (ms) | notes |
-|---|---|---|---|
-| `engine.extract` (284 B text) | _tbd_ | _tbd_ | wasm |
-| `engine.ingest` (extract+embed+store) | _tbd_ | _tbd_ | wasm |
-| `engine.query` (embed+retrieve, k=5) | _tbd_ | _tbd_ | wasm |
+Record the median/mean per path in the **Numbers** table above and commit.
 
 ## Expectations
 
