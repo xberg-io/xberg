@@ -490,7 +490,7 @@ fn default_chunk_size() -> usize {
 /// only covers the *missing* case. Polyglot bindings frequently emit explicit
 /// `"field": null` from zero-valued mirror structs, so this helper accepts either
 /// `null` or a present value and falls back to `T::default()` for null.
-fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+pub(crate) fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
     D: serde::Deserializer<'de>,
     T: Default + serde::Deserialize<'de>,

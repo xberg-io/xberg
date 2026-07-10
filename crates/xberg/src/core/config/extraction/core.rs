@@ -54,7 +54,7 @@ pub struct ExtractionConfig {
     /// Defaults to [`OcrStrategy::Auto`], which OCRs only pages whose native text
     /// fails a quality check. Only applies to PDF documents. Cannot be
     /// [`OcrStrategy::ScannedPages`] while `disable_ocr` is `true`.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "super::super::processing::deserialize_null_default")]
     pub ocr_strategy: OcrStrategy,
 
     /// Force OCR on specific pages only (1-indexed page numbers, must be >= 1).
@@ -755,6 +755,33 @@ fn default_extraction_timeout() -> Option<u64> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    /// Polyglot bindings serialize a zero-valued mirror struct with every field
+    /// present, so `ocr_strategy` arrives as an explicit `null`. `#[serde(default)]`
+    /// only covers a *missing* key; an internally-tagged enum rejects `null`.
+    /// Caught by the Go e2e suite: "invalid type: null, expected internally tagged
+    /// enum OcrStrategy".
+    #[test]
+    fn ocr_strategy_accepts_an_explicit_null() {
+        let config: ExtractionConfig =
+            serde_json::from_str(r#"{"ocr_strategy": null}"#).expect("null must deserialize");
+        assert_eq!(config.ocr_strategy, OcrStrategy::Auto);
+    }
+
+    #[test]
+    fn ocr_strategy_accepts_a_missing_key() {
+        let config: ExtractionConfig = serde_json::from_str("{}").expect("missing key must deserialize");
+        assert_eq!(config.ocr_strategy, OcrStrategy::Auto);
+    }
+
+    #[test]
+    fn ocr_strategy_round_trips_its_payload_variant() {
+        let json = r#"{"ocr_strategy": {"mode": "scanned_pages", "min_confidence": 0.7}}"#;
+        let config: ExtractionConfig = serde_json::from_str(json).expect("payload variant must deserialize");
+        assert_eq!(config.ocr_strategy, OcrStrategy::ScannedPages { min_confidence: 0.7 });
+    }
+
     use super::*;
     use crate::core::config::{
         CaptioningConfig, LlmConfig, NerConfig, OcrConfig, PageClassificationConfig, RedactionConfig,
