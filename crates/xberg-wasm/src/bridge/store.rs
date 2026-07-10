@@ -161,6 +161,7 @@ impl VectorStore for JsVectorStore {
     }
 }
 
-fn js_to_rag(v: JsValue) -> RagError {
+fn js_to_rag(v: impl Into<JsValue>) -> RagError {
+    let v = v.into();
     RagError::Backend(Box::new(JsStoreError(format!("{v:?}"))))
 }

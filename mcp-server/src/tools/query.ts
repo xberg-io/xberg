@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { embedTexts, rerank } from "xberg-rag-node";
-import { getStore, withTimeout } from "../store.js";
+import { getRuntime } from "../engine.js";
+import type { RetrieveQuery, Filter } from "xberg-wasm-runtime";
 
 const RetrieveModeSchema = z.enum(["vector", "full_text", "hybrid", "graph"]);
 const FilterSchema: z.ZodType<unknown> = z.lazy(() =>
@@ -42,7 +42,7 @@ const FilterSchema: z.ZodType<unknown> = z.lazy(() =>
 export function registerQueryTools(server: McpServer): void {
   server.tool(
     "query_corpus",
-    "Search a RAG corpus with vector, full-text, hybrid, or graph retrieval + optional reranking. query_text is auto-embedded for vector/hybrid modes. Use graph_depth to control traversal depth in graph mode.",
+    "Search a RAG corpus using the current wasm runtime's vector retrieval. query_text is auto-embedded. Note: full_text and graph modes are unsupported (rejected); hybrid is accepted for compatibility but runs as vector; rerank_results, graph_depth, and embedding_preset are currently accepted but ignored.",
     {
       collection: z.string().describe("Collection name"),
       query: z.string().describe("Search query text"),
@@ -60,71 +60,55 @@ export function registerQueryTools(server: McpServer): void {
       query,
       mode,
       top_k,
-      graph_depth,
+      graph_depth: _graph_depth,
       filter,
       include_content,
       include_document,
-      rerank_results,
-      embedding_preset,
+      rerank_results: _rerank_results,
+      embedding_preset: _embedding_preset,
     }) => {
       try {
-        let queryVector: number[] | null = null;
-
-        if (mode === "vector" || mode === "hybrid") {
-          const embJson = await withTimeout(
-            embedTexts(
-              JSON.stringify([query]),
-              JSON.stringify({ model: { type: "preset", name: embedding_preset } }),
-            ),
-            60_000,
-            "embedTexts",
-          );
-          const vecs = JSON.parse(embJson) as number[][];
-          queryVector = vecs[0] ?? null;
+        // The wasm in-memory store only supports vector retrieval; full_text/graph
+        // are honestly unsupported rather than silently degraded.
+        if (mode === "full_text" || mode === "graph") {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `query_corpus: mode '${mode}' is not supported by the current wasm runtime store (vector-only). Use 'vector' or 'hybrid'.`,
+              },
+            ],
+            isError: true,
+          };
         }
 
-        const effectiveTopK = rerank_results ? top_k * 5 : top_k;
+        const { embedder, store } = getRuntime();
 
-        const retrieveQuery = {
-          mode,
+        // Embed the query for vector retrieval (covers both 'vector' and 'hybrid',
+        // which is coerced to vector below since the backend has no hybrid mode).
+        const vecs = await embedder.embed([query]);
+        const queryVector = vecs[0] ? Array.from(vecs[0]) : undefined;
+
+        // embedding_preset no longer selects a model: the injected embedder is fixed
+        // by the wasm runtime, so this parameter is accepted but unused.
+        // graph_depth is likewise accepted but unused: graph mode is rejected above.
+
+        const rq: RetrieveQuery = {
+          mode: "vector",
           query_text: query,
           query_vector: queryVector,
-          top_k: effectiveTopK,
-          filter: filter ?? null,
+          top_k,
+          filter: filter as Filter | undefined,
           include_content,
           include_document,
           group_by_document: false,
-          graph_depth: mode === "graph" ? graph_depth : null,
-          candidate_multiplier: null,
         };
 
-        const store = await getStore();
-        const outputJson = await store.retrieve(collection, JSON.stringify(retrieveQuery));
-        const output = JSON.parse(outputJson) as {
-          chunks: Array<{ content?: string; score: number; document_id?: string }>;
-          mode?: string;
-        };
+        const output = await store.retrieve(collection, rq);
 
-        if (rerank_results && output.chunks.length > 0) {
-          const docs = output.chunks
-            .map((c) => c.content ?? "")
-            .filter((c) => c.length > 0);
-
-          if (docs.length > 0) {
-            const rerankedJson = await rerank(
-              query,
-              JSON.stringify(docs),
-              JSON.stringify({ model: { type: "preset", name: "balanced" } })
-            );
-            const ranked = JSON.parse(rerankedJson) as Array<{ index: number; score: number }>;
-
-            output.chunks = ranked
-              .sort((a, b) => b.score - a.score)
-              .slice(0, top_k)
-              .map((r) => output.chunks[r.index]!)
-              .filter((c) => c !== undefined);
-          }
-        }
+        // rerank_results: no reranker is injected by the wasm runtime yet. We do
+        // not over-fetch (top_k*5) or attempt reranking; results stay vector-ordered.
+        // Follow-up: wire in a reranker once the runtime injects one.
 
         return {
           content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],

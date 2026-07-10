@@ -8,12 +8,14 @@ export const embedderSchema = z.object({
 });
 
 export const vectorStoreSchema = z.object({
-  upsertDocument: asyncFunctionSchema,
-  query: asyncFunctionSchema,
-  delete: asyncFunctionSchema,
-  listCollections: asyncFunctionSchema,
-  dropCollection: asyncFunctionSchema,
   ensureCollection: asyncFunctionSchema,
+  dropCollection: asyncFunctionSchema,
+  getCollection: asyncFunctionSchema,
+  upsertDocument: asyncFunctionSchema,
+  deleteDocuments: asyncFunctionSchema,
+  deleteByFilter: asyncFunctionSchema,
+  retrieve: asyncFunctionSchema,
+  collectionStats: asyncFunctionSchema,
 });
 
 export const nerSchema = z.object({

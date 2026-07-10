@@ -36,9 +36,45 @@ The changelog starts fresh at `1.0.0-rc.1`. For the Kreuzberg v1–v4 history, s
 
 - **`OcrExtractionResult` now derives `Default`.** Downstream bindings and callers can
   construct and extend it without spelling out every field.
+- **MCP server backend migrated to the shared WASM engine.** The MCP server's
+  document, RAG, and PII tool groups (`extract_*`, `detect_pii`, `redact_document`,
+  `rehydrate_*`, `ingest_*`, `query_corpus`, collection/document/stats/reports)
+  now run on `@xberg-io/xberg-wasm` (via the `xberg-wasm-runtime` layer) instead
+  of the native NAPI bindings (`@xberg-io/xberg`, `xberg-rag-node`). Tool names and
+  input schemas are unchanged — no breaking change to the MCP protocol surface —
+  so connected agents keep working. OCR is provided through the runtime layer's
+  injected PaddleOCR (`ppu-paddle-ocr` over ONNX Runtime) with an in-binary
+  Tesseract fallback.
+- **`create_collection` default `embedding_dim` is now 384 (was 768).** The
+  runtime's embedder is fixed at 384 dimensions (all-MiniLM); the previous 768
+  default (a bge-base preset assumption) no longer matches, and a mismatched
+  collection dimension fails at ingest time. Collections used with
+  `ingest_document`/`query_corpus` must be 384-dim. The `embedding_dim` field is
+  still accepted for explicit overrides.
+- **`query_corpus` on the WASM store is vector-only for now.** The runtime's
+  in-memory vector store services `vector` retrieval (and coerces `hybrid` to it);
+  `full_text`/`graph` modes and result reranking are not yet available through the
+  WASM store and return a clear error / are skipped rather than silently degrading.
+  `filter`, `include_content`, and `include_document` are honored.
+- **Some MCP tool groups remain on the native path.** `extract_entities` /
+  `structured_extract` (LLM-backed NER and LLM structured extraction),
+  `transcribe_audio` (Whisper ONNX transcription), and `scrape_url` (headless-browser
+  crawling) have no equivalent in the current WASM engine and continue to use the
+  native bindings; they require the native binding to be present at call time.
 
 ### Fixed
 
+- **MCP PII rehydration now decrypts in-WASM.** `rehydrate_document` decrypts the
+  AES-256-GCM rehydration-map container inside the WASM engine (byte-compatible
+  with the maps written by the previous TypeScript path — `XPII\x01 | salt(16) |
+  iv(12) | tag(16) | ciphertext`, scrypt N=2^14), removing the native crypto
+  dependency from that path.
+- **RAG retrieval `PrimaryScore` is serializable again.** The `PrimaryScore` enum's
+  `Vector`/`FullText` variants were newtype-over-scalar under an internally-tagged
+  `#[serde(tag = "kind")]` representation, which serde cannot (de)serialize — every
+  cross-boundary retrieval (`query_corpus` over the WASM store) failed with
+  `invalid type: map, expected f32`. They are now struct variants (`{ score }`),
+  so results round-trip through `serde_wasm_bindgen` and `serde_json`.
 - **PDF/OCR worker-stack overflow.** The deep per-page OCR extraction futures are now
   boxed (`Box::pin`) so their large state lives on the heap instead of inflating the
   worker-thread stack frame. Together with the stack the binding runtimes provision for
@@ -54,6 +90,14 @@ The changelog starts fresh at `1.0.0-rc.1`. For the Kreuzberg v1–v4 history, s
   string after it became a list, so the WebAssembly build stopped compiling. It now uses the
   primary language (the in-memory WASI Tesseract handles one language at a time, like the PaddleOCR
   and VLM backends) and warns when more than one is requested.
+
+### Internal
+
+- **MCP server shares one WASM engine with the browser UI.** The server constructs a
+  single `XbergEngine` at startup from the runtime layer's injection descriptor
+  (`{ embedder, store, ner?, ocr? }`), so extraction, embeddings, NER, OCR, PII
+  redaction, and vector retrieval run through the same `.wasm` and JS runtime code
+  paths as the browser build instead of separate native bindings.
 
 ---
 

@@ -11,7 +11,9 @@ use crate::bridge::embedder::JsEmbedder;
 use crate::bridge::ner::resolve_ner_with_timeout;
 use crate::bridge::ocr::resolve_ocr_with_timeout;
 use crate::bridge::store::JsVectorStore;
+use xberg_rag::pipeline::Embedder;
 use xberg_rag::query::{RetrieveMode, RetrieveQuery};
+use xberg_rag::VectorStore;
 
 /// Extract an optional JS object field, returning `None` if the field is
 /// missing, `null`, or `undefined`.
@@ -129,7 +131,7 @@ impl XbergEngine {
             .await
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         let wasm_result = crate::WasmExtractionResult::from(result);
-        serde_wasm_bindgen::to_value(&wasm_result).map_err(|e| JsValue::from_str(&e.to_string()))
+        Ok(wasm_result.into())
     }
 
     /// Ingest a single document into the RAG vector store.
@@ -207,7 +209,7 @@ impl XbergEngine {
 
         let text = resolve_ocr_with_timeout(self.ocr.clone(), &bytes, &language, self.bridge_timeout_ms)
             .await
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            .map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
 
         Ok(JsValue::from_str(&text))
     }
@@ -268,7 +270,7 @@ impl XbergEngine {
 
         let entities = resolve_ner_with_timeout(self.ner.clone(), &text, &categories, self.bridge_timeout_ms)
             .await
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            .map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
 
         serde_wasm_bindgen::to_value(&entities).map_err(|e| JsValue::from_str(&e.to_string()))
     }
@@ -408,14 +410,14 @@ impl XbergEngine {
 
         let out = js_sys::Object::new();
         js_sys::Reflect::set(&out, &"redacted".into(), &result.into())
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            .map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
         js_sys::Reflect::set(
             &out,
             &"rehydrationMap".into(),
             &serde_wasm_bindgen::to_value(&rehydration_map)
                 .map_err(|e| JsValue::from_str(&e.to_string()))?,
         )
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        .map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
         Ok(out.into())
     }
 
@@ -452,7 +454,7 @@ impl XbergEngine {
     #[allow(clippy::missing_errors_doc)]
     pub fn cache_stats(&self) -> Result<JsValue, JsValue> {
         let stats = crate::WasmCacheStats::default();
-        serde_wasm_bindgen::to_value(&stats).map_err(|e| JsValue::from_str(&e.to_string()))
+        Ok(stats.into())
     }
 
     /// Invalidate all cached extraction results.

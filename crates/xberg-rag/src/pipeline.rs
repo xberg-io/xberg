@@ -45,7 +45,7 @@ pub trait Embedder: 'static {
 // ─── IngestRequest ───────────────────────────────────────────────────────────
 
 /// Input for a single document ingestion.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Deserialize)]
 pub struct IngestRequest {
     /// Full text of the document to chunk and embed.
     pub full_text: String,

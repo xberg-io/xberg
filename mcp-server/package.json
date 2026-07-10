@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "@xberg-io/xberg-wasm": "file:../crates/xberg-wasm",
+    "xberg-wasm-runtime": "file:../packages/xberg-wasm-runtime",
     "@xberg-io/xberg": "file:../crates/xberg-node",
     "xberg-rag-node": "file:../crates/xberg-rag-node",
     "docx": "^9.0.0",

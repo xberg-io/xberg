@@ -18642,8 +18642,7 @@ mod __alef_wasm_bridge_postprocessor {
             result
                 .as_string()
                 .and_then(|s| {
-                    serde_json::from_str::<xberg::ProcessingStage>(&format!("\"{}\"", s))
-                        .map_err(|_| xberg::XbergError::Other(format!("Failed to deserialize result: {}", e)))
+                    serde_json::from_str::<xberg::ProcessingStage>(&format!("\"{}\"", s)).ok()
                 })
                 .unwrap_or_default()
         }
@@ -19116,8 +19115,7 @@ mod __alef_wasm_bridge_documentextractor {
                 result
                     .as_string()
                     .and_then(|s| {
-                        serde_json::from_str::<Vec<String>>(&s)
-                            .map_err(|_| xberg::XbergError::Other(format!("Failed to deserialize result: {}", e)))
+                        serde_json::from_str::<Vec<String>>(&s).ok()
                     })
                     .unwrap_or_default()
             };
@@ -19337,8 +19335,7 @@ mod __alef_wasm_bridge_embeddingbackend {
             result
                 .as_string()
                 .and_then(|s| {
-                    serde_json::from_str::<usize>(&s)
-                        .map_err(|_| xberg::XbergError::Other(format!("Failed to deserialize result: {}", e)))
+                    serde_json::from_str::<usize>(&s).ok()
                 })
                 .unwrap_or_default()
         }

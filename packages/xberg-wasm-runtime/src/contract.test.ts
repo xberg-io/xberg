@@ -35,16 +35,18 @@ describe("injection descriptor contract", () => {
 
     const store: VectorStoreInterface = descriptor.store;
     expect(typeof store.upsertDocument).toBe("function");
-    expect(typeof store.query).toBe("function");
-    expect(typeof store.delete).toBe("function");
-    expect(typeof store.listCollections).toBe("function");
+    expect(typeof store.retrieve).toBe("function");
+    expect(typeof store.deleteDocuments).toBe("function");
+    expect(typeof store.deleteByFilter).toBe("function");
+    expect(typeof store.getCollection).toBe("function");
     expect(typeof store.dropCollection).toBe("function");
     expect(typeof store.ensureCollection).toBe("function");
+    expect(typeof store.collectionStats).toBe("function");
 
     // Test a real round-trip
-    await store.ensureCollection("test", 384);
-    const collections = await store.listCollections();
-    expect(collections).toContain("test");
+    await store.ensureCollection({ name: "test", embedding_dim: 384 });
+    const spec = await store.getCollection("test");
+    expect(spec?.name).toBe("test");
   }, 60_000);
 
   it("ner (if present) implements required interface", async () => {

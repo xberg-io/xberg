@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getStore } from "../store.js";
+import { getRuntime } from "../engine.js";
+import type { RetrieveQuery } from "xberg-wasm-runtime";
 
 export function registerReportTools(server: McpServer): void {
   server.tool(
@@ -9,9 +10,8 @@ export function registerReportTools(server: McpServer): void {
     { collection: z.string() },
     async ({ collection }) => {
       try {
-        const store = await getStore();
-        const statsJson = await store.collectionStats(collection);
-        const stats = JSON.parse(statsJson);
+        const { store } = getRuntime();
+        const stats = await store.collectionStats(collection);
 
         return {
           content: [
@@ -48,11 +48,17 @@ export function registerReportTools(server: McpServer): void {
     },
     async ({ collection, document_id }) => {
       try {
-        const store = await getStore();
+        const { embedder, store } = getRuntime();
 
-        const retrieveQuery = JSON.stringify({
-          mode: "full_text",
+        // R6: the wasm store is vector-only, so fetch-by-id is expressed as a
+        // filtered vector query — the filter does the actual selection.
+        const vecs = await embedder.embed([document_id]);
+        const queryVector = vecs[0] ? Array.from(vecs[0]) : undefined;
+
+        const retrieveQuery: RetrieveQuery = {
+          mode: "vector",
           query_text: document_id,
+          query_vector: queryVector,
           top_k: 1,
           filter: {
             eq: { field: "doc.external_id", value: document_id },
@@ -60,10 +66,9 @@ export function registerReportTools(server: McpServer): void {
           include_content: true,
           include_document: true,
           group_by_document: true,
-        });
+        };
 
-        const outputJson = await store.retrieve(collection, retrieveQuery);
-        const output = JSON.parse(outputJson);
+        const output = await store.retrieve(collection, retrieveQuery);
 
         if (!output.chunks || output.chunks.length === 0) {
           return {
@@ -90,6 +95,8 @@ export function registerReportTools(server: McpServer): void {
           };
         }
 
+        const docMetadata = doc.metadata as Record<string, unknown> | undefined;
+
         return {
           content: [
             {
@@ -105,9 +112,9 @@ export function registerReportTools(server: McpServer): void {
                 keywords: doc.keywords,
                 metadata: doc.metadata,
                 pii_stats: {
-                  pii_count: doc.metadata?.pii_count ?? "unknown",
-                  pii_categories: doc.metadata?.pii_categories ?? "unknown",
-                  ingestion_date: doc.metadata?.ingestion_date ?? "unknown",
+                  pii_count: docMetadata?.pii_count ?? "unknown",
+                  pii_categories: docMetadata?.pii_categories ?? "unknown",
+                  ingestion_date: docMetadata?.ingestion_date ?? "unknown",
                 },
                 chunks: output.chunks.length,
               }, null, 2),

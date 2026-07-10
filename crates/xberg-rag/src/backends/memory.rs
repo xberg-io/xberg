@@ -366,7 +366,7 @@ impl VectorStore for InMemoryVectorStore {
                     external_id: c.record.external_id.clone(),
                     content: query.include_content.then(|| c.record.content.clone()),
                     score: s,
-                    primary_score: PrimaryScore::Vector(s),
+                    primary_score: PrimaryScore::Vector { score: s },
                     chunk_metadata: c.record.chunk_metadata.clone(),
                     document: query.include_document.then(|| {
                         coll.documents

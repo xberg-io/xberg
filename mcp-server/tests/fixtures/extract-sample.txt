@@ -1,0 +1,4 @@
+Xberg is a document extraction engine. It extracts text, tables, and metadata
+from more than ninety document formats including PDF, DOCX, XLSX, images with
+OCR, HTML, and email. This fixture file exists to exercise the extract_document
+tool end to end against the WebAssembly engine.

@@ -1,6 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getStore, listTrackedCollections } from "../store.js";
+import { getRuntime } from "../engine.js";
+import { listTrackedCollections } from "../collection-registry.js";
+import type { RetrieveQuery } from "xberg-wasm-runtime";
 
 export function registerStatsTools(server: McpServer): void {
   server.tool(
@@ -9,9 +11,8 @@ export function registerStatsTools(server: McpServer): void {
     { collection: z.string() },
     async ({ collection }) => {
       try {
-        const store = await getStore();
-        const statsJson = await store.collectionStats(collection);
-        const stats = JSON.parse(statsJson);
+        const { store } = getRuntime();
+        const stats = await store.collectionStats(collection);
 
         return {
           content: [
@@ -46,14 +47,24 @@ export function registerStatsTools(server: McpServer): void {
       try {
         const tracked = listTrackedCollections();
 
-        const store = await getStore();
+        const { store } = getRuntime();
         const collections: Array<{ name: string; spec?: unknown }> = [];
 
         for (const name of tracked) {
           try {
-            const specJson = await store.getCollection(name);
-            if (specJson) {
-              collections.push({ name, spec: JSON.parse(specJson) });
+            const spec = await store.getCollection(name);
+            if (spec) {
+              // R3: expose the public "inner_product" spelling, not the runtime "innerproduct".
+              collections.push({
+                name,
+                spec: {
+                  ...spec,
+                  distance_metric:
+                    spec.distance_metric === "innerproduct"
+                      ? "inner_product"
+                      : spec.distance_metric,
+                },
+              });
             } else {
               collections.push({ name });
             }
@@ -141,9 +152,8 @@ export function registerStatsTools(server: McpServer): void {
     },
     async ({ collection, format }) => {
       try {
-        const store = await getStore();
-        const statsJson = await store.collectionStats(collection);
-        const stats = JSON.parse(statsJson);
+        const { store } = getRuntime();
+        const stats = await store.collectionStats(collection);
 
         if (stats.documents === 0) {
           return {
@@ -239,19 +249,25 @@ export function registerStatsTools(server: McpServer): void {
     },
     async ({ collection, document_id, metadata }) => {
       try {
-        const store = await getStore();
+        const { embedder, store } = getRuntime();
 
-        const retrieveQuery = JSON.stringify({
-          mode: "full_text",
+        // R6: the wasm store is vector-only, so this pre-check for document
+        // existence is expressed as a filtered vector query rather than
+        // mode:"full_text" (which the wasm store rejects).
+        const vecs = await embedder.embed([document_id]);
+        const queryVector = vecs[0] ? Array.from(vecs[0]) : undefined;
+
+        const retrieveQuery: RetrieveQuery = {
+          mode: "vector",
           query_text: document_id,
+          query_vector: queryVector,
           top_k: 1,
           filter: { eq: { field: "doc.external_id", value: document_id } },
           include_content: true,
           include_document: true,
-        });
+        };
 
-        const outputJson = await store.retrieve(collection, retrieveQuery);
-        const output = JSON.parse(outputJson);
+        const output = await store.retrieve(collection, retrieveQuery);
 
         if (!output.chunks || output.chunks.length === 0) {
           return {

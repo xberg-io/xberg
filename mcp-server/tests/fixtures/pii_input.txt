@@ -1,0 +1,2 @@
+Contact Jane Doe at jane.doe@example.com or 555-123-4567.
+SSN: 123-45-6789. Card: 4111 1111 1111 1111. Server IP: 192.168.1.100.

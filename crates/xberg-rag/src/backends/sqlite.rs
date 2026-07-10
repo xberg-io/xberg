@@ -1116,7 +1116,7 @@ fn retrieve_vector(
                 external_id: row.external_id.clone(),
                 content: query.include_content.then(|| row.content.clone()),
                 score,
-                primary_score: PrimaryScore::Vector(score),
+                primary_score: PrimaryScore::Vector { score },
                 chunk_metadata: row.chunk_metadata.clone(),
                 document: None,
             }))
@@ -1160,7 +1160,7 @@ fn retrieve_fts(
                 external_id: row.external_id.clone(),
                 content: query.include_content.then(|| row.content.clone()),
                 score: *score,
-                primary_score: PrimaryScore::FullText(*score),
+                primary_score: PrimaryScore::FullText { score: *score },
                 chunk_metadata: row.chunk_metadata.clone(),
                 document: None,
             }))

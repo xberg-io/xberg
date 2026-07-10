@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getStore } from "../store.js";
+import { getRuntime } from "../engine.js";
+import type { DocumentRecord, ChunkRecord, Filter, RetrieveQuery } from "xberg-wasm-runtime";
 
 const DocumentRecordSchema = z.object({
   external_id: z.string().optional(),
@@ -68,11 +69,11 @@ export function registerDocumentTools(server: McpServer): void {
     },
     async ({ collection, document, chunks }) => {
       try {
-        const store = await getStore();
+        const { store } = getRuntime();
         const docId = await store.upsertDocument(
           collection,
-          JSON.stringify(document),
-          JSON.stringify(chunks)
+          document as DocumentRecord,
+          chunks as ChunkRecord[]
         );
         return {
           content: [{ type: "text" as const, text: JSON.stringify({ doc_id: docId }) }],
@@ -89,42 +90,53 @@ export function registerDocumentTools(server: McpServer): void {
 
   server.tool(
     "get_document",
-    "Retrieve a document by its external ID or document ID using a filter.",
+    "Retrieve a document by its external ID, or by an explicit filter. Note: the vector-only wasm store has no internal-document-id index (mirroring the Rust backend's filter fields, which expose doc.external_id but not an internal id), so lookups resolve against the document's external_id. Pass a custom `filter` for anything else.",
     {
       collection: z.string(),
-      document_id: z.string().optional(),
-      external_id: z.string().optional(),
+      external_id: z.string().optional().describe("The document's external_id (as supplied to upsert_document)."),
+      document_id: z.string().optional().describe("Alias for external_id — matched against the document's external_id. The internal doc_id returned by upsert_document is not directly queryable in the vector-only store; pass it via external_id semantics or use a filter."),
       filter: FilterConditionSchema.optional(),
     },
     async ({ collection, document_id, external_id, filter }) => {
       try {
-        const store = await getStore();
+        const { embedder, store } = getRuntime();
 
-        const retrieveFilter = filter ?? (document_id
-          ? { eq: { field: "doc.external_id", value: document_id } }
-          : external_id
-          ? { eq: { field: "doc.external_id", value: external_id } }
+        // Both `external_id` and its `document_id` alias resolve to a
+        // doc.external_id match: the wasm store mirrors the Rust backend's
+        // filter fields (`crates/xberg-rag/src/backends/memory.rs` resolve_field),
+        // which has no internal-id field.
+        const idValue = external_id ?? document_id;
+        const retrieveFilter = filter ?? (idValue
+          ? { eq: { field: "doc.external_id", value: idValue } }
           : null);
 
         if (!retrieveFilter) {
           return {
-            content: [{ type: "text" as const, text: JSON.stringify({ error: "Must provide document_id, external_id, or filter" }) }],
+            content: [{ type: "text" as const, text: JSON.stringify({ error: "Must provide external_id, document_id, or filter" }) }],
             isError: true,
           };
         }
 
-        const queryJson = JSON.stringify({
-          mode: "full_text",
-          query_text: document_id ?? external_id ?? "document",
+        // R6: the wasm store is vector-only (no full_text mode), so fetch-by-id
+        // is expressed as a filtered vector query — the filter does the actual
+        // selection, the vector score only orders the (at most one matching
+        // group of) chunks.
+        const queryText = idValue ?? "document";
+        const vecs = await embedder.embed([queryText]);
+        const queryVector = vecs[0] ? Array.from(vecs[0]) : undefined;
+
+        const rq: RetrieveQuery = {
+          mode: "vector",
+          query_text: queryText,
+          query_vector: queryVector,
           top_k: 1,
-          filter: retrieveFilter,
+          filter: retrieveFilter as Filter,
           include_content: true,
           include_document: true,
           group_by_document: true,
-        });
+        };
 
-        const outputJson = await store.retrieve(collection, queryJson);
-        const output = JSON.parse(outputJson);
+        const output = await store.retrieve(collection, rq);
 
         return {
           content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
@@ -148,8 +160,8 @@ export function registerDocumentTools(server: McpServer): void {
     },
     async ({ collection, ids }) => {
       try {
-        const store = await getStore();
-        const count = await store.deleteDocuments(collection, JSON.stringify(ids));
+        const { store } = getRuntime();
+        const count = await store.deleteDocuments(collection, ids);
         return {
           content: [{ type: "text" as const, text: JSON.stringify({ deleted: count }) }],
         };
@@ -172,8 +184,8 @@ export function registerDocumentTools(server: McpServer): void {
     },
     async ({ collection, filter }) => {
       try {
-        const store = await getStore();
-        const count = await store.deleteByFilter(collection, JSON.stringify(filter));
+        const { store } = getRuntime();
+        const count = await store.deleteByFilter(collection, filter as Filter);
         return {
           content: [{ type: "text" as const, text: JSON.stringify({ deleted: count }) }],
         };

@@ -1,5 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { z } from "zod";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Lightweight smoke tests — verify tool registration runs without native bindings.
 // Full integration tests require the NAPI bindings to be built.
@@ -129,5 +133,83 @@ describe("rehydration encryption", () => {
     } finally {
       try { unlinkSync(mapPath); } catch { /* ignore */ }
     }
+  });
+});
+
+describe("extract tools (wasm engine)", () => {
+  let client: import("@modelcontextprotocol/sdk/client/index.js").Client;
+
+  beforeAll(async () => {
+    const { initializeEngine } = await import("../src/engine.js");
+    const { registerExtractTools } = await import("../src/tools/extract.js");
+    const { McpServer } = await import("@modelcontextprotocol/sdk/server/mcp.js");
+    const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
+    const { InMemoryTransport } = await import("@modelcontextprotocol/sdk/inMemory.js");
+
+    // First run downloads the embedder model (transformers.js) and loads the
+    // ~100MB wasm binary, so allow a generous budget.
+    await initializeEngine();
+
+    const server = new McpServer({ name: "test-server", version: "0.0.0" });
+    registerExtractTools(server);
+
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    client = new Client({ name: "test-client", version: "0.0.0" });
+    await Promise.all([
+      server.connect(serverTransport),
+      client.connect(clientTransport),
+    ]);
+  }, 180_000);
+
+  afterAll(async () => {
+    await client?.close();
+  });
+
+  it("extract_document extracts content from a real fixture", async () => {
+    const fixturePath = join(__dirname, "fixtures", "extract-sample.txt");
+    const result = await client.callTool({
+      name: "extract_document",
+      arguments: { input: { uri: fixturePath } },
+    });
+
+    const content = (result.content as Array<{ type: string; text: string }>)[0];
+    if (result.isError) throw new Error(content?.text ?? "unknown error");
+    expect(content?.type).toBe("text");
+    const parsed = JSON.parse(content!.text) as { results: Array<{ content: string }> };
+    expect(parsed.results.length).toBeGreaterThan(0);
+    expect(parsed.results[0]?.content.length).toBeGreaterThan(0);
+    expect(parsed.results[0]?.content).toContain("Xberg");
+  }, 60_000);
+
+  it("extract_batch extracts content from multiple real fixtures", async () => {
+    const fixturePath = join(__dirname, "fixtures", "extract-sample.txt");
+    const result = await client.callTool({
+      name: "extract_batch",
+      arguments: { inputs: [{ uri: fixturePath }, { uri: fixturePath }] },
+    });
+
+    expect(result.isError).not.toBe(true);
+    const content = (result.content as Array<{ type: string; text: string }>)[0];
+    const parsed = JSON.parse(content!.text) as { results: Array<{ content: string }> };
+    expect(parsed.results.length).toBe(2);
+    expect(parsed.results[0]?.content.length).toBeGreaterThan(0);
+    expect(parsed.results[1]?.content.length).toBeGreaterThan(0);
+  }, 60_000);
+
+  it("list_formats returns supported formats from the wasm module", async () => {
+    const result = await client.callTool({ name: "list_formats", arguments: {} });
+
+    expect(result.isError).not.toBe(true);
+    const content = (result.content as Array<{ type: string; text: string }>)[0];
+    const parsed = JSON.parse(content!.text) as Array<{ extension: string; mimeType: string }>;
+    expect(Array.isArray(parsed)).toBe(true);
+    expect(parsed.length).toBeGreaterThan(0);
+    expect(parsed[0]).toHaveProperty("extension");
+    expect(parsed[0]).toHaveProperty("mimeType");
+  });
+
+  it("extract_document returns an error result for invalid input", async () => {
+    const result = await client.callTool({ name: "extract_document", arguments: {} });
+    expect(result.isError).toBe(true);
   });
 });
