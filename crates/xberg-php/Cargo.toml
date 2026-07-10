@@ -17,7 +17,42 @@ crate-type = ["cdylib"]
 
 [features]
 extension-module = []
-default = ["api", "api-types", "auto-rotate-types", "chunking-tokenizers", "diff", "embedding-presets", "heuristics", "html", "keywords-rake", "keywords-yake", "late-interaction", "late-interaction-presets", "layout-types", "liter-llm", "markdown-footnotes", "ocr", "ocr-wasm", "office", "paddle-ocr-types", "pdf", "presets", "quality", "redaction", "reranker", "reranker-presets", "sparse-embedding-presets", "sparse-embeddings", "svg", "tokio-runtime", "transcription-types", "tree-sitter", "url-config-types", "url-ingestion", "xml"]
+default = [
+    "api",
+    "api-types",
+    "auto-rotate-types",
+    "chunking-tokenizers",
+    "diff",
+    "embedding-presets",
+    "heuristics",
+    "html",
+    "keywords-rake",
+    "keywords-yake",
+    "late-interaction",
+    "late-interaction-presets",
+    "layout-types",
+    "liter-llm",
+    "markdown-footnotes",
+    "ocr",
+    "ocr-wasm",
+    "office",
+    "paddle-ocr-types",
+    "pdf",
+    "presets",
+    "quality",
+    "redaction",
+    "reranker",
+    "reranker-presets",
+    "sparse-embedding-presets",
+    "sparse-embeddings",
+    "svg",
+    "tokio-runtime",
+    "transcription-types",
+    "tree-sitter",
+    "url-config-types",
+    "url-ingestion",
+    "xml",
+]
 api = ["xberg/api"]
 api-types = ["xberg/api-types"]
 auto-rotate-types = ["xberg/auto-rotate-types"]

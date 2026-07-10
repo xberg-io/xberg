@@ -297,34 +297,19 @@ static-embeddings = [
 reranker-presets = []
 # reranker: full cross-encoder inference via ONNX Runtime (ORT-dependent,
 # WASM-incompatible). NOTE: reranker-presets is a subset of reranker; always implied.
-reranker = [
-    "reranker-presets",
-    "onnx-runtime",
-    "dep:ndarray",
-    "tokio-runtime",
-]
+reranker = ["reranker-presets", "onnx-runtime", "dep:ndarray", "tokio-runtime"]
 # v5.0.0: SPLADE sparse embeddings for hybrid dense+sparse retrieval.
 # sparse-embedding-presets: static preset metadata (WASM/Android-safe, no ORT).
 sparse-embedding-presets = []
 # sparse-embeddings: SPLADE inference via ONNX Runtime (ORT-dependent,
 # WASM-incompatible). Builds on the shared crate::onnx helper (onnx-runtime).
-sparse-embeddings = [
-    "sparse-embedding-presets",
-    "onnx-runtime",
-    "dep:ndarray",
-    "tokio-runtime",
-]
+sparse-embeddings = ["sparse-embedding-presets", "onnx-runtime", "dep:ndarray", "tokio-runtime"]
 # v5.0.0: ColBERT late-interaction (multi-vector) embeddings for MaxSim retrieval.
 # late-interaction-presets: static preset metadata + pure-CPU MaxSim (WASM/Android-safe, no ORT).
 late-interaction-presets = []
 # late-interaction: ColBERT multi-vector inference via ONNX Runtime (ORT-dependent,
 # WASM-incompatible). Builds on the shared crate::onnx helper (onnx-runtime).
-late-interaction = [
-    "late-interaction-presets",
-    "onnx-runtime",
-    "dep:ndarray",
-    "tokio-runtime",
-]
+late-interaction = ["late-interaction-presets", "onnx-runtime", "dep:ndarray", "tokio-runtime"]
 stopwords = []
 quality = ["dep:unicode-normalization", "dep:chardetng", "stopwords"]
 
