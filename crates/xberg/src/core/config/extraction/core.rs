@@ -755,8 +755,6 @@ fn default_extraction_timeout() -> Option<u64> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     /// Polyglot bindings serialize a zero-valued mirror struct with every field
     /// present, so `ocr_strategy` arrives as an explicit `null`. `#[serde(default)]`
     /// only covers a *missing* key; an internally-tagged enum rejects `null`.
