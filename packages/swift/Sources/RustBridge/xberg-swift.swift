@@ -1209,6 +1209,9 @@ public func nerBackendKindFromJson<GenericIntoRustString: IntoRustString>(_ json
 public func vlmFallbackPolicyFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> VlmFallbackPolicy {
     try { let val = __swift_bridge__$vlm_fallback_policy_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return VlmFallbackPolicy(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
+public func ocrStrategyFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> OcrStrategy {
+    try { let val = __swift_bridge__$ocr_strategy_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return OcrStrategy(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
+}
 public func tableChunkingModeFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> TableChunkingMode {
     try { let val = __swift_bridge__$table_chunking_mode_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return TableChunkingMode(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
@@ -1832,6 +1835,9 @@ public func __alef_phantom_vec_ner_backend_kind() -> RustVec<NerBackendKind> {
 }
 public func __alef_phantom_vec_vlm_fallback_policy() -> RustVec<VlmFallbackPolicy> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_vlm_fallback_policy())
+}
+public func __alef_phantom_vec_ocr_strategy() -> RustVec<OcrStrategy> {
+    RustVec(ptr: __swift_bridge__$__alef_phantom_vec_ocr_strategy())
 }
 public func __alef_phantom_vec_table_chunking_mode() -> RustVec<TableChunkingMode> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_table_chunking_mode())
@@ -2757,8 +2763,8 @@ public class ExtractionConfig: ExtractionConfigRefMut {
     }
 }
 extension ExtractionConfig {
-    public convenience init<GenericIntoRustString: IntoRustString>(_ use_cache: Bool, _ enable_quality_processing: Bool, _ ocr: Optional<OcrConfig>, _ force_ocr: Bool, _ force_ocr_pages: Optional<RustVec<UInt32>>, _ disable_ocr: Bool, _ chunking: Optional<ChunkingConfig>, _ content_filter: Optional<ContentFilterConfig>, _ images: Optional<ImageExtractionConfig>, _ pdf_options: Optional<PdfConfig>, _ token_reduction: Optional<TokenReductionOptions>, _ language_detection: Optional<LanguageDetectionConfig>, _ pages: Optional<PageConfig>, _ postprocessor: Optional<PostProcessorConfig>, _ html_output: Optional<HtmlOutputConfig>, _ extraction_timeout_secs: Optional<UInt64>, _ max_concurrent_extractions: Optional<UInt>, _ result_format: ResultFormat, _ security_limits: Optional<SecurityLimits>, _ max_embedded_file_bytes: Optional<UInt64>, _ output_format: OutputFormat, _ jupyter_cell_rendering: JupyterCellRendering, _ layout: Optional<LayoutDetectionConfig>, _ transcription: Optional<TranscriptionConfig>, _ use_layout_for_markdown: Bool, _ include_document_structure: Bool, _ acceleration: Optional<AccelerationConfig>, _ cache_namespace: Optional<GenericIntoRustString>, _ cache_ttl_secs: Optional<UInt64>, _ email: Optional<EmailConfig>, _ url: UrlExtractionConfig, _ max_archive_depth: UInt, _ tree_sitter: Optional<TreeSitterConfig>, _ structured_extraction: Optional<StructuredExtractionConfig>, _ ner: Optional<NerConfig>, _ redaction: Optional<RedactionConfig>, _ summarization: Optional<SummarizationConfig>, _ translation: Optional<TranslationConfig>, _ page_classification: Optional<PageClassificationConfig>, _ captioning: Optional<CaptioningConfig>, _ qr_codes: Optional<Bool>) {
-        self.init(ptr: __swift_bridge__$ExtractionConfig$new(use_cache, enable_quality_processing, { if let val = ocr { val.isOwned = false; return val.ptr } else { return nil } }(), force_ocr, { if let val = force_ocr_pages { val.isOwned = false; return val.ptr } else { return nil } }(), disable_ocr, { if let val = chunking { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = content_filter { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = images { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = pdf_options { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = token_reduction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = language_detection { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = pages { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = postprocessor { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = html_output { val.isOwned = false; return val.ptr } else { return nil } }(), extraction_timeout_secs.intoFfiRepr(), max_concurrent_extractions.intoFfiRepr(), {result_format.isOwned = false; return result_format.ptr;}(), { if let val = security_limits { val.isOwned = false; return val.ptr } else { return nil } }(), max_embedded_file_bytes.intoFfiRepr(), {output_format.isOwned = false; return output_format.ptr;}(), {jupyter_cell_rendering.isOwned = false; return jupyter_cell_rendering.ptr;}(), { if let val = layout { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = transcription { val.isOwned = false; return val.ptr } else { return nil } }(), use_layout_for_markdown, include_document_structure, { if let val = acceleration { val.isOwned = false; return val.ptr } else { return nil } }(), { if let rustString = optionalStringIntoRustString(cache_namespace) { rustString.isOwned = false; return rustString.ptr } else { return nil } }(), cache_ttl_secs.intoFfiRepr(), { if let val = email { val.isOwned = false; return val.ptr } else { return nil } }(), {url.isOwned = false; return url.ptr;}(), max_archive_depth, { if let val = tree_sitter { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = structured_extraction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = ner { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = redaction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = summarization { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = translation { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = page_classification { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = captioning { val.isOwned = false; return val.ptr } else { return nil } }(), qr_codes.intoFfiRepr()))
+    public convenience init<GenericIntoRustString: IntoRustString>(_ use_cache: Bool, _ enable_quality_processing: Bool, _ ocr: Optional<OcrConfig>, _ force_ocr: Bool, _ ocr_strategy: OcrStrategy, _ force_ocr_pages: Optional<RustVec<UInt32>>, _ disable_ocr: Bool, _ chunking: Optional<ChunkingConfig>, _ content_filter: Optional<ContentFilterConfig>, _ images: Optional<ImageExtractionConfig>, _ pdf_options: Optional<PdfConfig>, _ token_reduction: Optional<TokenReductionOptions>, _ language_detection: Optional<LanguageDetectionConfig>, _ pages: Optional<PageConfig>, _ postprocessor: Optional<PostProcessorConfig>, _ html_output: Optional<HtmlOutputConfig>, _ extraction_timeout_secs: Optional<UInt64>, _ max_concurrent_extractions: Optional<UInt>, _ result_format: ResultFormat, _ security_limits: Optional<SecurityLimits>, _ max_embedded_file_bytes: Optional<UInt64>, _ output_format: OutputFormat, _ jupyter_cell_rendering: JupyterCellRendering, _ layout: Optional<LayoutDetectionConfig>, _ transcription: Optional<TranscriptionConfig>, _ use_layout_for_markdown: Bool, _ include_document_structure: Bool, _ acceleration: Optional<AccelerationConfig>, _ cache_namespace: Optional<GenericIntoRustString>, _ cache_ttl_secs: Optional<UInt64>, _ email: Optional<EmailConfig>, _ url: UrlExtractionConfig, _ max_archive_depth: UInt, _ tree_sitter: Optional<TreeSitterConfig>, _ structured_extraction: Optional<StructuredExtractionConfig>, _ ner: Optional<NerConfig>, _ redaction: Optional<RedactionConfig>, _ summarization: Optional<SummarizationConfig>, _ translation: Optional<TranslationConfig>, _ page_classification: Optional<PageClassificationConfig>, _ captioning: Optional<CaptioningConfig>, _ qr_codes: Optional<Bool>) {
+        self.init(ptr: __swift_bridge__$ExtractionConfig$new(use_cache, enable_quality_processing, { if let val = ocr { val.isOwned = false; return val.ptr } else { return nil } }(), force_ocr, {ocr_strategy.isOwned = false; return ocr_strategy.ptr;}(), { if let val = force_ocr_pages { val.isOwned = false; return val.ptr } else { return nil } }(), disable_ocr, { if let val = chunking { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = content_filter { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = images { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = pdf_options { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = token_reduction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = language_detection { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = pages { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = postprocessor { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = html_output { val.isOwned = false; return val.ptr } else { return nil } }(), extraction_timeout_secs.intoFfiRepr(), max_concurrent_extractions.intoFfiRepr(), {result_format.isOwned = false; return result_format.ptr;}(), { if let val = security_limits { val.isOwned = false; return val.ptr } else { return nil } }(), max_embedded_file_bytes.intoFfiRepr(), {output_format.isOwned = false; return output_format.ptr;}(), {jupyter_cell_rendering.isOwned = false; return jupyter_cell_rendering.ptr;}(), { if let val = layout { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = transcription { val.isOwned = false; return val.ptr } else { return nil } }(), use_layout_for_markdown, include_document_structure, { if let val = acceleration { val.isOwned = false; return val.ptr } else { return nil } }(), { if let rustString = optionalStringIntoRustString(cache_namespace) { rustString.isOwned = false; return rustString.ptr } else { return nil } }(), cache_ttl_secs.intoFfiRepr(), { if let val = email { val.isOwned = false; return val.ptr } else { return nil } }(), {url.isOwned = false; return url.ptr;}(), max_archive_depth, { if let val = tree_sitter { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = structured_extraction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = ner { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = redaction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = summarization { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = translation { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = page_classification { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = captioning { val.isOwned = false; return val.ptr } else { return nil } }(), qr_codes.intoFfiRepr()))
     }
 }
 public class ExtractionConfigRefMut: ExtractionConfigRef {
@@ -2788,6 +2794,10 @@ extension ExtractionConfigRef {
 
     public func forceOcr() -> Bool {
         __swift_bridge__$ExtractionConfig$force_ocr(ptr)
+    }
+
+    public func ocrStrategy() -> RustString {
+        RustString(ptr: __swift_bridge__$ExtractionConfig$ocr_strategy(ptr))
     }
 
     public func forceOcrPages() -> Optional<RustVec<UInt32>> {
@@ -3002,8 +3012,8 @@ public class FileExtractionConfig: FileExtractionConfigRefMut {
     }
 }
 extension FileExtractionConfig {
-    public convenience init(_ enable_quality_processing: Optional<Bool>, _ ocr: Optional<OcrConfig>, _ force_ocr: Optional<Bool>, _ force_ocr_pages: Optional<RustVec<UInt32>>, _ disable_ocr: Optional<Bool>, _ chunking: Optional<ChunkingConfig>, _ content_filter: Optional<ContentFilterConfig>, _ images: Optional<ImageExtractionConfig>, _ pdf_options: Optional<PdfConfig>, _ token_reduction: Optional<TokenReductionOptions>, _ language_detection: Optional<LanguageDetectionConfig>, _ pages: Optional<PageConfig>, _ postprocessor: Optional<PostProcessorConfig>, _ html_output: Optional<HtmlOutputConfig>, _ result_format: Optional<ResultFormat>, _ output_format: Optional<OutputFormat>, _ include_document_structure: Optional<Bool>, _ layout: Optional<LayoutDetectionConfig>, _ transcription: Optional<TranscriptionConfig>, _ timeout_secs: Optional<UInt64>, _ tree_sitter: Optional<TreeSitterConfig>, _ structured_extraction: Optional<StructuredExtractionConfig>, _ url: Optional<UrlExtractionConfig>, _ ner: Optional<NerConfig>, _ redaction: Optional<RedactionConfig>, _ summarization: Optional<SummarizationConfig>, _ translation: Optional<TranslationConfig>, _ page_classification: Optional<PageClassificationConfig>, _ captioning: Optional<CaptioningConfig>, _ qr_codes: Optional<Bool>) {
-        self.init(ptr: __swift_bridge__$FileExtractionConfig$new(enable_quality_processing.intoFfiRepr(), { if let val = ocr { val.isOwned = false; return val.ptr } else { return nil } }(), force_ocr.intoFfiRepr(), { if let val = force_ocr_pages { val.isOwned = false; return val.ptr } else { return nil } }(), disable_ocr.intoFfiRepr(), { if let val = chunking { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = content_filter { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = images { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = pdf_options { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = token_reduction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = language_detection { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = pages { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = postprocessor { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = html_output { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = result_format { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = output_format { val.isOwned = false; return val.ptr } else { return nil } }(), include_document_structure.intoFfiRepr(), { if let val = layout { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = transcription { val.isOwned = false; return val.ptr } else { return nil } }(), timeout_secs.intoFfiRepr(), { if let val = tree_sitter { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = structured_extraction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = url { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = ner { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = redaction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = summarization { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = translation { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = page_classification { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = captioning { val.isOwned = false; return val.ptr } else { return nil } }(), qr_codes.intoFfiRepr()))
+    public convenience init(_ enable_quality_processing: Optional<Bool>, _ ocr: Optional<OcrConfig>, _ force_ocr: Optional<Bool>, _ ocr_strategy: Optional<OcrStrategy>, _ force_ocr_pages: Optional<RustVec<UInt32>>, _ disable_ocr: Optional<Bool>, _ chunking: Optional<ChunkingConfig>, _ content_filter: Optional<ContentFilterConfig>, _ images: Optional<ImageExtractionConfig>, _ pdf_options: Optional<PdfConfig>, _ token_reduction: Optional<TokenReductionOptions>, _ language_detection: Optional<LanguageDetectionConfig>, _ pages: Optional<PageConfig>, _ postprocessor: Optional<PostProcessorConfig>, _ html_output: Optional<HtmlOutputConfig>, _ result_format: Optional<ResultFormat>, _ output_format: Optional<OutputFormat>, _ include_document_structure: Optional<Bool>, _ layout: Optional<LayoutDetectionConfig>, _ transcription: Optional<TranscriptionConfig>, _ timeout_secs: Optional<UInt64>, _ tree_sitter: Optional<TreeSitterConfig>, _ structured_extraction: Optional<StructuredExtractionConfig>, _ url: Optional<UrlExtractionConfig>, _ ner: Optional<NerConfig>, _ redaction: Optional<RedactionConfig>, _ summarization: Optional<SummarizationConfig>, _ translation: Optional<TranslationConfig>, _ page_classification: Optional<PageClassificationConfig>, _ captioning: Optional<CaptioningConfig>, _ qr_codes: Optional<Bool>) {
+        self.init(ptr: __swift_bridge__$FileExtractionConfig$new(enable_quality_processing.intoFfiRepr(), { if let val = ocr { val.isOwned = false; return val.ptr } else { return nil } }(), force_ocr.intoFfiRepr(), { if let val = ocr_strategy { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = force_ocr_pages { val.isOwned = false; return val.ptr } else { return nil } }(), disable_ocr.intoFfiRepr(), { if let val = chunking { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = content_filter { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = images { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = pdf_options { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = token_reduction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = language_detection { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = pages { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = postprocessor { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = html_output { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = result_format { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = output_format { val.isOwned = false; return val.ptr } else { return nil } }(), include_document_structure.intoFfiRepr(), { if let val = layout { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = transcription { val.isOwned = false; return val.ptr } else { return nil } }(), timeout_secs.intoFfiRepr(), { if let val = tree_sitter { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = structured_extraction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = url { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = ner { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = redaction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = summarization { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = translation { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = page_classification { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = captioning { val.isOwned = false; return val.ptr } else { return nil } }(), qr_codes.intoFfiRepr()))
     }
 }
 public class FileExtractionConfigRefMut: FileExtractionConfigRef {
@@ -3029,6 +3039,10 @@ extension FileExtractionConfigRef {
 
     public func forceOcr() -> Optional<Bool> {
         __swift_bridge__$FileExtractionConfig$force_ocr(ptr).intoSwiftRepr()
+    }
+
+    public func ocrStrategy() -> Optional<RustString> {
+        { let val = __swift_bridge__$FileExtractionConfig$ocr_strategy(ptr); if val != nil { return RustString(ptr: val!) } else { return nil } }()
     }
 
     public func forceOcrPages() -> Optional<RustVec<UInt32>> {
@@ -5472,8 +5486,8 @@ public class HierarchyConfig: HierarchyConfigRefMut {
     }
 }
 extension HierarchyConfig {
-    public convenience init(_ enabled: Bool, _ k_clusters: UInt, _ include_bbox: Bool, _ ocr_coverage_threshold: Optional<Float>) {
-        self.init(ptr: __swift_bridge__$HierarchyConfig$new(enabled, k_clusters, include_bbox, ocr_coverage_threshold.intoFfiRepr()))
+    public convenience init(_ enabled: Bool, _ k_clusters: UInt, _ include_bbox: Bool) {
+        self.init(ptr: __swift_bridge__$HierarchyConfig$new(enabled, k_clusters, include_bbox))
     }
 }
 public class HierarchyConfigRefMut: HierarchyConfigRef {
@@ -5499,10 +5513,6 @@ extension HierarchyConfigRef {
 
     public func includeBbox() -> Bool {
         __swift_bridge__$HierarchyConfig$include_bbox(ptr)
-    }
-
-    public func ocrCoverageThreshold() -> Optional<Float> {
-        __swift_bridge__$HierarchyConfig$ocr_coverage_threshold(ptr).intoSwiftRepr()
     }
 }
 extension HierarchyConfig: Vectorizable {
@@ -21562,8 +21572,8 @@ public class PdfMetadata: PdfMetadataRefMut {
     }
 }
 extension PdfMetadata {
-    public convenience init<GenericIntoRustString: IntoRustString>(_ pdf_version: Optional<GenericIntoRustString>, _ producer: Optional<GenericIntoRustString>, _ is_encrypted: Optional<Bool>, _ width: Optional<Int64>, _ height: Optional<Int64>, _ page_count: Optional<UInt32>) {
-        self.init(ptr: __swift_bridge__$PdfMetadata$new({ if let rustString = optionalStringIntoRustString(pdf_version) { rustString.isOwned = false; return rustString.ptr } else { return nil } }(), { if let rustString = optionalStringIntoRustString(producer) { rustString.isOwned = false; return rustString.ptr } else { return nil } }(), is_encrypted.intoFfiRepr(), width.intoFfiRepr(), height.intoFfiRepr(), page_count.intoFfiRepr()))
+    public convenience init<GenericIntoRustString: IntoRustString>(_ pdf_version: Optional<GenericIntoRustString>, _ producer: Optional<GenericIntoRustString>, _ is_encrypted: Optional<Bool>, _ width: Optional<Int64>, _ height: Optional<Int64>, _ page_count: Optional<UInt32>, _ scanned_confidence: Optional<Float>, _ scanned_pages: Optional<RustVec<UInt32>>) {
+        self.init(ptr: __swift_bridge__$PdfMetadata$new({ if let rustString = optionalStringIntoRustString(pdf_version) { rustString.isOwned = false; return rustString.ptr } else { return nil } }(), { if let rustString = optionalStringIntoRustString(producer) { rustString.isOwned = false; return rustString.ptr } else { return nil } }(), is_encrypted.intoFfiRepr(), width.intoFfiRepr(), height.intoFfiRepr(), page_count.intoFfiRepr(), scanned_confidence.intoFfiRepr(), { if let val = scanned_pages { val.isOwned = false; return val.ptr } else { return nil } }()))
     }
 }
 public class PdfMetadataRefMut: PdfMetadataRef {
@@ -21601,6 +21611,14 @@ extension PdfMetadataRef {
 
     public func pageCount() -> Optional<UInt32> {
         __swift_bridge__$PdfMetadata$page_count(ptr).intoSwiftRepr()
+    }
+
+    public func scannedConfidence() -> Optional<Float> {
+        __swift_bridge__$PdfMetadata$scanned_confidence(ptr).intoSwiftRepr()
+    }
+
+    public func scannedPages() -> Optional<RustVec<UInt32>> {
+        { let val = __swift_bridge__$PdfMetadata$scanned_pages(ptr); if val != nil { return RustVec(ptr: val!) } else { return nil } }()
     }
 }
 extension PdfMetadata: Vectorizable {
@@ -23632,6 +23650,86 @@ extension VlmFallbackPolicy: Vectorizable {
 
     public static func vecOfSelfLen(vecPtr: UnsafeMutableRawPointer) -> UInt {
         __swift_bridge__$Vec_VlmFallbackPolicy$len(vecPtr)
+    }
+}
+
+
+public class OcrStrategy: OcrStrategyRefMut {
+    public var isOwned: Bool = true
+
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+
+    deinit {
+        if isOwned {
+            __swift_bridge__$OcrStrategy$_free(ptr)
+        }
+    }
+}
+public class OcrStrategyRefMut: OcrStrategyRef {
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+}
+public class OcrStrategyRef {
+    public var ptr: UnsafeMutableRawPointer
+
+    public init(ptr: UnsafeMutableRawPointer) {
+        self.ptr = ptr
+    }
+}
+extension OcrStrategyRef {
+    public func to_string() -> RustString {
+        RustString(ptr: __swift_bridge__$OcrStrategy$to_string(ptr))
+    }
+}
+extension OcrStrategy: Vectorizable {
+    public static func vecOfSelfNew() -> UnsafeMutableRawPointer {
+        __swift_bridge__$Vec_OcrStrategy$new()
+    }
+
+    public static func vecOfSelfFree(vecPtr: UnsafeMutableRawPointer) {
+        __swift_bridge__$Vec_OcrStrategy$drop(vecPtr)
+    }
+
+    public static func vecOfSelfPush(vecPtr: UnsafeMutableRawPointer, value: OcrStrategy) {
+        __swift_bridge__$Vec_OcrStrategy$push(vecPtr, {value.isOwned = false; return value.ptr;}())
+    }
+
+    public static func vecOfSelfPop(vecPtr: UnsafeMutableRawPointer) -> Optional<Self> {
+        let pointer = __swift_bridge__$Vec_OcrStrategy$pop(vecPtr)
+        if pointer == nil {
+            return nil
+        } else {
+            return (OcrStrategy(ptr: pointer!) as! Self)
+        }
+    }
+
+    public static func vecOfSelfGet(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<OcrStrategyRef> {
+        let pointer = __swift_bridge__$Vec_OcrStrategy$get(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return OcrStrategyRef(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfGetMut(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<OcrStrategyRefMut> {
+        let pointer = __swift_bridge__$Vec_OcrStrategy$get_mut(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return OcrStrategyRefMut(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfAsPtr(vecPtr: UnsafeMutableRawPointer) -> UnsafePointer<OcrStrategyRef> {
+        UnsafePointer<OcrStrategyRef>(OpaquePointer(__swift_bridge__$Vec_OcrStrategy$as_ptr(vecPtr)))
+    }
+
+    public static func vecOfSelfLen(vecPtr: UnsafeMutableRawPointer) -> UInt {
+        __swift_bridge__$Vec_OcrStrategy$len(vecPtr)
     }
 }
 
