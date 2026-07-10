@@ -127,7 +127,9 @@ pub trait OcrBackend: Plugin {
     /// # impl OcrBackend for MyOcr {
     /// #     fn supports_language(&self, _: &str) -> bool { true }
     /// #     fn backend_type(&self) -> OcrBackendType { OcrBackendType::Custom }
-    /// #     async fn process_image_file(&self, _: &Path, _: &OcrConfig) -> Result<ExtractedDocument> { todo!() }
+    /// #     async fn process_image_file(&self, _: &Path, _: &OcrConfig) -> Result<ExtractedDocument> {
+    /// #         Ok(ExtractedDocument::default())
+    /// #     }
     /// async fn process_image(&self, image_bytes: &[u8], config: &OcrConfig) -> Result<ExtractedDocument> {
     ///     // Read backend-specific options; unknown keys are silently ignored.
     ///     let fast_mode = config.backend_options
@@ -218,8 +220,12 @@ pub trait OcrBackend: Plugin {
     /// # #[async_trait]
     /// # impl OcrBackend for MyOcr {
     /// #     fn backend_type(&self) -> OcrBackendType { OcrBackendType::Custom }
-    /// #     async fn process_image(&self, _: &[u8], _: &OcrConfig) -> Result<ExtractedDocument> { todo!() }
-    /// #     async fn process_image_file(&self, _: &Path, _: &OcrConfig) -> Result<ExtractedDocument> { todo!() }
+    /// #     async fn process_image(&self, _: &[u8], _: &OcrConfig) -> Result<ExtractedDocument> {
+    /// #         Ok(ExtractedDocument::default())
+    /// #     }
+    /// #     async fn process_image_file(&self, _: &Path, _: &OcrConfig) -> Result<ExtractedDocument> {
+    /// #         Ok(ExtractedDocument::default())
+    /// #     }
     /// fn supports_language(&self, lang: &str) -> bool {
     ///     self.languages.contains(&lang.to_string())
     /// }
@@ -251,8 +257,12 @@ pub trait OcrBackend: Plugin {
     /// # #[async_trait]
     /// # impl OcrBackend for TesseractBackend {
     /// #     fn supports_language(&self, _: &str) -> bool { true }
-    /// #     async fn process_image(&self, _: &[u8], _: &OcrConfig) -> Result<ExtractedDocument> { todo!() }
-    /// #     async fn process_image_file(&self, _: &Path, _: &OcrConfig) -> Result<ExtractedDocument> { todo!() }
+    /// #     async fn process_image(&self, _: &[u8], _: &OcrConfig) -> Result<ExtractedDocument> {
+    /// #         Ok(ExtractedDocument::default())
+    /// #     }
+    /// #     async fn process_image_file(&self, _: &Path, _: &OcrConfig) -> Result<ExtractedDocument> {
+    /// #         Ok(ExtractedDocument::default())
+    /// #     }
     /// fn backend_type(&self) -> OcrBackendType {
     ///     OcrBackendType::Tesseract
     /// }

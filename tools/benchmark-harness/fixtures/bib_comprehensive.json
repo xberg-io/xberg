@@ -1,8 +1,12 @@
 {
 	"document": "../../../test_documents/bibtex/comprehensive.bib",
 	"file_type": "bib",
-	"file_size": 3568,
-	"expected_frameworks": ["xberg", "pandoc", "tika"],
+	"file_size": 3560,
+	"expected_frameworks": [
+		"xberg",
+		"pandoc",
+		"tika"
+	],
 	"metadata": {
 		"description": "BibTeX bibliography file with multiple entries",
 		"category": "academic"

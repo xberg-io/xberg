@@ -94,9 +94,11 @@ pub struct TranscriptionConfig {
 
     /// Request SHA256 verification of downloaded model files.
     ///
-    /// Reserved for the checksum table follow-up. The current resolver logs a
-    /// warning and treats this as a no-op.
-    #[serde(default = "default_true")]
+    /// Defaults to `false` because the resolver downloads from mutable Hugging
+    /// Face refs unless callers pin and verify models out-of-band. Explicit
+    /// `true` requests are rejected by the model resolver until pinned checksum
+    /// metadata is available.
+    #[serde(default)]
     pub verify_hash: bool,
 }
 
@@ -112,7 +114,7 @@ impl Default for TranscriptionConfig {
             timeout_ms: default_timeout_ms(),
             model_cache_dir: None,
             allow_network: true,
-            verify_hash: true,
+            verify_hash: false,
         }
     }
 }

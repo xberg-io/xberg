@@ -20,7 +20,11 @@ pub(crate) fn extract_usage_from_chat(response: &liter_llm::ChatCompletionRespon
 }
 
 /// Extract usage metadata from an embedding response.
-#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[cfg(all(
+    feature = "tokio-runtime",
+    any(feature = "embeddings", feature = "static-embeddings"),
+    not(target_arch = "wasm32")
+))]
 pub(crate) fn extract_usage_from_embedding(response: &liter_llm::EmbeddingResponse, source: &str) -> Option<LlmUsage> {
     Some(LlmUsage {
         model: response.model.clone(),

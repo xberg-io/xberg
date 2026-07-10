@@ -19,7 +19,9 @@ exclude = [
     "readme_templates/**",
     "target/**",
     "templates/readme/**",
+    "test_documents",
     "test_documents/**",
+    "tools/benchmark-harness/fixtures/**",
     "vendor/**",
     "**/Cargo.toml",
     "docs-site/src/snippets/**",
@@ -35,21 +37,6 @@ exclude = [
     "**/*.diff",
     "**/*.patch",
     "**/frb_generated.rs",
-    "test_apps/**",
-    "**/*_bridge_generated/**",
-    "Package.swift",
-    "packages/**",
-    "docs-site/src/content/docs/reference/**",
-    "crates/*-dart/**",
-    "crates/*-ffi/**",
-    "crates/*-jni/**",
-    "crates/*-node/**",
-    "crates/*-php/**",
-    "crates/*-py/**",
-    "crates/*-rb/**",
-    "crates/*-rs-jni/**",
-    "crates/*-ruby/**",
-    "crates/*-wasm/**",
 ]
 
 [lint.markdown.rumdl]
@@ -57,14 +44,6 @@ disable = ["MD012", "MD013", "MD024", "MD033", "MD036", "MD041", "MD046", "MD051
 
 [fmt.markdown.rumdl]
 disable = ["MD012", "MD013", "MD024", "MD033", "MD036", "MD041", "MD046", "MD051", "MD076"]
-
-[lint.uncomment]
-enabled = true
-remove_todos = true
-remove_fixme = true
-remove_docs = false
-use_default_ignores = true
-preserve_patterns = ["~keep"]
 
 [lint.python.ruff]
 select = ["ALL"]
@@ -324,7 +303,6 @@ traineddata = "traineddata"
     "D415",
     "E702",
     "ERA001",
-    "EXE001",
     "PERF203",
     "PERF401",
     "PLC0415",
@@ -352,7 +330,6 @@ traineddata = "traineddata"
     "D103",
     "G004",
     "INP001",
-    "EXE001",
     "PERF401",
     "PLC0415",
     "PLR0911",
@@ -413,7 +390,7 @@ traineddata = "traineddata"
     "T201",
     "TC003",
 ]
-"tools/perf/*.py" = ["D103", "EXE001", "T201"]
+"tools/perf/*.py" = ["D103", "T201"]
 
 [hooks]
 stages = ["pre-commit"]
@@ -439,7 +416,9 @@ lint = { exclude = [
     "readme_templates/**",
     "target/**",
     "templates/readme/**",
+    "test_documents",
     "test_documents/**",
+    "tools/benchmark-harness/fixtures/**",
     "vendor/**",
     "**/Cargo.toml",
     "docs-site/src/snippets/**",
@@ -455,21 +434,6 @@ lint = { exclude = [
     "**/*.diff",
     "**/*.patch",
     "**/frb_generated.rs",
-    "test_apps/**",
-    "**/*_bridge_generated/**",
-    "Package.swift",
-    "packages/**",
-    "docs-site/src/content/docs/reference/**",
-    "crates/*-dart/**",
-    "crates/*-ffi/**",
-    "crates/*-jni/**",
-    "crates/*-node/**",
-    "crates/*-php/**",
-    "crates/*-py/**",
-    "crates/*-rb/**",
-    "crates/*-rs-jni/**",
-    "crates/*-ruby/**",
-    "crates/*-wasm/**",
 ] }
 fmt = { exclude = [
     "**/*.freezed.dart",
@@ -491,7 +455,9 @@ fmt = { exclude = [
     "readme_templates/**",
     "target/**",
     "templates/readme/**",
+    "test_documents",
     "test_documents/**",
+    "tools/benchmark-harness/fixtures/**",
     "vendor/**",
     "**/Cargo.toml",
     "docs-site/src/snippets/**",
@@ -507,21 +473,6 @@ fmt = { exclude = [
     "**/*.diff",
     "**/*.patch",
     "**/frb_generated.rs",
-    "test_apps/**",
-    "**/*_bridge_generated/**",
-    "Package.swift",
-    "packages/**",
-    "docs-site/src/content/docs/reference/**",
-    "crates/*-dart/**",
-    "crates/*-ffi/**",
-    "crates/*-jni/**",
-    "crates/*-node/**",
-    "crates/*-php/**",
-    "crates/*-py/**",
-    "crates/*-rb/**",
-    "crates/*-rs-jni/**",
-    "crates/*-ruby/**",
-    "crates/*-wasm/**",
 ] }
 file_safety = { exclude = [
     "**/*.freezed.dart",
@@ -543,8 +494,26 @@ file_safety = { exclude = [
     "readme_templates/**",
     "target/**",
     "templates/readme/**",
+    "test_documents",
     "test_documents/**",
+    "tools/benchmark-harness/fixtures/**",
     "vendor/**",
+    "crates/xberg-ffi/include/xberg.h",
+    "crates/xberg-ffi/src/lib.rs",
+    "crates/xberg-node/src/lib.rs",
+    "crates/xberg-php/src/lib.rs",
+    "crates/xberg-py/src/lib.rs",
+    "crates/xberg-wasm/src/lib.rs",
+    "packages/csharp/**/include/xberg.h",
+    "packages/dart/lib/src/xberg_bridge_generated/**",
+    "packages/dart/rust/src/lib.rs",
+    "packages/elixir/native/xberg_nif/src/lib.rs",
+    "packages/go/include/xberg.h",
+    "packages/java/**/include/xberg.h",
+    "packages/ruby/ext/xberg_rb/src/lib.rs",
+    "packages/swift/Sources/RustBridge/xberg-swift.swift",
+    "packages/swift/Sources/Xberg/Xberg.swift",
+    "packages/swift/rust/src/lib.rs",
     "**/Cargo.toml",
     "docs-site/src/snippets/**",
     "**/_generated/**",
@@ -559,24 +528,8 @@ file_safety = { exclude = [
     "**/*.diff",
     "**/*.patch",
     "**/frb_generated.rs",
-    "**/*.rs",
-    "test_apps/**",
-    "**/*_bridge_generated/**",
-    "Package.swift",
-    "packages/**",
-    "docs-site/src/content/docs/reference/**",
-    "crates/*-dart/**",
-    "crates/*-ffi/**",
-    "crates/*-jni/**",
-    "crates/*-node/**",
-    "crates/*-php/**",
-    "crates/*-py/**",
-    "crates/*-rb/**",
-    "crates/*-rs-jni/**",
-    "crates/*-ruby/**",
-    "crates/*-wasm/**",
 ] }
-cargo = { clippy_args = ["--workspace", "--lib", "--bins"], lint = false }
+cargo = true
 commit = { stages = ["commit-msg"] }
 
 [hooks.pre-commit.commands.pyrefly]

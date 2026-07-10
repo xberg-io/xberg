@@ -1,8 +1,14 @@
 {
 	"document": "../../../test_documents/markdown/simple_metadata.md",
 	"file_type": "md",
-	"file_size": 1200,
-	"expected_frameworks": ["xberg", "docling", "pandoc", "tika", "unstructured"],
+	"file_size": 1141,
+	"expected_frameworks": [
+		"xberg",
+		"docling",
+		"pandoc",
+		"tika",
+		"unstructured"
+	],
 	"metadata": {
 		"description": "Simple Markdown with metadata",
 		"category": "text"

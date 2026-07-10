@@ -1,8 +1,12 @@
 {
 	"document": "../../../../test_documents/vendored/docling/json/code_and_formula.json",
 	"file_type": "json",
-	"file_size": 21078,
-	"expected_frameworks": ["xberg", "markitdown", "tika"],
+	"file_size": 20502,
+	"expected_frameworks": [
+		"xberg",
+		"markitdown",
+		"tika"
+	],
 	"metadata": {
 		"description": "Document from docling test suite",
 		"source": "docling",

@@ -1,8 +1,11 @@
 {
 	"document": "../../../test_documents/data_formats/cargo.toml",
 	"file_type": "toml",
-	"file_size": 1983,
-	"expected_frameworks": ["xberg", "tika"],
+	"file_size": 1950,
+	"expected_frameworks": [
+		"xberg",
+		"tika"
+	],
 	"metadata": {
 		"description": "Rust Cargo workspace configuration",
 		"category": "data"

@@ -10,7 +10,6 @@ use crate::Result;
     feature = "excel",
     feature = "excel-wasm",
     feature = "html",
-    feature = "transcription",
     feature = "tree-sitter",
     feature = "xml",
 ))]
@@ -23,7 +22,6 @@ use crate::plugins::registry::get_document_extractor_registry;
     feature = "excel",
     feature = "excel-wasm",
     feature = "html",
-    feature = "transcription",
     feature = "tree-sitter",
     feature = "xml",
 ))]
@@ -61,7 +59,6 @@ use std::sync::Arc;
     feature = "excel",
     feature = "excel-wasm",
     feature = "html",
-    feature = "transcription",
     feature = "tree-sitter",
     feature = "xml",
 ))]

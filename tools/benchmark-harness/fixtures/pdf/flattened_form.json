@@ -1,7 +1,7 @@
 {
 	"document": "../../../../test_documents/pdf/flattened_form.pdf",
 	"file_type": "pdf",
-	"file_size": 1115,
+	"file_size": 1152,
 	"expected_frameworks": [
 		"xberg",
 		"docling",

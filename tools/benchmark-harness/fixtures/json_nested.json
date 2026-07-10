@@ -1,8 +1,12 @@
 {
 	"document": "../../../test_documents/json/complex_nested.json",
 	"file_type": "json",
-	"file_size": 742,
-	"expected_frameworks": ["xberg", "markitdown", "tika"],
+	"file_size": 855,
+	"expected_frameworks": [
+		"xberg",
+		"markitdown",
+		"tika"
+	],
 	"metadata": {
 		"description": "Nested JSON - Complex nested objects with deep hierarchies and configuration structures",
 		"category": "structured"

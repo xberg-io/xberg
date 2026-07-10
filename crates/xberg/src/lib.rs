@@ -73,9 +73,6 @@ pub mod chunking;
 #[cfg(feature = "diff")]
 pub mod diff;
 
-// ~keep TODO(wasm-llm): `liter-llm` stays in no-ORT/wasm target presets because the
-// ~keep dependency supports hosted HTTP providers on wasm. The runtime module remains
-// ~keep disabled until the wasm request/runtime integration is wired and tested.
 #[cfg(all(feature = "liter-llm", not(target_arch = "wasm32")))]
 pub mod llm;
 

@@ -1,8 +1,10 @@
 {
 	"document": "../../../test_documents/markdown/sample.mdx",
 	"file_type": "mdx",
-	"file_size": 1065,
-	"expected_frameworks": ["xberg"],
+	"file_size": 1060,
+	"expected_frameworks": [
+		"xberg"
+	],
 	"metadata": {
 		"description": "MDX document combining Markdown with JSX components",
 		"category": "markup",

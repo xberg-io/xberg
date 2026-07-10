@@ -1,8 +1,15 @@
 {
 	"document": "../../../../test_documents/vendored/markitdown/html/test_blog.html",
 	"file_type": "html",
-	"file_size": 25965,
-	"expected_frameworks": ["xberg", "docling", "markitdown", "pandoc", "tika", "unstructured"],
+	"file_size": 41310,
+	"expected_frameworks": [
+		"xberg",
+		"docling",
+		"markitdown",
+		"pandoc",
+		"tika",
+		"unstructured"
+	],
 	"metadata": {
 		"description": "Document from markitdown test suite",
 		"source": "markitdown",

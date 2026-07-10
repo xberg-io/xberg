@@ -1,8 +1,15 @@
 {
 	"document": "../../../../test_documents/vendored/docling/html/wiki_duck.html",
 	"file_type": "html",
-	"file_size": 244709,
-	"expected_frameworks": ["xberg", "docling", "markitdown", "pandoc", "tika", "unstructured"],
+	"file_size": 439307,
+	"expected_frameworks": [
+		"xberg",
+		"docling",
+		"markitdown",
+		"pandoc",
+		"tika",
+		"unstructured"
+	],
 	"metadata": {
 		"description": "Document from docling test suite",
 		"source": "docling",

@@ -115,6 +115,7 @@ pub struct LateInteractionPreset {
 /// checked-in `presets.sha256sum` manifest.
 /// SHA-256 manifest pinning every hosted late-interaction preset file, verified
 /// at download time by [`crate::onnx::download_model_files`].
+#[cfg(any(feature = "late-interaction", test))]
 pub(crate) const LATE_INTERACTION_SHA256_MANIFEST: &str = include_str!("presets.sha256sum");
 
 pub static LATE_INTERACTION_PRESETS: LazyLock<Vec<LateInteractionPreset>> = LazyLock::new(|| {

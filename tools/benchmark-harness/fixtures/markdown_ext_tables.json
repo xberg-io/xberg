@@ -1,8 +1,12 @@
 {
 	"document": "../../../test_documents/markdown/tables.markdown",
 	"file_type": "markdown",
-	"file_size": 2556,
-	"expected_frameworks": ["xberg", "docling", "pandoc"],
+	"file_size": 1866,
+	"expected_frameworks": [
+		"xberg",
+		"docling",
+		"pandoc"
+	],
 	"metadata": {
 		"description": "Markdown document with multiple table examples (MARKDOWN extension)",
 		"category": "markup",

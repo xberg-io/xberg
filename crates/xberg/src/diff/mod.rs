@@ -198,9 +198,6 @@ fn diff_tables(a_tables: &[Table], b_tables: &[Table]) -> (Vec<Table>, Vec<Table
 ///
 /// Header content is NOT compared — column reordering with the same dimensions will produce
 /// per-cell `CellChange` entries for every cell whose value differs, not a structural replacement.
-///
-/// ~keep TODO: smarter shape-matching that aligns tables by header names (instead of positional
-/// index) is a follow-up; for now dimensions-only is the v1 default.
 fn tables_same_shape(a: &Table, b: &Table) -> bool {
     if a.cells.len() != b.cells.len() {
         return false;

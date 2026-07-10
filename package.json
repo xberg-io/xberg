@@ -1,6 +1,6 @@
 {
   "name": "xberg-root",
-  "version": "1.0.0-rc.19",
+  "version": "1.0.0-rc.18",
   "private": true,
   "scripts": {
     "typecheck": "pnpm -r --if-present run typecheck"

@@ -182,6 +182,11 @@ pub struct EmbeddingPreset {
 /// All available embedding presets.
 /// SHA-256 manifest pinning every hosted embedding preset file, verified at
 /// download time by [`crate::onnx::download_model_files`].
+#[cfg(any(
+    feature = "embeddings",
+    all(feature = "static-embeddings", not(target_arch = "wasm32")),
+    test
+))]
 pub(crate) const EMBEDDING_SHA256_MANIFEST: &str = include_str!("presets.sha256sum");
 
 pub static EMBEDDING_PRESETS: LazyLock<Vec<EmbeddingPreset>> = LazyLock::new(|| {
@@ -629,13 +634,6 @@ pub fn embed_texts<T: AsRef<str>>(
     }
 
     match &config.model {
-        // ~keep TODO(wasm-llm): liter-llm has a wasm-http backend, but embedding
-        // ~keep dispatch still needs a wasm runtime path before this cfg can include wasm32.
-        // ~keep `tokio-runtime` is required in addition to `liter-llm` — this arm drives
-        // ~keep `tokio::runtime::Handle`/`block_in_place`/`global_runtime` directly, and
-        // ~keep `liter-llm`'s own feature definition does not imply `tokio-runtime` (unlike
-        // ~keep `embeddings`, which always does). A `static-embeddings + liter-llm` build
-        // ~keep without `tokio-runtime` falls through to the arm below instead.
         #[cfg(all(feature = "liter-llm", feature = "tokio-runtime", not(target_arch = "wasm32")))]
         crate::core::config::EmbeddingModelType::Llm { llm } => {
             let normalize = config.normalize;
@@ -649,9 +647,14 @@ pub fn embed_texts<T: AsRef<str>>(
             };
             result.map(|(embeddings, _usage)| embeddings)
         }
-        // ~keep TODO(wasm-llm): keep wasm in the MissingDependency branch until hosted
-        // ~keep embedding calls are wired for wasm runtimes.
-        #[cfg(any(not(feature = "liter-llm"), not(feature = "tokio-runtime"), target_arch = "wasm32"))]
+        #[cfg(target_arch = "wasm32")]
+        crate::core::config::EmbeddingModelType::Llm { .. } => Err(crate::XbergError::MissingDependency(
+            "LLM embeddings are not available on wasm builds".into(),
+        )),
+        #[cfg(all(
+            not(target_arch = "wasm32"),
+            any(not(feature = "liter-llm"), not(feature = "tokio-runtime"))
+        ))]
         crate::core::config::EmbeddingModelType::Llm { .. } => Err(crate::XbergError::MissingDependency(
             "LLM embeddings require the 'liter-llm' and 'tokio-runtime' features. Rebuild with --features liter-llm"
                 .into(),
@@ -930,17 +933,19 @@ pub async fn embed_texts_async<T: AsRef<str> + Send + 'static>(
     }
 
     match &config.model {
-        // ~keep TODO(wasm-llm): liter-llm has a wasm-http backend, but embedding
-        // ~keep dispatch still needs a wasm runtime path before this cfg can include wasm32.
         #[cfg(all(feature = "liter-llm", not(target_arch = "wasm32")))]
         crate::core::config::EmbeddingModelType::Llm { llm } => {
             return crate::llm::vlm_embeddings::embed_via_llm(&texts, llm, config.normalize)
                 .await
                 .map(|(embeddings, _usage)| embeddings);
         }
-        // ~keep TODO(wasm-llm): keep wasm in the MissingDependency branch until hosted
-        // ~keep embedding calls are wired for wasm runtimes.
-        #[cfg(any(not(feature = "liter-llm"), target_arch = "wasm32"))]
+        #[cfg(target_arch = "wasm32")]
+        crate::core::config::EmbeddingModelType::Llm { .. } => {
+            return Err(crate::XbergError::MissingDependency(
+                "LLM embeddings are not available on wasm builds".into(),
+            ));
+        }
+        #[cfg(all(not(feature = "liter-llm"), not(target_arch = "wasm32")))]
         crate::core::config::EmbeddingModelType::Llm { .. } => {
             return Err(crate::XbergError::MissingDependency(
                 "LLM embeddings require the 'liter-llm' feature. Rebuild with --features liter-llm".into(),

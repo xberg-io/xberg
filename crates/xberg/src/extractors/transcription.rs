@@ -11,7 +11,6 @@ use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex};
 
 use crate::core::config::ExtractionConfig;
-use crate::extractors::SyncExtractor;
 use crate::plugins::{InternalDocumentExtractor, Plugin};
 use crate::transcription::decode::{PcmAudio, decode_audio_to_pcm};
 use crate::transcription::engine::WhisperEngine;
@@ -184,7 +183,8 @@ impl InternalDocumentExtractor for TranscriptionExtractor {
     }
 }
 
-impl SyncExtractor for TranscriptionExtractor {
+#[cfg(test)]
+impl TranscriptionExtractor {
     fn extract_sync(&self, content: &[u8], mime_type: &str, config: &ExtractionConfig) -> Result<InternalDocument> {
         let tcfg = config.transcription.as_ref().filter(|c| c.enabled).ok_or_else(|| {
             XbergError::transcription(

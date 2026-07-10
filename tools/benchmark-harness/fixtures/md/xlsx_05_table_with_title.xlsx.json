@@ -1,8 +1,14 @@
 {
 	"document": "../../../../test_documents/vendored/docling/md/xlsx_05_table_with_title.xlsx.md",
 	"file_type": "md",
-	"file_size": 341,
-	"expected_frameworks": ["xberg", "docling", "pandoc", "tika", "unstructured"],
+	"file_size": 305,
+	"expected_frameworks": [
+		"xberg",
+		"docling",
+		"pandoc",
+		"tika",
+		"unstructured"
+	],
 	"metadata": {
 		"description": "Document from docling test suite",
 		"source": "docling",

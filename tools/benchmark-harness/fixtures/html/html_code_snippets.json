@@ -1,8 +1,15 @@
 {
 	"document": "../../../../test_documents/vendored/docling/html/html_code_snippets.html",
 	"file_type": "html",
-	"file_size": 1496,
-	"expected_frameworks": ["xberg", "docling", "markitdown", "pandoc", "tika", "unstructured"],
+	"file_size": 1638,
+	"expected_frameworks": [
+		"xberg",
+		"docling",
+		"markitdown",
+		"pandoc",
+		"tika",
+		"unstructured"
+	],
 	"metadata": {
 		"description": "Document from docling test suite",
 		"source": "docling",

@@ -1,8 +1,14 @@
 {
 	"document": "../../../../test_documents/vendored/docling/md/mixed_without_h1.md.md",
 	"file_type": "md",
-	"file_size": 108,
-	"expected_frameworks": ["xberg", "docling", "pandoc", "tika", "unstructured"],
+	"file_size": 106,
+	"expected_frameworks": [
+		"xberg",
+		"docling",
+		"pandoc",
+		"tika",
+		"unstructured"
+	],
 	"metadata": {
 		"description": "Document from docling test suite",
 		"source": "docling",

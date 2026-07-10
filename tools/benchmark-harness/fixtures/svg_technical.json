@@ -1,8 +1,12 @@
 {
 	"document": "../../../test_documents/images/5_level_paging_and_5_level_ept_intel_revision_1_1_may_2017.svg",
 	"file_type": "svg",
-	"file_size": 34255,
-	"expected_frameworks": ["xberg", "pymupdf4llm", "tika"],
+	"file_size": 34205,
+	"expected_frameworks": [
+		"xberg",
+		"pymupdf4llm",
+		"tika"
+	],
 	"metadata": {
 		"description": "SVG technical diagram from Intel document",
 		"category": "technical"

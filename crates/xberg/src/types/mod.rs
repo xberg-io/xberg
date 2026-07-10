@@ -41,7 +41,9 @@ pub use ocr_elements::*;
 pub use page::*;
 pub use qr::{QrBoundingBox, QrCode};
 pub use redaction::{PiiCategory, RedactionFinding, RedactionReport, RedactionStrategy};
-pub use revisions::{CellChange, DiffLine, DocumentRevision, RevisionAnchor, RevisionDelta, RevisionKind};
+pub use revisions::{
+    CellChange, DiffLine, DocumentRevision, PropertyChange, RevisionAnchor, RevisionDelta, RevisionKind,
+};
 pub use summary::{DocumentSummary, SummaryStrategy};
 pub use tables::*;
 pub use translation::Translation;

@@ -1,7 +1,7 @@
 {
 	"document": "../../../../test_documents/charts/chart_bar.pdf",
 	"file_type": "pdf",
-	"file_size": 1159,
+	"file_size": 1081,
 	"expected_frameworks": [
 		"xberg",
 		"docling",

@@ -1,8 +1,15 @@
 {
 	"document": "../../../test_documents/html/html.htm",
 	"file_type": "htm",
-	"file_size": 1397,
-	"expected_frameworks": ["xberg", "docling", "markitdown", "pandoc", "tika", "unstructured"],
+	"file_size": 1511,
+	"expected_frameworks": [
+		"xberg",
+		"docling",
+		"markitdown",
+		"pandoc",
+		"tika",
+		"unstructured"
+	],
 	"metadata": {
 		"description": "Minimal HTML document with basic structure (HTM extension)",
 		"category": "web",

@@ -1,8 +1,10 @@
 {
 	"document": "../../../../test_documents/html/international_emergency_medicine.html",
 	"file_type": "html",
-	"file_size": 352033,
-	"expected_frameworks": ["xberg"],
+	"file_size": 328017,
+	"expected_frameworks": [
+		"xberg"
+	],
 	"metadata": {
 		"description": "html test: international_emergency_medicine",
 		"source": "pandoc-generated",

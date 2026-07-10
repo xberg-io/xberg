@@ -1,8 +1,12 @@
 {
 	"document": "../../../../test_documents/vendored/docling/json/xlsx_05_table_with_title.xlsx.json",
 	"file_type": "json",
-	"file_size": 15938,
-	"expected_frameworks": ["xberg", "markitdown", "tika"],
+	"file_size": 15866,
+	"expected_frameworks": [
+		"xberg",
+		"markitdown",
+		"tika"
+	],
 	"metadata": {
 		"description": "Document from docling test suite",
 		"source": "docling",

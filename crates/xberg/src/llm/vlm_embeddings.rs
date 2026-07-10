@@ -40,7 +40,11 @@ use crate::core::config::LlmConfig;
 ///
 /// - `XbergError::Embedding` if the API call fails or returns unexpected data
 /// - `XbergError::MissingDependency` if the liter-llm client cannot be created
-#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[cfg(all(
+    feature = "tokio-runtime",
+    any(feature = "embeddings", feature = "static-embeddings"),
+    not(target_arch = "wasm32")
+))]
 pub(crate) async fn embed_via_llm<T: AsRef<str>>(
     texts: &[T],
     config: &LlmConfig,
@@ -91,7 +95,14 @@ pub(crate) async fn embed_via_llm<T: AsRef<str>>(
 }
 
 /// L2-normalize an embedding vector in-place.
-#[cfg(any(all(feature = "tokio-runtime", not(target_arch = "wasm32")), test))]
+#[cfg(any(
+    all(
+        feature = "tokio-runtime",
+        any(feature = "embeddings", feature = "static-embeddings"),
+        not(target_arch = "wasm32")
+    ),
+    test
+))]
 fn normalize_l2(embedding: &mut [f32]) {
     let magnitude: f32 = embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
     if magnitude > f32::EPSILON {

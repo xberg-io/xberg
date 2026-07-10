@@ -1,8 +1,11 @@
 {
 	"document": "../../../test_documents/data_formats/pyproject.toml",
 	"file_type": "toml",
-	"file_size": 2646,
-	"expected_frameworks": ["xberg", "tika"],
+	"file_size": 2547,
+	"expected_frameworks": [
+		"xberg",
+		"tika"
+	],
 	"metadata": {
 		"description": "Python pyproject.toml configuration",
 		"category": "data"

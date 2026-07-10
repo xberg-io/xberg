@@ -1937,6 +1937,18 @@ void* __swift_bridge__$Vec_CellChange$get_mut(void* vec_ptr, uintptr_t index);
 uintptr_t __swift_bridge__$Vec_CellChange$len(void* vec_ptr);
 void* __swift_bridge__$Vec_CellChange$as_ptr(void* vec_ptr);
 
+typedef struct PropertyChange PropertyChange;
+void __swift_bridge__$PropertyChange$_free(void* self);
+
+void* __swift_bridge__$Vec_PropertyChange$new(void);
+void __swift_bridge__$Vec_PropertyChange$drop(void* vec_ptr);
+void __swift_bridge__$Vec_PropertyChange$push(void* vec_ptr, void* item_ptr);
+void* __swift_bridge__$Vec_PropertyChange$pop(void* vec_ptr);
+void* __swift_bridge__$Vec_PropertyChange$get(void* vec_ptr, uintptr_t index);
+void* __swift_bridge__$Vec_PropertyChange$get_mut(void* vec_ptr, uintptr_t index);
+uintptr_t __swift_bridge__$Vec_PropertyChange$len(void* vec_ptr);
+void* __swift_bridge__$Vec_PropertyChange$as_ptr(void* vec_ptr);
+
 typedef struct DocumentRevision DocumentRevision;
 void __swift_bridge__$DocumentRevision$_free(void* self);
 
@@ -4517,15 +4529,19 @@ uintptr_t __swift_bridge__$CellChange$row(void* self);
 uintptr_t __swift_bridge__$CellChange$col(void* self);
 void* __swift_bridge__$CellChange$from(void* self);
 void* __swift_bridge__$CellChange$to(void* self);
+void* __swift_bridge__$PropertyChange$name(void* self);
+void* __swift_bridge__$PropertyChange$from(void* self);
+void* __swift_bridge__$PropertyChange$to(void* self);
 void* __swift_bridge__$DocumentRevision$revision_id(void* self);
 void* __swift_bridge__$DocumentRevision$author(void* self);
 void* __swift_bridge__$DocumentRevision$timestamp(void* self);
 void* __swift_bridge__$DocumentRevision$kind(void* self);
 void* __swift_bridge__$DocumentRevision$anchor(void* self);
 void* __swift_bridge__$DocumentRevision$delta(void* self);
-void* __swift_bridge__$RevisionDelta$new(void* content, void* table_changes);
+void* __swift_bridge__$RevisionDelta$new(void* content, void* table_changes, void* property_changes);
 void* __swift_bridge__$RevisionDelta$content(void* self);
 void* __swift_bridge__$RevisionDelta$table_changes(void* self);
+void* __swift_bridge__$RevisionDelta$property_changes(void* self);
 void* __swift_bridge__$DocumentSummary$text(void* self);
 void* __swift_bridge__$DocumentSummary$strategy(void* self);
 struct __private__OptionU32 __swift_bridge__$DocumentSummary$token_count(void* self);
@@ -5110,6 +5126,7 @@ struct __private__ResultPtrAndPtr __swift_bridge__$qr_bounding_box_from_json(voi
 struct __private__ResultPtrAndPtr __swift_bridge__$redaction_report_from_json(void* json);
 struct __private__ResultPtrAndPtr __swift_bridge__$redaction_finding_from_json(void* json);
 struct __private__ResultPtrAndPtr __swift_bridge__$cell_change_from_json(void* json);
+struct __private__ResultPtrAndPtr __swift_bridge__$property_change_from_json(void* json);
 struct __private__ResultPtrAndPtr __swift_bridge__$document_revision_from_json(void* json);
 struct __private__ResultPtrAndPtr __swift_bridge__$revision_delta_from_json(void* json);
 struct __private__ResultPtrAndPtr __swift_bridge__$document_summary_from_json(void* json);
@@ -5356,6 +5373,7 @@ void* __swift_bridge__$__alef_phantom_vec_qr_bounding_box(void);
 void* __swift_bridge__$__alef_phantom_vec_redaction_report(void);
 void* __swift_bridge__$__alef_phantom_vec_redaction_finding(void);
 void* __swift_bridge__$__alef_phantom_vec_cell_change(void);
+void* __swift_bridge__$__alef_phantom_vec_property_change(void);
 void* __swift_bridge__$__alef_phantom_vec_document_revision(void);
 void* __swift_bridge__$__alef_phantom_vec_revision_delta(void);
 void* __swift_bridge__$__alef_phantom_vec_document_summary(void);

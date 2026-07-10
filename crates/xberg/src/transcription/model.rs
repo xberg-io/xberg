@@ -81,6 +81,11 @@ pub enum WhisperModelError {
     /// The resolved cache directory could not be determined or created.
     #[error("cache directory unavailable: {0}")]
     Cache(String),
+
+    /// Hash verification was requested, but the resolver has no pinned checksum
+    /// metadata for the mutable Hugging Face model refs it uses.
+    #[error("hash verification is unavailable for unpinned Whisper model refs")]
+    HashVerificationUnavailable,
 }
 
 /// Map a [`WhisperModel`] to its directory name inside the whisper cache root.
@@ -273,10 +278,7 @@ fn unlock_file(_file: &std::fs::File) {}
 /// 4. Acquire a cross-process advisory lock to serialise concurrent first-time
 ///    downloads (a killed process never permanently wedges the lock).
 /// 5. Download each file via `hf-hub` into `target_dir` under canonical local names.
-/// 6. When `verify_hash` is `true` emit a warning that the hash table is not yet
-///    populated and the check is a no-op. The W3+ follow-up below tracks the
-///    static hash table.
-/// 7. Return populated [`WhisperModelPaths`].
+/// 6. Return populated [`WhisperModelPaths`].
 ///
 /// # Errors
 ///
@@ -290,6 +292,10 @@ pub fn ensure_whisper_model(
     allow_network: bool,
     verify_hash: bool,
 ) -> Result<WhisperModelPaths, WhisperModelError> {
+    if verify_hash {
+        return Err(WhisperModelError::HashVerificationUnavailable);
+    }
+
     let whisper_cache = cache_dir
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| crate::cache_dir::resolve_cache_dir("whisper"));
@@ -324,18 +330,6 @@ pub fn ensure_whisper_model(
             "Whisper model already cached (post-lock check)",
         );
         return Ok(build_paths(model, &target_dir));
-    }
-
-    // ~keep Hash verification reminder — the table is not yet populated in W3.
-    // ~keep TODO(W3+): populate a static hash table keyed by (WhisperModel, filename)
-    // ~keep            and verify each downloaded file via `crate::model_download::verify_sha256`.
-    if verify_hash {
-        tracing::warn!(
-            model = model_dirname(model),
-            "Whisper model hash verification is enabled but the hash table is not yet \
-             populated; the check is a no-op in this release. Checksums will be enforced \
-             in a follow-up work item.",
-        );
     }
 
     let api = hf_hub::api::sync::ApiBuilder::from_env()
@@ -487,6 +481,17 @@ mod tests {
         assert!(
             matches!(result, Err(WhisperModelError::ModelMissing(_))),
             "expected ModelMissing, got: {result:?}",
+        );
+    }
+
+    #[cfg(feature = "transcription")]
+    #[test]
+    fn verify_hash_requests_fail_fast() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let result = ensure_whisper_model(WhisperModel::Tiny, Some(tmp.path()), false, true);
+        assert!(
+            matches!(result, Err(WhisperModelError::HashVerificationUnavailable)),
+            "expected HashVerificationUnavailable, got: {result:?}",
         );
     }
 

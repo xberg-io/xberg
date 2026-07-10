@@ -1,8 +1,10 @@
 {
 	"document": "../../../../test_documents/html/hip_13044_b.html",
 	"file_type": "html",
-	"file_size": 278128,
-	"expected_frameworks": ["xberg"],
+	"file_size": 248083,
+	"expected_frameworks": [
+		"xberg"
+	],
 	"metadata": {
 		"description": "html test: hip_13044_b",
 		"source": "pandoc-generated",

@@ -1,8 +1,10 @@
 {
 	"document": "../../../../test_documents/html/sinthgunt.html",
 	"file_type": "html",
-	"file_size": 125362,
-	"expected_frameworks": ["xberg"],
+	"file_size": 118107,
+	"expected_frameworks": [
+		"xberg"
+	],
 	"metadata": {
 		"description": "HTML test document: sinthgunt",
 		"source": "pandoc-generated",

@@ -1,8 +1,10 @@
 {
 	"document": "../../../../test_documents/html/taylor_swift.html",
 	"file_type": "html",
-	"file_size": 4118693,
-	"expected_frameworks": ["xberg"],
+	"file_size": 3769899,
+	"expected_frameworks": [
+		"xberg"
+	],
 	"metadata": {
 		"description": "html test: taylor_swift",
 		"source": "pandoc-generated",

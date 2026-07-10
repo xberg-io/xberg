@@ -1,13 +1,24 @@
 {
 	"document": "../../../test_documents/markdown/comprehensive.md",
 	"file_type": "md",
-	"file_size": 6643,
-	"expected_frameworks": ["xberg", "docling", "pandoc", "tika", "unstructured"],
+	"file_size": 5883,
+	"expected_frameworks": [
+		"xberg",
+		"docling",
+		"pandoc",
+		"tika",
+		"unstructured"
+	],
 	"metadata": {
 		"description": "Comprehensive Markdown with GFM and Pandoc extensions - metadata, links, LaTeX",
 		"category": "markdown-gfm",
 		"size_class": "tiny",
-		"features": ["metadata", "links", "latex", "references"]
+		"features": [
+			"metadata",
+			"links",
+			"latex",
+			"references"
+		]
 	},
 	"ground_truth": {
 		"text_file": "../../../test_documents/ground_truth/md/markdown_gfm.txt",

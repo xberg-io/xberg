@@ -1,7 +1,7 @@
 {
 	"document": "../../../../test_documents/charts/chart_line.pdf",
 	"file_type": "pdf",
-	"file_size": 1259,
+	"file_size": 1287,
 	"expected_frameworks": [
 		"xberg",
 		"docling",

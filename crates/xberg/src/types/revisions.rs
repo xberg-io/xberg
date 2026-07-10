@@ -54,6 +54,23 @@ pub struct CellChange {
     pub to: String,
 }
 
+/// A single run-level or style-level property change.
+///
+/// Used for revisions that change formatting rather than text content. `from`
+/// and `to` store normalized property values when the source format exposes
+/// them; either side may be absent when the format only records one side of the
+/// change.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+pub struct PropertyChange {
+    /// Property name, such as `"bold"`, `"italic"`, `"font_size"`, or `"font_color"`.
+    pub name: String,
+    /// Value before the change, when available.
+    pub from: Option<String>,
+    /// Value after the change, when available.
+    pub to: Option<String>,
+}
+
 /// A single tracked change embedded in a document.
 ///
 /// Populated by per-format extractors that understand change-tracking metadata
@@ -159,8 +176,8 @@ impl Default for RevisionAnchor {
 ///
 /// For insertions and deletions the `content` field carries the added/removed
 /// lines as `DiffLine::Added` / `DiffLine::Removed` entries. For format
-/// changes, `content` is empty — ~keep TODO: add the property diff in a
-/// later enrichment pass.
+/// changes, `property_changes` carries normalized before/after formatting
+/// values when the source document exposes them.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
 pub struct RevisionDelta {
@@ -168,6 +185,9 @@ pub struct RevisionDelta {
     pub content: Vec<DiffLine>,
     /// Cell-level table changes for this revision.
     pub table_changes: Vec<CellChange>,
+    /// Formatting or metadata property changes for this revision.
+    #[serde(default)]
+    pub property_changes: Vec<PropertyChange>,
 }
 
 #[cfg(test)]
@@ -184,7 +204,7 @@ mod tests {
             anchor: Some(RevisionAnchor::Paragraph { index: 3 }),
             delta: RevisionDelta {
                 content: vec![DiffLine::Added("hello world".to_string())],
-                table_changes: vec![],
+                ..Default::default()
             },
         };
 
@@ -209,7 +229,7 @@ mod tests {
             anchor: None,
             delta: RevisionDelta {
                 content: vec![DiffLine::Removed("old text".to_string())],
-                table_changes: vec![],
+                ..Default::default()
             },
         };
 
@@ -240,6 +260,7 @@ mod tests {
         assert!(matches!(deserialized.kind, RevisionKind::FormatChange));
         assert!(deserialized.delta.content.is_empty());
         assert!(deserialized.delta.table_changes.is_empty());
+        assert!(deserialized.delta.property_changes.is_empty());
     }
 
     #[test]
@@ -316,6 +337,7 @@ mod tests {
                     from: "old".to_string(),
                     to: "new".to_string(),
                 }],
+                property_changes: vec![],
             },
         };
 
@@ -324,5 +346,31 @@ mod tests {
         assert_eq!(back.delta.table_changes.len(), 1);
         assert_eq!(back.delta.table_changes[0].from, "old");
         assert_eq!(back.delta.table_changes[0].to, "new");
+    }
+
+    #[test]
+    fn should_round_trip_property_change_in_revision_delta() {
+        let revision = DocumentRevision {
+            revision_id: "fmt-1".to_string(),
+            author: None,
+            timestamp: None,
+            kind: RevisionKind::FormatChange,
+            anchor: Some(RevisionAnchor::Paragraph { index: 0 }),
+            delta: RevisionDelta {
+                property_changes: vec![PropertyChange {
+                    name: "bold".to_string(),
+                    from: Some("true".to_string()),
+                    to: Some("false".to_string()),
+                }],
+                ..Default::default()
+            },
+        };
+
+        let json = serde_json::to_string(&revision).expect("serialization must succeed");
+        let back: DocumentRevision = serde_json::from_str(&json).expect("deserialization must succeed");
+        assert_eq!(back.delta.property_changes.len(), 1);
+        assert_eq!(back.delta.property_changes[0].name, "bold");
+        assert_eq!(back.delta.property_changes[0].from.as_deref(), Some("true"));
+        assert_eq!(back.delta.property_changes[0].to.as_deref(), Some("false"));
     }
 }

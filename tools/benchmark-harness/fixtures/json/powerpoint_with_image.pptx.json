@@ -1,8 +1,12 @@
 {
 	"document": "../../../../test_documents/vendored/docling/json/powerpoint_with_image.pptx.json",
 	"file_type": "json",
-	"file_size": 56295,
-	"expected_frameworks": ["xberg", "markitdown", "tika"],
+	"file_size": 56151,
+	"expected_frameworks": [
+		"xberg",
+		"markitdown",
+		"tika"
+	],
 	"metadata": {
 		"description": "Document from docling test suite",
 		"source": "docling",

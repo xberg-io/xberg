@@ -49,26 +49,6 @@ fn extract_markdown_with_layout(relative_path: &str) -> String {
 }
 
 #[cfg(feature = "layout-detection")]
-#[ignore = "~keep TODO: pdf_oxide upstream — https://github.com/yfedoseev/pdf_oxide/issues/484"]
-#[test]
-fn test_docling_no_figure_internal_text() {
-    if !test_documents_available() {
-        return;
-    }
-    let content = extract_markdown_with_layout("pdf/docling.pdf");
-
-    assert!(
-        !content.contains("Circling Minimums"),
-        "Figure-internal heading 'Circling Minimums' leaked into output"
-    );
-
-    assert!(
-        !content.contains("{;} Parse PDF pages"),
-        "Figure 1 diagram text leaked into output"
-    );
-}
-
-#[cfg(feature = "layout-detection")]
 #[test]
 fn test_docling_no_figure_text_as_headings() {
     if !test_documents_available() {

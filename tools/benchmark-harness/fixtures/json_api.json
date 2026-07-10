@@ -1,8 +1,12 @@
 {
 	"document": "../../../test_documents/json/openapi_spec.json",
 	"file_type": "json",
-	"file_size": 1589,
-	"expected_frameworks": ["xberg", "markitdown", "tika"],
+	"file_size": 1926,
+	"expected_frameworks": [
+		"xberg",
+		"markitdown",
+		"tika"
+	],
 	"metadata": {
 		"description": "API JSON - OpenAPI specification with endpoint definitions and schema documentation",
 		"category": "api"

@@ -1,8 +1,11 @@
 {
 	"document": "../../../../test_documents/vendored/docling/yaml/word_sample.yaml",
 	"file_type": "yaml",
-	"file_size": 103568,
-	"expected_frameworks": ["xberg", "tika"],
+	"file_size": 105146,
+	"expected_frameworks": [
+		"xberg",
+		"tika"
+	],
 	"metadata": {
 		"description": "Document from docling test suite",
 		"source": "docling",

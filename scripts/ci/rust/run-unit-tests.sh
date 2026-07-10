@@ -60,11 +60,9 @@ TEST_LOG="/tmp/cargo-test-$$.log"
 
 if ! {
   # ~keep `--all-targets` runs --lib --bins --tests --examples --benches but excludes
-  # ~keep `--doc`. 22 rustdoc examples in the xberg crate currently reference
-  # ~keep private items (extraction::capacity::estimate_content_capacity et al.) and
-  # ~keep fail to compile. Tracking the cleanup separately.
-  # ~keep TODO: re-enable doc tests once the failing
-  # ~keep examples are rewritten against the public API.
+  # ~keep `--doc`. The xberg crate still has rustdoc examples for private/internal
+  # ~keep APIs; `cargo test -p xberg --features full --doc` currently fails those
+  # ~keep examples because rustdoc compiles them as an external crate.
   echo "=== cargo test -p xberg --features full ==="
   RUST_BACKTRACE=full cargo test --locked -p xberg --features full --all-targets --verbose
 

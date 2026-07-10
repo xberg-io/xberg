@@ -40,12 +40,6 @@ public protocol IntoRustString {
 
 extension String: IntoRustString {
     public func intoRustString() -> RustString {
-        // TODO: When passing an owned Swift std String to Rust we've being wasteful here in that
-        //  we're creating a RustString (which involves Boxing a Rust std::string::String)
-        //  only to unbox it back into a String once it gets to the Rust side.
-        //
-        //  A better approach would be to pass a RustStr to the Rust side and then have Rust
-        //  call `.to_string()` on the RustStr.
         RustString(self)
     }
 }

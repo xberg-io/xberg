@@ -574,7 +574,7 @@ fn build_internal_elements(
                                 } else {
                                     vec![DiffLine::Added(region.content_text.clone())]
                                 },
-                                table_changes: vec![],
+                                ..Default::default()
                             },
                             RevisionKind::Deletion => RevisionDelta {
                                 content: if region.content_text.is_empty() {
@@ -582,7 +582,7 @@ fn build_internal_elements(
                                 } else {
                                     vec![DiffLine::Removed(region.content_text.clone())]
                                 },
-                                table_changes: vec![],
+                                ..Default::default()
                             },
                             RevisionKind::FormatChange | RevisionKind::Comment => RevisionDelta::default(),
                         };

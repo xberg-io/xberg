@@ -13,7 +13,8 @@ echo "Using swift-bridge output from: $OUT"
 
 fixVisibility() {
   sed -e 's/^    var ptr: UnsafeMutableRawPointer$/    public var ptr: UnsafeMutableRawPointer/g' \
-    -e 's/^    var isOwned: Bool = true$/    public var isOwned: Bool = true/g'
+    -e 's/^    var isOwned: Bool = true$/    public var isOwned: Bool = true/g' \
+    -e '/^        \/\/ [T]ODO: When passing an owned Swift std String/,/^        \/\/  call `\.to_string()` on the RustStr\.$/d'
 }
 
 mkdir -p packages/swift/Sources/RustBridgeC

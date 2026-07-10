@@ -93,7 +93,7 @@ pub(crate) fn get_page_rotations(pdf_bytes: &[u8], page_count: usize) -> Vec<u32
 
 /// Rotate a decoded page image per the page's normalized /Rotate value.
 /// No-op for 0 or non-quarter-turn values.
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn rotate_dynamic_image(img: image::DynamicImage, rotation_degrees: u32) -> image::DynamicImage {
     match rotation_degrees % 360 {
         90 => img.rotate90(),
@@ -109,7 +109,7 @@ pub(crate) fn rotate_dynamic_image(img: image::DynamicImage, rotation_degrees: u
 /// pages pay one decode + re-encode, which only happens for documents that
 /// actually carry /Rotate. Returns the (possibly new) PNG bytes with the
 /// post-rotation width and height.
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn rotate_png_page_if_needed(
     png_data: Vec<u8>,
     width: u32,
@@ -378,7 +378,7 @@ mod tests {
         );
     }
 
-    #[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
     #[test]
     fn test_rotate_dynamic_image_0_degrees_is_noop() {
         let img = image::DynamicImage::new_rgb8(100, 150);
@@ -386,7 +386,7 @@ mod tests {
         assert_eq!((rotated.width(), rotated.height()), (100, 150));
     }
 
-    #[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
     #[test]
     fn test_rotate_dynamic_image_90_degrees_swaps_dimensions() {
         let img = image::DynamicImage::new_rgb8(100, 150);
@@ -394,7 +394,7 @@ mod tests {
         assert_eq!((rotated.width(), rotated.height()), (150, 100));
     }
 
-    #[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
     #[test]
     fn test_rotate_dynamic_image_180_degrees_keeps_dimensions() {
         let img = image::DynamicImage::new_rgb8(100, 150);
@@ -402,7 +402,7 @@ mod tests {
         assert_eq!((rotated.width(), rotated.height()), (100, 150));
     }
 
-    #[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
     #[test]
     fn test_rotate_dynamic_image_270_degrees_swaps_dimensions() {
         let img = image::DynamicImage::new_rgb8(100, 150);

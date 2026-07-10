@@ -121,7 +121,7 @@ pub struct RerankerPreset {
 /// fail loudly if any preset path 404s.
 ///
 /// Since v5.0.0.
-#[cfg(feature = "reranker-presets")]
+#[cfg(any(feature = "reranker", test))]
 /// SHA-256 manifest pinning every hosted reranker preset file, verified at
 /// download time by [`crate::onnx::download_model_files`].
 pub(crate) const RERANKER_SHA256_MANIFEST: &str = include_str!("presets.sha256sum");

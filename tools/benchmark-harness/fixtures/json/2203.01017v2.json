@@ -1,8 +1,12 @@
 {
 	"document": "../../../../test_documents/vendored/docling/json/2203.01017v2.json",
 	"file_type": "json",
-	"file_size": 663249,
-	"expected_frameworks": ["xberg", "markitdown", "tika"],
+	"file_size": 640713,
+	"expected_frameworks": [
+		"xberg",
+		"markitdown",
+		"tika"
+	],
 	"metadata": {
 		"description": "Document from docling test suite",
 		"source": "docling",

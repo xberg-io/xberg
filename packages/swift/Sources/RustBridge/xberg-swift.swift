@@ -1020,6 +1020,9 @@ public func redactionFindingFromJson<GenericIntoRustString: IntoRustString>(_ js
 public func cellChangeFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> CellChange {
     try { let val = __swift_bridge__$cell_change_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return CellChange(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
+public func propertyChangeFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> PropertyChange {
+    try { let val = __swift_bridge__$property_change_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return PropertyChange(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
+}
 public func documentRevisionFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> DocumentRevision {
     try { let val = __swift_bridge__$document_revision_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return DocumentRevision(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
@@ -1757,6 +1760,9 @@ public func __alef_phantom_vec_redaction_finding() -> RustVec<RedactionFinding> 
 }
 public func __alef_phantom_vec_cell_change() -> RustVec<CellChange> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_cell_change())
+}
+public func __alef_phantom_vec_property_change() -> RustVec<PropertyChange> {
+    RustVec(ptr: __swift_bridge__$__alef_phantom_vec_property_change())
 }
 public func __alef_phantom_vec_document_revision() -> RustVec<DocumentRevision> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_document_revision())
@@ -17380,6 +17386,94 @@ extension CellChange: Vectorizable {
 }
 
 
+public class PropertyChange: PropertyChangeRefMut {
+    public var isOwned: Bool = true
+
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+
+    deinit {
+        if isOwned {
+            __swift_bridge__$PropertyChange$_free(ptr)
+        }
+    }
+}
+public class PropertyChangeRefMut: PropertyChangeRef {
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+}
+public class PropertyChangeRef {
+    public var ptr: UnsafeMutableRawPointer
+
+    public init(ptr: UnsafeMutableRawPointer) {
+        self.ptr = ptr
+    }
+}
+extension PropertyChangeRef {
+    public func name() -> RustString {
+        RustString(ptr: __swift_bridge__$PropertyChange$name(ptr))
+    }
+
+    public func from() -> Optional<RustString> {
+        { let val = __swift_bridge__$PropertyChange$from(ptr); if val != nil { return RustString(ptr: val!) } else { return nil } }()
+    }
+
+    public func to() -> Optional<RustString> {
+        { let val = __swift_bridge__$PropertyChange$to(ptr); if val != nil { return RustString(ptr: val!) } else { return nil } }()
+    }
+}
+extension PropertyChange: Vectorizable {
+    public static func vecOfSelfNew() -> UnsafeMutableRawPointer {
+        __swift_bridge__$Vec_PropertyChange$new()
+    }
+
+    public static func vecOfSelfFree(vecPtr: UnsafeMutableRawPointer) {
+        __swift_bridge__$Vec_PropertyChange$drop(vecPtr)
+    }
+
+    public static func vecOfSelfPush(vecPtr: UnsafeMutableRawPointer, value: PropertyChange) {
+        __swift_bridge__$Vec_PropertyChange$push(vecPtr, {value.isOwned = false; return value.ptr;}())
+    }
+
+    public static func vecOfSelfPop(vecPtr: UnsafeMutableRawPointer) -> Optional<Self> {
+        let pointer = __swift_bridge__$Vec_PropertyChange$pop(vecPtr)
+        if pointer == nil {
+            return nil
+        } else {
+            return (PropertyChange(ptr: pointer!) as! Self)
+        }
+    }
+
+    public static func vecOfSelfGet(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<PropertyChangeRef> {
+        let pointer = __swift_bridge__$Vec_PropertyChange$get(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return PropertyChangeRef(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfGetMut(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<PropertyChangeRefMut> {
+        let pointer = __swift_bridge__$Vec_PropertyChange$get_mut(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return PropertyChangeRefMut(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfAsPtr(vecPtr: UnsafeMutableRawPointer) -> UnsafePointer<PropertyChangeRef> {
+        UnsafePointer<PropertyChangeRef>(OpaquePointer(__swift_bridge__$Vec_PropertyChange$as_ptr(vecPtr)))
+    }
+
+    public static func vecOfSelfLen(vecPtr: UnsafeMutableRawPointer) -> UInt {
+        __swift_bridge__$Vec_PropertyChange$len(vecPtr)
+    }
+}
+
+
 public class DocumentRevision: DocumentRevisionRefMut {
     public var isOwned: Bool = true
 
@@ -17494,8 +17588,8 @@ public class RevisionDelta: RevisionDeltaRefMut {
     }
 }
 extension RevisionDelta {
-    public convenience init(_ content: RustVec<DiffLine>, _ table_changes: RustVec<CellChange>) {
-        self.init(ptr: __swift_bridge__$RevisionDelta$new({ let val = content; val.isOwned = false; return val.ptr }(), { let val = table_changes; val.isOwned = false; return val.ptr }()))
+    public convenience init(_ content: RustVec<DiffLine>, _ table_changes: RustVec<CellChange>, _ property_changes: RustVec<PropertyChange>) {
+        self.init(ptr: __swift_bridge__$RevisionDelta$new({ let val = content; val.isOwned = false; return val.ptr }(), { let val = table_changes; val.isOwned = false; return val.ptr }(), { let val = property_changes; val.isOwned = false; return val.ptr }()))
     }
 }
 public class RevisionDeltaRefMut: RevisionDeltaRef {
@@ -17517,6 +17611,10 @@ extension RevisionDeltaRef {
 
     public func tableChanges() -> RustVec<RustString> {
         RustVec(ptr: __swift_bridge__$RevisionDelta$table_changes(ptr))
+    }
+
+    public func propertyChanges() -> RustVec<RustString> {
+        RustVec(ptr: __swift_bridge__$RevisionDelta$property_changes(ptr))
     }
 }
 extension RevisionDelta: Vectorizable {

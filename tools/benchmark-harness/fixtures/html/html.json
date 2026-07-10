@@ -1,8 +1,10 @@
 {
 	"document": "../../../../test_documents/html/html.html",
 	"file_type": "html",
-	"file_size": 1397,
-	"expected_frameworks": ["xberg"],
+	"file_size": 1511,
+	"expected_frameworks": [
+		"xberg"
+	],
 	"metadata": {
 		"description": "HTML test document: html",
 		"source": "pandoc-generated",

@@ -1,8 +1,12 @@
 {
 	"document": "../../../../test_documents/vendored/docling/json/xlsx_02_sample_sales_data.xlsm.json",
 	"file_type": "json",
-	"file_size": 71229,
-	"expected_frameworks": ["xberg", "markitdown", "tika"],
+	"file_size": 71193,
+	"expected_frameworks": [
+		"xberg",
+		"markitdown",
+		"tika"
+	],
 	"metadata": {
 		"description": "Document from docling test suite",
 		"source": "docling",

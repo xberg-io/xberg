@@ -1,8 +1,14 @@
 {
 	"document": "../../../../test_documents/vendored/docling/md/xlsx_06_edge_cases_.xlsx.md",
 	"file_type": "md",
-	"file_size": 2881,
-	"expected_frameworks": ["xberg", "docling", "pandoc", "tika", "unstructured"],
+	"file_size": 2861,
+	"expected_frameworks": [
+		"xberg",
+		"docling",
+		"pandoc",
+		"tika",
+		"unstructured"
+	],
 	"metadata": {
 		"description": "Document from docling test suite",
 		"source": "docling",

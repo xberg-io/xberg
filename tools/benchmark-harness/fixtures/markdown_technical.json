@@ -1,8 +1,14 @@
 {
 	"document": "../../../test_documents/markdown/hip_13044_b.md",
 	"file_type": "md",
-	"file_size": 33901,
-	"expected_frameworks": ["xberg", "docling", "pandoc", "tika", "unstructured"],
+	"file_size": 54038,
+	"expected_frameworks": [
+		"xberg",
+		"docling",
+		"pandoc",
+		"tika",
+		"unstructured"
+	],
 	"metadata": {
 		"description": "Technical markdown document - 33KB scientific text",
 		"category": "markdown-technical",

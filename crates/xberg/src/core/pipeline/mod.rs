@@ -215,8 +215,6 @@ pub async fn run_pipeline(mut doc: InternalDocument, config: &ExtractionConfig) 
 
     // ~keep Run LLM-based structured extraction BEFORE output formatting
     // ~keep so extraction sees plain text, not markdown/HTML
-    // ~keep TODO(wasm-llm): hosted structured extraction should run on wasm through
-    // ~keep liter-llm's wasm-http backend once browser/runtime support is wired.
     #[cfg(all(feature = "liter-llm", not(target_arch = "wasm32")))]
     if let Some(ref structured_config) = config.structured_extraction {
         match crate::llm::structured::extract_structured(&result.content, structured_config).await {
@@ -234,13 +232,19 @@ pub async fn run_pipeline(mut doc: InternalDocument, config: &ExtractionConfig) 
         }
     }
 
-    // ~keep TODO(wasm-llm): keep wasm in the fallback branch until structured
-    // ~keep extraction has an async wasm-compatible runtime path.
-    #[cfg(any(not(feature = "liter-llm"), target_arch = "wasm32"))]
+    #[cfg(not(feature = "liter-llm"))]
     if config.structured_extraction.is_some() {
         result.processing_warnings.push(crate::types::ProcessingWarning {
             source: std::borrow::Cow::Borrowed("structured_extraction"),
             message: std::borrow::Cow::Borrowed("Structured extraction requires the 'liter-llm' feature"),
+        });
+    }
+
+    #[cfg(all(feature = "liter-llm", target_arch = "wasm32"))]
+    if config.structured_extraction.is_some() {
+        result.processing_warnings.push(crate::types::ProcessingWarning {
+            source: std::borrow::Cow::Borrowed("structured_extraction"),
+            message: std::borrow::Cow::Borrowed("Structured extraction is not available on wasm builds"),
         });
     }
 

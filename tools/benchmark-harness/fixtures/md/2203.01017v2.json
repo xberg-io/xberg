@@ -1,8 +1,14 @@
 {
 	"document": "../../../../test_documents/vendored/docling/md/2203.01017v2.md",
 	"file_type": "md",
-	"file_size": 54216,
-	"expected_frameworks": ["xberg", "docling", "pandoc", "tika", "unstructured"],
+	"file_size": 54005,
+	"expected_frameworks": [
+		"xberg",
+		"docling",
+		"pandoc",
+		"tika",
+		"unstructured"
+	],
 	"metadata": {
 		"description": "Document from docling test suite",
 		"source": "docling",

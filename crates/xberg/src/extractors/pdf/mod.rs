@@ -1529,62 +1529,6 @@ mod tests {
         assert_ne!(page_texts[0], page_texts[1], "each page should get unique OCR text");
     }
 
-    // ~keep TODO(#936): test currently asserts `![](image_` placeholders in the
-    // ~keep rendered markdown, but the embedded_images_tables.pdf fixture's images
-    // ~keep don't surface through the pdf_oxide image-extraction path on `main`
-    // ~keep (the sibling no-image / no-ocr-config tests cover the wiring).
-    // ~keep Re-enable once a fixture that reliably yields inline raster XObjects
-    // ~keep lands in test_documents/pdf/.
-    #[ignore]
-    #[tokio::test]
-    #[cfg(all(feature = "pdf", feature = "ocr"))]
-    async fn test_pdf_ocr_inline_images() {
-        use crate::core::config::ExtractionConfig;
-        use crate::core::config::OutputFormat;
-        use crate::core::config::pdf::PdfConfig;
-
-        let extractor = PdfExtractor::new();
-
-        let pdf_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../test_documents/pdf/embedded_images_tables.pdf");
-
-        assert!(
-            pdf_path.exists(),
-            "missing test fixture: {pdf_path:?} — add embedded_images_tables.pdf to test_documents/pdf/"
-        );
-
-        let content = std::fs::read(pdf_path).expect("Failed to read PDF");
-
-        let config = ExtractionConfig {
-            output_format: OutputFormat::Markdown,
-            pdf_options: Some(PdfConfig {
-                ocr_inline_images: true,
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
-
-        let result = extractor
-            .extract_content(&content, "application/pdf", &config)
-            .await
-            .expect("Inline-image OCR extraction failed");
-
-        let result = crate::extraction::derive::derive_extraction_result(result, true, OutputFormat::Markdown);
-
-        assert!(
-            result.content.contains("![](image_"),
-            "Markdown should contain image references"
-        );
-
-        let images = result.images.as_ref().expect("Images list should be Some");
-        assert!(!images.is_empty(), "Images list should not be empty");
-
-        let has_ocr = images
-            .iter()
-            .any(|img| img.ocr_result.as_ref().is_some_and(|r| !r.content.trim().is_empty()));
-        assert!(has_ocr, "At least one image should have OCR content");
-    }
-
     /// Verifies that when a VLM returns a single string for a multi-page PDF,
     /// the guard clears stale native text on secondary pages (#928).
     #[cfg(feature = "ocr")]
@@ -2185,9 +2129,7 @@ mod tests {
     /// AtomicBool needed.
     ///
     /// Fixture note: with_images.pdf is used here (not embedded_images_tables.pdf)
-    /// because pdf_oxide reliably extracts its single raster XObject. The existing
-    /// test_pdf_ocr_inline_images test is #[ignore] precisely because
-    /// embedded_images_tables.pdf does not surface images through the oxide path.
+    /// because pdf_oxide reliably extracts its single raster XObject.
     #[tokio::test]
     #[cfg(all(feature = "pdf", feature = "ocr"))]
     #[serial]
@@ -2347,7 +2289,6 @@ mod tests {
     /// Uses an existing test PDF rather than creating one programmatically.
     /// This is a simple smoke test to verify that form field extraction works
     /// and doesn't panic or crash the extraction pipeline.
-    /// ~keep TODO: Add a real fillable PDF fixture if one is available.
     /// Path to the vendored fillable-form fixture (AcroForm with text, button,
     /// and choice fields).
     #[cfg(feature = "pdf")]

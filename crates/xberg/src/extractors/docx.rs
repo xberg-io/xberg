@@ -2741,6 +2741,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn should_capture_format_change_property_delta() {
+        use crate::types::revisions::RevisionKind;
+
+        let data = build_test_docx(TRACK_CHANGES_XML);
+        let extractor = DocxExtractor::new();
+        let config = ExtractionConfig::default();
+        let internal_doc = extractor
+            .extract_content(
+                &data,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                &config,
+            )
+            .await
+            .unwrap();
+        let result = crate::extraction::derive::derive_extraction_result(
+            internal_doc,
+            false,
+            crate::core::config::OutputFormat::Plain,
+        );
+
+        let revisions = result.revisions.unwrap();
+        let fmt = revisions.iter().find(|r| r.kind == RevisionKind::FormatChange).unwrap();
+        assert!(fmt.delta.content.is_empty());
+        assert!(fmt.delta.table_changes.is_empty());
+        assert!(
+            fmt.delta.property_changes.iter().any(|change| {
+                change.name == "bold" && change.from.as_deref() == Some("true") && change.to.as_deref() == Some("false")
+            }),
+            "expected bold delta in {:?}",
+            fmt.delta.property_changes
+        );
+        assert!(
+            fmt.delta.property_changes.iter().any(|change| {
+                change.name == "italic" && change.from.is_none() && change.to.as_deref() == Some("true")
+            }),
+            "expected italic delta in {:?}",
+            fmt.delta.property_changes
+        );
+    }
+
+    #[tokio::test]
     async fn should_include_inserted_text_and_exclude_deleted_text_in_content() {
         let data = build_test_docx(TRACK_CHANGES_XML);
         let extractor = DocxExtractor::new();

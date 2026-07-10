@@ -185,8 +185,12 @@ impl DocumentExtractor for JsonExtractor {
     async fn extract(&self, input: ExtractInput, _config: &ExtractionConfig)
         -> Result<ExtractedDocument>
     {
-        // ...
-        todo!()
+        let bytes = input.bytes.unwrap_or_default();
+        Ok(ExtractedDocument {
+            content: String::from_utf8_lossy(&bytes).into_owned(),
+            mime_type: "application/json".into(),
+            ..Default::default()
+        })
     }
     fn supported_mime_types(&self) -> &[&str] { &["application/json"] }
     fn priority(&self) -> i32 { 75 }

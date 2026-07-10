@@ -1,8 +1,15 @@
 {
 	"document": "../../../../test_documents/vendored/docling/html/html_rich_table_cells.html",
 	"file_type": "html",
-	"file_size": 4552,
-	"expected_frameworks": ["xberg", "docling", "markitdown", "pandoc", "tika", "unstructured"],
+	"file_size": 5763,
+	"expected_frameworks": [
+		"xberg",
+		"docling",
+		"markitdown",
+		"pandoc",
+		"tika",
+		"unstructured"
+	],
 	"metadata": {
 		"description": "Document from docling test suite",
 		"source": "docling",

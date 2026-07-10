@@ -1,8 +1,13 @@
 {
 	"document": "../../../test_documents/data_formats/employees.tsv",
 	"file_type": "tsv",
-	"file_size": 3051,
-	"expected_frameworks": ["xberg", "pandoc", "tika", "unstructured"],
+	"file_size": 2926,
+	"expected_frameworks": [
+		"xberg",
+		"pandoc",
+		"tika",
+		"unstructured"
+	],
 	"metadata": {
 		"description": "Employee database with 25 records",
 		"category": "data"

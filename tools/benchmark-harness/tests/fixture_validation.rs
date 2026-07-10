@@ -53,6 +53,10 @@ fn discover_fixtures_recursive(dir: &Path, fixtures: &mut Vec<PathBuf>) {
 /// Check if a path is a JSON fixture file (ends with .json)
 fn is_json_fixture(path: &Path) -> bool {
     path.extension().and_then(|ext| ext.to_str()) == Some("json")
+        && !path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.ends_with(".split.json"))
 }
 
 #[test]
@@ -177,12 +181,6 @@ fn all_fixture_documents_exist_on_disk() {
     }
 }
 
-// ~keep TODO: re-enable once fixture file_size metadata is regenerated against the
-// ~keep current test_documents submodule. 143 fixtures drifted vs disk (likely after
-// ~keep a submodule sync that updated some HTML/PDF fixtures by a few bytes each).
-// ~keep Tracking separately; not a correctness issue — file_size metadata is purely
-// ~keep informational, the benchmark harness re-reads actual sizes at run time.
-#[ignore = "regenerate fixture file_size metadata against current test_documents/"]
 #[test]
 fn all_fixture_file_sizes_match() {
     let fixtures = discover_fixture_files();

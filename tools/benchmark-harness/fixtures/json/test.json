@@ -1,8 +1,12 @@
 {
 	"document": "../../../../test_documents/vendored/markitdown/json/test.json",
 	"file_type": "json",
-	"file_size": 229,
-	"expected_frameworks": ["xberg", "markitdown", "tika"],
+	"file_size": 197,
+	"expected_frameworks": [
+		"xberg",
+		"markitdown",
+		"tika"
+	],
 	"metadata": {
 		"description": "Document from markitdown test suite",
 		"source": "markitdown",

@@ -2,8 +2,8 @@
 //!
 //! This module provides real-time monitoring of CPU and memory usage during
 //! document extraction, with percentile calculations for performance analysis.
-//! When the "memory-profiling" feature is enabled, provides additional allocation
-//! hotspot analysis and heap snapshot tracking.
+//! When the "memory-profiling" feature is enabled, heap allocation snapshots
+//! are captured alongside RSS and virtual-memory samples.
 //!
 //! # Measurement Methodology
 //!
@@ -81,20 +81,6 @@ impl MemorySnapshot {
             heap_allocated,
         }
     }
-}
-
-/// Allocation site with count and size information
-///
-/// Only available when memory-profiling feature is enabled.
-#[cfg(feature = "memory-profiling")]
-#[derive(Debug, Clone)]
-pub struct AllocationSite {
-    /// Source location (file:line format)
-    pub location: String,
-    /// Total bytes allocated from this site
-    pub bytes_allocated: u64,
-    /// Number of allocations from this site
-    pub allocation_count: u64,
 }
 
 /// Sample of resource usage at a point in time
@@ -555,8 +541,6 @@ impl ResourceMonitor {
             p99_memory_bytes: Self::calculate_percentile(memory_values, 0.99),
             sample_count: samples.len(),
             snapshots: snapshots.to_vec(),
-            #[cfg(feature = "memory-profiling")]
-            allocation_hotspots: Vec::new(), // ~keep TODO: Extract from jemalloc profiles
             leak_detected,
         }
     }
@@ -594,9 +578,6 @@ pub struct ResourceStats {
     pub sample_count: usize,
     /// Complete memory snapshots for detailed analysis
     pub snapshots: Vec<MemorySnapshot>,
-    /// Memory allocation hotspots (only with memory-profiling feature)
-    #[cfg(feature = "memory-profiling")]
-    pub allocation_hotspots: Vec<AllocationSite>,
     /// Whether memory leak was detected (RSA growing without release)
     pub leak_detected: bool,
 }

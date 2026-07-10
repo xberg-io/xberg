@@ -73,6 +73,7 @@ pub struct SparseEmbeddingPreset {
 /// into a 30522-dim sparse vector.
 /// SHA-256 manifest pinning every hosted sparse-embedding preset file, verified
 /// at download time by [`crate::onnx::download_model_files`].
+#[cfg(any(feature = "sparse-embeddings", test))]
 pub(crate) const SPARSE_EMBEDDING_SHA256_MANIFEST: &str = include_str!("presets.sha256sum");
 
 pub static SPARSE_EMBEDDING_PRESETS: LazyLock<Vec<SparseEmbeddingPreset>> = LazyLock::new(|| {

@@ -1428,6 +1428,7 @@ mod tests {
         assert!(result.is_err());
     }
 
+    #[cfg(feature = "auto-rotate")]
     #[test]
     #[cfg(feature = "auto-rotate")]
     fn test_rotate_rgb_image_data_identity() {
@@ -1438,6 +1439,7 @@ mod tests {
         assert_eq!(h, 3);
     }
 
+    #[cfg(feature = "auto-rotate")]
     #[test]
     #[cfg(feature = "auto-rotate")]
     fn test_rotate_rgb_image_data_180() {
@@ -1448,6 +1450,7 @@ mod tests {
         assert_eq!(out, vec![10, 11, 12, 7, 8, 9, 4, 5, 6, 1, 2, 3]);
     }
 
+    #[cfg(feature = "auto-rotate")]
     #[test]
     #[cfg(feature = "auto-rotate")]
     fn test_rotate_rgb_image_data_90_swaps_dimensions() {
@@ -1457,6 +1460,7 @@ mod tests {
         assert_eq!(h, 2);
     }
 
+    #[cfg(feature = "auto-rotate")]
     #[test]
     #[cfg(feature = "auto-rotate")]
     fn test_rotate_rgb_image_data_270_swaps_dimensions() {
@@ -1466,6 +1470,7 @@ mod tests {
         assert_eq!(h, 2);
     }
 
+    #[cfg(feature = "auto-rotate")]
     #[test]
     #[cfg(feature = "auto-rotate")]
     fn test_rotate_rgb_image_data_90_then_270_is_identity() {
@@ -1477,6 +1482,7 @@ mod tests {
         assert_eq!(back, data);
     }
 
+    #[cfg(feature = "auto-rotate")]
     #[test]
     #[cfg(feature = "auto-rotate")]
     fn test_rotate_rgb_image_data_unsupported_angle() {

@@ -1,7 +1,7 @@
 {
 	"document": "../../../../test_documents/pdf/interactive_form.pdf",
 	"file_type": "pdf",
-	"file_size": 1441,
+	"file_size": 1445,
 	"expected_frameworks": [
 		"xberg",
 		"docling",

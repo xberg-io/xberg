@@ -1,8 +1,14 @@
 {
 	"document": "../../../../test_documents/vendored/docling/md/csv-comma.csv.md",
 	"file_type": "md",
-	"file_size": 1911,
-	"expected_frameworks": ["xberg", "docling", "pandoc", "tika", "unstructured"],
+	"file_size": 1862,
+	"expected_frameworks": [
+		"xberg",
+		"docling",
+		"pandoc",
+		"tika",
+		"unstructured"
+	],
 	"metadata": {
 		"description": "Document from docling test suite",
 		"source": "docling",

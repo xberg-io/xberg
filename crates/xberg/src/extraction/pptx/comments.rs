@@ -149,7 +149,7 @@ fn parse_comment_xml(
         } else {
             RevisionDelta {
                 content: vec![DiffLine::Context(comment_text)],
-                table_changes: vec![],
+                ..Default::default()
             }
         };
 

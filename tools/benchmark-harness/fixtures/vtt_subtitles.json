@@ -1,8 +1,11 @@
 {
 	"document": "../../../test_documents/data_formats/sample.vtt",
 	"file_type": "vtt",
-	"file_size": 262,
-	"expected_frameworks": ["xberg", "docling"],
+	"file_size": 254,
+	"expected_frameworks": [
+		"xberg",
+		"docling"
+	],
 	"metadata": {
 		"description": "WebVTT subtitle file with timed text content",
 		"category": "data_formats",

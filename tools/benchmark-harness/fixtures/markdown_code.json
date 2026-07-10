@@ -1,13 +1,26 @@
 {
 	"document": "../../../test_documents/markdown/writer.pandoc.md",
 	"file_type": "md",
-	"file_size": 15271,
-	"expected_frameworks": ["xberg", "docling", "pandoc", "tika", "unstructured"],
+	"file_size": 10015,
+	"expected_frameworks": [
+		"xberg",
+		"docling",
+		"pandoc",
+		"tika",
+		"unstructured"
+	],
 	"metadata": {
 		"description": "Pandoc test suite - nested divs, headers, inline formatting, code blocks",
 		"category": "markdown-code",
 		"size_class": "small",
-		"features": ["divs", "nesting", "headers", "inline-code", "code-blocks", "emphasis"]
+		"features": [
+			"divs",
+			"nesting",
+			"headers",
+			"inline-code",
+			"code-blocks",
+			"emphasis"
+		]
 	},
 	"ground_truth": {
 		"text_file": "../../../test_documents/ground_truth/md/markdown_code.txt",

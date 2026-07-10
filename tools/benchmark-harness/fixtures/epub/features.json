@@ -1,8 +1,10 @@
 {
 	"document": "../../../../test_documents/epub/features.epub",
 	"file_type": "epub",
-	"file_size": 8970,
-	"expected_frameworks": ["xberg"],
+	"file_size": 8961,
+	"expected_frameworks": [
+		"xberg"
+	],
 	"metadata": {
 		"description": "EPUB test document: features",
 		"source": "pandoc-generated",

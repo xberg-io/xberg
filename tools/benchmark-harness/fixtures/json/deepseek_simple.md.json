@@ -1,8 +1,12 @@
 {
 	"document": "../../../../test_documents/vendored/docling/json/deepseek_simple.md.json",
 	"file_type": "json",
-	"file_size": 10372,
-	"expected_frameworks": ["xberg", "markitdown", "tika"],
+	"file_size": 10192,
+	"expected_frameworks": [
+		"xberg",
+		"markitdown",
+		"tika"
+	],
 	"metadata": {
 		"description": "Document from docling test suite",
 		"source": "docling",

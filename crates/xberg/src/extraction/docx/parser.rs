@@ -1131,6 +1131,133 @@ fn apply_run_formatting(e: &BytesStart, current_run: &mut Option<Run>) {
     }
 }
 
+fn collect_run_property_change(e: &BytesStart, changes: &mut Vec<crate::types::revisions::PropertyChange>) {
+    let (name, from) = match e.name().as_ref() as &[u8] {
+        b"w:b" => ("bold", Some(is_format_enabled(e).to_string())),
+        b"w:i" => ("italic", Some(is_format_enabled(e).to_string())),
+        b"w:u" => ("underline", Some(is_format_enabled(e).to_string())),
+        b"w:strike" | b"w:dstrike" => ("strikethrough", Some(is_format_enabled(e).to_string())),
+        b"w:vertAlign" => ("vertical_align", get_val_attr_string(e)),
+        b"w:sz" => ("font_size", get_val_attr(e).map(|v| v.to_string())),
+        b"w:color" => ("font_color", get_val_attr_string(e)),
+        b"w:highlight" => ("highlight", get_val_attr_string(e)),
+        _ => return,
+    };
+
+    if let Some(change) = changes.iter_mut().find(|change| change.name == name) {
+        change.from = from;
+        return;
+    }
+
+    changes.push(crate::types::revisions::PropertyChange {
+        name: name.to_string(),
+        from,
+        to: None,
+    });
+}
+
+fn run_property_value(run: &Run, name: &str) -> Option<String> {
+    match name {
+        "bold" => Some(run.bold.to_string()),
+        "italic" => Some(run.italic.to_string()),
+        "underline" => Some(run.underline.to_string()),
+        "strikethrough" => Some(run.strikethrough.to_string()),
+        "vertical_align" => {
+            if run.subscript {
+                Some("subscript".to_string())
+            } else if run.superscript {
+                Some("superscript".to_string())
+            } else {
+                None
+            }
+        }
+        "font_size" => run.font_size.map(|v| v.to_string()),
+        "font_color" => run.font_color.clone(),
+        "highlight" => run.highlight.clone(),
+        _ => None,
+    }
+}
+
+fn push_current_run_property_changes(run: &Run, changes: &mut Vec<crate::types::revisions::PropertyChange>) {
+    let current_properties = [
+        ("bold", run.bold.then_some("true".to_string())),
+        ("italic", run.italic.then_some("true".to_string())),
+        ("underline", run.underline.then_some("true".to_string())),
+        ("strikethrough", run.strikethrough.then_some("true".to_string())),
+        (
+            "vertical_align",
+            if run.subscript {
+                Some("subscript".to_string())
+            } else if run.superscript {
+                Some("superscript".to_string())
+            } else {
+                None
+            },
+        ),
+        ("font_size", run.font_size.map(|v| v.to_string())),
+        ("font_color", run.font_color.clone()),
+        ("highlight", run.highlight.clone()),
+    ];
+
+    for (name, to) in current_properties {
+        let Some(to) = to else {
+            continue;
+        };
+        if changes.iter().any(|change| change.name == name) {
+            continue;
+        }
+        changes.push(crate::types::revisions::PropertyChange {
+            name: name.to_string(),
+            from: None,
+            to: Some(to),
+        });
+    }
+}
+
+fn finalize_run_property_changes(
+    mut changes: Vec<crate::types::revisions::PropertyChange>,
+    current_run: Option<&Run>,
+) -> Vec<crate::types::revisions::PropertyChange> {
+    if let Some(run) = current_run {
+        for change in &mut changes {
+            change.to = run_property_value(run, &change.name);
+        }
+        push_current_run_property_changes(run, &mut changes);
+    }
+
+    changes.into_iter().filter(|change| change.from != change.to).collect()
+}
+
+fn push_format_revision(
+    document: &mut Document,
+    attrs: (Option<String>, Option<String>, Option<String>),
+    property_changes: Vec<crate::types::revisions::PropertyChange>,
+    current_run: Option<&Run>,
+    current_paragraph_index: usize,
+    revision_id_counter: &mut usize,
+) {
+    let (id_opt, author, timestamp) = attrs;
+    let revision_id = id_opt.unwrap_or_else(|| {
+        let fallback = format!("docx-fmt-{}", *revision_id_counter);
+        *revision_id_counter += 1;
+        fallback
+    });
+
+    document.revisions.push(crate::types::revisions::DocumentRevision {
+        revision_id,
+        author,
+        timestamp,
+        kind: crate::types::revisions::RevisionKind::FormatChange,
+        anchor: Some(crate::types::revisions::RevisionAnchor::Paragraph {
+            index: current_paragraph_index,
+        }),
+        delta: crate::types::revisions::RevisionDelta {
+            property_changes: finalize_run_property_changes(property_changes, current_run),
+            ..Default::default()
+        },
+    });
+}
+
 /// Apply paragraph-level properties from a `<w:pStyle>`, `<w:ilvl>`, or `<w:numId>` element.
 ///
 /// Resolves the correct paragraph (table context vs top-level) automatically.
@@ -1348,7 +1475,9 @@ impl<R: Read + Seek> DocxParser<R> {
         document: &mut Document,
         budget: &mut SecurityBudget,
     ) -> Result<(), DocxParseError> {
-        use crate::types::revisions::{DiffLine, DocumentRevision, RevisionAnchor, RevisionDelta, RevisionKind};
+        use crate::types::revisions::{
+            DiffLine, DocumentRevision, PropertyChange, RevisionAnchor, RevisionDelta, RevisionKind,
+        };
 
         let mut reader = Reader::from_str(xml);
         reader.config_mut().trim_text(false);
@@ -1367,6 +1496,9 @@ impl<R: Read + Seek> DocxParser<R> {
         let mut revision_id_counter: usize = 0;
         let mut in_del_text = false;
         let mut current_paragraph_index: usize = 0;
+        let mut in_run_property_change = false;
+        let mut pending_format_revision_attrs: Option<(Option<String>, Option<String>, Option<String>)> = None;
+        let mut pending_property_changes: Vec<PropertyChange> = Vec::new();
 
         loop {
             budget.step()?;
@@ -1489,7 +1621,11 @@ impl<R: Read + Seek> DocxParser<R> {
                         }
                         b"w:b" | b"w:i" | b"w:u" | b"w:strike" | b"w:dstrike" | b"w:vertAlign" | b"w:sz"
                         | b"w:color" | b"w:highlight" => {
-                            apply_run_formatting(e, &mut current_run);
+                            if in_run_property_change {
+                                collect_run_property_change(e, &mut pending_property_changes);
+                            } else {
+                                apply_run_formatting(e, &mut current_run);
+                            }
                         }
                         b"w:pStyle" | b"w:ilvl" | b"w:numId" => {
                             apply_paragraph_property(e, &mut table_stack, &mut current_paragraph);
@@ -1541,15 +1677,10 @@ impl<R: Read + Seek> DocxParser<R> {
                             revision_attrs = collect_revision_attrs(e);
                             revision_text.clear();
                         }
-                        // ~keep Track-changes: run-property (formatting) change.
-                        // ~keep
-                        // ~keep No text delta — the format details are carried in the OOXML attributes.
-                        // ~keep We record the revision with an empty delta for now.
-                        // ~keep TODO: enrich with before/after property diff in a follow-up.
                         b"w:rPrChange" if revision_kind.is_none() => {
-                            revision_kind = Some(RevisionKind::FormatChange);
-                            revision_attrs = collect_revision_attrs(e);
-                            revision_text.clear();
+                            in_run_property_change = true;
+                            pending_format_revision_attrs = Some(collect_revision_attrs(e));
+                            pending_property_changes.clear();
                         }
                         b"w:delText" => {
                             in_del_text = true;
@@ -1571,7 +1702,11 @@ impl<R: Read + Seek> DocxParser<R> {
                     }
                     b"w:b" | b"w:i" | b"w:u" | b"w:strike" | b"w:dstrike" | b"w:vertAlign" | b"w:sz" | b"w:color"
                     | b"w:highlight" => {
-                        apply_run_formatting(e, &mut current_run);
+                        if in_run_property_change {
+                            collect_run_property_change(e, &mut pending_property_changes);
+                        } else {
+                            apply_run_formatting(e, &mut current_run);
+                        }
                     }
                     b"w:pStyle" | b"w:ilvl" | b"w:numId" => {
                         apply_paragraph_property(e, &mut table_stack, &mut current_paragraph);
@@ -1658,7 +1793,32 @@ impl<R: Read + Seek> DocxParser<R> {
                         b"w:t" => {
                             in_text = false;
                         }
+                        b"w:rPrChange" => {
+                            in_run_property_change = false;
+                        }
+                        b"w:rPr" if !in_run_property_change => {
+                            if let Some(attrs) = pending_format_revision_attrs.take() {
+                                push_format_revision(
+                                    document,
+                                    attrs,
+                                    std::mem::take(&mut pending_property_changes),
+                                    current_run.as_ref(),
+                                    current_paragraph_index,
+                                    &mut revision_id_counter,
+                                );
+                            }
+                        }
                         b"w:r" => {
+                            if let Some(attrs) = pending_format_revision_attrs.take() {
+                                push_format_revision(
+                                    document,
+                                    attrs,
+                                    std::mem::take(&mut pending_property_changes),
+                                    current_run.as_ref(),
+                                    current_paragraph_index,
+                                    &mut revision_id_counter,
+                                );
+                            }
                             if let Some(run) = current_run.take() {
                                 if let Some(ctx) = table_stack.last_mut() {
                                     if let Some(ref mut para) = ctx.paragraph {
@@ -1744,7 +1904,7 @@ impl<R: Read + Seek> DocxParser<R> {
                             } else {
                                 RevisionDelta {
                                     content: vec![DiffLine::Added(std::mem::take(&mut revision_text))],
-                                    table_changes: vec![],
+                                    ..Default::default()
                                 }
                             };
                             document.revisions.push(DocumentRevision {
@@ -1776,7 +1936,7 @@ impl<R: Read + Seek> DocxParser<R> {
                             } else {
                                 RevisionDelta {
                                     content: vec![DiffLine::Removed(std::mem::take(&mut revision_text))],
-                                    table_changes: vec![],
+                                    ..Default::default()
                                 }
                             };
                             document.revisions.push(DocumentRevision {
@@ -1791,30 +1951,6 @@ impl<R: Read + Seek> DocxParser<R> {
                             });
                             revision_kind = None;
                             revision_text.clear();
-                        }
-                        b"w:rPrChange" if revision_kind == Some(RevisionKind::FormatChange) => {
-                            let (id_opt, author_opt, date_opt) = (
-                                revision_attrs.0.take(),
-                                revision_attrs.1.take(),
-                                revision_attrs.2.take(),
-                            );
-                            let revision_id = id_opt.unwrap_or_else(|| {
-                                let fallback = format!("docx-fmt-{}", revision_id_counter);
-                                revision_id_counter += 1;
-                                fallback
-                            });
-                            // ~keep TODO: capture before/after property diff (font, size, colour, etc.)
-                            document.revisions.push(DocumentRevision {
-                                revision_id,
-                                author: author_opt,
-                                timestamp: date_opt,
-                                kind: RevisionKind::FormatChange,
-                                anchor: Some(RevisionAnchor::Paragraph {
-                                    index: current_paragraph_index,
-                                }),
-                                delta: RevisionDelta::default(),
-                            });
-                            revision_kind = None;
                         }
                         b"w:delText" => {
                             in_del_text = false;

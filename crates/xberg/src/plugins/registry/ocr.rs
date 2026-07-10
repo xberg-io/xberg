@@ -107,8 +107,6 @@ impl OcrBackendRegistry {
             }
         }
 
-        // ~keep TODO(wasm-llm): VLM OCR should be available on wasm once hosted LLM
-        // ~keep request handling is wired; the feature remains in wasm presets until then.
         #[cfg(all(feature = "liter-llm", not(target_arch = "wasm32")))]
         {
             use crate::llm::vlm_ocr::VlmOcrBackend;

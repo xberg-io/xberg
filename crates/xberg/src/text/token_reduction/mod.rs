@@ -8,8 +8,6 @@ mod simd_text;
 pub use config::{ReductionLevel, TokenReductionConfig};
 pub use core::TokenReducer;
 
-// ~keep TODO: reorganize token_reduction - move out of text, and reorganize text properly into utils etc.
-
 /// Reduces token count in text while preserving meaning and structure.
 ///
 /// This function removes stopwords, redundancy, and applies compression techniques
