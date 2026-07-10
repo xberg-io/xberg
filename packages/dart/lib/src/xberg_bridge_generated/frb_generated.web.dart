@@ -784,6 +784,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   OcrRotation dco_decode_box_autoadd_ocr_rotation(dynamic raw);
 
   @protected
+  OcrStrategy dco_decode_box_autoadd_ocr_strategy(dynamic raw);
+
+  @protected
   OcrTableBoundingBox dco_decode_box_autoadd_ocr_table_bounding_box(
     dynamic raw,
   );
@@ -1631,6 +1634,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   OcrRotation dco_decode_ocr_rotation(dynamic raw);
 
   @protected
+  OcrStrategy dco_decode_ocr_strategy(dynamic raw);
+
+  @protected
   OcrTable dco_decode_ocr_table(dynamic raw);
 
   @protected
@@ -1793,6 +1799,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   OcrRotation? dco_decode_opt_box_autoadd_ocr_rotation(dynamic raw);
+
+  @protected
+  OcrStrategy? dco_decode_opt_box_autoadd_ocr_strategy(dynamic raw);
 
   @protected
   OcrTableBoundingBox? dco_decode_opt_box_autoadd_ocr_table_bounding_box(
@@ -2992,6 +3001,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   OcrRotation sse_decode_box_autoadd_ocr_rotation(SseDeserializer deserializer);
 
   @protected
+  OcrStrategy sse_decode_box_autoadd_ocr_strategy(SseDeserializer deserializer);
+
+  @protected
   OcrTableBoundingBox sse_decode_box_autoadd_ocr_table_bounding_box(
     SseDeserializer deserializer,
   );
@@ -4027,6 +4039,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   OcrRotation sse_decode_ocr_rotation(SseDeserializer deserializer);
 
   @protected
+  OcrStrategy sse_decode_ocr_strategy(SseDeserializer deserializer);
+
+  @protected
   OcrTable sse_decode_ocr_table(SseDeserializer deserializer);
 
   @protected
@@ -4245,6 +4260,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   OcrRotation? sse_decode_opt_box_autoadd_ocr_rotation(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  OcrStrategy? sse_decode_opt_box_autoadd_ocr_strategy(
     SseDeserializer deserializer,
   );
 
@@ -5840,6 +5860,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_ocr_strategy(
+    OcrStrategy self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_ocr_table_bounding_box(
     OcrTableBoundingBox self,
     SseSerializer serializer,
@@ -7196,6 +7222,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_ocr_rotation(OcrRotation self, SseSerializer serializer);
 
   @protected
+  void sse_encode_ocr_strategy(OcrStrategy self, SseSerializer serializer);
+
+  @protected
   void sse_encode_ocr_table(OcrTable self, SseSerializer serializer);
 
   @protected
@@ -7456,6 +7485,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_ocr_rotation(
     OcrRotation? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_ocr_strategy(
+    OcrStrategy? self,
     SseSerializer serializer,
   );
 

@@ -19,9 +19,7 @@ exclude = [
     "readme_templates/**",
     "target/**",
     "templates/readme/**",
-    "test_documents",
     "test_documents/**",
-    "tools/benchmark-harness/fixtures/**",
     "vendor/**",
     "**/Cargo.toml",
     "docs-site/src/snippets/**",
@@ -138,6 +136,7 @@ specifing = "specifing"
 splitted = "splitted"
 substract = "substract"
 surrealdb = "surrealdb"
+tbe = "tbe"
 tesseract = "tesseract"
 tha = "tha"
 thr = "thr"
@@ -160,6 +159,9 @@ WebUI = "WebUI"
 traineddata = "traineddata"
 
 [per-file-ignores]
+# Executable CI helper (git mode 100755); poly runs ruff via stdin and cannot
+# see the exec bit, so EXE001 always false-fires on shebang'd scripts.
+"scripts/ci/docker/test_docker.py" = ["EXE001"]
 "**/api.py" = ["F401", "I001", "TC006", "UP035"]
 "**/*.pyi" = ["A002", "F401", "I001", "PYI033", "TC006", "UP035"]
 "**/options.py" = ["F401", "I001", "RUF100"]
@@ -416,9 +418,7 @@ lint = { exclude = [
     "readme_templates/**",
     "target/**",
     "templates/readme/**",
-    "test_documents",
     "test_documents/**",
-    "tools/benchmark-harness/fixtures/**",
     "vendor/**",
     "**/Cargo.toml",
     "docs-site/src/snippets/**",
@@ -455,9 +455,7 @@ fmt = { exclude = [
     "readme_templates/**",
     "target/**",
     "templates/readme/**",
-    "test_documents",
     "test_documents/**",
-    "tools/benchmark-harness/fixtures/**",
     "vendor/**",
     "**/Cargo.toml",
     "docs-site/src/snippets/**",
@@ -494,26 +492,8 @@ file_safety = { exclude = [
     "readme_templates/**",
     "target/**",
     "templates/readme/**",
-    "test_documents",
     "test_documents/**",
-    "tools/benchmark-harness/fixtures/**",
     "vendor/**",
-    "crates/xberg-ffi/include/xberg.h",
-    "crates/xberg-ffi/src/lib.rs",
-    "crates/xberg-node/src/lib.rs",
-    "crates/xberg-php/src/lib.rs",
-    "crates/xberg-py/src/lib.rs",
-    "crates/xberg-wasm/src/lib.rs",
-    "packages/csharp/**/include/xberg.h",
-    "packages/dart/lib/src/xberg_bridge_generated/**",
-    "packages/dart/rust/src/lib.rs",
-    "packages/elixir/native/xberg_nif/src/lib.rs",
-    "packages/go/include/xberg.h",
-    "packages/java/**/include/xberg.h",
-    "packages/ruby/ext/xberg_rb/src/lib.rs",
-    "packages/swift/Sources/RustBridge/xberg-swift.swift",
-    "packages/swift/Sources/Xberg/Xberg.swift",
-    "packages/swift/rust/src/lib.rs",
     "**/Cargo.toml",
     "docs-site/src/snippets/**",
     "**/_generated/**",

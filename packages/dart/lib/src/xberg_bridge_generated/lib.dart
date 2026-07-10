@@ -9,7 +9,7 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'lib.freezed.dart';
 
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `DocumentExtractorDartCallbacks`, `EmbeddingBackendDartCallbacks`, `OcrBackendDartCallbacks`, `PostProcessorDartCallbacks`, `RendererDartCallbacks`, `RerankerBackendDartCallbacks`, `TokenizerBackendDartCallbacks`, `ValidatorDartCallbacks`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `can_handle`, `count_tokens`, `dimensions`, `embed`, `emits_structured_markdown`, `estimated_duration_ms`, `extract`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `priority`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render_result`, `rerank`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages`, `supported_mime_types`, `supports_document_processing`, `supports_language`, `supports_table_detection`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`, `version`, `version`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `can_handle`, `count_tokens`, `dimensions`, `embed`, `emits_structured_markdown`, `estimated_duration_ms`, `extract`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `priority`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render_result`, `rerank`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages`, `supported_mime_types`, `supports_document_processing`, `supports_language`, `supports_table_detection`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`, `version`, `version`
 
 /// Extract content from a single bytes or URI input.
 Future<ExtractionResult> extract({
@@ -5832,6 +5832,13 @@ class ExtractionConfig {
   /// Force OCR even for searchable PDFs
   final bool forceOcr;
 
+  /// Which pages get OCR'd when neither `force_ocr` nor `force_ocr_pages` applies.
+  ///
+  /// Defaults to [`OcrStrategy::Auto`], which OCRs only pages whose native text
+  /// fails a quality check. Only applies to PDF documents. Cannot be
+  /// [`OcrStrategy::ScannedPages`] while `disable_ocr` is `true`.
+  final OcrStrategy ocrStrategy;
+
   /// Force OCR on specific pages only (1-indexed page numbers, must be >= 1).
   ///
   /// When set, only the listed pages are OCR'd regardless of text layer quality.
@@ -6085,6 +6092,7 @@ class ExtractionConfig {
     required this.enableQualityProcessing,
     this.ocr,
     required this.forceOcr,
+    required this.ocrStrategy,
     this.forceOcrPages,
     required this.disableOcr,
     this.chunking,
@@ -6131,6 +6139,7 @@ class ExtractionConfig {
   enableQualityProcessing.hashCode ^
   ocr.hashCode ^
   forceOcr.hashCode ^
+  ocrStrategy.hashCode ^
   forceOcrPages.hashCode ^
   disableOcr.hashCode ^
   chunking.hashCode ^
@@ -6179,6 +6188,7 @@ class ExtractionConfig {
   enableQualityProcessing == other.enableQualityProcessing &&
   ocr == other.ocr &&
   forceOcr == other.forceOcr &&
+  ocrStrategy == other.ocrStrategy &&
   forceOcrPages == other.forceOcrPages &&
   disableOcr == other.disableOcr &&
   chunking == other.chunking &&
@@ -6506,6 +6516,9 @@ class FileExtractionConfig {
   /// Override force OCR for this file.
   final bool? forceOcr;
 
+  /// Override the OCR page-selection strategy for this file.
+  final OcrStrategy? ocrStrategy;
+
   /// Override force OCR pages for this file (1-indexed page numbers).
   final Int64List? forceOcrPages;
 
@@ -6602,6 +6615,7 @@ class FileExtractionConfig {
     this.enableQualityProcessing,
     this.ocr,
     this.forceOcr,
+    this.ocrStrategy,
     this.forceOcrPages,
     this.disableOcr,
     this.chunking,
@@ -6637,6 +6651,7 @@ class FileExtractionConfig {
   enableQualityProcessing.hashCode ^
   ocr.hashCode ^
   forceOcr.hashCode ^
+  ocrStrategy.hashCode ^
   forceOcrPages.hashCode ^
   disableOcr.hashCode ^
   chunking.hashCode ^
@@ -6674,6 +6689,7 @@ class FileExtractionConfig {
   enableQualityProcessing == other.enableQualityProcessing &&
   ocr == other.ocr &&
   forceOcr == other.forceOcr &&
+  ocrStrategy == other.ocrStrategy &&
   forceOcrPages == other.forceOcrPages &&
   disableOcr == other.disableOcr &&
   chunking == other.chunking &&
@@ -7355,26 +7371,15 @@ class HierarchyConfig {
   /// Include bounding box information in hierarchy blocks
   final bool includeBbox;
 
-  /// OCR coverage threshold for smart OCR triggering (0.0-1.0)
-  ///
-  /// Determines when OCR should be triggered based on text block coverage.
-  /// OCR is triggered when text blocks cover less than this fraction of the page.
-  /// Default: 0.5 (trigger OCR if less than 50% of page has text)
-  final double? ocrCoverageThreshold;
-
   const HierarchyConfig({
     required this.enabled,
     required this.kClusters,
     required this.includeBbox,
-    this.ocrCoverageThreshold,
   });
 
   @override
   int get hashCode =>
-  enabled.hashCode ^
-  kClusters.hashCode ^
-  includeBbox.hashCode ^
-  ocrCoverageThreshold.hashCode;
+  enabled.hashCode ^ kClusters.hashCode ^ includeBbox.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -7383,8 +7388,7 @@ class HierarchyConfig {
   runtimeType == other.runtimeType &&
   enabled == other.enabled &&
   kClusters == other.kClusters &&
-  includeBbox == other.includeBbox &&
-  ocrCoverageThreshold == other.ocrCoverageThreshold;
+  includeBbox == other.includeBbox;
 }
 
 /// HTML metadata extracted from HTML documents.
@@ -10326,6 +10330,33 @@ class OcrRotation {
   confidence == other.confidence;
 }
 
+@freezed
+sealed class OcrStrategy with _$OcrStrategy {
+  const OcrStrategy._();
+
+  /// OCR only when the native text layer fails a quality check (default).
+  ///
+  /// A scanner's invisible OCR sidecar passes that check, so scanned pages
+  /// carrying one are extracted natively. Use [`OcrStrategy::ScannedPages`]
+  /// to OCR them instead.
+  const factory OcrStrategy.auto() = OcrStrategy_Auto;
+
+  /// Additionally OCR every page that looks like a scan.
+  ///
+  /// Pages are graded on raster coverage, whether the text layer is invisible
+  /// or absent, the image codec, and the producer. Pages at or above
+  /// `min_confidence` are OCR'd; the rest keep native text and still go through
+  /// the `Auto` quality check.
+  ///
+  /// Detects that a text layer came from a scanner, not whether it is accurate,
+  /// so a page carrying a good sidecar is OCR'd too.
+  const factory OcrStrategy.scannedPages({
+    /// Minimum scan confidence, in `[0.0, 1.0]`. Values outside the range are
+    /// clamped. See [`DEFAULT_SCANNED_MIN_CONFIDENCE`] for how to pick one.
+    required double minConfidence,
+  }) = OcrStrategy_ScannedPages;
+}
+
 /// Table detected via OCR.
 ///
 /// Represents a table structure recognized during OCR processing.
@@ -11452,6 +11483,18 @@ class PdfMetadata {
   /// Total number of pages in the PDF document
   final PlatformInt64? pageCount;
 
+  /// How strongly the document's most scan-like page resembles a scan, in `[0.0, 1.0]`.
+  ///
+  /// `None` when the document could not be inspected. A full-page raster with no
+  /// visible text scores at least `0.85`; a born-digital slide with a full-bleed
+  /// background image scores `0.50`.
+  final double? scannedConfidence;
+
+  /// Pages that look like scans (1-indexed), using the default confidence threshold.
+  ///
+  /// `None` when the document could not be inspected; empty when no page qualifies.
+  final Int64List? scannedPages;
+
   const PdfMetadata({
     this.pdfVersion,
     this.producer,
@@ -11459,6 +11502,8 @@ class PdfMetadata {
     this.width,
     this.height,
     this.pageCount,
+    this.scannedConfidence,
+    this.scannedPages,
   });
 
   @override
@@ -11468,7 +11513,9 @@ class PdfMetadata {
   isEncrypted.hashCode ^
   width.hashCode ^
   height.hashCode ^
-  pageCount.hashCode;
+  pageCount.hashCode ^
+  scannedConfidence.hashCode ^
+  scannedPages.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -11480,7 +11527,9 @@ class PdfMetadata {
   isEncrypted == other.isEncrypted &&
   width == other.width &&
   height == other.height &&
-  pageCount == other.pageCount;
+  pageCount == other.pageCount &&
+  scannedConfidence == other.scannedConfidence &&
+  scannedPages == other.scannedPages;
 }
 
 @freezed

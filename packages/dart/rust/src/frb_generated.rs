@@ -8932,6 +8932,7 @@ const _: fn() = || {
         let _: bool = ExtractionConfig.enable_quality_processing;
         let _: Option<crate::OcrConfig> = ExtractionConfig.ocr;
         let _: bool = ExtractionConfig.force_ocr;
+        let _: crate::OcrStrategy = ExtractionConfig.ocr_strategy;
         let _: Option<Vec<i64>> = ExtractionConfig.force_ocr_pages;
         let _: bool = ExtractionConfig.disable_ocr;
         let _: Option<crate::ChunkingConfig> = ExtractionConfig.chunking;
@@ -9017,6 +9018,7 @@ const _: fn() = || {
         let _: Option<bool> = FileExtractionConfig.enable_quality_processing;
         let _: Option<crate::OcrConfig> = FileExtractionConfig.ocr;
         let _: Option<bool> = FileExtractionConfig.force_ocr;
+        let _: Option<crate::OcrStrategy> = FileExtractionConfig.ocr_strategy;
         let _: Option<Vec<i64>> = FileExtractionConfig.force_ocr_pages;
         let _: Option<bool> = FileExtractionConfig.disable_ocr;
         let _: Option<crate::ChunkingConfig> = FileExtractionConfig.chunking;
@@ -9206,7 +9208,6 @@ const _: fn() = || {
         let _: bool = HierarchyConfig.enabled;
         let _: i64 = HierarchyConfig.k_clusters;
         let _: bool = HierarchyConfig.include_bbox;
-        let _: Option<f64> = HierarchyConfig.ocr_coverage_threshold;
     }
     {
         let HtmlMetadata = None::<crate::HtmlMetadata>.unwrap();
@@ -9732,6 +9733,12 @@ const _: fn() = || {
         let _: f64 = OcrRotation.angle_degrees;
         let _: Option<f64> = OcrRotation.confidence;
     }
+    match None::<crate::OcrStrategy>.unwrap() {
+        crate::OcrStrategy::Auto => {}
+        crate::OcrStrategy::ScannedPages { min_confidence } => {
+            let _: f64 = min_confidence;
+        }
+    }
     {
         let OcrTable = None::<crate::OcrTable>.unwrap();
         let _: Vec<Vec<String>> = OcrTable.cells;
@@ -9901,6 +9908,8 @@ const _: fn() = || {
         let _: Option<i64> = PdfMetadata.width;
         let _: Option<i64> = PdfMetadata.height;
         let _: Option<i64> = PdfMetadata.page_count;
+        let _: Option<f64> = PdfMetadata.scanned_confidence;
+        let _: Option<Vec<i64>> = PdfMetadata.scanned_pages;
     }
     match None::<crate::PiiCategory>.unwrap() {
         crate::PiiCategory::Email => {}
@@ -13319,6 +13328,7 @@ impl SseDecode for crate::ExtractionConfig {
         let mut var_enableQualityProcessing = <bool>::sse_decode(deserializer);
         let mut var_ocr = <Option<crate::OcrConfig>>::sse_decode(deserializer);
         let mut var_forceOcr = <bool>::sse_decode(deserializer);
+        let mut var_ocrStrategy = <crate::OcrStrategy>::sse_decode(deserializer);
         let mut var_forceOcrPages = <Option<Vec<i64>>>::sse_decode(deserializer);
         let mut var_disableOcr = <bool>::sse_decode(deserializer);
         let mut var_chunking = <Option<crate::ChunkingConfig>>::sse_decode(deserializer);
@@ -13362,6 +13372,7 @@ impl SseDecode for crate::ExtractionConfig {
             enable_quality_processing: var_enableQualityProcessing,
             ocr: var_ocr,
             force_ocr: var_forceOcr,
+            ocr_strategy: var_ocrStrategy,
             force_ocr_pages: var_forceOcrPages,
             disable_ocr: var_disableOcr,
             chunking: var_chunking,
@@ -13522,6 +13533,7 @@ impl SseDecode for crate::FileExtractionConfig {
         let mut var_enableQualityProcessing = <Option<bool>>::sse_decode(deserializer);
         let mut var_ocr = <Option<crate::OcrConfig>>::sse_decode(deserializer);
         let mut var_forceOcr = <Option<bool>>::sse_decode(deserializer);
+        let mut var_ocrStrategy = <Option<crate::OcrStrategy>>::sse_decode(deserializer);
         let mut var_forceOcrPages = <Option<Vec<i64>>>::sse_decode(deserializer);
         let mut var_disableOcr = <Option<bool>>::sse_decode(deserializer);
         let mut var_chunking = <Option<crate::ChunkingConfig>>::sse_decode(deserializer);
@@ -13554,6 +13566,7 @@ impl SseDecode for crate::FileExtractionConfig {
             enable_quality_processing: var_enableQualityProcessing,
             ocr: var_ocr,
             force_ocr: var_forceOcr,
+            ocr_strategy: var_ocrStrategy,
             force_ocr_pages: var_forceOcrPages,
             disable_ocr: var_disableOcr,
             chunking: var_chunking,
@@ -13911,12 +13924,10 @@ impl SseDecode for crate::HierarchyConfig {
         let mut var_enabled = <bool>::sse_decode(deserializer);
         let mut var_kClusters = <i64>::sse_decode(deserializer);
         let mut var_includeBbox = <bool>::sse_decode(deserializer);
-        let mut var_ocrCoverageThreshold = <Option<f64>>::sse_decode(deserializer);
         return crate::HierarchyConfig {
             enabled: var_enabled,
             k_clusters: var_kClusters,
             include_bbox: var_includeBbox,
-            ocr_coverage_threshold: var_ocrCoverageThreshold,
         };
     }
 }
@@ -16171,6 +16182,27 @@ impl SseDecode for crate::OcrRotation {
     }
 }
 
+impl SseDecode for crate::OcrStrategy {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut tag_ = <i32>::sse_decode(deserializer);
+        match tag_ {
+            0 => {
+                return crate::OcrStrategy::Auto;
+            }
+            1 => {
+                let mut var_minConfidence = <f64>::sse_decode(deserializer);
+                return crate::OcrStrategy::ScannedPages {
+                    min_confidence: var_minConfidence,
+                };
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+
 impl SseDecode for crate::OcrTable {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -16683,6 +16715,17 @@ impl SseDecode for Option<crate::OcrRotation> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<crate::OcrRotation>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::OcrStrategy> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::OcrStrategy>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -17686,6 +17729,8 @@ impl SseDecode for crate::PdfMetadata {
         let mut var_width = <Option<i64>>::sse_decode(deserializer);
         let mut var_height = <Option<i64>>::sse_decode(deserializer);
         let mut var_pageCount = <Option<i64>>::sse_decode(deserializer);
+        let mut var_scannedConfidence = <Option<f64>>::sse_decode(deserializer);
+        let mut var_scannedPages = <Option<Vec<i64>>>::sse_decode(deserializer);
         return crate::PdfMetadata {
             pdf_version: var_pdfVersion,
             producer: var_producer,
@@ -17693,6 +17738,8 @@ impl SseDecode for crate::PdfMetadata {
             width: var_width,
             height: var_height,
             page_count: var_pageCount,
+            scanned_confidence: var_scannedConfidence,
+            scanned_pages: var_scannedPages,
         };
     }
 }
@@ -21839,6 +21886,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::ExtractionConfig> {
             self.0.enable_quality_processing.into_into_dart().into_dart(),
             self.0.ocr.into_into_dart().into_dart(),
             self.0.force_ocr.into_into_dart().into_dart(),
+            self.0.ocr_strategy.into_into_dart().into_dart(),
             self.0.force_ocr_pages.into_into_dart().into_dart(),
             self.0.disable_ocr.into_into_dart().into_dart(),
             self.0.chunking.into_into_dart().into_dart(),
@@ -22007,6 +22055,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::FileExtractionConfig> {
             self.0.enable_quality_processing.into_into_dart().into_dart(),
             self.0.ocr.into_into_dart().into_dart(),
             self.0.force_ocr.into_into_dart().into_dart(),
+            self.0.ocr_strategy.into_into_dart().into_dart(),
             self.0.force_ocr_pages.into_into_dart().into_dart(),
             self.0.disable_ocr.into_into_dart().into_dart(),
             self.0.chunking.into_into_dart().into_dart(),
@@ -22350,7 +22399,6 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::HierarchyConfig> {
             self.0.enabled.into_into_dart().into_dart(),
             self.0.k_clusters.into_into_dart().into_dart(),
             self.0.include_bbox.into_into_dart().into_dart(),
-            self.0.ocr_coverage_threshold.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -23668,6 +23716,26 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::OcrRotation>> for crate
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::OcrStrategy> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self.0 {
+            crate::OcrStrategy::Auto => [0.into_dart()].into_dart(),
+            crate::OcrStrategy::ScannedPages { min_confidence } => {
+                [1.into_dart(), min_confidence.into_into_dart().into_dart()].into_dart()
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for FrbWrapper<crate::OcrStrategy> {}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::OcrStrategy>> for crate::OcrStrategy {
+    fn into_into_dart(self) -> FrbWrapper<crate::OcrStrategy> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::OcrTable> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -24118,6 +24186,8 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::PdfMetadata> {
             self.0.width.into_into_dart().into_dart(),
             self.0.height.into_into_dart().into_dart(),
             self.0.page_count.into_into_dart().into_dart(),
+            self.0.scanned_confidence.into_into_dart().into_dart(),
+            self.0.scanned_pages.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -27597,6 +27667,7 @@ impl SseEncode for crate::ExtractionConfig {
         <bool>::sse_encode(self.enable_quality_processing, serializer);
         <Option<crate::OcrConfig>>::sse_encode(self.ocr, serializer);
         <bool>::sse_encode(self.force_ocr, serializer);
+        <crate::OcrStrategy>::sse_encode(self.ocr_strategy, serializer);
         <Option<Vec<i64>>>::sse_encode(self.force_ocr_pages, serializer);
         <bool>::sse_encode(self.disable_ocr, serializer);
         <Option<crate::ChunkingConfig>>::sse_encode(self.chunking, serializer);
@@ -27724,6 +27795,7 @@ impl SseEncode for crate::FileExtractionConfig {
         <Option<bool>>::sse_encode(self.enable_quality_processing, serializer);
         <Option<crate::OcrConfig>>::sse_encode(self.ocr, serializer);
         <Option<bool>>::sse_encode(self.force_ocr, serializer);
+        <Option<crate::OcrStrategy>>::sse_encode(self.ocr_strategy, serializer);
         <Option<Vec<i64>>>::sse_encode(self.force_ocr_pages, serializer);
         <Option<bool>>::sse_encode(self.disable_ocr, serializer);
         <Option<crate::ChunkingConfig>>::sse_encode(self.chunking, serializer);
@@ -28014,7 +28086,6 @@ impl SseEncode for crate::HierarchyConfig {
         <bool>::sse_encode(self.enabled, serializer);
         <i64>::sse_encode(self.k_clusters, serializer);
         <bool>::sse_encode(self.include_bbox, serializer);
-        <Option<f64>>::sse_encode(self.ocr_coverage_threshold, serializer);
     }
 }
 
@@ -29819,6 +29890,24 @@ impl SseEncode for crate::OcrRotation {
     }
 }
 
+impl SseEncode for crate::OcrStrategy {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        match self {
+            crate::OcrStrategy::Auto => {
+                <i32>::sse_encode(0, serializer);
+            }
+            crate::OcrStrategy::ScannedPages { min_confidence } => {
+                <i32>::sse_encode(1, serializer);
+                <f64>::sse_encode(min_confidence, serializer);
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+
 impl SseEncode for crate::OcrTable {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -30275,6 +30364,16 @@ impl SseEncode for Option<crate::OcrRotation> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::OcrRotation>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::OcrStrategy> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::OcrStrategy>::sse_encode(value, serializer);
         }
     }
 }
@@ -31113,6 +31212,8 @@ impl SseEncode for crate::PdfMetadata {
         <Option<i64>>::sse_encode(self.width, serializer);
         <Option<i64>>::sse_encode(self.height, serializer);
         <Option<i64>>::sse_encode(self.page_count, serializer);
+        <Option<f64>>::sse_encode(self.scanned_confidence, serializer);
+        <Option<Vec<i64>>>::sse_encode(self.scanned_pages, serializer);
     }
 }
 

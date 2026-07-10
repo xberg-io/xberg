@@ -9019,6 +9019,266 @@ String toString() {
 
 
 /// @nodoc
+mixin _$OcrStrategy {
+
+
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is OcrStrategy);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+  return 'OcrStrategy()';
+}
+
+
+}
+
+/// @nodoc
+class $OcrStrategyCopyWith<$Res>  {
+$OcrStrategyCopyWith(OcrStrategy _, $Res Function(OcrStrategy) __);
+}
+
+
+/// Adds pattern-matching-related methods to [OcrStrategy].
+extension OcrStrategyPatterns on OcrStrategy {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( OcrStrategy_Auto value)?  auto,TResult Function( OcrStrategy_ScannedPages value)?  scannedPages,required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case OcrStrategy_Auto() when auto != null:
+return auto(_that);case OcrStrategy_ScannedPages() when scannedPages != null:
+return scannedPages(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( OcrStrategy_Auto value)  auto,required TResult Function( OcrStrategy_ScannedPages value)  scannedPages,}){
+final _that = this;
+switch (_that) {
+case OcrStrategy_Auto():
+return auto(_that);case OcrStrategy_ScannedPages():
+return scannedPages(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( OcrStrategy_Auto value)?  auto,TResult? Function( OcrStrategy_ScannedPages value)?  scannedPages,}){
+final _that = this;
+switch (_that) {
+case OcrStrategy_Auto() when auto != null:
+return auto(_that);case OcrStrategy_ScannedPages() when scannedPages != null:
+return scannedPages(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  auto,TResult Function( double minConfidence)?  scannedPages,required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case OcrStrategy_Auto() when auto != null:
+return auto();case OcrStrategy_ScannedPages() when scannedPages != null:
+return scannedPages(_that.minConfidence);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  auto,required TResult Function( double minConfidence)  scannedPages,}) {final _that = this;
+switch (_that) {
+case OcrStrategy_Auto():
+return auto();case OcrStrategy_ScannedPages():
+return scannedPages(_that.minConfidence);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  auto,TResult? Function( double minConfidence)?  scannedPages,}) {final _that = this;
+switch (_that) {
+case OcrStrategy_Auto() when auto != null:
+return auto();case OcrStrategy_ScannedPages() when scannedPages != null:
+return scannedPages(_that.minConfidence);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class OcrStrategy_Auto extends OcrStrategy {
+  const OcrStrategy_Auto(): super._();
+
+
+
+
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is OcrStrategy_Auto);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+  return 'OcrStrategy.auto()';
+}
+
+
+}
+
+
+
+
+/// @nodoc
+
+
+class OcrStrategy_ScannedPages extends OcrStrategy {
+  const OcrStrategy_ScannedPages({required this.minConfidence}): super._();
+
+
+/// Minimum scan confidence, in `[0.0, 1.0]`. Values outside the range are
+/// clamped. See [`DEFAULT_SCANNED_MIN_CONFIDENCE`] for how to pick one.
+ final  double minConfidence;
+
+/// Create a copy of OcrStrategy
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$OcrStrategy_ScannedPagesCopyWith<OcrStrategy_ScannedPages> get copyWith => _$OcrStrategy_ScannedPagesCopyWithImpl<OcrStrategy_ScannedPages>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is OcrStrategy_ScannedPages&&(identical(other.minConfidence, minConfidence) || other.minConfidence == minConfidence));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,minConfidence);
+
+@override
+String toString() {
+  return 'OcrStrategy.scannedPages(minConfidence: $minConfidence)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $OcrStrategy_ScannedPagesCopyWith<$Res> implements $OcrStrategyCopyWith<$Res> {
+  factory $OcrStrategy_ScannedPagesCopyWith(OcrStrategy_ScannedPages value, $Res Function(OcrStrategy_ScannedPages) _then) = _$OcrStrategy_ScannedPagesCopyWithImpl;
+@useResult
+$Res call({
+ double minConfidence
+});
+
+
+
+
+}
+/// @nodoc
+class _$OcrStrategy_ScannedPagesCopyWithImpl<$Res>
+    implements $OcrStrategy_ScannedPagesCopyWith<$Res> {
+  _$OcrStrategy_ScannedPagesCopyWithImpl(this._self, this._then);
+
+  final OcrStrategy_ScannedPages _self;
+  final $Res Function(OcrStrategy_ScannedPages) _then;
+
+/// Create a copy of OcrStrategy
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? minConfidence = null,}) {
+  return _then(OcrStrategy_ScannedPages(
+minConfidence: null == minConfidence ? _self.minConfidence : minConfidence // ignore: cast_nullable_to_non_nullable
+as double,
+  ));
+}
+
+
+}
+
+/// @nodoc
 mixin _$OutputFormat {
 
 

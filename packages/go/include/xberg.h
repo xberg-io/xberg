@@ -1244,6 +1244,20 @@ typedef struct XBERGOcrQualityThresholds XBERGOcrQualityThresholds;
  */
 typedef struct XBERGOcrRotation XBERGOcrRotation;
 /**
+ * Which pages of a PDF get OCR'd when neither `force_ocr` nor `force_ocr_pages` applies.
+ * \code
+ * use xberg::{ExtractionConfig, OcrStrategy};
+ *
+ * // OCR pages that look like scans; keep native text everywhere else.
+ * let config = ExtractionConfig {
+ *     ocr_strategy: OcrStrategy::ScannedPages { min_confidence: 0.7 },
+ *     ..Default::default()
+ * };
+ * assert!(matches!(config.ocr_strategy, OcrStrategy::ScannedPages { .. }));
+ * \endcode
+ */
+typedef struct XBERGOcrStrategy XBERGOcrStrategy;
+/**
  * Table detected via OCR.
  *
  * Represents a table structure recognized during OCR processing.
@@ -3553,6 +3567,13 @@ XBERGOcrConfig *xberg_extraction_config_ocr(const XBERGExtractionConfig *ptr);
 int32_t xberg_extraction_config_force_ocr(const XBERGExtractionConfig *ptr);
 
 /**
+ * Get the `ocr_strategy` field from a `ExtractionConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGOcrStrategy *xberg_extraction_config_ocr_strategy(const XBERGExtractionConfig *ptr);
+
+/**
  * Get the `force_ocr_pages` field from a `ExtractionConfig`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
@@ -3909,6 +3930,13 @@ XBERGOcrConfig *xberg_file_extraction_config_ocr(const XBERGFileExtractionConfig
  * Pointer must be a valid handle returned by this library.
  */
 int32_t xberg_file_extraction_config_force_ocr(const XBERGFileExtractionConfig *ptr);
+
+/**
+ * Get the `ocr_strategy` field from a `FileExtractionConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGOcrStrategy *xberg_file_extraction_config_ocr_strategy(const XBERGFileExtractionConfig *ptr);
 
 /**
  * Get the `force_ocr_pages` field from a `FileExtractionConfig`.
@@ -5764,13 +5792,6 @@ uintptr_t xberg_hierarchy_config_k_clusters(const XBERGHierarchyConfig *ptr);
  * Pointer must be a valid handle returned by this library.
  */
 int32_t xberg_hierarchy_config_include_bbox(const XBERGHierarchyConfig *ptr);
-
-/**
- * Get the `ocr_coverage_threshold` field from a `HierarchyConfig`.
- * # Safety
- * Pointer must be a valid handle returned by this library.
- */
-float xberg_hierarchy_config_ocr_coverage_threshold(const XBERGHierarchyConfig *ptr);
 
 /**
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
@@ -16291,6 +16312,20 @@ int64_t xberg_pdf_metadata_height(const XBERGPdfMetadata *ptr);
 uint32_t xberg_pdf_metadata_page_count(const XBERGPdfMetadata *ptr);
 
 /**
+ * Get the `scanned_confidence` field from a `PdfMetadata`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+float xberg_pdf_metadata_scanned_confidence(const XBERGPdfMetadata *ptr);
+
+/**
+ * Get the `scanned_pages` field from a `PdfMetadata`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_pdf_metadata_scanned_pages(const XBERGPdfMetadata *ptr);
+
+/**
  * Create a `ProxyConfig` from a JSON string. Returns null on failure.
  * # Safety
  * JSON string must be valid UTF-8 and null-terminated.
@@ -17185,6 +17220,21 @@ int32_t xberg_vlm_fallback_policy_from_i32(int32_t value);
  * Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t xberg_vlm_fallback_policy_from_str(const char *name);
+
+/**
+ * Convert an integer to a `OcrStrategy` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+int32_t xberg_ocr_strategy_from_i32(int32_t value);
+
+/**
+ * Convert a `OcrStrategy` serde wire value (C string) to its integer discriminant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
+ */
+int32_t xberg_ocr_strategy_from_str(const char *name);
 
 /**
  * Convert an integer to a `TableChunkingMode` variant. Returns -1 on invalid input.
@@ -18405,6 +18455,31 @@ char *xberg_vlm_fallback_policy_to_json(const XBERGVlmFallbackPolicy *ptr);
  * The returned string must be freed with `xberg_free_string`.
  */
 char *xberg_vlm_fallback_policy_to_string(const XBERGVlmFallbackPolicy *ptr);
+
+/**
+ * Free a heap-allocated `OcrStrategy` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void xberg_ocr_strategy_free(XBERGOcrStrategy *ptr);
+
+/**
+ * Serialize a heap-allocated `OcrStrategy` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_ocr_strategy_to_json(const XBERGOcrStrategy *ptr);
+
+/**
+ * Render a heap-allocated `OcrStrategy` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_ocr_strategy_to_string(const XBERGOcrStrategy *ptr);
 
 /**
  * Free a heap-allocated `TableChunkingMode` returned by a pointer-returning FFI function.
