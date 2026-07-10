@@ -15,10 +15,10 @@
 // ~keep compile this module in, or it goes dead-code (the caller falls back to the
 // ~keep MissingDependency arm instead). wasm32 has no LLM-hosted embedding transport
 // ~keep wired up yet (see the wasm-llm notes at each call site).
-#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[cfg(all(feature = "tokio-runtime", any(feature = "embeddings", feature = "static-embeddings"), not(target_arch = "wasm32")))]
 use liter_llm::{EmbeddingInput, EmbeddingRequest, LlmClient};
 
-#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[cfg(all(feature = "tokio-runtime", any(feature = "embeddings", feature = "static-embeddings"), not(target_arch = "wasm32")))]
 use crate::core::config::LlmConfig;
 
 /// Generate embeddings using a provider-hosted model via liter-llm.

@@ -11,7 +11,7 @@ use std::time::Duration;
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "onnx-runtime",
-    feature = "static-embeddings"
+    all(feature = "static-embeddings", not(target_arch = "wasm32"))
 ))]
 use sha2::{Digest, Sha256};
 #[cfg(any(
@@ -21,7 +21,7 @@ use sha2::{Digest, Sha256};
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "onnx-runtime",
-    feature = "static-embeddings"
+    all(feature = "static-embeddings", not(target_arch = "wasm32"))
 ))]
 use std::io::{BufReader, Read};
 #[cfg(any(
@@ -31,7 +31,7 @@ use std::io::{BufReader, Read};
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "onnx-runtime",
-    feature = "static-embeddings"
+    all(feature = "static-embeddings", not(target_arch = "wasm32"))
 ))]
 use std::path::Path;
 #[cfg(any(
@@ -182,7 +182,7 @@ pub(crate) fn hf_download(repo_id: &str, remote_filename: &str) -> Result<PathBu
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "onnx-runtime",
-    feature = "static-embeddings"
+    all(feature = "static-embeddings", not(target_arch = "wasm32"))
 ))]
 pub(crate) fn parse_sha256_manifest(content: &str) -> Result<Vec<(String, String)>, String> {
     let mut entries = Vec::new();
@@ -220,7 +220,7 @@ pub(crate) fn parse_sha256_manifest(content: &str) -> Result<Vec<(String, String
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "onnx-runtime",
-    feature = "static-embeddings"
+    all(feature = "static-embeddings", not(target_arch = "wasm32"))
 ))]
 pub(crate) fn verify_sha256(path: &Path, expected: &str, label: &str) -> Result<(), String> {
     if expected.is_empty() {
