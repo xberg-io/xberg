@@ -149,7 +149,7 @@ mod tests {
 
     fn hex_decode(s: &str) -> Vec<u8> {
         assert!(
-            s.len() % 2 == 0,
+            s.len().is_multiple_of(2),
             "hex input must have even length, got {}",
             s.len()
         );
