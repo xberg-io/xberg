@@ -49,10 +49,10 @@ dbase = "0.7"
 futures = "0.3"
 getrandom = { version = "0.4.2", features = ["wasm_js"] }
 hex = "0.4.3"
-# <3.8: html-to-markdown-rs 3.8 changed ImageInfo.dimensions from
+# <3.6: a 3.x minor of html-to-markdown-rs changed ImageInfo.dimensions from
 # Option<(u32,u32)> to Option<ImageDimensions>, breaking extractors/html.rs
-# and types/metadata.rs (a semver violation upstream in a 3.x minor).
-html-to-markdown-rs = { version = ">=3.5.7, <3.8", default-features = false }
+# and types/metadata.rs (a semver violation upstream; 3.5.x is the known-good line for kreuzberg 4.9.x).
+html-to-markdown-rs = { version = ">=3.5.7, <3.6", default-features = false }
 image = { version = "0.25.10", default-features = false }
 itertools = "0.14"
 js-sys = "0.3"
