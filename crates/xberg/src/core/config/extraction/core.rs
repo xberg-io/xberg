@@ -412,7 +412,7 @@ impl Default for ExtractionConfig {
             enable_quality_processing: true,
             ocr: None,
             force_ocr: false,
-            ocr_strategy: OcrStrategy::default(),
+            ocr_strategy: OcrStrategy::Auto,
             force_ocr_pages: None,
             disable_ocr: false,
             chunking: None,
