@@ -248,16 +248,15 @@ async-trait = { workspace = true }
 axum = { version = "0.8", features = ["macros", "json", "multipart"], optional = true }
 base64 = { workspace = true }
 biblatex = { version = "0.11", optional = true }
-biblib = { version = "0.4", default-features = false, features = [
+biblib = { version = "0.7", default-features = false, features = [
     "ris",
     "pubmed",
     "xml",
-    "regex",
 ], optional = true }
 bitvec = "1.0"
 blake3 = { workspace = true }
 bytes = { workspace = true }
-calamine = { version = "0.35.0", features = ["dates"], optional = true }
+calamine = { version = "0.36.0", features = ["dates"], optional = true }
 cfb = { workspace = true, optional = true }
 chardetng = { version = "1.0.0", optional = true }
 chrono = { workspace = true, optional = true }
@@ -297,7 +296,7 @@ kreuzberg-tesseract = { path = "../kreuzberg-tesseract", version = "4.9.9", opti
 libc = { workspace = true }
 liter-llm = { workspace = true, optional = true }
 log = { workspace = true }
-lopdf = { version = "0.41.0", optional = true }
+lopdf = { version = "0.42.0", optional = true }
 mail-parser = { version = "0.11.3", optional = true }
 memchr = "2.8.1"
 memmap2 = { workspace = true }
@@ -319,7 +318,7 @@ parking_lot = { workspace = true }
 pastey = "0.2"
 pdfium-render = { workspace = true, features = ["thread_safe", "image_latest"], optional = true }
 pulldown-cmark = { version = "0.13" }
-quick-xml = { version = "0.40.1", features = ["serialize"], optional = true }
+quick-xml = { version = "0.41.0", features = ["serialize"], optional = true }
 rake = { version = "0.3.6", optional = true }
 rayon = { workspace = true }
 regex = "1.12.3"
