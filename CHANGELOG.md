@@ -43,6 +43,14 @@ The changelog starts fresh at `1.0.0-rc.1`. For the Kreuzberg v1–v4 history, s
 
 ### Fixed
 
+- **Markdown, CSV, and other text members inside an archive are no longer flattened to escaped
+  prose.** Recursive archive extraction resolved each member's MIME by content sniffing first, but
+  markdown/CSV/YAML are all plain UTF-8 and sniff to `text/plain` — so a zipped `.md` reached the
+  plain-text extractor, which escaped its headings (`# Title` -> `\# Title`) and dropped its
+  structure. Member detection now prefers the file extension whenever the sniff is only the generic
+  `text/plain`, matching how the top-level path resolves a file by `detect_mime_type(path)` first,
+  so a `.md` member routes to the markdown extractor. Concrete binary formats (PDF/DOCX/images),
+  which sniff to a specific type, are unaffected.
 - **Model downloads can no longer hang the extraction pipeline on a blocked network.** hf-hub
   builds its ureq agent with no read/connect timeout, so a firewalled or stalled HuggingFace
   connection made the blocking `ApiRepo::get()` block forever — wedging the whole pipeline at 0%

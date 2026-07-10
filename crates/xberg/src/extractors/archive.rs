@@ -128,18 +128,22 @@ async fn build_archive_doc(
 
     if config.max_archive_depth > current_depth && !file_bytes.is_empty() {
         for (path, bytes) in &file_bytes {
-            let detected_mime = crate::core::mime::detect_mime_type_from_bytes(bytes).ok().or_else(|| {
-                std::path::Path::new(path)
-                    .extension()
-                    .and_then(|ext| ext.to_str())
-                    .and_then(|ext| mime_guess::from_ext(ext).first())
-                    .map(|m| m.to_string())
-            });
+            let sniffed_mime = crate::core::mime::detect_mime_type_from_bytes(bytes).ok();
 
-            let file_mime = match detected_mime {
-                Some(m) if m != "application/octet-stream" => m,
-                _ => continue,
+            // Sniffing sees markdown/CSV/YAML as plain UTF-8 and returns `text/plain`,
+            // so fall back to the extension (as the top-level path does) to reach their
+            // real extractors; a concrete sniff (PDF, DOCX, ...) still wins.
+            let file_mime = match sniffed_mime {
+                Some(m) if m != crate::core::mime::PLAIN_TEXT_MIME_TYPE => m,
+                sniffed => crate::core::mime::detect_mime_type(path, false)
+                    .ok()
+                    .or(sniffed)
+                    .unwrap_or_else(|| crate::core::mime::PLAIN_TEXT_MIME_TYPE.to_string()),
             };
+
+            if file_mime == "application/octet-stream" {
+                continue;
+            }
 
             let mut child_config = config.clone();
             child_config.max_archive_depth = config.max_archive_depth.saturating_sub(current_depth + 1);
@@ -602,6 +606,43 @@ mod tests {
         };
         assert_eq!(archive_meta.format, "ZIP");
         assert_eq!(archive_meta.file_count, 1);
+    }
+
+    #[tokio::test]
+    async fn test_zip_markdown_member_routes_to_markdown_extractor() {
+        let markdown = "# Title\n\nBody paragraph.\n\n## Section\n\n- a\n- b\n";
+
+        let mut cursor = Cursor::new(Vec::new());
+        {
+            let mut zip = ZipWriter::new(&mut cursor);
+            let options = FileOptions::<'_, ()>::default();
+            zip.start_file("doc.md", options).unwrap();
+            zip.write_all(markdown.as_bytes()).unwrap();
+            zip.finish().unwrap();
+        }
+
+        let bytes = cursor.into_inner();
+        let config = ExtractionConfig {
+            output_format: crate::core::config::OutputFormat::Markdown,
+            ..Default::default()
+        };
+
+        let result = ZipExtractor::new()
+            .extract_content(&bytes, "application/zip", &config)
+            .await
+            .unwrap();
+
+        let children = result.children.expect("archive should extract its member");
+        let member = children.iter().find(|c| c.path == "doc.md").unwrap();
+        assert_eq!(member.mime_type, "text/markdown");
+
+        let rendered = member
+            .result
+            .formatted_content
+            .as_ref()
+            .unwrap_or(&member.result.content);
+        assert!(rendered.contains("# Title"), "heading lost: {rendered:?}");
+        assert!(!rendered.contains("\\#"), "heading was escaped as prose: {rendered:?}");
     }
 
     #[tokio::test]
