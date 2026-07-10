@@ -1,7 +1,7 @@
 # sha256 manifest for the xberg-io/late-interaction-models preset fleet (self-hosted, weights unmodified).
 # Format: <sha256>  <repo-relative path>. Pins the exact bytes each preset resolves to.
 8a7ef3067ec44d7909d28daaf0cd52a6739a25e689252789b0927c593e17b121  colbert-small-v1/config.json
-b078342c7af055851eb25e599c7e362674e266aa52fe2d87d7bd325d3e3420e0  colbert-small-v1/model.onnx
+bd4bee8b055ed7a8e8b6e401792ae6e9137d9712c35eaa16f915ba69cae6d633  colbert-small-v1/model.onnx
 5d5b662e421ea9fac075174bb0688ee0d9431699900b90662acd44b2a350503a  colbert-small-v1/special_tokens_map.json
 d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66  colbert-small-v1/tokenizer.json
 0b29c7bfc889e53b36d9dd3e686dd4300f6525110eaa98c76a5dafceb2029f53  colbert-small-v1/tokenizer_config.json
