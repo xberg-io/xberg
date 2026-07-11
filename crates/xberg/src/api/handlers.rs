@@ -1300,10 +1300,17 @@ pub(crate) async fn process_handler(
                 ))
             })?;
 
-            let map = crate::text::redaction::redact_capturing_rehydration_map(&mut document, &redact_op.config)
+            let outcome = crate::text::redaction::redact_capturing_rehydration_map(&mut document, &redact_op.config)
                 .await
                 .map_err(ApiError::from)?;
-            let encrypted = crate::text::redaction::encrypt_map(&map, passphrase).map_err(ApiError::from)?;
+            if !outcome.rejection_counts.is_empty() {
+                tracing::debug!(
+                    target: "xberg::redaction",
+                    rejections = ?outcome.rejection_counts,
+                    "post-detection validators rejected candidate PII matches"
+                );
+            }
+            let encrypted = crate::text::redaction::encrypt_map(&outcome.map, passphrase).map_err(ApiError::from)?;
             let doc_id = state
                 .rehydration_store
                 .put_map(&xberg_doc_store::TenantCtx::default_tenant(), encrypted)

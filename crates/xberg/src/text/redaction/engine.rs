@@ -9,50 +9,102 @@ use std::collections::HashSet;
 use crate::Result;
 use crate::core::config::redaction::RedactionConfig;
 use crate::types::ExtractedDocument;
-use crate::types::redaction::{PiiCategory, RedactionFinding, RedactionReport};
+use crate::types::redaction::{PiiCategory, RedactionFinding, RedactionReport, RejectionCount};
 
 use super::patterns::{PatternMatch, scan_text};
 use super::strategy::{TokenCounter, apply_strategy};
+use super::validators::{self, EntityValidator, RejectionCounts, apply_validators};
 
 #[cfg(feature = "redaction-rehydrate")]
 use super::rehydration::RehydrationMap;
 
+/// Outcome of [`redact_capturing_rehydration_map`]: the token → original-text
+/// rehydration map plus a count of PII candidates the post-detection
+/// validators rejected (e.g. failed-checksum IBANs, failed-Luhn card
+/// numbers), keyed by rejection reason.
+///
+/// `rejection_counts` here is the same audit-only count also written to
+/// `result.redaction_report.rejection_counts` — repeated here as a
+/// Rust-native `RejectionCounts` map so callers of this richer API don't have
+/// to reconstruct it from the FFI-friendly `Vec<RejectionCount>` shape used
+/// on [`crate::types::redaction::RedactionReport`]. Rejected candidates never
+/// appear in `map` or in `findings` — validators ran before either was
+/// populated, so they were never treated as PII in the first place.
+#[cfg(feature = "redaction-rehydrate")]
+#[derive(Debug, Clone, Default)]
+pub struct TextRedactionOutcome {
+    /// Token → original PII text, populated for `TokenReplace` strategy hits.
+    pub map: RehydrationMap,
+    /// Post-detection validator rejection counts, keyed by reason.
+    pub rejection_counts: RejectionCounts,
+}
+
 /// Run pattern redaction (and optional NER-driven redaction) over `result` and
-/// rewrite every textual field. Populates `result.redaction_report`.
+/// rewrite every textual field. Populates `result.redaction_report`, whose
+/// `rejection_counts` field surfaces what the post-detection validators (see
+/// [`super::validators`]) dropped from the main content. The same counts are
+/// also logged at `DEBUG` under the `xberg::redaction` target.
+///
+/// `redact` implements [`crate::plugins::PostProcessor::process`], whose
+/// signature is `Result<()>` and shared by every post-processor, so it cannot
+/// return the counts directly — callers that need them as a typed value
+/// (rather than reading `result.redaction_report` afterwards) should use
+/// [`redact_capturing_rehydration_map`], whose richer [`TextRedactionOutcome`]
+/// return type carries them.
 pub async fn redact(result: &mut ExtractedDocument, config: &RedactionConfig) -> Result<()> {
-    redact_inner(
+    let rejection_counts = redact_inner(
         result,
         config,
         #[cfg(feature = "redaction-rehydrate")]
         None,
     )
-    .await
+    .await?;
+    if !rejection_counts.is_empty() {
+        tracing::debug!(
+            target: "xberg::redaction",
+            rejections = ?rejection_counts,
+            "post-detection validators rejected candidate PII matches"
+        );
+    }
+    Ok(())
 }
 
 /// Run redaction and capture the token → original text map for later rehydration.
 ///
-/// Returns a [`RehydrationMap`] mapping each replacement token (e.g. `[EMAIL_1]`)
-/// to the original PII text it replaced. Only populated for `TokenReplace` strategy
-/// tokens; `Mask` and `Hash` replacements are not reversible and are not included.
+/// Returns a [`TextRedactionOutcome`] whose `map` field maps each replacement
+/// token (e.g. `[EMAIL_1]`) to the original PII text it replaced — only
+/// populated for `TokenReplace` strategy tokens; `Mask` and `Hash`
+/// replacements are not reversible and are not included — and whose
+/// `rejection_counts` field surfaces what the post-detection validators
+/// dropped.
 #[cfg(feature = "redaction-rehydrate")]
 pub async fn redact_capturing_rehydration_map(
     result: &mut ExtractedDocument,
     config: &RedactionConfig,
-) -> Result<RehydrationMap> {
+) -> Result<TextRedactionOutcome> {
     let mut map = RehydrationMap::new();
-    redact_inner(result, config, Some(&mut map)).await?;
-    Ok(map)
+    let rejection_counts = redact_inner(result, config, Some(&mut map)).await?;
+    Ok(TextRedactionOutcome { map, rejection_counts })
 }
 
 // When redaction is off, redact_inner takes no rehydration_map arg.
 // The cfg-gated parameter approach is used above; this comment documents intent.
 
 /// Core redaction implementation shared by [`redact`] and [`redact_capturing_rehydration_map`].
+///
+/// Returns the [`RejectionCounts`] accumulated while validating the main
+/// `result.content` match set (see step 4b below). Secondary text fields
+/// (formatted content, chunks, entity/summary/translation/label text) run
+/// the same validators for correctness — so validator-rejected candidates
+/// are not redacted anywhere in the document — but their individual
+/// rejection counts are not merged into the returned total, since they are
+/// re-derivations of the same source text and would otherwise inflate the
+/// audit counters with duplicates of the same underlying rejection.
 async fn redact_inner(
     result: &mut ExtractedDocument,
     config: &RedactionConfig,
     #[cfg(feature = "redaction-rehydrate")] mut rehydration_map: Option<&mut RehydrationMap>,
-) -> Result<()> {
+) -> Result<RejectionCounts> {
     // Validate user-supplied terms/patterns up front so the engine never tries to
     // compile a malformed regex mid-pipeline.
     config.validate()?;
@@ -80,16 +132,18 @@ async fn redact_inner(
     #[cfg(not(feature = "ner"))]
     let _ = &active_categories;
 
-    // 3. Filter to only the configured categories (if any were specified).
-    //    Custom-category hits (`custom_terms` / `custom_patterns`) are always
-    //    retained — the user added them explicitly, the category filter is for
-    //    pruning the engine's built-in detectors.
-    if !config.categories.is_empty() {
-        matches.retain(|m| matches!(m.category, PiiCategory::Custom(_)) || config.categories.contains(&m.category));
-    }
+    // 3. Filter to only the configured categories (if any were specified), and
+    //    drop any match whose text is on the `preserve_terms` allowlist.
+    apply_category_and_preserve_filters(&mut matches, config);
 
     // 4. Resolve overlaps: prefer earlier match; if equal start, prefer longer span.
     let matches = dedupe_overlaps(matches);
+
+    // 4b. Post-detection validators: deterministic checks that need no
+    // regex-adjacent context (checksum-style) run once per surviving match,
+    // after dedup, instead of inline during the regex scan.
+    let default_validators = default_validators();
+    let (matches, rejection_counts) = apply_validators(matches, &result.content, &default_validators);
 
     // Build findings before rewriting (so offsets refer to the original content).
     let mut counter = TokenCounter::new();
@@ -119,7 +173,8 @@ async fn redact_inner(
     //    formatted_content uses different offsets from `content`, so we rescan it
     //    rather than reuse `matches`.
     if let Some(formatted) = result.formatted_content.as_ref() {
-        let formatted_matches = build_matches_for(formatted, &categories_vec, config, &custom_regexes);
+        let formatted_matches =
+            build_matches_for(formatted, &categories_vec, config, &custom_regexes, &default_validators);
         let formatted_findings: Vec<RedactionFinding> = formatted_matches
             .iter()
             .map(|m| {
@@ -144,7 +199,13 @@ async fn redact_inner(
     // 7. Rewrite each chunk.
     if let Some(chunks) = result.chunks.as_mut() {
         for chunk in chunks.iter_mut() {
-            let chunk_matches = build_matches_for(&chunk.content, &categories_vec, config, &custom_regexes);
+            let chunk_matches = build_matches_for(
+                &chunk.content,
+                &categories_vec,
+                config,
+                &custom_regexes,
+                &default_validators,
+            );
             if chunk_matches.is_empty() {
                 continue;
             }
@@ -184,13 +245,27 @@ async fn redact_inner(
     // 8. Rewrite NER entity text (if any).
     if let Some(entities) = result.entities.as_mut() {
         for entity in entities.iter_mut() {
-            entity.text = redact_string(&entity.text, &categories_vec, config, &custom_regexes, &mut counter);
+            entity.text = redact_string(
+                &entity.text,
+                &categories_vec,
+                config,
+                &custom_regexes,
+                &mut counter,
+                &default_validators,
+            );
         }
     }
 
     // 9. Rewrite summary text.
     if let Some(summary) = result.summary.as_mut() {
-        summary.text = redact_string(&summary.text, &categories_vec, config, &custom_regexes, &mut counter);
+        summary.text = redact_string(
+            &summary.text,
+            &categories_vec,
+            config,
+            &custom_regexes,
+            &mut counter,
+            &default_validators,
+        );
     }
 
     // 10. Rewrite translation body + formatted markup.
@@ -201,9 +276,17 @@ async fn redact_inner(
             config,
             &custom_regexes,
             &mut counter,
+            &default_validators,
         );
         if let Some(formatted) = translation.formatted_content.as_mut() {
-            *formatted = redact_string(formatted, &categories_vec, config, &custom_regexes, &mut counter);
+            *formatted = redact_string(
+                formatted,
+                &categories_vec,
+                config,
+                &custom_regexes,
+                &mut counter,
+                &default_validators,
+            );
         }
     }
 
@@ -212,22 +295,50 @@ async fn redact_inner(
     if let Some(pages) = result.page_classifications.as_mut() {
         for page in pages.iter_mut() {
             for label in page.labels.iter_mut() {
-                label.label = redact_string(&label.label, &categories_vec, config, &custom_regexes, &mut counter);
+                label.label = redact_string(
+                    &label.label,
+                    &categories_vec,
+                    config,
+                    &custom_regexes,
+                    &mut counter,
+                    &default_validators,
+                );
             }
         }
     }
 
     // 12. Populate redaction_report.
     let total = findings.len() as u32;
+    let report_rejection_counts: Vec<RejectionCount> = rejection_counts
+        .iter()
+        .map(|(&reason, &count)| RejectionCount {
+            reason: reason.to_string(),
+            count: count as u32,
+        })
+        .collect();
     result.redaction_report = Some(RedactionReport {
         findings,
         total_redacted: total,
+        rejection_counts: report_rejection_counts,
     });
 
     // Drop the original_content explicitly so the compiler can't keep it alive.
     drop(original_content);
 
-    Ok(())
+    Ok(rejection_counts)
+}
+
+/// Default post-detection validators, applied after every match set (main
+/// content, formatted content, chunks, and other rewritten text fields) is
+/// deduplicated. Centralised so every field runs the exact same
+/// checksum/Luhn checks that used to live inline in `find_all` — otherwise
+/// secondary fields would lose that validation and redact false positives
+/// that the main content correctly leaves untouched.
+fn default_validators() -> Vec<Box<dyn EntityValidator>> {
+    vec![
+        Box::new(validators::iban::IbanChecksumValidator),
+        Box::new(validators::luhn::LuhnValidator),
+    ]
 }
 
 /// Compute the set of categories the engine will consider during this run.
@@ -260,18 +371,44 @@ fn active_categories(config: &RedactionConfig) -> HashSet<PiiCategory> {
 /// (NER backends operate on the main `content`; secondary fields are
 /// regex-only by design — re-running NER per field would be expensive and
 /// the source field text is generally derived from the main content.)
+///
+/// Runs `validators` after dedup, same as the main content path — the
+/// per-field rejection counts are intentionally discarded (see
+/// [`redact_inner`]'s doc comment); only the filtered match set is kept.
 fn build_matches_for(
     text: &str,
     categories: &[PiiCategory],
     config: &RedactionConfig,
     custom_regexes: &[(String, regex::Regex)],
+    validators: &[Box<dyn EntityValidator>],
 ) -> Vec<PatternMatch> {
     let mut matches = scan_text(text, categories);
     matches.extend(scan_custom(text, custom_regexes));
+    apply_category_and_preserve_filters(&mut matches, config);
+    let matches = dedupe_overlaps(matches);
+    let (matches, _rejection_counts) = apply_validators(matches, text, validators);
+    matches
+}
+
+/// Apply the category allowlist (if any categories were configured) and the
+/// preserve-terms denylist. Shared by the main-content path and
+/// `build_matches_for` (formatted_content + chunks) so preserve semantics
+/// are identical everywhere redaction runs.
+fn apply_category_and_preserve_filters(matches: &mut Vec<PatternMatch>, config: &RedactionConfig) {
     if !config.categories.is_empty() {
         matches.retain(|m| matches!(m.category, PiiCategory::Custom(_)) || config.categories.contains(&m.category));
     }
-    dedupe_overlaps(matches)
+    if !config.preserve_terms.is_empty() {
+        matches.retain(|m| {
+            !config.preserve_terms.iter().any(|term| {
+                if term.case_sensitive {
+                    m.text == term.value
+                } else {
+                    m.text.eq_ignore_ascii_case(&term.value)
+                }
+            })
+        });
+    }
 }
 
 /// Compile every user-supplied term and pattern once. Returns `(label, regex)`
@@ -375,8 +512,9 @@ fn redact_string(
     config: &RedactionConfig,
     custom_regexes: &[(String, regex::Regex)],
     counter: &mut TokenCounter,
+    validators: &[Box<dyn EntityValidator>],
 ) -> String {
-    let matches = build_matches_for(text, categories, config, custom_regexes);
+    let matches = build_matches_for(text, categories, config, custom_regexes, validators);
     if matches.is_empty() {
         return text.to_string();
     }
@@ -521,6 +659,9 @@ fn make_ner_backend(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::config::redaction::RedactionTerm;
+    use crate::types::{Chunk, ChunkMetadata, ChunkType};
+    use std::borrow::Cow;
 
     #[test]
     fn test_dedupe_overlaps_keeps_longer_first() {
@@ -578,5 +719,134 @@ mod tests {
         ];
         let out = apply_replacements_reverse(text, &matches, &findings);
         assert_eq!(out, "Email me at [REDACTED] or [REDACTED].");
+    }
+
+    #[test]
+    fn preserve_terms_suppresses_a_matching_ner_hit() {
+        let mut matches = vec![
+            PatternMatch {
+                start: 0,
+                end: 8,
+                category: PiiCategory::Person,
+                text: "Jane Doe".into(),
+            },
+            PatternMatch {
+                start: 20,
+                end: 29,
+                category: PiiCategory::Organization,
+                text: "Acme Corp".into(),
+            },
+        ];
+        let config = RedactionConfig {
+            preserve_terms: vec![RedactionTerm::literal("Jane Doe")],
+            ..Default::default()
+        };
+
+        apply_category_and_preserve_filters(&mut matches, &config);
+
+        let remaining: Vec<&str> = matches.iter().map(|m| m.text.as_str()).collect();
+        assert!(
+            !remaining.contains(&"Jane Doe"),
+            "preserved term must be suppressed from findings"
+        );
+        assert!(remaining.contains(&"Acme Corp"), "non-preserved hits must remain");
+    }
+
+    #[test]
+    fn preserve_terms_is_case_insensitive_by_default() {
+        let mut matches = vec![PatternMatch {
+            start: 0,
+            end: 8,
+            category: PiiCategory::Person,
+            text: "JANE DOE".into(),
+        }];
+        let config = RedactionConfig {
+            preserve_terms: vec![RedactionTerm::literal("Jane Doe")],
+            ..Default::default()
+        };
+
+        apply_category_and_preserve_filters(&mut matches, &config);
+
+        assert!(
+            matches.is_empty(),
+            "a differently-cased occurrence must still be suppressed by default"
+        );
+    }
+
+    #[test]
+    fn preserve_terms_respects_case_sensitive_flag() {
+        let mut matches = vec![PatternMatch {
+            start: 0,
+            end: 8,
+            category: PiiCategory::Person,
+            text: "JANE DOE".into(),
+        }];
+        let config = RedactionConfig {
+            preserve_terms: vec![RedactionTerm {
+                label: "person".to_string(),
+                value: "Jane Doe".to_string(),
+                case_sensitive: true,
+            }],
+            ..Default::default()
+        };
+
+        apply_category_and_preserve_filters(&mut matches, &config);
+
+        assert_eq!(
+            matches.len(),
+            1,
+            "case-sensitive preserve term must not suppress a differently-cased occurrence"
+        );
+        assert_eq!(matches[0].text, "JANE DOE");
+    }
+
+    #[tokio::test]
+    async fn preserve_terms_applies_to_chunks_and_formatted_content_too() {
+        let content = "Contact Alice at alice@example.com for details.".to_string();
+        let formatted_content = "**Contact Alice at alice@example.com for details.**".to_string();
+        let chunk = Chunk {
+            content: content.clone(),
+            chunk_type: ChunkType::default(),
+            embedding: None,
+            metadata: ChunkMetadata {
+                byte_start: 0,
+                byte_end: content.len(),
+                token_count: None,
+                chunk_index: 0,
+                total_chunks: 1,
+                first_page: None,
+                last_page: None,
+                heading_context: None,
+                heading_path: Vec::new(),
+                image_indices: Vec::new(),
+            },
+        };
+        let mut result = ExtractedDocument {
+            content: content.clone(),
+            formatted_content: Some(formatted_content),
+            chunks: Some(vec![chunk]),
+            mime_type: Cow::Borrowed("text/plain"),
+            ..Default::default()
+        };
+        let config = RedactionConfig {
+            preserve_terms: vec![RedactionTerm::literal("alice@example.com")],
+            ..Default::default()
+        };
+
+        redact(&mut result, &config).await.unwrap();
+
+        assert!(
+            result.content.contains("alice@example.com"),
+            "preserved term must survive redaction in content"
+        );
+        assert!(
+            result.formatted_content.as_ref().unwrap().contains("alice@example.com"),
+            "preserved term must survive redaction in formatted_content"
+        );
+        assert!(
+            result.chunks.as_ref().unwrap()[0].content.contains("alice@example.com"),
+            "preserved term must survive redaction in chunks"
+        );
+        assert_eq!(result.redaction_report.as_ref().unwrap().total_redacted, 0);
     }
 }

@@ -51,6 +51,19 @@ pub struct RedactionConfig {
     /// at config-construction time via [`RedactionConfig::validate`].
     #[serde(default)]
     pub custom_patterns: Vec<RedactionPattern>,
+    /// Literal terms that must never be redacted, even if the pattern engine
+    /// or NER backend would otherwise flag them.
+    ///
+    /// Use this for known-public entities that a NER model mistakes for PII
+    /// (e.g. "Supreme Court", the caller's own organization name) — an
+    /// allowlist counterpart to [`custom_terms`](Self::custom_terms), which
+    /// is a forcelist. A term matches by exact value (respecting
+    /// `case_sensitive`), not by category — it suppresses that literal
+    /// string across every category, since a false positive doesn't know
+    /// its own category was wrong.
+    #[serde(default)]
+    #[cfg_attr(feature = "alef-meta", alef(since = "5.1.0"))]
+    pub preserve_terms: Vec<RedactionTerm>,
 }
 
 fn default_preserve_offsets() -> bool {
@@ -136,6 +149,7 @@ impl Default for RedactionConfig {
             preserve_offsets: true,
             custom_terms: Vec::new(),
             custom_patterns: Vec::new(),
+            preserve_terms: Vec::new(),
         }
     }
 }
@@ -153,6 +167,14 @@ impl RedactionConfig {
             if term.value.is_empty() {
                 return Err(crate::XbergError::validation(format!(
                     "RedactionConfig.custom_terms[{}]: value is empty",
+                    term.label
+                )));
+            }
+        }
+        for term in &self.preserve_terms {
+            if term.value.is_empty() {
+                return Err(crate::XbergError::validation(format!(
+                    "RedactionConfig.preserve_terms[{}]: value is empty",
                     term.label
                 )));
             }

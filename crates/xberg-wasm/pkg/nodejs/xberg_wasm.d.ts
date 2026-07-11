@@ -3855,6 +3855,21 @@ export class XbergEngine {
      */
     extract(input: any, config: any): Promise<any>;
     /**
+     * Search a decrypted rehydration map for `query`, matching either the
+     * token (exact) or the original value (case-insensitive substring).
+     *
+     * Returns an array of `{ token, original, category }`.
+     */
+    find_subject(map: any, query: string): any;
+    /**
+     * Remove every mapping in `map` whose token or original value matches
+     * `query`. Mutates a copy and returns
+     * `{ removed: [{ token, original, category }], remaining: { token: original } }` —
+     * the caller re-encrypts `remaining` with [`XbergEngine::encrypt_map`]
+     * and persists it; this method does not touch disk.
+     */
+    forget_subject(map: any, query: string): any;
+    /**
      * Ingest a single document into the RAG vector store.
      *
      * Requires both an `embedder` and a `store` to have been injected.

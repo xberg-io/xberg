@@ -450,6 +450,47 @@ impl XbergEngine {
         serde_wasm_bindgen::to_value(&inner).map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
+    /// Search a decrypted rehydration map for `query`, matching either the
+    /// token (exact) or the original value (case-insensitive substring).
+    ///
+    /// Returns an array of `{ token, original, category }`.
+    #[cfg(feature = "redaction-rehydrate")]
+    #[allow(clippy::missing_errors_doc)]
+    pub fn find_subject(&self, map: JsValue, query: &str) -> Result<JsValue, JsValue> {
+        let inner: RehydrationMap =
+            serde_wasm_bindgen::from_value(map).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let matches = xberg::text::redaction::rehydration::find_subject(&inner, query);
+        serde_wasm_bindgen::to_value(&matches).map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+
+    /// Remove every mapping in `map` whose token or original value matches
+    /// `query`. Mutates a copy and returns
+    /// `{ removed: [{ token, original, category }], remaining: { token: original } }` —
+    /// the caller re-encrypts `remaining` with [`XbergEngine::encrypt_map`]
+    /// and persists it; this method does not touch disk.
+    #[cfg(feature = "redaction-rehydrate")]
+    #[allow(clippy::missing_errors_doc)]
+    pub fn forget_subject(&self, map: JsValue, query: &str) -> Result<JsValue, JsValue> {
+        let mut inner: RehydrationMap =
+            serde_wasm_bindgen::from_value(map).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let removed = xberg::text::redaction::rehydration::forget_subject(&mut inner, query);
+
+        let out = js_sys::Object::new();
+        js_sys::Reflect::set(
+            &out,
+            &"removed".into(),
+            &serde_wasm_bindgen::to_value(&removed).map_err(|e| JsValue::from_str(&e.to_string()))?,
+        )
+        .map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
+        js_sys::Reflect::set(
+            &out,
+            &"remaining".into(),
+            &serde_wasm_bindgen::to_value(&inner).map_err(|e| JsValue::from_str(&e.to_string()))?,
+        )
+        .map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
+        Ok(out.into())
+    }
+
     /// Return aggregate statistics for the WASM extraction cache.
     #[allow(clippy::missing_errors_doc)]
     pub fn cache_stats(&self) -> Result<JsValue, JsValue> {

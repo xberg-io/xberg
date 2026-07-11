@@ -6,9 +6,12 @@
 //!
 //! Patterns are intentionally conservative: false positives are worse than a
 //! missed match because downstream callers will display the redacted text to
-//! end users. Where format validation is feasible (Luhn for credit cards, ISO
-//! prefix for IBAN, area lookup for SSN) it is applied here so the engine only
-//! reports verifiable PII.
+//! end users. Shape validation feasible at scan time (ISO country-code +
+//! length prefix for IBAN, digit-count for credit cards, area lookup for SSN)
+//! is applied here. Checksum-style validation that needs no regex-adjacent
+//! context (Luhn for credit cards, ISO 13616 mod-97 for IBAN) runs later,
+//! post-aggregation, via [`crate::text::redaction::validators`] — see
+//! [`crate::text::redaction::validators::EntityValidator`].
 //!
 //! Pattern source attribution: regex shapes are derived from `censgate/redact`
 //! (Apache-2.0) and adapted to the Rust `regex` crate (no look-around) while

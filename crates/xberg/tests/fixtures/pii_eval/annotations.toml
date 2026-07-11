@@ -1,0 +1,52 @@
+# Ground-truth PII spans for the eval harness corpus.
+# One [[span]] per labeled span. Offsets are byte offsets into the named file
+# (ASCII fixtures, so byte offset == char offset). Category strings match
+# PiiCategory's Debug representation (e.g. "Email", "CreditCard", "Iban").
+
+[[span]]
+file = "doc1.txt"
+start = 9
+end = 26
+category = "Email"
+
+[[span]]
+file = "doc1.txt"
+start = 32
+end = 44
+category = "Phone"
+
+[[span]]
+file = "doc1.txt"
+start = 50
+end = 77
+category = "Iban"
+
+[[span]]
+file = "doc2.txt"
+start = 25
+end = 33
+category = "IpAddress"
+
+[[span]]
+file = "doc2.txt"
+start = 43
+end = 59
+category = "CreditCard"
+
+[[span]]
+file = "doc2.txt"
+start = 64
+end = 69
+category = "PostalCode"
+
+[[span]]
+file = "doc3.txt"
+start = 4
+end = 15
+category = "Ssn"
+
+[[span]]
+file = "doc3.txt"
+start = 26
+end = 37
+category = "SwiftBic"
