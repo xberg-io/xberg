@@ -2639,7 +2639,12 @@ jobs:
           tag: ${{ needs.prepare.outputs.tag }}
           version: ${{ needs.prepare.outputs.version }}
           lib-name: xberg_nif
-          nif-versions: "2.16,2.17"
+          # Must match the NIF versions actually built (elixir-natives matrix) and
+          # declared in packages/elixir/lib/xberg/native.ex (`nif_versions: ["2.16"]`).
+          # NIF 2.16 loads fine on OTP 27 (NIF minor versions are backward compatible),
+          # so a single 2.16 artifact covers every supported runtime. Requesting 2.17
+          # here made the checksum step hunt for assets that were never built.
+          nif-versions: "2.16"
           targets: x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu,x86_64-unknown-linux-musl,aarch64-unknown-linux-musl,aarch64-apple-darwin,x86_64-apple-darwin,x86_64-pc-windows-msvc
           output-path: packages/elixir/checksum-Elixir.Xberg.Native.exs
 
@@ -2773,13 +2778,6 @@ jobs:
     if: ${{ needs.prepare.outputs.release_zig == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-zig.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true') }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/create-github-app-token@v2
-        id: app-token
-        with:
-          app-id: ${{ secrets.BOT_APP_ID }}
-          private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
-          owner: xberg-io
-
       - uses: actions/checkout@v6
         with:
           ref: ${{ needs.prepare.outputs.ref }}
@@ -2826,6 +2824,16 @@ jobs:
           done
           ls -la "$out"
           for d in "$out"/*/; do echo "--- $d ---"; ls -la "$d"; done
+
+      # Mint the app token immediately before the upload. GitHub App installation
+      # tokens have a hard 1h TTL; laying out the multi-platform FFI bundle (>1GB)
+      # can outlast a token minted at job start, causing the release upload to 401.
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
+          owner: xberg-io
 
       - uses: xberg-io/actions/publish-zig@v1
         with:
@@ -2929,13 +2937,6 @@ jobs:
           - { os: ubuntu-latest, bottle_tag: x86_64_linux, install_brew: true }
           - { os: ubuntu-24.04-arm, bottle_tag: arm64_linux, install_brew: true }
     steps:
-      - uses: actions/create-github-app-token@v2
-        id: app-token
-        with:
-          app-id: ${{ secrets.BOT_APP_ID }}
-          private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
-          owner: xberg-io
-
       - uses: actions/checkout@v5
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
@@ -2944,6 +2945,17 @@ jobs:
       - name: Install Homebrew (Linux)
         if: ${{ matrix.install_brew }}
         uses: xberg-io/actions/install-homebrew-linux@v1
+
+      # Mint the app token immediately before the bottle build+upload. GitHub App
+      # installation tokens have a hard 1h TTL; a from-source bottle build (esp. the
+      # slow macOS runners) minted at job start can expire before the action uploads
+      # the bottle to the release, causing a 401. Minting here gives the full hour.
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
+          owner: xberg-io
 
       - name: Build bottles
         uses: xberg-io/actions/homebrew-build-bottles@v1
