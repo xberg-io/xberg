@@ -165,6 +165,7 @@ export default defineConfig({
               { label: "Architecture", slug: "concepts/architecture" },
               { label: "Extraction Pipeline", slug: "concepts/extraction-pipeline" },
               { label: "Plugin System", slug: "concepts/plugin-system" },
+              { label: "Platform Support", slug: "concepts/platform-support" },
               { label: "Features", slug: "features" },
             ],
           },
