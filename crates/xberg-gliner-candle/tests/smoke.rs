@@ -52,3 +52,38 @@ fn base_model_extracts_entities_and_adapter_changes_output() {
         "unload_adapter must restore exact base-model behavior"
     );
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+#[ignore = "requires real fastino/gliner2-privacy-filter-PII-multi safetensors on disk"]
+fn pii_model_loads_from_bytes_and_extracts_entities() {
+    let Ok(model_dir) = std::env::var("GLINER2_PII_MODEL_DIR") else {
+        eprintln!("skipping: GLINER2_PII_MODEL_DIR not set");
+        return;
+    };
+    let dir = std::path::Path::new(&model_dir);
+
+    let safetensors = std::fs::read(dir.join("model.safetensors")).expect("read model.safetensors");
+    let tokenizer_json = std::fs::read(dir.join("tokenizer.json")).expect("read tokenizer.json");
+    let encoder_config_json =
+        std::fs::read(dir.join("encoder_config").join("config.json")).expect("read encoder_config/config.json");
+
+    // Exercises the exact wasm32-relevant code path (from_bytes, no filesystem
+    // reads inside the constructor itself) even though this test runs
+    // natively — Candle's tensor ops are portable, and this is the real
+    // check the design spec's config-schema inspection could not perform by
+    // reading alone: does model.safetensors's tensor naming actually carry
+    // the `encoder.` prefix encoder.rs strips via vb.pp("encoder")?
+    let model = xberg_gliner_candle::Gliner2Candle::from_bytes(&safetensors, &tokenizer_json, &encoder_config_json)
+        .expect("from_bytes must load the real pinned PII model without a tensor mismatch");
+
+    let text = "Email john.smith@acme.com or call +1 415 555 0199. Signed, Jane Doe.";
+    let labels = ["email", "phone_number", "person"];
+    let spans = model
+        .extract_ner(text, &labels, 0.3)
+        .expect("extraction against the real PII model must succeed");
+    assert!(
+        !spans.is_empty(),
+        "the real PII model must find at least one entity in a PII-laden sentence"
+    );
+}

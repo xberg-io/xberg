@@ -23,8 +23,7 @@ pub async fn resolve_ocr(
     image_bytes: &[u8],
     language: &str,
 ) -> Result<String, JsValue> {
-    resolve_ocr_with_timeout(injected, image_bytes, language, crate::bridge::BRIDGE_TIMEOUT_MS)
-        .await
+    resolve_ocr_with_timeout(injected, image_bytes, language, crate::bridge::BRIDGE_TIMEOUT_MS).await
 }
 
 /// Like [`resolve_ocr`] but with a configurable bridge timeout.
@@ -49,9 +48,9 @@ async fn call_injected_ocr(
 ) -> Result<String, JsValue> {
     let fn_val = Reflect::get(&obj, &JsValue::from_str("ocr"))
         .map_err(|e| js_from_any(format!("failed to read 'ocr' property: {e:?}")))?;
-    let func: Function = fn_val.dyn_into().map_err(|_| {
-        js_from_any("injected OCR object has no 'ocr' function")
-    })?;
+    let func: Function = fn_val
+        .dyn_into()
+        .map_err(|_| js_from_any("injected OCR object has no 'ocr' function"))?;
 
     let js_bytes = js_sys::Uint8Array::from(image_bytes);
     let opts = js_sys::Object::new();

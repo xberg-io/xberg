@@ -48,9 +48,6 @@ pub fn timed_js_future(promise: js_sys::Promise) -> wasm_bindgen_futures::JsFutu
 }
 
 /// Convenience wrapper: create a `JsFuture` with a custom timeout from a `Promise`.
-pub fn timed_js_future_with_timeout(
-    promise: js_sys::Promise,
-    ms: u32,
-) -> wasm_bindgen_futures::JsFuture {
+pub fn timed_js_future_with_timeout(promise: js_sys::Promise, ms: u32) -> wasm_bindgen_futures::JsFuture {
     wasm_bindgen_futures::JsFuture::from(with_timeout(promise, ms))
 }

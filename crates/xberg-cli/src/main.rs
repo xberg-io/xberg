@@ -972,9 +972,7 @@ fn main() -> Result<()> {
                     "onnx" | "" => NerBackendKind::Onnx,
                     "llm" => NerBackendKind::Llm,
                     "candle" => NerBackendKind::Candle,
-                    other => anyhow::bail!(
-                        "unknown --ner-backend value: {other:?}; expected onnx, llm, or candle"
-                    ),
+                    other => anyhow::bail!("unknown --ner-backend value: {other:?}; expected onnx, llm, or candle"),
                 };
                 // Merge into the config-file/JSON-sourced NerConfig (if any) instead of
                 // replacing it wholesale, so file-only settings like hf_repo/model_dir/

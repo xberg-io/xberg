@@ -19,6 +19,7 @@ use crate::presets::{Preset, Registry, ResolveError, ResolvedPreset, resolve};
 ///
 /// Implementations are `Send + Sync + 'static` and held behind
 /// `Arc<dyn PresetResolver>`; they may be called concurrently.
+#[cfg_attr(alef, alef(skip))]
 pub trait PresetResolver: Send + Sync + 'static {
     /// Look up a preset by identifier, returning an owned copy or `None`.
     fn get(&self, id: &str) -> Option<Preset>;
@@ -43,6 +44,7 @@ pub trait PresetResolver: Send + Sync + 'static {
 /// straight to [`presets::resolve`](crate::presets::resolve), so the result is
 /// identical to calling that free function directly.
 #[derive(Debug, Default, Clone, Copy)]
+#[cfg_attr(alef, alef(skip))]
 pub struct CorePresetResolver;
 
 impl PresetResolver for CorePresetResolver {

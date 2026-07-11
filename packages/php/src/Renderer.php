@@ -12,12 +12,14 @@ namespace Xberg;
  */
 interface Renderer
 {
+
     /**
      * Binding-safe rendering entry point for foreign-language plugin bridges.
      *
-     *
+
      * @param ExtractedDocument $result
      * @return string Return value from the plugin method
      */
     public function render_result(ExtractedDocument $result): string;
+
 }

@@ -28,6 +28,7 @@ pub struct CitedField {
     /// 1-based page number where the value appears, when known.
     pub page: Option<u32>,
     /// Bounding box `[x1, y1, x2, y2]`, when known.
+    #[cfg_attr(alef, alef(skip))]
     pub bbox: Option<[f64; 4]>,
     /// Confidence in the citation, when known.
     pub confidence: Option<f64>,

@@ -84,6 +84,7 @@ impl ParsedDocument {
     /// # Errors
     ///
     /// Propagates [`RasterizeError`] from the underlying renderer.
+    #[cfg_attr(alef, alef(skip))]
     pub fn rendered_pages(&self, dpi: u32) -> std::result::Result<Vec<PageImage>, RasterizeError> {
         let mut guard = self.rendered.lock();
         if let Some((cached_dpi, pages)) = guard.as_ref()

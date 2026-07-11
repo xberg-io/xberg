@@ -1,14 +1,9 @@
-use std::path::{Path, PathBuf};
-use std::{env, fs};
+use std::path::Path;
 
 fn main() {
     // Re-run whenever any Rust source changes or FRB config changes.
     println!("cargo:rerun-if-changed=src");
     println!("cargo:rerun-if-changed=flutter_rust_bridge.yaml");
-
-    // Copy compiled library to the location where Dart FFI expects to find it
-    // for local development builds.
-    copy_compiled_library();
 
     // Optional FRB codegen: regenerate flutter_rust_bridge artifacts when the
     // tool is on PATH. Missing tool is not fatal — committed generated sources
@@ -355,74 +350,6 @@ fn matching_paren(src: &str, open: usize) -> Option<usize> {
         }
     }
     None
-}
-
-/// Copy the compiled library to the location where Dart FFI expects to find it
-/// for local development. This enables `dart test` to load the native library
-/// without requiring a separate publication step.
-fn copy_compiled_library() {
-    let out_dir = env::var("OUT_DIR").ok();
-    let target_dir = env::var("CARGO_TARGET_DIR")
-        .or_else(|_| {
-            // Cargo doesn't set CARGO_TARGET_DIR in build scripts, but we can
-            // infer it from OUT_DIR (which is typically target/profile/build/crate-hash/out)
-            out_dir
-                .as_ref()
-                .and_then(|d| {
-                    PathBuf::from(d)
-                        .parent()
-                        .and_then(|p| p.parent())
-                        .and_then(|p| p.parent())
-                        .map(|p| p.to_string_lossy().to_string())
-                })
-                .ok_or(std::env::VarError::NotPresent)
-        })
-        .unwrap_or_else(|_| "target".to_string());
-
-    let profile = env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
-    let lib_name = library_name();
-    let src = PathBuf::from(&target_dir).join(&profile).join(&lib_name);
-
-    // Destination: packages/dart/lib/src/xberg_bridge_generated/
-    let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
-    let dest_dir = PathBuf::from(&manifest_dir)
-        .join("../lib/src/xberg_bridge_generated")
-        .canonicalize()
-        .unwrap_or_else(|_| PathBuf::from(&manifest_dir).join("../lib/src/xberg_bridge_generated"));
-
-    if !dest_dir.exists()
-        && let Err(e) = fs::create_dir_all(&dest_dir)
-    {
-        println!("cargo:warning=failed to create destination directory for library copy: {e}");
-        return;
-    }
-
-    let dest = dest_dir.join(&lib_name);
-
-    if src.exists() {
-        if let Err(e) = fs::copy(&src, &dest) {
-            println!(
-                "cargo:warning=failed to copy library from {} to {}: {e}",
-                src.display(),
-                dest.display()
-            );
-        } else {
-            println!("cargo:warning=copied library to {}", dest.display());
-        }
-    } else {
-        println!("cargo:warning=library not found at {}, skipping copy", src.display());
-    }
-}
-
-/// Return the platform-specific library name (e.g., libxberg_dart.dylib on macOS).
-fn library_name() -> String {
-    if cfg!(target_os = "windows") {
-        "xberg_dart.dll".to_string()
-    } else if cfg!(target_os = "macos") {
-        "libxberg_dart.dylib".to_string()
-    } else {
-        "libxberg_dart.so".to_string()
-    }
 }
 
 #[cfg(test)]

@@ -30,19 +30,27 @@ pub struct JsVectorStore {
 
 impl JsVectorStore {
     pub fn new(name: String, inner: Object) -> Self {
-        Self { name, inner, timeout_ms: crate::bridge::BRIDGE_TIMEOUT_MS }
+        Self {
+            name,
+            inner,
+            timeout_ms: crate::bridge::BRIDGE_TIMEOUT_MS,
+        }
     }
 
     pub fn with_timeout(name: String, inner: Object, timeout_ms: u32) -> Self {
-        Self { name, inner, timeout_ms }
+        Self {
+            name,
+            inner,
+            timeout_ms,
+        }
     }
 
     async fn call_method(&self, method: &str, args: &[JsValue]) -> RagResult<JsValue> {
-        let func_val = Reflect::get(&self.inner, &JsValue::from_str(method))
-            .map_err(js_to_rag)?;
+        let func_val = Reflect::get(&self.inner, &JsValue::from_str(method)).map_err(js_to_rag)?;
         let func: js_sys::Function = func_val.dyn_into().map_err(|_| {
             RagError::Backend(Box::new(JsStoreError(format!(
-                "method '{}' not found on JS store", method
+                "method '{}' not found on JS store",
+                method
             ))))
         })?;
         let js_args = js_sys::Array::new();
@@ -103,8 +111,7 @@ impl VectorStore for JsVectorStore {
         if result.is_null() || result.is_undefined() {
             return Ok(None);
         }
-        let spec: CollectionSpec =
-            serde_wasm_bindgen::from_value(result).map_err(js_to_rag)?;
+        let spec: CollectionSpec = serde_wasm_bindgen::from_value(result).map_err(js_to_rag)?;
         Ok(Some(spec))
     }
 
@@ -120,8 +127,7 @@ impl VectorStore for JsVectorStore {
         let result = self
             .call_method("upsertDocument", &[coll_val, doc_val, chunks_val])
             .await?;
-        let id: DocumentId =
-            serde_wasm_bindgen::from_value(result).map_err(js_to_rag)?;
+        let id: DocumentId = serde_wasm_bindgen::from_value(result).map_err(js_to_rag)?;
         Ok(id)
     }
 
@@ -136,9 +142,7 @@ impl VectorStore for JsVectorStore {
     async fn delete_by_filter(&self, collection: &str, filter: &Filter) -> RagResult<u64> {
         let coll_val = JsValue::from_str(collection);
         let filter_val = serde_wasm_bindgen::to_value(filter).map_err(js_to_rag)?;
-        let result = self
-            .call_method("deleteByFilter", &[coll_val, filter_val])
-            .await?;
+        let result = self.call_method("deleteByFilter", &[coll_val, filter_val]).await?;
         let count: u64 = serde_wasm_bindgen::from_value(result).map_err(js_to_rag)?;
         Ok(count)
     }
@@ -147,16 +151,14 @@ impl VectorStore for JsVectorStore {
         let coll_val = JsValue::from_str(collection);
         let query_val = serde_wasm_bindgen::to_value(query).map_err(js_to_rag)?;
         let result = self.call_method("retrieve", &[coll_val, query_val]).await?;
-        let output: RetrieveOutput =
-            serde_wasm_bindgen::from_value(result).map_err(js_to_rag)?;
+        let output: RetrieveOutput = serde_wasm_bindgen::from_value(result).map_err(js_to_rag)?;
         Ok(output)
     }
 
     async fn collection_stats(&self, collection: &str) -> RagResult<CollectionStats> {
         let val = JsValue::from_str(collection);
         let result = self.call_method("collectionStats", &[val]).await?;
-        let stats: CollectionStats =
-            serde_wasm_bindgen::from_value(result).map_err(js_to_rag)?;
+        let stats: CollectionStats = serde_wasm_bindgen::from_value(result).map_err(js_to_rag)?;
         Ok(stats)
     }
 }

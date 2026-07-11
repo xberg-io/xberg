@@ -1,12 +1,14 @@
 import { pipeline, env } from "@huggingface/transformers";
-import type { CacheConfig, Entity, NerInterface, NerOpts } from "./types";
+import type { CacheConfig, Entity, NerInterface } from "./types.js";
 import type { TokenClassificationSingle } from "@huggingface/transformers";
+import { selectModelBackend } from "./backend.js";
+import { configureTransformersEnvironment } from "./runtime-env.js";
 
 // Allow reading locally-cached transformers.js models in CI environments.
 // Note: this permits local file loading but does NOT suppress remote downloads;
 // remote model fetching is controlled by env.allowRemoteModels separately.
 if (typeof process !== "undefined" && process.env.CI) {
-  env.allowLocalModels = true;
+	env.allowLocalModels = true;
 }
 
 // "Xenova/gliner2-small-onnx" (the model named in the original spec) does not
@@ -29,56 +31,58 @@ const OUTSIDE_LABEL = "O";
  * Returns null if NER is disabled or the model cannot be loaded.
  * Optional; if not injected into the engine, the engine falls back to in-binary Candle NER.
  */
-export async function createNer(
-  config?: CacheConfig
-): Promise<NerInterface | null> {
-  try {
-    const modelId = config?.models?.ner ?? DEFAULT_NER_MODEL;
+export async function createNer(config?: CacheConfig): Promise<NerInterface | null> {
+	try {
+		const modelId = config?.models?.ner ?? DEFAULT_NER_MODEL;
+		configureTransformersEnvironment(config);
 
-    // transformers.js v3 has no `quantized` pipeline option; quantization is
-    // selected via `dtype` (defaults to the model's recommended dtype when
-    // omitted). We rely on the default here rather than forcing a dtype that
-    // may not exist for an arbitrary injected model id.
-    const tokenClassifier = await pipeline("token-classification", modelId);
+		const backend = selectModelBackend();
+		console.debug(`[ner] device=${backend.device} dtype=${backend.dtype} model=${modelId}`);
+		const tokenClassifier = await pipeline("token-classification", modelId, backend);
 
-    /**
-     * Named entity recognition on the given text. Returns a list of named
-     * entities with their labels, text, and confidence scores.
-     *
-     * IMPORTANT: The currently-loaded model (Xenova/bert-base-NER) recognizes
-     * only a fixed label set: PER (person), ORG (organization), LOC (location),
-     * and MISC (miscellaneous). The `opts.categories` parameter filters results
-     * to only entities matching those labels, but only works within this fixed
-     * set. Requesting categories outside this set (e.g., EMAIL, PHONE) will
-     * silently return no results with no error. To support arbitrary zero-shot
-     * categories (e.g., PII-specific entity types), swap the model ID to a
-     * genuine GLiNER2 export when one becomes available on the HuggingFace Hub.
-     *
-     * @param text The input text to analyze
-     * @param opts Optional filtering: categories (filter by label), threshold (min confidence score)
-     * @returns Array of entities with label, text, position, and confidence score
-     */
-    async function ner(text: string, opts?: NerOpts): Promise<Entity[]> {
-      if (!text || text.length === 0) return [];
+		/**
+		 * Named entity recognition on the given text. Returns a list of named
+		 * entities with their labels, text, and confidence scores.
+		 *
+		 * IMPORTANT: The currently-loaded model (Xenova/bert-base-NER) recognizes
+		 * only a fixed label set: PER (person), ORG (organization), LOC (location),
+		 * and MISC (miscellaneous). The `categories` parameter filters results to
+		 * only entities matching those labels, but only works within this fixed
+		 * set. Requesting categories outside this set (e.g., EMAIL, PHONE) will
+		 * silently return no results with no error — packages/xberg-wasm-runtime's
+		 * pii.ts regex layer exists specifically to cover that gap deterministically.
+		 *
+		 * `categories` is a plain positional array (not an options object) because
+		 * this must match crates/xberg-wasm/src/bridge/ner.rs's
+		 * call_injected_ner, which calls `ner(text, categories)` positionally —
+		 * the Rust bridge is the fixed contract this signature exists to satisfy.
+		 *
+		 * @param text The input text to analyze
+		 * @param categories Optional label filter
+		 * @param threshold Optional minimum confidence score
+		 * @returns Array of entities with label, text, position, and confidence score
+		 */
+		async function ner(text: string, categories?: string[], threshold?: number): Promise<Entity[]> {
+			if (!text || text.length === 0) return [];
 
-      try {
-        const predictions = await tokenClassifier(text);
-        const tokens = (
-          Array.isArray(predictions) ? predictions : [predictions]
-        ) as TokenClassificationSingle[];
+			try {
+				const predictions = await tokenClassifier(text);
+				const tokens = (
+					Array.isArray(predictions) ? predictions : [predictions]
+				) as TokenClassificationSingle[];
 
-        return mergeEntities(tokens, text, opts);
-      } catch (err) {
-        console.error("[ner] classification failed:", err);
-        return [];
-      }
-    }
+				return mergeEntities(tokens, text, categories, threshold);
+			} catch (err) {
+				console.error("[ner] classification failed:", err);
+				return [];
+			}
+		}
 
-    return { ner };
-  } catch (err) {
-    console.warn("[ner] model load failed, falling back to in-binary:", err);
-    return null;
-  }
+		return { ner };
+	} catch (err) {
+		console.warn("[ner] model load failed, falling back to in-binary:", err);
+		return null;
+	}
 }
 
 const WORDPIECE_CONTINUATION_PREFIX = "##";
@@ -98,78 +102,72 @@ const WORDPIECE_CONTINUATION_PREFIX = "##";
  * occurrences in order).
  */
 function mergeEntities(
-  tokens: TokenClassificationSingle[],
-  sourceText: string,
-  opts?: NerOpts
+	tokens: TokenClassificationSingle[],
+	sourceText: string,
+	categories?: string[],
+	threshold?: number,
 ): Entity[] {
-  const entities: Entity[] = [];
-  let current: Entity | null = null;
-  let searchCursor = 0;
+	const entities: Entity[] = [];
+	let current: Entity | null = null;
+	let searchCursor = 0;
 
-  for (const token of tokens) {
-    const rawLabel = token.entity;
-    if (!rawLabel || rawLabel === OUTSIDE_LABEL) {
-      current = null;
-      continue;
-    }
+	for (const token of tokens) {
+		const rawLabel = token.entity;
+		if (!rawLabel || rawLabel === OUTSIDE_LABEL) {
+			current = null;
+			continue;
+		}
 
-    const isBegin = rawLabel.startsWith(BEGIN_PREFIX);
-    const isInside = rawLabel.startsWith(INSIDE_PREFIX);
-    const label = isBegin || isInside ? rawLabel.slice(2) : rawLabel;
-    const isContinuationPiece = token.word.startsWith(
-      WORDPIECE_CONTINUATION_PREFIX
-    );
-    const surfaceWord = isContinuationPiece
-      ? token.word.slice(WORDPIECE_CONTINUATION_PREFIX.length)
-      : token.word;
+		const isBegin = rawLabel.startsWith(BEGIN_PREFIX);
+		const isInside = rawLabel.startsWith(INSIDE_PREFIX);
+		const label = isBegin || isInside ? rawLabel.slice(2) : rawLabel;
+		const isContinuationPiece = token.word.startsWith(WORDPIECE_CONTINUATION_PREFIX);
+		const surfaceWord = isContinuationPiece ? token.word.slice(WORDPIECE_CONTINUATION_PREFIX.length) : token.word;
 
-    let start = token.start;
-    let end = token.end;
-    if (start === undefined || end === undefined) {
-      const resolved = locateToken(sourceText, surfaceWord, searchCursor, {
-        allowAdjacent: isContinuationPiece,
-      });
-      if (!resolved) {
-        // Could not recover a position for this token; drop it rather than
-        // fabricate a location the `Entity` contract promises is accurate.
-        current = null;
-        continue;
-      }
-      start = resolved.start;
-      end = resolved.end;
-    }
-    searchCursor = end;
+		let start = token.start;
+		let end = token.end;
+		if (start === undefined || end === undefined) {
+			const resolved = locateToken(sourceText, surfaceWord, searchCursor, {
+				allowAdjacent: isContinuationPiece,
+			});
+			if (!resolved) {
+				// Could not recover a position for this token; drop it rather than
+				// fabricate a location the `Entity` contract promises is accurate.
+				current = null;
+				continue;
+			}
+			start = resolved.start;
+			end = resolved.end;
+		}
+		searchCursor = end;
 
-    const continuesCurrent =
-      !isBegin && current !== null && current.label === label;
+		const continuesCurrent = !isBegin && current !== null && current.label === label;
 
-    if (continuesCurrent && current) {
-      current.text = isContinuationPiece
-        ? current.text + surfaceWord
-        : `${current.text} ${surfaceWord}`;
-      current.end = end;
-      current.score = Math.min(current.score ?? 1, token.score);
-    } else {
-      current = {
-        label,
-        text: surfaceWord,
-        start,
-        end,
-        score: token.score,
-      };
-      entities.push(current);
-    }
-  }
+		if (continuesCurrent && current) {
+			current.text = isContinuationPiece ? current.text + surfaceWord : `${current.text} ${surfaceWord}`;
+			current.end = end;
+			current.score = Math.min(current.score ?? 1, token.score);
+		} else {
+			current = {
+				label,
+				text: surfaceWord,
+				start,
+				end,
+				score: token.score,
+			};
+			entities.push(current);
+		}
+	}
 
-  return entities.filter((entity) => {
-    if (opts?.threshold !== undefined && (entity.score ?? 0) < opts.threshold) {
-      return false;
-    }
-    if (opts?.categories && !opts.categories.includes(entity.label)) {
-      return false;
-    }
-    return true;
-  });
+	return entities.filter((entity) => {
+		if (threshold !== undefined && (entity.score ?? 0) < threshold) {
+			return false;
+		}
+		if (categories && !categories.includes(entity.label)) {
+			return false;
+		}
+		return true;
+	});
 }
 
 /**
@@ -180,28 +178,26 @@ function mergeEntities(
  * space from the token they extend.
  */
 function locateToken(
-  text: string,
-  word: string,
-  fromIndex: number,
-  { allowAdjacent }: { allowAdjacent: boolean }
+	text: string,
+	word: string,
+	fromIndex: number,
+	{ allowAdjacent }: { allowAdjacent: boolean },
 ): { start: number; end: number } | null {
-  if (word.length === 0) return null;
+	if (word.length === 0) return null;
 
-  const searchFrom = allowAdjacent
-    ? fromIndex
-    : skipWhitespace(text, fromIndex);
-  const lowerText = text.toLowerCase();
-  const lowerWord = word.toLowerCase();
-  const index = lowerText.indexOf(lowerWord, searchFrom);
-  if (index === -1) return null;
+	const searchFrom = allowAdjacent ? fromIndex : skipWhitespace(text, fromIndex);
+	const lowerText = text.toLowerCase();
+	const lowerWord = word.toLowerCase();
+	const index = lowerText.indexOf(lowerWord, searchFrom);
+	if (index === -1) return null;
 
-  return { start: index, end: index + word.length };
+	return { start: index, end: index + word.length };
 }
 
 function skipWhitespace(text: string, index: number): number {
-  let i = index;
-  while (i < text.length && /\s/.test(text[i] ?? "")) {
-    i++;
-  }
-  return i;
+	let i = index;
+	while (i < text.length && /\s/.test(text[i] ?? "")) {
+		i++;
+	}
+	return i;
 }

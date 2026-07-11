@@ -219,3 +219,54 @@ pub struct CollectionStats {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_ingested_at: Option<i64>,
 }
+
+#[cfg(test)]
+mod primary_score_wire_shape_tests {
+    use super::PrimaryScore;
+
+    /// Documents PrimaryScore's actual JSON wire shape for JS-side consumers
+    /// (packages/xberg-wasm-runtime) — the enum uses internal tagging
+    /// (`#[serde(tag = "kind", rename_all = "snake_case")]`) with struct
+    /// variants, so a variant's fields flatten alongside the `kind` tag at
+    /// the top level (there is no nested payload object). This test is the
+    /// source of truth.
+    #[test]
+    fn vector_variant_wire_shape() {
+        let json = serde_json::to_string(&PrimaryScore::Vector { score: 0.5 }).expect("serialize");
+        assert_eq!(json, r#"{"kind":"vector","score":0.5}"#);
+    }
+
+    #[test]
+    fn full_text_variant_wire_shape() {
+        let json = serde_json::to_string(&PrimaryScore::FullText { score: 0.75 }).expect("serialize");
+        assert_eq!(json, r#"{"kind":"full_text","score":0.75}"#);
+    }
+
+    #[test]
+    fn hybrid_variant_wire_shape() {
+        let json = serde_json::to_string(&PrimaryScore::Hybrid {
+            vector: 0.5,
+            full_text: 0.75,
+            rrf: 0.032,
+        })
+        .expect("serialize");
+        assert_eq!(json, r#"{"kind":"hybrid","vector":0.5,"full_text":0.75,"rrf":0.032}"#);
+    }
+
+    #[test]
+    fn round_trips_through_deserialize() {
+        for original in [
+            PrimaryScore::Vector { score: 0.5 },
+            PrimaryScore::FullText { score: 0.75 },
+            PrimaryScore::Hybrid {
+                vector: 0.5,
+                full_text: 0.75,
+                rrf: 0.032,
+            },
+        ] {
+            let json = serde_json::to_string(&original).expect("serialize");
+            let round_tripped: PrimaryScore = serde_json::from_str(&json).expect("deserialize");
+            assert_eq!(original, round_tripped);
+        }
+    }
+}

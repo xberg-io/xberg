@@ -12,10 +12,11 @@ namespace Xberg;
  */
 interface OcrBackend
 {
+
     /**
      * Process an image and extract text via OCR.
      *
-     *
+
      * @param mixed $image_bytes
      * @param OcrConfig $config
      * @return ExtractedDocument Return value from the plugin method
@@ -25,7 +26,7 @@ interface OcrBackend
     /**
      * Process a file and extract text via OCR.
      *
-     *
+
      * @param mixed $path
      * @param OcrConfig $config
      * @return ExtractedDocument Return value from the plugin method
@@ -35,7 +36,7 @@ interface OcrBackend
     /**
      * Check if this backend supports a given language code.
      *
-     *
+
      * @param string $lang
      * @return bool Return value from the plugin method
      */
@@ -44,7 +45,7 @@ interface OcrBackend
     /**
      * Get the backend type identifier.
      *
-     *
+
      * @return mixed Return value from the plugin method
      */
     public function backend_type(): mixed;
@@ -52,7 +53,7 @@ interface OcrBackend
     /**
      * Optional: Get a list of all supported languages.
      *
-     *
+
      * @return mixed Return value from the plugin method
      */
     public function supported_languages(): mixed;
@@ -60,7 +61,7 @@ interface OcrBackend
     /**
      * Optional: Check if the backend supports table detection.
      *
-     *
+
      * @return bool Return value from the plugin method
      */
     public function supports_table_detection(): bool;
@@ -68,7 +69,7 @@ interface OcrBackend
     /**
      * Check if the backend supports direct document-level processing (e.g. for PDFs).
      *
-     *
+
      * @return bool Return value from the plugin method
      */
     public function supports_document_processing(): bool;
@@ -76,7 +77,7 @@ interface OcrBackend
     /**
      * Declare that this backend emits structured markdown directly (tables, headings, lists)
      *
-     *
+
      * @return bool Return value from the plugin method
      */
     public function emits_structured_markdown(): bool;
@@ -84,10 +85,11 @@ interface OcrBackend
     /**
      * Process a document file directly via OCR.
      *
-     *
+
      * @param mixed $_path
      * @param OcrConfig $_config
      * @return ExtractedDocument Return value from the plugin method
      */
     public function process_document(mixed $_path, OcrConfig $_config): ExtractedDocument;
+
 }

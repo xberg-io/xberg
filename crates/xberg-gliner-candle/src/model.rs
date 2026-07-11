@@ -64,8 +64,9 @@ impl Gliner2Candle {
         let splitter = xberg_gliner::V2Splitter::new()?;
         let config: candle_transformers::models::debertav2::Config = serde_json::from_slice(encoder_config_json)
             .map_err(|e| GlinerCandleError::Backend(format!("encoder config parse: {e}")))?;
-        let encoder = encoder::Encoder::from_buffered_safetensors(safetensors, &config, &device)?;
-        let heads_loaded = heads::AllHeads::from_buffered_safetensors(safetensors, &device)?;
+        let encoder =
+            encoder::Encoder::from_buffered_safetensors(safetensors, &config, &device, candle_core::DType::F32)?;
+        let heads_loaded = heads::AllHeads::from_buffered_safetensors(safetensors, &device, candle_core::DType::F32)?;
 
         Ok(Self {
             tokenizer,

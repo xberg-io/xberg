@@ -24,6 +24,7 @@ pipeline-reranker = ["pipeline", "xberg/reranker", "xberg/tokio-runtime"]
 pipeline-keywords = ["pipeline", "xberg/keywords"]
 pipeline-ner-llm = ["pipeline", "xberg/ner-llm"]
 pipeline-ner-onnx = ["pipeline", "xberg/ner-onnx"]
+pipeline-redaction = ["pipeline", "xberg/redaction-rehydrate", "xberg/ner"]
 
 # Streaming answer/progress primitives over liter-llm. Native-only.
 streaming = ["vector-store", "dep:xberg", "xberg/liter-llm", "dep:futures", "dep:liter-llm"]
@@ -40,6 +41,7 @@ full = [
     "pipeline-reranker",
     "pipeline-keywords",
     "pipeline-ner-llm",
+    "pipeline-redaction",
     "streaming",
     "in-memory",
     "sqlite",

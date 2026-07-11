@@ -1,14 +1,20 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { createVectorStore } from "./store";
+import { createInMemoryVectorStore } from "./store";
 import type { VectorStoreInterface, DocumentRecord, ChunkRecord } from "./types";
 
+// Exercises createInMemoryVectorStore specifically (not the createVectorStore
+// dispatcher) — this suite tests distance-metric-aware scoring (l2/innerproduct/
+// cosine) that only the in-memory Map-based backend supports; the SQLite-backed
+// store-node.ts/store-worker.ts (createVectorStore's Node/browser targets) score
+// via sqlite-vec's vec0 index, whose distance function is fixed per table, not
+// selectable per query.
 describe("vector store", () => {
   let store: VectorStoreInterface;
   const testCollection = "test-docs";
   const vectorDim = 384;
 
   beforeEach(async () => {
-    store = await createVectorStore();
+    store = await createInMemoryVectorStore();
   });
 
   it("ensures a collection", async () => {

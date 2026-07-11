@@ -25,6 +25,7 @@ use crate::types::LlmUsage;
 /// `Arc<dyn LlmClient>`; they may be called concurrently.
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(alef, alef(skip))]
 pub trait LlmClient: Send + Sync + 'static {
     /// Send `prompt` to the configured model with a JSON-schema response
     /// constraint and return the parsed JSON value plus captured usage.
@@ -48,6 +49,7 @@ pub trait LlmClient: Send + Sync + 'static {
 /// [`llm::structured::complete_with_json_schema`](crate::llm::structured::complete_with_json_schema),
 /// so its behavior is identical to calling that function directly.
 #[derive(Debug, Default, Clone, Copy)]
+#[cfg_attr(alef, alef(skip))]
 pub struct LiterLlmClient;
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]

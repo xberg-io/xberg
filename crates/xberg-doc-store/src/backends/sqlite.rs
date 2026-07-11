@@ -19,7 +19,10 @@ use crate::rehydration::RehydrationStore;
 use crate::tenant::TenantCtx;
 
 fn now_unix() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
 }
 
 fn backend_err(e: impl std::error::Error + Send + Sync + 'static) -> StoreError {
@@ -39,7 +42,9 @@ impl SqliteRehydrationStore {
     pub fn open(path: impl AsRef<Path>) -> StoreResult<Self> {
         let conn = Connection::open(path.as_ref()).map_err(backend_err)?;
         Self::init(&conn)?;
-        Ok(Self { conn: Arc::new(Mutex::new(conn)) })
+        Ok(Self {
+            conn: Arc::new(Mutex::new(conn)),
+        })
     }
 
     /// Open an in-memory SQLite database. Test-only: not durable across drop
@@ -48,7 +53,9 @@ impl SqliteRehydrationStore {
     pub fn open_in_memory() -> StoreResult<Self> {
         let conn = Connection::open_in_memory().map_err(backend_err)?;
         Self::init(&conn)?;
-        Ok(Self { conn: Arc::new(Mutex::new(conn)) })
+        Ok(Self {
+            conn: Arc::new(Mutex::new(conn)),
+        })
     }
 
     fn init(conn: &Connection) -> StoreResult<()> {

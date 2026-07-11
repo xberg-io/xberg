@@ -118,6 +118,30 @@ jobs:
         run: cargo check --locked -p xberg --no-default-features --features ocr-wasm --lib
         shell: bash
 
+  wasm-check:
+    name: WASM compile check
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Setup Rust
+        uses: jamon8888/actions/setup-rust@v1
+        with:
+          cache-key-prefix: rust-wasm-check
+          use-sccache: "true"
+
+      - name: Add wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+        shell: bash
+
+      - name: Check xberg-wasm compiles for wasm32
+        run: cargo check --locked -p xberg-wasm --target wasm32-unknown-unknown --features wasm-target
+        shell: bash
+
   live-hf:
     name: Live HF preset tests
     if: github.actor != 'dependabot[bot]'

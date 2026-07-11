@@ -16,13 +16,9 @@ async fn resolve_ner_with_injected_stub() {
     .dyn_into::<js_sys::Object>()
     .unwrap();
 
-    let entities = xberg_wasm::bridge::ner::resolve_ner(
-        Some(stub),
-        "Alice works at Acme Corp",
-        &[],
-    )
-    .await
-    .unwrap();
+    let entities = xberg_wasm::bridge::ner::resolve_ner(Some(stub), "Alice works at Acme Corp", &[])
+        .await
+        .unwrap();
 
     assert_eq!(entities.len(), 2);
     assert_eq!(entities[0].text, "Alice");
@@ -48,13 +44,9 @@ async fn resolve_ocr_with_injected_stub() {
     .dyn_into::<js_sys::Object>()
     .unwrap();
 
-    let text = xberg_wasm::bridge::ocr::resolve_ocr(
-        Some(stub),
-        &[0xFF, 0xD8, 0xFF, 0xE0],
-        "eng",
-    )
-    .await
-    .unwrap();
+    let text = xberg_wasm::bridge::ocr::resolve_ocr(Some(stub), &[0xFF, 0xD8, 0xFF, 0xE0], "eng")
+        .await
+        .unwrap();
 
     assert_eq!(text, "hello from ocr");
 }

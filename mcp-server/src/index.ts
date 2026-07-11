@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { startHttp } from "./transports/http.js";
 import { registerExtractTools } from "./tools/extract.js";
 import { registerCollectionTools } from "./tools/collection.js";
 import { registerQueryTools } from "./tools/query.js";
@@ -52,6 +53,12 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("[xberg-mcp] started");
+
+  try {
+    await startHttp(server);
+  } catch (err) {
+    console.error(`[xberg-mcp] HTTP transport failed to start (stdio still works): ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 main().catch((err) => {

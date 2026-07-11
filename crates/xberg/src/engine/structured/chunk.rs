@@ -58,6 +58,7 @@ pub struct Batch {
 ///
 /// If a single page exceeds the limit, it is emitted as its own batch
 /// with a warning.
+#[cfg_attr(alef, alef(skip))]
 pub fn batch_pages(pages: Vec<PageImage>, user_text: Option<String>, config: &ChunkerConfig) -> Vec<Batch> {
     if pages.is_empty() {
         return vec![Batch {

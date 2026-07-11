@@ -455,7 +455,10 @@ default_features = false
 
 [crates.wasm]
 package_name = "@xberg-io/xberg-wasm"
-features = ["wasm-target", "url-ingestion"]
+# `wasm-target` expanded minus `ocr-wasm`: the MCP/Node host injects OCR via the
+# `ocr` bridge, so in-binary Tesseract (which pulls Leptonica + WASI fd/path/mkstemp/
+# system imports that wasm-bindgen's nodejs target can't satisfy) is unnecessary here.
+features = ["no-ort-target", "excel-wasm", "tree-sitter-wasm", "ner-candle-wasm", "url-ingestion"]
 exclude_types = [
   # ORT/runtime-only types not available in the wasm-target feature set
   "OcrFallbackDecision",
@@ -563,7 +566,8 @@ exclude_functions = [
 
 [crates.wasm.extra_dependencies]
 async-trait = "0.1"
-xberg-rag = { path = "../xberg-rag", default-features = false, features = ["vector-store", "pipeline"] }
+sha2 = "0.10"
+xberg-rag = { path = "../xberg-rag", default-features = false, features = ["vector-store", "pipeline", "pipeline-redaction"] }
 
 [crates.ffi]
 prefix = "xberg"

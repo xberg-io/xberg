@@ -34,9 +34,7 @@ async fn detect_pii_returns_empty_for_clean_text() {
 #[wasm_bindgen_test]
 async fn detect_pii_finds_email() {
     let engine = make_engine();
-    let result = engine
-        .detect_pii("Contact alice@example.com for info", None)
-        .unwrap();
+    let result = engine.detect_pii("Contact alice@example.com for info", None).unwrap();
     let matches: js_sys::Array = result.dyn_into().unwrap();
     assert!(matches.length() > 0);
 }
@@ -71,11 +69,7 @@ async fn redact_mask_strategy() {
 async fn redact_token_replace_strategy() {
     let engine = make_engine();
     let result = engine
-        .redact(
-            "Email alice@example.com here",
-            Some("token_replace".to_string()),
-            None,
-        )
+        .redact("Email alice@example.com here", Some("token_replace".to_string()), None)
         .unwrap();
     let obj: js_sys::Object = result.dyn_into().unwrap();
     let token_map = js_sys::Reflect::get(&obj, &JsValue::from_str("rehydrationMap")).unwrap();
@@ -86,9 +80,7 @@ async fn redact_token_replace_strategy() {
 #[wasm_bindgen_test]
 async fn redact_returns_original_when_no_pii() {
     let engine = make_engine();
-    let result = engine
-        .redact("No PII here", Some("mask".to_string()), None)
-        .unwrap();
+    let result = engine.redact("No PII here", Some("mask".to_string()), None).unwrap();
     let obj: js_sys::Object = result.dyn_into().unwrap();
     let redacted = js_sys::Reflect::get(&obj, &JsValue::from_str("redacted"))
         .unwrap()
@@ -101,9 +93,7 @@ async fn redact_returns_original_when_no_pii() {
 async fn query_missing_store_errors() {
     let engine = make_engine();
 
-    let result = engine
-        .query("test".to_string(), "coll".to_string(), 5)
-        .await;
+    let result = engine.query("test".to_string(), "coll".to_string(), 5).await;
     assert!(result.is_err());
 }
 
@@ -145,18 +135,15 @@ async fn ingest_config_chunking_override() {
     let config = js_sys::eval("({})").unwrap();
     let engine = xberg_wasm::engine::XbergEngine::new(config.into(), injection.into()).unwrap();
 
-    let doc = js_sys::eval(
-        "({ full_text: 'hello world. second sentence. third sentence. fourth sentence.' })",
-    )
-    .unwrap();
+    let doc =
+        js_sys::eval("({ full_text: 'hello world. second sentence. third sentence. fourth sentence.' })").unwrap();
 
     // Default chunking (1000 chars) should produce 1 chunk for this small text
     let result_default = engine.ingest(doc.clone(), "coll-default".to_string(), None).await;
     assert!(result_default.is_ok());
 
     // Override to tiny chunk size (20 chars) should produce multiple chunks
-    let config_override =
-        js_sys::eval("({ chunking: { maxCharacters: 20, overlap: 5 } })").unwrap();
+    let config_override = js_sys::eval("({ chunking: { maxCharacters: 20, overlap: 5 } })").unwrap();
     let result_override = engine
         .ingest(doc, "coll-override".to_string(), Some(config_override.into()))
         .await;

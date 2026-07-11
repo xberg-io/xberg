@@ -217,8 +217,5 @@ async fn rehydration_round_trip() {
         restored = restored.replace(&key, &original);
     }
 
-    assert_eq!(
-        restored, FIXTURE_TEXT,
-        "rehydrated text must match the original"
-    );
+    assert_eq!(restored, FIXTURE_TEXT, "rehydrated text must match the original");
 }

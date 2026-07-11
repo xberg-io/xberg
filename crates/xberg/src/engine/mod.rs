@@ -125,18 +125,21 @@ impl Engine {
 
     /// The injected [`StructuredPolicy`] seam (default: [`DefaultStructuredPolicy`]).
     #[cfg(feature = "heuristics")]
+    #[cfg_attr(alef, alef(skip))]
     pub fn structured_policy(&self) -> &Arc<dyn StructuredPolicy> {
         &self.inner.structured_policy
     }
 
     /// The injected [`PresetResolver`] seam (default: [`CorePresetResolver`]).
     #[cfg(feature = "presets")]
+    #[cfg_attr(alef, alef(skip))]
     pub fn preset_resolver(&self) -> &Arc<dyn PresetResolver> {
         &self.inner.preset_resolver
     }
 
     /// The injected [`LlmClient`] seam (default: [`LiterLlmClient`]).
     #[cfg(feature = "liter-llm")]
+    #[cfg_attr(alef, alef(skip))]
     pub fn llm_client(&self) -> &Arc<dyn LlmClient> {
         &self.inner.llm_client
     }
@@ -182,6 +185,7 @@ impl EngineBuilder {
 
     /// Inject a [`StructuredPolicy`], overriding the [`DefaultStructuredPolicy`] default.
     #[cfg(feature = "heuristics")]
+    #[cfg_attr(alef, alef(skip))]
     pub fn with_structured_policy(mut self, policy: Arc<dyn StructuredPolicy>) -> Self {
         self.structured_policy = Some(policy);
         self
@@ -189,6 +193,7 @@ impl EngineBuilder {
 
     /// Inject a [`PresetResolver`], overriding the [`CorePresetResolver`] default.
     #[cfg(feature = "presets")]
+    #[cfg_attr(alef, alef(skip))]
     pub fn with_preset_resolver(mut self, resolver: Arc<dyn PresetResolver>) -> Self {
         self.preset_resolver = Some(resolver);
         self
@@ -196,6 +201,7 @@ impl EngineBuilder {
 
     /// Inject an [`LlmClient`], overriding the [`LiterLlmClient`] default.
     #[cfg(feature = "liter-llm")]
+    #[cfg_attr(alef, alef(skip))]
     pub fn with_llm_client(mut self, client: Arc<dyn LlmClient>) -> Self {
         self.llm_client = Some(client);
         self

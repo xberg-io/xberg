@@ -13,33 +13,33 @@
  */
 
 export class SingleFlightGuard {
-  private active = false;
-  private label: string;
+	private active = false;
+	private label: string;
 
-  constructor(label: string) {
-    this.label = label;
-  }
+	constructor(label: string) {
+		this.label = label;
+	}
 
-  /**
-   * Run an async operation with single-flight enforcement.
-   * Throws if called concurrently.
-   */
-  async run<T>(fn: () => Promise<T>): Promise<T> {
-    if (this.active) {
-      throw new Error(
-        `[${this.label}] single-flight violation: concurrent call detected. ` +
-        `The wasm engine holds &self across an await and is not re-entrant. ` +
-        `Caller must serialize invocations on one engine handle.`
-      );
-    }
+	/**
+	 * Run an async operation with single-flight enforcement.
+	 * Throws if called concurrently.
+	 */
+	async run<T>(fn: () => Promise<T>): Promise<T> {
+		if (this.active) {
+			throw new Error(
+				`[${this.label}] single-flight violation: concurrent call detected. ` +
+					`The wasm engine holds &self across an await and is not re-entrant. ` +
+					`Caller must serialize invocations on one engine handle.`,
+			);
+		}
 
-    this.active = true;
-    try {
-      return await fn();
-    } finally {
-      this.active = false;
-    }
-  }
+		this.active = true;
+		try {
+			return await fn();
+		} finally {
+			this.active = false;
+		}
+	}
 }
 
 /**

@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="UTF-8"><title>Xberg store browser test</title></head>
+  <body>
+    <script type="module">
+      import { createBrowserVectorStore } from "/src/store-browser.ts";
+
+      globalThis.createTestStore = (path) => createBrowserVectorStore({ opfsPath: path });
+    </script>
+  </body>
+</html>

@@ -39,7 +39,7 @@ impl RetrieveMode {
 }
 
 /// A retrieval query.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RetrieveQuery {
     /// Retrieval mode.
     #[serde(default)]

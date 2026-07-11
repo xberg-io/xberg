@@ -11,9 +11,9 @@ use crate::bridge::embedder::JsEmbedder;
 use crate::bridge::ner::resolve_ner_with_timeout;
 use crate::bridge::ocr::resolve_ocr_with_timeout;
 use crate::bridge::store::JsVectorStore;
+use xberg_rag::VectorStore;
 use xberg_rag::pipeline::Embedder;
 use xberg_rag::query::{RetrieveMode, RetrieveQuery};
-use xberg_rag::VectorStore;
 
 /// Extract an optional JS object field, returning `None` if the field is
 /// missing, `null`, or `undefined`.
@@ -23,9 +23,9 @@ fn get_opt_field(obj: &Object, field: &str) -> Result<Option<Object>, JsValue> {
     if val.is_undefined() || val.is_null() {
         return Ok(None);
     }
-    val.dyn_into::<Object>().map(Some).map_err(|_| {
-        JsValue::from_str(&format!("field '{field}' must be an object"))
-    })
+    val.dyn_into::<Object>()
+        .map(Some)
+        .map_err(|_| JsValue::from_str(&format!("field '{field}' must be an object")))
 }
 
 /// Extract an optional numeric field, returning `None` if the field is
@@ -68,15 +68,19 @@ impl XbergEngine {
     /// - `embedder` — object with `embed(texts: string[]): Promise<number[][]>`
     /// - `store`    — object implementing the VectorStore JS protocol
     /// - `ner`      — object with `ner(text, categories): Promise<...>`
+    ///                **NOTE:** this injected NER bridge is ONLY used by
+    ///                `XbergEngine::ner()`. It does NOT satisfy `ingest()`'s
+    ///                NER requirement — `ingest()` uses the Candle backend
+    ///                via `initCandleNer()`, which must be called separately.
     /// - `ocr`      — object with `ocr(imageBytes, opts): Promise<string>`
     #[wasm_bindgen(constructor)]
     pub fn new(config: JsValue, injection: JsValue) -> Result<XbergEngine, JsValue> {
         let bridge_timeout_ms = if config.is_undefined() || config.is_null() {
             crate::bridge::BRIDGE_TIMEOUT_MS
         } else {
-            let config_obj: Object = config.dyn_into().map_err(|_| {
-                JsValue::from_str("config must be an object")
-            })?;
+            let config_obj: Object = config
+                .dyn_into()
+                .map_err(|_| JsValue::from_str("config must be an object"))?;
             get_opt_number(&config_obj, "bridgeTimeoutMs")?
                 .map(|v| v as u32)
                 .unwrap_or(crate::bridge::BRIDGE_TIMEOUT_MS)
@@ -90,8 +94,8 @@ impl XbergEngine {
                 .map_err(|_| JsValue::from_str("injection must be an object"))?
         };
 
-        let embedder = get_opt_field(&obj, "embedder")?
-            .map(|o| Arc::new(JsEmbedder::with_timeout(o, bridge_timeout_ms)));
+        let embedder =
+            get_opt_field(&obj, "embedder")?.map(|o| Arc::new(JsEmbedder::with_timeout(o, bridge_timeout_ms)));
 
         let store = get_opt_field(&obj, "store")?
             .map(|o| Arc::new(JsVectorStore::with_timeout("default".to_string(), o, bridge_timeout_ms)));
@@ -110,11 +114,7 @@ impl XbergEngine {
 
     /// Extract content from a single bytes or URI input.
     #[allow(clippy::missing_errors_doc)]
-    pub async fn extract(
-        &self,
-        input: JsValue,
-        config: JsValue,
-    ) -> Result<JsValue, JsValue> {
+    pub async fn extract(&self, input: JsValue, config: JsValue) -> Result<JsValue, JsValue> {
         let input_core: xberg::ExtractInput = if input.is_undefined() {
             xberg::ExtractInput::default()
         } else {
@@ -136,20 +136,27 @@ impl XbergEngine {
 
     /// Ingest a single document into the RAG vector store.
     ///
-    /// Requires both an `embedder` and a `store` to have been injected.
+    /// Requires an `embedder` and a `store` to have been injected. For PII+NER
+    /// redaction (mandatory when `pipeline-redaction` is enabled), the engine
+    /// resolves NER in this order:
+    /// 1. **Injected JS NER bridge** — the `ner` object from the constructor
+    ///    injection, if present. This is the preferred path in browser contexts.
+    /// 2. **Candle backend** — the in-binary GLiNER2 model loaded via
+    ///    `initCandleNer`. Used as fallback when no JS bridge is injected.
+    ///
+    /// If neither is available, ingestion fails with a clear error.
+    ///
     /// `config` is an optional object; only `chunking.maxCharacters` and
     /// `chunking.overlap` are currently supported. All other fields are
     /// ignored.
+    ///
+    /// Returns `{ document_id, rehydration_map, pii_category_counts }`. The
+    /// caller decides whether/how to persist or encrypt `rehydration_map` —
+    /// this method never does so itself (use `encryptMap` separately).
     #[allow(clippy::missing_errors_doc)]
-    pub async fn ingest(
-        &self,
-        doc: JsValue,
-        collection: String,
-        config: Option<JsValue>,
-    ) -> Result<JsValue, JsValue> {
+    pub async fn ingest(&self, doc: JsValue, collection: String, config: Option<JsValue>) -> Result<JsValue, JsValue> {
         let ingest_req: xberg_rag::pipeline::IngestRequest =
-            serde_wasm_bindgen::from_value(doc)
-                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            serde_wasm_bindgen::from_value(doc).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
         let embedder = self
             .embedder
@@ -159,6 +166,33 @@ impl XbergEngine {
             .store
             .as_ref()
             .ok_or_else(|| JsValue::from_str("store not injected"))?;
+
+        // Resolve NER: prefer injected JS bridge, fall back to Candle.
+        let ner_box: Option<Box<dyn xberg::text::ner::NerBackend>> =
+            crate::bridge::ner::resolve_ingest_ner(self.ner.as_ref(), self.bridge_timeout_ms);
+        let candle_rc = crate::bridge::ner::get_candle_ner();
+        // We need a boxed NER backend that lives long enough. Use a small
+        // owned wrapper for the Candle case so the `Box` owns it.
+        struct CandleBox(std::rc::Rc<xberg::text::ner::candle::CandleBackend>);
+        #[async_trait(?Send)]
+        impl xberg::text::ner::NerBackend for CandleBox {
+            async fn detect(
+                &self,
+                text: &str,
+                categories: &[xberg::types::entity::EntityCategory],
+            ) -> xberg::Result<Vec<xberg::types::entity::Entity>> {
+                self.0.detect(text, categories).await
+            }
+        }
+        let ner_backend: Box<dyn xberg::text::ner::NerBackend> = if let Some(ner) = ner_box {
+            ner
+        } else if let Some(candle) = candle_rc {
+            Box::new(CandleBox(candle))
+        } else {
+            return Err(JsValue::from_str(
+                "PII detection unavailable: inject a ner bridge or call initCandleNer",
+            ));
+        };
 
         let chunking = match config {
             Some(c) if !c.is_undefined() && !c.is_null() => {
@@ -188,6 +222,7 @@ impl XbergEngine {
             ingest_req,
             &pipeline_config,
             embedder.as_ref(),
+            ner_backend.as_ref(),
         )
         .await
         .map_err(|e| JsValue::from_str(&e.to_string()))?;
@@ -219,15 +254,9 @@ impl XbergEngine {
     /// Returns the dehydrated text with original PII values restored.
     #[cfg(feature = "redaction-rehydrate")]
     #[allow(clippy::missing_errors_doc)]
-    pub fn rehydrate(
-        &self,
-        doc: String,
-        map_bytes: Vec<u8>,
-        passphrase: String,
-    ) -> Result<String, JsValue> {
-        let map: RehydrationMap =
-            xberg::text::redaction::rehydration::decrypt_map(&map_bytes, &passphrase)
-                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    pub fn rehydrate(&self, doc: String, map_bytes: Vec<u8>, passphrase: String) -> Result<String, JsValue> {
+        let map: RehydrationMap = xberg::text::redaction::rehydration::decrypt_map(&map_bytes, &passphrase)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
         let mut result = doc;
         for (token, original) in &map {
@@ -242,31 +271,29 @@ impl XbergEngine {
     #[allow(clippy::missing_errors_doc)]
     pub async fn ner(&self, text: String, opts: JsValue) -> Result<JsValue, JsValue> {
         // Parse categories from opts if provided, otherwise use empty list.
-        let categories: Vec<xberg::types::entity::EntityCategory> =
-            if !opts.is_undefined() && !opts.is_null() {
-                if let Ok(cats_val) = js_sys::Reflect::get(&opts, &JsValue::from_str("categories"))
-                {
-                    if let Ok(arr) = cats_val.dyn_into::<js_sys::Array>() {
-                        let mut cats = Vec::new();
-                        for i in 0..arr.length() {
-                            if let Some(s) = arr.get(i).as_string() {
-                                if let Ok(cat) = serde_json::from_str::<xberg::types::entity::EntityCategory>(
-                                    &format!("\"{}\"", s),
-                                ) {
-                                    cats.push(cat);
-                                }
+        let categories: Vec<xberg::types::entity::EntityCategory> = if !opts.is_undefined() && !opts.is_null() {
+            if let Ok(cats_val) = js_sys::Reflect::get(&opts, &JsValue::from_str("categories")) {
+                if let Ok(arr) = cats_val.dyn_into::<js_sys::Array>() {
+                    let mut cats = Vec::new();
+                    for i in 0..arr.length() {
+                        if let Some(s) = arr.get(i).as_string() {
+                            if let Ok(cat) =
+                                serde_json::from_str::<xberg::types::entity::EntityCategory>(&format!("\"{}\"", s))
+                            {
+                                cats.push(cat);
                             }
                         }
-                        cats
-                    } else {
-                        Vec::new()
                     }
+                    cats
                 } else {
                     Vec::new()
                 }
             } else {
                 Vec::new()
-            };
+            }
+        } else {
+            Vec::new()
+        };
 
         let entities = resolve_ner_with_timeout(self.ner.clone(), &text, &categories, self.bridge_timeout_ms)
             .await
@@ -280,12 +307,7 @@ impl XbergEngine {
     /// Requires a `store` injection. If an `embedder` is also available, the query
     /// text will be embedded for vector similarity; otherwise full-text mode is used.
     #[allow(clippy::missing_errors_doc)]
-    pub async fn query(
-        &self,
-        q: String,
-        collection: String,
-        k: u32,
-    ) -> Result<JsValue, JsValue> {
+    pub async fn query(&self, q: String, collection: String, k: u32) -> Result<JsValue, JsValue> {
         let store = self
             .store
             .as_ref()
@@ -331,16 +353,9 @@ impl XbergEngine {
 
     /// Detect PII in `text`. Returns an array of `{ start, end, category, text }`.
     #[allow(clippy::missing_errors_doc)]
-    pub fn detect_pii(
-        &self,
-        text: &str,
-        categories: Option<Vec<String>>,
-    ) -> Result<JsValue, JsValue> {
-        let cats: Vec<xberg::types::redaction::PiiCategory> = categories
-            .unwrap_or_default()
-            .into_iter()
-            .map(Into::into)
-            .collect();
+    pub fn detect_pii(&self, text: &str, categories: Option<Vec<String>>) -> Result<JsValue, JsValue> {
+        let cats: Vec<xberg::types::redaction::PiiCategory> =
+            categories.unwrap_or_default().into_iter().map(Into::into).collect();
         let matches = xberg::text::redaction::patterns::scan_text(text, &cats);
         serde_wasm_bindgen::to_value(&matches).map_err(|e| JsValue::from_str(&e.to_string()))
     }
@@ -361,11 +376,8 @@ impl XbergEngine {
     ) -> Result<JsValue, JsValue> {
         let strat: xberg::types::redaction::RedactionStrategy =
             strategy.unwrap_or_else(|| "token_replace".to_string()).into();
-        let cats: Vec<xberg::types::redaction::PiiCategory> = categories
-            .unwrap_or_default()
-            .into_iter()
-            .map(Into::into)
-            .collect();
+        let cats: Vec<xberg::types::redaction::PiiCategory> =
+            categories.unwrap_or_default().into_iter().map(Into::into).collect();
 
         let matches = xberg::text::redaction::patterns::scan_text(text, &cats);
 
@@ -414,8 +426,7 @@ impl XbergEngine {
         js_sys::Reflect::set(
             &out,
             &"rehydrationMap".into(),
-            &serde_wasm_bindgen::to_value(&rehydration_map)
-                .map_err(|e| JsValue::from_str(&e.to_string()))?,
+            &serde_wasm_bindgen::to_value(&rehydration_map).map_err(|e| JsValue::from_str(&e.to_string()))?,
         )
         .map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
         Ok(out.into())
@@ -426,11 +437,7 @@ impl XbergEngine {
     /// Returns the raw ciphertext bytes (`XPII\x01` wire format).
     #[cfg(feature = "redaction-rehydrate")]
     #[allow(clippy::missing_errors_doc)]
-    pub fn encrypt_map(
-        &self,
-        map: JsValue,
-        passphrase: &str,
-    ) -> Result<Vec<u8>, JsValue> {
+    pub fn encrypt_map(&self, map: JsValue, passphrase: &str) -> Result<Vec<u8>, JsValue> {
         let inner: RehydrationMap =
             serde_wasm_bindgen::from_value(map).map_err(|e| JsValue::from_str(&e.to_string()))?;
         xberg::text::redaction::rehydration::encrypt_map(&inner, passphrase)
@@ -440,11 +447,7 @@ impl XbergEngine {
     /// Decrypt an encrypted blob back into a token→original map.
     #[cfg(feature = "redaction-rehydrate")]
     #[allow(clippy::missing_errors_doc)]
-    pub fn decrypt_map(
-        &self,
-        blob: Vec<u8>,
-        passphrase: &str,
-    ) -> Result<JsValue, JsValue> {
+    pub fn decrypt_map(&self, blob: Vec<u8>, passphrase: &str) -> Result<JsValue, JsValue> {
         let inner = xberg::text::redaction::rehydration::decrypt_map(&blob, passphrase)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         serde_wasm_bindgen::to_value(&inner).map_err(|e| JsValue::from_str(&e.to_string()))

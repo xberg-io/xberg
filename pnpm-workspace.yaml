@@ -7,10 +7,13 @@ packages:
   - "e2e/*"
   - "!e2e/wasm" # excluded: depends on wasm-pack build output (crates/xberg-wasm/pkg)
 allowBuilds:
+  better-sqlite3: true
   esbuild: true
   onnxruntime-node: true
   protobufjs: false
   sharp: true
+onlyBuiltDependencies:
+  - better-sqlite3
 sharedWorkspaceLockfile: true
 autoInstallPeers: true
 hoist: true

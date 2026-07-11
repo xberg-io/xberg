@@ -13,6 +13,7 @@ const wasmEngineTests = [
   "tests/collections.test.ts",
   "tests/e2e.test.ts",
   "tests/engine.test.ts",
+  "tests/http-ui-routes.test.ts",
   "tests/ingest.test.ts",
   "tests/pii.test.ts",
   "tests/pii_parity.test.ts",

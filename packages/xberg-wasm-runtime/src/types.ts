@@ -59,6 +59,25 @@ export interface ChunkRecord {
 }
 
 /**
+ * A directed graph edge, mirrored alongside vectors in the SQLite-backed
+ * stores. Mirrors `crates/xberg-rag/src/backends/graphqlite.rs`'s
+ * `_graph_edges(id, source, target, label, properties)` shape (fork-local —
+ * not part of `xberg_rag::types`, and not on `VectorStoreInterface`: the
+ * canonical, factory-validated interface has no graph capability, and
+ * `validateInjectionDescriptor`'s zod schema would strip these methods if
+ * they were added there. `createEdge`/`traverseGraph` are extras on the
+ * concrete `NodeVectorStore`/`BrowserVectorStore` return types instead —
+ * see `store-node.ts`.
+ */
+export interface GraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  label?: string;
+  properties?: Record<string, unknown>;
+}
+
+/**
  * Document summary attached to retrieval results.
  * Mirrors `xberg_rag::types::DocumentSummary`.
  */
@@ -183,6 +202,8 @@ export interface RetrieveOutput {
  * (the bridge propagates thrown/rejected promises as backend errors).
  */
 export interface VectorStoreInterface {
+  /** Release any native/worker resources held by the store. Safe to call more than once. */
+  close(): Promise<void>;
   /** Returns undefined on success, or an error message string on failure. */
   ensureCollection(spec: CollectionSpec): Promise<string | void>;
   /** Returns undefined on success, or an error message string on failure. */
@@ -210,13 +231,16 @@ export interface Entity {
   score?: number;
 }
 
-export interface NerOpts {
-  categories?: string[];
-  threshold?: number;
-}
-
 export interface NerInterface {
-  ner(text: string, opts?: NerOpts): Promise<Entity[]>;
+  /**
+   * `categories` is a plain positional array (not an options object) because
+   * this must match `crates/xberg-wasm/src/bridge/ner.rs`'s
+   * `call_injected_ner`, which calls `ner(text, categories)` positionally —
+   * the Rust bridge is the fixed contract this signature exists to satisfy.
+   * `threshold` is accepted for callers that filter client-side; the Rust
+   * bridge itself never passes it.
+   */
+  ner(text: string, categories?: string[], threshold?: number): Promise<Entity[]>;
 }
 
 export interface OcrOpts {
@@ -247,6 +271,7 @@ export interface InjectionDescriptor {
 export interface CacheConfig {
   opfsPath?: string; // Browser OPFS mount point
   nodeCachePath?: string; // Node ~/.cache/xberg path
+  nodeStorePath?: string; // Node SQLite file path; defaults inside nodeCachePath
   wasmPaths?: string; // ORT wasm binaries directory
   models?: {
     embedder?: string; // Model identifier for transformers.js

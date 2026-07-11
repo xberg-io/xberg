@@ -16,6 +16,7 @@ use crate::heuristics::{StructuredCallMode, StructuredInput, StructuredThreshold
 ///
 /// Implementations are `Send + Sync + 'static` and held behind
 /// `Arc<dyn StructuredPolicy>`; they may be called concurrently.
+#[cfg_attr(alef, alef(skip))]
 pub trait StructuredPolicy: Send + Sync + 'static {
     /// Choose the call mode for `input` using this policy's thresholds.
     fn choose_call_mode(&self, input: &StructuredInput) -> StructuredCallMode;
@@ -34,6 +35,7 @@ pub trait StructuredPolicy: Send + Sync + 'static {
 /// to [`heuristics::choose_call_mode`](crate::heuristics::choose_call_mode), so
 /// its decision is byte-identical to calling that free function directly.
 #[derive(Debug, Default, Clone)]
+#[cfg_attr(alef, alef(skip))]
 pub struct DefaultStructuredPolicy {
     thresholds: StructuredThresholds,
     merge_mode: MergeMode,

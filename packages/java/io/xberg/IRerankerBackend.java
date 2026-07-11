@@ -22,5 +22,5 @@ public interface IRerankerBackend {
     /** Shut down the plugin. */
     default void shutdown() throws Exception {}
 
-    /** rerank. */    List<Float> rerank(String query, List<String> documents) throws Exception;
+/** rerank. */    List<Float> rerank(String query, List<String> documents) throws Exception;
 }

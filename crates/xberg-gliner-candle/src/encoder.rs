@@ -51,11 +51,19 @@ impl Encoder {
 
     /// Load the encoder from in-memory safetensors bytes + parsed config
     /// (wasm/no-fs path). Mirrors [`Self::from_safetensors`] but reads the
-    /// weights from a buffer instead of mmap'ing a path.
-    pub fn from_buffered_safetensors(bytes: &[u8], config: &DebertaV2Config, device: &Device) -> crate::Result<Self> {
+    /// weights from a buffer instead of mmap'ing a path. `dtype` lets wasm32
+    /// callers request `DType::F16` to halve resident memory after loading —
+    /// the source safetensors bytes are always F32, so this only affects
+    /// in-memory footprint, not download size.
+    pub fn from_buffered_safetensors(
+        bytes: &[u8],
+        config: &DebertaV2Config,
+        device: &Device,
+        dtype: candle_core::DType,
+    ) -> crate::Result<Self> {
         let tensors = candle_core::safetensors::load_buffer(bytes, device)
             .map_err(|e| crate::GlinerCandleError::Backend(format!("encoder safetensors load_buffer: {e}")))?;
-        let vb = VarBuilder::from_tensors(tensors, candle_core::DType::F32, device);
+        let vb = VarBuilder::from_tensors(tensors, dtype, device);
         Self::from_var_builder(vb.pp("encoder"), config)
     }
 

@@ -46,6 +46,7 @@ pub enum RasterizeError {
 /// `dpi` is a caller parameter; the mechanism does not impose a default.
 /// `TextOnlyWithVisionFallback` is handled
 /// by the orchestrator — rasterization only happens if a fallback escalates.
+#[cfg_attr(alef, alef(skip))]
 pub async fn pages_for_call(
     bytes: &[u8],
     mime: &str,

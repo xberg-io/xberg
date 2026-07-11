@@ -18,8 +18,7 @@ use wasm_bindgen::prelude::*;
 pub fn encrypt_rehydration_map(map: JsValue, passphrase: &str) -> Result<Vec<u8>, JsValue> {
     let inner: HashMap<String, String> =
         serde_wasm_bindgen::from_value(map).map_err(|e| JsValue::from_str(&e.to_string()))?;
-    xberg::text::redaction::rehydration::encrypt_map(&inner, passphrase)
-        .map_err(|e| JsValue::from_str(&e.to_string()))
+    xberg::text::redaction::rehydration::encrypt_map(&inner, passphrase).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// Decrypt an encrypted blob back into a token→original map.

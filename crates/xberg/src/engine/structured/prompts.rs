@@ -57,6 +57,7 @@ pub struct BuiltPrompt {
 /// - User text includes `context_template` (if present) + the extracted excerpt,
 ///   truncated at `max_excerpt_bytes`.
 /// - VisionOnly / Skip modes set `user_text` to None.
+#[cfg_attr(alef, alef(skip))]
 pub fn build_prompt(
     system_prompt: &str,
     context_template: Option<&str>,
@@ -111,6 +112,7 @@ pub fn build_prompt(
 ///
 /// Returns the composed `user_text` (text only — images come separately in the request).
 #[allow(clippy::too_many_arguments)]
+#[cfg_attr(alef, alef(skip))]
 pub fn build_vision_fallback_prompt(
     system_prompt: &str,
     context_template: Option<&str>,

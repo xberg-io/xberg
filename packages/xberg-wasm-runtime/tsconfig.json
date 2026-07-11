@@ -15,5 +15,5 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"]
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist", "src/**/*.test.ts"]
 }
