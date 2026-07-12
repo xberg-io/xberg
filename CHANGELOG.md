@@ -43,6 +43,13 @@ The changelog starts fresh at `1.0.0-rc.1`. For the Kreuzberg v1–v4 history, s
 
 ### Fixed
 
+- **macOS wheels and the npm darwin package now target macOS 11, instead of only macOS 15.**
+  Wheels were built with a deployment target of 15.0, so pip and uv matched no wheel below
+  macOS 15 and silently fell back to compiling the Rust sdist; the npm darwin package vendored
+  the same Homebrew libheif closure, compiled for the runner's macOS 15. Both artifacts now
+  bundle a libheif decode stack built from source at the 11.0 target — as the Linux wheels
+  already do inside the manylinux container — and CI fails if any bundled library misses that
+  floor or is sourced from Homebrew.
 - **Markdown, CSV, and other text members inside an archive are no longer flattened to escaped
   prose.** Recursive archive extraction resolved each member's MIME by content sniffing first, but
   markdown/CSV/YAML are all plain UTF-8 and sniff to `text/plain` — so a zipped `.md` reached the

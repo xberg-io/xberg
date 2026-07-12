@@ -1,19 +1,15 @@
 #!/usr/bin/env bash
-# Recursively vendor a macOS .node's non-system dylib closure beside it and
-# rewrite every absolute (non-system) load command to @loader_path, then ad-hoc
-# re-sign each rewritten binary.
-#
-# Why: the NAPI .node links libheif (HEIC/AVIF) via an absolute Homebrew path
-# (/opt/homebrew/opt/libheif/lib/libheif.1.dylib), and libheif in turn pulls a
-# transitive closure (libde265, libx265, libaom, libsharpyuv, libvmaf, ...).
-# None of these are vendored by the shared build-node-napi action (it only
-# vendors ONNX Runtime, which is already @rpath-relocatable), so the published
-# darwin package fails to dlopen on any Mac without those Homebrew formulae at
-# those exact paths. ONNX Runtime is left untouched here: it is referenced via
-# @rpath and resolved by co-location + the .node's @loader_path LC_RPATH.
+# Vendor a macOS .node's non-system dylib closure (the libheif stack) beside
+# it, rewrite absolute load commands to @loader_path, and ad-hoc re-sign, so
+# the darwin package dlopens without anything preinstalled. ONNX Runtime is
+# untouched: @rpath-relocatable and resolved by co-location.
 #
 # Usage: vendor-macos-node-dylibs.sh <dir-containing-the-.node>
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="${REPO_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+source "$REPO_ROOT/scripts/lib/macho.sh"
 
 DIR="${1:?usage: vendor-macos-node-dylibs.sh <dir>}"
 DIR="$(cd "$DIR" && pwd)"
@@ -63,7 +59,14 @@ while [ $i -lt ${#queue[@]} ]; do
     is_vendorable "$dep" || continue
     b="$(basename "$dep")"
     if [ ! -f "$DIR/$b" ]; then
-      cp -f "$(resolve "$dep")" "$DIR/$b"; chmod u+w "$DIR/$b"
+      src="$(resolve "$dep")"
+      # Homebrew bottles target the runner's own macOS and would raise the
+      # package's floor; the heif closure comes from build-macos-heif-deps.sh.
+      case "$src" in
+        /opt/homebrew/*|/usr/local/*)
+          echo "::error::refusing to vendor Homebrew dylib $dep"; exit 1 ;;
+      esac
+      cp -f "$src" "$DIR/$b"; chmod u+w "$DIR/$b"
       echo "vendored $b"
     fi
     install_name_tool -change "$dep" "@loader_path/$b" "$target"
@@ -85,4 +88,18 @@ for f in "$DIR"/*.node "$DIR"/*.dylib; do
   done < <(deps_of "$f")
 done
 [ $leaks -eq 0 ] || { echo "::error::$leaks unvendored absolute deps remain"; exit 1; }
+
+# The .node must sit at the declared floor. Vendored dylibs we did not compile
+# (ONNX Runtime) are reported so the package's effective floor is visible.
+if [ -n "${MACOSX_DEPLOYMENT_TARGET:-}" ]; then
+  for f in "$DIR"/*.node "$DIR"/*.dylib; do
+    [ -e "$f" ] || continue
+    m="$(minos_of "$f")"
+    echo "minos $m $(basename "$f")"
+    case "$f" in
+      *.node) [ "$m" = "$MACOSX_DEPLOYMENT_TARGET" ] || {
+        echo "::error::$(basename "$f") targets macOS $m, expected $MACOSX_DEPLOYMENT_TARGET"; exit 1; } ;;
+    esac
+  done
+fi
 echo "macOS dylib closure vendored and self-contained under $DIR"
