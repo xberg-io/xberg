@@ -104,4 +104,11 @@ describe("HTTP ingest/map/ui routes (Task 6)", () => {
     const res = await fetch(`${baseUrl}/ui/`);
     expect(res.status).toBe(401);
   });
+
+  it("POST /admin delete_documents removes the ingested doc (stats drops to 0)", async () => {
+    const del = await fetch(`${baseUrl}/admin?token=${token}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "delete_documents", collection: "http_ingest_test", external_ids: ["doc-1"] }) });
+    expect(del.status).toBe(200); expect((await del.json()).deleted).toBeGreaterThanOrEqual(1);
+    const stats = await fetch(`${baseUrl}/admin?token=${token}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "stats", collection: "http_ingest_test" }) });
+    expect((await stats.json()).documents).toBe(0);
+  });
 });
