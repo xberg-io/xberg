@@ -8,28 +8,16 @@ pub(crate) fn xml_tag_name(name: &[u8]) -> Cow<'_, str> {
     String::from_utf8_lossy(name)
 }
 
-/// Resolve a predefined XML entity name to its character.
-#[cfg(any(feature = "xml", feature = "office"))]
-fn resolve_entity(name: &str) -> Option<&'static str> {
-    match name {
-        "amp" => Some("&"),
-        "lt" => Some("<"),
-        "gt" => Some(">"),
-        "quot" => Some("\""),
-        "apos" => Some("'"),
-        "nbsp" => Some("\u{00A0}"),
-        _ => None,
-    }
-}
-
-/// Streaming XML reader that restores pre-quick-xml-0.37 text semantics.
+/// Streaming XML reader that restores pre-quick-xml-0.38 text semantics.
 ///
-/// quick-xml 0.37+ splits text nodes at entity and character references, emitting
-/// `Event::GeneralRef` between `Event::Text` fragments. Consumers that only match
+/// quick-xml 0.38 split text nodes at entity and character references, emitting
+/// `Event::GeneralRef` between `Event::Text` fragments and delegating reference
+/// resolution to the consumer (tafia/quick-xml#766). Consumers that only match
 /// `Event::Text` silently drop the referenced characters (`&amp;` → nothing), and
 /// trim-and-join accumulators corrupt spacing around the fragments. This wrapper
-/// coalesces each run of `Text`/`GeneralRef` events into a single `Event::Text`
-/// with references resolved, so consumers see whole text nodes again.
+/// does for streaming reads what quick-xml's own serde deserializer does
+/// internally: it coalesces each run of `Text`/`GeneralRef` events into a single
+/// `Event::Text` with references resolved, so consumers see whole text nodes again.
 ///
 /// Reader-level `trim_text` must stay off (the default) — trimming individual
 /// fragments before coalescing would destroy the whitespace around references.
@@ -74,13 +62,13 @@ impl<'x> EntityReader<'x> {
         };
         let mut text = match first {
             Event::Text(t) => String::from_utf8_lossy(t.as_ref()).into_owned(),
-            Event::GeneralRef(r) => resolve_general_ref(r.as_ref()),
+            Event::GeneralRef(r) => resolve_general_ref(&r),
             other => return Ok(other),
         };
         loop {
             match self.reader.read_event()? {
                 Event::Text(t) => text.push_str(&String::from_utf8_lossy(t.as_ref())),
-                Event::GeneralRef(r) => text.push_str(&resolve_general_ref(r.as_ref())),
+                Event::GeneralRef(r) => text.push_str(&resolve_general_ref(&r)),
                 other => {
                     self.pending = Some(other);
                     break;
@@ -93,25 +81,26 @@ impl<'x> EntityReader<'x> {
 
 /// Resolve an XML general reference (entity or character reference) to its text.
 ///
-/// quick-xml 0.37+ emits `&amp;`-style references as `Event::GeneralRef` instead of
-/// including them in `Event::Text`, so every streaming reader that assembles text
-/// must append the resolved reference or the characters are silently dropped.
-/// Unknown named entities (undefined DTD entities) resolve to an empty string.
+/// Resolution is upstream's: [`BytesRef::resolve_char_ref`] for `&#...;` character
+/// references and [`quick_xml::escape::resolve_predefined_entity`] for the five
+/// XML predefined entities — the same building blocks quick-xml's own serde
+/// deserializer resolves references with. On top of that, `&nbsp;` (an HTML
+/// entity that real-world FB2/DocBook files use without declaring) resolves to
+/// U+00A0, and undeclared DTD entities resolve to an empty string: extraction
+/// is best-effort, so an unresolvable reference must not fail the document.
 #[cfg(any(feature = "xml", feature = "office"))]
-pub(crate) fn resolve_general_ref(ref_bytes: &[u8]) -> String {
-    let name = String::from_utf8_lossy(ref_bytes);
-    if let Some(entity) = resolve_entity(&name) {
-        return entity.to_string();
+pub(crate) fn resolve_general_ref(reference: &quick_xml::events::BytesRef<'_>) -> String {
+    if let Ok(Some(ch)) = reference.resolve_char_ref() {
+        return ch.to_string();
     }
-    if let Some(num) = name.strip_prefix('#') {
-        let code = if let Some(hex) = num.strip_prefix('x') {
-            u32::from_str_radix(hex, 16).ok()
-        } else {
-            num.parse::<u32>().ok()
-        };
-        if let Some(ch) = code.and_then(char::from_u32) {
-            return ch.to_string();
-        }
+    let Ok(name) = reference.decode() else {
+        return String::new();
+    };
+    if let Some(resolved) = quick_xml::escape::resolve_predefined_entity(&name) {
+        return resolved.to_string();
+    }
+    if name.as_ref() == "nbsp" {
+        return "\u{00A0}".to_string();
     }
     String::new()
 }
@@ -119,30 +108,34 @@ pub(crate) fn resolve_general_ref(ref_bytes: &[u8]) -> String {
 #[cfg(all(test, any(feature = "xml", feature = "office")))]
 mod tests {
     use super::*;
-    use quick_xml::events::Event;
+    use quick_xml::events::{BytesRef, Event};
+
+    fn resolve(name: &str) -> String {
+        resolve_general_ref(&BytesRef::new(name))
+    }
 
     #[test]
     fn test_resolve_general_ref_predefined_entities() {
-        assert_eq!(resolve_general_ref(b"amp"), "&");
-        assert_eq!(resolve_general_ref(b"lt"), "<");
-        assert_eq!(resolve_general_ref(b"gt"), ">");
-        assert_eq!(resolve_general_ref(b"quot"), "\"");
-        assert_eq!(resolve_general_ref(b"apos"), "'");
-        assert_eq!(resolve_general_ref(b"nbsp"), "\u{00A0}");
+        assert_eq!(resolve("amp"), "&");
+        assert_eq!(resolve("lt"), "<");
+        assert_eq!(resolve("gt"), ">");
+        assert_eq!(resolve("quot"), "\"");
+        assert_eq!(resolve("apos"), "'");
+        assert_eq!(resolve("nbsp"), "\u{00A0}");
     }
 
     #[test]
     fn test_resolve_general_ref_character_references() {
-        assert_eq!(resolve_general_ref(b"#8212"), "\u{2014}");
-        assert_eq!(resolve_general_ref(b"#x2014"), "\u{2014}");
-        assert_eq!(resolve_general_ref(b"#65"), "A");
+        assert_eq!(resolve("#8212"), "\u{2014}");
+        assert_eq!(resolve("#x2014"), "\u{2014}");
+        assert_eq!(resolve("#65"), "A");
     }
 
     #[test]
     fn test_resolve_general_ref_unknown_entity_is_empty() {
-        assert_eq!(resolve_general_ref(b"unknownentity"), "");
-        assert_eq!(resolve_general_ref(b"#xZZ"), "");
-        assert_eq!(resolve_general_ref(b"#1114112"), ""); // beyond char::MAX
+        assert_eq!(resolve("unknownentity"), "");
+        assert_eq!(resolve("#xZZ"), "");
+        assert_eq!(resolve("#1114112"), ""); // beyond char::MAX
     }
 
     /// The core contract: a text node split at references arrives as ONE Text

@@ -44,8 +44,8 @@ The changelog starts fresh at `1.0.0-rc.1`. For the Kreuzberg v1–v4 history, s
 ### Fixed
 
 - **XML entities (`&amp;`, `&lt;`, `&gt;`) no longer disappear from extracted text.** quick-xml
-  0.37+ delivers entity and character references as separate events instead of inlining them in
-  text, and every streaming reader that only matched text events silently dropped them —
+  0.38 started delivering entity and character references as separate events instead of inlining
+  them in text, and every streaming reader that only matched text events silently dropped them —
   `Falafel & Hummus <combo>` in a DOCX came out as `Falafel  Hummus combo`. Affected formats:
   DOCX (body, tables, headers/footers, footnotes/endnotes, math), DocBook, JATS, and generic
   XML/SVG. Text fragments are now coalesced with their resolved references before any

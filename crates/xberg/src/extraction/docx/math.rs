@@ -239,7 +239,7 @@ fn collect_run(reader: &mut Reader<&[u8]>, budget: &mut SecurityBudget) -> Resul
                 }
             }
             Ok(Event::GeneralRef(ref e)) if in_text => {
-                let t = crate::utils::xml_utils::resolve_general_ref(e.as_ref());
+                let t = crate::utils::xml_utils::resolve_general_ref(e);
                 budget.account_text(t.len())?;
                 text.push_str(&t);
             }

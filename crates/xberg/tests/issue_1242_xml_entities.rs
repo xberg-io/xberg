@@ -1,7 +1,7 @@
 //! Regression tests for #1242: XML entities (`&amp;`, `&lt;`, `&gt;`) dropped from extracted text.
 //!
-//! quick-xml 0.41 emits entity and character references as `Event::GeneralRef` instead of
-//! including them in `Event::Text`. Readers that only handle `Event::Text` silently drop the
+//! Since quick-xml 0.38, entity and character references arrive as `Event::GeneralRef` instead
+//! of inside `Event::Text`. Readers that only handle `Event::Text` silently drop the
 //! referenced characters, so `Falafel &amp; Hummus` extracts as `Falafel  Hummus`.
 //!
 //! Covers every streaming quick-xml reader that assembles document text: the DOCX body /
