@@ -54,6 +54,13 @@ The changelog starts fresh at `1.0.0-rc.1`. For the Kreuzberg v1–v4 history, s
   previously vendored Homebrew's unpinned onnxruntime bottle (macOS 14 floor) plus its
   abseil/onnx/protobuf/re2 closure. It now ships Microsoft's official 1.23.2 build, the last
   x86_64 macOS release, which links only system frameworks.
+- **XML entities (`&amp;`, `&lt;`, `&gt;`) no longer disappear from extracted text.** quick-xml
+  0.38 started delivering entity and character references as separate events instead of inlining
+  them in text, and every streaming reader that only matched text events silently dropped them —
+  `Falafel & Hummus <combo>` in a DOCX came out as `Falafel  Hummus combo`. Affected formats:
+  DOCX (body, tables, headers/footers, footnotes/endnotes, math), DocBook, JATS, and generic
+  XML/SVG. Text fragments are now coalesced with their resolved references before any
+  whitespace handling, so entities survive with correct spacing (`5>3` stays `5>3`, not `5 > 3`).
 - **Markdown, CSV, and other text members inside an archive are no longer flattened to escaped
   prose.** Recursive archive extraction resolved each member's MIME by content sniffing first, but
   markdown/CSV/YAML are all plain UTF-8 and sniff to `text/plain` — so a zipped `.md` reached the

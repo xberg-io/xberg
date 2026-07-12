@@ -28,10 +28,11 @@ use crate::types::internal_builder::InternalDocumentBuilder;
 use crate::types::metadata::{ContributorRole, FormatMetadata, JatsMetadata};
 use crate::types::uri::ExtractedUri;
 use async_trait::async_trait;
-use quick_xml::Reader;
 use quick_xml::events::Event;
 #[cfg(feature = "tokio-runtime")]
 use std::path::Path;
+
+use crate::utils::xml_utils::EntityReader;
 
 use elements::extract_jats_all_in_one;
 use parser::extract_citation_text as jats_extract_citation;
@@ -47,7 +48,7 @@ use parser::extract_text_content as jats_extract_text;
 /// - `<sup>` → superscript
 /// - `<ext-link>` → link (with xlink:href)
 fn extract_para_with_annotations_jats(
-    reader: &mut Reader<&[u8]>,
+    reader: &mut EntityReader<'_>,
     budget: &mut SecurityBudget,
 ) -> crate::Result<(String, Vec<crate::types::document_structure::TextAnnotation>)> {
     use crate::types::builder;
@@ -172,7 +173,7 @@ fn extract_para_with_annotations_jats(
 
 /// Build an `InternalDocument` from JATS XML content.
 fn build_jats_internal_document(content: &str, budget: &mut SecurityBudget) -> crate::Result<InternalDocument> {
-    let mut reader = Reader::from_str(content);
+    let mut reader = EntityReader::from_str(content);
     let mut builder = InternalDocumentBuilder::new("jats");
 
     let mut in_article_meta = false;

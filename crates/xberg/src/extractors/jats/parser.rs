@@ -3,11 +3,12 @@
 use crate::Result;
 use crate::extractors::security::SecurityBudget;
 use crate::text::utf8_validation;
-use quick_xml::Reader;
 use quick_xml::events::Event;
 
+use crate::utils::xml_utils::EntityReader;
+
 /// Extract text content from a JATS element and its children.
-pub(super) fn extract_text_content(reader: &mut Reader<&[u8]>, budget: &mut SecurityBudget) -> Result<String> {
+pub(super) fn extract_text_content(reader: &mut EntityReader<'_>, budget: &mut SecurityBudget) -> Result<String> {
     let mut text = String::new();
     let mut depth = 0;
 
@@ -64,7 +65,7 @@ pub(super) fn extract_text_content(reader: &mut Reader<&[u8]>, budget: &mut Secu
 /// `Brown T, Davis K. Cognitive effects of caffeine. J Neurosci. 2002;15:234-241.`
 ///
 /// Falls back to plain text extraction for `<mixed-citation>` or unrecognized structures.
-pub(super) fn extract_citation_text(reader: &mut Reader<&[u8]>, budget: &mut SecurityBudget) -> Result<String> {
+pub(super) fn extract_citation_text(reader: &mut EntityReader<'_>, budget: &mut SecurityBudget) -> Result<String> {
     let mut depth: u32 = 0;
     let mut in_element_citation = false;
     let mut in_mixed_citation = false;

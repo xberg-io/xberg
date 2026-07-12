@@ -26,8 +26,9 @@ use crate::types::internal_builder::InternalDocumentBuilder;
 use crate::types::uri::ExtractedUri;
 use crate::types::{Metadata, Table};
 use async_trait::async_trait;
-use quick_xml::Reader;
 use quick_xml::events::Event;
+
+use crate::utils::xml_utils::EntityReader;
 #[cfg(feature = "tokio-runtime")]
 use std::path::Path;
 
@@ -134,7 +135,7 @@ fn build_docbook_internal_document(
     budget: &mut SecurityBudget,
 ) -> Result<InternalDocument> {
     let wrapped = ensure_root_element(content);
-    let mut reader = Reader::from_str(&wrapped);
+    let mut reader = EntityReader::from_str(&wrapped);
     let mut builder = InternalDocumentBuilder::new("docbook");
 
     let mut title_extracted = false;
@@ -358,7 +359,7 @@ fn build_docbook_internal_document(
 /// Returns: (content, title, author, date, tables, publisher, copyright)
 fn parse_docbook_single_pass(content: &str, plain: bool, budget: &mut SecurityBudget) -> Result<DocBookParseResult> {
     let wrapped = ensure_root_element(content);
-    let mut reader = Reader::from_str(&wrapped);
+    let mut reader = EntityReader::from_str(&wrapped);
     let mut output = String::new();
     let mut title = String::new();
     let mut author = Option::None;
@@ -653,7 +654,7 @@ fn parse_docbook_single_pass(content: &str, plain: bool, budget: &mut SecurityBu
 /// Handles `<emphasis>`, `<emphasis role="bold">`, `<literal>`, `<command>`,
 /// `<link>`, and `<ulink>` elements.
 fn extract_element_text_with_inline(
-    reader: &mut Reader<&[u8]>,
+    reader: &mut EntityReader<'_>,
     plain: bool,
     budget: &mut SecurityBudget,
 ) -> Result<String> {
@@ -794,7 +795,7 @@ fn extract_element_text_with_inline(
 }
 
 /// Extract figure element, capturing the `<title>` as the caption.
-fn extract_figure_with_caption(reader: &mut Reader<&[u8]>, budget: &mut SecurityBudget) -> Result<String> {
+fn extract_figure_with_caption(reader: &mut EntityReader<'_>, budget: &mut SecurityBudget) -> Result<String> {
     let mut caption = String::new();
     let mut depth = 0;
 
@@ -871,7 +872,7 @@ fn extract_figure_with_caption(reader: &mut Reader<&[u8]>, budget: &mut Security
 /// - `<subscript>` → subscript
 /// - `<superscript>` → superscript
 fn extract_para_with_annotations(
-    reader: &mut Reader<&[u8]>,
+    reader: &mut EntityReader<'_>,
     budget: &mut SecurityBudget,
 ) -> Result<(String, Vec<crate::types::document_structure::TextAnnotation>)> {
     use crate::types::builder;
@@ -1031,7 +1032,7 @@ fn extract_para_with_annotations(
 
 /// Extract text content from a DocBook element and its children.
 /// Used for extracting nested content within elements.
-fn extract_element_text(reader: &mut Reader<&[u8]>, budget: &mut SecurityBudget) -> Result<String> {
+fn extract_element_text(reader: &mut EntityReader<'_>, budget: &mut SecurityBudget) -> Result<String> {
     let mut text = String::new();
     let mut depth = 0;
 

@@ -25,41 +25,9 @@ use crate::types::{ExtractedImage, Metadata, Table};
 use async_trait::async_trait;
 use base64::Engine;
 use bytes::Bytes;
-use quick_xml::Reader;
 use quick_xml::events::Event;
 
-/// Resolve an XML entity reference name to its character(s).
-fn resolve_entity(name: &str) -> Option<&'static str> {
-    match name {
-        "amp" => Some("&"),
-        "lt" => Some("<"),
-        "gt" => Some(">"),
-        "quot" => Some("\""),
-        "apos" => Some("'"),
-        "nbsp" => Some("\u{00A0}"),
-        _ if name.starts_with('#') => None,
-        _ => None,
-    }
-}
-
-/// Resolve an XML general reference (entity or char ref) to a string.
-fn resolve_general_ref(ref_bytes: &[u8]) -> String {
-    let name = String::from_utf8_lossy(ref_bytes);
-    if let Some(entity) = resolve_entity(&name) {
-        return entity.to_string();
-    }
-    if let Some(num) = name.strip_prefix('#') {
-        let code = if let Some(hex) = num.strip_prefix('x') {
-            u32::from_str_radix(hex, 16).ok()
-        } else {
-            num.parse::<u32>().ok()
-        };
-        if let Some(ch) = code.and_then(char::from_u32) {
-            return ch.to_string();
-        }
-    }
-    String::new()
-}
+use crate::utils::xml_utils::EntityReader;
 
 /// FictionBook document extractor.
 ///
@@ -79,7 +47,7 @@ impl FictionBookExtractor {
     }
 
     /// Extract text content from a FictionBook element and its children.
-    fn extract_text_content(reader: &mut Reader<&[u8]>, budget: &mut SecurityBudget) -> Result<String> {
+    fn extract_text_content(reader: &mut EntityReader<'_>, budget: &mut SecurityBudget) -> Result<String> {
         let mut text = String::new();
         let mut depth = 0;
 
@@ -141,12 +109,6 @@ impl FictionBookExtractor {
                         text.push('\n');
                     }
                 }
-                Ok(Event::GeneralRef(r)) => {
-                    let resolved = resolve_general_ref(r.as_ref());
-                    if !resolved.is_empty() {
-                        text.push_str(&resolved);
-                    }
-                }
                 Ok(Event::Eof) => break,
                 Err(e) => {
                     return Err(crate::error::XbergError::parsing(format!("XML parsing error: {}", e)));
@@ -167,7 +129,7 @@ impl FictionBookExtractor {
 
     /// Extract metadata from FictionBook document.
     fn extract_metadata(data: &[u8], budget: &mut SecurityBudget) -> Result<Metadata> {
-        let mut reader = Reader::from_reader(data);
+        let mut reader = EntityReader::from_bytes(data);
         let mut metadata = Metadata::default();
         let mut additional = ahash::AHashMap::new();
         let mut in_title_info = false;
@@ -424,7 +386,7 @@ impl FictionBookExtractor {
     }
 
     /// Extract a single table from the XML reader (positioned just after `<table>`).
-    fn extract_table(reader: &mut Reader<&[u8]>, budget: &mut SecurityBudget) -> Result<Vec<Vec<String>>> {
+    fn extract_table(reader: &mut EntityReader<'_>, budget: &mut SecurityBudget) -> Result<Vec<Vec<String>>> {
         let mut table: Vec<Vec<String>> = Vec::new();
         let mut current_row: Vec<String> = Vec::new();
         let mut in_row = false;
@@ -487,7 +449,7 @@ impl FictionBookExtractor {
 
     /// Extract all tables from the FictionBook body.
     fn extract_tables_from_body(data: &[u8], budget: &mut SecurityBudget) -> Result<Vec<Table>> {
-        let mut reader = Reader::from_reader(data);
+        let mut reader = EntityReader::from_bytes(data);
         let mut tables = Vec::new();
         let mut table_index = 0;
 
@@ -532,7 +494,7 @@ impl FictionBookExtractor {
     /// <binary id="cover.jpg" content-type="image/jpeg">base64data...</binary>
     /// ```
     fn extract_binary_images(data: &[u8], budget: &mut SecurityBudget) -> Result<Vec<ExtractedImage>> {
-        let mut reader = Reader::from_reader(data);
+        let mut reader = EntityReader::from_bytes(data);
         let mut images = Vec::new();
         let mut image_index = 0;
 
@@ -639,7 +601,7 @@ impl FictionBookExtractor {
     /// <a xlink:href="#note1">footnote ref</a>
     /// ```
     fn extract_links(data: &[u8], budget: &mut SecurityBudget) -> Result<Vec<ExtractedUri>> {
-        let mut reader = Reader::from_reader(data);
+        let mut reader = EntityReader::from_bytes(data);
         let mut uris = Vec::new();
         let mut in_body = false;
 
@@ -725,7 +687,7 @@ impl FictionBookExtractor {
 
     /// Build an `InternalDocument` from FictionBook XML content.
     fn build_internal_document(data: &[u8], budget: &mut SecurityBudget) -> Result<InternalDocument> {
-        let mut reader = Reader::from_reader(data);
+        let mut reader = EntityReader::from_bytes(data);
         let mut builder = InternalDocumentBuilder::new("fictionbook");
 
         let mut in_body = false;
@@ -844,7 +806,7 @@ impl FictionBookExtractor {
 
     /// Extract paragraph text with annotation tracking for inline formatting.
     fn extract_paragraph_with_annotations(
-        reader: &mut Reader<&[u8]>,
+        reader: &mut EntityReader<'_>,
         budget: &mut SecurityBudget,
     ) -> Result<(String, Vec<crate::types::document_structure::TextAnnotation>)> {
         use crate::types::document_structure::{AnnotationKind, TextAnnotation};
@@ -912,12 +874,6 @@ impl FictionBookExtractor {
                         text.push_str(trimmed);
                     }
                 }
-                Ok(Event::GeneralRef(r)) => {
-                    let resolved = resolve_general_ref(r.as_ref());
-                    if !resolved.is_empty() {
-                        text.push_str(&resolved);
-                    }
-                }
                 Ok(Event::Eof) => break,
                 Err(e) => {
                     return Err(crate::error::XbergError::parsing(format!("XML parsing error: {}", e)));
@@ -930,7 +886,7 @@ impl FictionBookExtractor {
     }
 
     /// Extract footnote text from a notes-body section.
-    fn extract_footnote_text(reader: &mut Reader<&[u8]>, budget: &mut SecurityBudget) -> Result<String> {
+    fn extract_footnote_text(reader: &mut EntityReader<'_>, budget: &mut SecurityBudget) -> Result<String> {
         let mut text = String::new();
         let mut section_depth = 1;
 
