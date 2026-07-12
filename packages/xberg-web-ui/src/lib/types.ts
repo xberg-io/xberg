@@ -5,6 +5,12 @@ export interface IngestChunkPayload {
   chunk_metadata?: unknown;
 }
 
+export interface OcrLine {
+  text: string;
+  confidence: number;
+  bbox?: { x: number; y: number; w: number; h: number };
+}
+
 /** Mirrors `mcp-server/src/http/ingest-route.ts`'s `IngestPayloadSchema`. */
 export interface IngestPayload {
   collection: string;
