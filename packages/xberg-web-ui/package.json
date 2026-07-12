@@ -1,0 +1,43 @@
+{
+  "name": "xberg-web-ui",
+  "version": "1.0.0-rc.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "export": "next build && node scripts/export-to-mcp.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:e2e": "playwright test",
+    "lint": "oxlint src/"
+  },
+  "dependencies": {
+    "next": "^14.2.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "@tanstack/react-table": "^8.20.0",
+    "clsx": "^2.1.1",
+    "class-variance-authority": "^0.7.0",
+    "tailwind-merge": "^2.5.0",
+    "xberg-wasm-runtime": "file:../xberg-wasm-runtime",
+    "@xberg-io/xberg-wasm": "file:../../crates/xberg-wasm"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@testing-library/jest-dom": "^6.5.0",
+    "@testing-library/react": "^16.0.1",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react-oxc": "^0.4.3",
+    "autoprefixer": "^10.4.20",
+    "fake-indexeddb": "^6.0.0",
+    "jsdom": "^25.0.1",
+    "oxlint": "^1.73.0",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.13",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}

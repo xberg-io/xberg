@@ -5,6 +5,7 @@ import { generateAuthToken, extractToken, isValidToken } from "./auth.js";
 import { serveStaticFile } from "./static-server.js";
 import { createIngestHandler } from "./ingest-route.js";
 import { createMapUploadHandler } from "./map-route.js";
+import { createCollectionHandler } from "./collection-route.js";
 import { getRuntime } from "../engine.js";
 import { getCacheDir } from "../paths.js";
 
@@ -27,6 +28,7 @@ export function createUiRoutes(): UiRoutes {
 
   const ingestHandler = createIngestHandler(() => getRuntime().store);
   const mapHandler = createMapUploadHandler(rehydrationDir);
+  const collectionHandler = createCollectionHandler(() => getRuntime().store);
 
   return {
     token,
@@ -34,7 +36,8 @@ export function createUiRoutes(): UiRoutes {
       const isUi = url.pathname === "/ui" || url.pathname.startsWith("/ui/");
       const isIngest = req.method === "POST" && url.pathname === "/ingest";
       const isMap = req.method === "POST" && url.pathname === "/map";
-      if (!isUi && !isIngest && !isMap) return false;
+      const isCollection = req.method === "POST" && url.pathname === "/collection";
+      if (!isUi && !isIngest && !isMap && !isCollection) return false;
 
       const candidate = extractToken(req, url);
       if (!isValidToken(candidate, token)) {
@@ -48,6 +51,10 @@ export function createUiRoutes(): UiRoutes {
       }
       if (isMap) {
         await mapHandler(req, res, url);
+        return true;
+      }
+      if (isCollection) {
+        await collectionHandler(req, res);
         return true;
       }
       const subPath = url.pathname === "/ui" ? "/" : url.pathname.slice("/ui".length);

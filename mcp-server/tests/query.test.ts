@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { initializeEngine, getEngine, getRuntime } from "../src/engine.js";
+import { EMBEDDING_DIM } from "../src/lib/constants.js";
 
 describe("query_corpus (Task 6 core behavior)", () => {
-  const EMBEDDING_DIM = 384; // matches xberg-wasm-runtime's default embedder model
 
   beforeAll(async () => {
     await initializeEngine();

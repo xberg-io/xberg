@@ -3,14 +3,15 @@ import { z } from "zod";
 import { getRuntime } from "../engine.js";
 import { trackCollection, untrackCollection } from "../collection-registry.js";
 import type { CollectionSpec, DistanceMetric } from "xberg-wasm-runtime";
+import { EMBEDDING_DIM, EMBEDDER_MODEL_ID } from "../lib/constants.js";
 
 export function registerCollectionTools(server: McpServer): void {
   server.tool(
     "create_collection",
-    "Create a RAG vector collection. The injected wasm embedder is fixed at 384 dimensions (all-MiniLM), so the default embedding_dim=384 matches it — collections used with ingest_document/query_corpus must be 384-dim.",
+    `Create a RAG vector collection. The default embedder is ${EMBEDDER_MODEL_ID} (${EMBEDDING_DIM} dimensions), so the default embedding_dim=${EMBEDDING_DIM} matches it — collections used with ingest_document/query_corpus must be ${EMBEDDING_DIM}-dim.`,
     {
       name: z.string().describe("Collection name"),
-      embedding_dim: z.number().int().positive().default(384).describe("Embedding dimension. Must match the embedder the tools use — the runtime's fixed embedder produces 384-dim vectors, so collections used with ingest_document/query_corpus must be 384."),
+      embedding_dim: z.number().int().positive().default(EMBEDDING_DIM).describe(`Embedding dimension. Must match the embedder the tools use — the runtime's fixed embedder produces ${EMBEDDING_DIM}-dim vectors, so collections used with ingest_document/query_corpus must be ${EMBEDDING_DIM}.`),
       distance_metric: z.enum(["cosine", "l2", "inner_product"]).optional().default("cosine"),
       index_method: z.enum(["flat", "hnsw", "diskann"]).optional().default("flat"),
     },

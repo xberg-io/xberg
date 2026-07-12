@@ -61,9 +61,7 @@ pub fn score(detected: &[PatternMatch], truth: &[TrueSpan]) -> BTreeMap<String, 
         let mut tp = 0usize;
         let mut fp = 0usize;
         for d in &dets {
-            let overlaps = truths
-                .iter()
-                .any(|t| d.start < t.end && d.end > t.start);
+            let overlaps = truths.iter().any(|t| d.start < t.end && d.end > t.start);
             if overlaps {
                 tp += 1;
             } else {
@@ -137,8 +135,8 @@ struct Annotations {
 pub fn load_corpus(dir: &Path) -> std::io::Result<Vec<(String, Vec<TrueSpan>)>> {
     let ann_path = dir.join("annotations.toml");
     let raw = std::fs::read_to_string(&ann_path)?;
-    let ann: Annotations = toml::from_str(&raw)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
+    let ann: Annotations =
+        toml::from_str(&raw).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
 
     let mut by_file: BTreeMap<String, Vec<TrueSpan>> = BTreeMap::new();
     for s in ann.span {
@@ -273,10 +271,7 @@ mod tests {
 
     #[test]
     fn corpus_eval_meets_f1_floor() {
-        let dir = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/fixtures/pii_eval"
-        );
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/pii_eval");
         let corpus = load_corpus(Path::new(dir)).expect("load corpus");
 
         let mut any = false;

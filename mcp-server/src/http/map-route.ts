@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdir, writeFile, rename, unlink } from "node:fs/promises";
 import { join } from "node:path";
+import { randomBytes } from "node:crypto";
 
 // Allows plain identifiers and filename-safe punctuation only — no `/` or
 // `\`, so the resulting filename can never escape `getRehydrationDir()`.
@@ -55,9 +56,16 @@ export function createMapUploadHandler(
       }
 
       const dir = getRehydrationDir();
-      mkdirSync(dir, { recursive: true });
+      await mkdir(dir, { recursive: true });
       const mapPath = join(dir, `${documentId}.map`);
-      writeFileSync(mapPath, body);
+      const tmpPath = `${mapPath}.${randomBytes(8).toString("hex")}.tmp`;
+      try {
+        await writeFile(tmpPath, body);
+        await rename(tmpPath, mapPath);
+      } catch (writeErr) {
+        await unlink(tmpPath).catch(() => {});
+        throw writeErr;
+      }
 
       sendJson(res, 200, { status: "stored" });
     } catch (err) {

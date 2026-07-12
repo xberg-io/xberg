@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createServer, type Server } from "node:http";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, symlinkSync } from "node:fs";
 import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { platform } from "node:process";
 import { resolveSafePath, serveStaticFile } from "../src/http/static-server.js";
 
 describe("http/static-server", () => {
@@ -76,5 +77,20 @@ describe("http/static-server", () => {
       socket.on("error", reject);
     });
     expect(status).toBe(403);
+  });
+
+  (platform === "win32" ? it.skip : it)("returns 403 for a symlink pointing outside the root directory", async () => {
+    const outsideDir = mkdtempSync(join(tmpdir(), "xberg-ui-test-outside-"));
+    try {
+      const outsideFile = join(outsideDir, "secret.txt");
+      writeFileSync(outsideFile, "secret-data");
+      const symlinkPath = join(dir, "evil-link.txt");
+      symlinkSync(outsideFile, symlinkPath);
+
+      const res = await fetch(`${baseUrl}/evil-link.txt`);
+      expect(res.status).toBe(403);
+    } finally {
+      rmSync(outsideDir, { recursive: true, force: true });
+    }
   });
 });

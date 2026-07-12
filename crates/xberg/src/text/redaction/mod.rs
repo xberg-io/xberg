@@ -16,10 +16,10 @@ pub mod rehydration;
 pub mod strategy;
 pub mod validators;
 
-#[cfg(feature = "redaction-rehydrate")]
-pub use engine::{TextRedactionOutcome, redact_capturing_rehydration_map};
 #[cfg(all(feature = "redaction-rehydrate", feature = "ner"))]
 pub use engine::{PlainTextRedactionOutcome, redact_text_capturing_rehydration_map};
+#[cfg(feature = "redaction-rehydrate")]
+pub use engine::{TextRedactionOutcome, redact_capturing_rehydration_map};
 pub use engine::{dedupe_overlaps, redact};
 pub use patterns::scan_text;
 #[cfg(feature = "redaction-rehydrate")]

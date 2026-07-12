@@ -1,0 +1,45 @@
+export interface IngestChunkPayload {
+  ordinal: number;
+  content: string;
+  embedding: number[];
+  chunk_metadata?: unknown;
+}
+
+/** Mirrors `mcp-server/src/http/ingest-route.ts`'s `IngestPayloadSchema`. */
+export interface IngestPayload {
+  collection: string;
+  external_id: string;
+  title?: string;
+  mime?: string;
+  source_uri?: string;
+  full_text: string;
+  keywords?: string[];
+  metadata?: Record<string, unknown>;
+  chunks: IngestChunkPayload[];
+}
+
+export interface CollectionPayload {
+  name: string;
+  embedding_dim: number;
+  distance_metric?: "cosine" | "l2" | "innerproduct";
+  index_method?: "flat" | "hnsw" | "diskann";
+}
+
+export type SyncStatus = "pending" | "syncing" | "synced" | "error";
+
+/**
+ * Local (IndexedDB) record of an ingested document. Never contains the
+ * plaintext rehydration map — only redacted text and counts.
+ */
+export interface IngestHistoryEntry {
+  collection: string;
+  externalId: string;
+  filename: string;
+  mime: string;
+  redactedText: string;
+  piiCategoryCounts: Record<string, number>;
+  documentId: string | null;
+  status: SyncStatus;
+  error?: string;
+  ingestedAt: number;
+}

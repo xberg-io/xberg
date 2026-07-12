@@ -2,8 +2,10 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { initializeEngine, getRuntime } from "../src/engine.js";
 import { startHttp, type HttpHandle } from "../src/transports/http.js";
-
-const EMBEDDING_DIM = 384; // matches xberg-wasm-runtime's default embedder model
+import { getCacheDir } from "../src/paths.js";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { EMBEDDING_DIM } from "../src/lib/constants.js";
 
 describe("HTTP ingest/map/ui routes (Task 6)", () => {
   let handle: HttpHandle;
@@ -28,6 +30,16 @@ describe("HTTP ingest/map/ui routes (Task 6)", () => {
   it("rejects /ingest without a valid token", async () => {
     const res = await fetch(`${baseUrl}/ingest`, { method: "POST", body: "{}" });
     expect(res.status).toBe(401);
+  });
+
+  it("POST /collection creates a collection ingest can then target", async () => {
+    const res = await fetch(`${baseUrl}/collection?token=${token}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "http_collection_route_test", embedding_dim: EMBEDDING_DIM }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ created: true });
   });
 
   it("POST /ingest stores a document via the runtime store", async () => {
@@ -73,6 +85,12 @@ describe("HTTP ingest/map/ui routes (Task 6)", () => {
       body: blob,
     });
     expect(res.status).toBe(200);
+
+    // Verify the file was written with the correct content
+    const rehydrationDir = join(getCacheDir(), "rehydration");
+    const mapPath = join(rehydrationDir, "doc-1.map");
+    const written = readFileSync(mapPath);
+    expect(written).toEqual(blob);
   });
 
   it("GET /ui serves the static placeholder with cross-origin isolation headers", async () => {

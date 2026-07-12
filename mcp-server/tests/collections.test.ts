@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import type { XbergEngine } from "@xberg-io/xberg-wasm";
 import { initializeEngine, getEngine, getRuntime } from "../src/engine.js";
 import type { DocumentRecord, ChunkRecord } from "xberg-wasm-runtime";
+import { EMBEDDING_DIM } from "../src/lib/constants.js";
 
 // Task 7a: verifies the store-backed tool groups (collection.ts, document.ts,
 // stats.ts, reports.ts) work end-to-end against the wasm runtime store
@@ -9,7 +10,6 @@ import type { DocumentRecord, ChunkRecord } from "xberg-wasm-runtime";
 // requires the native xberg-rag-node binding (which is not built in this
 // worktree). Mirrors tests/ingest.test.ts's pattern of exercising the
 // underlying store/engine directly plus a registration smoke test.
-const EMBEDDING_DIM = 384; // matches xberg-wasm-runtime's default embedder model
 
 describe("collection/document/stats store plumbing (Task 7a)", () => {
   beforeAll(async () => {

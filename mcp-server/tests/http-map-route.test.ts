@@ -73,4 +73,30 @@ describe("http/map-route", () => {
       expect(res.status).toBe(413);
     });
   });
+
+  it("handles concurrent uploads for the same document_id atomically", async () => {
+    await withServer(async (baseUrl) => {
+      const blob1 = Buffer.from("XPII\x01data-version-1");
+      const blob2 = Buffer.from("XPII\x01data-version-2");
+
+      // Fire two concurrent uploads for the same document_id
+      const [res1, res2] = await Promise.all([
+        fetch(`${baseUrl}/map?document_id=concurrent-doc`, { method: "POST", body: blob1 }),
+        fetch(`${baseUrl}/map?document_id=concurrent-doc`, { method: "POST", body: blob2 }),
+      ]);
+
+      expect(res1.status).toBe(200);
+      expect(res2.status).toBe(200);
+
+      // Read the final file and verify it's one of the two complete blobs (not corrupted/interleaved)
+      const mapPath = join(dir, "concurrent-doc.map");
+      expect(existsSync(mapPath)).toBe(true);
+      const finalContent = readFileSync(mapPath);
+
+      // The file should match exactly one of the two uploads (atomic write ensures this)
+      const matches1 = finalContent.equals(blob1);
+      const matches2 = finalContent.equals(blob2);
+      expect(matches1 || matches2).toBe(true);
+    });
+  });
 });

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { initializeEngine, getEngine, getRuntime } from "../src/engine.js";
+import { EMBEDDING_DIM } from "../src/lib/constants.js";
 
 // End-to-end coverage for Task 9:
 //
@@ -78,7 +79,6 @@ describe("all 13 tool groups register on one McpServer", () => {
 
 describe("cohesive wasm pipeline: ingest -> query -> detect_pii -> redact -> stats", () => {
   const COLLECTION = "e2e_pipeline_col";
-  const EMBEDDING_DIM = 384; // matches xberg-wasm-runtime's default embedder model
   const PII_TEXT = "Contact Jane Doe at jane.doe@example.com or 555-123-4567 regarding invoice #4471.";
 
   beforeAll(async () => {

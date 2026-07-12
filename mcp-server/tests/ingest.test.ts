@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import type { XbergEngine } from "@xberg-io/xberg-wasm";
 import type { VectorStoreInterface } from "xberg-wasm-runtime";
 import { createXbergRuntimeFactory } from "xberg-wasm-runtime";
+import { EMBEDDING_DIM } from "../src/lib/constants.js";
 
 // ingest.ts (the tool module under test for Task 5) imports store.ts, which
 // requires the native xberg-rag-node .node binding. That binding is not built
@@ -24,7 +25,6 @@ import { createXbergRuntimeFactory } from "xberg-wasm-runtime";
 describe("engine.ingest (Task 5 core behavior)", () => {
   let engine: XbergEngine;
   let store: VectorStoreInterface;
-  const EMBEDDING_DIM = 384; // matches xberg-wasm-runtime's default embedder model
 
   beforeAll(async () => {
     const injection = await createXbergRuntimeFactory();
