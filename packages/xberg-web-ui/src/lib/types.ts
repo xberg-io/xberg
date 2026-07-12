@@ -11,6 +11,12 @@ export interface OcrLine {
   bbox?: { x: number; y: number; w: number; h: number };
 }
 
+export interface PiiDetection {
+  token: string;
+  category: string;
+  confidence?: number;
+}
+
 /** Mirrors `mcp-server/src/http/ingest-route.ts`'s `IngestPayloadSchema`. */
 export interface IngestPayload {
   collection: string;
