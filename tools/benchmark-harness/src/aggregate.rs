@@ -160,6 +160,17 @@ pub struct ConsolidationMetadata {
     pub framework_count: usize,
     /// Number of unique file types
     pub file_type_count: usize,
+    /// File types the "overall" markdown quality ranking is actually computed over: the
+    /// intersection of file types every markdown candidate framework attempted. When this
+    /// degenerates to a single type (e.g. `["pdf"]`, because a PDF-only framework like
+    /// liteparse/mineru is in the pool), `quality_ranking_markdown` is NOT a true all-format
+    /// "overall" ranking — it reflects only these types. Consumers must read it accordingly.
+    #[serde(default)]
+    pub shared_corpus_markdown: Vec<String>,
+    /// File types the "overall" plaintext quality ranking is computed over. Same semantics as
+    /// [`Self::shared_corpus_markdown`].
+    #[serde(default)]
+    pub shared_corpus_plaintext: Vec<String>,
     /// Timestamp of consolidation
     pub timestamp: String,
 }
@@ -310,6 +321,8 @@ pub fn aggregate_new_format(results: &[BenchmarkResult]) -> NewConsolidatedResul
                 total_results: 0,
                 framework_count: 0,
                 file_type_count: 0,
+                shared_corpus_markdown: Vec::new(),
+                shared_corpus_plaintext: Vec::new(),
                 timestamp: chrono::Utc::now().to_rfc3339(),
             },
         };
@@ -379,9 +392,16 @@ pub fn aggregate_new_format(results: &[BenchmarkResult]) -> NewConsolidatedResul
 
     let per_fixture_results = build_per_fixture_results(results);
 
+    // Count *logical* frameworks: all xberg pipelines (xberg-markdown-baseline,
+    // xberg-plaintext-layout, …) are variants of the single "xberg" framework, so collapse
+    // them to one before counting. Otherwise framework_count over-reports by the number of
+    // xberg name-variants present (e.g. 11 instead of 8).
     let framework_count = results
         .iter()
-        .map(|r| extract_framework_and_mode(&r.framework).0)
+        .map(|r| {
+            let name = extract_framework_and_mode(&r.framework).0;
+            if name.starts_with("xberg") { "xberg" } else { name }
+        })
         .collect::<std::collections::HashSet<_>>()
         .len();
 
@@ -389,6 +409,11 @@ pub fn aggregate_new_format(results: &[BenchmarkResult]) -> NewConsolidatedResul
         total_results: results.len(),
         framework_count,
         file_type_count: file_types.len(),
+        shared_corpus_markdown: resolve_shared_corpus_file_types(&aggregated_by_framework_mode, OutputFormat::Markdown),
+        shared_corpus_plaintext: resolve_shared_corpus_file_types(
+            &aggregated_by_framework_mode,
+            OutputFormat::Plaintext,
+        ),
         timestamp: chrono::Utc::now().to_rfc3339(),
     };
 
@@ -797,23 +822,17 @@ fn weighted_avg(items: &[(f64, usize)]) -> f64 {
 /// succeed). This is distinct from a file type the framework never attempted at all, which is
 /// excluded entirely by the shared-corpus restriction above (that's not a failure, it's missing
 /// data, and including it would penalize frameworks for corpora they were never run against).
-fn build_shared_corpus_quality_ranking(
+/// Resolve the shared corpus for a format: the file types every candidate framework of that
+/// format actually attempted (any `total_sample_count > 0` in either OCR bucket), intersected
+/// across all candidates. This is the exact basis on which the "overall" quality ranking for
+/// the format is computed; a single-format framework in the pool collapses it to that one type.
+/// Returned sorted for stable metadata output.
+fn resolve_shared_corpus_file_types(
     by_framework_mode: &HashMap<String, FrameworkModeAggregation>,
     format: OutputFormat,
-) -> Vec<RankedFramework> {
-    let candidates: Vec<(&String, &FrameworkModeAggregation)> = by_framework_mode
-        .iter()
-        .filter(|(_, agg)| agg.output_format == format)
-        .collect();
-
-    if candidates.is_empty() {
-        return Vec::new();
-    }
-
-    // Shared corpus: file types every candidate framework attempted (any total_sample_count > 0
-    // in no_ocr or with_ocr), intersected across all candidates.
+) -> Vec<String> {
     let mut shared_file_types: Option<std::collections::HashSet<&str>> = None;
-    for (_, agg) in &candidates {
+    for agg in by_framework_mode.values().filter(|agg| agg.output_format == format) {
         let attempted: std::collections::HashSet<&str> = agg
             .by_file_type
             .iter()
@@ -830,7 +849,25 @@ fn build_shared_corpus_quality_ranking(
             None => attempted,
         });
     }
-    let shared_file_types = shared_file_types.unwrap_or_default();
+    let mut out: Vec<String> = shared_file_types.unwrap_or_default().into_iter().map(String::from).collect();
+    out.sort();
+    out
+}
+
+fn build_shared_corpus_quality_ranking(
+    by_framework_mode: &HashMap<String, FrameworkModeAggregation>,
+    format: OutputFormat,
+) -> Vec<RankedFramework> {
+    let candidates: Vec<(&String, &FrameworkModeAggregation)> = by_framework_mode
+        .iter()
+        .filter(|(_, agg)| agg.output_format == format)
+        .collect();
+
+    if candidates.is_empty() {
+        return Vec::new();
+    }
+
+    let shared_file_types = resolve_shared_corpus_file_types(by_framework_mode, format);
 
     if shared_file_types.is_empty() {
         return Vec::new();
@@ -840,7 +877,7 @@ fn build_shared_corpus_quality_ranking(
     for (key, agg) in candidates {
         let mut contributions: Vec<(f64, usize)> = Vec::new();
         for file_type in &shared_file_types {
-            let Some(ft) = agg.by_file_type.get(*file_type) else {
+            let Some(ft) = agg.by_file_type.get(file_type.as_str()) else {
                 continue;
             };
             for perf in [&ft.no_ocr, &ft.with_ocr].into_iter().flatten() {

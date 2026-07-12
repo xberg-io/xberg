@@ -267,6 +267,17 @@ Competitor names carry no format information, so they continue to need it in the
   "total_results": 500,
   "framework_count": 5,
   "file_type_count": 8,
+  "shared_corpus_markdown": ["pdf"],
+  "shared_corpus_plaintext": ["pdf"],
   "timestamp": "2025-05-09T10:15:30Z"
 }
 ```
+
+- **`framework_count`** counts *logical* frameworks: all `xberg-*` pipeline variants collapse to a
+  single `xberg` before counting (so 7 competitors + xberg = 8, not 11).
+- **`shared_corpus_markdown` / `shared_corpus_plaintext`** are the file types the "overall"
+  `quality_ranking_markdown` / `quality_ranking_plaintext` are actually computed over — the
+  intersection of file types every candidate framework of that format attempted. When a
+  single-format framework (e.g. PDF-only `liteparse`/`mineru`) is in the pool, this collapses to
+  that one type (e.g. `["pdf"]`), and the "overall" ranking must be read as that-type-only rather
+  than a true all-format comparison.
