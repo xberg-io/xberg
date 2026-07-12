@@ -50,6 +50,10 @@ The changelog starts fresh at `1.0.0-rc.1`. For the Kreuzberg v1–v4 history, s
   bundle a libheif decode stack built from source at the 11.0 target — as the Linux wheels
   already do inside the manylinux container — and CI fails if any bundled library misses that
   floor or is sourced from Homebrew.
+- **The Intel CLI tarball's ONNX Runtime now runs on macOS 13.4+ and is a single file.** It
+  previously vendored Homebrew's unpinned onnxruntime bottle (macOS 14 floor) plus its
+  abseil/onnx/protobuf/re2 closure. It now ships Microsoft's official 1.23.2 build, the last
+  x86_64 macOS release, which links only system frameworks.
 - **Markdown, CSV, and other text members inside an archive are no longer flattened to escaped
   prose.** Recursive archive extraction resolved each member's MIME by content sniffing first, but
   markdown/CSV/YAML are all plain UTF-8 and sniff to `text/plain` — so a zipped `.md` reached the

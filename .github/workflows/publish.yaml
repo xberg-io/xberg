@@ -516,10 +516,9 @@ jobs:
       matrix:
         include:
           - { os: macos-15, target: aarch64-apple-darwin }
-          # x86_64-apple-darwin (Intel macOS) intentionally omitted: Microsoft
-          # ships no x86_64-macOS ONNX Runtime prebuilt, so the .node cannot
-          # vendor a relocatable ORT. Kept in sync with alef's
-          # [crates.node].exclude_platforms=["darwin-x64"].
+          # x86_64-apple-darwin (Intel macOS) intentionally omitted: pyke ships
+          # no static ORT for it and Microsoft's last dylib is 1.23.2. Kept in
+          # sync with alef's [crates.node].exclude_platforms=["darwin-x64"].
           - { os: windows-latest, target: x86_64-pc-windows-msvc }
     steps:
       - uses: actions/checkout@v6
@@ -998,18 +997,11 @@ jobs:
         run: |
           set -euxo pipefail
           # This target loads ONNX Runtime at runtime (ort-dynamic) rather than
-          # static-linking a prebuilt, because none exists for x86_64-apple-darwin
-          # at onnxruntime >= 1.24 (the version ort rc.12 requires). Homebrew's
-          # onnxruntime (1.27, x86_64 "sonoma" bottle) satisfies the >=1.24 check.
-          # The sequoia runner has no matching x86_64 bottle, so pour the sonoma
-          # one explicitly. Vendored next to the binary + rewritten to
-          # @loader_path so it resolves without Homebrew on the user's machine.
-          export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
-          brew install --bottle-tag=sonoma onnxruntime \
-            || brew install onnxruntime
-          ORT_LIB="$(brew --prefix onnxruntime)/lib/libonnxruntime.dylib"
-          test -f "$ORT_LIB"
-          echo "ORT_VENDOR_LIB=$ORT_LIB" >> "$GITHUB_ENV"
+          # static-linking: pyke ships no x86_64-apple-darwin build. Vendor the
+          # dylib setup-onnx-runtime staged (Microsoft's last x86_64 release,
+          # 1.23.2, self-contained) next to the binary.
+          test -f "$ORT_DYLIB_PATH"
+          echo "ORT_VENDOR_LIB=$ORT_DYLIB_PATH" >> "$GITHUB_ENV"
 
       - name: Package CLI artifact
         env:
@@ -1024,46 +1016,20 @@ jobs:
             7z a "${STAGE}.zip" "$STAGE" >/dev/null
           else
             cp "$BINARY_PATH" "$STAGE/xberg"
-            # Intel macOS: bundle libonnxruntime.dylib next to the binary. ort
-            # resolves the default dylib name relative to the executable, so no
-            # ORT_DYLIB_PATH is needed. Vendor the dylib's FULL non-system
-            # dependency closure — Homebrew's onnxruntime links abseil, onnx,
-            # protobuf and re2, which in turn link each other — and repoint
-            # every install name at @loader_path so the bundle is
-            # self-contained (no Homebrew required at runtime). Each staged
-            # copy gets its @loader_path ID set immediately so its own
-            # LC_ID_DYLIB line (which otool -L prints first) drops out of the
-            # Homebrew-path grep instead of being re-vendored under its
-            # versioned name.
+            # Intel macOS: bundle libonnxruntime.dylib next to the binary; ort
+            # resolves the default dylib name relative to the executable. The
+            # official build links only system frameworks, so the one file is
+            # the whole closure.
             if [[ "$TARGET" == "x86_64-apple-darwin" && -n "${ORT_VENDOR_LIB:-}" ]]; then
               cp "$ORT_VENDOR_LIB" "$STAGE/libonnxruntime.dylib"
               chmod u+w "$STAGE/libonnxruntime.dylib"
               install_name_tool -id "@loader_path/libonnxruntime.dylib" "$STAGE/libonnxruntime.dylib"
-              # Iterate to a fixpoint: each pass copies newly referenced
-              # dylibs and rewrites references in everything staged so far.
-              changed=1
-              while [[ "$changed" == 1 ]]; do
-                changed=0
-                for lib in "$STAGE"/*.dylib; do
-                  while IFS= read -r dep; do
-                    base="$(basename "$dep")"
-                    src="$dep"
-                    [[ "$dep" == @rpath/* ]] && src="$(brew --prefix onnxruntime)/lib/$base"
-                    if [[ ! -f "$STAGE/$base" ]]; then
-                      [[ -f "$src" ]] || continue
-                      cp "$src" "$STAGE/$base"
-                      chmod u+w "$STAGE/$base"
-                      install_name_tool -id "@loader_path/$base" "$STAGE/$base"
-                      changed=1
-                    fi
-                    install_name_tool -change "$dep" "@loader_path/$base" "$lib" || true
-                  done < <(otool -L "$lib" | tail -n +2 | awk '{print $1}' \
-                    | grep -E '^(/opt/homebrew|/usr/local|@rpath)/' || true)
-                done
-              done
-              for lib in "$STAGE"/*.dylib; do
-                codesign --force -s - "$lib" || true
-              done
+              deps="$(otool -L "$STAGE/libonnxruntime.dylib" | tail -n +3 | awk '{print $1}' \
+                | grep -E '^(/opt/homebrew|/usr/local)/' || true)"
+              if [[ -n "$deps" ]]; then
+                echo "::error::vendored ONNX Runtime links non-system libraries:"; echo "$deps"; exit 1
+              fi
+              codesign --force -s - "$STAGE/libonnxruntime.dylib" || true
             fi
             tar -czf "${STAGE}.tar.gz" "$STAGE"
           fi

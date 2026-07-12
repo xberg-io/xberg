@@ -25,10 +25,10 @@ runs:
       with:
         path: |
           ${{ runner.temp }}/onnxruntime
-        key: onnx-v2-${{ runner.os }}-${{ inputs.arch-id != '' && inputs.arch-id || runner.arch }}-${{ inputs.ort-version }}
+        key: onnx-v3-${{ runner.os }}-${{ inputs.arch-id != '' && inputs.arch-id || runner.arch }}-${{ inputs.ort-version }}
         restore-keys: |
-          onnx-v2-${{ runner.os }}-${{ inputs.arch-id != '' && inputs.arch-id || runner.arch }}-
-          onnx-v2-${{ runner.os }}-
+          onnx-v3-${{ runner.os }}-${{ inputs.arch-id != '' && inputs.arch-id || runner.arch }}-
+          onnx-v3-${{ runner.os }}-
 
     - name: Prepare ONNX Runtime (Linux)
       if: runner.os == 'Linux'
