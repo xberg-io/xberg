@@ -4,13 +4,14 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import { WorkerClient } from "../engine/worker-client.js";
 import { captureAuthTokenFromLocation } from "../lib/auth-client.js";
 import { putHistoryEntry } from "../lib/ingest-history.js";
-import type { IngestHistoryEntry } from "../lib/types.js";
+import type { IngestHistoryEntry, OcrLine } from "../lib/types.js";
 
 interface EngineApi {
   ready: boolean;
   pendingCount: number;
   lastError: string | null;
   ingestFile(file: File, collection: string, passphrase: string): Promise<IngestHistoryEntry>;
+  ocrLayout(bytes: Uint8Array): Promise<OcrLine[]>;
 }
 
 const EngineContext = createContext<EngineApi | null>(null);
@@ -25,11 +26,11 @@ interface EngineProviderProps {
   baseUrl?: string;
   children: ReactNode;
   /** Test-only escape hatch — production callers never pass this. */
-  workerClient?: Pick<WorkerClient, "ingestFile" | "dispose">;
+  workerClient?: Pick<WorkerClient, "ingestFile" | "ocrLayout" | "dispose">;
 }
 
 export function EngineProvider({ baseUrl: baseProp, children, workerClient }: EngineProviderProps) {
-  const clientRef = useRef<Pick<WorkerClient, "ingestFile" | "dispose"> | null>(workerClient ?? null);
+  const clientRef = useRef<Pick<WorkerClient, "ingestFile" | "ocrLayout" | "dispose"> | null>(workerClient ?? null);
   const [ready, setReady] = useState(Boolean(workerClient));
   const [pendingCount, setPendingCount] = useState(0);
   const [lastError, setLastError] = useState<string | null>(null);
@@ -74,6 +75,10 @@ export function EngineProvider({ baseUrl: baseProp, children, workerClient }: En
         } finally {
           setPendingCount((n) => n - 1);
         }
+      },
+      async ocrLayout(bytes: Uint8Array): Promise<OcrLine[]> {
+        if (!clientRef.current) throw new Error("engine worker not ready yet");
+        return clientRef.current.ocrLayout(bytes);
       },
     }),
     [ready, pendingCount, lastError]
