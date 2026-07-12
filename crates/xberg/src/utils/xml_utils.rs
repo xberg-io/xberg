@@ -115,3 +115,68 @@ pub(crate) fn resolve_general_ref(ref_bytes: &[u8]) -> String {
     }
     String::new()
 }
+
+#[cfg(all(test, any(feature = "xml", feature = "office")))]
+mod tests {
+    use super::*;
+    use quick_xml::events::Event;
+
+    #[test]
+    fn test_resolve_general_ref_predefined_entities() {
+        assert_eq!(resolve_general_ref(b"amp"), "&");
+        assert_eq!(resolve_general_ref(b"lt"), "<");
+        assert_eq!(resolve_general_ref(b"gt"), ">");
+        assert_eq!(resolve_general_ref(b"quot"), "\"");
+        assert_eq!(resolve_general_ref(b"apos"), "'");
+        assert_eq!(resolve_general_ref(b"nbsp"), "\u{00A0}");
+    }
+
+    #[test]
+    fn test_resolve_general_ref_character_references() {
+        assert_eq!(resolve_general_ref(b"#8212"), "\u{2014}");
+        assert_eq!(resolve_general_ref(b"#x2014"), "\u{2014}");
+        assert_eq!(resolve_general_ref(b"#65"), "A");
+    }
+
+    #[test]
+    fn test_resolve_general_ref_unknown_entity_is_empty() {
+        assert_eq!(resolve_general_ref(b"unknownentity"), "");
+        assert_eq!(resolve_general_ref(b"#xZZ"), "");
+        assert_eq!(resolve_general_ref(b"#1114112"), ""); // beyond char::MAX
+    }
+
+    /// The core contract: a text node split at references arrives as ONE Text
+    /// event with the references resolved in place, spacing intact.
+    #[test]
+    fn test_entity_reader_coalesces_text_and_references() {
+        let xml = "<root><a>Profits &amp; losses</a><b>5&gt;3</b><c/></root>";
+        let mut reader = EntityReader::from_str(xml);
+        let mut texts = Vec::new();
+        loop {
+            match reader.read_event().expect("valid XML") {
+                Event::Text(t) => texts.push(String::from_utf8_lossy(t.as_ref()).into_owned()),
+                Event::Eof => break,
+                _ => {}
+            }
+        }
+        assert_eq!(texts, vec!["Profits & losses", "5>3"]);
+    }
+
+    #[test]
+    fn test_entity_reader_preserves_non_text_events() {
+        let xml = "<root attr=\"v\">x&#65;y<child/></root>";
+        let mut reader = EntityReader::from_str(xml);
+        let mut summary = Vec::new();
+        loop {
+            match reader.read_event().expect("valid XML") {
+                Event::Start(e) => summary.push(format!("start:{}", String::from_utf8_lossy(e.name().as_ref()))),
+                Event::Empty(e) => summary.push(format!("empty:{}", String::from_utf8_lossy(e.name().as_ref()))),
+                Event::End(e) => summary.push(format!("end:{}", String::from_utf8_lossy(e.name().as_ref()))),
+                Event::Text(t) => summary.push(format!("text:{}", String::from_utf8_lossy(t.as_ref()))),
+                Event::Eof => break,
+                _ => {}
+            }
+        }
+        assert_eq!(summary, vec!["start:root", "text:xAy", "empty:child", "end:root"]);
+    }
+}
