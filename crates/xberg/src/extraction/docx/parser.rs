@@ -1787,6 +1787,20 @@ impl<R: Read + Seek> DocxParser<R> {
                         revision_text.push_str(&text);
                     }
                 }
+                Ok(Event::GeneralRef(e)) => {
+                    if in_text && let Some(ref mut run) = current_run {
+                        let text = crate::utils::xml_utils::resolve_general_ref(e.as_ref());
+                        budget.account_text(text.len())?;
+                        run.text.push_str(&text);
+                        if revision_kind == Some(RevisionKind::Insertion) {
+                            revision_text.push_str(&text);
+                        }
+                    } else if in_del_text {
+                        let text = crate::utils::xml_utils::resolve_general_ref(e.as_ref());
+                        budget.account_text(text.len())?;
+                        revision_text.push_str(&text);
+                    }
+                }
                 Ok(Event::End(ref e)) => {
                     budget.leave();
                     match e.name().as_ref() as &[u8] {
@@ -2163,6 +2177,13 @@ impl<R: Read + Seek> DocxParser<R> {
                         run.text.push_str(&text);
                     }
                 }
+                Ok(Event::GeneralRef(e)) => {
+                    if in_text && let Some(ref mut run) = current_run {
+                        let text = crate::utils::xml_utils::resolve_general_ref(e.as_ref());
+                        budget.account_text(text.len())?;
+                        run.text.push_str(&text);
+                    }
+                }
                 Ok(Event::End(ref e)) => {
                     budget.leave();
                     match e.name().as_ref() as &[u8] {
@@ -2259,6 +2280,13 @@ impl<R: Read + Seek> DocxParser<R> {
                     if in_text && let Some(ref mut run) = current_run {
                         let text = e.decode()?;
                         budget.check_entity(&text)?;
+                        budget.account_text(text.len())?;
+                        run.text.push_str(&text);
+                    }
+                }
+                Ok(Event::GeneralRef(e)) => {
+                    if in_text && let Some(ref mut run) = current_run {
+                        let text = crate::utils::xml_utils::resolve_general_ref(e.as_ref());
                         budget.account_text(text.len())?;
                         run.text.push_str(&text);
                     }

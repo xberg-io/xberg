@@ -6,13 +6,14 @@ use crate::Result;
 use crate::extraction::cells_to_markdown;
 use crate::extractors::security::SecurityBudget;
 use crate::types::Table;
-use quick_xml::Reader;
 use quick_xml::events::Event;
+
+use crate::utils::xml_utils::EntityReader;
 
 /// Extract all content in a single optimized pass.
 /// Combines metadata extraction, content parsing, and table extraction into one pass.
 pub(super) fn extract_jats_all_in_one(content: &str) -> Result<(JatsMetadataExtracted, String, String, Vec<Table>)> {
-    let mut reader = Reader::from_str(content);
+    let mut reader = EntityReader::from_str(content);
     let mut budget = SecurityBudget::with_defaults();
     let mut metadata = JatsMetadataExtracted::default();
     let mut body_content = String::new();

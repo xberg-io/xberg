@@ -28,38 +28,7 @@ use bytes::Bytes;
 use quick_xml::Reader;
 use quick_xml::events::Event;
 
-/// Resolve an XML entity reference name to its character(s).
-fn resolve_entity(name: &str) -> Option<&'static str> {
-    match name {
-        "amp" => Some("&"),
-        "lt" => Some("<"),
-        "gt" => Some(">"),
-        "quot" => Some("\""),
-        "apos" => Some("'"),
-        "nbsp" => Some("\u{00A0}"),
-        _ if name.starts_with('#') => None,
-        _ => None,
-    }
-}
-
-/// Resolve an XML general reference (entity or char ref) to a string.
-fn resolve_general_ref(ref_bytes: &[u8]) -> String {
-    let name = String::from_utf8_lossy(ref_bytes);
-    if let Some(entity) = resolve_entity(&name) {
-        return entity.to_string();
-    }
-    if let Some(num) = name.strip_prefix('#') {
-        let code = if let Some(hex) = num.strip_prefix('x') {
-            u32::from_str_radix(hex, 16).ok()
-        } else {
-            num.parse::<u32>().ok()
-        };
-        if let Some(ch) = code.and_then(char::from_u32) {
-            return ch.to_string();
-        }
-    }
-    String::new()
-}
+use crate::utils::xml_utils::resolve_general_ref;
 
 /// FictionBook document extractor.
 ///

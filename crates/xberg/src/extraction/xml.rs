@@ -31,8 +31,8 @@
 use crate::error::{Result, XbergError};
 use crate::extractors::security::{SecurityBudget, SecurityLimits};
 use crate::types::XmlExtractionResult;
+use crate::utils::xml_utils::EntityReader;
 use ahash::AHashSet;
-use quick_xml::Reader;
 use quick_xml::events::Event;
 use std::borrow::Cow;
 
@@ -84,21 +84,22 @@ fn parse_xml_inner(
         xml_bytes
     };
 
-    let mut reader = Reader::from_reader(effective_bytes);
-    reader.config_mut().trim_text(!preserve_whitespace);
+    // No reader-level trim_text: EntityReader coalesces text fragments around
+    // entity references, and trimming fragments first would corrupt spacing.
+    // Text is trimmed below (when `preserve_whitespace` is off), after coalescing.
+    let mut reader = EntityReader::from_bytes(effective_bytes);
     reader.config_mut().check_end_names = false;
 
     let mut budget = SecurityBudget::from_limits(limits);
     let mut content = String::new();
     let mut element_count = 0usize;
     let mut unique_elements_set = AHashSet::new();
-    let mut buf = Vec::new();
     let mut element_stack: Vec<String> = Vec::new();
     let mut had_depth1_element = false;
 
     loop {
         budget.step()?;
-        match reader.read_event_into(&mut buf) {
+        match reader.read_event() {
             Ok(Event::Start(e)) => {
                 budget.enter()?;
                 let name_bytes = (e.name().as_ref() as &[u8]).to_vec();
@@ -193,7 +194,6 @@ fn parse_xml_inner(
             }
             _ => {}
         }
-        buf.clear();
     }
 
     let content = content.trim().to_string();

@@ -51,7 +51,7 @@ fn decode_xml_to_utf8(content: &[u8]) -> String {
 /// length, cumulative content size). Any limit violation is converted into a
 /// `XbergError::Security` via the `?` operator at call-site.
 fn build_internal_document(content: &[u8], mime_type: &str, budget: &mut SecurityBudget) -> Result<InternalDocument> {
-    use quick_xml::Reader;
+    use crate::utils::xml_utils::EntityReader;
     use quick_xml::events::Event;
     use std::borrow::Cow;
 
@@ -59,18 +59,19 @@ fn build_internal_document(content: &[u8], mime_type: &str, budget: &mut Securit
     let is_svg = mime_type == "image/svg+xml";
 
     let decoded = decode_xml_to_utf8(content);
-    let mut reader = Reader::from_reader(decoded.as_bytes());
-    reader.config_mut().trim_text(true);
+    // No reader-level trim_text: EntityReader coalesces text fragments around
+    // entity references, and trimming fragments first would corrupt spacing.
+    // Text is trimmed below, after coalescing.
+    let mut reader = EntityReader::from_bytes(decoded.as_bytes());
     reader.config_mut().check_end_names = false;
 
-    let mut buf = Vec::new();
     let mut depth: u16 = 0;
     let mut element_stack: Vec<String> = Vec::new();
     let mut index: u32 = 0;
 
     loop {
         budget.step()?;
-        match reader.read_event_into(&mut buf) {
+        match reader.read_event() {
             Ok(Event::Start(e)) => {
                 budget.enter()?;
                 let name_bytes = e.name().as_ref().to_vec();
@@ -110,7 +111,6 @@ fn build_internal_document(content: &[u8], mime_type: &str, budget: &mut Securit
                         .iter()
                         .any(|n| matches!(n.as_str(), "text" | "tspan" | "title" | "desc" | "textPath"));
                     if !in_text_elem {
-                        buf.clear();
                         continue;
                     }
                 }
@@ -163,7 +163,6 @@ fn build_internal_document(content: &[u8], mime_type: &str, budget: &mut Securit
             Err(_) => break,
             _ => {}
         }
-        buf.clear();
     }
 
     Ok(doc)

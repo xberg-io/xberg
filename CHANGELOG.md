@@ -43,6 +43,13 @@ The changelog starts fresh at `1.0.0-rc.1`. For the Kreuzberg v1–v4 history, s
 
 ### Fixed
 
+- **XML entities (`&amp;`, `&lt;`, `&gt;`) no longer disappear from extracted text.** quick-xml
+  0.37+ delivers entity and character references as separate events instead of inlining them in
+  text, and every streaming reader that only matched text events silently dropped them —
+  `Falafel & Hummus <combo>` in a DOCX came out as `Falafel  Hummus combo`. Affected formats:
+  DOCX (body, tables, headers/footers, footnotes/endnotes, math), DocBook, JATS, and generic
+  XML/SVG. Text fragments are now coalesced with their resolved references before any
+  whitespace handling, so entities survive with correct spacing (`5>3` stays `5>3`, not `5 > 3`).
 - **Markdown, CSV, and other text members inside an archive are no longer flattened to escaped
   prose.** Recursive archive extraction resolved each member's MIME by content sniffing first, but
   markdown/CSV/YAML are all plain UTF-8 and sniff to `text/plain` — so a zipped `.md` reached the
