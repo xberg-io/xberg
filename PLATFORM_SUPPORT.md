@@ -33,13 +33,14 @@ Legend: ✅ prebuilt shipped · ❌ not shipped · — not applicable
 
 ## Known gaps & rationale
 
-1. **Node · macOS x64 (Intel) — dropped (rc.23).** Microsoft ships no x86_64-macOS ONNX Runtime
-   prebuilt, so CI provisioned ORT via Homebrew, whose bottle dynamically links a ~252-lib abseil
-   closure at absolute Homebrew paths. The self-containment vendor step (`scripts/ci/vendor-macos-node-dylibs.sh`)
-   correctly rejected the non-portable package. Rather than vendor the abseil closure (package bloat)
-   or static-link ORT (unverified pyke static x64-mac binary), the Intel-mac node leg was dropped.
-   Intel Mac users run the arm64 binding under Rosetta or use the WASM package. In **rc.22** this leg
-   *failed* (so no node package published at all); the drop lands in **rc.23**.
+1. **Node · macOS x64 (Intel) — dropped (rc.23).** pyke ships no static x64-mac ORT, and
+   Microsoft's last x86_64-macOS ONNX Runtime dylib is 1.23.2 (the CLI vendors that one), so at the
+   time CI provisioned ORT via Homebrew, whose bottle dynamically links a ~252-lib abseil closure
+   at absolute Homebrew paths. The self-containment vendor step
+   (`scripts/ci/vendor-macos-node-dylibs.sh`) correctly rejected the non-portable package, and the
+   Intel-mac node leg was dropped. Intel Mac users run the arm64 binding under Rosetta or use the
+   WASM package. In **rc.22** this leg *failed* (so no node package published at all); the drop
+   lands in **rc.23**.
 2. **PHP** builds against **8.3, 8.4, 8.5** on every listed platform.
 3. **Dart** ships the server-mode native; the full pub.dev package has a known size blocker (all-platform
    natives exceed the 100 MB cap) tracked separately — see the release notes.
