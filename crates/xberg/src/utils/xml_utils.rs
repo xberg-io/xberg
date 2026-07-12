@@ -53,6 +53,11 @@ impl<'x> EntityReader<'x> {
 
     /// Read the next event, merging consecutive `Text` / `GeneralRef` events into
     /// one owned `Event::Text` whose content has all references resolved.
+    ///
+    /// The returned `Event::Text` carries already-resolved content: read it raw
+    /// (`as_ref()` / `decode()`). Never call `unescape()` on it — the content is
+    /// no longer escaped, so a resolved `&` would be misparsed as a dangling
+    /// entity reference.
     pub(crate) fn read_event(&mut self) -> quick_xml::Result<quick_xml::events::Event<'x>> {
         use quick_xml::events::{BytesText, Event};
 
