@@ -54,6 +54,13 @@ let package = Package(
         ]),
         .linkedLibrary("xberg_swift"),
         .linkedLibrary("xberg_ffi"),
+        // The Rust staticlib records native-library dependencies (e.g. `lzma-sys`
+        // via the archive/`xz2` path emits `cargo:rustc-link-lib`) that cargo would
+        // resolve when it drives the final link, but a `staticlib` `.a` does not
+        // embed them and SwiftPM does not read cargo's link metadata, so undefined
+        // symbols like `_lzma_stream_decoder` surface at the swift link step. Link
+        // the system library here. `liblzma` ships in the macOS SDK and on Linux.
+        .linkedLibrary("lzma"),
         .linkedFramework("Security", .when(platforms: [.macOS, .iOS])),
         .linkedFramework("CoreFoundation", .when(platforms: [.macOS, .iOS])),
         .linkedFramework("SystemConfiguration", .when(platforms: [.macOS])),

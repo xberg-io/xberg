@@ -33,7 +33,7 @@ let package = Package(
     // sibling RustBridge target below and link against this binary.
     .binaryTarget(
       name: "RustBridgeBinary",
-      url: "https://github.com/xberg-io/xberg/releases/download/v1.0.0-rc.25/Xberg-rs.artifactbundle.zip",
+      url: "https://github.com/xberg-io/xberg/releases/download/v1.0.0-rc.26/Xberg-rs.artifactbundle.zip",
       checksum: "__ALEF_SWIFT_CHECKSUM__"
     ),
     // RustBridge: Swift wrapper module owning the swift-bridge generated
@@ -45,9 +45,13 @@ let package = Package(
       path: "packages/swift/Sources/RustBridge",
       // The pre-built static library inside RustBridgeBinary references Apple
       // system frameworks (e.g. reqwest's proxy detection pulls in the Rust
-      // `system_configuration` crate → `SC*` symbols). The artifactbundle ships
-      // only the `.a`, so these frameworks must be linked by the consumer.
+      // `system_configuration` crate → `SC*` symbols) and native system
+      // libraries (e.g. the archive/`xz2` path pulls in `lzma-sys` →
+      // `_lzma_stream_decoder`). The artifactbundle ships only the `.a`, so these
+      // must be linked by the consumer. `liblzma` ships in the macOS SDK and on
+      // Linux.
       linkerSettings: [
+        .linkedLibrary("lzma"),
         .linkedFramework("Security", .when(platforms: [.macOS, .iOS])),
         .linkedFramework("CoreFoundation", .when(platforms: [.macOS, .iOS])),
         .linkedFramework("SystemConfiguration", .when(platforms: [.macOS])),
