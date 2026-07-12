@@ -83,7 +83,7 @@ pub(super) fn classify_paragraphs(paragraphs: &mut [PdfParagraph], heading_map: 
             };
             let too_short_at_body =
                 word_count <= 2 && body_font_size > 0.0 && para.dominant_font_size <= body_font_size + 0.5;
-            let period_ok = !t.ends_with('.') || is_section_pattern(t);
+            let period_ok = !ends_with_sentence_period(t) || is_section_pattern(t);
             let colon_ok = !t.ends_with(':') || is_all_caps_text(t);
             if italic_ok
                 && !too_short_at_body
@@ -149,7 +149,7 @@ pub(super) fn classify_paragraphs(paragraphs: &mut [PdfParagraph], heading_map: 
             let rescue_wc = rescue_text.split_whitespace().count();
             let rescue_colon_ok = !rescue_text.ends_with(':') || is_all_caps_text(rescue_text);
             if (1..=8).contains(&rescue_wc)
-                && !rescue_text.ends_with('.')
+                && !ends_with_sentence_period(rescue_text)
                 && rescue_colon_ok
                 && !looks_like_figure_label(rescue_text)
                 && !super::layout_classify::is_separator_text(rescue_text)
@@ -705,6 +705,16 @@ fn infer_section_level(text: &str) -> u8 {
         1 => 3,
         _ => 4,
     }
+}
+
+/// Check whether text ends with a genuine sentence-terminating period.
+///
+/// A trailing ellipsis (`...` or the `…` glyph) is a truncation marker — common
+/// in headings and truncated titles ("Impaired Glucose Tolerance ...") — not a
+/// sentence terminator, so it does not disqualify a line from being a heading.
+pub(super) fn ends_with_sentence_period(text: &str) -> bool {
+    let t = text.trim_end();
+    t.ends_with('.') && !t.ends_with("..")
 }
 
 /// Check if text looks like a section/legal heading that legitimately ends with a period.
@@ -2439,7 +2449,7 @@ mod tests {
 
 #[cfg(test)]
 mod numbered_section_heading_tests {
-    use super::is_numbered_section_heading;
+    use super::{ends_with_sentence_period, is_numbered_section_heading};
 
     #[test]
     fn multilevel_numbers_are_headings() {
@@ -2474,5 +2484,16 @@ mod numbered_section_heading_tests {
         assert!(!is_numbered_section_heading("Introduction"));
         assert!(!is_numbered_section_heading(""));
         assert!(!is_numbered_section_heading("1."));
+    }
+
+    #[test]
+    fn sentence_period_detected_but_ellipsis_is_not() {
+        // A genuine sentence-terminating period disqualifies a heading.
+        assert!(ends_with_sentence_period("This is a sentence."));
+        assert!(ends_with_sentence_period("Ends here.  "));
+        // A trailing ellipsis is a truncation marker, not a terminator.
+        assert!(!ends_with_sentence_period("Impaired Glucose Tolerance ..."));
+        assert!(!ends_with_sentence_period("Thermal Comfort As Related To …"));
+        assert!(!ends_with_sentence_period("No period at all"));
     }
 }

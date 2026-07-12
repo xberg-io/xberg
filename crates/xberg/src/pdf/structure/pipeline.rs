@@ -54,13 +54,17 @@ fn build_heading_map(
         right: 0.0,
         bottom: 0.0,
     };
+    // The text is carried so `assign_heading_levels_smart` can pick the body
+    // cluster by character mass (char-weighted body size). Leaving it empty makes
+    // every cluster tie at length 0, so `max_by_key` falls back to the smallest
+    // font as "body" and over-promotes every larger run to a heading.
     for &i in heuristic_pages {
         for seg in &all_page_segments[i] {
             if seg.text.trim().is_empty() {
                 continue;
             }
             all_blocks.push(TextBlock {
-                text: String::new(),
+                text: seg.text.clone(),
                 bbox: empty_bbox,
                 font_size: seg.font_size,
             });
@@ -69,8 +73,18 @@ fn build_heading_map(
     for &i in &struct_tree_needs_classify {
         if let Some(paragraphs) = &struct_tree_results[i] {
             for para in paragraphs {
+                let text = if !para.text.is_empty() {
+                    para.text.clone()
+                } else {
+                    para.lines
+                        .iter()
+                        .flat_map(|l| l.segments.iter())
+                        .map(|s| s.text.as_str())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                };
                 all_blocks.push(TextBlock {
-                    text: String::new(),
+                    text,
                     bbox: empty_bbox,
                     font_size: para.dominant_font_size,
                 });

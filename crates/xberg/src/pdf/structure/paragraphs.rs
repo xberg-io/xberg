@@ -27,8 +27,14 @@ pub(super) fn merge_continuation_paragraphs(paragraphs: &mut Vec<PdfParagraph>) 
             && !current.is_formula
             && !next.is_formula;
         let fonts_compatible = (current.dominant_font_size - next.dominant_font_size).abs() < 2.0;
+        // Never merge across a bold-state boundary. A bold run following non-bold
+        // prose (or vice versa) is a formatting break — an emphasized heading or a
+        // list item's bold lead-in — not a wrapped continuation. Absorbing it would
+        // bury the heading as inline bold before it can be classified. This mirrors
+        // the `bold_change` paragraph break in the heuristic line grouper.
+        let bold_compatible = current.is_bold == next.is_bold;
         let continuation_signal = !ends_with_sentence_terminator(&current) || starts_with_lowercase_continuation(&next);
-        let should_merge = both_body && fonts_compatible && continuation_signal;
+        let should_merge = both_body && fonts_compatible && bold_compatible && continuation_signal;
 
         if should_merge {
             current.text.clear();
@@ -254,6 +260,22 @@ mod tests {
             2,
             "terminated paragraph + uppercase start should not merge"
         );
+    }
+
+    #[test]
+    fn test_no_merge_across_bold_boundary() {
+        // A bold header following unterminated body prose must not be absorbed as
+        // a continuation — it should survive as its own paragraph for classification.
+        let body = make_body_paragraph(
+            "here is also available other sources of this Manual MetcalUser Guide",
+            12.0,
+        );
+        let mut header = make_body_paragraph("Impaired Glucose Tolerance And Impaired Fasting Glucose ...", 12.0);
+        header.is_bold = true;
+        let mut paragraphs = vec![body, header];
+        merge_continuation_paragraphs(&mut paragraphs);
+        assert_eq!(paragraphs.len(), 2, "bold header must not merge into non-bold prose");
+        assert!(paragraphs[1].is_bold, "the bold header paragraph must be preserved");
     }
 
     #[test]
