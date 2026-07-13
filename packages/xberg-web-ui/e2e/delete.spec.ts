@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { EMBEDDING_DIM } from "../src/lib/constants.js";
 import { serveStaticFile } from "../../../mcp-server/src/http/static-server.js";
-import { resolveUiSubPath } from "../../../mcp-server/src/http/ui-server.js";
+import { resolveUiSubPath } from "../../../mcp-server/src/http/ui-route-resolver.js";
 
 const OUT_DIR = join(fileURLToPath(new URL(".", import.meta.url)), "..", "out");
 

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resolveUiSubPath } from "../src/http/ui-server.js";
+import { resolveUiSubPath } from "../src/http/ui-route-resolver.js";
 
 describe("http/ui-server resolveUiSubPath", () => {
   let dir: string;
