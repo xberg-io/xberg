@@ -65,7 +65,7 @@ xml = ["xberg/xml"]
 
 [dependencies]
 async-trait = "0.1"
-crawlberg = { default-features = false, version = "1.0.3" }
+crawlberg = { default-features = false, version = "1.0.5" }
 futures = "0.3"
 futures-util = "0.3"
 js-sys = "0.3"
