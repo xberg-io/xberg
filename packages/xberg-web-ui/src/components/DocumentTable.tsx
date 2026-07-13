@@ -149,7 +149,12 @@ export function DocumentTable({ collection }: { collection: string }) {
             externalIds={[...selected]}
             onDeleted={onDeleted}
           />
-          <ReingestButton collection={collection} />
+          {selected.size === 1 ? (
+            <ReingestButton
+              collection={collection}
+              expectedExternalId={[...selected][0] ?? ""}
+            />
+          ) : null}
         </div>
       ) : null}
     </div>

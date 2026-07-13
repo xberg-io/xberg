@@ -4,12 +4,24 @@ import { type ChangeEvent, useRef, useState } from "react";
 import { Button } from "@/components/ui/button.js";
 import { Input } from "@/components/ui/input.js";
 import { useEngine } from "@/providers/EngineProvider.js";
+import { sanitizeExternalId } from "@/lib/sanitize-id.js";
 
 export interface ReingestButtonProps {
   collection: string;
+  /**
+   * The `external_id` of the document this button re-ingests. The picked
+   * file's sanitized filename MUST match this, or `upsertDocument` would
+   * silently create a new, unrelated document instead of replacing the one
+   * being re-ingested (external_id is derived from the filename — see
+   * `engine.worker.ts`'s `sanitizeExternalId(filename)`).
+   */
+  expectedExternalId: string;
 }
 
-export function ReingestButton({ collection }: ReingestButtonProps) {
+export function ReingestButton({
+  collection,
+  expectedExternalId,
+}: ReingestButtonProps) {
   const { ingestFile } = useEngine();
   const inputRef = useRef<HTMLInputElement>(null);
   const [passphrase, setPassphrase] = useState("");
@@ -20,8 +32,17 @@ export function ReingestButton({ collection }: ReingestButtonProps) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file || !passphrase) return;
-    setBusy(true);
     setError(null);
+
+    const pickedExternalId = sanitizeExternalId(file.name);
+    if (pickedExternalId !== expectedExternalId) {
+      setError(
+        `"${file.name}" would ingest as a new document ("${pickedExternalId}"), not replace this one ("${expectedExternalId}"). Pick the original file (same name) to re-ingest.`,
+      );
+      return;
+    }
+
+    setBusy(true);
     try {
       await ingestFile(file, collection, passphrase);
     } catch (err) {
