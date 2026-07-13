@@ -25,19 +25,19 @@ public final class ValidatorBridge implements AutoCloseable {
 
     /** Live registry — keeps Arenas and upcall stubs alive past the register call. */
     private static final ConcurrentHashMap<String, ValidatorBridge>
-    VALIDATOR_BRIDGES = new ConcurrentHashMap<>();
+            VALIDATOR_BRIDGES = new ConcurrentHashMap<>();
 
     // C vtable: 9 fields (4 plugin methods + 3 trait methods + free_string + free_user_data)
     private static final MemoryLayout VTABLE_LAYOUT = MemoryLayout.structLayout(
-        ValueLayout.ADDRESS,
-        ValueLayout.ADDRESS,
-        ValueLayout.ADDRESS,
-        ValueLayout.ADDRESS,
-        ValueLayout.ADDRESS,
-        ValueLayout.ADDRESS,
-        ValueLayout.ADDRESS,
-        ValueLayout.ADDRESS,
-        ValueLayout.ADDRESS
+            ValueLayout.ADDRESS,
+            ValueLayout.ADDRESS,
+            ValueLayout.ADDRESS,
+            ValueLayout.ADDRESS,
+            ValueLayout.ADDRESS,
+            ValueLayout.ADDRESS,
+            ValueLayout.ADDRESS,
+            ValueLayout.ADDRESS,
+            ValueLayout.ADDRESS
     );
     private static final long VTABLE_SIZE = VTABLE_LAYOUT.byteSize();
 
@@ -75,72 +75,72 @@ public final class ValidatorBridge implements AutoCloseable {
     private void initStubName(long offset) throws ReflectiveOperationException {
         var stubName = LINKER.upcallStub(LOOKUP.bind(this, "handleName",
             MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class)),
-        FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
-        arena);
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
+            arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubName);
     }
 
     private void initStubVersion(long offset) throws ReflectiveOperationException {
         var stubVersion = LINKER.upcallStub(LOOKUP.bind(this, "handleVersion",
             MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class)),
-        FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
-        arena);
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
+            arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubVersion);
     }
 
     private void initStubInitialize(long offset) throws ReflectiveOperationException {
         var stubInitialize = LINKER.upcallStub(LOOKUP.bind(this, "handleInitialize",
             MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class)),
-        FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
-        arena);
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
+            arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubInitialize);
     }
 
     private void initStubShutdown(long offset) throws ReflectiveOperationException {
         var stubShutdown = LINKER.upcallStub(LOOKUP.bind(this, "handleShutdown",
             MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class)),
-        FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
-        arena);
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
+            arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubShutdown);
     }
 
     private void initStubValidate(long offset) throws ReflectiveOperationException {
         var stubValidate = LINKER.upcallStub(LOOKUP.bind(this, "handleValidate",
             MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class, MemorySegment.class)),
-        FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
-        arena);
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
+            arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubValidate);
     }
 
     private void initStubShouldValidate(long offset) throws ReflectiveOperationException {
         var stubShouldValidate = LINKER.upcallStub(LOOKUP.bind(this, "handleShouldValidate",
             MethodType.methodType(long.class, MemorySegment.class, MemorySegment.class, MemorySegment.class)),
-        FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
-        arena);
+            FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
+            arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubShouldValidate);
     }
 
     private void initStubPriority(long offset) throws ReflectiveOperationException {
         var stubPriority = LINKER.upcallStub(LOOKUP.bind(this, "handlePriority",
             MethodType.methodType(long.class, MemorySegment.class)),
-        FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS),
-        arena);
+            FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS),
+            arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubPriority);
     }
 
     private void initStubFreeString(long offset) throws ReflectiveOperationException {
         var stubFreeString = LINKER.upcallStub(LOOKUP.bind(this, "freeString",
             MethodType.methodType(void.class, MemorySegment.class)),
-        FunctionDescriptor.ofVoid(ValueLayout.ADDRESS),
-        arena);
+            FunctionDescriptor.ofVoid(ValueLayout.ADDRESS),
+            arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubFreeString);
     }
 
     private void initStubFreeUserData(long offset) throws ReflectiveOperationException {
         var stubFreeUserData = LINKER.upcallStub(LOOKUP.bind(this, "freeUserData",
             MethodType.methodType(void.class, MemorySegment.class)),
-        FunctionDescriptor.ofVoid(ValueLayout.ADDRESS),
-        arena);
+            FunctionDescriptor.ofVoid(ValueLayout.ADDRESS),
+            arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubFreeUserData);
     }
 
@@ -275,8 +275,8 @@ public final class ValidatorBridge implements AutoCloseable {
                 if (rc != 0) {
                     MemorySegment errPtr = outErr.get(ValueLayout.ADDRESS, 0);
                     String msg = errPtr.equals(MemorySegment.NULL)
-                    ? "unregistration failed (rc=" + rc + ")"
-                    : errPtr.reinterpret(Long.MAX_VALUE).getString(0);
+                        ? "unregistration failed (rc=" + rc + ")"
+                        : errPtr.reinterpret(Long.MAX_VALUE).getString(0);
                     throw new RuntimeException("unregisterValidator: " + msg);
                 }
             }
@@ -299,8 +299,8 @@ public final class ValidatorBridge implements AutoCloseable {
                 if (rc != 0) {
                     MemorySegment errPtr = outErr.get(ValueLayout.ADDRESS, 0);
                     String msg = errPtr.equals(MemorySegment.NULL)
-                    ? "clear failed (rc=" + rc + ")"
-                    : errPtr.reinterpret(Long.MAX_VALUE).getString(0);
+                        ? "clear failed (rc=" + rc + ")"
+                        : errPtr.reinterpret(Long.MAX_VALUE).getString(0);
                     throw new RuntimeException("clearValidators: " + msg);
                 }
             }

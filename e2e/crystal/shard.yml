@@ -1,0 +1,8 @@
+name: xberg_e2e
+version: 0.0.0
+
+dependencies:
+  xberg:
+    path: ../../packages/crystal
+
+crystal: ">= 1.0.0"

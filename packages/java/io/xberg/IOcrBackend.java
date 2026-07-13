@@ -22,21 +22,21 @@ public interface IOcrBackend {
     /** Shut down the plugin. */
     default void shutdown() throws Exception {}
 
-    /** process_image. */    ExtractedDocument process_image(byte[] image_bytes, OcrConfig config) throws Exception;
+/** process_image. */    ExtractedDocument process_image(byte[] image_bytes, OcrConfig config) throws Exception;
 
-    /** process_image_file. */    ExtractedDocument process_image_file(java.nio.file.Path path, OcrConfig config) throws Exception;
+/** process_image_file. */    ExtractedDocument process_image_file(java.nio.file.Path path, OcrConfig config) throws Exception;
 
-    /** supports_language. */    boolean supports_language(String lang) throws Exception;
+/** supports_language. */    boolean supports_language(String lang) throws Exception;
 
-    /** backend_type. */    String backend_type() throws Exception;
+/** backend_type. */    String backend_type() throws Exception;
 
-    /** supported_languages. */    List<String> supported_languages() throws Exception;
+/** supported_languages. */    List<String> supported_languages() throws Exception;
 
-    /** supports_table_detection. */    boolean supports_table_detection() throws Exception;
+/** supports_table_detection. */    boolean supports_table_detection() throws Exception;
 
-    /** supports_document_processing. */    boolean supports_document_processing() throws Exception;
+/** supports_document_processing. */    boolean supports_document_processing() throws Exception;
 
-    /** emits_structured_markdown. */    boolean emits_structured_markdown() throws Exception;
+/** emits_structured_markdown. */    boolean emits_structured_markdown() throws Exception;
 
-    /** process_document. */    ExtractedDocument process_document(java.nio.file.Path _path, OcrConfig _config) throws Exception;
+/** process_document. */    ExtractedDocument process_document(java.nio.file.Path _path, OcrConfig _config) throws Exception;
 }

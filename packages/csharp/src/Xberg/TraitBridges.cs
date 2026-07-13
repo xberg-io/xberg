@@ -736,7 +736,7 @@ public sealed class OcrBackendBridge : IDisposable {
     /// <summary>Register a OcrBackend implementation and return its native handle</summary>
     public static IntPtr Register(IOcrBackend impl) {
         if (impl == null)
-        throw new ArgumentNullException(nameof(impl));
+            throw new ArgumentNullException(nameof(impl));
 
         var name = impl.Name;
 
@@ -781,12 +781,12 @@ public sealed class OcrBackendBridge : IDisposable {
 public static class OcrBackendRegistry {
 
     private static readonly ConcurrentDictionary<string, OcrBackendBridge> _bridges =
-    new ConcurrentDictionary<string, OcrBackendBridge>();
+        new ConcurrentDictionary<string, OcrBackendBridge>();
 
     /// <summary>Register a OcrBackend implementation and return its native handle</summary>
     public static IntPtr RegisterOcrBackend(IOcrBackend impl) {
         if (impl == null)
-        throw new ArgumentNullException(nameof(impl));
+            throw new ArgumentNullException(nameof(impl));
 
         // Delegate to Register, which builds the bridge, stores it, AND calls the
         // native RegisterOcrBackend so Rust actually learns about the impl.
@@ -798,7 +798,7 @@ public static class OcrBackendRegistry {
 
     public static IntPtr Register(IOcrBackend impl) {
         if (impl == null)
-        throw new ArgumentNullException(nameof(impl));
+            throw new ArgumentNullException(nameof(impl));
 
         var name = impl.Name;
 
@@ -839,7 +839,7 @@ public static class OcrBackendRegistry {
     /// <summary>Unregister a OcrBackend implementation</summary>
     public static void Unregister(string name) {
         if (string.IsNullOrEmpty(name))
-        throw new ArgumentException("Name cannot be empty", nameof(name));
+            throw new ArgumentException("Name cannot be empty", nameof(name));
 
         var result = NativeMethods.UnregisterOcrBackend(name, out var outError);
         if (result != 0) {
@@ -1340,7 +1340,7 @@ public sealed class PostProcessorBridge : IDisposable {
     /// <summary>Register a PostProcessor implementation and return its native handle</summary>
     public static IntPtr Register(IPostProcessor impl) {
         if (impl == null)
-        throw new ArgumentNullException(nameof(impl));
+            throw new ArgumentNullException(nameof(impl));
 
         var name = impl.Name;
 
@@ -1385,12 +1385,12 @@ public sealed class PostProcessorBridge : IDisposable {
 public static class PostProcessorRegistry {
 
     private static readonly ConcurrentDictionary<string, PostProcessorBridge> _bridges =
-    new ConcurrentDictionary<string, PostProcessorBridge>();
+        new ConcurrentDictionary<string, PostProcessorBridge>();
 
     /// <summary>Register a PostProcessor implementation and return its native handle</summary>
     public static IntPtr RegisterPostProcessor(IPostProcessor impl) {
         if (impl == null)
-        throw new ArgumentNullException(nameof(impl));
+            throw new ArgumentNullException(nameof(impl));
 
         // Delegate to Register, which builds the bridge, stores it, AND calls the
         // native RegisterPostProcessor so Rust actually learns about the impl.
@@ -1402,7 +1402,7 @@ public static class PostProcessorRegistry {
 
     public static IntPtr Register(IPostProcessor impl) {
         if (impl == null)
-        throw new ArgumentNullException(nameof(impl));
+            throw new ArgumentNullException(nameof(impl));
 
         var name = impl.Name;
 
@@ -1443,7 +1443,7 @@ public static class PostProcessorRegistry {
     /// <summary>Unregister a PostProcessor implementation</summary>
     public static void Unregister(string name) {
         if (string.IsNullOrEmpty(name))
-        throw new ArgumentException("Name cannot be empty", nameof(name));
+            throw new ArgumentException("Name cannot be empty", nameof(name));
 
         var result = NativeMethods.UnregisterPostProcessor(name, out var outError);
         if (result != 0) {
@@ -1843,7 +1843,7 @@ public sealed class ValidatorBridge : IDisposable {
     /// <summary>Register a Validator implementation and return its native handle</summary>
     public static IntPtr Register(IValidator impl) {
         if (impl == null)
-        throw new ArgumentNullException(nameof(impl));
+            throw new ArgumentNullException(nameof(impl));
 
         var name = impl.Name;
 
@@ -1888,12 +1888,12 @@ public sealed class ValidatorBridge : IDisposable {
 public static class ValidatorRegistry {
 
     private static readonly ConcurrentDictionary<string, ValidatorBridge> _bridges =
-    new ConcurrentDictionary<string, ValidatorBridge>();
+        new ConcurrentDictionary<string, ValidatorBridge>();
 
     /// <summary>Register a Validator implementation and return its native handle</summary>
     public static IntPtr RegisterValidator(IValidator impl) {
         if (impl == null)
-        throw new ArgumentNullException(nameof(impl));
+            throw new ArgumentNullException(nameof(impl));
 
         // Delegate to Register, which builds the bridge, stores it, AND calls the
         // native RegisterValidator so Rust actually learns about the impl.
@@ -1905,7 +1905,7 @@ public static class ValidatorRegistry {
 
     public static IntPtr Register(IValidator impl) {
         if (impl == null)
-        throw new ArgumentNullException(nameof(impl));
+            throw new ArgumentNullException(nameof(impl));
 
         var name = impl.Name;
 
@@ -1946,7 +1946,7 @@ public static class ValidatorRegistry {
     /// <summary>Unregister a Validator implementation</summary>
     public static void Unregister(string name) {
         if (string.IsNullOrEmpty(name))
-        throw new ArgumentException("Name cannot be empty", nameof(name));
+            throw new ArgumentException("Name cannot be empty", nameof(name));
 
         var result = NativeMethods.UnregisterValidator(name, out var outError);
         if (result != 0) {
@@ -2432,7 +2432,7 @@ public sealed class DocumentExtractorBridge : IDisposable {
     /// <summary>Register a DocumentExtractor implementation and return its native handle</summary>
     public static IntPtr Register(IDocumentExtractor impl) {
         if (impl == null)
-        throw new ArgumentNullException(nameof(impl));
+            throw new ArgumentNullException(nameof(impl));
 
         var name = impl.Name;
 
@@ -2477,12 +2477,12 @@ public sealed class DocumentExtractorBridge : IDisposable {
 public static class DocumentExtractorRegistry {
 
     private static readonly ConcurrentDictionary<string, DocumentExtractorBridge> _bridges =
-    new ConcurrentDictionary<string, DocumentExtractorBridge>();
+        new ConcurrentDictionary<string, DocumentExtractorBridge>();
 
     /// <summary>Register a DocumentExtractor implementation and return its native handle</summary>
     public static IntPtr RegisterDocumentExtractor(IDocumentExtractor impl) {
         if (impl == null)
-        throw new ArgumentNullException(nameof(impl));
+            throw new ArgumentNullException(nameof(impl));
 
         // Delegate to Register, which builds the bridge, stores it, AND calls the
         // native RegisterDocumentExtractor so Rust actually learns about the impl.
@@ -2494,7 +2494,7 @@ public static class DocumentExtractorRegistry {
 
     public static IntPtr Register(IDocumentExtractor impl) {
         if (impl == null)
-        throw new ArgumentNullException(nameof(impl));
+            throw new ArgumentNullException(nameof(impl));
 
         var name = impl.Name;
 
@@ -2535,7 +2535,7 @@ public static class DocumentExtractorRegistry {
     /// <summary>Unregister a DocumentExtractor implementation</summary>
     public static void Unregister(string name) {
         if (string.IsNullOrEmpty(name))
-        throw new ArgumentException("Name cannot be empty", nameof(name));
+            throw new ArgumentException("Name cannot be empty", nameof(name));
 
         var result = NativeMethods.UnregisterDocumentExtractor(name, out var outError);
         if (result != 0) {
@@ -2917,7 +2917,7 @@ public sealed class EmbeddingBackendBridge : IDisposable {
     /// <summary>Register a EmbeddingBackend implementation and return its native handle</summary>
     public static IntPtr Register(IEmbeddingBackend impl) {
         if (impl == null)
-        throw new ArgumentNullException(nameof(impl));
+            throw new ArgumentNullException(nameof(impl));
 
         var name = impl.Name;
 
@@ -2962,12 +2962,12 @@ public sealed class EmbeddingBackendBridge : IDisposable {
 public static class EmbeddingBackendRegistry {
 
     private static readonly ConcurrentDictionary<string, EmbeddingBackendBridge> _bridges =
-    new ConcurrentDictionary<string, EmbeddingBackendBridge>();
+        new ConcurrentDictionary<string, EmbeddingBackendBridge>();
 
     /// <summary>Register a EmbeddingBackend implementation and return its native handle</summary>
     public static IntPtr RegisterEmbeddingBackend(IEmbeddingBackend impl) {
         if (impl == null)
-        throw new ArgumentNullException(nameof(impl));
+            throw new ArgumentNullException(nameof(impl));
 
         // Delegate to Register, which builds the bridge, stores it, AND calls the
         // native RegisterEmbeddingBackend so Rust actually learns about the impl.
@@ -2979,7 +2979,7 @@ public static class EmbeddingBackendRegistry {
 
     public static IntPtr Register(IEmbeddingBackend impl) {
         if (impl == null)
-        throw new ArgumentNullException(nameof(impl));
+            throw new ArgumentNullException(nameof(impl));
 
         var name = impl.Name;
 
@@ -3020,7 +3020,7 @@ public static class EmbeddingBackendRegistry {
     /// <summary>Unregister a EmbeddingBackend implementation</summary>
     public static void Unregister(string name) {
         if (string.IsNullOrEmpty(name))
-        throw new ArgumentException("Name cannot be empty", nameof(name));
+            throw new ArgumentException("Name cannot be empty", nameof(name));
 
         var result = NativeMethods.UnregisterEmbeddingBackend(name, out var outError);
         if (result != 0) {
@@ -3365,7 +3365,7 @@ public sealed class RendererBridge : IDisposable {
     /// <summary>Register a Renderer implementation and return its native handle</summary>
     public static IntPtr Register(IRenderer impl) {
         if (impl == null)
-        throw new ArgumentNullException(nameof(impl));
+            throw new ArgumentNullException(nameof(impl));
 
         var name = impl.Name;
 
@@ -3410,12 +3410,12 @@ public sealed class RendererBridge : IDisposable {
 public static class RendererRegistry {
 
     private static readonly ConcurrentDictionary<string, RendererBridge> _bridges =
-    new ConcurrentDictionary<string, RendererBridge>();
+        new ConcurrentDictionary<string, RendererBridge>();
 
     /// <summary>Register a Renderer implementation and return its native handle</summary>
     public static IntPtr RegisterRenderer(IRenderer impl) {
         if (impl == null)
-        throw new ArgumentNullException(nameof(impl));
+            throw new ArgumentNullException(nameof(impl));
 
         // Delegate to Register, which builds the bridge, stores it, AND calls the
         // native RegisterRenderer so Rust actually learns about the impl.
@@ -3427,7 +3427,7 @@ public static class RendererRegistry {
 
     public static IntPtr Register(IRenderer impl) {
         if (impl == null)
-        throw new ArgumentNullException(nameof(impl));
+            throw new ArgumentNullException(nameof(impl));
 
         var name = impl.Name;
 
@@ -3468,7 +3468,7 @@ public static class RendererRegistry {
     /// <summary>Unregister a Renderer implementation</summary>
     public static void Unregister(string name) {
         if (string.IsNullOrEmpty(name))
-        throw new ArgumentException("Name cannot be empty", nameof(name));
+            throw new ArgumentException("Name cannot be empty", nameof(name));
 
         var result = NativeMethods.UnregisterRenderer(name, out var outError);
         if (result != 0) {
@@ -3814,7 +3814,7 @@ public sealed class RerankerBackendBridge : IDisposable {
     /// <summary>Register a RerankerBackend implementation and return its native handle</summary>
     public static IntPtr Register(IRerankerBackend impl) {
         if (impl == null)
-        throw new ArgumentNullException(nameof(impl));
+            throw new ArgumentNullException(nameof(impl));
 
         var name = impl.Name;
 
@@ -3859,12 +3859,12 @@ public sealed class RerankerBackendBridge : IDisposable {
 public static class RerankerBackendRegistry {
 
     private static readonly ConcurrentDictionary<string, RerankerBackendBridge> _bridges =
-    new ConcurrentDictionary<string, RerankerBackendBridge>();
+        new ConcurrentDictionary<string, RerankerBackendBridge>();
 
     /// <summary>Register a RerankerBackend implementation and return its native handle</summary>
     public static IntPtr RegisterRerankerBackend(IRerankerBackend impl) {
         if (impl == null)
-        throw new ArgumentNullException(nameof(impl));
+            throw new ArgumentNullException(nameof(impl));
 
         // Delegate to Register, which builds the bridge, stores it, AND calls the
         // native RegisterRerankerBackend so Rust actually learns about the impl.
@@ -3876,7 +3876,7 @@ public static class RerankerBackendRegistry {
 
     public static IntPtr Register(IRerankerBackend impl) {
         if (impl == null)
-        throw new ArgumentNullException(nameof(impl));
+            throw new ArgumentNullException(nameof(impl));
 
         var name = impl.Name;
 
@@ -3917,7 +3917,7 @@ public static class RerankerBackendRegistry {
     /// <summary>Unregister a RerankerBackend implementation</summary>
     public static void Unregister(string name) {
         if (string.IsNullOrEmpty(name))
-        throw new ArgumentException("Name cannot be empty", nameof(name));
+            throw new ArgumentException("Name cannot be empty", nameof(name));
 
         var result = NativeMethods.UnregisterRerankerBackend(name, out var outError);
         if (result != 0) {
@@ -4236,7 +4236,7 @@ public sealed class TokenizerBackendBridge : IDisposable {
     /// <summary>Register a TokenizerBackend implementation and return its native handle</summary>
     public static IntPtr Register(ITokenizerBackend impl) {
         if (impl == null)
-        throw new ArgumentNullException(nameof(impl));
+            throw new ArgumentNullException(nameof(impl));
 
         var name = impl.Name;
 
@@ -4281,12 +4281,12 @@ public sealed class TokenizerBackendBridge : IDisposable {
 public static class TokenizerBackendRegistry {
 
     private static readonly ConcurrentDictionary<string, TokenizerBackendBridge> _bridges =
-    new ConcurrentDictionary<string, TokenizerBackendBridge>();
+        new ConcurrentDictionary<string, TokenizerBackendBridge>();
 
     /// <summary>Register a TokenizerBackend implementation and return its native handle</summary>
     public static IntPtr RegisterTokenizerBackend(ITokenizerBackend impl) {
         if (impl == null)
-        throw new ArgumentNullException(nameof(impl));
+            throw new ArgumentNullException(nameof(impl));
 
         // Delegate to Register, which builds the bridge, stores it, AND calls the
         // native RegisterTokenizerBackend so Rust actually learns about the impl.
@@ -4298,7 +4298,7 @@ public static class TokenizerBackendRegistry {
 
     public static IntPtr Register(ITokenizerBackend impl) {
         if (impl == null)
-        throw new ArgumentNullException(nameof(impl));
+            throw new ArgumentNullException(nameof(impl));
 
         var name = impl.Name;
 
@@ -4339,7 +4339,7 @@ public static class TokenizerBackendRegistry {
     /// <summary>Unregister a TokenizerBackend implementation</summary>
     public static void Unregister(string name) {
         if (string.IsNullOrEmpty(name))
-        throw new ArgumentException("Name cannot be empty", nameof(name));
+            throw new ArgumentException("Name cannot be empty", nameof(name));
 
         var result = NativeMethods.UnregisterTokenizerBackend(name, out var outError);
         if (result != 0) {

@@ -38,48 +38,30 @@ exclude = [
 ]
 
 [lint.markdown.rumdl]
-disable = ["MD012", "MD013", "MD024", "MD033", "MD036", "MD041", "MD046", "MD051", "MD076"]
+disable = [
+    "MD012",
+    "MD013",
+    "MD024",
+    "MD033",
+    "MD036",
+    "MD041",
+    "MD046",
+    "MD051",
+    "MD076",
+]
 
 [fmt.markdown.rumdl]
-disable = ["MD012", "MD013", "MD024", "MD033", "MD036", "MD041", "MD046", "MD051", "MD076"]
-
-[lint.python.ruff]
-select = ["ALL"]
-ignore = [
-    "ANN401",
-    "ASYNC109",
-    "ASYNC110",
-    "BLE001",
-    "COM812",
-    "D100",
-    "D104",
-    "D107",
-    "D205",
-    "E501",
-    "EM",
-    "FBT",
-    "FIX",
-    "ISC001",
-    "PD011",
-    "PGH003",
-    "PLR2004",
-    "PLW0603",
-    "S104",
-    "S110",
-    "S603",
-    "TD",
-    "TRY",
+disable = [
+    "MD012",
+    "MD013",
+    "MD024",
+    "MD033",
+    "MD036",
+    "MD041",
+    "MD046",
+    "MD051",
+    "MD076",
 ]
-mccabe_max_complexity = 15
-pydocstyle_convention = "google"
-pylint_max_args = 10
-pylint_max_branches = 15
-pylint_max_returns = 10
-
-[lint.php.mago]
-select = ["correctness", "security"]
-ignore = ["strict-assertions", "use-specific-assertions", "no-redundant-variable", "sensitive-parameter"]
-php_version = "8.2"
 
 [lint.typos.extend_words]
 ake = "ake"
@@ -158,10 +140,6 @@ WebUI = "WebUI"
 traineddata = "traineddata"
 
 [per-file-ignores]
-"**/api.py" = ["F401", "I001", "TC006", "UP035"]
-"**/*.pyi" = ["A002", "F401", "I001", "PYI033", "TC006", "UP035"]
-"**/options.py" = ["F401", "I001", "RUF100"]
-"**/__init__.py" = ["I001"]
 "**/tests/**" = [
     "ANN",
     "D103",
@@ -285,13 +263,32 @@ traineddata = "traineddata"
     "A001",
     "N801",
 ]
-"**/text_repair.rs" = ["typo"]
-"cli-proxy/pypi/**/*.py" = ["ANN001", "ANN202", "S310", "T201"]
-"crates/xberg-node/format-metadata-wrapper.js" = ["no-unused-vars"]
-"crates/xberg-node/index.js" = ["no-unused-vars"]
-"docker/**" = ["DL3006", "DL3059"]
-"e2e/**/*.py" = ["A001", "N801"]
-"packages/python/build.py" = ["INP001"]
+"**/text_repair.rs" = [
+    "typo",
+]
+"cli-proxy/pypi/**/*.py" = [
+    "ANN001",
+    "ANN202",
+    "S310",
+    "T201",
+]
+"crates/xberg-node/format-metadata-wrapper.js" = [
+    "no-unused-vars",
+]
+"crates/xberg-node/index.js" = [
+    "no-unused-vars",
+]
+"docker/**" = [
+    "DL3006",
+    "DL3059",
+]
+"e2e/**/*.py" = [
+    "A001",
+    "N801",
+]
+"packages/python/build.py" = [
+    "INP001",
+]
 "scripts/**/*.py" = [
     "B023",
     "C901",
@@ -338,7 +335,9 @@ traineddata = "traineddata"
     "S607",
     "T201",
 ]
-"tools/benchmark-harness/scripts/*.php" = ["no-unescaped-output"]
+"tools/benchmark-harness/scripts/*.php" = [
+    "no-unescaped-output",
+]
 "tools/benchmark-harness/scripts/*.py" = [
     "ANN001",
     "ANN201",
@@ -388,13 +387,16 @@ traineddata = "traineddata"
     "T201",
     "TC003",
 ]
-"tools/perf/*.py" = ["D103", "T201"]
+"tools/perf/*.py" = [
+    "D103",
+    "T201",
+]
 
 [hooks]
-stages = ["pre-commit"]
+stages = [ "pre-commit" ]
 
 [hooks.builtin]
-lint = { exclude = [
+polylint = { exclude = [
     "**/*.freezed.dart",
     "**/*.g.dart",
     "**/*.jinja",
@@ -431,7 +433,7 @@ lint = { exclude = [
     "**/*.patch",
     "**/frb_generated.rs",
 ] }
-fmt = { exclude = [
+polyfmt = { exclude = [
     "**/*.freezed.dart",
     "**/*.g.dart",
     "**/*.jinja",
@@ -506,8 +508,4 @@ file_safety = { exclude = [
     "**/frb_generated.rs",
 ] }
 cargo = true
-commit = { stages = ["commit-msg"] }
-
-[hooks.pre-commit.commands.pyrefly]
-run = "pyrefly check packages/python"
-files = "packages/python/**/*.py"
+commit = { stages = [ "commit-msg" ] }

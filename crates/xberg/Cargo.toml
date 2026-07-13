@@ -560,7 +560,6 @@ formats = [
     "archives",
     "mdx",
     "svg",
-    "heic",
 ]
 # Text processing and analysis capabilities.
 analysis = [
@@ -577,6 +576,7 @@ services = ["api", "mcp", "otel"]
 full = [
     "formats",
     "analysis",
+    "heic",
     "services",
     "url-ingestion",
     "ocr",
@@ -604,12 +604,12 @@ full = [
     "classification",
     "captioning",
     "qr-codes",
-    "heic",
 ]
 # Server deployment preset — formats + analysis + services + OCR.
 server = [
     "formats",
     "analysis",
+    "heic",
     "services",
     "url-ingestion",
     "ocr",

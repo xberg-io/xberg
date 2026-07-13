@@ -22,11 +22,11 @@ public interface IDocumentExtractor {
     /** Shut down the plugin. */
     default void shutdown() throws Exception {}
 
-    /** extract. */    ExtractedDocument extract(ExtractInput input, ExtractionConfig config) throws Exception;
+/** extract. */    ExtractedDocument extract(ExtractInput input, ExtractionConfig config) throws Exception;
 
-    /** supported_mime_types. */    List<String> supported_mime_types() throws Exception;
+/** supported_mime_types. */    List<String> supported_mime_types() throws Exception;
 
-    /** priority. */    int priority() throws Exception;
+/** priority. */    int priority() throws Exception;
 
-    /** can_handle. */    boolean can_handle(java.nio.file.Path _path, String _mime_type) throws Exception;
+/** can_handle. */    boolean can_handle(java.nio.file.Path _path, String _mime_type) throws Exception;
 }

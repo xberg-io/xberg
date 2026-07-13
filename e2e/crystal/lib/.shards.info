@@ -1,0 +1,6 @@
+---
+version: 1.0
+shards:
+  xberg:
+    path: ../../packages/crystal
+    version: 1.0.0-rc.14

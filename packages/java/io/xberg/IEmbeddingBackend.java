@@ -22,7 +22,7 @@ public interface IEmbeddingBackend {
     /** Shut down the plugin. */
     default void shutdown() throws Exception {}
 
-    /** dimensions. */    long dimensions() throws Exception;
+/** dimensions. */    long dimensions() throws Exception;
 
-    /** embed. */    List<List<Float>> embed(List<String> texts) throws Exception;
+/** embed. */    List<List<Float>> embed(List<String> texts) throws Exception;
 }

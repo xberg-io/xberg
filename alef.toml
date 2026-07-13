@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.34.0"
+alef_version = "0.32.6"
 # alef codegen emits non-shorthand struct init (`name: name`) in generated
 # binding lib.rs files; allow it repo-wide so workspace clippy passes under
 # -D warnings (emitted into every generated Rust binding as #![allow(...)]).
@@ -20,6 +20,7 @@ languages = [
     "kotlin_android",
     "swift",
     "zig",
+    "crystal",
 ]
 
 # ---------------------------------------------------------------------------
@@ -1522,7 +1523,26 @@ exclude_functions = [
     "batch_extract_files_sync",
 ]
 
+[crates.crystal]
+module_name = "Xberg"
+exclude_functions = [
+    "calculate_quality_score",
+    "count_tokens",
+    "embed_texts",
+    "extract_sync",
+    "extract_batch_sync",
+    "extract_bytes",
+    "extract_bytes_sync",
+    "extract_file",
+    "extract_file_sync",
+    "batch_extract_bytes",
+    "batch_extract_bytes_sync",
+    "batch_extract_files",
+    "batch_extract_files_sync",
+]
+
 [crates.output]
+
 python = "crates/xberg-py/src/"
 node = "crates/xberg-node/src/"
 ruby = "packages/ruby/ext/xberg_rb/src/"
@@ -1538,12 +1558,15 @@ kotlin_android = "packages/kotlin-android/"
 swift = "packages/swift/Sources/Xberg/"
 dart = "packages/dart/lib/src/"
 zig = "packages/zig/src/"
+crystal = "packages/crystal/src/"
 
 [crates.exclude]
 types = [
     # Generic types — alef(skip) source annotation not picked up for generic structs
     # (alef-extract does not propagate cfg_attr through type-parameter bounds).
     "Pool",
+    "MetricsLayer",
+    "MultipartApi",
 
     # split_and_extract config/result types (core-only, like extract_structured).
     # The `split_and_extract*` functions are already excluded below; these types
@@ -2120,6 +2143,7 @@ languages = [
     "swift",
     "zig",
     "homebrew",
+    "crystal",
 ]
 fields_optional = [
     "results[0].metadata.format",
@@ -2293,6 +2317,9 @@ result_is_json_struct = true
 [crates.e2e.call.overrides.dart]
 function = "extract"
 options_type = "ExtractionConfig"
+
+[crates.e2e.call.overrides.crystal]
+module = "Xberg"
 
 [crates.e2e.calls.extract]
 function = "extract"
@@ -3951,6 +3978,9 @@ path = "../../packages/kotlin-android"
 
 [crates.e2e.packages.swift]
 path = "../../packages/swift"
+
+[crates.e2e.packages.crystal]
+path = "../../packages/crystal"
 
 [crates.e2e.packages.zig]
 path = "../../packages/zig"

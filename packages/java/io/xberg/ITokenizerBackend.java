@@ -21,5 +21,5 @@ public interface ITokenizerBackend {
     /** Shut down the plugin. */
     default void shutdown() throws Exception {}
 
-    /** count_tokens. */    long count_tokens(String text) throws Exception;
+/** count_tokens. */    long count_tokens(String text) throws Exception;
 }

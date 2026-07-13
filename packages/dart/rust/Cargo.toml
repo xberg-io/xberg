@@ -49,8 +49,6 @@ crawlberg = { default-features = false, version = "1.0.3" }
 flutter_rust_bridge = "=2.12.0"
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
-[target.'cfg(all(target_os = "macos", target_arch = "x86_64"))'.dependencies]
-xberg = { path = "../../../crates/xberg", default-features = false, features = ["macos-intel-target"] }
 [target.'cfg(not(any(target_os = "android", target_os = "ios", target_os = "windows", all(target_os = "macos", target_arch = "x86_64"))))'.dependencies]
 xberg = { path = "../../../crates/xberg", features = ["pdf", "excel", "office", "hwp", "hwpx", "iwork", "email", "html", "xml", "archives", "mdx", "svg", "language-detection", "chunking", "chunking-tokenizers", "quality", "keywords", "diff", "api", "api-types", "mcp", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "reranker", "reranker-presets", "transcription-types", "tree-sitter", "liter-llm", "tokio-runtime", "ner-llm", "ner-onnx", "redaction", "summarization", "classification", "captioning", "qr-codes", "auto-rotate-types", "stopwords"] }
 [target.'cfg(target_os = "android")'.dependencies]
@@ -59,6 +57,8 @@ xberg = { path = "../../../crates/xberg", default-features = false, features = [
 xberg = { path = "../../../crates/xberg", default-features = false, features = ["android-target"] }
 [target.'cfg(target_os = "windows")'.dependencies]
 xberg = { path = "../../../crates/xberg", default-features = false, features = ["windows-target"] }
+[target.'cfg(all(target_os = "macos", target_arch = "x86_64"))'.dependencies]
+xberg = { path = "../../../crates/xberg", default-features = false, features = ["macos-intel-target"] }
 
 [lints.rust]
 # flutter_rust_bridge uses #[cfg(frb_expand)] internally during macro expansion.

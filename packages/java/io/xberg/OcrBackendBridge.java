@@ -26,25 +26,25 @@ public final class OcrBackendBridge implements AutoCloseable {
 
     /** Live registry — keeps Arenas and upcall stubs alive past the register call. */
     private static final ConcurrentHashMap<String, OcrBackendBridge>
-    OCR_BACKEND_BRIDGES = new ConcurrentHashMap<>();
+            OCR_BACKEND_BRIDGES = new ConcurrentHashMap<>();
 
     // C vtable: 15 fields (4 plugin methods + 9 trait methods + free_string + free_user_data)
     private static final MemoryLayout VTABLE_LAYOUT = MemoryLayout.structLayout(
-        ValueLayout.ADDRESS,
-        ValueLayout.ADDRESS,
-        ValueLayout.ADDRESS,
-        ValueLayout.ADDRESS,
-        ValueLayout.ADDRESS,
-        ValueLayout.ADDRESS,
-        ValueLayout.ADDRESS,
-        ValueLayout.ADDRESS,
-        ValueLayout.ADDRESS,
-        ValueLayout.ADDRESS,
-        ValueLayout.ADDRESS,
-        ValueLayout.ADDRESS,
-        ValueLayout.ADDRESS,
-        ValueLayout.ADDRESS,
-        ValueLayout.ADDRESS
+            ValueLayout.ADDRESS,
+            ValueLayout.ADDRESS,
+            ValueLayout.ADDRESS,
+            ValueLayout.ADDRESS,
+            ValueLayout.ADDRESS,
+            ValueLayout.ADDRESS,
+            ValueLayout.ADDRESS,
+            ValueLayout.ADDRESS,
+            ValueLayout.ADDRESS,
+            ValueLayout.ADDRESS,
+            ValueLayout.ADDRESS,
+            ValueLayout.ADDRESS,
+            ValueLayout.ADDRESS,
+            ValueLayout.ADDRESS,
+            ValueLayout.ADDRESS
     );
     private static final long VTABLE_SIZE = VTABLE_LAYOUT.byteSize();
 
@@ -88,32 +88,32 @@ public final class OcrBackendBridge implements AutoCloseable {
     private void initStubName(long offset) throws ReflectiveOperationException {
         var stubName = LINKER.upcallStub(LOOKUP.bind(this, "handleName",
             MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class)),
-        FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
-        arena);
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
+            arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubName);
     }
 
     private void initStubVersion(long offset) throws ReflectiveOperationException {
         var stubVersion = LINKER.upcallStub(LOOKUP.bind(this, "handleVersion",
             MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class)),
-        FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
-        arena);
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
+            arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubVersion);
     }
 
     private void initStubInitialize(long offset) throws ReflectiveOperationException {
         var stubInitialize = LINKER.upcallStub(LOOKUP.bind(this, "handleInitialize",
             MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class)),
-        FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
-        arena);
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
+            arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubInitialize);
     }
 
     private void initStubShutdown(long offset) throws ReflectiveOperationException {
         var stubShutdown = LINKER.upcallStub(LOOKUP.bind(this, "handleShutdown",
             MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class)),
-        FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
-        arena);
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
+            arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubShutdown);
     }
 
@@ -127,17 +127,17 @@ public final class OcrBackendBridge implements AutoCloseable {
                 MemorySegment.class,
                 MemorySegment.class,
                 MemorySegment.class
-        )),
-        FunctionDescriptor.of(
-            ValueLayout.JAVA_INT,
-            ValueLayout.ADDRESS,
-            ValueLayout.ADDRESS,
-            ValueLayout.JAVA_LONG,
-            ValueLayout.ADDRESS,
-            ValueLayout.ADDRESS,
-            ValueLayout.ADDRESS
-        ),
-        arena);
+            )),
+            FunctionDescriptor.of(
+                ValueLayout.JAVA_INT,
+                ValueLayout.ADDRESS,
+                ValueLayout.ADDRESS,
+                ValueLayout.JAVA_LONG,
+                ValueLayout.ADDRESS,
+                ValueLayout.ADDRESS,
+                ValueLayout.ADDRESS
+            ),
+            arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubProcessImage);
     }
 
@@ -150,64 +150,64 @@ public final class OcrBackendBridge implements AutoCloseable {
                 MemorySegment.class,
                 MemorySegment.class,
                 MemorySegment.class
-        )),
-        FunctionDescriptor.of(
-            ValueLayout.JAVA_INT,
-            ValueLayout.ADDRESS,
-            ValueLayout.ADDRESS,
-            ValueLayout.ADDRESS,
-            ValueLayout.ADDRESS,
-            ValueLayout.ADDRESS
-        ),
-        arena);
+            )),
+            FunctionDescriptor.of(
+                ValueLayout.JAVA_INT,
+                ValueLayout.ADDRESS,
+                ValueLayout.ADDRESS,
+                ValueLayout.ADDRESS,
+                ValueLayout.ADDRESS,
+                ValueLayout.ADDRESS
+            ),
+            arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubProcessImageFile);
     }
 
     private void initStubSupportsLanguage(long offset) throws ReflectiveOperationException {
         var stubSupportsLanguage = LINKER.upcallStub(LOOKUP.bind(this, "handleSupportsLanguage",
             MethodType.methodType(long.class, MemorySegment.class, MemorySegment.class)),
-        FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
-        arena);
+            FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
+            arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubSupportsLanguage);
     }
 
     private void initStubBackendType(long offset) throws ReflectiveOperationException {
         var stubBackendType = LINKER.upcallStub(LOOKUP.bind(this, "handleBackendType",
             MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class)),
-        FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
-        arena);
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
+            arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubBackendType);
     }
 
     private void initStubSupportedLanguages(long offset) throws ReflectiveOperationException {
         var stubSupportedLanguages = LINKER.upcallStub(LOOKUP.bind(this, "handleSupportedLanguages",
             MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class)),
-        FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
-        arena);
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
+            arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubSupportedLanguages);
     }
 
     private void initStubSupportsTableDetection(long offset) throws ReflectiveOperationException {
         var stubSupportsTableDetection = LINKER.upcallStub(LOOKUP.bind(this, "handleSupportsTableDetection",
             MethodType.methodType(long.class, MemorySegment.class)),
-        FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS),
-        arena);
+            FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS),
+            arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubSupportsTableDetection);
     }
 
     private void initStubSupportsDocumentProcessing(long offset) throws ReflectiveOperationException {
         var stubSupportsDocumentProcessing = LINKER.upcallStub(LOOKUP.bind(this, "handleSupportsDocumentProcessing",
             MethodType.methodType(long.class, MemorySegment.class)),
-        FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS),
-        arena);
+            FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS),
+            arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubSupportsDocumentProcessing);
     }
 
     private void initStubEmitsStructuredMarkdown(long offset) throws ReflectiveOperationException {
         var stubEmitsStructuredMarkdown = LINKER.upcallStub(LOOKUP.bind(this, "handleEmitsStructuredMarkdown",
             MethodType.methodType(long.class, MemorySegment.class)),
-        FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS),
-        arena);
+            FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS),
+            arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubEmitsStructuredMarkdown);
     }
 
@@ -220,32 +220,32 @@ public final class OcrBackendBridge implements AutoCloseable {
                 MemorySegment.class,
                 MemorySegment.class,
                 MemorySegment.class
-        )),
-        FunctionDescriptor.of(
-            ValueLayout.JAVA_INT,
-            ValueLayout.ADDRESS,
-            ValueLayout.ADDRESS,
-            ValueLayout.ADDRESS,
-            ValueLayout.ADDRESS,
-            ValueLayout.ADDRESS
-        ),
-        arena);
+            )),
+            FunctionDescriptor.of(
+                ValueLayout.JAVA_INT,
+                ValueLayout.ADDRESS,
+                ValueLayout.ADDRESS,
+                ValueLayout.ADDRESS,
+                ValueLayout.ADDRESS,
+                ValueLayout.ADDRESS
+            ),
+            arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubProcessDocument);
     }
 
     private void initStubFreeString(long offset) throws ReflectiveOperationException {
         var stubFreeString = LINKER.upcallStub(LOOKUP.bind(this, "freeString",
             MethodType.methodType(void.class, MemorySegment.class)),
-        FunctionDescriptor.ofVoid(ValueLayout.ADDRESS),
-        arena);
+            FunctionDescriptor.ofVoid(ValueLayout.ADDRESS),
+            arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubFreeString);
     }
 
     private void initStubFreeUserData(long offset) throws ReflectiveOperationException {
         var stubFreeUserData = LINKER.upcallStub(LOOKUP.bind(this, "freeUserData",
             MethodType.methodType(void.class, MemorySegment.class)),
-        FunctionDescriptor.ofVoid(ValueLayout.ADDRESS),
-        arena);
+            FunctionDescriptor.ofVoid(ValueLayout.ADDRESS),
+            arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubFreeUserData);
     }
 
@@ -486,8 +486,8 @@ public final class OcrBackendBridge implements AutoCloseable {
                 if (rc != 0) {
                     MemorySegment errPtr = outErr.get(ValueLayout.ADDRESS, 0);
                     String msg = errPtr.equals(MemorySegment.NULL)
-                    ? "unregistration failed (rc=" + rc + ")"
-                    : errPtr.reinterpret(Long.MAX_VALUE).getString(0);
+                        ? "unregistration failed (rc=" + rc + ")"
+                        : errPtr.reinterpret(Long.MAX_VALUE).getString(0);
                     throw new RuntimeException("unregisterOcrBackend: " + msg);
                 }
             }
@@ -510,8 +510,8 @@ public final class OcrBackendBridge implements AutoCloseable {
                 if (rc != 0) {
                     MemorySegment errPtr = outErr.get(ValueLayout.ADDRESS, 0);
                     String msg = errPtr.equals(MemorySegment.NULL)
-                    ? "clear failed (rc=" + rc + ")"
-                    : errPtr.reinterpret(Long.MAX_VALUE).getString(0);
+                        ? "clear failed (rc=" + rc + ")"
+                        : errPtr.reinterpret(Long.MAX_VALUE).getString(0);
                     throw new RuntimeException("clearOcrBackends: " + msg);
                 }
             }
