@@ -1,5 +1,3 @@
-import * as fs from "fs";
-import * as path from "path";
 import { createEmbedder } from "./embedder.js";
 import { createNer } from "./ner.js";
 import { createOcr } from "./ocr.js";
@@ -77,16 +75,25 @@ export class CacheManager {
 		const cached: string[] = [];
 		let totalSize = 0;
 
+		// `fs`/`path` are Node-only — imported lazily here (never reached in the
+		// browser) rather than statically at module scope, so bundlers targeting
+		// the browser (e.g. this package used from a Web Worker via Next.js/
+		// webpack) never need to resolve them at all.
+		const nodeFs = typeof window === "undefined" ? await import("fs") : null;
+		const nodePath = typeof window === "undefined" ? await import("path") : null;
+
 		for (const model of MODELS) {
-			const modelPath = path.join(this.cacheDir, model.path);
 			try {
-				if (typeof window === "undefined" && fs.existsSync(modelPath)) {
-					const size = directorySize(modelPath);
-					if (size > 0) {
-						cached.push(model.name);
-						totalSize += size;
+				if (nodeFs && nodePath) {
+					const modelPath = nodePath.join(this.cacheDir, model.path);
+					if (nodeFs.existsSync(modelPath)) {
+						const size = directorySize(nodeFs, nodePath, modelPath);
+						if (size > 0) {
+							cached.push(model.name);
+							totalSize += size;
+						}
 					}
-				} else if (typeof window !== "undefined") {
+				} else {
 					// Browser: check OPFS (simplified; actual check would use storage API)
 					// For now, assume not cached in CI
 				}
@@ -176,9 +183,11 @@ export class CacheManager {
 	}
 }
 
-function directorySize(directory: string): number {
-	return fs.readdirSync(directory, { withFileTypes: true }).reduce((total, entry) => {
-		const child = path.join(directory, entry.name);
-		return total + (entry.isDirectory() ? directorySize(child) : fs.statSync(child).size);
+function directorySize(nodeFs: typeof import("fs"), nodePath: typeof import("path"), directory: string): number {
+	return nodeFs.readdirSync(directory, { withFileTypes: true }).reduce((total, entry) => {
+		const child = nodePath.join(directory, entry.name);
+		return (
+			total + (entry.isDirectory() ? directorySize(nodeFs, nodePath, child) : nodeFs.statSync(child).size)
+		);
 	}, 0);
 }

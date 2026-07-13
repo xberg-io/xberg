@@ -32,6 +32,19 @@ const DEFAULT_MODEL_EXPORT = "V6_SMALL_MODEL";
  * with `createNer`.
  */
 export async function createOcr(config?: CacheConfig): Promise<OcrInterface | null> {
+	if (typeof window !== "undefined") {
+		// `ppu-paddle-ocr`'s Node entry point requires `onnxruntime-node` and
+		// `@napi-rs/canvas` native bindings that do not exist in a browser. A
+		// runtime try/catch alone isn't enough: bundlers (webpack/Next.js)
+		// statically follow this dynamic `import()` and fail the build trying
+		// to resolve those native `.node` binaries for a browser target, even
+		// though this branch would always reject at runtime anyway. Skip it
+		// before the import is ever reached, so bundlers can dead-code-eliminate
+		// it for client builds — same environment check `store.ts` uses for its
+		// Node-only `better-sqlite3` backend. The engine falls back to
+		// in-binary Tesseract OCR, exactly as if this import had failed.
+		return null;
+	}
 	try {
 		const { PaddleOcrService, ...models } = await import("ppu-paddle-ocr");
 
