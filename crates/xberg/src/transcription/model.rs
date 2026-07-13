@@ -332,7 +332,7 @@ pub fn ensure_whisper_model(
         return Ok(build_paths(model, &target_dir));
     }
 
-    let api = hf_hub::HFClientBuilder::new()
+    let api = crate::model_download::hf_client_builder()
         .cache_dir(whisper_cache.clone())
         .build_sync()
         .map_err(|error| WhisperModelError::Download(format!("Failed to initialise hf-hub API: {error}")))?;

@@ -11173,6 +11173,7 @@ dependencies = [
  "rake",
  "rayon",
  "regex",
+ "reqwest",
  "resvg",
  "rmcp",
  "rmp-serde",

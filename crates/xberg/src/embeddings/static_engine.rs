@@ -130,7 +130,7 @@ mod download {
         model_file: &str,
         cache_directory: &Path,
     ) -> crate::Result<StaticEmbeddingEngine> {
-        let api = hf_hub::HFClientBuilder::new()
+        let api = crate::model_download::hf_client_builder()
             .cache_dir(cache_directory.to_path_buf())
             .build_sync()
             .map_err(|e| crate::XbergError::embedding(format!("Failed to create HF API client: {e}")))?;

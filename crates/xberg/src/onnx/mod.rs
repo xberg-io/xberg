@@ -329,7 +329,7 @@ fn download_model_files_inner(
     let _download_lock = ProcessDownloadLock::acquire(cache_directory, repo_name);
     cleanup_stale_locks(cache_directory, repo_name);
 
-    let api = hf_hub::HFClientBuilder::new()
+    let api = crate::model_download::hf_client_builder()
         .cache_dir(cache_directory.to_path_buf())
         .build_sync()
         .map_err(|e| err(format!("Failed to create HF API client: {e}")))?;

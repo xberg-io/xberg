@@ -48,7 +48,14 @@ tokio-runtime = ["dep:tokio"]
 
 # PDF extraction is currently backed by pdf_oxide. Keep this as the canonical
 # `pdf` feature until/unless a second PDF backend is introduced.
-pdf = ["dep:pdf_oxide", "dep:lopdf", "dep:image", "dep:flate2", "html", "image-encode"]
+pdf = [
+    "dep:pdf_oxide",
+    "dep:lopdf",
+    "dep:image",
+    "dep:flate2",
+    "html",
+    "image-encode",
+]
 excel = ["dep:calamine", "tokio-runtime"]
 excel-wasm = ["dep:calamine"]
 office = [
@@ -70,7 +77,14 @@ notebook = ["html"]
 hwp = ["dep:cfb", "dep:flate2"]
 hwpx = ["dep:unhwp", "dep:zip"]
 iwork = ["dep:zip", "dep:snap"]
-email = ["dep:mail-parser", "dep:cfb", "dep:outlook-pst", "dep:tempfile", "dep:chrono", "dep:chardetng"]
+email = [
+    "dep:mail-parser",
+    "dep:cfb",
+    "dep:outlook-pst",
+    "dep:tempfile",
+    "dep:chrono",
+    "dep:chardetng",
+]
 html = ["dep:html-to-markdown-rs", "dep:v_htmlescape"]
 xml = ["dep:quick-xml", "dep:roxmltree"]
 archives = ["dep:zip", "dep:tar", "dep:sevenz-rust2", "dep:flate2"]
@@ -111,7 +125,14 @@ ocr = [
 bundle-tessdata-eng = ["xberg-tesseract/bundle-tessdata-eng"]
 # WASM OCR: Minimal Tesseract backend without html-to-markdown (which has WASI imports)
 # Includes only the core OCR processing dependencies needed for Tesseract on WASM
-ocr-wasm = ["ocr-pipeline", "dep:xberg-tesseract", "dep:image", "dep:nom-exif", "dep:hayro-jpeg2000", "dep:hayro-jbig2"]
+ocr-wasm = [
+    "ocr-pipeline",
+    "dep:xberg-tesseract",
+    "dep:image",
+    "dep:nom-exif",
+    "dep:hayro-jpeg2000",
+    "dep:hayro-jbig2",
+]
 # HEIF / HEIC / AVIF / HEICS / AVCS decoding via vendored libheif bindings.
 # Native-only — libheif is a C library with no working WASM/Android story.
 # Pulls in `nom-exif` so HEIC EXIF blocks are readable even without the full `ocr` feature.
@@ -131,7 +152,15 @@ paddle-ocr-types = []
 # Per-model sub-features live in xberg-candle-ocr; enable them via
 # `--features candle-ocr,xberg-candle-ocr/trocr` or by depending on
 # xberg-candle-ocr directly with the sub-feature.
-candle-ocr = ["dep:xberg-candle-ocr", "dep:image", "dep:hf-hub", "dep:sha2", "ocr-pipeline", "tokio-runtime"]
+candle-ocr = [
+    "dep:xberg-candle-ocr",
+    "dep:image",
+    "dep:hf-hub",
+    "dep:reqwest",
+    "dep:sha2",
+    "ocr-pipeline",
+    "tokio-runtime",
+]
 # TrOCR backend: aggregate feature enabling candle-ocr with trocr sub-feature
 candle-trocr = ["candle-ocr", "xberg-candle-ocr/trocr"]
 # PaddleOCR-VL backend: aggregate feature enabling candle-ocr with paddleocr-vl sub-feature
@@ -141,7 +170,12 @@ candle-glm-ocr = ["candle-ocr", "xberg-candle-ocr/glm-ocr", "layout-detection"]
 # DeepSeek-OCR backend: aggregate feature enabling candle-ocr with deepseek-ocr sub-feature
 candle-deepseek-ocr = ["candle-ocr", "xberg-candle-ocr/deepseek-ocr"]
 # Umbrella aggregate for all candle VLM OCR backends (not in full/formats/wasm-target/android-target)
-candle-vlm-ocr = ["candle-deepseek-ocr", "candle-paddleocr-vl", "candle-glm-ocr", "candle-trocr"]
+candle-vlm-ocr = [
+    "candle-deepseek-ocr",
+    "candle-paddleocr-vl",
+    "candle-glm-ocr",
+    "candle-trocr",
+]
 # Candle GPU acceleration pass-throughs. Enable alongside any candle-* backend
 # to compile the corresponding candle backend (CUDA / Metal / Accelerate /
 # MKL) — CPU decode of the larger VLM backends is impractically slow.
@@ -157,6 +191,7 @@ paddle-ocr = [
     "dep:sha2",
     "dep:image",
     "dep:hf-hub",
+    "dep:reqwest",
     "dep:ureq",
     "dep:ort",
     "image-encode",
@@ -179,6 +214,7 @@ auto-rotate = [
     "dep:ort",
     "dep:ndarray",
     "dep:hf-hub",
+    "dep:reqwest",
     "dep:sha2",
     "dep:image",
     "dep:ureq",
@@ -189,6 +225,7 @@ layout-detection = [
     "dep:ort",
     "dep:ndarray",
     "dep:hf-hub",
+    "dep:reqwest",
     "dep:sha2",
     "dep:image",
     "tokio-runtime",
@@ -214,6 +251,7 @@ transcription = [
     "dep:ndarray",
     "dep:ort",
     "dep:hf-hub",
+    "dep:reqwest",
     "dep:sha2",
     "dep:symphonia",
     "dep:lofty",
@@ -222,23 +260,51 @@ transcription = [
     "tokio-runtime",
 ]
 
-chunking = ["dep:auto_enums", "dep:either", "dep:icu_provider", "dep:icu_segmenter", "dep:itertools", "dep:strum"]
+chunking = [
+    "dep:auto_enums",
+    "dep:either",
+    "dep:icu_provider",
+    "dep:icu_segmenter",
+    "dep:itertools",
+    "dep:strum",
+]
 chunking-tokenizers = ["chunking", "dep:tokenizers"]
 # onnx-runtime: shared ONNX model-loading helpers (crate::onnx) — HF download,
 # cross-process lock, tokenizer load, ORT session build. Marker feature enabled
 # by every ORT-backed capability that builds on the shared helper (currently
 # sparse-embeddings and late-interaction). The embeddings and reranker modules
 # still vendor their own copies; migrating them onto crate::onnx is a follow-up.
-onnx-runtime = ["dep:hf-hub", "dep:ort", "dep:tokenizers", "dep:sha2", "ort-bundled"]
+onnx-runtime = [
+    "dep:hf-hub",
+    "dep:reqwest",
+    "dep:ort",
+    "dep:tokenizers",
+    "dep:sha2",
+    "ort-bundled",
+]
 # embedding-presets: static preset metadata (WASM-safe, no ORT)
 embedding-presets = []
 # embeddings: full embedding generation with ONNX Runtime (ORT-dependent, WASM-incompatible)
 # NOTE: embedding-presets is a subset of embeddings (no ORT); always implied by embeddings.
-embeddings = ["onnx-runtime", "dep:ndarray", "chunking", "tokio-runtime", "embedding-presets"]
+embeddings = [
+    "onnx-runtime",
+    "dep:ndarray",
+    "chunking",
+    "tokio-runtime",
+    "embedding-presets",
+]
 # static-embeddings: pure-Rust static (model2vec) embedding inference — no ONNX Runtime.
 # The only dense embedder available on `no-ort-target` (WASM/Android). Model download is
 # native-only (hf-hub); WASM/Android load model bytes via `StaticEmbeddingEngine::from_bytes`.
-static-embeddings = ["embedding-presets", "dep:model2vec-rs", "dep:tokenizers", "dep:ndarray", "dep:hf-hub", "dep:sha2"]
+static-embeddings = [
+    "embedding-presets",
+    "dep:model2vec-rs",
+    "dep:tokenizers",
+    "dep:ndarray",
+    "dep:hf-hub",
+    "dep:reqwest",
+    "dep:sha2",
+]
 # v5.0.0: cross-encoder reranking.
 # reranker-presets: static preset metadata (WASM/Android-safe, no ORT).
 reranker-presets = []
@@ -279,28 +345,35 @@ diff = ["dep:similar"]
 # `crates/xberg/src/extractors/` for QR) and is wired through a built-in
 # post-processor under `crates/xberg/src/plugins/processor/builtin/`.
 ner = [] # NER result types only; safe on every target.
-ner-llm-types = ["ner"] # LlmBackend stub for targets without full ner-llm (Windows, Android x86_64, WASM).
+ner-llm-types = [
+    "ner",
+] # LlmBackend stub for targets without full ner-llm (Windows, Android x86_64, WASM).
 ner-llm = ["ner", "liter-llm"] # LLM-driven zero-shot NER (no ORT).
 ner-onnx = [
     # xberg-gliner ONNX backend with Hugging Face model download.
     "ner",
     "dep:xberg-gliner",
     "dep:hf-hub",
+    "dep:reqwest",
     "dep:sha2",
     "ort-bundled",
     "tokio-runtime",
 ]
 
-presets = ["dep:include_dir", "dep:jsonschema", "dep:sha2"] # Preset format + registry + loader + resolver; pure-Rust.
+presets = [
+    "dep:include_dir",
+    "dep:jsonschema",
+    "dep:sha2",
+] # Preset format + registry + loader + resolver; pure-Rust.
 
 # Compatibility feature for public LLM structured extraction through
 # `ExtractionConfig::structured_extraction`.
 structured = ["liter-llm", "tokio-runtime"]
 
-redaction = ["dep:sha2"]            # Pattern-based PII engine; pure-Rust.
+redaction = ["dep:sha2"] # Pattern-based PII engine; pure-Rust.
 redaction-ml = ["redaction", "ner"] # Couple in NER for PERSON/ORG/LOC redaction.
 
-summarization = ["stopwords"]                      # TextRank extractive only; pure-Rust (uses stopword tables).
+summarization = ["stopwords"] # TextRank extractive only; pure-Rust (uses stopword tables).
 summarization-llm = ["summarization", "liter-llm"]
 
 translation = ["liter-llm"]
@@ -535,7 +608,14 @@ formats = [
     "heic",
 ]
 # Text processing and analysis capabilities.
-analysis = ["language-detection", "chunking", "quality", "keywords", "markdown-footnotes", "diff"]
+analysis = [
+    "language-detection",
+    "chunking",
+    "quality",
+    "keywords",
+    "markdown-footnotes",
+    "diff",
+]
 # Network services and observability infrastructure.
 services = ["api", "mcp", "otel"]
 # Everything — all formats, analysis, services, OCR, ML, and code intelligence.
@@ -575,7 +655,15 @@ full = [
     "heic",
 ]
 # Server deployment preset — formats + analysis + services + OCR.
-server = ["formats", "analysis", "services", "url-ingestion", "ocr", "paddle-ocr", "layout-detection"]
+server = [
+    "formats",
+    "analysis",
+    "services",
+    "url-ingestion",
+    "ocr",
+    "paddle-ocr",
+    "layout-detection",
+]
 # CLI-only features (thin gate for xberg-cli).
 cli = ["services", "chunking", "url-ingestion"]
 
@@ -808,6 +896,17 @@ optional = true
 version = "0.2"
 default-features = false
 features = ["fancy-regex"]
+optional = true
+
+# reqwest is pulled transitively by hf-hub 1.0 but not re-exported, so we declare it directly to
+# inject a `reqwest::Client` with a bounded `connect_timeout` into `HFClientBuilder` (see
+# `model_download::hf_client_builder`). Without it, a blackholed IPv6 route parks each connect in
+# SYN_SENT for the full OS timeout (#1249). `default-features = false` + no extra features keeps the
+# resolved reqwest build (already selected by hf-hub) unchanged via feature unification; enabled by
+# exactly the features that enable `hf-hub`. Excluded on wasm32 alongside hf-hub.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.reqwest]
+version = "0.13"
+default-features = false
 optional = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.tree-sitter-language-pack]
