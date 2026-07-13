@@ -97,13 +97,13 @@ Extract text, tables, images, metadata, and code intelligence from 97 file forma
 Kotlin DSL (`build.gradle.kts`):
 
 ```kotlin
-implementation("io.xberg:xberg-android:1.0.0-rc.27")
+implementation("io.xberg:xberg-android:1.0.0-rc.28")
 ```
 
 Groovy DSL (`build.gradle`):
 
 ```groovy
-implementation 'io.xberg:xberg-android:1.0.0-rc.27'
+implementation 'io.xberg:xberg-android:1.0.0-rc.28'
 ```
 
 Add to your `pom.xml`:
@@ -112,12 +112,11 @@ Add to your `pom.xml`:
 <dependency>
     <groupId>io.xberg</groupId>
     <artifactId>xberg-android</artifactId>
-    <version>1.0.0-rc.27</version>
+    <version>1.0.0-rc.28</version>
 </dependency>
 ```
 
 ### System Requirements
-
 - See [Installation Guide](https://docs.xberg.io/getting-started/installation/) for requirements
 
 ## Quick Start
