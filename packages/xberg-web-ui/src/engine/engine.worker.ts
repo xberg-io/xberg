@@ -21,6 +21,12 @@ interface IngestMessage {
   mcpBaseUrl: string;
 }
 
+interface OcrMessage {
+  type: "ocr";
+  requestId: string;
+  bytes: Uint8Array;
+}
+
 let mcpBaseUrl = "";
 let engine: XbergEngine | null = null;
 // Captures the redacted `full_text` seen by the most recent `upsertDocument`
@@ -139,10 +145,26 @@ async function handleIngest(msg: IngestMessage): Promise<void> {
   }
 }
 
+async function handleOcr(msg: OcrMessage): Promise<void> {
+  try {
+    const xEngine = await getEngine();
+    // `engine.ocr` returns the recognized text as a single string (no
+    // per-line geometry from the WASM OCR bridge), so split on newlines
+    // to recover lines; confidence is unavailable and defaults to 1.
+    const text = (await xEngine.ocr(msg.bytes, undefined)) as string;
+    const lines = text.split(/\r?\n/).map((t) => ({ text: t, confidence: 1 }));
+    post({ type: "ocrResult", requestId: msg.requestId, lines });
+  } catch (err) {
+    post({ type: "error", requestId: msg.requestId, message: err instanceof Error ? err.message : String(err) });
+  }
+}
+
 self.addEventListener("message", (ev: MessageEvent) => {
-  const msg = ev.data as IngestMessage;
+  const msg = ev.data as IngestMessage | OcrMessage;
   if (msg.type === "ingest") {
     mcpBaseUrl = msg.mcpBaseUrl;
     lastIngest = lastIngest.then(() => handleIngest(msg));
+  } else if (msg.type === "ocr") {
+    void handleOcr(msg);
   }
 });

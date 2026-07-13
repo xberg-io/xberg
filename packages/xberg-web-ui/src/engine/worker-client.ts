@@ -1,10 +1,11 @@
 // src/engine/worker-client.ts
-import type { IngestHistoryEntry } from "../lib/types.js";
+import type { IngestHistoryEntry, OcrLine } from "../lib/types.js";
 
 type ProgressMessage = { type: "progress"; requestId: string; stage: string };
 type ResultMessage = { type: "result"; requestId: string; entry: IngestHistoryEntry };
 type ErrorMessage = { type: "error"; requestId: string; message: string };
-type WorkerOutMessage = ProgressMessage | ResultMessage | ErrorMessage;
+type OcrResultMessage = { type: "ocrResult"; requestId: string; lines: OcrLine[] };
+type WorkerOutMessage = ProgressMessage | ResultMessage | ErrorMessage | OcrResultMessage;
 
 function randomRequestId(): string {
   return `req-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
@@ -64,7 +65,7 @@ export class WorkerClient {
         this.pending.delete(requestId);
         if (msg.type === "error") {
           reject(new Error(msg.message));
-        } else {
+        } else if (msg.type === "result") {
           resolve(msg.entry);
         }
       };
@@ -86,6 +87,30 @@ export class WorkerClient {
         passphrase,
         mcpBaseUrl: this.baseUrl,
       });
+    });
+  }
+
+  ocrLayout(bytes: Uint8Array): Promise<OcrLine[]> {
+    return new Promise((resolve, reject) => {
+      const requestId = randomRequestId();
+      const onMessage = (ev: MessageEvent<WorkerOutMessage>): void => {
+        const msg = ev.data;
+        if (msg.requestId !== requestId) return;
+        if (msg.type === "ocrResult") {
+          this.worker.removeEventListener("message", onMessage as EventListener);
+          this.pending.delete(requestId);
+          resolve(msg.lines ?? []);
+          return;
+        }
+        if (msg.type === "error") {
+          this.worker.removeEventListener("message", onMessage as EventListener);
+          this.pending.delete(requestId);
+          reject(new Error(msg.message));
+        }
+      };
+      this.pending.set(requestId, { reject, onMessage: onMessage as EventListener });
+      this.worker.addEventListener("message", onMessage as EventListener);
+      this.worker.postMessage({ type: "ocr", requestId, bytes });
     });
   }
 }

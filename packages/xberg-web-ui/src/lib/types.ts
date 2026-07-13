@@ -5,6 +5,28 @@ export interface IngestChunkPayload {
   chunk_metadata?: unknown;
 }
 
+/**
+ * Intentionally has no page identity or page dimensions: `engine.worker.ts`'s
+ * `handleOcr` gets a flat string back from `XbergEngine.ocr` (the `@xberg-io/xberg-wasm`
+ * binding doesn't expose per-line geometry or multi-page structure yet) and
+ * splits it into "lines" on newlines, so every result is already scoped to
+ * a single page with no real bounding boxes. Modeling `page`/dimensions here
+ * would just be a field nothing populates. Add it once the WASM OCR bridge
+ * returns real per-page, per-line geometry (`toParsedOcrOutput` would then
+ * need to group blocks by that page identity instead of hardcoding page 1).
+ */
+export interface OcrLine {
+  text: string;
+  confidence: number;
+  bbox?: { x: number; y: number; w: number; h: number };
+}
+
+export interface PiiDetection {
+  token: string;
+  category: string;
+  confidence?: number;
+}
+
 /** Mirrors `mcp-server/src/http/ingest-route.ts`'s `IngestPayloadSchema`. */
 export interface IngestPayload {
   collection: string;

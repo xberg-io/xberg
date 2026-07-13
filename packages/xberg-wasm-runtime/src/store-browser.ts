@@ -20,7 +20,7 @@ export type BrowserVectorStore = VectorStoreInterface & {
 };
 
 export async function createBrowserVectorStore(config?: CacheConfig): Promise<BrowserVectorStore> {
-	const worker = new Worker(new URL("./store-worker.ts", import.meta.url), { type: "module" });
+	const worker = new Worker(new URL("./store-worker.js", import.meta.url), { type: "module" });
 	const dbPath = config?.opfsPath ?? "/xberg/default.sqlite3";
 	if (!dbPath.startsWith("/") || dbPath.includes("..")) {
 		worker.terminate();

@@ -9,9 +9,13 @@
     "baseColor": "slate",
     "cssVariables": true
   },
+  "iconLibrary": "radix",
   "aliases": {
     "components": "@/components",
     "utils": "@/lib/utils",
     "ui": "@/components/ui"
+  },
+  "registries": {
+    "@extend": "https://ui.extend.ai/r/{name}.json"
   }
 }
