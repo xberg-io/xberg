@@ -5,22 +5,73 @@ import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area"
 
 import { cn } from "@/lib/utils"
 
+export interface ScrollAreaProps
+  extends React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root> {
+  /** Which scrollbar(s) to render. Defaults to "vertical" (prior behavior). */
+  orientation?: "vertical" | "horizontal" | "both"
+  /** Cosmetic edge fade over the scrollable content. */
+  scrollFade?: boolean
+  /** Reserve stable space for the scrollbar so content doesn't reflow when it appears. */
+  scrollbarGutter?: boolean
+  /** className applied to the inner Viewport element (not the Root). */
+  viewportClassName?: string
+  /** Additional props spread onto the inner Viewport element. */
+  viewportProps?: React.HTMLAttributes<HTMLDivElement>
+  /** Ref to the inner Viewport element (distinct from the forwarded Root ref). */
+  viewportRef?: React.Ref<HTMLDivElement>
+}
+
 const ScrollArea = React.forwardRef<
   React.ElementRef<typeof ScrollAreaPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root>
->(({ className, children, ...props }, ref) => (
-  <ScrollAreaPrimitive.Root
-    ref={ref}
-    className={cn("relative overflow-hidden", className)}
-    {...props}
-  >
-    <ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit]">
-      {children}
-    </ScrollAreaPrimitive.Viewport>
-    <ScrollBar />
-    <ScrollAreaPrimitive.Corner />
-  </ScrollAreaPrimitive.Root>
-))
+  ScrollAreaProps
+>(
+  (
+    {
+      className,
+      children,
+      orientation = "vertical",
+      scrollFade = false,
+      scrollbarGutter = false,
+      viewportClassName,
+      viewportProps,
+      viewportRef,
+      ...props
+    },
+    ref
+  ) => (
+    <ScrollAreaPrimitive.Root
+      ref={ref}
+      className={cn(
+        "relative overflow-hidden",
+        scrollFade &&
+          "[mask-image:linear-gradient(to_bottom,transparent,black_12px,black_calc(100%-12px),transparent)]",
+        className
+      )}
+      {...props}
+    >
+      <ScrollAreaPrimitive.Viewport
+        ref={viewportRef}
+        className={cn(
+          "h-full w-full rounded-[inherit]",
+          scrollbarGutter && "[scrollbar-gutter:stable]",
+          viewportClassName
+        )}
+        {...viewportProps}
+      >
+        {children}
+      </ScrollAreaPrimitive.Viewport>
+      {orientation === "both" ? (
+        <>
+          <ScrollBar orientation="vertical" />
+          <ScrollBar orientation="horizontal" />
+        </>
+      ) : (
+        <ScrollBar orientation={orientation} />
+      )}
+      <ScrollAreaPrimitive.Corner />
+    </ScrollAreaPrimitive.Root>
+  )
+)
 ScrollArea.displayName = ScrollAreaPrimitive.Root.displayName
 
 const ScrollBar = React.forwardRef<

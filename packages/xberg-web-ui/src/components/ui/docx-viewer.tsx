@@ -213,7 +213,8 @@ function getNextZoomScale(currentZoomScale: number, direction: 1 | -1) {
     fallbackIndex = ZOOM_OPTIONS.findIndex((value) => value > currentZoomScale)
   } else {
     for (let index = ZOOM_OPTIONS.length - 1; index >= 0; index -= 1) {
-      if (ZOOM_OPTIONS[index] < currentZoomScale) {
+      const value = ZOOM_OPTIONS[index]
+      if (value !== undefined && value < currentZoomScale) {
         fallbackIndex = index
         break
       }
@@ -564,7 +565,8 @@ function DocxToolbar({
   toolbarActions?: React.ReactNode
   zoomScale: number
 }) {
-  const canZoomIn = zoomScale < ZOOM_OPTIONS[ZOOM_OPTIONS.length - 1]
+  const maxZoomScale = ZOOM_OPTIONS.at(-1) ?? ZOOM_OPTIONS[0]
+  const canZoomIn = zoomScale < maxZoomScale
   const canZoomOut = zoomScale > ZOOM_OPTIONS[0]
 
   return (

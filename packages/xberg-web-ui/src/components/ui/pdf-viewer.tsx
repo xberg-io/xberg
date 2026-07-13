@@ -161,7 +161,7 @@ export type PDFViewerProps = {
 }
 
 const DEFAULT_ZOOM = 1
-const ZOOM_OPTIONS = [0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 2]
+const ZOOM_OPTIONS = [0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 2] as const
 const PAGE_GAP = 24
 const THUMBNAIL_PAGE_WIDTH = 92
 const THUMBNAIL_IMAGE_PADDING = 8
@@ -428,7 +428,9 @@ function getVisibleThumbnailItems({
   if (start === -1) start = items.length - 1
 
   let end = start
-  while (end < items.length && items[end].top <= viewportBottom) {
+  while (end < items.length) {
+    const item = items[end]
+    if (!item || item.top > viewportBottom) break
     end += 1
   }
 
@@ -2052,7 +2054,7 @@ function PDFViewerInner({
       const referencePageIndex =
         activePage > 0 && currentDocument.pages[activePage - 1]
           ? activePage - 1
-          : targetPageIndexes[0]
+          : (targetPageIndexes[0] ?? fallbackPageIndex)
       let scrollDelta = 0
 
       for (const pageIndex of targetPageIndexes) {
@@ -2351,7 +2353,7 @@ function PDFViewerInner({
                     aria-label="Zoom in"
                     disabled={
                       controlsDisabled ||
-                      currentZoomLevel >= ZOOM_OPTIONS[ZOOM_OPTIONS.length - 1]
+                      currentZoomLevel >= (ZOOM_OPTIONS.at(-1) ?? ZOOM_OPTIONS[0])
                     }
                     onClick={() => {
                       const nextZoom = ZOOM_OPTIONS.find(
@@ -2359,7 +2361,7 @@ function PDFViewerInner({
                       )
 
                       zoom?.requestZoom(
-                        nextZoom ?? ZOOM_OPTIONS[ZOOM_OPTIONS.length - 1]
+                        nextZoom ?? ZOOM_OPTIONS.at(-1) ?? ZOOM_OPTIONS[0]
                       )
                     }}
                   >

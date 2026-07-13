@@ -93,23 +93,48 @@ DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName
 
 const DropdownMenuCheckboxItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.CheckboxItem>,
-  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem>
->(({ className, children, checked, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem> & {
+    /** "switch" renders the indicator as a toggle switch instead of a checkmark. */
+    variant?: "default" | "switch"
+  }
+>(({ className, children, checked, variant = "default", ...props }, ref) => (
   <DropdownMenuPrimitive.CheckboxItem
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex cursor-default select-none items-center rounded-sm py-1.5 pr-2 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      variant === "switch" ? "justify-between pl-2" : "pl-8",
       className
     )}
     checked={checked}
     {...props}
   >
-    <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-      <DropdownMenuPrimitive.ItemIndicator>
-        <Check className="h-4 w-4" />
-      </DropdownMenuPrimitive.ItemIndicator>
-    </span>
-    {children}
+    {variant === "switch" ? (
+      <>
+        {children}
+        <span
+          className={cn(
+            "ml-4 inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors",
+            checked ? "bg-primary" : "bg-input"
+          )}
+        >
+          <span
+            className={cn(
+              "h-3 w-3 rounded-full bg-background shadow transition-transform",
+              checked ? "translate-x-3.5" : "translate-x-0.5"
+            )}
+          />
+        </span>
+      </>
+    ) : (
+      <>
+        <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+          <DropdownMenuPrimitive.ItemIndicator>
+            <Check className="h-4 w-4" />
+          </DropdownMenuPrimitive.ItemIndicator>
+        </span>
+        {children}
+      </>
+    )}
   </DropdownMenuPrimitive.CheckboxItem>
 ))
 DropdownMenuCheckboxItem.displayName =
