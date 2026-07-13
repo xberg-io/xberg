@@ -37,18 +37,50 @@ async fn resolve_ner_without_injected_returns_error() {
 async fn resolve_ocr_with_injected_stub() {
     let stub = js_sys::eval(
         "({
-            ocr: async (bytes, opts) => ({ text: 'hello from ocr' })
+            ocr: async (bytes, opts) => ({
+                text: 'hello from ocr',
+                lines: [
+                    { text: 'hello from ocr', confidence: 0.98, bbox: { x: 1, y: 2, w: 3, h: 4 } }
+                ]
+            })
         })",
     )
     .unwrap()
     .dyn_into::<js_sys::Object>()
     .unwrap();
 
-    let text = xberg_wasm::bridge::ocr::resolve_ocr(Some(stub), &[0xFF, 0xD8, 0xFF, 0xE0], "eng")
+    let result = xberg_wasm::bridge::ocr::resolve_ocr(Some(stub), &[0xFF, 0xD8, 0xFF, 0xE0], "eng")
         .await
         .unwrap();
 
-    assert_eq!(text, "hello from ocr");
+    assert_eq!(result.text, "hello from ocr");
+    assert_eq!(result.lines.len(), 1);
+    assert_eq!(result.lines[0].text, "hello from ocr");
+    assert!((result.lines[0].confidence - 0.98).abs() < f64::EPSILON);
+    let bbox = result.lines[0].bbox.as_ref().expect("bbox should be present");
+    assert_eq!(bbox.x, 1.0);
+    assert_eq!(bbox.y, 2.0);
+    assert_eq!(bbox.w, 3.0);
+    assert_eq!(bbox.h, 4.0);
+}
+
+#[wasm_bindgen_test]
+async fn resolve_ocr_with_injected_stub_missing_lines_defaults_to_empty() {
+    let stub = js_sys::eval(
+        "({
+            ocr: async (bytes, opts) => ({ text: 'no geometry available' })
+        })",
+    )
+    .unwrap()
+    .dyn_into::<js_sys::Object>()
+    .unwrap();
+
+    let result = xberg_wasm::bridge::ocr::resolve_ocr(Some(stub), &[0xFF, 0xD8, 0xFF, 0xE0], "eng")
+        .await
+        .unwrap();
+
+    assert_eq!(result.text, "no geometry available");
+    assert!(result.lines.is_empty());
 }
 
 #[wasm_bindgen_test]
