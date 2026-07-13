@@ -53,7 +53,9 @@ Legend: ✅ prebuilt shipped · ❌ not shipped · — not applicable
    x86_64-emulator native uses the ORT-free `android-target` feature set (no PaddleOCR, layout
    detection, embeddings, or auto-rotate); arm64 devices get the full ORT-enabled build.
 7. **WASM** is a single `wasm32` artifact, portable across any WASM runtime (browser and Node). It uses
-   the `wasm-target` feature set (`ocr-wasm`, `excel-wasm`, `tree-sitter-wasm`; no native ORT).
+   the `wasm-target` feature set (`ocr-wasm`, `excel-wasm`; no native ORT). Tree-sitter code
+   intelligence is **excluded**: the 306-language grammar pack pushes the `.wasm` past the 50 MB
+   per-file limit of public CDNs (jsDelivr), so source files extract as text but are not parsed.
 
 ## Cross-cutting gaps
 
