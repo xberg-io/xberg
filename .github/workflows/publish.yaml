@@ -2099,9 +2099,23 @@ jobs:
     if: ${{ always() && needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.dry_run != 'true' && !contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     steps:
+      # The release is still a DRAFT at this point (finalize un-drafts it, and
+      # finalize runs AFTER this job). The default GITHUB_TOKEN only has
+      # `contents: read`, which cannot see draft releases, so the lookup fails
+      # all its retries with "release not found" — which then skips finalize and
+      # cascades into skipping the Homebrew bottle build (issue #1247). Mint the
+      # App token (push access → draft visibility), same as finalize does.
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
+          owner: xberg-io
+
       - uses: xberg-io/actions/verify-release-assets@v1
         with:
           tag: ${{ needs.prepare.outputs.tag }}
+          token: ${{ steps.app-token.outputs.token }}
           expected-assets: |
             # CLI
             xberg-cli-*.tar.gz
