@@ -682,21 +682,17 @@ function DocxToolbar({
 
 function DocxSidebarThumbnail({
   canvasRef,
-  displayFileName,
   hasError,
   isActive,
   isLoading,
-  pageNumber,
   pixelHeightPx,
   pixelWidthPx,
   previewAspectRatio,
 }: {
   canvasRef: React.RefCallback<HTMLCanvasElement>
-  displayFileName: string
   hasError: boolean
   isActive: boolean
   isLoading: boolean
-  pageNumber: number
   pixelHeightPx: number
   pixelWidthPx: number
   previewAspectRatio: number
@@ -725,7 +721,6 @@ function DocxSidebarThumbnail({
 
 function DocxThumbnailSidebarList({
   activePage,
-  displayFileName,
   isLoadingDocument,
   onSelectPage,
   onThumbnailRenderWindowChange,
@@ -734,7 +729,6 @@ function DocxThumbnailSidebarList({
   thumbnails,
 }: {
   activePage: number
-  displayFileName: string
   isLoadingDocument: boolean
   onSelectPage: (pageNumber: number) => void
   onThumbnailRenderWindowChange: (
@@ -928,14 +922,12 @@ function DocxThumbnailSidebarList({
                 >
                   <DocxSidebarThumbnail
                     canvasRef={thumbnail.canvasRef}
-                    displayFileName={displayFileName}
                     hasError={thumbnail.status === "error"}
                     isActive={thumbnail.pageNumber === activePage}
                     isLoading={
                       thumbnail.status !== "ready" &&
                       thumbnail.status !== "error"
                     }
-                    pageNumber={thumbnail.pageNumber}
                     pixelHeightPx={thumbnail.pixelHeightPx}
                     pixelWidthPx={thumbnail.pixelWidthPx}
                     previewAspectRatio={thumbnail.aspectRatio}
@@ -953,7 +945,6 @@ function DocxThumbnailSidebarList({
 
 function DocxThumbnailSidebarContent({
   activePageStore,
-  displayFileName,
   editor,
   isLoadingDocument,
   onSelectPage,
@@ -962,7 +953,6 @@ function DocxThumbnailSidebarContent({
   sidebarOpen,
 }: {
   activePageStore: DocxActivePageStore
-  displayFileName: string
   editor: DocxEditorController
   isLoadingDocument: boolean
   onSelectPage: (pageNumber: number) => void
@@ -1028,7 +1018,6 @@ function DocxThumbnailSidebarContent({
   return (
     <DocxThumbnailSidebarList
       activePage={activePage}
-      displayFileName={displayFileName}
       isLoadingDocument={isLoadingDocument}
       onSelectPage={onSelectPage}
       onThumbnailRenderWindowChange={handleThumbnailRenderWindowChange}
@@ -1472,7 +1461,6 @@ function DocxViewerContent({
         >
           <DocxThumbnailSidebarContent
             activePageStore={activePageStore}
-            displayFileName={displayFileName}
             editor={editor}
             isLoadingDocument={isLoadingDocument}
             onSelectPage={scrollToPage}
