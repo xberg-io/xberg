@@ -1,4 +1,4 @@
-import { afterEach, describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { detectBackend, selectModelBackend } from "./backend.js";
 
 describe("detectBackend", () => {
@@ -45,20 +45,66 @@ describe("detectBackend", () => {
 });
 
 describe("selectModelBackend", () => {
-	afterEach(() => vi.unstubAllGlobals());
-	it("selects quantized CPU inference in Node", () => {
-		expect(selectModelBackend()).toEqual({ device: "cpu", dtype: "q8" });
+	// Vitest's own worker RPC relies on the real global `process` (it calls
+	// process.nextTick on later ticks, including mid-await inside these
+	// tests). Stubbing `process` itself to `undefined` crashes the test
+	// worker as soon as any tick runs during an awaited call. Instead, only
+	// hide the one field selectModelBackend actually reads, leaving the real
+	// `process` object (and its nextTick) intact throughout.
+	let originalNodeVersion: string | undefined;
+	beforeEach(() => {
+		originalNodeVersion = process.versions.node;
+		// @ts-expect-error -- test-only: simulate a browser process.versions shape
+		delete process.versions.node;
+	});
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		process.versions.node = originalNodeVersion as string;
 	});
 
-	it("selects WebGPU with fp32 in a capable browser", () => {
-		vi.stubGlobal("process", undefined);
-		vi.stubGlobal("navigator", { gpu: {} });
-		expect(selectModelBackend()).toEqual({ device: "webgpu", dtype: "fp32" });
+	it("selects quantized CPU inference in Node", async () => {
+		process.versions.node = originalNodeVersion as string;
+		expect(await selectModelBackend()).toEqual({ device: "cpu", dtype: "q8" });
 	});
 
-	it("selects quantized WASM in a browser without WebGPU", () => {
-		vi.stubGlobal("process", undefined);
+	it("selects WebGPU with fp32 when requestAdapter resolves with a real adapter", async () => {
+		vi.stubGlobal("navigator", { gpu: { requestAdapter: vi.fn().mockResolvedValue({}) } });
+		expect(await selectModelBackend()).toEqual({ device: "webgpu", dtype: "fp32" });
+	});
+
+	it("selects quantized WASM in a browser without WebGPU", async () => {
 		vi.stubGlobal("navigator", {});
-		expect(selectModelBackend()).toEqual({ device: "wasm", dtype: "q8" });
+		expect(await selectModelBackend()).toEqual({ device: "wasm", dtype: "q8" });
+	});
+
+	it("falls back to WASM when requestAdapter resolves with no adapter", async () => {
+		vi.stubGlobal("navigator", { gpu: { requestAdapter: vi.fn().mockResolvedValue(null) } });
+		expect(await selectModelBackend()).toEqual({ device: "wasm", dtype: "q8" });
+	});
+
+	it("falls back to WASM when requestAdapter throws", async () => {
+		vi.stubGlobal("navigator", {
+			gpu: { requestAdapter: vi.fn().mockRejectedValue(new Error("blocked")) },
+		});
+		expect(await selectModelBackend()).toEqual({ device: "wasm", dtype: "q8" });
+	});
+
+	it("falls back to WASM when requestAdapter never settles (present-but-non-functional GPU)", async () => {
+		// Only fake setTimeout/clearTimeout -- faking the full timer set (the
+		// default) also replaces process.nextTick, which Vitest's own worker
+		// RPC relies on, and crashes the test worker.
+		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+		vi.stubGlobal("navigator", { gpu: { requestAdapter: vi.fn(() => new Promise(() => {})) } });
+		const promise = selectModelBackend();
+		await vi.advanceTimersByTimeAsync(3_000);
+		expect(await promise).toEqual({ device: "wasm", dtype: "q8" });
+		vi.useRealTimers();
+	});
+
+	it("respects forceWasmBackend without calling requestAdapter", async () => {
+		const requestAdapter = vi.fn();
+		vi.stubGlobal("navigator", { gpu: { requestAdapter } });
+		expect(await selectModelBackend({ forceWasmBackend: true })).toEqual({ device: "wasm", dtype: "q8" });
+		expect(requestAdapter).not.toHaveBeenCalled();
 	});
 });

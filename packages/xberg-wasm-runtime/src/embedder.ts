@@ -29,7 +29,7 @@ export async function createEmbedder(config?: CacheConfig): Promise<EmbedderInte
 	const modelId = config?.models?.embedder ?? DEFAULT_MODEL;
 	configureTransformersEnvironment(config);
 
-	const backend = selectModelBackend(config);
+	const backend = await selectModelBackend(config);
 	console.debug(`[embedder] device=${backend.device} dtype=${backend.dtype} model=${modelId}`);
 	const extractor = await pipeline("feature-extraction", modelId, backend);
 
