@@ -87,10 +87,16 @@ describe("lib/sync-client", () => {
     const fetchMock = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
     vi.stubGlobal("fetch", fetchMock);
     const promise = postIngest("http://x:8080", { collection: "c1", external_id: "d", full_text: "t", chunks: [] });
+    // Attach the rejection assertion before advancing timers -- postIngest
+    // rejects mid-advance, and a handler attached only after all three
+    // advances complete leaves a window where Node flags the rejection as
+    // unhandled (a real "Unhandled Error" in the vitest run, even though
+    // the test itself passes).
+    const assertion = expect(promise).rejects.toThrow(/postIngest failed: network error/);
     await vi.advanceTimersByTimeAsync(400);
     await vi.advanceTimersByTimeAsync(800);
     await vi.advanceTimersByTimeAsync(1600);
-    await expect(promise).rejects.toThrow(/postIngest failed: network error/);
+    await assertion;
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 });
