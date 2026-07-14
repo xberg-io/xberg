@@ -1,3 +1,5 @@
+import { env } from "@huggingface/transformers";
+
 /**
  * Runtime detection of the best available ONNX Runtime Web backend.
  *
@@ -52,6 +54,61 @@ export async function selectModelBackend(config?: { forceWasmBackend?: boolean }
 		// fall through to wasm
 	}
 	return { device: "wasm", dtype: "q8" };
+}
+
+// onnxruntime-web's threaded WASM backend pre-spawns a pthread-style Worker
+// pool as part of session creation, before any model file is fetched. In
+// some sandboxed/automated browser contexts that bootstrap itself can hang
+// indefinitely -- confirmed NOT caused by WebGPU detection (see above, that
+// case now resolves to "wasm" quickly), missing COOP/COEP (crossOriginIsolated
+// was true), network egress (fetch to the model host worked directly), or
+// basic Worker creation (a bare postMessage round-trip worked). The hang
+// happens with zero console output and zero network requests, before
+// onnxruntime-web logs anything -- consistent with the worker-pool handshake
+// itself stalling. Race pipeline() against a timeout and, on timeout, retry
+// once forced onto onnxruntime-web's single-threaded WASM path (no worker
+// pool to bootstrap) so a stalled threaded backend degrades instead of
+// hanging the caller forever. Threaded WASM stays the default everywhere
+// this actually works -- this is a fallback, not a blanket disable.
+const PIPELINE_INIT_TIMEOUT_MS = 30_000;
+
+/**
+ * Create a transformers.js pipeline, falling back to onnxruntime-web's
+ * single-threaded WASM path if the (preferred) threaded backend's own
+ * worker-pool bootstrap doesn't complete within `PIPELINE_INIT_TIMEOUT_MS`.
+ */
+export async function createPipelineWithFallback<T>(
+	createPipeline: (backend: ModelBackend) => Promise<T>,
+	backend: ModelBackend,
+	label: string,
+): Promise<T> {
+	if (backend.device !== "wasm" && backend.device !== "webgpu") {
+		return createPipeline(backend);
+	}
+
+	const timeout = new Promise<"timeout">((resolve) => {
+		setTimeout(() => resolve("timeout"), PIPELINE_INIT_TIMEOUT_MS);
+	});
+
+	const result = await Promise.race([createPipeline(backend), timeout]);
+	if (result !== "timeout") {
+		return result;
+	}
+
+	console.warn(
+		`[backend] ${label} pipeline init exceeded ${PIPELINE_INIT_TIMEOUT_MS}ms on device=${backend.device}` +
+			" -- retrying on single-threaded WASM (threaded backend's worker-pool bootstrap may be stalled)",
+	);
+	// Merely switching `device` back to "wasm" isn't enough to change anything
+	// if that's already what was tried -- threading is a separate ORT config
+	// axis. Force the single-threaded, non-proxied path (no worker pool to
+	// bootstrap) so the retry can't hit the same stall.
+	const wasmConfig = env.backends?.onnx?.wasm as { numThreads?: number; proxy?: boolean } | undefined;
+	if (wasmConfig) {
+		wasmConfig.numThreads = 1;
+		wasmConfig.proxy = false;
+	}
+	return createPipeline({ device: "wasm", dtype: "q8" });
 }
 
 export function detectBackend(): OnnxBackend {
