@@ -110,6 +110,19 @@ export class WasmAuthConfig {
 }
 
 /**
+ * A batch of pages ready for a single vision-LLM call.
+ */
+export class WasmBatch {
+    free(): void;
+    [Symbol.dispose](): void;
+    static default(): WasmBatch;
+    constructor(pages: WasmPageImage[], userText?: string | null);
+    pages: WasmPageImage[];
+    get userText(): string | undefined;
+    set userText(value: string | null | undefined);
+}
+
+/**
  * BibTeX bibliography metadata.
  */
 export class WasmBibtexMetadata {
@@ -220,6 +233,19 @@ export enum WasmBrowserWait {
     NetworkIdle = 0,
     Selector = 1,
     Fixed = 2,
+}
+
+/**
+ * Built prompt components ready to send to the vision model.
+ */
+export class WasmBuiltPrompt {
+    free(): void;
+    [Symbol.dispose](): void;
+    static default(): WasmBuiltPrompt;
+    constructor(system: string, userText?: string | null);
+    system: string;
+    get userText(): string | undefined;
+    set userText(value: string | null | undefined);
 }
 
 /**
@@ -441,6 +467,45 @@ export class WasmCitationMetadata {
     keywords: string[];
     get yearRange(): WasmYearRange | undefined;
     set yearRange(value: WasmYearRange | null | undefined);
+}
+
+/**
+ * Both views of the fused output: citation-wrapped and flattened.
+ */
+export class WasmCitationOutput {
+    free(): void;
+    [Symbol.dispose](): void;
+    static default(): WasmCitationOutput;
+    constructor(structuredOutput: any, structuredOutputFlat: any);
+    structuredOutput: any;
+    structuredOutputFlat: any;
+}
+
+/**
+ * Provenance of a cited field value.
+ */
+export enum WasmCitationSource {
+    Llm = 0,
+    Extracted = 1,
+    Fused = 2,
+    None = 3,
+}
+
+/**
+ * A single field with its citation envelope.
+ */
+export class WasmCitedField {
+    free(): void;
+    [Symbol.dispose](): void;
+    static default(): WasmCitedField;
+    constructor(value: any, source: WasmCitationSource, page?: number | null, confidence?: number | null);
+    get confidence(): number | undefined;
+    set confidence(value: number | null | undefined);
+    get page(): number | undefined;
+    set page(value: number | null | undefined);
+    get source(): string;
+    set source(value: WasmCitationSource);
+    value: any;
 }
 
 /**
@@ -2143,6 +2208,22 @@ export enum WasmMergeMode {
 }
 
 /**
+ * Merged structured output plus validation bookkeeping.
+ */
+export class WasmMergedOutput {
+    free(): void;
+    [Symbol.dispose](): void;
+    static default(): WasmMergedOutput;
+    constructor(merged: any, outcome: WasmOutcome, perBatchErrors: string[], errorMessage?: string | null);
+    get errorMessage(): string | undefined;
+    set errorMessage(value: string | null | undefined);
+    merged: any;
+    get outcome(): string;
+    set outcome(value: WasmOutcome);
+    perBatchErrors: string[];
+}
+
+/**
  * Extraction result metadata.
  *
  * Contains common fields applicable to all formats, format-specific metadata
@@ -2448,7 +2529,7 @@ export class WasmOcrExtractionResult {
     free(): void;
     [Symbol.dispose](): void;
     static default(): WasmOcrExtractionResult;
-    constructor(content: string, mimeType: string, metadata: any, tables: WasmOcrTable[], ocrElements?: WasmOcrElement[] | null);
+    constructor(content?: string | null, mimeType?: string | null, metadata?: any | null, tables?: WasmOcrTable[] | null, ocrElements?: WasmOcrElement[] | null);
     content: string;
     metadata: any;
     mimeType: string;
@@ -2589,6 +2670,16 @@ export class WasmOcrTableBoundingBox {
 }
 
 /**
+ * Outcome of validating and merging a set of batch responses.
+ */
+export enum WasmOutcome {
+    Success = 0,
+    PartialSuccess = 1,
+    SchemaInvalid = 2,
+    Error = 3,
+}
+
+/**
  * Output format for extraction results.
  *
  * Controls the format of the `content` field in `ExtractedDocument`.
@@ -2722,6 +2813,18 @@ export class WasmPageHierarchy {
     constructor(blockCount: number, blocks: WasmHierarchicalBlock[]);
     blockCount: number;
     blocks: WasmHierarchicalBlock[];
+}
+
+/**
+ * A rendered page ready for inline-base64 transport to the vision model.
+ */
+export class WasmPageImage {
+    free(): void;
+    [Symbol.dispose](): void;
+    static default(): WasmPageImage;
+    constructor(pageNumber: number, pngBytes: Uint8Array);
+    pageNumber: number;
+    pngBytes: Uint8Array;
 }
 
 /**
@@ -3012,6 +3115,24 @@ export class WasmProcessingWarning {
 }
 
 /**
+ * A coarse progress event emitted during extraction.
+ *
+ * Intentionally minimal: a stage label plus optional detail and completion
+ * fraction. Richer event shapes are layered on by the sink implementation.
+ */
+export class WasmProgressEvent {
+    free(): void;
+    [Symbol.dispose](): void;
+    static default(): WasmProgressEvent;
+    constructor(stage: string, message?: string | null, fraction?: number | null);
+    get fraction(): number | undefined;
+    set fraction(value: number | null | undefined);
+    get message(): string | undefined;
+    set message(value: string | null | undefined);
+    stage: string;
+}
+
+/**
  * Proxy configuration for HTTP requests.
  */
 export class WasmProxyConfig {
@@ -3073,7 +3194,7 @@ export class WasmRedactionConfig {
     free(): void;
     [Symbol.dispose](): void;
     static default(): WasmRedactionConfig;
-    constructor(categories?: any[] | null, strategy?: WasmRedactionStrategy | null, preserveOffsets?: boolean | null, customTerms?: WasmRedactionTerm[] | null, customPatterns?: WasmRedactionPattern[] | null, ner?: WasmNerConfig | null);
+    constructor(categories?: any[] | null, strategy?: WasmRedactionStrategy | null, preserveOffsets?: boolean | null, customTerms?: WasmRedactionTerm[] | null, customPatterns?: WasmRedactionPattern[] | null, preserveTerms?: WasmRedactionTerm[] | null, ner?: WasmNerConfig | null);
     /**
      * Validate user-supplied terms and patterns at config-construction time.
      *
@@ -3090,6 +3211,7 @@ export class WasmRedactionConfig {
     get ner(): WasmNerConfig | undefined;
     set ner(value: WasmNerConfig | null | undefined);
     preserveOffsets: boolean;
+    preserveTerms: WasmRedactionTerm[];
     get strategy(): string;
     set strategy(value: WasmRedactionStrategy);
 }
@@ -3144,7 +3266,7 @@ export class WasmRedactionReport {
     free(): void;
     [Symbol.dispose](): void;
     static default(): WasmRedactionReport;
-    constructor(findings: WasmRedactionFinding[], totalRedacted: number);
+    constructor(findings?: WasmRedactionFinding[] | null, totalRedacted?: number | null);
     findings: WasmRedactionFinding[];
     totalRedacted: number;
 }
@@ -3182,6 +3304,29 @@ export class WasmRedactionTerm {
     caseSensitive: boolean;
     label: string;
     value: string;
+}
+
+/**
+ * One rejection-reason tally emitted by the redaction engine's
+ * post-detection validators (see
+ * `EntityValidator`).
+ */
+export class WasmRejectionCount {
+    free(): void;
+    [Symbol.dispose](): void;
+    static default(): WasmRejectionCount;
+    constructor(reason: string, count: number);
+    count: number;
+    reason: string;
+}
+
+/**
+ * Counter for rejections, keyed by validator reason string.
+ */
+export class WasmRejectionCounts {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
 }
 
 /**
@@ -3416,6 +3561,20 @@ export class WasmStructuredExtractionConfig {
     set schemaDescription(value: string | null | undefined);
     schemaName: string;
     strict: boolean;
+}
+
+/**
+ * One vault match — either direction of lookup.
+ */
+export class WasmSubjectMatch {
+    free(): void;
+    [Symbol.dispose](): void;
+    static default(): WasmSubjectMatch;
+    constructor(token: string, original: string, category?: string | null);
+    get category(): string | undefined;
+    set category(value: string | null | undefined);
+    original: string;
+    token: string;
 }
 
 /**
@@ -3714,6 +3873,14 @@ export enum WasmUrlExtractionMode {
 }
 
 /**
+ * Outcome of a single validator on a single candidate match.
+ */
+export enum WasmValidationResult {
+    Accept = 0,
+    Reject = 1,
+}
+
+/**
  * Policy controlling when VLM (Vision Language Model) OCR is used as a fallback.
  *
  * This knob is syntactic sugar over the explicit `OcrPipelineConfig` stage
@@ -3837,45 +4004,33 @@ export class XbergEngine {
      */
     cache_stats(): any;
     /**
-     * Decrypt an encrypted blob back into a token→original map.
-     */
-    decrypt_map(blob: Uint8Array, passphrase: string): any;
-    /**
      * Detect PII in `text`. Returns an array of `{ start, end, category, text }`.
      */
     detect_pii(text: string, categories?: string[] | null): any;
-    /**
-     * Encrypt a rehydration map with `passphrase`.
-     *
-     * Returns the raw ciphertext bytes (`XPII\x01` wire format).
-     */
-    encrypt_map(map: any, passphrase: string): Uint8Array;
     /**
      * Extract content from a single bytes or URI input.
      */
     extract(input: any, config: any): Promise<any>;
     /**
-     * Search a decrypted rehydration map for `query`, matching either the
-     * token (exact) or the original value (case-insensitive substring).
-     *
-     * Returns an array of `{ token, original, category }`.
-     */
-    find_subject(map: any, query: string): any;
-    /**
-     * Remove every mapping in `map` whose token or original value matches
-     * `query`. Mutates a copy and returns
-     * `{ removed: [{ token, original, category }], remaining: { token: original } }` —
-     * the caller re-encrypts `remaining` with [`XbergEngine::encrypt_map`]
-     * and persists it; this method does not touch disk.
-     */
-    forget_subject(map: any, query: string): any;
-    /**
      * Ingest a single document into the RAG vector store.
      *
-     * Requires both an `embedder` and a `store` to have been injected.
+     * Requires an `embedder` and a `store` to have been injected. For PII+NER
+     * redaction (mandatory when `pipeline-redaction` is enabled), the engine
+     * resolves NER in this order:
+     * 1. **Injected JS NER bridge** — the `ner` object from the constructor
+     *    injection, if present. This is the preferred path in browser contexts.
+     * 2. **Candle backend** — the in-binary GLiNER2 model loaded via
+     *    `initCandleNer`. Used as fallback when no JS bridge is injected.
+     *
+     * If neither is available, ingestion fails with a clear error.
+     *
      * `config` is an optional object; only `chunking.maxCharacters` and
      * `chunking.overlap` are currently supported. All other fields are
      * ignored.
+     *
+     * Returns `{ document_id, rehydration_map, pii_category_counts }`. The
+     * caller decides whether/how to persist or encrypt `rehydration_map` —
+     * this method never does so itself (use `encryptMap` separately).
      */
     ingest(doc: any, collection: string, config?: any | null): Promise<any>;
     /**
@@ -3899,11 +4054,16 @@ export class XbergEngine {
      * - `embedder` — object with `embed(texts: string[]): Promise<number[][]>`
      * - `store`    — object implementing the VectorStore JS protocol
      * - `ner`      — object with `ner(text, categories): Promise<...>`
-     * - `ocr`      — object with `ocr(imageBytes, opts): Promise<string>`
+     *                **NOTE:** this injected NER bridge is ONLY used by
+     *                `XbergEngine::ner()`. It does NOT satisfy `ingest()`'s
+     *                NER requirement — `ingest()` uses the Candle backend
+     *                via `initCandleNer()`, which must be called separately.
+     * - `ocr`      — object with `ocr(imageBytes, opts): Promise<{ text: string, lines?: Array<{ text: string, confidence: number, bbox?: { x: number, y: number, w: number, h: number } }> }>`
      */
     constructor(config: any, injection: any);
     /**
-     * Perform OCR on image bytes, returning extracted text.
+     * Perform OCR on image bytes, returning extracted text with per-line
+     * confidence and bounding-box geometry (when the backend provides it).
      */
     ocr(bytes: Uint8Array, opts: any): Promise<any>;
     /**
@@ -3923,12 +4083,6 @@ export class XbergEngine {
      * with a direct call to the core redaction API to avoid duplication.
      */
     redact(text: string, strategy?: string | null, categories?: string[] | null): any;
-    /**
-     * Decrypt a rehydration map and substitute tokens in `doc`.
-     *
-     * Returns the dehydrated text with original PII values restored.
-     */
-    rehydrate(doc: string, map_bytes: Uint8Array, passphrase: string): string;
 }
 
 export function clearDocumentExtractors(): void;
@@ -3971,16 +4125,13 @@ export function compress(entries: string[], datas: Uint8Array[]): Uint8Array;
 export function decompress(src: Uint8Array, pwd: string, f: Function): void;
 
 /**
- * Decrypt an encrypted blob back into a token→original map.
- */
-export function decryptRehydrationMap(blob: Uint8Array, passphrase: string): any;
-
-/**
- * Encrypt a token→original map with `passphrase`.
+ * Pick the highest-priority match among overlapping spans.
  *
- * Returns the raw ciphertext bytes (`XPII\x01` wire format).
+ * Strategy: walk matches in (start, -length) order; keep a match only if its
+ * start is at or after the previously-kept end. This is a standard interval
+ * dedupe that prefers earlier and longer spans.
  */
-export function encryptRehydrationMap(map: any, passphrase: string): Uint8Array;
+export function dedupeOverlaps(matches: WasmPatternMatch[]): WasmPatternMatch[];
 
 /**
  * Extract content from a single bytes or URI input.
@@ -3991,6 +4142,14 @@ export function extract(input: any, config: any): Promise<WasmExtractionResult>;
  * Extract content from multiple bytes or URI inputs.
  */
 export function extractBatch(inputs: WasmExtractInput[], config: any): Promise<WasmExtractionResult>;
+
+/**
+ * Initialize the in-binary Candle NER fallback from in-memory model bytes.
+ * JS calls this once, after downloading the pinned PII model's
+ * `model.safetensors`, `tokenizer.json`, and `encoder_config/config.json`.
+ * Calling this more than once replaces the previously-loaded model.
+ */
+export function initCandleNer(safetensors: Uint8Array, tokenizer_json: Uint8Array, encoder_config_json: Uint8Array): void;
 
 /**
  * List names of all registered document extractors.
