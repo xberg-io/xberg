@@ -1,4 +1,4 @@
-import { env } from "@huggingface/transformers";
+import { env, AutoModel } from "@huggingface/transformers";
 
 /**
  * Runtime detection of the best available ONNX Runtime Web backend.
@@ -56,35 +56,68 @@ export async function selectModelBackend(config?: { forceWasmBackend?: boolean }
 	return { device: "wasm", dtype: "q8" };
 }
 
-// onnxruntime-web's threaded WASM backend pre-spawns a pthread-style Worker
-// pool as part of session creation, before any model file is fetched. In
-// some sandboxed/automated browser contexts that bootstrap itself can hang
-// indefinitely -- confirmed NOT caused by WebGPU detection (see above, that
-// case now resolves to "wasm" quickly), missing COOP/COEP (crossOriginIsolated
-// was true), network egress (fetch to the model host worked directly), or
-// basic Worker creation (a bare postMessage round-trip worked). The hang
-// happens with zero console output and zero network requests, before
-// onnxruntime-web logs anything -- consistent with the worker-pool handshake
-// itself stalling. Race pipeline() against a timeout and, on timeout, retry
-// once forced onto onnxruntime-web's single-threaded WASM path (no worker
-// pool to bootstrap) so a stalled threaded backend degrades instead of
-// hanging the caller forever. Threaded WASM stays the default everywhere
-// this actually works -- this is a fallback, not a blanket disable.
+// ROOT CAUSE (isolated via direct testing, not guesswork): transformers.js's
+// pipeline() always loads the tokenizer and the ONNX model CONCURRENTLY via
+// Promise.all (see loadItems() in its pipelines.js). In some sandboxed/
+// automated browser contexts, onnxruntime-web's lazy WASM environment
+// singleton-init (WASM module instantiation + pthread worker-pool bootstrap)
+// races with that concurrent tokenizer load on a fresh page and never
+// resolves -- confirmed by isolating each half: AutoModel.from_pretrained()
+// alone succeeds, AutoTokenizer.from_pretrained() alone succeeds, but
+// calling both at once (what pipeline() does internally) hangs forever with
+// zero console output and zero network activity. Once ANY ORT session has
+// been created successfully once on the page, onnxruntime-web's WASM env is
+// already a warm singleton, and subsequent pipeline() calls (even for a
+// different model) succeed quickly -- confirmed by calling pipeline() a
+// second time after a standalone AutoModel.from_pretrained() succeeded.
+//
+// Not caused by WebGPU misdetection (separately fixed above), missing
+// COOP/COEP (crossOriginIsolated verified true), CDN-origin worker spawning
+// (also separately fixed -- ORT's threaded runtime is now served
+// same-origin), network egress, or basic Worker creation (all independently
+// verified working in this same environment).
+//
+// Fix: prime the WASM env by loading the real target model ONCE, alone,
+// sequentially, before ever calling pipeline(). transformers.js caches
+// downloaded model files, so this costs no extra network/bandwidth -- only
+// a second (cheap, already-warm) session construction when pipeline() loads
+// the same model again internally.
+let onnxRuntimeWarmPromise: Promise<void> | null = null;
+
+async function primeOnnxRuntime(modelId: string, backend: ModelBackend): Promise<void> {
+	if (backend.device !== "wasm" && backend.device !== "webgpu") return;
+	onnxRuntimeWarmPromise ??= AutoModel.from_pretrained(modelId, backend)
+		.then(() => undefined)
+		.catch((err: unknown) => {
+			console.warn("[backend] ORT warm-up failed (continuing anyway, real pipeline() load may still hang):", err);
+		});
+	return onnxRuntimeWarmPromise;
+}
+
+// Belt-and-suspenders: if pipeline() somehow still hangs despite priming
+// (e.g. a genuinely different model architecture triggers a fresh issue),
+// don't hang the caller forever -- retry once forced onto onnxruntime-web's
+// single-threaded, non-proxied WASM path (no worker pool to bootstrap at
+// all), which sidesteps threading-related stalls entirely as a last resort.
 const PIPELINE_INIT_TIMEOUT_MS = 30_000;
 
 /**
- * Create a transformers.js pipeline, falling back to onnxruntime-web's
- * single-threaded WASM path if the (preferred) threaded backend's own
- * worker-pool bootstrap doesn't complete within `PIPELINE_INIT_TIMEOUT_MS`.
+ * Create a transformers.js pipeline, priming onnxruntime-web's WASM
+ * environment first to avoid pipeline()'s internal concurrent-load race
+ * (see comment above), with a single-threaded-WASM retry as a last-resort
+ * safety net if init still doesn't complete in time.
  */
 export async function createPipelineWithFallback<T>(
 	createPipeline: (backend: ModelBackend) => Promise<T>,
 	backend: ModelBackend,
 	label: string,
+	modelId: string,
 ): Promise<T> {
 	if (backend.device !== "wasm" && backend.device !== "webgpu") {
 		return createPipeline(backend);
 	}
+
+	await primeOnnxRuntime(modelId, backend);
 
 	const timeout = new Promise<"timeout">((resolve) => {
 		setTimeout(() => resolve("timeout"), PIPELINE_INIT_TIMEOUT_MS);
@@ -97,12 +130,8 @@ export async function createPipelineWithFallback<T>(
 
 	console.warn(
 		`[backend] ${label} pipeline init exceeded ${PIPELINE_INIT_TIMEOUT_MS}ms on device=${backend.device}` +
-			" -- retrying on single-threaded WASM (threaded backend's worker-pool bootstrap may be stalled)",
+			" despite priming -- retrying on single-threaded WASM as a last resort",
 	);
-	// Merely switching `device` back to "wasm" isn't enough to change anything
-	// if that's already what was tried -- threading is a separate ORT config
-	// axis. Force the single-threaded, non-proxied path (no worker pool to
-	// bootstrap) so the retry can't hit the same stall.
 	const wasmConfig = env.backends?.onnx?.wasm as { numThreads?: number; proxy?: boolean } | undefined;
 	if (wasmConfig) {
 		wasmConfig.numThreads = 1;

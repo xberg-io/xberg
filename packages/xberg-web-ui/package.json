@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "predev": "pnpm --dir ../xberg-wasm-runtime build",
+    "predev": "pnpm --dir ../xberg-wasm-runtime build && node scripts/copy-ort-dist.mjs",
     "dev": "next dev",
-    "prebuild": "pnpm --dir ../xberg-wasm-runtime build",
+    "prebuild": "pnpm --dir ../xberg-wasm-runtime build && node scripts/copy-ort-dist.mjs",
     "build": "next build",
     "export": "next build && node scripts/export-to-mcp.mjs",
     "typecheck": "tsc --noEmit",

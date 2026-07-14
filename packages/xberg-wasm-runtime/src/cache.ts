@@ -3,12 +3,6 @@ import { createNer } from "./ner.js";
 import { createOcr } from "./ocr.js";
 import { configureTransformersEnvironment, defaultNodeCachePath } from "./runtime-env.js";
 
-declare global {
-	interface Window {
-		ort?: { env: { wasm: { wasmPaths: string } } };
-	}
-}
-
 interface ModelInfo {
 	name: string;
 	path: string;
@@ -168,15 +162,14 @@ export class CacheManager {
 
 	/**
 	 * Set ONNX Runtime wasm binary paths to self-hosted location (no CDN).
+	 * Routes through @huggingface/transformers' env (the ORT instance the
+	 * pipelines actually use) — a global `window.ort` never exists when ORT
+	 * is bundled, which is why the previous window-based approach was always
+	 * a silent no-op.
 	 */
 	setWasmPaths(wasmDir: string): void {
 		try {
-			if (typeof window !== "undefined" && "ort" in window && window.ort) {
-				window.ort.env.wasm.wasmPaths = wasmDir;
-				console.debug(`[cache] ORT wasm paths set to ${wasmDir}`);
-			} else {
-				console.debug(`[cache] window.ort not found; setWasmPaths is a no-op`);
-			}
+			configureTransformersEnvironment({ wasmPaths: wasmDir });
 		} catch (err) {
 			console.warn(`[cache] failed to set ORT wasm paths:`, err);
 		}

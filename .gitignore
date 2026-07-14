@@ -321,3 +321,6 @@ build-output-musl-node/
 .github/skills/
 # END ai-rulez
 .gitnexus
+
+# onnxruntime-web runtime files copied by packages/xberg-web-ui/scripts/copy-ort-dist.mjs
+packages/xberg-web-ui/public/ort/

@@ -35,6 +35,7 @@ export async function createEmbedder(config?: CacheConfig): Promise<EmbedderInte
 		(b) => pipeline("feature-extraction", modelId, b),
 		backend,
 		"embedder",
+		modelId,
 	);
 
 	const cache = new Map<string, Float32Array>();

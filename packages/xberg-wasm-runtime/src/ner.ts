@@ -42,6 +42,7 @@ export async function createNer(config?: CacheConfig): Promise<NerInterface | nu
 			(b) => pipeline("token-classification", modelId, b),
 			backend,
 			"ner",
+			modelId,
 		);
 
 		/**

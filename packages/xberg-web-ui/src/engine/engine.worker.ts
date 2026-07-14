@@ -97,7 +97,11 @@ async function getEngine(): Promise<XbergEngine> {
     // constructed, since the engine's WASM functions and linear memory are not
     // available until the module is initialized.
     await init();
-    const injection = await createXbergRuntimeFactory();
+    // wasmPaths: ORT's runtime .mjs/.wasm must be served same-origin
+    // (public/ort/, populated by scripts/copy-ort-dist.mjs). The CDN default
+    // hangs forever on crossOriginIsolated pages: ORT's threaded runtime
+    // can't spawn its pthread workers from a cross-origin URL.
+    const injection = await createXbergRuntimeFactory({ wasmPaths: "/ui/ort/" });
     injection.store = createHttpStore((fullText) => {
       lastRedactedFullText = fullText;
     });

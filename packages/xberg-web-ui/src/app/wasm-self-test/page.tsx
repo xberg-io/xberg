@@ -19,7 +19,14 @@ export default function WasmSelfTestPage() {
         setStatus("stage:inited");
 
         setStatus("stage:factory");
-        const injection = await createXbergRuntimeFactory({ forceWasmBackend: true });
+        // wasmPaths: ORT's runtime .mjs/.wasm must be served same-origin
+        // (public/ort/, populated by scripts/copy-ort-dist.mjs). The CDN
+        // default hangs forever on crossOriginIsolated pages: ORT's threaded
+        // runtime can't spawn its pthread workers from a cross-origin URL.
+        const injection = await createXbergRuntimeFactory({
+          forceWasmBackend: true,
+          wasmPaths: "/ui/ort/",
+        });
         setStatus("stage:factory-done");
 
         // wasm build has no tokio-runtime, so the timeout field must be null.

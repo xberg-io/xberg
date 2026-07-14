@@ -1,4 +1,5 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
+import { env } from "@huggingface/transformers";
 import { CacheManager } from "./cache";
 import { join } from "node:path";
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
@@ -30,18 +31,19 @@ describe("cache manager", () => {
 		expect(status).toHaveProperty("cached");
 	});
 
-	it("setWasmPaths handles missing window gracefully", () => {
-		const manager = new CacheManager();
-		// In Node environment, window is undefined
-		// setWasmPaths should not throw
-		expect(() => manager.setWasmPaths("/some/path")).not.toThrow();
+	it("setWasmPaths does not throw", () => {
+		// setWasmPaths should not throw regardless of environment.
+		expect(() => new CacheManager().setWasmPaths("/some/path")).not.toThrow();
 	});
 
-	it("sets ORT WASM paths in a browser runtime", () => {
-		const browserWindow = { ort: { env: { wasm: { wasmPaths: "" } } } };
-		vi.stubGlobal("window", browserWindow);
+	it("routes ORT WASM paths through the actual transformers.js env, not window.ort", () => {
+		// window.ort never exists when onnxruntime-web is bundled (not loaded as
+		// a global script), so setWasmPaths must configure the real bundled ORT
+		// instance via @huggingface/transformers' own env -- the one the
+		// pipelines actually use -- not a window global.
 		new CacheManager().setWasmPaths("/assets/ort/");
-		expect(browserWindow.ort.env.wasm.wasmPaths).toBe("/assets/ort/");
+		const wasmEnv = (env.backends?.onnx as { wasm?: { wasmPaths?: unknown } } | undefined)?.wasm;
+		expect(wasmEnv?.wasmPaths).toBe("/assets/ort/");
 	});
 
 	it("reports an empty browser OPFS cache until browser status I/O is available", async () => {
