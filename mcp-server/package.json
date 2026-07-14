@@ -4,8 +4,10 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
+    "prebuild": "pnpm --dir ../packages/xberg-wasm-runtime build",
     "build": "tsc",
     "start": "node dist/index.js",
+    "predev": "pnpm --dir ../packages/xberg-wasm-runtime build",
     "dev": "tsx src/index.ts",
     "test": "vitest",
     "test:e2e": "vitest run tests/e2e.test.ts",
