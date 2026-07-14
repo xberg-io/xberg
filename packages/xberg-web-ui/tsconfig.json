@@ -21,6 +21,9 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@xberg-io/xberg-wasm": [
+        "../../crates/xberg-wasm/pkg/web/xberg_wasm"
       ]
     },
     "allowJs": true,

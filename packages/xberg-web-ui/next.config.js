@@ -38,13 +38,8 @@ const nextConfig = {
       },
     ];
   },
-  // onnxruntime-web (pulled in by `@huggingface/transformers` for the browser
-  // embedder) ships an ESM WebGPU/JSEP module that Next's SWC minifier
-  // otherwise parses as a CommonJS script and chokes on (`import.meta`,
-  // `import`/`export` outside module code). Transpiling the package makes
-  // Next treat it as ESM so the production build succeeds.
   transpilePackages: ["onnxruntime-web", "@huggingface/transformers"],
-  webpack(config, { isServer }) {
+  webpack(config, { isServer, webpack }) {
     // Source uses NodeNext-style `.js`-suffixed imports for `.ts`/`.tsx`
     // files (matches tsconfig's `moduleResolution: "bundler"`, and how
     // Vitest/esbuild already resolve it) — webpack needs an explicit
@@ -84,6 +79,48 @@ const nextConfig = {
       // untouched: they resolve the package normally and get pkg/nodejs.
       config.resolve.alias["@xberg-io/xberg-wasm"] = wasmWebPath;
     }
+
+    // onnxruntime-web's threaded WASM backend (pulled in by
+    // @huggingface/transformers) ships a worker bootstrap file
+    // (ort.bundle.min.mjs) that it references via
+    // `new URL("ort.bundle.min.mjs", import.meta.url)`. Webpack statically
+    // detects that pattern and copies the file verbatim into static/media/
+    // as a raw asset -- it never passes through webpack's module/transpile
+    // pipeline, so `transpilePackages` has no effect on it, and mutating
+    // `optimization.minimizer[*].options.exclude` doesn't either (Next's
+    // built-in minifier plugin doesn't honor it for asset-module output).
+    // Next's production build still runs TerserPlugin over every emitted
+    // .mjs file and chokes on this one's `import.meta`/`import`/`export`
+    // syntax (parsed as a plain script, not a module). TerserPlugin skips
+    // any asset already flagged `info.minimized` -- and this file already
+    // ships pre-minified from onnxruntime-web ("ort.bundle.min") -- so mark
+    // it as such via a processAssets hook that runs before minification.
+    if (!isServer) {
+      const ORT_BUNDLE_PATTERN = /ort\.bundle\.min[^/\\]*\.mjs$/;
+      config.plugins.push({
+        apply(compiler) {
+          compiler.hooks.compilation.tap("SkipMinifyForOrtBundle", (compilation) => {
+            compilation.hooks.processAssets.tap(
+              {
+                name: "SkipMinifyForOrtBundle",
+                stage: webpack.Compilation.PROCESS_ASSETS_STAGE_ADDITIONAL,
+              },
+              (assets) => {
+                for (const name of Object.keys(assets)) {
+                  if (ORT_BUNDLE_PATTERN.test(name)) {
+                    compilation.updateAsset(name, (source) => source, (info) => ({
+                      ...info,
+                      minimized: true,
+                    }));
+                  }
+                }
+              },
+            );
+          });
+        },
+      });
+    }
+
     return config;
   },
 };
