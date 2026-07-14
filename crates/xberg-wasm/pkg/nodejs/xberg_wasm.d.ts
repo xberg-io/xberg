@@ -4004,13 +4004,38 @@ export class XbergEngine {
      */
     cache_stats(): any;
     /**
+     * Decrypt an encrypted blob back into a token→original map.
+     */
+    decrypt_map(blob: Uint8Array, passphrase: string): any;
+    /**
      * Detect PII in `text`. Returns an array of `{ start, end, category, text }`.
      */
     detect_pii(text: string, categories?: string[] | null): any;
     /**
+     * Encrypt a rehydration map with `passphrase`.
+     *
+     * Returns the raw ciphertext bytes (`XPII\x01` wire format).
+     */
+    encrypt_map(map: any, passphrase: string): Uint8Array;
+    /**
      * Extract content from a single bytes or URI input.
      */
     extract(input: any, config: any): Promise<any>;
+    /**
+     * Search a decrypted rehydration map for `query`, matching either the
+     * token (exact) or the original value (case-insensitive substring).
+     *
+     * Returns an array of `{ token, original, category }`.
+     */
+    find_subject(map: any, query: string): any;
+    /**
+     * Remove every mapping in `map` whose token or original value matches
+     * `query`. Mutates a copy and returns
+     * `{ removed: [{ token, original, category }], remaining: { token: original } }` —
+     * the caller re-encrypts `remaining` with [`XbergEngine::encrypt_map`]
+     * and persists it; this method does not touch disk.
+     */
+    forget_subject(map: any, query: string): any;
     /**
      * Ingest a single document into the RAG vector store.
      *
@@ -4083,6 +4108,12 @@ export class XbergEngine {
      * with a direct call to the core redaction API to avoid duplication.
      */
     redact(text: string, strategy?: string | null, categories?: string[] | null): any;
+    /**
+     * Decrypt a rehydration map and substitute tokens in `doc`.
+     *
+     * Returns the dehydrated text with original PII values restored.
+     */
+    rehydrate(doc: string, map_bytes: Uint8Array, passphrase: string): string;
 }
 
 export function clearDocumentExtractors(): void;

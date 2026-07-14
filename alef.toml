@@ -1729,7 +1729,7 @@ precondition = "command -v wasm-pack >/dev/null 2>&1"
 # under --target nodejs. The web target leaves them as ESM `import * as foo from "env"`
 # statements that Node cannot resolve. The published bundler target (pkg/*) is built
 # separately by the publish pipeline.
-before = "wasm-pack build crates/xberg-wasm --release --target nodejs --out-dir pkg/nodejs && cd e2e/wasm && pnpm install --ignore-workspace"
+before = "node scripts/ensure-wasm-mods.mjs && wasm-pack build crates/xberg-wasm --release --target nodejs --out-dir pkg/nodejs -- --features redaction-rehydrate && cd e2e/wasm && pnpm install --ignore-workspace"
 e2e = "cd e2e/wasm && pnpm test"
 
 [crates.test.rust]

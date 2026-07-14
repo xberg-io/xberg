@@ -31,9 +31,14 @@ use xberg::engine::seams::PresetResolver;
 use xberg::text::ner::NerBackend;
 use xberg::text::redaction::EntityValidator;
 
+// Hand-written modules (NOT alef-generated). Re-inserted by
+// scripts/ensure-wasm-mods.mjs after every alef regeneration — do not
+// remove. See that script's header for why alef cannot preserve these.
 pub mod bridge;
 pub mod engine;
 pub use engine::XbergEngine;
+
+
 
 /// Aggregate statistics for a xberg cache directory.
 #[derive(Clone, Default)]
