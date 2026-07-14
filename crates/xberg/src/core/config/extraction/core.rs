@@ -727,7 +727,14 @@ fn default_max_embedded_file_bytes() -> Option<u64> {
 /// resources. 60 s is generous for legitimate documents while bounding the
 /// worst-case cost of a single untrusted input.
 fn default_extraction_timeout() -> Option<u64> {
-    Some(60)
+    #[cfg(feature = "tokio-runtime")]
+    {
+        Some(60)
+    }
+    #[cfg(not(feature = "tokio-runtime"))]
+    {
+        None
+    }
 }
 
 #[cfg(test)]
