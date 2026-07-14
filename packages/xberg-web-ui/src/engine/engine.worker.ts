@@ -2,7 +2,7 @@
 /// <reference lib="webworker" />
 import { createXbergRuntimeFactory } from "xberg-wasm-runtime";
 import type { VectorStoreInterface, DocumentRecord, ChunkRecord, CollectionSpec } from "xberg-wasm-runtime";
-import { XbergEngine } from "@xberg-io/xberg-wasm";
+import init, { XbergEngine } from "@xberg-io/xberg-wasm";
 import { postIngest, postMap } from "../lib/sync-client.js";
 import { sanitizeExternalId } from "../lib/sanitize-id.js";
 import { EMBEDDING_DIM } from "../lib/constants.js";
@@ -84,6 +84,11 @@ function createHttpStore(onUpsert: (fullText: string) => void): VectorStoreInter
 
 async function getEngine(): Promise<XbergEngine> {
   if (engine) return engine;
+  // wasm-pack "web" target: instantiate the .wasm at runtime (fetches the
+  // binary emitted by webpack via `new URL`). Must run before the engine is
+  // constructed, since the engine's WASM functions and linear memory are not
+  // available until the module is initialized.
+  await init();
   const injection = await createXbergRuntimeFactory();
   injection.store = createHttpStore((fullText) => {
     lastRedactedFullText = fullText;
