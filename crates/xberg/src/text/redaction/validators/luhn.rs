@@ -10,6 +10,7 @@ use crate::text::redaction::patterns::PatternMatch;
 
 /// Validates credit-card-shaped candidates against the Luhn mod-10 checksum.
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(alef, alef(skip))]
 pub struct LuhnValidator;
 
 impl EntityValidator for LuhnValidator {

@@ -109,7 +109,6 @@ Then add the product to the relevant target:
 ```
 
 ### System Requirements
-
 - **Swift 6.0+** (`swift-tools-version: 6.0`) on macOS 13+ or iOS 16+
 - Native runtime delivered through the C FFI surface from `xberg-ffi`; published artifacts ship as a binary target
 - Optional: [ONNX Runtime](https://github.com/microsoft/onnxruntime/releases) version 1.24+ for ORT-dependent inference features

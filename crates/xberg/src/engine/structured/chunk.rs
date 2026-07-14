@@ -22,6 +22,7 @@ const DEFAULT_MAX_INPUT_TOKENS: u32 = 800_000;
 ///
 /// These are plain parameters with no environment or policy coupling.
 #[derive(Debug, Clone)]
+#[cfg_attr(alef, alef(skip))]
 pub struct ChunkerConfig {
     /// Maximum input tokens per batch.
     pub max_input_tokens: u32,

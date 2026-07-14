@@ -32,6 +32,7 @@ pub trait CacheBackend: Send + Sync + 'static {
 /// no engine-level caching, so [`get`](CacheBackend::get) always returns `None`
 /// and [`put`](CacheBackend::put) is inert.
 #[derive(Debug, Default, Clone, Copy)]
+#[cfg_attr(alef, alef(skip))]
 pub struct NoopCache;
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]

@@ -23,6 +23,7 @@ use crate::layout::{LayoutError, LayoutModelManager};
 /// model manager (e.g. `"rtdetr"`, `"tatr"`, `"pp_doclayout_v3"`,
 /// `"table_classifier"`, `"slanet_wired"`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(alef, alef(skip))]
 pub struct ModelId {
     /// Canonical model-type key.
     pub kind: String,
@@ -43,6 +44,7 @@ impl ModelId {
 /// `Arc<dyn ModelProvider>`; they may be called concurrently.
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(alef, alef(skip))]
 pub trait ModelProvider: Send + Sync + 'static {
     /// Ensure the model exists locally, downloading if needed, and return its path.
     ///
@@ -59,6 +61,7 @@ pub trait ModelProvider: Send + Sync + 'static {
 /// identical to the manager's existing on-demand download/cache behavior. The
 /// blocking download runs on a blocking thread to keep the async call non-blocking.
 #[derive(Debug, Clone)]
+#[cfg_attr(alef, alef(skip))]
 pub struct DefaultModelProvider {
     manager: LayoutModelManager,
 }

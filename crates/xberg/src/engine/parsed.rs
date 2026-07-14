@@ -31,6 +31,7 @@ const PDF_MIME: &str = "application/pdf";
 /// Cheaply shareable: the source bytes are held behind an [`Arc`], and the
 /// render cache is interior-mutable so [`rendered_pages`](Self::rendered_pages)
 /// can take `&self`.
+#[cfg_attr(alef, alef(skip))]
 pub struct ParsedDocument {
     mime_type: String,
     page_count: u32,

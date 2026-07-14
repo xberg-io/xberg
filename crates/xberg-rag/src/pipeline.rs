@@ -57,6 +57,11 @@ fn is_free_text_leaf(key: &str, text: &str) -> bool {
 /// Async JSON redactor: applies NER+regex to free-text string leaves and
 /// regex-only to opaque/short leaves, sharing the request-wide `TokenCounter`
 /// and accumulators. Mirrors the fail-closed discipline of `redact_request`.
+#[cfg(all(feature = "pipeline-redaction", not(target_arch = "wasm32")))]
+type RedactJsonValueFuture<'a> = std::pin::Pin<Box<dyn std::future::Future<Output = RagResult<()>> + Send + 'a>>;
+#[cfg(all(feature = "pipeline-redaction", target_arch = "wasm32"))]
+type RedactJsonValueFuture<'a> = std::pin::Pin<Box<dyn std::future::Future<Output = RagResult<()>> + 'a>>;
+
 #[cfg(feature = "pipeline-redaction")]
 fn redact_json_value_async<'a>(
     value: &'a mut Value,
@@ -64,7 +69,7 @@ fn redact_json_value_async<'a>(
     counter: &'a mut TokenCounter,
     rehydration_map: &'a mut xberg::text::redaction::RehydrationMap,
     category_counts: &'a mut std::collections::HashMap<String, usize>,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = RagResult<()>> + Send + 'a>> {
+) -> RedactJsonValueFuture<'a> {
     Box::pin(async move {
         match value {
             Value::String(s) => {

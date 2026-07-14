@@ -36,6 +36,7 @@ pub trait ProgressSink: Send + Sync + 'static {
 /// This reproduces today's behavior exactly — the default extraction path emits
 /// no progress, so [`emit`](ProgressSink::emit) is inert.
 #[derive(Debug, Default, Clone, Copy)]
+#[cfg_attr(alef, alef(skip))]
 pub struct NoopProgressSink;
 
 impl ProgressSink for NoopProgressSink {

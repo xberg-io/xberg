@@ -128,7 +128,8 @@ fn spans_to_entities(spans: Vec<xberg_gliner_candle::Span>) -> Vec<Entity> {
         .collect()
 }
 
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl NerBackend for CandleBackend {
     async fn detect(&self, text: &str, categories: &[EntityCategory]) -> Result<Vec<Entity>> {
         let labels: Vec<&str> = if categories.is_empty() {

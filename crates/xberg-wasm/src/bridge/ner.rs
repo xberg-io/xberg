@@ -15,16 +15,19 @@
 use js_sys::{Function, Object, Promise, Reflect};
 use wasm_bindgen::prelude::*;
 
+use async_trait::async_trait;
 use xberg::text::ner::NerBackend;
 use xberg::text::ner::candle::CandleBackend;
 use xberg::types::entity::{Entity, EntityCategory};
 
 thread_local! {
-    // Rc, not a bare CandleBackend: fallback_ner clones the Rc out of the
+    // Arc, not a bare CandleBackend: fallback_ner clones the Arc out of the
     // cell and drops the RefCell borrow *before* awaiting detect() below —
     // holding a RefCell borrow across an .await is a footgun (a re-entrant
-    // call while the future is suspended would panic on double-borrow).
-    static CANDLE_NER: std::cell::RefCell<Option<std::rc::Rc<CandleBackend>>> = const { std::cell::RefCell::new(None) };
+    // call while the future is suspended would panic on double-borrow). Arc
+    // (not Rc) because `NerBackend: Send + Sync` — wasm32 is single-threaded
+    // so the atomic refcounting is free, but the trait bound is unconditional.
+    static CANDLE_NER: std::cell::RefCell<Option<std::sync::Arc<CandleBackend>>> = const { std::cell::RefCell::new(None) };
 }
 
 /// Initialize the in-binary Candle NER fallback from in-memory model bytes.
@@ -37,7 +40,7 @@ pub fn init_candle_ner(safetensors: &[u8], tokenizer_json: &[u8], encoder_config
     let backend = CandleBackend::from_bytes(safetensors, tokenizer_json, encoder_config_json)
         .map_err(|e| js_from_any(format!("initCandleNer: {e}")))?;
     CANDLE_NER.with(|cell| {
-        *cell.borrow_mut() = Some(std::rc::Rc::new(backend));
+        *cell.borrow_mut() = Some(std::sync::Arc::new(backend));
     });
     Ok(())
 }
@@ -45,7 +48,7 @@ pub fn init_candle_ner(safetensors: &[u8], tokenizer_json: &[u8], encoder_config
 /// Return the currently-loaded Candle NER backend, if `initCandleNer` has
 /// been called. Used by `engine.rs::ingest()` to thread the already-loaded
 /// model into `xberg-rag`'s mandatory PII+NER redaction step.
-pub(crate) fn get_candle_ner() -> Option<std::rc::Rc<CandleBackend>> {
+pub(crate) fn get_candle_ner() -> Option<std::sync::Arc<CandleBackend>> {
     CANDLE_NER.with(|cell| cell.borrow().clone())
 }
 
@@ -157,7 +160,10 @@ impl NerBackend for JsNerBridge {
     ) -> xberg::Result<Vec<Entity>> {
         call_injected_ner(self.obj.clone(), text, categories, self.timeout_ms)
             .await
-            .map_err(|e| xberg::XbergError::Plugin(format!("JS NER bridge: {e:?}")))
+            .map_err(|e| xberg::XbergError::Plugin {
+                message: format!("JS NER bridge: {e:?}"),
+                plugin_name: "js-ner-bridge".to_string(),
+            })
     }
 }
 

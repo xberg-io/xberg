@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use js_sys::Object;
 use wasm_bindgen::prelude::*;
 
@@ -172,8 +173,9 @@ impl XbergEngine {
             crate::bridge::ner::resolve_ingest_ner(self.ner.as_ref(), self.bridge_timeout_ms);
         let candle_rc = crate::bridge::ner::get_candle_ner();
         // We need a boxed NER backend that lives long enough. Use a small
-        // owned wrapper for the Candle case so the `Box` owns it.
-        struct CandleBox(std::rc::Rc<xberg::text::ner::candle::CandleBackend>);
+        // owned wrapper for the Candle case so the `Box` owns it. Arc (not Rc)
+        // because `NerBackend: Send + Sync` is unconditional on the trait.
+        struct CandleBox(Arc<xberg::text::ner::candle::CandleBackend>);
         #[async_trait(?Send)]
         impl xberg::text::ner::NerBackend for CandleBox {
             async fn detect(

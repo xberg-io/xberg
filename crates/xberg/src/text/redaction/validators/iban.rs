@@ -11,6 +11,7 @@ use crate::text::redaction::patterns::PatternMatch;
 
 /// Validates IBAN candidates against the ISO 13616 mod-97 checksum.
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(alef, alef(skip))]
 pub struct IbanChecksumValidator;
 
 impl EntityValidator for IbanChecksumValidator {

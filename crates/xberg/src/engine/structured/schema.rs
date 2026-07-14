@@ -54,6 +54,7 @@ pub struct MergedOutput {
 /// - Merge strategy applied to all validated batches
 /// - Per-batch validation failures collected in `per_batch_errors`
 /// - Outcome determined by validation/merge success rate
+#[cfg_attr(alef, alef(skip))]
 pub fn validate_and_merge(
     raw_responses: Vec<serde_json::Value>,
     schema: &serde_json::Value,

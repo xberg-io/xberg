@@ -65,6 +65,7 @@ pub struct CitationOutput {
 /// matching on the stringified field values against OCR text, so the exact schema of the
 /// source data is not needed. `match_threshold` and `fused_confidence` are caller
 /// parameters: the mechanism imposes no default, matching the rest of this module.
+#[cfg_attr(alef, alef(skip))]
 pub fn fuse(
     merged: serde_json::Value,
     ocr_elements: &[serde_json::Value],

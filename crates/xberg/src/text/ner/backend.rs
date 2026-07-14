@@ -8,7 +8,8 @@ use async_trait::async_trait;
 ///
 /// The redaction engine and the NER post-processor both consume backends through
 /// this trait so they can be swapped without rewriting consumer code.
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 #[cfg_attr(alef, alef(skip))]
 pub trait NerBackend: Send + Sync {
     /// Identify entities in `text` belonging to any of the `categories`.
