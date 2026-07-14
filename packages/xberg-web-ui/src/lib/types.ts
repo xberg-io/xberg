@@ -6,19 +6,20 @@ export interface IngestChunkPayload {
 }
 
 /**
- * Intentionally has no page identity or page dimensions: `engine.worker.ts`'s
- * `handleOcr` gets a flat string back from `XbergEngine.ocr` (the `@xberg-io/xberg-wasm`
- * binding doesn't expose per-line geometry or multi-page structure yet) and
- * splits it into "lines" on newlines, so every result is already scoped to
- * a single page with no real bounding boxes. Modeling `page`/dimensions here
- * would just be a field nothing populates. Add it once the WASM OCR bridge
- * returns real per-page, per-line geometry (`toParsedOcrOutput` would then
- * need to group blocks by that page identity instead of hardcoding page 1).
+ * `bbox`/`confidence` are real per-line OCR geometry (see the WASM OCR
+ * bridge in `crates/xberg-wasm/src/bridge/ocr.rs`), not derived from a
+ * flat-string split. `page` is optional and caller-supplied: nothing in
+ * this codebase currently splits a multi-page document into per-page
+ * images before calling OCR (`handleOcr` still OCRs one whole file's
+ * bytes per call), so `page` stays undefined until that rasterization
+ * step exists. `toParsedOcrOutput` uses `page.number`/`width`/`height`
+ * per block when present and defaults to page 1 otherwise.
  */
 export interface OcrLine {
   text: string;
   confidence: number;
   bbox?: { x: number; y: number; w: number; h: number };
+  page?: { number: number; width: number; height: number };
 }
 
 export interface PiiDetection {
