@@ -110,7 +110,9 @@ export class WorkerClient {
       };
       this.pending.set(requestId, { reject, onMessage: onMessage as EventListener });
       this.worker.addEventListener("message", onMessage as EventListener);
-      this.worker.postMessage({ type: "ocr", requestId, bytes });
+      // Transfer the underlying ArrayBuffer instead of structured-cloning it,
+      // and document that the caller must not reuse `bytes` afterwards.
+      this.worker.postMessage({ type: "ocr", requestId, bytes }, [bytes.buffer]);
     });
   }
 }

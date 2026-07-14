@@ -23,12 +23,14 @@ if (s.includes("function makeEnv()")) {
 const before = s;
 s = s.replace(/import \* as import\d+ from "env"\r?\n/g, "");
 if (s === before) {
-  console.error("WARNING: no env import lines found (already removed?)");
+  console.error("ERROR: no env import lines found (unexpected target)");
+  process.exit(1);
 }
 
 // 2. Replace the ten `"env": importN,` return entries with `"env": makeEnv(),`.
 if (!/"env": import\d+,/.test(s)) {
-  console.error("WARNING: no env return entries found");
+  console.error("ERROR: no env return entries found (unexpected target)");
+  process.exit(1);
 }
 s = s.replace(/"env": import\d+,\r?\n/g, "");
 s = s.replace(
@@ -80,11 +82,11 @@ function makeEnv() {
     return c;
   }
   function strcmp(s1, s2) {
-    const u32 = new Uint32Array(mem());
+    const u8 = new Uint8Array(mem());
     let i = 0;
     for (;;) {
-      const a = u32[(s1 >> 2) + i];
-      const b = u32[(s2 >> 2) + i];
+      const a = u8[s1 + i];
+      const b = u8[s2 + i];
       if (a === 0 && b === 0) return 0;
       if (a === 0) return -1;
       if (b === 0) return 1;

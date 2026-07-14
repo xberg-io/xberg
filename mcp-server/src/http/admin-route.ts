@@ -22,6 +22,7 @@ export function createAdminHandler(
         total += (c as Buffer).length;
         if (total > MAX_BODY_BYTES) {
           res.writeHead(413, { "Content-Type": "application/json" }).end(JSON.stringify({ error: "payload too large" }));
+          req.on("error", () => {});
           req.resume();
           return;
         }

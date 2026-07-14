@@ -82,19 +82,29 @@ function createHttpStore(onUpsert: (fullText: string) => void): VectorStoreInter
   };
 }
 
+let enginePromise: Promise<XbergEngine> | null = null;
+
 async function getEngine(): Promise<XbergEngine> {
-  if (engine) return engine;
-  // wasm-pack "web" target: instantiate the .wasm at runtime (fetches the
-  // binary emitted by webpack via `new URL`). Must run before the engine is
-  // constructed, since the engine's WASM functions and linear memory are not
-  // available until the module is initialized.
-  await init();
-  const injection = await createXbergRuntimeFactory();
-  injection.store = createHttpStore((fullText) => {
-    lastRedactedFullText = fullText;
-  });
-  engine = new XbergEngine({}, injection);
-  return engine;
+  if (enginePromise) return enginePromise;
+  // Cache the in-flight initialization (not just the finished engine) so
+  // concurrent callers — ingest and OCR arriving together — reuse the same
+  // XbergEngine instance instead of racing to construct two of them. The
+  // engine is not reentrant, so sharing one instance behind a single queue
+  // is what keeps its internal state correct.
+  enginePromise = (async () => {
+    // wasm-pack "web" target: instantiate the .wasm at runtime (fetches the
+    // binary emitted by webpack via `new URL`). Must run before the engine is
+    // constructed, since the engine's WASM functions and linear memory are not
+    // available until the module is initialized.
+    await init();
+    const injection = await createXbergRuntimeFactory();
+    injection.store = createHttpStore((fullText) => {
+      lastRedactedFullText = fullText;
+    });
+    engine = new XbergEngine({}, injection);
+    return engine;
+  })();
+  return enginePromise;
 }
 
 function post(msg: unknown, transfer: Transferable[] = []): void {
@@ -153,7 +163,20 @@ async function handleIngest(msg: IngestMessage): Promise<void> {
 async function handleOcr(msg: OcrMessage): Promise<void> {
   try {
     const xEngine = await getEngine();
-    const result = (await xEngine.ocr(msg.bytes, undefined)) as {
+    // Enforce a deadline: xEngine.ocr() is a synchronous WASM call that cannot
+    // be interrupted from JS, so Promise.race alone cannot stop it. We still
+    // bound the *wait*: if it stalls, we report the error and discard the
+    // (now possibly wedged) engine so the next request rebuilds a fresh one
+    // instead of reusing a stuck instance. A full worker restart would need
+    // cooperation from the main-thread WorkerClient and is out of scope here.
+    const OCR_TIMEOUT_MS = 120_000;
+    const timeout = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("OCR timed out")), OCR_TIMEOUT_MS);
+    });
+    const result = (await Promise.race([
+      xEngine.ocr(msg.bytes, undefined),
+      timeout,
+    ])) as {
       text: string;
       lines: Array<{
         text: string;
@@ -163,6 +186,10 @@ async function handleOcr(msg: OcrMessage): Promise<void> {
     };
     post({ type: "ocrResult", requestId: msg.requestId, lines: result.lines });
   } catch (err) {
+    // A timeout (or any stall) leaves the engine in an unknown state — drop it
+    // so the next request reinitializes rather than reusing a wedged instance.
+    engine = null;
+    enginePromise = null;
     post({ type: "error", requestId: msg.requestId, message: err instanceof Error ? err.message : String(err) });
   }
 }
@@ -173,6 +200,8 @@ self.addEventListener("message", (ev: MessageEvent) => {
     mcpBaseUrl = msg.mcpBaseUrl;
     lastIngest = lastIngest.then(() => handleIngest(msg));
   } else if (msg.type === "ocr") {
-    void handleOcr(msg);
+    // Serialize OCR behind the same ingest queue: the engine is not reentrant,
+    // so OCR and ingest must not run concurrently on the shared instance.
+    lastIngest = lastIngest.then(() => handleOcr(msg));
   }
 });

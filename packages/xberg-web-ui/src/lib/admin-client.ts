@@ -41,6 +41,15 @@ export async function postAdmin(
     body: JSON.stringify(payload),
   };
   const res = MUTATING_OPS.has(payload.op) ? await fetch(url, init) : await postWithRetry(url, init);
-  if (!res.ok) throw new Error(`admin failed (${res.status})`);
+  if (!res.ok) {
+    let message = `admin failed (${res.status})`;
+    try {
+      const body = (await res.json()) as { error?: unknown };
+      if (body && typeof body.error === "string") message = body.error;
+    } catch {
+      // Response had no usable JSON body — keep the status-based message.
+    }
+    throw new Error(message);
+  }
   return (await res.json()) as AdminResult;
 }

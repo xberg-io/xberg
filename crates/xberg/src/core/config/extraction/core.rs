@@ -847,10 +847,17 @@ mod tests {
     #[test]
     fn test_default_extraction_timeout_is_sixty_seconds() {
         let config = ExtractionConfig::default();
+        #[cfg(feature = "tokio-runtime")]
         assert_eq!(
             config.extraction_timeout_secs,
             Some(60),
             "default timeout must be Some(60) to prevent unbounded extraction"
+        );
+        #[cfg(not(feature = "tokio-runtime"))]
+        assert_eq!(
+            config.extraction_timeout_secs,
+            None,
+            "without tokio-runtime the extraction timeout must default to None"
         );
     }
 
@@ -879,10 +886,17 @@ mod tests {
         // When the JSON field is absent the serde default function must fire.
         let json = r#"{}"#;
         let config: ExtractionConfig = serde_json::from_str(json).unwrap();
+        #[cfg(feature = "tokio-runtime")]
         assert_eq!(
             config.extraction_timeout_secs,
             Some(60),
             "absent field must use default_extraction_timeout() -> Some(60)"
+        );
+        #[cfg(not(feature = "tokio-runtime"))]
+        assert_eq!(
+            config.extraction_timeout_secs,
+            None,
+            "absent field must use default_extraction_timeout() -> None without tokio-runtime"
         );
     }
 

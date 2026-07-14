@@ -108,7 +108,6 @@ composer require xberg-io/xberg
 
 Extract text, metadata, and structure from any supported document format:
 
-```php
 ```php title="basic_extraction_oop.php"
 <?php
 
@@ -145,7 +144,6 @@ if (count($result->tables) > 0) {
     }
 }
 ```
-```
 
 ### Common Use Cases
 
@@ -155,7 +153,6 @@ Most use cases benefit from configuration to control extraction behavior:
 
 **With OCR (for scanned documents):**
 
-```php
 ```php title="basic_ocr.php"
 <?php
 
@@ -281,7 +278,6 @@ if ($avgCharsPerPage < 100) {
     echo "Pass: Moderate - Text extracted successfully\n";
 }
 ```
-```
 
 #### Table Extraction
 
@@ -289,7 +285,6 @@ See [Configuration Guide](https://docs.xberg.io/guides/configuration/) for table
 
 #### Processing Multiple Files
 
-```php
 ```php title="batch_processing.php"
 <?php
 
@@ -320,7 +315,6 @@ foreach ($output->results as $result) {
     echo "Tables: " . count($result->tables) . "\n";
     echo "MIME: {$result->mimeType}\n\n";
 }
-```
 ```
 
 ### Next Steps
@@ -430,7 +424,6 @@ Xberg supports multiple OCR backends for extracting text from scanned documents 
 
 ### OCR Configuration Example
 
-```php
 ```php title="basic_ocr.php"
 <?php
 
@@ -556,7 +549,6 @@ if ($avgCharsPerPage < 100) {
     echo "Pass: Moderate - Text extracted successfully\n";
 }
 ```
-```
 
 ## Plugin System
 
@@ -574,7 +566,6 @@ Generate vector embeddings for extracted text using the built-in ONNX Runtime su
 
 Process multiple documents efficiently:
 
-```php
 ```php title="batch_processing.php"
 <?php
 
@@ -605,7 +596,6 @@ foreach ($output->results as $result) {
     echo "Tables: " . count($result->tables) . "\n";
     echo "MIME: {$result->mimeType}\n\n";
 }
-```
 ```
 
 ## Configuration

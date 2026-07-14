@@ -119,7 +119,6 @@ mix deps.get
 
 Extract text, metadata, and structure from any supported document format:
 
-```exs
 ```elixir title="Elixir"
 # Basic document extraction workflow
 # Load file -> extract -> access results
@@ -134,7 +133,6 @@ IO.puts("\nMetadata:")
 IO.puts("Format: #{inspect(result.metadata.format)}")
 IO.puts("Tables found: #{length(result.tables)}")
 ```
-```
 
 ### Common Use Cases
 
@@ -144,7 +142,6 @@ Most use cases benefit from configuration to control extraction behavior:
 
 **With OCR (for scanned documents):**
 
-```exs
 ```elixir title="Elixir"
 alias Xberg.ExtractionConfig
 
@@ -160,7 +157,6 @@ IO.puts("OCR Extracted content:")
 IO.puts(content)
 IO.puts("Metadata: #{inspect(result.metadata)}")
 ```
-```
 
 #### Table Extraction
 
@@ -168,7 +164,6 @@ See [Configuration Guide](https://docs.xberg.io/guides/configuration/) for table
 
 #### Processing Multiple Files
 
-```exs
 ```elixir title="Elixir"
 inputs = [
   %Xberg.ExtractInput{kind: :uri, uri: "document.pdf"},
@@ -185,7 +180,6 @@ inputs = [
 Enum.each(output.results, fn result ->
   IO.puts(result.content)
 end)
-```
 ```
 
 #### Async Processing
@@ -302,7 +296,6 @@ Xberg supports multiple OCR backends for extracting text from scanned documents 
 
 ### OCR Configuration Example
 
-```exs
 ```elixir title="Elixir"
 alias Xberg.ExtractionConfig
 
@@ -317,7 +310,6 @@ content = result.content
 IO.puts("OCR Extracted content:")
 IO.puts(content)
 IO.puts("Metadata: #{inspect(result.metadata)}")
-```
 ```
 
 ## Async Support
@@ -334,7 +326,6 @@ For detailed plugin documentation, visit [Plugin System Guide](https://docs.xber
 
 ### Plugin Example
 
-```exs
 ```elixir title="Elixir"
 alias Xberg.Plugin
 
@@ -412,7 +403,6 @@ end
 {:ok, processors} = Plugin.list_post_processors()
 IO.inspect(processors, label: "Registered Post-Processors")
 ```
-```
 
 ## Embeddings Support
 
@@ -424,7 +414,6 @@ Generate vector embeddings for extracted text using the built-in ONNX Runtime su
 
 Process multiple documents efficiently:
 
-```exs
 ```elixir title="Elixir"
 inputs = [
   %Xberg.ExtractInput{kind: :uri, uri: "document.pdf"},
@@ -441,7 +430,6 @@ inputs = [
 Enum.each(output.results, fn result ->
   IO.puts(result.content)
 end)
-```
 ```
 
 ## Configuration
