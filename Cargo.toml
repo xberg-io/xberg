@@ -76,7 +76,7 @@ once_cell = "1.21.4"
 
 ort = { version = "2.0.0-rc.12", default-features = false, features = ["std", "api-18"] }
 parking_lot = "0.12.5"
-pdf_oxide = { version = "0.3.73", default-features = false, features = ["rendering", "legacy-crypto"] }
+pdf_oxide = { version = "0.3.74", default-features = false, features = ["rendering", "legacy-crypto"] }
 rayon = "1.12.0"
 reqwest = { version = "0.13.4", default-features = false }
 # SVG rendering (resvg re-exports tiny_skia and usvg; default-features = false
