@@ -16,9 +16,12 @@ export type ModelBackend = {
 	dtype: "fp32" | "q8";
 };
 
-export function selectModelBackend(): ModelBackend {
+export function selectModelBackend(config?: { forceWasmBackend?: boolean }): ModelBackend {
 	if (typeof process !== "undefined" && process.versions?.node) {
 		return { device: "cpu", dtype: "q8" };
+	}
+	if (config?.forceWasmBackend) {
+		return { device: "wasm", dtype: "q8" };
 	}
 	const hasWebGpu =
 		typeof navigator !== "undefined" &&

@@ -28,7 +28,19 @@ export async function createVectorStore(config?: CacheConfig): Promise<VectorSto
     return createNodeVectorStore(config);
   }
   const { createBrowserVectorStore } = await import("./store-browser.js");
-  return createBrowserVectorStore(config);
+  try {
+    return await createBrowserVectorStore(config);
+  } catch (err) {
+    // The browser OPFS/SQLite store needs cross-origin isolation (COOP/COEP)
+    // and OPFS support, which may be absent (e.g. inside a non-isolated Web
+    // Worker, or a headless test context). The engine only requires *some*
+    // `VectorStoreInterface` to satisfy its injection contract; callers that
+    // need durability (the web UI worker) override `injection.store` with an
+    // HTTP-backed store anyway. Fall back to the in-memory store so factory
+    // initialization never blocks on OPFS availability.
+    console.warn("[store] OPFS store unavailable, using in-memory store:", err);
+    return createInMemoryVectorStore(config);
+  }
 }
 
 /**

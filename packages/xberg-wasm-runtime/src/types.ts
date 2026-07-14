@@ -273,6 +273,7 @@ export interface CacheConfig {
   nodeCachePath?: string; // Node ~/.cache/xberg path
   nodeStorePath?: string; // Node SQLite file path; defaults inside nodeCachePath
   wasmPaths?: string; // ORT wasm binaries directory
+  forceWasmBackend?: boolean; // Skip WebGPU detection; use the WASM-CPU backend
   models?: {
     embedder?: string; // Model identifier for transformers.js
     ner?: string;

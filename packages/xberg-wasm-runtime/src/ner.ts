@@ -36,7 +36,7 @@ export async function createNer(config?: CacheConfig): Promise<NerInterface | nu
 		const modelId = config?.models?.ner ?? DEFAULT_NER_MODEL;
 		configureTransformersEnvironment(config);
 
-		const backend = selectModelBackend();
+		const backend = selectModelBackend(config);
 		console.debug(`[ner] device=${backend.device} dtype=${backend.dtype} model=${modelId}`);
 		const tokenClassifier = await pipeline("token-classification", modelId, backend);
 
