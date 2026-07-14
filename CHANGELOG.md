@@ -152,6 +152,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   width — scanned pages with vertical OCR layers, typeset tategaki books. The panic guard kept
   extraction alive, but the affected page came back as a per-page error with its text lost.
   pdf_oxide 0.3.73 fixes the sort, so those pages now extract normally.
+- **Bordered tables with stroke-width-rendered rules are detected (#1213).** Some print-era PDF
+  generators draw a vertical table rule as a ~1pt segment stroked with a line width equal to the
+  table height, so the rule's geometric bounding box was a speck and the Lines-strategy detector
+  saw no vertical rulings — whole fuse-chart-style tables were missed (their only detected "table"
+  being a false-positive page footer) and their text flowed out column-major, destroying row
+  associations. pdf_oxide 0.3.74 accounts for stroke width in path bounding boxes, so these grids
+  are now detected natively with their rows intact.
+- **Inter-word spaces are no longer dropped in positioned/tabular PDF text.** Words in
+  TJ-positioned runs — the header cells of rate tables and similar tabular layouts — extracted
+  glued together (`Comparisonrate`, `roadvehicles`, `transportlayer`) while the same words in
+  flowing prose on the page were spaced correctly. pdf_oxide 0.3.74 accounts for the `TJ` numeric
+  adjustment that carries the space in those runs, so positioned text is spaced too.
 - **Redaction now scrubs every text-bearing field.** The redaction pass rewrote the main content
   and a handful of fields but left table cells, page content, form-field values, image captions,
   URIs, metadata, and structured output carrying the original text — while still reporting success.

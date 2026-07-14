@@ -235,3 +235,31 @@ fn test_pdf_structure_reading_order() {
          crates/xberg/src/pdf/oxide/hierarchy.rs"
     );
 }
+
+/// Regression test for yfedoseev/pdf_oxide#847: inter-word spaces were dropped
+/// on TJ-positioned runs, so words in this pdfplumber fixture's tabular
+/// rate-table header extracted glued (`Comparisonrate`, eight times) while the
+/// same words in flowing prose were spaced correctly. pdf_oxide 0.3.74 accounts
+/// for the `TJ` numeric adjustment that carries the space, so the header text
+/// is spaced too.
+#[test]
+fn test_tj_positioned_runs_keep_interword_spaces() {
+    if !test_documents_available() {
+        return;
+    }
+    let path = get_test_file_path("vendored/pdfplumber/pdf/pr-138-example.pdf");
+    if !path.exists() {
+        return;
+    }
+    let content = extract_uri_document_blocking(&path, None, &ExtractionConfig::default())
+        .expect("extraction should succeed")
+        .content;
+    assert!(
+        !content.contains("Comparisonrate"),
+        "TJ-positioned header still glues 'Comparisonrate' — pdf_oxide#847 regression"
+    );
+    assert!(
+        content.contains("Comparison rate"),
+        "expected the spaced phrase 'Comparison rate' in extracted text"
+    );
+}
