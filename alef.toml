@@ -336,6 +336,17 @@ exclude_functions = [
   "batch_extract_bytes_sync",
   "batch_extract_files",
   "batch_extract_files_sync",
+  # EngineBuilder.with_progress_sink/with_model_provider take Rust trait-object
+  # callback params (JsVisitorRef) that alef's node backend can't auto-delegate
+  # (`JsVisitorRef: FromNapiValue` is unsatisfied -- these need a JS-callback
+  # adapter this codegen doesn't have). with_cache_backend/build are excluded
+  # alongside them since they're only reachable through this same builder chain.
+  # mcp-server (the only node consumer) never uses EngineBuilder at all -- it
+  # constructs `new XbergEngine({}, injection)` directly -- so excluding the
+  # whole chain from node bindings has no functional impact.
+  "with_progress_sink",
+  "with_model_provider",
+  "with_cache_backend",
 ]
 
 [crates.node.extra_dependencies]

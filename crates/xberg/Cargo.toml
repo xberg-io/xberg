@@ -450,6 +450,12 @@ windows-target = [
     "reranker-presets",
     "ner",
     "ner-llm-types",
+    # ner-candle (not ner-onnx): the Candle GLiNER2 backend is pure Rust with
+    # no ONNX Runtime linking requirement, so it's safe on the ORT-less
+    # Windows runner this feature set targets -- unlike ner-onnx, which stays
+    # excluded here for the same ORT-availability reason as the other
+    # ORT-dependent features above.
+    "ner-candle",
     "presets",
     "redaction",
     "diff",
