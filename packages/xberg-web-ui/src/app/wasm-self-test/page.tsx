@@ -33,15 +33,17 @@ export default function WasmSelfTestPage() {
         });
         setStatus("stage:factory-done");
 
-        // wasm build has no tokio-runtime, so the timeout field must be null.
-        const engine = new XbergEngine({ extraction_timeout_secs: null }, injection);
+        const engine = new XbergEngine({}, injection);
         setStatus("stage:engine");
 
         const sample = "Contact Alice at alice@example.com about the Q3 contract.";
         const bytes = new TextEncoder().encode(sample);
+        // wasm build has no tokio-runtime, so the timeout field must be null;
+        // XbergEngine's constructor config doesn't read extraction_timeout_secs
+        // (only bridgeTimeoutMs) — the override belongs on extract()'s config.
         const out = (await engine.extract(
           { kind: "bytes", bytes, filename: "sample.txt" },
-          undefined
+          { extraction_timeout_secs: null }
         )) as { results?: Array<{ content: string }> };
         const content = out.results?.[0]?.content ?? "";
         setStatus("stage:extracted");

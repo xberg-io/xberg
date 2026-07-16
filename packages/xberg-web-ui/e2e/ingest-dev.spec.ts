@@ -74,7 +74,10 @@ test("browser wasm engine ingests a PII doc with redaction (dev proxy)", async (
     }
     send(404, {});
   });
-  await new Promise<void>((resolve) => server.listen(8082, "127.0.0.1", resolve));
+  const port = await new Promise<number>((resolve) =>
+    server.listen(0, "127.0.0.1", () => resolve((server.address() as { port: number }).port))
+  );
+  const baseUrl = `http://127.0.0.1:${port}`;
 
   const errors: string[] = [];
   page.on("console", (m) => {
@@ -83,7 +86,7 @@ test("browser wasm engine ingests a PII doc with redaction (dev proxy)", async (
   page.on("pageerror", (e) => errors.push(String(e)));
 
   try {
-    await page.goto("http://127.0.0.1:8082/ui/?token=test", { waitUntil: "domcontentloaded" });
+    await page.goto(`${baseUrl}/ui/?token=test`, { waitUntil: "domcontentloaded" });
     await page.getByText("New folder").click();
     await page.getByLabel("Folder name").fill("contrats");
     await page.getByRole("button", { name: "Create" }).click();

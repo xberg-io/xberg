@@ -84,16 +84,17 @@ test("uploading a PII doc then deleting it via the UI removes it from the MCP st
     }
     send(404, {});
   });
-  await new Promise<void>((resolve, reject) => {
+  const port = await new Promise<number>((resolve, reject) => {
     server.once("error", reject);
-    server.listen(8082, "127.0.0.1", () => {
+    server.listen(0, "127.0.0.1", () => {
       server.off("error", reject);
-      resolve();
+      resolve((server.address() as { port: number }).port);
     });
   });
+  const baseUrl = `http://127.0.0.1:${port}`;
 
   try {
-    await page.goto("http://127.0.0.1:8082/ui/?token=test");
+    await page.goto(`${baseUrl}/ui/?token=test`);
     await page.getByText("New folder").click();
     await page.getByLabel("Folder name").fill("contrats");
     await page.getByText("Create").click();
@@ -111,7 +112,7 @@ test("uploading a PII doc then deleting it via the UI removes it from the MCP st
 
     // Reload the folder view (the table reads ingest history from IndexedDB)
     // and select the row that was just ingested.
-    await page.goto("http://127.0.0.1:8082/ui/folder/contrats?token=test");
+    await page.goto(`${baseUrl}/ui/folder/contrats?token=test`);
     await page.getByLabel("select-contrat.pdf").check();
 
     await page.getByRole("button", { name: "Delete" }).click();

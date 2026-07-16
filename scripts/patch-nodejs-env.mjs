@@ -1,14 +1,19 @@
-// Patches the wasm-bindgen "web" target glue (pkg/web/xberg_wasm.js) so it no
-// longer imports host libc shims from a separate "env" module. Instead it
-// provides its own implementation that closes over the module-scoped `wasm`
-// object (set during init), so strcmp/memchr can read the linear memory.
+// Patches the wasm-bindgen "nodejs" target glue (pkg/nodejs/xberg_wasm.js) so
+// it no longer `require("env")`s host libc shims from a nonexistent "env"
+// package. Instead it provides its own implementation that closes over the
+// module-scoped `wasm` object (set during synchronous init), so
+// strcmp/memchr can read the linear memory. CJS counterpart of
+// patch-web-env.mjs -- same shim functions, different import/require syntax
+// and a different anchor for the module-scoped `wasm` binding (the nodejs
+// target declares `let wasm = wasmInstance.exports;` directly, rather than
+// `web`'s `let wasmModule, wasmInstance, wasm;` predeclaration).
 //
 // Idempotent: re-running after a wasm-pack rebuild re-applies the patch.
 import { readFileSync, writeFileSync } from "node:fs";
 
 const target = process.argv[2];
 if (!target) {
-  console.error("usage: patch-web-env.mjs <pkg/web/xberg_wasm.js>");
+  console.error("usage: patch-nodejs-env.mjs <pkg/nodejs/xberg_wasm.js>");
   process.exit(1);
 }
 
@@ -19,11 +24,11 @@ if (s.includes("function makeEnv()")) {
   process.exit(0);
 }
 
-// 1. Drop the `import * as importN from "env"` lines (10 of them).
+// 1. Drop the `const importN = require("env");` lines (10 of them).
 const before = s;
-s = s.replace(/import \* as import\d+ from "env"\r?\n/g, "");
+s = s.replace(/const import\d+ = require\("env"\);\r?\n/g, "");
 if (s === before) {
-  console.error("ERROR: no env import lines found (unexpected target)");
+  console.error("ERROR: no env require lines found (unexpected target)");
   process.exit(1);
 }
 
@@ -38,8 +43,11 @@ s = s.replace(
   '"env": makeEnv(),\n        "./xberg_wasm_bg.js": import0,',
 );
 
-// 3. Inject the makeEnv() implementation right after the `wasm` declaration so
-//    the returned closures can see the module-scoped `wasm` variable.
+// 3. Inject the makeEnv() implementation right before __wbg_get_imports() so
+//    the returned closures can see the module-scoped `wasm` variable --
+//    `wasm` is assigned later (`let wasm = wasmInstance.exports;`), but the
+//    closures only read it when actually CALLED during wasm execution, well
+//    after that assignment has run.
 const makeEnv = `
 function makeEnv() {
   function mem() {
@@ -85,8 +93,8 @@ function makeEnv() {
     const u8 = new Uint8Array(mem());
     let i = 0;
     for (;;) {
-      const a = u8[s1 + i] ?? 0;
-      const b = u8[s2 + i] ?? 0;
+      const a = u8[s1 + i];
+      const b = u8[s2 + i];
       if (a === 0 && b === 0) return 0;
       if (a === 0) return -1;
       if (b === 0) return 1;
@@ -109,8 +117,8 @@ function makeEnv() {
 }
 `;
 s = s.replace(
-  /let wasmModule, wasmInstance, wasm;/,
-  `let wasmModule, wasmInstance, wasm;${makeEnv}`,
+  /function __wbg_get_imports\(\) \{/,
+  `${makeEnv}\nfunction __wbg_get_imports() {`,
 );
 
 writeFileSync(target, s);

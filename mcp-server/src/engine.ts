@@ -1,5 +1,3 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import type { XbergEngine } from "@xberg-io/xberg-wasm";
 import { createXbergRuntimeFactory } from "xberg-wasm-runtime";
 import type { InjectionDescriptor } from "xberg-wasm-runtime";
@@ -34,20 +32,25 @@ export function initializeEngine(): Promise<XbergEngine> {
 
     const cacheDir = getCacheDir();
 
-    const injection = await createXbergRuntimeFactory({ nodeCachePath: cacheDir });
+    // `nerBackend: "candle"` matters here specifically because of how
+    // `resolve_ingest_ner` (crates/xberg-wasm/src/bridge/ner.rs) picks a
+    // backend for `ingest()`'s mandatory PII redaction step: an injected JS
+    // NER bridge (the default transformers.js pipeline this factory would
+    // otherwise create) always takes priority over the in-binary Candle
+    // GLiNER2 backend. Without this flag, `ingest()` silently redacted with
+    // the weak generic bert-base-NER model instead of the real
+    // privacy-tuned GLiNER2 model. `xberg-wasm-runtime`'s
+    // `initCandleNerBackend` (invoked internally when this flag is set)
+    // downloads/caches the model under `<nodeCachePath>/candle-ner/` and
+    // omits `ner` from the returned descriptor on success, letting
+    // `resolve_ingest_ner` fall through to Candle; on failure it falls back
+    // to injecting the transformers.js NER instead, non-fatally.
+    const injection = await createXbergRuntimeFactory({ nodeCachePath: cacheDir, nerBackend: "candle" });
     _injection = injection;
 
     // Per Task 1 spec, engine construction uses default config.
     const { XbergEngine } = await import("@xberg-io/xberg-wasm");
     _engine = new XbergEngine({}, injection);
-
-    // `ingest()` requires the in-binary Candle NER backend for its mandatory
-    // PII+NER redaction step. The injected NER bridge only powers
-    // `Engine.ner()`, not `ingest()`, so load the Candle model here. Model
-    // loading is best-effort: a failure (missing model files, network error)
-    // is logged but does not abort startup — `ingest()` will surface a clear
-    // error at call time instead.
-    await initCandleNer(_engine, cacheDir);
 
     return _engine;
   })();
@@ -61,69 +64,6 @@ export function initializeEngine(): Promise<XbergEngine> {
   });
   _initPromise = guarded;
   return guarded;
-}
-
-/**
- * Load the in-binary Candle NER model into the engine via `initCandleNer`.
- *
- * The model ships as three files — `model.safetensors`, `tokenizer.json`,
- * `encoder_config.json`. We look for them under `<cacheDir>/candle-ner/`; if
- * present, they are read and passed to the engine. A Hugging Face repo can be
- * supplied via `XBERG_CANDLE_NER_REPO` to fetch the files on first run. Any
- * failure is non-fatal: we log and return so startup continues.
- */
-async function initCandleNer(engine: XbergEngine, cacheDir: string): Promise<void> {
-  try {
-    const repo = process.env.XBERG_CANDLE_NER_REPO;
-    const dir = join(cacheDir, "candle-ner");
-    const safetensors = await resolveModelFile(dir, "model.safetensors", repo);
-    const tokenizerJson = await resolveModelFile(dir, "tokenizer.json", repo);
-    const encoderConfig = await resolveModelFile(dir, "encoder_config.json", repo);
-    if (safetensors && tokenizerJson && encoderConfig) {
-      // TYPE-ONLY STOPGAP (see https://github.com/jamon8888/xberg/issues/24):
-      // the checked-in xberg_wasm.d.ts predates the Rust `initCandleNer`
-      // bridge function and doesn't declare it at all, so `XbergEngine`
-      // has no such method in its generated types. This cast just keeps
-      // `tsc` green — it does not fix the underlying gap. The real fix is
-      // a wasm crate rebuild plus calling this as the free function the
-      // Rust side actually exports, not a method on `engine`.
-      (engine as unknown as { initCandleNer: (a: Uint8Array, b: Uint8Array, c: Uint8Array) => void }).initCandleNer(
-        safetensors,
-        tokenizerJson,
-        encoderConfig,
-      );
-    } else {
-      console.warn(
-        "[engine] Candle NER model files not found; ingest() will fail until initCandleNer is called with model bytes.",
-      );
-    }
-  } catch (err) {
-    console.warn(`[engine] Candle NER not initialized: ${String(err)}. ingest() will fail until initCandleNer is called.`);
-  }
-}
-
-/**
- * Resolve a model file from `dir` if present, otherwise download it from
- * `<repo>/resolve/main/<name>` into `dir` when `repo` is set. Returns `null`
- * if the file is neither present locally nor fetchable.
- */
-async function resolveModelFile(
-  dir: string,
-  name: string,
-  repo: string | undefined,
-): Promise<Uint8Array | null> {
-  const localPath = join(dir, name);
-  if (existsSync(localPath)) {
-    return new Uint8Array(readFileSync(localPath));
-  }
-  if (!repo) return null;
-  const url = `https://huggingface.co/${repo}/resolve/main/${name}`;
-  const res = await fetch(url);
-  if (!res.ok || !res.body) return null;
-  const buf = new Uint8Array(await res.arrayBuffer());
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  writeFileSync(localPath, buf);
-  return buf;
 }
 
 /** Return the initialized singleton engine, or throw if not yet initialized. */

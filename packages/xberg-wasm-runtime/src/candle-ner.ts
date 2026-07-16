@@ -1,5 +1,5 @@
 /**
- * Browser-only wiring for the in-binary Candle GLiNER2 NER backend
+ * Wiring for the in-binary Candle GLiNER2 NER backend
  * (`crates/xberg-gliner-candle`, exposed via `initCandleNer` in
  * `crates/xberg-wasm/src/bridge/ner.rs`). Unlike `ner.ts`'s transformers.js
  * `bert-base-NER` pipeline (fixed PER/ORG/LOC/MISC labels), this is real
@@ -15,15 +15,20 @@
  * omit `ner` from the returned `InjectionDescriptor` for this to actually
  * take effect, not just call `initCandleNer` and also inject the JS NER.
  *
- * This module has no dependency on `xberg-wasm-runtime` itself being
- * browser-only: `@xberg-io/xberg-wasm` resolves to `pkg/nodejs` by default
- * and to `pkg/web` only via the browser-side bundler alias xberg-web-ui's
- * next.config.js already sets up. `initCandleNer`/`init` exist on both
- * targets, but this module's entry point (`initCandleNerBackend`) is only
- * ever invoked when `typeof window !== "undefined"` -- Candle-in-WASM
- * exists specifically to cover the browser, where a native ONNX Runtime
- * binary (what Node/mcp-server uses instead) cannot run at all.
+ * Works in both browser and Node: `@xberg-io/xberg-wasm` resolves to
+ * `pkg/nodejs` by default and to `pkg/web` only via the browser-side
+ * bundler alias xberg-web-ui's next.config.js sets up, and
+ * `initCandleNer`/`init` exist on both targets. This module previously
+ * refused to run outside `typeof window !== "undefined"` on the assumption
+ * that mcp-server would instead use a native ONNX Runtime GLiNER
+ * implementation -- that native path (crates/xberg-node) was never wired up
+ * end-to-end, while this WASM path works unmodified in Node (confirmed live
+ * against mcp-server): `fetch` is a Node 18+ global and `fetchWithCache`
+ * already degrades to a plain fetch when the browser Cache Storage API
+ * (`caches`) is absent, which is exactly the Node case.
  */
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import type { CacheConfig } from "./types.js";
 
 // fastino/gliner2-privacy-filter-PII-multi: the pinned Candle-compatible
@@ -42,15 +47,28 @@ interface CandleNerModelBytes {
 }
 
 /**
- * Fetch `url`, using the browser Cache Storage API to persist the response
- * across page loads when available. Falls back to a plain fetch if the
- * Cache API is unavailable or a cache write fails (matches the resilience
- * pattern transformers.js itself uses for its own model cache -- see the
- * "Unable to add response to browser cache" warning path in
- * `@huggingface/transformers`' hub.js, which never treats a cache-write
- * failure as fatal).
+ * Fetch `url`, persisting the response across restarts when a cache backend
+ * is available: the browser Cache Storage API in the browser, or a plain
+ * file under `nodeCacheDir` in Node (mirrors mcp-server's own
+ * disk-persisted model cache convention -- this is a genuinely large,
+ * ~1.24GB total download, so avoiding a re-fetch on every process restart
+ * matters). Falls back to a plain fetch if no cache backend is available or
+ * a cache write fails (matches the resilience pattern transformers.js
+ * itself uses for its own model cache -- see the "Unable to add response to
+ * browser cache" warning path in `@huggingface/transformers`' hub.js, which
+ * never treats a cache-write failure as fatal).
  */
-async function fetchWithCache(url: string): Promise<Uint8Array> {
+async function fetchWithCache(url: string, nodeCacheDir: string | undefined, fileName: string): Promise<Uint8Array> {
+	if (nodeCacheDir) {
+		const localPath = join(nodeCacheDir, fileName);
+		// A zero-byte file means a previous download was interrupted --
+		// treat it as absent so it retries, rather than "successfully"
+		// loading an empty model file.
+		if (existsSync(localPath) && statSync(localPath).size > 0) {
+			return new Uint8Array(readFileSync(localPath));
+		}
+	}
+
 	const cacheApi = typeof caches !== "undefined" ? caches : undefined;
 	if (cacheApi) {
 		try {
@@ -78,7 +96,19 @@ async function fetchWithCache(url: string): Promise<Uint8Array> {
 		}
 	}
 
-	return new Uint8Array(await response.arrayBuffer());
+	const bytes = new Uint8Array(await response.arrayBuffer());
+
+	if (nodeCacheDir) {
+		try {
+			const localPath = join(nodeCacheDir, fileName);
+			mkdirSync(dirname(localPath), { recursive: true });
+			writeFileSync(localPath, bytes);
+		} catch (err) {
+			console.warn(`[candle-ner] unable to persist ${fileName} to node cache:`, err);
+		}
+	}
+
+	return bytes;
 }
 
 /**
@@ -88,37 +118,35 @@ async function fetchWithCache(url: string): Promise<Uint8Array> {
  * cold cache -- callers should surface progress/expectations to the user
  * rather than assume this resolves quickly.
  */
-async function downloadCandleNerModel(baseUrl: string): Promise<CandleNerModelBytes> {
+async function downloadCandleNerModel(baseUrl: string, nodeCacheDir: string | undefined): Promise<CandleNerModelBytes> {
 	const [safetensors, tokenizerJson, encoderConfigJson] = await Promise.all([
-		fetchWithCache(new URL("model.safetensors", baseUrl).href),
-		fetchWithCache(new URL("tokenizer.json", baseUrl).href),
-		fetchWithCache(new URL("encoder_config/config.json", baseUrl).href),
+		fetchWithCache(new URL("model.safetensors", baseUrl).href, nodeCacheDir, "model.safetensors"),
+		fetchWithCache(new URL("tokenizer.json", baseUrl).href, nodeCacheDir, "tokenizer.json"),
+		fetchWithCache(new URL("encoder_config/config.json", baseUrl).href, nodeCacheDir, join("encoder_config", "config.json")),
 	]);
 	return { safetensors, tokenizerJson, encoderConfigJson };
 }
 
 /**
  * Download the pinned GLiNER2 PII model and initialize the in-binary Candle
- * NER backend via `@xberg-io/xberg-wasm`'s `initCandleNer`. Browser-only --
- * throws if called outside a browser context (no Candle-in-WASM path exists
- * for Node; mcp-server uses the native ONNX Runtime `xberg-gliner` crate
- * instead).
+ * NER backend via `@xberg-io/xberg-wasm`'s `initCandleNer`. Works in both
+ * browser and Node -- see this module's doc comment for why the Node path
+ * is safe. In Node, `config?.nodeCachePath` (if set) doubles as a
+ * `<nodeCachePath>/candle-ner/` disk cache for the three model files, so
+ * the ~1.24GB download only happens once across process restarts.
  *
  * Idempotent-safe to call multiple times: `initCandleNer` replaces the
  * previously-loaded model rather than erroring, and the underlying wasm
  * `init()` short-circuits once the module is already instantiated.
  */
 export async function initCandleNerBackend(config?: CacheConfig): Promise<void> {
-	if (typeof window === "undefined") {
-		throw new Error("[candle-ner] initCandleNerBackend is browser-only (no Candle-in-WASM path exists for Node)");
-	}
-
 	const baseUrl = config?.candleNerModelUrl ?? DEFAULT_CANDLE_NER_BASE_URL;
+	const nodeCacheDir = config?.nodeCachePath ? join(config.nodeCachePath, "candle-ner") : undefined;
 	console.debug(`[candle-ner] downloading GLiNER2 PII model from ${baseUrl}`);
 
 	const [wasmModule, bytes] = await Promise.all([
 		import("@xberg-io/xberg-wasm"),
-		downloadCandleNerModel(baseUrl),
+		downloadCandleNerModel(baseUrl, nodeCacheDir),
 	]);
 
 	// Idempotent (see xberg_wasm.js's __wbg_init: `if (wasm !== undefined) return wasm;`).
