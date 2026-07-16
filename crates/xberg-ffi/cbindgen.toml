@@ -618,6 +618,14 @@ typedef struct XBERGEntity XBERGEntity;
  */
 typedef struct XBERGEntityCategory XBERGEntityCategory;
 /**
+ * A label-targeted deterministic post-detection check.
+ *
+ * Implementations must be `Send + Sync` because the redaction engine may
+ * run validators from within async extraction pipelines shared across
+ * tasks.
+ */
+typedef struct XBERGEntityValidator XBERGEntityValidator;
+/**
  * EPUB metadata (Dublin Core extensions).
  */
 typedef struct XBERGEpubMetadata XBERGEpubMetadata;
@@ -884,6 +892,10 @@ typedef struct XBERGHtmlOutputConfig XBERGHtmlOutputConfig;
  */
 typedef struct XBERGHtmlTheme XBERGHtmlTheme;
 /**
+ * Validates IBAN candidates against the ISO 13616 mod-97 checksum.
+ */
+typedef struct XBERGIbanChecksumValidator XBERGIbanChecksumValidator;
+/**
  * Image extraction configuration.
  */
 typedef struct XBERGImageExtractionConfig XBERGImageExtractionConfig;
@@ -1030,6 +1042,10 @@ typedef struct XBERGLlmConfig XBERGLlmConfig;
  * within one extraction (e.g. VLM OCR + structured extraction).
  */
 typedef struct XBERGLlmUsage XBERGLlmUsage;
+/**
+ * Validates credit-card-shaped candidates against the Luhn mod-10 checksum.
+ */
+typedef struct XBERGLuhnValidator XBERGLuhnValidator;
 /**
  * How partial results from multiple model calls (e.g. per page batch) are combined.
  *
@@ -1709,6 +1725,16 @@ typedef struct XBERGRegistry XBERGRegistry;
  */
 typedef struct XBERGRehydrationMap XBERGRehydrationMap;
 /**
+ * One rejection-reason tally emitted by the redaction engine's
+ * post-detection validators (see
+ * `EntityValidator`).
+ */
+typedef struct XBERGRejectionCount XBERGRejectionCount;
+/**
+ * Counter for rejections, keyed by validator reason string.
+ */
+typedef struct XBERGRejectionCounts XBERGRejectionCounts;
+/**
  * Semantic kind of a relationship between document elements.
  */
 typedef struct XBERGRelationshipKind XBERGRelationshipKind;
@@ -1912,6 +1938,10 @@ typedef struct XBERGStructuredDataType XBERGStructuredDataType;
  */
 typedef struct XBERGStructuredExtractionConfig XBERGStructuredExtractionConfig;
 /**
+ * One vault match â either direction of lookup.
+ */
+typedef struct XBERGSubjectMatch XBERGSubjectMatch;
+/**
  * Configuration for the summarisation post-processor.
  */
 typedef struct XBERGSummarizationConfig XBERGSummarizationConfig;
@@ -2023,10 +2053,18 @@ typedef struct XBERGTextExtractionResult XBERGTextExtractionResult;
  */
 typedef struct XBERGTextMetadata XBERGTextMetadata;
 /**
- * Outcome of `redact_text_capturing_rehydration_map`: the redacted text,
- * its rehydration map, and per-category finding counts. Counts only â the
- * matched PII text itself is never included here, per the redaction
- * pipeline's logging rule.
+ * Outcome of `redact_capturing_rehydration_map`: the token â original-text
+ * rehydration map plus a count of PII candidates the post-detection
+ * validators rejected (e.g. failed-checksum IBANs, failed-Luhn card
+ * numbers), keyed by rejection reason.
+ *
+ * `rejection_counts` here is the same audit-only count also written to
+ * `result.redaction_report.rejection_counts` â repeated here as a
+ * Rust-native `RejectionCounts` map so callers of this richer API don't have
+ * to reconstruct it from the FFI-friendly `Vec<RejectionCount>` shape used
+ * on `RedactionReport`. Rejected candidates never
+ * appear in `map` or in `findings` â validators ran before either was
+ * populated, so they were never treated as PII in the first place.
  */
 typedef struct XBERGTextRedactionOutcome XBERGTextRedactionOutcome;
 /**
@@ -2115,6 +2153,10 @@ typedef struct XBERGUrlExtractionMode XBERGUrlExtractionMode;
  * User-provided chunk configuration.
  */
 typedef struct XBERGUserChunkConfig XBERGUserChunkConfig;
+/**
+ * Outcome of a single validator on a single candidate match.
+ */
+typedef struct XBERGValidationResult XBERGValidationResult;
 /**
  * Trait for validator plugins.
  *
@@ -2252,7 +2294,7 @@ typedef struct XBERGYearRange XBERGYearRange;
 [export]
 prefix = "XBERG"
 include = []
-exclude = ["AnchorProperties", "ApiDoc", "ApiError", "ApiSizeLimits", "ApiState", "ArchiveArchiveEntry", "ArchiveArchiveMetadata", "Attributes", "AudioTags", "BatchItemResult", "BatchProcessor", "BatchProcessorConfig", "BibtexExtractor", "BorderStyle", "ByteBufferPool", "CacheClearResponse", "CacheStatsResponse", "CacheWarmParams", "CancellationToken", "CandleModelId", "CandleOcrConfig", "CaptioningEnrichmentConfig", "CaptioningProcessor", "CellBBox", "CellBorders", "CellMargins", "CellProperties", "CellShading", "CharShape", "ChunkPlan", "ChunkingDecision", "ChunkingProcessor", "ChunkingResult", "CitationExtractor", "ClassificationEnrichmentConfig", "ClassifyContext", "CodeExtractor", "ColorScheme", "ColumnLayout", "CommonPdfMetadata", "ConcurrencyConfig", "ConfidenceSignals", "ConfidenceWeights", "CorePresetResolver", "CsvExtractor", "CustomModelVariant", "CustomProperties", "DbfExtractor", "DeepseekOcrBackend", "DefaultStructuredPolicy", "DetectMimeTypeParams", "DetectTimings", "DetectedBoundary", "DjotExtractor", "DocExtractor", "DocOrientationDetector", "DocProperties", "DocbookExtractor", "DoclingCompatDocument", "DoclingCompatResponse", "Document", "DocumentExtractorRegistry", "DocumentStructureBuilder", "DocxExtractor", "Drawing", "DrawingType", "ElementId", "ElementKind", "EmailExtractor", "EmbedError", "EmbeddingBackendRegistry", "EmbeddingEngine", "EmbeddingPreset", "EnrichOptions", "EnrichResult", "EnrichStatus", "EnrichedResult", "EnrichmentConfig", "EpubExtractor", "ErrorResponse", "ExcelExtractor", "Extent", "ExtractBatchParams", "ExtractParams", "ExtractedInlineImage", "ExtractionMetrics", "ExtractionRequest", "ExtractionResult2", "ExtractionService", "ExtractionServiceBuilder", "ExtractionSource", "FictionBookExtractor", "FileBytes", "FileHeader", "FontScheme", "GenericCache", "GlineBackend", "GlinerManifestEntry", "GlmOcrBackend", "GzipExtractor", "HeaderFooter", "HeaderFooterType", "HealthResponse", "HierarchyBoundingBox", "HocrWord", "HtmlExtractionResult", "HtmlExtractor", "HunyuanOcrBackend", "HwpDocument", "HwpError", "HwpExtractor", "HwpImage", "HwpxExtractor", "ImageDpiConfig", "ImageExtractor", "ImageOcrResult", "InfoResponse", "InternalDocument", "InternalDocumentBuilder", "InternalDocumentExtractor", "InternalElement", "InternalElementId", "InternedString", "JatsExtractor", "JsonExtractionConfig", "JupyterExtractor", "KeynoteExtractor", "KeywordExtractor", "LanguageDetector", "LanguageRegistry", "LatexExtractor", "LayoutEngine", "LayoutEngineConfig", "LayoutError", "LayoutMode", "LayoutModel", "LayoutModelManager", "ListItemMetadata", "LiterLlmClient", "LlmBackend", "LlmClient", "ManifestEntryResponse", "ManifestResponse", "MarkdownExtractor", "MdxExtractor", "MergedChunk", "MetricsLayer", "ModelBackend", "ModelCacheStats", "ModelManager", "ModelManifestEntry", "ModelParagraph", "NerBackend", "NerEnrichmentConfig", "NerProcessor", "NodeId", "NormalizeResult", "Note", "NoteType", "NumbersExtractor", "OcrBackendRegistry", "OcrCache", "OcrCacheStats", "OcrError", "OcrProcessor", "OcrTesseractConfig", "OdtExtractor", "OdtProperties", "OpenWebDocumentMetadata", "OpenWebDocumentResponse", "OpmlExtractor", "OrgModeExtractor", "Orientation", "PaddleOcrBackend", "PaddleOcrVlBackend", "PageClassificationProcessor", "PageMargins", "PageMarginsPoints", "PagesExtractor", "ParaText", "Paragraph", "ParagraphProperties", "ParserTable", "ParserTableCell", "PcmAudio", "PdfError", "PdfExtractionMetadata", "PdfExtractor", "PlainTextExtractor", "PluginHealthStatus", "PoolMetrics", "PoolSizeHint", "Pooling", "Position", "PostProcessorRegistry", "PpDocLayoutV3Model", "PptExtractionResult", "PptExtractor", "PptMetadata", "PptxExtractionOptions", "PptxExtractor", "PresetResolver", "PstExtractor", "QrCodeProcessor", "QualityProcessor", "RecModelPaths", "Record", "Recyclable", "RedactionProcessor", "Relationship", "RelationshipTarget", "RendererRegistry", "RerankError", "RerankerBackendRegistry", "RerankerEngine", "RerankerPreset", "ResolvedRecModel", "ResolvedStyle", "RowProperties", "RstExtractor", "RtDetrModel", "RtfExtractor", "Run", "RunProperties", "Section", "SectionProperties", "SecurityError", "Segment", "SevenZExtractor", "SharedModelPaths", "SlanetCell", "SlanetModel", "SlanetResult", "StreamReader", "StringBufferPool", "StructuredCallMode", "StructuredExtractor", "StructuredInput", "StructuredPolicy", "StructuredThresholds", "StyleCatalog", "StyleDefinition", "StyleType", "StyledHtmlRenderer", "SummarizationProcessor", "Table2", "TableBorders", "TableClassifier", "TableLook", "TableProperties", "TableRow", "TableTableGrid", "TableType", "TableWidth", "TarExtractor", "TatrClass", "TatrDetection", "TatrModel", "TatrResult", "TessdataManager", "TesseractBackend", "TesseractWasmBackend", "Theme", "ThemeColor", "TokenReducer", "TracingLayer", "TranscriptionError", "TranscriptionExtractor", "TranslationProcessor", "TrocrBackend", "TsvRow", "TypstExtractor", "ValidatorRegistry", "VersionResponse", "VerticalMerge", "VlmOcrBackend", "WarmRequest", "WarmResponse", "WhisperEngine", "WhisperModelError", "WhisperModelPaths", "WrapType", "XmlExtractor", "YoloModel", "YoloVariant", "ZipBombValidator", "ZipExtractor"]
+exclude = ["AnchorProperties", "ApiDoc", "ApiError", "ApiSizeLimits", "ApiState", "ArchiveArchiveEntry", "ArchiveArchiveMetadata", "Attributes", "AudioTags", "BatchItemResult", "BatchProcessor", "BatchProcessorConfig", "BibtexExtractor", "BorderStyle", "ByteBufferPool", "CacheClearResponse", "CacheStatsResponse", "CacheWarmParams", "CancellationToken", "CandleModelId", "CandleOcrConfig", "CaptioningEnrichmentConfig", "CaptioningProcessor", "CategoryScore", "CellBBox", "CellBorders", "CellMargins", "CellProperties", "CellShading", "CharShape", "ChunkPlan", "ChunkingDecision", "ChunkingProcessor", "ChunkingResult", "CitationExtractor", "ClassificationEnrichmentConfig", "ClassifyContext", "CodeExtractor", "ColorScheme", "ColumnLayout", "CommonPdfMetadata", "ConcurrencyConfig", "ConfidenceSignals", "ConfidenceWeights", "CorePresetResolver", "CsvExtractor", "CustomModelVariant", "CustomProperties", "DbfExtractor", "DeepseekOcrBackend", "DefaultStructuredPolicy", "DetectMimeTypeParams", "DetectTimings", "DetectedBoundary", "DjotExtractor", "DocExtractor", "DocOrientationDetector", "DocProperties", "DocbookExtractor", "DoclingCompatDocument", "DoclingCompatResponse", "Document", "DocumentExtractorRegistry", "DocumentStructureBuilder", "DocxExtractor", "Drawing", "DrawingType", "ElementId", "ElementKind", "EmailExtractor", "EmbedError", "EmbeddingBackendRegistry", "EmbeddingEngine", "EmbeddingPreset", "EnrichOptions", "EnrichResult", "EnrichStatus", "EnrichedResult", "EnrichmentConfig", "EpubExtractor", "ErrorResponse", "ExcelExtractor", "Extent", "ExtractBatchParams", "ExtractParams", "ExtractedInlineImage", "ExtractionMetrics", "ExtractionRequest", "ExtractionResult2", "ExtractionService", "ExtractionServiceBuilder", "ExtractionSource", "FictionBookExtractor", "FileBytes", "FileHeader", "FontScheme", "GenericCache", "GlineBackend", "GlinerManifestEntry", "GlmOcrBackend", "GzipExtractor", "HeaderFooter", "HeaderFooterType", "HealthResponse", "HierarchyBoundingBox", "HocrWord", "HtmlExtractionResult", "HtmlExtractor", "HunyuanOcrBackend", "HwpDocument", "HwpError", "HwpExtractor", "HwpImage", "HwpxExtractor", "ImageDpiConfig", "ImageExtractor", "ImageOcrResult", "InfoResponse", "InternalDocument", "InternalDocumentBuilder", "InternalDocumentExtractor", "InternalElement", "InternalElementId", "InternedString", "JatsExtractor", "JsonExtractionConfig", "JupyterExtractor", "KeynoteExtractor", "KeywordExtractor", "LanguageDetector", "LanguageRegistry", "LatexExtractor", "LayoutEngine", "LayoutEngineConfig", "LayoutError", "LayoutMode", "LayoutModel", "LayoutModelManager", "ListItemMetadata", "LiterLlmClient", "LlmBackend", "LlmClient", "ManifestEntryResponse", "ManifestResponse", "MarkdownExtractor", "MdxExtractor", "MergedChunk", "MetricsLayer", "ModelBackend", "ModelCacheStats", "ModelManager", "ModelManifestEntry", "ModelParagraph", "NerBackend", "NerEnrichmentConfig", "NerProcessor", "NodeId", "NormalizeResult", "Note", "NoteType", "NumbersExtractor", "OcrBackendRegistry", "OcrCache", "OcrCacheStats", "OcrError", "OcrProcessor", "OcrTesseractConfig", "OdtExtractor", "OdtProperties", "OpenWebDocumentMetadata", "OpenWebDocumentResponse", "OpmlExtractor", "OrgModeExtractor", "Orientation", "PaddleOcrBackend", "PaddleOcrVlBackend", "PageClassificationProcessor", "PageMargins", "PageMarginsPoints", "PagesExtractor", "ParaText", "Paragraph", "ParagraphProperties", "ParserTable", "ParserTableCell", "PcmAudio", "PdfError", "PdfExtractionMetadata", "PdfExtractor", "PlainTextExtractor", "PlainTextRedactionOutcome", "PluginHealthStatus", "PoolMetrics", "PoolSizeHint", "Pooling", "Position", "PostProcessorRegistry", "PpDocLayoutV3Model", "PptExtractionResult", "PptExtractor", "PptMetadata", "PptxExtractionOptions", "PptxExtractor", "PresetResolver", "PstExtractor", "QrCodeProcessor", "QualityProcessor", "RecModelPaths", "Record", "Recyclable", "RedactionProcessor", "Relationship", "RelationshipTarget", "RendererRegistry", "RerankError", "RerankerBackendRegistry", "RerankerEngine", "RerankerPreset", "ResolvedRecModel", "ResolvedStyle", "RowProperties", "RstExtractor", "RtDetrModel", "RtfExtractor", "Run", "RunProperties", "Section", "SectionProperties", "SecurityError", "Segment", "SevenZExtractor", "SharedModelPaths", "SlanetCell", "SlanetModel", "SlanetResult", "StreamReader", "StringBufferPool", "StructuredCallMode", "StructuredExtractor", "StructuredInput", "StructuredPolicy", "StructuredThresholds", "StyleCatalog", "StyleDefinition", "StyleType", "StyledHtmlRenderer", "SummarizationProcessor", "Table2", "TableBorders", "TableClassifier", "TableLook", "TableProperties", "TableRow", "TableTableGrid", "TableType", "TableWidth", "TarExtractor", "TatrClass", "TatrDetection", "TatrModel", "TatrResult", "TessdataManager", "TesseractBackend", "TesseractWasmBackend", "Theme", "ThemeColor", "TokenReducer", "TracingLayer", "TranscriptionError", "TranscriptionExtractor", "TranslationProcessor", "TrocrBackend", "TrueSpan", "TsvRow", "TypstExtractor", "ValidatorRegistry", "VersionResponse", "VerticalMerge", "VlmOcrBackend", "WarmRequest", "WarmResponse", "WhisperEngine", "WhisperModelError", "WhisperModelPaths", "WrapType", "XmlExtractor", "YoloModel", "YoloVariant", "ZipBombValidator", "ZipExtractor"]
 
 [fn]
 args = "vertical"

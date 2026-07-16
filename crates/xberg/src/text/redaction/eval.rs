@@ -17,6 +17,7 @@ use std::path::Path;
 use crate::text::redaction::patterns::PatternMatch;
 
 /// A hand-labeled ground-truth PII span in a corpus document.
+#[cfg_attr(alef, alef(skip))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrueSpan {
     pub start: usize,
@@ -25,6 +26,7 @@ pub struct TrueSpan {
 }
 
 /// Per-category precision/recall/F1 derived by [`score`].
+#[cfg_attr(alef, alef(skip))]
 #[derive(Debug, Clone, PartialEq)]
 pub struct CategoryScore {
     pub true_positives: usize,
@@ -41,6 +43,7 @@ pub struct CategoryScore {
 /// A detection is a true positive if it overlaps any truth span of the same
 /// category by at least one byte (`d.start < t.end && d.end > t.start`). A
 /// truth span is a false negative if no same-category detection overlaps it.
+#[cfg_attr(alef, alef(skip))]
 pub fn score(detected: &[PatternMatch], truth: &[TrueSpan]) -> BTreeMap<String, CategoryScore> {
     let mut categories: BTreeSet<String> = BTreeSet::new();
     for m in detected {
@@ -132,6 +135,7 @@ struct Annotations {
 ///
 /// Returns an error if `annotations.toml` is missing/malformed or a referenced
 /// file cannot be read.
+#[cfg_attr(alef, alef(skip))]
 pub fn load_corpus(dir: &Path) -> std::io::Result<Vec<(String, Vec<TrueSpan>)>> {
     let ann_path = dir.join("annotations.toml");
     let raw = std::fs::read_to_string(&ann_path)?;
@@ -165,6 +169,7 @@ pub fn load_corpus(dir: &Path) -> std::io::Result<Vec<(String, Vec<TrueSpan>)>> 
 /// checksum validators exist specifically to cut credit-card/IBAN false
 /// positives, so an eval harness that skipped them couldn't detect precision
 /// regressions in the path `redact()` actually uses.
+#[cfg_attr(alef, alef(skip))]
 pub fn evaluate_text(text: &str, truth: &[TrueSpan]) -> BTreeMap<String, CategoryScore> {
     use crate::text::redaction::validators::{EntityValidator, apply_validators};
 

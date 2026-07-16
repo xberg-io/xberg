@@ -503,6 +503,61 @@ public static class XbergConverter
     }
 
     /// <summary>
+    /// Search a decrypted map for `query`, matching either the token or the
+    /// original value (case-insensitive substring match on `original`; exact
+    /// match on `token`, since tokens are structured like `"[EMAIL_1]"`).
+    ///
+    /// Results are sorted by token for deterministic output.
+    /// </summary>
+    /// <param name="map"></param>
+    /// <param name="query"></param>
+    public static List<SubjectMatch> FindSubject(RehydrationMap map, string query)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        ArgumentNullException.ThrowIfNull(query);
+            var nativeResult = NativeMethods.FindSubject(
+            map.Handle,
+            query
+            );
+        if (NativeMethods.LastErrorCode() != 0)
+        {
+            throw GetLastError();
+        }
+        var json = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(nativeResult);
+        NativeMethods.FreeString(nativeResult);
+        var returnValue = JsonSerializer.Deserialize<List<SubjectMatch>>(json ?? "null", JsonOptions)!;
+        return returnValue;
+    }
+
+    /// <summary>
+    /// Remove every mapping whose token or original value matches `query`.
+    /// Returns the removed entries (the caller re-encrypts and persists the
+    /// resulting map — this function does not touch disk).
+    ///
+    /// Idempotent: calling this again with the same `query` after the matching
+    /// entries have already been removed returns an empty `Vec`.
+    /// </summary>
+    /// <param name="map"></param>
+    /// <param name="query"></param>
+    public static List<SubjectMatch> ForgetSubject(RehydrationMap map, string query)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        ArgumentNullException.ThrowIfNull(query);
+            var nativeResult = NativeMethods.ForgetSubject(
+            map.Handle,
+            query
+            );
+        if (NativeMethods.LastErrorCode() != 0)
+        {
+            throw GetLastError();
+        }
+        var json = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(nativeResult);
+        NativeMethods.FreeString(nativeResult);
+        var returnValue = JsonSerializer.Deserialize<List<SubjectMatch>>(json ?? "null", JsonOptions)!;
+        return returnValue;
+    }
+
+    /// <summary>
     /// Find unmarked claims in markdown text.
     ///
     /// Returns lines that assert a claim but carry neither a footnote citation anchor (`[^...]`)

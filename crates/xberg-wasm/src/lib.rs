@@ -26,12 +26,12 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use wasm_bindgen::prelude::*;
 use xberg::DocumentExtractor;
-use xberg::Validator;
 use xberg::engine::seams::PresetResolver;
 use xberg::engine::seams::cache::CacheBackend;
 use xberg::engine::seams::model_provider::ModelProvider;
 use xberg::engine::seams::progress::ProgressSink;
 use xberg::text::ner::NerBackend;
+use xberg::text::redaction::EntityValidator;
 
 /// Aggregate statistics for a xberg cache directory.
 #[derive(Clone, Default)]
@@ -3774,6 +3774,7 @@ pub struct WasmRedactionConfig {
     preserve_offsets: bool,
     custom_terms: Vec<WasmRedactionTerm>,
     custom_patterns: Vec<WasmRedactionPattern>,
+    preserve_terms: Vec<WasmRedactionTerm>,
 }
 
 impl Default for WasmRedactionConfig {
@@ -3792,6 +3793,7 @@ impl WasmRedactionConfig {
         preserveOffsets: Option<bool>,
         customTerms: Option<Vec<WasmRedactionTerm>>,
         customPatterns: Option<Vec<WasmRedactionPattern>>,
+        preserveTerms: Option<Vec<WasmRedactionTerm>>,
         ner: Option<WasmNerConfig>,
     ) -> WasmRedactionConfig {
         WasmRedactionConfig {
@@ -3801,6 +3803,7 @@ impl WasmRedactionConfig {
             preserve_offsets: preserveOffsets.unwrap_or(true),
             custom_terms: customTerms.unwrap_or_default(),
             custom_patterns: customPatterns.unwrap_or_default(),
+            preserve_terms: preserveTerms.unwrap_or_default(),
         }
     }
 
@@ -3865,6 +3868,16 @@ impl WasmRedactionConfig {
     #[wasm_bindgen(setter, js_name = "customPatterns")]
     pub fn set_custom_patterns(&mut self, value: Vec<WasmRedactionPattern>) {
         self.custom_patterns = value;
+    }
+
+    #[wasm_bindgen(getter, js_name = "preserveTerms")]
+    pub fn preserve_terms(&self) -> Vec<WasmRedactionTerm> {
+        self.preserve_terms.clone()
+    }
+
+    #[wasm_bindgen(setter, js_name = "preserveTerms")]
+    pub fn set_preserve_terms(&mut self, value: Vec<WasmRedactionTerm>) {
+        self.preserve_terms = value;
     }
 
     #[allow(clippy::should_implement_trait)]
@@ -5012,30 +5025,6 @@ impl WasmEngine {
     ) -> Result<WasmExtractionResult, JsValue> {
         Err(JsValue::from_str("Not implemented: extract_batch"))
     }
-
-    /// The injected `CacheBackend` seam (default: `NoopCache`).
-    #[wasm_bindgen(js_name = "cacheBackend")]
-    pub fn cache_backend(&self) -> WasmCacheBackend {
-        WasmCacheBackend {
-            inner: Arc::new(self.inner.cache_backend().clone()),
-        }
-    }
-
-    /// The injected `ProgressSink` seam (default: `NoopProgressSink`).
-    #[wasm_bindgen(js_name = "progressSink")]
-    pub fn progress_sink(&self) -> WasmProgressSink {
-        WasmProgressSink {
-            inner: Arc::new(self.inner.progress_sink().clone()),
-        }
-    }
-
-    /// The injected `ModelProvider` seam (default: `DefaultModelProvider`).
-    #[wasm_bindgen(js_name = "modelProvider")]
-    pub fn model_provider(&self) -> WasmModelProvider {
-        WasmModelProvider {
-            inner: Arc::new(self.inner.model_provider().clone()),
-        }
-    }
 }
 
 /// Builder for `Engine`.
@@ -5051,30 +5040,6 @@ pub struct WasmEngineBuilder {
 
 #[wasm_bindgen]
 impl WasmEngineBuilder {
-    /// Inject a `CacheBackend`, overriding the `NoopCache` default.
-    #[wasm_bindgen(js_name = "withCacheBackend")]
-    pub fn with_cache_backend(&self, cache: WasmCacheBackend) -> WasmEngineBuilder {
-        Self {
-            inner: Arc::new((*self.inner).clone().with_cache_backend(&cache.inner)),
-        }
-    }
-
-    /// Inject a `ProgressSink`, overriding the `NoopProgressSink` default.
-    #[wasm_bindgen(js_name = "withProgressSink")]
-    pub fn with_progress_sink(&self, progress: WasmProgressSink) -> WasmEngineBuilder {
-        Self {
-            inner: Arc::new((*self.inner).clone().with_progress_sink(&progress.inner)),
-        }
-    }
-
-    /// Inject a `ModelProvider`, overriding the `DefaultModelProvider` default.
-    #[wasm_bindgen(js_name = "withModelProvider")]
-    pub fn with_model_provider(&self, provider: WasmModelProvider) -> WasmEngineBuilder {
-        Self {
-            inner: Arc::new((*self.inner).clone().with_model_provider(&provider.inner)),
-        }
-    }
-
     /// Finalize the builder into an `Engine`, filling every unset seam with
     /// its in-core default.
     #[wasm_bindgen]
@@ -5755,6 +5720,118 @@ impl WasmPatternMatch {
         self.text = value;
     }
 }
+
+/// One vault match — either direction of lookup.
+#[derive(Clone, Default)]
+#[wasm_bindgen]
+pub struct WasmSubjectMatch {
+    token: String,
+    original: String,
+    category: Option<String>,
+}
+
+#[wasm_bindgen]
+impl WasmSubjectMatch {
+    #[allow(non_snake_case)]
+    #[wasm_bindgen(constructor)]
+    pub fn new(token: String, original: String, category: Option<String>) -> WasmSubjectMatch {
+        WasmSubjectMatch {
+            token: token,
+            original: original,
+            category: category,
+        }
+    }
+
+    #[wasm_bindgen]
+    #[allow(clippy::should_implement_trait)]
+    pub fn default() -> WasmSubjectMatch {
+        <WasmSubjectMatch as ::core::default::Default>::default()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn token(&self) -> String {
+        self.token.clone()
+    }
+
+    #[wasm_bindgen(setter)]
+    pub fn set_token(&mut self, value: String) {
+        self.token = value;
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn original(&self) -> String {
+        self.original.clone()
+    }
+
+    #[wasm_bindgen(setter)]
+    pub fn set_original(&mut self, value: String) {
+        self.original = value;
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn category(&self) -> Option<String> {
+        self.category.clone()
+    }
+
+    #[wasm_bindgen(setter)]
+    pub fn set_category(&mut self, value: Option<String>) {
+        self.category = value;
+    }
+}
+
+/// Validates IBAN candidates against the ISO 13616 mod-97 checksum.
+#[derive(Clone)]
+#[wasm_bindgen]
+pub struct WasmIbanChecksumValidator {
+    pub(crate) inner: Arc<xberg::text::redaction::validators::iban::IbanChecksumValidator>,
+}
+
+#[wasm_bindgen]
+impl WasmIbanChecksumValidator {
+    #[wasm_bindgen]
+    pub fn label(&self) -> String {
+        self.inner.label().into()
+    }
+
+    #[wasm_bindgen]
+    pub fn validate(&self, _entity: WasmPatternMatch, __ctx: String) -> WasmValidationResult {
+        compile_error!(
+            "alef cannot generate WASM binding for validate; configure wasm.exclude_functions or make the return type fallible"
+        )
+    }
+}
+
+/// Validates credit-card-shaped candidates against the Luhn mod-10 checksum.
+#[derive(Clone)]
+#[wasm_bindgen]
+pub struct WasmLuhnValidator {
+    pub(crate) inner: Arc<xberg::text::redaction::validators::luhn::LuhnValidator>,
+}
+
+#[wasm_bindgen]
+impl WasmLuhnValidator {
+    #[wasm_bindgen]
+    pub fn label(&self) -> String {
+        self.inner.label().into()
+    }
+
+    #[wasm_bindgen]
+    pub fn validate(&self, _entity: WasmPatternMatch, __ctx: String) -> WasmValidationResult {
+        compile_error!(
+            "alef cannot generate WASM binding for validate; configure wasm.exclude_functions or make the return type fallible"
+        )
+    }
+}
+
+/// Counter for rejections, keyed by validator reason string.
+#[derive(Clone)]
+#[wasm_bindgen]
+pub struct WasmRejectionCounts {
+    pub(crate) inner: Arc<xberg::text::redaction::RejectionCounts>,
+}
+
+#[wasm_bindgen]
+impl WasmRejectionCounts {}
 
 /// A PDF annotation extracted from a document page.
 #[derive(Clone, Default)]
@@ -13884,21 +13961,27 @@ impl WasmQrBoundingBox {
 /// audit-log consumers can see exactly what fired. Offsets are relative to the *original*
 /// pre-redaction `content` and are intended for audit reconstruction only — the original
 /// bytes are dropped at the end of the pipeline.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 #[wasm_bindgen]
 pub struct WasmRedactionReport {
     findings: Vec<WasmRedactionFinding>,
     total_redacted: u32,
 }
 
+impl Default for WasmRedactionReport {
+    fn default() -> Self {
+        <xberg::RedactionReport as Default>::default().into()
+    }
+}
+
 #[wasm_bindgen]
 impl WasmRedactionReport {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
-    pub fn new(findings: Vec<WasmRedactionFinding>, totalRedacted: u32) -> WasmRedactionReport {
+    pub fn new(findings: Option<Vec<WasmRedactionFinding>>, totalRedacted: Option<u32>) -> WasmRedactionReport {
         WasmRedactionReport {
-            findings: findings,
-            total_redacted: totalRedacted,
+            findings: findings.unwrap_or_default(),
+            total_redacted: totalRedacted.unwrap_or_default(),
         }
     }
 
@@ -13926,6 +14009,54 @@ impl WasmRedactionReport {
     #[wasm_bindgen(setter, js_name = "totalRedacted")]
     pub fn set_total_redacted(&mut self, value: u32) {
         self.total_redacted = value;
+    }
+}
+
+/// One rejection-reason tally emitted by the redaction engine's
+/// post-detection validators (see
+/// `EntityValidator`).
+#[derive(Clone, Default)]
+#[wasm_bindgen]
+pub struct WasmRejectionCount {
+    reason: String,
+    count: u32,
+}
+
+#[wasm_bindgen]
+impl WasmRejectionCount {
+    #[allow(non_snake_case)]
+    #[wasm_bindgen(constructor)]
+    pub fn new(reason: String, count: u32) -> WasmRejectionCount {
+        WasmRejectionCount {
+            reason: reason,
+            count: count,
+        }
+    }
+
+    #[wasm_bindgen]
+    #[allow(clippy::should_implement_trait)]
+    pub fn default() -> WasmRejectionCount {
+        <WasmRejectionCount as ::core::default::Default>::default()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn reason(&self) -> String {
+        self.reason.clone()
+    }
+
+    #[wasm_bindgen(setter)]
+    pub fn set_reason(&mut self, value: String) {
+        self.reason = value;
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn count(&self) -> u32 {
+        self.count
+    }
+
+    #[wasm_bindgen(setter)]
+    pub fn set_count(&mut self, value: u32) {
+        self.count = value;
     }
 }
 
@@ -16655,6 +16786,41 @@ impl WasmProcessingStage {
             "Early" => Some(Self::Early),
             "Middle" => Some(Self::Middle),
             "Late" => Some(Self::Late),
+            _ => None,
+        }
+    }
+}
+
+/// Outcome of a single validator on a single candidate match.
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum WasmValidationResult {
+    Accept = 0,
+    Reject = 1,
+}
+
+#[allow(clippy::derivable_impls)]
+impl Default for WasmValidationResult {
+    fn default() -> Self {
+        Self::Accept
+    }
+}
+
+impl WasmValidationResult {
+    /// Returns the serde wire string for this variant (e.g. `"stop"`, `"tool_calls"`).
+    pub fn to_api_str(self) -> &'static str {
+        match self {
+            Self::Accept => "Accept",
+            Self::Reject => "Reject",
+        }
+    }
+
+    /// Parses a serde wire string and returns the corresponding variant, or None if unrecognized.
+    pub fn from_api_str(s: &str) -> Option<Self> {
+        match s {
+            "Accept" => Some(Self::Accept),
+            "Reject" => Some(Self::Reject),
             _ => None,
         }
     }
@@ -21665,6 +21831,7 @@ impl From<WasmRedactionConfig> for xberg::RedactionConfig {
             preserve_offsets: val.preserve_offsets,
             custom_terms: val.custom_terms.into_iter().map(Into::into).collect(),
             custom_patterns: val.custom_patterns.into_iter().map(Into::into).collect(),
+            preserve_terms: val.preserve_terms.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -21679,6 +21846,7 @@ impl From<xberg::RedactionConfig> for WasmRedactionConfig {
             preserve_offsets: val.preserve_offsets,
             custom_terms: val.custom_terms.into_iter().map(Into::into).collect(),
             custom_patterns: val.custom_patterns.into_iter().map(Into::into).collect(),
+            preserve_terms: val.preserve_terms.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -22078,6 +22246,28 @@ impl From<xberg::text::redaction::patterns::PatternMatch> for WasmPatternMatch {
             end: val.end,
             category: val.category.into(),
             text: val.text.to_string(),
+        }
+    }
+}
+
+#[allow(clippy::redundant_closure, clippy::useless_conversion)]
+impl From<WasmSubjectMatch> for xberg::text::redaction::SubjectMatch {
+    fn from(val: WasmSubjectMatch) -> Self {
+        Self {
+            token: val.token,
+            original: val.original,
+            category: val.category,
+        }
+    }
+}
+
+#[allow(clippy::redundant_closure, clippy::useless_conversion)]
+impl From<xberg::text::redaction::SubjectMatch> for WasmSubjectMatch {
+    fn from(val: xberg::text::redaction::SubjectMatch) -> Self {
+        Self {
+            token: val.token.to_string(),
+            original: val.original.to_string(),
+            category: val.category.map(|v| v.to_string()),
         }
     }
 }
@@ -24236,12 +24426,14 @@ impl From<xberg::QrBoundingBox> for WasmQrBoundingBox {
     }
 }
 
+#[allow(clippy::needless_update)]
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmRedactionReport> for xberg::RedactionReport {
     fn from(val: WasmRedactionReport) -> Self {
         Self {
             findings: val.findings.into_iter().map(Into::into).collect(),
             total_redacted: val.total_redacted,
+            ..Default::default()
         }
     }
 }
@@ -24252,6 +24444,16 @@ impl From<xberg::RedactionReport> for WasmRedactionReport {
         Self {
             findings: val.findings.into_iter().map(Into::into).collect(),
             total_redacted: val.total_redacted,
+        }
+    }
+}
+
+#[allow(clippy::redundant_closure, clippy::useless_conversion)]
+impl From<xberg::redaction::RejectionCount> for WasmRejectionCount {
+    fn from(val: xberg::redaction::RejectionCount) -> Self {
+        Self {
+            reason: val.reason.to_string(),
+            count: val.count,
         }
     }
 }
@@ -25218,6 +25420,26 @@ impl From<xberg::ProcessingStage> for WasmProcessingStage {
             xberg::ProcessingStage::Early => Self::Early,
             xberg::ProcessingStage::Middle => Self::Middle,
             xberg::ProcessingStage::Late => Self::Late,
+        }
+    }
+}
+
+impl From<WasmValidationResult> for xberg::text::redaction::ValidationResult {
+    fn from(val: WasmValidationResult) -> Self {
+        match val {
+            WasmValidationResult::Accept => Self::Accept,
+            WasmValidationResult::Reject => Self::Reject {
+                reason: Default::default(),
+            },
+        }
+    }
+}
+
+impl From<xberg::text::redaction::ValidationResult> for WasmValidationResult {
+    fn from(val: xberg::text::redaction::ValidationResult) -> Self {
+        match val {
+            xberg::text::redaction::ValidationResult::Accept => Self::Accept,
+            xberg::text::redaction::ValidationResult::Reject { .. } => Self::Reject,
         }
     }
 }

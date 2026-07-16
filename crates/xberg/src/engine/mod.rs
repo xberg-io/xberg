@@ -114,11 +114,13 @@ impl Engine {
     }
 
     /// The injected [`CacheBackend`] seam (default: [`NoopCache`]).
+    #[cfg_attr(alef, alef(skip))]
     pub fn cache_backend(&self) -> &Arc<dyn CacheBackend> {
         &self.inner.cache
     }
 
     /// The injected [`ProgressSink`] seam (default: [`NoopProgressSink`]).
+    #[cfg_attr(alef, alef(skip))]
     pub fn progress_sink(&self) -> &Arc<dyn ProgressSink> {
         &self.inner.progress
     }
@@ -146,6 +148,7 @@ impl Engine {
 
     /// The injected [`ModelProvider`] seam (default: [`DefaultModelProvider`]).
     #[cfg(feature = "layout-detection")]
+    #[cfg_attr(alef, alef(skip))]
     pub fn model_provider(&self) -> &Arc<dyn ModelProvider> {
         &self.inner.model_provider
     }
@@ -172,12 +175,14 @@ pub struct EngineBuilder {
 
 impl EngineBuilder {
     /// Inject a [`CacheBackend`], overriding the [`NoopCache`] default.
+    #[cfg_attr(alef, alef(skip))]
     pub fn with_cache_backend(mut self, cache: Arc<dyn CacheBackend>) -> Self {
         self.cache = Some(cache);
         self
     }
 
     /// Inject a [`ProgressSink`], overriding the [`NoopProgressSink`] default.
+    #[cfg_attr(alef, alef(skip))]
     pub fn with_progress_sink(mut self, progress: Arc<dyn ProgressSink>) -> Self {
         self.progress = Some(progress);
         self
@@ -209,6 +214,7 @@ impl EngineBuilder {
 
     /// Inject a [`ModelProvider`], overriding the [`DefaultModelProvider`] default.
     #[cfg(feature = "layout-detection")]
+    #[cfg_attr(alef, alef(skip))]
     pub fn with_model_provider(mut self, provider: Arc<dyn ModelProvider>) -> Self {
         self.model_provider = Some(provider);
         self

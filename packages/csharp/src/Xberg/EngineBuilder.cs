@@ -49,66 +49,6 @@ public sealed class EngineBuilder : IDisposable
 
 
     /// <summary>
-    /// Inject a `CacheBackend`, overriding the `NoopCache` default.
-    /// </summary>
-    public EngineBuilder WithCacheBackend(CacheBackend cache)
-    {
-        var nativeResult = NativeMethods.EngineBuilderWithCacheBackend(
-            Handle,
-            cache.Handle
-        );
-        if (nativeResult == IntPtr.Zero)
-        {
-            var ec = NativeMethods.LastErrorCode();
-            var ctxPtr = NativeMethods.LastErrorContext();
-            var msg = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(ctxPtr) ?? "EngineBuilderWithCacheBackend failed";
-            throw new XbergException(ec, msg);
-        }
-        var returnValue = new EngineBuilder(nativeResult);
-        return returnValue;
-    }
-
-    /// <summary>
-    /// Inject a `ProgressSink`, overriding the `NoopProgressSink` default.
-    /// </summary>
-    public EngineBuilder WithProgressSink(ProgressSink progress)
-    {
-        var nativeResult = NativeMethods.EngineBuilderWithProgressSink(
-            Handle,
-            progress.Handle
-        );
-        if (nativeResult == IntPtr.Zero)
-        {
-            var ec = NativeMethods.LastErrorCode();
-            var ctxPtr = NativeMethods.LastErrorContext();
-            var msg = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(ctxPtr) ?? "EngineBuilderWithProgressSink failed";
-            throw new XbergException(ec, msg);
-        }
-        var returnValue = new EngineBuilder(nativeResult);
-        return returnValue;
-    }
-
-    /// <summary>
-    /// Inject a `ModelProvider`, overriding the `DefaultModelProvider` default.
-    /// </summary>
-    public EngineBuilder WithModelProvider(ModelProvider provider)
-    {
-        var nativeResult = NativeMethods.EngineBuilderWithModelProvider(
-            Handle,
-            provider.Handle
-        );
-        if (nativeResult == IntPtr.Zero)
-        {
-            var ec = NativeMethods.LastErrorCode();
-            var ctxPtr = NativeMethods.LastErrorContext();
-            var msg = global::System.Runtime.InteropServices.Marshal.PtrToStringUTF8(ctxPtr) ?? "EngineBuilderWithModelProvider failed";
-            throw new XbergException(ec, msg);
-        }
-        var returnValue = new EngineBuilder(nativeResult);
-        return returnValue;
-    }
-
-    /// <summary>
     /// Finalize the builder into an `Engine`, filling every unset seam with
     /// its in-core default.
     /// </summary>

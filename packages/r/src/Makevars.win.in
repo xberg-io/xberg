@@ -1,0 +1,17 @@
+CARGO_BUILD_ARGS = --release --target x86_64-pc-windows-gnu
+STATLIB = ./rust/target/x86_64-pc-windows-gnu/release/xberg_r.lib
+PKG_LIBS = -L./rust/target/x86_64-pc-windows-gnu/release -lxberg_r -lws2_32 -ladvapi32 -luserenv -lbcrypt -lntdll
+
+all: $(SHLIB)
+
+$(STATLIB):
+	cargo build --manifest-path ./rust/Cargo.toml $(CARGO_BUILD_ARGS)
+
+$(SHLIB): $(STATLIB)
+
+binary:
+	cd .. && R CMD INSTALL --build .
+
+clean:
+	rm -f $(SHLIB) $(STATLIB)
+	cargo clean --manifest-path ./rust/Cargo.toml

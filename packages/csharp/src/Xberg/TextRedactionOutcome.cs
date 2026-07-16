@@ -11,21 +11,32 @@ using System.Text.Json.Serialization;
 namespace Xberg;
 
 /// <summary>
-/// Outcome of `redact_text_capturing_rehydration_map`: the redacted text,
-/// its rehydration map, and per-category finding counts. Counts only — the
-/// matched PII text itself is never included here, per the redaction
-/// pipeline's logging rule.
+/// Outcome of `redact_capturing_rehydration_map`: the token → original-text
+/// rehydration map plus a count of PII candidates the post-detection
+/// validators rejected (e.g. failed-checksum IBANs, failed-Luhn card
+/// numbers), keyed by rejection reason.
+///
+/// `rejection_counts` here is the same audit-only count also written to
+/// `result.redaction_report.rejection_counts` — repeated here as a
+/// Rust-native `RejectionCounts` map so callers of this richer API don't have
+/// to reconstruct it from the FFI-friendly `Vec&lt;RejectionCount&gt;` shape used
+/// on `RedactionReport`. Rejected candidates never
+/// appear in `map` or in `findings` — validators ran before either was
+/// populated, so they were never treated as PII in the first place.
 /// </summary>
 public sealed record TextRedactionOutcome
 {
-    [JsonPropertyName("redacted_text")]
-    public string RedactedText { get; init; } = "";
+    /// <summary>
+    /// Token → original PII text, populated for `TokenReplace` strategy hits.
+    /// </summary>
+    [JsonPropertyName("map")]
+    public RehydrationMap Map { get; init; } = default!;
 
-    [JsonPropertyName("rehydration_map")]
-    public RehydrationMap RehydrationMap { get; init; } = default!;
-
-    [JsonPropertyName("category_counts")]
-    public Dictionary<string, ulong> CategoryCounts { get; init; } = new Dictionary<string, ulong>();
+    /// <summary>
+    /// Post-detection validator rejection counts, keyed by reason.
+    /// </summary>
+    [JsonPropertyName("rejection_counts")]
+    public RejectionCounts RejectionCounts { get; init; } = default!;
 
 
     /// <summary>

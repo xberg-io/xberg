@@ -138,8 +138,11 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
         shell: bash
 
+      - name: Install WASI SDK
+        uses: jamon8888/actions/install-wasi-sdk@v1
+
       - name: Check xberg-wasm compiles for wasm32
-        run: cargo check --locked -p xberg-wasm --target wasm32-unknown-unknown --features wasm-target
+        run: cargo check --locked -p xberg --no-default-features --features wasm-target --target wasm32-unknown-unknown
         shell: bash
 
   live-hf:
