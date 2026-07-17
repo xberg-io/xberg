@@ -1493,6 +1493,34 @@ function getRotatedPageDimensions(page: PageLayout, rotation: Rotation) {
   })
 }
 
+// Maps a point (x, y) in an unrotated page's pixel space to its position in
+// the same page after a clockwise `rotation` (matching the scroll plugin's
+// rotated layout coordinates, per applyPageRotationDeltasToScrollerLayout).
+export function rotatePointInPage({
+  height,
+  rotation,
+  width,
+  x,
+  y,
+}: {
+  height: number
+  rotation: Rotation
+  width: number
+  x: number
+  y: number
+}): { x: number; y: number } {
+  switch (rotation) {
+    case 1:
+      return { x: height - y, y: x }
+    case 2:
+      return { x: width - x, y: height - y }
+    case 3:
+      return { x: y, y: width - x }
+    default:
+      return { x, y }
+  }
+}
+
 function applyPageRotationDeltasToScrollerLayout({
   basePageRotations,
   layout,
@@ -1995,25 +2023,33 @@ function PDFViewerInner({
     () => ({
       scrollToPage,
       scrollToPageArea: (pageNumber, area, options) => {
-        const pageSize = pdfDocument?.pages[pageNumber - 1]?.size
+        const pageIndex = pageNumber - 1
+        const pageSize = pdfDocument?.pages[pageIndex]?.size
+
+        let pageCoordinates: { x: number; y: number } | undefined
+        if (pageSize) {
+          const basePageRotation = basePageRotations[pageIndex] ?? normalizeRotation(0)
+          const rotation = normalizeRotation(
+            basePageRotation + (pageRotationDeltas.get(pageIndex) ?? 0)
+          )
+          pageCoordinates = rotatePointInPage({
+            height: pageSize.height,
+            rotation,
+            width: pageSize.width,
+            x: ((area.left ?? 0) / 100) * pageSize.width,
+            y: (area.top / 100) * pageSize.height,
+          })
+        }
 
         scroll?.scrollToPage({
           pageNumber,
-          ...(pageSize
-            ? {
-                pageCoordinates: {
-                  x: ((area.left ?? 0) / 100) * pageSize.width,
-                  y: (area.top / 100) * pageSize.height,
-                },
-                alignY: 25,
-              }
-            : {}),
+          ...(pageCoordinates ? { pageCoordinates, alignY: 25 } : {}),
           behavior: options?.behavior === "smooth" ? "smooth" : "auto",
         })
       },
       getViewportElement: () => viewportElementRef.current,
     }),
-    [pdfDocument, scroll, scrollToPage]
+    [basePageRotations, pageRotationDeltas, pdfDocument, scroll, scrollToPage]
   )
 
   const handleDownload = React.useCallback(async () => {

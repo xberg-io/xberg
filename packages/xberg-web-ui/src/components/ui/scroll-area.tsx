@@ -46,7 +46,7 @@ const ScrollArea = React.forwardRef<
         innerViewportRef.current = node
         if (typeof viewportRef === "function") viewportRef(node)
         else if (viewportRef && "current" in viewportRef) {
-          ;(viewportRef as React.RefObject<HTMLDivElement | null>).current = node
+          ;(viewportRef as { current: HTMLDivElement | null }).current = node
         }
       },
       [viewportRef]
