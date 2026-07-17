@@ -551,7 +551,7 @@ Implement the wasm-aware `VectorStore` trait over an injected JS store object.
 
 - [ ] **Step 2: Run to verify it fails** — `wasm-pack test --headless --chrome crates/xberg-wasm -- --test store_bridge`; Expected: FAIL (`JsVectorStore` not found).
 
-- [ ] **Step 3: Implement `JsVectorStore`** — one method per `VectorStore` trait fn (signatures from [store.rs:38-90+](../../crates/xberg-rag/src/store.rs)). Each serializes args with `serde_wasm_bindgen::to_value`, calls the JS method, `JsFuture::from(promise).await`, deserializes the result with `serde_wasm_bindgen::from_value`. Use `#[async_trait(?Send)]`. `name()` returns a stored `String`; `capabilities()` returns `Capabilities` describing vector+filter support.
+- [ ] **Step 3: Implement `JsVectorStore`** — one method per `VectorStore` trait fn (signatures from [store.rs:38-90+](../../../crates/xberg-rag/src/store.rs)). Each serializes args with `serde_wasm_bindgen::to_value`, calls the JS method, `JsFuture::from(promise).await`, deserializes the result with `serde_wasm_bindgen::from_value`. Use `#[async_trait(?Send)]`. `name()` returns a stored `String`; `capabilities()` returns `Capabilities` describing vector+filter support.
 
 - [ ] **Step 4: Run to verify it passes** — same command; Expected: PASS.
 

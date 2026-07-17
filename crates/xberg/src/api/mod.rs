@@ -87,6 +87,8 @@ pub(crate) mod jobs;
 #[cfg(feature = "api")]
 pub mod openapi;
 mod openweb;
+#[cfg(feature = "process-api")]
+pub mod rag;
 mod router;
 mod startup;
 mod types;

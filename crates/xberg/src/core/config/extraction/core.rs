@@ -727,14 +727,10 @@ fn default_max_embedded_file_bytes() -> Option<u64> {
 /// resources. 60 s is generous for legitimate documents while bounding the
 /// worst-case cost of a single untrusted input.
 fn default_extraction_timeout() -> Option<u64> {
-    #[cfg(feature = "tokio-runtime")]
-    {
-        Some(60)
-    }
-    #[cfg(not(feature = "tokio-runtime"))]
-    {
-        None
-    }
+    // Always bound untrusted input. Enforcement uses tokio::select! when the
+    // tokio-runtime feature is active; non-tokio consumers still get the
+    // documented 60 s default rather than an unbounded `None`.
+    Some(60)
 }
 
 #[cfg(test)]
@@ -773,6 +769,13 @@ mod tests {
     fn test_effective_disable_ocr_default_is_false() {
         let config = ExtractionConfig::default();
         assert!(!config.effective_disable_ocr());
+    }
+
+    #[test]
+    fn test_default_extraction_timeout_is_bounded() {
+        // Untrusted input must always be bounded, regardless of the
+        // tokio-runtime feature (see CodeRabbit blocking item #3).
+        assert_eq!(default_extraction_timeout(), Some(60));
     }
 
     #[test]

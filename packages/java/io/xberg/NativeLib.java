@@ -550,6 +550,40 @@ final class NativeLib {
     );
 
 
+    static final MethodHandle XBERG_FIND_SUBJECT = LINKER.downcallHandle(
+        LIB.find("xberg_find_subject")
+            .or(() -> LIB.find("_xberg_find_subject"))
+            // Try underscore-prefixed variant for macOS
+            .or(() -> LINKER.defaultLookup().find("xberg_find_subject"))
+            // Fallback to default lookup
+            .or(() -> LINKER.defaultLookup().find("_xberg_find_subject"))
+            // Fallback underscore variant
+            .orElseThrow(() -> new ExceptionInInitializerError(
+                "Native symbol not found: " + "xberg_find_subject" +
+                " (tried: xberg_find_subject, _xberg_find_subject). " +
+                "Ensure the native library was compiled with this function exported. " +
+                "If this is an optional feature, check that all required features are enabled.")),
+        FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS)
+    );
+
+
+    static final MethodHandle XBERG_FORGET_SUBJECT = LINKER.downcallHandle(
+        LIB.find("xberg_forget_subject")
+            .or(() -> LIB.find("_xberg_forget_subject"))
+            // Try underscore-prefixed variant for macOS
+            .or(() -> LINKER.defaultLookup().find("xberg_forget_subject"))
+            // Fallback to default lookup
+            .or(() -> LINKER.defaultLookup().find("_xberg_forget_subject"))
+            // Fallback underscore variant
+            .orElseThrow(() -> new ExceptionInInitializerError(
+                "Native symbol not found: " + "xberg_forget_subject" +
+                " (tried: xberg_forget_subject, _xberg_forget_subject). " +
+                "Ensure the native library was compiled with this function exported. " +
+                "If this is an optional feature, check that all required features are enabled.")),
+        FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS)
+    );
+
+
     static final MethodHandle XBERG_FIND_UNMARKED_CLAIMS = LINKER.downcallHandle(
         LIB.find("xberg_find_unmarked_claims")
             .or(() -> LIB.find("_xberg_find_unmarked_claims"))
@@ -817,108 +851,6 @@ final class NativeLib {
     );
 
 
-    static final MethodHandle XBERG_ENGINE_CACHE_BACKEND = LINKER.downcallHandle(
-        LIB.find("xberg_engine_cache_backend")
-            .or(() -> LIB.find("_xberg_engine_cache_backend"))
-            // Try underscore-prefixed variant for macOS
-            .or(() -> LINKER.defaultLookup().find("xberg_engine_cache_backend"))
-            // Fallback to default lookup
-            .or(() -> LINKER.defaultLookup().find("_xberg_engine_cache_backend"))
-            // Fallback underscore variant
-            .orElseThrow(() -> new ExceptionInInitializerError(
-                "Native symbol not found: " + "xberg_engine_cache_backend" +
-                " (tried: xberg_engine_cache_backend, _xberg_engine_cache_backend). " +
-                "Ensure the native library was compiled with this function exported. " +
-                "If this is an optional feature, check that all required features are enabled.")),
-        FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS)
-    );
-
-
-    static final MethodHandle XBERG_ENGINE_PROGRESS_SINK = LINKER.downcallHandle(
-        LIB.find("xberg_engine_progress_sink")
-            .or(() -> LIB.find("_xberg_engine_progress_sink"))
-            // Try underscore-prefixed variant for macOS
-            .or(() -> LINKER.defaultLookup().find("xberg_engine_progress_sink"))
-            // Fallback to default lookup
-            .or(() -> LINKER.defaultLookup().find("_xberg_engine_progress_sink"))
-            // Fallback underscore variant
-            .orElseThrow(() -> new ExceptionInInitializerError(
-                "Native symbol not found: " + "xberg_engine_progress_sink" +
-                " (tried: xberg_engine_progress_sink, _xberg_engine_progress_sink). " +
-                "Ensure the native library was compiled with this function exported. " +
-                "If this is an optional feature, check that all required features are enabled.")),
-        FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS)
-    );
-
-
-    static final MethodHandle XBERG_ENGINE_MODEL_PROVIDER = LINKER.downcallHandle(
-        LIB.find("xberg_engine_model_provider")
-            .or(() -> LIB.find("_xberg_engine_model_provider"))
-            // Try underscore-prefixed variant for macOS
-            .or(() -> LINKER.defaultLookup().find("xberg_engine_model_provider"))
-            // Fallback to default lookup
-            .or(() -> LINKER.defaultLookup().find("_xberg_engine_model_provider"))
-            // Fallback underscore variant
-            .orElseThrow(() -> new ExceptionInInitializerError(
-                "Native symbol not found: " + "xberg_engine_model_provider" +
-                " (tried: xberg_engine_model_provider, _xberg_engine_model_provider). " +
-                "Ensure the native library was compiled with this function exported. " +
-                "If this is an optional feature, check that all required features are enabled.")),
-        FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS)
-    );
-
-
-    static final MethodHandle XBERG_ENGINE_BUILDER_WITH_CACHE_BACKEND = LINKER.downcallHandle(
-        LIB.find("xberg_engine_builder_with_cache_backend")
-            .or(() -> LIB.find("_xberg_engine_builder_with_cache_backend"))
-            // Try underscore-prefixed variant for macOS
-            .or(() -> LINKER.defaultLookup().find("xberg_engine_builder_with_cache_backend"))
-            // Fallback to default lookup
-            .or(() -> LINKER.defaultLookup().find("_xberg_engine_builder_with_cache_backend"))
-            // Fallback underscore variant
-            .orElseThrow(() -> new ExceptionInInitializerError(
-                "Native symbol not found: " + "xberg_engine_builder_with_cache_backend" +
-                " (tried: xberg_engine_builder_with_cache_backend, _xberg_engine_builder_with_cache_backend). " +
-                "Ensure the native library was compiled with this function exported. " +
-                "If this is an optional feature, check that all required features are enabled.")),
-        FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS)
-    );
-
-
-    static final MethodHandle XBERG_ENGINE_BUILDER_WITH_PROGRESS_SINK = LINKER.downcallHandle(
-        LIB.find("xberg_engine_builder_with_progress_sink")
-            .or(() -> LIB.find("_xberg_engine_builder_with_progress_sink"))
-            // Try underscore-prefixed variant for macOS
-            .or(() -> LINKER.defaultLookup().find("xberg_engine_builder_with_progress_sink"))
-            // Fallback to default lookup
-            .or(() -> LINKER.defaultLookup().find("_xberg_engine_builder_with_progress_sink"))
-            // Fallback underscore variant
-            .orElseThrow(() -> new ExceptionInInitializerError(
-                "Native symbol not found: " + "xberg_engine_builder_with_progress_sink" +
-                " (tried: xberg_engine_builder_with_progress_sink, _xberg_engine_builder_with_progress_sink). " +
-                "Ensure the native library was compiled with this function exported. " +
-                "If this is an optional feature, check that all required features are enabled.")),
-        FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS)
-    );
-
-
-    static final MethodHandle XBERG_ENGINE_BUILDER_WITH_MODEL_PROVIDER = LINKER.downcallHandle(
-        LIB.find("xberg_engine_builder_with_model_provider")
-            .or(() -> LIB.find("_xberg_engine_builder_with_model_provider"))
-            // Try underscore-prefixed variant for macOS
-            .or(() -> LINKER.defaultLookup().find("xberg_engine_builder_with_model_provider"))
-            // Fallback to default lookup
-            .or(() -> LINKER.defaultLookup().find("_xberg_engine_builder_with_model_provider"))
-            // Fallback underscore variant
-            .orElseThrow(() -> new ExceptionInInitializerError(
-                "Native symbol not found: " + "xberg_engine_builder_with_model_provider" +
-                " (tried: xberg_engine_builder_with_model_provider, _xberg_engine_builder_with_model_provider). " +
-                "Ensure the native library was compiled with this function exported. " +
-                "If this is an optional feature, check that all required features are enabled.")),
-        FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS)
-    );
-
-
     static final MethodHandle XBERG_ENGINE_BUILDER_BUILD = LINKER.downcallHandle(
         LIB.find("xberg_engine_builder_build")
             .or(() -> LIB.find("_xberg_engine_builder_build"))
@@ -1009,6 +941,74 @@ final class NativeLib {
                 "Ensure the native library was compiled with this function exported. " +
                 "If this is an optional feature, check that all required features are enabled.")),
         FunctionDescriptor.of(ValueLayout.ADDRESS)
+    );
+
+
+    static final MethodHandle XBERG_IBAN_CHECKSUM_VALIDATOR_LABEL = LINKER.downcallHandle(
+        LIB.find("xberg_iban_checksum_validator_label")
+            .or(() -> LIB.find("_xberg_iban_checksum_validator_label"))
+            // Try underscore-prefixed variant for macOS
+            .or(() -> LINKER.defaultLookup().find("xberg_iban_checksum_validator_label"))
+            // Fallback to default lookup
+            .or(() -> LINKER.defaultLookup().find("_xberg_iban_checksum_validator_label"))
+            // Fallback underscore variant
+            .orElseThrow(() -> new ExceptionInInitializerError(
+                "Native symbol not found: " + "xberg_iban_checksum_validator_label" +
+                " (tried: xberg_iban_checksum_validator_label, _xberg_iban_checksum_validator_label). " +
+                "Ensure the native library was compiled with this function exported. " +
+                "If this is an optional feature, check that all required features are enabled.")),
+        FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS)
+    );
+
+
+    static final MethodHandle XBERG_IBAN_CHECKSUM_VALIDATOR_VALIDATE = LINKER.downcallHandle(
+        LIB.find("xberg_iban_checksum_validator_validate")
+            .or(() -> LIB.find("_xberg_iban_checksum_validator_validate"))
+            // Try underscore-prefixed variant for macOS
+            .or(() -> LINKER.defaultLookup().find("xberg_iban_checksum_validator_validate"))
+            // Fallback to default lookup
+            .or(() -> LINKER.defaultLookup().find("_xberg_iban_checksum_validator_validate"))
+            // Fallback underscore variant
+            .orElseThrow(() -> new ExceptionInInitializerError(
+                "Native symbol not found: " + "xberg_iban_checksum_validator_validate" +
+                " (tried: xberg_iban_checksum_validator_validate, _xberg_iban_checksum_validator_validate). " +
+                "Ensure the native library was compiled with this function exported. " +
+                "If this is an optional feature, check that all required features are enabled.")),
+        FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS)
+    );
+
+
+    static final MethodHandle XBERG_LUHN_VALIDATOR_LABEL = LINKER.downcallHandle(
+        LIB.find("xberg_luhn_validator_label")
+            .or(() -> LIB.find("_xberg_luhn_validator_label"))
+            // Try underscore-prefixed variant for macOS
+            .or(() -> LINKER.defaultLookup().find("xberg_luhn_validator_label"))
+            // Fallback to default lookup
+            .or(() -> LINKER.defaultLookup().find("_xberg_luhn_validator_label"))
+            // Fallback underscore variant
+            .orElseThrow(() -> new ExceptionInInitializerError(
+                "Native symbol not found: " + "xberg_luhn_validator_label" +
+                " (tried: xberg_luhn_validator_label, _xberg_luhn_validator_label). " +
+                "Ensure the native library was compiled with this function exported. " +
+                "If this is an optional feature, check that all required features are enabled.")),
+        FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS)
+    );
+
+
+    static final MethodHandle XBERG_LUHN_VALIDATOR_VALIDATE = LINKER.downcallHandle(
+        LIB.find("xberg_luhn_validator_validate")
+            .or(() -> LIB.find("_xberg_luhn_validator_validate"))
+            // Try underscore-prefixed variant for macOS
+            .or(() -> LINKER.defaultLookup().find("xberg_luhn_validator_validate"))
+            // Fallback to default lookup
+            .or(() -> LINKER.defaultLookup().find("_xberg_luhn_validator_validate"))
+            // Fallback underscore variant
+            .orElseThrow(() -> new ExceptionInInitializerError(
+                "Native symbol not found: " + "xberg_luhn_validator_validate" +
+                " (tried: xberg_luhn_validator_validate, _xberg_luhn_validator_validate). " +
+                "Ensure the native library was compiled with this function exported. " +
+                "If this is an optional feature, check that all required features are enabled.")),
+        FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS)
     );
 
 
@@ -1350,39 +1350,39 @@ final class NativeLib {
     );
 
 
-    static final MethodHandle XBERG_CACHE_BACKEND_FREE = LINKER.downcallHandle(
-        LIB.find("xberg_cache_backend_free")
-            .or(() -> LIB.find("_xberg_cache_backend_free"))
+    static final MethodHandle XBERG_VALIDATION_RESULT_FREE = LINKER.downcallHandle(
+        LIB.find("xberg_validation_result_free")
+            .or(() -> LIB.find("_xberg_validation_result_free"))
             // Try underscore-prefixed variant for macOS
-            .or(() -> LINKER.defaultLookup().find("xberg_cache_backend_free"))
+            .or(() -> LINKER.defaultLookup().find("xberg_validation_result_free"))
             // Fallback to default lookup
-            .or(() -> LINKER.defaultLookup().find("_xberg_cache_backend_free"))
+            .or(() -> LINKER.defaultLookup().find("_xberg_validation_result_free"))
             // Fallback underscore variant
             .orElseThrow(),
         FunctionDescriptor.ofVoid(ValueLayout.ADDRESS)
     );
 
 
-    static final MethodHandle XBERG_PROGRESS_SINK_FREE = LINKER.downcallHandle(
-        LIB.find("xberg_progress_sink_free")
-            .or(() -> LIB.find("_xberg_progress_sink_free"))
+    static final MethodHandle XBERG_PATTERN_MATCH_FROM_JSON = LINKER.downcallHandle(
+        LIB.find("xberg_pattern_match_from_json")
+            .or(() -> LIB.find("_xberg_pattern_match_from_json"))
             // Try underscore-prefixed variant for macOS
-            .or(() -> LINKER.defaultLookup().find("xberg_progress_sink_free"))
+            .or(() -> LINKER.defaultLookup().find("xberg_pattern_match_from_json"))
             // Fallback to default lookup
-            .or(() -> LINKER.defaultLookup().find("_xberg_progress_sink_free"))
+            .or(() -> LINKER.defaultLookup().find("_xberg_pattern_match_from_json"))
             // Fallback underscore variant
             .orElseThrow(),
-        FunctionDescriptor.ofVoid(ValueLayout.ADDRESS)
+        FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS)
     );
 
 
-    static final MethodHandle XBERG_MODEL_PROVIDER_FREE = LINKER.downcallHandle(
-        LIB.find("xberg_model_provider_free")
-            .or(() -> LIB.find("_xberg_model_provider_free"))
+    static final MethodHandle XBERG_PATTERN_MATCH_FREE = LINKER.downcallHandle(
+        LIB.find("xberg_pattern_match_free")
+            .or(() -> LIB.find("_xberg_pattern_match_free"))
             // Try underscore-prefixed variant for macOS
-            .or(() -> LINKER.defaultLookup().find("xberg_model_provider_free"))
+            .or(() -> LINKER.defaultLookup().find("xberg_pattern_match_free"))
             // Fallback to default lookup
-            .or(() -> LINKER.defaultLookup().find("_xberg_model_provider_free"))
+            .or(() -> LINKER.defaultLookup().find("_xberg_pattern_match_free"))
             // Fallback underscore variant
             .orElseThrow(),
         FunctionDescriptor.ofVoid(ValueLayout.ADDRESS)
@@ -1505,6 +1505,45 @@ final class NativeLib {
             .or(() -> LINKER.defaultLookup().find("xberg_token_counter_free"))
             // Fallback to default lookup
             .or(() -> LINKER.defaultLookup().find("_xberg_token_counter_free"))
+            // Fallback underscore variant
+            .orElseThrow(),
+        FunctionDescriptor.ofVoid(ValueLayout.ADDRESS)
+    );
+
+
+    static final MethodHandle XBERG_IBAN_CHECKSUM_VALIDATOR_FREE = LINKER.downcallHandle(
+        LIB.find("xberg_iban_checksum_validator_free")
+            .or(() -> LIB.find("_xberg_iban_checksum_validator_free"))
+            // Try underscore-prefixed variant for macOS
+            .or(() -> LINKER.defaultLookup().find("xberg_iban_checksum_validator_free"))
+            // Fallback to default lookup
+            .or(() -> LINKER.defaultLookup().find("_xberg_iban_checksum_validator_free"))
+            // Fallback underscore variant
+            .orElseThrow(),
+        FunctionDescriptor.ofVoid(ValueLayout.ADDRESS)
+    );
+
+
+    static final MethodHandle XBERG_LUHN_VALIDATOR_FREE = LINKER.downcallHandle(
+        LIB.find("xberg_luhn_validator_free")
+            .or(() -> LIB.find("_xberg_luhn_validator_free"))
+            // Try underscore-prefixed variant for macOS
+            .or(() -> LINKER.defaultLookup().find("xberg_luhn_validator_free"))
+            // Fallback to default lookup
+            .or(() -> LINKER.defaultLookup().find("_xberg_luhn_validator_free"))
+            // Fallback underscore variant
+            .orElseThrow(),
+        FunctionDescriptor.ofVoid(ValueLayout.ADDRESS)
+    );
+
+
+    static final MethodHandle XBERG_REJECTION_COUNTS_FREE = LINKER.downcallHandle(
+        LIB.find("xberg_rejection_counts_free")
+            .or(() -> LIB.find("_xberg_rejection_counts_free"))
+            // Try underscore-prefixed variant for macOS
+            .or(() -> LINKER.defaultLookup().find("xberg_rejection_counts_free"))
+            // Fallback to default lookup
+            .or(() -> LINKER.defaultLookup().find("_xberg_rejection_counts_free"))
             // Fallback underscore variant
             .orElseThrow(),
         FunctionDescriptor.ofVoid(ValueLayout.ADDRESS)

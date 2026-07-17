@@ -1,0 +1,56 @@
+path	tier	feature	note
+crates/xberg/src/api/types.rs	carry	process-api	ApiState.rehydration_store field added; rest of Process* moved to api/rag/types.rs
+crates/xberg/src/api/router.rs	carry	process-api	/v1/process + rehydrate route wiring + ApiState construction
+crates/xberg/src/api/mod.rs	carry	process-api	pub mod rag; behind process-api
+crates/xberg/src/api/handlers.rs	carry	process-api	process/rehydrate handler bodies re-fenced to api/rag/handlers.rs; test_router() rehydration_store field gated; ApiExtractInput/extract_unified_inputs/enforce_api_uri_policy made pub(crate) for api::rag to import
+crates/xberg/Cargo.toml	carry	multiple	fork features: ner-candle, ner-candle-wasm, redaction-rehydrate, doc-store-sqlite, process-api; deps: xberg-doc-store, xberg-gliner-candle, aes-gcm, scrypt
+crates/xberg/src/text/redaction/engine.rs	carry	redaction-rehydrate	14 interleaved hunks through redact(); highest non-RAG merge risk
+crates/xberg/src/text/ner/gline.rs	carry	ner-candle	12 interleaved hunks; GlineBackend + ensure_model changes
+crates/xberg/src/text/redaction/patterns/mod.rs	carry	redaction	pattern registration
+crates/xberg/src/text/redaction/patterns/iban.rs	carry	redaction	pattern tweak
+crates/xberg/src/text/redaction/patterns/credit_card.rs	carry	redaction	pattern rewrite
+crates/xberg/src/lib.rs	carry	multiple	module wiring
+crates/xberg/src/engine/mod.rs	carry	multiple	hook lines
+crates/xberg/src/engine/parsed.rs	carry	multiple	marker line
+crates/xberg/src/engine/structured/chunk.rs	carry	structured	marker line
+crates/xberg/src/engine/structured/citations.rs	carry	structured	marker line
+crates/xberg/src/engine/structured/prompts.rs	carry	structured	marker lines
+crates/xberg/src/engine/structured/rasterize.rs	carry	structured	marker line
+crates/xberg/src/chunking/tokenizer_cache.rs	carry	chunking	one-line change
+crates/xberg/src/core/config/mod.rs	carry	multiple	one-line change
+crates/xberg-rag/Cargo.toml	carry	graph	graphqlite backend deps
+crates/xberg-rag/src/query.rs	carry	graph	Graph RetrieveMode variant (HIGH RISK: upstream added scoring.rs)
+crates/xberg-rag/src/backends/sqlite.rs	carry	graph	graphqlite dispatch
+crates/xberg-rag/src/backends/memory.rs	carry	graph	graph parity
+crates/xberg-rag/src/pipeline.rs	carry	graph	graph wiring
+crates/xberg-rag/src/types.rs	carry	graph	graph types
+crates/xberg-ffi/include/xberg.h	carry	ffi	FFI surface for additions
+crates/xberg-ffi/cbindgen.toml	carry	ffi	header gen config
+crates/xberg-ffi/src/lib.rs	carry	ffi	FFI exports for additions
+crates/xberg-wasm/src/lib.rs	carry	wasm	integration point (14 new files are Tier-1 overlay, not here)
+crates/xberg-wasm/Cargo.toml	carry	wasm	wasm feature wiring
+crates/xberg-node/src/lib.rs	carry	node	integration point
+crates/xberg-node/index.d.ts	carry	node	generated d.ts additions
+crates/xberg-rag/src/backends/graphqlite.rs	carry	graph	graphqlite backend implementation
+crates/xberg-rag/src/backends/mod.rs	carry	graph	backend module exports with graphqlite
+crates/xberg/src/core/config/ner.rs	carry	ner-candle	NER backend configuration
+crates/xberg/src/core/config/redaction.rs	carry	redaction	redaction configuration types
+crates/xberg/src/engine/seams/llm_client.rs	carry	structured	plugin seam for LLM integration
+crates/xberg/src/engine/seams/preset_resolver.rs	carry	structured	plugin seam for preset resolution
+crates/xberg/src/engine/seams/structured_policy.rs	carry	structured	plugin seam for structured output policies
+crates/xberg/src/plugins/processor/builtin/ner.rs	carry	ner-candle	built-in NER processor plugin
+crates/xberg/src/text/ner/candle.rs	carry	ner-candle	Candle NER backend
+crates/xberg/src/text/ner/mod.rs	carry	ner	NER module with trait definitions and discovery
+crates/xberg/src/text/redaction/eval.rs	carry	redaction-rehydrate	redaction evaluation/testing
+crates/xberg/src/text/redaction/mod.rs	carry	redaction	redaction module exports
+crates/xberg/src/text/redaction/rehydration.rs	carry	redaction-rehydrate	rehydration map encryption/decryption
+crates/xberg/src/text/redaction/validators/iban.rs	carry	redaction	IBAN pattern validator
+crates/xberg/src/text/redaction/validators/luhn.rs	carry	redaction	Luhn pattern validator
+crates/xberg/src/text/redaction/validators/mod.rs	carry	redaction	validator module exports
+crates/xberg/src/text/testdata/ts_map_fixture.hex	carry	redaction-rehydrate	test fixture for token map encryption
+crates/xberg/src/types/redaction.rs	carry	redaction	redaction types and enums
+crates/xberg/tests/fixtures/pii_eval/annotations.toml	carry	redaction-rehydrate	PII evaluation test annotations
+crates/xberg/tests/fixtures/pii_eval/doc1.txt	carry	redaction-rehydrate	PII evaluation test document
+crates/xberg/tests/fixtures/pii_eval/doc2.txt	carry	redaction-rehydrate	PII evaluation test document
+crates/xberg/tests/fixtures/pii_eval/doc3.txt	carry	redaction-rehydrate	PII evaluation test document
+crates/xberg/tests/rehydration_durability.rs	carry	redaction-rehydrate	rehydration map durability tests

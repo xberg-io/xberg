@@ -23,12 +23,12 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 use xberg::DocumentExtractor;
-use xberg::Validator;
 use xberg::engine::seams::PresetResolver;
 use xberg::engine::seams::cache::CacheBackend;
 use xberg::engine::seams::model_provider::ModelProvider;
 use xberg::engine::seams::progress::ProgressSink;
 use xberg::text::ner::NerBackend;
+use xberg::text::redaction::EntityValidator;
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize, rustler::NifMap)]
 pub struct AccelerationConfig {
@@ -1013,6 +1013,7 @@ pub struct RedactionConfig {
     pub preserve_offsets: bool,
     pub custom_terms: Vec<RedactionTerm>,
     pub custom_patterns: Vec<RedactionPattern>,
+    pub preserve_terms: Vec<RedactionTerm>,
 }
 
 impl RedactionConfig {
@@ -1031,6 +1032,10 @@ impl RedactionConfig {
                 .unwrap_or_default(),
             custom_patterns: opts
                 .get("custom_patterns")
+                .and_then(|t| t.decode().ok())
+                .unwrap_or_default(),
+            preserve_terms: opts
+                .get("preserve_terms")
                 .and_then(|t| t.decode().ok())
                 .unwrap_or_default(),
         }
@@ -1576,6 +1581,14 @@ impl std::panic::RefUnwindSafe for RehydrationMap {}
 
 impl rustler::Resource for RehydrationMap {}
 
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize, rustler::NifStruct)]
+#[module = "Xberg.SubjectMatch"]
+pub struct SubjectMatch {
+    pub token: String,
+    pub original: String,
+    pub category: Option<String>,
+}
+
 #[derive(Clone)]
 pub struct TokenCounter {
     inner: Arc<xberg::TokenCounter>,
@@ -1586,6 +1599,39 @@ pub struct TokenCounter {
 impl std::panic::RefUnwindSafe for TokenCounter {}
 
 impl rustler::Resource for TokenCounter {}
+
+#[derive(Clone)]
+pub struct IbanChecksumValidator {
+    inner: Arc<xberg::text::redaction::validators::iban::IbanChecksumValidator>,
+}
+
+// SAFETY: See gen_opaque_resource in alef-backend-rustler for rationale.
+
+impl std::panic::RefUnwindSafe for IbanChecksumValidator {}
+
+impl rustler::Resource for IbanChecksumValidator {}
+
+#[derive(Clone)]
+pub struct LuhnValidator {
+    inner: Arc<xberg::text::redaction::validators::luhn::LuhnValidator>,
+}
+
+// SAFETY: See gen_opaque_resource in alef-backend-rustler for rationale.
+
+impl std::panic::RefUnwindSafe for LuhnValidator {}
+
+impl rustler::Resource for LuhnValidator {}
+
+#[derive(Clone)]
+pub struct RejectionCounts {
+    inner: Arc<xberg::text::redaction::RejectionCounts>,
+}
+
+// SAFETY: See gen_opaque_resource in alef-backend-rustler for rationale.
+
+impl std::panic::RefUnwindSafe for RejectionCounts {}
+
+impl rustler::Resource for RejectionCounts {}
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize, rustler::NifMap)]
 pub struct FootnoteConfig {
@@ -2940,11 +2986,22 @@ pub struct QrBoundingBox {
     pub height: u32,
 }
 
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize, rustler::NifStruct)]
-#[module = "Xberg.RedactionReport"]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize, rustler::NifMap)]
 pub struct RedactionReport {
     pub findings: Vec<RedactionFinding>,
     pub total_redacted: u32,
+}
+
+impl RedactionReport {
+    pub fn new(opts: std::collections::HashMap<String, rustler::Term>) -> Self {
+        Self {
+            findings: opts.get("findings").and_then(|t| t.decode().ok()).unwrap_or_default(),
+            total_redacted: opts
+                .get("total_redacted")
+                .and_then(|t| t.decode().ok())
+                .unwrap_or_default(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize, rustler::NifStruct)]
@@ -4068,6 +4125,19 @@ pub enum ReductionLevel {
 impl Default for ReductionLevel {
     fn default() -> Self {
         Self::Off
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rustler::NifTaggedEnum)]
+pub enum ValidationResult {
+    Accept,
+    Reject { reason: String },
+}
+
+#[allow(clippy::derivable_impls)]
+impl Default for ValidationResult {
+    fn default() -> Self {
+        Self::Accept
     }
 }
 
@@ -5329,6 +5399,33 @@ pub fn decrypt_map(blob: rustler::Binary, passphrase: String) -> Result<Resource
     Ok(ResourceArc::new(RehydrationMap {
         inner: Arc::new(result),
     }))
+}
+
+/// Search a decrypted map for `query`, matching either the token or the
+/// original value (case-insensitive substring match on `original`; exact
+/// match on `token`, since tokens are structured like `"[EMAIL_1]"`).
+///
+/// Results are sorted by token for deterministic output.
+#[rustler::nif]
+pub fn find_subject(map: rustler::ResourceArc<RehydrationMap>, query: String) -> Vec<SubjectMatch> {
+    xberg::text::redaction::find_subject(&map.inner, &query)
+        .into_iter()
+        .map(Into::into)
+        .collect()
+}
+
+/// Remove every mapping whose token or original value matches `query`.
+/// Returns the removed entries (the caller re-encrypts and persists the
+/// resulting map — this function does not touch disk).
+///
+/// Idempotent: calling this again with the same `query` after the matching
+/// entries have already been removed returns an empty `Vec`.
+#[rustler::nif]
+pub fn forget_subject(map: rustler::ResourceArc<RehydrationMap>, query: String) -> Vec<SubjectMatch> {
+    xberg::text::redaction::forget_subject(&map.inner, &query)
+        .into_iter()
+        .map(Into::into)
+        .collect()
 }
 
 #[cfg(feature = "markdown-footnotes")]
@@ -7461,63 +7558,6 @@ pub fn engine_extract_batch_async(
     }
 }
 
-/// The injected `CacheBackend` seam (default: `NoopCache`).
-#[rustler::nif]
-pub fn engine_cache_backend(resource: rustler::ResourceArc<Engine>) -> ResourceArc<CacheBackend> {
-    ResourceArc::new(CacheBackend {
-        inner: Arc::new(resource.inner.as_ref().cache_backend().clone()),
-    })
-}
-
-/// The injected `ProgressSink` seam (default: `NoopProgressSink`).
-#[rustler::nif]
-pub fn engine_progress_sink(resource: rustler::ResourceArc<Engine>) -> ResourceArc<ProgressSink> {
-    ResourceArc::new(ProgressSink {
-        inner: Arc::new(resource.inner.as_ref().progress_sink().clone()),
-    })
-}
-
-/// The injected `ModelProvider` seam (default: `DefaultModelProvider`).
-#[rustler::nif]
-pub fn engine_model_provider(resource: rustler::ResourceArc<Engine>) -> ResourceArc<ModelProvider> {
-    ResourceArc::new(ModelProvider {
-        inner: Arc::new(resource.inner.as_ref().model_provider().clone()),
-    })
-}
-
-/// Inject a `CacheBackend`, overriding the `NoopCache` default.
-#[rustler::nif]
-pub fn enginebuilder_with_cache_backend(
-    resource: rustler::ResourceArc<EngineBuilder>,
-    cache: rustler::ResourceArc<CacheBackend>,
-) -> ResourceArc<EngineBuilder> {
-    ResourceArc::new(EngineBuilder {
-        inner: Arc::new((*resource.inner).clone().with_cache_backend(&cache.inner)),
-    })
-}
-
-/// Inject a `ProgressSink`, overriding the `NoopProgressSink` default.
-#[rustler::nif]
-pub fn enginebuilder_with_progress_sink(
-    resource: rustler::ResourceArc<EngineBuilder>,
-    progress: rustler::ResourceArc<ProgressSink>,
-) -> ResourceArc<EngineBuilder> {
-    ResourceArc::new(EngineBuilder {
-        inner: Arc::new((*resource.inner).clone().with_progress_sink(&progress.inner)),
-    })
-}
-
-/// Inject a `ModelProvider`, overriding the `DefaultModelProvider` default.
-#[rustler::nif]
-pub fn enginebuilder_with_model_provider(
-    resource: rustler::ResourceArc<EngineBuilder>,
-    provider: rustler::ResourceArc<ModelProvider>,
-) -> ResourceArc<EngineBuilder> {
-    ResourceArc::new(EngineBuilder {
-        inner: Arc::new((*resource.inner).clone().with_model_provider(&provider.inner)),
-    })
-}
-
 /// Finalize the builder into an `Engine`, filling every unset seam with
 /// its in-core default.
 #[rustler::nif]
@@ -7594,6 +7634,38 @@ pub fn tokencounter_new() -> ResourceArc<TokenCounter> {
     ResourceArc::new(TokenCounter {
         inner: Arc::new(xberg::TokenCounter::new()),
     })
+}
+
+#[rustler::nif]
+pub fn ibanchecksumvalidator_label(resource: rustler::ResourceArc<IbanChecksumValidator>) -> String {
+    resource.inner.as_ref().label().into()
+}
+
+#[rustler::nif]
+pub fn ibanchecksumvalidator_validate(
+    resource: rustler::ResourceArc<IbanChecksumValidator>,
+    entity: PatternMatch,
+    _ctx: String,
+) -> ValidationResult {
+    compile_error!(
+        "alef cannot generate Rustler binding for ibanchecksumvalidator_validate; configure elixir.exclude_functions or make the return type fallible"
+    )
+}
+
+#[rustler::nif]
+pub fn luhnvalidator_label(resource: rustler::ResourceArc<LuhnValidator>) -> String {
+    resource.inner.as_ref().label().into()
+}
+
+#[rustler::nif]
+pub fn luhnvalidator_validate(
+    resource: rustler::ResourceArc<LuhnValidator>,
+    entity: PatternMatch,
+    _ctx: String,
+) -> ValidationResult {
+    compile_error!(
+        "alef cannot generate Rustler binding for luhnvalidator_validate; configure elixir.exclude_functions or make the return type fallible"
+    )
 }
 
 #[rustler::nif]
@@ -9036,6 +9108,7 @@ impl From<RedactionConfig> for xberg::RedactionConfig {
             preserve_offsets: val.preserve_offsets,
             custom_terms: val.custom_terms.into_iter().map(Into::into).collect(),
             custom_patterns: val.custom_patterns.into_iter().map(Into::into).collect(),
+            preserve_terms: val.preserve_terms.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -9050,6 +9123,7 @@ impl From<xberg::RedactionConfig> for RedactionConfig {
             preserve_offsets: val.preserve_offsets,
             custom_terms: val.custom_terms.into_iter().map(Into::into).collect(),
             custom_patterns: val.custom_patterns.into_iter().map(Into::into).collect(),
+            preserve_terms: val.preserve_terms.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -9632,6 +9706,28 @@ impl From<xberg::text::redaction::patterns::PatternMatch> for PatternMatch {
             end: val.end,
             category: val.category.into(),
             text: val.text.to_string(),
+        }
+    }
+}
+
+#[allow(clippy::redundant_closure, clippy::useless_conversion)]
+impl From<SubjectMatch> for xberg::text::redaction::SubjectMatch {
+    fn from(val: SubjectMatch) -> Self {
+        Self {
+            token: val.token,
+            original: val.original,
+            category: val.category,
+        }
+    }
+}
+
+#[allow(clippy::redundant_closure, clippy::useless_conversion)]
+impl From<xberg::text::redaction::SubjectMatch> for SubjectMatch {
+    fn from(val: xberg::text::redaction::SubjectMatch) -> Self {
+        Self {
+            token: val.token.to_string(),
+            original: val.original.to_string(),
+            category: val.category.map(|v| v.to_string()),
         }
     }
 }
@@ -11727,12 +11823,14 @@ impl From<xberg::QrBoundingBox> for QrBoundingBox {
     }
 }
 
+#[allow(clippy::needless_update)]
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<RedactionReport> for xberg::RedactionReport {
     fn from(val: RedactionReport) -> Self {
         Self {
             findings: val.findings.into_iter().map(Into::into).collect(),
             total_redacted: val.total_redacted,
+            ..Default::default()
         }
     }
 }
@@ -13152,6 +13250,26 @@ impl From<xberg::ReductionLevel> for ReductionLevel {
             xberg::ReductionLevel::Moderate => Self::Moderate,
             xberg::ReductionLevel::Aggressive => Self::Aggressive,
             xberg::ReductionLevel::Maximum => Self::Maximum,
+        }
+    }
+}
+
+impl From<ValidationResult> for xberg::text::redaction::ValidationResult {
+    fn from(val: ValidationResult) -> Self {
+        match val {
+            ValidationResult::Accept => Self::Accept,
+            ValidationResult::Reject { reason } => Self::Reject { reason: reason },
+        }
+    }
+}
+
+impl From<xberg::text::redaction::ValidationResult> for ValidationResult {
+    fn from(val: xberg::text::redaction::ValidationResult) -> Self {
+        match val {
+            xberg::text::redaction::ValidationResult::Accept => Self::Accept,
+            xberg::text::redaction::ValidationResult::Reject { reason } => Self::Reject {
+                reason: reason.to_string(),
+            },
         }
     }
 }
@@ -15015,6 +15133,13 @@ pub fn pattern_match_from_json(json: String) -> Result<PatternMatch, String> {
 }
 
 #[rustler::nif]
+pub fn subject_match_from_json(json: String) -> Result<SubjectMatch, String> {
+    serde_json::from_str::<xberg::text::redaction::SubjectMatch>(&json)
+        .map(SubjectMatch::from)
+        .map_err(|e| e.to_string())
+}
+
+#[rustler::nif]
 pub fn footnote_config_from_json(json: String) -> Result<FootnoteConfig, String> {
     serde_json::from_str::<xberg::FootnoteConfig>(&json)
         .map(FootnoteConfig::from)
@@ -15771,6 +15896,12 @@ fn on_load(env: rustler::Env, _info: rustler::Term) -> bool {
         .expect("Failed to register resource type RehydrationMap");
     env.register::<TokenCounter>()
         .expect("Failed to register resource type TokenCounter");
+    env.register::<IbanChecksumValidator>()
+        .expect("Failed to register resource type IbanChecksumValidator");
+    env.register::<LuhnValidator>()
+        .expect("Failed to register resource type LuhnValidator");
+    env.register::<RejectionCounts>()
+        .expect("Failed to register resource type RejectionCounts");
     env.register::<MetaSchema>()
         .expect("Failed to register resource type MetaSchema");
     env.register::<Registry>()

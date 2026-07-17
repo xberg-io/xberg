@@ -3,18 +3,24 @@
 // To verify freshness: alef verify --exit-code
 package io.xberg;
 
-import java.util.Map;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
- * Outcome of redact_text_capturing_rehydration_map: the redacted text,
- * its rehydration map, and per-category finding counts. Counts only — the
- * matched PII text itself is never included here, per the redaction
- * pipeline's logging rule.
+ * Outcome of redact_capturing_rehydration_map: the token → original-text
+ * rehydration map plus a count of PII candidates the post-detection
+ * validators rejected (e.g. failed-checksum IBANs, failed-Luhn card
+ * numbers), keyed by rejection reason.
+ *
+ * {@code rejection_counts} here is the same audit-only count also written to
+ * {@code result.redaction_report.rejection_counts} — repeated here as a
+ * Rust-native {@code RejectionCounts} map so callers of this richer API don't have
+ * to reconstruct it from the FFI-friendly {@code Vec&lt;RejectionCount&gt;} shape used
+ * on {@code RedactionReport}. Rejected candidates never
+ * appear in {@code map} or in {@code findings} — validators ran before either was
+ * populated, so they were never treated as PII in the first place.
  */
 public record TextRedactionOutcome(
-    @JsonProperty("redacted_text") String redactedText,
-    @JsonProperty("rehydration_map") RehydrationMap rehydrationMap,
-    @JsonProperty("category_counts") Map<String, Long> categoryCounts
+    RehydrationMap map,
+    @JsonProperty("rejection_counts") RejectionCounts rejectionCounts
 ) {
 }

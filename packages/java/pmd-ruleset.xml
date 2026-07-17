@@ -1,36 +1,34 @@
 <?xml version="1.0"?>
-<ruleset
-  name="Custom PMD Ruleset"
-  xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
-  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0
-                             https://pmd.sourceforge.io/ruleset_2_0_0.xsd"
->
-  <description>PMD ruleset for Java bindings</description>
+<ruleset name="Custom PMD Ruleset"
+         xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0
+                             https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+    <description>PMD ruleset for Java bindings</description>
 
-  <rule ref="category/java/bestpractices.xml">
-    <exclude name="LooseCoupling" />
-    <!-- Codegen emits defensive @SuppressWarnings; some are situationally redundant. -->
-    <exclude name="UnnecessaryWarningSuppression" />
-    <!--
+    <rule ref="category/java/bestpractices.xml">
+        <exclude name="LooseCoupling"/>
+        <!-- Codegen emits defensive @SuppressWarnings; some are situationally redundant. -->
+        <exclude name="UnnecessaryWarningSuppression"/>
+        <!--
             Generated config DTOs carry loopback defaults copied verbatim from the
             Rust source (e.g. `host = "127.0.0.1"`). The literal is the source of
             truth, not a deployment address, so AvoidUsingHardCodedIP does not apply.
         -->
-    <exclude name="AvoidUsingHardCodedIP" />
-    <!--
+        <exclude name="AvoidUsingHardCodedIP"/>
+        <!--
             Generated DTOs mirror Rust array/byte fields and expose them verbatim;
             defensive copies are the consumer's concern, not codegen's. Suppress the
             array-aliasing pair project-wide.
         -->
-    <exclude name="ArrayIsStoredDirectly" />
-    <exclude name="MethodReturnsInternalArray" />
-  </rule>
-  <rule ref="category/java/codestyle.xml">
-    <exclude name="AtLeastOneConstructor" />
-    <exclude name="CommentDefaultAccessModifier" />
-    <exclude name="OnlyOneReturn" />
-    <!--
+        <exclude name="ArrayIsStoredDirectly"/>
+        <exclude name="MethodReturnsInternalArray"/>
+    </rule>
+    <rule ref="category/java/codestyle.xml">
+        <exclude name="AtLeastOneConstructor"/>
+        <exclude name="CommentDefaultAccessModifier"/>
+        <exclude name="OnlyOneReturn"/>
+        <!--
             These records mirror the Rust source field-for-field; field, parameter and
             accessor names are inherited verbatim and cannot be renamed by codegen.
             ShortVariable (`id`, `n`) and LongVariable (`selfHarmInstructions`) flag those
@@ -38,23 +36,23 @@
             from Rust (`300000L`); the *CouldBeFinal rules are uniform codegen style.
             Codegen is the source of truth, so these are suppressed project-wide.
         -->
-    <exclude name="ShortVariable" />
-    <exclude name="LongVariable" />
-    <exclude name="UseUnderscoresInNumericLiterals" />
-    <exclude name="LocalVariableCouldBeFinal" />
-    <exclude name="MethodArgumentCouldBeFinal" />
-  </rule>
-  <rule ref="category/java/design.xml">
-    <exclude name="LawOfDemeter" />
-    <exclude name="DataClass" />
-    <!--
+        <exclude name="ShortVariable"/>
+        <exclude name="LongVariable"/>
+        <exclude name="UseUnderscoresInNumericLiterals"/>
+        <exclude name="LocalVariableCouldBeFinal"/>
+        <exclude name="MethodArgumentCouldBeFinal"/>
+    </rule>
+    <rule ref="category/java/design.xml">
+        <exclude name="LawOfDemeter"/>
+        <exclude name="DataClass"/>
+        <!--
             DTOs mirror their Rust struct: a wide struct (e.g. ModerationCategoryScores)
             yields many fields and many accessor methods. TooManyFields/TooManyMethods are
             inherent to the source shape, not a design smell codegen can refactor away.
         -->
-    <exclude name="TooManyFields" />
-    <exclude name="TooManyMethods" />
-    <!--
+        <exclude name="TooManyFields"/>
+        <exclude name="TooManyMethods"/>
+        <!--
             Generated Builder-pattern classes carry per-instance final fields
             with their type-default initializer (e.g. `private final boolean
             introspectionEnabled = true;`). PMD interprets these as constants
@@ -63,25 +61,25 @@
             field across all builders and break the pattern. Suppress the
             rule project-wide; codegen is the source of truth.
         -->
-    <exclude name="FinalFieldCouldBeStatic" />
-  </rule>
-  <rule ref="category/java/documentation.xml">
-    <exclude name="CommentSize" />
-    <!--
+        <exclude name="FinalFieldCouldBeStatic"/>
+    </rule>
+    <rule ref="category/java/documentation.xml">
+        <exclude name="CommentSize"/>
+        <!--
             CommentRequired demands hand-written Javadoc on every field/constructor.
             These records are generated DTOs that mirror the Rust source field-for-field;
             codegen is the source of truth, so per-field comments are neither written nor
             meaningful here. Type-level Javadoc is still emitted and still required.
         -->
-    <exclude name="CommentRequired" />
-  </rule>
-  <rule ref="category/java/errorprone.xml">
-    <exclude name="EmptyCatchBlock" />
-  </rule>
-  <rule ref="category/java/multithreading.xml">
-    <!-- Immutable DTOs use plain HashMap for their map fields; concurrency is the caller's concern. -->
-    <exclude name="UseConcurrentHashMap" />
-  </rule>
-  <rule ref="category/java/performance.xml" />
-  <rule ref="category/java/security.xml" />
+        <exclude name="CommentRequired"/>
+    </rule>
+    <rule ref="category/java/errorprone.xml">
+        <exclude name="EmptyCatchBlock"/>
+    </rule>
+    <rule ref="category/java/multithreading.xml">
+        <!-- Immutable DTOs use plain HashMap for their map fields; concurrency is the caller's concern. -->
+        <exclude name="UseConcurrentHashMap"/>
+    </rule>
+    <rule ref="category/java/performance.xml"/>
+    <rule ref="category/java/security.xml"/>
 </ruleset>

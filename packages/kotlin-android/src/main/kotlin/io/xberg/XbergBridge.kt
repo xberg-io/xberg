@@ -64,6 +64,12 @@ object XbergBridge {
     external fun nativeDecryptMap(blob: String, passphrase: String): Long
 
     @Throws(XbergBridgeException::class)
+    external fun nativeFindSubject(map: Long, query: String): String
+
+    @Throws(XbergBridgeException::class)
+    external fun nativeForgetSubject(map: Long, query: String): String
+
+    @Throws(XbergBridgeException::class)
     external fun nativeFindUnmarkedClaims(markdown: String): String
 
     @Throws(XbergBridgeException::class)
@@ -92,25 +98,23 @@ object XbergBridge {
     external fun nativeEngineExtract(handle: Long, requestJson: String): String
     @Throws(XbergBridgeException::class)
     external fun nativeEngineExtractBatch(handle: Long, requestJson: String): String
-    @Throws(XbergBridgeException::class)
-    external fun nativeEngineCacheBackend(handle: Long): String
-    @Throws(XbergBridgeException::class)
-    external fun nativeEngineProgressSink(handle: Long): String
-    @Throws(XbergBridgeException::class)
-    external fun nativeEngineModelProvider(handle: Long): String
     external fun nativeFreeEngine(handle: Long)
-    @Throws(XbergBridgeException::class)
-    external fun nativeEngineBuilderWithCacheBackend(handle: Long, requestJson: String): Long
-    @Throws(XbergBridgeException::class)
-    external fun nativeEngineBuilderWithProgressSink(handle: Long, requestJson: String): Long
-    @Throws(XbergBridgeException::class)
-    external fun nativeEngineBuilderWithModelProvider(handle: Long, requestJson: String): Long
     @Throws(XbergBridgeException::class)
     external fun nativeEngineBuilderBuild(handle: Long): Long
     external fun nativeFreeEngineBuilder(handle: Long)
     @Throws(XbergBridgeException::class)
     external fun nativeCandleBackendDetect(handle: Long, requestJson: String): String
     external fun nativeFreeCandleBackend(handle: Long)
+    @Throws(XbergBridgeException::class)
+    external fun nativeIbanChecksumValidatorLabel(handle: Long): String
+    @Throws(XbergBridgeException::class)
+    external fun nativeIbanChecksumValidatorValidate(handle: Long, requestJson: String): String
+    external fun nativeFreeIbanChecksumValidator(handle: Long)
+    @Throws(XbergBridgeException::class)
+    external fun nativeLuhnValidatorLabel(handle: Long): String
+    @Throws(XbergBridgeException::class)
+    external fun nativeLuhnValidatorValidate(handle: Long, requestJson: String): String
+    external fun nativeFreeLuhnValidator(handle: Long)
     @Throws(XbergBridgeException::class)
     external fun nativeMetaSchemaParsePreset(handle: Long, requestJson: String): String
     external fun nativeFreeMetaSchema(handle: Long)
@@ -181,5 +185,6 @@ object XbergBridge {
 
     // Destructor external funs for handle-only opaque types.
     external fun nativeFreeRehydrationMap(handle: Long)
+    external fun nativeFreeRejectionCounts(handle: Long)
     external fun nativeFreeTokenCounter(handle: Long)
 }

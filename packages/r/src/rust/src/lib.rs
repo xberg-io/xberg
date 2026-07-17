@@ -20,12 +20,12 @@ use extendr_api::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
 use xberg::DocumentExtractor;
-use xberg::Validator;
 use xberg::engine::seams::PresetResolver;
 use xberg::engine::seams::cache::CacheBackend;
 use xberg::engine::seams::model_provider::ModelProvider;
 use xberg::engine::seams::progress::ProgressSink;
 use xberg::text::ner::NerBackend;
+use xberg::text::redaction::EntityValidator;
 
 #[extendr]
 #[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
@@ -2308,6 +2308,17 @@ pub struct RedactionConfig {
     /// hit becomes a `PiiCategory.Custom(label)` finding. Patterns are validated
     /// at config-construction time via `RedactionConfig.validate`.
     pub custom_patterns: Vec<RedactionPattern>,
+    /// Literal terms that must never be redacted, even if the pattern engine
+    /// or NER backend would otherwise flag them.
+    ///
+    /// Use this for known-public entities that a NER model mistakes for PII
+    /// (e.g. "Supreme Court", the caller's own organization name) — an
+    /// allowlist counterpart to `custom_terms`, which
+    /// is a forcelist. A term matches by exact value (respecting
+    /// `case_sensitive`), not by category — it suppresses that literal
+    /// string across every category, since a false positive doesn't know
+    /// its own category was wrong.
+    pub preserve_terms: Vec<RedactionTerm>,
 }
 
 #[extendr]
@@ -3082,24 +3093,6 @@ pub struct Engine {
 
 #[extendr]
 impl Engine {
-    pub fn cache_backend(&self) -> CacheBackend {
-        CacheBackend {
-            inner: Arc::new(self.inner.cache_backend().clone()),
-        }
-    }
-
-    pub fn progress_sink(&self) -> ProgressSink {
-        ProgressSink {
-            inner: Arc::new(self.inner.progress_sink().clone()),
-        }
-    }
-
-    pub fn model_provider(&self) -> ModelProvider {
-        ModelProvider {
-            inner: Arc::new(self.inner.model_provider().clone()),
-        }
-    }
-
     pub fn builder() -> EngineBuilder {
         EngineBuilder {
             inner: Arc::new(xberg::engine::Engine::builder()),
@@ -3121,27 +3114,6 @@ pub struct EngineBuilder {
 
 #[extendr]
 impl EngineBuilder {
-    pub fn with_cache_backend(&self, cache: CacheBackend) -> EngineBuilder {
-        let _ = cache;
-        compile_error!(
-            "alef cannot auto-delegate `EngineBuilder.with_cache_backend`; configure an adapter body or exclude this item from the backend"
-        )
-    }
-
-    pub fn with_progress_sink(&self, progress: ProgressSink) -> EngineBuilder {
-        let _ = progress;
-        compile_error!(
-            "alef cannot auto-delegate `EngineBuilder.with_progress_sink`; configure an adapter body or exclude this item from the backend"
-        )
-    }
-
-    pub fn with_model_provider(&self, provider: ModelProvider) -> EngineBuilder {
-        let _ = provider;
-        compile_error!(
-            "alef cannot auto-delegate `EngineBuilder.with_model_provider`; configure an adapter body or exclude this item from the backend"
-        )
-    }
-
     pub fn build(&self) -> Engine {
         compile_error!(
             "alef cannot auto-delegate `EngineBuilder.build`; configure an adapter body or exclude this item from the backend"
@@ -3791,26 +3763,18 @@ impl CustomGlinerSource {}
 #[extendr]
 #[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct TextRedactionOutcome {
-    pub redacted_text: String,
-    pub rehydration_map: RehydrationMap,
-    pub category_counts: HashMap<String, f64>,
+    /// Token → original PII text, populated for `TokenReplace` strategy hits.
+    pub map: RehydrationMap,
+    /// Post-detection validator rejection counts, keyed by reason.
+    pub rejection_counts: RejectionCounts,
 }
 
 #[extendr]
 impl TextRedactionOutcome {}
 
 #[extendr]
-pub fn new_textredactionoutcome(
-    redacted_text: Option<String>,
-    category_counts: Option<HashMap<String, f64>>,
-) -> TextRedactionOutcome {
+pub fn new_textredactionoutcome() -> TextRedactionOutcome {
     let mut __out = <TextRedactionOutcome>::default();
-    if let Some(v) = redacted_text {
-        __out.redacted_text = v;
-    }
-    if let Some(v) = category_counts {
-        __out.category_counts = v;
-    }
     __out
 }
 
@@ -3841,6 +3805,20 @@ pub struct RehydrationMap {
 impl RehydrationMap {}
 
 #[extendr]
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct SubjectMatch {
+    pub token: String,
+    pub original: String,
+    /// Category parsed from the token's bracket contents (e.g. `"EMAIL"`
+    /// from `"[EMAIL_1]"`), or `None` if the token doesn't follow the
+    /// `"[CATEGORY_N]"` convention.
+    pub category: Option<String>,
+}
+
+#[extendr]
+impl SubjectMatch {}
+
+#[extendr]
 #[derive(Clone)]
 pub struct TokenCounter {
     inner: Arc<xberg::TokenCounter>,
@@ -3854,6 +3832,45 @@ impl TokenCounter {
         }
     }
 }
+
+#[extendr]
+#[derive(Clone)]
+pub struct IbanChecksumValidator {
+    inner: Arc<xberg::text::redaction::validators::iban::IbanChecksumValidator>,
+}
+
+#[extendr]
+impl IbanChecksumValidator {
+    pub fn label(&self) -> String {
+        compile_error!(
+            "alef cannot auto-delegate `IbanChecksumValidator.label`; configure an adapter body or exclude this item from the backend"
+        )
+    }
+}
+
+#[extendr]
+#[derive(Clone)]
+pub struct LuhnValidator {
+    inner: Arc<xberg::text::redaction::validators::luhn::LuhnValidator>,
+}
+
+#[extendr]
+impl LuhnValidator {
+    pub fn label(&self) -> String {
+        compile_error!(
+            "alef cannot auto-delegate `LuhnValidator.label`; configure an adapter body or exclude this item from the backend"
+        )
+    }
+}
+
+#[extendr]
+#[derive(Clone)]
+pub struct RejectionCounts {
+    inner: Arc<xberg::text::redaction::RejectionCounts>,
+}
+
+#[extendr]
+impl RejectionCounts {}
 
 #[extendr]
 #[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
@@ -6530,6 +6547,19 @@ pub struct RedactionReport {
 
 #[extendr]
 #[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct RejectionCount {
+    /// Static reason identifier reported by the validator (e.g.
+    /// `"iban_checksum_failed"`). Never contains the underlying PII text.
+    pub reason: String,
+    /// Number of candidates rejected for this reason.
+    pub count: i32,
+}
+
+#[extendr]
+impl RejectionCount {}
+
+#[extendr]
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct RedactionFinding {
     /// Byte-offset start in the original (pre-redaction) `ExtractedDocument.content`.
     pub start: i32,
@@ -8781,6 +8811,15 @@ pub enum ReductionLevel {
     Maximum = 4,
 }
 
+#[extendr]
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct ValidationResult {
+    pub format_type: String,
+}
+
+#[extendr]
+impl ValidationResult {}
+
 #[derive(Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PdfAnnotationType {
@@ -10764,6 +10803,7 @@ impl From<RedactionConfig> for xberg::RedactionConfig {
             preserve_offsets: val.preserve_offsets,
             custom_terms: val.custom_terms.into_iter().map(Into::into).collect(),
             custom_patterns: val.custom_patterns.into_iter().map(Into::into).collect(),
+            preserve_terms: val.preserve_terms.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -10778,6 +10818,7 @@ impl From<xberg::RedactionConfig> for RedactionConfig {
             preserve_offsets: val.preserve_offsets,
             custom_terms: val.custom_terms.into_iter().map(Into::into).collect(),
             custom_patterns: val.custom_patterns.into_iter().map(Into::into).collect(),
+            preserve_terms: val.preserve_terms.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -11438,15 +11479,12 @@ impl From<xberg::text::ner::gline::CustomGlinerSource> for CustomGlinerSource {
 impl From<xberg::text::redaction::TextRedactionOutcome> for TextRedactionOutcome {
     fn from(val: xberg::text::redaction::TextRedactionOutcome) -> Self {
         Self {
-            redacted_text: val.redacted_text.to_string(),
-            rehydration_map: RehydrationMap {
-                inner: Arc::new(val.rehydration_map),
+            map: RehydrationMap {
+                inner: Arc::new(val.map),
             },
-            category_counts: val
-                .category_counts
-                .iter()
-                .map(|(k, v)| (k.clone(), *v as f64))
-                .collect(),
+            rejection_counts: RejectionCounts {
+                inner: Arc::new(val.rejection_counts),
+            },
         }
     }
 }
@@ -11471,6 +11509,28 @@ impl From<xberg::text::redaction::patterns::PatternMatch> for PatternMatch {
             end: val.end as f64,
             category: val.category.into(),
             text: val.text.to_string(),
+        }
+    }
+}
+
+#[allow(clippy::redundant_closure, clippy::useless_conversion)]
+impl From<SubjectMatch> for xberg::text::redaction::SubjectMatch {
+    fn from(val: SubjectMatch) -> Self {
+        Self {
+            token: val.token,
+            original: val.original,
+            category: val.category,
+        }
+    }
+}
+
+#[allow(clippy::redundant_closure, clippy::useless_conversion)]
+impl From<xberg::text::redaction::SubjectMatch> for SubjectMatch {
+    fn from(val: xberg::text::redaction::SubjectMatch) -> Self {
+        Self {
+            token: val.token.to_string(),
+            original: val.original.to_string(),
+            category: val.category.map(|v| v.to_string()),
         }
     }
 }
@@ -13743,12 +13803,14 @@ impl From<xberg::QrBoundingBox> for QrBoundingBox {
     }
 }
 
+#[allow(clippy::needless_update)]
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<RedactionReport> for xberg::RedactionReport {
     fn from(val: RedactionReport) -> Self {
         Self {
             findings: val.findings.into_iter().map(Into::into).collect(),
             total_redacted: val.total_redacted as u32,
+            ..Default::default()
         }
     }
 }
@@ -13759,6 +13821,16 @@ impl From<xberg::RedactionReport> for RedactionReport {
         Self {
             findings: val.findings.into_iter().map(Into::into).collect(),
             total_redacted: val.total_redacted as i32,
+        }
+    }
+}
+
+#[allow(clippy::redundant_closure, clippy::useless_conversion)]
+impl From<xberg::redaction::RejectionCount> for RejectionCount {
+    fn from(val: xberg::redaction::RejectionCount) -> Self {
+        Self {
+            reason: val.reason.to_string(),
+            count: val.count as i32,
         }
     }
 }
@@ -15306,6 +15378,23 @@ impl From<xberg::ReductionLevel> for ReductionLevel {
     }
 }
 
+impl From<xberg::text::redaction::ValidationResult> for ValidationResult {
+    fn from(val: xberg::text::redaction::ValidationResult) -> Self {
+        match val {
+            xberg::text::redaction::ValidationResult::Accept => Self {
+                format_type: "Accept".to_string(),
+                ..Default::default()
+            },
+            xberg::text::redaction::ValidationResult::Reject { .. } => Self {
+                format_type: "Reject".to_string(),
+                ..Default::default()
+            },
+            #[allow(unreachable_patterns)]
+            _ => Self::default(),
+        }
+    }
+}
+
 impl From<PdfAnnotationType> for xberg::PdfAnnotationType {
     fn from(val: PdfAnnotationType) -> Self {
         match val {
@@ -16840,6 +16929,20 @@ pub fn decrypt_map(blob: Vec<u8>, passphrase: String) -> Result<RehydrationMap> 
                     .collect::<String>(),
             )
         })
+}
+
+#[extendr]
+pub fn find_subject(map: RehydrationMap, query: String) -> String {
+    let result = xberg::text::redaction::find_subject(&map.inner, &query);
+
+    serde_json::to_string(&result).expect("serialization failed")
+}
+
+#[extendr]
+pub fn forget_subject(map: RehydrationMap, query: String) -> String {
+    let result = xberg::text::redaction::forget_subject(&map.inner, &query);
+
+    serde_json::to_string(&result).expect("serialization failed")
 }
 
 #[cfg(feature = "markdown-footnotes")]
@@ -18514,7 +18617,11 @@ extendr_module! {
     impl TextRedactionOutcome;
     impl PatternMatch;
     impl RehydrationMap;
+    impl SubjectMatch;
     impl TokenCounter;
+    impl IbanChecksumValidator;
+    impl LuhnValidator;
+    impl RejectionCounts;
     impl FootnoteConfig;
     impl FootnoteAnchor;
     impl FootnoteDefinition;
@@ -18577,6 +18684,7 @@ extendr_module! {
     impl HierarchicalBlock;
     impl QrCode;
     impl QrBoundingBox;
+    impl RejectionCount;
     impl RedactionFinding;
     impl CellChange;
     impl DocumentRevision;
@@ -18620,6 +18728,7 @@ extendr_module! {
     impl ImageOutputFormat;
     impl OutputFormat;
     impl VlmFallbackPolicy;
+    impl ValidationResult;
     impl EntityCategory;
     impl FormatMetadata;
     impl PiiCategory;
@@ -18650,6 +18759,8 @@ extendr_module! {
     fn dedupe_overlaps;
     fn encrypt_map;
     fn decrypt_map;
+    fn find_subject;
+    fn forget_subject;
     fn register_ocr_backend;
     fn unregister_ocr_backend;
     fn clear_ocr_backends;

@@ -10,9 +10,16 @@ const isMusl = () => {
   // "is musl" positive. Fall through to the filesystem heuristic instead: on
   // glibc systems `/lib64/ld-musl-x86_64.so.1` does not exist; on musl systems
   // it always does. statSync errors → not musl.
-  if (typeof process.report === "object" && typeof process.report.getReport === "function") {
+  if (
+    typeof process.report === "object" &&
+    typeof process.report.getReport === "function"
+  ) {
     const report = process.report.getReport();
-    if (report && report.header && typeof report.header.glibcVersion === "string") {
+    if (
+      report &&
+      report.header &&
+      typeof report.header.glibcVersion === "string"
+    ) {
       return false;
     }
   }
@@ -87,7 +94,9 @@ const tryLoadBinding = () => {
 tryLoadBinding();
 
 if (!nativeBinding) {
-  throw new Error(`Failed to load native binding for ${platform}-${arch}. Errors: ${loadErrors.join(", ")}`);
+  throw new Error(
+    `Failed to load native binding for ${platform}-${arch}. Errors: ${loadErrors.join(", ")}`
+  );
 }
 
 module.exports = nativeBinding;

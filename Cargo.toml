@@ -1,3 +1,8 @@
+# Fork-overlay policy (see .ai-rulez/rules/upstream-sync.md):
+# - Upstream-synced crates live in `members` and build by default.
+# - Fork-only crates (web-ui, mcp-server, skills) are NOT workspace members and
+#   are built only by explicitly targeting their own task/manifest. They are
+#   excluded from `cargo build`/`cargo test` so the upstreamed tree stays clean.
 [workspace]
 members = [
     "crates/xberg",
@@ -10,9 +15,12 @@ members = [
     "crates/xberg-paddle-ocr",
     "crates/xberg-rag",
     "crates/xberg-rag-node",
-    "crates/xberg-rag-node",
     "crates/xberg-tesseract",
     "crates/xberg-wasm",
+    "crates/xberg-ffi",
+    "crates/xberg-jni",
+    "crates/xberg-php",
+    "crates/xberg-py",
     "packages/dart/rust",
     "packages/swift/rust",
     "tools/benchmark-harness",

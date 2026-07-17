@@ -450,6 +450,43 @@ public final class XbergRs {
     }
 
     /**
+     * Search a decrypted map for {@code query}, matching either the token or the
+     * original value (case-insensitive substring match on {@code original}; exact
+     * match on {@code token}, since tokens are structured like {@code "[EMAIL_1]"}).
+     *
+     * Results are sorted by token for deterministic output.
+     */
+    public static List<SubjectMatch> findSubject(final RehydrationMap map, final String query) throws XbergRsException {
+        try (var arena = Arena.ofShared()) {
+            var cmap = map.handle();
+            var cquery = arena.allocateFrom(query);
+            var resultPtr = (MemorySegment) NativeLib.XBERG_FIND_SUBJECT.invoke(cmap, cquery);
+            return readJsonList(resultPtr, new com.fasterxml.jackson.core.type.TypeReference<java.util.List<SubjectMatch>>() { });
+        } catch (Throwable e) {
+            throw new XbergRsException("FFI call failed", e);
+        }
+    }
+
+    /**
+     * Remove every mapping whose token or original value matches {@code query}.
+     * Returns the removed entries (the caller re-encrypts and persists the
+     * resulting map — this function does not touch disk).
+     *
+     * Idempotent: calling this again with the same {@code query} after the matching
+     * entries have already been removed returns an empty {@code Vec}.
+     */
+    public static List<SubjectMatch> forgetSubject(final RehydrationMap map, final String query) throws XbergRsException {
+        try (var arena = Arena.ofShared()) {
+            var cmap = map.handle();
+            var cquery = arena.allocateFrom(query);
+            var resultPtr = (MemorySegment) NativeLib.XBERG_FORGET_SUBJECT.invoke(cmap, cquery);
+            return readJsonList(resultPtr, new com.fasterxml.jackson.core.type.TypeReference<java.util.List<SubjectMatch>>() { });
+        } catch (Throwable e) {
+            throw new XbergRsException("FFI call failed", e);
+        }
+    }
+
+    /**
      * Find unmarked claims in markdown text.
      *
      * Returns lines that assert a claim but carry neither a footnote citation anchor ({@code [^...]})

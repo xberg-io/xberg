@@ -31,11 +31,17 @@ use xberg::engine::seams::PresetResolver;
 use xberg::text::ner::NerBackend;
 use xberg::text::redaction::EntityValidator;
 
-// Hand-written modules (NOT alef-generated). Re-inserted by
-// scripts/ensure-wasm-mods.mjs after every alef regeneration — do not
-// remove. See that script's header for why alef cannot preserve these.
+// Hand-written modules (NOT alef-generated). Declared in alef.toml
+// [crates.wasm] custom_modules so regeneration emits them; scripts/ensure-wasm-mods.mjs
+// re-inserts them as a backstop if a regen omits them. Do not remove.
+// These modules use wasm-only APIs (js_sys/wasm_bindgen) and must only be
+// compiled for the wasm32 target; host builds would otherwise fail to
+// resolve js_sys symbols (E0425).
+#[cfg(target_arch = "wasm32")]
 pub mod bridge;
+#[cfg(target_arch = "wasm32")]
 pub mod engine;
+#[cfg(target_arch = "wasm32")]
 pub use engine::XbergEngine;
 
 

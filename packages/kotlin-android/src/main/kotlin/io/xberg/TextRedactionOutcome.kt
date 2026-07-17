@@ -27,13 +27,22 @@
 package io.xberg
 
 /**
- * Outcome of `redact_text_capturing_rehydration_map`: the redacted text,
- * its rehydration map, and per-category finding counts. Counts only — the
- * matched PII text itself is never included here, per the redaction
- * pipeline's logging rule.
+ * Outcome of `redact_capturing_rehydration_map`: the token → original-text
+ * rehydration map plus a count of PII candidates the post-detection
+ * validators rejected (e.g. failed-checksum IBANs, failed-Luhn card
+ * numbers), keyed by rejection reason.
+ *
+ * `rejection_counts` here is the same audit-only count also written to
+ * `result.redaction_report.rejection_counts` — repeated here as a
+ * Rust-native `RejectionCounts` map so callers of this richer API don't have
+ * to reconstruct it from the FFI-friendly `List<RejectionCount>` shape used
+ * on `RedactionReport`. Rejected candidates never
+ * appear in `map` or in `findings` — validators ran before either was
+ * populated, so they were never treated as PII in the first place.
  */
 data class TextRedactionOutcome(
-    val redactedText: String = "",
-    val rehydrationMap: RehydrationMap,
-    val categoryCounts: Map<String, Long> = emptyMap(),
+    /** Token → original PII text, populated for `TokenReplace` strategy hits. */
+    val map: RehydrationMap,
+    /** Post-detection validator rejection counts, keyed by reason. */
+    val rejectionCounts: RejectionCounts,
 )

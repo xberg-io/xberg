@@ -24,7 +24,7 @@ tier this spec is meant to replace with a durable, tenant-scoped one:
 - `POST /v1/documents/{id}/rehydrate` looks that map up by the returned key and
   decrypts it with the caller-supplied passphrase.
 - `ApiState.rehydration_store`
-  ([rehydration_store.rs](../../../crates/xberg/src/api/rehydration_store.rs)) is
+  ([rehydration_store.rs](../../../crates/xberg-doc-store/src/rehydration.rs)) is
   a **`moka` in-memory cache, 24h TTL** — lost on restart, no tenant scoping, no
   erasure, no audit. `POST /v1/search` and any corpus `[embed → store]` step are
   not yet built.

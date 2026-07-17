@@ -1,0 +1,53 @@
+[package]
+name = "xberg-r"
+version = "1.0.0-rc.5"
+edition = "2024"
+license = "MIT"
+description = "High-performance document intelligence library"
+readme = false
+keywords = ["document", "extraction", "ocr", "pdf", "text"]
+categories = []
+
+[lib]
+crate-type = ["staticlib", "lib"]
+
+[dependencies]
+async-trait = "0.1"
+crawlberg = { default-features = false, version = "1.0.2" }
+extendr-api = "0.9"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread"] }
+xberg = { version = "1.0.0-rc.5", path = "../../../../crates/xberg", default-features = false, features = ["wasm-target", "url-ingestion"] }
+
+[features]
+api = ["xberg/api"]
+api-types = ["xberg/api-types"]
+auto-rotate-types = ["xberg/auto-rotate-types"]
+chunking-tokenizers = ["xberg/chunking-tokenizers"]
+diff = ["xberg/diff"]
+heic = ["xberg/heic"]
+heuristics = ["xberg/heuristics"]
+html = ["xberg/html"]
+keywords-rake = ["xberg/keywords-rake"]
+keywords-yake = ["xberg/keywords-yake"]
+layout-types = ["xberg/layout-types"]
+liter-llm = ["xberg/liter-llm"]
+markdown-footnotes = ["xberg/markdown-footnotes"]
+ocr = ["xberg/ocr"]
+ocr-wasm = ["xberg/ocr-wasm"]
+office = ["xberg/office"]
+paddle-ocr-types = ["xberg/paddle-ocr-types"]
+pdf = ["xberg/pdf"]
+presets = ["xberg/presets"]
+quality = ["xberg/quality"]
+redaction = ["xberg/redaction"]
+redaction-rehydrate = ["xberg/redaction-rehydrate"]
+reranker = ["xberg/reranker"]
+reranker-presets = ["xberg/reranker-presets"]
+svg = ["xberg/svg"]
+transcription-types = ["xberg/transcription-types"]
+tree-sitter = ["xberg/tree-sitter"]
+url-config-types = ["xberg/url-config-types"]
+url-ingestion = ["xberg/url-ingestion"]
+xml = ["xberg/xml"]

@@ -1,0 +1,6 @@
+[files]
+extend-exclude = ["target/", ".alef/", "*.lock", "*.min.js"]
+
+[default.extend-words]
+# Add project-specific words here
+# crate_name = "crate_name"

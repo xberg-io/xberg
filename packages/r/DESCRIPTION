@@ -1,0 +1,23 @@
+Package: xberg
+Title: High-performance document intelligence library
+Version: 1.0.0.9005
+Authors@R: person("Na'aman", "Hirschfeld", email = "naaman@xberg.io", role = c("aut", "cre"))
+Description: High-performance document intelligence library
+    Rust bindings generated with extendr.
+URL: https://github.com/xberg-io/xberg
+BugReports: https://github.com/xberg-io/xberg/issues
+License: MIT
+Depends: R (>= 4.2)
+Imports: jsonlite
+Suggests:
+    testthat (>= 3.0.0),
+    withr,
+    roxygen2,
+    lintr,
+    styler
+SystemRequirements: Cargo (Rust's package manager), rustc (>= 1.91)
+Config/rextendr/version: 0.4.2
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Config/testthat/edition: 3

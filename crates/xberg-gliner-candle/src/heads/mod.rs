@@ -20,7 +20,7 @@ pub(crate) const MAX_WIDTH: usize = 8;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
 
-use candle_core::{DType, Device};
+use candle_core::Device;
 use candle_nn::VarBuilder;
 
 /// Container for the three parametric inference heads.
@@ -41,7 +41,7 @@ impl AllHeads {
     pub fn from_safetensors(weights_path: &Path, device: &Device) -> crate::Result<Self> {
         // SAFETY: mmap-reads the weights file; safe as long as it isn't
         // mutated under us — matches `encoder::Encoder`'s pattern.
-        let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[weights_path], DType::F32, device) }
+        let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[weights_path], candle_core::DType::F32, device) }
             .map_err(|e| crate::GlinerCandleError::Backend(format!("heads safetensors: {e}")))?;
         Self::load(vb, device)
     }

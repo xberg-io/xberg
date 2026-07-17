@@ -211,6 +211,25 @@ class XbergBridge {
     return await rust_bridge.decryptMap(blob: blob, passphrase: passphrase);
   }
 
+  /// Search a decrypted map for `query`, matching either the token or the
+  /// original value (case-insensitive substring match on `original`; exact
+  /// match on `token`, since tokens are structured like `"[EMAIL_1]"`).
+  ///
+  /// Results are sorted by token for deterministic output.
+  static Future<List<SubjectMatch>> findSubject(RehydrationMap map, String query) async {
+    return await rust_bridge.findSubject(map: map, query: query);
+  }
+
+  /// Remove every mapping whose token or original value matches `query`.
+  /// Returns the removed entries (the caller re-encrypts and persists the
+  /// resulting map — this function does not touch disk).
+  ///
+  /// Idempotent: calling this again with the same `query` after the matching
+  /// entries have already been removed returns an empty `Vec`.
+  static Future<List<SubjectMatch>> forgetSubject(RehydrationMap map, String query) async {
+    return await rust_bridge.forgetSubject(map: map, query: query);
+  }
+
   /// Find unmarked claims in markdown text.
   ///
   /// Returns lines that assert a claim but carry neither a footnote citation anchor (`[^...]`)

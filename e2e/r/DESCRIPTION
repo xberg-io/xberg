@@ -1,0 +1,6 @@
+Package: e2e.r
+Title: E2E Tests for xberg
+Version: 0.1.0
+Description: End-to-end test suite.
+Suggests: testthat (>= 3.0.0)
+Config/testthat/edition: 3

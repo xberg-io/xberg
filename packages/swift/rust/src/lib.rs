@@ -900,6 +900,7 @@ mod ffi {
             preserve_offsets: bool,
             custom_terms: Vec<RedactionTerm>,
             custom_patterns: Vec<RedactionPattern>,
+            preserve_terms: Vec<RedactionTerm>,
         ) -> RedactionConfig;
         fn categories(&self) -> Vec<String>;
         fn strategy(&self) -> String;
@@ -910,6 +911,8 @@ mod ffi {
         fn custom_terms(&self) -> Vec<RedactionTerm>;
         #[swift_bridge(swift_name = "customPatterns")]
         fn custom_patterns(&self) -> Vec<RedactionPattern>;
+        #[swift_bridge(swift_name = "preserveTerms")]
+        fn preserve_terms(&self) -> Vec<RedactionTerm>;
     }
 
     extern "Rust" {
@@ -1216,12 +1219,6 @@ mod ffi {
             inputs: Vec<ExtractInput>,
             config: ExtractionConfig,
         ) -> Result<ExtractionResult, String>;
-        #[swift_bridge(swift_name = "engineCacheBackend")]
-        fn engine_cache_backend(client: &Engine) -> CacheBackend;
-        #[swift_bridge(swift_name = "engineProgressSink")]
-        fn engine_progress_sink(client: &Engine) -> ProgressSink;
-        #[swift_bridge(swift_name = "engineModelProvider")]
-        fn engine_model_provider(client: &Engine) -> ModelProvider;
     }
 
     extern "Rust" {
@@ -1229,12 +1226,6 @@ mod ffi {
     }
 
     extern "Rust" {
-        #[swift_bridge(swift_name = "engineBuilderWithCacheBackend")]
-        fn engine_builder_with_cache_backend(client: &EngineBuilder, cache: CacheBackend) -> EngineBuilder;
-        #[swift_bridge(swift_name = "engineBuilderWithProgressSink")]
-        fn engine_builder_with_progress_sink(client: &EngineBuilder, progress: ProgressSink) -> EngineBuilder;
-        #[swift_bridge(swift_name = "engineBuilderWithModelProvider")]
-        fn engine_builder_with_model_provider(client: &EngineBuilder, provider: ModelProvider) -> EngineBuilder;
         #[swift_bridge(swift_name = "engineBuilderBuild")]
         fn engine_builder_build(client: &EngineBuilder) -> Engine;
     }
@@ -1514,18 +1505,14 @@ mod ffi {
         fn architecture(&self) -> String;
     }
 
-    #[cfg(all(feature = "redaction-rehydrate", feature = "ner"))]
+    #[cfg(feature = "redaction-rehydrate")]
     extern "Rust" {
         type TextRedactionOutcome;
         #[swift_bridge(init)]
-        fn new(redacted_text: String, rehydration_map: RehydrationMap, category_counts: String)
-        -> TextRedactionOutcome;
-        #[swift_bridge(swift_name = "redactedText")]
-        fn redacted_text(&self) -> String;
-        #[swift_bridge(swift_name = "rehydrationMap")]
-        fn rehydration_map(&self) -> RehydrationMap;
-        #[swift_bridge(swift_name = "categoryCounts")]
-        fn category_counts(&self) -> String;
+        fn new(map: RehydrationMap, rejection_counts: RejectionCounts) -> TextRedactionOutcome;
+        fn map(&self) -> RehydrationMap;
+        #[swift_bridge(swift_name = "rejectionCounts")]
+        fn rejection_counts(&self) -> RejectionCounts;
     }
 
     extern "Rust" {
@@ -1534,6 +1521,44 @@ mod ffi {
         fn end(&self) -> usize;
         fn category(&self) -> String;
         fn text(&self) -> String;
+    }
+
+    extern "Rust" {
+        type SubjectMatch;
+        fn token(&self) -> String;
+        fn original(&self) -> String;
+        fn category(&self) -> Option<String>;
+    }
+
+    extern "Rust" {
+        type IbanChecksumValidator;
+    }
+
+    extern "Rust" {
+        #[swift_bridge(swift_name = "ibanChecksumValidatorLabel")]
+        fn iban_checksum_validator_label(client: &IbanChecksumValidator) -> String;
+        #[swift_bridge(swift_name = "ibanChecksumValidatorValidate")]
+        fn iban_checksum_validator_validate(
+            client: &IbanChecksumValidator,
+            entity: PatternMatch,
+            ctx: String,
+        ) -> ValidationResult;
+    }
+
+    extern "Rust" {
+        type LuhnValidator;
+    }
+
+    extern "Rust" {
+        #[swift_bridge(swift_name = "luhnValidatorLabel")]
+        fn luhn_validator_label(client: &LuhnValidator) -> String;
+        #[swift_bridge(swift_name = "luhnValidatorValidate")]
+        fn luhn_validator_validate(client: &LuhnValidator, entity: PatternMatch, ctx: String) -> ValidationResult;
+    }
+
+    extern "Rust" {
+        type RejectionCounts;
+        fn rejection_counts_noop(client: &RejectionCounts);
     }
 
     #[cfg(feature = "markdown-footnotes")]
@@ -2894,9 +2919,17 @@ mod ffi {
 
     extern "Rust" {
         type RedactionReport;
+        #[swift_bridge(init)]
+        fn new(findings: Vec<RedactionFinding>, total_redacted: u32) -> RedactionReport;
         fn findings(&self) -> Vec<RedactionFinding>;
         #[swift_bridge(swift_name = "totalRedacted")]
         fn total_redacted(&self) -> u32;
+    }
+
+    extern "Rust" {
+        type RejectionCount;
+        fn reason(&self) -> String;
+        fn count(&self) -> u32;
     }
 
     extern "Rust" {
@@ -3837,6 +3870,11 @@ mod ffi {
     }
 
     extern "Rust" {
+        type ValidationResult;
+        fn to_string(&self) -> String;
+    }
+
+    extern "Rust" {
         type PdfAnnotationType;
         fn to_string(&self) -> String;
     }
@@ -4061,10 +4099,10 @@ mod ffi {
     }
 
     extern "Rust" {
-        type TokenCounter;
-        fn token_counter_noop(client: &TokenCounter);
         type RehydrationMap;
         fn rehydration_map_noop(client: &RehydrationMap);
+        type TokenCounter;
+        fn token_counter_noop(client: &TokenCounter);
 
         fn extract(input: ExtractInput, config: ExtractionConfig) -> Result<ExtractionResult, String>;
         #[swift_bridge(swift_name = "extractBatch")]
@@ -4108,6 +4146,10 @@ mod ffi {
         fn encrypt_map(map: RehydrationMap, passphrase: String) -> Result<Vec<u8>, String>;
         #[swift_bridge(swift_name = "decryptMap")]
         fn decrypt_map(blob: Vec<u8>, passphrase: String) -> Result<RehydrationMap, String>;
+        #[swift_bridge(swift_name = "findSubject")]
+        fn find_subject(map: RehydrationMap, query: String) -> Vec<SubjectMatch>;
+        #[swift_bridge(swift_name = "forgetSubject")]
+        fn forget_subject(map: RehydrationMap, query: String) -> Vec<SubjectMatch>;
     }
 
     #[cfg(feature = "markdown-footnotes")]
@@ -4425,6 +4467,8 @@ mod ffi {
         fn security_limits_from_json(json: String) -> Result<SecurityLimits, String>;
         #[swift_bridge(swift_name = "tokenReductionConfigFromJson")]
         fn token_reduction_config_from_json(json: String) -> Result<TokenReductionConfig, String>;
+        #[swift_bridge(swift_name = "subjectMatchFromJson")]
+        fn subject_match_from_json(json: String) -> Result<SubjectMatch, String>;
         #[swift_bridge(swift_name = "footnoteConfigFromJson")]
         fn footnote_config_from_json(json: String) -> Result<FootnoteConfig, String>;
         #[swift_bridge(swift_name = "footnoteAnchorFromJson")]
@@ -4601,6 +4645,8 @@ mod ffi {
         fn qr_bounding_box_from_json(json: String) -> Result<QrBoundingBox, String>;
         #[swift_bridge(swift_name = "redactionReportFromJson")]
         fn redaction_report_from_json(json: String) -> Result<RedactionReport, String>;
+        #[swift_bridge(swift_name = "rejectionCountFromJson")]
+        fn rejection_count_from_json(json: String) -> Result<RejectionCount, String>;
         #[swift_bridge(swift_name = "redactionFindingFromJson")]
         fn redaction_finding_from_json(json: String) -> Result<RedactionFinding, String>;
         #[swift_bridge(swift_name = "cellChangeFromJson")]
@@ -4897,6 +4943,10 @@ mod ffi {
         fn __alef_phantom_vec_custom_gliner_source() -> Vec<CustomGlinerSource>;
         fn __alef_phantom_vec_pattern_match() -> Vec<PatternMatch>;
         fn __alef_phantom_vec_rehydration_map() -> Vec<RehydrationMap>;
+        fn __alef_phantom_vec_subject_match() -> Vec<SubjectMatch>;
+        fn __alef_phantom_vec_iban_checksum_validator() -> Vec<IbanChecksumValidator>;
+        fn __alef_phantom_vec_luhn_validator() -> Vec<LuhnValidator>;
+        fn __alef_phantom_vec_rejection_counts() -> Vec<RejectionCounts>;
         fn __alef_phantom_vec_pdf_annotation() -> Vec<PdfAnnotation>;
         fn __alef_phantom_vec_page_classification() -> Vec<PageClassification>;
         fn __alef_phantom_vec_classification_label() -> Vec<ClassificationLabel>;
@@ -4980,6 +5030,7 @@ mod ffi {
         fn __alef_phantom_vec_qr_code() -> Vec<QrCode>;
         fn __alef_phantom_vec_qr_bounding_box() -> Vec<QrBoundingBox>;
         fn __alef_phantom_vec_redaction_report() -> Vec<RedactionReport>;
+        fn __alef_phantom_vec_rejection_count() -> Vec<RejectionCount>;
         fn __alef_phantom_vec_redaction_finding() -> Vec<RedactionFinding>;
         fn __alef_phantom_vec_cell_change() -> Vec<CellChange>;
         fn __alef_phantom_vec_document_revision() -> Vec<DocumentRevision>;
@@ -5014,6 +5065,7 @@ mod ffi {
         fn __alef_phantom_vec_list_type() -> Vec<ListType>;
         fn __alef_phantom_vec_ocr_backend_type() -> Vec<OcrBackendType>;
         fn __alef_phantom_vec_processing_stage() -> Vec<ProcessingStage>;
+        fn __alef_phantom_vec_validation_result() -> Vec<ValidationResult>;
         fn __alef_phantom_vec_pdf_annotation_type() -> Vec<PdfAnnotationType>;
         fn __alef_phantom_vec_block_type() -> Vec<BlockType>;
         fn __alef_phantom_vec_inline_type() -> Vec<InlineType>;
@@ -5218,7 +5270,7 @@ mod ffi {
         fn __alef_phantom_vec_token_reduction_config() -> Vec<TokenReductionConfig>;
     }
 
-    #[cfg(all(feature = "redaction-rehydrate", feature = "ner"))]
+    #[cfg(feature = "redaction-rehydrate")]
     extern "Rust" {
         // Phantom Vec<T> functions: swift-bridge-build must emit the full Vec support
         // C ABI symbols (__swift_bridge__$Vec_T$new, drop, push, pop, get, get_mut, as_ptr, len)
@@ -6283,7 +6335,7 @@ pub fn __alef_phantom_vec_candle_backend() -> Vec<CandleBackend> {
 pub fn __alef_phantom_vec_custom_gliner_source() -> Vec<CustomGlinerSource> {
     Vec::new()
 }
-#[cfg(all(feature = "redaction-rehydrate", feature = "ner"))]
+#[cfg(feature = "redaction-rehydrate")]
 #[doc(hidden)]
 pub fn __alef_phantom_vec_text_redaction_outcome() -> Vec<TextRedactionOutcome> {
     Vec::new()
@@ -6296,9 +6348,25 @@ pub fn __alef_phantom_vec_pattern_match() -> Vec<PatternMatch> {
 pub fn __alef_phantom_vec_rehydration_map() -> Vec<RehydrationMap> {
     Vec::new()
 }
+#[doc(hidden)]
+pub fn __alef_phantom_vec_subject_match() -> Vec<SubjectMatch> {
+    Vec::new()
+}
 #[cfg(feature = "redaction")]
 #[doc(hidden)]
 pub fn __alef_phantom_vec_token_counter() -> Vec<TokenCounter> {
+    Vec::new()
+}
+#[doc(hidden)]
+pub fn __alef_phantom_vec_iban_checksum_validator() -> Vec<IbanChecksumValidator> {
+    Vec::new()
+}
+#[doc(hidden)]
+pub fn __alef_phantom_vec_luhn_validator() -> Vec<LuhnValidator> {
+    Vec::new()
+}
+#[doc(hidden)]
+pub fn __alef_phantom_vec_rejection_counts() -> Vec<RejectionCounts> {
     Vec::new()
 }
 #[cfg(feature = "markdown-footnotes")]
@@ -6664,6 +6732,10 @@ pub fn __alef_phantom_vec_redaction_report() -> Vec<RedactionReport> {
     Vec::new()
 }
 #[doc(hidden)]
+pub fn __alef_phantom_vec_rejection_count() -> Vec<RejectionCount> {
+    Vec::new()
+}
+#[doc(hidden)]
 pub fn __alef_phantom_vec_redaction_finding() -> Vec<RedactionFinding> {
     Vec::new()
 }
@@ -6992,6 +7064,10 @@ pub fn __alef_phantom_vec_processing_stage() -> Vec<ProcessingStage> {
 #[cfg(feature = "quality")]
 #[doc(hidden)]
 pub fn __alef_phantom_vec_reduction_level() -> Vec<ReductionLevel> {
+    Vec::new()
+}
+#[doc(hidden)]
+pub fn __alef_phantom_vec_validation_result() -> Vec<ValidationResult> {
     Vec::new()
 }
 #[doc(hidden)]
@@ -9547,6 +9623,7 @@ impl RedactionConfig {
         preserve_offsets: bool,
         custom_terms: Vec<RedactionTerm>,
         custom_patterns: Vec<RedactionPattern>,
+        preserve_terms: Vec<RedactionTerm>,
     ) -> RedactionConfig {
         let mut __target: xberg::RedactionConfig = ::std::default::Default::default();
         // alef: categories (Vec<>) contains enum elements — left at default
@@ -9557,6 +9634,7 @@ impl RedactionConfig {
         __target.preserve_offsets = preserve_offsets;
         __target.custom_terms = custom_terms.into_iter().map(|w| w.0).collect();
         __target.custom_patterns = custom_patterns.into_iter().map(|w| w.0).collect();
+        __target.preserve_terms = preserve_terms.into_iter().map(|w| w.0).collect();
         RedactionConfig(__target)
     }
     pub fn categories(&self) -> Vec<String> {
@@ -9590,6 +9668,13 @@ impl RedactionConfig {
             .custom_patterns
             .iter()
             .map(|elem| RedactionPattern(elem.clone()))
+            .collect()
+    }
+    pub fn preserve_terms(&self) -> Vec<RedactionTerm> {
+        self.0
+            .preserve_terms
+            .iter()
+            .map(|elem| RedactionTerm(elem.clone()))
             .collect()
     }
 }
@@ -10271,27 +10356,9 @@ pub fn engine_extract_batch(
             .map(ExtractionResult)
     })
 }
-pub fn engine_cache_backend(client: &Engine) -> CacheBackend {
-    CacheBackend(client.0.cache_backend())
-}
-pub fn engine_progress_sink(client: &Engine) -> ProgressSink {
-    ProgressSink(client.0.progress_sink())
-}
-pub fn engine_model_provider(client: &Engine) -> ModelProvider {
-    ModelProvider(client.0.model_provider())
-}
 
 pub struct EngineBuilder(pub xberg::engine::EngineBuilder);
 
-pub fn engine_builder_with_cache_backend(client: &EngineBuilder, cache: CacheBackend) -> EngineBuilder {
-    EngineBuilder(client.0.clone().with_cache_backend(cache.0))
-}
-pub fn engine_builder_with_progress_sink(client: &EngineBuilder, progress: ProgressSink) -> EngineBuilder {
-    EngineBuilder(client.0.clone().with_progress_sink(progress.0))
-}
-pub fn engine_builder_with_model_provider(client: &EngineBuilder, provider: ModelProvider) -> EngineBuilder {
-    EngineBuilder(client.0.clone().with_model_provider(provider.0))
-}
 pub fn engine_builder_build(client: &EngineBuilder) -> Engine {
     Engine(client.0.clone().build())
 }
@@ -11219,33 +11286,21 @@ impl CustomGlinerSource {
     }
 }
 
-#[cfg(all(feature = "redaction-rehydrate", feature = "ner"))]
+#[cfg(feature = "redaction-rehydrate")]
 pub struct TextRedactionOutcome(pub xberg::text::redaction::TextRedactionOutcome);
-#[cfg(all(feature = "redaction-rehydrate", feature = "ner"))]
+#[cfg(feature = "redaction-rehydrate")]
 impl TextRedactionOutcome {
-    pub fn new(
-        redacted_text: String,
-        rehydration_map: RehydrationMap,
-        category_counts: String,
-    ) -> TextRedactionOutcome {
+    pub fn new(map: RehydrationMap, rejection_counts: RejectionCounts) -> TextRedactionOutcome {
         let mut __target: xberg::text::redaction::TextRedactionOutcome = ::std::default::Default::default();
-        // alef: redacted_text — String fallback in non-serde struct, left at default
-        __target.rehydration_map = rehydration_map.0;
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&category_counts) {
-            if let Ok(t) = ::serde_json::from_value(v) {
-                __target.category_counts = t;
-            }
-        }
+        __target.map = map.0;
+        __target.rejection_counts = rejection_counts.0;
         TextRedactionOutcome(__target)
     }
-    pub fn redacted_text(&self) -> String {
-        format!("{:?}", &self.0.redacted_text)
+    pub fn map(&self) -> RehydrationMap {
+        RehydrationMap(self.0.map.clone())
     }
-    pub fn rehydration_map(&self) -> RehydrationMap {
-        RehydrationMap(self.0.rehydration_map.clone())
-    }
-    pub fn category_counts(&self) -> String {
-        serde_json::to_string(&self.0.category_counts).expect("serializable category_counts")
+    pub fn rejection_counts(&self) -> RejectionCounts {
+        RejectionCounts(self.0.rejection_counts.clone())
     }
 }
 
@@ -11273,8 +11328,51 @@ impl PatternMatch {
 
 pub struct RehydrationMap(pub xberg::text::redaction::RehydrationMap);
 
+pub struct SubjectMatch(pub xberg::text::redaction::SubjectMatch);
+impl SubjectMatch {
+    pub fn token(&self) -> String {
+        self.0.token.clone()
+    }
+    pub fn original(&self) -> String {
+        self.0.original.clone()
+    }
+    pub fn category(&self) -> Option<String> {
+        self.0.category.clone()
+    }
+}
+
 #[cfg(feature = "redaction")]
 pub struct TokenCounter(pub xberg::TokenCounter);
+
+pub struct IbanChecksumValidator(pub xberg::text::redaction::validators::iban::IbanChecksumValidator);
+
+#[allow(unused_imports)]
+use xberg::text::redaction::EntityValidator;
+
+pub fn iban_checksum_validator_label(client: &IbanChecksumValidator) -> String {
+    client.0.label().to_string()
+}
+pub fn iban_checksum_validator_validate(
+    client: &IbanChecksumValidator,
+    entity: PatternMatch,
+    ctx: String,
+) -> ValidationResult {
+    ValidationResult(client.0.validate(&entity.0, &ctx))
+}
+
+pub struct LuhnValidator(pub xberg::text::redaction::validators::luhn::LuhnValidator);
+
+#[allow(unused_imports)]
+use xberg::text::redaction::EntityValidator;
+
+pub fn luhn_validator_label(client: &LuhnValidator) -> String {
+    client.0.label().to_string()
+}
+pub fn luhn_validator_validate(client: &LuhnValidator, entity: PatternMatch, ctx: String) -> ValidationResult {
+    ValidationResult(client.0.validate(&entity.0, &ctx))
+}
+
+pub struct RejectionCounts(pub xberg::text::redaction::RejectionCounts);
 
 #[cfg(feature = "markdown-footnotes")]
 pub struct FootnoteConfig(pub xberg::FootnoteConfig);
@@ -15218,6 +15316,12 @@ impl QrBoundingBox {
 
 pub struct RedactionReport(pub xberg::RedactionReport);
 impl RedactionReport {
+    pub fn new(findings: Vec<RedactionFinding>, total_redacted: u32) -> RedactionReport {
+        let mut __target: xberg::RedactionReport = ::std::default::Default::default();
+        __target.findings = findings.into_iter().map(|w| w.0).collect();
+        __target.total_redacted = total_redacted;
+        RedactionReport(__target)
+    }
     pub fn findings(&self) -> Vec<RedactionFinding> {
         self.0
             .findings
@@ -15227,6 +15331,19 @@ impl RedactionReport {
     }
     pub fn total_redacted(&self) -> u32 {
         ::serde_json::to_value(&self.0.total_redacted)
+            .ok()
+            .and_then(|j| ::serde_json::from_value(j).ok())
+            .unwrap_or_default()
+    }
+}
+
+pub struct RejectionCount(pub xberg::redaction::RejectionCount);
+impl RejectionCount {
+    pub fn reason(&self) -> String {
+        self.0.reason.clone()
+    }
+    pub fn count(&self) -> u32 {
+        ::serde_json::to_value(&self.0.count)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
@@ -17277,12 +17394,16 @@ impl SsrfPolicy {
     }
 }
 
+pub fn rehydration_map_noop(client: &RehydrationMap) {
+    // No-op method for swift-bridge destructor synthesis
+}
+
 #[cfg(feature = "redaction")]
 pub fn token_counter_noop(client: &TokenCounter) {
     // No-op method for swift-bridge destructor synthesis
 }
 
-pub fn rehydration_map_noop(client: &RehydrationMap) {
+pub fn rejection_counts_noop(client: &RejectionCounts) {
     // No-op method for swift-bridge destructor synthesis
 }
 
@@ -18026,6 +18147,29 @@ impl ReductionLevel {
             Self::Moderate => "Moderate".to_string(),
             Self::Aggressive => "Aggressive".to_string(),
             Self::Maximum => "Maximum".to_string(),
+        }
+    }
+}
+
+pub enum ValidationResult {
+    Accept,
+    Reject,
+}
+
+impl From<xberg::text::redaction::ValidationResult> for ValidationResult {
+    fn from(val: xberg::text::redaction::ValidationResult) -> Self {
+        match val {
+            xberg::text::redaction::ValidationResult::Accept => Self::Accept,
+            xberg::text::redaction::ValidationResult::Reject { .. } => Self::Reject,
+        }
+    }
+}
+
+impl ValidationResult {
+    pub fn to_string(&self) -> String {
+        match self {
+            Self::Accept => "Accept".to_string(),
+            Self::Reject => "Reject".to_string(),
         }
     }
 }
@@ -19858,6 +20002,20 @@ pub fn decrypt_map(blob: Vec<u8>, passphrase: String) -> Result<RehydrationMap, 
         .map(RehydrationMap)
 }
 
+pub fn find_subject(map: RehydrationMap, query: String) -> Vec<SubjectMatch> {
+    (xberg::text::redaction::find_subject(&map.0, &query))
+        .into_iter()
+        .map(SubjectMatch)
+        .collect::<Vec<_>>()
+}
+
+pub fn forget_subject(mut map: RehydrationMap, query: String) -> Vec<SubjectMatch> {
+    (xberg::text::redaction::forget_subject(&mut map.0, &query))
+        .into_iter()
+        .map(SubjectMatch)
+        .collect::<Vec<_>>()
+}
+
 #[cfg(feature = "markdown-footnotes")]
 pub fn find_unmarked_claims(markdown: String) -> Vec<String> {
     xberg::find_unmarked_claims(&markdown)
@@ -20873,6 +21031,11 @@ pub fn token_reduction_config_from_json(json: String) -> Result<TokenReductionCo
         .map(TokenReductionConfig)
         .map_err(|e| e.to_string())
 }
+pub fn subject_match_from_json(json: String) -> Result<SubjectMatch, String> {
+    serde_json::from_str::<xberg::text::redaction::SubjectMatch>(&json)
+        .map(SubjectMatch)
+        .map_err(|e| e.to_string())
+}
 pub fn footnote_config_from_json(json: String) -> Result<FootnoteConfig, String> {
     serde_json::from_str::<xberg::FootnoteConfig>(&json)
         .map(FootnoteConfig)
@@ -21311,6 +21474,11 @@ pub fn qr_bounding_box_from_json(json: String) -> Result<QrBoundingBox, String> 
 pub fn redaction_report_from_json(json: String) -> Result<RedactionReport, String> {
     serde_json::from_str::<xberg::RedactionReport>(&json)
         .map(RedactionReport)
+        .map_err(|e| e.to_string())
+}
+pub fn rejection_count_from_json(json: String) -> Result<RejectionCount, String> {
+    serde_json::from_str::<xberg::redaction::RejectionCount>(&json)
+        .map(RejectionCount)
         .map_err(|e| e.to_string())
 }
 pub fn redaction_finding_from_json(json: String) -> Result<RedactionFinding, String> {

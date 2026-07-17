@@ -1422,6 +1422,17 @@ pub const RedactionConfig = struct {
     /// hit becomes a `PiiCategory.Custom(label)` finding. Patterns are validated
     /// at config-construction time via `RedactionConfig.validate`.
     custom_patterns: []const RedactionPattern,
+    /// Literal terms that must never be redacted, even if the pattern engine
+    /// or NER backend would otherwise flag them.
+    ///
+    /// Use this for known-public entities that a NER model mistakes for PII
+    /// (e.g. "Supreme Court", the caller's own organization name) — an
+    /// allowlist counterpart to `custom_terms`, which
+    /// is a forcelist. A term matches by exact value (respecting
+    /// `case_sensitive`), not by category — it suppresses that literal
+    /// string across every category, since a false positive doesn't know
+    /// its own category was wrong.
+    preserve_terms: []const RedactionTerm,
 };
 
 /// One user-supplied literal term to redact.
@@ -1906,6 +1917,16 @@ pub const PatternMatch = struct {
     /// Matched substring (owned copy — pattern engine returns owned data so the
     /// caller can free the original text if needed before replacement).
     text: []const u8,
+};
+
+/// One vault match — either direction of lookup.
+pub const SubjectMatch = struct {
+    token: []const u8,
+    original: []const u8,
+    /// Category parsed from the token's bracket contents (e.g. `"EMAIL"`
+    /// from `"[EMAIL_1]"`), or `null` if the token doesn't follow the
+    /// `"[CATEGORY_N]"` convention.
+    category: ?[]const u8,
 };
 
 /// Configuration for markdown footnote and citation parsing.
@@ -3766,6 +3787,17 @@ pub const RedactionReport = struct {
     total_redacted: u32,
 };
 
+/// One rejection-reason tally emitted by the redaction engine's
+/// post-detection validators (see
+/// `EntityValidator`).
+pub const RejectionCount = struct {
+    /// Static reason identifier reported by the validator (e.g.
+    /// `"iban_checksum_failed"`). Never contains the underlying PII text.
+    reason: []const u8,
+    /// Number of candidates rejected for this reason.
+    count: u32,
+};
+
 /// One redaction event: which span was rewritten, why, and with what.
 pub const RedactionFinding = struct {
     /// Byte-offset start in the original (pre-redaction) `ExtractedDocument.content`.
@@ -5210,6 +5242,15 @@ pub const ReductionLevel = enum {
     maximum,
 };
 
+/// Outcome of a single validator on a single candidate match.
+pub const ValidationResult = union(enum) {
+    /// Pass-through, no change.
+    accept: void,
+    /// Drop the candidate. `reason` is a static identifier used as a
+    /// `RejectionCounts` key (e.g. `"iban_checksum_failed"`).
+    reject: []const u8,
+};
+
 /// Type of PDF annotation.
 pub const PdfAnnotationType = enum {
     /// Sticky note / text annotation
@@ -6582,6 +6623,47 @@ pub fn decrypt_map(blob: []const u8, passphrase: []const u8) RasterizeError!Rehy
         return _error_with_message(RasterizeError);
     }
     return RehydrationMap{ ._handle = _result.? };
+}
+
+/// Search a decrypted map for `query`, matching either the token or the
+/// original value (case-insensitive substring match on `original`; exact
+/// match on `token`, since tokens are structured like `"[EMAIL_1]"`).
+///
+/// Results are sorted by token for deterministic output.
+pub fn find_subject(map: RehydrationMap, query: []const u8) error{OutOfMemory}![]u8 {
+    const query_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{query}, 0);
+    defer std.heap.c_allocator.free(query_z);
+    const _result = c.xberg_find_subject(map, query_z);
+    const _result_len = c.xberg_find_subject_len(map, query_z);
+    return blk: {
+        const slice = _result[0.._result_len];
+        const owned = try std.heap.c_allocator.dupe(u8, slice);
+        _free_string(_result);
+        break :blk owned;
+    }
+;
+}
+
+/// Remove every mapping whose token or original value matches `query`.
+/// Returns the removed entries (the caller re-encrypts and persists the
+/// resulting map — this function does not touch disk).
+///
+/// Idempotent: calling this again with the same `query` after the matching
+/// entries have already been removed returns an empty `Vec`.
+pub fn forget_subject(map: RehydrationMap, query: []const u8) error{OutOfMemory}![]u8 {
+    const query_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{query}, 0);
+    defer std.heap.c_allocator.free(query_z);
+    const _result = c.xberg_forget_subject(map, query_z);
+    const _result_len = c.xberg_forget_subject_len(map, query_z);
+    return blk: {
+        const slice = _result[0.._result_len];
+        const owned = try std.heap.c_allocator.dupe(u8, slice);
+        _free_string(_result);
+        break :blk owned;
+    }
+;
 }
 
 /// Find unmarked claims in markdown text.
@@ -8558,24 +8640,6 @@ pub const Engine = struct {
         };
     }
 
-    /// The injected `CacheBackend` seam (default: `NoopCache`).
-    pub fn cache_backend(self: *Engine) CacheBackend {
-        const _result = c.xberg_engine_cache_backend(@as(*c.XBERGEngine, @ptrCast(self._handle)));
-        return CacheBackend{ ._handle = _result.? };
-    }
-
-    /// The injected `ProgressSink` seam (default: `NoopProgressSink`).
-    pub fn progress_sink(self: *Engine) ProgressSink {
-        const _result = c.xberg_engine_progress_sink(@as(*c.XBERGEngine, @ptrCast(self._handle)));
-        return ProgressSink{ ._handle = _result.? };
-    }
-
-    /// The injected `ModelProvider` seam (default: `DefaultModelProvider`).
-    pub fn model_provider(self: *Engine) ModelProvider {
-        const _result = c.xberg_engine_model_provider(@as(*c.XBERGEngine, @ptrCast(self._handle)));
-        return ModelProvider{ ._handle = _result.? };
-    }
-
     /// Release the underlying FFI handle. Safe to call once per instance.
     pub fn free(self: *Engine) void {
         c.xberg_engine_free(@as(*c.XBERGEngine, @ptrCast(self._handle)));
@@ -8589,24 +8653,6 @@ pub const Engine = struct {
 /// engine whose seams are exactly those defaults.
 pub const EngineBuilder = struct {
     _handle: *anyopaque,
-
-    /// Inject a `CacheBackend`, overriding the `NoopCache` default.
-    pub fn with_cache_backend(self: *EngineBuilder, cache: CacheBackend) error{OutOfMemory}!EngineBuilder {
-        const _result = c.xberg_engine_builder_with_cache_backend(@as(*c.XBERGEngineBuilder, @ptrCast(self._handle)), cache);
-        return EngineBuilder{ ._handle = _result.? };
-    }
-
-    /// Inject a `ProgressSink`, overriding the `NoopProgressSink` default.
-    pub fn with_progress_sink(self: *EngineBuilder, progress: ProgressSink) error{OutOfMemory}!EngineBuilder {
-        const _result = c.xberg_engine_builder_with_progress_sink(@as(*c.XBERGEngineBuilder, @ptrCast(self._handle)), progress);
-        return EngineBuilder{ ._handle = _result.? };
-    }
-
-    /// Inject a `ModelProvider`, overriding the `DefaultModelProvider` default.
-    pub fn with_model_provider(self: *EngineBuilder, provider: ModelProvider) error{OutOfMemory}!EngineBuilder {
-        const _result = c.xberg_engine_builder_with_model_provider(@as(*c.XBERGEngineBuilder, @ptrCast(self._handle)), provider);
-        return EngineBuilder{ ._handle = _result.? };
-    }
 
     /// Finalize the builder into an `Engine`, filling every unset seam with
     /// its in-core default.
@@ -8692,10 +8738,18 @@ pub const CustomGlinerSource = struct {
     }
 };
 
-/// Outcome of `redact_text_capturing_rehydration_map`: the redacted text,
-/// its rehydration map, and per-category finding counts. Counts only — the
-/// matched PII text itself is never included here, per the redaction
-/// pipeline's logging rule.
+/// Outcome of `redact_capturing_rehydration_map`: the token → original-text
+/// rehydration map plus a count of PII candidates the post-detection
+/// validators rejected (e.g. failed-checksum IBANs, failed-Luhn card
+/// numbers), keyed by rejection reason.
+///
+/// `rejection_counts` here is the same audit-only count also written to
+/// `result.redaction_report.rejection_counts` — repeated here as a
+/// Rust-native `RejectionCounts` map so callers of this richer API don't have
+/// to reconstruct it from the FFI-friendly `[]const RejectionCount` shape used
+/// on `RedactionReport`. Rejected candidates never
+/// appear in `map` or in `findings` — validators ran before either was
+/// populated, so they were never treated as PII in the first place.
 pub const TextRedactionOutcome = struct {
     _handle: *anyopaque,
 
@@ -8729,6 +8783,80 @@ pub const TokenCounter = struct {
     /// Release the underlying FFI handle. Safe to call once per instance.
     pub fn free(self: *TokenCounter) void {
         c.xberg_token_counter_free(@as(*c.XBERGTokenCounter, @ptrCast(self._handle)));
+    }
+};
+
+/// Validates IBAN candidates against the ISO 13616 mod-97 checksum.
+pub const IbanChecksumValidator = struct {
+    _handle: *anyopaque,
+
+    pub fn label(self: *IbanChecksumValidator) error{OutOfMemory}![]u8 {
+        const _result = c.xberg_iban_checksum_validator_label(@as(*c.XBERGIbanChecksumValidator, @ptrCast(self._handle)));
+        return blk: {
+            const slice = std.mem.span(_result);
+            const owned = try std.heap.c_allocator.dupe(u8, slice);
+            c.xberg_free_string(_result);
+            break :blk owned;
+        };
+    }
+
+    pub fn validate(self: *IbanChecksumValidator, entity: []const u8, _ctx: []const u8) error{OutOfMemory,InvalidJson}!ValidationResult {
+        const entity_z = try std.heap.c_allocator.dupeZ(u8, entity);
+        defer std.heap.c_allocator.free(entity_z);
+        const entity_handle = c.xberg_pattern_match_from_json(entity_z.ptr);
+        if (entity_handle == null) return error.InvalidJson;
+        defer c.xberg_pattern_match_free(entity_handle);
+        const _ctx_z = try std.heap.c_allocator.dupeZ(u8, _ctx);
+        defer std.heap.c_allocator.free(_ctx_z);
+        const _result = c.xberg_iban_checksum_validator_validate(@as(*c.XBERGIbanChecksumValidator, @ptrCast(self._handle)), entity_handle, _ctx_z);
+        return ValidationResult{ ._handle = _result.? };
+    }
+
+    /// Release the underlying FFI handle. Safe to call once per instance.
+    pub fn free(self: *IbanChecksumValidator) void {
+        c.xberg_iban_checksum_validator_free(@as(*c.XBERGIbanChecksumValidator, @ptrCast(self._handle)));
+    }
+};
+
+/// Validates credit-card-shaped candidates against the Luhn mod-10 checksum.
+pub const LuhnValidator = struct {
+    _handle: *anyopaque,
+
+    pub fn label(self: *LuhnValidator) error{OutOfMemory}![]u8 {
+        const _result = c.xberg_luhn_validator_label(@as(*c.XBERGLuhnValidator, @ptrCast(self._handle)));
+        return blk: {
+            const slice = std.mem.span(_result);
+            const owned = try std.heap.c_allocator.dupe(u8, slice);
+            c.xberg_free_string(_result);
+            break :blk owned;
+        };
+    }
+
+    pub fn validate(self: *LuhnValidator, entity: []const u8, _ctx: []const u8) error{OutOfMemory,InvalidJson}!ValidationResult {
+        const entity_z = try std.heap.c_allocator.dupeZ(u8, entity);
+        defer std.heap.c_allocator.free(entity_z);
+        const entity_handle = c.xberg_pattern_match_from_json(entity_z.ptr);
+        if (entity_handle == null) return error.InvalidJson;
+        defer c.xberg_pattern_match_free(entity_handle);
+        const _ctx_z = try std.heap.c_allocator.dupeZ(u8, _ctx);
+        defer std.heap.c_allocator.free(_ctx_z);
+        const _result = c.xberg_luhn_validator_validate(@as(*c.XBERGLuhnValidator, @ptrCast(self._handle)), entity_handle, _ctx_z);
+        return ValidationResult{ ._handle = _result.? };
+    }
+
+    /// Release the underlying FFI handle. Safe to call once per instance.
+    pub fn free(self: *LuhnValidator) void {
+        c.xberg_luhn_validator_free(@as(*c.XBERGLuhnValidator, @ptrCast(self._handle)));
+    }
+};
+
+/// Counter for rejections, keyed by validator reason string.
+pub const RejectionCounts = struct {
+    _handle: *anyopaque,
+
+    /// Release the underlying FFI handle. Safe to call once per instance.
+    pub fn free(self: *RejectionCounts) void {
+        c.xberg_rejection_counts_free(@as(*c.XBERGRejectionCounts, @ptrCast(self._handle)));
     }
 };
 

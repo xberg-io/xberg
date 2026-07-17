@@ -5153,5 +5153,4 @@ union __swift_bridge__$ResultUIntAndString$Fields {uintptr_t ok; void* err;};
 typedef struct __swift_bridge__$ResultUIntAndString{__swift_bridge__$ResultUIntAndString$Tag tag; union __swift_bridge__$ResultUIntAndString$Fields payload;} __swift_bridge__$ResultUIntAndString;
 
 
-
 #endif /* RUST_BRIDGE_C_H */
