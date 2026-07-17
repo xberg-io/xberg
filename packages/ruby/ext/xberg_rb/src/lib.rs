@@ -24,12 +24,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 use xberg::DocumentExtractor;
-use xberg::Validator;
 use xberg::engine::seams::PresetResolver;
 use xberg::engine::seams::cache::CacheBackend;
 use xberg::engine::seams::model_provider::ModelProvider;
 use xberg::engine::seams::progress::ProgressSink;
 use xberg::text::ner::NerBackend;
+use xberg::text::redaction::EntityValidator;
 
 fn json_to_ruby(handle: &Ruby, val: serde_json::Value) -> magnus::Value {
     use magnus::IntoValue;
@@ -4134,6 +4134,7 @@ pub struct RedactionConfig {
     preserve_offsets: bool,
     custom_terms: Vec<RedactionTerm>,
     custom_patterns: Vec<RedactionPattern>,
+    preserve_terms: Vec<RedactionTerm>,
 }
 
 unsafe impl IntoValueFromNative for RedactionConfig {}
@@ -4200,6 +4201,10 @@ impl RedactionConfig {
                 .get(ruby.to_symbol("custom_patterns"))
                 .and_then(|v| <Vec<RedactionPattern>>::try_convert(v).ok())
                 .unwrap_or_default(),
+            preserve_terms: kwargs
+                .get(ruby.to_symbol("preserve_terms"))
+                .and_then(|v| <Vec<RedactionTerm>>::try_convert(v).ok())
+                .unwrap_or_default(),
         })
     }
 
@@ -4227,6 +4232,10 @@ impl RedactionConfig {
         self.custom_patterns.clone()
     }
 
+    fn preserve_terms(&self) -> Vec<RedactionTerm> {
+        self.preserve_terms.clone()
+    }
+
     fn validate(&self) -> Result<(), Error> {
         let core_self = xberg::RedactionConfig {
             categories: self.categories.clone().into_iter().map(Into::into).collect(),
@@ -4240,6 +4249,8 @@ impl RedactionConfig {
             custom_terms: self.custom_terms.clone().into_iter().map(Into::into).collect(),
 
             custom_patterns: self.custom_patterns.clone().into_iter().map(Into::into).collect(),
+
+            preserve_terms: self.preserve_terms.clone().into_iter().map(Into::into).collect(),
         };
         let result = core_self.validate().map_err(|e| {
             magnus::Error::new(
@@ -6111,24 +6122,6 @@ impl Engine {
             })?;
         Ok(result.into())
     }
-
-    fn cache_backend(&self) -> CacheBackend {
-        CacheBackend {
-            inner: Arc::new(self.inner.cache_backend().clone()),
-        }
-    }
-
-    fn progress_sink(&self) -> ProgressSink {
-        ProgressSink {
-            inner: Arc::new(self.inner.progress_sink().clone()),
-        }
-    }
-
-    fn model_provider(&self) -> ModelProvider {
-        ModelProvider {
-            inner: Arc::new(self.inner.model_provider().clone()),
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -6149,24 +6142,6 @@ impl magnus::TryConvert for EngineBuilder {
 unsafe impl TryConvertOwned for EngineBuilder {}
 
 impl EngineBuilder {
-    fn with_cache_backend(&self, cache: CacheBackend) -> EngineBuilder {
-        Self {
-            inner: Arc::new(self.inner.as_ref().clone().with_cache_backend(&cache.inner)),
-        }
-    }
-
-    fn with_progress_sink(&self, progress: ProgressSink) -> EngineBuilder {
-        Self {
-            inner: Arc::new(self.inner.as_ref().clone().with_progress_sink(&progress.inner)),
-        }
-    }
-
-    fn with_model_provider(&self, provider: ModelProvider) -> EngineBuilder {
-        Self {
-            inner: Arc::new(self.inner.as_ref().clone().with_model_provider(&provider.inner)),
-        }
-    }
-
     fn build(&self) -> Engine {
         Engine {
             inner: Arc::new(self.inner.as_ref().clone().build()),
@@ -7312,9 +7287,8 @@ impl CustomGlinerSource {
 #[serde(default)]
 #[magnus::wrap(class = "Xberg::TextRedactionOutcome")]
 pub struct TextRedactionOutcome {
-    redacted_text: String,
-    rehydration_map: RehydrationMap,
-    category_counts: HashMap<String, usize>,
+    map: RehydrationMap,
+    rejection_counts: RejectionCounts,
 }
 
 unsafe impl IntoValueFromNative for TextRedactionOutcome {}
@@ -7358,31 +7332,23 @@ impl TextRedactionOutcome {
         let (kwargs_opt,) = args.optional;
         let kwargs = kwargs_opt.unwrap_or_else(|| ruby.hash_new());
         Ok(Self {
-            redacted_text: kwargs
-                .get(ruby.to_symbol("redacted_text"))
-                .and_then(|v| String::try_convert(v).ok())
-                .unwrap_or_default(),
-            rehydration_map: kwargs
-                .get(ruby.to_symbol("rehydration_map"))
+            map: kwargs
+                .get(ruby.to_symbol("map"))
                 .and_then(|v| RehydrationMap::try_convert(v).ok())
                 .unwrap_or_default(),
-            category_counts: kwargs
-                .get(ruby.to_symbol("category_counts"))
-                .and_then(|v| <HashMap<String, usize>>::try_convert(v).ok())
+            rejection_counts: kwargs
+                .get(ruby.to_symbol("rejection_counts"))
+                .and_then(|v| RejectionCounts::try_convert(v).ok())
                 .unwrap_or_default(),
         })
     }
 
-    fn redacted_text(&self) -> String {
-        self.redacted_text.clone()
+    fn map(&self) -> RehydrationMap {
+        self.map.clone()
     }
 
-    fn rehydration_map(&self) -> RehydrationMap {
-        self.rehydration_map.clone()
-    }
-
-    fn category_counts(&self) -> HashMap<String, usize> {
-        self.category_counts.clone()
+    fn rejection_counts(&self) -> RejectionCounts {
+        self.rejection_counts.clone()
     }
 }
 
@@ -7490,6 +7456,76 @@ unsafe impl TryConvertOwned for RehydrationMap {}
 
 impl RehydrationMap {}
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[magnus::wrap(class = "Xberg::SubjectMatch")]
+pub struct SubjectMatch {
+    token: String,
+    original: String,
+    category: Option<String>,
+}
+
+unsafe impl IntoValueFromNative for SubjectMatch {}
+
+impl magnus::TryConvert for SubjectMatch {
+    fn try_convert(val: magnus::Value) -> Result<Self, magnus::Error> {
+        if let Ok(r) = <&SubjectMatch as magnus::TryConvert>::try_convert(val) {
+            return Ok(r.clone());
+        }
+        let json_str: String = if let Ok(s) = <String as magnus::TryConvert>::try_convert(val) {
+            s
+        } else {
+            val.funcall::<_, _, String>("to_json", ()).map_err(|e| {
+                magnus::Error::new(
+                    unsafe { magnus::Ruby::get_unchecked() }.exception_type_error(),
+                    format!("no implicit conversion into SubjectMatch: {}", e),
+                )
+            })?
+        };
+        serde_json::from_str::<SubjectMatch>(&json_str).map_err(|e| {
+            magnus::Error::new(
+                unsafe { magnus::Ruby::get_unchecked() }.exception_type_error(),
+                format!("failed to deserialize SubjectMatch: {}", e),
+            )
+        })
+    }
+}
+
+unsafe impl TryConvertOwned for SubjectMatch {}
+
+impl SubjectMatch {
+    fn new(args: &[magnus::Value]) -> Result<Self, magnus::Error> {
+        let ruby = unsafe { magnus::Ruby::get_unchecked() };
+        let args = magnus::scan_args::scan_args::<(), (Option<magnus::RHash>,), (), (), (), ()>(args)?;
+        let (kwargs_opt,) = args.optional;
+        let kwargs = kwargs_opt.unwrap_or_else(|| ruby.hash_new());
+        Ok(Self {
+            token: kwargs
+                .get(ruby.to_symbol("token"))
+                .and_then(|v| String::try_convert(v).ok())
+                .unwrap_or_default(),
+            original: kwargs
+                .get(ruby.to_symbol("original"))
+                .and_then(|v| String::try_convert(v).ok())
+                .unwrap_or_default(),
+            category: kwargs
+                .get(ruby.to_symbol("category"))
+                .and_then(|v| String::try_convert(v).ok()),
+        })
+    }
+
+    fn token(&self) -> String {
+        self.token.clone()
+    }
+
+    fn original(&self) -> String {
+        self.original.clone()
+    }
+
+    fn category(&self) -> Option<String> {
+        self.category.clone()
+    }
+}
+
 #[derive(Clone)]
 #[magnus::wrap(class = "Xberg::TokenCounter")]
 pub struct TokenCounter {
@@ -7508,6 +7544,81 @@ impl magnus::TryConvert for TokenCounter {
 unsafe impl TryConvertOwned for TokenCounter {}
 
 impl TokenCounter {}
+
+#[derive(Clone)]
+#[magnus::wrap(class = "Xberg::IbanChecksumValidator")]
+pub struct IbanChecksumValidator {
+    inner: Arc<xberg::text::redaction::validators::iban::IbanChecksumValidator>,
+}
+
+unsafe impl IntoValueFromNative for IbanChecksumValidator {}
+
+impl magnus::TryConvert for IbanChecksumValidator {
+    fn try_convert(val: magnus::Value) -> Result<Self, magnus::Error> {
+        let r: &IbanChecksumValidator = magnus::TryConvert::try_convert(val)?;
+        Ok(r.clone())
+    }
+}
+
+unsafe impl TryConvertOwned for IbanChecksumValidator {}
+
+impl IbanChecksumValidator {
+    fn label(&self) -> String {
+        self.inner.label().into()
+    }
+
+    fn validate(&self, entity: PatternMatch, _ctx: String) -> ValidationResult {
+        let entity_core: xberg::PatternMatch = entity.into();
+        self.inner.validate(&entity_core, &_ctx).into()
+    }
+}
+
+#[derive(Clone)]
+#[magnus::wrap(class = "Xberg::LuhnValidator")]
+pub struct LuhnValidator {
+    inner: Arc<xberg::text::redaction::validators::luhn::LuhnValidator>,
+}
+
+unsafe impl IntoValueFromNative for LuhnValidator {}
+
+impl magnus::TryConvert for LuhnValidator {
+    fn try_convert(val: magnus::Value) -> Result<Self, magnus::Error> {
+        let r: &LuhnValidator = magnus::TryConvert::try_convert(val)?;
+        Ok(r.clone())
+    }
+}
+
+unsafe impl TryConvertOwned for LuhnValidator {}
+
+impl LuhnValidator {
+    fn label(&self) -> String {
+        self.inner.label().into()
+    }
+
+    fn validate(&self, entity: PatternMatch, _ctx: String) -> ValidationResult {
+        let entity_core: xberg::PatternMatch = entity.into();
+        self.inner.validate(&entity_core, &_ctx).into()
+    }
+}
+
+#[derive(Clone)]
+#[magnus::wrap(class = "Xberg::RejectionCounts")]
+pub struct RejectionCounts {
+    inner: Arc<xberg::text::redaction::RejectionCounts>,
+}
+
+unsafe impl IntoValueFromNative for RejectionCounts {}
+
+impl magnus::TryConvert for RejectionCounts {
+    fn try_convert(val: magnus::Value) -> Result<Self, magnus::Error> {
+        let r: &RejectionCounts = magnus::TryConvert::try_convert(val)?;
+        Ok(r.clone())
+    }
+}
+
+unsafe impl TryConvertOwned for RejectionCounts {}
+
+impl RejectionCounts {}
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
@@ -16112,6 +16223,7 @@ impl QrBoundingBox {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 #[magnus::wrap(class = "Xberg::RedactionReport")]
 pub struct RedactionReport {
     findings: Vec<RedactionFinding>,
@@ -16146,6 +16258,12 @@ impl magnus::TryConvert for RedactionReport {
 
 unsafe impl TryConvertOwned for RedactionReport {}
 
+impl Default for RedactionReport {
+    fn default() -> Self {
+        xberg::RedactionReport::default().into()
+    }
+}
+
 impl RedactionReport {
     fn new(args: &[magnus::Value]) -> Result<Self, magnus::Error> {
         let ruby = unsafe { magnus::Ruby::get_unchecked() };
@@ -16170,6 +16288,68 @@ impl RedactionReport {
 
     fn total_redacted(&self) -> u32 {
         self.total_redacted
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[magnus::wrap(class = "Xberg::RejectionCount")]
+pub struct RejectionCount {
+    reason: String,
+    count: u32,
+}
+
+unsafe impl IntoValueFromNative for RejectionCount {}
+
+impl magnus::TryConvert for RejectionCount {
+    fn try_convert(val: magnus::Value) -> Result<Self, magnus::Error> {
+        if let Ok(r) = <&RejectionCount as magnus::TryConvert>::try_convert(val) {
+            return Ok(r.clone());
+        }
+        let json_str: String = if let Ok(s) = <String as magnus::TryConvert>::try_convert(val) {
+            s
+        } else {
+            val.funcall::<_, _, String>("to_json", ()).map_err(|e| {
+                magnus::Error::new(
+                    unsafe { magnus::Ruby::get_unchecked() }.exception_type_error(),
+                    format!("no implicit conversion into RejectionCount: {}", e),
+                )
+            })?
+        };
+        serde_json::from_str::<RejectionCount>(&json_str).map_err(|e| {
+            magnus::Error::new(
+                unsafe { magnus::Ruby::get_unchecked() }.exception_type_error(),
+                format!("failed to deserialize RejectionCount: {}", e),
+            )
+        })
+    }
+}
+
+unsafe impl TryConvertOwned for RejectionCount {}
+
+impl RejectionCount {
+    fn new(args: &[magnus::Value]) -> Result<Self, magnus::Error> {
+        let ruby = unsafe { magnus::Ruby::get_unchecked() };
+        let args = magnus::scan_args::scan_args::<(), (Option<magnus::RHash>,), (), (), (), ()>(args)?;
+        let (kwargs_opt,) = args.optional;
+        let kwargs = kwargs_opt.unwrap_or_else(|| ruby.hash_new());
+        Ok(Self {
+            reason: kwargs
+                .get(ruby.to_symbol("reason"))
+                .and_then(|v| String::try_convert(v).ok())
+                .unwrap_or_default(),
+            count: kwargs
+                .get(ruby.to_symbol("count"))
+                .and_then(|v| u32::try_convert(v).ok())
+                .unwrap_or_default(),
+        })
+    }
+
+    fn reason(&self) -> String {
+        self.reason.clone()
+    }
+
+    fn count(&self) -> u32 {
+        self.count
     }
 }
 
@@ -22697,6 +22877,67 @@ impl magnus::TryConvert for ReductionLevel {
 unsafe impl IntoValueFromNative for ReductionLevel {}
 unsafe impl TryConvertOwned for ReductionLevel {}
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub enum ValidationResult {
+    Accept,
+    Reject { reason: String },
+}
+
+impl Default for ValidationResult {
+    fn default() -> Self {
+        Self::Accept
+    }
+}
+
+impl magnus::IntoValue for ValidationResult {
+    fn into_value_with(self, handle: &Ruby) -> magnus::Value {
+        match serde_json::to_value(&self) {
+            Ok(v) => json_to_ruby(handle, v),
+            Err(_) => handle.qnil().into_value_with(handle),
+        }
+    }
+}
+
+impl magnus::TryConvert for ValidationResult {
+    fn try_convert(val: magnus::Value) -> Result<Self, magnus::Error> {
+        // For data enums with fields (e.g., PageAction), try to deserialize from JSON first.
+        // For unit enums or when passed as a string, fall back to string-based conversion.
+        let json_str: String = if let Ok(s) = <String as magnus::TryConvert>::try_convert(val) {
+            s
+        } else {
+            val.funcall::<_, _, String>("to_json", ()).map_err(|e| {
+                magnus::Error::new(
+                    unsafe { Ruby::get_unchecked() }.exception_type_error(),
+                    format!("no implicit conversion into ValidationResult: {}", e),
+                )
+            })?
+        };
+        // Try deserializing as JSON first (handles JSON strings like "\"markdown\"" or "{\"click\":{\"selector\":\"...\"}}\"")
+        // For internally-tagged enums, a bare variant string is wrapped as {"<tag>": value}.
+        // If that fails, try treating it as a plain string value and wrap in quotes
+        // If both fail, try as Custom variant (for untagged enum support)
+        serde_json::from_str(&json_str)
+            .or_else(|_| serde_json::from_str(&format!("\"{json_str}\"")))
+            .or_else(|_| {
+                // Try as a JSON string for Custom variant (untagged enums accept any remaining value)
+                match serde_json::to_value(&json_str) {
+                    Ok(val) => serde_json::from_value(val),
+                    Err(e) => Err(e),
+                }
+            })
+            .map_err(|e| magnus::Error::new(unsafe { Ruby::get_unchecked() }.exception_type_error(), e.to_string()))
+    }
+}
+
+unsafe impl IntoValueFromNative for ValidationResult {}
+unsafe impl TryConvertOwned for ValidationResult {}
+
+impl ValidationResult {
+    pub fn _factory_reject(reason: String) -> Self {
+        Self::Reject { reason }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PdfAnnotationType {
@@ -25855,6 +26096,20 @@ fn decrypt_map(blob: Vec<u8>, passphrase: String) -> Result<RehydrationMap, Erro
     })
 }
 
+fn find_subject(map: RehydrationMap, query: String) -> Vec<SubjectMatch> {
+    xberg::text::redaction::find_subject(&map.inner, &query)
+        .into_iter()
+        .map(Into::into)
+        .collect()
+}
+
+fn forget_subject(map: RehydrationMap, query: String) -> Vec<SubjectMatch> {
+    xberg::text::redaction::forget_subject(&map.inner, &query)
+        .into_iter()
+        .map(Into::into)
+        .collect()
+}
+
 #[cfg(feature = "markdown-footnotes")]
 fn find_unmarked_claims(markdown: String) -> Vec<String> {
     xberg::find_unmarked_claims(&markdown)
@@ -28300,6 +28555,7 @@ impl From<RedactionConfig> for xberg::RedactionConfig {
             preserve_offsets: val.preserve_offsets,
             custom_terms: val.custom_terms.into_iter().map(Into::into).collect(),
             custom_patterns: val.custom_patterns.into_iter().map(Into::into).collect(),
+            preserve_terms: val.preserve_terms.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -28314,6 +28570,7 @@ impl From<xberg::RedactionConfig> for RedactionConfig {
             preserve_offsets: val.preserve_offsets,
             custom_terms: val.custom_terms.into_iter().map(Into::into).collect(),
             custom_patterns: val.custom_patterns.into_iter().map(Into::into).collect(),
+            preserve_terms: val.preserve_terms.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -28974,11 +29231,12 @@ impl From<xberg::text::ner::gline::CustomGlinerSource> for CustomGlinerSource {
 impl From<xberg::text::redaction::TextRedactionOutcome> for TextRedactionOutcome {
     fn from(val: xberg::text::redaction::TextRedactionOutcome) -> Self {
         Self {
-            redacted_text: val.redacted_text.to_string(),
-            rehydration_map: RehydrationMap {
-                inner: Arc::new(val.rehydration_map),
+            map: RehydrationMap {
+                inner: Arc::new(val.map),
             },
-            category_counts: val.category_counts.into_iter().collect(),
+            rejection_counts: RejectionCounts {
+                inner: Arc::new(val.rejection_counts),
+            },
         }
     }
 }
@@ -29003,6 +29261,28 @@ impl From<xberg::text::redaction::patterns::PatternMatch> for PatternMatch {
             end: val.end,
             category: val.category.into(),
             text: val.text.to_string(),
+        }
+    }
+}
+
+#[allow(clippy::redundant_closure, clippy::useless_conversion)]
+impl From<SubjectMatch> for xberg::text::redaction::SubjectMatch {
+    fn from(val: SubjectMatch) -> Self {
+        Self {
+            token: val.token,
+            original: val.original,
+            category: val.category,
+        }
+    }
+}
+
+#[allow(clippy::redundant_closure, clippy::useless_conversion)]
+impl From<xberg::text::redaction::SubjectMatch> for SubjectMatch {
+    fn from(val: xberg::text::redaction::SubjectMatch) -> Self {
+        Self {
+            token: val.token.to_string(),
+            original: val.original.to_string(),
+            category: val.category.map(|v| v.to_string()),
         }
     }
 }
@@ -31278,12 +31558,14 @@ impl From<xberg::QrBoundingBox> for QrBoundingBox {
     }
 }
 
+#[allow(clippy::needless_update)]
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<RedactionReport> for xberg::RedactionReport {
     fn from(val: RedactionReport) -> Self {
         Self {
             findings: val.findings.into_iter().map(Into::into).collect(),
             total_redacted: val.total_redacted,
+            ..Default::default()
         }
     }
 }
@@ -31294,6 +31576,16 @@ impl From<xberg::RedactionReport> for RedactionReport {
         Self {
             findings: val.findings.into_iter().map(Into::into).collect(),
             total_redacted: val.total_redacted,
+        }
+    }
+}
+
+#[allow(clippy::redundant_closure, clippy::useless_conversion)]
+impl From<xberg::redaction::RejectionCount> for RejectionCount {
+    fn from(val: xberg::redaction::RejectionCount) -> Self {
+        Self {
+            reason: val.reason.to_string(),
+            count: val.count,
         }
     }
 }
@@ -32918,6 +33210,26 @@ impl From<xberg::ReductionLevel> for ReductionLevel {
             xberg::ReductionLevel::Moderate => Self::Moderate,
             xberg::ReductionLevel::Aggressive => Self::Aggressive,
             xberg::ReductionLevel::Maximum => Self::Maximum,
+        }
+    }
+}
+
+impl From<ValidationResult> for xberg::text::redaction::ValidationResult {
+    fn from(val: ValidationResult) -> Self {
+        match val {
+            ValidationResult::Accept => Self::Accept,
+            ValidationResult::Reject { reason } => Self::Reject { reason: reason },
+        }
+    }
+}
+
+impl From<xberg::text::redaction::ValidationResult> for ValidationResult {
+    fn from(val: xberg::text::redaction::ValidationResult) -> Self {
+        match val {
+            xberg::text::redaction::ValidationResult::Accept => Self::Accept,
+            xberg::text::redaction::ValidationResult::Reject { reason } => Self::Reject {
+                reason: reason.to_string(),
+            },
         }
     }
 }
@@ -35123,6 +35435,8 @@ fn ruby_init(ruby: &Ruby) -> Result<(), Error> {
 
     class.define_method("custom_patterns", method!(RedactionConfig::custom_patterns, 0))?;
 
+    class.define_method("preserve_terms", method!(RedactionConfig::preserve_terms, 0))?;
+
     class.define_method("validate", method!(RedactionConfig::validate, 0))?;
 
     let class = module.define_class("RedactionTerm", ruby.class_object())?;
@@ -35410,19 +35724,7 @@ fn ruby_init(ruby: &Ruby) -> Result<(), Error> {
 
     class.define_method("extract_batch_async", method!(Engine::extract_batch_async, 2))?;
 
-    class.define_method("cache_backend", method!(Engine::cache_backend, 0))?;
-
-    class.define_method("progress_sink", method!(Engine::progress_sink, 0))?;
-
-    class.define_method("model_provider", method!(Engine::model_provider, 0))?;
-
     let class = module.define_class("EngineBuilder", ruby.class_object())?;
-
-    class.define_method("with_cache_backend", method!(EngineBuilder::with_cache_backend, 1))?;
-
-    class.define_method("with_progress_sink", method!(EngineBuilder::with_progress_sink, 1))?;
-
-    class.define_method("with_model_provider", method!(EngineBuilder::with_model_provider, 1))?;
 
     class.define_method("build", method!(EngineBuilder::build, 0))?;
 
@@ -35649,11 +35951,9 @@ fn ruby_init(ruby: &Ruby) -> Result<(), Error> {
 
     class.define_singleton_method("new", function!(TextRedactionOutcome::new, -1))?;
 
-    class.define_method("redacted_text", method!(TextRedactionOutcome::redacted_text, 0))?;
+    class.define_method("map", method!(TextRedactionOutcome::map, 0))?;
 
-    class.define_method("rehydration_map", method!(TextRedactionOutcome::rehydration_map, 0))?;
-
-    class.define_method("category_counts", method!(TextRedactionOutcome::category_counts, 0))?;
+    class.define_method("rejection_counts", method!(TextRedactionOutcome::rejection_counts, 0))?;
 
     let class = module.define_class("PatternMatch", ruby.class_object())?;
 
@@ -35669,7 +35969,31 @@ fn ruby_init(ruby: &Ruby) -> Result<(), Error> {
 
     let class = module.define_class("RehydrationMap", ruby.class_object())?;
 
+    let class = module.define_class("SubjectMatch", ruby.class_object())?;
+
+    class.define_singleton_method("new", function!(SubjectMatch::new, -1))?;
+
+    class.define_method("token", method!(SubjectMatch::token, 0))?;
+
+    class.define_method("original", method!(SubjectMatch::original, 0))?;
+
+    class.define_method("category", method!(SubjectMatch::category, 0))?;
+
     let class = module.define_class("TokenCounter", ruby.class_object())?;
+
+    let class = module.define_class("IbanChecksumValidator", ruby.class_object())?;
+
+    class.define_method("label", method!(IbanChecksumValidator::label, 0))?;
+
+    class.define_method("validate", method!(IbanChecksumValidator::validate, 2))?;
+
+    let class = module.define_class("LuhnValidator", ruby.class_object())?;
+
+    class.define_method("label", method!(LuhnValidator::label, 0))?;
+
+    class.define_method("validate", method!(LuhnValidator::validate, 2))?;
+
+    let class = module.define_class("RejectionCounts", ruby.class_object())?;
 
     let class = module.define_class("FootnoteConfig", ruby.class_object())?;
 
@@ -37065,6 +37389,14 @@ fn ruby_init(ruby: &Ruby) -> Result<(), Error> {
 
     class.define_method("total_redacted", method!(RedactionReport::total_redacted, 0))?;
 
+    let class = module.define_class("RejectionCount", ruby.class_object())?;
+
+    class.define_singleton_method("new", function!(RejectionCount::new, -1))?;
+
+    class.define_method("reason", method!(RejectionCount::reason, 0))?;
+
+    class.define_method("count", method!(RejectionCount::count, 0))?;
+
     let class = module.define_class("RedactionFinding", ruby.class_object())?;
 
     class.define_singleton_method("new", function!(RedactionFinding::new, -1))?;
@@ -37892,6 +38224,10 @@ fn ruby_init(ruby: &Ruby) -> Result<(), Error> {
 
     class.define_method("max_redirects", method!(SsrfPolicy::max_redirects, 0))?;
 
+    let class = module.define_class("ValidationResult", ruby.class_object())?;
+
+    class.define_singleton_method("reject", function!(ValidationResult::_factory_reject, 1))?;
+
     module.define_module_function("extract", function!(extract_async, -1))?;
 
     module.define_module_function("extract_batch", function!(extract_batch_async, -1))?;
@@ -37923,6 +38259,10 @@ fn ruby_init(ruby: &Ruby) -> Result<(), Error> {
     module.define_module_function("encrypt_map", function!(encrypt_map, 2))?;
 
     module.define_module_function("decrypt_map", function!(decrypt_map, 2))?;
+
+    module.define_module_function("find_subject", function!(find_subject, 2))?;
+
+    module.define_module_function("forget_subject", function!(forget_subject, 2))?;
 
     module.define_module_function("find_unmarked_claims", function!(find_unmarked_claims, 1))?;
 

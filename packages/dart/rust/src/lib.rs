@@ -1353,6 +1353,17 @@ pub struct RedactionConfig {
     /// hit becomes a `PiiCategory::Custom(label)` finding. Patterns are validated
     /// at config-construction time via [`RedactionConfig::validate`].
     pub custom_patterns: Vec<RedactionPattern>,
+    /// Literal terms that must never be redacted, even if the pattern engine
+    /// or NER backend would otherwise flag them.
+    ///
+    /// Use this for known-public entities that a NER model mistakes for PII
+    /// (e.g. "Supreme Court", the caller's own organization name) — an
+    /// allowlist counterpart to [`custom_terms`](Self::custom_terms), which
+    /// is a forcelist. A term matches by exact value (respecting
+    /// `case_sensitive`), not by category — it suppresses that literal
+    /// string across every category, since a false positive doesn't know
+    /// its own category was wrong.
+    pub preserve_terms: Vec<RedactionTerm>,
 }
 
 /// One user-supplied literal term to redact.
@@ -2103,15 +2114,24 @@ pub struct CustomGlinerSource {
     pub architecture: GlinerArchitecture,
 }
 
-/// Outcome of [`redact_text_capturing_rehydration_map`]: the redacted text,
-/// its rehydration map, and per-category finding counts. Counts only — the
-/// matched PII text itself is never included here, per the redaction
-/// pipeline's logging rule.
+/// Outcome of [`redact_capturing_rehydration_map`]: the token → original-text
+/// rehydration map plus a count of PII candidates the post-detection
+/// validators rejected (e.g. failed-checksum IBANs, failed-Luhn card
+/// numbers), keyed by rejection reason.
+///
+/// `rejection_counts` here is the same audit-only count also written to
+/// `result.redaction_report.rejection_counts` — repeated here as a
+/// Rust-native `RejectionCounts` map so callers of this richer API don't have
+/// to reconstruct it from the FFI-friendly `Vec<RejectionCount>` shape used
+/// on `RedactionReport`. Rejected candidates never
+/// appear in `map` or in `findings` — validators ran before either was
+/// populated, so they were never treated as PII in the first place.
 #[frb(mirror(TextRedactionOutcome))]
 pub struct TextRedactionOutcome {
-    pub redacted_text: String,
-    pub rehydration_map: RehydrationMap,
-    pub category_counts: std::collections::HashMap<String, i64>,
+    /// Token → original PII text, populated for `TokenReplace` strategy hits.
+    pub map: RehydrationMap,
+    /// Post-detection validator rejection counts, keyed by reason.
+    pub rejection_counts: RejectionCounts,
 }
 
 /// One detected PII span in the input text.
@@ -2146,6 +2166,17 @@ impl From<RehydrationMap> for xberg::text::redaction::RehydrationMap {
     }
 }
 
+/// One vault match — either direction of lookup.
+#[frb(mirror(SubjectMatch))]
+pub struct SubjectMatch {
+    pub token: String,
+    pub original: String,
+    /// Category parsed from the token's bracket contents (e.g. `"EMAIL"`
+    /// from `"[EMAIL_1]"`), or `None` if the token doesn't follow the
+    /// `"[CATEGORY_N]"` convention.
+    pub category: Option<String>,
+}
+
 /// Per-category running counter for [`RedactionStrategy::TokenReplace`].
 #[frb(opaque)]
 pub struct TokenCounter {
@@ -2160,6 +2191,60 @@ impl From<xberg::TokenCounter> for TokenCounter {
 
 impl From<TokenCounter> for xberg::TokenCounter {
     fn from(value: TokenCounter) -> Self {
+        value.inner
+    }
+}
+
+/// Validates IBAN candidates against the ISO 13616 mod-97 checksum.
+#[frb(opaque)]
+pub struct IbanChecksumValidator {
+    pub(crate) inner: xberg::text::redaction::validators::iban::IbanChecksumValidator,
+}
+
+impl From<xberg::text::redaction::validators::iban::IbanChecksumValidator> for IbanChecksumValidator {
+    fn from(inner: xberg::text::redaction::validators::iban::IbanChecksumValidator) -> Self {
+        Self { inner }
+    }
+}
+
+impl From<IbanChecksumValidator> for xberg::text::redaction::validators::iban::IbanChecksumValidator {
+    fn from(value: IbanChecksumValidator) -> Self {
+        value.inner
+    }
+}
+
+/// Validates credit-card-shaped candidates against the Luhn mod-10 checksum.
+#[frb(opaque)]
+pub struct LuhnValidator {
+    pub(crate) inner: xberg::text::redaction::validators::luhn::LuhnValidator,
+}
+
+impl From<xberg::text::redaction::validators::luhn::LuhnValidator> for LuhnValidator {
+    fn from(inner: xberg::text::redaction::validators::luhn::LuhnValidator) -> Self {
+        Self { inner }
+    }
+}
+
+impl From<LuhnValidator> for xberg::text::redaction::validators::luhn::LuhnValidator {
+    fn from(value: LuhnValidator) -> Self {
+        value.inner
+    }
+}
+
+/// Counter for rejections, keyed by validator reason string.
+#[frb(opaque)]
+pub struct RejectionCounts {
+    pub(crate) inner: xberg::text::redaction::RejectionCounts,
+}
+
+impl From<xberg::text::redaction::RejectionCounts> for RejectionCounts {
+    fn from(inner: xberg::text::redaction::RejectionCounts) -> Self {
+        Self { inner }
+    }
+}
+
+impl From<RejectionCounts> for xberg::text::redaction::RejectionCounts {
+    fn from(value: RejectionCounts) -> Self {
         value.inner
     }
 }
@@ -4104,6 +4189,18 @@ pub struct RedactionReport {
     pub total_redacted: i64,
 }
 
+/// One rejection-reason tally emitted by the redaction engine's
+/// post-detection validators (see
+/// `EntityValidator`).
+#[frb(mirror(RejectionCount))]
+pub struct RejectionCount {
+    /// Static reason identifier reported by the validator (e.g.
+    /// `"iban_checksum_failed"`). Never contains the underlying PII text.
+    pub reason: String,
+    /// Number of candidates rejected for this reason.
+    pub count: i64,
+}
+
 /// One redaction event: which span was rewritten, why, and with what.
 #[frb(mirror(RedactionFinding))]
 pub struct RedactionFinding {
@@ -5202,12 +5299,6 @@ impl ParsedDocument {
 
 #[allow(unused_imports)]
 use xberg::DocumentExtractor;
-#[allow(unused_imports)]
-use xberg::engine::seams::CacheBackend;
-#[allow(unused_imports)]
-use xberg::engine::seams::ModelProvider;
-#[allow(unused_imports)]
-use xberg::engine::seams::ProgressSink;
 impl Engine {
     #[frb]
     pub fn builder() -> EngineBuilder {
@@ -5246,63 +5337,9 @@ impl Engine {
             .map(|v| ExtractionResult::from(v))
             .map_err(|e| e.to_string())
     }
-    #[frb]
-    pub fn cache_backend(&self) -> CacheBackend {
-        {
-            let v = self.inner.cache_backend();
-            CacheBackend::from(v.clone())
-        }
-    }
-    #[frb]
-    pub fn progress_sink(&self) -> ProgressSink {
-        {
-            let v = self.inner.progress_sink();
-            ProgressSink::from(v.clone())
-        }
-    }
-    #[frb]
-    pub fn model_provider(&self) -> ModelProvider {
-        {
-            let v = self.inner.model_provider();
-            ModelProvider::from(v.clone())
-        }
-    }
 }
 
-#[allow(unused_imports)]
-use xberg::engine::seams::CacheBackend;
-#[allow(unused_imports)]
-use xberg::engine::seams::ModelProvider;
-#[allow(unused_imports)]
-use xberg::engine::seams::ProgressSink;
 impl EngineBuilder {
-    #[frb]
-    pub fn with_cache_backend(self, cache: CacheBackend) -> EngineBuilder {
-        {
-            let v = self
-                .inner
-                .with_cache_backend(unsafe { ::std::mem::transmute::<CacheBackend, xberg::CacheBackend>(cache) });
-            EngineBuilder::from(v)
-        }
-    }
-    #[frb]
-    pub fn with_progress_sink(self, progress: ProgressSink) -> EngineBuilder {
-        {
-            let v = self
-                .inner
-                .with_progress_sink(unsafe { ::std::mem::transmute::<ProgressSink, xberg::ProgressSink>(progress) });
-            EngineBuilder::from(v)
-        }
-    }
-    #[frb]
-    pub fn with_model_provider(self, provider: ModelProvider) -> EngineBuilder {
-        {
-            let v = self
-                .inner
-                .with_model_provider(unsafe { ::std::mem::transmute::<ModelProvider, xberg::ModelProvider>(provider) });
-            EngineBuilder::from(v)
-        }
-    }
     #[frb]
     pub fn build(self) -> Engine {
         {
@@ -5353,6 +5390,44 @@ impl TokenCounter {
         {
             let v = xberg::TokenCounter::new();
             TokenCounter::from(v)
+        }
+    }
+}
+
+#[allow(unused_imports)]
+use xberg::text::redaction::EntityValidator;
+impl IbanChecksumValidator {
+    #[frb]
+    pub fn label(&self) -> String {
+        {
+            let v = self.inner.label();
+            v.to_string()
+        }
+    }
+    #[frb]
+    pub fn validate(&self, entity: PatternMatch, _ctx: String) -> ValidationResult {
+        {
+            let v = self.inner.validate(&xberg::PatternMatch::from(entity), &_ctx);
+            ValidationResult::from(v)
+        }
+    }
+}
+
+#[allow(unused_imports)]
+use xberg::text::redaction::EntityValidator;
+impl LuhnValidator {
+    #[frb]
+    pub fn label(&self) -> String {
+        {
+            let v = self.inner.label();
+            v.to_string()
+        }
+    }
+    #[frb]
+    pub fn validate(&self, entity: PatternMatch, _ctx: String) -> ValidationResult {
+        {
+            let v = self.inner.validate(&xberg::PatternMatch::from(entity), &_ctx);
+            ValidationResult::from(v)
         }
     }
 }
@@ -6047,6 +6122,19 @@ pub enum ReductionLevel {
     Aggressive,
     /// Maximum compression; prioritizes brevity over completeness.
     Maximum,
+}
+
+/// Outcome of a single validator on a single candidate match.
+#[frb(mirror(ValidationResult), unignore)]
+pub enum ValidationResult {
+    /// Pass-through, no change.
+    Accept,
+    /// Drop the candidate. `reason` is a static identifier used as a
+    /// [`RejectionCounts`] key (e.g. `"iban_checksum_failed"`).
+    Reject {
+        /// Static identifier for the rejection cause.
+        reason: String,
+    },
 }
 
 /// Type of PDF annotation.
@@ -7819,6 +7907,11 @@ impl From<xberg::RedactionConfig> for RedactionConfig {
                 .into_iter()
                 .map(RedactionPattern::from)
                 .collect::<Vec<_>>(),
+            preserve_terms: v
+                .preserve_terms
+                .into_iter()
+                .map(RedactionTerm::from)
+                .collect::<Vec<_>>(),
         }
     }
 }
@@ -8177,9 +8270,8 @@ impl From<xberg::text::ner::gline::CustomGlinerSource> for CustomGlinerSource {
 impl From<xberg::text::redaction::TextRedactionOutcome> for TextRedactionOutcome {
     fn from(v: xberg::text::redaction::TextRedactionOutcome) -> Self {
         TextRedactionOutcome {
-            redacted_text: v.redacted_text.into(),
-            rehydration_map: RehydrationMap::from(v.rehydration_map),
-            category_counts: v.category_counts.into_iter().map(|(k, v)| (k.into(), v as _)).collect(),
+            map: RehydrationMap::from(v.map),
+            rejection_counts: RejectionCounts::from(v.rejection_counts),
         }
     }
 }
@@ -8191,6 +8283,16 @@ impl From<xberg::text::redaction::patterns::PatternMatch> for PatternMatch {
             end: v.end as _,
             category: PiiCategory::from(v.category),
             text: v.text.into(),
+        }
+    }
+}
+
+impl From<xberg::text::redaction::SubjectMatch> for SubjectMatch {
+    fn from(v: xberg::text::redaction::SubjectMatch) -> Self {
+        SubjectMatch {
+            token: v.token.into(),
+            original: v.original.into(),
+            category: v.category.map(|s| s.into()),
         }
     }
 }
@@ -9402,6 +9504,15 @@ impl From<xberg::RedactionReport> for RedactionReport {
     }
 }
 
+impl From<xberg::redaction::RejectionCount> for RejectionCount {
+    fn from(v: xberg::redaction::RejectionCount) -> Self {
+        RejectionCount {
+            reason: v.reason.into(),
+            count: v.count as _,
+        }
+    }
+}
+
 impl From<xberg::RedactionFinding> for RedactionFinding {
     fn from(v: xberg::RedactionFinding) -> Self {
         RedactionFinding {
@@ -10327,6 +10438,15 @@ impl From<xberg::ReductionLevel> for ReductionLevel {
             xberg::ReductionLevel::Moderate => ReductionLevel::Moderate,
             xberg::ReductionLevel::Aggressive => ReductionLevel::Aggressive,
             xberg::ReductionLevel::Maximum => ReductionLevel::Maximum,
+        }
+    }
+}
+
+impl From<xberg::text::redaction::ValidationResult> for ValidationResult {
+    fn from(v: xberg::text::redaction::ValidationResult) -> Self {
+        match v {
+            xberg::text::redaction::ValidationResult::Accept => ValidationResult::Accept,
+            xberg::text::redaction::ValidationResult::Reject { reason } => ValidationResult::Reject { reason: reason },
         }
     }
 }
@@ -11581,6 +11701,7 @@ impl From<RedactionConfig> for xberg::RedactionConfig {
             preserve_offsets: v.preserve_offsets as _,
             custom_terms: v.custom_terms.into_iter().map(Into::into).collect(),
             custom_patterns: v.custom_patterns.into_iter().map(Into::into).collect(),
+            preserve_terms: v.preserve_terms.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -12710,11 +12831,13 @@ impl From<QrBoundingBox> for xberg::QrBoundingBox {
     }
 }
 
+#[allow(clippy::needless_update)]
 impl From<RedactionReport> for xberg::RedactionReport {
     fn from(v: RedactionReport) -> Self {
         xberg::RedactionReport {
             findings: v.findings.into_iter().map(Into::into).collect(),
             total_redacted: v.total_redacted as _,
+            ..Default::default()
         }
     }
 }
@@ -14031,6 +14154,31 @@ pub fn decrypt_map(blob: Vec<u8>, passphrase: String) -> Result<RehydrationMap, 
         .map_err(|e| e.to_string())
 }
 
+/// Search a decrypted map for `query`, matching either the token or the
+/// original value (case-insensitive substring match on `original`; exact
+/// match on `token`, since tokens are structured like `"[EMAIL_1]"`).
+///
+/// Results are sorted by token for deterministic output.
+pub fn find_subject(map: RehydrationMap, query: String) -> Vec<SubjectMatch> {
+    xberg::text::redaction::find_subject(&map.inner, &query)
+        .into_iter()
+        .map(SubjectMatch::from)
+        .collect::<Vec<_>>()
+}
+
+/// Remove every mapping whose token or original value matches `query`.
+/// Returns the removed entries (the caller re-encrypts and persists the
+/// resulting map — this function does not touch disk).
+///
+/// Idempotent: calling this again with the same `query` after the matching
+/// entries have already been removed returns an empty `Vec`.
+pub fn forget_subject(mut map: RehydrationMap, query: String) -> Vec<SubjectMatch> {
+    xberg::text::redaction::forget_subject(&mut map.inner, &query)
+        .into_iter()
+        .map(SubjectMatch::from)
+        .collect::<Vec<_>>()
+}
+
 /// Find unmarked claims in markdown text.
 ///
 /// Returns lines that assert a claim but carry neither a footnote citation anchor (`[^...]`)
@@ -14428,6 +14576,13 @@ pub fn create_token_reduction_config_from_json(json: String) -> Result<TokenRedu
 pub fn create_pattern_match_from_json(json: String) -> Result<PatternMatch, String> {
     serde_json::from_str::<xberg::text::redaction::patterns::PatternMatch>(&json)
         .map(PatternMatch::from)
+        .map_err(|e| e.to_string())
+}
+
+#[frb]
+pub fn create_subject_match_from_json(json: String) -> Result<SubjectMatch, String> {
+    serde_json::from_str::<xberg::text::redaction::SubjectMatch>(&json)
+        .map(SubjectMatch::from)
         .map_err(|e| e.to_string())
 }
 
@@ -15051,6 +15206,13 @@ pub fn create_qr_bounding_box_from_json(json: String) -> Result<QrBoundingBox, S
 pub fn create_redaction_report_from_json(json: String) -> Result<RedactionReport, String> {
     serde_json::from_str::<xberg::RedactionReport>(&json)
         .map(RedactionReport::from)
+        .map_err(|e| e.to_string())
+}
+
+#[frb]
+pub fn create_rejection_count_from_json(json: String) -> Result<RejectionCount, String> {
+    serde_json::from_str::<xberg::redaction::RejectionCount>(&json)
+        .map(RejectionCount::from)
         .map_err(|e| e.to_string())
 }
 

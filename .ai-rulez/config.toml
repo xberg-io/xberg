@@ -59,6 +59,10 @@ merge_strategy = 'local-override'
 name = 'alef'
 source = 'https://github.com/xberg-io/alef.git'
 
+[[installed_skills]]
+name = 'shadcn'
+source = 'https://github.com/shadcn-ui/ui.git'
+
 [[mcp_servers]]
 name = 'playwright'
 description = 'Playwright browser automation for E2E testing and docs verification'

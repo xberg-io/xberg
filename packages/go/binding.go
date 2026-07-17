@@ -1211,6 +1211,68 @@ ReductionLevelMaximum ReductionLevel = "Maximum"
 )
 
 
+// ValidationResult outcome of a single validator on a single candidate match.
+// Variants: Accept, Reject
+// Sealed interface -- use one of ValidationResultAccept, ValidationResultReject.
+type ValidationResult interface {
+	isValidationResult()
+	Type() string
+}
+// ValidationResultAccept pass-through, no change.
+type ValidationResultAccept struct {
+}
+
+func (ValidationResultAccept) isValidationResult() {}
+func (ValidationResultAccept) Type() string { return "Accept" }
+func (v ValidationResultAccept) MarshalJSON() ([]byte, error) {
+	type aux struct {
+	}
+	return json.Marshal(aux{
+	})
+}
+// ValidationResultReject drop the candidate. `reason` is a static identifier used as a
+// [`RejectionCounts`] key (e.g. `"iban_checksum_failed"`).
+type ValidationResultReject struct {
+	// Static identifier for the rejection cause.
+	Reason string `json:"reason"`
+}
+
+func (ValidationResultReject) isValidationResult() {}
+func (ValidationResultReject) Type() string { return "Reject" }
+func (v ValidationResultReject) MarshalJSON() ([]byte, error) {
+	type aux struct {
+		Reason string `json:"reason"`
+	}
+	return json.Marshal(aux{
+		Reason: v.Reason,
+	})
+}
+// UnmarshalValidationResult decodes JSON data into the appropriate concrete ValidationResult variant.
+func UnmarshalValidationResult(data []byte) (ValidationResult, error) {
+	var wire struct {
+	}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return nil, err
+	}
+
+	switch wire.Type {
+	case "Accept":
+		var v ValidationResultAccept
+		if err := json.Unmarshal(data, &v); err != nil {
+			return nil, err
+		}
+		return v, nil
+	case "Reject":
+		var v ValidationResultReject
+		if err := json.Unmarshal(data, &v); err != nil {
+			return nil, err
+		}
+		return v, nil
+	}
+	return nil, fmt.Errorf("unknown ValidationResult type: %q", wire.Type)
+}
+
+
 // PdfAnnotationType is an enumeration type.
 type PdfAnnotationType string
 
@@ -5287,6 +5349,17 @@ type RedactionConfig struct {
 	// hit becomes a `PiiCategory::Custom(label)` finding. Patterns are validated
 	// at config-construction time via [`RedactionConfig::validate`].
 	CustomPatterns []RedactionPattern `json:"custom_patterns,omitempty"`
+	// Literal terms that must never be redacted, even if the pattern engine
+	// or NER backend would otherwise flag them.
+	//
+	// Use this for known-public entities that a NER model mistakes for PII
+	// (e.g. "Supreme Court", the caller's own organization name) — an
+	// allowlist counterpart to [`custom_terms`](Self::custom_terms), which
+	// is a forcelist. A term matches by exact value (respecting
+	// `case_sensitive`), not by category — it suppresses that literal
+	// string across every category, since a false positive doesn't know
+	// its own category was wrong.
+	PreserveTerms []RedactionTerm `json:"preserve_terms,omitempty"`
 }
 
 
@@ -6034,14 +6107,23 @@ type CustomGlinerSource struct {
 }
 
 
-// TextRedactionOutcome outcome of [`redact_text_capturing_rehydration_map`]: the redacted text,
-// its rehydration map, and per-category finding counts. Counts only — the
-// matched PII text itself is never included here, per the redaction
-// pipeline's logging rule.
+// TextRedactionOutcome outcome of [`redact_capturing_rehydration_map`]: the token → original-text
+// rehydration map plus a count of PII candidates the post-detection
+// validators rejected (e.g. failed-checksum IBANs, failed-Luhn card
+// numbers), keyed by rejection reason.
+//
+// `rejection_counts` here is the same audit-only count also written to
+// `result.redaction_report.rejection_counts` — repeated here as a
+// Rust-native `RejectionCounts` map so callers of this richer API don't have
+// to reconstruct it from the FFI-friendly `Vec<RejectionCount>` shape used
+// on `RedactionReport`. Rejected candidates never
+// appear in `map` or in `findings` — validators ran before either was
+// populated, so they were never treated as PII in the first place.
 type TextRedactionOutcome struct {
-	RedactedText string `json:"redacted_text"`
-	RehydrationMap *json.RawMessage `json:"rehydration_map,omitempty"`
-	CategoryCounts map[string]uint `json:"category_counts,omitempty"`
+	// Token → original PII text, populated for `TokenReplace` strategy hits.
+	Map *json.RawMessage `json:"map,omitempty"`
+	// Post-detection validator rejection counts, keyed by reason.
+	RejectionCounts *json.RawMessage `json:"rejection_counts,omitempty"`
 }
 
 
@@ -6073,6 +6155,17 @@ func (h *RehydrationMap) Free() {
 }
 
 
+// SubjectMatch one vault match — either direction of lookup.
+type SubjectMatch struct {
+	Token string `json:"token"`
+	Original string `json:"original"`
+	// Category parsed from the token's bracket contents (e.g. `"EMAIL"`
+	// from `"[EMAIL_1]"`), or `None` if the token doesn't follow the
+	// `"[CATEGORY_N]"` convention.
+	Category *string `json:"category,omitempty"`
+}
+
+
 // TokenCounter is an opaque handle type.
 type TokenCounter struct {
 	ptr unsafe.Pointer
@@ -6082,6 +6175,48 @@ type TokenCounter struct {
 func (h *TokenCounter) Free() {
 	if h.ptr != nil {
 		C.xberg_token_counter_free((*C.XBERGTokenCounter)(h.ptr))
+		h.ptr = nil
+	}
+}
+
+
+// IbanChecksumValidator is an opaque handle type.
+type IbanChecksumValidator struct {
+	ptr unsafe.Pointer
+}
+
+// Free releases the resources held by this handle.
+func (h *IbanChecksumValidator) Free() {
+	if h.ptr != nil {
+		C.xberg_iban_checksum_validator_free((*C.XBERGIbanChecksumValidator)(h.ptr))
+		h.ptr = nil
+	}
+}
+
+
+// LuhnValidator is an opaque handle type.
+type LuhnValidator struct {
+	ptr unsafe.Pointer
+}
+
+// Free releases the resources held by this handle.
+func (h *LuhnValidator) Free() {
+	if h.ptr != nil {
+		C.xberg_luhn_validator_free((*C.XBERGLuhnValidator)(h.ptr))
+		h.ptr = nil
+	}
+}
+
+
+// RejectionCounts is an opaque handle type.
+type RejectionCounts struct {
+	ptr unsafe.Pointer
+}
+
+// Free releases the resources held by this handle.
+func (h *RejectionCounts) Free() {
+	if h.ptr != nil {
+		C.xberg_rejection_counts_free((*C.XBERGRejectionCounts)(h.ptr))
 		h.ptr = nil
 	}
 }
@@ -8194,6 +8329,18 @@ type RedactionReport struct {
 }
 
 
+// RejectionCount one rejection-reason tally emitted by the redaction engine's
+// post-detection validators (see
+// `EntityValidator`).
+type RejectionCount struct {
+	// Static reason identifier reported by the validator (e.g.
+	// `"iban_checksum_failed"`). Never contains the underlying PII text.
+	Reason string `json:"reason"`
+	// Number of candidates rejected for this reason.
+	Count uint32 `json:"count"`
+}
+
+
 // RedactionFinding one redaction event: which span was rewritten, why, and with what.
 type RedactionFinding struct {
 	// Byte-offset start in the original (pre-redaction) `ExtractedDocument::content`.
@@ -9893,6 +10040,55 @@ func DecryptMap(blob []byte, passphrase string) (*RehydrationMap, error) {
 }
 
 
+// FindSubject search a decrypted map for `query`, matching either the token or the
+// original value (case-insensitive substring match on `original`; exact
+// match on `token`, since tokens are structured like `"[EMAIL_1]"`).
+//
+// Results are sorted by token for deterministic output.
+func FindSubject(map *RehydrationMap, query string) []SubjectMatch {
+	cMap := (*C.XBERGRehydrationMap)(unsafe.Pointer(map.ptr))
+
+
+	cQuery := C.CString(query)
+	defer C.free(unsafe.Pointer(cQuery))
+
+
+	ptr := C.xberg_find_subject(cMap, cQuery)
+	return func() []SubjectMatch {
+	if ptr == nil { return nil }
+	defer C.xberg_free_string(ptr)
+	var result []SubjectMatch
+	if err := json.Unmarshal([]byte(C.GoString(ptr)), &result); err != nil { return nil }
+	return result
+}()
+}
+
+
+// ForgetSubject remove every mapping whose token or original value matches `query`.
+// Returns the removed entries (the caller re-encrypts and persists the
+// resulting map — this function does not touch disk).
+//
+// Idempotent: calling this again with the same `query` after the matching
+// entries have already been removed returns an empty `Vec`.
+func ForgetSubject(map *RehydrationMap, query string) []SubjectMatch {
+	cMap := (*C.XBERGRehydrationMap)(unsafe.Pointer(map.ptr))
+
+
+	cQuery := C.CString(query)
+	defer C.free(unsafe.Pointer(cQuery))
+
+
+	ptr := C.xberg_forget_subject(cMap, cQuery)
+	return func() []SubjectMatch {
+	if ptr == nil { return nil }
+	defer C.xberg_free_string(ptr)
+	var result []SubjectMatch
+	if err := json.Unmarshal([]byte(C.GoString(ptr)), &result); err != nil { return nil }
+	return result
+}()
+}
+
+
 // FindUnmarkedClaims find unmarked claims in markdown text.
 //
 // Returns lines that assert a claim but carry neither a footnote citation anchor (`[^...]`)
@@ -10567,60 +10763,6 @@ func (h *Engine) ExtractBatch(inputs []ExtractInput, config ExtractionConfig) (*
 }
 
 
-// CacheBackend injected [`CacheBackend`] seam (default: [`NoopCache`]).
-func (h *Engine) CacheBackend() *CacheBackend {
-	ptr := C.xberg_engine_cache_backend((*C.XBERGEngine)(unsafe.Pointer(h.ptr)))
-	return &CacheBackend{ptr: unsafe.Pointer(ptr)}
-}
-
-
-// ProgressSink injected [`ProgressSink`] seam (default: [`NoopProgressSink`]).
-func (h *Engine) ProgressSink() *ProgressSink {
-	ptr := C.xberg_engine_progress_sink((*C.XBERGEngine)(unsafe.Pointer(h.ptr)))
-	return &ProgressSink{ptr: unsafe.Pointer(ptr)}
-}
-
-
-// ModelProvider injected [`ModelProvider`] seam (default: [`DefaultModelProvider`]).
-func (h *Engine) ModelProvider() *ModelProvider {
-	ptr := C.xberg_engine_model_provider((*C.XBERGEngine)(unsafe.Pointer(h.ptr)))
-	return &ModelProvider{ptr: unsafe.Pointer(ptr)}
-}
-
-
-// WithCacheBackend inject a [`CacheBackend`], overriding the [`NoopCache`] default.
-func (h *EngineBuilder) WithCacheBackend(cache *CacheBackend) *EngineBuilder {
-	cCache := (*C.XBERGCacheBackend)(unsafe.Pointer(cache.ptr))
-
-
-	ptr := C.xberg_engine_builder_with_cache_backend((*C.XBERGEngineBuilder)(unsafe.Pointer(h.ptr)), cCache)
-	h.ptr = unsafe.Pointer(ptr)
-	return h
-}
-
-
-// WithProgressSink inject a [`ProgressSink`], overriding the [`NoopProgressSink`] default.
-func (h *EngineBuilder) WithProgressSink(progress *ProgressSink) *EngineBuilder {
-	cProgress := (*C.XBERGProgressSink)(unsafe.Pointer(progress.ptr))
-
-
-	ptr := C.xberg_engine_builder_with_progress_sink((*C.XBERGEngineBuilder)(unsafe.Pointer(h.ptr)), cProgress)
-	h.ptr = unsafe.Pointer(ptr)
-	return h
-}
-
-
-// WithModelProvider inject a [`ModelProvider`], overriding the [`DefaultModelProvider`] default.
-func (h *EngineBuilder) WithModelProvider(provider *ModelProvider) *EngineBuilder {
-	cProvider := (*C.XBERGModelProvider)(unsafe.Pointer(provider.ptr))
-
-
-	ptr := C.xberg_engine_builder_with_model_provider((*C.XBERGEngineBuilder)(unsafe.Pointer(h.ptr)), cProvider)
-	h.ptr = unsafe.Pointer(ptr)
-	return h
-}
-
-
 // Build finalize the builder into an [`Engine`], filling every unset seam with
 // its in-core default.
 func (h *EngineBuilder) Build() *Engine {
@@ -10661,6 +10803,22 @@ func (h *CandleBackend) Detect(text string, categories []EntityCategory) ([]Enti
 func TokenCounterNew() *TokenCounter {
 	ptr := C.xberg_token_counter_new()
 	return &TokenCounter{ptr: unsafe.Pointer(ptr)}
+}
+
+
+// Label is a method.
+func (h *IbanChecksumValidator) Label() string {
+	ptr := C.xberg_iban_checksum_validator_label((*C.XBERGIbanChecksumValidator)(unsafe.Pointer(h.ptr)))
+	defer C.xberg_free_string(ptr)
+	return C.GoString(ptr)
+}
+
+
+// Label is a method.
+func (h *LuhnValidator) Label() string {
+	ptr := C.xberg_luhn_validator_label((*C.XBERGLuhnValidator)(unsafe.Pointer(h.ptr)))
+	defer C.xberg_free_string(ptr)
+	return C.GoString(ptr)
 }
 
 

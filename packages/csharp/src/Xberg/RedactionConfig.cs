@@ -67,6 +67,21 @@ public sealed record RedactionConfig
     [JsonPropertyName("custom_patterns")]
     public List<RedactionPattern> CustomPatterns { get; init; } = [];
 
+    /// <summary>
+    /// Literal terms that must never be redacted, even if the pattern engine
+    /// or NER backend would otherwise flag them.
+    ///
+    /// Use this for known-public entities that a NER model mistakes for PII
+    /// (e.g. "Supreme Court", the caller's own organization name) — an
+    /// allowlist counterpart to `custom_terms`, which
+    /// is a forcelist. A term matches by exact value (respecting
+    /// `case_sensitive`), not by category — it suppresses that literal
+    /// string across every category, since a false positive doesn't know
+    /// its own category was wrong.
+    /// </summary>
+    [JsonPropertyName("preserve_terms")]
+    public List<RedactionTerm> PreserveTerms { get; init; } = [];
+
 
     /// <summary>
     /// Parse a <see cref="RedactionConfig"/> from a JSON string.

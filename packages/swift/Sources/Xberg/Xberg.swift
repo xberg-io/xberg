@@ -2338,10 +2338,18 @@ public typealias TokenReductionConfig = RustBridge.TokenReductionConfig
 /// Callers choosing a custom repo are trusting that source directly.
 public typealias CustomGlinerSource = RustBridge.CustomGlinerSource
 
-/// Outcome of [`redact_text_capturing_rehydration_map`]: the redacted text,
-/// its rehydration map, and per-category finding counts. Counts only — the
-/// matched PII text itself is never included here, per the redaction
-/// pipeline's logging rule.
+/// Outcome of [`redact_capturing_rehydration_map`]: the token → original-text
+/// rehydration map plus a count of PII candidates the post-detection
+/// validators rejected (e.g. failed-checksum IBANs, failed-Luhn card
+/// numbers), keyed by rejection reason.
+///
+/// `rejection_counts` here is the same audit-only count also written to
+/// `result.redaction_report.rejection_counts` — repeated here as a
+/// Rust-native `RejectionCounts` map so callers of this richer API don't have
+/// to reconstruct it from the FFI-friendly `Vec<RejectionCount>` shape used
+/// on `RedactionReport`. Rejected candidates never
+/// appear in `map` or in `findings` — validators ran before either was
+/// populated, so they were never treated as PII in the first place.
 public typealias TextRedactionOutcome = RustBridge.TextRedactionOutcome
 
 /// One detected PII span in the input text.
@@ -2381,6 +2389,39 @@ internal extension PatternMatch {
 
 /// Token → original PII text.
 public typealias RehydrationMap = RustBridge.RehydrationMap
+
+/// One vault match — either direction of lookup.
+public struct SubjectMatch: Codable, Sendable, Hashable {
+    public let token: String
+    public let original: String
+    /// Category parsed from the token's bracket contents (e.g. `"EMAIL"`
+    /// from `"[EMAIL_1]"`), or `None` if the token doesn't follow the
+    /// `"[CATEGORY_N]"` convention.
+    public let category: String?
+    public init(token: String, original: String, category: String? = nil) {
+        self.token = token
+        self.original = original
+        self.category = category
+    }
+}
+
+// MARK: - Internal FFI conversions for SubjectMatch
+internal extension SubjectMatch {
+    init(_ rb: RustBridge.SubjectMatchRef) throws {
+        self.token = rb.token().toString()
+        self.original = rb.original().toString()
+        self.category = rb.category()?.toString()
+    }
+
+    func intoRust() throws -> RustBridge.SubjectMatch {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.subjectMatchFromJson(json)
+    }
+}
+
+/// Counter for rejections, keyed by validator reason string.
+public typealias RejectionCounts = RustBridge.RejectionCounts
 
 /// Configuration for markdown footnote and citation parsing.
 public struct FootnoteConfig: Codable, Sendable, Hashable {
@@ -5569,6 +5610,11 @@ public struct RedactionReport: Codable, Sendable, Hashable {
         case findings = "findings"
         case totalRedacted = "total_redacted"
     }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.findings = try container.decodeIfPresent([RedactionFinding].self, forKey: .findings) ?? []
+        self.totalRedacted = try container.decodeIfPresent(UInt32.self, forKey: .totalRedacted) ?? 0
+    }
 }
 
 // MARK: - Internal FFI conversions for RedactionReport
@@ -5579,9 +5625,38 @@ internal extension RedactionReport {
     }
 
     func intoRust() throws -> RustBridge.RedactionReport {
+        let __findings = RustVec<RustBridge.RedactionFinding>()
+        for __elem in self.findings { __findings.push(value: try __elem.intoRust()) }
+        return RustBridge.RedactionReport(__findings, self.totalRedacted)
+    }
+}
+
+/// One rejection-reason tally emitted by the redaction engine's
+/// post-detection validators (see
+/// `EntityValidator`).
+public struct RejectionCount: Codable, Sendable, Hashable {
+    /// Static reason identifier reported by the validator (e.g.
+    /// `"iban_checksum_failed"`). Never contains the underlying PII text.
+    public let reason: String
+    /// Number of candidates rejected for this reason.
+    public let count: UInt32
+    public init(reason: String, count: UInt32) {
+        self.reason = reason
+        self.count = count
+    }
+}
+
+// MARK: - Internal FFI conversions for RejectionCount
+internal extension RejectionCount {
+    init(_ rb: RustBridge.RejectionCountRef) throws {
+        self.reason = rb.reason().toString()
+        self.count = rb.count()
+    }
+
+    func intoRust() throws -> RustBridge.RejectionCount {
         let data = try JSONEncoder().encode(self)
         let json = String(data: data, encoding: .utf8) ?? "{}"
-        return try RustBridge.redactionReportFromJson(json)
+        return try RustBridge.rejectionCountFromJson(json)
     }
 }
 
@@ -7329,6 +7404,10 @@ public typealias PatternMatchRef = RustBridge.PatternMatchRef
 
 public typealias PatternMatchRefMut = RustBridge.PatternMatchRefMut
 
+public typealias SubjectMatchRef = RustBridge.SubjectMatchRef
+
+public typealias SubjectMatchRefMut = RustBridge.SubjectMatchRefMut
+
 public typealias FootnoteConfigRef = RustBridge.FootnoteConfigRef
 
 public typealias FootnoteConfigRefMut = RustBridge.FootnoteConfigRefMut
@@ -7592,6 +7671,10 @@ public typealias QrBoundingBoxRefMut = RustBridge.QrBoundingBoxRefMut
 public typealias RedactionReportRef = RustBridge.RedactionReportRef
 
 public typealias RedactionReportRefMut = RustBridge.RedactionReportRefMut
+
+public typealias RejectionCountRef = RustBridge.RejectionCountRef
+
+public typealias RejectionCountRefMut = RustBridge.RejectionCountRefMut
 
 public typealias RedactionFindingRef = RustBridge.RedactionFindingRef
 
@@ -8657,6 +8740,9 @@ extension ReductionLevel {
         return try RustBridge.reductionLevelFromJson(json)
     }
 }
+
+/// Outcome of a single validator on a single candidate match.
+public typealias ValidationResult = RustBridge.ValidationResult
 
 /// Type of PDF annotation.
 public enum PdfAnnotationType: String, Codable, Sendable, Hashable {
@@ -10736,6 +10822,10 @@ public func patternMatchFromJson(_ json: String) throws -> PatternMatch {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(PatternMatch.self, from: data)
 }
+public func subjectMatchFromJson(_ json: String) throws -> SubjectMatch {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(SubjectMatch.self, from: data)
+}
 public func footnoteConfigFromJson(_ json: String) throws -> FootnoteConfig {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(FootnoteConfig.self, from: data)
@@ -11068,6 +11158,10 @@ public func qrBoundingBoxFromJson(_ json: String) throws -> QrBoundingBox {
 public func redactionReportFromJson(_ json: String) throws -> RedactionReport {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(RedactionReport.self, from: data)
+}
+public func rejectionCountFromJson(_ json: String) throws -> RejectionCount {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(RejectionCount.self, from: data)
 }
 public func redactionFindingFromJson(_ json: String) throws -> RedactionFinding {
     let data = json.data(using: .utf8) ?? Data()
@@ -11703,6 +11797,25 @@ public func decryptMap(blob: [UInt8], passphrase: String) throws -> RehydrationM
         let _rb_passphrase = RustString(passphrase)
     return try RustBridge.decryptMap(_rb_blob, _rb_passphrase)
 }
+/// Search a decrypted map for `query`, matching either the token or the
+/// original value (case-insensitive substring match on `original`; exact
+/// match on `token`, since tokens are structured like `"[EMAIL_1]"`).
+///
+/// Results are sorted by token for deterministic output.
+public func findSubject(map: RehydrationMap, query: String) throws -> [SubjectMatch] {
+        let _rb_query = RustString(query)
+    return try RustBridge.findSubject(map, _rb_query).map { ref in try SubjectMatch(ref) }
+}
+/// Remove every mapping whose token or original value matches `query`.
+/// Returns the removed entries (the caller re-encrypts and persists the
+/// resulting map — this function does not touch disk).
+///
+/// Idempotent: calling this again with the same `query` after the matching
+/// entries have already been removed returns an empty `Vec`.
+public func forgetSubject(map: RehydrationMap, query: String) throws -> [SubjectMatch] {
+        let _rb_query = RustString(query)
+    return try RustBridge.forgetSubject(map, _rb_query).map { ref in try SubjectMatch(ref) }
+}
 /// Find unmarked claims in markdown text.
 ///
 /// Returns lines that assert a claim but carry neither a footnote citation anchor (`[^...]`)
@@ -12019,7 +12132,15 @@ extension RustBridge.PatternMatch: @unchecked Sendable {}
 // swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
 extension RustBridge.RehydrationMap: @unchecked Sendable {}
 // swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.SubjectMatch: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
 extension RustBridge.TokenCounter: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.IbanChecksumValidator: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.LuhnValidator: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.RejectionCounts: @unchecked Sendable {}
 // swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
 extension RustBridge.FootnoteConfig: @unchecked Sendable {}
 // swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
@@ -12198,6 +12319,8 @@ extension RustBridge.QrCode: @unchecked Sendable {}
 extension RustBridge.QrBoundingBox: @unchecked Sendable {}
 // swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
 extension RustBridge.RedactionReport: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.RejectionCount: @unchecked Sendable {}
 // swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
 extension RustBridge.RedactionFinding: @unchecked Sendable {}
 // swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.

@@ -31,6 +31,15 @@ internal static partial class NativeMethods
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_engine_builder_free")]
     internal static extern void EngineBuilderFree(IntPtr ptr);
 
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_entity_validator_free")]
+    internal static extern void EntityValidatorFree(IntPtr ptr);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_iban_checksum_validator_free")]
+    internal static extern void IbanChecksumValidatorFree(IntPtr ptr);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_luhn_validator_free")]
+    internal static extern void LuhnValidatorFree(IntPtr ptr);
+
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_meta_schema_free")]
     internal static extern void MetaSchemaFree(IntPtr ptr);
 
@@ -63,6 +72,9 @@ internal static partial class NativeMethods
 
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_rehydration_map_free")]
     internal static extern void RehydrationMapFree(IntPtr ptr);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_rejection_counts_free")]
+    internal static extern void RejectionCountsFree(IntPtr ptr);
 
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_renderer_free")]
     internal static extern void RendererFree(IntPtr ptr);
@@ -147,6 +159,12 @@ internal static partial class NativeMethods
 
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_page_range_free")]
     internal static extern void PageRangeFree(IntPtr ptr);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_pattern_match_from_json")]
+    internal static extern IntPtr PatternMatchFromJson([MarshalAs(UnmanagedType.LPUTF8Str)] string json);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_pattern_match_free")]
+    internal static extern void PatternMatchFree(IntPtr ptr);
 
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_progress_event_from_json")]
     internal static extern IntPtr ProgressEventFromJson([MarshalAs(UnmanagedType.LPUTF8Str)] string json);
@@ -325,9 +343,6 @@ internal static partial class NativeMethods
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_pattern_match_to_json")]
     internal static extern IntPtr PatternMatchToJson(IntPtr ptr);
 
-    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_pattern_match_free")]
-    internal static extern void PatternMatchFree(IntPtr ptr);
-
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_pdf_config_to_json")]
     internal static extern IntPtr PdfConfigToJson(IntPtr ptr);
 
@@ -387,6 +402,12 @@ internal static partial class NativeMethods
 
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_server_config_to_json")]
     internal static extern IntPtr ServerConfigToJson(IntPtr ptr);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_subject_match_to_json")]
+    internal static extern IntPtr SubjectMatchToJson(IntPtr ptr);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_subject_match_free")]
+    internal static extern void SubjectMatchFree(IntPtr ptr);
 
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_supported_format_to_json")]
     internal static extern IntPtr SupportedFormatToJson(IntPtr ptr);
@@ -528,6 +549,18 @@ internal static partial class NativeMethods
         IntPtr blob,
         UIntPtr blobLen,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string passphrase
+    );
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_find_subject")]
+    internal static extern IntPtr FindSubject(
+        IntPtr map,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string query
+    );
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_forget_subject")]
+    internal static extern IntPtr ForgetSubject(
+        IntPtr map,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string query
     );
 
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_find_unmarked_claims")]
@@ -763,39 +796,6 @@ internal static partial class NativeMethods
         IntPtr config
     );
 
-    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_engine_cache_backend")]
-    internal static extern IntPtr EngineCacheBackend(
-        IntPtr handle
-    );
-
-    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_engine_progress_sink")]
-    internal static extern IntPtr EngineProgressSink(
-        IntPtr handle
-    );
-
-    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_engine_model_provider")]
-    internal static extern IntPtr EngineModelProvider(
-        IntPtr handle
-    );
-
-    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_engine_builder_with_cache_backend")]
-    internal static extern IntPtr EngineBuilderWithCacheBackend(
-        IntPtr handle,
-        IntPtr cache
-    );
-
-    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_engine_builder_with_progress_sink")]
-    internal static extern IntPtr EngineBuilderWithProgressSink(
-        IntPtr handle,
-        IntPtr progress
-    );
-
-    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_engine_builder_with_model_provider")]
-    internal static extern IntPtr EngineBuilderWithModelProvider(
-        IntPtr handle,
-        IntPtr provider
-    );
-
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_engine_builder_build")]
     internal static extern IntPtr EngineBuilderBuild(
         IntPtr handle
@@ -832,6 +832,30 @@ internal static partial class NativeMethods
 
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_token_counter_new")]
     internal static extern IntPtr TokenCounterNew();
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_iban_checksum_validator_label")]
+    internal static extern IntPtr IbanChecksumValidatorLabel(
+        IntPtr handle
+    );
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_iban_checksum_validator_validate")]
+    internal static extern IntPtr IbanChecksumValidatorValidate(
+        IntPtr handle,
+        IntPtr entity,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string ctx
+    );
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_luhn_validator_label")]
+    internal static extern IntPtr LuhnValidatorLabel(
+        IntPtr handle
+    );
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_luhn_validator_validate")]
+    internal static extern IntPtr LuhnValidatorValidate(
+        IntPtr handle,
+        IntPtr entity,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string ctx
+    );
 
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "xberg_footnote_config_default")]
     internal static extern IntPtr FootnoteConfigDefault();

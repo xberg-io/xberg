@@ -251,6 +251,29 @@ object Xberg {
     /** Decrypt a blob from `encrypt_map`. */
     fun decryptMap(blob: ByteArray, passphrase: String): RehydrationMap = RehydrationMap(XbergBridge.nativeDecryptMap(java.util.Base64.getEncoder().encodeToString(blob), passphrase))
     /**
+     * Search a decrypted map for `query`, matching either the token or the
+     * original value (case-insensitive substring match on `original`; exact
+     * match on `token`, since tokens are structured like `"[EMAIL_1]"`).
+     *
+     * Results are sorted by token for deterministic output.
+     */
+    fun findSubject(map: RehydrationMap, query: String): List<SubjectMatch> {
+        val resultJson = XbergBridge.nativeFindSubject(map.handle, query)
+        return mapper.readValue(resultJson, object : TypeReference<List<SubjectMatch>>() {})
+    }
+    /**
+     * Remove every mapping whose token or original value matches `query`.
+     * Returns the removed entries (the caller re-encrypts and persists the
+     * resulting map — this function does not touch disk).
+     *
+     * Idempotent: calling this again with the same `query` after the matching
+     * entries have already been removed returns an empty `Vec`.
+     */
+    fun forgetSubject(map: RehydrationMap, query: String): List<SubjectMatch> {
+        val resultJson = XbergBridge.nativeForgetSubject(map.handle, query)
+        return mapper.readValue(resultJson, object : TypeReference<List<SubjectMatch>>() {})
+    }
+    /**
      * Find unmarked claims in markdown text.
      *
      * Returns lines that assert a claim but carry neither a footnote citation anchor (`[^...]`)

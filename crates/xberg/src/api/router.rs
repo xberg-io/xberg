@@ -23,7 +23,7 @@ use super::{
     handlers::{
         cache_clear_handler, cache_manifest_handler, cache_stats_handler, cache_warm_handler, detect_handler,
         extract_async_handler, extract_handler, formats_handler, health_handler, info_handler, job_status_handler,
-        not_found_handler, process_handler, rehydrate_handler, version_handler,
+        not_found_handler, version_handler,
     },
     openweb::{openweb_docling_handler, openweb_external_handler},
     types::{ApiSizeLimits, ApiState},
@@ -182,14 +182,16 @@ pub(crate) fn create_router_with_limits_and_server_config(
         .route("/cache/clear", delete(cache_clear_handler))
         .route("/cache/manifest", get(cache_manifest_handler))
         .route("/cache/warm", post(cache_warm_handler))
-        // Process pipeline endpoint (extract → NER → redact)
-        .route("/v1/process", post(process_handler))
-        // Rehydration: decrypt and return token→original map for a prior /v1/process call
-        .route("/v1/documents/{rehydration_key}/rehydrate", post(rehydrate_handler))
         // OpenWebUI compatibility endpoints
         .route("/process", put(openweb_external_handler))
         .route("/v1/convert/file", post(openweb_docling_handler))
         .fallback(not_found_handler);
+
+    // Fork-only: /v1/process (extract → NER → redact) and rehydration routes.
+    #[cfg(feature = "process-api")]
+    {
+        router = router.merge(super::rag::routes());
+    }
 
     // Add OpenAPI schema endpoint if API feature is enabled
     #[cfg(feature = "api")]

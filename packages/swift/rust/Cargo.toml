@@ -29,7 +29,7 @@ doctest = false
 bench = false
 
 [features]
-default = ["api", "api-types", "auto-rotate-types", "chunking-tokenizers", "diff", "heuristics", "html", "keywords-rake", "keywords-yake", "layout-types", "liter-llm", "markdown-footnotes", "ner", "ocr", "ocr-wasm", "office", "paddle-ocr-types", "pdf", "presets", "quality", "redaction", "redaction-rehydrate", "reranker", "reranker-presets", "svg", "transcription-types", "tree-sitter", "url-config-types", "url-ingestion", "xml"]
+default = ["api", "api-types", "auto-rotate-types", "chunking-tokenizers", "diff", "heuristics", "html", "keywords-rake", "keywords-yake", "layout-types", "liter-llm", "markdown-footnotes", "ocr", "ocr-wasm", "office", "paddle-ocr-types", "pdf", "presets", "quality", "redaction", "redaction-rehydrate", "reranker", "reranker-presets", "svg", "transcription-types", "tree-sitter", "url-config-types", "url-ingestion", "xml"]
 api = ["xberg/api"]
 api-types = ["xberg/api-types"]
 auto-rotate-types = ["xberg/auto-rotate-types"]
@@ -43,7 +43,6 @@ keywords-yake = ["xberg/keywords-yake"]
 layout-types = ["xberg/layout-types"]
 liter-llm = ["xberg/liter-llm"]
 markdown-footnotes = ["xberg/markdown-footnotes"]
-ner = ["xberg/ner"]
 ocr = ["xberg/ocr"]
 ocr-wasm = ["xberg/ocr-wasm"]
 office = ["xberg/office"]

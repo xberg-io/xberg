@@ -33,8 +33,8 @@ use xberg::engine::seams::model_provider::ModelProvider;
 use xberg::engine::seams::progress::ProgressSink;
 use xberg::engine::seams::PresetResolver;
 use xberg::text::ner::NerBackend;
+use xberg::text::redaction::EntityValidator;
 use xberg::DocumentExtractor;
-use xberg::Validator;
 
 thread_local! {
     static LAST_ERROR_CODE: RefCell<i32> = const { RefCell::new(0) };
@@ -7893,6 +7893,27 @@ pub unsafe extern "C" fn xberg_redaction_config_custom_patterns(
     }
 }
 
+/// Get the `preserve_terms` field from a `RedactionConfig`.
+/// # Safety
+/// Pointer must be a valid handle returned by this library.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_redaction_config_preserve_terms(
+    ptr: *const xberg::RedactionConfig,
+) -> *mut std::ffi::c_char {
+    if ptr.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: null check above guarantees ptr is a valid pointer.
+    let obj = unsafe { &*ptr };
+    match serde_json::to_string(&obj.preserve_terms) {
+        Ok(s) => match CString::new(s) {
+            Ok(cs) => cs.into_raw(),
+            Err(_) => std::ptr::null_mut(),
+        },
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
 /// \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
 /// freed with the appropriate free function.
 #[unsafe(no_mangle)]
@@ -10800,60 +10821,6 @@ pub unsafe extern "C" fn xberg_engine_extract_batch(
     }
 }
 
-/// The injected `CacheBackend` seam (default: `NoopCache`).
-/// \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
-/// freed with the appropriate free function.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn xberg_engine_cache_backend(this: *const xberg::engine::Engine) -> *mut CacheBackend {
-    clear_last_error();
-    if this.is_null() {
-        set_last_error(1, "Null pointer passed for self");
-        return std::ptr::null_mut();
-    }
-    // SAFETY: null check above guarantees this is a valid pointer.
-    let obj = unsafe { &*this };
-
-    let result = obj.cache_backend();
-    let result = result.clone();
-    Box::into_raw(Box::new(result))
-}
-
-/// The injected `ProgressSink` seam (default: `NoopProgressSink`).
-/// \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
-/// freed with the appropriate free function.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn xberg_engine_progress_sink(this: *const xberg::engine::Engine) -> *mut ProgressSink {
-    clear_last_error();
-    if this.is_null() {
-        set_last_error(1, "Null pointer passed for self");
-        return std::ptr::null_mut();
-    }
-    // SAFETY: null check above guarantees this is a valid pointer.
-    let obj = unsafe { &*this };
-
-    let result = obj.progress_sink();
-    let result = result.clone();
-    Box::into_raw(Box::new(result))
-}
-
-/// The injected `ModelProvider` seam (default: `DefaultModelProvider`).
-/// \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
-/// freed with the appropriate free function.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn xberg_engine_model_provider(this: *const xberg::engine::Engine) -> *mut ModelProvider {
-    clear_last_error();
-    if this.is_null() {
-        set_last_error(1, "Null pointer passed for self");
-        return std::ptr::null_mut();
-    }
-    // SAFETY: null check above guarantees this is a valid pointer.
-    let obj = unsafe { &*this };
-
-    let result = obj.model_provider();
-    let result = result.clone();
-    Box::into_raw(Box::new(result))
-}
-
 /// Free a `EngineBuilder` handle.
 /// # Safety
 /// Pointer must have been returned by this library, or be null.
@@ -13065,7 +13032,7 @@ pub unsafe extern "C" fn xberg_custom_gliner_source_architecture(
     Box::into_raw(Box::new(obj.architecture))
 }
 
-#[cfg(all(feature = "redaction-rehydrate", feature = "ner"))]
+#[cfg(feature = "redaction-rehydrate")]
 /// Free a `TextRedactionOutcome` handle.
 /// # Safety
 /// Pointer must have been returned by this library, or be null.
@@ -13079,31 +13046,12 @@ pub unsafe extern "C" fn xberg_text_redaction_outcome_free(ptr: *mut xberg::text
     }
 }
 
-#[cfg(all(feature = "redaction-rehydrate", feature = "ner"))]
-/// Get the `redacted_text` field from a `TextRedactionOutcome`.
+#[cfg(feature = "redaction-rehydrate")]
+/// Get the `map` field from a `TextRedactionOutcome`.
 /// # Safety
 /// Pointer must be a valid handle returned by this library.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn xberg_text_redaction_outcome_redacted_text(
-    ptr: *const xberg::text::redaction::TextRedactionOutcome,
-) -> *mut std::ffi::c_char {
-    if ptr.is_null() {
-        return std::ptr::null_mut();
-    }
-    // SAFETY: null check above guarantees ptr is a valid pointer.
-    let obj = unsafe { &*ptr };
-    match CString::new(obj.redacted_text.to_string()) {
-        Ok(cs) => cs.into_raw(),
-        Err(_) => std::ptr::null_mut(),
-    }
-}
-
-#[cfg(all(feature = "redaction-rehydrate", feature = "ner"))]
-/// Get the `rehydration_map` field from a `TextRedactionOutcome`.
-/// # Safety
-/// Pointer must be a valid handle returned by this library.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn xberg_text_redaction_outcome_rehydration_map(
+pub unsafe extern "C" fn xberg_text_redaction_outcome_map(
     ptr: *const xberg::text::redaction::TextRedactionOutcome,
 ) -> *mut xberg::text::redaction::RehydrationMap {
     if ptr.is_null() {
@@ -13111,29 +13059,23 @@ pub unsafe extern "C" fn xberg_text_redaction_outcome_rehydration_map(
     }
     // SAFETY: null check above guarantees ptr is a valid pointer.
     let obj = unsafe { &*ptr };
-    obj.rehydration_map as *const _ as *mut _
+    obj.map as *const _ as *mut _
 }
 
-#[cfg(all(feature = "redaction-rehydrate", feature = "ner"))]
-/// Get the `category_counts` field from a `TextRedactionOutcome`.
+#[cfg(feature = "redaction-rehydrate")]
+/// Get the `rejection_counts` field from a `TextRedactionOutcome`.
 /// # Safety
 /// Pointer must be a valid handle returned by this library.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn xberg_text_redaction_outcome_category_counts(
+pub unsafe extern "C" fn xberg_text_redaction_outcome_rejection_counts(
     ptr: *const xberg::text::redaction::TextRedactionOutcome,
-) -> *mut std::ffi::c_char {
+) -> *mut xberg::text::redaction::RejectionCounts {
     if ptr.is_null() {
         return std::ptr::null_mut();
     }
     // SAFETY: null check above guarantees ptr is a valid pointer.
     let obj = unsafe { &*ptr };
-    match serde_json::to_string(&obj.category_counts) {
-        Ok(s) => match CString::new(s) {
-            Ok(cs) => cs.into_raw(),
-            Err(_) => std::ptr::null_mut(),
-        },
-        Err(_) => std::ptr::null_mut(),
-    }
+    obj.rejection_counts as *const _ as *mut _
 }
 
 /// Create a `PatternMatch` from a JSON string. Returns null on failure.
@@ -13283,6 +13225,134 @@ pub unsafe extern "C" fn xberg_rehydration_map_free(ptr: *mut xberg::text::redac
     }
 }
 
+/// Create a `SubjectMatch` from a JSON string. Returns null on failure.
+/// # Safety
+/// JSON string must be valid UTF-8 and null-terminated.
+/// Returned handle must be freed with `xberg_subject_match_free`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_subject_match_from_json(
+    json: *const c_char,
+) -> *mut xberg::text::redaction::SubjectMatch {
+    clear_last_error();
+    if json.is_null() {
+        set_last_error(1, "Null pointer passed for JSON string");
+        return std::ptr::null_mut();
+    }
+    // SAFETY: null check above guarantees json is a valid pointer; string is valid UTF-8 from caller.
+    let c_str = match unsafe { CStr::from_ptr(json) }.to_str() {
+        Ok(s) => s,
+        Err(_) => {
+            set_last_error(1, "Invalid UTF-8 in JSON string");
+            return std::ptr::null_mut();
+        }
+    };
+    match serde_json::from_str::<xberg::text::redaction::SubjectMatch>(c_str) {
+        Ok(val) => Box::into_raw(Box::new(val)),
+        Err(e) => {
+            set_last_error(2, &e.to_string());
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Serialize a `SubjectMatch` to a JSON string. Returns null on failure.
+/// # Safety
+/// `ptr` must be a valid, non-null pointer returned by a `xberg` function.
+/// The returned string must be freed with `xberg_free_string`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_subject_match_to_json(ptr: *const xberg::text::redaction::SubjectMatch) -> *mut c_char {
+    clear_last_error();
+    if ptr.is_null() {
+        set_last_error(1, "Null pointer passed to to_json");
+        return std::ptr::null_mut();
+    }
+    // SAFETY: null check above guarantees ptr is a valid pointer.
+    let val = unsafe { &*ptr };
+    match serde_json::to_string(val) {
+        Ok(s) => match CString::new(s) {
+            Ok(cs) => cs.into_raw(),
+            Err(e) => {
+                set_last_error(2, &e.to_string());
+                std::ptr::null_mut()
+            }
+        },
+        Err(e) => {
+            set_last_error(2, &e.to_string());
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Free a `SubjectMatch` handle.
+/// # Safety
+/// Pointer must have been returned by this library, or be null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_subject_match_free(ptr: *mut xberg::text::redaction::SubjectMatch) {
+    if !ptr.is_null() {
+        // SAFETY: ptr was allocated by Box::into_raw; caller ensures no aliases.
+        unsafe {
+            drop(Box::from_raw(ptr));
+        }
+    }
+}
+
+/// Get the `token` field from a `SubjectMatch`.
+/// # Safety
+/// Pointer must be a valid handle returned by this library.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_subject_match_token(
+    ptr: *const xberg::text::redaction::SubjectMatch,
+) -> *mut std::ffi::c_char {
+    if ptr.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: null check above guarantees ptr is a valid pointer.
+    let obj = unsafe { &*ptr };
+    match CString::new(obj.token.to_string()) {
+        Ok(cs) => cs.into_raw(),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// Get the `original` field from a `SubjectMatch`.
+/// # Safety
+/// Pointer must be a valid handle returned by this library.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_subject_match_original(
+    ptr: *const xberg::text::redaction::SubjectMatch,
+) -> *mut std::ffi::c_char {
+    if ptr.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: null check above guarantees ptr is a valid pointer.
+    let obj = unsafe { &*ptr };
+    match CString::new(obj.original.to_string()) {
+        Ok(cs) => cs.into_raw(),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// Get the `category` field from a `SubjectMatch`.
+/// # Safety
+/// Pointer must be a valid handle returned by this library.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_subject_match_category(
+    ptr: *const xberg::text::redaction::SubjectMatch,
+) -> *mut std::ffi::c_char {
+    if ptr.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: null check above guarantees ptr is a valid pointer.
+    let obj = unsafe { &*ptr };
+    match &obj.category {
+        Some(val) => match CString::new(val.to_string()) {
+            Ok(cs) => cs.into_raw(),
+            Err(_) => std::ptr::null_mut(),
+        },
+        None => std::ptr::null_mut(),
+    }
+}
+
 #[cfg(feature = "redaction")]
 /// Free a `TokenCounter` handle.
 /// # Safety
@@ -13301,6 +13371,167 @@ pub unsafe extern "C" fn xberg_token_counter_free(ptr: *mut xberg::TokenCounter)
 pub unsafe extern "C" fn xberg_token_counter_new() -> *mut xberg::TokenCounter {
     let result = xberg::TokenCounter::new();
     Box::into_raw(Box::new(result))
+}
+
+/// Free a `IbanChecksumValidator` handle.
+/// # Safety
+/// Pointer must have been returned by this library, or be null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_iban_checksum_validator_free(
+    ptr: *mut xberg::text::redaction::validators::iban::IbanChecksumValidator,
+) {
+    if !ptr.is_null() {
+        // SAFETY: ptr was allocated by Box::into_raw; caller ensures no aliases.
+        unsafe {
+            drop(Box::from_raw(ptr));
+        }
+    }
+}
+
+/// \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
+/// freed with the appropriate free function.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_iban_checksum_validator_label(
+    this: *const xberg::text::redaction::validators::iban::IbanChecksumValidator,
+) -> *mut std::ffi::c_char {
+    clear_last_error();
+    if this.is_null() {
+        set_last_error(1, "Null pointer passed for self");
+        return std::ptr::null_mut();
+    }
+    // SAFETY: null check above guarantees this is a valid pointer.
+    let obj = unsafe { &*this };
+
+    let result = obj.label();
+    let result = result.to_owned();
+    match CString::new(result.to_string()) {
+        Ok(cs) => cs.into_raw(),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
+/// freed with the appropriate free function.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_iban_checksum_validator_validate(
+    this: *const xberg::text::redaction::validators::iban::IbanChecksumValidator,
+    entity: *const xberg::text::redaction::patterns::PatternMatch,
+    _ctx: *const std::ffi::c_char,
+) -> *mut xberg::text::redaction::ValidationResult {
+    clear_last_error();
+    if this.is_null() {
+        set_last_error(1, "Null pointer passed for self");
+        return std::ptr::null_mut();
+    }
+    // SAFETY: null check above guarantees this is a valid pointer.
+    let obj = unsafe { &*this };
+
+    if entity.is_null() {
+        set_last_error(1, "Null pointer passed for parameter 'entity'");
+        return std::ptr::null_mut();
+    }
+    // SAFETY: null check above guarantees entity is a valid non-null pointer.
+    let entity_rs = unsafe { &*entity };
+    if _ctx.is_null() {
+        set_last_error(1, "Null pointer passed for parameter '_ctx'");
+        return std::ptr::null_mut();
+    }
+    // SAFETY: null check above guarantees _ctx is a valid pointer; string is valid UTF-8 from caller.
+    let _ctx_rs = match unsafe { CStr::from_ptr(_ctx) }.to_str() {
+        Ok(s) => s.to_string(),
+        Err(_) => {
+            set_last_error(1, "Invalid UTF-8 in parameter '_ctx'");
+            return std::ptr::null_mut();
+        }
+    };
+    let result = obj.validate(&entity_rs, &_ctx_rs);
+    Box::into_raw(Box::new(result))
+}
+
+/// Free a `LuhnValidator` handle.
+/// # Safety
+/// Pointer must have been returned by this library, or be null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_luhn_validator_free(ptr: *mut xberg::text::redaction::validators::luhn::LuhnValidator) {
+    if !ptr.is_null() {
+        // SAFETY: ptr was allocated by Box::into_raw; caller ensures no aliases.
+        unsafe {
+            drop(Box::from_raw(ptr));
+        }
+    }
+}
+
+/// \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
+/// freed with the appropriate free function.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_luhn_validator_label(
+    this: *const xberg::text::redaction::validators::luhn::LuhnValidator,
+) -> *mut std::ffi::c_char {
+    clear_last_error();
+    if this.is_null() {
+        set_last_error(1, "Null pointer passed for self");
+        return std::ptr::null_mut();
+    }
+    // SAFETY: null check above guarantees this is a valid pointer.
+    let obj = unsafe { &*this };
+
+    let result = obj.label();
+    let result = result.to_owned();
+    match CString::new(result.to_string()) {
+        Ok(cs) => cs.into_raw(),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
+/// freed with the appropriate free function.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_luhn_validator_validate(
+    this: *const xberg::text::redaction::validators::luhn::LuhnValidator,
+    entity: *const xberg::text::redaction::patterns::PatternMatch,
+    _ctx: *const std::ffi::c_char,
+) -> *mut xberg::text::redaction::ValidationResult {
+    clear_last_error();
+    if this.is_null() {
+        set_last_error(1, "Null pointer passed for self");
+        return std::ptr::null_mut();
+    }
+    // SAFETY: null check above guarantees this is a valid pointer.
+    let obj = unsafe { &*this };
+
+    if entity.is_null() {
+        set_last_error(1, "Null pointer passed for parameter 'entity'");
+        return std::ptr::null_mut();
+    }
+    // SAFETY: null check above guarantees entity is a valid non-null pointer.
+    let entity_rs = unsafe { &*entity };
+    if _ctx.is_null() {
+        set_last_error(1, "Null pointer passed for parameter '_ctx'");
+        return std::ptr::null_mut();
+    }
+    // SAFETY: null check above guarantees _ctx is a valid pointer; string is valid UTF-8 from caller.
+    let _ctx_rs = match unsafe { CStr::from_ptr(_ctx) }.to_str() {
+        Ok(s) => s.to_string(),
+        Err(_) => {
+            set_last_error(1, "Invalid UTF-8 in parameter '_ctx'");
+            return std::ptr::null_mut();
+        }
+    };
+    let result = obj.validate(&entity_rs, &_ctx_rs);
+    Box::into_raw(Box::new(result))
+}
+
+/// Free a `RejectionCounts` handle.
+/// # Safety
+/// Pointer must have been returned by this library, or be null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_rejection_counts_free(ptr: *mut xberg::text::redaction::RejectionCounts) {
+    if !ptr.is_null() {
+        // SAFETY: ptr was allocated by Box::into_raw; caller ensures no aliases.
+        unsafe {
+            drop(Box::from_raw(ptr));
+        }
+    }
 }
 
 #[cfg(feature = "markdown-footnotes")]
@@ -27707,6 +27938,127 @@ pub unsafe extern "C" fn xberg_redaction_report_total_redacted(ptr: *const xberg
     obj.total_redacted
 }
 
+/// Get the `rejection_counts` field from a `RedactionReport`.
+/// # Safety
+/// Pointer must be a valid handle returned by this library.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_redaction_report_rejection_counts(
+    ptr: *const xberg::RedactionReport,
+) -> *mut std::ffi::c_char {
+    if ptr.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: null check above guarantees ptr is a valid pointer.
+    let obj = unsafe { &*ptr };
+    match serde_json::to_string(&obj.rejection_counts) {
+        Ok(s) => match CString::new(s) {
+            Ok(cs) => cs.into_raw(),
+            Err(_) => std::ptr::null_mut(),
+        },
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// Create a `RejectionCount` from a JSON string. Returns null on failure.
+/// # Safety
+/// JSON string must be valid UTF-8 and null-terminated.
+/// Returned handle must be freed with `xberg_rejection_count_free`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_rejection_count_from_json(json: *const c_char) -> *mut xberg::redaction::RejectionCount {
+    clear_last_error();
+    if json.is_null() {
+        set_last_error(1, "Null pointer passed for JSON string");
+        return std::ptr::null_mut();
+    }
+    // SAFETY: null check above guarantees json is a valid pointer; string is valid UTF-8 from caller.
+    let c_str = match unsafe { CStr::from_ptr(json) }.to_str() {
+        Ok(s) => s,
+        Err(_) => {
+            set_last_error(1, "Invalid UTF-8 in JSON string");
+            return std::ptr::null_mut();
+        }
+    };
+    match serde_json::from_str::<xberg::redaction::RejectionCount>(c_str) {
+        Ok(val) => Box::into_raw(Box::new(val)),
+        Err(e) => {
+            set_last_error(2, &e.to_string());
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Serialize a `RejectionCount` to a JSON string. Returns null on failure.
+/// # Safety
+/// `ptr` must be a valid, non-null pointer returned by a `xberg` function.
+/// The returned string must be freed with `xberg_free_string`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_rejection_count_to_json(ptr: *const xberg::redaction::RejectionCount) -> *mut c_char {
+    clear_last_error();
+    if ptr.is_null() {
+        set_last_error(1, "Null pointer passed to to_json");
+        return std::ptr::null_mut();
+    }
+    // SAFETY: null check above guarantees ptr is a valid pointer.
+    let val = unsafe { &*ptr };
+    match serde_json::to_string(val) {
+        Ok(s) => match CString::new(s) {
+            Ok(cs) => cs.into_raw(),
+            Err(e) => {
+                set_last_error(2, &e.to_string());
+                std::ptr::null_mut()
+            }
+        },
+        Err(e) => {
+            set_last_error(2, &e.to_string());
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Free a `RejectionCount` handle.
+/// # Safety
+/// Pointer must have been returned by this library, or be null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_rejection_count_free(ptr: *mut xberg::redaction::RejectionCount) {
+    if !ptr.is_null() {
+        // SAFETY: ptr was allocated by Box::into_raw; caller ensures no aliases.
+        unsafe {
+            drop(Box::from_raw(ptr));
+        }
+    }
+}
+
+/// Get the `reason` field from a `RejectionCount`.
+/// # Safety
+/// Pointer must be a valid handle returned by this library.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_rejection_count_reason(
+    ptr: *const xberg::redaction::RejectionCount,
+) -> *mut std::ffi::c_char {
+    if ptr.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: null check above guarantees ptr is a valid pointer.
+    let obj = unsafe { &*ptr };
+    match CString::new(obj.reason.to_string()) {
+        Ok(cs) => cs.into_raw(),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// Get the `count` field from a `RejectionCount`.
+/// # Safety
+/// Pointer must be a valid handle returned by this library.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_rejection_count_count(ptr: *const xberg::redaction::RejectionCount) -> u32 {
+    if ptr.is_null() {
+        return 0;
+    }
+    // SAFETY: null check above guarantees ptr is a valid pointer.
+    let obj = unsafe { &*ptr };
+    obj.count
+}
+
 /// Create a `RedactionFinding` from a JSON string. Returns null on failure.
 /// # Safety
 /// JSON string must be valid UTF-8 and null-terminated.
@@ -37482,6 +37834,49 @@ pub unsafe extern "C" fn xberg_reduction_level_from_str(name: *const c_char) -> 
     }
 }
 
+/// Convert an integer to a `ValidationResult` variant. Returns -1 on invalid input.
+/// # Safety
+/// Caller must ensure all pointer arguments are valid or null.
+/// Returned pointers must be freed with the appropriate free function.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_validation_result_from_i32(value: i32) -> i32 {
+    match value {
+        0 => 0, // Accept
+        1 => 1, // Reject
+        _ => {
+            set_last_error(1, "Invalid ValidationResult variant");
+            -1
+        }
+    }
+}
+
+/// Convert a `ValidationResult` serde wire value (C string) to its integer discriminant. Returns -1 on invalid input.
+/// # Safety
+/// Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_validation_result_from_str(name: *const c_char) -> i32 {
+    if name.is_null() {
+        set_last_error(1, "Null pointer passed for enum name");
+        return -1;
+    }
+    // SAFETY: null check above guarantees name is a valid pointer; string is valid UTF-8 from caller.
+    let s = match unsafe { CStr::from_ptr(name) }.to_str() {
+        Ok(s) => s,
+        Err(_) => {
+            set_last_error(1, "Invalid UTF-8 in enum name");
+            return -1;
+        }
+    };
+    match s {
+        "Accept" => 0,
+        "Reject" => 1,
+        _ => {
+            set_last_error(1, "Unknown ValidationResult variant");
+            -1
+        }
+    }
+}
+
 /// Convert an integer to a `PdfAnnotationType` variant. Returns -1 on invalid input.
 /// # Safety
 /// Caller must ensure all pointer arguments are valid or null.
@@ -41390,6 +41785,19 @@ pub unsafe extern "C" fn xberg_reduction_level_to_string(ptr: *const xberg::Redu
     }
 }
 
+/// Free a heap-allocated `ValidationResult` returned by a pointer-returning FFI function.
+/// # Safety
+/// Pointer must have been returned by this library, or be null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_validation_result_free(ptr: *mut xberg::text::redaction::ValidationResult) {
+    if !ptr.is_null() {
+        // SAFETY: ptr was allocated by Box::into_raw; caller ensures no aliases.
+        unsafe {
+            drop(Box::from_raw(ptr));
+        }
+    }
+}
+
 /// Free a heap-allocated `PdfAnnotationType` returned by a pointer-returning FFI function.
 /// # Safety
 /// Pointer must have been returned by this library, or be null.
@@ -44616,6 +45024,137 @@ pub unsafe extern "C" fn xberg_decrypt_map(
             std::ptr::null_mut()
         }
     }
+}
+
+/// Search a decrypted map for `query`, matching either the token or the
+/// original value (case-insensitive substring match on `original`; exact
+/// match on `token`, since tokens are structured like `"`EMAIL_1`"`).
+///
+/// Results are sorted by token for deterministic output.
+/// \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
+/// freed with the appropriate free function.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_find_subject(
+    map: *const xberg::text::redaction::RehydrationMap,
+    query: *const std::ffi::c_char,
+) -> *mut std::ffi::c_char {
+    clear_last_error();
+    if map.is_null() {
+        set_last_error(1, "Null pointer passed for parameter 'map'");
+        return std::ptr::null_mut();
+    }
+    // SAFETY: null check above guarantees map is a valid non-null pointer.
+    let map_rs = unsafe { &*map };
+    if query.is_null() {
+        set_last_error(1, "Null pointer passed for parameter 'query'");
+        return std::ptr::null_mut();
+    }
+    // SAFETY: null check above guarantees query is a valid pointer; string is valid UTF-8 from caller.
+    let query_rs = match unsafe { CStr::from_ptr(query) }.to_str() {
+        Ok(s) => s.to_string(),
+        Err(_) => {
+            set_last_error(1, "Invalid UTF-8 in parameter 'query'");
+            return std::ptr::null_mut();
+        }
+    };
+    let result = xberg::text::redaction::find_subject(&map_rs, &query_rs);
+    {
+        match serde_json::to_string(&result) {
+            Ok(__alef_return) => match CString::new(__alef_return) {
+                Ok(cs) => {
+                    set_last_return_len(cs.as_bytes().len());
+                    cs.into_raw()
+                }
+                Err(_) => {
+                    set_last_return_len(0);
+                    std::ptr::null_mut()
+                }
+            },
+            Err(_) => {
+                set_last_return_len(0);
+                std::ptr::null_mut()
+            }
+        }
+    }
+}
+
+/// Return the byte length of the C string most recently returned by `xberg_find_subject` on this
+/// thread. Returns 0 when the primary call returned null or failed before producing a string. Enables
+/// safe slice construction in Zig and Java FFM Panama without a NUL-scan.
+/// \note SAFETY: Pointer arguments are ignored and are present only to keep the companion ABI aligned
+/// with `xberg_find_subject`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_find_subject_len(
+    _map: *const xberg::text::redaction::RehydrationMap,
+    _query: *const std::ffi::c_char,
+) -> usize {
+    last_return_len()
+}
+
+/// Remove every mapping whose token or original value matches `query`.
+/// Returns the removed entries (the caller re-encrypts and persists the
+/// resulting map â this function does not touch disk).
+///
+/// Idempotent: calling this again with the same `query` after the matching
+/// entries have already been removed returns an empty `Vec`.
+/// \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
+/// freed with the appropriate free function.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_forget_subject(
+    map: *mut xberg::text::redaction::RehydrationMap,
+    query: *const std::ffi::c_char,
+) -> *mut std::ffi::c_char {
+    clear_last_error();
+    if map.is_null() {
+        set_last_error(1, "Null pointer passed for parameter 'map'");
+        return std::ptr::null_mut();
+    }
+    // SAFETY: null check above guarantees map is a valid non-null pointer.
+    let map_rs = unsafe { &mut *map };
+    if query.is_null() {
+        set_last_error(1, "Null pointer passed for parameter 'query'");
+        return std::ptr::null_mut();
+    }
+    // SAFETY: null check above guarantees query is a valid pointer; string is valid UTF-8 from caller.
+    let query_rs = match unsafe { CStr::from_ptr(query) }.to_str() {
+        Ok(s) => s.to_string(),
+        Err(_) => {
+            set_last_error(1, "Invalid UTF-8 in parameter 'query'");
+            return std::ptr::null_mut();
+        }
+    };
+    let result = xberg::text::redaction::forget_subject(map_rs, &query_rs);
+    {
+        match serde_json::to_string(&result) {
+            Ok(__alef_return) => match CString::new(__alef_return) {
+                Ok(cs) => {
+                    set_last_return_len(cs.as_bytes().len());
+                    cs.into_raw()
+                }
+                Err(_) => {
+                    set_last_return_len(0);
+                    std::ptr::null_mut()
+                }
+            },
+            Err(_) => {
+                set_last_return_len(0);
+                std::ptr::null_mut()
+            }
+        }
+    }
+}
+
+/// Return the byte length of the C string most recently returned by `xberg_forget_subject` on this
+/// thread. Returns 0 when the primary call returned null or failed before producing a string. Enables
+/// safe slice construction in Zig and Java FFM Panama without a NUL-scan.
+/// \note SAFETY: Pointer arguments are ignored and are present only to keep the companion ABI aligned
+/// with `xberg_forget_subject`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xberg_forget_subject_len(
+    _map: *const xberg::text::redaction::RehydrationMap,
+    _query: *const std::ffi::c_char,
+) -> usize {
+    last_return_len()
 }
 
 /// Find unmarked claims in markdown text.

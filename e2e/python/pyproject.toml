@@ -1,6 +1,9 @@
 [build-system]
 build-backend = "setuptools.build_meta"
-requires = ["setuptools>=68", "wheel"]
+requires = [
+  "setuptools>=68",
+  "wheel",
+]
 
 [project]
 name = "xberg-e2e"
@@ -8,14 +11,19 @@ version = "0.0.0"
 description = "End-to-end tests"
 requires-python = ">=3.10"
 classifiers = [
-    "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
 ]
-dependencies = ["xberg", "pytest>=7.4", "pytest-asyncio>=0.23", "pytest-timeout>=2.1"]
+dependencies = [
+  "xberg",
+  "pytest>=7.4",
+  "pytest-asyncio>=0.23",
+  "pytest-timeout>=2.1",
+]
 
 [tool.setuptools]
 packages = []
@@ -26,7 +34,12 @@ sources.xberg = { path = "../../packages/python" }
 [tool.ruff]
 line-length = 120
 lint.ignore = ["PLR2004"]
-lint.per-file-ignores."tests/**" = ["B017", "PT011", "S101", "S108"]
+lint.per-file-ignores."tests/**" = [
+  "B017",
+  "PT011",
+  "S101",
+  "S108",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

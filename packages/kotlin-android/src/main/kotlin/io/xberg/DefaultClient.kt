@@ -110,24 +110,6 @@ class Engine internal constructor(internal val handle: Long) : AutoCloseable {
         }
     }
 
-    // The injected [`CacheBackend`] seam (default: [`NoopCache`]).
-    fun cacheBackend(): CacheBackend {
-        val responseJson = XbergBridge.nativeEngineCacheBackend(handle)
-        return MAPPER.readValue(responseJson, CacheBackend::class.java)
-    }
-
-    // The injected [`ProgressSink`] seam (default: [`NoopProgressSink`]).
-    fun progressSink(): ProgressSink {
-        val responseJson = XbergBridge.nativeEngineProgressSink(handle)
-        return MAPPER.readValue(responseJson, ProgressSink::class.java)
-    }
-
-    // The injected [`ModelProvider`] seam (default: [`DefaultModelProvider`]).
-    fun modelProvider(): ModelProvider {
-        val responseJson = XbergBridge.nativeEngineModelProvider(handle)
-        return MAPPER.readValue(responseJson, ModelProvider::class.java)
-    }
-
     override fun close() { XbergBridge.nativeFreeEngine(handle) }
 }
 @Suppress("TooManyFunctions")
@@ -137,24 +119,6 @@ class EngineBuilder internal constructor(internal val handle: Long) : AutoClosea
             .registerModule(com.fasterxml.jackson.datatype.jdk8.Jdk8Module())
             .findAndRegisterModules()
             .setPropertyNamingStrategy(com.fasterxml.jackson.databind.PropertyNamingStrategies.SNAKE_CASE)
-    }
-
-    // Inject a [`CacheBackend`], overriding the [`NoopCache`] default.
-    fun withCacheBackend(cache: CacheBackend): EngineBuilder {
-        val handle = XbergBridge.nativeEngineBuilderWithCacheBackend(handle, MAPPER.writeValueAsString(cache))
-        return EngineBuilder(handle)
-    }
-
-    // Inject a [`ProgressSink`], overriding the [`NoopProgressSink`] default.
-    fun withProgressSink(progress: ProgressSink): EngineBuilder {
-        val handle = XbergBridge.nativeEngineBuilderWithProgressSink(handle, MAPPER.writeValueAsString(progress))
-        return EngineBuilder(handle)
-    }
-
-    // Inject a [`ModelProvider`], overriding the [`DefaultModelProvider`] default.
-    fun withModelProvider(provider: ModelProvider): EngineBuilder {
-        val handle = XbergBridge.nativeEngineBuilderWithModelProvider(handle, MAPPER.writeValueAsString(provider))
-        return EngineBuilder(handle)
     }
 
     // Finalize the builder into an [`Engine`], filling every unset seam with
@@ -183,6 +147,46 @@ class CandleBackend internal constructor(internal val handle: Long) : AutoClosea
     }
 
     override fun close() { XbergBridge.nativeFreeCandleBackend(handle) }
+}
+@Suppress("TooManyFunctions")
+class IbanChecksumValidator internal constructor(internal val handle: Long) : AutoCloseable {
+    companion object {
+        private val MAPPER = com.fasterxml.jackson.databind.ObjectMapper()
+            .registerModule(com.fasterxml.jackson.datatype.jdk8.Jdk8Module())
+            .findAndRegisterModules()
+            .setPropertyNamingStrategy(com.fasterxml.jackson.databind.PropertyNamingStrategies.SNAKE_CASE)
+    }
+
+    fun label(): String {
+        return XbergBridge.nativeIbanChecksumValidatorLabel(handle)
+    }
+
+    fun validate(entity: PatternMatch, ctx: String): ValidationResult {
+        val responseJson = XbergBridge.nativeIbanChecksumValidatorValidate(handle, MAPPER.writeValueAsString(mapOf("entity" to entity, "ctx" to ctx)))
+        return MAPPER.readValue(responseJson, ValidationResult::class.java)
+    }
+
+    override fun close() { XbergBridge.nativeFreeIbanChecksumValidator(handle) }
+}
+@Suppress("TooManyFunctions")
+class LuhnValidator internal constructor(internal val handle: Long) : AutoCloseable {
+    companion object {
+        private val MAPPER = com.fasterxml.jackson.databind.ObjectMapper()
+            .registerModule(com.fasterxml.jackson.datatype.jdk8.Jdk8Module())
+            .findAndRegisterModules()
+            .setPropertyNamingStrategy(com.fasterxml.jackson.databind.PropertyNamingStrategies.SNAKE_CASE)
+    }
+
+    fun label(): String {
+        return XbergBridge.nativeLuhnValidatorLabel(handle)
+    }
+
+    fun validate(entity: PatternMatch, ctx: String): ValidationResult {
+        val responseJson = XbergBridge.nativeLuhnValidatorValidate(handle, MAPPER.writeValueAsString(mapOf("entity" to entity, "ctx" to ctx)))
+        return MAPPER.readValue(responseJson, ValidationResult::class.java)
+    }
+
+    override fun close() { XbergBridge.nativeFreeLuhnValidator(handle) }
 }
 @Suppress("TooManyFunctions")
 class MetaSchema internal constructor(internal val handle: Long) : AutoCloseable {

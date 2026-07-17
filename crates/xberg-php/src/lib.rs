@@ -29,12 +29,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 use xberg::DocumentExtractor;
-use xberg::Validator;
 use xberg::engine::seams::PresetResolver;
 use xberg::engine::seams::cache::CacheBackend;
 use xberg::engine::seams::model_provider::ModelProvider;
 use xberg::engine::seams::progress::ProgressSink;
 use xberg::text::ner::NerBackend;
+use xberg::text::redaction::EntityValidator;
 
 #[derive(Debug, Clone, Default)]
 pub struct PhpBytes(pub Vec<u8>);
@@ -3999,6 +3999,18 @@ pub struct RedactionConfig {
     /// at config-construction time via `RedactionConfig.validate`.
     #[serde(alias = "customPatterns")]
     pub custom_patterns: Vec<RedactionPattern>,
+    /// Literal terms that must never be redacted, even if the pattern engine
+    /// or NER backend would otherwise flag them.
+    ///
+    /// Use this for known-public entities that a NER model mistakes for PII
+    /// (e.g. "Supreme Court", the caller's own organization name) — an
+    /// allowlist counterpart to `custom_terms`, which
+    /// is a forcelist. A term matches by exact value (respecting
+    /// `case_sensitive`), not by category — it suppresses that literal
+    /// string across every category, since a false positive doesn't know
+    /// its own category was wrong.
+    #[serde(alias = "preserveTerms")]
+    pub preserve_terms: Vec<RedactionTerm>,
 }
 
 impl Default for RedactionConfig {
@@ -4023,6 +4035,7 @@ impl RedactionConfig {
             preserve_offsets: preserveOffsets,
             custom_terms: Default::default(),
             custom_patterns: Default::default(),
+            preserve_terms: Default::default(),
         }
     }
 
@@ -4048,6 +4061,10 @@ impl RedactionConfig {
 
     pub fn get_custom_patterns(&self) -> Vec<RedactionPattern> {
         self.custom_patterns.clone()
+    }
+
+    pub fn get_preserve_terms(&self) -> Vec<RedactionTerm> {
+        self.preserve_terms.clone()
     }
 
     pub fn validate(&self) -> PhpResult<()> {
@@ -4084,6 +4101,7 @@ impl RedactionConfig {
             preserve_offsets: self.preserve_offsets,
             custom_terms: self.custom_terms.clone().into_iter().map(Into::into).collect(),
             custom_patterns: self.custom_patterns.clone().into_iter().map(Into::into).collect(),
+            preserve_terms: self.preserve_terms.clone().into_iter().map(Into::into).collect(),
         };
         let result = core_self
             .validate()
@@ -5514,27 +5532,6 @@ impl Engine {
         })
     }
 
-    /// The injected `CacheBackend` seam (default: `NoopCache`).
-    pub fn cache_backend(&self) -> CacheBackend {
-        CacheBackend {
-            inner: Arc::new(self.inner.cache_backend().clone()),
-        }
-    }
-
-    /// The injected `ProgressSink` seam (default: `NoopProgressSink`).
-    pub fn progress_sink(&self) -> ProgressSink {
-        ProgressSink {
-            inner: Arc::new(self.inner.progress_sink().clone()),
-        }
-    }
-
-    /// The injected `ModelProvider` seam (default: `DefaultModelProvider`).
-    pub fn model_provider(&self) -> ModelProvider {
-        ModelProvider {
-            inner: Arc::new(self.inner.model_provider().clone()),
-        }
-    }
-
     /// Start building an `Engine`.
     #[php(name = "builder")]
     pub fn builder() -> EngineBuilder {
@@ -5561,27 +5558,6 @@ pub struct EngineBuilder {
 
 #[php_impl]
 impl EngineBuilder {
-    /// Inject a `CacheBackend`, overriding the `NoopCache` default.
-    pub fn with_cache_backend(&self, cache: &CacheBackend) -> EngineBuilder {
-        Self {
-            inner: Arc::new((*self.inner).clone().with_cache_backend(&cache.inner)),
-        }
-    }
-
-    /// Inject a `ProgressSink`, overriding the `NoopProgressSink` default.
-    pub fn with_progress_sink(&self, progress: &ProgressSink) -> EngineBuilder {
-        Self {
-            inner: Arc::new((*self.inner).clone().with_progress_sink(&progress.inner)),
-        }
-    }
-
-    /// Inject a `ModelProvider`, overriding the `DefaultModelProvider` default.
-    pub fn with_model_provider(&self, provider: &ModelProvider) -> EngineBuilder {
-        Self {
-            inner: Arc::new((*self.inner).clone().with_model_provider(&provider.inner)),
-        }
-    }
-
     /// Finalize the builder into an `Engine`, filling every unset seam with
     /// its in-core default.
     pub fn build(&self) -> Engine {
@@ -6611,14 +6587,13 @@ impl CustomGlinerSource {
 #[php(name = "Xberg\\TextRedactionOutcome")]
 #[serde(default)]
 pub struct TextRedactionOutcome {
-    #[php(prop, name = "redactedText")]
-    #[serde(alias = "redactedText")]
-    pub redacted_text: String,
-    #[serde(alias = "rehydrationMap")]
+    /// Token → original PII text, populated for `TokenReplace` strategy hits.
     #[serde(skip)]
-    pub rehydration_map: RehydrationMap,
-    #[serde(alias = "categoryCounts")]
-    pub category_counts: HashMap<String, i64>,
+    pub map: RehydrationMap,
+    /// Post-detection validator rejection counts, keyed by reason.
+    #[serde(alias = "rejectionCounts")]
+    #[serde(skip)]
+    pub rejection_counts: RejectionCounts,
 }
 
 impl Default for TextRedactionOutcome {
@@ -6634,30 +6609,23 @@ impl TextRedactionOutcome {
         serde_json::from_str(&json).map_err(|e| PhpException::default(e.to_string()))
     }
 
-    #[php(constructor)]
-    pub fn new(redactedText: String) -> Self {
-        Self {
-            redacted_text: redactedText,
-            rehydration_map: Default::default(),
-            category_counts: Default::default(),
-        }
+    pub fn get_map(&self) -> RehydrationMap {
+        self.map.clone()
     }
 
-    pub fn get_redacted_text(&self) -> String {
-        self.redacted_text.clone()
+    pub fn get_rejection_counts(&self) -> RejectionCounts {
+        self.rejection_counts.clone()
     }
 
-    pub fn get_rehydration_map(&self) -> RehydrationMap {
-        self.rehydration_map.clone()
-    }
-
-    pub fn get_category_counts(&self) -> HashMap<String, i64> {
-        self.category_counts.clone()
-    }
-
-    pub fn with_rehydration_map(&self, rehydrationMap: &mut RehydrationMap) -> Self {
+    pub fn with_map(&self, map: &mut RehydrationMap) -> Self {
         let mut next = self.clone();
-        next.rehydration_map = Some(rehydrationMap.clone());
+        next.map = Some(map.clone());
+        next
+    }
+
+    pub fn with_rejection_counts(&self, rejectionCounts: &mut RejectionCounts) -> Self {
+        let mut next = self.clone();
+        next.rejection_counts = Some(rejectionCounts.clone());
         next
     }
 }
@@ -6722,6 +6690,46 @@ pub struct RehydrationMap {
 #[php_impl]
 impl RehydrationMap {}
 
+#[derive(Clone, serde::Serialize, serde::Deserialize, Default)]
+#[php_class]
+#[php(name = "Xberg\\SubjectMatch")]
+#[serde(default)]
+pub struct SubjectMatch {
+    #[php(prop, name = "token")]
+    pub token: String,
+    #[php(prop, name = "original")]
+    pub original: String,
+    /// Category parsed from the token's bracket contents (e.g. `"EMAIL"`
+    /// from `"[EMAIL_1]"`), or `None` if the token doesn't follow the
+    /// `"[CATEGORY_N]"` convention.
+    #[php(prop, name = "category")]
+    pub category: Option<String>,
+}
+
+#[php_impl]
+impl SubjectMatch {
+    #[php(constructor)]
+    pub fn new(token: String, original: String, category: Option<String>) -> Self {
+        Self {
+            token: token,
+            original: original,
+            category: category,
+        }
+    }
+
+    pub fn get_token(&self) -> String {
+        self.token.clone()
+    }
+
+    pub fn get_original(&self) -> String {
+        self.original.clone()
+    }
+
+    pub fn get_category(&self) -> Option<String> {
+        self.category.clone()
+    }
+}
+
 #[derive(Clone)]
 #[php_class]
 #[php(name = "Xberg\\TokenCounter")]
@@ -6745,6 +6753,54 @@ impl Default for TokenCounter {
         Self::new()
     }
 }
+
+#[derive(Clone)]
+#[php_class]
+#[php(name = "Xberg\\IbanChecksumValidator")]
+pub struct IbanChecksumValidator {
+    inner: Arc<xberg::text::redaction::validators::iban::IbanChecksumValidator>,
+}
+
+#[php_impl]
+impl IbanChecksumValidator {
+    pub fn label(&self) -> String {
+        self.inner.label().into()
+    }
+
+    pub fn validate(&self, entity: &PatternMatch, ctx: String) -> String {
+        let entity_core: xberg::PatternMatch = entity.clone().into();
+        serde_json::to_string(&self.inner.validate(&entity_core, &ctx)).unwrap_or_default()
+    }
+}
+
+#[derive(Clone)]
+#[php_class]
+#[php(name = "Xberg\\LuhnValidator")]
+pub struct LuhnValidator {
+    inner: Arc<xberg::text::redaction::validators::luhn::LuhnValidator>,
+}
+
+#[php_impl]
+impl LuhnValidator {
+    pub fn label(&self) -> String {
+        self.inner.label().into()
+    }
+
+    pub fn validate(&self, entity: &PatternMatch, ctx: String) -> String {
+        let entity_core: xberg::PatternMatch = entity.clone().into();
+        serde_json::to_string(&self.inner.validate(&entity_core, &ctx)).unwrap_or_default()
+    }
+}
+
+#[derive(Clone)]
+#[php_class]
+#[php(name = "Xberg\\RejectionCounts")]
+pub struct RejectionCounts {
+    inner: Arc<xberg::text::redaction::RejectionCounts>,
+}
+
+#[php_impl]
+impl RejectionCounts {}
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 #[php_class]
@@ -13190,7 +13246,7 @@ impl QrBoundingBox {
     }
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize, Default)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 #[php_class]
 #[php(name = "Xberg\\RedactionReport")]
 #[serde(default)]
@@ -13201,6 +13257,12 @@ pub struct RedactionReport {
     #[php(prop, name = "totalRedacted")]
     #[serde(alias = "totalRedacted")]
     pub total_redacted: u32,
+}
+
+impl Default for RedactionReport {
+    fn default() -> Self {
+        <xberg::RedactionReport as Default>::default().into()
+    }
 }
 
 #[php_impl]
@@ -13224,6 +13286,39 @@ impl RedactionReport {
 
     pub fn get_total_redacted(&self) -> u32 {
         self.total_redacted.clone()
+    }
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize, Default)]
+#[php_class]
+#[php(name = "Xberg\\RejectionCount")]
+#[serde(default)]
+pub struct RejectionCount {
+    /// Static reason identifier reported by the validator (e.g.
+    /// `"iban_checksum_failed"`). Never contains the underlying PII text.
+    #[php(prop, name = "reason")]
+    pub reason: String,
+    /// Number of candidates rejected for this reason.
+    #[php(prop, name = "count")]
+    pub count: u32,
+}
+
+#[php_impl]
+impl RejectionCount {
+    #[php(constructor)]
+    pub fn new(reason: String, count: u32) -> Self {
+        Self {
+            reason: reason,
+            count: count,
+        }
+    }
+
+    pub fn get_reason(&self) -> String {
+        self.reason.clone()
+    }
+
+    pub fn get_count(&self) -> u32 {
+        self.count.clone()
     }
 }
 
@@ -17786,6 +17881,16 @@ impl ReductionLevel {
 }
 
 #[php_class]
+#[php(name = "Xberg\\ValidationResult")]
+pub struct ValidationResult {}
+
+#[php_impl]
+impl ValidationResult {
+    pub const ACCEPT: &str = "Accept";
+    pub const REJECT: &str = "Reject";
+}
+
+#[php_class]
 #[php(name = "Xberg\\PdfAnnotationType")]
 pub struct PdfAnnotationType {}
 
@@ -19612,6 +19717,33 @@ impl XbergApi {
         Ok(RehydrationMap {
             inner: Arc::new(result),
         })
+    }
+
+    /// Search a decrypted map for `query`, matching either the token or the
+    /// original value (case-insensitive substring match on `original`; exact
+    /// match on `token`, since tokens are structured like `"[EMAIL_1]"`).
+    ///
+    /// Results are sorted by token for deterministic output.
+    #[php(name = "findSubject")]
+    pub fn find_subject(map: &RehydrationMap, query: String) -> Vec<SubjectMatch> {
+        xberg::text::redaction::find_subject(&map.inner, &query)
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    }
+
+    /// Remove every mapping whose token or original value matches `query`.
+    /// Returns the removed entries (the caller re-encrypts and persists the
+    /// resulting map — this function does not touch disk).
+    ///
+    /// Idempotent: calling this again with the same `query` after the matching
+    /// entries have already been removed returns an empty `Vec`.
+    #[php(name = "forgetSubject")]
+    pub fn forget_subject(map: &RehydrationMap, query: String) -> Vec<SubjectMatch> {
+        xberg::text::redaction::forget_subject(&map.inner, &query)
+            .into_iter()
+            .map(Into::into)
+            .collect()
     }
 
     #[cfg(any(feature = "markdown-footnotes", not(feature = "markdown-footnotes")))]
@@ -22372,6 +22504,7 @@ impl From<RedactionConfig> for xberg::RedactionConfig {
             preserve_offsets: val.preserve_offsets,
             custom_terms: val.custom_terms.into_iter().map(Into::into).collect(),
             custom_patterns: val.custom_patterns.into_iter().map(Into::into).collect(),
+            preserve_terms: val.preserve_terms.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -22398,6 +22531,7 @@ impl From<xberg::RedactionConfig> for RedactionConfig {
             preserve_offsets: val.preserve_offsets,
             custom_terms: val.custom_terms.into_iter().map(Into::into).collect(),
             custom_patterns: val.custom_patterns.into_iter().map(Into::into).collect(),
+            preserve_terms: val.preserve_terms.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -23112,13 +23246,8 @@ impl From<xberg::text::ner::gline::CustomGlinerSource> for CustomGlinerSource {
 impl From<xberg::text::redaction::TextRedactionOutcome> for TextRedactionOutcome {
     fn from(val: xberg::text::redaction::TextRedactionOutcome) -> Self {
         Self {
-            redacted_text: val.redacted_text.to_string(),
-            rehydration_map: Default::default(),
-            category_counts: val
-                .category_counts
-                .iter()
-                .map(|(k, v)| (k.clone(), *v as i64))
-                .collect(),
+            map: Default::default(),
+            rejection_counts: Default::default(),
         }
     }
 }
@@ -23161,6 +23290,28 @@ impl From<xberg::text::redaction::patterns::PatternMatch> for PatternMatch {
                 .and_then(|s| s.as_str().map(String::from))
                 .unwrap_or_default(),
             text: val.text.to_string(),
+        }
+    }
+}
+
+#[allow(clippy::redundant_closure, clippy::useless_conversion)]
+impl From<SubjectMatch> for xberg::text::redaction::SubjectMatch {
+    fn from(val: SubjectMatch) -> Self {
+        Self {
+            token: val.token,
+            original: val.original,
+            category: val.category,
+        }
+    }
+}
+
+#[allow(clippy::redundant_closure, clippy::useless_conversion)]
+impl From<xberg::text::redaction::SubjectMatch> for SubjectMatch {
+    fn from(val: xberg::text::redaction::SubjectMatch) -> Self {
+        Self {
+            token: val.token.to_string(),
+            original: val.original.to_string(),
+            category: val.category.map(|v| v.to_string()),
         }
     }
 }
@@ -25645,6 +25796,7 @@ impl From<RedactionReport> for xberg::RedactionReport {
         Self {
             findings: val.findings.into_iter().map(Into::into).collect(),
             total_redacted: val.total_redacted,
+            ..Default::default()
         }
     }
 }
@@ -25655,6 +25807,16 @@ impl From<xberg::RedactionReport> for RedactionReport {
         Self {
             findings: val.findings.into_iter().map(Into::into).collect(),
             total_redacted: val.total_redacted,
+        }
+    }
+}
+
+#[allow(clippy::redundant_closure, clippy::useless_conversion)]
+impl From<xberg::redaction::RejectionCount> for RejectionCount {
+    fn from(val: xberg::redaction::RejectionCount) -> Self {
+        Self {
+            reason: val.reason.to_string(),
+            count: val.count,
         }
     }
 }
@@ -27987,9 +28149,8 @@ impl From<PptxAppProperties> for xberg::extraction::office_metadata::app_propert
 impl From<TextRedactionOutcome> for xberg::text::redaction::TextRedactionOutcome {
     fn from(val: TextRedactionOutcome) -> Self {
         Self {
-            redacted_text: val.redacted_text,
-            rehydration_map: Default::default(),
-            category_counts: val.category_counts.into_iter().map(|(k, v)| (k, v as usize)).collect(),
+            map: Default::default(),
+            rejection_counts: Default::default(),
         }
     }
 }
@@ -28169,6 +28330,16 @@ impl From<OcrTableBoundingBox> for xberg::OcrTableBoundingBox {
             top: val.top,
             right: val.right,
             bottom: val.bottom,
+        }
+    }
+}
+
+#[allow(clippy::redundant_closure, clippy::useless_conversion)]
+impl From<RejectionCount> for xberg::redaction::RejectionCount {
+    fn from(val: RejectionCount) -> Self {
+        Self {
+            reason: val.reason,
+            count: val.count,
         }
     }
 }
@@ -29230,7 +29401,11 @@ pub extern "C" fn get_module() -> *mut ::ext_php_rs::zend::ModuleEntry {
             .class::<TextRedactionOutcome>()
             .class::<PatternMatch>()
             .class::<RehydrationMap>()
+            .class::<SubjectMatch>()
             .class::<TokenCounter>()
+            .class::<IbanChecksumValidator>()
+            .class::<LuhnValidator>()
+            .class::<RejectionCounts>()
             .class::<FootnoteConfig>()
             .class::<FootnoteAnchor>()
             .class::<FootnoteDefinition>()
@@ -29320,6 +29495,7 @@ pub extern "C" fn get_module() -> *mut ::ext_php_rs::zend::ModuleEntry {
             .class::<QrCode>()
             .class::<QrBoundingBox>()
             .class::<RedactionReport>()
+            .class::<RejectionCount>()
             .class::<RedactionFinding>()
             .class::<CellChange>()
             .class::<DocumentRevision>()
@@ -29398,6 +29574,7 @@ pub extern "C" fn get_module() -> *mut ::ext_php_rs::zend::ModuleEntry {
             .class::<OcrBackendType>()
             .class::<ProcessingStage>()
             .class::<ReductionLevel>()
+            .class::<ValidationResult>()
             .class::<PdfAnnotationType>()
             .class::<BlockType>()
             .class::<InlineType>()

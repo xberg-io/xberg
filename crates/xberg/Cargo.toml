@@ -342,6 +342,9 @@ doc-store-sqlite = ["api", "xberg-doc-store/sqlite"]
 mcp = ["tower-service", "dep:rmcp", "tokio-runtime"]
 mcp-http = ["mcp", "api"]
 
+# Fork-only: extract-and-fence the /v1/process + rehydrate API surface.
+process-api = ["api", "redaction-rehydrate", "dep:xberg-doc-store"]
+
 otel = ["dep:opentelemetry", "dep:opentelemetry_sdk", "dep:tracing-opentelemetry"]
 
 # no-ort-target: shared base for targets that cannot use ONNX Runtime (Android x86_64 emulator,

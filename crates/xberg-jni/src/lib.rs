@@ -29,12 +29,12 @@ use xberg as core_crate; // bring trait methods into scope
 
 const ERROR_CLASS: &str = "io/xberg/XbergBridgeException";
 use xberg::DocumentExtractor;
-use xberg::Validator;
 use xberg::engine::seams::PresetResolver;
 use xberg::engine::seams::cache::CacheBackend;
 use xberg::engine::seams::model_provider::ModelProvider;
 use xberg::engine::seams::progress::ProgressSink;
 use xberg::text::ner::NerBackend;
+use xberg::text::redaction::EntityValidator;
 fn runtime() -> &'static Runtime {
     static RT: OnceLock<Runtime> = OnceLock::new();
     RT.get_or_init(|| Runtime::new().expect("create tokio runtime"))
@@ -747,6 +747,66 @@ pub unsafe extern "system" fn Java_io_xberg_XbergBridge_nativeDecryptMap(
     }
 }
 #[unsafe(no_mangle)]
+pub unsafe extern "system" fn Java_io_xberg_XbergBridge_nativeFindSubject(
+    mut env: EnvUnowned,
+    _class: JClass,
+    map: jlong,
+    query: JString,
+) -> jstring {
+    // SAFETY: env is a valid EnvUnowned passed by the JVM for this native call frame.
+    let mut __jni_attach_guard = unsafe { jni::AttachGuard::from_unowned(env.as_raw()) };
+    let env = __jni_attach_guard.borrow_env_mut();
+    // SAFETY: map was allocated by the matching constructor shim and
+    // remains valid until the destructor shim is called.
+    let map: &core_crate::RehydrationMap = unsafe { &*(map as *const core_crate::RehydrationMap) };
+    let query = match jstring_to_string(env, query) {
+        Ok(s) => s,
+        Err(e) => {
+            throw_jni_error(env, &format!("{e}"));
+            return std::ptr::null_mut();
+        }
+    };
+    let v = core_crate::text::redaction::find_subject(map, &query);
+    let s = match serde_json::to_string(&v) {
+        Ok(s) => s,
+        Err(e) => {
+            throw_jni_error(env, &format!("serialize: {e}"));
+            return std::ptr::null_mut();
+        }
+    };
+    string_to_jstring(env, &s)
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn Java_io_xberg_XbergBridge_nativeForgetSubject(
+    mut env: EnvUnowned,
+    _class: JClass,
+    map: jlong,
+    query: JString,
+) -> jstring {
+    // SAFETY: env is a valid EnvUnowned passed by the JVM for this native call frame.
+    let mut __jni_attach_guard = unsafe { jni::AttachGuard::from_unowned(env.as_raw()) };
+    let env = __jni_attach_guard.borrow_env_mut();
+    // SAFETY: map was allocated by the matching constructor shim and
+    // remains valid until the destructor shim is called.
+    let map: &core_crate::RehydrationMap = unsafe { &*(map as *const core_crate::RehydrationMap) };
+    let query = match jstring_to_string(env, query) {
+        Ok(s) => s,
+        Err(e) => {
+            throw_jni_error(env, &format!("{e}"));
+            return std::ptr::null_mut();
+        }
+    };
+    let v = core_crate::text::redaction::forget_subject(map, &query);
+    let s = match serde_json::to_string(&v) {
+        Ok(s) => s,
+        Err(e) => {
+            throw_jni_error(env, &format!("serialize: {e}"));
+            return std::ptr::null_mut();
+        }
+    };
+    string_to_jstring(env, &s)
+}
+#[unsafe(no_mangle)]
 pub unsafe extern "system" fn Java_io_xberg_XbergBridge_nativeFindUnmarkedClaims(
     mut env: EnvUnowned,
     _class: JClass,
@@ -1238,75 +1298,6 @@ pub unsafe extern "system" fn Java_io_xberg_XbergBridge_nativeEngineExtractBatch
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_io_xberg_XbergBridge_nativeEngineCacheBackend(
-    mut env: EnvUnowned,
-    _class: JClass,
-    handle: jlong,
-) -> jstring {
-    // SAFETY: env is a valid EnvUnowned passed by the JVM for this native call frame.
-    let mut __jni_attach_guard = unsafe { jni::AttachGuard::from_unowned(env.as_raw()) };
-    let env = __jni_attach_guard.borrow_env_mut();
-    // SAFETY: handle was allocated by the matching constructor shim and remains
-    // valid until nativeFree is called. The Kotlin AutoCloseable.close() guarantee
-    // ensures the handle outlives this call.
-    let client: &core_crate::Engine = unsafe { &*(handle as *const core_crate::Engine) };
-    let v = client.cache_backend();
-    let s = match serde_json::to_string(&v) {
-        Ok(s) => s,
-        Err(e) => {
-            throw_jni_error(env, &format!("serialize: {e}"));
-            return std::ptr::null_mut();
-        }
-    };
-    string_to_jstring(env, &s)
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_io_xberg_XbergBridge_nativeEngineProgressSink(
-    mut env: EnvUnowned,
-    _class: JClass,
-    handle: jlong,
-) -> jstring {
-    // SAFETY: env is a valid EnvUnowned passed by the JVM for this native call frame.
-    let mut __jni_attach_guard = unsafe { jni::AttachGuard::from_unowned(env.as_raw()) };
-    let env = __jni_attach_guard.borrow_env_mut();
-    // SAFETY: handle was allocated by the matching constructor shim and remains
-    // valid until nativeFree is called. The Kotlin AutoCloseable.close() guarantee
-    // ensures the handle outlives this call.
-    let client: &core_crate::Engine = unsafe { &*(handle as *const core_crate::Engine) };
-    let v = client.progress_sink();
-    let s = match serde_json::to_string(&v) {
-        Ok(s) => s,
-        Err(e) => {
-            throw_jni_error(env, &format!("serialize: {e}"));
-            return std::ptr::null_mut();
-        }
-    };
-    string_to_jstring(env, &s)
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_io_xberg_XbergBridge_nativeEngineModelProvider(
-    mut env: EnvUnowned,
-    _class: JClass,
-    handle: jlong,
-) -> jstring {
-    // SAFETY: env is a valid EnvUnowned passed by the JVM for this native call frame.
-    let mut __jni_attach_guard = unsafe { jni::AttachGuard::from_unowned(env.as_raw()) };
-    let env = __jni_attach_guard.borrow_env_mut();
-    // SAFETY: handle was allocated by the matching constructor shim and remains
-    // valid until nativeFree is called. The Kotlin AutoCloseable.close() guarantee
-    // ensures the handle outlives this call.
-    let client: &core_crate::Engine = unsafe { &*(handle as *const core_crate::Engine) };
-    let v = client.model_provider();
-    let s = match serde_json::to_string(&v) {
-        Ok(s) => s,
-        Err(e) => {
-            throw_jni_error(env, &format!("serialize: {e}"));
-            return std::ptr::null_mut();
-        }
-    };
-    string_to_jstring(env, &s)
-}
-#[unsafe(no_mangle)]
 pub unsafe extern "system" fn Java_io_xberg_XbergBridge_nativeFreeEngine(
     _env: EnvUnowned,
     _class: JClass,
@@ -1320,99 +1311,6 @@ pub unsafe extern "system" fn Java_io_xberg_XbergBridge_nativeFreeEngine(
     unsafe {
         let _ = Box::from_raw(handle as *mut core_crate::Engine);
     }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_io_xberg_XbergBridge_nativeEngineBuilderWithCacheBackend(
-    mut env: EnvUnowned,
-    _class: JClass,
-    handle: jlong,
-    request_json: JString,
-) -> jlong {
-    // SAFETY: env is a valid EnvUnowned passed by the JVM for this native call frame.
-    let mut __jni_attach_guard = unsafe { jni::AttachGuard::from_unowned(env.as_raw()) };
-    let env = __jni_attach_guard.borrow_env_mut();
-    // SAFETY: handle was allocated by the matching constructor shim and remains
-    // valid until nativeFree is called. The Kotlin AutoCloseable.close() guarantee
-    // ensures the handle outlives this call.
-    let client: core_crate::EngineBuilder = unsafe { (*(handle as *const core_crate::EngineBuilder)).clone() };
-    let req_str = match jstring_to_string(env, request_json) {
-        Ok(s) => s,
-        Err(e) => {
-            throw_jni_error(env, &format!("{e}"));
-            return 0;
-        }
-    };
-    let cache: core_crate::CacheBackend = match serde_json::from_str(&req_str) {
-        Ok(v) => v,
-        Err(e) => {
-            throw_jni_error(env, &format!("request deserialize: {e}"));
-            return 0;
-        }
-    };
-    let v = client.with_cache_backend(cache);
-    Box::into_raw(Box::new(v)) as jlong
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_io_xberg_XbergBridge_nativeEngineBuilderWithProgressSink(
-    mut env: EnvUnowned,
-    _class: JClass,
-    handle: jlong,
-    request_json: JString,
-) -> jlong {
-    // SAFETY: env is a valid EnvUnowned passed by the JVM for this native call frame.
-    let mut __jni_attach_guard = unsafe { jni::AttachGuard::from_unowned(env.as_raw()) };
-    let env = __jni_attach_guard.borrow_env_mut();
-    // SAFETY: handle was allocated by the matching constructor shim and remains
-    // valid until nativeFree is called. The Kotlin AutoCloseable.close() guarantee
-    // ensures the handle outlives this call.
-    let client: core_crate::EngineBuilder = unsafe { (*(handle as *const core_crate::EngineBuilder)).clone() };
-    let req_str = match jstring_to_string(env, request_json) {
-        Ok(s) => s,
-        Err(e) => {
-            throw_jni_error(env, &format!("{e}"));
-            return 0;
-        }
-    };
-    let progress: core_crate::ProgressSink = match serde_json::from_str(&req_str) {
-        Ok(v) => v,
-        Err(e) => {
-            throw_jni_error(env, &format!("request deserialize: {e}"));
-            return 0;
-        }
-    };
-    let v = client.with_progress_sink(progress);
-    Box::into_raw(Box::new(v)) as jlong
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_io_xberg_XbergBridge_nativeEngineBuilderWithModelProvider(
-    mut env: EnvUnowned,
-    _class: JClass,
-    handle: jlong,
-    request_json: JString,
-) -> jlong {
-    // SAFETY: env is a valid EnvUnowned passed by the JVM for this native call frame.
-    let mut __jni_attach_guard = unsafe { jni::AttachGuard::from_unowned(env.as_raw()) };
-    let env = __jni_attach_guard.borrow_env_mut();
-    // SAFETY: handle was allocated by the matching constructor shim and remains
-    // valid until nativeFree is called. The Kotlin AutoCloseable.close() guarantee
-    // ensures the handle outlives this call.
-    let client: core_crate::EngineBuilder = unsafe { (*(handle as *const core_crate::EngineBuilder)).clone() };
-    let req_str = match jstring_to_string(env, request_json) {
-        Ok(s) => s,
-        Err(e) => {
-            throw_jni_error(env, &format!("{e}"));
-            return 0;
-        }
-    };
-    let provider: core_crate::ModelProvider = match serde_json::from_str(&req_str) {
-        Ok(v) => v,
-        Err(e) => {
-            throw_jni_error(env, &format!("request deserialize: {e}"));
-            return 0;
-        }
-    };
-    let v = client.with_model_provider(provider);
-    Box::into_raw(Box::new(v)) as jlong
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn Java_io_xberg_XbergBridge_nativeEngineBuilderBuild(
@@ -1526,6 +1424,178 @@ pub unsafe extern "system" fn Java_io_xberg_XbergBridge_nativeFreeCandleBackend(
     // ownership is transferred back here for drop via Box::from_raw.
     unsafe {
         let _ = Box::from_raw(handle as *mut core_crate::CandleBackend);
+    }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn Java_io_xberg_XbergBridge_nativeIbanChecksumValidatorLabel(
+    mut env: EnvUnowned,
+    _class: JClass,
+    handle: jlong,
+) -> jstring {
+    // SAFETY: env is a valid EnvUnowned passed by the JVM for this native call frame.
+    let mut __jni_attach_guard = unsafe { jni::AttachGuard::from_unowned(env.as_raw()) };
+    let env = __jni_attach_guard.borrow_env_mut();
+    // SAFETY: handle was allocated by the matching constructor shim and remains
+    // valid until nativeFree is called. The Kotlin AutoCloseable.close() guarantee
+    // ensures the handle outlives this call.
+    let client: &core_crate::IbanChecksumValidator = unsafe { &*(handle as *const core_crate::IbanChecksumValidator) };
+    let v = client.label();
+    string_to_jstring(env, v)
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn Java_io_xberg_XbergBridge_nativeIbanChecksumValidatorValidate(
+    mut env: EnvUnowned,
+    _class: JClass,
+    handle: jlong,
+    request_json: JString,
+) -> jstring {
+    // SAFETY: env is a valid EnvUnowned passed by the JVM for this native call frame.
+    let mut __jni_attach_guard = unsafe { jni::AttachGuard::from_unowned(env.as_raw()) };
+    let env = __jni_attach_guard.borrow_env_mut();
+    // SAFETY: handle was allocated by the matching constructor shim and remains
+    // valid until nativeFree is called. The Kotlin AutoCloseable.close() guarantee
+    // ensures the handle outlives this call.
+    let client: &core_crate::IbanChecksumValidator = unsafe { &*(handle as *const core_crate::IbanChecksumValidator) };
+    let req_str = match jstring_to_string(env, request_json) {
+        Ok(s) => s,
+        Err(e) => {
+            throw_jni_error(env, &format!("invalid request_json: {e}"));
+            return std::ptr::null_mut();
+        }
+    };
+    let req_map: serde_json::Map<String, serde_json::Value> = match serde_json::from_str(&req_str) {
+        Ok(m) => m,
+        Err(e) => {
+            throw_jni_error(env, &format!("param deserialize: {e}"));
+            return std::ptr::null_mut();
+        }
+    };
+    let entity: core_crate::PatternMatch = match req_map
+        .get("entity")
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+    {
+        Some(v) => v,
+        None => {
+            throw_jni_error(env, "missing param: entity");
+            return std::ptr::null_mut();
+        }
+    };
+    let _ctx: String = match req_map.get("_ctx").and_then(|v| serde_json::from_value(v.clone()).ok()) {
+        Some(v) => v,
+        None => {
+            throw_jni_error(env, "missing param: _ctx");
+            return std::ptr::null_mut();
+        }
+    };
+    let v = client.validate(&entity, &_ctx);
+    let s = match serde_json::to_string(&v) {
+        Ok(s) => s,
+        Err(e) => {
+            throw_jni_error(env, &format!("serialize: {e}"));
+            return std::ptr::null_mut();
+        }
+    };
+    string_to_jstring(env, &s)
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn Java_io_xberg_XbergBridge_nativeFreeIbanChecksumValidator(
+    _env: EnvUnowned,
+    _class: JClass,
+    handle: jlong,
+) {
+    if handle == 0 {
+        return;
+    }
+    // SAFETY: `handle` was allocated by the matching constructor shim and
+    // ownership is transferred back here for drop via Box::from_raw.
+    unsafe {
+        let _ = Box::from_raw(handle as *mut core_crate::IbanChecksumValidator);
+    }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn Java_io_xberg_XbergBridge_nativeLuhnValidatorLabel(
+    mut env: EnvUnowned,
+    _class: JClass,
+    handle: jlong,
+) -> jstring {
+    // SAFETY: env is a valid EnvUnowned passed by the JVM for this native call frame.
+    let mut __jni_attach_guard = unsafe { jni::AttachGuard::from_unowned(env.as_raw()) };
+    let env = __jni_attach_guard.borrow_env_mut();
+    // SAFETY: handle was allocated by the matching constructor shim and remains
+    // valid until nativeFree is called. The Kotlin AutoCloseable.close() guarantee
+    // ensures the handle outlives this call.
+    let client: &core_crate::LuhnValidator = unsafe { &*(handle as *const core_crate::LuhnValidator) };
+    let v = client.label();
+    string_to_jstring(env, v)
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn Java_io_xberg_XbergBridge_nativeLuhnValidatorValidate(
+    mut env: EnvUnowned,
+    _class: JClass,
+    handle: jlong,
+    request_json: JString,
+) -> jstring {
+    // SAFETY: env is a valid EnvUnowned passed by the JVM for this native call frame.
+    let mut __jni_attach_guard = unsafe { jni::AttachGuard::from_unowned(env.as_raw()) };
+    let env = __jni_attach_guard.borrow_env_mut();
+    // SAFETY: handle was allocated by the matching constructor shim and remains
+    // valid until nativeFree is called. The Kotlin AutoCloseable.close() guarantee
+    // ensures the handle outlives this call.
+    let client: &core_crate::LuhnValidator = unsafe { &*(handle as *const core_crate::LuhnValidator) };
+    let req_str = match jstring_to_string(env, request_json) {
+        Ok(s) => s,
+        Err(e) => {
+            throw_jni_error(env, &format!("invalid request_json: {e}"));
+            return std::ptr::null_mut();
+        }
+    };
+    let req_map: serde_json::Map<String, serde_json::Value> = match serde_json::from_str(&req_str) {
+        Ok(m) => m,
+        Err(e) => {
+            throw_jni_error(env, &format!("param deserialize: {e}"));
+            return std::ptr::null_mut();
+        }
+    };
+    let entity: core_crate::PatternMatch = match req_map
+        .get("entity")
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+    {
+        Some(v) => v,
+        None => {
+            throw_jni_error(env, "missing param: entity");
+            return std::ptr::null_mut();
+        }
+    };
+    let _ctx: String = match req_map.get("_ctx").and_then(|v| serde_json::from_value(v.clone()).ok()) {
+        Some(v) => v,
+        None => {
+            throw_jni_error(env, "missing param: _ctx");
+            return std::ptr::null_mut();
+        }
+    };
+    let v = client.validate(&entity, &_ctx);
+    let s = match serde_json::to_string(&v) {
+        Ok(s) => s,
+        Err(e) => {
+            throw_jni_error(env, &format!("serialize: {e}"));
+            return std::ptr::null_mut();
+        }
+    };
+    string_to_jstring(env, &s)
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn Java_io_xberg_XbergBridge_nativeFreeLuhnValidator(
+    _env: EnvUnowned,
+    _class: JClass,
+    handle: jlong,
+) {
+    if handle == 0 {
+        return;
+    }
+    // SAFETY: `handle` was allocated by the matching constructor shim and
+    // ownership is transferred back here for drop via Box::from_raw.
+    unsafe {
+        let _ = Box::from_raw(handle as *mut core_crate::LuhnValidator);
     }
 }
 #[unsafe(no_mangle)]

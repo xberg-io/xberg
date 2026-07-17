@@ -311,6 +311,8 @@ packages/go/.lib/
 .bench-rc32/
 build-output-musl-node/
 
+.gitnexus
+
 # BEGIN ai-rulez (DO NOT EDIT - managed by ai-rulez)
 .agents/
 .ai-rulez/.generated-manifest.json
@@ -320,7 +322,6 @@ build-output-musl-node/
 .github/copilot-instructions.md
 .github/skills/
 # END ai-rulez
-.gitnexus
 
 # onnxruntime-web runtime files copied by packages/xberg-web-ui/scripts/copy-ort-dist.mjs
 packages/xberg-web-ui/public/ort/

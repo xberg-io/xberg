@@ -53,12 +53,12 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use xberg::DocumentExtractor;
-use xberg::Validator;
 use xberg::engine::seams::PresetResolver;
 use xberg::engine::seams::cache::CacheBackend;
 use xberg::engine::seams::model_provider::ModelProvider;
 use xberg::engine::seams::progress::ProgressSink;
 use xberg::text::ner::NerBackend;
+use xberg::text::redaction::EntityValidator;
 
 static WORKER_POOL: std::sync::LazyLock<tokio::runtime::Runtime> = std::sync::LazyLock::new(|| {
     // 16 MB worker stack: a deep consumer future (e.g. a multi-stage OCR pipeline) overflows the
@@ -1979,6 +1979,19 @@ pub struct JsRedactionConfig {
     #[napi(js_name = "customPatterns")]
     #[serde(rename = "customPatterns")]
     pub custom_patterns: Option<Vec<JsRedactionPattern>>,
+    /// Literal terms that must never be redacted, even if the pattern engine
+    /// or NER backend would otherwise flag them.
+    ///
+    /// Use this for known-public entities that a NER model mistakes for PII
+    /// (e.g. "Supreme Court", the caller's own organization name) — an
+    /// allowlist counterpart to `custom_terms`, which
+    /// is a forcelist. A term matches by exact value (respecting
+    /// `case_sensitive`), not by category — it suppresses that literal
+    /// string across every category, since a false positive doesn't know
+    /// its own category was wrong.
+    #[napi(js_name = "preserveTerms")]
+    #[serde(rename = "preserveTerms")]
+    pub preserve_terms: Option<Vec<JsRedactionTerm>>,
 }
 
 #[napi(js_name = "redactionConfigDefault")]
@@ -2686,24 +2699,6 @@ impl JsEngine {
         Ok(result.into())
     }
 
-    /// The injected `CacheBackend` seam (default: `NoopCache`).
-    #[napi(js_name = "cacheBackend")]
-    pub fn cache_backend(&self) -> JsVisitorRef {
-        self.inner.cache_backend().clone().into()
-    }
-
-    /// The injected `ProgressSink` seam (default: `NoopProgressSink`).
-    #[napi(js_name = "progressSink")]
-    pub fn progress_sink(&self) -> JsVisitorRef {
-        self.inner.progress_sink().clone().into()
-    }
-
-    /// The injected `ModelProvider` seam (default: `DefaultModelProvider`).
-    #[napi(js_name = "modelProvider")]
-    pub fn model_provider(&self) -> JsVisitorRef {
-        self.inner.model_provider().clone().into()
-    }
-
     /// Start building an `Engine`.
     #[napi]
     pub fn builder() -> JsEngineBuilder {
@@ -2734,33 +2729,6 @@ pub struct JsEngineBuilder {
 
 #[napi]
 impl JsEngineBuilder {
-    /// Inject a `CacheBackend`, overriding the `NoopCache` default.
-    #[napi(js_name = "withCacheBackend")]
-    pub fn with_cache_backend(&self, cache: JsVisitorRef) -> JsEngineBuilder {
-        let _ = cache;
-        compile_error!(
-            "alef cannot auto-delegate `EngineBuilder.with_cache_backend`; configure an adapter body or add this item to the backend exclude list"
-        )
-    }
-
-    /// Inject a `ProgressSink`, overriding the `NoopProgressSink` default.
-    #[napi(js_name = "withProgressSink")]
-    pub fn with_progress_sink(&self, progress: JsVisitorRef) -> JsEngineBuilder {
-        let _ = progress;
-        compile_error!(
-            "alef cannot auto-delegate `EngineBuilder.with_progress_sink`; configure an adapter body or add this item to the backend exclude list"
-        )
-    }
-
-    /// Inject a `ModelProvider`, overriding the `DefaultModelProvider` default.
-    #[napi(js_name = "withModelProvider")]
-    pub fn with_model_provider(&self, provider: JsVisitorRef) -> JsEngineBuilder {
-        let _ = provider;
-        compile_error!(
-            "alef cannot auto-delegate `EngineBuilder.with_model_provider`; configure an adapter body or add this item to the backend exclude list"
-        )
-    }
-
     /// Finalize the builder into an `Engine`, filling every unset seam with
     /// its in-core default.
     #[napi]
@@ -3179,23 +3147,29 @@ pub struct JsCustomGlinerSource {
     pub architecture: JsGlinerArchitecture,
 }
 
-/// Outcome of `redact_text_capturing_rehydration_map`: the redacted text,
-/// its rehydration map, and per-category finding counts. Counts only — the
-/// matched PII text itself is never included here, per the redaction
-/// pipeline's logging rule.
+/// Outcome of `redact_capturing_rehydration_map`: the token → original-text
+/// rehydration map plus a count of PII candidates the post-detection
+/// validators rejected (e.g. failed-checksum IBANs, failed-Luhn card
+/// numbers), keyed by rejection reason.
+///
+/// `rejection_counts` here is the same audit-only count also written to
+/// `result.redaction_report.rejection_counts` — repeated here as a
+/// Rust-native `RejectionCounts` map so callers of this richer API don't have
+/// to reconstruct it from the FFI-friendly `Vec<RejectionCount>` shape used
+/// on `RedactionReport`. Rejected candidates never
+/// appear in `map` or in `findings` — validators ran before either was
+/// populated, so they were never treated as PII in the first place.
 #[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 #[napi(object, js_name = "TextRedactionOutcome")]
 pub struct JsTextRedactionOutcome {
-    #[napi(js_name = "redactedText")]
-    #[serde(rename = "redactedText")]
-    pub redacted_text: Option<String>,
-    #[napi(js_name = "rehydrationMap")]
-    #[serde(rename = "rehydrationMap")]
+    /// Token → original PII text, populated for `TokenReplace` strategy hits.
     #[serde(skip)]
-    pub rehydration_map: Option<napi::bindgen_prelude::Object<'static>>,
-    #[napi(js_name = "categoryCounts")]
-    #[serde(rename = "categoryCounts")]
-    pub category_counts: Option<HashMap<String, i64>>,
+    pub map: Option<napi::bindgen_prelude::Object<'static>>,
+    /// Post-detection validator rejection counts, keyed by reason.
+    #[napi(js_name = "rejectionCounts")]
+    #[serde(rename = "rejectionCounts")]
+    #[serde(skip)]
+    pub rejection_counts: Option<napi::bindgen_prelude::Object<'static>>,
 }
 
 /// One detected PII span in the input text.
@@ -3222,6 +3196,18 @@ pub struct JsRehydrationMap {
 
 #[napi]
 impl JsRehydrationMap {}
+
+/// One vault match — either direction of lookup.
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+#[napi(object, js_name = "SubjectMatch")]
+pub struct JsSubjectMatch {
+    pub token: String,
+    pub original: String,
+    /// Category parsed from the token's bracket contents (e.g. `"EMAIL"`
+    /// from `"[EMAIL_1]"`), or `None` if the token doesn't follow the
+    /// `"[CATEGORY_N]"` convention.
+    pub category: Option<String>,
+}
 
 /// Per-category running counter for `RedactionStrategy.TokenReplace`.
 #[derive(Clone)]
@@ -3256,6 +3242,62 @@ impl Default for JsTokenCounter {
         Self::new()
     }
 }
+
+/// Validates IBAN candidates against the ISO 13616 mod-97 checksum.
+#[derive(Clone)]
+#[napi(js_name = "IbanChecksumValidator")]
+pub struct JsIbanChecksumValidator {
+    inner: Arc<xberg::text::redaction::validators::iban::IbanChecksumValidator>,
+}
+
+#[napi]
+impl JsIbanChecksumValidator {
+    #[napi]
+    pub fn label(&self) -> String {
+        self.inner.label().into()
+    }
+
+    #[napi]
+    pub fn validate(&self, entity: JsPatternMatch, _ctx: String) -> JsValidationResult {
+        let _ = (entity, _ctx);
+        compile_error!(
+            "alef cannot auto-delegate `IbanChecksumValidator.validate`; configure an adapter body or add this item to the backend exclude list"
+        )
+    }
+}
+
+/// Validates credit-card-shaped candidates against the Luhn mod-10 checksum.
+#[derive(Clone)]
+#[napi(js_name = "LuhnValidator")]
+pub struct JsLuhnValidator {
+    inner: Arc<xberg::text::redaction::validators::luhn::LuhnValidator>,
+}
+
+#[napi]
+impl JsLuhnValidator {
+    #[napi]
+    pub fn label(&self) -> String {
+        self.inner.label().into()
+    }
+
+    #[napi]
+    pub fn validate(&self, entity: JsPatternMatch, _ctx: String) -> JsValidationResult {
+        let _ = (entity, _ctx);
+        compile_error!(
+            "alef cannot auto-delegate `LuhnValidator.validate`; configure an adapter body or add this item to the backend exclude list"
+        )
+    }
+}
+
+/// Counter for rejections, keyed by validator reason string.
+#[derive(Clone)]
+#[napi(js_name = "RejectionCounts")]
+pub struct JsRejectionCounts {
+    inner: Arc<xberg::text::redaction::RejectionCounts>,
+}
+
+#[napi]
+impl JsRejectionCounts {}
 
 /// Configuration for markdown footnote and citation parsing.
 #[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
@@ -5779,11 +5821,24 @@ pub struct JsQrBoundingBox {
 #[napi(object, js_name = "RedactionReport")]
 pub struct JsRedactionReport {
     /// Individual redaction findings in original-source byte order.
-    pub findings: Vec<JsRedactionFinding>,
+    pub findings: Option<Vec<JsRedactionFinding>>,
     /// Total number of redactions applied across the document.
     #[napi(js_name = "totalRedacted")]
     #[serde(rename = "totalRedacted")]
-    pub total_redacted: u32,
+    pub total_redacted: Option<u32>,
+}
+
+/// One rejection-reason tally emitted by the redaction engine's
+/// post-detection validators (see
+/// `EntityValidator`).
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+#[napi(object, js_name = "RejectionCount")]
+pub struct JsRejectionCount {
+    /// Static reason identifier reported by the validator (e.g.
+    /// `"iban_checksum_failed"`). Never contains the underlying PII text.
+    pub reason: String,
+    /// Number of candidates rejected for this reason.
+    pub count: u32,
 }
 
 /// One redaction event: which span was rewritten, why, and with what.
@@ -8246,6 +8301,24 @@ impl Default for JsReductionLevel {
     }
 }
 
+/// Outcome of a single validator on a single candidate match.
+#[napi(string_enum, js_name = "ValidationResult")]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub enum JsValidationResult {
+    /// Pass-through, no change.
+    Accept,
+    /// Drop the candidate. `reason` is a static identifier used as a
+    /// `RejectionCounts` key (e.g. `"iban_checksum_failed"`).
+    Reject,
+}
+
+#[allow(clippy::derivable_impls)]
+impl Default for JsValidationResult {
+    fn default() -> Self {
+        Self::Accept
+    }
+}
+
 /// Type of PDF annotation.
 #[napi(string_enum = "snake_case", js_name = "PdfAnnotationType")]
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -9882,6 +9955,33 @@ pub fn decrypt_map(blob: napi::bindgen_prelude::Buffer, passphrase: String) -> R
     xberg::text::redaction::decrypt_map(&blob, &passphrase)
         .map(|val| JsRehydrationMap { inner: Arc::new(val) })
         .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))
+}
+
+/// Search a decrypted map for `query`, matching either the token or the
+/// original value (case-insensitive substring match on `original`; exact
+/// match on `token`, since tokens are structured like `"[EMAIL_1]"`).
+///
+/// Results are sorted by token for deterministic output.
+#[napi(js_name = "findSubject")]
+pub fn find_subject(map: &JsRehydrationMap, query: String) -> Vec<JsSubjectMatch> {
+    xberg::text::redaction::find_subject(map.inner.as_ref(), &query)
+        .into_iter()
+        .map(Into::into)
+        .collect()
+}
+
+/// Remove every mapping whose token or original value matches `query`.
+/// Returns the removed entries (the caller re-encrypts and persists the
+/// resulting map — this function does not touch disk).
+///
+/// Idempotent: calling this again with the same `query` after the matching
+/// entries have already been removed returns an empty `Vec`.
+#[napi(js_name = "forgetSubject")]
+pub fn forget_subject(map: &JsRehydrationMap, query: String) -> Vec<JsSubjectMatch> {
+    xberg::text::redaction::forget_subject(map.inner.as_ref(), &query)
+        .into_iter()
+        .map(Into::into)
+        .collect()
 }
 
 #[cfg(feature = "markdown-footnotes")]
@@ -13703,6 +13803,9 @@ impl From<JsRedactionConfig> for xberg::RedactionConfig {
         if let Some(__v) = val.custom_patterns {
             __result.custom_patterns = __v.into_iter().map(Into::into).collect();
         }
+        if let Some(__v) = val.preserve_terms {
+            __result.preserve_terms = __v.into_iter().map(Into::into).collect();
+        }
         __result
     }
 }
@@ -13717,6 +13820,7 @@ impl From<xberg::RedactionConfig> for JsRedactionConfig {
             preserve_offsets: Some(val.preserve_offsets),
             custom_terms: Some(val.custom_terms.into_iter().map(Into::into).collect()),
             custom_patterns: Some(val.custom_patterns.into_iter().map(Into::into).collect()),
+            preserve_terms: Some(val.preserve_terms.into_iter().map(Into::into).collect()),
         }
     }
 }
@@ -14476,14 +14580,8 @@ impl From<xberg::text::ner::gline::CustomGlinerSource> for JsCustomGlinerSource 
 impl From<xberg::text::redaction::TextRedactionOutcome> for JsTextRedactionOutcome {
     fn from(val: xberg::text::redaction::TextRedactionOutcome) -> Self {
         Self {
-            redacted_text: Some(val.redacted_text.to_string()),
-            rehydration_map: Default::default(),
-            category_counts: Some(
-                val.category_counts
-                    .iter()
-                    .map(|(k, v)| (k.clone(), *v as i64))
-                    .collect(),
-            ),
+            map: Default::default(),
+            rejection_counts: Default::default(),
         }
     }
 }
@@ -14508,6 +14606,28 @@ impl From<xberg::text::redaction::patterns::PatternMatch> for JsPatternMatch {
             end: val.end as i64,
             category: val.category.into(),
             text: val.text.to_string(),
+        }
+    }
+}
+
+#[allow(clippy::redundant_closure, clippy::useless_conversion)]
+impl From<JsSubjectMatch> for xberg::text::redaction::SubjectMatch {
+    fn from(val: JsSubjectMatch) -> Self {
+        Self {
+            token: val.token,
+            original: val.original,
+            category: val.category,
+        }
+    }
+}
+
+#[allow(clippy::redundant_closure, clippy::useless_conversion)]
+impl From<xberg::text::redaction::SubjectMatch> for JsSubjectMatch {
+    fn from(val: xberg::text::redaction::SubjectMatch) -> Self {
+        Self {
+            token: val.token.to_string(),
+            original: val.original.to_string(),
+            category: val.category.map(|v| v.to_string()),
         }
     }
 }
@@ -17020,13 +17140,19 @@ impl From<xberg::QrBoundingBox> for JsQrBoundingBox {
     }
 }
 
+#[allow(clippy::needless_update)]
+#[allow(clippy::field_reassign_with_default, clippy::let_and_return)]
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<JsRedactionReport> for xberg::RedactionReport {
     fn from(val: JsRedactionReport) -> Self {
-        Self {
-            findings: val.findings.into_iter().map(Into::into).collect(),
-            total_redacted: val.total_redacted,
+        let mut __result = xberg::RedactionReport::default();
+        if let Some(__v) = val.findings {
+            __result.findings = __v.into_iter().map(Into::into).collect();
         }
+        if let Some(__v) = val.total_redacted {
+            __result.total_redacted = __v;
+        }
+        __result
     }
 }
 
@@ -17034,8 +17160,18 @@ impl From<JsRedactionReport> for xberg::RedactionReport {
 impl From<xberg::RedactionReport> for JsRedactionReport {
     fn from(val: xberg::RedactionReport) -> Self {
         Self {
-            findings: val.findings.into_iter().map(Into::into).collect(),
-            total_redacted: val.total_redacted,
+            findings: Some(val.findings.into_iter().map(Into::into).collect()),
+            total_redacted: Some(val.total_redacted),
+        }
+    }
+}
+
+#[allow(clippy::redundant_closure, clippy::useless_conversion)]
+impl From<xberg::redaction::RejectionCount> for JsRejectionCount {
+    fn from(val: xberg::redaction::RejectionCount) -> Self {
+        Self {
+            reason: val.reason.to_string(),
+            count: val.count,
         }
     }
 }
@@ -18933,6 +19069,26 @@ impl From<xberg::ReductionLevel> for JsReductionLevel {
             xberg::ReductionLevel::Moderate => Self::Moderate,
             xberg::ReductionLevel::Aggressive => Self::Aggressive,
             xberg::ReductionLevel::Maximum => Self::Maximum,
+        }
+    }
+}
+
+impl From<JsValidationResult> for xberg::text::redaction::ValidationResult {
+    fn from(val: JsValidationResult) -> Self {
+        match val {
+            JsValidationResult::Accept => Self::Accept,
+            JsValidationResult::Reject => Self::Reject {
+                reason: Default::default(),
+            },
+        }
+    }
+}
+
+impl From<xberg::text::redaction::ValidationResult> for JsValidationResult {
+    fn from(val: xberg::text::redaction::ValidationResult) -> Self {
+        match val {
+            xberg::text::redaction::ValidationResult::Accept => Self::Accept,
+            xberg::text::redaction::ValidationResult::Reject { .. } => Self::Reject,
         }
     }
 }
@@ -21523,14 +21679,11 @@ impl From<JsPptxAppProperties> for xberg::extraction::office_metadata::app_prope
 impl From<JsTextRedactionOutcome> for xberg::text::redaction::TextRedactionOutcome {
     fn from(val: JsTextRedactionOutcome) -> Self {
         let mut __result = xberg::text::redaction::TextRedactionOutcome::default();
-        if let Some(__v) = val.redacted_text {
-            __result.redacted_text = __v;
+        if let Some(__v) = val.map {
+            __result.map = Default::default();
         }
-        if let Some(__v) = val.rehydration_map {
-            __result.rehydration_map = Default::default();
-        }
-        if let Some(__v) = val.category_counts {
-            __result.category_counts = __v.into_iter().map(|(k, v)| (k, v as usize)).collect();
+        if let Some(__v) = val.rejection_counts {
+            __result.rejection_counts = Default::default();
         }
         __result
     }
@@ -21720,6 +21873,16 @@ impl From<JsOcrTableBoundingBox> for xberg::OcrTableBoundingBox {
             top: val.top,
             right: val.right,
             bottom: val.bottom,
+        }
+    }
+}
+
+#[allow(clippy::redundant_closure, clippy::useless_conversion)]
+impl From<JsRejectionCount> for xberg::redaction::RejectionCount {
+    fn from(val: JsRejectionCount) -> Self {
+        Self {
+            reason: val.reason,
+            count: val.count,
         }
     }
 }

@@ -4,8 +4,6 @@
 package io.xberg;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.Arena;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Builder for Engine.
@@ -24,90 +22,6 @@ public class EngineBuilder implements AutoCloseable {
 
     MemorySegment handle() {
         return this.handle;
-    }
-    /**
-     * Inject a CacheBackend, overriding the NoopCache default.
-     */
-    public EngineBuilder withCacheBackend(final CacheBackend cache) throws XbergRsException {
-        java.util.Objects.requireNonNull(cache, "cache must not be null");
-        try (Arena arena = Arena.ofShared()) {
-            String cCacheJson = STREAM_MAPPER.writeValueAsString(cache);
-            var cCacheJsonSeg = arena.allocateFrom(cCacheJson);
-            MemorySegment cCache = (MemorySegment) NativeLib.XBERG_CACHE_BACKEND_FROM_JSON.invoke(cCacheJsonSeg);
-            if (cCache.equals(MemorySegment.NULL)) { checkLastFfiError(); throw new XbergRsException("withCacheBackend: failed to marshal cache", (Throwable) null); }
-            // CPD-OFF — FFI opaque-handle return, no JSON deserialization needed.
-            // The returned pointer is owned by the new wrapper, which frees it in
-            // close(); freeing it here would leave the wrapper holding a dangling
-            // handle (use-after-free on the next native call).
-            MemorySegment resultPtr = (MemorySegment) NativeLib.XBERG_ENGINE_BUILDER_WITH_CACHE_BACKEND.invoke(this.handle, cCache);
-            if (!cCache.equals(MemorySegment.NULL)) { try { NativeLib.XBERG_CACHE_BACKEND_FREE.invoke(cCache); } catch (Throwable ignore) {} }
-            if (resultPtr.equals(MemorySegment.NULL)) {
-                checkLastFfiError();
-                return null;
-            }
-            return new EngineBuilder(resultPtr);
-            // CPD-ON
-        } catch (XbergRsException ex) {
-            throw ex;
-        } catch (Throwable e) {
-            throw new XbergRsException("withCacheBackend: failed", e);
-        }
-    }
-    /**
-     * Inject a ProgressSink, overriding the NoopProgressSink default.
-     */
-    public EngineBuilder withProgressSink(final ProgressSink progress) throws XbergRsException {
-        java.util.Objects.requireNonNull(progress, "progress must not be null");
-        try (Arena arena = Arena.ofShared()) {
-            String cProgressJson = STREAM_MAPPER.writeValueAsString(progress);
-            var cProgressJsonSeg = arena.allocateFrom(cProgressJson);
-            MemorySegment cProgress = (MemorySegment) NativeLib.XBERG_PROGRESS_SINK_FROM_JSON.invoke(cProgressJsonSeg);
-            if (cProgress.equals(MemorySegment.NULL)) { checkLastFfiError(); throw new XbergRsException("withProgressSink: failed to marshal progress", (Throwable) null); }
-            // CPD-OFF — FFI opaque-handle return, no JSON deserialization needed.
-            // The returned pointer is owned by the new wrapper, which frees it in
-            // close(); freeing it here would leave the wrapper holding a dangling
-            // handle (use-after-free on the next native call).
-            MemorySegment resultPtr = (MemorySegment) NativeLib.XBERG_ENGINE_BUILDER_WITH_PROGRESS_SINK.invoke(this.handle, cProgress);
-            if (!cProgress.equals(MemorySegment.NULL)) { try { NativeLib.XBERG_PROGRESS_SINK_FREE.invoke(cProgress); } catch (Throwable ignore) {} }
-            if (resultPtr.equals(MemorySegment.NULL)) {
-                checkLastFfiError();
-                return null;
-            }
-            return new EngineBuilder(resultPtr);
-            // CPD-ON
-        } catch (XbergRsException ex) {
-            throw ex;
-        } catch (Throwable e) {
-            throw new XbergRsException("withProgressSink: failed", e);
-        }
-    }
-    /**
-     * Inject a ModelProvider, overriding the DefaultModelProvider default.
-     */
-    public EngineBuilder withModelProvider(final ModelProvider provider) throws XbergRsException {
-        java.util.Objects.requireNonNull(provider, "provider must not be null");
-        try (Arena arena = Arena.ofShared()) {
-            String cProviderJson = STREAM_MAPPER.writeValueAsString(provider);
-            var cProviderJsonSeg = arena.allocateFrom(cProviderJson);
-            MemorySegment cProvider = (MemorySegment) NativeLib.XBERG_MODEL_PROVIDER_FROM_JSON.invoke(cProviderJsonSeg);
-            if (cProvider.equals(MemorySegment.NULL)) { checkLastFfiError(); throw new XbergRsException("withModelProvider: failed to marshal provider", (Throwable) null); }
-            // CPD-OFF — FFI opaque-handle return, no JSON deserialization needed.
-            // The returned pointer is owned by the new wrapper, which frees it in
-            // close(); freeing it here would leave the wrapper holding a dangling
-            // handle (use-after-free on the next native call).
-            MemorySegment resultPtr = (MemorySegment) NativeLib.XBERG_ENGINE_BUILDER_WITH_MODEL_PROVIDER.invoke(this.handle, cProvider);
-            if (!cProvider.equals(MemorySegment.NULL)) { try { NativeLib.XBERG_MODEL_PROVIDER_FREE.invoke(cProvider); } catch (Throwable ignore) {} }
-            if (resultPtr.equals(MemorySegment.NULL)) {
-                checkLastFfiError();
-                return null;
-            }
-            return new EngineBuilder(resultPtr);
-            // CPD-ON
-        } catch (XbergRsException ex) {
-            throw ex;
-        } catch (Throwable e) {
-            throw new XbergRsException("withModelProvider: failed", e);
-        }
     }
     /**
      * Finalize the builder into an Engine, filling every unset seam with
@@ -157,15 +71,5 @@ public class EngineBuilder implements AutoCloseable {
         } catch (Throwable e) {
             throw new XbergRsException("failed to read last error", e);
         }
-    }
-    private static final ObjectMapper STREAM_MAPPER = createStreamMapper();
-
-    private static ObjectMapper createStreamMapper() {
-        return new ObjectMapper()
-            .registerModule(new com.fasterxml.jackson.datatype.jdk8.Jdk8Module())
-            .findAndRegisterModules()
-            .setPropertyNamingStrategy(com.fasterxml.jackson.databind.PropertyNamingStrategies.SNAKE_CASE)
-            .setSerializationInclusion(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-            .configure(com.fasterxml.jackson.databind.MapperFeature.ACCEPT_CASE_INSENSITIVE_ENUMS, true);
     }    // CPD-ON
 }

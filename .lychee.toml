@@ -7,6 +7,10 @@
 
 # Exclude common patterns that produce false positives
 exclude = [
+    # Missing demo GIF assets referenced from README.md (not committed to repo)
+    "docs/assets/demos",
+    # CSS data: URIs in docs/css/extra.css are misparsed by lychee as file links
+    "data:",
     # Localhost / loopback addresses
     "localhost",
     "127\\.0\\.0\\.1",
