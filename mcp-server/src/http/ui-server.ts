@@ -45,10 +45,26 @@ export function createUiRoutes(): UiRoutes {
       const isAdmin = req.method === "POST" && url.pathname === "/admin";
       if (!isUi && !isIngest && !isMap && !isCollection && !isAdmin) return false;
 
-      const candidate = extractToken(req, url);
-      if (!isValidToken(candidate, token)) {
-        res.writeHead(401, { "Content-Type": "application/json" }).end(JSON.stringify({ error: "unauthorized" }));
-        return true;
+      // `/ui/*` (GET) serves the compiled static app shell -- no secrets
+      // live in it, and it cannot practically be gated behind `?token=`:
+      // Next.js's client-side router fetches its own hashed JS/CSS bundles
+      // (`/ui/_next/static/...`), ORT's `.wasm`/`.mjs` runtime
+      // (`/ui/ort/...`, see engine.worker.ts's `wasmPaths: "/ui/ort/"`),
+      // and RSC payloads for client-side navigation
+      // (`/ui/folder/<name>.txt?_rsc=...`) via plain relative fetches that
+      // never carry the page URL's query string -- there is no way for any
+      // of them to "inherit" the token. Gating `/ui` at all left every one
+      // of these 401ing right after a successful, authenticated top-level
+      // navigation, so the app could load the shell but never actually
+      // render a folder, run OCR/NER models, or navigate client-side. The
+      // real security boundary is the data-mutating API routes below
+      // (ingest/map/collection/admin), which remain fully token-gated.
+      if (!isUi) {
+        const candidate = extractToken(req, url);
+        if (!isValidToken(candidate, token)) {
+          res.writeHead(401, { "Content-Type": "application/json" }).end(JSON.stringify({ error: "unauthorized" }));
+          return true;
+        }
       }
 
       if (isIngest) {

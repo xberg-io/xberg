@@ -46,7 +46,12 @@ const ScrollArea = React.forwardRef<
         innerViewportRef.current = node
         if (typeof viewportRef === "function") viewportRef(node)
         else if (viewportRef && "current" in viewportRef) {
-          ;(viewportRef as React.RefObject<HTMLDivElement | null>).current = node
+          // `RefObject.current` is `readonly` in current @types/react (only
+          // React itself is meant to assign it) -- casting to `RefObject`
+          // keeps that readonly modifier, so cast to a plain writable shape
+          // instead; this is the standard escape hatch for the "forward a
+          // second, non-root ref into a child's internal DOM node" pattern.
+          ;(viewportRef as unknown as { current: HTMLDivElement | null }).current = node
         }
       },
       [viewportRef]

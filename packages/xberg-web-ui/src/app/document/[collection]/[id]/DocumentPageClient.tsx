@@ -1,6 +1,6 @@
 "use client";
 import { type ChangeEvent, useEffect, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { documentParamsFromPathname } from "@/lib/route-params.js";
 import { getHistoryEntry } from "@/lib/ingest-history.js";
 import { getAuthToken } from "@/lib/auth-client.js";
 import { resolveMcpBaseUrl } from "@/lib/mcp-base-url.js";
@@ -19,13 +19,16 @@ export function DocumentPageClient({
   id: string;
 }) {
   // Static export can only ever bake the placeholder shell's params into
-  // this component's props. For a real collection/id, the server falls
-  // back to serving that same shell (see ui-server.ts), so the true
-  // segments must be re-derived from the actual browser URL on the client
-  // instead of trusted from props.
-  const params = useParams<{ collection: string; id: string }>();
-  const collection = params?.collection ?? collectionParam;
-  const id = params?.id ?? idParam;
+  // this component's props, and mcp-server's static file server falls back
+  // to serving that same shell for every real collection/id (see
+  // ui-route-resolver.ts) -- its embedded router state says the route is
+  // `/document/placeholder/placeholder`, so `useParams()` returns that
+  // fixed value regardless of the actual address bar URL (confirmed live:
+  // `window.location.pathname` reports the real path while `useParams()`
+  // does not). Parse the real segments out of the pathname directly instead.
+  const { collection: realCollection, id: realId } = documentParamsFromPathname();
+  const collection = realCollection ?? collectionParam;
+  const id = realId ?? idParam;
   const { ocrLayout } = useEngine();
   const [entry, setEntry] = useState<IngestHistoryEntry | null>(null);
   const [loading, setLoading] = useState(true);

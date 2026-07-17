@@ -27,8 +27,6 @@
  * already degrades to a plain fetch when the browser Cache Storage API
  * (`caches`) is absent, which is exactly the Node case.
  */
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
 import type { CacheConfig } from "./types.js";
 
 // fastino/gliner2-privacy-filter-PII-multi: the pinned Candle-compatible
@@ -59,14 +57,18 @@ interface CandleNerModelBytes {
  * never treats a cache-write failure as fatal).
  */
 async function fetchWithCache(url: string, nodeCacheDir: string | undefined, fileName: string): Promise<Uint8Array> {
-	if (nodeCacheDir) {
-		const localPath = join(nodeCacheDir, fileName);
-		// A zero-byte file means a previous download was interrupted --
-		// treat it as absent so it retries, rather than "successfully"
-		// loading an empty model file.
-		if (existsSync(localPath) && statSync(localPath).size > 0) {
-			return new Uint8Array(readFileSync(localPath));
-		}
+	// `typeof window === "undefined"` (not just `if (nodeCacheDir)`) gates
+	// the dynamic import: webpack's dead-code-elimination statically folds
+	// this exact check to `false` in a browser bundle (same pattern
+	// store.ts's createVectorStore uses for store-node.js) and prunes the
+	// branch entirely, so it never tries to resolve candle-ner-node-cache.js's
+	// `node:fs` import. A plain runtime `if (nodeCacheDir)` is NOT
+	// statically foldable and left the import in the browser bundle graph,
+	// breaking the webpack build with `UnhandledSchemeError` on `node:fs`.
+	if (typeof window === "undefined" && nodeCacheDir) {
+		const { readCached } = await import("./candle-ner-node-cache.js");
+		const cached = readCached(nodeCacheDir, fileName);
+		if (cached) return cached;
 	}
 
 	const cacheApi = typeof caches !== "undefined" ? caches : undefined;
@@ -98,11 +100,10 @@ async function fetchWithCache(url: string, nodeCacheDir: string | undefined, fil
 
 	const bytes = new Uint8Array(await response.arrayBuffer());
 
-	if (nodeCacheDir) {
+	if (typeof window === "undefined" && nodeCacheDir) {
 		try {
-			const localPath = join(nodeCacheDir, fileName);
-			mkdirSync(dirname(localPath), { recursive: true });
-			writeFileSync(localPath, bytes);
+			const { writeCached } = await import("./candle-ner-node-cache.js");
+			writeCached(nodeCacheDir, fileName, bytes);
 		} catch (err) {
 			console.warn(`[candle-ner] unable to persist ${fileName} to node cache:`, err);
 		}
@@ -122,7 +123,7 @@ async function downloadCandleNerModel(baseUrl: string, nodeCacheDir: string | un
 	const [safetensors, tokenizerJson, encoderConfigJson] = await Promise.all([
 		fetchWithCache(new URL("model.safetensors", baseUrl).href, nodeCacheDir, "model.safetensors"),
 		fetchWithCache(new URL("tokenizer.json", baseUrl).href, nodeCacheDir, "tokenizer.json"),
-		fetchWithCache(new URL("encoder_config/config.json", baseUrl).href, nodeCacheDir, join("encoder_config", "config.json")),
+		fetchWithCache(new URL("encoder_config/config.json", baseUrl).href, nodeCacheDir, "encoder_config/config.json"),
 	]);
 	return { safetensors, tokenizerJson, encoderConfigJson };
 }
@@ -141,7 +142,10 @@ async function downloadCandleNerModel(baseUrl: string, nodeCacheDir: string | un
  */
 export async function initCandleNerBackend(config?: CacheConfig): Promise<void> {
 	const baseUrl = config?.candleNerModelUrl ?? DEFAULT_CANDLE_NER_BASE_URL;
-	const nodeCacheDir = config?.nodeCachePath ? join(config.nodeCachePath, "candle-ner") : undefined;
+	const nodeCacheDir =
+		typeof window === "undefined" && config?.nodeCachePath
+			? (await import("./candle-ner-node-cache.js")).candleNerCacheDir(config.nodeCachePath)
+			: undefined;
 	console.debug(`[candle-ner] downloading GLiNER2 PII model from ${baseUrl}`);
 
 	const [wasmModule, bytes] = await Promise.all([

@@ -1,16 +1,22 @@
 "use client";
 import { type ChangeEvent, useState } from "react";
-import { useParams } from "next/navigation";
 import { useEngine } from "@/providers/EngineProvider.js";
 import { DocumentTable } from "@/components/DocumentTable.js";
 import { Input } from "@/components/ui/input.js";
+import { collectionFromPathname } from "@/lib/route-params.js";
 
 export function FolderPageClient({ collection: collectionParam }: { collection: string }) {
-  // See DocumentPageClient: static export only bakes the placeholder shell's
-  // param into props, so the real collection must be re-derived from the
-  // actual browser URL once the client router has hydrated.
-  const params = useParams<{ collection: string }>();
-  const collection = params?.collection ?? collectionParam;
+  // Static export (`output: "export"`) only ever generates ONE file for this
+  // dynamic route -- `folder/placeholder.html` -- and mcp-server's static
+  // file server (ui-route-resolver.ts) serves that same file for every real
+  // `/folder/<name>` request. Its embedded router state says the route is
+  // `/folder/placeholder`, so Next's own `useParams()` returns
+  // `{collection: "placeholder"}` regardless of the actual address bar URL
+  // (confirmed live: `window.location.pathname` correctly reports the real
+  // path while `useParams()` does not) -- there is no client-side re-sync
+  // for a hard navigation to a route Next itself didn't generate. Parse the
+  // real segment out of `window.location.pathname` directly instead.
+  const collection = collectionFromPathname("folder") ?? collectionParam;
   const { ingestFile } = useEngine();
   const [passphrase, setPassphrase] = useState("");
 

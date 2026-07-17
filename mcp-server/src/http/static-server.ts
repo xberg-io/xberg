@@ -55,8 +55,18 @@ export function serveStaticFile(rootDir: string, requestPath: string, res: Serve
     filePath = join(filePath, "index.html");
   }
   if (!existsSync(filePath)) {
-    res.writeHead(404).end("Not Found");
-    return;
+    // Next.js's static export (`output: "export"`) names most pages as a
+    // flat `<route>.html` file rather than `<route>/index.html` (e.g.
+    // `/folder/placeholder` -> `folder/placeholder.html`) -- try that
+    // convention before giving up, mirroring the standard static-site
+    // `try_files $uri $uri.html` fallback.
+    const htmlPath = `${filePath}.html`;
+    if (existsSync(htmlPath) && statSync(htmlPath).isFile()) {
+      filePath = htmlPath;
+    } else {
+      res.writeHead(404).end("Not Found");
+      return;
+    }
   }
   // Canonicalize both root and target so a symlink inside rootDir pointing
   // outside it cannot escape the containment boundary established above.

@@ -3,10 +3,17 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { listFolders } from "@/lib/ingest-history.js";
 import { CreateFolderDialog } from "@/components/CreateFolderDialog.js";
+import { resolveMcpBaseUrl } from "@/lib/mcp-base-url.js";
 
 export default function HomePage() {
   const [folders, setFolders] = useState<string[]>([]);
-  const baseUrl = typeof window !== "undefined" ? window.location.origin : "http://127.0.0.1:8080";
+  // This page previously hardcoded `window.location.origin` unconditionally,
+  // ignoring NEXT_PUBLIC_MCP_BASE_URL entirely (unlike layout.tsx/
+  // DocumentPageClient.tsx, which already use this same shared helper).
+  // That's correct only when web-ui is served from the same origin as
+  // mcp-server (its own static /ui route) -- a separate dev server on
+  // another port needs the explicit override to reach mcp-server's API at all.
+  const baseUrl = resolveMcpBaseUrl();
 
   useEffect(() => {
     void listFolders()
