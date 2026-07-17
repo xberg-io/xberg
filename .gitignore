@@ -79,6 +79,19 @@ packages/ruby/vendor/
 # PHP
 vendor/
 !crates/xberg-candle-ocr/src/vendor/
+
+# Vendored crate patches (see the [patch.crates-io] comments in Cargo.toml
+# for why each one exists) -- must be committed, not gitignored, or `cargo
+# check` fails to resolve them on a fresh checkout (including CI). The
+# top-level `vendor/` itself must be un-ignored first -- git won't descend
+# into an already-excluded directory to apply deeper negations.
+!vendor/
+!vendor/safetensors-0.8.0-wasm32-fix/
+!vendor/safetensors-0.8.0-wasm32-fix/**
+!vendor/candle-nn-0.11.0-f16-layernorm-fix/
+!vendor/candle-nn-0.11.0-f16-layernorm-fix/**
+!vendor/candle-transformers-0.11.0-f16-debug/
+!vendor/candle-transformers-0.11.0-f16-debug/**
 php-xberg.ini
 packages/php/php-xberg.ini
 packages/php/tests.xml
