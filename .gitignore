@@ -92,6 +92,8 @@ vendor/
 !vendor/candle-nn-0.11.0-f16-layernorm-fix/**
 !vendor/candle-transformers-0.11.0-f16-debug/
 !vendor/candle-transformers-0.11.0-f16-debug/**
+!vendor/swift-bridge-ir-0.1.59-todo-fix/
+!vendor/swift-bridge-ir-0.1.59-todo-fix/**
 php-xberg.ini
 packages/php/php-xberg.ini
 packages/php/tests.xml

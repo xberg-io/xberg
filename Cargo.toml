@@ -166,6 +166,18 @@ candle-nn = { path = "vendor/candle-nn-0.11.0-f16-layernorm-fix" }
 # encoder.forward". Remove this patch once the real fix is identified and
 # applied (either here permanently or upstream).
 candle-transformers = { path = "vendor/candle-transformers-0.11.0-f16-debug" }
+# swift-bridge-ir 0.1.59's BridgedType::to_alpha_numeric_underscore_name has
+# match arms for only some StdLibType variants (Null/ints/Bool/F32/F64/Tuple)
+# and a catchall `_ => todo!()` for the rest. Any #[swift_bridge::bridge] fn
+# returning Result<Vec<T>, _> or Result<Option<T>, _> -- both used throughout
+# xberg's public API -- panics build.rs with "not yet implemented" while
+# naming the FFI Result's C struct, breaking every `cargo check`/`clippy` run
+# that touches the xberg-swift crate (Android/iOS/Windows/Linux CI, not just
+# actual macOS Swift builds). vendor/swift-bridge-ir-0.1.59-todo-fix adds the
+# missing U64/I64 arms (matching the existing Usize/Isize pattern) and Vec/
+# Option arms (following the upstream doc comment's own stated convention:
+# "Option<T> would return Option_{T.to_alpha_numeric_underscore_name()}").
+swift-bridge-ir = { path = "vendor/swift-bridge-ir-0.1.59-todo-fix" }
 xberg = { path = "crates/xberg" }
 xberg-gliner = { path = "crates/xberg-gliner" }
 xberg-gliner-candle = { path = "crates/xberg-gliner-candle" }

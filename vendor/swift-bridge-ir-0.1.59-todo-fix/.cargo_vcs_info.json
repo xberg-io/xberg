@@ -1,0 +1,6 @@
+{
+  "git": {
+    "sha1": "e527dc7454bebbfab537d842990bf3a1672e676c"
+  },
+  "path_in_vcs": "crates/swift-bridge-ir"
+}
