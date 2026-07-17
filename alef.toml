@@ -469,7 +469,11 @@ package_name = "@xberg-io/xberg-wasm"
 # `wasm-target` expanded minus `ocr-wasm`: the MCP/Node host injects OCR via the
 # `ocr` bridge, so in-binary Tesseract (which pulls Leptonica + WASI fd/path/mkstemp/
 # system imports that wasm-bindgen's nodejs target can't satisfy) is unnecessary here.
-features = ["no-ort-target", "excel-wasm", "tree-sitter-wasm", "ner-candle-wasm", "url-ingestion"]
+features = ["no-ort-target", "excel-wasm", "tree-sitter-wasm", "ner-candle-wasm", "url-ingestion", "redaction-rehydrate"]
+# Hand-written modules that alef does not generate. Declared here so regeneration
+# emits `pub mod bridge;` / `pub mod engine;` into the generated lib.rs instead of
+# relying solely on scripts/ensure-wasm-mods.mjs to re-insert them post-regen.
+custom_modules = ["bridge", "engine"]
 exclude_types = [
   # ORT/runtime-only types not available in the wasm-target feature set
   "OcrFallbackDecision",
