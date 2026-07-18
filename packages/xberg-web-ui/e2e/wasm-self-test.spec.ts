@@ -1,8 +1,9 @@
 // e2e/wasm-self-test.spec.ts
 //
 // Drives the wasm engine directly (via /ui/wasm-self-test) to verify the
-// wasm-pack "web" target loads and the patched host libc shim works — without
-// the folder-dialog UI (which has a pre-existing hydration bug).
+// wasm-pack "web" target loads and the patched host libc shim works, in
+// isolation from the folder-dialog UI (covered instead by ingest.spec.ts /
+// delete.spec.ts, which exercise the real folder-create-upload flow).
 import { test, expect } from "@playwright/test";
 import { createServer } from "node:http";
 import http from "node:http";

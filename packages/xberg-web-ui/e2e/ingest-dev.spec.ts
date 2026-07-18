@@ -37,6 +37,11 @@ function proxyUi(req: IncomingMessage, res: ServerResponse): void {
 }
 
 test("browser wasm engine ingests a PII doc with redaction (dev proxy)", async ({ page }) => {
+  // First-load model download + WASM init (bge-m3 embedder, Candle GLiNER2
+  // NER) has taken several minutes in this environment -- see
+  // ingest.spec.ts's identical note. The config-level 60s default (and this
+  // test's own 60s poll below) are nowhere near enough.
+  test.setTimeout(300_000);
   const received: { collection?: unknown; ingest?: unknown; mapDocumentId?: string } = {};
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
@@ -104,7 +109,7 @@ test("browser wasm engine ingests a PII doc with redaction (dev proxy)", async (
     });
 
     await expect
-      .poll(() => received.ingest !== undefined, { timeout: 60_000 })
+      .poll(() => received.ingest !== undefined, { timeout: 240_000 })
       .toBe(true);
     expect(received.collection).toEqual({ name: "contrats", embedding_dim: EMBEDDING_DIM });
     await expect.poll(() => received.mapDocumentId, { timeout: 10_000 }).toBe("contrat.pdf");

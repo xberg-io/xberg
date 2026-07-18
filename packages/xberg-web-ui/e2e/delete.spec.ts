@@ -18,6 +18,11 @@ const OUT_DIR = join(fileURLToPath(new URL(".", import.meta.url)), "..", "out");
 test("uploading a PII doc then deleting it via the UI removes it from the MCP store, without leaking clear PII", async ({
   page,
 }) => {
+  // First-load model download + WASM init (bge-m3 embedder, Candle GLiNER2
+  // NER) has taken several minutes in this environment -- see
+  // ingest.spec.ts's identical note, including the KNOWN OPEN ISSUE with
+  // `xEngine.extract()`/`.ingest()` stalling past model init.
+  test.setTimeout(300_000);
   const received: {
     collection?: unknown;
     ingest?: unknown;
@@ -93,21 +98,41 @@ test("uploading a PII doc then deleting it via the UI removes it from the MCP st
   });
   const baseUrl = `http://127.0.0.1:${port}`;
 
+  const errors: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(String(e)));
+
   try {
     await page.goto(`${baseUrl}/ui/?token=test`);
     await page.getByText("New folder").click();
     await page.getByLabel("Folder name").fill("contrats");
-    await page.getByText("Create").click();
-    await page.getByText("contrats").click();
+    await page.getByRole("button", { name: "Create" }).click();
+    // The dialog overlay can stay mounted briefly after a successful
+    // create, intercepting the click on the folder link underneath it
+    // (see ingest-dev.spec.ts's identical workaround).
+    await page.keyboard.press("Escape");
+    await page.getByText("contrats").click({ timeout: 15_000 });
+    // Clicking the folder link is a hard navigation (Next's static export has
+    // no client-side route for a real `/folder/<name>` URL). If the
+    // passphrase is filled before that reload settles, the fill can land on
+    // a page instance about to be torn down, silently resetting the input to
+    // empty before the file-select fires -- see ingest.spec.ts's identical
+    // workaround for the full explanation.
+    await page.getByRole("heading", { name: "contrats" }).waitFor({ timeout: 15_000 });
+    await page.waitForLoadState("networkidle");
 
-    await page.getByLabel(/passphrase/i).fill("correct-horse-battery");
+    const passphraseInput = page.getByLabel(/passphrase/i);
+    await passphraseInput.fill("correct-horse-battery");
+    await expect(passphraseInput).toHaveValue("correct-horse-battery");
     await page.setInputFiles("input[type=file]", {
       name: "contrat.pdf",
       mimeType: "application/pdf",
       buffer: Buffer.from("Contact alice@example.com about the contract"),
     });
 
-    await expect.poll(() => received.ingest !== undefined, { timeout: 30_000 }).toBe(true);
+    await expect.poll(() => received.ingest !== undefined, { timeout: 240_000 }).toBe(true);
     expect(received.collection).toEqual({ name: "contrats", embedding_dim: EMBEDDING_DIM });
 
     // Reload the folder view (the table reads ingest history from IndexedDB)
@@ -127,6 +152,13 @@ test("uploading a PII doc then deleting it via the UI removes it from the MCP st
 
     // The row disappears from the table once the delete resolves.
     await expect(page.getByText("contrat.pdf")).toHaveCount(0);
+  } catch (err) {
+    const banner = await page
+      .evaluate(() => document.body.innerText.slice(0, 800))
+      .catch(() => "(eval failed)");
+    console.log("=== CONSOLE/PAGE ERRORS ===\n" + errors.join("\n"));
+    console.log("=== PAGE TEXT (first 800) ===\n" + banner);
+    throw err;
   } finally {
     await new Promise<void>((resolve, reject) => {
       server.close((err) => (err ? reject(err) : resolve()));

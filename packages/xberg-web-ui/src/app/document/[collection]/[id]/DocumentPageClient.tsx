@@ -25,10 +25,20 @@ export function DocumentPageClient({
   // `/document/placeholder/placeholder`, so `useParams()` returns that
   // fixed value regardless of the actual address bar URL (confirmed live:
   // `window.location.pathname` reports the real path while `useParams()`
-  // does not). Parse the real segments out of the pathname directly instead.
-  const { collection: realCollection, id: realId } = documentParamsFromPathname();
-  const collection = realCollection ?? collectionParam;
-  const id = realId ?? idParam;
+  // does not).
+  //
+  // The first client render must still match the server-rendered HTML
+  // (baked with `collectionParam`/`idParam`), or React's hydration bails
+  // out and force-remounts the whole tree, discarding local state. So
+  // render the baked props on mount, then correct to the real values from
+  // `window.location.pathname` in an effect (client-only, post-hydration).
+  const [collection, setCollection] = useState(collectionParam);
+  const [id, setId] = useState(idParam);
+  useEffect(() => {
+    const real = documentParamsFromPathname();
+    if (real.collection && real.collection !== collectionParam) setCollection(real.collection);
+    if (real.id && real.id !== idParam) setId(real.id);
+  }, [collectionParam, idParam]);
   const { ocrLayout } = useEngine();
   const [entry, setEntry] = useState<IngestHistoryEntry | null>(null);
   const [loading, setLoading] = useState(true);
