@@ -17,6 +17,27 @@ use super::strategy::{TokenCounter, apply_strategy};
 /// Run pattern redaction (and optional NER-driven redaction) over `result` and
 /// rewrite every textual field. Populates `result.redaction_report`.
 pub async fn redact(result: &mut ExtractedDocument, config: &RedactionConfig) -> Result<()> {
+    redact_counted(result, config).await.map(|_counter| ())
+}
+
+/// Like [`redact`], additionally returning the token to original-text map for
+/// later rehydration. Only `RedactionStrategy::TokenReplace` allocations
+/// appear in the map; `Mask`, `Hash`, and `Drop` are not reversible. The map
+/// never touches disk here; encrypt it with
+/// [`super::rehydration::encrypt_map`] and persistence stays with the caller.
+#[cfg(feature = "redaction-rehydrate")]
+#[cfg_attr(alef, alef(skip))]
+pub async fn redact_capturing_rehydration_map(
+    result: &mut ExtractedDocument,
+    config: &RedactionConfig,
+) -> Result<super::rehydration::RehydrationMap> {
+    let counter = redact_counted(result, config).await?;
+    Ok(counter.rehydration_map())
+}
+
+/// Shared body for [`redact`] and the map-capturing variant: runs the full
+/// pass and hands back the token counter it used.
+async fn redact_counted(result: &mut ExtractedDocument, config: &RedactionConfig) -> Result<TokenCounter> {
     config.validate()?;
     let active_categories = active_categories(config);
     let custom_regexes = compile_custom(config);
@@ -148,7 +169,7 @@ pub async fn redact(result: &mut ExtractedDocument, config: &RedactionConfig) ->
 
     drop(original_content);
 
-    Ok(())
+    Ok(counter)
 }
 
 /// Compute the set of categories the engine will consider during this run.
@@ -623,6 +644,40 @@ mod tests {
         ];
         let out = apply_replacements_reverse(text, &matches, &findings);
         assert_eq!(out, "Email me at [REDACTED] or [REDACTED].");
+    }
+
+    /// The capturing variant returns exactly the TokenReplace substitutions:
+    /// every token in the rewritten content maps back to the original PII.
+    #[cfg(feature = "redaction-rehydrate")]
+    #[tokio::test]
+    async fn capture_returns_token_to_original_map() {
+        let email = "alice@example.com";
+        let phone = "+1-555-123-4567";
+        let mut doc = ExtractedDocument {
+            content: format!("Contact {email} or call {phone}. Again: {email}."),
+            ..Default::default()
+        };
+        let config = RedactionConfig {
+            strategy: crate::types::redaction::RedactionStrategy::TokenReplace,
+            ..Default::default()
+        };
+
+        let map = redact_capturing_rehydration_map(&mut doc, &config)
+            .await
+            .expect("capture must succeed");
+
+        assert!(!doc.content.contains(email), "content still holds the email: {}", doc.content);
+        assert_eq!(
+            map.values().filter(|v| v.as_str() == email).count(),
+            1,
+            "repeated originals must dedupe to one token: {map:?}"
+        );
+        // Round trip: substituting every token back restores the original text.
+        let mut rehydrated = doc.content.clone();
+        for (token, original) in &map {
+            rehydrated = rehydrated.replace(token, original);
+        }
+        assert!(rehydrated.contains(email) && rehydrated.contains(phone), "rehydrated: {rehydrated}");
     }
 
     /// Regression for xberg-io/xberg#1223: redaction must mask PII on every

@@ -39,6 +39,19 @@ impl TokenCounter {
         self.cache.insert(key, token.clone());
         token
     }
+
+    /// Token to original-text view of every allocation made so far. The
+    /// counter's dedup cache holds exactly the `TokenReplace` substitutions
+    /// (no other strategy allocates tokens), so this is the complete
+    /// rehydration map for the pass that used this counter.
+    #[cfg(feature = "redaction-rehydrate")]
+    #[cfg_attr(alef, alef(skip))]
+    pub fn rehydration_map(&self) -> super::rehydration::RehydrationMap {
+        self.cache
+            .iter()
+            .map(|((_category, original), token)| (token.clone(), original.clone()))
+            .collect()
+    }
 }
 
 /// Apply `strategy` to `original` for `category` and return the replacement token.
