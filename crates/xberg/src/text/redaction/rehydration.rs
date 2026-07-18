@@ -14,6 +14,7 @@ use scrypt::Params as ScryptParams;
 use crate::{Result, XbergError};
 
 /// Token → original PII text.
+#[cfg_attr(alef, alef(skip))] // binding surface arrives with the engine/wasm integration
 pub type RehydrationMap = HashMap<String, String>;
 
 const MAGIC: &[u8; 5] = b"XPII\x01";
@@ -39,6 +40,7 @@ fn derive_key(passphrase: &str, salt: &[u8]) -> Result<[u8; KEY_LEN]> {
 }
 
 /// Encrypt `map` with `passphrase`. Returns `XPII\x01` + salt(16) + nonce(12) + tag(16) + ciphertext.
+#[cfg_attr(alef, alef(skip))]
 pub fn encrypt_map(map: &RehydrationMap, passphrase: &str) -> Result<Vec<u8>> {
     let plaintext = serde_json::to_vec(map)
         .map_err(|e| XbergError::validation(format!("failed to serialize rehydration map: {e}")))?;
@@ -67,6 +69,7 @@ pub fn encrypt_map(map: &RehydrationMap, passphrase: &str) -> Result<Vec<u8>> {
 }
 
 /// Decrypt a blob from [`encrypt_map`].
+#[cfg_attr(alef, alef(skip))]
 pub fn decrypt_map(blob: &[u8], passphrase: &str) -> Result<RehydrationMap> {
     let min_len = MAGIC.len() + SALT_LEN + NONCE_LEN + TAG_LEN;
     if blob.len() < min_len || &blob[..MAGIC.len()] != MAGIC {
@@ -116,6 +119,7 @@ fn category_from_token(token: &str) -> Option<&str> {
 }
 
 /// One vault match — either direction of lookup.
+#[cfg_attr(alef, alef(skip))] // binding surface arrives with the engine/wasm integration
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SubjectMatch {
     pub token: String,
@@ -145,6 +149,7 @@ fn subject_matches(token: &str, original: &str, query: &str, query_lower: &str) 
 /// match on `token`, since tokens are structured like `"[EMAIL_1]"`).
 ///
 /// Results are sorted by token for deterministic output.
+#[cfg_attr(alef, alef(skip))]
 pub fn find_subject(map: &RehydrationMap, query: &str) -> Vec<SubjectMatch> {
     let query_lower = query.to_ascii_lowercase();
     let mut matches: Vec<SubjectMatch> = map
@@ -166,6 +171,7 @@ pub fn find_subject(map: &RehydrationMap, query: &str) -> Vec<SubjectMatch> {
 ///
 /// Idempotent: calling this again with the same `query` after the matching
 /// entries have already been removed returns an empty `Vec`.
+#[cfg_attr(alef, alef(skip))]
 pub fn forget_subject(map: &mut RehydrationMap, query: &str) -> Vec<SubjectMatch> {
     let query_lower = query.to_ascii_lowercase();
     let tokens_to_remove: Vec<String> = map
