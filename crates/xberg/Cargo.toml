@@ -371,6 +371,7 @@ presets = [
 structured = ["liter-llm", "tokio-runtime"]
 
 redaction = ["dep:sha2"] # Pattern-based PII engine; pure-Rust.
+redaction-rehydrate = ["redaction", "dep:aes-gcm", "dep:scrypt"] # Encrypted rehydration map capture.
 redaction-ml = ["redaction", "ner"] # Couple in NER for PERSON/ORG/LOC redaction.
 
 summarization = ["stopwords"] # TextRank extractive only; pure-Rust (uses stopword tables).
@@ -668,6 +669,7 @@ server = [
 cli = ["services", "chunking", "url-ingestion"]
 
 [dependencies]
+aes-gcm = { version = "0.10", optional = true }
 ahash = { workspace = true }
 async-trait = { workspace = true }
 auto_enums = { version = "0.8", optional = true }
@@ -768,6 +770,7 @@ rmp-serde = "1.3"
 
 roxmltree = { version = "0.21.1", optional = true }
 rqrr = { version = "0.10", optional = true }
+scrypt = { version = "0.11", optional = true, default-features = false, features = ["std"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_toon_format = { workspace = true }
