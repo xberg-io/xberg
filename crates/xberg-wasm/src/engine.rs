@@ -1,4 +1,4 @@
-//! `XbergEngine` — a stateful handle carrying injected bridges and
+//! `XbergEngine`; a stateful handle carrying injected bridges and
 //! convenience methods on top of the raw WASM exports.
 
 use js_sys::Object;
@@ -46,11 +46,11 @@ impl XbergEngine {
     /// Create a new engine with injected bridges.
     ///
     /// `config` may contain:
-    /// - `bridgeTimeoutMs` — timeout in milliseconds for JS bridge calls
+    /// - `bridgeTimeoutMs`; timeout in milliseconds for JS bridge calls
     ///   (defaults to 30,000ms if not provided)
     ///
     /// `injection` may contain:
-    /// - `ocr` — object with `ocr(imageBytes, opts): Promise<{ text: string, lines?: Array<{ text: string, confidence: number, bbox?: { x: number, y: number, w: number, h: number } }> }>`
+    /// - `ocr`; object with `ocr(imageBytes, opts): Promise<{ text: string, lines?: Array<{ text: string, confidence: number, bbox?: { x: number, y: number, w: number, h: number } }> }>`
     ///
     /// Unknown injection keys are ignored, so hosts can pass richer injection
     /// objects shared with other engines.

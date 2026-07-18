@@ -3,7 +3,7 @@
 //! The WASM engine calls an externally-injected JavaScript object that
 //! implements an `ocr(imageBytes, options)` async method. The host returns
 //! a promise resolving to `{ text: string, lines: Array<{ text: string,
-//! confidence: number, bbox?: { x, y, w, h } }> }` — real per-line geometry,
+//! confidence: number, bbox?: { x, y, w, h } }> }`; real per-line geometry,
 //! not just a flat string. `lines` is optional on the wire; a missing or
 //! malformed `lines` array degrades to an empty vec rather than an error,
 //! since `text` alone is still useful.
