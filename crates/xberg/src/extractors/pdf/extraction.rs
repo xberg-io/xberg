@@ -55,7 +55,7 @@ pub(crate) fn extract_all_from_oxide_document(
     let mut doc = crate::pdf::oxide::OxideDocument::open_bytes_with_passwords(content, passwords)?;
 
     #[cfg_attr(not(feature = "layout-detection"), allow(unused_mut))]
-    let (mut native_text, boundaries, page_contents, pdf_metadata) =
+    let (mut native_text, mut boundaries, page_contents, mut pdf_metadata) =
         crate::pdf::oxide::text::extract_text_and_metadata(&mut doc, Some(config)).map_err(|e| {
             crate::error::XbergError::Parsing {
                 message: format!("pdf_oxide text extraction failed: {e}"),
@@ -67,16 +67,27 @@ pub(crate) fn extract_all_from_oxide_document(
     if config.pdf_options.as_ref().is_some_and(|opts| opts.reading_order)
         && let Some(hints) = layout_hints
     {
-        native_text = match apply_reading_order_reordering(&mut doc, &native_text, hints) {
-            Ok(reordered) => reordered,
+        match apply_reading_order_reordering(&mut doc, &native_text, hints) {
+            Ok((reordered, reordered_boundaries)) => {
+                native_text = reordered;
+                // Reordering rebuilds the text, so boundaries computed against
+                // the original extraction order no longer index it.
+                if !reordered_boundaries.is_empty() {
+                    if let Some(ref mut page_structure) = pdf_metadata.page_structure {
+                        page_structure.boundaries = Some(reordered_boundaries.clone());
+                    }
+                    if boundaries.is_some() {
+                        boundaries = Some(reordered_boundaries);
+                    }
+                }
+            }
             Err(e) => {
                 tracing::warn!(
                     error = %e,
                     "reading-order reordering failed; using native text extraction order"
                 );
-                native_text
             }
-        };
+        }
     }
     #[cfg(not(feature = "layout-detection"))]
     let _ = layout_hints;
@@ -313,13 +324,16 @@ pub(crate) fn extract_all_from_oxide_document(
 /// Extracts text spans from each page, projects them onto layout regions,
 /// performs column detection, and rebuilds the text in natural reading order.
 ///
-/// Returns the reordered text string, or an error if extraction/reordering fails.
+/// Returns the reordered text string together with page boundaries recomputed
+/// against it — the rebuilt string has a different byte layout, so boundaries
+/// from the original extraction must not be used to index it. An empty
+/// boundary vector means the text was returned unchanged.
 #[cfg(feature = "layout-detection")]
 fn apply_reading_order_reordering(
     doc: &mut crate::pdf::oxide::OxideDocument,
     native_text: &str,
     layout_hints_per_page: &[Vec<crate::pdf::structure::types::LayoutHint>],
-) -> Result<String> {
+) -> Result<(String, Vec<crate::types::PageBoundary>)> {
     use crate::extractors::pdf::reading_order;
 
     let page_count = doc.doc.page_count().map_err(|e| crate::error::XbergError::Parsing {
@@ -368,15 +382,59 @@ fn apply_reading_order_reordering(
     }
 
     if reordered_pages.is_empty() {
-        return Ok(native_text.to_string());
+        return Ok((native_text.to_string(), Vec::new()));
     }
 
-    let result = reordered_pages.join("\n\n");
-    Ok(result)
+    Ok(join_pages_with_boundaries(&reordered_pages))
+}
+
+/// Join per-page texts with `"\n\n"` separators, recording each page's byte
+/// range in the combined string. The separators belong to no page, matching
+/// how `extract_text_from_oxide_document` records boundaries.
+#[cfg(feature = "layout-detection")]
+fn join_pages_with_boundaries(pages: &[String]) -> (String, Vec<crate::types::PageBoundary>) {
+    let mut content = String::new();
+    let mut boundaries = Vec::with_capacity(pages.len());
+    for (idx, page_text) in pages.iter().enumerate() {
+        if idx > 0 {
+            content.push_str("\n\n");
+        }
+        let byte_start = content.len();
+        content.push_str(page_text);
+        boundaries.push(crate::types::PageBoundary {
+            byte_start,
+            byte_end: content.len(),
+            page_number: idx as u32 + 1,
+        });
+    }
+    (content, boundaries)
 }
 
 #[cfg(test)]
 mod tests {
+
+    /// Boundaries produced alongside reordered text must index it exactly:
+    /// char-boundary-valid offsets whose slice is the page's text, with the
+    /// `"\n\n"` separators belonging to no page.
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn test_join_pages_with_boundaries_multibyte() {
+        let pages = vec![
+            "CLASSIFICATION • Classification: SECRET".to_string(),
+            "second — page's text with curly \u{201c}quotes\u{201d}".to_string(),
+            String::new(),
+            "final page".to_string(),
+        ];
+        let (content, boundaries) = super::join_pages_with_boundaries(&pages);
+        assert_eq!(content, pages.join("\n\n"));
+        assert_eq!(boundaries.len(), pages.len());
+        for (i, b) in boundaries.iter().enumerate() {
+            assert_eq!(b.page_number, i as u32 + 1);
+            assert!(content.is_char_boundary(b.byte_start));
+            assert!(content.is_char_boundary(b.byte_end));
+            assert_eq!(&content[b.byte_start..b.byte_end], pages[i]);
+        }
+    }
 
     #[test]
     fn test_bounding_box_coordinate_conversion() {
