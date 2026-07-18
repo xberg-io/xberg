@@ -18,6 +18,11 @@ extern "C" {
 
 pub(crate) const BRIDGE_TIMEOUT_MS: u32 = 30_000;
 
+/// Convert a Display error into a JsValue suitable for propagation.
+pub(crate) fn js_from_any(v: impl std::fmt::Display) -> JsValue {
+    JsValue::from_str(&v.to_string())
+}
+
 fn get_timeout_racer() -> &'static js_sys::Function {
     static RACER: OnceLock<js_sys::Function> = OnceLock::new();
     RACER.get_or_init(|| {

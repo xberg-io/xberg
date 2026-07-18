@@ -12,6 +12,8 @@
 //! unavailable and calls return an error saying so.
 
 use js_sys::{Function, Object, Promise, Reflect};
+
+use crate::bridge::js_from_any;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -96,9 +98,4 @@ async fn call_injected_ocr(
     let js_val = crate::bridge::timed_js_future_with_timeout(promise, timeout_ms).await?;
 
     serde_wasm_bindgen::from_value(js_val).map_err(|e| js_from_any(format!("failed to deserialize ocr result: {e}")))
-}
-
-/// Convert a Display error into a JsValue suitable for propagation.
-fn js_from_any(v: impl std::fmt::Display) -> JsValue {
-    JsValue::from_str(&v.to_string())
 }

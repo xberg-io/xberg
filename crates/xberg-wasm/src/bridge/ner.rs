@@ -2,8 +2,11 @@
 //!
 //! The WASM engine calls an externally-injected JavaScript object that
 //! implements a `ner(text, categories)` async method, called positionally to
-//! match this file's own `call_injected_ner`. When no injection is provided,
-//! NER is unavailable and calls return an error saying so.
+//! match [`call_injected_ner`]. The host returns a promise resolving to an
+//! array of entities (`{ category, text, start, end, confidence? }`).
+//!
+//! There is no in-binary fallback: when no backend is injected, NER is
+//! unavailable and calls return an error saying so.
 
 use js_sys::{Function, Object, Promise, Reflect};
 use wasm_bindgen::prelude::*;
@@ -12,7 +15,11 @@ use async_trait::async_trait;
 use xberg::text::ner::NerBackend;
 use xberg::types::entity::{Entity, EntityCategory};
 
-/// Resolve the best available NER backend for the current request.
+use crate::bridge::js_from_any;
+
+/// Resolve NER through the injected backend.
+///
+/// Returns an error when `injected` is `None`.
 pub async fn resolve_ner(
     injected: Option<js_sys::Object>,
     text: &str,
@@ -31,13 +38,26 @@ pub async fn resolve_ner_with_timeout(
     match injected {
         Some(obj) => call_injected_ner(obj, text, categories, timeout_ms).await,
         None => Err(js_from_any(
-            "NER unavailable: no injected backend",
+            "NER unavailable: no NER backend injected; pass a `ner` object in the engine injection",
         )),
     }
 }
 
+/// The wire form of an [`EntityCategory`]: the serde snake_case name for the
+/// built-in variants, the raw label for `Custom`. `serde_json::to_value`
+/// alone would render `Custom("x")` as an object and lose the label.
+fn category_wire_name(category: &EntityCategory) -> String {
+    match category {
+        EntityCategory::Custom(label) => label.clone(),
+        other => serde_json::to_value(other)
+            .ok()
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_default(),
+    }
+}
+
 /// Call the injected JS `ner(text, categories)` method and deserialize the
-/// returned promise into a Vec<Entity>.
+/// returned promise into a `Vec<Entity>`.
 async fn call_injected_ner(
     obj: Object,
     text: &str,
@@ -53,11 +73,7 @@ async fn call_injected_ner(
     let js_text = JsValue::from_str(text);
     let js_cats = js_sys::Array::new();
     for c in categories {
-        let cat_str = serde_json::to_value(c)
-            .ok()
-            .and_then(|v| v.as_str().map(String::from))
-            .unwrap_or_default();
-        js_cats.push(&JsValue::from_str(&cat_str));
+        js_cats.push(&JsValue::from_str(&category_wire_name(c)));
     }
     let args = js_sys::Array::of2(&js_text, &js_cats);
 
@@ -65,13 +81,14 @@ async fn call_injected_ner(
     let promise = Promise::from(result);
     let js_val = crate::bridge::timed_js_future_with_timeout(promise, timeout_ms).await?;
 
-    let entities: Vec<Entity> = serde_wasm_bindgen::from_value(js_val)
-        .map_err(|e| js_from_any(format!("failed to deserialize NER result: {e}")))?;
-    Ok(entities)
+    serde_wasm_bindgen::from_value(js_val).map_err(|e| js_from_any(format!("failed to deserialize NER result: {e}")))
 }
 
-/// Adapter that wraps an injected JS NER object as a [`NerBackend`].
-pub(crate) struct JsNerBridge {
+/// Adapter that wraps an injected JS NER object as a [`NerBackend`], so core
+/// consumers taking `&dyn NerBackend` can run against a JS backend. The trait
+/// is `?Send` on wasm32 (see `xberg::text::ner::backend`), which is what
+/// permits holding `JsValue`s across the await.
+pub struct JsNerBridge {
     obj: Object,
     timeout_ms: u32,
 }
@@ -83,7 +100,8 @@ impl JsNerBridge {
     }
 }
 
-#[async_trait(?Send)]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl NerBackend for JsNerBridge {
     async fn detect(&self, text: &str, categories: &[EntityCategory]) -> xberg::Result<Vec<Entity>> {
         call_injected_ner(self.obj.clone(), text, categories, self.timeout_ms)
@@ -93,9 +111,4 @@ impl NerBackend for JsNerBridge {
                 plugin_name: "js-ner-bridge".to_string(),
             })
     }
-}
-
-/// Convert a Display error into a JsValue suitable for propagation.
-fn js_from_any(v: impl std::fmt::Display) -> JsValue {
-    JsValue::from_str(&v.to_string())
 }

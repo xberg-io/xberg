@@ -120,7 +120,7 @@ impl XbergEngine {
                 .map(|arr| {
                     arr.iter()
                         .filter_map(|v| v.as_string())
-                        .filter_map(|s| serde_json::from_str::<xberg::types::entity::EntityCategory>(&format!("\"{s}\"")).ok())
+                        .map(xberg::types::entity::EntityCategory::from)
                         .collect()
                 })
                 .unwrap_or_default()
