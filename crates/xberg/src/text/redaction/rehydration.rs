@@ -10,6 +10,7 @@ use aes_gcm::aead::rand_core::RngCore;
 use aes_gcm::aead::{AeadInPlace, KeyInit, OsRng};
 use aes_gcm::{Aes256Gcm, Key, Nonce};
 use scrypt::Params as ScryptParams;
+use zeroize::Zeroizing;
 
 use crate::{Result, XbergError};
 
@@ -22,19 +23,20 @@ const SALT_LEN: usize = 16;
 const NONCE_LEN: usize = 12;
 const TAG_LEN: usize = 16;
 const KEY_LEN: usize = 32;
-/// Must stay in sync with the shipped TypeScript rehydration module
-/// (`mcp-server/src/redaction/rehydration.ts`), which uses Node's
-/// `crypto.scryptSync` defaults (N = 2^14, r = 8, p = 1).
+/// Must stay in sync with the TypeScript implementation of this wire
+/// format, which uses Node's `crypto.scryptSync` defaults
+/// (N = 2^14, r = 8, p = 1); the `decrypts_map_produced_by_typescript`
+/// test pins the compatibility.
 /// Changing this value breaks wire-format compatibility with existing TS maps.
 const SCRYPT_LOG_N: u8 = 14;
 const SCRYPT_R: u32 = 8;
 const SCRYPT_P: u32 = 1;
 
-fn derive_key(passphrase: &str, salt: &[u8]) -> Result<[u8; KEY_LEN]> {
+fn derive_key(passphrase: &str, salt: &[u8]) -> Result<Zeroizing<[u8; KEY_LEN]>> {
     let params = ScryptParams::new(SCRYPT_LOG_N, SCRYPT_R, SCRYPT_P, KEY_LEN)
         .map_err(|e| XbergError::validation(format!("invalid scrypt parameters: {e}")))?;
-    let mut key = [0u8; KEY_LEN];
-    scrypt::scrypt(passphrase.as_bytes(), salt, &params, &mut key)
+    let mut key = Zeroizing::new([0u8; KEY_LEN]);
+    scrypt::scrypt(passphrase.as_bytes(), salt, &params, &mut *key)
         .map_err(|e| XbergError::validation(format!("scrypt key derivation failed: {e}")))?;
     Ok(key)
 }
@@ -51,7 +53,7 @@ pub fn encrypt_map(map: &RehydrationMap, passphrase: &str) -> Result<Vec<u8>> {
     OsRng.fill_bytes(&mut nonce_bytes);
 
     let key_bytes = derive_key(passphrase, &salt)?;
-    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key_bytes));
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&*key_bytes));
     let nonce = Nonce::from_slice(&nonce_bytes);
 
     let mut buffer = plaintext;
@@ -88,14 +90,16 @@ pub fn decrypt_map(blob: &[u8], passphrase: &str) -> Result<RehydrationMap> {
     let ciphertext = &blob[offset..];
 
     let key_bytes = derive_key(passphrase, salt)?;
-    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key_bytes));
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&*key_bytes));
     let nonce = Nonce::from_slice(nonce_bytes);
 
-    let mut buffer = ciphertext.to_vec();
+    // Zeroizing: after decryption the buffer holds the plaintext PII map;
+    // wipe it when it drops rather than leaving it in freed memory.
+    let mut buffer = Zeroizing::new(ciphertext.to_vec());
     cipher
         .decrypt_in_place_detached(nonce, b"", &mut buffer, tag.into())
         .map_err(|_| {
-            XbergError::validation("failed to decrypt rehydration map — wrong passphrase or corrupted data")
+            XbergError::validation("failed to decrypt rehydration map: wrong passphrase or corrupted data")
         })?;
 
     serde_json::from_slice(&buffer)
@@ -105,7 +109,7 @@ pub fn decrypt_map(blob: &[u8], passphrase: &str) -> Result<RehydrationMap> {
 /// Parse the PII category out of a redaction token's bracket contents.
 ///
 /// Tokens are structured as `"[CATEGORY_N]"` (e.g. `"[EMAIL_1]"`,
-/// `"[PERSON_2]"`). Returns `None` if `token` doesn't follow that shape —
+/// `"[PERSON_2]"`). Returns `None` if `token` doesn't follow that shape:
 /// missing brackets, no trailing `_<N>` suffix, or an empty category.
 fn category_from_token(token: &str) -> Option<&str> {
     let inner = token.strip_prefix('[')?.strip_suffix(']')?;
@@ -118,7 +122,7 @@ fn category_from_token(token: &str) -> Option<&str> {
     Some(category)
 }
 
-/// One vault match — either direction of lookup.
+/// One vault match, in either direction of lookup.
 #[cfg_attr(alef, alef(skip))] // binding surface arrives with the engine/wasm integration
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SubjectMatch {
@@ -130,18 +134,19 @@ pub struct SubjectMatch {
     pub category: Option<String>,
 }
 
-/// Return `true` if `query` identifies `token`/`original` — exact match on
-/// `token` (tokens are structured like `"[EMAIL_1]"`), case-insensitive
-/// substring match on `original`.
+/// Return `true` if `query` identifies `token`/`original`: exact match on
+/// `token` (tokens are structured like `"[EMAIL_1]"`), Unicode
+/// case-insensitive substring match on `original`, matching the TypeScript
+/// implementation's `toLowerCase()` semantics.
 fn subject_matches(token: &str, original: &str, query: &str, query_lower: &str) -> bool {
     // An empty query is a substring of every original value, so without this
     // guard `find_subject`/`forget_subject` would treat "" as "match
-    // everything" — for `forget_subject`, that means a blank erase query
+    // everything"; for `forget_subject`, that means a blank erase query
     // wipes the whole rehydration map instead of matching nothing.
     if query.is_empty() {
         return false;
     }
-    token == query || original.to_ascii_lowercase().contains(query_lower)
+    token == query || original.to_lowercase().contains(query_lower)
 }
 
 /// Search a decrypted map for `query`, matching either the token or the
@@ -151,7 +156,7 @@ fn subject_matches(token: &str, original: &str, query: &str, query_lower: &str) 
 /// Results are sorted by token for deterministic output.
 #[cfg_attr(alef, alef(skip))]
 pub fn find_subject(map: &RehydrationMap, query: &str) -> Vec<SubjectMatch> {
-    let query_lower = query.to_ascii_lowercase();
+    let query_lower = query.to_lowercase();
     let mut matches: Vec<SubjectMatch> = map
         .iter()
         .filter(|(token, original)| subject_matches(token, original, query, &query_lower))
@@ -167,13 +172,13 @@ pub fn find_subject(map: &RehydrationMap, query: &str) -> Vec<SubjectMatch> {
 
 /// Remove every mapping whose token or original value matches `query`.
 /// Returns the removed entries (the caller re-encrypts and persists the
-/// resulting map — this function does not touch disk).
+/// resulting map; this function does not touch disk).
 ///
 /// Idempotent: calling this again with the same `query` after the matching
 /// entries have already been removed returns an empty `Vec`.
 #[cfg_attr(alef, alef(skip))]
 pub fn forget_subject(map: &mut RehydrationMap, query: &str) -> Vec<SubjectMatch> {
-    let query_lower = query.to_ascii_lowercase();
+    let query_lower = query.to_lowercase();
     let tokens_to_remove: Vec<String> = map
         .iter()
         .filter(|(token, original)| subject_matches(token, original, query, &query_lower))
@@ -254,7 +259,7 @@ mod tests {
     fn find_subject_matches_by_original_value_substring() {
         let map = sample_map();
         // "johnson" only overlaps "Alice Johnson" (case-insensitive substring),
-        // not "alice@example.com" — unlike "alice", which would match both.
+        // not "alice@example.com", unlike "alice", which would match both.
         let matches = find_subject(&map, "johnson");
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].token, "[PERSON_1]");
@@ -279,6 +284,17 @@ mod tests {
     fn find_subject_returns_empty_for_no_match() {
         let map = sample_map();
         assert!(find_subject(&map, "nonexistent subject").is_empty());
+    }
+
+    #[test]
+    fn find_subject_matches_unicode_case_insensitively() {
+        // Parity with the TypeScript implementation's toLowerCase(): a
+        // lowercase query must match an uppercase non-ASCII original.
+        let mut map = RehydrationMap::new();
+        map.insert("[PERSON_1]".to_string(), "\u{d6}ZLEM Y\u{131}lmaz".to_string());
+        let matches = find_subject(&map, "\u{f6}zlem");
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].token, "[PERSON_1]");
     }
 
     #[test]

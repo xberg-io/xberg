@@ -371,7 +371,7 @@ presets = [
 structured = ["liter-llm", "tokio-runtime"]
 
 redaction = ["dep:sha2"] # Pattern-based PII engine; pure-Rust.
-redaction-rehydrate = ["redaction", "dep:aes-gcm", "dep:scrypt"] # Encrypted rehydration map capture.
+redaction-rehydrate = ["redaction", "dep:aes-gcm", "dep:scrypt", "dep:zeroize"] # Encrypted rehydration map capture.
 redaction-ml = ["redaction", "ner"] # Couple in NER for PERSON/ORG/LOC redaction.
 
 summarization = ["stopwords"] # TextRank extractive only; pure-Rust (uses stopword tables).
@@ -831,6 +831,7 @@ xberg-libheif = { path = "../xberg-libheif", version = "1.0.0-rc.29", optional =
 # action injects the version at cargo-publish time, so crates.io still gets a
 # version requirement. Do not re-pin it here.
 xberg-tesseract = { path = "../xberg-tesseract", optional = true }
+zeroize = { version = "1", optional = true }
 zip = { version = ">=7.0.0", optional = true, default-features = false, features = ["deflate-flate2"] }
 
 [target.'cfg(all(not(target_os = "windows"), not(target_arch = "wasm32")))'.dependencies]

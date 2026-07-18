@@ -11307,6 +11307,7 @@ dependencies = [
  "xberg-libheif",
  "xberg-paddle-ocr",
  "xberg-tesseract",
+ "zeroize",
  "zip 8.6.0",
 ]
 
