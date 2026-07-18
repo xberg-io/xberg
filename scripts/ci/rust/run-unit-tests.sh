@@ -23,7 +23,7 @@ echo "  CARGO_TERM_COLOR: ${CARGO_TERM_COLOR:-not set}"
 
 echo "Workspace information:"
 echo "  Repository: $REPO_ROOT"
-echo "  Excluded packages: xberg-e2e-generator, xberg-py, xberg-node, xberg-candle-ocr, xberg-gliner-candle, xberg-cli, benchmark-harness"
+echo "  Excluded packages: xberg-e2e-generator, xberg-py, xberg-node, xberg-candle-ocr, xberg-gliner, xberg-cli, benchmark-harness"
 
 if [ ! -d "$TESSDATA_PREFIX" ]; then
   echo "WARNING: TESSDATA_PREFIX directory not found: $TESSDATA_PREFIX"
@@ -69,9 +69,10 @@ if ! {
   echo "=== cargo test --workspace (all features, excluding xberg) ==="
   extra_excludes=()
   extra_excludes+=(--exclude xberg-candle-ocr)
-  # xberg-gliner-candle: cuda/metal features cannot build on CI runners; tested
-  # separately below with default features.
-  extra_excludes+=(--exclude xberg-gliner-candle)
+  # xberg-gliner: its cuda/metal features cannot build on CI runners, so
+  # --all-features is unusable; tested separately below with an explicit
+  # feature list.
+  extra_excludes+=(--exclude xberg-gliner)
   extra_excludes+=(--exclude xberg-cli)
   extra_excludes+=(--exclude benchmark-harness)
   RUST_BACKTRACE=full cargo test --locked \
@@ -85,16 +86,22 @@ if ! {
     --all-targets \
     --verbose
 
-  echo "=== cargo test -p xberg-gliner-candle (default features) ==="
+  echo "=== cargo test -p xberg-gliner (explicit features) ==="
+  # cuda/metal cannot build on CPU-only runners, so xberg-gliner gets an
+  # explicit feature list instead of --all-features: the default ONNX
+  # features everywhere, plus candle where it can build. Only Linux aarch64
+  # drops candle: gemm-f16 (candle's matmul backend) carries aarch64 inline
+  # asm that requires the fullfp16 target feature, which that runner's
+  # baseline lacks ("instruction requires: fullfp16"). Apple Silicon
+  # includes fullfp16 and runs the candle tests.
+  gliner_features=(--features candle,ort-dynamic)
   if [ "$(uname -s)" = "Linux" ] && [ "$(uname -m)" = "aarch64" ]; then
-    # gemm-f16 (candle's matmul backend) carries aarch64 inline asm that
-    # requires the fullfp16 target feature; the Linux ARM runner's baseline
-    # lacks it, so real codegen fails with "instruction requires: fullfp16".
-    # Apple Silicon includes fullfp16 in its baseline and runs these fine.
-    echo "Skipping xberg-gliner-candle tests on Linux aarch64 (gemm-f16 needs fullfp16)"
-  else
-    RUST_BACKTRACE=full cargo test --locked -p xberg-gliner-candle --all-targets --verbose
+    echo "Dropping the candle feature on Linux aarch64 (gemm-f16 needs fullfp16)"
+    gliner_features=(--features ort-dynamic)
   fi
+  RUST_BACKTRACE=full cargo test --locked -p xberg-gliner \
+    ${gliner_features[@]+"${gliner_features[@]}"} \
+    --all-targets --verbose
 } 2>&1 | tee "$TEST_LOG"; then
   echo "=== Test execution failed ==="
   echo "Last 50 lines of test output:"

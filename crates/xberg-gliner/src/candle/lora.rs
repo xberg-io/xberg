@@ -83,14 +83,14 @@ pub struct LoraAdapter {
 
 impl LoraAdapter {
     /// Load a PEFT adapter from a directory.
-    pub fn load(adapter_dir: &Path, device: &Device) -> crate::Result<Self> {
+    pub fn load(adapter_dir: &Path, device: &Device) -> crate::candle::Result<Self> {
         let config_path = adapter_dir.join("adapter_config.json");
         let cfg_str = std::fs::read_to_string(&config_path)
-            .map_err(|e| crate::GlinerCandleError::Backend(format!("lora: read {}: {e}", config_path.display())))?;
+            .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("lora: read {}: {e}", config_path.display())))?;
         let config: LoraConfig = serde_json::from_str(&cfg_str)
-            .map_err(|e| crate::GlinerCandleError::Backend(format!("lora: parse {}: {e}", config_path.display())))?;
+            .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("lora: parse {}: {e}", config_path.display())))?;
         if config.r == 0 {
-            return Err(crate::GlinerCandleError::Backend(
+            return Err(crate::candle::GlinerCandleError::Backend(
                 "lora: adapter_config.json has r=0; refusing to merge".into(),
             ));
         }
@@ -100,16 +100,16 @@ impl LoraAdapter {
         } else if adapter_dir.join("adapter_weights.safetensors").exists() {
             adapter_dir.join("adapter_weights.safetensors")
         } else {
-            return Err(crate::GlinerCandleError::Backend(format!(
+            return Err(crate::candle::GlinerCandleError::Backend(format!(
                 "lora: no adapter_model.safetensors or adapter_weights.safetensors in {}",
                 adapter_dir.display()
             )));
         };
 
         let bytes = std::fs::read(&weights_path)
-            .map_err(|e| crate::GlinerCandleError::Backend(format!("lora: read {}: {e}", weights_path.display())))?;
+            .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("lora: read {}: {e}", weights_path.display())))?;
         let st = SafeTensors::deserialize(&bytes).map_err(|e| {
-            crate::GlinerCandleError::Backend(format!("lora: deserialize {}: {e}", weights_path.display()))
+            crate::candle::GlinerCandleError::Backend(format!("lora: deserialize {}: {e}", weights_path.display()))
         })?;
 
         // Walk keys, group by module path, slot lora_A/lora_B.
@@ -122,7 +122,7 @@ impl LoraAdapter {
             // PEFT adapters are typically fp32; if the dtype is fp16/bf16 we'd
             // need to convert. Phase 4 supports fp32 only; error otherwise.
             if view.dtype() != safetensors::Dtype::F32 {
-                return Err(crate::GlinerCandleError::Backend(format!(
+                return Err(crate::candle::GlinerCandleError::Backend(format!(
                     "lora: {key}: dtype {:?} not supported (Phase 4 ships fp32 only)",
                     view.dtype()
                 )));
@@ -134,7 +134,7 @@ impl LoraAdapter {
                 data.push(f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
             }
             let tensor = Tensor::from_vec(data, shape, device)
-                .map_err(|e| crate::GlinerCandleError::Backend(format!("lora: tensor {key}: {e}")))?;
+                .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("lora: tensor {key}: {e}")))?;
             let entry = by_module.entry(module_path).or_default();
             match slot {
                 LoraSlot::A => entry.0 = Some(tensor),
@@ -146,9 +146,9 @@ impl LoraAdapter {
         let mut modules = HashMap::new();
         for (path, (a, b)) in by_module {
             let lora_a =
-                a.ok_or_else(|| crate::GlinerCandleError::Backend(format!("lora: missing lora_A for module {path}")))?;
+                a.ok_or_else(|| crate::candle::GlinerCandleError::Backend(format!("lora: missing lora_A for module {path}")))?;
             let lora_b =
-                b.ok_or_else(|| crate::GlinerCandleError::Backend(format!("lora: missing lora_B for module {path}")))?;
+                b.ok_or_else(|| crate::candle::GlinerCandleError::Backend(format!("lora: missing lora_B for module {path}")))?;
             modules.insert(path, LoraModule { lora_a, lora_b });
         }
 
@@ -165,16 +165,16 @@ enum LoraSlot {
 /// Parse `base_model.model.<module_path>.lora_{A,B}.weight` →
 /// `(<module_path>, slot)`. Strict; rejects keys not matching the
 /// PEFT convention.
-fn parse_lora_key(key: &str) -> crate::Result<(String, LoraSlot)> {
+fn parse_lora_key(key: &str) -> crate::candle::Result<(String, LoraSlot)> {
     let stripped = key.strip_prefix("base_model.model.").ok_or_else(|| {
-        crate::GlinerCandleError::Backend(format!("lora: key {key} does not start with 'base_model.model.'"))
+        crate::candle::GlinerCandleError::Backend(format!("lora: key {key} does not start with 'base_model.model.'"))
     })?;
     if let Some(path) = stripped.strip_suffix(".lora_A.weight") {
         Ok((path.to_string(), LoraSlot::A))
     } else if let Some(path) = stripped.strip_suffix(".lora_B.weight") {
         Ok((path.to_string(), LoraSlot::B))
     } else {
-        Err(crate::GlinerCandleError::Backend(format!(
+        Err(crate::candle::GlinerCandleError::Backend(format!(
             "lora: key {key} does not end with '.lora_A.weight' or '.lora_B.weight'"
         )))
     }
@@ -196,12 +196,12 @@ pub(crate) fn merge_into_base(
     base_safetensors: &Path,
     adapter: &LoraAdapter,
     device: &Device,
-) -> crate::Result<HashMap<String, Tensor>> {
+) -> crate::candle::Result<HashMap<String, Tensor>> {
     let bytes = std::fs::read(base_safetensors).map_err(|e| {
-        crate::GlinerCandleError::Backend(format!("lora_merge: read {}: {e}", base_safetensors.display()))
+        crate::candle::GlinerCandleError::Backend(format!("lora_merge: read {}: {e}", base_safetensors.display()))
     })?;
     let st = SafeTensors::deserialize(&bytes).map_err(|e| {
-        crate::GlinerCandleError::Backend(format!("lora_merge: deserialize {}: {e}", base_safetensors.display()))
+        crate::candle::GlinerCandleError::Backend(format!("lora_merge: deserialize {}: {e}", base_safetensors.display()))
     })?;
 
     let scale = adapter.config.lora_alpha / (adapter.config.r as f64);
@@ -213,7 +213,7 @@ pub(crate) fn merge_into_base(
         // Decode safetensors view to a Candle tensor.
         let shape: Vec<usize> = view.shape().to_vec();
         let mut tensor = decode_view(&view, shape, device)
-            .map_err(|e| crate::GlinerCandleError::Backend(format!("lora_merge: decode {key}: {e}")))?;
+            .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("lora_merge: decode {key}: {e}")))?;
 
         // Match key against adapter modules: strip `.weight` suffix, look up.
         if let Some(mod_path) = key.strip_suffix(".weight")
@@ -226,7 +226,7 @@ pub(crate) fn merge_into_base(
                 scale,
                 adapter.config.fan_in_fan_out,
             )
-            .map_err(|e| crate::GlinerCandleError::Backend(format!("lora_merge: apply delta to {mod_path}: {e}")))?;
+            .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("lora_merge: apply delta to {mod_path}: {e}")))?;
             applied.insert(mod_path.to_string());
         }
 
@@ -238,7 +238,7 @@ pub(crate) fn merge_into_base(
     // a config error (e.g. trained on a different model).
     for adapter_path in adapter.modules.keys() {
         if !applied.contains(adapter_path) {
-            return Err(crate::GlinerCandleError::Backend(format!(
+            return Err(crate::candle::GlinerCandleError::Backend(format!(
                 "lora_merge: adapter targets module '{adapter_path}' but no \
                  matching key '{adapter_path}.weight' found in base safetensors"
             )));

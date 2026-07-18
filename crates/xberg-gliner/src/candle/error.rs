@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-/// Result type used by `xberg-gliner-candle`.
+/// Result type used by the `candle` module.
 pub type Result<T> = std::result::Result<T, GlinerCandleError>;
 
 /// Errors returned by Candle GLiNER2 inference, LoRA loading, and merge.
@@ -11,7 +11,7 @@ pub enum GlinerCandleError {
     Candle(#[from] candle_core::Error),
     /// `xberg-gliner` prompt-encoding or decode error.
     #[error("gliner error: {0}")]
-    Gliner(#[from] xberg_gliner::GlinerError),
+    Gliner(#[from] crate::GlinerError),
     /// Filesystem or config-parsing error during model/adapter loading.
     #[error("backend error: {0}")]
     Backend(String),

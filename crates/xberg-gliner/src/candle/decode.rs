@@ -1,16 +1,16 @@
 //! Span-index construction and score decoding for the Candle GLiNER2
 //! pipeline. The numeric decode loop is adapted from
 //! `anno::backends::gliner2_fastino::pipeline::decode_entities_with_thresholds`
-//! to target `xberg_gliner::Span` (byte offsets) instead of anno's
+//! to target `crate::Span` (byte offsets) instead of anno's
 //! char-offset `Entity` type; no offset-unit conversion needed here.
 
 use ndarray::Array3;
 pub(crate) use ndarray::Array4;
 
-use xberg_gliner::{Span, Token, decode::greedy_search};
+use crate::{Span, Token, decode::greedy_search};
 
-pub(crate) use crate::heads::MAX_WIDTH;
-pub(crate) use crate::heads::count_lstm::MAX_COUNT;
+pub(crate) use crate::candle::heads::MAX_WIDTH;
+pub(crate) use crate::candle::heads::count_lstm::MAX_COUNT;
 
 /// Per-instance per-span per-label entity scores. Shape
 /// `[MAX_COUNT, num_words, MAX_WIDTH, num_labels]`. Already-sigmoided.
@@ -24,7 +24,7 @@ pub(crate) struct ScorerOutput {
 /// emits `(start, start + width_idx)`. Out-of-range pairs (`end >= num_words`)
 /// are zero-padded; those slots carry score `0.0` after the heads' forward
 /// pass and are always skipped by `decode_span_scores`.
-pub(crate) fn build_span_idx(num_words: usize) -> crate::Result<Array3<i64>> {
+pub(crate) fn build_span_idx(num_words: usize) -> crate::candle::Result<Array3<i64>> {
     let num_spans = num_words * MAX_WIDTH;
     let mut data = Vec::with_capacity(num_spans * 2);
     for start in 0..num_words {
@@ -39,12 +39,12 @@ pub(crate) fn build_span_idx(num_words: usize) -> crate::Result<Array3<i64>> {
         }
     }
     Array3::from_shape_vec((1, num_spans, 2), data)
-        .map_err(|e| crate::GlinerCandleError::Backend(format!("build_span_idx shape: {e}")))
+        .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("build_span_idx shape: {e}")))
 }
 
 /// Decode the scorer's `[MAX_COUNT, num_words, MAX_WIDTH, num_labels]` tensor
-/// into a [`xberg_gliner::SpanOutput`], applying a single global `threshold`,
-/// then greedy-merging overlaps via `xberg_gliner::decode::greedy_search`.
+/// into a [`crate::SpanOutput`], applying a single global `threshold`,
+/// then greedy-merging overlaps via `crate::decode::greedy_search`.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn decode_span_scores(
     text: &str,
@@ -56,7 +56,7 @@ pub(crate) fn decode_span_scores(
     flat_ner: bool,
     dup_label: bool,
     multi_label: bool,
-) -> crate::Result<xberg_gliner::SpanOutput> {
+) -> crate::candle::Result<crate::SpanOutput> {
     let scores = &scorer_out.scores;
     // Bound by the scores tensor's word dimension, not `words.len()`: when the
     // input exceeds the encoder's position-embedding limit, `run_pipeline`
@@ -114,7 +114,7 @@ pub(crate) fn decode_span_scores(
     candidates.sort_unstable_by_key(Span::offsets);
     let spans = greedy_search(&candidates, flat_ner, dup_label, multi_label);
 
-    Ok(xberg_gliner::SpanOutput {
+    Ok(crate::SpanOutput {
         texts: vec![text.to_string()],
         entities: labels.to_vec(),
         spans: vec![spans],
@@ -127,7 +127,7 @@ mod tests {
 
     #[test]
     fn decode_span_scores_skips_non_char_boundary_offsets() {
-        use xberg_gliner::Token;
+        use crate::Token;
         // "\u{130}a": U+0130 is two bytes, so offset 1 is mid-character. A
         // token carrying such offsets (possible when the lowercased copy is
         // longer than the original) must be skipped, not panic.
@@ -153,7 +153,7 @@ mod tests {
 
     #[test]
     fn decode_span_scores_bounds_by_scores_dim_after_truncation() {
-        use xberg_gliner::Token;
+        use crate::Token;
         // Three words, but the scores tensor only covers two (the pipeline
         // truncated the third at the position-embedding limit). Decoding must
         // stay inside the tensor instead of panicking on the third word.
@@ -194,7 +194,7 @@ mod tests {
 
     #[test]
     fn decode_span_scores_drops_below_threshold_candidates() {
-        use xberg_gliner::Token;
+        use crate::Token;
         let text = "Ada Lovelace";
         let words = vec![Token::new(0, 3, "ada"), Token::new(4, 12, "lovelace")];
         let labels = vec!["person".to_string()];

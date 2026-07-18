@@ -32,7 +32,9 @@ impl V2Tokenizer {
         Ok(Self { inner })
     }
 
-    /// Load from in-memory `tokenizer.json` bytes (wasm/no-fs path).
+    /// Load from in-memory `tokenizer.json` bytes (wasm/no-fs path); only
+    /// the `candle` backend loads tokenizers from memory.
+    #[cfg(feature = "candle")]
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         let inner = tokenizers::Tokenizer::from_bytes(bytes)
             .map_err(|error| GlinerError::Tokenizer(format!("failed to load tokenizer from bytes: {error}")))?;

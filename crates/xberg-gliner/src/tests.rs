@@ -3,12 +3,13 @@ use ndarray::Array4;
 use super::*;
 
 #[test]
-fn v2_prompt_encoding_surface_is_public() {
-    // Compile-time check: these must be reachable as `xberg_gliner::*` from
-    // outside the crate (xberg-gliner-candle depends on this surface).
-    let splitter = crate::V2Splitter::new().expect("valid regex");
+fn v2_prompt_encoding_constructs_and_errors_cleanly() {
+    // The V2 prompt-encoding surface is shared with the `candle` module;
+    // constructing it must not panic, and a missing tokenizer file must
+    // surface as an error.
+    let splitter = crate::v2::splitter::V2Splitter::new().expect("valid regex");
     let tokenizer_path = std::path::Path::new("nonexistent.json");
-    let result = crate::V2Tokenizer::from_file(tokenizer_path);
+    let result = crate::v2::tokenizer::V2Tokenizer::from_file(tokenizer_path);
     assert!(result.is_err(), "missing file must error, not panic");
     let _ = splitter; // keep both symbols referenced
 }

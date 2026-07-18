@@ -21,16 +21,16 @@ pub struct Encoder {
 impl Encoder {
     /// Load the encoder from a `model.safetensors` + `config.json` pair.
     ///
-    /// Only used by [`crate::Gliner2Candle::from_local_with_device`] and
-    /// [`crate::Gliner2Candle::unload_adapter`]; dead weight on wasm32
+    /// Only used by [`crate::candle::Gliner2Candle::from_local_with_device`] and
+    /// [`crate::candle::Gliner2Candle::unload_adapter`]; dead weight on wasm32
     /// (no filesystem).
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn from_safetensors(weights_path: &Path, config_path: &Path, device: &Device) -> crate::Result<Self> {
+    pub fn from_safetensors(weights_path: &Path, config_path: &Path, device: &Device) -> crate::candle::Result<Self> {
         let cfg_str = std::fs::read_to_string(config_path).map_err(|e| {
-            crate::GlinerCandleError::Backend(format!("encoder config read {}: {e}", config_path.display()))
+            crate::candle::GlinerCandleError::Backend(format!("encoder config read {}: {e}", config_path.display()))
         })?;
         let config: DebertaV2Config = serde_json::from_str(&cfg_str).map_err(|e| {
-            crate::GlinerCandleError::Backend(format!("encoder config parse {}: {e}", config_path.display()))
+            crate::candle::GlinerCandleError::Backend(format!("encoder config parse {}: {e}", config_path.display()))
         })?;
 
         // SAFETY: VarBuilder::from_mmaped_safetensors mmap-reads the weights
@@ -38,13 +38,13 @@ impl Encoder {
         // standard pattern.
         #[allow(unsafe_code)]
         let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[weights_path], candle_core::DType::F32, device) }
-            .map_err(|e| crate::GlinerCandleError::Backend(format!("encoder safetensors: {e}")))?;
+            .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("encoder safetensors: {e}")))?;
 
         // GLiNER2 stores all encoder tensors under the `encoder.` prefix
         // (e.g. `encoder.embeddings.word_embeddings.weight`). DebertaV2Model
         // expects them at root, so scope into the prefix.
         let model = DebertaV2Model::load(vb.pp("encoder"), &config)
-            .map_err(|e| crate::GlinerCandleError::Backend(format!("encoder DebertaV2Model::load: {e}")))?;
+            .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("encoder DebertaV2Model::load: {e}")))?;
 
         Ok(Self { model, config })
     }
@@ -60,22 +60,22 @@ impl Encoder {
         config: &DebertaV2Config,
         device: &Device,
         dtype: candle_core::DType,
-    ) -> crate::Result<Self> {
-        let tensors = crate::streaming_load::load_buffer_streaming(bytes, device, dtype)?;
+    ) -> crate::candle::Result<Self> {
+        let tensors = crate::candle::streaming_load::load_buffer_streaming(bytes, device, dtype)?;
         let vb = VarBuilder::from_tensors(tensors, dtype, device);
         Self::from_var_builder(vb.pp("encoder"), config)
     }
 
     /// Load the encoder from an already-built [`VarBuilder`] + parsed config.
     ///
-    /// Used by [`crate::Gliner2Candle::load_adapter`] after the LoRA merge
+    /// Used by [`crate::candle::Gliner2Candle::load_adapter`] after the LoRA merge
     /// has produced a `HashMap<String, Tensor>` that's wrapped into a
     /// `VarBuilder::from_tensors`. The caller is responsible for scoping
     /// into the `encoder.` prefix; this constructor calls `DebertaV2Model::load`
     /// directly on the provided VarBuilder.
-    pub fn from_var_builder(vb: VarBuilder<'_>, config: &DebertaV2Config) -> crate::Result<Self> {
+    pub fn from_var_builder(vb: VarBuilder<'_>, config: &DebertaV2Config) -> crate::candle::Result<Self> {
         let model = DebertaV2Model::load(vb, config)
-            .map_err(|e| crate::GlinerCandleError::Backend(format!("encoder DebertaV2Model::load (vb): {e}")))?;
+            .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("encoder DebertaV2Model::load (vb): {e}")))?;
         Ok(Self {
             model,
             config: config.clone(),

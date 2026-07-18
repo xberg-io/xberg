@@ -49,9 +49,9 @@ pub(crate) fn load_buffer_streaming(
     bytes: &[u8],
     device: &Device,
     dtype: DType,
-) -> crate::Result<HashMap<String, Tensor>> {
+) -> crate::candle::Result<HashMap<String, Tensor>> {
     let st = SafeTensors::deserialize(bytes)
-        .map_err(|e| crate::GlinerCandleError::Backend(format!("safetensors deserialize: {e}")))?;
+        .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("safetensors deserialize: {e}")))?;
 
     let mut tensors = HashMap::with_capacity(st.len());
     for (name, view) in st.iter() {
@@ -74,12 +74,12 @@ pub(crate) fn load_buffer_streaming(
 
 /// Convert an F32 safetensors view directly to an F16 `Tensor` without ever
 /// materializing an intermediate F32 `Tensor`/`Vec<f32>`. See module docs.
-fn convert_view_to_f16(view: &TensorView<'_>, device: &Device) -> crate::Result<Tensor> {
+fn convert_view_to_f16(view: &TensorView<'_>, device: &Device) -> crate::candle::Result<Tensor> {
     let bytes = view.data();
     let mut out: Vec<half::f16> = Vec::with_capacity(bytes.len() / 4);
     for chunk in bytes.chunks_exact(4) {
         let f = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
         out.push(half::f16::from_f32(f));
     }
-    Tensor::from_vec(out, view.shape(), device).map_err(crate::GlinerCandleError::from)
+    Tensor::from_vec(out, view.shape(), device).map_err(crate::candle::GlinerCandleError::from)
 }

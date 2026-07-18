@@ -4,11 +4,11 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
-description = "Stripped span-mode GLiNER ONNX runtime used by xberg NER."
+description = "GLiNER inference used by xberg NER: span-mode ONNX runtime plus an optional Candle GLiNER2 backend."
 license = "Apache-2.0"
 repository.workspace = true
 homepage.workspace = true
-keywords = ["nlp", "ner", "gliner", "onnx"]
+keywords = ["nlp", "ner", "gliner", "onnx", "candle"]
 categories = ["text-processing"]
 
 [lib]
@@ -25,20 +25,61 @@ default = ["ort-bundled"]
 ort-backend = ["dep:ort"]
 ort-bundled = ["ort-backend", "ort/download-binaries", "ort/tls-rustls"]
 ort-dynamic = ["ort-backend", "ort/load-dynamic"]
+# Candle-based GLiNER2 backend (`candle` module): DeBERTa-v2 encoder, span
+# scoring heads, PEFT LoRA merge-at-load. Independent of the ORT features.
+candle = [
+    "dep:candle-core",
+    "dep:candle-nn",
+    "dep:candle-transformers",
+    "dep:half",
+    "dep:safetensors",
+    "dep:serde",
+    "dep:serde_json",
+]
+# GPU pass-throughs for the candle backend. Neither can build on CPU-only CI
+# runners, which is why scripts/ci/rust/run-unit-tests.sh tests this crate
+# with an explicit feature list instead of --all-features.
+cuda = ["candle", "candle-core?/cuda", "candle-nn?/cuda", "candle-transformers?/cuda"]
+metal = ["candle", "candle-core?/metal", "candle-nn?/metal", "candle-transformers?/metal"]
 
 [dependencies]
+candle-core = { workspace = true, optional = true }
+candle-nn = { workspace = true, optional = true }
+candle-transformers = { workspace = true, optional = true }
+# Direct F32->F16 byte-level conversion in candle/streaming_load.rs (avoids
+# materializing an intermediate F32 candle Tensor for large tensors on
+# wasm32, see that file's module doc) needs the same `half::f16` type
+# candle-core's F16 dtype uses internally. Pinned to match candle-core
+# 0.11's transitive `half` version (see Cargo.lock) so `Tensor::from_vec`
+# accepts the Vec<half::f16> directly.
+half = { version = "2.7", optional = true }
 ndarray = "0.17"
 ort = { workspace = true, features = ["ndarray"], optional = true }
 parking_lot = { workspace = true }
 regex = "1.13"
+# Must stay in lockstep with the safetensors version candle-core uses
+# internally (0.8): the streaming loader (candle/streaming_load.rs) hands
+# its own TensorView values to candle_core::safetensors::Load, which is
+# only implemented for that version's TensorView type. A different version
+# here would be a distinct crate instance/type and the
+# `Load::load(&view, ..)` calls would not compile.
+safetensors = { version = "0.8", optional = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokenizers = { version = "0.23", default-features = false, features = ["fancy-regex"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 # tokenizers pulls getrandom transitively (via ahash, rand); force-enable the
 # wasm_js backend for every getrandom major in the graph so wasm32 links.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
 getrandom_03 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3"
 
 [lints]
 workspace = true

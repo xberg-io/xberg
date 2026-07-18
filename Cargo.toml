@@ -5,7 +5,6 @@ members = [
     "crates/xberg-cli",
     "crates/xberg-ffi",
     "crates/xberg-gliner",
-    "crates/xberg-gliner-candle",
     "crates/xberg-jni",
     "crates/xberg-libheif",
     "crates/xberg-node",
@@ -120,7 +119,6 @@ web-sys = { version = "0.3", features = [
 ] }
 xberg = { path = "./crates/xberg", version = "1.0.0-rc.29", default-features = false }
 xberg-gliner = { path = "./crates/xberg-gliner", version = "1.0.0-rc.29", default-features = false }
-xberg-gliner-candle = { path = "./crates/xberg-gliner-candle", version = "1.0.0-rc.29", default-features = false }
 
 [patch.crates-io]
 xberg = { path = "crates/xberg" }

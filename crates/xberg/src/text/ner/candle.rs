@@ -1,4 +1,4 @@
-//! NER backend backed by `xberg-gliner-candle` (GLiNER2 safetensors + optional LoRA).
+//! NER backend backed by `xberg-gliner`'s `candle` module (GLiNER2 safetensors + optional LoRA).
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
@@ -13,7 +13,7 @@ use ahash::AHashMap;
 use async_trait::async_trait;
 #[cfg(all(not(target_arch = "wasm32"), feature = "ner-candle"))]
 use parking_lot::RwLock;
-use xberg_gliner_candle::Gliner2Candle;
+use xberg_gliner::candle::Gliner2Candle;
 
 use crate::Result;
 use crate::text::ner::NerBackend;
@@ -128,7 +128,7 @@ impl CandleBackend {
     }
 }
 
-fn spans_to_entities(spans: Vec<xberg_gliner_candle::Span>) -> Vec<Entity> {
+fn spans_to_entities(spans: Vec<xberg_gliner::Span>) -> Vec<Entity> {
     spans
         .into_iter()
         .map(|span| {
@@ -283,7 +283,7 @@ mod tests {
 
     #[test]
     fn spans_to_entities_converts_fields_correctly() {
-        let span = xberg_gliner_candle::Span::new(0, 0, 5, "Alice".to_string(), "person".to_string(), 0.92)
+        let span = xberg_gliner::Span::new(0, 0, 5, "Alice".to_string(), "person".to_string(), 0.92)
             .expect("valid span");
         let entities = spans_to_entities(vec![span]);
 

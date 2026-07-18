@@ -16,7 +16,7 @@ pub struct SchemaGatherOutput {
 impl SchemaGather {
     /// `schema_indices` includes the `[P]` index first, followed by all
     /// per-field `[E]` indices; matches `schema_positions` order from
-    /// `xberg_gliner::encode_v2`.
+    /// `crate::encode_v2`.
     pub fn forward(
         &self,
         hidden_states: &Tensor,  // [1, S, H]

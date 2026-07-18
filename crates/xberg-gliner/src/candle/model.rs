@@ -9,13 +9,13 @@ use std::path::PathBuf;
 use candle_core::Device;
 
 #[cfg(not(target_arch = "wasm32"))]
-use crate::lora;
-use crate::{GlinerCandleError, Result, decode, encoder, heads, pipeline};
+use crate::candle::lora;
+use crate::candle::{GlinerCandleError, Result, decode, encoder, heads, pipeline};
 
 /// Candle-based GLiNER2 backend with PEFT LoRA adapter merge-at-load support.
 pub struct Gliner2Candle {
-    pub(crate) tokenizer: xberg_gliner::V2Tokenizer,
-    pub(crate) splitter: xberg_gliner::V2Splitter,
+    pub(crate) tokenizer: crate::V2Tokenizer,
+    pub(crate) splitter: crate::V2Splitter,
     pub(crate) device: Device,
     /// Directory containing the base model's `tokenizer.json`, `config.json`
     /// (or `encoder_config/config.json`), and `model.safetensors`. Used to
@@ -60,8 +60,8 @@ impl Gliner2Candle {
     /// `safetensors` is the `model.safetensors` contents.
     pub fn from_bytes(safetensors: &[u8], tokenizer_json: &[u8], encoder_config_json: &[u8]) -> Result<Self> {
         let device = Device::Cpu;
-        let tokenizer = xberg_gliner::V2Tokenizer::from_bytes(tokenizer_json)?;
-        let splitter = xberg_gliner::V2Splitter::new()?;
+        let tokenizer = crate::V2Tokenizer::from_bytes(tokenizer_json)?;
+        let splitter = crate::V2Splitter::new()?;
         let config: candle_transformers::models::debertav2::Config = serde_json::from_slice(encoder_config_json)
             .map_err(|e| GlinerCandleError::Backend(format!("encoder config parse: {e}")))?;
         // wasm32: F16, halving resident memory after loading -- confirmed via
@@ -94,7 +94,7 @@ impl Gliner2Candle {
     }
 
     /// Extract entities for the given zero-shot `labels`.
-    pub fn extract_ner(&self, text: &str, labels: &[&str], threshold: f32) -> Result<Vec<xberg_gliner::Span>> {
+    pub fn extract_ner(&self, text: &str, labels: &[&str], threshold: f32) -> Result<Vec<crate::Span>> {
         if labels.is_empty() {
             return Ok(vec![]);
         }
@@ -192,8 +192,8 @@ impl Gliner2Candle {
             )));
         }
 
-        let tokenizer = xberg_gliner::V2Tokenizer::from_file(&tokenizer_path)?;
-        let splitter = xberg_gliner::V2Splitter::new()?;
+        let tokenizer = crate::V2Tokenizer::from_file(&tokenizer_path)?;
+        let splitter = crate::V2Splitter::new()?;
         let encoder = encoder::Encoder::from_safetensors(&weights_path, &config_path, device)?;
         let heads_loaded = heads::AllHeads::from_safetensors(&weights_path, device)?;
         let model_id = model_dir

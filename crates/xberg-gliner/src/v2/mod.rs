@@ -5,7 +5,7 @@
 //! implement the original span-mode GLiNER.
 //!
 //! `preprocess`, `splitter`, and `tokenizer` are backend-agnostic (also
-//! consumed by the Candle implementation in `xberg-gliner-candle`); the
+//! consumed by the Candle implementation in the `candle` module); the
 //! rest drive the ONNX Runtime engine and are gated on `ort-backend`.
 
 #[cfg(feature = "ort-backend")]

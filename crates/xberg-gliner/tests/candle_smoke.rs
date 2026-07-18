@@ -4,8 +4,9 @@
 //! ```text
 //! GLINER2_CANDLE_MODEL_DIR=/path/to/gliner2-multi-v1 \
 //! GLINER2_TEST_ADAPTER_DIR=/path/to/adapter \
-//! cargo test -p xberg-gliner-candle --test smoke -- --ignored
+//! cargo test -p xberg-gliner --features candle --test candle_smoke -- --ignored
 //! ```
+#![cfg(feature = "candle")]
 
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
@@ -21,7 +22,7 @@ fn base_model_extracts_entities_and_adapter_changes_output() {
     };
 
     let mut model =
-        xberg_gliner_candle::Gliner2Candle::from_local(std::path::Path::new(&model_dir)).expect("load base model");
+        xberg_gliner::candle::Gliner2Candle::from_local(std::path::Path::new(&model_dir)).expect("load base model");
     let text = "Steve Jobs founded Apple in Cupertino.";
     let labels = ["person", "organization", "location"];
 
@@ -74,7 +75,7 @@ fn pii_model_loads_from_bytes_and_extracts_entities() {
     // check the design spec's config-schema inspection could not perform by
     // reading alone: does model.safetensors's tensor naming actually carry
     // the `encoder.` prefix encoder.rs strips via vb.pp("encoder")?
-    let model = xberg_gliner_candle::Gliner2Candle::from_bytes(&safetensors, &tokenizer_json, &encoder_config_json)
+    let model = xberg_gliner::candle::Gliner2Candle::from_bytes(&safetensors, &tokenizer_json, &encoder_config_json)
         .expect("from_bytes must load the real pinned PII model without a tensor mismatch");
 
     let text = "Email john.smith@acme.com or call +1 415 555 0199. Signed, Jane Doe.";
