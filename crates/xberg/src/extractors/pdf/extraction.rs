@@ -67,7 +67,7 @@ pub(crate) fn extract_all_from_oxide_document(
     if config.pdf_options.as_ref().is_some_and(|opts| opts.reading_order)
         && let Some(hints) = layout_hints
     {
-        match apply_reading_order_reordering(&mut doc, &native_text, hints) {
+        match apply_reading_order_reordering(&mut doc, &native_text, hints, config.pages.as_ref()) {
             Ok((reordered, reordered_boundaries)) => {
                 native_text = reordered;
                 // Reordering rebuilds the text, so boundaries computed against
@@ -327,12 +327,14 @@ pub(crate) fn extract_all_from_oxide_document(
 /// Returns the reordered text string together with page boundaries recomputed
 /// against it — the rebuilt string has a different byte layout, so boundaries
 /// from the original extraction must not be used to index it. An empty
-/// boundary vector means the text was returned unchanged.
+/// boundary vector means the text was returned unchanged. Page markers from
+/// `page_config` are preserved in the rebuilt text.
 #[cfg(feature = "layout-detection")]
 fn apply_reading_order_reordering(
     doc: &mut crate::pdf::oxide::OxideDocument,
     native_text: &str,
     layout_hints_per_page: &[Vec<crate::pdf::structure::types::LayoutHint>],
+    page_config: Option<&crate::core::config::PageConfig>,
 ) -> Result<(String, Vec<crate::types::PageBoundary>)> {
     use crate::extractors::pdf::reading_order;
 
@@ -385,18 +387,27 @@ fn apply_reading_order_reordering(
         return Ok((native_text.to_string(), Vec::new()));
     }
 
-    Ok(join_pages_with_boundaries(&reordered_pages))
+    Ok(join_pages_with_boundaries(&reordered_pages, page_config))
 }
 
-/// Join per-page texts with `"\n\n"` separators, recording each page's byte
-/// range in the combined string. The separators belong to no page, matching
-/// how `extract_text_from_oxide_document` records boundaries.
+/// Join per-page texts, recording each page's byte range in the combined
+/// string, faithful to how `extract_text_from_oxide_document` assembles it:
+/// a rendered page marker before each page when `insert_page_markers` is on,
+/// otherwise `"\n\n"` separators between pages. Markers and separators belong
+/// to no page.
 #[cfg(feature = "layout-detection")]
-fn join_pages_with_boundaries(pages: &[String]) -> (String, Vec<crate::types::PageBoundary>) {
+fn join_pages_with_boundaries(
+    pages: &[String],
+    page_config: Option<&crate::core::config::PageConfig>,
+) -> (String, Vec<crate::types::PageBoundary>) {
+    let markers = page_config.filter(|c| c.insert_page_markers);
     let mut content = String::new();
     let mut boundaries = Vec::with_capacity(pages.len());
     for (idx, page_text) in pages.iter().enumerate() {
-        if idx > 0 {
+        if let Some(config) = markers {
+            let marker = config.marker_format.replace("{page_num}", &(idx + 1).to_string());
+            content.push_str(&marker);
+        } else if idx > 0 {
             content.push_str("\n\n");
         }
         let byte_start = content.len();
@@ -425,7 +436,7 @@ mod tests {
             String::new(),
             "final page".to_string(),
         ];
-        let (content, boundaries) = super::join_pages_with_boundaries(&pages);
+        let (content, boundaries) = super::join_pages_with_boundaries(&pages, None);
         assert_eq!(content, pages.join("\n\n"));
         assert_eq!(boundaries.len(), pages.len());
         for (i, b) in boundaries.iter().enumerate() {
@@ -433,6 +444,32 @@ mod tests {
             assert!(content.is_char_boundary(b.byte_start));
             assert!(content.is_char_boundary(b.byte_end));
             assert_eq!(&content[b.byte_start..b.byte_end], pages[i]);
+        }
+    }
+
+    /// With `insert_page_markers` on, the reordered rebuild must emit the same
+    /// rendered markers as initial extraction: one before each page, outside
+    /// the page's byte range.
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn test_join_pages_with_boundaries_page_markers() {
+        let pages = vec!["first • page".to_string(), "second page".to_string()];
+        let page_config = crate::core::config::PageConfig {
+            insert_page_markers: true,
+            marker_format: "\n\n<!-- PAGE {page_num} -->\n\n".to_string(),
+            ..Default::default()
+        };
+        let (content, boundaries) = super::join_pages_with_boundaries(&pages, Some(&page_config));
+        assert_eq!(
+            content,
+            "\n\n<!-- PAGE 1 -->\n\nfirst • page\n\n<!-- PAGE 2 -->\n\nsecond page"
+        );
+        for (i, b) in boundaries.iter().enumerate() {
+            assert_eq!(
+                &content[b.byte_start..b.byte_end],
+                pages[i],
+                "markers stay outside page ranges"
+            );
         }
     }
 

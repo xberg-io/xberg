@@ -46,7 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   multibyte character, silently dropping the whole document. On OCR-heavy corpora this lost the
   majority of pages with layout detection on. Boundaries are now recomputed against the reordered
   text (including the copy used for chunk page ranges), and the per-page OCR gate and OCR/native
-  merge skip-and-log invalid boundaries instead of panicking.
+  merge skip-and-log invalid boundaries instead of panicking. The rebuilt text also keeps
+  `insert_page_markers` markers, which reading-order reordering used to drop.
 - **macOS wheels and the npm darwin package now target macOS 11, instead of only macOS 15.**
   Wheels were built with a deployment target of 15.0, so pip and uv matched no wheel below
   macOS 15 and silently fell back to compiling the Rust sdist; the npm darwin package vendored
