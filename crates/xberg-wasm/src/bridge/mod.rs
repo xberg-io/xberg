@@ -9,6 +9,12 @@ use std::sync::OnceLock;
 
 use wasm_bindgen::prelude::*;
 
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console)]
+    fn warn(msg: &str);
+}
+
 pub(crate) const BRIDGE_TIMEOUT_MS: u32 = 30_000;
 
 fn get_timeout_racer() -> &'static js_sys::Function {
@@ -21,8 +27,9 @@ fn get_timeout_racer() -> &'static js_sys::Function {
              const timer = new Promise((_, reject) => {\n\
                  id = setTimeout(() => reject(new Error('bridge call timed out')), ms);\n\
              });\n\
-             p.finally(() => clearTimeout(id));\n\
-             return Promise.race([p, timer]);\n\
+             const raced = Promise.race([p, timer]);\n\
+             raced.then(() => clearTimeout(id), () => clearTimeout(id));\n\
+             return raced;\n\
              })()",
         )
     })
@@ -30,17 +37,24 @@ fn get_timeout_racer() -> &'static js_sys::Function {
 
 /// Wrap a JS `Promise` with a timeout.
 ///
-/// If the promise does not resolve within `ms` milliseconds, the returned
+/// If the promise does not settle within `ms` milliseconds, the returned
 /// promise rejects with an `Error("bridge call timed out")`.  Uses
 /// `Promise.race` under the hood so the original promise is still cancellable.
-/// The timer handle is cleared via `p.finally` so the timeout does not stay
-/// alive after the promise settles.
+/// The timer is cleared once the race settles; the cleanup chain hangs off the
+/// raced promise with both handlers attached, so it can never itself become an
+/// unhandled rejection when the bridge call fails.
 pub fn with_timeout(promise: js_sys::Promise, ms: u32) -> js_sys::Promise {
     let racer = get_timeout_racer();
     let p_val = JsValue::from(&promise);
     match racer.call2(&JsValue::NULL, &p_val, &JsValue::from(ms)) {
         Ok(val) => val.into(),
-        Err(_) => promise,
+        Err(_) => {
+            // Arming the race can only fail on engine-level errors (e.g. OOM).
+            // Degrade to the untimed promise, but say so instead of silently
+            // dropping the timeout.
+            warn("xberg-wasm: failed to arm bridge timeout; proceeding without one");
+            promise
+        }
     }
 }
 

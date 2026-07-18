@@ -1,18 +1,16 @@
-//! OCR (Optical Character Recognition) bridge with injected-first dispatch.
+//! OCR (Optical Character Recognition) bridge with injected dispatch.
 //!
-//! Similar to the NER bridge, the WASM engine prefers an externally-
-//! injected JavaScript object that implements an
-//! `ocr(imageBytes, options)` async method. The host returns a promise
-//! resolving to `{ text: string, lines: Array<{ text: string, confidence:
-//! number, bbox?: { x, y, w, h } }> }` — real per-line geometry, not just
-//! a flat string. `lines` is optional on the wire; a missing/malformed
-//! `lines` array degrades to an empty vec rather than an error, since
-//! `text` alone is still useful.
+//! The WASM engine calls an externally-injected JavaScript object that
+//! implements an `ocr(imageBytes, options)` async method. The host returns
+//! a promise resolving to `{ text: string, lines: Array<{ text: string,
+//! confidence: number, bbox?: { x, y, w, h } }> }` — real per-line geometry,
+//! not just a flat string. `lines` is optional on the wire; a missing or
+//! malformed `lines` array degrades to an empty vec rather than an error,
+//! since `text` alone is still useful.
 //!
-//! When no injection is present it attempts an in-binary Tesseract
-//! fallback under `#[cfg(feature = "ocr-wasm")]`.
+//! There is no in-binary fallback: when no backend is injected, OCR is
+//! unavailable and calls return an error saying so.
 
-#[cfg(target_arch = "wasm32")]
 use js_sys::{Function, Object, Promise, Reflect};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -45,15 +43,10 @@ pub struct OcrResult {
     pub lines: Vec<OcrLineResult>,
 }
 
-/// Resolve the best available OCR backend and return extracted text with
+/// Resolve OCR through the injected backend and return extracted text with
 /// per-line geometry.
 ///
-/// 1. If `injected` is `Some(obj)`, call
-///    `obj.ocr(imageBytes, { language })` — the host returns a promise
-///    resolving to `{ text, lines }` (see module docs).
-/// 2. If `injected` is `None` and `ocr-wasm` is enabled, attempt
-///    the in-binary Tesseract backend.
-/// 3. Otherwise return an error explaining that OCR is unavailable.
+/// Returns an error when `injected` is `None` or `image_bytes` is empty.
 pub async fn resolve_ocr(
     injected: Option<js_sys::Object>,
     image_bytes: &[u8],
@@ -69,9 +62,14 @@ pub async fn resolve_ocr_with_timeout(
     language: &str,
     timeout_ms: u32,
 ) -> Result<OcrResult, JsValue> {
+    if image_bytes.is_empty() {
+        return Err(js_from_any("OCR input image is empty"));
+    }
     match injected {
         Some(obj) => call_injected_ocr(obj, image_bytes, language, timeout_ms).await,
-        None => fallback_ocr(image_bytes, language).await,
+        None => Err(js_from_any(
+            "OCR unavailable: no OCR backend injected; pass an `ocr` object in the engine injection",
+        )),
     }
 }
 
@@ -99,31 +97,6 @@ async fn call_injected_ocr(
 
     serde_wasm_bindgen::from_value(js_val)
         .map_err(|e| js_from_any(format!("failed to deserialize ocr result: {e}")))
-}
-
-/// In-binary OCR fallback via Tesseract WASM backend.
-async fn fallback_ocr(image_bytes: &[u8], language: &str) -> Result<OcrResult, JsValue> {
-    if image_bytes.is_empty() {
-        return Err(js_from_any("OCR input image is empty"));
-    }
-
-    #[cfg(all(feature = "ocr-wasm", not(feature = "ocr")))]
-    {
-        // TesseractWasmBackend::new() is pub(crate) in xberg, so we cannot
-        // construct it from xberg-wasm.  Return a diagnostic error.
-        let _ = language;
-        Err(js_from_any(
-            "OCR unavailable: no injected backend and ocr-wasm backend constructor is not public; \
-             provide an injected JS backend or use the full xberg API directly",
-        ))
-    }
-
-    #[cfg(not(all(feature = "ocr-wasm", not(feature = "ocr"))))]
-    {
-        Err(js_from_any(
-            "OCR unavailable: no injected backend and ocr-wasm disabled",
-        ))
-    }
 }
 
 /// Convert a Display error into a JsValue suitable for propagation.
