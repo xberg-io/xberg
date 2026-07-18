@@ -431,7 +431,7 @@ sources = [
 roots = ["crawlberg::CrawlConfig", "crawlberg::MapResult"]
 
 [crates.extra_dependencies]
-crawlberg = { version = "1.0.3", default-features = false }
+crawlberg = { version = "1.0.5", default-features = false }
 
 [crates.python]
 module_name = "_xberg"
