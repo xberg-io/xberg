@@ -327,7 +327,16 @@ pub(crate) fn evaluate_per_page_ocr(
     let mut failing_pages: Vec<u32> = Vec::with_capacity(boundaries.len());
     let mut valid_boundary_count: usize = 0;
     for boundary in boundaries {
-        if boundary.byte_end > native_text.len() || boundary.byte_start > boundary.byte_end {
+        if boundary.byte_start > boundary.byte_end
+            || !native_text.is_char_boundary(boundary.byte_start)
+            || !native_text.is_char_boundary(boundary.byte_end)
+        {
+            tracing::warn!(
+                page = boundary.page_number,
+                byte_start = boundary.byte_start,
+                byte_end = boundary.byte_end,
+                "skipping OCR quality evaluation for page with invalid text boundary"
+            );
             continue;
         }
         valid_boundary_count += 1;
@@ -613,6 +622,17 @@ pub(crate) fn merge_ocr_pages_into_native(
     for boundary in sorted_boundaries {
         if let Some(ocr_text) = ocr_results.get(&boundary.page_number) {
             if ocr_text.trim().is_empty() {
+                continue;
+            }
+            // Checked against `result` (not `native_text`) so that overlapping
+            // boundaries stay safe after earlier replacements shift the string.
+            if !result.is_char_boundary(boundary.byte_start) || !result.is_char_boundary(boundary.byte_end) {
+                tracing::warn!(
+                    page = boundary.page_number,
+                    byte_start = boundary.byte_start,
+                    byte_end = boundary.byte_end,
+                    "skipping OCR merge for page with invalid text boundary; keeping native text"
+                );
                 continue;
             }
             result.replace_range(boundary.byte_start..boundary.byte_end, ocr_text);
@@ -1695,6 +1715,70 @@ mod tests {
         assert!(merged.contains("PAGE ONE NATIVE"));
         assert!(merged.contains("CLEAN OCR PAGE TWO"));
         assert!(!merged.contains("garbage page two"));
+    }
+
+    /// Boundaries can go stale when the text they index is rebuilt (e.g.
+    /// reading-order reordering). A stale offset landing inside a multibyte
+    /// character must be skipped, not panic the page.
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn test_per_page_ocr_non_char_boundary_offsets_skipped() {
+        use crate::types::PageBoundary;
+
+        let text = "This is a normal paragraph with meaningful words and proper structure. \
+                    It contains multiple sentences • that form a coherent text block.";
+        let mid_bullet = text.find('•').unwrap() + 1;
+        assert!(!text.is_char_boundary(mid_bullet));
+        let boundaries = vec![
+            PageBoundary {
+                page_number: 1,
+                byte_start: 0,
+                byte_end: mid_bullet,
+            },
+            PageBoundary {
+                page_number: 2,
+                byte_start: mid_bullet,
+                byte_end: text.len(),
+            },
+        ];
+        let decision = evaluate_per_page_ocr(text, Some(&boundaries), Some(2), &t());
+        assert!(
+            decision.failing_pages.is_empty(),
+            "stale non-char-boundary offsets must be skipped, not evaluated"
+        );
+    }
+
+    /// Same staleness in the mixed OCR/native merge: a boundary that does not
+    /// land on char boundaries must leave the native text untouched.
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    #[test]
+    fn test_merge_non_char_boundary_offsets_skipped() {
+        use crate::types::PageBoundary;
+
+        let native = "PAGE ONE • NATIVE\nPAGE TWO NATIVE";
+        let mid_bullet = native.find('•').unwrap() + 1;
+        assert!(!native.is_char_boundary(mid_bullet));
+        let boundaries = vec![
+            PageBoundary {
+                page_number: 1,
+                byte_start: 0,
+                byte_end: mid_bullet,
+            },
+            PageBoundary {
+                page_number: 2,
+                byte_start: mid_bullet,
+                byte_end: native.len(),
+            },
+        ];
+        let mut ocr_results: ahash::AHashMap<u32, String> = ahash::AHashMap::new();
+        ocr_results.insert(1, "OCR PAGE ONE".to_string());
+        ocr_results.insert(2, "OCR PAGE TWO".to_string());
+
+        let merged = merge_ocr_pages_into_native(native, &boundaries, &ocr_results);
+        assert_eq!(
+            merged, native,
+            "stale non-char-boundary offsets must not be spliced into the native text"
+        );
     }
 
     #[cfg(feature = "ocr")]
