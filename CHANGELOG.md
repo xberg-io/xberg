@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Reversible redaction for authorized callers (`redaction-rehydrate`).** Token-replacement
+  redaction can now capture a token to original-text map, encrypt it with a passphrase
+  (AES-256-GCM, scrypt-derived key, fresh salt and nonce per encryption), and later search or
+  selectively delete subjects from it: `find_subject` matches a token exactly or an original
+  value by substring, and `forget_subject` removes every matching entry and returns what was
+  removed so the caller can re-encrypt the remainder. The map never touches disk inside xberg.
+
 - **Scanned PDFs are now detectable, and can be OCR'd without forcing OCR on the whole file.**
   PDF metadata gains `scanned_confidence` (0.0–1.0) and `scanned_pages`, so you can tell whether a
   document is a scan before deciding how to extract it. The new `ocr_strategy` config selects which

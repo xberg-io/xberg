@@ -647,6 +647,7 @@ full = [
     "structured",
     "redaction",
     "redaction-ml",
+    "redaction-rehydrate",
     "summarization",
     "summarization-llm",
     "translation",
