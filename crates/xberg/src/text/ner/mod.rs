@@ -19,6 +19,8 @@
 #![cfg(feature = "ner")]
 
 pub mod backend;
+#[cfg(any(feature = "ner-candle", feature = "ner-candle-wasm"))]
+pub mod candle;
 #[cfg(feature = "ner-onnx")]
 pub mod gline;
 #[cfg(all(feature = "ner-llm", not(all(target_os = "android", target_arch = "x86_64"))))]

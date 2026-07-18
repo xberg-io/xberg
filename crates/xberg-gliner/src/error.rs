@@ -16,6 +16,7 @@ pub enum GlinerError {
     #[error("regex error: {0}")]
     Regex(#[from] regex::Error),
     /// ONNX Runtime failed.
+    #[cfg(feature = "ort-backend")]
     #[error("onnx runtime error: {0}")]
     Ort(#[from] ort::Error),
     /// An expected tensor was missing from model output.

@@ -1,0 +1,61 @@
+[package]
+name = "xberg-gliner-candle"
+version.workspace = true
+edition = "2024"
+rust-version.workspace = true
+authors.workspace = true
+description = "Candle-based GLiNER2 inference with runtime PEFT LoRA adapter merge-at-load."
+license = "Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+keywords = ["nlp", "ner", "gliner", "candle", "lora"]
+categories = ["text-processing"]
+
+[lib]
+name = "xberg_gliner_candle"
+path = "src/lib.rs"
+
+[features]
+default = []
+cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda"]
+metal = ["candle-core/metal", "candle-nn/metal", "candle-transformers/metal"]
+# ORT backend selection — pass through to xberg-gliner. One of these must be
+# active for tests and binaries to link (ORT symbols are unconditional in
+# xberg-gliner). Use ort-bundled in dev; ort-dynamic when a system ORT is
+# guaranteed present.
+ort-bundled = ["xberg-gliner/ort-bundled"]
+ort-dynamic = ["xberg-gliner/ort-dynamic"]
+
+[dependencies]
+candle-core = { workspace = true }
+candle-nn = { workspace = true }
+candle-transformers = { workspace = true }
+# Direct F32->F16 byte-level conversion in streaming_load.rs (avoids
+# materializing an intermediate F32 candle Tensor for large tensors on
+# wasm32, see that file's module doc) needs the same `half::f16` type
+# candle-core's F16 dtype uses internally. Pinned to match candle-core
+# 0.11's transitive `half` version (see Cargo.lock) so `Tensor::from_vec`
+# accepts the Vec<half::f16> directly.
+half = "2.7"
+ndarray = "0.17"
+# NOT `{ workspace = true }` (the workspace-wide alias pins 0.4, an old,
+# semver-incompatible version other crates need) -- this crate's streaming
+# loader (src/streaming_load.rs) must resolve to the SAME safetensors
+# version+instance candle-core uses internally (0.8.0, patched at the
+# workspace root via [patch.crates-io] for the wasm32 overflow fix), since
+# candle_core::safetensors::Load is only implemented for THAT version's
+# TensorView type. A `{ workspace = true }` 0.4 dependency here would be a
+# distinct crate instance/type, breaking `Load::load(&view, ..)` calls.
+safetensors = "0.8"
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokenizers = { version = "0.23", default-features = false, features = ["fancy-regex"] }
+xberg-gliner = { workspace = true, default-features = false }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+wasm-bindgen-test = "0.3"
+
+[lints]
+workspace = true

@@ -344,6 +344,10 @@ diff = ["dep:similar"]
 # Each feature lands in its own module under `crates/xberg/src/text/` (or
 # `crates/xberg/src/extractors/` for QR) and is wired through a built-in
 # post-processor under `crates/xberg/src/plugins/processor/builtin/`.
+ner-candle = ["ner", "dep:xberg-gliner-candle", "tokio-runtime"]
+# Same in-binary GLiNER2 Candle inference for wasm32 (no tokio); the wasm-side
+# wiring lands separately.
+ner-candle-wasm = ["ner", "dep:xberg-gliner-candle"]
 ner = [] # NER result types only; safe on every target.
 ner-llm-types = [
     "ner",
@@ -823,6 +827,7 @@ uuid = { version = "1", features = ["v4"], optional = true }
 v_htmlescape = { version = "0.17", optional = true }
 whatlang = { version = "0.18.0", optional = true }
 xberg-gliner = { workspace = true, optional = true }
+xberg-gliner-candle = { workspace = true, optional = true }
 xberg-libheif = { path = "../xberg-libheif", version = "1.0.0-rc.29", optional = true }
 # No `version` on this path-dep: xberg-tesseract carries `links =
 # "xberg_tesseract"`, and a versioned path-dep makes the maturin sdist
