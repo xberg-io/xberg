@@ -46,6 +46,8 @@ PDF_DIR = TEST_DOCS / "pdf"
 FIXTURE_DIR = REPO_ROOT / "tools/benchmark-harness/fixtures/pdf"
 MANIFEST = TEST_DOCS / "ground_truth" / "corpus_manifest.json"
 README = TEST_DOCS / "README.md"
+ATTRIBUTIONS = TEST_DOCS / "ATTRIBUTIONS.md"
+LICENSES = TEST_DOCS / "LICENSES.md"
 LEDGER = STAGING / "build_ledger.json"
 PARSEBENCH = Path("/tmp/parsebench")  # noqa: S108  ParseBench staging (table.jsonl + docs/table/*.pdf)
 PB_MIN_TABLE_COVERAGE = 0.60  # a table page whose GT (table only) covers < this of the page is not
@@ -57,7 +59,9 @@ SOURCES = {
         "repo": "lazyc/READoc",
         "revision": None,
         "license": "MIT",
+        "redistribute": "vendor",  # permissive → committed into test_documents
         "url": "https://huggingface.co/datasets/lazyc/READoc",
+        "citation": "READoc: A Unified Benchmark for Realistic Document Structured Extraction (arXiv:2409.05137)",
         "granularity": "document",
         "gt_dirs": ["arxiv_ground_truth", "github_ground_truth"],
         "pdf_zips": ["arxiv.zip", "github.zip"],
@@ -67,11 +71,19 @@ SOURCES = {
         "repo": "llamaindex/ParseBench",
         "revision": None,
         "license": "Apache-2.0",
+        "redistribute": "vendor",  # permissive → committed into test_documents
         "url": "https://huggingface.co/datasets/llamaindex/ParseBench",
+        "citation": "ParseBench: A Document Parsing Benchmark for AI Agents, Zhang et al. (arXiv:2604.08538)",
         "granularity": "page",
         "note": "only table.jsonl ships expected_markdown (HTML tables); human-verified",
     },
 }
+
+# Redistribution policy. xberg (this repo) is MIT-licensed, public, non-commercial open-source.
+# `vendor`    = permissive (MIT/Apache/CC-BY/CC0/public-domain) → source PDFs + GT committed here.
+# `reference` = non-commercial / ShareAlike / research-only ToU → NOT committed; fetched to local
+#               staging by build_corpus and used for scoring only (non-commercial use), never
+#               redistributed. Recorded in the manifest with license + source URL for provenance.
 
 
 def sha256_bytes(b: bytes) -> str:
@@ -504,7 +516,86 @@ def stage_manifest(records: dict, dry: bool) -> None:
     MANIFEST.parent.mkdir(parents=True, exist_ok=True)
     MANIFEST.write_text(json.dumps(manifest, indent=2) + "\n")
     generate_readme(records)
-    print(f"[manifest] wrote {MANIFEST} (hash {manifest['manifest_sha256'][:12]}) + README")
+    generate_attributions(records)
+    generate_licenses(records)
+    print(f"[manifest] wrote {MANIFEST} (hash {manifest['manifest_sha256'][:12]}) + README + ATTRIBUTIONS + LICENSES")
+
+
+def _source_doc_counts(records: dict) -> dict:
+    from collections import Counter
+
+    return dict(Counter(r["source_dataset"] for r in records.values() if r["gate_verdict"] == "ACCEPT"))
+
+
+def generate_attributions(records: dict) -> None:
+    """Per-source attribution (satisfies CC-BY / dataset citation requirements)."""
+    counts = _source_doc_counts(records)
+    lines = [
+        "# Attributions",
+        "",
+        "This benchmark corpus is derived from third-party datasets. Each is credited below as required",
+        "by its license. Per-document provenance (upstream id, source revision, license) is in",
+        "`ground_truth/corpus_manifest.json`.",
+        "",
+    ]
+    for name, cfg in SOURCES.items():
+        n = counts.get(name, 0)
+        lines += [
+            f"## {cfg['repo']}",
+            "",
+            f"- **Citation:** {cfg.get('citation', cfg['repo'])}",
+            f"- **Source:** {cfg['url']}",
+            f"- **License:** {cfg['license']}",
+            f"- **Used here:** {n} accepted documents ({cfg['redistribute']}).",
+            "- **Modifications:** ground truth normalized to canonical GFM (see README → How the data "
+            "was modified). Derived GT is a derivative work under the upstream license.",
+            "",
+        ]
+    ATTRIBUTIONS.write_text("\n".join(lines))
+
+
+def generate_licenses(records: dict) -> None:
+    """License clarification: what the repo's MIT covers vs. what upstream data retains."""
+    vend = [c for c in SOURCES.values() if c.get("redistribute") == "vendor"]
+    ref = [c for c in SOURCES.values() if c.get("redistribute") == "reference"]
+    rows = ["| dataset | license | policy |", "|---|---|---|"]
+    for cfg in SOURCES.values():
+        rows.append(f"| [{cfg['repo']}]({cfg['url']}) | {cfg['license']} | {cfg['redistribute']} |")
+    body = f"""# Licensing
+
+`test_documents` is part of **xberg** (https://github.com/xberg-io/xberg), which is **MIT-licensed,
+public, non-commercial open-source**. Kreuzberg, Inc.'s commercial product lives in a separate repo.
+
+## What the MIT license covers
+
+The repository's MIT `LICENSE` covers **our own work**: the corpus tooling
+(`tools/benchmark-harness/scripts/*`), the `corpus_manifest.json`, this file, `ATTRIBUTIONS.md`, and
+`README.md`. It does **not** relicense third-party dataset content. Each source document and its
+upstream ground truth **retain their own upstream license** (see the table below and
+`ATTRIBUTIONS.md`). Our GFM-normalized ground truth is a derivative work carried under its source's
+license.
+
+## Redistribution policy
+
+Datasets are handled by license class:
+
+- **vendor** — permissively licensed (MIT / Apache-2.0 / CC-BY / CC0 / US public-domain). Source PDFs
+  and ground truth are **committed** into this repo, with attribution in `ATTRIBUTIONS.md`.
+- **reference** — non-commercial (CC-BY-NC), ShareAlike (CC-BY-SA / -NC-SA), or research-only terms.
+  These are **not committed**. `build_corpus.py` fetches them to local staging on demand; they are
+  used only for **non-commercial benchmarking** of this open-source library and are **never
+  redistributed** here. Their manifest entries carry the source URL + license for provenance.
+
+This keeps the public MIT repo free of content it cannot redistribute, while still letting the
+non-commercial benchmark use non-commercial data.
+
+## Sources
+
+{chr(10).join(rows)}
+
+Vendored sources: {len(vend)}. Reference-only sources: {len(ref)}.
+"""
+    LICENSES.write_text(body)
 
 
 def _verdict_counts(records: dict) -> dict:
