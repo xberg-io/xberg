@@ -40,7 +40,12 @@ candle = [
 # runners, which is why scripts/ci/rust/run-unit-tests.sh tests this crate
 # with an explicit feature list instead of --all-features.
 cuda = ["candle", "candle-core?/cuda", "candle-nn?/cuda", "candle-transformers?/cuda"]
-metal = ["candle", "candle-core?/metal", "candle-nn?/metal", "candle-transformers?/metal"]
+metal = [
+    "candle",
+    "candle-core?/metal",
+    "candle-nn?/metal",
+    "candle-transformers?/metal",
+]
 
 [dependencies]
 candle-core = { workspace = true, optional = true }
@@ -69,14 +74,14 @@ serde_json = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokenizers = { version = "0.23", default-features = false, features = ["fancy-regex"] }
 
-[dev-dependencies]
-tempfile = { workspace = true }
-
 # tokenizers pulls getrandom transitively (via ahash, rand); force-enable the
 # wasm_js backend for every getrandom major in the graph so wasm32 links.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
 getrandom_03 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = "0.3"
