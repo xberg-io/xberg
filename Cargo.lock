@@ -11699,6 +11699,7 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "tract-onnx",
  "tree-sitter-language-pack",
  "unhwp",
  "unicode-normalization",

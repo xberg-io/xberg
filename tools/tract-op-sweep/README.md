@@ -32,14 +32,14 @@ writes the full error chain per model (the table truncates it).
 | `angle_cls` | AngleNet (CNN) | **ready, pin input** | runnable once input is `1,3,224,224` |
 | `det_v6_medium` | DBNet (CNN) | **ready, pin input** | runnable once input is pinned |
 | `rec_v6_medium` | CRNN (CNN + LSTM) | **ready, pin input** | runnable once input is `1,3,48,320` — LSTM path works |
-| `tatr` | DETR (Table Transformer) | **needs-work** | conv weight in-channels is a symbol (`Sym(num_channels)` won't unify with `3`) — needs symbol concretization |
+| `tatr` | DETR (Table Transformer) | **ORT-only** | quantized export: pinning the input resolves the conv in-channel, but the `Conv_quant_output_scale_mul` scale const bakes in a symbolic `batch_size` the analyser cannot unify with `1` (Phase-2 finding) |
 | `pp_doclayout_v3` | Paddle DETR + NMS | **needs-work** | 3 inputs (`image`/`im_shape`/`scale_factor`) all need explicit facts |
 | `db_det_v5_server` | DBNet (CNN) | **needs-work** | stride-2 dim arithmetic tract won't unify (`1+n/2` vs `(n+1)/2`); `det_v6` is a working alternative |
 | `slanet_plus` | SLANet+ seq2seq | **needs-work** | data-dependent `Resize` (output size from a runtime tensor) |
 | `slanet_wired` | SLANeXt seq2seq | **stays ORT** | `Loop` op unimplemented in tract |
 | `slanet_wireless` | SLANeXt seq2seq | **stays ORT** | `Loop` op unimplemented in tract |
 
-**4 ready as-is · 3 ready once input pinned · 6 needs-work (2 of them ORT-only).**
+**4 ready as-is · 3 ready once input pinned · 6 needs-work (3 of them ORT-only: `tatr`, `slanet_wired`, `slanet_wireless`).**
 
 ## What this means for the rollout
 
@@ -47,10 +47,13 @@ writes the full error chain per model (the table truncates it).
   `textline_ori` need nothing; `angle_cls`, `det_v6`, `rec_v6` (incl. the CRNN LSTM path) just need
   the input shape pinned, which the backend does anyway.
 - **RT-DETR is ready as-is** — better than the issue predicted; no dynamic-shape concretization needed
-  for the docling-v2 detector.
-- **TATR (the issue's "first target") needs analyse work** — the export leaves the conv weight's
-  in-channel dim symbolic. Resolve in Phase 2 via tract symbol concretization / fuller input facts
-  before relying on it.
+  for the docling-v2 detector. It becomes the DETR-family seam target in Phase 4 (it takes two inputs —
+  image + `orig_target_sizes` — which the backend passes through by name).
+- **TATR is ORT-only** — Phase 2 probing showed the issue's "first target" is a *quantized* export:
+  pinning the input channel to 3 clears the conv-weight symbol, but the fused `Conv_quant` scale
+  multiplier carries a symbolic `batch_size` that tract 0.23.4's HIR analyser refuses to unify with a
+  concrete `1` (symbol-scope assertions do not reach that analyser). It joins SLANeXt on ORT; revisit
+  only if a non-quantized TATR export or an upstream tract fix lands.
 - **`pp_doclayout_v3` needs its three input facts pinned** (Phase 4) — a mechanical fix, not an op gap.
 - **SLANeXt (`Loop`) stays on ORT** as the issue anticipated; `slanet_plus` (data-dependent `Resize`)
   and `db_det_v5_server` (dim-parity) are also blocked — `det_v6` covers detection instead.

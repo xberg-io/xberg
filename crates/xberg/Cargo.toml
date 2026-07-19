@@ -209,6 +209,12 @@ layout-detection = [
     "tokio-runtime",
     "ort-bundled",
 ]
+# tract: pure-Rust ONNX inference engine for the `crate::inference` seam. Additive
+# on native (both engines compile together for cross-engine parity tests); the sole
+# engine on no-ORT targets (WASM, Android x86_64) once their model consumers are
+# wired in a later phase. Native default stays ONNX Runtime — `default_backend()`
+# picks tract only when `ort` is absent (see build.rs `inference_ort`).
+tract = ["dep:tract-onnx", "dep:ndarray"]
 language-detection = ["dep:whatlang"]
 # layout-types: pure-Rust layout struct definitions — no ORT dependency.
 # Included by layout-detection; also usable standalone on WASM/Android targets.
@@ -343,9 +349,14 @@ presets = ["dep:include_dir", "dep:jsonschema", "dep:sha2"] # Preset format + re
 # `ExtractionConfig::structured_extraction`.
 structured = ["liter-llm", "tokio-runtime"]
 
-redaction = ["dep:sha2"]                                                        # Pattern-based PII engine; pure-Rust.
-redaction-rehydrate = ["redaction", "dep:aes-gcm", "dep:scrypt", "dep:zeroize"] # Encrypted rehydration map capture.
-redaction-ml = ["redaction", "ner"]                                             # Couple in NER for PERSON/ORG/LOC redaction.
+redaction = ["dep:sha2"] # Pattern-based PII engine; pure-Rust.
+redaction-rehydrate = [
+    "redaction",
+    "dep:aes-gcm",
+    "dep:scrypt",
+    "dep:zeroize",
+] # Encrypted rehydration map capture.
+redaction-ml = ["redaction", "ner"] # Couple in NER for PERSON/ORG/LOC redaction.
 
 summarization = ["stopwords"]                      # TextRank extractive only; pure-Rust (uses stopword tables).
 summarization-llm = ["summarization", "liter-llm"]
@@ -772,6 +783,9 @@ tower-http = { version = "0.7", features = [
 ], optional = true }
 tracing = { workspace = true }
 tracing-opentelemetry = { version = "0.33", optional = true }
+# Pure-Rust ONNX engine — the inference-seam backend on no-ORT targets (WASM,
+# Android x86_64). `tract-onnx` (not the `tract` facade) is CPU-only + wasm-safe.
+tract-onnx = { workspace = true, optional = true }
 unhwp = { version = "0.5.3", default-features = false, features = ["hwpx"], optional = true }
 unicode-normalization = { version = "0.1.25", optional = true }
 url = { workspace = true }
