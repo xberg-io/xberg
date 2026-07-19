@@ -48,6 +48,12 @@ MANIFEST = TEST_DOCS / "ground_truth" / "corpus_manifest.json"
 README = TEST_DOCS / "README.md"
 ATTRIBUTIONS = TEST_DOCS / "ATTRIBUTIONS.md"
 LICENSES = TEST_DOCS / "LICENSES.md"
+# Gitignored on-demand cache for `reference`-class docs (source PDFs + GT we may NOT redistribute).
+# Materialized by `build_corpus.py --stage materialize`; committed fixtures for reference docs point
+# here, so the public repo never contains the third-party bytes.
+CACHE = TEST_DOCS / ".corpus-cache"
+CACHE_PDF = CACHE / "pdf"
+CACHE_GT = CACHE / "ground_truth" / "pdf"
 LEDGER = STAGING / "build_ledger.json"
 PARSEBENCH = Path("/tmp/parsebench")  # noqa: S108  ParseBench staging (table.jsonl + docs/table/*.pdf)
 PB_MIN_TABLE_COVERAGE = 0.60  # a table page whose GT (table only) covers < this of the page is not
@@ -59,7 +65,10 @@ SOURCES = {
         "repo": "lazyc/READoc",
         "revision": None,
         "license": "MIT",
-        "redistribute": "vendor",  # permissive → committed into test_documents
+        # PER-DOC (see doc_redistribute): GitHub docs (author-owned README content) are vendored;
+        # arXiv docs are reference-only — the MIT tag can't license the bundled arXiv PDFs
+        # (nonexclusive-distrib), and their LaTeX-source GT is version-drift-prone.
+        "redistribute": "per-doc",
         "url": "https://huggingface.co/datasets/lazyc/READoc",
         "citation": "READoc: A Unified Benchmark for Realistic Document Structured Extraction (arXiv:2409.05137)",
         "granularity": "document",
@@ -71,7 +80,9 @@ SOURCES = {
         "repo": "llamaindex/ParseBench",
         "revision": None,
         "license": "Apache-2.0",
-        "redistribute": "vendor",  # permissive → committed into test_documents
+        # Apache-2.0 covers ParseBench's ANNOTATIONS, not the bundled third-party enterprise PDFs
+        # (which carry a takedown clause). So the source PDFs are reference-only, not vendored.
+        "redistribute": "reference",
         "url": "https://huggingface.co/datasets/llamaindex/ParseBench",
         "citation": "ParseBench: A Document Parsing Benchmark for AI Agents, Zhang et al. (arXiv:2604.08538)",
         "granularity": "page",
@@ -375,6 +386,7 @@ def stage_curate(records: dict, dry: bool) -> None:
         r["cohorts"] = list(dict.fromkeys([*r.get("cohorts", []), *strata]))
         r["size_tier"] = "extended"
         r["role"] = "tune" if _hash01(r["id"]) < TUNE_FRACTION else "eval"
+        r["redistribute"] = doc_redistribute(r)  # recorded in the manifest for every accepted doc
 
     by_stratum: dict[str, list] = defaultdict(list)
     for r in accept:
@@ -433,68 +445,144 @@ def _size_category(nbytes: int) -> str:
     return "small" if nbytes < 500_000 else "medium" if nbytes < 5_000_000 else "large"
 
 
-def stage_assemble(records: dict, dry: bool) -> None:
-    """Materialize the active tiers (smoke ⊂ core) into test_documents: PDF + GFM GT (.md) + plaintext
-    GT (.txt) + fixture JSON. Extended-only docs stay manifest-only (reproducible via `build_corpus`).
-    Records pdf/gt hashes onto each materialized doc.
-    """
+def doc_redistribute(rec: dict) -> str:
+    """vendor (committed) vs reference (gitignored, fetched on demand), per document. ReaDoc is split:
+    GitHub docs (pure-int ids = author-owned README content) vendor; arXiv docs reference — the wrapper
+    MIT tag cannot license the bundled arXiv PDFs, and their source-derived GT is version-drift-prone."""
+    ds = rec["source_dataset"]
+    if ds == "readoc":
+        return "vendor" if rec["id"].isdigit() else "reference"
+    return SOURCES.get(ds, {}).get("redistribute", "reference")
+
+
+def _dest(redistribute: str) -> tuple[Path, Path, str]:
+    """(pdf_dir, gt_dir, fixture-path prefix) for a redistribution class."""
+    if redistribute == "vendor":
+        return PDF_DIR, GT_DIR, "../../../../test_documents"
+    return CACHE_PDF, CACHE_GT, "../../../../test_documents/.corpus-cache"
+
+
+def _write_doc(r: dict) -> tuple[int, str] | None:
+    """Copy the source PDF + write GFM/.txt GT to the doc's redistribution destination (committed for
+    vendor, gitignored cache for reference). Records redistribute + pdf/txt hashes. Returns (bytes, prefix)."""
     import shutil
 
+    src_pdf, gt = _source_pdf(r), _normalized_gt(r)
+    if src_pdf is None or not src_pdf.exists() or not gt.exists():
+        r["exclusion_reason"] = "missing source PDF or normalized GT"
+        return None
+    md = gt.read_text("utf-8", "replace")
+    txt = strip_to_text(md)
+    r["redistribute"] = doc_redistribute(r)
+    pdf_dir, gt_dir, prefix = _dest(r["redistribute"])
+    for d in (pdf_dir, gt_dir):
+        d.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(src_pdf, pdf_dir / f"{r['id']}.pdf")
+    (gt_dir / f"{r['id']}.md").write_text(md)
+    (gt_dir / f"{r['id']}.txt").write_text(txt)
+    r["pdf_sha256"] = sha256_file(pdf_dir / f"{r['id']}.pdf")
+    r["gt_txt_sha256"] = sha256_bytes(txt.encode())
+    return (pdf_dir / f"{r['id']}.pdf").stat().st_size, prefix
+
+
+def _fixture(r: dict, nbytes: int, prefix: str) -> dict:
+    return {
+        "document": f"{prefix}/pdf/{r['id']}.pdf",
+        "file_type": "pdf",
+        "file_size": nbytes,
+        "expected_frameworks": ["xberg", "liteparse", "docling"],
+        "metadata": {
+            "description": f"{r['source_dataset']} {r['upstream_id']}",
+            "source": r["source_dataset"],
+            "redistribute": r["redistribute"],
+            "size_category": _size_category(nbytes),
+            "cohorts": r["cohorts"],
+            "size_tier": r["size_tier"],
+            "role": r["role"],
+        },
+        "ground_truth": {
+            "text_file": f"{prefix}/ground_truth/pdf/{r['id']}.txt",
+            "markdown_file": f"{prefix}/ground_truth/pdf/{r['id']}.md",
+            "source": r["source_dataset"],
+        },
+    }
+
+
+def _prune_managed() -> None:
+    """assemble owns the corpus files: clear prior readoc/parsebench outputs — committed AND cached —
+    so tier/redistribute changes never leave stale files. Non-managed (e.g. manual) is kept."""
+    for fx in FIXTURE_DIR.glob("*.json"):
+        try:
+            src = json.loads(fx.read_text()).get("ground_truth", {}).get("source")
+        except (json.JSONDecodeError, OSError):
+            continue
+        if src in ("readoc", "parsebench"):
+            stem = fx.stem
+            fx.unlink(missing_ok=True)
+            (PDF_DIR / f"{stem}.pdf").unlink(missing_ok=True)
+            (CACHE_PDF / f"{stem}.pdf").unlink(missing_ok=True)
+            for base in (GT_DIR, CACHE_GT):
+                (base / f"{stem}.md").unlink(missing_ok=True)
+                (base / f"{stem}.txt").unlink(missing_ok=True)
+
+
+def _write_gitignore() -> None:
+    gi = TEST_DOCS / ".gitignore"
+    existing = gi.read_text() if gi.exists() else ""
+    if ".corpus-cache" not in existing:
+        gi.write_text(existing + ".corpus-cache/\n")
+
+
+def stage_assemble(records: dict, dry: bool) -> None:
+    """Materialize the active tiers (smoke ⊂ core) + write fixtures. VENDOR docs → committed
+    test_documents; REFERENCE docs → the gitignored .corpus-cache (never redistributed). Fixtures are
+    always committed (pointers); reference-doc fixtures point into the cache and require --stage
+    materialize before a run."""
     active = [r for r in records.values() if r["gate_verdict"] == "ACCEPT" and r.get("size_tier") in ("smoke", "core")]
     if not dry:
-        for d in (PDF_DIR, GT_DIR, FIXTURE_DIR):
+        for d in (PDF_DIR, GT_DIR, FIXTURE_DIR, CACHE_PDF, CACHE_GT):
             d.mkdir(parents=True, exist_ok=True)
-        # assemble fully owns the corpus-managed files: clear prior readoc/parsebench outputs so tier
-        # membership changes never leave stale fixtures/GT/PDFs behind. Non-managed (e.g. manual) kept.
-        for fx in FIXTURE_DIR.glob("*.json"):
-            try:
-                src = json.loads(fx.read_text()).get("ground_truth", {}).get("source")
-            except (json.JSONDecodeError, OSError):
-                continue
-            if src in ("readoc", "parsebench"):
-                stem = fx.stem
-                fx.unlink(missing_ok=True)
-                (PDF_DIR / f"{stem}.pdf").unlink(missing_ok=True)
-                (GT_DIR / f"{stem}.md").unlink(missing_ok=True)
-                (GT_DIR / f"{stem}.txt").unlink(missing_ok=True)
-    written = 0
+        _prune_managed()
+        _write_gitignore()
+    written = {"vendor": 0, "reference": 0}
     for r in active:
-        src_pdf, gt = _source_pdf(r), _normalized_gt(r)
-        if src_pdf is None or not src_pdf.exists() or not gt.exists():
-            r["exclusion_reason"] = "missing source PDF or normalized GT at assemble"
-            continue
-        md = gt.read_text("utf-8", "replace")
-        txt = strip_to_text(md)
-        written += 1
         if dry:
+            if _source_pdf(r) and _normalized_gt(r).exists():
+                written[doc_redistribute(r)] += 1
             continue
-        shutil.copyfile(src_pdf, PDF_DIR / f"{r['id']}.pdf")
-        (GT_DIR / f"{r['id']}.md").write_text(md)
-        (GT_DIR / f"{r['id']}.txt").write_text(txt)
-        nbytes = (PDF_DIR / f"{r['id']}.pdf").stat().st_size
-        r["pdf_sha256"] = sha256_file(PDF_DIR / f"{r['id']}.pdf")
-        r["gt_txt_sha256"] = sha256_bytes(txt.encode())
-        fixture = {
-            "document": f"../../../../test_documents/pdf/{r['id']}.pdf",
-            "file_type": "pdf",
-            "file_size": nbytes,
-            "expected_frameworks": ["xberg", "liteparse", "docling"],
-            "metadata": {
-                "description": f"{r['source_dataset']} {r['upstream_id']}",
-                "source": r["source_dataset"],
-                "size_category": _size_category(nbytes),
-                "cohorts": r["cohorts"],
-                "size_tier": r["size_tier"],
-                "role": r["role"],
-            },
-            "ground_truth": {
-                "text_file": f"../../../../test_documents/ground_truth/pdf/{r['id']}.txt",
-                "markdown_file": f"../../../../test_documents/ground_truth/pdf/{r['id']}.md",
-                "source": r["source_dataset"],
-            },
-        }
-        (FIXTURE_DIR / f"{r['id']}.json").write_text(json.dumps(fixture, indent=2) + "\n")
-    print(f"[assemble] materialized {written} core+smoke docs into test_documents (dry={dry})")
+        res = _write_doc(r)
+        if res is None:
+            continue
+        nbytes, prefix = res
+        (FIXTURE_DIR / f"{r['id']}.json").write_text(json.dumps(_fixture(r, nbytes, prefix), indent=2) + "\n")
+        written[r["redistribute"]] += 1
+    print(f"[assemble] vendor→committed {written['vendor']}, reference→gitignored-cache {written['reference']}")
+
+
+def stage_materialize(records: dict, dry: bool) -> None:
+    """On-demand fetch: populate the gitignored .corpus-cache with source PDF + GT for every committed
+    REFERENCE fixture. This is what the harness runs before a benchmark so reference docs exist locally
+    without ever being redistributed. Idempotent (skips docs already cached). Requires acquire+normalize
+    to have run (ledger + staged sources present)."""
+    ref_fixtures = []
+    for fx in FIXTURE_DIR.glob("*.json"):
+        try:
+            d = json.loads(fx.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        if d.get("metadata", {}).get("redistribute") == "reference":
+            ref_fixtures.append(fx.stem)
+    have = built = missing = 0
+    for stem in ref_fixtures:
+        if (CACHE_PDF / f"{stem}.pdf").exists():
+            have += 1
+            continue
+        r = records.get(stem)
+        if dry or r is None or _write_doc(r) is None:
+            missing += 1
+        else:
+            built += 1
+    print(f"[materialize] {len(ref_fixtures)} reference fixtures — cached {have}, built {built}, missing {missing}")
 
 
 def stage_manifest(records: dict, dry: bool) -> None:
@@ -715,13 +803,15 @@ STAGES = {
     "curate": stage_curate,
     "assemble": stage_assemble,
     "manifest": stage_manifest,
+    "materialize": stage_materialize,
 }
-ORDER = ["acquire", "normalize", "gate", "curate", "assemble", "manifest"]
+ORDER = ["acquire", "normalize", "gate", "curate", "assemble", "manifest"]  # `all` runs these in order
+# `materialize` is on-demand (harness pre-run step), not part of `all`.
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Reproducible xberg GT corpus builder")
-    ap.add_argument("--stage", choices=[*ORDER, "all"], default="all")
+    ap.add_argument("--stage", choices=[*ORDER, "all", "materialize"], default="all")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 

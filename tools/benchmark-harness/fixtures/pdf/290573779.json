@@ -10,6 +10,7 @@
   "metadata": {
     "description": "readoc 290573779",
     "source": "readoc",
+    "redistribute": "vendor",
     "size_category": "medium",
     "cohorts": [
       "native-clean",

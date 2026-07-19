@@ -1,5 +1,5 @@
 {
-  "document": "../../../../test_documents/pdf/pb_SERFF_TX_random_pages_1_page173.pdf",
+  "document": "../../../../test_documents/.corpus-cache/pdf/pb_SERFF_TX_random_pages_1_page173.pdf",
   "file_type": "pdf",
   "file_size": 47249,
   "expected_frameworks": [
@@ -10,6 +10,7 @@
   "metadata": {
     "description": "parsebench SERFF_TX_random_pages_1_page173",
     "source": "parsebench",
+    "redistribute": "reference",
     "size_category": "small",
     "cohorts": [
       "native-clean",
@@ -22,8 +23,8 @@
     "role": "tune"
   },
   "ground_truth": {
-    "text_file": "../../../../test_documents/ground_truth/pdf/pb_SERFF_TX_random_pages_1_page173.txt",
-    "markdown_file": "../../../../test_documents/ground_truth/pdf/pb_SERFF_TX_random_pages_1_page173.md",
+    "text_file": "../../../../test_documents/.corpus-cache/ground_truth/pdf/pb_SERFF_TX_random_pages_1_page173.txt",
+    "markdown_file": "../../../../test_documents/.corpus-cache/ground_truth/pdf/pb_SERFF_TX_random_pages_1_page173.md",
     "source": "parsebench"
   }
 }

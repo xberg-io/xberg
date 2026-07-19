@@ -1,5 +1,5 @@
 {
-  "document": "../../../../test_documents/pdf/pb_AZ_LIC_Rate_Tables_2.0.v2_page48.pdf",
+  "document": "../../../../test_documents/.corpus-cache/pdf/pb_AZ_LIC_Rate_Tables_2.0.v2_page48.pdf",
   "file_type": "pdf",
   "file_size": 31301,
   "expected_frameworks": [
@@ -10,6 +10,7 @@
   "metadata": {
     "description": "parsebench AZ_LIC_Rate_Tables_2.0.v2_page48",
     "source": "parsebench",
+    "redistribute": "reference",
     "size_category": "small",
     "cohorts": [
       "native-clean",
@@ -21,8 +22,8 @@
     "role": "tune"
   },
   "ground_truth": {
-    "text_file": "../../../../test_documents/ground_truth/pdf/pb_AZ_LIC_Rate_Tables_2.0.v2_page48.txt",
-    "markdown_file": "../../../../test_documents/ground_truth/pdf/pb_AZ_LIC_Rate_Tables_2.0.v2_page48.md",
+    "text_file": "../../../../test_documents/.corpus-cache/ground_truth/pdf/pb_AZ_LIC_Rate_Tables_2.0.v2_page48.txt",
+    "markdown_file": "../../../../test_documents/.corpus-cache/ground_truth/pdf/pb_AZ_LIC_Rate_Tables_2.0.v2_page48.md",
     "source": "parsebench"
   }
 }

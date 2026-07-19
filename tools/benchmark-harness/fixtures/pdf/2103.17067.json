@@ -1,5 +1,5 @@
 {
-  "document": "../../../../test_documents/pdf/2103.17067.pdf",
+  "document": "../../../../test_documents/.corpus-cache/pdf/2103.17067.pdf",
   "file_type": "pdf",
   "file_size": 813590,
   "expected_frameworks": [
@@ -10,6 +10,7 @@
   "metadata": {
     "description": "readoc 2103.17067",
     "source": "readoc",
+    "redistribute": "reference",
     "size_category": "medium",
     "cohorts": [
       "native-clean",
@@ -22,8 +23,8 @@
     "role": "tune"
   },
   "ground_truth": {
-    "text_file": "../../../../test_documents/ground_truth/pdf/2103.17067.txt",
-    "markdown_file": "../../../../test_documents/ground_truth/pdf/2103.17067.md",
+    "text_file": "../../../../test_documents/.corpus-cache/ground_truth/pdf/2103.17067.txt",
+    "markdown_file": "../../../../test_documents/.corpus-cache/ground_truth/pdf/2103.17067.md",
     "source": "readoc"
   }
 }

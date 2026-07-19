@@ -1,30 +1,29 @@
 {
-  "document": "../../../../test_documents/pdf/1905.05274.pdf",
+  "document": "../../../../test_documents/pdf/111114821.pdf",
   "file_type": "pdf",
-  "file_size": 152109,
+  "file_size": 87574,
   "expected_frameworks": [
     "xberg",
     "liteparse",
     "docling"
   ],
   "metadata": {
-    "description": "readoc 1905.05274",
+    "description": "readoc 111114821",
     "source": "readoc",
+    "redistribute": "vendor",
     "size_category": "small",
     "cohorts": [
       "native-clean",
-      "formula",
       "nested-heading",
       "nested-list",
-      "caption/footnote",
       "multipage-reading-order"
     ],
     "size_tier": "core",
     "role": "tune"
   },
   "ground_truth": {
-    "text_file": "../../../../test_documents/ground_truth/pdf/1905.05274.txt",
-    "markdown_file": "../../../../test_documents/ground_truth/pdf/1905.05274.md",
+    "text_file": "../../../../test_documents/ground_truth/pdf/111114821.txt",
+    "markdown_file": "../../../../test_documents/ground_truth/pdf/111114821.md",
     "source": "readoc"
   }
 }
