@@ -9,11 +9,8 @@
 //! rather than requiring the whole document's rasterised frames and the full
 //! ONNX batch tensor to be live simultaneously.
 //!
-//! The resulting `(Vec<RgbImage>, Vec<PageLayoutResult>)` pair is consumed
-//! by [`super::extraction::extract_all_from_oxide_document`] via
-//! `layout_images` / `layout_results`, which feeds the segment structure
-//! pipeline with layout hints for heading / table / list / figure
-//! classification (the "layout-for-markdown" path).
+//! The resulting images, page metadata, layout hints, and raw detections feed
+//! both native markdown structure recovery and OCR layout assembly.
 
 /// Maximum number of pages sent to the layout model in a single ONNX call.
 ///
@@ -21,6 +18,14 @@
 /// for the batch tensor.  8 pages ≈ 39 MB vs 214 pages ≈ 1.05 GB without chunking.
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
 const LAYOUT_BATCH_CHUNK_SIZE: usize = 8;
+
+/// Small white raster used when one page cannot be rendered.
+///
+/// Keeping a page-aligned placeholder lets downstream OCR reuse every other
+/// rendered page without retrying the entire document. The matching detection
+/// result is empty and uses these same dimensions.
+#[cfg(all(feature = "pdf", feature = "layout-detection"))]
+const FAILED_RENDER_PLACEHOLDER_SIDE: u32 = 64;
 
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
 use crate::{
@@ -32,12 +37,14 @@ use crate::{
 
 /// Render every page of `content` to RGB (in chunks) and run layout detection.
 ///
-/// Returns `(images, results, hints_per_page)` where:
-/// - `images[i]` is the rendered RGB image for page `i` (or a 1×1 placeholder
+/// Returns `(images, results, hints_per_page, detections_per_page)` where:
+/// - `images[i]` is the rendered RGB image for page `i` (or a small white placeholder
 ///   if the page failed to render).
 /// - `results[i]` holds per-region detection metadata in PDF coordinate space.
 /// - `hints_per_page[i]` holds the layout hints derived from detections on
 ///   page `i` (empty for pages that failed to render or produced no detections).
+/// - `detections_per_page[i]` preserves the pixel-space detections for OCR
+///   layout assembly (empty for pages that failed to render).
 ///
 /// # Memory behaviour
 ///
@@ -52,7 +59,58 @@ use crate::{
 /// failures are logged and produce empty layout for that page without aborting
 /// the whole document.
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
-type LayoutForMarkdownOutput = (Vec<image::RgbImage>, Vec<PageLayoutResult>, Vec<Vec<LayoutHint>>);
+type LayoutForMarkdownOutput = (
+    Vec<image::RgbImage>,
+    Vec<PageLayoutResult>,
+    Vec<Vec<LayoutHint>>,
+    Vec<crate::layout::DetectionResult>,
+);
+
+#[cfg(all(feature = "pdf", feature = "layout-detection"))]
+async fn run_layout_for_pdf_pages_async(
+    content: &[u8],
+    layout_config: &LayoutDetectionConfig,
+) -> Result<LayoutForMarkdownOutput> {
+    #[cfg(feature = "tokio-runtime")]
+    {
+        let owned_content = content.to_vec();
+        let owned_config = layout_config.clone();
+        tokio::task::spawn_blocking(move || run_layout_for_pdf_pages(&owned_content, &owned_config))
+            .await
+            .map_err(|error| XbergError::Other(format!("layout runner task failed: {error}")))?
+    }
+
+    #[cfg(not(feature = "tokio-runtime"))]
+    run_layout_for_pdf_pages(content, layout_config)
+}
+
+#[cfg(all(feature = "pdf", feature = "layout-detection"))]
+fn validate_batch_cardinality(expected: usize, actual: usize) -> Result<()> {
+    if actual == expected {
+        return Ok(());
+    }
+
+    Err(XbergError::Other(format!(
+        "layout runner: batch detection returned {actual} results for {expected} rendered pages"
+    )))
+}
+
+#[cfg(all(feature = "pdf", feature = "layout-detection"))]
+fn render_failure_placeholder() -> image::RgbImage {
+    image::RgbImage::from_pixel(
+        FAILED_RENDER_PLACEHOLDER_SIDE,
+        FAILED_RENDER_PLACEHOLDER_SIDE,
+        image::Rgb([u8::MAX; 3]),
+    )
+}
+
+#[cfg(all(feature = "pdf", feature = "layout-detection"))]
+fn displayed_page_dimensions(width: f32, height: f32, rotation_degrees: u32) -> (f32, f32) {
+    match rotation_degrees % 360 {
+        90 | 270 => (height, width),
+        _ => (width, height),
+    }
+}
 
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
 pub(super) fn run_layout_for_pdf_pages(
@@ -70,7 +128,7 @@ pub(super) fn run_layout_for_pdf_pages(
     })?;
 
     if page_count == 0 {
-        return Ok((Vec::new(), Vec::new(), Vec::new()));
+        return Ok((Vec::new(), Vec::new(), Vec::new(), Vec::new()));
     }
 
     let mut engine = crate::layout::take_or_create_engine(layout_config)
@@ -81,6 +139,7 @@ pub(super) fn run_layout_for_pdf_pages(
     let mut all_images: Vec<image::RgbImage> = Vec::with_capacity(page_count);
     let mut all_layout_results: Vec<PageLayoutResult> = Vec::with_capacity(page_count);
     let mut all_hints: Vec<Vec<LayoutHint>> = Vec::with_capacity(page_count);
+    let mut all_detections: Vec<crate::layout::DetectionResult> = Vec::with_capacity(page_count);
 
     let total_chunks = page_count.div_ceil(LAYOUT_BATCH_CHUNK_SIZE);
 
@@ -92,10 +151,12 @@ pub(super) fn run_layout_for_pdf_pages(
         let mut chunk_images: Vec<Option<image::RgbImage>> = Vec::with_capacity(chunk_size);
 
         for page_idx in chunk_start..chunk_end {
-            let (pw, ph) = doc
+            let (media_width, media_height) = doc
                 .get_page_media_box(page_idx)
                 .map(|(llx, lly, urx, ury)| ((urx - llx).abs(), (ury - lly).abs()))
                 .unwrap_or((612.0, 792.0));
+            let rotation = page_rotations.get(page_idx).copied().unwrap_or(0);
+            let (pw, ph) = displayed_page_dimensions(media_width, media_height, rotation);
             chunk_page_meta.push((pw, ph));
 
             let rgb_opt = match crate::pdf::render::render_page_with_safeguards(&doc, page_idx, 150) {
@@ -120,16 +181,10 @@ pub(super) fn run_layout_for_pdf_pages(
                         );
                         None
                     }
-                    Ok(img) => {
-                        let rotation = page_rotations.get(page_idx).copied().unwrap_or(0);
-                        let rgb = img.into_rgb8();
-                        Some(match rotation % 360 {
-                            90 => image::imageops::rotate270(&rgb),
-                            180 => image::imageops::rotate180(&rgb),
-                            270 => image::imageops::rotate90(&rgb),
-                            _ => rgb,
-                        })
-                    }
+                    // pdf_oxide applies inherited page rotation while rendering.
+                    // Keep this raster unchanged so its coordinates stay aligned
+                    // with layout detections and reused OCR input.
+                    Ok(img) => Some(img.into_rgb8()),
                 },
             };
             chunk_images.push(rgb_opt);
@@ -163,13 +218,18 @@ pub(super) fn run_layout_for_pdf_pages(
                 "layout runner: detecting chunk"
             );
 
-            match engine.detect_batch(&rgb_refs) {
-                Ok(r) => r,
+            let results = match engine.detect_batch(&rgb_refs) {
+                Ok(results) => results,
                 Err(e) => {
                     crate::layout::return_engine(engine);
                     return Err(XbergError::Other(format!("layout runner: batch detection failed: {e}")));
                 }
+            };
+            if let Err(error) = validate_batch_cardinality(rgb_refs.len(), results.len()) {
+                crate::layout::return_engine(engine);
+                return Err(error);
             }
+            results
         };
 
         let mut detected_by_pos: Vec<Option<_>> = (0..chunk_size).map(|_| None).collect();
@@ -180,7 +240,7 @@ pub(super) fn run_layout_for_pdf_pages(
         for k in 0..chunk_size {
             let (pw, ph) = chunk_page_meta[k];
             let rotation = page_rotations.get(chunk_start + k).copied().unwrap_or(0);
-            let img = chunk_images[k].take().unwrap_or_else(|| image::RgbImage::new(1, 1));
+            let img = chunk_images[k].take().unwrap_or_else(render_failure_placeholder);
 
             if let Some((detection, _timings)) = detected_by_pos[k].take() {
                 let image_width_px = img.width();
@@ -201,8 +261,14 @@ pub(super) fn run_layout_for_pdf_pages(
                 );
 
                 all_hints.push(hints);
+                all_detections.push(detection);
             } else {
                 all_hints.push(Vec::new());
+                all_detections.push(crate::layout::DetectionResult {
+                    page_width: img.width(),
+                    page_height: img.height(),
+                    detections: Vec::new(),
+                });
             }
 
             all_layout_results.push(PageLayoutResult {
@@ -215,50 +281,170 @@ pub(super) fn run_layout_for_pdf_pages(
 
     crate::layout::return_engine(engine);
 
-    Ok((all_images, all_layout_results, all_hints))
+    Ok((all_images, all_layout_results, all_hints, all_detections))
 }
 
 /// Convenience wrapper that reads `use_layout_for_markdown` and other gate
 /// conditions from `config` and, when they are all satisfied, runs
 /// [`run_layout_for_pdf_pages`].
 ///
-/// Returns `(None, None, None)` when the feature is not requested, or on soft
+/// Returns four `None` values when the feature is not requested, or on soft
 /// failure (logged as a warning so the markdown path can continue without
-/// layout hints).
+/// layout hints). Rendering and inference run off the async executor when a
+/// Tokio runtime is enabled.
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
 type LayoutForMarkdownOptional = (
     Option<Vec<image::RgbImage>>,
     Option<Vec<PageLayoutResult>>,
     Option<Vec<Vec<LayoutHint>>>,
+    Option<Vec<crate::layout::DetectionResult>>,
 );
 
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
-pub(super) fn maybe_run_layout_for_markdown(content: &[u8], config: &ExtractionConfig) -> LayoutForMarkdownOptional {
+pub(super) async fn maybe_run_layout_for_markdown(
+    content: &[u8],
+    config: &ExtractionConfig,
+) -> LayoutForMarkdownOptional {
     if !config.use_layout_for_markdown {
-        return (None, None, None);
+        return (None, None, None, None);
     }
     let Some(ref layout_config) = config.layout else {
-        return (None, None, None);
+        return (None, None, None, None);
     };
     if config.force_ocr {
-        return (None, None, None);
+        return (None, None, None, None);
     }
-    match run_layout_for_pdf_pages(content, layout_config) {
-        Ok((images, results, hints)) => {
+    match run_layout_for_pdf_pages_async(content, layout_config).await {
+        Ok((images, results, hints, detections)) => {
             let total_hints: usize = hints.iter().map(|h| h.len()).sum();
             tracing::info!(
                 pages = images.len(),
                 total_hints,
                 "layout-for-markdown: detection succeeded"
             );
-            (Some(images), Some(results), Some(hints))
+            (Some(images), Some(results), Some(hints), Some(detections))
         }
         Err(e) => {
             tracing::warn!(
                 error = %e,
                 "layout-for-markdown: detection failed, continuing without layout hints"
             );
-            (None, None, None)
+            (None, None, None, None)
         }
+    }
+}
+
+/// Run the layout pass used by OCR without blocking a Tokio worker thread.
+#[cfg(all(
+    feature = "pdf",
+    feature = "layout-detection",
+    any(feature = "ocr", feature = "ocr-pipeline")
+))]
+pub(super) async fn run_layout_for_ocr(
+    content: &[u8],
+    layout_config: &LayoutDetectionConfig,
+) -> Result<LayoutForMarkdownOutput> {
+    run_layout_for_pdf_pages_async(content, layout_config).await
+}
+
+#[cfg(all(test, feature = "pdf", feature = "layout-detection"))]
+mod tests {
+    use super::{
+        FAILED_RENDER_PLACEHOLDER_SIDE, displayed_page_dimensions, render_failure_placeholder,
+        validate_batch_cardinality,
+    };
+
+    fn rotated_pdf(inherited: bool) -> Vec<u8> {
+        use lopdf::{Document, Object, Stream, dictionary};
+
+        let mut document = Document::with_version("1.5");
+        let pages_id = document.new_object_id();
+        let page_id = document.new_object_id();
+        let content_id = document.add_object(Stream::new(dictionary! {}, Vec::new()));
+
+        let mut page = dictionary! {
+            "Type" => "Page",
+            "Parent" => pages_id,
+            "MediaBox" => vec![0.into(), 0.into(), 200.into(), 100.into()],
+            "Resources" => dictionary! {},
+            "Contents" => content_id,
+        };
+        if !inherited {
+            page.set("Rotate", 90);
+        }
+        document.objects.insert(page_id, Object::Dictionary(page));
+
+        let mut pages = dictionary! {
+            "Type" => "Pages",
+            "Kids" => vec![page_id.into()],
+            "Count" => 1,
+        };
+        if inherited {
+            pages.set("Rotate", 90);
+        }
+        document.objects.insert(pages_id, Object::Dictionary(pages));
+
+        let catalog_id = document.add_object(dictionary! {
+            "Type" => "Catalog",
+            "Pages" => pages_id,
+        });
+        document.trailer.set("Root", catalog_id);
+
+        let mut bytes = Vec::new();
+        document.save_to(&mut bytes).expect("fixture PDF must serialize");
+        bytes
+    }
+
+    fn assert_pdf_oxide_applies_rotation(bytes: Vec<u8>) {
+        let document = pdf_oxide::PdfDocument::from_bytes(bytes.clone()).expect("fixture PDF must open");
+        let rendered =
+            crate::pdf::render::render_page_with_safeguards(&document, 0, 72).expect("rotated fixture must render");
+        let rotations = crate::pdf::render::get_page_rotations(&bytes, 1);
+        let (media_width, media_height) = document
+            .get_page_media_box(0)
+            .map(|(llx, lly, urx, ury)| ((urx - llx).abs(), (ury - lly).abs()))
+            .expect("fixture must have a MediaBox");
+
+        assert_eq!(rotations, vec![90]);
+        assert!(
+            rendered.height > rendered.width,
+            "rotated landscape page must render as portrait"
+        );
+        assert_eq!(
+            displayed_page_dimensions(media_width, media_height, rotations[0]),
+            (100.0, 200.0)
+        );
+    }
+
+    #[test]
+    fn batch_cardinality_accepts_one_result_per_rendered_page() {
+        assert!(validate_batch_cardinality(3, 3).is_ok());
+    }
+
+    #[test]
+    fn batch_cardinality_rejects_truncated_results() {
+        let error = validate_batch_cardinality(3, 2).expect_err("truncated results must fail");
+        assert!(error.to_string().contains("2 results for 3 rendered pages"));
+    }
+
+    #[test]
+    fn render_failure_placeholder_is_nonempty_and_white() {
+        let image = render_failure_placeholder();
+
+        assert_eq!(
+            image.dimensions(),
+            (FAILED_RENDER_PLACEHOLDER_SIDE, FAILED_RENDER_PLACEHOLDER_SIDE)
+        );
+        assert!(image.pixels().all(|pixel| pixel.0 == [u8::MAX; 3]));
+    }
+
+    #[test]
+    fn pdf_oxide_applies_direct_page_rotation() {
+        assert_pdf_oxide_applies_rotation(rotated_pdf(false));
+    }
+
+    #[test]
+    fn pdf_oxide_applies_inherited_page_rotation() {
+        assert_pdf_oxide_applies_rotation(rotated_pdf(true));
     }
 }

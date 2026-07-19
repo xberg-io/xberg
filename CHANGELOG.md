@@ -61,6 +61,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **PDF OCR now reuses layout rasters and detections without duplicating tables.** Layout rendering
+  and inference run off the async executor, rendered pages transfer into OCR without another PDF
+  render, failed pages degrade independently, and direct or inherited page rotation stays in the
+  displayed coordinate frame. OCR-produced tables replace native tables for full-document OCR and
+  are inserted into the structured document exactly once.
 - **Layout detection with reading order no longer crashes pages whose text contains bullets,
   curly quotes, or other multibyte characters.** Reading-order reordering rebuilds the extracted
   text but kept the page boundaries computed against the original string, so downstream code

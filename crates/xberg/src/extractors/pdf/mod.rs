@@ -70,16 +70,71 @@ fn scanned_pages_to_ocr(
 }
 use pages::{assign_hierarchy_to_pages, assign_tables_and_images_to_pages};
 
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn replace_tables_with_ocr_output(tables: &mut Vec<crate::types::Table>, mut ocr_tables: Vec<crate::types::Table>) {
+    if ocr_tables.is_empty() {
+        return;
+    }
+
+    ocr_tables.sort_by_key(|table| table.page_number);
+    *tables = ocr_tables;
+}
+
+#[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn prepare_ocr_layout_inputs(
+    images: Vec<image::RgbImage>,
+    mut detections: Vec<crate::layout::DetectionResult>,
+) -> (Vec<image::DynamicImage>, Vec<crate::layout::DetectionResult>) {
+    if detections.len() != images.len() {
+        tracing::warn!(
+            images = images.len(),
+            detections = detections.len(),
+            "OCR layout input cardinality mismatch; discarding detections while reusing page rasters"
+        );
+        detections = images
+            .iter()
+            .map(|image| crate::layout::DetectionResult {
+                page_width: image.width(),
+                page_height: image.height(),
+                detections: Vec::new(),
+            })
+            .collect();
+    } else {
+        for (page_index, (image, detection)) in images.iter().zip(&mut detections).enumerate() {
+            if detection.page_width != image.width() || detection.page_height != image.height() {
+                tracing::warn!(
+                    page = page_index + 1,
+                    image_width = image.width(),
+                    image_height = image.height(),
+                    detection_width = detection.page_width,
+                    detection_height = detection.page_height,
+                    "OCR layout dimensions mismatch; discarding detections for this page"
+                );
+                *detection = crate::layout::DetectionResult {
+                    page_width: image.width(),
+                    page_height: image.height(),
+                    detections: Vec::new(),
+                };
+            }
+        }
+    }
+
+    let images = images.into_iter().map(image::DynamicImage::ImageRgb8).collect();
+    (images, detections)
+}
+
 /// Run OCR with optional layout detection on PDF bytes.
 ///
-/// Returns `None` when layout detection is not configured or fails.
-/// Failures are logged as warnings but do not propagate — extraction
-/// continues without layout hints (graceful degradation).
+/// Reuses detections from native extraction when available. Otherwise, when
+/// layout detection is configured, it runs a soft-failing layout pass before
+/// OCR. Layout failures are logged and OCR continues without layout hints.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 async fn run_ocr_with_layout(
     content: &[u8],
     config: &ExtractionConfig,
     path: Option<&std::path::Path>,
+    #[cfg(feature = "layout-detection")] precomputed_layout_images: Option<Vec<image::RgbImage>>,
+    #[cfg(feature = "layout-detection")] precomputed_layout_detections: Option<Vec<crate::layout::DetectionResult>>,
 ) -> crate::Result<(
     String,
     Vec<crate::types::Table>,
@@ -93,16 +148,54 @@ async fn run_ocr_with_layout(
     let default_ocr_config = crate::core::config::OcrConfig::default();
     let ocr_config = config.ocr.as_ref().unwrap_or(&default_ocr_config);
 
+    #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+    let owned_layout = if precomputed_layout_detections.is_none() || precomputed_layout_images.is_none() {
+        if let Some(layout_config) = config.layout.as_ref() {
+            match layout_runner::run_layout_for_ocr(content, layout_config).await {
+                Ok(layout) => Some(layout),
+                Err(error) => {
+                    tracing::warn!(
+                        error = %error,
+                        "OCR layout detection failed; continuing without layout assembly"
+                    );
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+    let layout_inputs = match (precomputed_layout_images, precomputed_layout_detections) {
+        (Some(images), Some(detections)) => Some((images, detections)),
+        _ => owned_layout.map(|(images, _, _, detections)| (images, detections)),
+    };
+    #[cfg(all(not(feature = "pdf"), feature = "layout-detection"))]
+    let layout_inputs = precomputed_layout_images.zip(precomputed_layout_detections);
+
     #[cfg(feature = "layout-detection")]
-    let layout_detections: Option<Vec<crate::layout::DetectionResult>> = None;
+    let prepared_layout_inputs =
+        layout_inputs.map(|(images, detections)| prepare_ocr_layout_inputs(images, detections));
+    #[cfg(feature = "layout-detection")]
+    let ocr_images = prepared_layout_inputs.as_ref().map(|(images, _)| images.as_slice());
+    #[cfg(feature = "layout-detection")]
+    let layout_detections = prepared_layout_inputs
+        .as_ref()
+        .map(|(_, detections)| detections.as_slice());
 
     if let Some(pipeline) = ocr_config.effective_pipeline() {
-        let (text, _ocr_tables, ocr_elements, pipeline_doc, llm_usage, ocr_pts, pipeline_rasters, pipeline_formulas) =
+        let (text, ocr_tables, ocr_elements, pipeline_doc, llm_usage, ocr_pts, pipeline_rasters, pipeline_formulas) =
             Box::pin(ocr::run_ocr_pipeline(
                 Some(content),
+                #[cfg(feature = "layout-detection")]
+                ocr_images,
+                #[cfg(not(feature = "layout-detection"))]
                 None,
                 #[cfg(feature = "layout-detection")]
-                layout_detections.as_deref(),
+                layout_detections,
                 config,
                 &pipeline,
                 path,
@@ -110,7 +203,7 @@ async fn run_ocr_with_layout(
             .await?;
         return Ok((
             text,
-            Vec::new(),
+            ocr_tables,
             ocr_elements,
             pipeline_doc,
             llm_usage,
@@ -123,9 +216,12 @@ async fn run_ocr_with_layout(
     let (text, _mean_conf, ocr_tables, ocr_elements, ocr_doc, llm_usage, ocr_pts, ocr_rasters, formulas) =
         Box::pin(extract_with_ocr(
             Some(content),
+            #[cfg(feature = "layout-detection")]
+            ocr_images,
+            #[cfg(not(feature = "layout-detection"))]
             None,
             #[cfg(feature = "layout-detection")]
-            layout_detections.as_deref(),
+            layout_detections,
             config,
             path,
         ))
@@ -236,8 +332,13 @@ impl PdfExtractor {
         let _ = &path;
 
         #[cfg(all(feature = "pdf", feature = "layout-detection"))]
-        let (markdown_layout_images, markdown_layout_results, markdown_layout_hints) =
-            layout_runner::maybe_run_layout_for_markdown(content, config);
+        #[allow(unused_mut, unused_variables)]
+        let (
+            mut markdown_layout_images,
+            markdown_layout_results,
+            markdown_layout_hints,
+            mut markdown_layout_detections,
+        ) = layout_runner::maybe_run_layout_for_markdown(content, config).await;
 
         #[cfg(all(feature = "pdf", feature = "layout-detection"))]
         let layout_hints: Option<&[Vec<crate::pdf::structure::types::LayoutHint>]> = markdown_layout_hints.as_deref();
@@ -334,7 +435,16 @@ impl PdfExtractor {
             (native_text, ExtractionMethod::Native)
         } else if config.force_ocr {
             let (ocr_text, ocr_tbls, ocr_elems, ocr_doc, llm_usage, ocr_pts, ocr_rstrs, formulas) =
-                run_ocr_with_layout(content, config, path).await?;
+                run_ocr_with_layout(
+                    content,
+                    config,
+                    path,
+                    #[cfg(feature = "layout-detection")]
+                    markdown_layout_images.take(),
+                    #[cfg(feature = "layout-detection")]
+                    markdown_layout_detections.take(),
+                )
+                .await?;
             ocr_tables = ocr_tbls;
             ocr_elements = ocr_elems;
             ocr_internal_doc = ocr_doc;
@@ -459,7 +569,17 @@ impl PdfExtractor {
                         tracing::debug!("Skipping document-level OCR fallback: run_ocr_on_images=true");
                         (native_text, ExtractionMethod::Native)
                     } else {
-                        match run_ocr_with_layout(content, config, path).await {
+                        match run_ocr_with_layout(
+                            content,
+                            config,
+                            path,
+                            #[cfg(feature = "layout-detection")]
+                            markdown_layout_images.take(),
+                            #[cfg(feature = "layout-detection")]
+                            markdown_layout_detections.take(),
+                        )
+                        .await
+                        {
                             Ok((ocr_text, ocr_tbls, ocr_elems, ocr_doc, llm_usage, ocr_pts, ocr_rstrs, formulas)) => {
                                 ocr_tables = ocr_tbls;
                                 ocr_elements = ocr_elems;
@@ -544,10 +664,14 @@ impl PdfExtractor {
         let (text, extraction_method) = (native_text, ExtractionMethod::Native);
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        if !ocr_tables.is_empty() {
-            tables.extend(ocr_tables);
-            tables.sort_by_key(|t| t.page_number);
-        }
+        let ocr_document_owns_tables = ocr_internal_doc.as_ref().is_some_and(|doc| !doc.tables.is_empty());
+
+        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+        // Full-document OCR is authoritative for tables when it produced
+        // them. The structured OCR document already contains the same table
+        // values, so later document assembly must not inject them a second
+        // time.
+        replace_tables_with_ocr_output(&mut tables, ocr_tables);
 
         let (images, image_fallback_warning): (
             Option<Vec<crate::types::ExtractedImage>>,
@@ -696,7 +820,12 @@ impl PdfExtractor {
 
         doc.form_fields = pdf_form_fields;
 
-        if !use_structured_doc {
+        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+        let inject_tables = !use_structured_doc && !ocr_document_owns_tables;
+        #[cfg(not(any(feature = "ocr", feature = "ocr-pipeline")))]
+        let inject_tables = !use_structured_doc;
+
+        if inject_tables {
             for table in tables {
                 let table_index = doc.push_table(table);
                 doc.push_element(InternalElement::text(ElementKind::Table { table_index }, "", 0));
@@ -942,6 +1071,96 @@ mod tests {
     #[cfg(feature = "pdf")]
     fn extraction_method(result: &crate::types::ExtractedDocument) -> Option<ExtractionMethod> {
         result.extraction_method
+    }
+
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    #[test]
+    fn ocr_tables_replace_native_tables_and_are_sorted() {
+        let table = |markdown: &str, page_number| crate::types::Table {
+            cells: Vec::new(),
+            markdown: markdown.to_string(),
+            page_number,
+            bounding_box: None,
+        };
+        let mut tables = vec![table("native", 1)];
+
+        replace_tables_with_ocr_output(&mut tables, vec![table("ocr-page-2", 2), table("ocr-page-1", 1)]);
+
+        assert_eq!(tables.len(), 2);
+        assert_eq!(tables[0].markdown, "ocr-page-1");
+        assert_eq!(tables[1].markdown, "ocr-page-2");
+    }
+
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    #[test]
+    fn empty_ocr_tables_preserve_native_tables() {
+        let mut tables = vec![crate::types::Table {
+            cells: Vec::new(),
+            markdown: "native".to_string(),
+            page_number: 1,
+            bounding_box: None,
+        }];
+
+        replace_tables_with_ocr_output(&mut tables, Vec::new());
+
+        assert_eq!(tables.len(), 1);
+        assert_eq!(tables[0].markdown, "native");
+    }
+
+    #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-pipeline")))]
+    #[test]
+    fn preparing_ocr_layout_inputs_transfers_raster_ownership() {
+        let image = image::RgbImage::from_pixel(4, 3, image::Rgb([1, 2, 3]));
+        let original_pixels = image.as_ptr();
+        let detections = vec![crate::layout::DetectionResult {
+            page_width: 4,
+            page_height: 3,
+            detections: Vec::new(),
+        }];
+
+        let (images, detections) = prepare_ocr_layout_inputs(vec![image], detections);
+
+        let image::DynamicImage::ImageRgb8(transferred) = &images[0] else {
+            panic!("RGB raster must retain its storage type");
+        };
+        assert_eq!(transferred.as_ptr(), original_pixels);
+        assert_eq!((detections[0].page_width, detections[0].page_height), (4, 3));
+    }
+
+    #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-pipeline")))]
+    #[test]
+    fn preparing_ocr_layout_inputs_discards_only_mismatched_page_detections() {
+        let images = vec![image::RgbImage::new(4, 3), image::RgbImage::new(8, 6)];
+        let detections = vec![
+            crate::layout::DetectionResult {
+                page_width: 4,
+                page_height: 3,
+                detections: Vec::new(),
+            },
+            crate::layout::DetectionResult {
+                page_width: 16,
+                page_height: 12,
+                detections: Vec::new(),
+            },
+        ];
+
+        let (_, detections) = prepare_ocr_layout_inputs(images, detections);
+
+        assert_eq!((detections[0].page_width, detections[0].page_height), (4, 3));
+        assert_eq!((detections[1].page_width, detections[1].page_height), (8, 6));
+        assert!(detections[1].detections.is_empty());
+    }
+
+    #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-pipeline")))]
+    #[test]
+    fn preparing_ocr_layout_inputs_repairs_detection_cardinality() {
+        let images = vec![image::RgbImage::new(4, 3), image::RgbImage::new(8, 6)];
+
+        let (_, detections) = prepare_ocr_layout_inputs(images, Vec::new());
+
+        assert_eq!(detections.len(), 2);
+        assert_eq!((detections[0].page_width, detections[0].page_height), (4, 3));
+        assert_eq!((detections[1].page_width, detections[1].page_height), (8, 6));
     }
 
     #[cfg(feature = "ocr")]
