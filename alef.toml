@@ -723,6 +723,11 @@ exclude_functions = [
 [crates.wasm.extra_dependencies]
 async-trait = "0.1"
 
+# Test harness for the in-crate #[wasm_bindgen_test] suites in src/engine.rs;
+# dev-only, never part of the published package's dependency graph.
+[crates.wasm.extra_dev_dependencies]
+wasm-bindgen-test = "0.3"
+
 [crates.ffi]
 prefix = "xberg"
 header_name = "xberg.h"

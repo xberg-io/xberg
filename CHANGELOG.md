@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **In-crate Rust tests for the wasm engine.** The `XbergEngine` bridge surface (constructor
+  validation, OCR/NER dispatch through injected JS backends, wire-shape handling, bridge
+  timeout) is now covered by `#[wasm_bindgen_test]` suites inside `xberg-wasm` itself, run
+  under Node via `scripts/ci/wasm/run-crate-tests.sh` in the wasm e2e job. The generated
+  manifest carries `wasm-bindgen-test` as a dev-dependency through alef's
+  `extra_dev_dependencies`, and `test-shims/` supplies the `env` / `wasi_snapshot_preview1`
+  stub modules the test glue needs for the same reason the published package needs
+  `fix-wasi-imports.mjs`. The vitest e2e suites keep covering the JS side of the contract.
+
 - **Reversible redaction for authorized callers (`redaction-rehydrate`).** Token-replacement
   redaction can now capture a token to original-text map, encrypt it with a passphrase
   (AES-256-GCM, scrypt-derived key, fresh salt and nonce per encryption), and later search or

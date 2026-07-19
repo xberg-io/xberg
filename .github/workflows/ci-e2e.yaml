@@ -449,6 +449,11 @@ jobs:
           DYLD_LIBRARY_PATH: ${{ env.DYLD_LIBRARY_PATH || '' }}
           TESSDATA_PREFIX: "/usr/share/tesseract-ocr/5/tessdata"
 
+      - name: Run in-crate wasm engine tests (Node)
+        if: matrix.lang == 'wasm'
+        shell: bash
+        run: scripts/ci/wasm/run-crate-tests.sh
+
       - name: Run e2e tests (swift, instrumented)
         if: matrix.lang == 'swift'
         shell: bash

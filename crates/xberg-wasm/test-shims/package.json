@@ -1,0 +1,4 @@
+{
+  "comment": "Keeps this directory CommonJS: the parent package.json declares type=module, but wasm-bindgen's Node test glue loads these shims via require().",
+  "type": "commonjs"
+}
