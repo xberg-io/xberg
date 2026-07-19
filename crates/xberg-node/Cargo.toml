@@ -58,7 +58,7 @@ xml = ["xberg/xml"]
 
 [dependencies]
 async-trait = "0.1"
-crawlberg = { default-features = false, version = "1.0.7" }
+crawlberg = { default-features = false, version = "1.0.5" }
 napi = { version = "3", features = ["async", "serde-json"] }
 napi-derive = "3"
 serde = { version = "1", features = ["derive"] }

@@ -50,11 +50,11 @@ base64 = { workspace = true }
 candle-core = { workspace = true }
 candle-nn = { workspace = true }
 candle-transformers = { workspace = true }
+fs2 = { workspace = true }
 image = { workspace = true, features = ["png", "jpeg", "webp", "bmp", "tiff", "gif"] }
 parking_lot = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-fs2 = { workspace = true }
 sha2 = "0.11"
 thiserror = { workspace = true }
 tokenizers = { version = "0.23", default-features = false, features = ["fancy-regex"] }

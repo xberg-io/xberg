@@ -35,7 +35,6 @@ exclude = [
     "**/*.diff",
     "**/*.patch",
     "**/frb_generated.rs",
-    "charts/**/templates/**",
 ]
 
 [lint.markdown.rumdl]
@@ -433,7 +432,6 @@ lint = { exclude = [
     "**/*.diff",
     "**/*.patch",
     "**/frb_generated.rs",
-    "charts/**/templates/**",
 ] }
 fmt = { exclude = [
     "**/*.freezed.dart",
@@ -471,7 +469,6 @@ fmt = { exclude = [
     "**/*.diff",
     "**/*.patch",
     "**/frb_generated.rs",
-    "charts/**/templates/**",
 ] }
 file_safety = { exclude = [
     "**/*.freezed.dart",
@@ -509,7 +506,6 @@ file_safety = { exclude = [
     "**/*.diff",
     "**/*.patch",
     "**/frb_generated.rs",
-    "charts/**/templates/**",
 ] }
 cargo = true
 commit = { stages = ["commit-msg"] }

@@ -10075,28 +10075,28 @@ extension ExtractedDocumentRef {
         { let val = __swift_bridge__$ExtractedDocument$detected_languages(ptr); if val != nil { return RustVec(ptr: val!) } else { return nil } }()
     }
 
-    public func chunks() -> RustString {
-        RustString(ptr: __swift_bridge__$ExtractedDocument$chunks(ptr))
+    public func chunks() -> Optional<RustVec<Chunk>> {
+        { let val = __swift_bridge__$ExtractedDocument$chunks(ptr); if val != nil { return RustVec(ptr: val!) } else { return nil } }()
     }
 
-    public func images() -> RustString {
-        RustString(ptr: __swift_bridge__$ExtractedDocument$images(ptr))
+    public func images() -> Optional<RustVec<ExtractedImage>> {
+        { let val = __swift_bridge__$ExtractedDocument$images(ptr); if val != nil { return RustVec(ptr: val!) } else { return nil } }()
     }
 
-    public func pages() -> RustString {
-        RustString(ptr: __swift_bridge__$ExtractedDocument$pages(ptr))
+    public func pages() -> Optional<RustVec<PageContent>> {
+        { let val = __swift_bridge__$ExtractedDocument$pages(ptr); if val != nil { return RustVec(ptr: val!) } else { return nil } }()
     }
 
-    public func elements() -> RustString {
-        RustString(ptr: __swift_bridge__$ExtractedDocument$elements(ptr))
+    public func elements() -> Optional<RustVec<Element>> {
+        { let val = __swift_bridge__$ExtractedDocument$elements(ptr); if val != nil { return RustVec(ptr: val!) } else { return nil } }()
     }
 
     public func djotContent() -> Optional<DjotContent> {
         { let val = __swift_bridge__$ExtractedDocument$djot_content(ptr); if val != nil { return DjotContent(ptr: val!) } else { return nil } }()
     }
 
-    public func ocrElements() -> RustString {
-        RustString(ptr: __swift_bridge__$ExtractedDocument$ocr_elements(ptr))
+    public func ocrElements() -> Optional<RustVec<OcrElement>> {
+        { let val = __swift_bridge__$ExtractedDocument$ocr_elements(ptr); if val != nil { return RustVec(ptr: val!) } else { return nil } }()
     }
 
     public func document() -> Optional<DocumentStructure> {
@@ -10111,20 +10111,20 @@ extension ExtractedDocumentRef {
         RustVec(ptr: __swift_bridge__$ExtractedDocument$processing_warnings(ptr))
     }
 
-    public func annotations() -> RustString {
-        RustString(ptr: __swift_bridge__$ExtractedDocument$annotations(ptr))
+    public func annotations() -> Optional<RustVec<PdfAnnotation>> {
+        { let val = __swift_bridge__$ExtractedDocument$annotations(ptr); if val != nil { return RustVec(ptr: val!) } else { return nil } }()
     }
 
-    public func children() -> RustString {
-        RustString(ptr: __swift_bridge__$ExtractedDocument$children(ptr))
+    public func children() -> Optional<RustVec<ArchiveEntry>> {
+        { let val = __swift_bridge__$ExtractedDocument$children(ptr); if val != nil { return RustVec(ptr: val!) } else { return nil } }()
     }
 
-    public func uris() -> RustString {
-        RustString(ptr: __swift_bridge__$ExtractedDocument$uris(ptr))
+    public func uris() -> Optional<RustVec<ExtractedUri>> {
+        { let val = __swift_bridge__$ExtractedDocument$uris(ptr); if val != nil { return RustVec(ptr: val!) } else { return nil } }()
     }
 
-    public func revisions() -> RustString {
-        RustString(ptr: __swift_bridge__$ExtractedDocument$revisions(ptr))
+    public func revisions() -> Optional<RustVec<DocumentRevision>> {
+        { let val = __swift_bridge__$ExtractedDocument$revisions(ptr); if val != nil { return RustVec(ptr: val!) } else { return nil } }()
     }
 
     public func structuredOutput() -> Optional<RustString> {
@@ -10135,12 +10135,12 @@ extension ExtractedDocumentRef {
         { let val = __swift_bridge__$ExtractedDocument$code_intelligence(ptr); if val != nil { return RustString(ptr: val!) } else { return nil } }()
     }
 
-    public func llmUsage() -> RustString {
-        RustString(ptr: __swift_bridge__$ExtractedDocument$llm_usage(ptr))
+    public func llmUsage() -> Optional<RustVec<LlmUsage>> {
+        { let val = __swift_bridge__$ExtractedDocument$llm_usage(ptr); if val != nil { return RustVec(ptr: val!) } else { return nil } }()
     }
 
-    public func entities() -> RustString {
-        RustString(ptr: __swift_bridge__$ExtractedDocument$entities(ptr))
+    public func entities() -> Optional<RustVec<Entity>> {
+        { let val = __swift_bridge__$ExtractedDocument$entities(ptr); if val != nil { return RustVec(ptr: val!) } else { return nil } }()
     }
 
     public func summary() -> Optional<DocumentSummary> {
@@ -10155,8 +10155,8 @@ extension ExtractedDocumentRef {
         { let val = __swift_bridge__$ExtractedDocument$translation(ptr); if val != nil { return Translation(ptr: val!) } else { return nil } }()
     }
 
-    public func pageClassifications() -> RustString {
-        RustString(ptr: __swift_bridge__$ExtractedDocument$page_classifications(ptr))
+    public func pageClassifications() -> Optional<RustVec<PageClassification>> {
+        { let val = __swift_bridge__$ExtractedDocument$page_classifications(ptr); if val != nil { return RustVec(ptr: val!) } else { return nil } }()
     }
 
     public func redactionReport() -> Optional<RedactionReport> {
@@ -10977,8 +10977,8 @@ extension ExtractedImageRef {
         { let val = __swift_bridge__$ExtractedImage$caption(ptr); if val != nil { return RustString(ptr: val!) } else { return nil } }()
     }
 
-    public func qrCodes() -> RustString {
-        RustString(ptr: __swift_bridge__$ExtractedImage$qr_codes(ptr))
+    public func qrCodes() -> Optional<RustVec<QrCode>> {
+        { let val = __swift_bridge__$ExtractedImage$qr_codes(ptr); if val != nil { return RustVec(ptr: val!) } else { return nil } }()
     }
 
     public func dataBase64() -> Optional<RustString> {
@@ -11466,8 +11466,8 @@ extension ExcelWorkbookRef {
         RustString(ptr: __swift_bridge__$ExcelWorkbook$metadata(ptr))
     }
 
-    public func revisions() -> RustString {
-        RustString(ptr: __swift_bridge__$ExcelWorkbook$revisions(ptr))
+    public func revisions() -> Optional<RustVec<DocumentRevision>> {
+        { let val = __swift_bridge__$ExcelWorkbook$revisions(ptr); if val != nil { return RustVec(ptr: val!) } else { return nil } }()
     }
 }
 extension ExcelWorkbook: Vectorizable {
@@ -11858,8 +11858,8 @@ extension PptxExtractionResultRef {
         { let val = __swift_bridge__$PptxExtractionResult$page_structure(ptr); if val != nil { return PageStructure(ptr: val!) } else { return nil } }()
     }
 
-    public func pageContents() -> RustString {
-        RustString(ptr: __swift_bridge__$PptxExtractionResult$page_contents(ptr))
+    public func pageContents() -> Optional<RustVec<PageContent>> {
+        { let val = __swift_bridge__$PptxExtractionResult$page_contents(ptr); if val != nil { return RustVec(ptr: val!) } else { return nil } }()
     }
 
     public func document() -> Optional<DocumentStructure> {
@@ -11870,8 +11870,8 @@ extension PptxExtractionResultRef {
         RustString(ptr: __swift_bridge__$PptxExtractionResult$office_metadata(ptr))
     }
 
-    public func revisions() -> RustString {
-        RustString(ptr: __swift_bridge__$PptxExtractionResult$revisions(ptr))
+    public func revisions() -> Optional<RustVec<DocumentRevision>> {
+        { let val = __swift_bridge__$PptxExtractionResult$revisions(ptr); if val != nil { return RustVec(ptr: val!) } else { return nil } }()
     }
 }
 extension PptxExtractionResult: Vectorizable {
@@ -12195,8 +12195,8 @@ extension OcrExtractionResultRef {
         RustVec(ptr: __swift_bridge__$OcrExtractionResult$tables(ptr))
     }
 
-    public func ocrElements() -> RustString {
-        RustString(ptr: __swift_bridge__$OcrExtractionResult$ocr_elements(ptr))
+    public func ocrElements() -> Optional<RustVec<OcrElement>> {
+        { let val = __swift_bridge__$OcrExtractionResult$ocr_elements(ptr); if val != nil { return RustVec(ptr: val!) } else { return nil } }()
     }
 }
 extension OcrExtractionResult: Vectorizable {
@@ -29113,3 +29113,6 @@ func __swift_bridge__SwiftRerankerBackendBox__free (ptr: UnsafeMutableRawPointer
 func __swift_bridge__SwiftTokenizerBackendBox__free (ptr: UnsafeMutableRawPointer) {
     let _ = Unmanaged<SwiftTokenizerBackendBox>.fromOpaque(ptr).takeRetainedValue()
 }
+
+
+

@@ -40,11 +40,11 @@
     ]
   },
   "scripts": {
-    "build": "npx --yes -p @napi-rs/cli@^3.6.2 napi build --platform --release",
-    "artifacts": "npx --yes -p @napi-rs/cli@^3.6.2 napi artifacts",
-    "prepublishOnly": "npx --yes -p @napi-rs/cli@^3.6.2 napi prepublish -t npm --skip-optional-publish"
+    "build": "npx --yes -p @napi-rs/cli@^3.7.3 napi build --platform --release",
+    "artifacts": "npx --yes -p @napi-rs/cli@^3.7.3 napi artifacts",
+    "prepublishOnly": "npx --yes -p @napi-rs/cli@^3.7.3 napi prepublish -t npm --skip-optional-publish"
   },
   "engines": { "node": ">= 22" },
   "publishConfig": { "access": "public" },
-  "devDependencies": { "@napi-rs/cli": "^3.6.2" }
+  "devDependencies": { "@napi-rs/cli": "^3.7.3" }
 }

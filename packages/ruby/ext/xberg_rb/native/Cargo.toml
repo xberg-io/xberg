@@ -55,7 +55,7 @@ xml = ["xberg/xml"]
 
 [dependencies]
 async-trait = "0.1"
-crawlberg = { default-features = false, version = "1.0.3" }
+crawlberg = { default-features = false, version = "1.0.5" }
 magnus = "0.8"
 rb-sys = ">=0.9, <0.9.128"
 serde = { version = "1", features = ["derive"] }

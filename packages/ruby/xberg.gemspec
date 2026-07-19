@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
 
   spec.license       = "MIT"
 
-  spec.required_ruby_version = [">= 3.2.0", "< 4.0"]
+  spec.required_ruby_version = ">= 3.2.0"
   spec.metadata["keywords"] = %w[document extraction ocr pdf text].join(",")
   spec.metadata["rubygems_mfa_required"] = "true"
 
