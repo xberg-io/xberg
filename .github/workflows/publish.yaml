@@ -1324,10 +1324,12 @@ jobs:
 
       - uses: xberg-io/actions/build-android-natives@v1
         with:
-          crate-name: xberg-ffi
+          # xberg-jni has no [features] table of its own; it pulls in
+          # xberg's android-target feature automatically via
+          # cfg(target_os = "android") dependency selection, so no
+          # --features/--no-default-features flags are passed here.
+          crate-name: xberg-jni
           abis: ${{ matrix.abi }}
-          features: android-target
-          no-default-features: "true"
       - uses: actions/upload-artifact@v7
         with:
           name: kotlin-android-${{ matrix.abi }}
@@ -2413,6 +2415,20 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+  # NOTE (#1246 follow-up): the npm `latest` dist-tag for @xberg-io/xberg-wasm
+  # currently still points at a `0.0.1` placeholder published before this
+  # workflow's dist-tag logic existed (`npm view @xberg-io/xberg-wasm
+  # dist-tags` -> { latest: "0.0.1", next: "1.0.0-rc.29" }). This job always
+  # passes npm-tag: ${{ needs.prepare.outputs.npm_tag }}, which is "next" for
+  # every prerelease (see determine_npm_tag in
+  # scripts/publish/validate-and-compute-release-metadata.sh) and would only
+  # become "latest" on a genuine non-prerelease (1.0.0) publish -- so this
+  # workflow cannot safely repoint `latest` today without prematurely
+  # promoting an rc build. Fixing the stale pointer requires a one-time,
+  # out-of-band `npm dist-tag add @xberg-io/xberg-wasm@<version> latest` (or
+  # unpublish/deprecate of the 0.0.1 stub) run manually by someone with
+  # publish rights on the package; do not automate it here until a real
+  # 1.0.0 release exists.
   publish-wasm:
     name: Publish WASM package
     needs: [prepare, wasm-bindings, check-npm]
@@ -2436,6 +2452,31 @@ jobs:
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org/"
+
+      - name: Assert npm tarball contains the wasm web bundle
+        working-directory: crates/xberg-wasm
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Regression guard for #1246: crates/xberg-wasm/pkg/web/.gitignore = "*"
+          # can silently drop pkg/web from the published tarball unless
+          # build:all's `find pkg -name .gitignore -delete` step ran. A missing
+          # pkg/web/xberg_wasm.js or pkg/web/xberg_wasm_bg.wasm ships a package
+          # that 404s at import time (the live-demo failure this bug reports).
+          TARBALL=$(npm pack --silent)
+          MISSING=0
+          for f in "package/pkg/web/xberg_wasm.js" "package/pkg/web/xberg_wasm_bg.wasm"; do
+            if ! tar -tzf "$TARBALL" | grep -qx "$f"; then
+              echo "FATAL: npm tarball is missing $f" >&2
+              MISSING=1
+            fi
+          done
+          rm -f "$TARBALL"
+          if [[ "$MISSING" -ne 0 ]]; then
+            echo "FATAL: wasm npm package is missing required web bundle files; aborting publish." >&2
+            exit 1
+          fi
+          echo "OK: npm tarball contains the wasm web bundle (xberg_wasm.js + xberg_wasm_bg.wasm)"
 
       - uses: xberg-io/actions/publish-npm@v1
         with:
@@ -2534,7 +2575,7 @@ jobs:
           for abi in arm64-v8a x86_64; do
             dest="packages/kotlin-android/src/main/jniLibs/${abi}"
             mkdir -p "$dest"
-            src="kotlin-android-artifacts/${abi}/libxberg_ffi.so"
+            src="kotlin-android-artifacts/${abi}/libxberg_jni.so"
             if [[ -f "$src" ]]; then
               cp -v "$src" "$dest/"
             fi
