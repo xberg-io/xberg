@@ -144,9 +144,10 @@ pub mod ort_discovery;
 pub(crate) mod model_download;
 
 /// Engine-neutral inference seam (issue #1275): backend/session traits over ONNX
-/// Runtime today, with a pure-Rust `tract` backend added on no-ORT targets
-/// (WASM, Android) in a later phase.
-#[cfg(any(feature = "layout-detection", feature = "auto-rotate"))]
+/// Runtime on native builds and the pure-Rust `tract` engine on no-ORT targets
+/// (Android x86_64; WASM once embedded-weight loading lands). `auto_rotate` covers
+/// both the ORT `auto-rotate` and the tract `auto-rotate-tract` variants.
+#[cfg(any(feature = "layout-detection", auto_rotate))]
 pub(crate) mod inference;
 
 #[cfg(any(feature = "paddle-ocr", feature = "paddle-ocr-types"))]

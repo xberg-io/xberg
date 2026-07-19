@@ -14,6 +14,18 @@ fn main() {
         println!("cargo::rustc-cfg=inference_ort");
     }
 
+    // `auto_rotate` marks builds where the document-orientation capability is
+    // present regardless of engine: the ORT-backed `auto-rotate` feature or the
+    // pure-Rust `auto-rotate-tract` feature (no-ORT targets). Consumer sites gate
+    // on this cfg so they need not enumerate every engine variant; `default_backend`
+    // (via `inference_ort`) still picks the concrete engine.
+    println!("cargo::rustc-check-cfg=cfg(auto_rotate)");
+    if std::env::var_os("CARGO_FEATURE_AUTO_ROTATE").is_some()
+        || std::env::var_os("CARGO_FEATURE_AUTO_ROTATE_TRACT").is_some()
+    {
+        println!("cargo::rustc-cfg=auto_rotate");
+    }
+
     if std::env::var_os("CARGO_FEATURE_ORT_BUNDLED").is_some()
         && std::env::var_os("CARGO_FEATURE_ORT_DYNAMIC").is_some()
     {

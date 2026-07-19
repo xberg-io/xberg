@@ -59,17 +59,36 @@ impl InferenceBackend for TractBackend {
                 .into_runnable()
         })()
         .map_err(|e| InferenceError::Load(e.to_string()))?;
-
-        let graph = plan.model();
-        let input_names = graph.inputs.iter().map(|o| graph.node(o.node).name.clone()).collect();
-        let output_names = graph.outputs.iter().map(|o| graph.node(o.node).name.clone()).collect();
-
-        Ok(Box::new(TractSession {
-            plan,
-            input_names,
-            output_names,
-        }))
+        Ok(session_from_plan(plan))
     }
+
+    fn load_from_memory(
+        &self,
+        model_bytes: &[u8],
+        _accel: Option<&AccelerationConfig>,
+    ) -> Result<Box<dyn InferenceSession>, InferenceError> {
+        let plan = (|| -> TractResult<Arc<TypedRunnableModel>> {
+            tract_onnx::onnx()
+                .model_for_read(&mut std::io::Cursor::new(model_bytes))?
+                .into_optimized()?
+                .into_runnable()
+        })()
+        .map_err(|e| InferenceError::Load(e.to_string()))?;
+        Ok(session_from_plan(plan))
+    }
+}
+
+/// Wrap a runnable plan behind the neutral session trait, reading input/output
+/// names from the graph in declared order (tract runs positionally).
+fn session_from_plan(plan: Arc<TypedRunnableModel>) -> Box<dyn InferenceSession> {
+    let graph = plan.model();
+    let input_names = graph.inputs.iter().map(|o| graph.node(o.node).name.clone()).collect();
+    let output_names = graph.outputs.iter().map(|o| graph.node(o.node).name.clone()).collect();
+    Box::new(TractSession {
+        plan,
+        input_names,
+        output_names,
+    })
 }
 
 /// A tract runnable plan behind the neutral [`InferenceSession`] trait.
@@ -236,6 +255,41 @@ mod tests {
 
         if ran == 0 {
             eprintln!("tract_matches_ort_on_cnn_classifiers: no models cached, nothing compared");
+        }
+    }
+
+    /// `load_from_memory` must produce a session equivalent to `load` for the same
+    /// artifact — covered on both engines (ORT `commit_from_memory`, tract
+    /// `model_for_read`). Self-skips when the model is not cached.
+    #[test]
+    fn load_from_memory_matches_load_on_both_engines() {
+        let suffix = "v2/classifiers/PP-LCNet_x1_0_doc_ori.onnx";
+        let Some(path) = cached_model(suffix) else {
+            eprintln!("skip: {suffix} not in HF cache");
+            return;
+        };
+        let bytes = std::fs::read(&path).unwrap();
+
+        let shape = [1usize, 3, 224, 224];
+        let count: usize = shape.iter().product();
+        let data: Vec<f32> = (0..count).map(|i| ((i % 255) as f32) / 255.0 - 0.5).collect();
+        let input = ndarray::ArrayD::from_shape_vec(shape.to_vec(), data).unwrap();
+
+        let run = |session: &dyn InferenceSession| -> Vec<f32> {
+            let input_name = session.input_names().first().cloned().unwrap();
+            let out = session
+                .run(vec![(input_name, InferenceTensor::F32(input.clone()))])
+                .unwrap();
+            out[0].1.as_f32().unwrap().as_slice().unwrap().to_vec()
+        };
+
+        for backend in [
+            Box::new(OrtBackend::new()) as Box<dyn InferenceBackend>,
+            Box::new(TractBackend::new()) as Box<dyn InferenceBackend>,
+        ] {
+            let from_path = run(backend.load(&path, None).unwrap().as_ref());
+            let from_memory = run(backend.load_from_memory(&bytes, None).unwrap().as_ref());
+            assert_eq!(from_path, from_memory, "load vs load_from_memory diverged");
         }
     }
 }

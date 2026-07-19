@@ -59,4 +59,21 @@ pub trait InferenceBackend: Send + Sync {
         model_path: &Path,
         accel: Option<&AccelerationConfig>,
     ) -> Result<Box<dyn InferenceSession>, InferenceError>;
+
+    /// Load a model from an in-memory ONNX byte buffer.
+    ///
+    /// Used where there is no model file to read — WASM (weights embedded via
+    /// `include_bytes!` or streamed from JS) and any caller that already holds the
+    /// bytes. Native callers normally use [`load`](Self::load) with a cached path.
+    ///
+    /// Landed as seam infrastructure ahead of its consumer: the only callers today
+    /// are the cross-engine parity tests. The WASM embedded-weight path wires the
+    /// first production caller in a later phase, so it is `dead_code`-allowed until
+    /// then rather than gated behind a narrower cfg.
+    #[allow(dead_code)]
+    fn load_from_memory(
+        &self,
+        model_bytes: &[u8],
+        accel: Option<&AccelerationConfig>,
+    ) -> Result<Box<dyn InferenceSession>, InferenceError>;
 }

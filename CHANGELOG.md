@@ -22,6 +22,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stub modules the test glue needs for the same reason the published package needs
   `fix-wasi-imports.mjs`. The vitest e2e suites keep covering the JS side of the contract.
 
+- **Pure-Rust document orientation on no-ORT targets (`auto-rotate-tract`).** The PP-LCNet
+  auto-rotate classifier can now run through the `tract` engine instead of ONNX Runtime, so
+  page-orientation detection works where native ORT cannot link. A new `auto-rotate-tract` feature
+  mirrors `auto-rotate` but selects the pure-Rust backend, and `android-target` now enables it
+  (the x86_64 emulator previously had no orientation detection at all). The ORT-backed `auto-rotate`
+  remains the native default; the engine is chosen at compile time by the inference seam, and tract
+  matches ORT within 1e-3 on the classifier logits. WASM support (embedded-weight loading) follows in
+  a later phase. Part of #1275.
+
 - **Reversible redaction for authorized callers (`redaction-rehydrate`).** Token-replacement
   redaction can now capture a token to original-text map, encrypt it with a passphrase
   (AES-256-GCM, scrypt-derived key, fresh salt and nonce per encryption), and later search or

@@ -2,16 +2,17 @@
 //!
 //! The `types` submodule is always available under the `auto-rotate-types` feature
 //! (pure-Rust, no ORT dependency). The full detection implementation requires the
-//! `auto-rotate` feature and ONNX Runtime.
+//! document-orientation capability (`auto_rotate` cfg) — provided by the ORT-backed
+//! `auto-rotate` feature or the pure-Rust `auto-rotate-tract` variant.
 
 pub mod types;
 pub use types::OrientationResult;
 
-#[cfg(feature = "auto-rotate")]
+#[cfg(auto_rotate)]
 pub(crate) mod detector;
-#[cfg(all(feature = "auto-rotate", feature = "paddle-ocr"))]
+#[cfg(all(auto_rotate, feature = "paddle-ocr"))]
 pub(crate) use detector::detect_and_rotate;
-#[cfg(feature = "auto-rotate")]
+#[cfg(auto_rotate)]
 pub(crate) use detector::resolve_cache_dir;
-#[cfg(feature = "auto-rotate")]
+#[cfg(auto_rotate)]
 pub use detector::{DocOrientationDetector, MIN_CONFIDENCE};

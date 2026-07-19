@@ -5,7 +5,7 @@ use std::time::Duration;
 #[cfg(any(
     feature = "paddle-ocr",
     feature = "layout-detection",
-    feature = "auto-rotate",
+    auto_rotate,
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
@@ -17,7 +17,7 @@ use sha2::{Digest, Sha256};
 #[cfg(any(
     feature = "paddle-ocr",
     feature = "layout-detection",
-    feature = "auto-rotate",
+    auto_rotate,
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
@@ -29,7 +29,7 @@ use std::io::{BufReader, Read};
 #[cfg(any(
     feature = "paddle-ocr",
     feature = "layout-detection",
-    feature = "auto-rotate",
+    auto_rotate,
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
@@ -41,7 +41,7 @@ use std::path::Path;
 #[cfg(any(
     feature = "paddle-ocr",
     feature = "layout-detection",
-    feature = "auto-rotate",
+    auto_rotate,
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
@@ -85,7 +85,7 @@ static QUARANTINE_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::Ato
     any(
         feature = "candle-ocr",
         feature = "paddle-ocr",
-        feature = "auto-rotate",
+        auto_rotate,
         feature = "layout-detection",
         feature = "transcription",
         feature = "chunking-tokenizers",
@@ -105,7 +105,7 @@ const HF_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
     any(
         feature = "candle-ocr",
         feature = "paddle-ocr",
-        feature = "auto-rotate",
+        auto_rotate,
         feature = "layout-detection",
         feature = "transcription",
         feature = "chunking-tokenizers",
@@ -130,7 +130,7 @@ const HF_MAX_RETRY_ATTEMPTS: usize = 2;
     any(
         feature = "candle-ocr",
         feature = "paddle-ocr",
-        feature = "auto-rotate",
+        auto_rotate,
         feature = "layout-detection",
         feature = "transcription",
         feature = "chunking-tokenizers",
@@ -147,7 +147,7 @@ struct Ipv4FirstResolver;
     any(
         feature = "candle-ocr",
         feature = "paddle-ocr",
-        feature = "auto-rotate",
+        auto_rotate,
         feature = "layout-detection",
         feature = "transcription",
         feature = "chunking-tokenizers",
@@ -180,7 +180,7 @@ impl reqwest::dns::Resolve for Ipv4FirstResolver {
     any(
         feature = "candle-ocr",
         feature = "paddle-ocr",
-        feature = "auto-rotate",
+        auto_rotate,
         feature = "layout-detection",
         feature = "transcription",
         feature = "chunking-tokenizers",
@@ -208,7 +208,7 @@ fn order_ipv4_first(addrs: &mut [std::net::SocketAddr]) {
     any(
         feature = "candle-ocr",
         feature = "paddle-ocr",
-        feature = "auto-rotate",
+        auto_rotate,
         feature = "layout-detection",
         feature = "transcription",
         feature = "chunking-tokenizers",
@@ -357,7 +357,7 @@ where
 #[cfg(any(
     feature = "paddle-ocr",
     feature = "layout-detection",
-    feature = "auto-rotate",
+    auto_rotate,
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
@@ -722,7 +722,7 @@ pub(crate) fn hf_resolve_file(
 #[cfg(any(
     feature = "paddle-ocr",
     feature = "layout-detection",
-    feature = "auto-rotate",
+    auto_rotate,
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl"
 ))]
@@ -1266,7 +1266,7 @@ pub(crate) fn parse_sha256_manifest(content: &str) -> Result<Vec<(String, String
 #[cfg(any(
     feature = "paddle-ocr",
     feature = "layout-detection",
-    feature = "auto-rotate",
+    auto_rotate,
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
@@ -1802,7 +1802,7 @@ mod download_deadline_tests {
     any(
         feature = "candle-ocr",
         feature = "paddle-ocr",
-        feature = "auto-rotate",
+        auto_rotate,
         feature = "layout-detection",
         feature = "transcription",
         feature = "onnx-runtime",
@@ -1857,7 +1857,7 @@ mod hf_client_builder_tests {
     any(
         feature = "paddle-ocr",
         feature = "layout-detection",
-        feature = "auto-rotate",
+        auto_rotate,
         feature = "ner-onnx"
     )
 ))]

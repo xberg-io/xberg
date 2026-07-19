@@ -1,7 +1,9 @@
 //! Document orientation detection implementation using PP-LCNet_x1_0_doc_ori.
 //!
 //! Detects page-level orientation (0°, 90°, 180°, 270°) for scanned documents
-//! and images. Requires the `auto-rotate` feature (ONNX Runtime).
+//! and images. Runs through the [`crate::inference`] seam, so it works on either
+//! engine: the ORT-backed `auto-rotate` feature or the pure-Rust `auto-rotate-tract`
+//! variant (no-ORT targets). The model is engine-neutral either way.
 //!
 //! Used by ALL OCR backends when `auto_rotate` is enabled in `OcrConfig`.
 //! More reliable than Tesseract's `DetectOrientationScript` which crashes
@@ -68,8 +70,15 @@ impl DocOrientationDetector {
         let preprocessed = preprocess(image);
         let input_tensor = normalize(&preprocessed);
 
+        // PP-LCNet's single input is named "x"; read it from the graph rather than
+        // hard-coding, so the same call works whichever engine loaded the model.
+        let input_name = session
+            .input_names()
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "x".to_string());
         let outputs = session
-            .run(vec![("x".to_string(), InferenceTensor::F32(input_tensor.into_dyn()))])
+            .run(vec![(input_name, InferenceTensor::F32(input_tensor.into_dyn()))])
             .map_err(|e| XbergError::Ocr {
                 message: format!("Doc orientation inference failed: {e}"),
                 source: None,

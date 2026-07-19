@@ -99,7 +99,7 @@ fn return_api_to_cache(api: TesseractAPI, tessdata_path: String, language: Strin
 /// Process-global document-orientation classifier (ONNX PP-LCNet), shared by
 /// every tesseract-backend auto-rotate call. Session initialization is lazy and
 /// internally synchronized; `detect` is thread-safe.
-#[cfg(feature = "auto-rotate")]
+#[cfg(auto_rotate)]
 fn doc_orientation_detector() -> &'static crate::doc_orientation::DocOrientationDetector {
     static DETECTOR: std::sync::LazyLock<crate::doc_orientation::DocOrientationDetector> =
         std::sync::LazyLock::new(|| {
@@ -113,7 +113,7 @@ fn doc_orientation_detector() -> &'static crate::doc_orientation::DocOrientation
 
 use crate::types::OcrElement;
 
-#[cfg(feature = "auto-rotate")]
+#[cfg(auto_rotate)]
 /// Rotate raw RGB image data by the given degrees (0, 90, 180, 270).
 ///
 /// Returns the rotated pixel data and the new (width, height).
@@ -419,7 +419,7 @@ fn build_content_with_inline_tables(tsv_data: &str, tables: &[OcrTable], min_con
 /// 0° false positives above 0.35 are rare.
 const MIN_ORIENTATION_CONFIDENCE: f32 = 0.35;
 
-#[cfg(feature = "auto-rotate")]
+#[cfg(auto_rotate)]
 const _: () = assert!(MIN_ORIENTATION_CONFIDENCE == crate::doc_orientation::MIN_CONFIDENCE);
 
 /// Check whether a center point (x, y) lies within a bounding box.
@@ -687,7 +687,7 @@ pub(super) fn perform_ocr(
     apply_tesseract_variables(&api, config)?;
 
     // DROP ORDER NOTE: `pix_guard` is declared AFTER `api` (the `ApiGuard`), so Rust
-    #[cfg_attr(not(feature = "auto-rotate"), allow(unused_mut))]
+    #[cfg_attr(not(auto_rotate), allow(unused_mut))]
     let mut pix_guard: Option<xberg_tesseract::Pix> = {
         match xberg_tesseract::Pix::from_raw_rgb(&image_data, width, height) {
             Ok(mut pix) => {
@@ -741,19 +741,19 @@ pub(super) fn perform_ocr(
         )
     });
 
-    #[cfg_attr(not(feature = "auto-rotate"), allow(unused_mut))]
+    #[cfg_attr(not(auto_rotate), allow(unused_mut))]
     let mut detected_orientation: Option<(i32, f32, String, f32)> = None;
     let auto_rotate_enabled =
         config.preprocessing.as_ref().map(|p| p.auto_rotate).unwrap_or(false) || config.auto_rotate;
 
-    #[cfg(not(feature = "auto-rotate"))]
+    #[cfg(not(auto_rotate))]
     if auto_rotate_enabled {
         tracing::warn!(
             "auto_rotate requested but the `auto-rotate` feature is not compiled in; skipping orientation detection"
         );
     }
 
-    #[cfg(feature = "auto-rotate")]
+    #[cfg(auto_rotate)]
     if auto_rotate_enabled {
         let orientation_result = image::RgbImage::from_raw(width, height, image_data.clone())
             .ok_or_else(|| crate::error::XbergError::Ocr {
@@ -1428,9 +1428,9 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[cfg(feature = "auto-rotate")]
+    #[cfg(auto_rotate)]
     #[test]
-    #[cfg(feature = "auto-rotate")]
+    #[cfg(auto_rotate)]
     fn test_rotate_rgb_image_data_identity() {
         let data: Vec<u8> = (0..18).collect();
         let (out, w, h) = rotate_rgb_image_data(&data, 2, 3, 0);
@@ -1439,9 +1439,9 @@ mod tests {
         assert_eq!(h, 3);
     }
 
-    #[cfg(feature = "auto-rotate")]
+    #[cfg(auto_rotate)]
     #[test]
-    #[cfg(feature = "auto-rotate")]
+    #[cfg(auto_rotate)]
     fn test_rotate_rgb_image_data_180() {
         let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
         let (out, w, h) = rotate_rgb_image_data(&data, 2, 2, 180);
@@ -1450,9 +1450,9 @@ mod tests {
         assert_eq!(out, vec![10, 11, 12, 7, 8, 9, 4, 5, 6, 1, 2, 3]);
     }
 
-    #[cfg(feature = "auto-rotate")]
+    #[cfg(auto_rotate)]
     #[test]
-    #[cfg(feature = "auto-rotate")]
+    #[cfg(auto_rotate)]
     fn test_rotate_rgb_image_data_90_swaps_dimensions() {
         let data: Vec<u8> = (0..18).collect();
         let (_, w, h) = rotate_rgb_image_data(&data, 2, 3, 90);
@@ -1460,9 +1460,9 @@ mod tests {
         assert_eq!(h, 2);
     }
 
-    #[cfg(feature = "auto-rotate")]
+    #[cfg(auto_rotate)]
     #[test]
-    #[cfg(feature = "auto-rotate")]
+    #[cfg(auto_rotate)]
     fn test_rotate_rgb_image_data_270_swaps_dimensions() {
         let data: Vec<u8> = (0..18).collect();
         let (_, w, h) = rotate_rgb_image_data(&data, 2, 3, 270);
@@ -1470,9 +1470,9 @@ mod tests {
         assert_eq!(h, 2);
     }
 
-    #[cfg(feature = "auto-rotate")]
+    #[cfg(auto_rotate)]
     #[test]
-    #[cfg(feature = "auto-rotate")]
+    #[cfg(auto_rotate)]
     fn test_rotate_rgb_image_data_90_then_270_is_identity() {
         let data: Vec<u8> = (0..18).collect();
         let (rotated_90, w1, h1) = rotate_rgb_image_data(&data, 2, 3, 90);
@@ -1482,9 +1482,9 @@ mod tests {
         assert_eq!(back, data);
     }
 
-    #[cfg(feature = "auto-rotate")]
+    #[cfg(auto_rotate)]
     #[test]
-    #[cfg(feature = "auto-rotate")]
+    #[cfg(auto_rotate)]
     fn test_rotate_rgb_image_data_unsupported_angle() {
         let data: Vec<u8> = (0..12).collect();
         let (out, w, h) = rotate_rgb_image_data(&data, 2, 2, 45);

@@ -209,6 +209,26 @@ layout-detection = [
     "tokio-runtime",
     "ort-bundled",
 ]
+# auto-rotate-tract: no-ORT sibling of `auto-rotate` (issue #1275). Same PP-LCNet
+# document-orientation capability, run through the pure-Rust `tract` engine instead
+# of ONNX Runtime, so it builds on no-ORT targets (Android x86_64; WASM once
+# embedded-weight loading lands). Weights are fetched via hf-hub on host/Android;
+# it deliberately omits `dep:ort`/`ort-bundled`. `auto-rotate` (ORT) stays the
+# native default — never enable both in one build.
+auto-rotate-tract = [
+    "auto-rotate-types",
+    "tract",
+    "dep:ndarray",
+    "dep:hf-hub",
+    "dep:reqwest",
+    "dep:sha2",
+    "dep:image",
+    "dep:ureq",
+    # model_download's resilient hf-hub client (Ipv4FirstResolver) uses
+    # tokio::spawn_blocking on non-wasm targets; layout-detection pulls this for
+    # the same reason. Gated out on wasm32, where the embedded-weight path lands.
+    "tokio-runtime",
+]
 # tract: pure-Rust ONNX inference engine for the `crate::inference` seam. Additive
 # on native (both engines compile together for cross-engine parity tests); the sole
 # engine on no-ORT targets (WASM, Android x86_64) once their model consumers are
@@ -456,13 +476,15 @@ no-ort-target = [
 wasm-target = ["no-ort-target", "excel-wasm", "ocr-wasm"]
 # android-target: no-ort-target plus native-Linux variants that work on Android ABI
 # (excel with tokio, native tree-sitter, Tesseract OCR, and API/MCP transport).
-# Excludes ORT-dependent features (paddle-ocr, layout-detection, embeddings, reranker,
-# auto-rotate, transcription).
+# Excludes ORT-dependent ML (paddle-ocr, layout-detection, embeddings, reranker,
+# transcription); document orientation is provided by the pure-Rust `auto-rotate-tract`
+# (tract) variant instead of the ORT-backed `auto-rotate`.
 android-target = [
     "no-ort-target",
     "excel",
     "tree-sitter",
     "ocr",
+    "auto-rotate-tract",
     "api",
     "mcp",
     "liter-llm",

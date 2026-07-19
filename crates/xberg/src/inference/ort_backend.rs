@@ -34,11 +34,11 @@ impl OrtBackend {
         Self
     }
 
-    /// Build a session for `model_path`, applying the standard xberg
-    /// configuration. When `with_eps` is false the platform execution providers
-    /// are skipped (CPU-only), used for the fallback retry.
+    /// Build a session from `source`, applying the standard xberg configuration.
+    /// When `with_eps` is false the platform execution providers are skipped
+    /// (CPU-only), used for the fallback retry.
     fn commit(
-        model_path: &Path,
+        source: ModelSource<'_>,
         accel: Option<&AccelerationConfig>,
         thread_budget: usize,
         with_eps: bool,
@@ -54,10 +54,42 @@ impl OrtBackend {
             if with_eps {
                 builder = crate::ort_discovery::apply_execution_providers(builder, accel)?;
             }
-            builder.commit_from_file(model_path)
+            match source {
+                ModelSource::File(path) => builder.commit_from_file(path),
+                ModelSource::Memory(bytes) => builder.commit_from_memory(bytes),
+            }
         })()
         .map_err(|e| InferenceError::Load(e.to_string()))
     }
+
+    /// Build a session from `source` with the EP-then-CPU-fallback retry, and wrap
+    /// it behind the neutral session trait. Shared by [`load`](InferenceBackend::load)
+    /// and [`load_from_memory`](InferenceBackend::load_from_memory).
+    fn build_session(
+        source: ModelSource<'_>,
+        accel: Option<&AccelerationConfig>,
+    ) -> Result<Box<dyn InferenceSession>, InferenceError> {
+        crate::ort_discovery::ensure_ort_available();
+        let thread_budget = crate::core::config::concurrency::resolve_thread_budget(None);
+
+        let session = match Self::commit(source, accel, thread_budget, true) {
+            Ok(session) => session,
+            Err(first_err) => {
+                tracing::warn!("OrtBackend: platform EP build failed ({first_err}), retrying CPU-only");
+                Self::commit(source, accel, thread_budget, false)?
+            }
+        };
+
+        let input_names = session.inputs().iter().map(|i| i.name().to_string()).collect();
+        Ok(Box::new(OrtSession { session, input_names }))
+    }
+}
+
+/// Where an ORT session's graph is read from — a cached file or an in-memory buffer.
+#[derive(Clone, Copy)]
+enum ModelSource<'a> {
+    File(&'a Path),
+    Memory(&'a [u8]),
 }
 
 impl Default for OrtBackend {
@@ -72,19 +104,15 @@ impl InferenceBackend for OrtBackend {
         model_path: &Path,
         accel: Option<&AccelerationConfig>,
     ) -> Result<Box<dyn InferenceSession>, InferenceError> {
-        crate::ort_discovery::ensure_ort_available();
-        let thread_budget = crate::core::config::concurrency::resolve_thread_budget(None);
+        Self::build_session(ModelSource::File(model_path), accel)
+    }
 
-        let session = match Self::commit(model_path, accel, thread_budget, true) {
-            Ok(session) => session,
-            Err(first_err) => {
-                tracing::warn!("OrtBackend: platform EP build failed ({first_err}), retrying CPU-only");
-                Self::commit(model_path, accel, thread_budget, false)?
-            }
-        };
-
-        let input_names = session.inputs().iter().map(|i| i.name().to_string()).collect();
-        Ok(Box::new(OrtSession { session, input_names }))
+    fn load_from_memory(
+        &self,
+        model_bytes: &[u8],
+        accel: Option<&AccelerationConfig>,
+    ) -> Result<Box<dyn InferenceSession>, InferenceError> {
+        Self::build_session(ModelSource::Memory(model_bytes), accel)
     }
 }
 
