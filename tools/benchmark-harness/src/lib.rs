@@ -65,6 +65,7 @@ pub mod profiling;
 pub mod quality;
 pub mod registry;
 pub mod runner;
+pub mod score_outputs;
 pub mod sizes;
 pub mod split_benchmark;
 pub mod stats;

@@ -357,6 +357,21 @@ enum Commands {
         #[arg(long)]
         filter: Option<String>,
     },
+
+    /// Score precomputed Markdown outputs without running extraction
+    ScoreOutputs {
+        /// Directory containing fixture JSON files, or one fixture JSON file
+        #[arg(short, long)]
+        fixtures: PathBuf,
+
+        /// Markdown output directory, Markdown file, JSON map/records, or JSONL records
+        #[arg(short, long)]
+        outputs: PathBuf,
+
+        /// Write the score report to this JSON file instead of standard output
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
 }
 
 #[tokio::main]
@@ -1081,6 +1096,33 @@ async fn main() -> Result<()> {
                 .map_err(|e| benchmark_harness::Error::Benchmark(format!("{e:#}")))
         }
 
+        Commands::ScoreOutputs {
+            fixtures,
+            outputs,
+            output,
+        } => {
+            let report = benchmark_harness::score_outputs::score_outputs(&fixtures, &outputs)?;
+            let json = serde_json::to_string_pretty(&report).map_err(benchmark_harness::Error::Json)?;
+            if let Some(path) = output {
+                if let Some(parent) = path.parent()
+                    && !parent.as_os_str().is_empty()
+                {
+                    std::fs::create_dir_all(parent).map_err(benchmark_harness::Error::Io)?;
+                }
+                std::fs::write(&path, json).map_err(benchmark_harness::Error::Io)?;
+                eprintln!(
+                    "Scored {} outputs: mean SF1={:.4}, mean TF1={:.4}; report written to {}",
+                    report.document_count,
+                    report.mean_sf1,
+                    report.mean_tf1,
+                    path.display()
+                );
+            } else {
+                println!("{json}");
+            }
+            Ok(())
+        }
+
         Commands::MeasureFrameworkSizes { output } => {
             use benchmark_harness::{measure_framework_sizes, save_framework_sizes};
 
@@ -1158,7 +1200,8 @@ fn format_size(bytes: u64) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::normalize_run_frameworks;
+    use super::{Cli, Commands, normalize_run_frameworks};
+    use clap::Parser;
 
     #[test]
     fn batch_mode_normalizes_unsuffixed_xberg_aliases() {
@@ -1196,5 +1239,20 @@ mod tests {
     fn single_mode_preserves_xberg_names() {
         let names = normalize_run_frameworks(&["xberg-markdown-baseline".to_string()], false);
         assert_eq!(names, ["xberg-markdown-baseline"]);
+    }
+
+    #[test]
+    fn score_outputs_cli_accepts_required_paths() {
+        let cli = Cli::try_parse_from([
+            "benchmark-harness",
+            "score-outputs",
+            "--fixtures",
+            "fixtures",
+            "--outputs",
+            "outputs",
+        ])
+        .unwrap();
+
+        assert!(matches!(cli.command, Commands::ScoreOutputs { .. }));
     }
 }
