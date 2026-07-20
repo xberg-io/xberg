@@ -42,10 +42,10 @@ mod tests {
         // 2 words, max_width 2 -> spans: (0,0) (0,1) (1,1) (0,0)-padding ~keep
         let span_idx = build_span_idx(2, 2).expect("span idx");
         assert_eq!(span_idx.shape(), &[1, 4, 2]);
-        assert_eq!((span_idx[[0, 0, 0]], span_idx[[0, 0, 1]]), (0, 0)); 
-        assert_eq!((span_idx[[0, 1, 0]], span_idx[[0, 1, 1]]), (0, 1)); 
-        assert_eq!((span_idx[[0, 2, 0]], span_idx[[0, 2, 1]]), (1, 1)); 
-        assert_eq!((span_idx[[0, 3, 0]], span_idx[[0, 3, 1]]), (0, 0)); 
+        assert_eq!((span_idx[[0, 0, 0]], span_idx[[0, 0, 1]]), (0, 0));
+        assert_eq!((span_idx[[0, 1, 0]], span_idx[[0, 1, 1]]), (0, 1));
+        assert_eq!((span_idx[[0, 2, 0]], span_idx[[0, 2, 1]]), (1, 1));
+        assert_eq!((span_idx[[0, 3, 0]], span_idx[[0, 3, 1]]), (0, 0));
     }
 
     #[test]

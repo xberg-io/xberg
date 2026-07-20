@@ -1295,9 +1295,9 @@ mod tests {
         }
 
         let hints = vec![
-            hint(40.0, 460.0, 460.0, 490.0),  
-            hint(40.0, 100.0, 240.0, 450.0),  
-            hint(260.0, 100.0, 460.0, 450.0), 
+            hint(40.0, 460.0, 460.0, 490.0),
+            hint(40.0, 100.0, 240.0, 450.0),
+            hint(260.0, 100.0, 460.0, 450.0),
         ];
 
         let reordered = reorder_segments_by_layout(segments, &hints);

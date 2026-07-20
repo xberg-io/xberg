@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.38.4"
+alef_version = "0.39.0"
 # -D warnings (emitted into every generated Rust binding as #![allow(...)]).
 extra_clippy_allows = ["redundant_field_names"]
 languages = [
@@ -114,13 +114,7 @@ remove-todos = false
 remove-fixme = false
 remove-docs = false
 use-default-ignores = true
-preserve-patterns = [
-    "SAFETY",
-    "SPDX",
-    "Copyright",
-    "License",
-    "licensed under",
-]
+preserve-patterns = ["SAFETY", "SPDX", "Copyright", "License", "licensed under"]
 
 [workspace.poly.typos.extend-words]
 # flate2 crate + PDF FlateDecode filter (THE ORIGINAL BUG: flate -> flat)
@@ -675,6 +669,10 @@ package_name = "@xberg-io/xberg-wasm"
 # bundlers, Deno (npm:), and Node 22+. ~keep
 targets = ["web"]
 features = ["wasm-target", "url-ingestion"]
+# tract layout/orientation weights push the release .wasm past jsdelivr's 50MB
+# per-file cap when wasm-pack's default wasm-opt is off. Run wasm-opt -Oz to
+# claw the binary back under the cap. ~keep
+wasm_opt = ["-Oz"]
 # Hand-written modules (src/bridge/, src/engine.rs): the injectable OCR bridge
 # and the stateful XbergEngine handle. alef declares them in the generated
 # lib.rs but does not manage their contents. ~keep

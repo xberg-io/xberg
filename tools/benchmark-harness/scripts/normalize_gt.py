@@ -82,7 +82,6 @@ def normalize(md: str, source: str = "") -> str:
     return normalize_with_report(md, source)[0]
 
 
-
 import shutil  # noqa: E402
 import subprocess  # noqa: E402
 

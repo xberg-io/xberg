@@ -36,7 +36,7 @@ pub(crate) fn run_pipeline(
 
     let hidden = encoder
         .forward(&input_ids, &attention_mask, None)
-        .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("[pipeline:2 encoder.forward] {e}")))?; 
+        .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("[pipeline:2 encoder.forward] {e}")))?;
 
     // 3. Token gather. `text_positions` are already per-word token indices
     //    from `encode_v2`; filter to the truncated sequence. ~keep
@@ -53,7 +53,7 @@ pub(crate) fn run_pipeline(
     let word_indices = Tensor::from_slice(&filtered_positions[..], (num_words,), device)?;
     let text_emb = TokenGather
         .forward(&hidden, &word_indices)
-        .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("[pipeline:3 token_gather] {e}")))?; 
+        .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("[pipeline:3 token_gather] {e}")))?;
 
     let span_idx_arr = build_span_idx(num_words)?;
     // index_select requires U32 indices on the CPU backend. ~keep
@@ -62,7 +62,7 @@ pub(crate) fn run_pipeline(
     let span_rep_out = heads
         .span_rep
         .forward(&text_emb, &span_idx)
-        .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("[pipeline:4 span_rep] {e}")))?; 
+        .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("[pipeline:4 span_rep] {e}")))?;
 
     // 5. Schema gather: `[P]` index first, then per-label `[E]` indices;
     //    exactly `encoded.schema_positions`' order. ~keep

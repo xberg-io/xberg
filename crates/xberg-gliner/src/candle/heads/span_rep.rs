@@ -52,18 +52,18 @@ impl SpanRep {
             .project_end_3
             .forward(&self.project_end_0.forward(text_emb)?.relu()?)?;
 
-        let start_idx = span_idx.i((0, .., 0))?.contiguous()?; 
-        let end_idx = span_idx.i((0, .., 1))?.contiguous()?; 
+        let start_idx = span_idx.i((0, .., 0))?.contiguous()?;
+        let end_idx = span_idx.i((0, .., 1))?.contiguous()?;
 
-        let start_rep_2d = start_rep.squeeze(0)?; 
-        let end_rep_2d = end_rep.squeeze(0)?; 
+        let start_rep_2d = start_rep.squeeze(0)?;
+        let end_rep_2d = end_rep.squeeze(0)?;
 
-        let start_at = start_rep_2d.index_select(&start_idx, 0)?; 
-        let end_at = end_rep_2d.index_select(&end_idx, 0)?; 
+        let start_at = start_rep_2d.index_select(&start_idx, 0)?;
+        let end_at = end_rep_2d.index_select(&end_idx, 0)?;
 
         let cat = Tensor::cat(&[&start_at, &end_at], 1)?.relu()?;
 
-        let out_2d = self.out_project_3.forward(&self.out_project_0.forward(&cat)?.relu()?)?; 
+        let out_2d = self.out_project_3.forward(&self.out_project_0.forward(&cat)?.relu()?)?;
 
         out_2d.reshape((1, t, MAX_WIDTH, 768))
     }

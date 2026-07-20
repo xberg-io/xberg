@@ -182,8 +182,6 @@ def resolve_revision(repo: str) -> str:
     return json.loads(out).get("sha", "") if out else ""
 
 
-
-
 def stage_acquire(records: dict, dry: bool) -> None:
     """Download pinned sources into staging (idempotent). GT dirs first, PDFs second."""
     for name, cfg in SOURCES.items():
@@ -795,8 +793,6 @@ def _verdict_counts(records: dict) -> dict:
     from collections import Counter
 
     return dict(Counter(r["gate_verdict"] for r in records.values()))
-
-
 
 
 def _transform_catalog() -> str:

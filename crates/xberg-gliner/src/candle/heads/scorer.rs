@@ -20,8 +20,8 @@ impl Scorer {
             return Err(candle_core::Error::Msg(format!("scorer: hidden mismatch {h} vs {h2}")));
         }
 
-        let span_flat = span_rep.reshape(((), h))?.contiguous()?; 
-        let struct_flat = struct_proj.reshape(((), h))?.contiguous()?; 
+        let span_flat = span_rep.reshape(((), h))?.contiguous()?;
+        let struct_flat = struct_proj.reshape(((), h))?.contiguous()?;
         let scores_flat = struct_flat.matmul(&span_flat.transpose(0, 1)?.contiguous()?)?;
         let scores = scores_flat.reshape((count, f, t, w))?;
 

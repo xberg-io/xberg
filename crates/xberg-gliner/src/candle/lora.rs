@@ -294,16 +294,16 @@ fn decode_view(
 /// base weight is `[in, out]` instead of `[out, in]` and the delta is
 /// transposed before adding.
 fn apply_lora_delta(
-    base: &Tensor,   
-    lora_a: &Tensor, 
-    lora_b: &Tensor, 
+    base: &Tensor,
+    lora_a: &Tensor,
+    lora_b: &Tensor,
     scale: f64,
     fan_in_fan_out: bool,
 ) -> candle_core::Result<Tensor> {
-    let delta = lora_b.matmul(lora_a)?; 
+    let delta = lora_b.matmul(lora_a)?;
     let delta = (delta * scale)?;
     let delta = if fan_in_fan_out {
-        delta.t()?.contiguous()? 
+        delta.t()?.contiguous()?
     } else {
         delta
     };
@@ -353,9 +353,9 @@ mod tests {
     #[test]
     fn apply_lora_delta_shape() {
         let device = Device::Cpu;
-        let base = Tensor::zeros((4, 3), DType::F32, &device).unwrap(); 
-        let lora_a = Tensor::ones((2, 3), DType::F32, &device).unwrap(); 
-        let lora_b = Tensor::ones((4, 2), DType::F32, &device).unwrap(); 
+        let base = Tensor::zeros((4, 3), DType::F32, &device).unwrap();
+        let lora_a = Tensor::ones((2, 3), DType::F32, &device).unwrap();
+        let lora_b = Tensor::ones((4, 2), DType::F32, &device).unwrap();
         let merged = apply_lora_delta(&base, &lora_a, &lora_b, 0.5, false).unwrap();
         assert_eq!(merged.shape().dims(), &[4, 3]);
         // Each entry of (lora_b @ lora_a) is r=2 ones, so delta = 2 * 0.5 = 1.0 everywhere. ~keep

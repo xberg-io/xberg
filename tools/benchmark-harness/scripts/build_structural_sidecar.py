@@ -51,8 +51,6 @@ CAPTION_PREFIXES = ("figure", "fig.", "table", "chart", "diagram", "scheme", "pl
 _FORMULA_CMDS = ("\\frac", "\\sum", "\\int", "\\begin{")
 
 
-
-
 @dataclass
 class Doc:
     """Accumulates typed structural nodes for one document as they are parsed."""
@@ -264,8 +262,6 @@ def _bind_captions_and_footnotes(nodes: list[dict]) -> None:
             nodes[i] = {"kind": "caption", "binds_to": target, "text": text}
 
 
-
-
 class _TableCollector(HTMLParser):
     """Collect tables with real rowspan/colspan from source HTML."""
 
@@ -345,8 +341,6 @@ def _apply_html_spans(doc: dict, html: str) -> None:
     md_table_positions = [i for i, n in enumerate(doc["nodes"]) if n["kind"] == "table"]
     for pos, html_table in zip(md_table_positions, html_tables, strict=False):
         doc["nodes"][pos] = html_table
-
-
 
 
 def build_for_markdown_file(md_path: Path) -> Path:

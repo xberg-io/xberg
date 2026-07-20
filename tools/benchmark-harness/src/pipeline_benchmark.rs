@@ -155,10 +155,8 @@ async fn extract_and_score(
                 } else {
                     &content
                 };
-                let score = structural_sidecar::score_structural(
-                    &StructuralSidecar::from_markdown(capped),
-                    &gt_sidecar,
-                );
+                let score =
+                    structural_sidecar::score_structural(&StructuralSidecar::from_markdown(capped), &gt_sidecar);
                 let dimensions = score
                     .dimensions()
                     .into_iter()

@@ -43,7 +43,6 @@ use serde::{Deserialize, Serialize};
 use crate::markdown_quality::{compute_order_score, fold_order_into_sf1};
 use crate::quality::{compute_f1, tokenize};
 
-
 const WEIGHT_HEADING: f64 = 2.0;
 const WEIGHT_TABLE: f64 = 1.5;
 const WEIGHT_LIST: f64 = 1.0;
@@ -58,7 +57,6 @@ const LIST_DEPTH_STEP: f64 = 0.34;
 const STRUCT_SPLIT: f64 = 0.5;
 /// Per-grid-dimension credit when only one of {rowspan, colspan} agrees.
 const SPAN_HALF_CREDIT: f64 = 0.5;
-
 
 /// A single cell in a table's grid.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -204,7 +202,6 @@ impl StructuralScore {
     }
 }
 
-
 impl StructuralSidecar {
     /// Serialize to pretty JSON (`<id>.structural.json`).
     pub fn to_json(&self) -> Result<String, serde_json::Error> {
@@ -221,8 +218,8 @@ impl StructuralSidecar {
         // Heading hierarchy stack: (level, node_index, text). ~keep
         let mut heading_stack: Vec<(u8, usize, String)> = Vec::new();
 
-        let mut list_ordered: Vec<bool> = Vec::new(); 
-        let mut item_text: Vec<String> = Vec::new(); 
+        let mut list_ordered: Vec<bool> = Vec::new();
+        let mut item_text: Vec<String> = Vec::new();
         let mut item_ordered: Vec<bool> = Vec::new();
 
         struct TableBuild {
@@ -556,7 +553,6 @@ fn is_footnote_text(text: &str) -> bool {
     t.starts_with("[^") && t.contains("]:")
 }
 
-
 fn content_sim(a: &str, b: &str) -> f64 {
     compute_f1(&tokenize(a), &tokenize(b))
 }
@@ -662,10 +658,7 @@ pub fn score_markdown(predicted: &str, ground_truth: &str) -> StructuralScore {
 }
 
 /// Content-based node matches used only to explain a canonical SF1 score.
-pub(crate) fn diagnostic_matches(
-    pred: &StructuralSidecar,
-    gt: &StructuralSidecar,
-) -> Vec<(usize, usize, f64)> {
+pub(crate) fn diagnostic_matches(pred: &StructuralSidecar, gt: &StructuralSidecar) -> Vec<(usize, usize, f64)> {
     let pred_text: Vec<String> = pred.nodes.iter().map(StructuralNode::repr_text).collect();
     let gt_text: Vec<String> = gt.nodes.iter().map(StructuralNode::repr_text).collect();
     greedy_match(&pred_text, &gt_text)
@@ -942,7 +935,6 @@ fn order_positions(reading_order: &[usize], n: usize) -> Vec<usize> {
     pos
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -983,7 +975,6 @@ Figure 1: The overall system architecture and its components.
         score_structural(pred, gt).sf1
     }
 
-
     #[test]
     fn test_parser_extracts_all_dimensions() {
         let s = baseline();
@@ -1015,7 +1006,6 @@ Figure 1: The overall system architecture and its components.
         assert_eq!(positions.len(), t.cells.len(), "table cell origins must be unique");
     }
 
-
     #[test]
     fn test_identity_is_one() {
         let s = baseline();
@@ -1033,7 +1023,6 @@ Figure 1: The overall system architecture and its components.
         let back: StructuralSidecar = serde_json::from_str(&json).unwrap();
         assert!((sf1(&back, &s) - 1.0).abs() < 1e-9);
     }
-
 
     fn assert_drops(perturbed: &StructuralSidecar, label: &str) {
         let gt = baseline();
@@ -1251,7 +1240,6 @@ Figure 1: The overall system architecture and its components.
         );
     }
 
-
     #[test]
     fn test_monotonic_degradation_chain() {
         let gt = baseline();
@@ -1272,7 +1260,6 @@ Figure 1: The overall system architecture and its components.
         assert!(scores.last().unwrap() < &scores[0], "chain must end below identity");
     }
 
-
     #[test]
     fn test_fabricated_table_d3_is_zero_when_gt_has_none() {
         let gt_md = "# Title\n\nJust prose here, no tables at all in the ground truth.\n";
@@ -1282,10 +1269,7 @@ Figure 1: The overall system architecture and its components.
         let pred = StructuralSidecar::from_markdown(pred_md);
         let score = score_structural(&pred, &gt);
         assert_eq!(score.d3_table, 0.0, "fabricated table must score D3=0");
-        assert!(
-            score.sf1 < score_structural(&gt, &gt).sf1,
-            "fabrication must lower SF1"
-        );
+        assert!(score.sf1 < score_structural(&gt, &gt).sf1, "fabrication must lower SF1");
     }
 
     #[test]

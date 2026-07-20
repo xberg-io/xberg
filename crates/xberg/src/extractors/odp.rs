@@ -528,7 +528,7 @@ mod tests {
     async fn test_odp_real_fixtures() {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test_documents/odp");
         let Ok(entries) = std::fs::read_dir(&dir) else {
-            return; 
+            return;
         };
 
         let extractor = OdpExtractor::new();
@@ -561,7 +561,7 @@ mod tests {
         }
 
         if files == 0 {
-            return; 
+            return;
         }
         assert!(any_text, "at least one .odp fixture should yield non-empty text");
         assert!(any_slide, "at least one .odp fixture should yield a slide marker");

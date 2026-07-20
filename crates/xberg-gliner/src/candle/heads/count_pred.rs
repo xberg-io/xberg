@@ -39,7 +39,7 @@ impl CountPred {
         let h1 = self.linear_0.forward(&p_emb_2d)?.relu()?;
         let logits = self.linear_2.forward(&h1)?;
 
-        let argmax = logits.argmax(1)?; 
+        let argmax = logits.argmax(1)?;
         let argmax_scalar = argmax.reshape(())?.to_scalar::<u32>()? as usize;
 
         Ok(argmax_scalar.min(MAX_COUNT_CLASSES - 1))

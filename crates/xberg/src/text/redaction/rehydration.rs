@@ -121,7 +121,7 @@ fn category_from_token(token: &str) -> Option<&str> {
     let inner = token.strip_prefix('[')?.strip_suffix(']')?;
     let underscore_idx = inner.rfind('_')?;
     let (category, rest) = inner.split_at(underscore_idx);
-    let suffix = &rest[1..]; 
+    let suffix = &rest[1..];
     if category.is_empty() || suffix.is_empty() || !suffix.bytes().all(|b| b.is_ascii_digit()) {
         return None;
     }
