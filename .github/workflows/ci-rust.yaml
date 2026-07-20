@@ -101,6 +101,25 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
         shell: bash
 
+      # The workspace clippy above uses each crate's *default* features, which for
+      # `xberg` is a minimal set that excludes layout-detection, OCR, and every ML
+      # model. Lint the full ORT surface explicitly so the layout models
+      # (RT-DETR, PP-DocLayout, table classifier), OCR, and embeddings are held to
+      # -D warnings — otherwise dead code / lint regressions in that code ship
+      # unnoticed (it is compiled by `task rust:test:ci` but never clippy-gated).
+      - name: Clippy full ORT surface (layout + OCR + ML)
+        run: cargo clippy --locked -p xberg --features full --all-targets -- -D warnings
+        shell: bash
+
+      # Lint the pure-Rust `tract` inference engine on a no-ORT feature combo where
+      # it is the *actual* backend (auto-rotate via tract). `full` above never links
+      # tract, so without this the whole tract seam + its model_download path get
+      # zero -D-warnings coverage in CI (this is what caught the auto_rotate cfg /
+      # fs2 feature gaps during the Phase 4 rebase).
+      - name: Clippy no-ORT tract engine
+        run: cargo clippy --locked -p xberg --no-default-features --features "ocr,auto-rotate-tract" --all-targets -- -D warnings
+        shell: bash
+
       - name: Run tests
         run: task rust:test:ci
         shell: bash
@@ -198,8 +217,9 @@ jobs:
       - name: Run tract/ORT parity tests
         run: |
           # The tract backend's whole point is bit-close parity with ONNX Runtime. These tests
-          # download the PP-LCNet classifiers and run them through BOTH engines, asserting
-          # max |Δ| < 1e-3. XBERG_REQUIRE_TRACT_PARITY=1 turns a missing model into a hard
+          # download the PP-LCNet classifiers and the RT-DETR layout detector and run them
+          # through BOTH engines, asserting each output matches within a tight tolerance.
+          # XBERG_REQUIRE_TRACT_PARITY=1 turns a missing model into a hard
           # failure so the suite can never pass by comparing nothing (locally, absent the env
           # var and weights, it self-skips). The `tract` feature is only compiled here — the
           # main unit-test job builds `full`, which does not include it — so this is the sole

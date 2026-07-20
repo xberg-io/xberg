@@ -31,6 +31,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   matches ORT within 1e-3 on the classifier logits. WASM support (embedded-weight loading) follows in
   a later phase. Part of #1275.
 
+- **Layout detectors on the engine-neutral inference seam.** The RT-DETR and PP-DocLayout-V3 layout
+  models now load and run through the `crate::inference` seam instead of holding a bare
+  `ort::Session`, making layout model execution engine-neutral (the prerequisite for running layout
+  off ONNX Runtime). ONNX Runtime stays the native default and its output is unchanged (pure
+  refactor). RT-DETR additionally runs on the pure-Rust `tract` engine — a new parity test asserts
+  tract tracks ORT within 5e-3 on every RT-DETR output, and the seam now materializes tract's
+  symbolic-dimension (`TDim`) integer outputs (RT-DETR class labels) as `i64`. PP-DocLayout-V3 stays
+  ORT-only under tract pending input-fact pinning (see `tools/tract-op-sweep`). Part of #1275.
+
 - **Reversible redaction for authorized callers (`redaction-rehydrate`).** Token-replacement
   redaction can now capture a token to original-text map, encrypt it with a passphrase
   (AES-256-GCM, scrypt-derived key, fresh salt and nonce per encryption), and later search or

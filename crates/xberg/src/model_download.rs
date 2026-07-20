@@ -65,7 +65,7 @@ const DEFAULT_MODEL_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(300);
     any(
         feature = "paddle-ocr",
         feature = "layout-detection",
-        feature = "auto-rotate",
+        auto_rotate,
         feature = "ner-onnx",
         feature = "candle-paddleocr-vl",
         feature = "transcription",
@@ -255,7 +255,7 @@ pub(crate) fn model_download_timeout() -> Duration {
 #[cfg(any(
     feature = "paddle-ocr",
     feature = "layout-detection",
-    feature = "auto-rotate",
+    auto_rotate,
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
@@ -273,7 +273,7 @@ pub(crate) fn hf_offline_mode() -> bool {
 #[cfg(any(
     feature = "paddle-ocr",
     feature = "layout-detection",
-    feature = "auto-rotate",
+    auto_rotate,
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
@@ -290,7 +290,7 @@ fn env_flag_enabled(value: &std::ffi::OsStr) -> bool {
 #[cfg(any(
     feature = "paddle-ocr",
     feature = "layout-detection",
-    feature = "auto-rotate",
+    auto_rotate,
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
@@ -381,7 +381,7 @@ fn download_lock(key: &str) -> std::sync::Arc<std::sync::Mutex<()>> {
 #[cfg(any(
     feature = "paddle-ocr",
     feature = "layout-detection",
-    feature = "auto-rotate",
+    auto_rotate,
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
@@ -398,7 +398,7 @@ pub(crate) struct ArtifactFileLock {
 #[cfg(any(
     feature = "paddle-ocr",
     feature = "layout-detection",
-    feature = "auto-rotate",
+    auto_rotate,
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
@@ -417,7 +417,7 @@ impl Drop for ArtifactFileLock {
 #[cfg(any(
     feature = "paddle-ocr",
     feature = "layout-detection",
-    feature = "auto-rotate",
+    auto_rotate,
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
@@ -432,7 +432,7 @@ pub(crate) fn acquire_artifact_file_lock(path: &Path) -> Result<ArtifactFileLock
 #[cfg(any(
     feature = "paddle-ocr",
     feature = "layout-detection",
-    feature = "auto-rotate",
+    auto_rotate,
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
@@ -493,7 +493,7 @@ pub(crate) fn acquire_artifact_file_lock_with_timeout(
 #[cfg(any(
     feature = "paddle-ocr",
     feature = "layout-detection",
-    feature = "auto-rotate",
+    auto_rotate,
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
@@ -515,7 +515,7 @@ fn hf_artifact_lock_path(repo_id: &str, cache_dir: Option<&Path>, expected_sha25
 #[cfg(any(
     feature = "paddle-ocr",
     feature = "layout-detection",
-    feature = "auto-rotate",
+    auto_rotate,
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
@@ -531,7 +531,8 @@ fn is_sha256_hex(value: &str) -> bool {
 /// explicitly supplied an alternative Hugging Face cache root.
 #[cfg(any(
     feature = "paddle-ocr",
-    feature = "auto-rotate",
+    feature = "layout-detection",
+    auto_rotate,
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
@@ -591,7 +592,8 @@ pub(crate) fn hf_cached_file(
 /// cached entry is force-refreshed and the replacement is verified before use.
 #[cfg(any(
     feature = "paddle-ocr",
-    feature = "auto-rotate",
+    feature = "layout-detection",
+    auto_rotate,
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
@@ -741,7 +743,7 @@ pub(crate) fn hf_download_revision(repo_id: &str, remote_filename: &str, revisio
 #[cfg(any(
     feature = "paddle-ocr",
     feature = "layout-detection",
-    feature = "auto-rotate",
+    auto_rotate,
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
@@ -881,7 +883,7 @@ pub(crate) fn hf_force_download_revision(
 #[cfg(any(
     feature = "paddle-ocr",
     feature = "layout-detection",
-    feature = "auto-rotate",
+    auto_rotate,
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
@@ -924,7 +926,7 @@ fn verified_cached_path(
     any(
         feature = "paddle-ocr",
         feature = "layout-detection",
-        feature = "auto-rotate",
+        auto_rotate,
         feature = "ner-onnx",
         feature = "candle-paddleocr-vl",
         feature = "transcription",
@@ -950,7 +952,7 @@ struct QuarantinedEntry {
     any(
         feature = "paddle-ocr",
         feature = "layout-detection",
-        feature = "auto-rotate",
+        auto_rotate,
         feature = "ner-onnx",
         feature = "candle-paddleocr-vl",
         feature = "transcription",
@@ -1016,7 +1018,7 @@ fn quarantine_hf_cache_entry(
     any(
         feature = "paddle-ocr",
         feature = "layout-detection",
-        feature = "auto-rotate",
+        auto_rotate,
         feature = "ner-onnx",
         feature = "candle-paddleocr-vl",
         feature = "transcription",
@@ -1043,7 +1045,7 @@ fn deterministic_hf_blob_path(snapshot: &Path, expected_sha256: &str) -> Option<
     any(
         feature = "paddle-ocr",
         feature = "layout-detection",
-        feature = "auto-rotate",
+        auto_rotate,
         feature = "ner-onnx",
         feature = "candle-paddleocr-vl",
         feature = "transcription",
@@ -1068,7 +1070,7 @@ fn hf_blob_belongs_to_snapshot(snapshot: &Path, blob: &Path) -> bool {
     any(
         feature = "paddle-ocr",
         feature = "layout-detection",
-        feature = "auto-rotate",
+        auto_rotate,
         feature = "ner-onnx",
         feature = "candle-paddleocr-vl",
         feature = "transcription",
@@ -1144,7 +1146,7 @@ fn restore_quarantined_entries(
     any(
         feature = "paddle-ocr",
         feature = "layout-detection",
-        feature = "auto-rotate",
+        auto_rotate,
         feature = "ner-onnx",
         feature = "candle-paddleocr-vl",
         feature = "transcription",
@@ -1186,7 +1188,7 @@ pub(crate) fn hf_cached_revision(
 #[cfg(any(
     feature = "paddle-ocr",
     feature = "layout-detection",
-    feature = "auto-rotate",
+    auto_rotate,
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
@@ -1311,7 +1313,7 @@ pub(crate) fn verify_sha256(path: &Path, expected: &str, label: &str) -> Result<
     any(
         feature = "paddle-ocr",
         feature = "layout-detection",
-        feature = "auto-rotate",
+        auto_rotate,
         feature = "ner-onnx",
         feature = "candle-paddleocr-vl",
         feature = "transcription",

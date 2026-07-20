@@ -171,6 +171,15 @@ fn tract_to_tensor(tensor: &Tensor) -> Result<InferenceTensor, InferenceError> {
         DatumType::I32 => InferenceTensor::I32(extract(tensor)?),
         DatumType::U8 => InferenceTensor::U8(extract(tensor)?),
         DatumType::Bool => InferenceTensor::Bool(extract(tensor)?),
+        // Some graphs (e.g. RT-DETR class labels) surface integer outputs as tract's
+        // symbolic-dimension type `TDim`. At run time the dims are concrete, so cast
+        // to i64 to match the ONNX Runtime representation of the same output.
+        DatumType::TDim => {
+            let cast = tensor
+                .cast_to::<i64>()
+                .map_err(|e| InferenceError::Tensor(e.to_string()))?;
+            InferenceTensor::I64(extract(cast.as_ref())?)
+        }
         other => {
             return Err(InferenceError::Tensor(format!(
                 "unsupported output datum type {other:?}"
@@ -187,6 +196,9 @@ mod tests {
 
     /// HF repository holding the PP-LCNet classifiers compared here.
     const PARITY_REPO: &str = "xberg-io/paddleocr-onnx-models";
+
+    /// HF repository holding the layout detectors (RT-DETR, PP-DocLayout-V3).
+    const LAYOUT_REPO: &str = "xberg-io/layout-models";
 
     /// Whether the parity comparison is mandatory. CI sets
     /// `XBERG_REQUIRE_TRACT_PARITY=1` so a missing model is a hard failure, not a
@@ -221,12 +233,12 @@ mod tests {
     /// path and fails loudly on error. Returns `None` only for a local run where
     /// the model is absent and parity is not required — the self-skip case that
     /// keeps the suite runnable offline without ever passing vacuously in CI.
-    fn resolve_model(filename: &str) -> Option<std::path::PathBuf> {
+    fn resolve_model(repo: &str, filename: &str) -> Option<std::path::PathBuf> {
         if let Some(path) = cached_model(filename) {
             return Some(path);
         }
         if parity_required() {
-            return Some(download_parity_model(filename));
+            return Some(download_parity_model(repo, filename));
         }
         None
     }
@@ -238,8 +250,8 @@ mod tests {
         feature = "ner-onnx",
         feature = "candle-paddleocr-vl"
     ))]
-    fn download_parity_model(filename: &str) -> std::path::PathBuf {
-        crate::model_download::hf_download(PARITY_REPO, filename)
+    fn download_parity_model(repo: &str, filename: &str) -> std::path::PathBuf {
+        crate::model_download::hf_download(repo, filename)
             .expect("XBERG_REQUIRE_TRACT_PARITY is set but the parity model download failed")
     }
 
@@ -250,7 +262,7 @@ mod tests {
         feature = "ner-onnx",
         feature = "candle-paddleocr-vl"
     )))]
-    fn download_parity_model(_filename: &str) -> std::path::PathBuf {
+    fn download_parity_model(_repo: &str, _filename: &str) -> std::path::PathBuf {
         panic!(
             "XBERG_REQUIRE_TRACT_PARITY is set but no model-download feature is enabled; \
              build the parity tests with `--features full,tract`"
@@ -268,7 +280,7 @@ mod tests {
 
         let mut ran = 0;
         for (suffix, shape, out_len) in cases {
-            let Some(path) = resolve_model(suffix) else {
+            let Some(path) = resolve_model(PARITY_REPO, suffix) else {
                 eprintln!("skip: {suffix} not in HF cache");
                 continue;
             };
@@ -322,7 +334,7 @@ mod tests {
     #[test]
     fn load_from_memory_matches_load_on_both_engines() {
         let suffix = "v2/classifiers/PP-LCNet_x1_0_doc_ori.onnx";
-        let Some(path) = resolve_model(suffix) else {
+        let Some(path) = resolve_model(PARITY_REPO, suffix) else {
             eprintln!("skip: {suffix} not in HF cache");
             return;
         };
@@ -349,5 +361,89 @@ mod tests {
             let from_memory = run(backend.load_from_memory(&bytes, None).unwrap().as_ref());
             assert_eq!(from_path, from_memory, "load vs load_from_memory diverged");
         }
+    }
+
+    /// RT-DETR (NMS-free layout detector) migrated onto the seam in Phase 4. Two
+    /// inputs (image + `orig_target_sizes`), three outputs (labels/boxes/scores).
+    /// tract runs it as-is — no input-fact pinning — and must track ORT within
+    /// tolerance. Box coordinates live in the 0..640 pixel range while scores are
+    /// in 0..1, so f32 outputs are compared with a magnitude-normalized relative
+    /// tolerance rather than the single absolute logit tolerance used for the CNN
+    /// classifiers.
+    ///
+    /// PP-DocLayout-V3 is also seam-migrated (ORT path is byte-identical), but it
+    /// stays ORT-only under tract until its three input facts are pinned — a
+    /// mechanical follow-up, not an op gap; see the `tools/tract-op-sweep` matrix
+    /// (`pp_doclayout_v3` = needs-work) — so it is not compared here.
+    #[test]
+    fn tract_matches_ort_on_rtdetr_layout() {
+        let suffix = "rtdetr/model.onnx";
+        let Some(path) = resolve_model(LAYOUT_REPO, suffix) else {
+            eprintln!("skip: {suffix} not in HF cache");
+            assert!(
+                !parity_required(),
+                "XBERG_REQUIRE_TRACT_PARITY is set but RT-DETR was not compared"
+            );
+            return;
+        };
+
+        const SIZE: usize = 640;
+        let img_count = 3 * SIZE * SIZE;
+        let img_data: Vec<f32> = (0..img_count).map(|i| ((i % 255) as f32) / 255.0).collect();
+        let image = ndarray::ArrayD::from_shape_vec(vec![1, 3, SIZE, SIZE], img_data).unwrap();
+        let sizes = ndarray::ArrayD::from_shape_vec(vec![1, 2], vec![SIZE as i64, SIZE as i64]).unwrap();
+
+        let run = |session: &dyn InferenceSession| {
+            let names = session.input_names().to_vec();
+            session
+                .run(vec![
+                    (names[0].clone(), InferenceTensor::F32(image.clone())),
+                    (names[1].clone(), InferenceTensor::I64(sizes.clone())),
+                ])
+                .unwrap()
+        };
+
+        let ort = OrtBackend::new().load(&path, None).unwrap();
+        let tract = TractBackend::new().load(&path, None).unwrap();
+        let ort_out = run(ort.as_ref());
+        let tract_out = run(tract.as_ref());
+
+        // Compare outputs positionally: both engines emit them in the graph's
+        // declared output order, but tract labels each with the producing node's
+        // internal name (e.g. `/postprocessor/Sub_2`) whereas ORT uses the graph's
+        // declared output names (`labels`/`boxes`/`scores`) — so names are not
+        // comparable, only order and payload. (RT-DETR's model code parses outputs
+        // by dtype, not name, so this backend name difference is transparent to it.)
+        assert_eq!(ort_out.len(), tract_out.len(), "RT-DETR output count");
+        let mut compared_f32 = 0;
+        for (index, ((_, oval), (_, tval))) in ort_out.iter().zip(&tract_out).enumerate() {
+            match (oval, tval) {
+                (InferenceTensor::F32(a), InferenceTensor::F32(b)) => {
+                    assert_eq!(a.shape(), b.shape(), "output {index}: RT-DETR f32 shape");
+                    // Relative error normalized by magnitude: box coordinates live in
+                    // 0..640 and scores in 0..1, so a single absolute tolerance cannot
+                    // fit both. Normalizing by max(|a|, 1) holds both to the same
+                    // fractional bound. The DETR box-decode post-processing accumulates
+                    // more float error than a bare CNN logit (empirically ~1.2e-3 here),
+                    // so the bound is 5e-3 — still orders of magnitude below any real
+                    // engine divergence.
+                    let max_rel_diff = a
+                        .iter()
+                        .zip(b)
+                        .map(|(x, y)| (x - y).abs() / x.abs().max(1.0))
+                        .fold(0.0f32, f32::max);
+                    assert!(
+                        max_rel_diff < 5e-3,
+                        "output {index}: RT-DETR tract vs ORT max relative |Δ| = {max_rel_diff} exceeds 5e-3"
+                    );
+                    compared_f32 += 1;
+                }
+                (InferenceTensor::I64(a), InferenceTensor::I64(b)) => {
+                    assert_eq!(a, b, "output {index}: RT-DETR class labels diverged between engines");
+                }
+                _ => panic!("output {index}: RT-DETR output dtype mismatch between engines"),
+            }
+        }
+        assert!(compared_f32 >= 2, "expected boxes + scores f32 outputs to be compared");
     }
 }

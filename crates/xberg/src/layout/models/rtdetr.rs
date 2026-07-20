@@ -2,8 +2,8 @@ use std::time::Instant;
 
 use image::RgbImage;
 use ndarray::{Array, Array2, Array4};
-use ort::{inputs, session::Session, value::Tensor};
 
+use crate::inference::{InferenceSession, InferenceTensor, default_backend};
 use crate::layout::error::LayoutError;
 use crate::layout::models::LayoutModel;
 use crate::layout::preprocessing;
@@ -29,19 +29,24 @@ const INPUT_SIZE: u32 = 640;
 ///   - `scores`: f32 [batch, num_queries]   (confidence scores)
 #[cfg_attr(alef, alef(skip))]
 pub struct RtDetrModel {
-    session: Session,
+    session: Box<dyn InferenceSession>,
     input_names: Vec<String>,
 }
 
 impl RtDetrModel {
     /// Load a Docling RT-DETR ONNX model from a file.
+    ///
+    /// The session (optimization level, thread budget, execution-provider
+    /// selection, and CPU-only fallback) is built by the [`crate::inference`]
+    /// seam's default backend, so the model is engine-neutral.
     pub(crate) fn from_file(
         path: &str,
         accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
     ) -> Result<Self, LayoutError> {
-        let budget = crate::core::config::concurrency::resolve_thread_budget(None);
-        let session = crate::layout::session::build_session(path, accel, budget)?;
-        let input_names: Vec<String> = session.inputs().iter().map(|i| i.name().to_string()).collect();
+        let session = default_backend()
+            .load(std::path::Path::new(path), accel)
+            .map_err(|e| LayoutError::Ort(ort::Error::new(e.to_string())))?;
+        let input_names: Vec<String> = session.input_names().to_vec();
         Ok(Self { session, input_names })
     }
 
@@ -64,21 +69,25 @@ impl RtDetrModel {
         let preprocess_start = Instant::now();
 
         let input_tensor = preprocessing::preprocess_rescale(img, INPUT_SIZE);
-        let images_tensor = Tensor::from_array(input_tensor)?;
 
         let sizes = Array::from_shape_vec((1, 2), vec![orig_height as i64, orig_width as i64])
             .map_err(|e| LayoutError::InvalidOutput(format!("Failed to create sizes tensor: {e}")))?;
-        let sizes_tensor = Tensor::from_array(sizes)?;
 
         let preprocess_ms = preprocess_start.elapsed().as_secs_f64() * 1000.0;
         tracing::debug!(preprocess_ms, "RT-DETR preprocessing complete");
 
         let onnx_start = Instant::now();
 
-        let outputs = self.session.run(inputs![
-            self.input_names[0].as_str() => images_tensor,
-            self.input_names[1].as_str() => sizes_tensor
-        ])?;
+        let outputs = self
+            .session
+            .run(vec![
+                (
+                    self.input_names[0].clone(),
+                    InferenceTensor::F32(input_tensor.into_dyn()),
+                ),
+                (self.input_names[1].clone(), InferenceTensor::I64(sizes.into_dyn())),
+            ])
+            .map_err(|e| LayoutError::Ort(ort::Error::new(e.to_string())))?;
 
         let onnx_ms = onnx_start.elapsed().as_secs_f64() * 1000.0;
         tracing::debug!(onnx_ms, "RT-DETR ONNX session.run() complete");
@@ -87,16 +96,16 @@ impl RtDetrModel {
         let mut float_shapes: Vec<Vec<usize>> = Vec::new();
         let mut label_data: Vec<i64> = Vec::new();
 
-        for (_name, value) in outputs.iter() {
-            if let Ok(view) = value.try_extract_tensor::<i64>() {
-                label_data = view.1.to_vec();
-                continue;
-            }
-            if let Ok(view) = value.try_extract_tensor::<f32>() {
-                let shape: Vec<usize> = view.0.iter().map(|&d| d as usize).collect();
-                let data: Vec<f32> = view.1.to_vec();
-                float_shapes.push(shape);
-                float_data.push(data);
+        for (_name, value) in &outputs {
+            match value {
+                InferenceTensor::I64(array) => {
+                    label_data = array.iter().copied().collect();
+                }
+                InferenceTensor::F32(array) => {
+                    float_shapes.push(array.shape().to_vec());
+                    float_data.push(array.iter().copied().collect());
+                }
+                _ => {}
             }
         }
 
@@ -211,7 +220,6 @@ impl RtDetrModel {
 
         let images_array = Array4::from_shape_vec((batch, 3, ts, ts), all_pixel_data)
             .map_err(|e| LayoutError::InvalidOutput(format!("Failed to build batch images tensor: {e}")))?;
-        let images_tensor = Tensor::from_array(images_array)?;
 
         let sizes_flat: Vec<i64> = images
             .iter()
@@ -219,17 +227,25 @@ impl RtDetrModel {
             .collect();
         let sizes_array = Array2::from_shape_vec((batch, 2), sizes_flat)
             .map_err(|e| LayoutError::InvalidOutput(format!("Failed to build batch sizes tensor: {e}")))?;
-        let sizes_tensor = Tensor::from_array(sizes_array)?;
 
         let preprocess_ms = preprocess_start.elapsed().as_secs_f64() * 1000.0;
         tracing::debug!(preprocess_ms, batch, "RT-DETR batch preprocessing complete");
 
         let onnx_start = Instant::now();
 
-        let outputs = self.session.run(inputs![
-            self.input_names[0].as_str() => images_tensor,
-            self.input_names[1].as_str() => sizes_tensor
-        ])?;
+        let outputs = self
+            .session
+            .run(vec![
+                (
+                    self.input_names[0].clone(),
+                    InferenceTensor::F32(images_array.into_dyn()),
+                ),
+                (
+                    self.input_names[1].clone(),
+                    InferenceTensor::I64(sizes_array.into_dyn()),
+                ),
+            ])
+            .map_err(|e| LayoutError::Ort(ort::Error::new(e.to_string())))?;
 
         let onnx_ms = onnx_start.elapsed().as_secs_f64() * 1000.0;
         tracing::debug!(onnx_ms, batch, "RT-DETR batch ONNX session.run() complete");
@@ -238,16 +254,16 @@ impl RtDetrModel {
         let mut float_shapes: Vec<Vec<usize>> = Vec::new();
         let mut label_data: Vec<i64> = Vec::new();
 
-        for (_name, value) in outputs.iter() {
-            if let Ok(view) = value.try_extract_tensor::<i64>() {
-                label_data = view.1.to_vec();
-                continue;
-            }
-            if let Ok(view) = value.try_extract_tensor::<f32>() {
-                let shape: Vec<usize> = view.0.iter().map(|&d| d as usize).collect();
-                let data: Vec<f32> = view.1.to_vec();
-                float_shapes.push(shape);
-                float_data.push(data);
+        for (_name, value) in &outputs {
+            match value {
+                InferenceTensor::I64(array) => {
+                    label_data = array.iter().copied().collect();
+                }
+                InferenceTensor::F32(array) => {
+                    float_shapes.push(array.shape().to_vec());
+                    float_data.push(array.iter().copied().collect());
+                }
+                _ => {}
             }
         }
 

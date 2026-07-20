@@ -2343,7 +2343,7 @@ checksum = "2cdc8d50f426189eef89dac62fabfa0abb27d5cc008f25bf4156a0203325becc"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.118",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -6832,7 +6832,7 @@ dependencies = [
  "itertools 0.14.0",
  "proc-macro2",
  "quote",
- "syn 2.0.118",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -10157,7 +10157,7 @@ dependencies = [
 
 [[package]]
 name = "tract-op-sweep"
-version = "1.0.0-rc.29"
+version = "1.0.0-rc.30"
 dependencies = [
  "anyhow",
  "clap",

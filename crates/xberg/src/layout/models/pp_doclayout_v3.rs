@@ -50,8 +50,8 @@ use std::time::Instant;
 
 use image::RgbImage;
 use ndarray::{Array2, Array4};
-use ort::{inputs, session::Session, value::Tensor};
 
+use crate::inference::{InferenceSession, InferenceTensor, default_backend};
 use crate::layout::error::LayoutError;
 use crate::layout::models::LayoutModel;
 use crate::layout::preprocessing;
@@ -87,20 +87,25 @@ const COL_Y2: usize = 5;
 /// to original-image pixel coordinates.
 #[cfg_attr(alef, alef(skip))]
 pub struct PpDocLayoutV3Model {
-    session: Session,
+    session: Box<dyn InferenceSession>,
     /// Cached input names in session order (looked up by name at runtime).
     input_names: Vec<String>,
 }
 
 impl PpDocLayoutV3Model {
     /// Load a PP-DocLayout-V3 ONNX model from a file.
+    ///
+    /// The session (optimization level, thread budget, execution-provider
+    /// selection, and CPU-only fallback) is built by the [`crate::inference`]
+    /// seam's default backend, so the model is engine-neutral.
     pub(crate) fn from_file(
         path: &str,
         accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
     ) -> Result<Self, LayoutError> {
-        let budget = crate::core::config::concurrency::resolve_thread_budget(None);
-        let session = crate::layout::session::build_session(path, accel, budget)?;
-        let input_names: Vec<String> = session.inputs().iter().map(|i| i.name().to_string()).collect();
+        let session = default_backend()
+            .load(std::path::Path::new(path), accel)
+            .map_err(|e| LayoutError::Ort(ort::Error::new(e.to_string())))?;
+        let input_names: Vec<String> = session.input_names().to_vec();
         Ok(Self { session, input_names })
     }
 
@@ -232,9 +237,6 @@ impl PpDocLayoutV3Model {
         let preprocess_start = Instant::now();
 
         let (pixel_array, im_shape_array, scale_factor_array) = Self::preprocess_single(img);
-        let image_tensor = Tensor::from_array(pixel_array)?;
-        let im_shape_tensor = Tensor::from_array(im_shape_array)?;
-        let scale_factor_tensor = Tensor::from_array(scale_factor_array)?;
 
         let preprocess_ms = preprocess_start.elapsed().as_secs_f64() * 1000.0;
         tracing::debug!(preprocess_ms, "PP-DocLayout-V3 preprocessing complete");
@@ -245,11 +247,14 @@ impl PpDocLayoutV3Model {
         let image_name = self.resolve_input_name("image", 1);
         let scale_factor_name = self.resolve_input_name("scale_factor", 2);
 
-        let outputs = self.session.run(inputs![
-            im_shape_name.as_str() => im_shape_tensor,
-            image_name.as_str() => image_tensor,
-            scale_factor_name.as_str() => scale_factor_tensor
-        ])?;
+        let outputs = self
+            .session
+            .run(vec![
+                (im_shape_name, InferenceTensor::F32(im_shape_array.into_dyn())),
+                (image_name, InferenceTensor::F32(pixel_array.into_dyn())),
+                (scale_factor_name, InferenceTensor::F32(scale_factor_array.into_dyn())),
+            ])
+            .map_err(|e| LayoutError::Ort(ort::Error::new(e.to_string())))?;
 
         let onnx_ms = onnx_start.elapsed().as_secs_f64() * 1000.0;
         tracing::debug!(onnx_ms, "PP-DocLayout-V3 ONNX session.run() complete");
@@ -257,15 +262,15 @@ impl PpDocLayoutV3Model {
         let mut det_data: Vec<f32> = Vec::new();
         let mut bbox_num: Vec<i32> = Vec::new();
 
-        for (name, value) in outputs.iter() {
-            if name == "fetch_name_0"
-                && let Ok(view) = value.try_extract_tensor::<f32>()
-            {
-                det_data = view.1.to_vec();
-            } else if name == "fetch_name_1"
-                && let Ok(view) = value.try_extract_tensor::<i32>()
-            {
-                bbox_num = view.1.to_vec();
+        for (name, value) in &outputs {
+            match (name.as_str(), value) {
+                ("fetch_name_0", InferenceTensor::F32(array)) => {
+                    det_data = array.iter().copied().collect();
+                }
+                ("fetch_name_1", InferenceTensor::I32(array)) => {
+                    bbox_num = array.iter().copied().collect();
+                }
+                _ => {}
             }
         }
 
@@ -357,10 +362,6 @@ impl PpDocLayoutV3Model {
         let scale_factor_array = Array2::from_shape_vec((batch, 2), all_scale_factor)
             .map_err(|e| LayoutError::InvalidOutput(format!("Failed to build batch scale_factor tensor: {e}")))?;
 
-        let image_tensor = Tensor::from_array(images_array)?;
-        let im_shape_tensor = Tensor::from_array(im_shape_array)?;
-        let scale_factor_tensor = Tensor::from_array(scale_factor_array)?;
-
         let preprocess_ms = preprocess_start.elapsed().as_secs_f64() * 1000.0;
         tracing::debug!(preprocess_ms, batch, "PP-DocLayout-V3 batch preprocessing complete");
 
@@ -370,11 +371,14 @@ impl PpDocLayoutV3Model {
         let image_name = self.resolve_input_name("image", 1);
         let scale_factor_name = self.resolve_input_name("scale_factor", 2);
 
-        let outputs = self.session.run(inputs![
-            im_shape_name.as_str() => im_shape_tensor,
-            image_name.as_str() => image_tensor,
-            scale_factor_name.as_str() => scale_factor_tensor
-        ])?;
+        let outputs = self
+            .session
+            .run(vec![
+                (im_shape_name, InferenceTensor::F32(im_shape_array.into_dyn())),
+                (image_name, InferenceTensor::F32(images_array.into_dyn())),
+                (scale_factor_name, InferenceTensor::F32(scale_factor_array.into_dyn())),
+            ])
+            .map_err(|e| LayoutError::Ort(ort::Error::new(e.to_string())))?;
 
         let onnx_ms = onnx_start.elapsed().as_secs_f64() * 1000.0;
         tracing::debug!(onnx_ms, batch, "PP-DocLayout-V3 batch ONNX session.run() complete");
@@ -382,15 +386,15 @@ impl PpDocLayoutV3Model {
         let mut det_data: Vec<f32> = Vec::new();
         let mut bbox_num: Vec<i32> = Vec::new();
 
-        for (name, value) in outputs.iter() {
-            if name == "fetch_name_0"
-                && let Ok(view) = value.try_extract_tensor::<f32>()
-            {
-                det_data = view.1.to_vec();
-            } else if name == "fetch_name_1"
-                && let Ok(view) = value.try_extract_tensor::<i32>()
-            {
-                bbox_num = view.1.to_vec();
+        for (name, value) in &outputs {
+            match (name.as_str(), value) {
+                ("fetch_name_0", InferenceTensor::F32(array)) => {
+                    det_data = array.iter().copied().collect();
+                }
+                ("fetch_name_1", InferenceTensor::I32(array)) => {
+                    bbox_num = array.iter().copied().collect();
+                }
+                _ => {}
             }
         }
 
