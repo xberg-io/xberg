@@ -385,7 +385,7 @@ fn download_lock(key: &str) -> std::sync::Arc<std::sync::Mutex<()>> {
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
-    feature = "chunking-tokenizers",
+    all(feature = "chunking-tokenizers", not(target_arch = "wasm32")),
     feature = "onnx-runtime",
     all(feature = "static-embeddings", not(target_arch = "wasm32"))
 ))]
@@ -402,7 +402,7 @@ pub(crate) struct ArtifactFileLock {
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
-    feature = "chunking-tokenizers",
+    all(feature = "chunking-tokenizers", not(target_arch = "wasm32")),
     feature = "onnx-runtime",
     all(feature = "static-embeddings", not(target_arch = "wasm32"))
 ))]
@@ -421,7 +421,7 @@ impl Drop for ArtifactFileLock {
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
-    feature = "chunking-tokenizers",
+    all(feature = "chunking-tokenizers", not(target_arch = "wasm32")),
     feature = "onnx-runtime",
     all(feature = "static-embeddings", not(target_arch = "wasm32"))
 ))]
@@ -436,7 +436,7 @@ pub(crate) fn acquire_artifact_file_lock(path: &Path) -> Result<ArtifactFileLock
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
-    feature = "chunking-tokenizers",
+    all(feature = "chunking-tokenizers", not(target_arch = "wasm32")),
     feature = "onnx-runtime",
     all(feature = "static-embeddings", not(target_arch = "wasm32"))
 ))]
@@ -531,14 +531,14 @@ fn is_sha256_hex(value: &str) -> bool {
 /// explicitly supplied an alternative Hugging Face cache root.
 #[cfg(any(
     feature = "paddle-ocr",
-    feature = "layout-detection",
     feature = "auto-rotate",
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
     feature = "chunking-tokenizers",
     feature = "onnx-runtime",
-    all(feature = "static-embeddings", not(target_arch = "wasm32"))
+    all(feature = "static-embeddings", not(target_arch = "wasm32")),
+    all(test, feature = "layout-detection")
 ))]
 fn hf_client(cache_dir: Option<&Path>) -> Result<hf_hub::HFClientSync, String> {
     let builder = hf_client_builder();
@@ -557,13 +557,6 @@ fn hf_client(cache_dir: Option<&Path>) -> Result<hf_hub::HFClientSync, String> {
 /// by [`hf_client`] so changing standard HF environment configuration cannot
 /// accidentally reuse an engine loaded from a different snapshot cache.
 #[cfg(any(
-    feature = "paddle-ocr",
-    feature = "layout-detection",
-    feature = "auto-rotate",
-    feature = "ner-onnx",
-    feature = "candle-paddleocr-vl",
-    feature = "transcription",
-    feature = "chunking-tokenizers",
     feature = "onnx-runtime",
     all(feature = "static-embeddings", not(target_arch = "wasm32"))
 ))]
@@ -598,14 +591,14 @@ pub(crate) fn hf_cached_file(
 /// cached entry is force-refreshed and the replacement is verified before use.
 #[cfg(any(
     feature = "paddle-ocr",
-    feature = "layout-detection",
     feature = "auto-rotate",
     feature = "ner-onnx",
     feature = "candle-paddleocr-vl",
     feature = "transcription",
     feature = "chunking-tokenizers",
     feature = "onnx-runtime",
-    all(feature = "static-embeddings", not(target_arch = "wasm32"))
+    all(feature = "static-embeddings", not(target_arch = "wasm32")),
+    all(test, feature = "layout-detection")
 ))]
 pub(crate) fn hf_resolve_file(
     repo_id: &str,
@@ -1441,6 +1434,10 @@ mod hf_cache_tests {
             hf_resolve_file("owner/repo", "model.onnx", Some(revision), None, Some(&sha256(payload))).unwrap();
 
         assert_eq!(resolved, cached_file);
+        #[cfg(any(
+            feature = "onnx-runtime",
+            all(feature = "static-embeddings", not(target_arch = "wasm32"))
+        ))]
         assert_eq!(hf_cache_key(None), cache.display().to_string());
     }
 
