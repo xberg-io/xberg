@@ -68,6 +68,10 @@ jobs:
       - uses: actions/checkout@v6
         with:
           submodules: recursive
+          lfs: true
+
+      - name: Pull test_documents LFS objects
+        run: git -C test_documents lfs pull
 
       - name: Compute FFI source hash
         id: ffi-hash
@@ -212,6 +216,10 @@ jobs:
       - uses: actions/checkout@v6
         with:
           submodules: recursive
+          lfs: true
+
+      - name: Pull test_documents LFS objects
+        run: git -C test_documents lfs pull
 
       - name: Setup Rust
         uses: xberg-io/actions/setup-rust@v1
