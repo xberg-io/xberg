@@ -14,6 +14,13 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
+# CI exports RUSTFLAGS for the native builds (onnxruntime -L paths and
+# -Wl,-rpath,$ORIGIN link args that rust-lld rejects). The env var overrides
+# .cargo/config.toml's [target.wasm32-unknown-unknown] rustflags entirely,
+# which also drops flags the wasm build needs (getrandom_backend, bulk-memory,
+# --allow-multiple-definition). Unset it so the config-file flags govern.
+unset RUSTFLAGS CARGO_ENCODED_RUSTFLAGS
+
 if ! command -v wasm-pack >/dev/null 2>&1; then
   "$repo_root/scripts/ci/wasm/install-wasm-pack.sh"
 fi
