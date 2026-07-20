@@ -503,7 +503,7 @@ pub(crate) fn italic(start: u32, end: u32) -> TextAnnotation {
 }
 
 /// Create an underline annotation for the given byte range.
-#[cfg(any(feature = "office", feature = "xml"))]
+#[cfg(any(feature = "office", feature = "xml", feature = "html"))]
 pub(crate) fn underline(start: u32, end: u32) -> TextAnnotation {
     TextAnnotation {
         start,

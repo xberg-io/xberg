@@ -272,6 +272,48 @@ Emoji: 🎉 🚀 ✅"
     }
 }
 
+/// Regression test for <https://github.com/xberg-io/xberg/issues/1278>.
+///
+/// Legacy multi-byte charsets — here EUC-KR declared via the `ks_c_5601-1987` label — must decode to
+/// real text, not U+FFFD replacement characters. This depends on mail-parser's `full_encoding`
+/// feature, which compiles the multi-byte decoders (EUC-KR, Shift-JIS, Big5, GBK, …). Without it the
+/// body falls back to `from_utf8_lossy` and produces mojibake.
+#[tokio::test]
+async fn test_eml_legacy_korean_charset_ks_c_5601_1987() {
+    let config = ExtractionConfig::default();
+
+    // Synthetic reproducer from the issue: text/plain; charset="ks_c_5601-1987", quoted-printable
+    // body of valid EUC-KR bytes decoding to Korean.
+    let eml_content: &[u8] = b"From: sample.sender@example.invalid\r\n\
+To: sample.recipient@example.invalid\r\n\
+Subject: Synthetic Korean charset decoding test\r\n\
+Date: Mon, 20 Jul 2026 00:00:00 +0000\r\n\
+MIME-Version: 1.0\r\n\
+Content-Type: text/plain; charset=\"ks_c_5601-1987\"\r\n\
+Content-Transfer-Encoding: quoted-printable\r\n\
+\r\n\
+=BE=C8=B3=E7=C7=CF=BC=BC=BF=E4.=20=C0=CC=B0=CD=C0=BA=20=B0=F8=B0=B3=20=B0=\r\n\
+=A1=B4=C9=C7=D1=20=C7=D1=B1=DB=20=C0=CC=B8=DE=C0=CF=20=B9=AE=C0=CE=\r\n\
+=C4=DA=B5=F9=20=C5=D7=BD=BA=C6=AE=C0=D4=B4=CF=B4=D9.\r\n\
+=B5=CE=20=B9=F8=C2=B0=20=C5=D7=BD=BA=C6=AE=20=B9=AE=C0=E5=C0=D4=B4=CF=B4=D9=\r\n\
+.\r\n";
+
+    let result = extract_bytes_document(eml_content, "message/rfc822", &config)
+        .await
+        .expect("Should extract EUC-KR EML successfully");
+
+    assert!(
+        !result.content.contains('\u{FFFD}'),
+        "decoded body must not contain U+FFFD replacement characters; got: {}",
+        result.content
+    );
+    assert!(
+        result.content.contains("안녕하세요"),
+        "decoded body should contain the Korean greeting; got: {}",
+        result.content
+    );
+}
+
 /// Test email with multiple recipients (To, CC, BCC).
 #[tokio::test]
 async fn test_email_large_attachments() {
