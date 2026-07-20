@@ -102,6 +102,24 @@ exclude = [
     "**/*.diff",
     "**/*.patch",
     "**/frb_generated.rs",
+    "charts/**",
+]
+
+# Opt-in comment-removal sweep. Preserve doc comments (rustdoc is required on
+# public items), TODO/FIXME (actionable), and SAFETY/license markers. Generated
+# binding output is exempted via per-file-ignores below.
+[workspace.poly.uncomment]
+enabled = true
+remove-todos = false
+remove-fixme = false
+remove-docs = false
+use-default-ignores = true
+preserve-patterns = [
+    "SAFETY",
+    "SPDX",
+    "Copyright",
+    "License",
+    "licensed under",
 ]
 
 [workspace.poly.typos.extend-words]
@@ -183,6 +201,16 @@ WebUI = "WebUI"
 traineddata = "traineddata"
 
 [workspace.poly.per-file-ignores]
+# Alef-generated binding output — never hand-clean comments; regeneration owns them.
+".cargo/config.toml" = ["comment", "doc-comment"]
+"Package.swift" = ["comment", "doc-comment"]
+"packages/**" = ["comment", "doc-comment"]
+"crates/xberg-node/**" = ["comment", "doc-comment"]
+"crates/xberg-wasm/**" = ["comment", "doc-comment"]
+"crates/xberg-ffi/**" = ["comment", "doc-comment"]
+"crates/xberg-py/**" = ["comment", "doc-comment"]
+"crates/xberg-php/**" = ["comment", "doc-comment"]
+"crates/xberg-jni/**" = ["comment", "doc-comment"]
 "**/text_repair.rs" = ["typo"]
 # Executable CI helper (git mode 100755); poly runs ruff via stdin and cannot
 # see the exec bit, so EXE001 always false-fires on shebang'd scripts.

@@ -35,6 +35,7 @@ exclude = [
     "**/*.diff",
     "**/*.patch",
     "**/frb_generated.rs",
+    "charts/**",
 ]
 
 [lint.markdown.rumdl]
@@ -157,6 +158,14 @@ PyMuPDF = "PyMuPDF"
 SurrealDB = "SurrealDB"
 WebUI = "WebUI"
 traineddata = "traineddata"
+
+[lint.uncomment]
+enabled = true
+remove_todos = false
+remove_fixme = false
+remove_docs = false
+use_default_ignores = true
+preserve_patterns = ["SAFETY", "SPDX", "Copyright", "License", "licensed under"]
 
 [per-file-ignores]
 "**/api.py" = ["F401", "I001", "TC006", "UP035"]
@@ -287,11 +296,20 @@ traineddata = "traineddata"
     "N801",
 ]
 "**/text_repair.rs" = ["typo"]
+".cargo/config.toml" = ["comment", "doc-comment"]
+"Package.swift" = ["comment", "doc-comment"]
 "cli-proxy/pypi/**/*.py" = ["ANN001", "ANN202", "S310", "T201"]
+"crates/xberg-ffi/**" = ["comment", "doc-comment"]
+"crates/xberg-jni/**" = ["comment", "doc-comment"]
+"crates/xberg-node/**" = ["comment", "doc-comment"]
 "crates/xberg-node/format-metadata-wrapper.js" = ["no-unused-vars"]
 "crates/xberg-node/index.js" = ["no-unused-vars"]
+"crates/xberg-php/**" = ["comment", "doc-comment"]
+"crates/xberg-py/**" = ["comment", "doc-comment"]
+"crates/xberg-wasm/**" = ["comment", "doc-comment"]
 "docker/**" = ["DL3006", "DL3059"]
 "e2e/**/*.py" = ["A001", "N801"]
+"packages/**" = ["comment", "doc-comment"]
 "packages/python/build.py" = ["INP001"]
 "scripts/**/*.py" = [
     "B023",
@@ -432,6 +450,7 @@ lint = { exclude = [
     "**/*.diff",
     "**/*.patch",
     "**/frb_generated.rs",
+    "charts/**",
 ] }
 fmt = { exclude = [
     "**/*.freezed.dart",
@@ -469,6 +488,7 @@ fmt = { exclude = [
     "**/*.diff",
     "**/*.patch",
     "**/frb_generated.rs",
+    "charts/**",
 ] }
 file_safety = { exclude = [
     "**/*.freezed.dart",
@@ -506,6 +526,7 @@ file_safety = { exclude = [
     "**/*.diff",
     "**/*.patch",
     "**/frb_generated.rs",
+    "charts/**",
 ] }
 cargo = true
 commit = { stages = ["commit-msg"] }
