@@ -38,7 +38,7 @@ Package identifiers moved from `kreuzberg` to `xberg`:
 | Maven | `dev.kreuzberg:kreuzberg` | `io.xberg:xberg` |
 | NuGet | `Kreuzberg` | `Xberg` |
 | Packagist | `kreuzberg/kreuzberg` | `xberg-io/xberg` |
-| Go module | `github.com/kreuzberg-dev/kreuzberg` | `github.com/xberg-io/xberg` |
+| Go module | `github.com/kreuzberg-dev/kreuzberg` | `github.com/xberg-io/xberg/packages/go` |
 | R binding | supported | **removed** (use v4 LTS) |
 
 The extraction API is otherwise compatible in shape; update the import/package name and consult the
