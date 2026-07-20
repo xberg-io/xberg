@@ -557,6 +557,13 @@ fn hf_client(cache_dir: Option<&Path>) -> Result<hf_hub::HFClientSync, String> {
 /// by [`hf_client`] so changing standard HF environment configuration cannot
 /// accidentally reuse an engine loaded from a different snapshot cache.
 #[cfg(any(
+    feature = "paddle-ocr",
+    feature = "layout-detection",
+    feature = "auto-rotate",
+    feature = "ner-onnx",
+    feature = "candle-paddleocr-vl",
+    feature = "transcription",
+    feature = "chunking-tokenizers",
     feature = "onnx-runtime",
     all(feature = "static-embeddings", not(target_arch = "wasm32"))
 ))]
