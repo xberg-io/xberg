@@ -109,7 +109,7 @@ impl InferenceSession for TractSession {
                 .find(|(n, _)| n == name)
                 .map(|(_, t)| t)
                 .ok_or_else(|| InferenceError::Run(format!("missing input '{name}'")))?;
-            let tract_tensor = tensor_to_tract(tensor).map_err(|e| InferenceError::Tensor(e.to_string()))?;
+            let tract_tensor = tensor_to_tract(tensor)?;
             ordered.push(TValue::from(tract_tensor));
         }
 
@@ -136,11 +136,15 @@ impl InferenceSession for TractSession {
 }
 
 /// Convert a neutral input tensor into a tract tensor via a contiguous slice.
-fn tensor_to_tract(tensor: &InferenceTensor) -> TractResult<Tensor> {
-    fn build<T: Datum + Copy>(array: &ndarray::ArrayD<T>) -> TractResult<Tensor> {
+fn tensor_to_tract(tensor: &InferenceTensor) -> Result<Tensor, InferenceError> {
+    fn build<T: Datum + Copy>(array: &ndarray::ArrayD<T>) -> Result<Tensor, InferenceError> {
         let standard = array.as_standard_layout();
-        let slice = standard.as_slice().expect("standard layout is contiguous");
-        Tensor::from_shape(standard.shape(), slice)
+        // `as_standard_layout()` yields a C-contiguous array, so `as_slice()` is
+        // `Some` here; guard rather than panic to keep the seam fully `Result`-based.
+        let slice = standard
+            .as_slice()
+            .ok_or_else(|| InferenceError::Tensor("standard-layout array is not contiguous".to_string()))?;
+        Tensor::from_shape(standard.shape(), slice).map_err(|e| InferenceError::Tensor(e.to_string()))
     }
     match tensor {
         InferenceTensor::F32(array) => build(array),
@@ -181,9 +185,18 @@ mod tests {
     use super::*;
     use crate::inference::ort_backend::OrtBackend;
 
+    /// HF repository holding the PP-LCNet classifiers compared here.
+    const PARITY_REPO: &str = "xberg-io/paddleocr-onnx-models";
+
+    /// Whether the parity comparison is mandatory. CI sets
+    /// `XBERG_REQUIRE_TRACT_PARITY=1` so a missing model is a hard failure, not a
+    /// silent skip — otherwise these tests could pass by comparing nothing.
+    fn parity_required() -> bool {
+        std::env::var_os("XBERG_REQUIRE_TRACT_PARITY").is_some()
+    }
+
     /// Locate a cached ONNX model by the tail of its path in the HuggingFace hub
-    /// cache, returning `None` (so the test self-skips) when it is not present —
-    /// keeps parity coverage runnable locally without making CI depend on weights.
+    /// cache, returning `None` when it is not present.
     fn cached_model(suffix: &str) -> Option<std::path::PathBuf> {
         let home = std::env::var("HOME").ok()?;
         let root = std::path::Path::new(&home).join(".cache/huggingface/hub");
@@ -203,6 +216,47 @@ mod tests {
         best
     }
 
+    /// Resolve a parity model to a local path. Uses the HF cache when present;
+    /// otherwise, when parity is required (CI), downloads it via the production
+    /// path and fails loudly on error. Returns `None` only for a local run where
+    /// the model is absent and parity is not required — the self-skip case that
+    /// keeps the suite runnable offline without ever passing vacuously in CI.
+    fn resolve_model(filename: &str) -> Option<std::path::PathBuf> {
+        if let Some(path) = cached_model(filename) {
+            return Some(path);
+        }
+        if parity_required() {
+            return Some(download_parity_model(filename));
+        }
+        None
+    }
+
+    #[cfg(any(
+        feature = "paddle-ocr",
+        feature = "layout-detection",
+        auto_rotate,
+        feature = "ner-onnx",
+        feature = "candle-paddleocr-vl"
+    ))]
+    fn download_parity_model(filename: &str) -> std::path::PathBuf {
+        crate::model_download::hf_download(PARITY_REPO, filename)
+            .expect("XBERG_REQUIRE_TRACT_PARITY is set but the parity model download failed")
+    }
+
+    #[cfg(not(any(
+        feature = "paddle-ocr",
+        feature = "layout-detection",
+        auto_rotate,
+        feature = "ner-onnx",
+        feature = "candle-paddleocr-vl"
+    )))]
+    fn download_parity_model(_filename: &str) -> std::path::PathBuf {
+        panic!(
+            "XBERG_REQUIRE_TRACT_PARITY is set but no model-download feature is enabled; \
+             build the parity tests with `--features full,tract`"
+        );
+    }
+
     /// The two PP-LCNet CNN classifiers migrated onto the seam in Phase 1. Both are
     /// fixed 224×224 NCHW; tract and ORT must agree within a tight tolerance.
     #[test]
@@ -214,7 +268,7 @@ mod tests {
 
         let mut ran = 0;
         for (suffix, shape, out_len) in cases {
-            let Some(path) = cached_model(suffix) else {
+            let Some(path) = resolve_model(suffix) else {
                 eprintln!("skip: {suffix} not in HF cache");
                 continue;
             };
@@ -254,6 +308,10 @@ mod tests {
         }
 
         if ran == 0 {
+            assert!(
+                !parity_required(),
+                "XBERG_REQUIRE_TRACT_PARITY is set but no parity models were compared"
+            );
             eprintln!("tract_matches_ort_on_cnn_classifiers: no models cached, nothing compared");
         }
     }
@@ -264,7 +322,7 @@ mod tests {
     #[test]
     fn load_from_memory_matches_load_on_both_engines() {
         let suffix = "v2/classifiers/PP-LCNet_x1_0_doc_ori.onnx";
-        let Some(path) = cached_model(suffix) else {
+        let Some(path) = resolve_model(suffix) else {
             eprintln!("skip: {suffix} not in HF cache");
             return;
         };
