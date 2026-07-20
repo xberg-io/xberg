@@ -22,6 +22,13 @@ pub enum MdBlockType {
 }
 
 impl MdBlockType {
+    pub(crate) fn is_heading(self) -> bool {
+        matches!(
+            self,
+            Self::Heading1 | Self::Heading2 | Self::Heading3 | Self::Heading4 | Self::Heading5 | Self::Heading6
+        )
+    }
+
     fn name(&self) -> &'static str {
         match self {
             MdBlockType::Heading1 => "H1",
