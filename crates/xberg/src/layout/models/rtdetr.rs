@@ -45,7 +45,7 @@ impl RtDetrModel {
     ) -> Result<Self, LayoutError> {
         let session = default_backend()
             .load(std::path::Path::new(path), accel)
-            .map_err(|e| LayoutError::Ort(ort::Error::new(e.to_string())))?;
+            .map_err(|e| LayoutError::Inference(e.to_string()))?;
         let input_names: Vec<String> = session.input_names().to_vec();
         Ok(Self { session, input_names })
     }
@@ -87,7 +87,7 @@ impl RtDetrModel {
                 ),
                 (self.input_names[1].clone(), InferenceTensor::I64(sizes.into_dyn())),
             ])
-            .map_err(|e| LayoutError::Ort(ort::Error::new(e.to_string())))?;
+            .map_err(|e| LayoutError::Inference(e.to_string()))?;
 
         let onnx_ms = onnx_start.elapsed().as_secs_f64() * 1000.0;
         tracing::debug!(onnx_ms, "RT-DETR ONNX session.run() complete");
@@ -214,7 +214,10 @@ impl RtDetrModel {
 
         for img in images {
             let tensor = preprocessing::preprocess_rescale(img, INPUT_SIZE);
-            all_pixel_data.extend_from_slice(tensor.as_slice().expect("tensor not contiguous"));
+            let slice = tensor
+                .as_slice()
+                .ok_or_else(|| LayoutError::InvalidOutput("preprocessed image tensor is not contiguous".to_string()))?;
+            all_pixel_data.extend_from_slice(slice);
             metas.push((img.width(), img.height()));
         }
 
@@ -245,7 +248,7 @@ impl RtDetrModel {
                     InferenceTensor::I64(sizes_array.into_dyn()),
                 ),
             ])
-            .map_err(|e| LayoutError::Ort(ort::Error::new(e.to_string())))?;
+            .map_err(|e| LayoutError::Inference(e.to_string()))?;
 
         let onnx_ms = onnx_start.elapsed().as_secs_f64() * 1000.0;
         tracing::debug!(onnx_ms, batch, "RT-DETR batch ONNX session.run() complete");

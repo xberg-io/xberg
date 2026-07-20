@@ -189,6 +189,46 @@ fn tract_to_tensor(tensor: &Tensor) -> Result<InferenceTensor, InferenceError> {
     Ok(tensor)
 }
 
+/// Model-free coverage of the tract boundary conversions. Needs neither ONNX
+/// Runtime nor a downloaded model, so it runs offline wherever the tract engine
+/// is compiled — unlike the model-gated parity suite below, it never self-skips.
+#[cfg(test)]
+mod conversion_tests {
+    use super::*;
+    use ndarray::ArrayD;
+
+    #[test]
+    fn tensor_conversions_roundtrip_every_dtype() {
+        let cases = [
+            InferenceTensor::F32(ArrayD::from_shape_vec(vec![2, 2], vec![1.0f32, -2.0, 3.5, 4.0]).unwrap()),
+            InferenceTensor::I64(ArrayD::from_shape_vec(vec![3], vec![10i64, -20, 30]).unwrap()),
+            InferenceTensor::I32(ArrayD::from_shape_vec(vec![2, 1], vec![7i32, -8]).unwrap()),
+            InferenceTensor::U8(ArrayD::from_shape_vec(vec![4], vec![0u8, 1, 254, 255]).unwrap()),
+            InferenceTensor::Bool(ArrayD::from_shape_vec(vec![2], vec![true, false]).unwrap()),
+        ];
+        for original in cases {
+            let tract = tensor_to_tract(&original).unwrap();
+            let back = tract_to_tensor(&tract).unwrap();
+            assert_eq!(back, original, "tract dtype round-trip diverged for {original:?}");
+        }
+    }
+
+    #[test]
+    fn non_standard_layout_input_is_copied_and_preserves_values() {
+        // `reversed_axes` flips strides without copying, yielding an F-order
+        // (non-contiguous) array; `tensor_to_tract` must standardise it before
+        // slicing. `PartialEq` on `ArrayD` compares logical elements, so the
+        // round-trip must still match despite the layout change.
+        let original = InferenceTensor::F32(
+            ArrayD::from_shape_vec(vec![2, 3], vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0])
+                .unwrap()
+                .reversed_axes(),
+        );
+        let back = tract_to_tensor(&tensor_to_tract(&original).unwrap()).unwrap();
+        assert_eq!(back, original);
+    }
+}
+
 #[cfg(all(test, inference_ort))]
 mod tests {
     use super::*;

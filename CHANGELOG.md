@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Layout-model inference errors are engine-neutral.** Layout models on the `crate::inference`
+  seam (RT-DETR, PP-DocLayout-V3, table classifier) now surface seam load/run failures as a new
+  `LayoutError::Inference(String)` variant instead of funnelling them through `LayoutError::Ort`,
+  so they no longer name ONNX Runtime's error type at the seam boundary — a prerequisite for
+  running layout off ORT. Two `.expect()` panics in the layout preprocessing paths were replaced
+  with `Result` propagation, and the tract boundary tensor conversions plus `default_backend()`
+  selection gained offline (model-free) test coverage. Part of #1275.
+
 ## [1.0.0-rc.30] - 2026-07-20
 
 ### Added

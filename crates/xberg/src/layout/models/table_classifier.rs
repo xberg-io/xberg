@@ -64,7 +64,7 @@ impl TableClassifier {
     ) -> Result<Self, LayoutError> {
         let session = default_backend()
             .load(Path::new(path), accel)
-            .map_err(|e| LayoutError::Ort(ort::Error::new(e.to_string())))?;
+            .map_err(|e| LayoutError::Inference(e.to_string()))?;
         let input_name = session
             .input_names()
             .first()
@@ -81,7 +81,7 @@ impl TableClassifier {
             "TableClassifier: starting classification"
         );
 
-        let input_tensor = preprocess_lcnet(table_img);
+        let input_tensor = preprocess_lcnet(table_img)?;
 
         let inference_start = std::time::Instant::now();
         let outputs = self
@@ -90,7 +90,7 @@ impl TableClassifier {
                 self.input_name.clone(),
                 InferenceTensor::F32(input_tensor.into_dyn()),
             )])
-            .map_err(|e| LayoutError::Ort(ort::Error::new(e.to_string())))?;
+            .map_err(|e| LayoutError::Inference(e.to_string()))?;
         let inference_ms = inference_start.elapsed().as_secs_f64() * 1000.0;
 
         tracing::trace!(
@@ -145,7 +145,7 @@ const MIN_EDGE: u32 = 256;
 /// 2. Center-crop to 224×224
 /// 3. Normalize in BGR channel order (PaddleOCR convention)
 /// 4. Layout: NCHW `[1, 3, 224, 224]` f32
-fn preprocess_lcnet(img: &RgbImage) -> Array4<f32> {
+fn preprocess_lcnet(img: &RgbImage) -> Result<Array4<f32>, LayoutError> {
     let orig_w = img.width();
     let orig_h = img.height();
 
@@ -185,5 +185,6 @@ fn preprocess_lcnet(img: &RgbImage) -> Array4<f32> {
         data[2 * hw + i] = r * alpha_r + beta_r;
     }
 
-    Array4::from_shape_vec((1, 3, h, w), data).expect("shape mismatch in preprocess_lcnet")
+    Array4::from_shape_vec((1, 3, h, w), data)
+        .map_err(|e| LayoutError::InvalidOutput(format!("preprocess_lcnet shape mismatch: {e}")))
 }

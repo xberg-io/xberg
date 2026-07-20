@@ -51,3 +51,16 @@ pub(crate) fn default_backend() -> Box<dyn InferenceBackend> {
 pub(crate) fn default_backend() -> Box<dyn InferenceBackend> {
     Box::new(tract_backend::TractBackend::new())
 }
+
+#[cfg(test)]
+mod tests {
+    /// Guards the `default_backend()` cfg selection. The value is largely
+    /// compile-time: this only builds if *exactly one* of the two cfg-gated
+    /// definitions is in scope — both would be a duplicate-definition error,
+    /// neither an unresolved call. Constructing it confirms the selected
+    /// zero-sized backend is usable for the compiled feature set.
+    #[test]
+    fn default_backend_selection_compiles_and_constructs() {
+        let _backend = super::default_backend();
+    }
+}

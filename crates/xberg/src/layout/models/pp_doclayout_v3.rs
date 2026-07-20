@@ -104,7 +104,7 @@ impl PpDocLayoutV3Model {
     ) -> Result<Self, LayoutError> {
         let session = default_backend()
             .load(std::path::Path::new(path), accel)
-            .map_err(|e| LayoutError::Ort(ort::Error::new(e.to_string())))?;
+            .map_err(|e| LayoutError::Inference(e.to_string()))?;
         let input_names: Vec<String> = session.input_names().to_vec();
         Ok(Self { session, input_names })
     }
@@ -254,7 +254,7 @@ impl PpDocLayoutV3Model {
                 (image_name, InferenceTensor::F32(pixel_array.into_dyn())),
                 (scale_factor_name, InferenceTensor::F32(scale_factor_array.into_dyn())),
             ])
-            .map_err(|e| LayoutError::Ort(ort::Error::new(e.to_string())))?;
+            .map_err(|e| LayoutError::Inference(e.to_string()))?;
 
         let onnx_ms = onnx_start.elapsed().as_secs_f64() * 1000.0;
         tracing::debug!(onnx_ms, "PP-DocLayout-V3 ONNX session.run() complete");
@@ -378,7 +378,7 @@ impl PpDocLayoutV3Model {
                 (image_name, InferenceTensor::F32(images_array.into_dyn())),
                 (scale_factor_name, InferenceTensor::F32(scale_factor_array.into_dyn())),
             ])
-            .map_err(|e| LayoutError::Ort(ort::Error::new(e.to_string())))?;
+            .map_err(|e| LayoutError::Inference(e.to_string()))?;
 
         let onnx_ms = onnx_start.elapsed().as_secs_f64() * 1000.0;
         tracing::debug!(onnx_ms, batch, "PP-DocLayout-V3 batch ONNX session.run() complete");
