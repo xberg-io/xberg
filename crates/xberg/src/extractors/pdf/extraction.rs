@@ -39,6 +39,7 @@ pub(crate) type PdfExtractionPhaseResult = (
 pub(crate) fn extract_all_from_oxide_document(
     content: &[u8],
     config: &ExtractionConfig,
+    outline_entries: &[crate::pdf::bookmarks::PdfOutlineEntry],
     layout_hints: Option<&[Vec<crate::pdf::structure::types::LayoutHint>]>,
     #[cfg(feature = "layout-detection")] layout_images: Option<&[image::RgbImage]>,
     #[cfg(not(feature = "layout-detection"))] _layout_images: Option<()>,
@@ -219,6 +220,7 @@ pub(crate) fn extract_all_from_oxide_document(
             crate::pdf::structure::SegmentStructureConfig {
                 k_clusters: k,
                 tables: &tables,
+                outline_entries,
                 strip_repeating_text,
                 include_headers,
                 include_footers,

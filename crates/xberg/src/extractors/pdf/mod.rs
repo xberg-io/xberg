@@ -333,6 +333,16 @@ impl PdfExtractor {
     ) -> Result<InternalDocument> {
         let _ = &path;
 
+        let (outline_entries, bookmark_uris, pdf_revisions) = match lopdf::Document::load_mem(content) {
+            Ok(lopdf_doc) => {
+                let entries = crate::pdf::bookmarks::extract_outline_entries(&lopdf_doc);
+                let uris = crate::pdf::bookmarks::extract_bookmarks_from_entries(&entries);
+                let revisions = crate::pdf::xref_revisions::extract_pdf_xref_revisions(content, &lopdf_doc);
+                (entries, uris, revisions)
+            }
+            Err(_) => (Vec::new(), Vec::new(), None),
+        };
+
         #[cfg(all(feature = "pdf", feature = "layout-detection"))]
         #[allow(unused_mut, unused_variables)]
         let (
@@ -362,6 +372,7 @@ impl PdfExtractor {
         ) = extract_all_from_oxide_document(
             content,
             config,
+            &outline_entries,
             layout_hints,
             #[cfg(feature = "layout-detection")]
             markdown_layout_images.as_deref(),
@@ -951,14 +962,10 @@ impl PdfExtractor {
 
         #[cfg(feature = "pdf")]
         {
-            if let Ok(lopdf_doc) = lopdf::Document::load_mem(content) {
-                let bookmark_uris = crate::pdf::bookmarks::extract_bookmarks(&lopdf_doc);
-                for uri in bookmark_uris {
-                    doc.push_uri(uri);
-                }
-
-                doc.revisions = crate::pdf::xref_revisions::extract_pdf_xref_revisions(content, &lopdf_doc);
+            for uri in bookmark_uris {
+                doc.push_uri(uri);
             }
+            doc.revisions = pdf_revisions;
         }
 
         #[cfg(all(feature = "pdf", feature = "tokio-runtime"))]

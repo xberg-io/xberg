@@ -2,6 +2,7 @@
 
 use std::borrow::Cow;
 
+use crate::pdf::bookmarks::PdfOutlineEntry;
 use crate::pdf::error::Result;
 use crate::pdf::hierarchy::{BoundingBox, SegmentData, TextBlock, assign_heading_levels_smart, cluster_font_sizes};
 #[cfg(not(target_arch = "wasm32"))]
@@ -1183,6 +1184,7 @@ fn is_page_number_pattern(text: &str) -> bool {
 pub(crate) struct SegmentStructureConfig<'a> {
     pub k_clusters: usize,
     pub tables: &'a [crate::types::Table],
+    pub outline_entries: &'a [PdfOutlineEntry],
     pub strip_repeating_text: bool,
     pub include_headers: bool,
     pub include_footers: bool,
@@ -1212,6 +1214,7 @@ pub(crate) fn extract_document_structure_from_segments(
     let SegmentStructureConfig {
         k_clusters,
         tables,
+        outline_entries,
         strip_repeating_text,
         include_headers,
         include_footers,
@@ -1713,6 +1716,7 @@ pub(crate) fn extract_document_structure_from_segments(
         mark_cross_page_repeating_short_text(&mut all_page_paragraphs);
     }
     mark_arxiv_noise(&mut all_page_paragraphs);
+    recover_headings_from_outline(&mut all_page_paragraphs, outline_entries);
     for page in &mut all_page_paragraphs {
         retain_page_furniture_safely(page);
     }
@@ -2267,22 +2271,193 @@ fn deduplicate_paragraphs(all_pages: &mut [Vec<PdfParagraph>]) {
     }
 }
 
+const DEFAULT_OUTLINE_HEADING_OFFSET: i64 = 2;
+const MIN_OUTLINE_CALIBRATION_ANCHORS: usize = 2;
+const MIN_MARKDOWN_HEADING_LEVEL: i64 = 1;
+const MAX_MARKDOWN_HEADING_LEVEL: i64 = 6;
+
+#[derive(Debug, Clone, Copy)]
+struct OutlineParagraphMatch {
+    page_index: usize,
+    paragraph_index: usize,
+    depth: usize,
+}
+
+fn recover_headings_from_outline(all_pages: &mut [Vec<PdfParagraph>], outline_entries: &[PdfOutlineEntry]) {
+    let matches = collect_unique_outline_matches(all_pages, outline_entries);
+    let offset = calibrated_outline_heading_offset(all_pages, &matches);
+
+    for matched in matches {
+        let paragraph = &mut all_pages[matched.page_index][matched.paragraph_index];
+        if paragraph.heading_level.is_some() || !outline_layout_allows_heading(paragraph) {
+            continue;
+        }
+        let depth = i64::try_from(matched.depth).unwrap_or(i64::MAX);
+        let level = depth
+            .saturating_add(offset)
+            .clamp(MIN_MARKDOWN_HEADING_LEVEL, MAX_MARKDOWN_HEADING_LEVEL);
+        paragraph.heading_level = Some(level as u8);
+        paragraph.is_list_item = false;
+        paragraph.is_page_furniture = false;
+    }
+}
+
+fn collect_unique_outline_matches(
+    all_pages: &[Vec<PdfParagraph>],
+    outline_entries: &[PdfOutlineEntry],
+) -> Vec<OutlineParagraphMatch> {
+    let mut outline_counts = ahash::AHashMap::<(usize, String), usize>::new();
+    for entry in outline_entries {
+        if let Some(key) = outline_match_key(entry, all_pages.len()) {
+            *outline_counts.entry(key).or_default() += 1;
+        }
+    }
+    let paragraph_matches = all_pages
+        .iter()
+        .map(|page| {
+            let mut matches = ahash::AHashMap::<String, (usize, usize)>::new();
+            for (index, paragraph) in page.iter().enumerate() {
+                let title = normalize_outline_title(&paragraph_text_raw(paragraph));
+                let entry = matches.entry(title).or_insert((0, index));
+                entry.0 += 1;
+            }
+            matches
+        })
+        .collect::<Vec<_>>();
+
+    outline_entries
+        .iter()
+        .filter_map(|entry| {
+            let (page_index, title) = outline_match_key(entry, all_pages.len())?;
+            if outline_counts.get(&(page_index, title.clone())) != Some(&1) {
+                return None;
+            }
+            let &(paragraph_count, paragraph_index) = paragraph_matches[page_index].get(&title)?;
+            (paragraph_count == 1).then_some(OutlineParagraphMatch {
+                page_index,
+                paragraph_index,
+                depth: entry.depth,
+            })
+        })
+        .collect()
+}
+
+fn outline_match_key(entry: &PdfOutlineEntry, page_count: usize) -> Option<(usize, String)> {
+    let page_number = entry.page_number?;
+    let page_index = usize::try_from(page_number.checked_sub(1)?).ok()?;
+    let title = normalize_outline_title(&entry.title);
+    (page_index < page_count && !title.is_empty()).then_some((page_index, title))
+}
+
+fn calibrated_outline_heading_offset(all_pages: &[Vec<PdfParagraph>], matches: &[OutlineParagraphMatch]) -> i64 {
+    let mut counts = ahash::AHashMap::<i64, usize>::new();
+    for matched in matches {
+        let paragraph = &all_pages[matched.page_index][matched.paragraph_index];
+        if !outline_layout_allows_heading(paragraph) {
+            continue;
+        }
+        if let Some(level) = paragraph.heading_level {
+            let depth = i64::try_from(matched.depth).unwrap_or(i64::MAX);
+            *counts.entry(i64::from(level).saturating_sub(depth)).or_default() += 1;
+        }
+    }
+
+    let max_count = counts.values().copied().max().unwrap_or_default();
+    let mut winners = counts.into_iter().filter(|(_, count)| *count == max_count);
+    let winner = winners.next();
+    match (winner, winners.next(), max_count) {
+        (Some((offset, _)), None, count) if count >= MIN_OUTLINE_CALIBRATION_ANCHORS => offset,
+        _ => DEFAULT_OUTLINE_HEADING_OFFSET,
+    }
+}
+
+fn outline_layout_allows_heading(paragraph: &PdfParagraph) -> bool {
+    if paragraph.is_code_block || paragraph.is_formula || paragraph.caption_for.is_some() {
+        return false;
+    }
+    matches!(
+        paragraph.layout_class,
+        None | Some(super::types::LayoutHintClass::Title)
+            | Some(super::types::LayoutHintClass::SectionHeader)
+            | Some(super::types::LayoutHintClass::Text)
+            | Some(super::types::LayoutHintClass::Other)
+    )
+}
+
+fn normalize_outline_title(text: &str) -> String {
+    let text = strip_section_label(text.trim());
+    let mut normalized = String::new();
+    let mut pending_space = false;
+    for character in text.chars().flat_map(char::to_lowercase) {
+        if character.is_alphanumeric() {
+            if pending_space && !normalized.is_empty() {
+                normalized.push(' ');
+            }
+            normalized.push(character);
+            pending_space = false;
+        } else if !normalized.is_empty() {
+            pending_space = true;
+        }
+    }
+    normalized
+}
+
+fn strip_section_label(text: &str) -> &str {
+    let Some((first, rest)) = text.split_once(char::is_whitespace) else {
+        return text;
+    };
+    let punctuated = first
+        .chars()
+        .next()
+        .is_some_and(|character| matches!(character, '(' | '['))
+        || first
+            .chars()
+            .last()
+            .is_some_and(|character| matches!(character, '.' | ')' | ']' | ':'));
+    let core = first.trim_matches(|character| matches!(character, '(' | '[' | '.' | ')' | ']' | ':'));
+    let decimal_parts = core.split('.').collect::<Vec<_>>();
+    let decimal = !decimal_parts.is_empty()
+        && decimal_parts
+            .iter()
+            .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit()));
+    let decimal_label = decimal && (punctuated || decimal_parts.len() > 1 || core.len() <= 3);
+    let roman_label = punctuated
+        && !core.is_empty()
+        && core
+            .chars()
+            .all(|character| matches!(character.to_ascii_uppercase(), 'I' | 'V' | 'X' | 'L' | 'C' | 'D' | 'M'));
+    let letter_label = punctuated && core.len() == 1 && core.chars().all(|character| character.is_ascii_alphabetic());
+
+    if decimal_label || roman_label || letter_label {
+        rest.trim_start()
+    } else {
+        text
+    }
+}
+
+fn paragraph_text_raw(para: &PdfParagraph) -> String {
+    if para.text.is_empty() {
+        para.lines
+            .iter()
+            .flat_map(|line| line.segments.iter())
+            .map(|segment| segment.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" ")
+    } else {
+        para.text.clone()
+    }
+}
+
 /// Normalize paragraph text for deduplication comparison.
 ///
 /// Uses `para.text` when populated (heuristic path), otherwise assembles text
 /// from segment data (structure tree path, used in tests).
 fn paragraph_text_normalized(para: &PdfParagraph) -> String {
-    let raw = if para.text.is_empty() {
-        para.lines
-            .iter()
-            .flat_map(|l| l.segments.iter())
-            .map(|s| s.text.as_str())
-            .collect::<Vec<_>>()
-            .join(" ")
-    } else {
-        para.text.clone()
-    };
-    raw.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()
+    paragraph_text_raw(para)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
 }
 
 /// Check if a paragraph is a candidate for non-consecutive deduplication.
@@ -2771,6 +2946,125 @@ mod tests {
             block_bbox: None,
             word_count,
         }
+    }
+
+    fn outline_para(text: &str) -> PdfParagraph {
+        let mut paragraph = para(vec![line(vec![seg(text, 0.0, 100.0)])]);
+        paragraph.text = text.to_string();
+        paragraph.word_count = text.split_whitespace().count();
+        paragraph
+    }
+
+    #[test]
+    fn outline_recovery_is_page_scoped_and_uses_root_h2() {
+        let mut intro = outline_para("1. Introduction");
+        intro.is_list_item = true;
+        intro.is_page_furniture = true;
+        let mut pages = vec![vec![intro, outline_para("Methods")], vec![outline_para("Introduction")]];
+        let entries = vec![
+            PdfOutlineEntry::test_entry("Introduction", 0, 1),
+            PdfOutlineEntry::test_entry("Methods", 1, 1),
+        ];
+
+        recover_headings_from_outline(&mut pages, &entries);
+
+        assert_eq!(pages[0][0].heading_level, Some(2));
+        assert_eq!(pages[0][1].heading_level, Some(3));
+        assert_eq!(pages[1][0].heading_level, None);
+        assert!(!pages[0][0].is_list_item);
+        assert!(!pages[0][0].is_page_furniture);
+    }
+
+    #[test]
+    fn outline_recovery_calibrates_from_two_consistent_anchors() {
+        let mut first = outline_para("First anchor");
+        first.heading_level = Some(1);
+        let mut second = outline_para("Second anchor");
+        second.heading_level = Some(2);
+        let mut pages = vec![vec![first, second, outline_para("Recovered")]];
+        let entries = vec![
+            PdfOutlineEntry::test_entry("First anchor", 0, 1),
+            PdfOutlineEntry::test_entry("Second anchor", 1, 1),
+            PdfOutlineEntry::test_entry("Recovered", 2, 1),
+        ];
+
+        recover_headings_from_outline(&mut pages, &entries);
+
+        assert_eq!(pages[0][2].heading_level, Some(3));
+    }
+
+    #[test]
+    fn outline_recovery_ignores_singleton_bad_calibration_anchor() {
+        let mut anchor = outline_para("Bad anchor");
+        anchor.heading_level = Some(5);
+        let mut pages = vec![vec![anchor, outline_para("Recovered")]];
+        let entries = vec![
+            PdfOutlineEntry::test_entry("Bad anchor", 0, 1),
+            PdfOutlineEntry::test_entry("Recovered", 1, 1),
+        ];
+
+        recover_headings_from_outline(&mut pages, &entries);
+
+        assert_eq!(pages[0][1].heading_level, Some(3));
+    }
+
+    #[test]
+    fn outline_recovery_rejects_ambiguous_titles() {
+        let mut pages = vec![vec![
+            outline_para("Duplicate outline"),
+            outline_para("Duplicate paragraph"),
+            outline_para("Duplicate paragraph"),
+        ]];
+        let entries = vec![
+            PdfOutlineEntry::test_entry("Duplicate outline", 0, 1),
+            PdfOutlineEntry::test_entry("Duplicate outline", 1, 1),
+            PdfOutlineEntry::test_entry("Duplicate paragraph", 0, 1),
+        ];
+
+        recover_headings_from_outline(&mut pages, &entries);
+
+        assert!(pages[0].iter().all(|paragraph| paragraph.heading_level.is_none()));
+    }
+
+    #[test]
+    fn outline_recovery_rejects_semantic_non_headings() {
+        let mut header = outline_para("Header");
+        header.layout_class = Some(LayoutHintClass::PageHeader);
+        let mut list = outline_para("List");
+        list.layout_class = Some(LayoutHintClass::ListItem);
+        let mut formula = outline_para("Formula");
+        formula.is_formula = true;
+        let mut pages = vec![vec![header, list, formula]];
+        let entries = vec![
+            PdfOutlineEntry::test_entry("Header", 0, 1),
+            PdfOutlineEntry::test_entry("List", 0, 1),
+            PdfOutlineEntry::test_entry("Formula", 0, 1),
+        ];
+
+        recover_headings_from_outline(&mut pages, &entries);
+
+        assert!(pages[0].iter().all(|paragraph| paragraph.heading_level.is_none()));
+    }
+
+    #[test]
+    fn outline_title_normalization_handles_labels_without_aliasing_prose() {
+        assert_eq!(
+            normalize_outline_title("1. Introduction"),
+            normalize_outline_title("Introduction")
+        );
+        assert_eq!(
+            normalize_outline_title("IV. Results"),
+            normalize_outline_title("Results")
+        );
+        assert_ne!(
+            normalize_outline_title("A quick example"),
+            normalize_outline_title("quick example")
+        );
+        assert_ne!(
+            normalize_outline_title("2024 Report"),
+            normalize_outline_title("Report")
+        );
+        assert_ne!(normalize_outline_title("v2 API"), normalize_outline_title("API"));
     }
 
     fn paragraph_text(paragraph: &PdfParagraph) -> String {

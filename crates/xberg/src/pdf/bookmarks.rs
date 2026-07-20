@@ -36,6 +36,18 @@ pub(crate) struct PdfOutlineEntry {
     uri: Option<ExtractedUri>,
 }
 
+#[cfg(test)]
+impl PdfOutlineEntry {
+    pub(crate) fn test_entry(title: &str, depth: usize, page_number: u32) -> Self {
+        Self {
+            title: title.to_string(),
+            depth,
+            page_number: Some(page_number),
+            uri: None,
+        }
+    }
+}
+
 /// Extract rich outline entries from a PDF document loaded via lopdf.
 ///
 /// Traversal is bounded independently of successfully decoded entries, and
@@ -57,11 +69,13 @@ pub(crate) fn extract_outline_entries(document: &Document) -> Vec<PdfOutlineEntr
 ///
 /// Resolved named destinations retain their anchor URL and now also carry page
 /// metadata when the destination points into this document.
+#[cfg(test)]
 pub(crate) fn extract_bookmarks(document: &Document) -> Vec<ExtractedUri> {
-    extract_outline_entries(document)
-        .into_iter()
-        .filter_map(|entry| entry.uri)
-        .collect()
+    extract_bookmarks_from_entries(&extract_outline_entries(document))
+}
+
+pub(crate) fn extract_bookmarks_from_entries(entries: &[PdfOutlineEntry]) -> Vec<ExtractedUri> {
+    entries.iter().filter_map(|entry| entry.uri.clone()).collect()
 }
 
 fn first_outline_item(document: &Document) -> Option<ObjectId> {
