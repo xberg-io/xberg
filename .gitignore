@@ -318,6 +318,7 @@ packages/go/.lib/
 .basemind/
 
 .bench-rc32/
+.private-bench/
 build-output-musl-node/
 
 poly.local.toml
