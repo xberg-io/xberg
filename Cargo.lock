@@ -10156,19 +10156,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tract-op-sweep"
-version = "1.0.0-rc.30"
-dependencies = [
- "anyhow",
- "clap",
- "ndarray 0.17.2",
- "ort",
- "serde",
- "serde_json",
- "tract-onnx",
-]
-
-[[package]]
 name = "tract-pulse"
 version = "0.23.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

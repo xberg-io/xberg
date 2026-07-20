@@ -269,7 +269,7 @@ impl PpDocLayoutV3Model {
         // facts clears the earlier symbolic-shape wall, but tract 0.23.4's
         // `LayerNormalization` op translator then fails on the DETR decoder's norm
         // layer with a genuine shape-inference bug (see
-        // `tools/tract-op-sweep/README.md`). If a future tract upgrade ever
+        // `docs-site/src/content/docs/concepts/tract-inference.md`). If a future tract upgrade ever
         // unblocks this model, switch this match to positional/dtype comparison
         // (like `rtdetr.rs`'s `run_inference`) instead of by-name.
         let mut det_data: Vec<f32> = Vec::new();

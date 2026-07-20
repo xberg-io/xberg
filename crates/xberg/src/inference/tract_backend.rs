@@ -419,9 +419,9 @@ mod tests {
     /// (`Output mismatch after rewiring expansion for output #0: expected
     /// 1,300,1,..,F32 got 1,300,256,F32`, node `LayerNormalization.3`) — reproduced
     /// even at the bare `into_typed()` translation stage, before any
-    /// declutter/optimize pass runs. Not a mechanical fix; see the
-    /// `tools/tract-op-sweep` matrix (`pp_doclayout_v3` = ORT-only) — so it is not
-    /// compared here.
+    /// declutter/optimize pass runs. Not a mechanical fix; see the model-coverage
+    /// matrix in `docs-site/src/content/docs/concepts/tract-inference.md`
+    /// (`pp_doclayout_v3` = ORT-only) — so it is not compared here.
     #[test]
     fn tract_matches_ort_on_rtdetr_layout() {
         let suffix = "rtdetr/model.onnx";

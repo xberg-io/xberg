@@ -1,7 +1,7 @@
 #[cfg(feature = "layout-detection")]
 /// PP-DocLayout-V3 layout detection model. ORT-only: engine-neutral on the seam, but a
 /// tract 0.23.4 `LayerNormalization` op-translation bug leaves it unrunnable under tract
-/// (see `tools/tract-op-sweep/README.md`), so it is gated out of `layout-tract` builds.
+/// (see `docs-site/src/content/docs/concepts/tract-inference.md`), so it is gated out of `layout-tract` builds.
 pub mod pp_doclayout_v3;
 /// RT-DETR v2 layout detection model. Engine-neutral (runs on the `crate::inference`
 /// seam) — available under both `layout-detection` (ORT) and `layout-tract` (tract).
@@ -17,7 +17,7 @@ pub mod slanet;
 pub mod table_classifier;
 #[cfg(all(feature = "layout-detection", feature = "pdf"))]
 /// Table Transformer (TATR) table structure recognition model. ORT-only (bare
-/// `ort::Session`; quantized export tract cannot unify — see `tools/tract-op-sweep/README.md`).
+/// `ort::Session`; quantized export tract cannot unify — see `docs-site/src/content/docs/concepts/tract-inference.md`).
 pub mod tatr;
 #[cfg(feature = "layout-detection")]
 /// YOLO-based layout detection models (DocLayNet, DocStructBench, YOLOX variants). ORT-only

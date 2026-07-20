@@ -150,7 +150,7 @@ impl LayoutEngine {
                 return Err(LayoutError::ModelDownload(
                     "PP-DocLayout-V3 requires the ORT-backed `layout-detection` feature \
                      (unsupported under the pure-Rust `layout-tract` engine — see \
-                     tools/tract-op-sweep/README.md)"
+                     docs-site/src/content/docs/concepts/tract-inference.md)"
                         .into(),
                 ));
             }

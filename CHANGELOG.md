@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plumbing (the shared ORT session builder, YOLO, TATR, SLANeXT, PP-DocLayout-V3, and the
   `LayoutError::Ort` variant) stays gated on the literal `layout-detection` feature, since table
   STRUCTURE recognition (TATR/SLANeXT) and PP-DocLayout-V3 (a tract 0.23.4 `LayerNormalization`
-  op-translation bug — see `tools/tract-op-sweep/README.md`) are not available under tract;
+  op-translation bug — see the Pure-Rust Inference concept doc) are not available under tract;
   `LayoutEngine::from_config` returns a `LayoutError` for those instead of failing to compile or
   panicking. The ORT-backed `layout-detection` remains the native default. With the `pdf` feature
   (which `android-target` enables), `TableClassifier` (wired/wireless) is part of the public
@@ -66,7 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refactor). RT-DETR additionally runs on the pure-Rust `tract` engine — a new parity test asserts
   tract tracks ORT within 5e-3 on every RT-DETR output, and the seam now materializes tract's
   symbolic-dimension (`TDim`) integer outputs (RT-DETR class labels) as `i64`. PP-DocLayout-V3 stays
-  ORT-only under tract pending input-fact pinning (see `tools/tract-op-sweep`). Part of #1275.
+  ORT-only under tract pending input-fact pinning (see the Pure-Rust Inference concept doc). Part of #1275.
 
 - **Reversible redaction for authorized callers (`redaction-rehydrate`).** Token-replacement
   redaction can now capture a token to original-text map, encrypt it with a passphrase
