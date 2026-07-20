@@ -84,17 +84,7 @@ fn derive_document_structure_inner(doc: &mut InternalDocument) -> DocumentStruct
         }
         match doc.elements[elem_idx].kind {
             ElementKind::ListEnd | ElementKind::QuoteEnd | ElementKind::GroupEnd => {
-                if let Some((_, top_idx)) = stack.last() {
-                    let top_content = &ds.nodes[top_idx.0 as usize].content;
-                    if matches!(
-                        (&doc.elements[elem_idx].kind, top_content),
-                        (ElementKind::ListEnd, NodeContent::List { .. })
-                            | (ElementKind::QuoteEnd, NodeContent::Quote)
-                            | (ElementKind::GroupEnd, NodeContent::Group { .. })
-                    ) {
-                        stack.pop();
-                    }
-                }
+                close_container(&mut stack, &ds, doc.elements[elem_idx].kind);
                 continue;
             }
             ElementKind::FootnoteRef => {
@@ -257,6 +247,33 @@ fn derive_document_structure_inner(doc: &mut InternalDocument) -> DocumentStruct
 
     ds.finalize_node_types();
     ds
+}
+
+/// Close the nearest explicit container matching an end marker.
+///
+/// Derived heading groups may sit above an explicit container on the stack. An
+/// end marker closes both those derived groups and its matching container,
+/// rather than mistaking the heading group for the explicit group itself.
+fn close_container(stack: &mut Vec<(u16, NodeIndex)>, ds: &DocumentStructure, end_kind: ElementKind) {
+    let Some(container_position) = stack.iter().rposition(|(_, node_idx)| {
+        let content = &ds.nodes[node_idx.0 as usize].content;
+        matches!(
+            (end_kind, content),
+            (ElementKind::ListEnd, NodeContent::List { .. })
+                | (ElementKind::QuoteEnd, NodeContent::Quote)
+                | (
+                    ElementKind::GroupEnd,
+                    NodeContent::Group {
+                        heading_level: None,
+                        ..
+                    }
+                )
+        )
+    }) else {
+        return;
+    };
+
+    stack.truncate(container_position);
 }
 
 /// Pop the stack until the top has depth strictly less than `target_depth`.
@@ -920,6 +937,65 @@ mod tests {
         }
 
         assert_eq!(h2_group.children.len(), 2);
+    }
+
+    #[test]
+    fn test_group_end_closes_layout_group_beneath_heading() {
+        let mut doc = make_doc("pdf");
+        doc.push_element(InternalElement::text(ElementKind::GroupStart, "", 0));
+        doc.push_element(InternalElement::text(
+            ElementKind::Heading { level: 1 },
+            "Region heading",
+            1,
+        ));
+        doc.push_element(InternalElement::text(ElementKind::Paragraph, "Region body", 2));
+        doc.push_element(InternalElement::text(ElementKind::GroupEnd, "", 0));
+        doc.push_element(InternalElement::text(ElementKind::Table { table_index: 0 }, "", 1));
+        doc.push_element(InternalElement::text(ElementKind::PageBreak, "", 1));
+        doc.push_element(InternalElement::text(ElementKind::GroupStart, "", 1));
+        doc.push_element(InternalElement::text(ElementKind::Paragraph, "Next region", 2));
+        doc.push_element(InternalElement::text(ElementKind::GroupEnd, "", 1));
+
+        resolve_relationships(&mut doc);
+        let ds = derive_document_structure_inner(&mut doc);
+        assert!(ds.validate().is_ok(), "validation: {:?}", ds.validate());
+
+        let roots: Vec<_> = ds.body_roots().collect();
+        assert_eq!(roots.len(), 4);
+        assert!(matches!(
+            &roots[0].1.content,
+            NodeContent::Group {
+                heading_level: None,
+                ..
+            }
+        ));
+        assert!(matches!(&roots[1].1.content, NodeContent::Table { .. }));
+        assert!(matches!(&roots[2].1.content, NodeContent::PageBreak));
+        assert!(matches!(
+            &roots[3].1.content,
+            NodeContent::Group {
+                heading_level: None,
+                ..
+            }
+        ));
+
+        let first_group = &ds.nodes[roots[0].0.0 as usize];
+        assert_eq!(first_group.children.len(), 1);
+        let heading_group = &ds.nodes[first_group.children[0].0 as usize];
+        assert!(matches!(
+            &heading_group.content,
+            NodeContent::Group {
+                heading_level: Some(1),
+                ..
+            }
+        ));
+
+        let next_group = &ds.nodes[roots[3].0.0 as usize];
+        assert_eq!(next_group.children.len(), 1);
+        assert!(matches!(
+            &ds.nodes[next_group.children[0].0 as usize].content,
+            NodeContent::Paragraph { .. }
+        ));
     }
 
     #[test]
