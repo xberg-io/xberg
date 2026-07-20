@@ -1474,23 +1474,19 @@ pub(crate) fn extract_document_structure_from_segments(
         "oxide layout table extraction complete"
     );
 
-    let extracted_table_bboxes_by_page: ahash::AHashMap<usize, Vec<crate::types::BoundingBox>> = {
-        let mut map: ahash::AHashMap<usize, Vec<crate::types::BoundingBox>> = ahash::AHashMap::new();
-        for table in tables.iter().chain(layout_tables.iter()) {
-            if let Some(ref bb) = table.bounding_box {
-                map.entry(table.page_number.saturating_sub(1) as usize)
-                    .or_default()
-                    .push(*bb);
-            }
-        }
-        tracing::debug!(
-            native_tables = tables.len(),
-            layout_tables = layout_tables.len(),
-            pages_with_bboxes = map.len(),
-            "oxide table bbox suppression map built"
-        );
-        map
-    };
+    #[cfg(feature = "layout-detection")]
+    let overlap_preference = table_overlap_preference;
+    #[cfg(not(feature = "layout-detection"))]
+    let overlap_preference = crate::core::config::layout::TableOverlapPreference::Content;
+    let emitted_tables = prepare_emitted_tables(tables, layout_tables, overlap_preference);
+
+    let extracted_table_bboxes_by_page = table_bboxes_by_page(&emitted_tables);
+    tracing::debug!(
+        native_tables = tables.len(),
+        emitted_tables = emitted_tables.len(),
+        pages_with_bboxes = extracted_table_bboxes_by_page.len(),
+        "oxide table bbox suppression map built"
+    );
 
     #[cfg(feature = "layout-detection")]
     let validations_by_page: ahash::AHashMap<usize, Vec<super::regions::layout_validation::RegionValidation>> = {
@@ -1581,15 +1577,8 @@ pub(crate) fn extract_document_structure_from_segments(
         "oxide structure pipeline: paragraph extraction complete, assembling document"
     );
 
-    let native_count = tables.len();
-    let mut combined_tables: Vec<crate::types::Table> = tables.iter().cloned().chain(layout_tables).collect();
-    #[cfg(feature = "layout-detection")]
-    let overlap_preference = table_overlap_preference;
-    #[cfg(not(feature = "layout-detection"))]
-    let overlap_preference = crate::core::config::layout::TableOverlapPreference::Content;
-    deduplicate_overlapping_tables(&mut combined_tables, native_count, overlap_preference);
     let effective_image_positions = if inject_placeholders { image_positions } else { &[] };
-    let mut doc = assemble_internal_document(all_page_paragraphs, &combined_tables, images, effective_image_positions);
+    let mut doc = assemble_internal_document(all_page_paragraphs, &emitted_tables, images, effective_image_positions);
 
     for elem in &mut doc.elements {
         if elem.text.is_empty() {
@@ -1613,6 +1602,38 @@ pub(crate) fn extract_document_structure_from_segments(
     );
 
     Ok(doc)
+}
+
+/// Select the exact tables that final assembly will emit.
+///
+/// Suppression must consume this same set so a duplicate or empty table cannot
+/// remove source text without contributing a corresponding table element.
+fn prepare_emitted_tables(
+    native_tables: &[crate::types::Table],
+    layout_tables: Vec<crate::types::Table>,
+    overlap_preference: crate::core::config::layout::TableOverlapPreference,
+) -> Vec<crate::types::Table> {
+    let mut emitted_tables: Vec<crate::types::Table> = native_tables.iter().cloned().chain(layout_tables).collect();
+    emitted_tables.retain(|table| !table.markdown.trim().is_empty());
+    let native_count = native_tables
+        .iter()
+        .filter(|table| !table.markdown.trim().is_empty())
+        .count();
+    deduplicate_overlapping_tables(&mut emitted_tables, native_count, overlap_preference);
+    emitted_tables
+}
+
+fn table_bboxes_by_page(tables: &[crate::types::Table]) -> ahash::AHashMap<usize, Vec<crate::types::BoundingBox>> {
+    let mut bboxes_by_page: ahash::AHashMap<usize, Vec<crate::types::BoundingBox>> = ahash::AHashMap::new();
+    for table in tables {
+        if let Some(bbox) = table.bounding_box {
+            bboxes_by_page
+                .entry(table.page_number.saturating_sub(1) as usize)
+                .or_default()
+                .push(bbox);
+        }
+    }
+    bboxes_by_page
 }
 
 /// Filter out segments that overlap >=50% with any table bounding box.
@@ -2230,6 +2251,101 @@ mod tests {
         ];
         deduplicate_overlapping_tables(&mut tables, 1, TableOverlapPreference::Native);
         assert_eq!(tables.len(), 2, "non-overlapping tables are both kept");
+    }
+
+    #[test]
+    fn dropped_duplicate_table_does_not_suppress_text() {
+        use crate::core::config::layout::TableOverlapPreference;
+
+        let native_tables = vec![ov_table(1, (0.0, 0.0, 100.0, 100.0), "native table content")];
+        let layout_tables = vec![ov_table(1, (0.0, 0.0, 200.0, 100.0), "x")];
+        let emitted_tables = prepare_emitted_tables(&native_tables, layout_tables, TableOverlapPreference::Content);
+        let bboxes_by_page = table_bboxes_by_page(&emitted_tables);
+
+        assert_eq!(emitted_tables.len(), 1);
+        assert_eq!(emitted_tables[0].bounding_box.expect("kept table bbox").x1, 100.0);
+
+        let segment = SegmentData {
+            x: 150.0,
+            y: 10.0,
+            width: 20.0,
+            height: 12.0,
+            ..seg("text outside the emitted table", 150.0, 20.0)
+        };
+        let filtered = filter_segments_by_table_bboxes(
+            vec![segment],
+            bboxes_by_page.get(&0).map(Vec::as_slice).unwrap_or_default(),
+        );
+        assert_eq!(filtered.len(), 1, "a discarded duplicate bbox must not remove text");
+    }
+
+    #[test]
+    fn empty_table_does_not_suppress_text() {
+        use crate::core::config::layout::TableOverlapPreference;
+
+        let native_tables = vec![ov_table(1, (0.0, 0.0, 100.0, 100.0), "  \n")];
+        let emitted_tables = prepare_emitted_tables(&native_tables, Vec::new(), TableOverlapPreference::Content);
+        let bboxes_by_page = table_bboxes_by_page(&emitted_tables);
+
+        assert!(
+            emitted_tables.is_empty(),
+            "assembly would not emit whitespace-only markdown"
+        );
+        assert!(
+            bboxes_by_page.is_empty(),
+            "non-emitted tables must not contribute suppression boxes"
+        );
+
+        let segment = SegmentData {
+            x: 10.0,
+            y: 10.0,
+            width: 20.0,
+            height: 12.0,
+            ..seg("text under an empty table", 10.0, 20.0)
+        };
+        let filtered = filter_segments_by_table_bboxes(
+            vec![segment],
+            bboxes_by_page.get(&0).map(Vec::as_slice).unwrap_or_default(),
+        );
+        assert_eq!(filtered.len(), 1);
+    }
+
+    #[test]
+    fn empty_table_does_not_displace_valid_overlap() {
+        use crate::core::config::layout::TableOverlapPreference;
+
+        let native_tables = vec![ov_table(1, (0.0, 0.0, 100.0, 100.0), "  \n")];
+        let layout_tables = vec![ov_table(1, (0.0, 0.0, 100.0, 100.0), "| valid |")];
+
+        let emitted_tables = prepare_emitted_tables(&native_tables, layout_tables, TableOverlapPreference::Native);
+
+        assert_eq!(emitted_tables.len(), 1);
+        assert_eq!(emitted_tables[0].markdown, "| valid |");
+    }
+
+    #[test]
+    fn emitted_table_still_suppresses_covered_text() {
+        use crate::core::config::layout::TableOverlapPreference;
+
+        let native_tables = vec![ov_table(1, (0.0, 0.0, 100.0, 100.0), "| value |")];
+        let emitted_tables = prepare_emitted_tables(&native_tables, Vec::new(), TableOverlapPreference::Content);
+        let bboxes_by_page = table_bboxes_by_page(&emitted_tables);
+        let segment = SegmentData {
+            x: 10.0,
+            y: 10.0,
+            width: 20.0,
+            height: 12.0,
+            ..seg("duplicated table text", 10.0, 20.0)
+        };
+
+        let filtered = filter_segments_by_table_bboxes(
+            vec![segment],
+            bboxes_by_page.get(&0).map(Vec::as_slice).unwrap_or_default(),
+        );
+        assert!(
+            filtered.is_empty(),
+            "an emitted table must continue to suppress duplicate text"
+        );
     }
 
     /// Helper: segment with font metadata for title-promotion tests.
