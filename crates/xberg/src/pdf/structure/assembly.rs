@@ -177,12 +177,11 @@ fn assemble_page_elements_with_tables(
         .enumerate()
         .filter(|(_, para)| para.caption_for.is_none())
         .collect();
-    let mut tables_at_slot: Vec<Vec<&crate::types::Table>> = (0..=ordered_paragraphs.len())
-        .map(|_| Vec::new())
-        .collect();
+    let mut tables_at_slot: Vec<Vec<&crate::types::Table>> =
+        (0..=ordered_paragraphs.len()).map(|_| Vec::new()).collect();
 
     for (table_y, table) in positioned {
-        let slot = table_insertion_slot(&ordered_paragraphs, table_y);
+        let slot = table_insertion_slot(&ordered_paragraphs, table, table_y);
         tables_at_slot[slot].push(table);
     }
 
@@ -222,18 +221,90 @@ fn assemble_page_elements_with_tables(
     }
 }
 
-/// Pick the earliest reading-order boundary immediately before text below the table.
+/// Pick a reading-order boundary immediately before text below the table.
 ///
-/// Paragraphs may already be in column-aware order, so their vertical anchors are
-/// not necessarily monotonic. Selecting a boundary without sorting keeps the
-/// paragraph subsequence intact while still placing tables sensibly in a column.
-fn table_insertion_slot(paragraphs: &[(usize, &PdfParagraph)], table_y: f32) -> usize {
+/// When every paragraph has horizontal geometry and the table overlaps only a
+/// subset, the subset identifies the table's column. Full-width tables and pages
+/// with incomplete geometry fall back to the complete paragraph sequence. Neither
+/// path changes the established paragraph subsequence.
+fn table_insertion_slot(paragraphs: &[(usize, &PdfParagraph)], table: &crate::types::Table, table_y: f32) -> usize {
+    let fallback = || {
+        vertical_insertion_slot(
+            paragraphs
+                .iter()
+                .enumerate()
+                .map(|(slot, &(_, paragraph))| (slot, paragraph)),
+            table_y,
+            paragraphs.len(),
+        )
+    };
+    let Some(table_bbox) = table.bounding_box else {
+        return fallback();
+    };
+
+    let mut overlapping = Vec::new();
+    let mut has_non_overlapping_paragraph = false;
+    for (slot, &(_, paragraph)) in paragraphs.iter().enumerate() {
+        let Some((left, right)) = paragraph_horizontal_bounds(paragraph) else {
+            return fallback();
+        };
+        if horizontal_ranges_overlap(table_bbox.x0 as f32, table_bbox.x1 as f32, left, right) {
+            overlapping.push((slot, paragraph));
+        } else {
+            has_non_overlapping_paragraph = true;
+        }
+    }
+
+    if overlapping.is_empty() || !has_non_overlapping_paragraph {
+        return fallback();
+    }
+
+    let end_slot = overlapping.last().map_or(paragraphs.len(), |(slot, _)| slot + 1);
+    vertical_insertion_slot(
+        overlapping.iter().map(|(slot, paragraph)| (*slot, *paragraph)),
+        table_y,
+        end_slot,
+    )
+}
+
+fn vertical_insertion_slot<'a>(
+    mut paragraphs: impl Iterator<Item = (usize, &'a PdfParagraph)>,
+    table_y: f32,
+    end_slot: usize,
+) -> usize {
     paragraphs
-        .iter()
-        .position(|(_, paragraph)| {
-            paragraph_vertical_anchor(paragraph).is_some_and(|paragraph_y| paragraph_y < table_y)
+        .find_map(|(slot, paragraph)| {
+            paragraph_vertical_anchor(paragraph)
+                .is_some_and(|paragraph_y| paragraph_y < table_y)
+                .then_some(slot)
         })
-        .unwrap_or(paragraphs.len())
+        .unwrap_or(end_slot)
+}
+
+fn paragraph_horizontal_bounds(paragraph: &PdfParagraph) -> Option<(f32, f32)> {
+    if let Some((left, _, right, _)) = paragraph.block_bbox
+        && left.is_finite()
+        && right.is_finite()
+        && right > left
+    {
+        return Some((left, right));
+    }
+
+    let mut left = f32::INFINITY;
+    let mut right = f32::NEG_INFINITY;
+    for segment in paragraph.lines.iter().flat_map(|line| &line.segments) {
+        left = left.min(segment.x);
+        right = right.max(segment.x + segment.width);
+    }
+    (left.is_finite() && right.is_finite() && right > left).then_some((left, right))
+}
+
+fn horizontal_ranges_overlap(first_left: f32, first_right: f32, second_left: f32, second_right: f32) -> bool {
+    first_left.is_finite()
+        && first_right.is_finite()
+        && first_right > first_left
+        && first_left < second_right
+        && first_right > second_left
 }
 
 fn paragraph_vertical_anchor(paragraph: &PdfParagraph) -> Option<f32> {
@@ -243,11 +314,7 @@ fn paragraph_vertical_anchor(paragraph: &PdfParagraph) -> Option<f32> {
         .or_else(|| paragraph.lines.first().map(|line| line.baseline_y))
 }
 
-fn push_table_element(
-    builder: &mut InternalDocumentBuilder,
-    table: &crate::types::Table,
-    page: Option<u32>,
-) -> u32 {
+fn push_table_element(builder: &mut InternalDocumentBuilder, table: &crate::types::Table, page: Option<u32>) -> u32 {
     let bbox = table.bounding_box.map(|bb| BoundingBox {
         x0: bb.x0,
         y0: bb.y0,
@@ -316,22 +383,28 @@ fn push_paragraph_element(builder: &mut InternalDocumentBuilder, para: &PdfParag
     }
 
     if para.is_list_item {
-        let text = get_text(para);
         let ordered = list_item_is_ordered(para);
-        let normalized = normalize_list_text(&text);
-        let annotations = if !para.text.is_empty() && para.is_bold {
-            vec![TextAnnotation {
-                start: 0,
-                end: normalized.len() as u32,
-                kind: AnnotationKind::Bold,
-            }]
-        } else if para.text.is_empty() {
-            let (_, anns) = extract_text_and_annotations(para);
-            anns
+        let text = get_text(para);
+        let annotations = if para.text.is_empty() {
+            let (annotated_text, annotations) = extract_text_and_annotations(para);
+            if annotated_text == text {
+                annotations
+            } else {
+                Vec::new()
+            }
         } else {
-            vec![]
+            para.is_bold
+                .then_some(TextAnnotation {
+                    start: 0,
+                    end: text.len() as u32,
+                    kind: AnnotationKind::Bold,
+                })
+                .into_iter()
+                .collect()
         };
-        return builder.push_list_item(&normalized, ordered, annotations, page, bbox);
+        let (normalized, removed_prefix_len) = normalize_list_text(&text);
+        let annotations = shift_annotations_after_prefix_removal(annotations, removed_prefix_len, normalized.len());
+        return builder.push_list_item(normalized, ordered, annotations, page, bbox);
     }
 
     if para.is_page_furniture {
@@ -596,25 +669,30 @@ fn list_item_is_ordered(para: &PdfParagraph) -> bool {
     digit_end > 0 && matches!(t.as_bytes().get(digit_end), Some(b'.') | Some(b')'))
 }
 
-/// Normalize list item text: strip bullet/number prefixes and return clean text.
-fn normalize_list_text(text: &str) -> String {
+/// Strip a bullet/number prefix and return the clean suffix plus its byte offset.
+fn normalize_list_text(text: &str) -> (&str, usize) {
     let trimmed = text.trim_start();
     const BULLET_CHARS: &[char] = &['\u{2022}', '\u{00B7}'];
+    let mut normalized = trimmed;
     for &ch in BULLET_CHARS {
         if trimmed.starts_with(ch) {
-            return trimmed[ch.len_utf8()..].trim_start().to_string();
+            normalized = trimmed[ch.len_utf8()..].trim_start();
+            return (normalized, text.len() - normalized.len());
         }
     }
     if let Some(stripped) = trimmed.strip_prefix("* ") {
-        return stripped.trim_start().to_string();
+        normalized = stripped.trim_start();
+        return (normalized, text.len() - normalized.len());
     }
     if let Some(stripped) = trimmed.strip_prefix("- ") {
-        return stripped.to_string();
+        normalized = stripped;
+        return (normalized, text.len() - normalized.len());
     }
     const DASH_BULLETS: &[char] = &['–', '—', '−', '‐', '‑', '‒', '―', '➤', '►', '▶', '○', '●', '◦'];
     for &ch in DASH_BULLETS {
         if trimmed.starts_with(ch) {
-            return trimmed[ch.len_utf8()..].trim_start().to_string();
+            normalized = trimmed[ch.len_utf8()..].trim_start();
+            return (normalized, text.len() - normalized.len());
         }
     }
     let bytes = trimmed.as_bytes();
@@ -623,10 +701,28 @@ fn normalize_list_text(text: &str) -> String {
         let suffix = bytes[digit_end];
         if suffix == b'.' || suffix == b')' {
             let after = &trimmed[digit_end + 1..];
-            return after.trim_start().to_string();
+            normalized = after.trim_start();
+            return (normalized, text.len() - normalized.len());
         }
     }
-    trimmed.to_string()
+    (normalized, text.len() - normalized.len())
+}
+
+fn shift_annotations_after_prefix_removal(
+    annotations: Vec<TextAnnotation>,
+    removed_prefix_len: usize,
+    normalized_len: usize,
+) -> Vec<TextAnnotation> {
+    let removed_prefix_len = removed_prefix_len.min(u32::MAX as usize) as u32;
+    let normalized_len = normalized_len.min(u32::MAX as usize) as u32;
+    annotations
+        .into_iter()
+        .filter_map(|mut annotation| {
+            annotation.start = annotation.start.saturating_sub(removed_prefix_len).min(normalized_len);
+            annotation.end = annotation.end.saturating_sub(removed_prefix_len).min(normalized_len);
+            (annotation.start < annotation.end).then_some(annotation)
+        })
+        .collect()
 }
 
 /// Guess whether page furniture is a header or footer based on vertical position.
@@ -707,15 +803,25 @@ mod tests {
         }
     }
 
+    fn make_paragraph_in_box(text: &str, baseline_y: f32, left: f32, right: f32) -> PdfParagraph {
+        let mut paragraph = make_paragraph_at(text, None, baseline_y);
+        paragraph.block_bbox = Some((left, baseline_y - 12.0, right, baseline_y));
+        paragraph
+    }
+
     fn make_table_at(markdown: &str, top_y: f64) -> crate::types::Table {
+        make_table_in_box(markdown, 40.0, 560.0, top_y)
+    }
+
+    fn make_table_in_box(markdown: &str, left: f64, right: f64, top_y: f64) -> crate::types::Table {
         crate::types::Table {
             cells: vec![],
             markdown: markdown.to_string(),
             page_number: 1,
             bounding_box: Some(crate::types::BoundingBox {
-                x0: 40.0,
+                x0: left,
                 y0: top_y - 80.0,
-                x1: 560.0,
+                x1: right,
                 y1: top_y,
             }),
         }
@@ -805,10 +911,10 @@ mod tests {
     #[test]
     fn test_single_column_table_is_interleaved_by_vertical_position() {
         let pages = vec![vec![
-            make_paragraph_at("Before", None, 900.0),
-            make_paragraph_at("After", None, 700.0),
+            make_paragraph_in_box("Before", 900.0, 40.0, 560.0),
+            make_paragraph_in_box("After", 700.0, 40.0, 560.0),
         ]];
-        let tables = vec![make_table_at("| Between |", 800.0)];
+        let tables = vec![make_table_in_box("| Between |", 80.0, 520.0, 800.0)];
 
         let document = assemble_internal_document(pages, &tables, None, &[]);
 
@@ -816,14 +922,50 @@ mod tests {
     }
 
     #[test]
-    fn test_two_column_paragraph_order_survives_table_interleaving() {
+    fn test_full_width_table_preserves_two_column_paragraph_order() {
         let pages = vec![vec![
-            make_paragraph_at("Left top", None, 900.0),
-            make_paragraph_at("Left bottom", None, 700.0),
-            make_paragraph_at("Right top", None, 880.0),
-            make_paragraph_at("Right bottom", None, 680.0),
+            make_paragraph_in_box("Left top", 900.0, 40.0, 260.0),
+            make_paragraph_in_box("Left bottom", 700.0, 40.0, 260.0),
+            make_paragraph_in_box("Right top", 880.0, 340.0, 560.0),
+            make_paragraph_in_box("Right bottom", 680.0, 340.0, 560.0),
         ]];
-        let tables = vec![make_table_at("| Interleaved |", 800.0)];
+        let tables = vec![make_table_at("| Full width |", 800.0)];
+
+        let document = assemble_internal_document(pages, &tables, None, &[]);
+
+        assert_eq!(
+            page_element_labels(&document),
+            ["Left top", "<table>", "Left bottom", "Right top", "Right bottom"]
+        );
+    }
+
+    #[test]
+    fn test_right_column_table_uses_right_column_vertical_boundary() {
+        let pages = vec![vec![
+            make_paragraph_in_box("Left top", 900.0, 40.0, 260.0),
+            make_paragraph_in_box("Left bottom", 700.0, 40.0, 260.0),
+            make_paragraph_in_box("Right top", 880.0, 340.0, 560.0),
+            make_paragraph_in_box("Right bottom", 680.0, 340.0, 560.0),
+        ]];
+        let tables = vec![make_table_in_box("| Right column |", 350.0, 550.0, 800.0)];
+
+        let document = assemble_internal_document(pages, &tables, None, &[]);
+
+        assert_eq!(
+            page_element_labels(&document),
+            ["Left top", "Left bottom", "Right top", "<table>", "Right bottom"]
+        );
+    }
+
+    #[test]
+    fn test_incomplete_paragraph_geometry_uses_conservative_page_boundary() {
+        let pages = vec![vec![
+            make_paragraph_in_box("Left top", 900.0, 40.0, 260.0),
+            make_paragraph_at("Left bottom", None, 700.0),
+            make_paragraph_in_box("Right top", 880.0, 340.0, 560.0),
+            make_paragraph_in_box("Right bottom", 680.0, 340.0, 560.0),
+        ]];
+        let tables = vec![make_table_in_box("| Right column |", 350.0, 550.0, 800.0)];
 
         let document = assemble_internal_document(pages, &tables, None, &[]);
 
@@ -1007,6 +1149,58 @@ mod tests {
             is_italic: true,
             ..plain_segment(text)
         }
+    }
+
+    #[test]
+    fn test_bold_list_annotation_is_shifted_after_unicode_bullet() {
+        let lines = vec![PdfLine {
+            segments: vec![bold_segment("• Bold item")],
+            baseline_y: 700.0,
+            dominant_font_size: 12.0,
+            is_bold: true,
+            is_monospace: false,
+        }];
+        let word_count = PdfParagraph::compute_word_count("", &lines);
+        let paragraph = PdfParagraph {
+            text: String::new(),
+            lines,
+            dominant_font_size: 12.0,
+            heading_level: None,
+            is_bold: true,
+            is_list_item: true,
+            is_code_block: false,
+            is_formula: false,
+            is_page_furniture: false,
+            layout_class: None,
+            caption_for: None,
+            block_bbox: None,
+            word_count,
+        };
+
+        let document = assemble_internal_document(vec![vec![paragraph]], &[], None, &[]);
+        let item = document
+            .elements
+            .iter()
+            .find(|element| matches!(element.kind, ElementKind::ListItem { .. }))
+            .expect("list item should be emitted");
+
+        assert_eq!(item.text, "Bold item");
+        assert!(!item.annotations.is_empty(), "bold annotation should be preserved");
+        for annotation in &item.annotations {
+            let start = annotation.start as usize;
+            let end = annotation.end as usize;
+            assert!(
+                start < end && end <= item.text.len(),
+                "invalid annotation: {annotation:?}"
+            );
+            assert!(item.text.is_char_boundary(start) && item.text.is_char_boundary(end));
+        }
+        let bold = item
+            .annotations
+            .iter()
+            .find(|annotation| matches!(annotation.kind, AnnotationKind::Bold))
+            .expect("bold annotation should be present");
+        assert_eq!(&item.text[bold.start as usize..bold.end as usize], "Bold item");
     }
 
     #[test]
@@ -1221,5 +1415,4 @@ mod tests {
         assert!(texts.contains(&"HR 28/24"), "HR 28/24 missing; headings: {texts:?}");
         assert!(texts.contains(&"HR 36/30"), "HR 36/30 missing; headings: {texts:?}");
     }
-
 }
