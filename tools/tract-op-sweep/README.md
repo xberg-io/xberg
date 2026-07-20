@@ -129,3 +129,25 @@ the remaining WASM work is xberg-side: a pre-existing `xberg-wasm` wasm32 build 
 tract (`mio`/`tokio` pulled via other deps), streamed weights through `load_from_memory` (no
 hf-hub/tokio-DNS on wasm32), `ocr-wasm` wiring + `alef.toml` un-strip, and the 50 MB `.wasm` size
 check.
+
+## Phase 5 measurement: tract-vs-ORT layout latency
+
+Apple Silicon (aarch64), `--release`, single-thread CPU, best-of-8 warm `run()` samples on the three
+seam models. Reproduce with:
+
+```sh
+cargo test --release -p xberg --no-default-features --features "layout-detection,auto-rotate,tract" \
+  --lib inference::tract_backend::tests::tract_vs_ort_latency_report -- --ignored --nocapture
+```
+
+| model | tract load (ms) | ORT load (ms) | tract run (ms) | ORT run (ms) | tract/ORT run |
+|---|---|---|---|---|---|
+| RT-DETR layout detector | 465 | 221 | 2637 | 137 | 19.3x |
+| PP-LCNet table classifier | 22 | 9 | 31.9 | 2.2 | 14.4x |
+| PP-LCNet doc-orientation | 22 | 8 | 31.9 | 2.8 | 11.5x |
+
+tract's pure-Rust CPU kernels run **~11-19x slower than ONNX Runtime** — expected, and the accepted
+trade-off: these models run roughly once per page, and on the targets tract exists for (WASM /
+Android x86_64, where ORT cannot link at all) the alternative is *no* layout/orientation, not ORT.
+On native builds ORT stays the default, so this regression never reaches native users. RT-DETR's
+~2.6 s/inference is the ceiling to watch for WASM UX; the CNN classifiers at ~32 ms are comfortable.
