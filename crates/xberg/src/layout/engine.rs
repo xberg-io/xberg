@@ -254,6 +254,16 @@ impl LayoutEngine {
         Ok(result)
     }
 
+    /// Decode `image_bytes` and run layout detection.
+    ///
+    /// A convenience wrapper over [`Self::detect`] for callers that hold encoded
+    /// image bytes (PNG/JPEG/…) rather than a decoded [`RgbImage`] — notably the
+    /// WASM bridge, which receives image bytes from JS.
+    pub fn detect_image_bytes(&mut self, image_bytes: &[u8]) -> Result<DetectionResult, LayoutError> {
+        let img = image::load_from_memory(image_bytes)?.to_rgb8();
+        self.detect(&img)
+    }
+
     /// Run layout detection on an image and return granular timing data.
     ///
     /// Identical to [`detect`] but also returns a [`DetectTimings`] breakdown.

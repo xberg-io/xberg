@@ -39,6 +39,9 @@ impl RtDetrModel {
     /// The session (optimization level, thread budget, execution-provider
     /// selection, and CPU-only fallback) is built by the [`crate::inference`]
     /// seam's default backend, so the model is engine-neutral.
+    ///
+    /// Native-only: WASM has no filesystem model path and uses [`Self::from_bytes`].
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn from_file(
         path: &str,
         accel: Option<&crate::core::config::acceleration::AccelerationConfig>,

@@ -166,6 +166,44 @@ impl XbergEngine {
     }
 }
 
+/// Detect page layout (RT-DETR) from encoded image bytes using a caller-supplied
+/// ONNX model.
+///
+/// Both arguments are raw bytes: `imageBytes` is an encoded image (PNG/JPEG/…) and
+/// `modelBytes` is the RT-DETR `.onnx` weights the JS host fetched. Weights are
+/// never embedded in the `.wasm` (RT-DETR alone runs to hundreds of MB, far over
+/// the CDN per-file cap), so the host fetches them and hands the bytes over here.
+/// Inference runs entirely in Rust through the pure-Rust tract engine; the returned
+/// value is a `DetectionResult` object (bounding boxes, classes, confidences).
+///
+/// Only RT-DETR detection is available on WASM; the ORT-only layout models
+/// (`PP-DocLayout-V3`, YOLO) and table-structure recognition (TATR, SLANeXT) are not.
+#[wasm_bindgen(js_name = "detectLayout")]
+#[allow(clippy::missing_errors_doc)]
+pub fn detect_layout(image_bytes: Vec<u8>, model_bytes: Vec<u8>) -> Result<JsValue, JsValue> {
+    let mut engine = xberg::layout::LayoutEngine::from_rtdetr_bytes(&model_bytes, None)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let result = engine
+        .detect_image_bytes(&image_bytes)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Detect document page orientation (PP-LCNet) from encoded image bytes using a
+/// caller-supplied ONNX model.
+///
+/// See [`detect_layout`] for the bytes contract. Returns an `OrientationResult`
+/// object with the detected rotation (0/90/180/270 degrees) and its confidence.
+#[wasm_bindgen(js_name = "detectOrientation")]
+#[allow(clippy::missing_errors_doc)]
+pub fn detect_orientation(image_bytes: Vec<u8>, model_bytes: Vec<u8>) -> Result<JsValue, JsValue> {
+    let detector = xberg::doc_orientation::DocOrientationDetector::from_bytes(model_bytes, None);
+    let result = detector
+        .detect_image_bytes(&image_bytes)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
 /// In-crate tests for the engine's bridge surface, run under Node via
 /// `scripts/ci/wasm/run-crate-tests.sh` (which wraps `wasm-pack test --node`
 /// with the import shims from `test-shims/`).

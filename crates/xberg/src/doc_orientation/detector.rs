@@ -20,10 +20,16 @@ use crate::inference::{InferenceSession, InferenceTensor, default_backend};
 
 use super::types::OrientationResult;
 
-/// HuggingFace repository containing the model.
+/// HuggingFace repository containing the model. Native-only: WASM resolves weights
+/// from caller-supplied bytes (see [`DocOrientationDetector::from_bytes`]), so the
+/// download coordinates are not compiled there.
+#[cfg(not(target_arch = "wasm32"))]
 const HF_REPO_ID: &str = "xberg-io/paddleocr-onnx-models";
+#[cfg(not(target_arch = "wasm32"))]
 const HF_REPO_REVISION: &str = "bfaf0b492cfc1dee0c73245fc5860bfdcf2c3443";
+#[cfg(not(target_arch = "wasm32"))]
 const REMOTE_FILENAME: &str = "v2/classifiers/PP-LCNet_x1_0_doc_ori.onnx";
+#[cfg(not(target_arch = "wasm32"))]
 const SHA256: &str = "6b742aebce6f0f7f71f747931ac7becfc7c96c51641e14943b291eeb334e7947";
 
 const INPUT_SIZE: u32 = 224;
@@ -46,9 +52,8 @@ pub const MIN_CONFIDENCE: f32 = 0.35;
 enum ModelSource {
     #[cfg(not(target_arch = "wasm32"))]
     CacheDir(PathBuf),
-    // Constructed only by `from_bytes`, the WASM entry point wired through the
-    // xberg-wasm bridge (follow-up); unused on native, which uses `CacheDir`.
-    #[allow(dead_code)]
+    // Constructed by `from_bytes`, the byte-buffer entry point used on WASM
+    // (where `CacheDir` is unavailable); native builds use `CacheDir`.
     Bytes(Vec<u8>),
 }
 
@@ -83,12 +88,11 @@ impl DocOrientationDetector {
 
     /// Creates a new detector from already-resolved ONNX model bytes.
     ///
-    /// The WASM entry point: the JS host fetches the weights and hands over the
+    /// The byte-buffer entry point (used on WASM, where there is no filesystem
+    /// cache or HTTP download): the caller fetches the weights and hands over the
     /// bytes, which flow straight through to the [`crate::inference`] seam's
     /// `load_from_memory` — no filesystem path or HTTP download involved.
-    // Wired through the xberg-wasm bridge (follow-up); unused on native.
-    #[allow(dead_code)]
-    pub(crate) fn from_bytes(
+    pub fn from_bytes(
         model_bytes: Vec<u8>,
         accel: Option<crate::core::config::acceleration::AccelerationConfig>,
     ) -> Self {
@@ -97,6 +101,21 @@ impl DocOrientationDetector {
             source: ModelSource::Bytes(model_bytes),
             acceleration: accel,
         }
+    }
+
+    /// Decode `image_bytes` and detect the document page orientation.
+    ///
+    /// A convenience wrapper over [`Self::detect`] for callers that hold encoded
+    /// image bytes (PNG/JPEG/…) rather than a decoded [`RgbImage`] — notably the
+    /// WASM bridge, which receives image bytes from JS.
+    pub fn detect_image_bytes(&self, image_bytes: &[u8]) -> Result<OrientationResult> {
+        let image = image::load_from_memory(image_bytes)
+            .map_err(|e| XbergError::Ocr {
+                message: format!("Failed to decode image for orientation detection: {e}"),
+                source: None,
+            })?
+            .to_rgb8();
+        self.detect(&image)
     }
 
     /// Detect document page orientation.
