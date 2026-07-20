@@ -131,7 +131,7 @@ pub(crate) async fn vlm_ocr(
 ) -> crate::Result<(String, Option<crate::types::LlmUsage>)> {
     // liter-llm applies its own 60s default when no timeout is set, which is too
     // short for full-page VLM transcription. Supply a VLM-appropriate default when
-    // the caller left `timeout_secs` unset; an explicit value always takes priority.
+    // the caller left `timeout_secs` unset; an explicit value always takes priority. ~keep
     let effective_config = effective_vlm_config(config);
     let client = super::client::create_client(&effective_config)?;
 

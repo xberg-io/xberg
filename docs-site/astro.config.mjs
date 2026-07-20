@@ -25,7 +25,7 @@ const API_LANGUAGES = [
 export default defineConfig({
   site: "https://docs.xberg.io",
   // Section roots are Starlight sidebar groups, not pages, so they would 404.
-  // Redirect each index-less section root to its first page.
+  // Redirect each index-less section root to its first page. ~keep
   redirects: {
     "/getting-started": "/getting-started/installation/",
     "/guides": "/guides/extraction/",

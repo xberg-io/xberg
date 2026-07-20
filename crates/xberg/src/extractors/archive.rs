@@ -132,7 +132,7 @@ async fn build_archive_doc(
 
             // Sniffing sees markdown/CSV/YAML as plain UTF-8 and returns `text/plain`,
             // so fall back to the extension (as the top-level path does) to reach their
-            // real extractors; a concrete sniff (PDF, DOCX, ...) still wins.
+            // real extractors; a concrete sniff (PDF, DOCX, ...) still wins. ~keep
             let file_mime = match sniffed_mime {
                 Some(m) if m != crate::core::mime::PLAIN_TEXT_MIME_TYPE => m,
                 sniffed => crate::core::mime::detect_mime_type(path, false)

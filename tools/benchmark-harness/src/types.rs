@@ -516,7 +516,7 @@ mod tests {
     #[test]
     fn stage_timings_parses_from_cli_json_shape() {
         // Mirrors the exact JSON shape emitted by `xberg-cli`'s `output::StageTimings` when
-        // XBERG_EMIT_STAGE_TIMING is set and layout/OCR is active.
+        // XBERG_EMIT_STAGE_TIMING is set and layout/OCR is active. ~keep
         let raw = r#"{
             "process_init_ms": 4.2,
             "first_parse_ms": 1171.0,

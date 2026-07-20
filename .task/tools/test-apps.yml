@@ -107,7 +107,7 @@ tasks:
       - dart pub get
       # Pub.dev cannot ship the >100MB per-platform native set; the published package exposes a
       # download_libs executable that fetches the native from the GitHub release. Without it,
-      # RustLib.init() finds no native and setUpAll fails.
+      # RustLib.init() finds no native and setUpAll fails. ~keep
       - dart run xberg:download_libs
       - dart test test/smoke_test.dart
 

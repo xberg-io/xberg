@@ -153,7 +153,7 @@ pub(crate) async fn extract_file(
         // Without a tokio runtime (e.g. the WASM build) there is no timer to
         // enforce a timeout, but the default ExtractionConfig sets
         // extraction_timeout_secs, so erroring here would reject every default
-        // call. Ignore the unenforceable limit and run the extraction instead.
+        // call. Ignore the unenforceable limit and run the extraction instead. ~keep
         if config.extraction_timeout_secs.is_some() {
             tracing::debug!(
                 "extraction_timeout_secs is ignored without the 'tokio-runtime' feature; running without a timeout"

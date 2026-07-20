@@ -57,7 +57,7 @@ fn build_heading_map(
     // The text is carried so `assign_heading_levels_smart` can pick the body
     // cluster by character mass (char-weighted body size). Leaving it empty makes
     // every cluster tie at length 0, so `max_by_key` falls back to the smallest
-    // font as "body" and over-promotes every larger run to a heading.
+    // font as "body" and over-promotes every larger run to a heading. ~keep
     for &i in heuristic_pages {
         for seg in &all_page_segments[i] {
             if seg.text.trim().is_empty() {
@@ -100,7 +100,7 @@ fn build_heading_map(
         // baseline. Return a body-only map (every cluster centroid mapped to
         // `None`) and skip both k-means heading promotion and the fallback
         // title promotion, so a lone larger line on a cover/title/one-line
-        // document is not over-promoted to a heading.
+        // document is not over-promoted to a heading. ~keep
         tracing::debug!(
             paragraph_count,
             min_blocks = MIN_BLOCKS_FOR_FONT_HEADING,
@@ -922,7 +922,7 @@ fn finalize_paragraph(
     // line — including body-sized emphasis, or a stray oversized glyph from
     // a font-metric artifact — gets promoted regardless of scale, which is
     // exactly the pattern that over-promoted "Big"/"Text" in a 3-paragraph
-    // document with no real headings.
+    // document with no real headings. ~keep
     let clears_bold_font_gate = body_font_size > 0.0
         && first.font_size >= body_font_size * super::constants::MIN_HEADING_FONT_RATIO
         && first.font_size >= body_font_size + super::constants::MIN_HEADING_FONT_GAP;
@@ -2689,7 +2689,7 @@ mod tests {
     #[test]
     fn suppress_all_heading_roles_does_not_fire_at_or_above_floor() {
         // Alternate heading/body role so each segment is a distinct logical
-        // block under `count_logical_blocks` rather than collapsing into one.
+        // block under `count_logical_blocks` rather than collapsing into one. ~keep
         let mut pages = vec![
             (0..MIN_BLOCKS_FOR_FONT_HEADING)
                 .map(|i| {

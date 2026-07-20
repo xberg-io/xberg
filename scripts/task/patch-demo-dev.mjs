@@ -15,7 +15,7 @@ const ASSET_PORT = process.env.ASSET_PORT ?? "9000";
 // demo.html: `WASM_CDN_ORIGIN = "https://cdn.jsdelivr.net/npm/@xberg-io/xberg-wasm"`.
 // The env/wasi ESM shim is baked into pkg/web at build time by
 // crates/xberg-wasm/scripts/fix-wasi-imports.mjs (run by the demo:dev:build
-// task), so the wasm glue needs no patching here.
+// task), so the wasm glue needs no patching here. ~keep
 const cdnRe = /https:\/\/cdn\.jsdelivr\.net\/npm\/@xberg-io\/xberg-wasm/g;
 
 const patched = readFileSync(src, "utf8")

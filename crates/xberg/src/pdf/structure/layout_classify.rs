@@ -350,7 +350,7 @@ pub(super) fn apply_hint_to_paragraph(para: &mut PdfParagraph, hint: &LayoutHint
 
     // Independent heading evidence: font clearly above body, bold weight, or a recognized
     // section-numbering pattern. Used to veto destructive demotion (A2) and for override
-    // logging. Computed once so the guard and the log block agree.
+    // logging. Computed once so the guard and the log block agree. ~keep
     let font_above_body = body_font_size.is_some_and(|body| body > 0.0 && para.dominant_font_size > body + 0.5);
     let has_strong_heading_evidence =
         font_above_body || para.is_bold || super::classify::is_section_pattern(para_text.trim());
@@ -930,7 +930,7 @@ mod tests {
     #[test]
     fn test_bold_heading_not_demoted_by_high_confidence_text_hint() {
         // A2: a bold paragraph carries independent heading evidence, so even a
-        // high-confidence Text hint must not erase its heading level.
+        // high-confidence Text hint must not erase its heading level. ~keep
         let mut paragraphs = vec![make_para(50.0, 600.0, 300.0, 16.0)];
         paragraphs[0].heading_level = Some(2);
         paragraphs[0].is_bold = true;
@@ -945,7 +945,7 @@ mod tests {
 
     #[test]
     fn test_large_font_heading_not_demoted_by_text_hint() {
-        // A2: font clearly above body size is independent heading evidence.
+        // A2: font clearly above body size is independent heading evidence. ~keep
         let mut paragraphs = vec![make_para(50.0, 600.0, 300.0, 16.0)];
         paragraphs[0].heading_level = Some(2);
         paragraphs[0].dominant_font_size = 16.0;
@@ -961,7 +961,7 @@ mod tests {
     #[test]
     fn test_body_text_borderline_confidence_preserves_heading() {
         // A2: demotion now requires confidence >= HEADING_DEMOTE_CONFIDENCE (0.85),
-        // above the old 0.7 bar. A 0.8 hint no longer erases a heading.
+        // above the old 0.7 bar. A 0.8 hint no longer erases a heading. ~keep
         let mut paragraphs = vec![make_para(50.0, 600.0, 300.0, 16.0)];
         paragraphs[0].heading_level = Some(2);
         let hints = vec![make_hint(LayoutHintClass::Text, 0.8, 40.0, 598.0, 400.0, 620.0)];
@@ -976,7 +976,7 @@ mod tests {
     #[test]
     fn test_body_font_false_heading_still_demotes() {
         // A2 must not over-suppress: a body-font, non-bold, non-numbered false heading
-        // with a high-confidence Text hint still demotes (no independent evidence).
+        // with a high-confidence Text hint still demotes (no independent evidence). ~keep
         let mut paragraphs = vec![make_para(50.0, 600.0, 300.0, 16.0)];
         paragraphs[0].heading_level = Some(2);
         let hints = vec![make_hint(LayoutHintClass::Text, 0.9, 40.0, 598.0, 400.0, 620.0)];

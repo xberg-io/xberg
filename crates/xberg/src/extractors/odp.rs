@@ -118,7 +118,7 @@ fn build_internal_document(
     let mut builder = InternalDocumentBuilder::new("odp");
 
     // Presentations carry no tracked changes; feed the shared ODT walker empty
-    // collaboration state so its change-tracking arms are inert.
+    // collaboration state so its change-tracking arms are inert. ~keep
     let empty_changes = AHashMap::new();
     let mut revisions = Vec::new();
 
@@ -135,7 +135,7 @@ fn build_internal_document(
                 builder.push_slide(slide_number, slide_name, None);
 
                 // Direct-child frames only — never descendants — so the sibling
-                // `presentation:notes` frames are not pulled into slide text.
+                // `presentation:notes` frames are not pulled into slide text. ~keep
                 for frame in page.children().filter(|n| n.tag_name().name() == "frame") {
                     for object in frame.children() {
                         match object.tag_name().name() {
@@ -243,7 +243,7 @@ impl InternalDocumentExtractor for OdpExtractor {
             crate::error::XbergError::parsing(format!("Failed to open ZIP archive for metadata: {}", e))
         })?;
 
-        // ODP `meta.xml` uses the same ODF metadata schema as ODT.
+        // ODP `meta.xml` uses the same ODF metadata schema as ODT. ~keep
         if let Ok(props) = office_metadata::extract_odt_properties(&mut meta_archive) {
             if let Some(title) = props.title {
                 metadata_map.insert(Cow::Borrowed("title"), serde_json::Value::String(title));
@@ -429,7 +429,7 @@ mod tests {
         {
             let mut zip = zip::ZipWriter::new(Cursor::new(&mut buf));
             let stored = zip::write::FileOptions::<()>::default().compression_method(zip::CompressionMethod::Stored);
-            // The `mimetype` entry must be first and stored uncompressed per the ODF spec.
+            // The `mimetype` entry must be first and stored uncompressed per the ODF spec. ~keep
             zip.start_file("mimetype", stored).unwrap();
             zip.write_all(ODP_MIME.as_bytes()).unwrap();
 
@@ -474,7 +474,7 @@ mod tests {
     #[tokio::test]
     async fn test_odp_extracts_table_cells() {
         // A slide whose frame holds a table (draw:frame > table:table), the
-        // real-world nesting — a sibling of text boxes, not inside one.
+        // real-world nesting — a sibling of text boxes, not inside one. ~keep
         let bytes = odp_bytes(
             r#"<draw:page draw:name="Data"><draw:frame><table:table>
                  <table:table-row>

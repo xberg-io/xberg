@@ -9,7 +9,7 @@
 # crates/xberg-wasm/scripts/fix-wasi-imports.mjs patches out of the published
 # package. The test runner generates its glue on the fly with no patch hook,
 # so NODE_PATH supplies stub modules for those imports instead; see
-# crates/xberg-wasm/test-shims/.
+# crates/xberg-wasm/test-shims/. ~keep
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
@@ -18,7 +18,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 # -Wl,-rpath,$ORIGIN link args that rust-lld rejects). The env var overrides
 # .cargo/config.toml's [target.wasm32-unknown-unknown] rustflags entirely,
 # which also drops flags the wasm build needs (getrandom_backend, bulk-memory,
-# --allow-multiple-definition). Unset it so the config-file flags govern.
+# --allow-multiple-definition). Unset it so the config-file flags govern. ~keep
 unset RUSTFLAGS CARGO_ENCODED_RUSTFLAGS
 
 if ! command -v wasm-pack >/dev/null 2>&1; then

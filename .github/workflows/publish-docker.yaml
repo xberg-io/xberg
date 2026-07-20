@@ -360,7 +360,7 @@ jobs:
 
   # Publish the Helm chart only after the image manifests are pushed, so the
   # chart's image reference (ghcr.io/xberg-io/xberg:<version>) already resolves.
-  # Delegates to the reusable publish-helm.yaml (sign + Artifact Hub metadata).
+  # Delegates to the reusable publish-helm.yaml (sign + Artifact Hub metadata). ~keep
   publish-helm:
     name: Publish Helm chart
     needs:

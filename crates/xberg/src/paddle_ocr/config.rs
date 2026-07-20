@@ -155,7 +155,7 @@ impl PaddleOcrConfig {
 
         // `hf_hub` (and model downloading in general) is unavailable on wasm32; PaddleOcrConfig
         // itself stays available there under `paddle-ocr-types` (config/type definitions only,
-        // no ORT), so fall back to the shared cache-dir resolver instead of the excluded crate.
+        // no ORT), so fall back to the shared cache-dir resolver instead of the excluded crate. ~keep
         #[cfg(not(target_arch = "wasm32"))]
         {
             hf_hub::resolve_cache_dir()

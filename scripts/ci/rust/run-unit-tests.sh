@@ -71,7 +71,7 @@ if ! {
   extra_excludes+=(--exclude xberg-candle-ocr)
   # xberg-gliner: its cuda/metal features cannot build on CI runners, so
   # --all-features is unusable; tested separately below with an explicit
-  # feature list.
+  # feature list. ~keep
   extra_excludes+=(--exclude xberg-gliner)
   extra_excludes+=(--exclude xberg-cli)
   extra_excludes+=(--exclude benchmark-harness)
@@ -93,7 +93,7 @@ if ! {
   # drops candle: gemm-f16 (candle's matmul backend) carries aarch64 inline
   # asm that requires the fullfp16 target feature, which that runner's
   # baseline lacks ("instruction requires: fullfp16"). Apple Silicon
-  # includes fullfp16 and runs the candle tests.
+  # includes fullfp16 and runs the candle tests. ~keep
   gliner_features=(--features candle,ort-dynamic)
   if [ "$(uname -s)" = "Linux" ] && [ "$(uname -m)" = "aarch64" ]; then
     echo "Dropping the candle feature on Linux aarch64 (gemm-f16 needs fullfp16)"

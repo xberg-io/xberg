@@ -39,7 +39,7 @@ mod tests {
 
     #[test]
     fn builds_dense_span_pairs_with_zero_padding() {
-        // 2 words, max_width 2 -> spans: (0,0) (0,1) (1,1) (0,0)-padding
+        // 2 words, max_width 2 -> spans: (0,0) (0,1) (1,1) (0,0)-padding ~keep
         let span_idx = build_span_idx(2, 2).expect("span idx");
         assert_eq!(span_idx.shape(), &[1, 4, 2]);
         assert_eq!((span_idx[[0, 0, 0]], span_idx[[0, 0, 1]]), (0, 0)); // start=0 width=1

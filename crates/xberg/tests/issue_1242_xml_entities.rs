@@ -148,7 +148,7 @@ mod docx {
             .await
             .expect("extraction should succeed");
 
-        // Footnote definitions render into plain content as a trailing section.
+        // Footnote definitions render into plain content as a trailing section. ~keep
         assert!(
             result.content.contains("salt & pepper"),
             "footnote text must keep the & entity; got: {:?}",
@@ -156,7 +156,7 @@ mod docx {
         );
 
         // Header content lives on the Header layer, which plain output excludes
-        // by design; assert on the document structure instead.
+        // by design; assert on the document structure instead. ~keep
         let structure = result.document.expect("document structure requested");
         let header_texts: Vec<String> = structure
             .nodes

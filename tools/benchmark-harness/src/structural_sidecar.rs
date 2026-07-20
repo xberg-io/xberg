@@ -227,7 +227,7 @@ impl StructuralSidecar {
 
         let mut nodes: Vec<StructuralNode> = Vec::new();
 
-        // Heading hierarchy stack: (level, node_index, text).
+        // Heading hierarchy stack: (level, node_index, text). ~keep
         let mut heading_stack: Vec<(u8, usize, String)> = Vec::new();
 
         // List state.
@@ -302,7 +302,7 @@ impl StructuralSidecar {
                                 text: trimmed.to_string(),
                             });
                         } else {
-                            // Code blocks are content — fold into the paragraph pool.
+                            // Code blocks are content — fold into the paragraph pool. ~keep
                             nodes.push(StructuralNode::Paragraph {
                                 text: trimmed.to_string(),
                             });
@@ -393,19 +393,19 @@ impl StructuralSidecar {
                 Event::End(TagEnd::Item) => {
                     let text = item_text.pop().unwrap_or_default().trim().to_string();
                     let ordered = item_ordered.pop().unwrap_or(false);
-                    let depth = item_text.len(); // remaining open items = ancestor count
+                    let depth = item_text.len(); // remaining open items = ancestor count ~keep
                     if !text.is_empty() {
                         nodes.push(StructuralNode::ListItem {
                             depth,
                             ordered,
-                            parent_item: None, // filled in post-pass (not scored)
+                            parent_item: None, // filled in post-pass (not scored) ~keep
                             text,
                         });
                     }
                 }
                 Event::Start(Tag::Image { .. }) => {
                     flush_paragraph(&mut current_text, &mut nodes);
-                    current_text.push_str("\u{0}IMG\u{0}"); // sentinel so image alt is captured separately
+                    current_text.push_str("\u{0}IMG\u{0}"); // sentinel so image alt is captured separately ~keep
                 }
                 Event::End(TagEnd::Image) => {
                     if let Some(rest) = current_text.strip_prefix("\u{0}IMG\u{0}") {
@@ -563,7 +563,7 @@ fn is_caption_text(text: &str) -> bool {
 }
 
 fn is_footnote_text(text: &str) -> bool {
-    // GFM footnote definition `[^id]: …` rendered as literal text without the option enabled.
+    // GFM footnote definition `[^id]: …` rendered as literal text without the option enabled. ~keep
     let t = text.trim_start();
     t.starts_with("[^") && t.contains("]:")
 }
@@ -858,7 +858,7 @@ fn score_tables(pred: &StructuralSidecar, gt: &StructuralSidecar) -> Dim {
         return Dim { value: 1.0 };
     }
     if pt.is_empty() || gt_tables.is_empty() {
-        // A fabricated table (pred-only) or a dropped table (gt-only) scores 0.
+        // A fabricated table (pred-only) or a dropped table (gt-only) scores 0. ~keep
         return Dim { value: 0.0 };
     }
     let ptext: Vec<String> = pt
@@ -912,7 +912,7 @@ fn present_edges(p: &StructuralSidecar, g: &StructuralSidecar) -> bool {
 fn score_edges(pred: &StructuralSidecar, gt: &StructuralSidecar) -> Dim {
     let pe = edges(pred);
     let ge = edges(gt);
-    // Match edges by caption similarity; credit weights in target agreement too.
+    // Match edges by caption similarity; credit weights in target agreement too. ~keep
     let ptext: Vec<String> = pe.iter().map(|e| e.caption.clone()).collect();
     let gtext: Vec<String> = ge.iter().map(|e| e.caption.clone()).collect();
     let credit: f64 = greedy_match(&ptext, &gtext)
@@ -1258,7 +1258,7 @@ Figure 1: The overall system architecture and its components.
     #[test]
     fn test_scramble_reading_order_is_raw_times_floor() {
         // Only reading order changes, so the content-structure base is untouched;
-        // a fully reversed order collapses the LIS toward the ORDER_SCORE_FLOOR.
+        // a fully reversed order collapses the LIS toward the ORDER_SCORE_FLOOR. ~keep
         let gt = baseline();
         let scrambled = scramble_reading_order(baseline());
         let ordered = sf1(&gt, &gt);
@@ -1267,7 +1267,7 @@ Figure 1: The overall system architecture and its components.
             scrambled_score < ordered,
             "scramble must lower the score: {scrambled_score} !< {ordered}"
         );
-        // Lands at the floor (raw · 0.8), modulo the 1/n residue of the LIS.
+        // Lands at the floor (raw · 0.8), modulo the 1/n residue of the LIS. ~keep
         let floor = ordered * ORDER_SCORE_FLOOR;
         assert!(
             scrambled_score >= floor - 1e-9 && scrambled_score <= floor + 0.06,

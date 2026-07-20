@@ -54,7 +54,7 @@ pub(crate) async fn extract_batch(
     // futures; extractor futures are `!Send` on wasm32 (async_trait(?Send), see
     // plugins/extractor/trait.rs) and wasm32 has no OS threads to run them on regardless. Use
     // the sequential path there even though `tokio-runtime` is active (it's pulled in by
-    // `chunking-tokenizers`/`static-embeddings`, not concurrency support).
+    // `chunking-tokenizers`/`static-embeddings`, not concurrency support). ~keep
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     {
         extract_batch_concurrent(inner, inputs, config).await

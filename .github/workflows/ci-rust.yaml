@@ -192,5 +192,5 @@ jobs:
           DYLD_FALLBACK_LIBRARY_PATH: ${{ env.DYLD_FALLBACK_LIBRARY_PATH || '' }}
           RUST_LOG: warn
           # Cold downloads of large ONNX models on a slow HF day exceed the 300s production default;
-          # raise the watchdog for CI only (still bounded well under the 45-min job timeout).
+          # raise the watchdog for CI only (still bounded well under the 45-min job timeout). ~keep
           XBERG_MODEL_DOWNLOAD_TIMEOUT_SECS: "900"

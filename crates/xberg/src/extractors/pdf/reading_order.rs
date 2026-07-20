@@ -312,7 +312,7 @@ fn order_blocks_by_graph(blocks: &[OrderBlock]) -> Vec<usize> {
         }
     }
     // Safety net: append any block the traversal missed (degenerate geometry /
-    // cycles) so no content is dropped.
+    // cycles) so no content is dropped. ~keep
     for (k, &seen) in visited.iter().enumerate() {
         if !seen {
             order.push(k);
@@ -1276,7 +1276,7 @@ mod tests {
 
         // A full-width title above two columns. The predecessor graph must emit
         // the title first, then the whole left column, then the whole right
-        // column — the title interrupts any left→right chaining across columns.
+        // column — the title interrupts any left→right chaining across columns. ~keep
         let segments = vec![
             seg("Title", 50.0, 470.0),
             seg("L1", 50.0, 440.0),

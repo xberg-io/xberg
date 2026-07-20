@@ -181,13 +181,13 @@ fn test_stroke_width_vertical_rules_table_detected_via_pipeline() {
 
     let mut doc = DocumentBuilder::new();
     let mut page = doc.a4_page();
-    // Horizontal rules: ordinary 1pt strokes at every row boundary.
+    // Horizontal rules: ordinary 1pt strokes at every row boundary. ~keep
     for i in 0..=6u32 {
         let y = 510.0 + 40.0 * i as f32;
         page = page.stroke_line(50.0, y, 400.0, y, thin.clone());
     }
     // Vertical rules: 1pt-long horizontal segments at the table's vertical
-    // midpoint, stroked with the full table height (240pt).
+    // midpoint, stroked with the full table height (240pt). ~keep
     for x in [50.0_f32, 150.0, 250.0, 400.0] {
         page = page.stroke_line(x - 0.5, 630.0, x + 0.5, 630.0, LineStyle::new(240.0, 0.0, 0.0, 0.0));
     }

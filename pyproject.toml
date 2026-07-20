@@ -27,7 +27,7 @@ bench-unstructured = ["unstructured[docx,pdf,pptx,xlsx,md,odt,rtf,epub,org,rst]=
 environments = ["python_version >= '3.11'"]
 # markitdown[all] (bench-markitdown) requires azure-ai-contentunderstanding>=1.2.0b1,
 # which currently only publishes pre-releases; allow prereleases when no stable
-# version satisfies a specifier (scoped, not a blanket opt-in).
+# version satisfies a specifier (scoped, not a blanket opt-in). ~keep
 prerelease = "if-necessary"
 workspace.members = ["packages/python"]
 conflicts = [

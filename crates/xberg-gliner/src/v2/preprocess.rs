@@ -42,7 +42,7 @@ pub fn encode_v2(
 ) -> Result<V2Encoded> {
     let schema_tokens = build_schema_tokens(labels);
     let words = splitter.split(text);
-    let num_schema_words = schema_tokens.len() + 1; // +1 for [SEP_TEXT]
+    let num_schema_words = schema_tokens.len() + 1; // +1 for [SEP_TEXT] ~keep
 
     let mut full_sequence: Vec<&str> = schema_tokens.iter().map(String::as_str).collect();
     full_sequence.push(SEP_TEXT_TOKEN);
@@ -53,7 +53,7 @@ pub fn encode_v2(
     // One forward pass over word_ids, recording each word's first token
     // position. A per-word `.position()` scan would be O(words x tokens),
     // which is quadratic on exactly the large documents this pipeline
-    // targets; this index keeps the whole lookup phase O(tokens).
+    // targets; this index keeps the whole lookup phase O(tokens). ~keep
     let total_words = num_schema_words + words.len();
     let mut first_token_of_word: Vec<Option<usize>> = vec![None; total_words];
     for (token_pos, word_id) in encoding.word_ids.iter().enumerate() {
@@ -129,7 +129,7 @@ mod tests {
     fn computes_text_and_schema_positions() {
         let labels = vec!["person".to_string(), "city".to_string()];
         // schema_tokens = ["(", "[P]", "entities", "(", "[E]", "person", "[E]", "city", ")", ")"]
-        // len = 10, num_schema_words = 11 (+1 for [SEP_TEXT])
+        // len = 10, num_schema_words = 11 (+1 for [SEP_TEXT]) ~keep
         let splitter = V2Splitter::new().expect("valid regex");
         let encoded = encode_v2("Ada lives", &labels, &FakeTokenizer, &splitter).expect("encoded");
 
@@ -138,7 +138,7 @@ mod tests {
         assert_eq!(encoded.text_positions, vec![11, 12]);
         // [P] is schema word 1, [E] tokens are schema words 4 and 6
         assert_eq!(encoded.schema_positions, vec![1, 4, 6]);
-        assert_eq!(encoded.input_ids.len(), 13); // 10 schema + 1 sep + 2 words
+        assert_eq!(encoded.input_ids.len(), 13); // 10 schema + 1 sep + 2 words ~keep
     }
 
     #[test]

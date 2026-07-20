@@ -73,7 +73,7 @@ fn extract_pdf_specific_metadata(doc: &mut OxideDocument, scanned_min_confidence
 
     let producer = get_info_string(&mut doc.doc, "Producer");
 
-    // Advisory: a document we cannot grade reports no scan evidence.
+    // Advisory: a document we cannot grade reports no scan evidence. ~keep
     let detection = crate::pdf::scan_detect::detect(&doc.doc);
     let scanned_confidence = detection.as_ref().map(|d| d.confidence);
     let scanned_pages = detection.as_ref().map(|d| {

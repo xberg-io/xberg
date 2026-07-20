@@ -139,7 +139,7 @@ pub fn measure_framework_sizes() -> Result<FrameworkSizes> {
 
         // The native xberg CLI is measured with a shipped-vs-model breakdown so
         // benchmark rows can report install size fairly (heuristic rows exclude
-        // the on-demand model cache; ML rows include it).
+        // the on-demand model cache; ML rows include it). ~keep
         if *name == "xberg-rust" {
             match measure_xberg_framework_size(description) {
                 Some(fs) => {
@@ -240,7 +240,7 @@ fn measure_framework(name: &str, method: &str) -> Result<Option<u64>> {
         "pip_package" => measure_pip_package(extract_package_name(name)),
         "npm_package" => measure_npm_package(extract_package_name(name)),
         // Note: `xberg-rust` is measured separately via `measure_xberg_framework_size`
-        // (shipped-vs-model breakdown) before this generic dispatch is reached.
+        // (shipped-vs-model breakdown) before this generic dispatch is reached. ~keep
         "binary_size" => measure_binary(name),
         "jar_size" => measure_jar(name),
         "gem_package" => measure_gem_package(extract_package_name(name)),

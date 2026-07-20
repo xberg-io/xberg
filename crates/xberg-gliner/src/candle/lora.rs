@@ -116,14 +116,14 @@ impl LoraAdapter {
         })?;
 
         // Walk keys, group by module path, slot lora_A/lora_B.
-        // Keys: base_model.model.<path>.lora_{A,B}.weight
+        // Keys: base_model.model.<path>.lora_{A,B}.weight ~keep
         let mut by_module: HashMap<String, (Option<Tensor>, Option<Tensor>)> = HashMap::new();
         for (key, view) in st.tensors() {
             let (module_path, slot) = parse_lora_key(&key)?;
             let shape: Vec<usize> = view.shape().to_vec();
             // safetensors gives us a byte slice; load into a Candle tensor.
             // PEFT adapters are typically fp32; if the dtype is fp16/bf16 we'd
-            // need to convert. Phase 4 supports fp32 only; error otherwise.
+            // need to convert. Phase 4 supports fp32 only; error otherwise. ~keep
             if view.dtype() != safetensors::Dtype::F32 {
                 return Err(crate::candle::GlinerCandleError::Backend(format!(
                     "lora: {key}: dtype {:?} not supported (Phase 4 ships fp32 only)",
@@ -214,7 +214,7 @@ pub(crate) fn merge_into_base(
 
     let scale = adapter.config.lora_alpha / (adapter.config.r as f64);
     let mut out: HashMap<String, Tensor> = HashMap::with_capacity(st.tensors().len());
-    // Owned because we exit the loop scope before the validation pass below.
+    // Owned because we exit the loop scope before the validation pass below. ~keep
     let mut applied: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     for (key, view) in st.tensors() {
@@ -245,7 +245,7 @@ pub(crate) fn merge_into_base(
 
     // Sanity: every adapter module should have matched a base key. If
     // the adapter targets a module that doesn't exist in the base, that's
-    // a config error (e.g. trained on a different model).
+    // a config error (e.g. trained on a different model). ~keep
     for adapter_path in adapter.modules.keys() {
         if !applied.contains(adapter_path) {
             return Err(crate::candle::GlinerCandleError::Backend(format!(
@@ -322,7 +322,7 @@ fn apply_lora_delta(
 }
 
 // Note: DType is referenced via fully-qualified candle_core::DType in the
-// public API to avoid an unused import when the trait isn't otherwise used.
+// public API to avoid an unused import when the trait isn't otherwise used. ~keep
 #[allow(dead_code)]
 fn _dtype_marker() -> DType {
     DType::F32
@@ -362,7 +362,7 @@ mod tests {
         let lora_b = Tensor::ones((4, 2), DType::F32, &device).unwrap(); // [out=4, r=2]
         let merged = apply_lora_delta(&base, &lora_a, &lora_b, 0.5, false).unwrap();
         assert_eq!(merged.shape().dims(), &[4, 3]);
-        // Each entry of (lora_b @ lora_a) is r=2 ones, so delta = 2 * 0.5 = 1.0 everywhere.
+        // Each entry of (lora_b @ lora_a) is r=2 ones, so delta = 2 * 0.5 = 1.0 everywhere. ~keep
         let v = merged.flatten_all().unwrap().to_vec1::<f32>().unwrap();
         for x in v {
             assert!((x - 1.0).abs() < 1e-6);

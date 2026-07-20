@@ -435,7 +435,7 @@ impl SubprocessAdapter {
     #[cfg(unix)]
     fn kill_process_group(pid: Option<u32>) {
         if let Some(pid) = pid {
-            // SAFETY: the child was placed in a process group whose id equals its
+            // SAFETY: the child was placed in a process group whose id equals its ~keep
             // pid. A negative pid targets only that group, never the harness.
             unsafe {
                 libc::kill(-(pid as libc::pid_t), libc::SIGKILL);
@@ -829,7 +829,7 @@ impl SubprocessAdapter {
         cmd.stderr(Stdio::piped());
         Self::configure_child_process(&mut cmd);
         // Staging is harness setup, not framework work. Start the measured
-        // interval only after tempdir creation and input symlinks are complete.
+        // interval only after tempdir creation and input symlinks are complete. ~keep
         let total_file_size = file_paths
             .iter()
             .filter_map(|path| fs::metadata(path).ok())
@@ -1273,7 +1273,7 @@ impl FrameworkAdapter for SubprocessAdapter {
             Err(e) => {
                 // Xberg's batch CLI uses fail_if_errors: a failed item makes
                 // the process fail, so there is no honest partial envelope to
-                // synthesize into per-file benchmark rows.
+                // synthesize into per-file benchmark rows. ~keep
                 return Err(e);
             }
         };
@@ -1314,7 +1314,7 @@ impl FrameworkAdapter for SubprocessAdapter {
 
         // Use the slower of process-wall time and an adapter-reported batch
         // makespan. This consumes Xberg's `total_ms` without allowing a
-        // self-reported inner timer to inflate cross-framework throughput.
+        // self-reported inner timer to inflate cross-framework throughput. ~keep
         let batch_makespan = parsed_batch
             .reported_total_duration
             .map_or(duration, |reported| duration.max(reported));
@@ -1432,7 +1432,7 @@ impl FrameworkAdapter for SubprocessAdapter {
                         avg_cpu_percent: resource_stats.avg_cpu_percent,
                         // The per-item schema has no batch-level metrics slot.
                         // Store aggregate throughput once so downstream filters
-                        // recover it without multiplying it by batch cardinality.
+                        // recover it without multiplying it by batch cardinality. ~keep
                         throughput_bytes_per_sec: if throughput_anchor == Some(idx) {
                             batch_throughput
                         } else {

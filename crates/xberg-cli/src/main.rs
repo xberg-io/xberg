@@ -546,7 +546,7 @@ impl From<ContentOutputFormatArg> for ContentOutputFormat {
 fn main() -> Result<()> {
     // Captured as early as feasible for the optional per-stage cold-start timing breakdown (see
     // `commands::extract::stage_timing_requested`). Gated on the env var so the timing path is
-    // fully zero-cost (no `Instant::now()` call, no state) when stage timing isn't requested.
+    // fully zero-cost (no `Instant::now()` call, no state) when stage timing isn't requested. ~keep
     let process_start = commands::extract::stage_timing_requested().then(Instant::now);
 
     let cli = Cli::parse();

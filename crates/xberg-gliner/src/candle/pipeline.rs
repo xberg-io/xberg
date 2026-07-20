@@ -41,7 +41,7 @@ pub(crate) fn run_pipeline(
         .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("[pipeline:2 encoder.forward] {e}")))?; // [1, S, H]
 
     // 3. Token gather. `text_positions` are already per-word token indices
-    //    from `encode_v2`; filter to the truncated sequence.
+    //    from `encode_v2`; filter to the truncated sequence. ~keep
     let filtered_positions: Vec<u32> = encoded
         .text_positions
         .iter()
@@ -59,7 +59,7 @@ pub(crate) fn run_pipeline(
 
     // 4. Span rep.
     let span_idx_arr = build_span_idx(num_words)?;
-    // index_select requires U32 indices on the CPU backend.
+    // index_select requires U32 indices on the CPU backend. ~keep
     let span_idx_data: Vec<u32> = span_idx_arr.iter().map(|&v| v as u32).collect();
     let span_idx = Tensor::from_slice(&span_idx_data[..], (1, num_words * MAX_WIDTH, 2), device)?;
     let span_rep_out = heads
@@ -68,7 +68,7 @@ pub(crate) fn run_pipeline(
         .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("[pipeline:4 span_rep] {e}")))?; // [1, num_words, MAX_WIDTH, H]
 
     // 5. Schema gather: `[P]` index first, then per-label `[E]` indices;
-    //    exactly `encoded.schema_positions`' order.
+    //    exactly `encoded.schema_positions`' order. ~keep
     if encoded.schema_positions.is_empty() {
         return Err(crate::candle::GlinerCandleError::Backend(
             "schema_positions empty; encode_v2 must emit at least the [P] marker".to_string(),
@@ -114,7 +114,7 @@ pub(crate) fn run_pipeline(
 
     // 10. Read back to host as Array4<f32>. Scores may be F16 (encoder/heads
     // run at F16 on wasm32 to fit weights in linear memory) -- to_vec1::<f32>
-    // requires the tensor's actual dtype to already be F32, so cast first.
+    // requires the tensor's actual dtype to already be F32, so cast first. ~keep
     let scores_vec: Vec<f32> = scores_padded
         .to_dtype(candle_core::DType::F32)?
         .flatten_all()?

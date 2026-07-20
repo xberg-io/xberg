@@ -2,7 +2,7 @@
 # Build the libheif decode stack (libde265, libaom, libheif) from source at
 # MACOSX_DEPLOYMENT_TARGET, into a prefix that macOS artifacts bundle instead
 # of Homebrew bottles, which target the runner's own macOS (#1243).
-# Decode-only, mirroring the manylinux build-libheif step in xberg-io/actions.
+# Decode-only, mirroring the manylinux build-libheif step in xberg-io/actions. ~keep
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,14 +12,14 @@ source "$REPO_ROOT/scripts/lib/macho.sh"
 
 LIBDE265_VERSION=1.0.16
 LIBAOM_VERSION=3.12.1
-LIBHEIF_VERSION=1.23.0 # keep in step with build-libheif in xberg-io/actions
+LIBHEIF_VERSION=1.23.0 # keep in step with build-libheif in xberg-io/actions ~keep
 
 PREFIX="${XBERG_HEIF_PREFIX:-/tmp/xberg-heif}"
 TARGET="${MACOSX_DEPLOYMENT_TARGET:-11.0}"
 WORK="$(mktemp -d)"
 JOBS="$(sysctl -n hw.ncpu)"
 
-# Absolute install names so delocate can resolve every load command.
+# Absolute install names so delocate can resolve every load command. ~keep
 CMAKE_COMMON=(
   -DCMAKE_BUILD_TYPE=Release
   -DCMAKE_INSTALL_PREFIX="$PREFIX"
@@ -92,7 +92,7 @@ main() {
   # The macos-15-intel runner ships a nasm libaom's test_nasm rejects
   # ("multipass optimization not supported"), which aborts configure. This is a
   # decode-only build on an EOL arch, so drop to the generic (pure-C) CPU target
-  # on x86_64 to bypass nasm entirely. arm64 keeps its NEON SIMD.
+  # on x86_64 to bypass nasm entirely. arm64 keeps its NEON SIMD. ~keep
   aom_cpu_arg=""
   [ "$(uname -m)" = "x86_64" ] && aom_cpu_arg="-DAOM_TARGET_CPU=generic"
   build_dep libaom "$LIBAOM_VERSION" \
@@ -100,7 +100,7 @@ main() {
     -DCONFIG_AV1_ENCODER=0 -DENABLE_EXAMPLES=0 -DENABLE_TESTS=0 -DENABLE_DOCS=0 -DENABLE_TOOLS=0 \
     ${aom_cpu_arg}
 
-  # Pin dependency discovery to this prefix so no Homebrew library leaks in.
+  # Pin dependency discovery to this prefix so no Homebrew library leaks in. ~keep
   PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig" build_dep libheif "$LIBHEIF_VERSION" \
     "https://github.com/strukturag/libheif/releases/download/v$LIBHEIF_VERSION/libheif-$LIBHEIF_VERSION.tar.gz" \
     -DCMAKE_PREFIX_PATH="$PREFIX" -DCMAKE_IGNORE_PREFIX_PATH="/opt/homebrew;/usr/local" \

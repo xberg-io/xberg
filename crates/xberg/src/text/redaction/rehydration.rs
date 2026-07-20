@@ -14,7 +14,7 @@ use zeroize::Zeroizing;
 use crate::{Result, XbergError};
 
 /// Token → original PII text.
-#[cfg_attr(alef, alef(skip))] // binding surface arrives with the engine/wasm integration
+#[cfg_attr(alef, alef(skip))] // binding surface arrives with the engine/wasm integration ~keep
 pub type RehydrationMap = HashMap<String, String>;
 
 const MAGIC: &[u8; 5] = b"XPII\x01";
@@ -34,7 +34,7 @@ const SCRYPT_P: u32 = 1;
 fn derive_key(passphrase: &str, salt: &[u8]) -> Result<Zeroizing<[u8; KEY_LEN]>> {
     // scrypt 0.12's `scrypt()` derives exactly `output.len()` bytes and ignores any
     // length baked into `Params`, so the output length is fixed by the KEY_LEN-sized
-    // `key` buffer below; `Params::new` no longer takes a length argument.
+    // `key` buffer below; `Params::new` no longer takes a length argument. ~keep
     let params = ScryptParams::new(SCRYPT_LOG_N, SCRYPT_R, SCRYPT_P)
         .map_err(|e| XbergError::validation(format!("invalid scrypt parameters: {e}")))?;
     let mut key = Zeroizing::new([0u8; KEY_LEN]);
@@ -102,7 +102,7 @@ pub fn decrypt_map(blob: &[u8], passphrase: &str) -> Result<RehydrationMap> {
         Tag::<Aes256Gcm>::try_from(tag).map_err(|e| XbergError::validation(format!("invalid AES-256-GCM tag: {e}")))?;
 
     // Zeroizing: after decryption the buffer holds the plaintext PII map;
-    // wipe it when it drops rather than leaving it in freed memory.
+    // wipe it when it drops rather than leaving it in freed memory. ~keep
     let mut buffer = Zeroizing::new(ciphertext.to_vec());
     cipher
         .decrypt_inout_detached(&nonce, b"", buffer.as_mut_slice().into(), &tag)
@@ -129,7 +129,7 @@ fn category_from_token(token: &str) -> Option<&str> {
 }
 
 /// One vault match, in either direction of lookup.
-#[cfg_attr(alef, alef(skip))] // binding surface arrives with the engine/wasm integration
+#[cfg_attr(alef, alef(skip))] // binding surface arrives with the engine/wasm integration ~keep
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SubjectMatch {
     pub token: String,
@@ -148,7 +148,7 @@ fn subject_matches(token: &str, original: &str, query: &str, query_lower: &str) 
     // An empty query is a substring of every original value, so without this
     // guard `find_subject`/`forget_subject` would treat "" as "match
     // everything"; for `forget_subject`, that means a blank erase query
-    // wipes the whole rehydration map instead of matching nothing.
+    // wipes the whole rehydration map instead of matching nothing. ~keep
     if query.is_empty() {
         return false;
     }
@@ -265,7 +265,7 @@ mod tests {
     fn find_subject_matches_by_original_value_substring() {
         let map = sample_map();
         // "johnson" only overlaps "Alice Johnson" (case-insensitive substring),
-        // not "alice@example.com", unlike "alice", which would match both.
+        // not "alice@example.com", unlike "alice", which would match both. ~keep
         let matches = find_subject(&map, "johnson");
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].token, "[PERSON_1]");
@@ -282,7 +282,7 @@ mod tests {
         assert_eq!(matches[0].original, "alice@example.com");
         assert_eq!(matches[0].category.as_deref(), Some("EMAIL"));
 
-        // A substring of the token (not an exact match) must not match.
+        // A substring of the token (not an exact match) must not match. ~keep
         assert!(find_subject(&map, "EMAIL_1").is_empty());
     }
 
@@ -295,7 +295,7 @@ mod tests {
     #[test]
     fn find_subject_matches_unicode_case_insensitively() {
         // Parity with the TypeScript implementation's toLowerCase(): a
-        // lowercase query must match an uppercase non-ASCII original.
+        // lowercase query must match an uppercase non-ASCII original. ~keep
         let mut map = RehydrationMap::new();
         map.insert("[PERSON_1]".to_string(), "\u{d6}ZLEM Y\u{131}lmaz".to_string());
         let matches = find_subject(&map, "\u{f6}zlem");

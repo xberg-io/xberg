@@ -4,7 +4,7 @@
 # the darwin package dlopens without anything preinstalled. ONNX Runtime is
 # untouched: @rpath-relocatable and resolved by co-location.
 #
-# Usage: vendor-macos-node-dylibs.sh <dir-containing-the-.node>
+# Usage: vendor-macos-node-dylibs.sh <dir-containing-the-.node> ~keep
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -15,7 +15,7 @@ DIR="${1:?usage: vendor-macos-node-dylibs.sh <dir>}"
 DIR="$(cd "$DIR" && pwd)"
 
 # Absolute path outside the system prefixes = vendorable. @rpath/@loader_path/
-# @executable_path are already relocatable and left alone.
+# @executable_path are already relocatable and left alone. ~keep
 is_vendorable() {
   case "$1" in
     /usr/lib/*|/System/*) return 1 ;;
@@ -27,12 +27,12 @@ is_vendorable() {
 
 # Load-command deps of a Mach-O, excluding the header line and the binary's own
 # install id (LC_ID_DYLIB) — for a .node the id is often a CI build path that
-# must never be vendored.
+# must never be vendored. ~keep
 deps_of() {
   local self_id
   self_id="$(otool -D "$1" | tail -n +2 | head -1 | sed 's/^[[:space:]]*//')"
   # Drop the header (line 1) and exclude the binary's own id. `|| true` keeps a
-  # binary with no vendorable deps from failing the pipeline under `set -e`.
+  # binary with no vendorable deps from failing the pipeline under `set -e`. ~keep
   otool -L "$1" | tail -n +2 | sed 's/^[[:space:]]*//; s/ (compatibility.*//' \
     | grep -vxF -e "$self_id" || true
 }
@@ -61,7 +61,7 @@ while [ $i -lt ${#queue[@]} ]; do
     if [ ! -f "$DIR/$b" ]; then
       src="$(resolve "$dep")"
       # Homebrew bottles target the runner's own macOS and would raise the
-      # package's floor; the heif closure comes from build-macos-heif-deps.sh.
+      # package's floor; the heif closure comes from build-macos-heif-deps.sh. ~keep
       case "$src" in
         /opt/homebrew/*|/usr/local/*)
           echo "::error::refusing to vendor Homebrew dylib $dep"; exit 1 ;;
@@ -90,7 +90,7 @@ done
 [ $leaks -eq 0 ] || { echo "::error::$leaks unvendored absolute deps remain"; exit 1; }
 
 # The .node must sit at the declared floor. Vendored dylibs we did not compile
-# (ONNX Runtime) are reported so the package's effective floor is visible.
+# (ONNX Runtime) are reported so the package's effective floor is visible. ~keep
 if [ -n "${MACOSX_DEPLOYMENT_TARGET:-}" ]; then
   for f in "$DIR"/*.node "$DIR"/*.dylib; do
     [ -e "$f" ] || continue

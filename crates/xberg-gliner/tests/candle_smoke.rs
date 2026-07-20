@@ -74,7 +74,7 @@ fn pii_model_loads_from_bytes_and_extracts_entities() {
     // natively; Candle's tensor ops are portable, and this is the real
     // check the design spec's config-schema inspection could not perform by
     // reading alone: does model.safetensors's tensor naming actually carry
-    // the `encoder.` prefix encoder.rs strips via vb.pp("encoder")?
+    // the `encoder.` prefix encoder.rs strips via vb.pp("encoder")? ~keep
     let model = xberg_gliner::candle::Gliner2Candle::from_bytes(&safetensors, &tokenizer_json, &encoder_config_json)
         .expect("from_bytes must load the real pinned PII model without a tensor mismatch");
 

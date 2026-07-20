@@ -2157,7 +2157,7 @@ mod tests {
         assert!(!is_math_character('a'));
         assert!(!is_math_character('1'));
         // '+', '=' and '^' are math characters: `a2 + 8 = 12` must classify as a
-        // formula (test_formula_detection_ascii_operators).
+        // formula (test_formula_detection_ascii_operators). ~keep
         assert!(is_math_character('+'));
         assert!(is_math_character('='));
         assert!(is_math_character('^'));
@@ -2595,10 +2595,10 @@ mod numbered_section_heading_tests {
 
     #[test]
     fn sentence_period_detected_but_ellipsis_is_not() {
-        // A genuine sentence-terminating period disqualifies a heading.
+        // A genuine sentence-terminating period disqualifies a heading. ~keep
         assert!(ends_with_sentence_period("This is a sentence."));
         assert!(ends_with_sentence_period("Ends here.  "));
-        // A trailing ellipsis is a truncation marker, not a terminator.
+        // A trailing ellipsis is a truncation marker, not a terminator. ~keep
         assert!(!ends_with_sentence_period("Impaired Glucose Tolerance ..."));
         assert!(!ends_with_sentence_period("Thermal Comfort As Related To …"));
         assert!(!ends_with_sentence_period("No period at all"));

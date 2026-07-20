@@ -377,7 +377,7 @@ fn compute_detr_resize(orig_w: u32, orig_h: u32) -> (u32, u32) {
     // Match Hugging Face's `get_resize_output_image_size` exactly: compute and
     // truncate the tentative long edge first, then use that truncated value
     // when applying the long-edge cap. Collapsing this into one ratio causes
-    // one-pixel drift for some dimensions.
+    // one-pixel drift for some dimensions. ~keep
     let requested_short = u64::from(DETR_SHORT_EDGE);
     let requested_long = requested_short * long / short;
     let (new_short, new_long) = if requested_long > u64::from(DETR_LONG_EDGE) {

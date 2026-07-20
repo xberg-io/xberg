@@ -53,7 +53,7 @@ exceptions = [
     { allow = ["MPL-2.0"], crate = "option-ext" },
     # colored is pulled transitively by hf-xet (hf-hub 1.0's Xet transfer backend).
     # MPL-2.0 is file-level weak copyleft; merely linking it imposes no obligation
-    # on xberg. Unavoidable while on hf-hub 1.0.
+    # on xberg. Unavoidable while on hf-hub 1.0. ~keep
     { allow = ["MPL-2.0"], crate = "colored" },
     { allow = ["LGPL-2.1-or-later"], crate = "r-efi" },
     { allow = ["MPL-2.0"], crate = "symphonia" },

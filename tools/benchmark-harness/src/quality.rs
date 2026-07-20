@@ -39,7 +39,7 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-// The structural-sidecar file lives at `src/structural_sidecar.rs`; it is attached
+// The structural-sidecar file lives at `src/structural_sidecar.rs`; it is attached ~keep
 // here (rather than in `lib.rs`) via `#[path]` so the crate root stays untouched.
 #[path = "structural_sidecar.rs"]
 pub mod structural_sidecar;
@@ -163,7 +163,7 @@ pub fn tokenize(text: &str) -> Vec<String> {
             }
             // Normalize thousands separators ("1,000" -> "1000") before the numeric parse so a
             // grouped number and its bare form become the same token. Only strip commas that form
-            // well-shaped 3-digit groups, to avoid corrupting European decimals like "3,14".
+            // well-shaped 3-digit groups, to avoid corrupting European decimals like "3,14". ~keep
             let candidate = if is_thousands_grouped(&token) {
                 token.replace(',', "")
             } else {
@@ -424,11 +424,11 @@ mod tests {
 
     #[test]
     fn test_thousands_separators_normalize_to_bare_number() {
-        // "1,000" and "1000" must tokenize identically (previously "1,000" failed f64 parse).
+        // "1,000" and "1000" must tokenize identically (previously "1,000" failed f64 parse). ~keep
         assert_eq!(tokenize("1,000"), tokenize("1000"));
         assert_eq!(tokenize("12,345,678"), tokenize("12345678"));
         assert_eq!(tokenize("1,234.56"), tokenize("1234.56"));
-        // A European-decimal comma (2-digit group) must NOT be treated as a thousands separator.
+        // A European-decimal comma (2-digit group) must NOT be treated as a thousands separator. ~keep
         assert_eq!(tokenize("3,14"), vec!["3,14"]);
     }
 

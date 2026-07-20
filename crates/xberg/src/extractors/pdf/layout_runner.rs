@@ -183,7 +183,7 @@ pub(super) fn run_layout_for_pdf_pages(
                     }
                     // pdf_oxide applies inherited page rotation while rendering.
                     // Keep this raster unchanged so its coordinates stay aligned
-                    // with layout detections and reused OCR input.
+                    // with layout detections and reused OCR input. ~keep
                     Ok(img) => Some(img.into_rgb8()),
                 },
             };

@@ -61,7 +61,7 @@ fn get_or_insert_arc(
 ///
 /// `Gliner2Candle` holds candle tensors which are not `Send`, so we wrap it
 /// in a `Mutex` to satisfy the `Send + Sync` requirement of [`NerBackend`].
-#[cfg_attr(alef, alef(skip))] // binding surface arrives with the NER dispatch follow-up
+#[cfg_attr(alef, alef(skip))] // binding surface arrives with the NER dispatch follow-up ~keep
 pub struct CandleBackend {
     model: Mutex<Gliner2Candle>,
 }
@@ -162,7 +162,7 @@ impl NerBackend for CandleBackend {
         // extract_ner is CPU-bound (tensor inference). On native targets, block_in_place
         // signals tokio to move other tasks off this thread for the duration without
         // requiring Send. wasm32 has no multi-threaded tokio runtime (and is single-threaded
-        // regardless), so extract_ner is called directly; it is already synchronous.
+        // regardless), so extract_ner is called directly; it is already synchronous. ~keep
         #[cfg(not(target_arch = "wasm32"))]
         let spans =
             tokio::task::block_in_place(|| model.extract_ner(text, &labels, DEFAULT_THRESHOLD)).map_err(|e| {
@@ -248,7 +248,7 @@ mod tests {
     #[test]
     fn default_labels_matches_broader_backend_set() {
         // Must include the full default category set the other NER backends use,
-        // not just the narrower person/organization/location/email/phone subset.
+        // not just the narrower person/organization/location/email/phone subset. ~keep
         let labels = default_labels();
         for expected in [
             "person",

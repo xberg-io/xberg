@@ -125,7 +125,7 @@ fn page_signals(doc: &PdfDocument, page_index: usize) -> Option<PageScanSignals>
         return None;
     }
 
-    // Detection is advisory: a page that panics must not abort the extraction.
+    // Detection is advisory: a page that panics must not abort the extraction. ~keep
     let classified = super::oxide::guard_oxide_panic(
         || doc.classify_page(page_index).map_err(|error| error.to_string()),
         |message| message,
@@ -323,9 +323,9 @@ mod tests {
             confidence: 0.5,
             page_confidence: vec![0.0, 0.5],
         };
-        // Negative thresholds clamp to 0.0, which still selects every page.
+        // Negative thresholds clamp to 0.0, which still selects every page. ~keep
         assert_eq!(detection.scanned_page_indices(-1.0), vec![0, 1]);
-        // Thresholds above 1.0 clamp to 1.0 and select nothing below it.
+        // Thresholds above 1.0 clamp to 1.0 and select nothing below it. ~keep
         assert_eq!(detection.scanned_page_indices(2.0), Vec::<usize>::new());
     }
 }

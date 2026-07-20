@@ -160,7 +160,7 @@ impl reqwest::dns::Resolve for Ipv4FirstResolver {
     fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
         let host = name.as_str().to_owned();
         Box::pin(async move {
-            // Port 0 is a placeholder; reqwest overrides it with the request's real port.
+            // Port 0 is a placeholder; reqwest overrides it with the request's real port. ~keep
             let mut addrs = tokio::task::spawn_blocking(move || {
                 std::net::ToSocketAddrs::to_socket_addrs(&(host.as_str(), 0_u16))
                     .map(|iter| iter.collect::<Vec<std::net::SocketAddr>>())
@@ -777,7 +777,7 @@ fn hf_download_at_revision(repo_id: &str, remote_filename: &str, revision: Optio
     with_download_deadline(&label, move || {
         // Keep the per-artifact lock in the worker. If the caller's deadline
         // expires, the detached transfer continues to own the lock and a retry
-        // cannot race hf-hub's in-flight cache publication.
+        // cannot race hf-hub's in-flight cache publication. ~keep
         let _guard = file_lock.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(path) = hf_cached_revision_with_client(&api, &repo_id, &filename, revision.as_deref())? {
             tracing::debug!(repo = repo_id, filename, revision, "Using standard Hugging Face cache");
@@ -826,7 +826,7 @@ pub(crate) fn hf_force_download_revision(
             .map_err(|e| format!("Failed to initialize HuggingFace Hub API: {e}"))?;
 
         // Another caller may have repaired the entry while this caller waited.
-        // Revalidate under the same artifact lock before forcing any network I/O.
+        // Revalidate under the same artifact lock before forcing any network I/O. ~keep
         let cached = hf_cached_revision_with_client(&api, &repo_id, &filename, Some(&revision))?;
         if let Some(path) = verified_cached_path(cached.as_deref(), expected_size, &expected_sha256, &model_label) {
             return Ok(path);
@@ -1085,7 +1085,7 @@ fn restore_quarantined_entries(
 ) -> Result<(), String> {
     // hf-hub does not honor Xberg's advisory lock. If it has installed either
     // the expected snapshot or blob since quarantine began, its publication is
-    // authoritative and the old corrupt entries must not be restored over it.
+    // authoritative and the old corrupt entries must not be restored over it. ~keep
     if entries
         .iter()
         .any(|entry| verify_cached_artifact(&entry.original, expected_size, expected_sha256, label).is_ok())
@@ -1693,14 +1693,14 @@ mod hf_cache_tests {
 #[cfg_attr(not(test), allow(dead_code))]
 #[allow(unused_mut)]
 // Every push below is individually `#[cfg]`-gated on its family's feature, so the
-// entries cannot be expressed as a single `vec![]` literal.
+// entries cannot be expressed as a single `vec![]` literal. ~keep
 #[allow(clippy::vec_init_then_push)]
 pub(crate) fn vendored_model_manifests() -> Vec<(&'static str, &'static str)> {
     let mut manifests = Vec::new();
 
     // The `embeddings` module (and therefore its manifest const) is only compiled
     // under `embedding-presets`; the const itself further requires `embeddings`,
-    // non-wasm `static-embeddings`, or `test`.
+    // non-wasm `static-embeddings`, or `test`. ~keep
     #[cfg(all(
         feature = "embedding-presets",
         any(
@@ -1836,7 +1836,7 @@ mod hf_client_builder_tests {
         ));
         let v4b = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(2, 2, 2, 2), 0));
 
-        // Interleaved AAAA-first input: default getaddrinfo order can hand IPv6 out first.
+        // Interleaved AAAA-first input: default getaddrinfo order can hand IPv6 out first. ~keep
         let mut addrs = vec![v6a, v4a, v6b, v4b];
         order_ipv4_first(&mut addrs);
 

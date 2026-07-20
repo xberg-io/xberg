@@ -334,7 +334,7 @@ fn looks_like_formula(content: &str) -> bool {
         return true;
     }
     // Weak signal: a `^{…}` superscript only counts when the block is short and math-dominant,
-    // not an inline superscript embedded in a full sentence of prose.
+    // not an inline superscript embedded in a full sentence of prose. ~keep
     if content.contains("^{") && content.contains('}') {
         return content.split_whitespace().count() <= 6;
     }

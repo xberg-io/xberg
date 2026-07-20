@@ -31,7 +31,7 @@ pub(super) fn merge_continuation_paragraphs(paragraphs: &mut Vec<PdfParagraph>) 
         // prose (or vice versa) is a formatting break — an emphasized heading or a
         // list item's bold lead-in — not a wrapped continuation. Absorbing it would
         // bury the heading as inline bold before it can be classified. This mirrors
-        // the `bold_change` paragraph break in the heuristic line grouper.
+        // the `bold_change` paragraph break in the heuristic line grouper. ~keep
         let bold_compatible = current.is_bold == next.is_bold;
         let continuation_signal = !ends_with_sentence_terminator(&current) || starts_with_lowercase_continuation(&next);
         let same_region = current.layout_region_path == next.layout_region_path;
@@ -268,7 +268,7 @@ mod tests {
     #[test]
     fn test_no_merge_across_bold_boundary() {
         // A bold header following unterminated body prose must not be absorbed as
-        // a continuation — it should survive as its own paragraph for classification.
+        // a continuation — it should survive as its own paragraph for classification. ~keep
         let body = make_body_paragraph(
             "here is also available other sources of this Manual MetcalUser Guide",
             12.0,

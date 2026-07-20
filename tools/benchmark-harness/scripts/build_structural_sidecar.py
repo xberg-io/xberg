@@ -106,7 +106,7 @@ def _split_row(line: str) -> list[str]:
 def parse_markdown(md: str) -> dict:
     lines = md.splitlines()
     doc = Doc()
-    heading_stack: list[tuple[int, int, str]] = []  # (level, node_index, text)
+    heading_stack: list[tuple[int, int, str]] = []  # (level, node_index, text) ~keep
     para: list[str] = []
 
     def flush_para() -> None:
@@ -185,7 +185,7 @@ def _parse_table(lines: list[str], start: int, doc: Doc) -> int:
     for col, text in enumerate(header):
         cells.append({"row": 0, "col": col, "rowspan": 1, "colspan": 1, "is_header": True, "text": text})
     row = 1
-    i = start + 2  # skip header + separator
+    i = start + 2  # skip header + separator ~keep
     n = len(lines)
     while i < n and "|" in lines[i] and lines[i].strip():
         for col, text in enumerate(_split_row(lines[i])):
@@ -210,12 +210,12 @@ def _parse_list_block(lines: list[str], start: int, doc: Doc) -> int:
     """Parse a contiguous list block; nesting depth derived from indentation."""
     i = start
     n = len(lines)
-    indents: list[int] = []  # stack of indent widths -> depth
-    item_indices: list[int] = []  # node index per depth for parent linkage
+    indents: list[int] = []  # stack of indent widths -> depth ~keep
+    item_indices: list[int] = []  # node index per depth for parent linkage ~keep
     while i < n:
         line = lines[i]
         if not line.strip():
-            # allow a single blank line inside a list, else end block
+            # allow a single blank line inside a list, else end block ~keep
             if i + 1 < n and (_ULIST_RE.match(lines[i + 1]) or _OLIST_RE.match(lines[i + 1])):
                 i += 1
                 continue

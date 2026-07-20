@@ -4,7 +4,7 @@ name: Publish Helm Chart
 # this workflow (workflow_call) only after the container image manifests are
 # pushed — the chart references ghcr.io/xberg-io/xberg:<version>, so publishing
 # the chart before the image exists would be a race. This workflow keeps its own
-# dispatch triggers for manual / hotfix chart publishes.
+# dispatch triggers for manual / hotfix chart publishes. ~keep
 on:
   workflow_call:
     inputs:
@@ -32,7 +32,7 @@ on:
     types: [publish-helm]
 
 # Distinct prefix (not github.workflow) so a workflow_call from publish-docker
-# does not share a concurrency group with the caller and deadlock.
+# does not share a concurrency group with the caller and deadlock. ~keep
 concurrency:
   group: publish-helm-${{ inputs.version || (github.event_name == 'workflow_dispatch' && github.event.inputs.tag) || github.ref || github.run_id }}
   cancel-in-progress: false
@@ -47,7 +47,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-      # Required for cosign keyless signing (Sigstore OIDC token).
+      # Required for cosign keyless signing (Sigstore OIDC token). ~keep
       id-token: write
     steps:
       - name: Checkout
@@ -122,7 +122,7 @@ jobs:
             | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       # Sign the pushed chart with cosign keyless (Sigstore OIDC + Rekor) so
-      # Artifact Hub shows the "Signed" label. Signing by digest, not tag.
+      # Artifact Hub shows the "Signed" label. Signing by digest, not tag. ~keep
       - name: Sign chart (cosign keyless)
         if: steps.meta.outputs.dry_run != 'true'
         env:
@@ -134,7 +134,7 @@ jobs:
           cosign sign "ghcr.io/xberg-io/charts/xberg@${DIGEST}"
 
       # Push the Artifact Hub repository metadata so the repository is marked as
-      # a Verified Publisher. Idempotent — re-pushing overwrites the same tag.
+      # a Verified Publisher. Idempotent — re-pushing overwrites the same tag. ~keep
       - name: Publish Artifact Hub repository metadata
         if: steps.meta.outputs.dry_run != 'true'
         run: |

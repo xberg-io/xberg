@@ -1447,7 +1447,7 @@ mod tests {
 
     fn xberg_size_map() -> HashMap<String, DiskSizeInfo> {
         let mut sizes = HashMap::new();
-        // shipped binary+dylibs = 40 MB, on-demand model cache = 525 MB.
+        // shipped binary+dylibs = 40 MB, on-demand model cache = 525 MB. ~keep
         sizes.insert("xberg-rust".to_string(), disk_size(565, 40, 525));
         sizes.insert("liteparse".to_string(), disk_size(35, 35, 0));
         sizes
@@ -1470,7 +1470,7 @@ mod tests {
     #[test]
     fn should_report_shipped_only_for_xberg_heuristic_rows() {
         let sizes = xberg_size_map();
-        // Baseline/plaintext heuristic pipelines ship without ML models.
+        // Baseline/plaintext heuristic pipelines ship without ML models. ~keep
         for name in [
             "xberg-markdown-baseline",
             "xberg-plaintext-baseline",

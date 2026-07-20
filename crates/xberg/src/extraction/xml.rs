@@ -86,7 +86,7 @@ fn parse_xml_inner(
 
     // No reader-level trim_text: EntityReader coalesces text fragments around
     // entity references, and trimming fragments first would corrupt spacing.
-    // Text is trimmed below (when `preserve_whitespace` is off), after coalescing.
+    // Text is trimmed below (when `preserve_whitespace` is off), after coalescing. ~keep
     let mut reader = EntityReader::from_bytes(effective_bytes);
     reader.config_mut().check_end_names = false;
 

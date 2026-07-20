@@ -145,7 +145,7 @@ mod tests {
     fn find_config_in_dir_prefers_toml_over_other_formats() {
         let dir = tempfile::tempdir().unwrap();
         // A valid TOML file and a deliberately invalid JSON file coexist. TOML is
-        // probed first, so discovery must succeed without touching the JSON.
+        // probed first, so discovery must succeed without touching the JSON. ~keep
         std::fs::write(dir.path().join("xberg.toml"), "use_cache = true\n").unwrap();
         std::fs::write(dir.path().join("xberg.json"), "not valid json").unwrap();
 

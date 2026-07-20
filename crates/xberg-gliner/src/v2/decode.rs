@@ -110,7 +110,7 @@ mod tests {
         let words = vec![Token::new(0, 3, "Ada")];
         let labels = vec!["person".to_string()];
         let scores = Array4::<f32>::zeros((1, 1, 1, 1));
-        // wrong max_width argument (2, but tensor only has width 1)
+        // wrong max_width argument (2, but tensor only has width 1) ~keep
         let result = decode_span_scores(
             scores.into_dyn().view(),
             text,

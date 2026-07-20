@@ -50,16 +50,16 @@ ATTRIBUTIONS = TEST_DOCS / "ATTRIBUTIONS.md"
 LICENSES = TEST_DOCS / "LICENSES.md"
 # Gitignored on-demand cache for `reference`-class docs (source PDFs + GT we may NOT redistribute).
 # Materialized by `build_corpus.py --stage materialize`; committed fixtures for reference docs point
-# here, so the public repo never contains the third-party bytes.
+# here, so the public repo never contains the third-party bytes. ~keep
 CACHE = TEST_DOCS / ".corpus-cache"
 CACHE_PDF = CACHE / "pdf"
 CACHE_GT = CACHE / "ground_truth" / "pdf"
 LEDGER = STAGING / "build_ledger.json"
 PARSEBENCH = Path("/tmp/parsebench")  # noqa: S108  ParseBench staging (table.jsonl + docs/table/*.pdf)
 PB_MIN_TABLE_COVERAGE = 0.60  # a table page whose GT (table only) covers < this of the page is not
-#                               table-dominant — its non-table prose would distort whole-doc scoring.
+#                               table-dominant — its non-table prose would distort whole-doc scoring. ~keep
 
-# Pinned upstream sources. revision=None ⇒ resolve latest at acquire time and record the sha.
+# Pinned upstream sources. revision=None ⇒ resolve latest at acquire time and record the sha. ~keep
 SOURCES = {
     "readoc": {
         "repo": "lazyc/READoc",
@@ -67,7 +67,7 @@ SOURCES = {
         "license": "MIT",
         # PER-DOC (see doc_redistribute): GitHub docs (author-owned README content) are vendored;
         # arXiv docs are reference-only — the MIT tag can't license the bundled arXiv PDFs
-        # (nonexclusive-distrib), and their LaTeX-source GT is version-drift-prone.
+        # (nonexclusive-distrib), and their LaTeX-source GT is version-drift-prone. ~keep
         "redistribute": "per-doc",
         "url": "https://huggingface.co/datasets/lazyc/READoc",
         "citation": "READoc: A Unified Benchmark for Realistic Document Structured Extraction (arXiv:2409.05137)",
@@ -81,7 +81,7 @@ SOURCES = {
         "revision": None,
         "license": "Apache-2.0",
         # Apache-2.0 covers ParseBench's ANNOTATIONS, not the bundled third-party enterprise PDFs
-        # (which carry a takedown clause). So the source PDFs are reference-only, not vendored.
+        # (which carry a takedown clause). So the source PDFs are reference-only, not vendored. ~keep
         "redistribute": "reference",
         "url": "https://huggingface.co/datasets/llamaindex/ParseBench",
         "citation": "ParseBench: A Document Parsing Benchmark for AI Agents, Zhang et al. (arXiv:2604.08538)",
@@ -90,9 +90,9 @@ SOURCES = {
     },
     "fintabnet": {
         "repo": "bsmock/FinTabNet.c",
-        "revision": None,  # resolved from HF at acquire (real dataset repo); staged copy re-gated here
+        "revision": None,  # resolved from HF at acquire (real dataset repo); staged copy re-gated here ~keep
         "license": "CDLA-Permissive-2.0",
-        # CDLA-Permissive-2.0 is a permissive, redistribution-friendly data license → vendored.
+        # CDLA-Permissive-2.0 is a permissive, redistribution-friendly data license → vendored. ~keep
         "redistribute": "vendor",
         "url": "https://huggingface.co/datasets/bsmock/FinTabNet.c",
         "citation": (
@@ -103,10 +103,10 @@ SOURCES = {
     },
     "federal_register": {
         "repo": "federalregister.gov",
-        # Not an HF dataset → pin the staging snapshot instead of resolving a HF sha at acquire.
+        # Not an HF dataset → pin the staging snapshot instead of resolving a HF sha at acquire. ~keep
         "revision": "2026-07-20",
         "license": "US-PD (17 U.S.C. §105)",
-        # U.S. Government work, public domain → freely redistributable → vendored.
+        # U.S. Government work, public domain → freely redistributable → vendored. ~keep
         "redistribute": "vendor",
         "url": "https://www.federalregister.gov",
         "citation": (
@@ -120,7 +120,7 @@ SOURCES = {
 
 # Vendored datasets pre-staged on disk as (pdf, gt.md) pairs under <base>/{pdf,gt}/<id>.{pdf,md}
 # (already triaged upstream; this builder re-gates them with its own oracle). Normalized GT is written
-# to <base>/normalized/<id>.md, mirroring the readoc/parsebench normalize→gate→assemble flow.
+# to <base>/normalized/<id>.md, mirroring the readoc/parsebench normalize→gate→assemble flow. ~keep
 STAGED_SOURCES = {
     "fintabnet": STAGING / "fintabnet" / "staged",
     "federal_register": STAGING / "federal_register" / "staged",
@@ -130,7 +130,7 @@ STAGED_SOURCES = {
 # `vendor`    = permissive (MIT/Apache/CC-BY/CC0/public-domain) → source PDFs + GT committed here.
 # `reference` = non-commercial / ShareAlike / research-only ToU → NOT committed; fetched to local
 #               staging by build_corpus and used for scoring only (non-commercial use), never
-#               redistributed. Recorded in the manifest with license + source URL for provenance.
+#               redistributed. Recorded in the manifest with license + source URL for provenance. ~keep
 
 
 def sha256_bytes(b: bytes) -> str:
@@ -151,9 +151,9 @@ class DocRecord:
     source_url: str
     license: str
     source_revision: str = ""
-    src_gt_sha256: str = ""  # sha of the raw upstream GT, before any modification
-    out_gt_md_sha256: str = ""  # sha of the normalized GT actually committed
-    transforms: dict = field(default_factory=dict)  # {transform_name: count} — the modifications
+    src_gt_sha256: str = ""  # sha of the raw upstream GT, before any modification ~keep
+    out_gt_md_sha256: str = ""  # sha of the normalized GT actually committed ~keep
+    transforms: dict = field(default_factory=dict)  # {transform_name: count} — the modifications ~keep
     gate_verdict: str = "PENDING"
     exclusion_reason: str = ""
     cohorts: list = field(default_factory=list)
@@ -196,7 +196,7 @@ def stage_acquire(records: dict, dry: bool) -> None:
         dest.mkdir(parents=True, exist_ok=True)
         if name == "readoc" and not (dest / "arxiv_ground_truth").exists():
             _hf(cfg["repo"], dest, cfg["revision"], include="*_ground_truth/*")
-        # ParseBench GT + table PDFs handled by its assemble handler (already staged at /tmp/parsebench).
+        # ParseBench GT + table PDFs handled by its assemble handler (already staged at /tmp/parsebench). ~keep
 
 
 def stage_normalize(records: dict, dry: bool) -> None:
@@ -228,7 +228,7 @@ def stage_normalize(records: dict, dry: bool) -> None:
     n = sum(1 for r in records.values() if r["source_dataset"] == "readoc")
     print(f"[normalize] readoc: {n} GT files normalized")
 
-    # ParseBench — each record's expected_markdown is an HTML table; convert to GFM with our engine.
+    # ParseBench — each record's expected_markdown is an HTML table; convert to GFM with our engine. ~keep
     pb = SOURCES["parsebench"]
     count = 0
     for pid, _pdf, html in _parsebench_records():
@@ -255,7 +255,7 @@ def stage_normalize(records: dict, dry: bool) -> None:
     print(f"[normalize] parsebench: {count} HTML tables → GFM")
 
     # Pre-staged vendored datasets (fintabnet, federal_register): GT is already GFM on disk; canonicalize
-    # it (COMMON_TRANSFORMS only for these non-readoc sources) and record the exact per-doc transforms.
+    # it (COMMON_TRANSFORMS only for these non-readoc sources) and record the exact per-doc transforms. ~keep
     for name, base in STAGED_SOURCES.items():
         _normalize_staged(records, name, base, dry)
 
@@ -268,14 +268,14 @@ def _normalize_staged(records: dict, name: str, base: Path, dry: bool) -> None:
     for gt_md in sorted((base / "gt").glob("*.md")):
         sid = gt_md.stem
         if not (base / "pdf" / f"{sid}.pdf").exists():
-            continue  # orphan GT with no source PDF — skip (gate would only mark it NO_PDF)
+            continue  # orphan GT with no source PDF — skip (gate would only mark it NO_PDF) ~keep
         raw = gt_md.read_text("utf-8", "replace")
         out, report = normalize_with_report(raw, source=name)
         rec = records.get(sid) or asdict(
             DocRecord(
                 id=sid,
                 source_dataset=name,
-                upstream_id=sid[3:] if name == "fintabnet" else sid,  # strip the `ft_` id prefix
+                upstream_id=sid[3:] if name == "fintabnet" else sid,  # strip the `ft_` id prefix ~keep
                 source_url=cfg["url"],
                 license=cfg["license"],
                 source_revision=cfg.get("revision") or "",
@@ -303,7 +303,7 @@ def _parsebench_records() -> list[tuple[str, Path, str]]:
         html = r.get("expected_markdown")
         if not html:
             continue
-        stem = re.sub(r"[^A-Za-z0-9._-]+", "_", Path(r["pdf"]).stem)  # filename-safe id (names have spaces)
+        stem = re.sub(r"[^A-Za-z0-9._-]+", "_", Path(r["pdf"]).stem)  # filename-safe id (names have spaces) ~keep
         out.append((f"pb_{stem}", PARSEBENCH / r["pdf"], html))
     return out
 
@@ -375,13 +375,13 @@ def stage_gate(records: dict, dry: bool) -> None:
             continue
         ev = evaluate(pdf, gt.read_text("utf-8", "replace"), source="parsebench")
         _apply_gate(rec, ev, ["tables"])
-        # ParseBench GT is human-verified, so a "fabricated table" flag (header tokens absent from the
+        # ParseBench GT is human-verified, so a "fabricated table" flag (header tokens absent from the ~keep
         # text layer) means the table is an IMAGE the oracle can't read, not fabrication → REVIEW+OCR.
         if ev.verdict == "REJECT" and "fabricated table" in rec["exclusion_reason"]:
             rec["gate_verdict"] = "REVIEW"
             rec["exclusion_reason"] = "table absent from text layer (image table?) — needs 2nd OCR oracle"
             rec["cohorts"] = list(dict.fromkeys([*rec["cohorts"], "figures"]))
-        # A table-only GT on a prose-heavy page distorts whole-doc scoring → hold for review.
+        # A table-only GT on a prose-heavy page distorts whole-doc scoring → hold for review. ~keep
         elif ev.verdict == "ACCEPT" and ev.coverage < PB_MIN_TABLE_COVERAGE:
             rec["gate_verdict"] = "REVIEW"
             rec["exclusion_reason"] = f"table-only GT but page is {ev.coverage:.2f} table (non-table prose)"
@@ -391,7 +391,7 @@ def stage_gate(records: dict, dry: bool) -> None:
     print(f"[gate] parsebench: {pb}")
 
     # Pre-staged vendored datasets — same calibrated oracle, source-agnostic (fintabnet crops are
-    # table-dominant → tagged `tables`; federal_register is whole-doc prose+tables).
+    # table-dominant → tagged `tables`; federal_register is whole-doc prose+tables). ~keep
     for name, base in STAGED_SOURCES.items():
         norm = base / "normalized"
         extra = ["tables"] if name == "fintabnet" else []
@@ -415,10 +415,10 @@ def stage_gate(records: dict, dry: bool) -> None:
         print(f"[gate] {name}: {tally}")
 
 
-CORE_SIZE = 160  # active fast-iteration tier (runtime-governed; calibrate to codex's wall-clock)
-CORE_PER_STRATUM = 24  # ensure each diagnostic stratum is represented in core
-SMOKE_PER_STRATUM = 2  # smoke covers every stratum minimally (~24 docs)
-TUNE_FRACTION = 0.70  # deterministic 70/30 tune/eval split (overfitting guard)
+CORE_SIZE = 160  # active fast-iteration tier (runtime-governed; calibrate to codex's wall-clock) ~keep
+CORE_PER_STRATUM = 24  # ensure each diagnostic stratum is represented in core ~keep
+SMOKE_PER_STRATUM = 2  # smoke covers every stratum minimally (~24 docs) ~keep
+TUNE_FRACTION = 0.70  # deterministic 70/30 tune/eval split (overfitting guard) ~keep
 
 _H = re.compile  # local alias
 _MATH = _H(r"\$[^$\n]+\$|\$\$")
@@ -830,7 +830,7 @@ def _modification_summary(records: dict) -> str:
 def generate_readme(records: dict) -> None:
     src_rows = ["| dataset | license | GT provenance | role |", "|---|---|---|---|"]
     for cfg in SOURCES.values():
-        # revision is None for sources resolved from HF at acquire time (e.g. fintabnet); show HEAD.
+        # revision is None for sources resolved from HF at acquire time (e.g. fintabnet); show HEAD. ~keep
         rev = (cfg.get("revision") or "HEAD")[:8]
         src_rows.append(
             f"| [{cfg['repo']}]({cfg['url']}) @`{rev}` | {cfg['license']} | {cfg['note']} | {cfg['granularity']} |"
@@ -916,7 +916,7 @@ STAGES = {
     "materialize": stage_materialize,
 }
 ORDER = ["acquire", "normalize", "gate", "curate", "assemble", "manifest"]  # `all` runs these in order
-# `materialize` is on-demand (harness pre-run step), not part of `all`.
+# `materialize` is on-demand (harness pre-run step), not part of `all`. ~keep
 
 
 def main() -> int:

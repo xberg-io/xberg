@@ -25,7 +25,7 @@ jobs:
       # ships bin/download_libs.dart + lib/src/native_loader.dart, which fetch the
       # platform library from the GitHub release into the versioned user cache on
       # first use. Publishing from a git checkout guarantees only tracked source
-      # is uploaded (~300KB), never stray build output.
+      # is uploaded (~300KB), never stray build output. ~keep
       - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref }}

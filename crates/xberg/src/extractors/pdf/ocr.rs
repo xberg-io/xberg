@@ -469,7 +469,7 @@ pub(crate) async fn extract_mixed_ocr_native(
     use image::ImageEncoder;
     use image::codecs::png::PngEncoder;
     // rayon's work-stealing pool needs OS threads; wasm32 has none, so the parallel encode
-    // paths below fall back to sequential `.iter()` there. Gate the import to match.
+    // paths below fall back to sequential `.iter()` there. Gate the import to match. ~keep
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     use rayon::prelude::*;
     use std::io::Cursor;
@@ -540,7 +540,7 @@ pub(crate) async fn extract_mixed_ocr_native(
         // are `!Send` on wasm32 (async_trait(?Send), see plugins/extractor/trait.rs) — and
         // wasm32 has no OS threads to run them on regardless. Fall back to the sequential path
         // there even though `tokio-runtime` is active (it's pulled in by
-        // `chunking-tokenizers`/`static-embeddings`, not concurrency support).
+        // `chunking-tokenizers`/`static-embeddings`, not concurrency support). ~keep
         #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
         {
             let mut join_set = tokio::task::JoinSet::new();
@@ -632,7 +632,7 @@ pub(crate) fn merge_ocr_pages_into_native(
                 continue;
             }
             // Checked against `result` (not `native_text`) so that overlapping
-            // boundaries stay safe after earlier replacements shift the string.
+            // boundaries stay safe after earlier replacements shift the string. ~keep
             if !result.is_char_boundary(boundary.byte_start) || !result.is_char_boundary(boundary.byte_end) {
                 tracing::warn!(
                     page = boundary.page_number,
@@ -792,7 +792,7 @@ pub(crate) async fn extract_with_ocr(
     }
 
     // rayon's work-stealing pool needs OS threads; wasm32 has none, so the parallel encode
-    // paths below fall back to sequential `.iter()` there. Gate the import to match.
+    // paths below fall back to sequential `.iter()` there. Gate the import to match. ~keep
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     use rayon::prelude::*;
     use std::sync::Arc;
@@ -931,7 +931,7 @@ pub(crate) async fn extract_with_ocr(
         let batch_count = encoded_batch.len();
         let mut batch_ocr_results: Vec<Option<crate::types::ExtractedDocument>> = vec![None; batch_count];
 
-        // See the sibling JoinSet block above: `Send` futures aren't available on wasm32.
+        // See the sibling JoinSet block above: `Send` futures aren't available on wasm32. ~keep
         #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
         {
             let mut join_set: JoinSet<(usize, crate::Result<crate::types::ExtractedDocument>)> = JoinSet::new();

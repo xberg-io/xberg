@@ -62,7 +62,7 @@ struct GlinerModelDefinition {
 }
 
 // Sizes reported by Hugging Face's expanded recursive tree metadata for
-// `xberg-io/gliner-models` at `GLINER_MODELS_REVISION`.
+// `xberg-io/gliner-models` at `GLINER_MODELS_REVISION`. ~keep
 const GLINER_MODELS: &[GlinerModelDefinition] = &[
     GlinerModelDefinition {
         id: "gliner_small-v2.5",

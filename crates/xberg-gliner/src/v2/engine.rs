@@ -71,7 +71,7 @@ impl Gliner2 {
             )));
         }
         // `input` is owned; take the strings instead of cloning a potentially
-        // large document text per call.
+        // large document text per call. ~keep
         let TextInput { texts, entities, .. } = input;
         let text = texts.into_iter().next().expect("length checked above");
         let labels = entities;

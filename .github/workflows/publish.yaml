@@ -462,7 +462,7 @@ jobs:
           # The deployment target is the wheel's macOS floor: 15.0 left macOS 11-14
           # with no installable wheel (#1243). delocate bundles the libheif closure,
           # so the hook builds it from source at the target and PKG_CONFIG_PATH links
-          # the wheel against it instead of Homebrew's runner-OS bottles.
+          # the wheel against it instead of Homebrew's runner-OS bottles. ~keep
           cibw-before-build-macos: bash {project}/scripts/ci/build-macos-heif-deps.sh
           cibw-environment-macos: 'MATURIN_BUILD_ARGS="" CARGO_BUILD_LOCKED=true MACOSX_DEPLOYMENT_TARGET=11.0 PKG_CONFIG_PATH=/tmp/xberg-heif/lib/pkgconfig'
           cibw-before-build-windows: "rustup install 1.95-x86_64-pc-windows-msvc --profile minimal --component rust-src --component rustfmt --component clippy && rustup target add x86_64-pc-windows-msvc --toolchain 1.95-x86_64-pc-windows-msvc && pip install maturin uv && set PATH=%USERPROFILE%\\.cargo\\bin;%PATH%"
@@ -518,7 +518,7 @@ jobs:
           - { os: macos-15, target: aarch64-apple-darwin }
           # x86_64-apple-darwin (Intel macOS) intentionally omitted: pyke ships
           # no static ORT for it and Microsoft's last dylib is 1.23.2. Kept in
-          # sync with alef's [crates.node].exclude_platforms=["darwin-x64"].
+          # sync with alef's [crates.node].exclude_platforms=["darwin-x64"]. ~keep
           - { os: windows-latest, target: x86_64-pc-windows-msvc }
     steps:
       - uses: actions/checkout@v6
@@ -544,7 +544,7 @@ jobs:
           ort-version: "1.24.2"
 
       # Build the libheif closure from source at the macOS floor (#1243) and
-      # make the .node link it instead of Homebrew's runner-OS bottles.
+      # make the .node link it instead of Homebrew's runner-OS bottles. ~keep
       - name: Build libheif stack for the macOS floor
         if: contains(matrix.target, 'apple-darwin')
         shell: bash
@@ -777,7 +777,7 @@ jobs:
           # them post-build. This override is the durable hook: alef regenerates
           # crates/xberg-wasm/package.json scripts and drops any hand-added
           # suffix, so we invoke the patch here (publish.yaml is not generated)
-          # rather than relying on a package.json script surviving regen.
+          # rather than relying on a package.json script surviving regen. ~keep
           build-command: "pnpm run build:all && node scripts/fix-wasi-imports.mjs"
 
       - name: Smoke test — Node can load the wasm web bundle
@@ -994,7 +994,7 @@ jobs:
       # Stage ONNX Runtime for Intel macOS after the build so the ort-dynamic
       # compile is unaffected; this exports ORT_DYLIB_PATH for the vendor step.
       # pyke ships no x86_64-apple-darwin build, so the macOS setup script pins
-      # Microsoft's last x86_64 release (1.23.2, self-contained).
+      # Microsoft's last x86_64 release (1.23.2, self-contained). ~keep
       - name: Setup ONNX Runtime (Intel macOS)
         if: matrix.target == 'x86_64-apple-darwin'
         uses: ./.github/actions/setup-onnx-runtime
@@ -1327,7 +1327,7 @@ jobs:
           # xberg-jni has no [features] table of its own; it pulls in
           # xberg's android-target feature automatically via
           # cfg(target_os = "android") dependency selection, so no
-          # --features/--no-default-features flags are passed here.
+          # --features/--no-default-features flags are passed here. ~keep
           crate-name: xberg-jni
           abis: ${{ matrix.abi }}
       - uses: actions/upload-artifact@v7
@@ -1595,7 +1595,7 @@ jobs:
               target: aarch64-apple-darwin,
               # Asset blob uses the aarch64 spelling to match native_loader.dart's
               # nativeAssetBlob() (and the linux-aarch64 asset); the cache RID stays
-              # macos-arm64. A macos-arm64 asset name here 404s on Apple Silicon.
+              # macos-arm64. A macos-arm64 asset name here 404s on Apple Silicon. ~keep
               blob: macos-aarch64,
               lib: libxberg_dart.dylib,
             }
@@ -1710,7 +1710,7 @@ jobs:
           # Include the .sha256 sidecars: native_loader.dart verifies the
           # downloaded tarball against them before extracting, so a bare
           # xberg-dart-*.tar.gz pattern (no trailing *) would ship natives the
-          # loader then refuses to install.
+          # loader then refuses to install. ~keep
           assets: xberg-dart-*.tar.gz*
 
   swift-artifactbundle:
@@ -1735,7 +1735,7 @@ jobs:
           # Must match the asset filename the alef-generated root Package.swift
           # binaryTarget resolves: `<name>.artifactbundle.zip`. The manifest
           # references Xberg-rs.artifactbundle.zip, so the uploaded asset (named
-          # after artifact-name) must be Xberg-rs, not XbergSwift, or SwiftPM 404s.
+          # after artifact-name) must be Xberg-rs, not XbergSwift, or SwiftPM 404s. ~keep
           artifact-name: Xberg-rs
           include-macos-x86_64: "false"
           include-ios-x86_64: "false"
@@ -1786,7 +1786,7 @@ jobs:
     # the exact bytes on the release — the same asset SwiftPM downloads. This
     # eliminates the class of failure where a rebuilt/re-uploaded bundle (checksum
     # non-determinism) or a flaky `download-artifact` digest check left Package.swift
-    # pinning a checksum that no longer matched the released bundle.
+    # pinning a checksum that no longer matched the released bundle. ~keep
     needs: [prepare, upload-swift-bundle]
     if: ${{ needs.prepare.outputs.release_swift == 'true' && needs.upload-swift-bundle.result == 'success' }}
     runs-on: ubuntu-latest
@@ -2127,7 +2127,7 @@ jobs:
       # `contents: read`, which cannot see draft releases, so the lookup fails
       # all its retries with "release not found" — which then skips finalize and
       # cascades into skipping the Homebrew bottle build (issue #1247). Mint the
-      # App token (push access → draft visibility), same as finalize does.
+      # App token (push access → draft visibility), same as finalize does. ~keep
       - uses: actions/create-github-app-token@v2
         id: app-token
         with:
@@ -2431,7 +2431,7 @@ jobs:
   # out-of-band `npm dist-tag add @xberg-io/xberg-wasm@<version> latest` (or
   # unpublish/deprecate of the 0.0.1 stub) run manually by someone with
   # publish rights on the package; do not automate it here until a real
-  # 1.0.0 release exists.
+  # 1.0.0 release exists. ~keep
   publish-wasm:
     name: Publish WASM package
     needs: [prepare, wasm-bindings, check-npm]
@@ -2663,7 +2663,7 @@ jobs:
     # FAILED. `!= 'failure'` (not `== 'success'`) tolerates idempotently-SKIPPED
     # uploads on same-tag retries — a skipped upload means the asset is already on
     # the release, so finalize must still run. `== 'success'` here previously
-    # stuck every retry in draft, cascading into skipped hex/zig/homebrew.
+    # stuck every retry in draft, cascading into skipped hex/zig/homebrew. ~keep
     if: >-
       ${{ always()
       && needs.prepare.outputs.is_tag == 'true'
@@ -2693,7 +2693,7 @@ jobs:
     needs: [prepare, finalize-github-release-after-uploads, check-hex]
     # Runs whenever the release is finalized, independent of any sibling channel's
     # result. Fetches its NIFs from the finalized release (not run-artifacts), so it
-    # only needs finalize to have succeeded.
+    # only needs finalize to have succeeded. ~keep
     if: >-
       ${{ always()
       && needs.finalize-github-release-after-uploads.result == 'success'
@@ -2724,7 +2724,7 @@ jobs:
           # declared in packages/elixir/lib/xberg/native.ex (`nif_versions: ["2.16"]`).
           # NIF 2.16 loads fine on OTP 27 (NIF minor versions are backward compatible),
           # so a single 2.16 artifact covers every supported runtime. Requesting 2.17
-          # here made the checksum step hunt for assets that were never built.
+          # here made the checksum step hunt for assets that were never built. ~keep
           nif-versions: "2.16"
           targets: x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu,x86_64-unknown-linux-musl,aarch64-unknown-linux-musl,aarch64-apple-darwin,x86_64-pc-windows-msvc
           output-path: packages/elixir/checksum-Elixir.Xberg.Native.exs
@@ -2776,7 +2776,7 @@ jobs:
     needs: [prepare, finalize-github-release-after-uploads, check-zig, c-ffi-libraries]
     # Consumes c-ffi RUN-artifacts, so c-ffi-libraries must have SUCCEEDED this run
     # (a skip means there are no artifacts to download). Otherwise runs independent
-    # of any sibling channel's result, once the release is finalized.
+    # of any sibling channel's result, once the release is finalized. ~keep
     if: >-
       ${{ always()
       && needs.finalize-github-release-after-uploads.result == 'success'
@@ -2849,7 +2849,7 @@ jobs:
 
       # Mint the app token immediately before the upload. GitHub App installation
       # tokens have a hard 1h TTL; laying out the multi-platform FFI bundle (>1GB)
-      # can outlast a token minted at job start, causing the release upload to 401.
+      # can outlast a token minted at job start, causing the release upload to 401. ~keep
       - uses: actions/create-github-app-token@v2
         id: app-token
         with:
@@ -2882,7 +2882,7 @@ jobs:
     needs: [prepare, upload-cli-release, check-homebrew]
     # Pins release-asset URLs that persist on the release, so a SKIPPED upload-cli
     # on a same-tag retry (asset already uploaded) must not skip the formula bump;
-    # only a genuine upload failure should. Independent of all other channels.
+    # only a genuine upload failure should. Independent of all other channels. ~keep
     if: >-
       ${{ always()
       && needs.upload-cli-release.result != 'failure'
@@ -2954,11 +2954,11 @@ jobs:
     # build's `brew install` fetches the source tarball: the formula now pins a
     # release-asset URL (stable bytes, uploaded by publish-homebrew-formula), and
     # draft-release assets are not publicly downloadable. In dry-run finalize is
-    # skipped, so this job is skipped too (no asset is uploaded to point at).
+    # skipped, so this job is skipped too (no asset is uploaded to point at). ~keep
     needs: [prepare, publish-homebrew-formula, finalize-github-release-after-uploads]
     # Runs once the formula is bumped and the release is finalized (out of draft so
     # `brew install` can fetch the pinned release asset), independent of any sibling
-    # channel's result. Builds from source — consumes no cross-job run-artifacts.
+    # channel's result. Builds from source — consumes no cross-job run-artifacts. ~keep
     if: >-
       ${{ always()
       && needs.publish-homebrew-formula.result == 'success'
@@ -2987,7 +2987,7 @@ jobs:
       # Mint the app token immediately before the bottle build+upload. GitHub App
       # installation tokens have a hard 1h TTL; a from-source bottle build (esp. the
       # slow macOS runners) minted at job start can expire before the action uploads
-      # the bottle to the release, causing a 401. Minting here gives the full hour.
+      # the bottle to the release, causing a 401. Minting here gives the full hour. ~keep
       - uses: actions/create-github-app-token@v2
         id: app-token
         with:
@@ -3018,7 +3018,7 @@ jobs:
     name: Merge Homebrew bottle DSL
     needs: [prepare, publish-homebrew-formula, homebrew-bottles]
     # Consumes the bottle-json RUN-artifacts, so homebrew-bottles must have SUCCEEDED
-    # this run. Otherwise independent of any sibling channel's result.
+    # this run. Otherwise independent of any sibling channel's result. ~keep
     if: >-
       ${{ always()
       && needs.publish-homebrew-formula.result == 'success'

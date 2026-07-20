@@ -26,7 +26,7 @@ _MATH_INLINE = re.compile(r"\\\((.+?)\\\)", re.DOTALL)
 _MATH_DISPLAY = re.compile(r"\\\[(.+?)\\\]", re.DOTALL)
 
 # Adjacent bold close+open collapsed by pandoc: "**Definition 1.1****.**" -> "**Definition 1.1.**".
-# Four consecutive stars are a bold-close immediately followed by a bold-open; drop them to merge.
+# Four consecutive stars are a bold-close immediately followed by a bold-open; drop them to merge. ~keep
 _DOUBLE_BOLD = re.compile(r"\*\*\*\*")
 
 # Trailing whitespace and >2 blank lines.
@@ -36,7 +36,7 @@ _BLANK_RUN = re.compile(r"\n{3,}")
 
 # Each transform is (name, human description, compiled regex, replacement). Keeping them declarative
 # lets build_corpus.py both apply them and generate the "how the data was modified" documentation
-# from this single source of truth — the docs cannot drift from the code.
+# from this single source of truth — the docs cannot drift from the code. ~keep
 READOC_TRANSFORMS = [
     ("math_display", r"display math \[…\] → $$…$$", _MATH_DISPLAY, lambda m: f"$$ {m.group(1).strip()} $$"),
     ("math_inline", r"inline math \(…\) → $…$", _MATH_INLINE, lambda m: f"${m.group(1).strip()}$"),
@@ -49,7 +49,7 @@ COMMON_TRANSFORMS = [
 
 
 # Fenced and inline code spans must be left verbatim — the math/bold rewrites would corrupt code
-# (e.g. `****` in a C banner, `\(x\)` in a regex). Transforms run only OUTSIDE these spans.
+# (e.g. `****` in a C banner, `\(x\)` in a regex). Transforms run only OUTSIDE these spans. ~keep
 _CODE_SPAN = re.compile(r"```.*?```|~~~.*?~~~|`[^`\n]+`", re.DOTALL)
 
 
@@ -99,7 +99,7 @@ def _html_to_markdown_cli() -> str:
     global _H2M_BIN
     if _H2M_BIN:
         return _H2M_BIN
-    polyrepo = Path(__file__).resolve().parents[4]  # …/xberg-io
+    polyrepo = Path(__file__).resolve().parents[4]  # …/xberg-io ~keep
     for profile in ("release", "debug"):
         cand = polyrepo / "html-to-markdown" / "target" / profile / "html-to-markdown"
         if cand.exists():

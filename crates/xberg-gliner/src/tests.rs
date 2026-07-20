@@ -11,7 +11,7 @@ fn v2_prompt_encoding_constructs_and_errors_cleanly() {
     let tokenizer_path = std::path::Path::new("nonexistent.json");
     let result = crate::v2::tokenizer::V2Tokenizer::from_file(tokenizer_path);
     assert!(result.is_err(), "missing file must error, not panic");
-    let _ = splitter; // keep both symbols referenced
+    let _ = splitter; // keep both symbols referenced ~keep
 }
 
 #[test]

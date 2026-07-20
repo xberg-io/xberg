@@ -78,7 +78,7 @@ async fn test_sampling_frequency_achieves_target() {
 
 // The benchmark binary uses Tokio's multi-thread runtime. A current-thread
 // test would make synchronous OS process refreshes contend with the timer it
-// is trying to validate and measure an execution mode the harness never uses.
+// is trying to validate and measure an execution mode the harness never uses. ~keep
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_variance_within_tolerance() {
     let mut durations = Vec::new();

@@ -61,7 +61,7 @@ fn build_internal_document(content: &[u8], mime_type: &str, budget: &mut Securit
     let decoded = decode_xml_to_utf8(content);
     // No reader-level trim_text: EntityReader coalesces text fragments around
     // entity references, and trimming fragments first would corrupt spacing.
-    // Text is trimmed below, after coalescing.
+    // Text is trimmed below, after coalescing. ~keep
     let mut reader = EntityReader::from_bytes(decoded.as_bytes());
     reader.config_mut().check_end_names = false;
 

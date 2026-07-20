@@ -101,7 +101,7 @@ fn score_from_result(result: &BenchmarkResult) -> FrameworkScore {
 
 /// Build the per-document pivot with computed deficits.
 pub fn build_document_rows(results: &[BenchmarkResult], config: &GapConfig) -> Vec<DocumentRow> {
-    // document -> framework(base name) -> score.
+    // document -> framework(base name) -> score. ~keep
     let mut by_doc: BTreeMap<String, BTreeMap<String, (FrameworkScore, u64)>> = BTreeMap::new();
 
     for result in results {
@@ -541,9 +541,9 @@ mod tests {
         let summary = build_load_summary(&results);
         let layout = summary.iter().find(|l| l.framework == "xberg-markdown-layout").unwrap();
         assert_eq!(layout.measured, 2);
-        assert!((layout.mean_load_per_core - 0.75).abs() < 1e-9); // (1.0 + 0.5) / 2
+        assert!((layout.mean_load_per_core - 0.75).abs() < 1e-9); // (1.0 + 0.5) / 2 ~keep
         assert!((layout.max_load_per_core - 1.0).abs() < 1e-9);
-        assert_eq!(layout.contended, 1); // only the load=14 result is contended
+        assert_eq!(layout.contended, 1); // only the load=14 result is contended ~keep
     }
 
     #[test]

@@ -395,7 +395,7 @@ pub fn aggregate_new_format(results: &[BenchmarkResult]) -> NewConsolidatedResul
     // Count *logical* frameworks: all xberg pipelines (xberg-markdown-baseline,
     // xberg-plaintext-layout, …) are variants of the single "xberg" framework, so collapse
     // them to one before counting. Otherwise framework_count over-reports by the number of
-    // xberg name-variants present (e.g. 11 instead of 8).
+    // xberg name-variants present (e.g. 11 instead of 8). ~keep
     let framework_count = results
         .iter()
         .map(|r| {
@@ -499,7 +499,7 @@ fn aggregate_by_ocr_status(
     use crate::types::OcrStatus;
 
     // Unknown is deliberately excluded from both cohorts. In particular, an
-    // unreported PDF OCR status must never be presented as a no-OCR result.
+    // unreported PDF OCR status must never be presented as a no-OCR result. ~keep
     let no_ocr: Vec<&BenchmarkResult> = results
         .iter()
         .filter(|result| result.ocr_status == OcrStatus::NotUsed)
@@ -1017,7 +1017,7 @@ fn build_comparison(by_framework_mode: &HashMap<String, FrameworkModeAggregation
     // (`successful_sample_count == 0`, `total_sample_count > 0`) must count against it — quality
     // contribution 0.0, weighted by samples attempted (not just those that succeeded) — instead
     // of being silently dropped (which let e.g. a framework failing 100% of PDFs escape any
-    // quality penalty). TF1/SF1 use the same 0.0-on-full-failure treatment for consistency.
+    // quality penalty). TF1/SF1 use the same 0.0-on-full-failure treatment for consistency. ~keep
     let mut pdf_metrics: Vec<(String, f64, f64, f64, OutputFormat)> = Vec::new();
     for (key, agg) in by_framework_mode {
         if let Some(pdf_ft) = agg.by_file_type.get("pdf") {
@@ -1038,7 +1038,7 @@ fn build_comparison(by_framework_mode: &HashMap<String, FrameworkModeAggregation
                 // SF1 has no defined "failure" value for plaintext-only frameworks (they never
                 // carry a layout term at all), so a missing layout score only contributes 0.0
                 // when the bucket was a genuine failure (no quality at all), not when the
-                // framework is plaintext-only and layout is simply not applicable.
+                // framework is plaintext-only and layout is simply not applicable. ~keep
                 match sf1_value {
                     Some(layout) => sf1s.push((layout, w)),
                     None if perf.quality.is_none() => sf1s.push((0.0, w)),
@@ -1072,7 +1072,7 @@ fn build_comparison(by_framework_mode: &HashMap<String, FrameworkModeAggregation
 
     // As with the all-file-types quality ranking above, PDF quality must also be split by
     // output format — plaintext-only frameworks never carry an SF1 term and must never be
-    // pooled against markdown frameworks' layout-inclusive quality score.
+    // pooled against markdown frameworks' layout-inclusive quality score. ~keep
     let mut pdf_qual_markdown: Vec<(String, f64)> = pdf_metrics
         .iter()
         .filter(|(_, _, _, _, fmt)| *fmt == OutputFormat::Markdown)
@@ -1692,7 +1692,7 @@ mod tests {
         });
 
         // A plaintext-only competitor (e.g. Apache Tika): higher raw quality_score because it
-        // never incurs the structural (SF1) penalty markdown frameworks carry.
+        // never incurs the structural (SF1) penalty markdown frameworks carry. ~keep
         let mut plaintext_result =
             create_test_result("apache-tika", "pdf", OcrStatus::NotUsed, 100, 1_000_000.0, 10_000_000);
         plaintext_result.output_format = OutputFormat::Plaintext;

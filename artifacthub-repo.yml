@@ -2,7 +2,7 @@
 # Pushed to the OCI registry under the `artifacthub.io` tag by
 # .github/workflows/publish-helm.yaml so Artifact Hub marks the
 # repository as a Verified Publisher.
-# Repository: oci://ghcr.io/xberg-io/charts/xberg
+# Repository: oci://ghcr.io/xberg-io/charts/xberg ~keep
 repositoryID: f817dbd2-fdd8-4d73-b8e9-6ab83d01055a
 owners:
   - name: xberg-dev

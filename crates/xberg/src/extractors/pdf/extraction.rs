@@ -71,7 +71,7 @@ pub(crate) fn extract_all_from_oxide_document(
             Ok((reordered, reordered_boundaries)) => {
                 native_text = reordered;
                 // Reordering rebuilds the text, so boundaries computed against
-                // the original extraction order no longer index it.
+                // the original extraction order no longer index it. ~keep
                 if !reordered_boundaries.is_empty() {
                     if let Some(ref mut page_structure) = pdf_metadata.page_structure {
                         page_structure.boundaries = Some(reordered_boundaries.clone());

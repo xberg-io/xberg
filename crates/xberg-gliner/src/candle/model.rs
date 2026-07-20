@@ -72,7 +72,7 @@ impl Gliner2Candle {
         // every tensor in the file as F32 before any conversion). Native
         // targets keep F32 -- plenty of RAM, and F32 avoids any precision
         // risk for callers relying on `load_adapter`'s LoRA merge (which
-        // stays F32-only, non-wasm32-gated, see model.rs's other impl block).
+        // stays F32-only, non-wasm32-gated, see model.rs's other impl block). ~keep
         #[cfg(target_arch = "wasm32")]
         let dtype = candle_core::DType::F16;
         #[cfg(not(target_arch = "wasm32"))]

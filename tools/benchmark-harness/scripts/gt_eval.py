@@ -38,20 +38,20 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 MIN_ORACLE_TOKENS = 25
-EMPTY_PAGE_TOKENS = 5  # a page with < this many tokens is "empty" (image/scan)
+EMPTY_PAGE_TOKENS = 5  # a page with < this many tokens is "empty" (image/scan) ~keep
 SCAN_PAGE_FRACTION = 0.40  # >= this fraction empty => oracle unreliable => NO_ORACLE/REVIEW
-TRUNC_COVERAGE = 0.55  # overall gt/oracle token ratio below this is a truncation candidate
-TRUNC_HEAD_RECALL = 0.55  # leading-half oracle recall must be at least this...
-TRUNC_TAIL_RECALL = 0.18  # ...and trailing-quarter recall at most this => clean prefix drop
-TRUNC_EXTREME_COVERAGE = 0.25  # GT below this fraction of a multi-page native doc => truncated
-TABLE_LABEL_SUPPORT = 0.40  # a table whose header tokens fall below this => fabricated
+TRUNC_COVERAGE = 0.55  # overall gt/oracle token ratio below this is a truncation candidate ~keep
+TRUNC_HEAD_RECALL = 0.55  # leading-half oracle recall must be at least this... ~keep
+TRUNC_TAIL_RECALL = 0.18  # ...and trailing-quarter recall at most this => clean prefix drop ~keep
+TRUNC_EXTREME_COVERAGE = 0.25  # GT below this fraction of a multi-page native doc => truncated ~keep
+TABLE_LABEL_SUPPORT = 0.40  # a table whose header tokens fall below this => fabricated ~keep
 HALLUC_PRECISION = 0.70  # native-text precision below this => REVIEW
 DIGIT_CONTRADICTION = 0.35  # >= this fraction of GT numbers absent from oracle => REJECT
 
 _WORD = re.compile(r"[a-z0-9]+")
 _NUM = re.compile(r"\d[\d.,/]*\d|\d")
 # Math and code carry numbers pdftotext cannot faithfully extract (subscripts, equation glyphs), so a
-# GT-vs-oracle digit comparison over them is noise. Strip them before extracting prose numbers.
+# GT-vs-oracle digit comparison over them is noise. Strip them before extracting prose numbers. ~keep
 _MATH_CODE = re.compile(r"\$\$.*?\$\$|\$[^$\n]*\$|```.*?```|`[^`\n]*`", re.DOTALL)
 _TABLE_ROW = re.compile(r"^\s*\|.*\|\s*$")
 _TABLE_SEP = re.compile(r"^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$")
@@ -141,7 +141,7 @@ def evaluate(pdf_path: Path, gt_md: str, source: str = "") -> Eval:
     ev = Eval()
     g_tok = tokens(gt_md)
     ev.gt_tokens = len(g_tok)
-    # Empty / near-empty GT (e.g. a failed html_to_gfm produced "") is always bad, oracle-independent.
+    # Empty / near-empty GT (e.g. a failed html_to_gfm produced "") is always bad, oracle-independent. ~keep
     if len(g_tok) < 3:
         ev.verdict, ev.reasons = "REJECT", [f"empty/near-empty GT ({len(g_tok)} tokens)"]
         return ev
@@ -170,7 +170,7 @@ def evaluate(pdf_path: Path, gt_md: str, source: str = "") -> Eval:
     ev.tail_recall = _segment_recall(oracle_flat, g_set, 0.75, 1.0)
 
     # A page with no text layer only matters when it HIDES GT content — i.e. coverage is low. A blank
-    # trailing page (common in per-page crops; GT fully covered by the text page) is not a scan.
+    # trailing page (common in per-page crops; GT fully covered by the text page) is not a scan. ~keep
     frac_empty = ev.empty_pages / max(1, ev.pages)
     scan_suspect = frac_empty >= SCAN_PAGE_FRACTION and ev.coverage < TRUNC_COVERAGE
     if scan_suspect:
@@ -179,7 +179,7 @@ def evaluate(pdf_path: Path, gt_md: str, source: str = "") -> Eval:
         ev.cohorts.append("native-clean")
 
     reasons = []
-    # Truncation, shape A: clean prefix whose recall drops off in the oracle tail.
+    # Truncation, shape A: clean prefix whose recall drops off in the oracle tail. ~keep
     if ev.coverage < TRUNC_COVERAGE and ev.head_recall >= TRUNC_HEAD_RECALL and ev.tail_recall <= TRUNC_TAIL_RECALL:
         reasons.append(
             f"truncated: covers {ev.coverage:.2f}, head-recall {ev.head_recall:.2f} vs "
@@ -187,12 +187,12 @@ def evaluate(pdf_path: Path, gt_md: str, source: str = "") -> Eval:
         )
     # Truncation, shape B: GT is a tiny fraction of a native doc (single- or multi-page). Catches the
     # prefix-drop miss when repeated boilerplate keeps tail-recall high (federal-register: cov 0.10) and
-    # the single-page case the prefix rule cannot see (a 1-page PDF whose GT covers a sliver of it).
+    # the single-page case the prefix rule cannot see (a 1-page PDF whose GT covers a sliver of it). ~keep
     elif "native-clean" in ev.cohorts and ev.coverage < TRUNC_EXTREME_COVERAGE:
         reasons.append(f"truncated: GT is {ev.coverage:.2f} of a {ev.pages}-page native doc (extreme length gap)")
 
     # Table fabrication: header/label tokens absent from oracle. Skip whenever a meaningful fraction of
-    # pages have no text layer — the table's labels may legitimately live on an image page (else a real
+    # pages have no text layer — the table's labels may legitimately live on an image page (else a real ~keep
     # table on a partly-scanned doc false-REJECTs). Such docs fall through to the scan/precision REVIEW.
     if frac_empty < SCAN_PAGE_FRACTION:
         for hdr in table_header_tokens(gt_md):
@@ -207,14 +207,14 @@ def evaluate(pdf_path: Path, gt_md: str, source: str = "") -> Eval:
     # false-rejected 30% of authoritative source-derived academic GT (pdftotext mangles subscript/
     # equation/citation number glyphs), while its only real win (prose hallucination like pdfa_019)
     # is already routed to REVIEW via the scanned-page path. Truncation + table-label + precision
-    # cover the real defects without that noise. `numbers()`/`_MATH_CODE` kept for the sidecar work.
+    # cover the real defects without that noise. `numbers()`/`_MATH_CODE` kept for the sidecar work. ~keep
 
     if reasons:
         ev.verdict, ev.reasons = "REJECT", reasons
         return ev
 
     # arXiv version drift: ReaDoc arXiv GT is derived from the LaTeX SOURCE, which may be a different
-    # version than the rendered PDF. The token gate can't see it (body matches), but the GT then cites
+    # version than the rendered PDF. The token gate can't see it (body matches), but the GT then cites ~keep
     # references absent from the PDF bibliography. High-signal, cheap; routes to human REVIEW.
     gt_cite, oracle_cite = max_citation(gt_md), max_citation(oracle_raw)
     version_drift = "readoc" in source and gt_cite > oracle_cite + 15 and gt_cite > 1.3 * max(1, oracle_cite)

@@ -161,7 +161,7 @@ fn atomic_publish_with_lock_timeout(
 
     // std::fs::rename replaces an existing file on Unix but not on Windows.
     // Serialize by destination and preserve the old file as a rollback backup
-    // until the complete staged copy has been published.
+    // until the complete staged copy has been published. ~keep
     #[cfg(windows)]
     {
         let backup = tmp.path().with_extension("backup");

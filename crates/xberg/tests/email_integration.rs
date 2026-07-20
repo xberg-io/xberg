@@ -283,7 +283,7 @@ async fn test_eml_legacy_korean_charset_ks_c_5601_1987() {
     let config = ExtractionConfig::default();
 
     // Synthetic reproducer from the issue: text/plain; charset="ks_c_5601-1987", quoted-printable
-    // body of valid EUC-KR bytes decoding to Korean.
+    // body of valid EUC-KR bytes decoding to Korean. ~keep
     let eml_content: &[u8] = b"From: sample.sender@example.invalid\r\n\
 To: sample.recipient@example.invalid\r\n\
 Subject: Synthetic Korean charset decoding test\r\n\

@@ -61,7 +61,7 @@ pub(crate) fn decode_span_scores(
     // Bound by the scores tensor's word dimension, not `words.len()`: when the
     // input exceeds the encoder's position-embedding limit, `run_pipeline`
     // truncates and the scores only cover the surviving words. Indexing by the
-    // full word list would walk off the array.
+    // full word list would walk off the array. ~keep
     let num_words = words.len().min(scores.shape()[1]);
     let num_labels = labels.len();
 
@@ -74,7 +74,7 @@ pub(crate) fn decode_span_scores(
                 if end_idx >= num_words {
                     continue;
                 }
-                let end_word = end_idx + 1; // exclusive
+                let end_word = end_idx + 1; // exclusive ~keep
                 for m in 0..num_labels {
                     let prob = scores[[c_idx, start, width_idx, m]];
                     if prob <= threshold {
@@ -90,7 +90,7 @@ pub(crate) fn decode_span_scores(
                     // that changes byte length can land these offsets out of
                     // bounds or mid-character in the original text. Skip such
                     // candidates instead of panicking, matching v2_decode's
-                    // defensive handling on the ONNX path.
+                    // defensive handling on the ONNX path. ~keep
                     let Some(raw) = text.get(byte_start..byte_end) else {
                         continue;
                     };
@@ -130,7 +130,7 @@ mod tests {
         use crate::Token;
         // "\u{130}a": U+0130 is two bytes, so offset 1 is mid-character. A
         // token carrying such offsets (possible when the lowercased copy is
-        // longer than the original) must be skipped, not panic.
+        // longer than the original) must be skipped, not panic. ~keep
         let text = "\u{130}a";
         let words = vec![Token::new(1, 3, "ia")];
         let labels = vec!["person".to_string()];
@@ -156,7 +156,7 @@ mod tests {
         use crate::Token;
         // Three words, but the scores tensor only covers two (the pipeline
         // truncated the third at the position-embedding limit). Decoding must
-        // stay inside the tensor instead of panicking on the third word.
+        // stay inside the tensor instead of panicking on the third word. ~keep
         let text = "one two three";
         let words = vec![
             Token::new(0, 3, "one"),

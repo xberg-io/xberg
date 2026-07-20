@@ -107,7 +107,7 @@ exclude = [
 
 # Opt-in comment-removal sweep. Preserve doc comments (rustdoc is required on
 # public items), TODO/FIXME (actionable), and SAFETY/license markers. Generated
-# binding output is exempted via per-file-ignores below.
+# binding output is exempted via per-file-ignores below. ~keep
 [workspace.poly.uncomment]
 enabled = true
 remove-todos = false
@@ -201,7 +201,7 @@ WebUI = "WebUI"
 traineddata = "traineddata"
 
 [workspace.poly.per-file-ignores]
-# Alef-generated binding output — never hand-clean comments; regeneration owns them.
+# Alef-generated binding output — never hand-clean comments; regeneration owns them. ~keep
 ".cargo/config.toml" = ["comment", "doc-comment"]
 "Package.swift" = ["comment", "doc-comment"]
 "packages/**" = ["comment", "doc-comment"]
@@ -213,7 +213,7 @@ traineddata = "traineddata"
 "crates/xberg-jni/**" = ["comment", "doc-comment"]
 "**/text_repair.rs" = ["typo"]
 # Executable CI helper (git mode 100755); poly runs ruff via stdin and cannot
-# see the exec bit, so EXE001 always false-fires on shebang'd scripts.
+# see the exec bit, so EXE001 always false-fires on shebang'd scripts. ~keep
 "scripts/ci/docker/test_docker.py" = ["EXE001"]
 "crates/xberg-node/index.js" = ["no-unused-vars"]
 "crates/xberg-node/format-metadata-wrapper.js" = ["no-unused-vars"]
@@ -508,7 +508,7 @@ package_name = "@xberg-io/xberg"
 # Intel macOS (darwin-x64) is dropped: Microsoft ships no x86_64-macOS ONNX
 # Runtime prebuilt, so CI provisions ORT via Homebrew, whose bottle links a
 # non-relocatable abseil closure that cannot be vendored into a portable .node.
-# Intel Mac users run the arm64 binding under Rosetta or use the WASM package.
+# Intel Mac users run the arm64 binding under Rosetta or use the WASM package. ~keep
 exclude_platforms = ["darwin-x64"]
 exclude_types = ["StreamReader", "PooledString"]
 exclude_functions = [
@@ -630,7 +630,7 @@ default_features = false
 app_name = "xberg"
 # Intel macOS (x86_64-apple-darwin) dropped: GitHub retires the last x86_64-macOS
 # runner in 2027 and pyke ships no static ORT for it. rustler_precompiled would
-# hard-fail its checksum step hunting for an artifact CI no longer builds.
+# hard-fail its checksum step hunting for an artifact CI no longer builds. ~keep
 nif_targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-gnu"]
 exclude_functions = [
     "calculate_quality_score",
@@ -672,12 +672,12 @@ package_name = "@xberg-io/xberg-wasm"
 # Publish only the `web` (ES module) target. Each wasm-pack target embeds a full
 # copy of the ~40MB wasm binary; shipping all four exceeded jsdelivr's 150MB CDN
 # limit and broke the docs live demo. The `web` build serves browsers, CDNs,
-# bundlers, Deno (npm:), and Node 22+.
+# bundlers, Deno (npm:), and Node 22+. ~keep
 targets = ["web"]
 features = ["wasm-target", "url-ingestion"]
 # Hand-written modules (src/bridge/, src/engine.rs): the injectable OCR bridge
 # and the stateful XbergEngine handle. alef declares them in the generated
-# lib.rs but does not manage their contents.
+# lib.rs but does not manage their contents. ~keep
 custom_rust_modules = ["bridge", "engine"]
 exclude_types = ["OcrFallbackDecision", "OcrProcessor", "OcrCacheStats", "TessdataManager", "PageLayoutResult"]
 exclude_functions = [
@@ -752,7 +752,7 @@ exclude_functions = [
 async-trait = "0.1"
 
 # Test harness for the in-crate #[wasm_bindgen_test] suites in src/engine.rs;
-# dev-only, never part of the published package's dependency graph.
+# dev-only, never part of the published package's dependency graph. ~keep
 [crates.wasm.extra_dev_dependencies]
 wasm-bindgen-test = "0.3"
 

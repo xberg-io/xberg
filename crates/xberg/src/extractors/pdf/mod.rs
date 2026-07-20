@@ -289,7 +289,7 @@ impl InternalDocumentExtractor for PdfExtractor {
         #[cfg(feature = "pdf")]
         crate::pdf::oxide_text::set_current_pdf_path(Some(path.to_path_buf()));
         // Async on native (non-blocking tokio::fs); sync fallback on wasm32 where tokio's `fs`
-        // feature is unavailable. See `core::io::read_file_async`.
+        // feature is unavailable. See `core::io::read_file_async`. ~keep
         let bytes = crate::core::io::read_file_async(path).await?;
         let result = self.extract_core(&bytes, mime_type, config, Some(path)).await;
         #[cfg(feature = "pdf")]
@@ -484,7 +484,7 @@ impl PdfExtractor {
             scanned_pages_to_ocr(config, &pdf_metadata, &native_text, boundaries.as_deref())
         {
             // A scanner's invisible sidecar passes the gate below, so detected
-            // pages are selected before it runs.
+            // pages are selected before it runs. ~keep
             if let Some(ref bounds) = boundaries
                 && !bounds.is_empty()
             {
@@ -672,7 +672,7 @@ impl PdfExtractor {
         // Full-document OCR is authoritative for tables when it produced
         // them. The structured OCR document already contains the same table
         // values, so later document assembly must not inject them a second
-        // time.
+        // time. ~keep
         replace_tables_with_ocr_output(&mut tables, ocr_tables);
 
         let (images, image_fallback_warning): (

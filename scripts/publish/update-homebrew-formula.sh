@@ -23,7 +23,7 @@ github_archive="https://github.com/xberg-io/xberg/archive/${tag}.tar.gz"
 # `brew install`) yields mismatched checksums and the bottle job fails with
 # "Formula reports different checksum". Pin the formula to a release asset whose
 # exact bytes we own instead: download the archive once, publish it as a stable
-# release asset, and point the formula url/sha at that asset.
+# release asset, and point the formula url/sha at that asset. ~keep
 asset_name="xberg-${version}.tar.gz"
 tarball_url="https://github.com/xberg-io/xberg/releases/download/${tag}/${asset_name}"
 

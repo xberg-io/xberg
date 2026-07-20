@@ -1,7 +1,7 @@
 # basemind configuration — https://github.com/Goldziher/basemind
 # Lives at the repo root and is meant to be committed. The `.basemind/` cache (index + blobs) is
 # derived state, gitignored, and wiped on schema bumps — never put durable config there.
-# Every value below is the built-in default; uncomment and edit only what you want to change.
+# Every value below is the built-in default; uncomment and edit only what you want to change. ~keep
 "$schema" = "v1"
 
 [scan]
@@ -25,21 +25,21 @@
 # off roughly halves scan time on large repos but leaves reference search empty until an L2 pass.
 # eager_l2 = true
 # Absolute paths OUTSIDE the repo to also index (e.g. a Bazel external cache). Symlinks are always
-# followed for these regardless of scan.follow_symlinks.
+# followed for these regardless of scan.follow_symlinks. ~keep
 # extra_roots = []
 
 [watch]
 # Coalesce filesystem events within this window (milliseconds).
 # debounce_ms = 250
-# Run L2 extraction on live watch edits (extra CPU per edit).
+# Run L2 extraction on live watch edits (extra CPU per edit). ~keep
 # live_l2 = false
 
 [cache]
-# Max extracted file-maps kept hot in memory.
+# Max extracted file-maps kept hot in memory. ~keep
 # file_map_lru = 256
 
 [mcp]
-# MCP transport. Only "stdio" is supported today.
+# MCP transport. Only "stdio" is supported today. ~keep
 # transport = "stdio"
 
 [documents]
@@ -57,7 +57,7 @@
 # Globs for documents that are still extracted + indexed but NOT embedded (keyword-only).
 # embed_exclude = []
 # Route archives (.zip/.tar/.jar/…) into the recursive archive extractor. Off by default so one
-# archive can't explode into thousands of embeds. True binaries are always skipped.
+# archive can't explode into thousands of embeds. True binaries are always skipped. ~keep
 # extract_archives = false
 
 [code_search]
@@ -69,5 +69,5 @@
 # you specifically want vector search over code (downloads an ONNX model, re-embeds on preset change).
 # embed = false
 # Globs for source files that are still chunked + BM25-indexed but NOT embedded (only used when
-# embed = true).
+# embed = true). ~keep
 # embed_exclude = []

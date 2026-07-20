@@ -17,7 +17,7 @@ mod preprocess;
 #[cfg(feature = "ort-backend")]
 mod session;
 // Only used by the ORT engines (engine.rs, preprocess.rs); dead weight
-// without ort-backend.
+// without ort-backend. ~keep
 #[cfg(feature = "ort-backend")]
 mod splitter;
 #[cfg(feature = "ort-backend")]
@@ -25,7 +25,7 @@ mod tensor;
 #[cfg(feature = "ort-backend")]
 mod tokenizer;
 // The V2 (GLiNER2) pipeline is only reachable through the ONNX engine or
-// the candle backend; without either there is no consumer for it.
+// the candle backend; without either there is no consumer for it. ~keep
 #[cfg(any(feature = "ort-backend", feature = "candle"))]
 mod v2;
 
@@ -45,7 +45,7 @@ pub use v2::engine::Gliner2;
 pub use v2::session::{INPUT_NAMES_V2, OUTPUT_NAMES_V2};
 
 // The V2 prompt-encoding surface is shared with the `candle` module but is
-// not part of the crate's public API.
+// not part of the crate's public API. ~keep
 #[cfg(feature = "candle")]
 pub(crate) use v2::preprocess::{V2Encoded, encode_v2};
 #[cfg(feature = "candle")]

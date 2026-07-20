@@ -274,7 +274,7 @@ fn calculate_framework_stats(results: &[&BenchmarkResult]) -> FrameworkExtension
 
     // Batch adapters store one positive aggregate-throughput anchor and zero
     // on sibling per-file rows. Average only reported measurements so the
-    // anchor is not divided by successful batch cardinality.
+    // anchor is not divided by successful batch cardinality. ~keep
     let reported_throughputs: Vec<f64> = successful_results
         .iter()
         .map(|r| r.metrics.throughput_bytes_per_sec / 1_000_000.0)
@@ -777,7 +777,7 @@ mod tests {
         });
 
         // Failed result: create_benchmark_result forces quality to None for failures anyway,
-        // but assert explicitly that it never contributes to the mean.
+        // but assert explicitly that it never contributes to the mean. ~keep
         let result2 = create_benchmark_result("framework1", false, 0, None, 0.0, 0);
 
         let results = vec![&result1, &result2];

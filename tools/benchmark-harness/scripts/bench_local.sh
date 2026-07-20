@@ -23,7 +23,7 @@
 #   BATCH_HEURISTIC_FIXTURES non-OCR batch cohort (default: unset)
 #   BATCH_OCR_FIXTURES all-OCR batch cohort (default: unset)
 #   BATCH_WORKERS bounded native batch concurrency for every framework (default: 4)
-#   SKIP_BUILD   set to 1 to skip the cargo builds (default: build)
+#   SKIP_BUILD   set to 1 to skip the cargo builds (default: build) ~keep
 #
 set -euo pipefail
 
@@ -70,7 +70,7 @@ fi
 HARNESS=./target/release/benchmark-harness
 
 # 3. Resolve Docling once, outside measured extraction, to the exact direct
-#    interpreter that the Rust adapter will use.
+#    interpreter that the Rust adapter will use. ~keep
 resolve_docling_python() {
   local candidate resolved
   if [ -n "${XBERG_BENCH_PYTHON:-}" ]; then

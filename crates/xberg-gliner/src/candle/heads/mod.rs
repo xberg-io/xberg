@@ -40,7 +40,7 @@ impl AllHeads {
     #[allow(unsafe_code)]
     pub fn from_safetensors(weights_path: &Path, device: &Device) -> crate::candle::Result<Self> {
         // SAFETY: mmap-reads the weights file; safe as long as it isn't
-        // mutated under us; matches `encoder::Encoder`'s pattern.
+        // mutated under us; matches `encoder::Encoder`'s pattern. ~keep
         let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[weights_path], candle_core::DType::F32, device) }
             .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("heads safetensors: {e}")))?;
         Self::load(vb, device)

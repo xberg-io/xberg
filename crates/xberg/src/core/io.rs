@@ -114,7 +114,7 @@ pub(crate) async fn read_file_async(path: impl AsRef<Path>) -> Result<Vec<u8>> {
         tokio::fs::read(path.as_ref()).await.map_err(crate::XbergError::from)
     }
     // wasm32, or native without the async runtime: no runtime to block, so the sync reader
-    // is the correct choice (and `tokio::fs` is unavailable on wasm32 regardless).
+    // is the correct choice (and `tokio::fs` is unavailable on wasm32 regardless). ~keep
     #[cfg(not(all(feature = "tokio-runtime", not(target_arch = "wasm32"))))]
     {
         std::fs::read(path.as_ref()).map_err(crate::XbergError::from)

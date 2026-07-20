@@ -35,7 +35,7 @@ packages=(
   # liblzma-dev provides the liblzma.so linker symlink. The swift package
   # statically links libxberg_ffi.a, whose lzma-sys transitive dep surfaces
   # `-llzma` at the swift link step; the runner ships liblzma5 (runtime) but
-  # not the dev symlink, so ld.gold fails with "cannot find -llzma".
+  # not the dev symlink, so ld.gold fails with "cannot find -llzma". ~keep
   liblzma-dev
   php-cli
   php-dev

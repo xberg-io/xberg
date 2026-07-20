@@ -35,14 +35,14 @@ impl Encoder {
 
         // SAFETY: VarBuilder::from_mmaped_safetensors mmap-reads the weights
         // file. Safe as long as the file isn't mutated under us; Candle's
-        // standard pattern.
+        // standard pattern. ~keep
         #[allow(unsafe_code)]
         let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[weights_path], candle_core::DType::F32, device) }
             .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("encoder safetensors: {e}")))?;
 
         // GLiNER2 stores all encoder tensors under the `encoder.` prefix
         // (e.g. `encoder.embeddings.word_embeddings.weight`). DebertaV2Model
-        // expects them at root, so scope into the prefix.
+        // expects them at root, so scope into the prefix. ~keep
         let model = DebertaV2Model::load(vb.pp("encoder"), &config)
             .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("encoder DebertaV2Model::load: {e}")))?;
 
@@ -96,7 +96,7 @@ impl Encoder {
         token_type_ids: Option<&Tensor>,
     ) -> candle_core::Result<Tensor> {
         // DebertaV2Model::forward takes Option<Tensor> (owned). Clone the
-        // borrowed inputs; Candle Tensors are Arc-backed so this is cheap.
+        // borrowed inputs; Candle Tensors are Arc-backed so this is cheap. ~keep
         self.model
             .forward(input_ids, token_type_ids.cloned(), Some(attention_mask.clone()))
     }

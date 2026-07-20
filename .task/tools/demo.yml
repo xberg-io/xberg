@@ -16,7 +16,7 @@ tasks:
     dir: crates/xberg-wasm
     cmds:
       # Bake the same env/wasi ESM shim the publish pipeline applies, so local
-      # dev loads pkg/web exactly as production consumers do.
+      # dev loads pkg/web exactly as production consumers do. ~keep
       - '[ "${SKIP_WASM_BUILD:-0}" = "1" ] || { pnpm run build:wasm:web && node scripts/fix-wasi-imports.mjs; }'
 
   dev:patch:

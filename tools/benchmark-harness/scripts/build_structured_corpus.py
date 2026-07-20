@@ -52,7 +52,7 @@ URL = "https://huggingface.co/datasets/llamaindex/ParseBench"
 MANIFEST_SCHEMA = 1
 
 # Split -> (xberg capability it exercises, the cohort/capability tag surfaced for querying).
-# Deterministic order also decides which subdir a byte-identical PDF is sourced from on collisions.
+# Deterministic order also decides which subdir a byte-identical PDF is sourced from on collisions. ~keep
 SPLITS = ("chart", "layout", "text_content", "text_formatting")
 SPLIT_META = {
     "chart": {"capability": "chart-extraction", "cohort": "chart"},
@@ -65,7 +65,7 @@ SPLIT_META = {
 REPO_ROOT = Path(__file__).resolve().parents[3]
 TEST_DOCS = REPO_ROOT / "test_documents"
 GT_OUT_DIR = TEST_DOCS / "ground_truth" / "structured" / "parsebench"
-# Gitignored on-demand cache for `reference`-class content (see test_documents/.gitignore).
+# Gitignored on-demand cache for `reference`-class content (see test_documents/.gitignore). ~keep
 CACHE_PDF_DIR = TEST_DOCS / ".corpus-cache" / "structured" / "pdf"
 MANIFEST = TEST_DOCS / "ground_truth" / "structured_manifest.json"
 
@@ -116,7 +116,7 @@ def build(source: Path, dry_run: bool) -> dict:
     # per-doc accumulation keyed by pb id
     docs: dict[str, dict] = {}
     # deterministic source PDF selection: first split (in SPLITS order) that references the doc wins;
-    # collisions across split subdirs must be byte-identical or we abort.
+    # collisions across split subdirs must be byte-identical or we abort. ~keep
     pdf_source: dict[str, Path] = {}
     split_summary: dict[str, dict] = {}
 
@@ -149,7 +149,7 @@ def build(source: Path, dry_run: bool) -> dict:
             for tag in record.get("tags") or []:
                 entry["tags"][tag] += 1
 
-        # vendor the split GT verbatim (committed, Apache-2.0), hash the copy we ship
+        # vendor the split GT verbatim (committed, Apache-2.0), hash the copy we ship ~keep
         vendored = GT_OUT_DIR / f"{split}.jsonl"
         copy_if_changed(src_jsonl, vendored, dry_run)
         gt_hash = sha256_file(vendored if vendored.exists() else src_jsonl)

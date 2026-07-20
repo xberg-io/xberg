@@ -335,7 +335,7 @@ mod slow_fixture_extractor {
             tokio::time::sleep(self.sleep).await;
             // `ExtractedDocument` has crate-private fields, so it cannot be built with
             // struct-literal `..Default::default()` from outside `xberg`. Start from
-            // `Default::default()` and mutate the public fields instead.
+            // `Default::default()` and mutate the public fields instead. ~keep
             let mut document = ExtractedDocument::default();
             document.content = "slow fixture output".to_string();
             document.mime_type = SLOW_FIXTURE_MIME.into();

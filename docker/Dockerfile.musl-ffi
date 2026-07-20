@@ -48,7 +48,7 @@ RUN cargo build --release --package xberg-ffi && \
 # libxberg_ffi.so. Without this the NuGet package ships the FFI library alone and
 # .NET raises DllNotFoundException on its unresolved libonnxruntime (xberg #1280).
 # Best-effort: the allowlist skips base-image-provided libs (musl libc, libstdc++,
-# libgcc); an unmatched dep is left out rather than failing the build.
+# libgcc); an unmatched dep is left out rather than failing the build. ~keep
 RUN apk add --no-cache patchelf && \
     ldd /build/libxberg_ffi.so | awk '{print $3}' | grep -E '^/' | while read -r lib; do \
         base="$(basename "$lib")"; \

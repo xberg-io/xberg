@@ -28,7 +28,7 @@ esac
 echo "Using macOS ONNX Runtime arch: $ort_arch"
 
 # Last Microsoft x86_64 macOS release (1.24 dropped the arch). Self-contained
-# with a macOS 13.4 floor; ort built with api-18 accepts any runtime >= 1.18.
+# with a macOS 13.4 floor; ort built with api-18 accepts any runtime >= 1.18. ~keep
 if [ "$ort_arch" = "x86_64" ]; then
   ort_version="1.23.2"
 fi

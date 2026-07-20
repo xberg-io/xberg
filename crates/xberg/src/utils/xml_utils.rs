@@ -140,7 +140,7 @@ mod tests {
     fn test_resolve_general_ref_unknown_entity_is_empty() {
         assert_eq!(resolve("unknownentity"), "");
         assert_eq!(resolve("#xZZ"), "");
-        assert_eq!(resolve("#1114112"), ""); // beyond char::MAX
+        assert_eq!(resolve("#1114112"), ""); // beyond char::MAX ~keep
     }
 
     /// The core contract: a text node split at references arrives as ONE Text
