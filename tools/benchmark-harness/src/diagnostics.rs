@@ -157,18 +157,52 @@ pub fn diagnose_document(
     }
 }
 
-/// Write diagnostic files to `/tmp/xberg_diagnose/{doc_name}/`.
-///
-/// Creates the directory and writes:
-/// - `gt.md` — ground truth markdown (if available)
-/// - `extracted.md` — extracted output
-/// - `diagnostic.json` — serialized `DocumentDiagnostic`
-pub fn write_diagnostic_files(
+const DIAGNOSTIC_OUTPUT_ROOT: &str = "/tmp/xberg_diagnose";
+const MAX_PATH_COMPONENT_LENGTH: usize = 120;
+const PATH_COMPONENT_HASH_LENGTH: usize = 16;
+
+fn sanitize_path_component(value: &str) -> String {
+    const HEX_DIGITS: &[u8; 16] = b"0123456789ABCDEF";
+
+    if value.is_empty() {
+        return "~empty".to_string();
+    }
+
+    let mut sanitized = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_') {
+            sanitized.push(char::from(byte));
+        } else {
+            sanitized.push('~');
+            sanitized.push(char::from(HEX_DIGITS[usize::from(byte >> 4)]));
+            sanitized.push(char::from(HEX_DIGITS[usize::from(byte & 0x0f)]));
+        }
+    }
+    if sanitized.len() <= MAX_PATH_COMPONENT_LENGTH {
+        return sanitized;
+    }
+
+    let hash = blake3::hash(value.as_bytes()).to_hex();
+    let prefix_length = MAX_PATH_COMPONENT_LENGTH - PATH_COMPONENT_HASH_LENGTH - 1;
+    sanitized.truncate(prefix_length);
+    sanitized.push('~');
+    sanitized.push_str(&hash[..PATH_COMPONENT_HASH_LENGTH]);
+    sanitized
+}
+
+fn diagnostic_output_dir(root: &std::path::Path, diag: &DocumentDiagnostic) -> std::path::PathBuf {
+    root.join(sanitize_path_component(&diag.doc_name))
+        .join(sanitize_path_component(&diag.file_type))
+        .join(sanitize_path_component(&diag.pipeline))
+}
+
+fn write_diagnostic_files_to_root(
+    root: &std::path::Path,
     diag: &DocumentDiagnostic,
     gt_markdown: Option<&str>,
     extracted_content: &str,
 ) -> std::io::Result<()> {
-    let dir = std::path::PathBuf::from("/tmp/xberg_diagnose").join(format!("{}_{}", diag.doc_name, diag.file_type));
+    let dir = diagnostic_output_dir(root, diag);
     std::fs::create_dir_all(&dir)?;
 
     if let Some(md) = gt_markdown {
@@ -181,6 +215,26 @@ pub fn write_diagnostic_files(
     std::fs::write(dir.join("diagnostic.json"), json)?;
 
     Ok(())
+}
+
+/// Write diagnostic files to
+/// `/tmp/xberg_diagnose/{doc_name}/{file_type}/{pipeline}/`.
+///
+/// Creates the directory and writes:
+/// - `gt.md` — ground truth markdown (if available)
+/// - `extracted.md` — extracted output
+/// - `diagnostic.json` — serialized `DocumentDiagnostic`
+pub fn write_diagnostic_files(
+    diag: &DocumentDiagnostic,
+    gt_markdown: Option<&str>,
+    extracted_content: &str,
+) -> std::io::Result<()> {
+    write_diagnostic_files_to_root(
+        std::path::Path::new(DIAGNOSTIC_OUTPUT_ROOT),
+        diag,
+        gt_markdown,
+        extracted_content,
+    )
 }
 
 #[cfg(test)]
@@ -222,15 +276,64 @@ mod tests {
 
     #[test]
     fn test_write_diagnostic_files() {
+        let temp = tempfile::tempdir().expect("create diagnostic output directory");
         let diag = diagnose_document("write_test", "pdf", "baseline", "extracted text", "ground truth", None);
-        let result = write_diagnostic_files(&diag, Some("# GT"), "extracted text");
+        let result = write_diagnostic_files_to_root(temp.path(), &diag, Some("# GT"), "extracted text");
         assert!(result.is_ok());
 
-        let dir = std::path::PathBuf::from("/tmp/xberg_diagnose/write_test_pdf");
+        let dir = temp.path().join("write_test/pdf/baseline");
         assert!(dir.join("gt.md").exists());
         assert!(dir.join("extracted.md").exists());
         assert!(dir.join("diagnostic.json").exists());
+    }
 
-        let _ = std::fs::remove_dir_all(&dir);
+    #[test]
+    fn test_diagnostic_outputs_are_pipeline_specific() {
+        let temp = tempfile::tempdir().expect("create diagnostic output directory");
+        let baseline = diagnose_document("collision_test", "pdf", "baseline", "baseline", "ground truth", None);
+        let layout = diagnose_document("collision_test", "pdf", "layout", "layout", "ground truth", None);
+
+        write_diagnostic_files_to_root(temp.path(), &baseline, None, "baseline output")
+            .expect("write baseline diagnostics");
+        write_diagnostic_files_to_root(temp.path(), &layout, None, "layout output").expect("write layout diagnostics");
+
+        let baseline_dir = diagnostic_output_dir(temp.path(), &baseline);
+        let layout_dir = diagnostic_output_dir(temp.path(), &layout);
+        assert_ne!(baseline_dir, layout_dir);
+        assert_eq!(
+            std::fs::read_to_string(baseline_dir.join("extracted.md")).unwrap(),
+            "baseline output"
+        );
+        assert_eq!(
+            std::fs::read_to_string(layout_dir.join("extracted.md")).unwrap(),
+            "layout output"
+        );
+    }
+
+    #[test]
+    fn test_diagnostic_output_path_sanitizes_components() {
+        let diag = diagnose_document("../../report name", "../pdf", "../layout+table", "", "", None);
+        let root = std::path::Path::new(DIAGNOSTIC_OUTPUT_ROOT);
+        let dir = diagnostic_output_dir(root, &diag);
+
+        assert_eq!(
+            dir,
+            std::path::PathBuf::from(DIAGNOSTIC_OUTPUT_ROOT)
+                .join("~2E~2E~2F~2E~2E~2Freport~20name")
+                .join("~2E~2E~2Fpdf")
+                .join("~2E~2E~2Flayout~2Btable")
+        );
+        assert!(dir.starts_with(root));
+    }
+
+    #[test]
+    fn test_sanitized_components_are_bounded_and_collision_resistant() {
+        let common_prefix = "a".repeat(MAX_PATH_COMPONENT_LENGTH * 2);
+        let first = sanitize_path_component(&format!("{common_prefix}first"));
+        let second = sanitize_path_component(&format!("{common_prefix}second"));
+
+        assert_eq!(first.len(), MAX_PATH_COMPONENT_LENGTH);
+        assert_eq!(second.len(), MAX_PATH_COMPONENT_LENGTH);
+        assert_ne!(first, second);
     }
 }
