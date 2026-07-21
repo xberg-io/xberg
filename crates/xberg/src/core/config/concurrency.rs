@@ -24,9 +24,9 @@ use serde::{Deserialize, Serialize};
 pub struct ConcurrencyConfig {
     /// Maximum number of threads for all internal thread pools.
     ///
-    /// Caps Rayon global pool size, ONNX Runtime intra-op threads, and
-    /// (when `max_concurrent_extractions` is unset) the batch concurrency
-    /// semaphore. When `None`, system defaults are used.
+    /// Caps Rayon global pool size, ONNX Runtime intra-op threads, and the
+    /// combined document/inner-task budget for batch extraction. When `None`,
+    /// system defaults are used.
     pub max_threads: Option<usize>,
 }
 
@@ -73,10 +73,11 @@ pub(crate) struct BatchExecutionPlan {
 
 /// Allocate batch workers and per-worker model threads without oversubscription.
 ///
-/// Layout inference is intentionally limited to two workers because the retained
-/// RT-DETR and TATR pools each contain two sessions. The total configured budget is
-/// divided between those workers. `max_concurrent` is a ceiling, never an override
-/// of the layout/RSS guard.
+/// The total configured budget is divided between document workers so nested
+/// per-document parallelism cannot multiply the process-wide CPU budget.
+/// Layout inference is additionally limited to two workers because the retained
+/// RT-DETR and TATR pools each contain two sessions. `max_concurrent` is always a
+/// ceiling and cannot expand execution beyond the total thread budget.
 #[cfg(all(
     not(target_arch = "wasm32"),
     any(
@@ -97,25 +98,20 @@ pub(crate) fn resolve_batch_execution_plan(
 
     let total_budget = resolve_thread_budget(config);
     let available_inputs = input_count.max(1);
+    let worker_ceiling = max_concurrent
+        .unwrap_or(total_budget)
+        .max(1)
+        .min(total_budget)
+        .min(available_inputs);
     let workers = if layout_active {
-        max_concurrent
-            .unwrap_or(total_budget)
-            .clamp(1, MAX_LAYOUT_WORKERS)
-            .min(total_budget)
-            .min(available_inputs)
+        worker_ceiling.min(MAX_LAYOUT_WORKERS)
     } else {
-        max_concurrent
-            .map_or(total_budget, |explicit| explicit.max(1))
-            .min(available_inputs)
+        worker_ceiling
     }
     .max(1);
-    let thread_budget = if layout_active {
-        (total_budget / workers).max(1)
-    } else {
-        total_budget
-    };
+    let thread_budget = (total_budget / workers).max(1);
 
-    debug_assert!(!layout_active || workers * thread_budget <= total_budget);
+    debug_assert!(workers * thread_budget <= total_budget);
     BatchExecutionPlan { workers, thread_budget }
 }
 
@@ -161,6 +157,18 @@ pub(crate) fn init_thread_pools(budget: usize) {
     });
 }
 
+/// Initialize process-wide CPU pools from the total batch budget.
+///
+/// Batch workers receive a divided per-document budget, but Rayon is global and
+/// immutable after first initialization. It must therefore be initialized before
+/// any worker observes its smaller share.
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub(crate) fn init_batch_thread_pool(config: Option<&ConcurrencyConfig>) -> usize {
+    let total_budget = resolve_thread_budget(config);
+    init_thread_pools(total_budget);
+    total_budget
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -200,7 +208,7 @@ mod tests {
             resolve_batch_execution_plan(None, false, budget, None),
             BatchExecutionPlan {
                 workers: budget,
-                thread_budget: budget,
+                thread_budget: 1,
             }
         );
     }
@@ -241,17 +249,66 @@ mod tests {
 
     #[test]
     #[cfg(not(target_arch = "wasm32"))]
-    fn test_non_layout_batch_plan_preserves_explicit_worker_limit() {
+    fn test_non_layout_batch_plan_divides_budget_at_explicit_worker_limit() {
+        let config = ConcurrencyConfig { max_threads: Some(8) };
+        let plan = resolve_batch_execution_plan(Some(&config), false, 16, Some(2));
+        assert_eq!(plan.workers, 2);
+        assert_eq!(plan.thread_budget, 4);
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn test_non_layout_batch_plan_clamps_explicit_limit_to_total_budget() {
         let config = ConcurrencyConfig { max_threads: Some(2) };
         let plan = resolve_batch_execution_plan(Some(&config), false, 8, Some(6));
-        assert_eq!(plan.workers, 6);
-        assert_eq!(plan.thread_budget, 2);
+        assert_eq!(plan.workers, 2);
+        assert_eq!(plan.thread_budget, 1);
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn test_non_layout_batch_plan_gives_single_input_full_inner_budget() {
+        let config = ConcurrencyConfig { max_threads: Some(8) };
+        let plan = resolve_batch_execution_plan(Some(&config), false, 1, None);
+        assert_eq!(plan.workers, 1);
+        assert_eq!(plan.thread_budget, 8);
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn test_batch_plan_never_exceeds_total_budget() {
+        for total_budget in 1..=8 {
+            let config = ConcurrencyConfig {
+                max_threads: Some(total_budget),
+            };
+            for input_count in 0..=12 {
+                for max_concurrent in [None, Some(0), Some(1), Some(3), Some(16)] {
+                    for layout_active in [false, true] {
+                        let plan =
+                            resolve_batch_execution_plan(Some(&config), layout_active, input_count, max_concurrent);
+                        assert!(plan.workers * plan.thread_budget <= total_budget);
+                        assert!(plan.workers <= total_budget);
+                        assert!(plan.workers <= input_count.max(1));
+                        if let Some(explicit) = max_concurrent {
+                            assert!(plan.workers <= explicit.max(1));
+                        }
+                    }
+                }
+            }
+        }
     }
 
     #[test]
     fn test_init_thread_pools_idempotent() {
         init_thread_pools(2);
         init_thread_pools(4);
+    }
+
+    #[test]
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    fn test_batch_thread_pool_uses_total_configured_budget() {
+        let config = ConcurrencyConfig { max_threads: Some(7) };
+        assert_eq!(init_batch_thread_pool(Some(&config)), 7);
     }
 
     #[test]

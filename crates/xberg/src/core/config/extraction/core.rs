@@ -153,10 +153,11 @@ pub struct ExtractionConfig {
     #[serde(default = "default_extraction_timeout")]
     pub extraction_timeout_secs: Option<u64>,
 
-    /// Maximum concurrent extractions in batch operations (None = (num_cpus × 1.5).ceil()).
+    /// Maximum concurrent document extractions in batch operations.
     ///
-    /// Limits parallelism to prevent resource exhaustion when processing
-    /// large batches. Defaults to (num_cpus × 1.5).ceil() when not set.
+    /// This is a ceiling within the configured total thread budget, not an
+    /// independent pool size. When unset, the scheduler derives document and
+    /// per-document concurrency from `ConcurrencyConfig::max_threads`.
     #[serde(default)]
     pub max_concurrent_extractions: Option<usize>,
 
@@ -300,9 +301,9 @@ pub struct ExtractionConfig {
 
     /// Concurrency limits for constrained environments (None = use defaults).
     ///
-    /// Controls Rayon thread pool size, ONNX Runtime intra-op threads, and
-    /// (when `max_concurrent_extractions` is unset) the batch concurrency
-    /// semaphore. See [`crate::core::config::ConcurrencyConfig`] for details.
+    /// Controls Rayon thread pool size, ONNX Runtime intra-op threads, and the
+    /// combined document/inner-task budget for batch extraction. See
+    /// [`crate::core::config::ConcurrencyConfig`] for details.
     #[serde(default)]
     #[cfg_attr(alef, alef(skip))]
     pub concurrency: Option<super::super::concurrency::ConcurrencyConfig>,

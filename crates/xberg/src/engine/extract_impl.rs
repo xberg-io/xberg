@@ -16,6 +16,9 @@ use std::sync::Arc;
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 use std::time::Instant;
 
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+type PendingBatchItem = (usize, ExtractInput, String);
+
 #[cfg(feature = "url-ingestion")]
 use crawlberg::{CrawlConfig, CrawlEngine, CrawlPageResult, DownloadedDocument, ScrapeResult};
 
@@ -113,9 +116,9 @@ async fn extract_batch_concurrent(
         return Ok(output);
     }
 
-    let execution_plan = resolve_engine_batch_execution_plan(config, &inputs);
+    crate::core::config::concurrency::init_batch_thread_pool(config.concurrency.as_ref());
     let base_config = Arc::new(config.clone());
-    let mut pending = VecDeque::with_capacity(input_count);
+    let mut pending: VecDeque<PendingBatchItem> = VecDeque::with_capacity(input_count);
 
     let mut items: Vec<Option<BatchItemResult>> = Vec::with_capacity(input_count);
     items.resize_with(input_count, || None);
@@ -149,7 +152,8 @@ async fn extract_batch_concurrent(
         pending.push_back((index, input, source));
     }
 
-    let task_config = Arc::clone(&base_config);
+    let execution_plan = resolve_pending_batch_execution_plan(config, &pending);
+    let task_config = resolve_batch_base_config(&base_config, execution_plan.thread_budget);
     let completed = run_bounded_batch_tasks(pending, execution_plan.workers, move |(index, input, source)| {
         let base_config = Arc::clone(&task_config);
         async move {
@@ -192,14 +196,31 @@ async fn extract_batch_concurrent(
     Ok(output)
 }
 
-#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[cfg(all(test, feature = "tokio-runtime", not(target_arch = "wasm32")))]
 fn resolve_engine_batch_execution_plan(
     config: &ExtractionConfig,
     inputs: &[ExtractInput],
 ) -> crate::core::config::concurrency::BatchExecutionPlan {
+    resolve_engine_batch_execution_plan_for(config, batch_layout_active(config, inputs), inputs.len())
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+fn resolve_pending_batch_execution_plan(
+    config: &ExtractionConfig,
+    pending: &VecDeque<PendingBatchItem>,
+) -> crate::core::config::concurrency::BatchExecutionPlan {
+    resolve_engine_batch_execution_plan_for(
+        config,
+        batch_layout_active(config, pending.iter().map(|(_, input, _)| input)),
+        pending.len(),
+    )
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+fn batch_layout_active<'a>(config: &ExtractionConfig, inputs: impl IntoIterator<Item = &'a ExtractInput>) -> bool {
     #[cfg(layout_detection)]
     let layout_active = config.layout.is_some()
-        || inputs.iter().any(|input| {
+        || inputs.into_iter().any(|input| {
             input
                 .config
                 .as_ref()
@@ -208,9 +229,9 @@ fn resolve_engine_batch_execution_plan(
     #[cfg(not(layout_detection))]
     let layout_active = false;
     #[cfg(not(layout_detection))]
-    let _ = inputs;
+    let _ = (config, inputs);
 
-    resolve_engine_batch_execution_plan_for(config, layout_active, inputs.len())
+    layout_active
 }
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
@@ -556,6 +577,19 @@ fn resolve_batch_input_config(
     }
 
     let mut resolved = Arc::unwrap_or_clone(resolved);
+    resolved.concurrency = Some(crate::core::config::ConcurrencyConfig {
+        max_threads: Some(thread_budget),
+    });
+    Arc::new(resolved)
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+fn resolve_batch_base_config(base_config: &Arc<ExtractionConfig>, thread_budget: usize) -> Arc<ExtractionConfig> {
+    if crate::core::config::concurrency::resolve_thread_budget(base_config.concurrency.as_ref()) == thread_budget {
+        return Arc::clone(base_config);
+    }
+
+    let mut resolved = (**base_config).clone();
     resolved.concurrency = Some(crate::core::config::ConcurrencyConfig {
         max_threads: Some(thread_budget),
     });

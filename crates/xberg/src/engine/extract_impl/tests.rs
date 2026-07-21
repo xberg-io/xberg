@@ -247,16 +247,39 @@ fn engine_batch_execution_plan_matches_layout_aware_resolution() {
         concurrency: Some(crate::core::config::ConcurrencyConfig { max_threads: Some(4) }),
         ..Default::default()
     };
-    assert_eq!(resolve_engine_batch_execution_plan_for(&config, false, 8).workers, 4);
+    let non_layout = resolve_engine_batch_execution_plan_for(&config, false, 8);
+    assert_eq!(non_layout.workers, 4);
+    assert_eq!(non_layout.thread_budget, 1);
     let layout = resolve_engine_batch_execution_plan_for(&config, true, 8);
     assert_eq!(layout.workers, 2);
     assert_eq!(layout.thread_budget, 2);
 
     let explicit = ExtractionConfig {
-        max_concurrent_extractions: Some(3),
+        max_concurrent_extractions: Some(2),
         ..config
     };
     assert_eq!(resolve_engine_batch_execution_plan_for(&explicit, true, 8).workers, 2);
+    let non_layout_explicit = resolve_engine_batch_execution_plan_for(&explicit, false, 8);
+    assert_eq!(non_layout_explicit.workers, 2);
+    assert_eq!(non_layout_explicit.thread_budget, 2);
+}
+
+#[test]
+fn engine_batch_base_config_applies_plan_budget_once() {
+    let base = Arc::new(ExtractionConfig {
+        concurrency: Some(crate::core::config::ConcurrencyConfig { max_threads: Some(8) }),
+        ..Default::default()
+    });
+
+    let adjusted = resolve_batch_base_config(&base, 2);
+    assert_eq!(
+        adjusted.concurrency.as_ref().and_then(|config| config.max_threads),
+        Some(2)
+    );
+    assert!(!Arc::ptr_eq(&base, &adjusted));
+
+    let reused = resolve_batch_base_config(&adjusted, 2);
+    assert!(Arc::ptr_eq(&adjusted, &reused));
 }
 
 #[test]
@@ -278,6 +301,33 @@ fn engine_batch_execution_plan_without_layout_respects_input_count() {
     let inputs = vec![ExtractInput::default()];
 
     assert_eq!(resolve_engine_batch_execution_plan(&config, &inputs).workers, 1);
+}
+
+#[cfg(all(layout_detection, feature = "url-ingestion"))]
+#[test]
+fn engine_batch_plan_ignores_shared_url_count_and_layout_overrides() {
+    let config = ExtractionConfig {
+        concurrency: Some(crate::core::config::ConcurrencyConfig { max_threads: Some(8) }),
+        ..Default::default()
+    };
+    let shared = ExtractInput {
+        config: Some(crate::core::config::FileExtractionConfig {
+            layout: Some(Default::default()),
+            ..Default::default()
+        }),
+        ..ExtractInput::from_uri("https://example.com/document.pdf")
+    };
+    assert!(shared_group_uri(&shared).is_some());
+
+    let local = ExtractInput::from_uri("local.pdf");
+    let all_plan = resolve_engine_batch_execution_plan(&config, &[shared, local.clone()]);
+    assert_eq!(all_plan.workers, 2);
+    assert_eq!(all_plan.thread_budget, 4);
+
+    let pending = VecDeque::from([(1, local, "local.pdf".to_string())]);
+    let pending_plan = resolve_pending_batch_execution_plan(&config, &pending);
+    assert_eq!(pending_plan.workers, 1);
+    assert_eq!(pending_plan.thread_budget, 8);
 }
 
 #[cfg(layout_detection)]
