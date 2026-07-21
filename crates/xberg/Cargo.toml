@@ -95,6 +95,7 @@ tree-sitter-wasm = ["tree-sitter"]
 
 ocr = [
     "ocr-pipeline",
+    "tokio-runtime",
     "dep:xberg-tesseract",
     "dep:image",
     "dep:tiff",
