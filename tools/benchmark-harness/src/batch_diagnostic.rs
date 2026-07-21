@@ -116,6 +116,7 @@ fn resolve_extraction_config(config: &BatchDiagnosticConfig) -> Result<Extractio
     };
 
     extraction_config.use_cache = false;
+    disable_ocr_result_caches(&mut extraction_config, &config.inputs)?;
     if let Some(max_concurrent_extractions) = config.max_concurrent_extractions {
         extraction_config.max_concurrent_extractions = Some(max_concurrent_extractions);
     }
@@ -137,6 +138,60 @@ fn resolve_extraction_config(config: &BatchDiagnosticConfig) -> Result<Extractio
         ));
     }
     Ok(extraction_config)
+}
+
+fn disable_ocr_result_caches(config: &mut ExtractionConfig, inputs: &[PathBuf]) -> Result<()> {
+    if config.disable_ocr || config.ocr.as_ref().is_some_and(|ocr| !ocr.enabled) {
+        return Ok(());
+    }
+
+    if config.ocr.is_none() && !config.force_ocr && config.force_ocr_pages.as_ref().is_none_or(Vec::is_empty) {
+        reject_implicit_ocr_caches(config, inputs)?;
+        return Ok(());
+    }
+    let ocr = config.ocr.get_or_insert_with(xberg::OcrConfig::default);
+    if let Some(pipeline) = ocr.pipeline.as_mut() {
+        for stage in &mut pipeline.stages {
+            if stage.backend == "tesseract" {
+                stage
+                    .tesseract_config
+                    .get_or_insert_with(xberg::TesseractConfig::default)
+                    .use_cache = false;
+            }
+        }
+    } else if ocr.backend == "tesseract" {
+        ocr.tesseract_config
+            .get_or_insert_with(xberg::TesseractConfig::default)
+            .use_cache = false;
+    }
+    Ok(())
+}
+
+fn reject_implicit_ocr_caches(config: &ExtractionConfig, inputs: &[PathBuf]) -> Result<()> {
+    if matches!(config.ocr_strategy, xberg::OcrStrategy::ScannedPages { .. }) {
+        return Err(implicit_ocr_config_error("scanned-page OCR"));
+    }
+    if config
+        .pdf_options
+        .as_ref()
+        .is_some_and(|options| options.ocr_inline_images)
+    {
+        return Err(implicit_ocr_config_error("PDF inline-image OCR"));
+    }
+    for input in inputs {
+        let mime = xberg::detect_mime_type(input.to_string_lossy().into_owned(), true)
+            .map_err(|error| Error::Config(format!("failed to detect input type for {}: {error}", input.display())))?;
+        if mime.starts_with("image/") {
+            return Err(implicit_ocr_config_error("image OCR"));
+        }
+    }
+    Ok(())
+}
+
+fn implicit_ocr_config_error(path: &str) -> Error {
+    Error::Config(format!(
+        "{path} uses an implicit OCR configuration whose backend cache cannot be disabled safely; provide an explicit `ocr` configuration"
+    ))
 }
 
 fn parse_extraction_config_json(raw: &str) -> Result<ExtractionConfig> {
@@ -363,7 +418,7 @@ mod tests {
 
     fn diagnostic_config(extraction_config_json: Option<&str>) -> BatchDiagnosticConfig {
         BatchDiagnosticConfig {
-            inputs: vec![PathBuf::from("input.pdf")],
+            inputs: vec![fixture_path("pdf/tiny.pdf")],
             batch_size: 1,
             warmup_iterations: 0,
             iterations: 1,
@@ -371,6 +426,12 @@ mod tests {
             max_threads: None,
             max_concurrent_extractions: None,
         }
+    }
+
+    fn fixture_path(relative: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../test_documents")
+            .join(relative)
     }
 
     #[test]
@@ -381,6 +442,46 @@ mod tests {
         assert_eq!(extraction.output_format, xberg::OutputFormat::Markdown);
         assert!(extraction.disable_ocr);
         assert!(!extraction.use_cache);
+    }
+
+    #[test]
+    fn default_diagnostic_preserves_absent_ocr_config() {
+        let extraction = resolve_extraction_config(&diagnostic_config(None)).unwrap();
+
+        assert!(extraction.ocr.is_none());
+    }
+
+    #[test]
+    fn diagnostic_rejects_implicit_image_ocr_cache() {
+        let mut config = diagnostic_config(None);
+        config.inputs = vec![fixture_path("images/ocr_image.jpg")];
+
+        assert!(matches!(
+            resolve_extraction_config(&config),
+            Err(Error::Config(message)) if message.contains("explicit `ocr`")
+        ));
+    }
+
+    #[test]
+    fn diagnostic_rejects_implicit_scanned_page_ocr_cache() {
+        let config = diagnostic_config(Some(
+            r#"{"ocr_strategy":{"mode":"scanned_pages","min_confidence":0.5}}"#,
+        ));
+
+        assert!(matches!(
+            resolve_extraction_config(&config),
+            Err(Error::Config(message)) if message.contains("scanned-page OCR")
+        ));
+    }
+
+    #[test]
+    fn diagnostic_rejects_implicit_inline_image_ocr_cache() {
+        let config = diagnostic_config(Some(r#"{"pdf_options":{"ocr_inline_images":true}}"#));
+
+        assert!(matches!(
+            resolve_extraction_config(&config),
+            Err(Error::Config(message)) if message.contains("inline-image OCR")
+        ));
     }
 
     #[test]
@@ -402,7 +503,34 @@ mod tests {
         let extraction = resolve_extraction_config(&config).unwrap();
 
         assert!(extraction.force_ocr);
-        assert_eq!(extraction.ocr.unwrap().backend, "tesseract");
+        let ocr = extraction.ocr.unwrap();
+        assert_eq!(ocr.backend, "tesseract");
+        assert!(!ocr.tesseract_config.unwrap().use_cache);
+    }
+
+    #[test]
+    fn diagnostic_overrides_explicit_tesseract_cache() {
+        let config = diagnostic_config(Some(
+            r#"{"ocr":{"backend":"tesseract","tesseract_config":{"use_cache":true}},"force_ocr":true}"#,
+        ));
+        let extraction = resolve_extraction_config(&config).unwrap();
+
+        assert!(!extraction.ocr.unwrap().tesseract_config.unwrap().use_cache);
+    }
+
+    #[test]
+    fn diagnostic_disables_tesseract_pipeline_stage_caches() {
+        let config = diagnostic_config(Some(
+            r#"{"ocr":{"pipeline":{"stages":[{"backend":"tesseract","priority":100},{"backend":"tesseract","priority":50,"tesseract_config":{"use_cache":true}}]}}}"#,
+        ));
+        let extraction = resolve_extraction_config(&config).unwrap();
+        let stages = extraction.ocr.unwrap().pipeline.unwrap().stages;
+
+        assert!(
+            stages
+                .iter()
+                .all(|stage| !stage.tesseract_config.as_ref().unwrap().use_cache)
+        );
     }
 
     #[test]
