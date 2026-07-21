@@ -45,7 +45,7 @@ The `no-ort-target` aggregate is the shared no-ORT base used by both `wasm-targe
 
 - `xberg-paddle-ocr`, `hf-hub`, `pprof` — excluded on `wasm32`
 - `ureq`: `rustls` on non-Windows; `native-tls` on Windows
-- `xberg-ffi` and `xberg-dart` cargo dependencies are target-conditional: `cfg(all(target_os = "android", target_arch = "x86_64"))` selects `android-target`; all other targets (including arm64 Android phones) get the full ORT-enabled feature set.
+- `xberg-ffi` and `xberg-dart` cargo dependencies are target-conditional: `cfg(target_os = "android")` (**both** ABIs — `aarch64` and `x86_64`) and `cfg(target_os = "ios")` select `android-target`, the pure-Rust tract ML surface with no ONNX Runtime; `cfg(target_os = "windows")` selects `windows-target` (full ORT ML via `ort-bundled`); `cfg(all(target_os = "macos", target_arch = "x86_64"))` selects `macos-intel-target`. All other targets (Linux, macOS arm64) get the full ORT-enabled feature set. Android and iOS run inference through `tract`, not ORT, on every ABI — there is no arch split that gives arm64 Android phones a native ORT build.
 
 ## Aggregate Sets
 
