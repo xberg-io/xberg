@@ -471,10 +471,12 @@ impl InternalElement {
     /// Regenerate the ID with the correct index (call after pushing to the document).
     #[cfg(any(
         feature = "ocr",
-        feature = "ocr-pipeline",
         feature = "xml",
         feature = "archives",
-        feature = "hwpx"
+        feature = "hwpx",
+        // The only bare-`ocr-pipeline` caller lives in `extractors::pdf::ocr`, so gate on
+        // pdf+ocr-pipeline. `ocr-wasm` enables ocr-pipeline without pdf and has no caller. ~keep
+        all(feature = "pdf", feature = "ocr-pipeline")
     ))]
     pub(crate) fn with_index(mut self, index: u32) -> Self {
         self.id = InternalElementId::generate(self.kind.discriminant(), &self.text, self.page, index);
