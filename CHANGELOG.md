@@ -25,7 +25,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   panicking. The ORT-backed `layout-detection` remains the native default. With the `pdf` feature
   (which `android-target` enables), `TableClassifier` (wired/wireless) is part of the public
   `crate::layout` API on either engine. Wiring `layout-tract` into the PDF table-structure pipeline
-  and widening `wasm-target` are deferred follow-ups. Part of #1275.
+  remains a deferred follow-up. Part of #1275.
+- **Layout detection and document-orientation on WebAssembly (via `tract`).** `wasm-target` now
+  enables `layout-tract` + `auto-rotate-tract`, so RT-DETR layout detection and PP-LCNet
+  document-orientation run in the browser through the pure-Rust `tract` engine — capabilities that
+  were impossible on WASM while inference required ONNX Runtime. Two new `xberg-wasm` exports,
+  `detectLayout(imageBytes, modelBytes)` and `detectOrientation(imageBytes, modelBytes)`, take the
+  `.onnx` weights as bytes: the JS host fetches them (weights are never embedded — RT-DETR alone
+  would blow the CDN per-file cap) and hands them to the seam's `load_from_memory`, its first
+  production consumer. The release `.wasm` stays under jsdelivr's 50 MB cap (`wasm-opt -Oz`, wired
+  through alef's `[crates.wasm].wasm_opt`). Part of #1275.
+- **Windows bindings gain the full ONNX Runtime ML surface (issue #1276).** `windows-target` now
+  enables `auto-rotate`, `layout-detection`, `paddle-ocr`, `embeddings`, `reranker`,
+  `sparse-embeddings`, `late-interaction`, `transcription`, and `ner-onnx` (previously curated out).
+  Windows already links ONNX Runtime for the python/node/CLI paths via `ort-bundled` (pyke ships a
+  win-x64 prebuilt), so the Go/Java/C# FFI bindings now expose layout, OCR, embeddings, reranking,
+  transcription, and NER on Windows too. `heic` stays excluded (libheif is not on the
+  `windows-latest` runner).
 
 ### Changed
 
