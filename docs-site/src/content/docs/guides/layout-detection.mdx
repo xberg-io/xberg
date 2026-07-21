@@ -39,7 +39,7 @@ Xberg uses only the RT-DETR v2 model for layout detection. The `preset` field is
 :::
 
 :::note[Pure-Rust inference engine]
-RT-DETR also runs through xberg's pure-Rust `tract` engine (no native ONNX Runtime library, CPU-only), matching ONNX Runtime within 5e-3 on its outputs. This is a step toward layout detection on targets that cannot link native ONNX Runtime (WASM, the Android x86_64 emulator); it is not yet enabled for those targets. PP-DocLayout-V3, TATR, and SLANeXT table structure models remain ONNX Runtime-only.
+RT-DETR also runs through xberg's pure-Rust `tract` engine (no native ONNX Runtime library, CPU-only), matching ONNX Runtime within 5e-3 on its outputs. This brings layout detection to targets that cannot link native ONNX Runtime: it is enabled on WASM and the Android x86_64 emulator via the `layout-tract` feature (on WASM, weights are streamed in through the `detectLayout` export). PP-DocLayout-V3, TATR, and SLANeXT table structure models remain ONNX Runtime-only.
 :::
 
 ## Configuration

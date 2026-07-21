@@ -73,9 +73,9 @@ cargo test --release -p xberg --no-default-features --features "layout-detection
 
 | Target | Engine | Models |
 |---|---|---|
-| Native (desktop, server, Android arm64, iOS) | ONNX Runtime | Full set |
-| Android x86_64 emulator (`android-target`) | tract | RT-DETR layout, table classifier, document-orientation |
-| WASM (`wasm-target`) | — | tract inference not yet wired (planned) |
+| Native (desktop, server, Windows, Android arm64) | ONNX Runtime | Full set |
+| Android x86_64 emulator (`android-target`), iOS | tract | RT-DETR layout, table classifier, document-orientation |
+| WASM (`wasm-target`) | tract | RT-DETR layout, document-orientation (streamed weights via `detectLayout` / `detectOrientation`) |
 
 ## PaddleOCR
 

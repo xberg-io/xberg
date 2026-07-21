@@ -398,16 +398,15 @@ with `await initWasm()` (or the default `init()` export) before calling `extract
 :::caution[Wasm Platform Limitations]
 The Wasm binding does not support:
 
-- **Layout detection** (RT-DETR model inference requires ONNX Runtime, unavailable in WebAssembly; RT-DETR also runs on the pure-Rust `tract` engine, but layout detection is not yet enabled for the `wasm-target` feature set)
 - **PaddleOCR, embeddings, reranking, and transcription inference** (all require ONNX Runtime)
-- **Auto-rotate document-orientation detection** (runs through ONNX Runtime natively; a pure-Rust `tract` path exists via `auto-rotate-tract` and is already used on the Android x86_64 emulator, but WASM wiring is not complete yet)
 - **LLM/VLM features** (liter-llm is not part of the `wasm-target` feature set)
 - **Hardware acceleration config** (single-threaded WASM, no GPU access)
 - **Native server features** (`api`, `mcp`, CLI binary)
+- **Tree-sitter code intelligence** (the 306-language grammar pack exceeds the 50 MB CDN per-file cap)
 - **Browser filesystem paths** (use `kind = "bytes"` for browser file uploads; path APIs require Node/Deno/Bun filesystem access)
 - **Email codepage config** (EmailConfig not available)
 
-Pure-Rust extraction formats, OCR via Tesseract WASM, chunking, metadata, tables, language detection, SVG handling, redaction, summarization, QR-code detection, and image extraction work in WASM. See the [WASM API Reference](/reference/api-wasm/) for details.
+Layout detection (RT-DETR) and document-orientation detection **do** run in Wasm through the pure-Rust `tract` engine (`layout-tract` + `auto-rotate-tract`): the `detectLayout` / `detectOrientation` exports take the `.onnx` weights as streamed bytes, which the JS host fetches and passes in. Pure-Rust extraction formats, OCR via Tesseract WASM, chunking, metadata, tables, language detection, SVG handling, redaction, summarization, QR-code detection, and image extraction also work in WASM. See the [WASM API Reference](/reference/api-wasm/) for details.
 :::
 
 ### Java

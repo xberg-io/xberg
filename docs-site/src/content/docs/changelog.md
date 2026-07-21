@@ -14,6 +14,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Pure-Rust layout detection on no-ORT targets (`layout-tract`).** RT-DETR layout detection and
+  the PP-LCNet wired/wireless table classifier can now run through the `tract` engine instead of
+  ONNX Runtime, mirroring the `auto-rotate-tract` pattern. A new `layout-tract` feature is the
+  no-ORT sibling of `layout-detection`, and `android-target` now enables it (the x86_64 emulator
+  previously had no layout detection at all). TATR, SLANeXT, and PP-DocLayout-V3 stay ONNX
+  Runtime-only (tract 0.23.4 op-coverage gaps). The ORT-backed `layout-detection` remains the
+  native default. Part of #1275.
+- **Layout detection and document-orientation on WebAssembly (via `tract`).** `wasm-target` now
+  enables `layout-tract` + `auto-rotate-tract`, so RT-DETR layout detection and PP-LCNet
+  document-orientation run in the browser through the pure-Rust `tract` engine. Two new
+  `xberg-wasm` exports, `detectLayout(imageBytes, modelBytes)` and
+  `detectOrientation(imageBytes, modelBytes)`, take the `.onnx` weights as bytes: the JS host
+  fetches them (weights are never embedded — RT-DETR alone would blow the CDN per-file cap) and
+  hands them to the seam's `load_from_memory`. The release `.wasm` stays under jsdelivr's 50 MB
+  cap. Part of #1275.
+- **Windows bindings gain the full ONNX Runtime ML surface (issue #1276).** `windows-target` now
+  enables `auto-rotate`, `layout-detection`, `paddle-ocr`, `embeddings`, `reranker`,
+  `sparse-embeddings`, `late-interaction`, `transcription`, and `ner-onnx` (previously curated
+  out), so the Go/Java/C# FFI bindings expose layout, OCR, embeddings, reranking, transcription,
+  and NER on Windows too. `heic` stays excluded.
 - **Bring your own tokenizer for token-budgeted chunking.** Register a `TokenizerBackend`
   plugin (`register_tokenizer_backend`) — from Rust or any language binding — and reference
   it by name from `ChunkSizing::Tokenizer { model }`. The registry is checked before the

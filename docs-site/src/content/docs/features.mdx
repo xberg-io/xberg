@@ -428,7 +428,7 @@ Detect and classify document regions using ONNX-based deep learning. Layout dete
 
 GPU acceleration via ONNX Runtime (CUDA, CoreML, TensorRT) significantly reduces inference time. Models are automatically downloaded and cached on first use.
 
-**Availability:** Native builds that include ONNX Runtime. It is excluded from `wasm-target`, `android-target`, and the curated `windows-target` aggregate.
+**Availability:** Native builds that include ONNX Runtime, including the full `windows-target` aggregate. RT-DETR layout detection (and the wired/wireless table classifier) also runs off ONNX Runtime through the pure-Rust `tract` engine on `wasm-target` and `android-target` via the `layout-tract` feature; TATR, SLANeXT, and PP-DocLayout-V3 table-structure models stay ONNX Runtime-only.
 
 For configuration and usage, see the [Layout Detection Guide](/guides/layout-detection/).
 
@@ -492,7 +492,7 @@ Polyglot bindings share the Rust core and expose the same generated types where 
 **TypeScript: Two flavors**
 
 - **Native** (`@xberg-io/xberg`) — Full speed, complete feature parity (servers, plugins, config file discovery)
-- **WASM** (`@xberg-io/xberg-wasm`) — Browser/edge runtime, 60–80% of native speed, no native dependencies required. Excluded features: ORT-dependent inference (`paddle-ocr`, layout detection, embeddings, reranker, auto-rotate, transcription), liter-llm/VLM features, server modes (`api`/`mcp`), CLI binary, and browser filesystem paths. Pure-Rust extraction formats, Tesseract WASM OCR, chunking, keywords, language detection, stopwords, tree-sitter, redaction, summarization, SVG, and QR-code detection are supported.
+- **WASM** (`@xberg-io/xberg-wasm`) — Browser/edge runtime, 60–80% of native speed, no native dependencies required. Excluded features: ORT-dependent inference (`paddle-ocr`, embeddings, reranker, transcription), liter-llm/VLM features, server modes (`api`/`mcp`), CLI binary, tree-sitter code intelligence, and browser filesystem paths. Supported: pure-Rust extraction formats, Tesseract WASM OCR, RT-DETR layout detection and document-orientation through the pure-Rust `tract` engine (streamed model weights via `detectLayout` / `detectOrientation`), chunking, keywords, language detection, stopwords, redaction, summarization, SVG, and QR-code detection.
 
 Choose Native for server-side Node.js; choose WASM for browser or edge deployments.
 
