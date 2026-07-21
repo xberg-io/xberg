@@ -85,6 +85,7 @@ pub(crate) fn resolve_thread_budget(config: Option<&ConcurrencyConfig>) -> usize
     not(target_arch = "wasm32"),
     any(
         test,
+        feature = "tokio-runtime",
         feature = "late-interaction",
         feature = "reranker",
         feature = "sparse-embeddings"

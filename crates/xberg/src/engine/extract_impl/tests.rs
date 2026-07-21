@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::fs::File;
 use std::io::Write;
 
@@ -153,22 +154,150 @@ async fn extract_batch_collects_unsupported_scheme_error() {
 
 #[tokio::test]
 async fn extract_batch_applies_item_timeout() {
-    let item = run_batch_item(
-        0,
-        "<test>".to_string(),
-        std::sync::Arc::new(tokio::sync::Semaphore::new(1)),
-        Some(1),
-        None,
-        || async {
-            std::future::pending::<()>().await;
-            Ok(ExtractionResult::default())
-        },
-    )
+    let item = run_batch_item(0, "<test>".to_string(), Some(1), None, || async {
+        std::future::pending::<()>().await;
+        Ok(ExtractionResult::default())
+    })
     .await;
 
     let error = item.result.unwrap_err();
     assert_eq!(error_code(&error), 1004);
     assert_eq!(error_type(&error), "timeout");
+}
+
+#[tokio::test]
+async fn bounded_batch_scheduler_caps_in_flight_tasks() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let active = Arc::new(AtomicUsize::new(0));
+    let peak = Arc::new(AtomicUsize::new(0));
+    let pending = (0..8).collect::<VecDeque<_>>();
+    let completed = run_bounded_batch_tasks(pending, 2, {
+        let active = Arc::clone(&active);
+        let peak = Arc::clone(&peak);
+        move |index| {
+            let active = Arc::clone(&active);
+            let peak = Arc::clone(&peak);
+            async move {
+                let now = active.fetch_add(1, Ordering::SeqCst) + 1;
+                peak.fetch_max(now, Ordering::SeqCst);
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                active.fetch_sub(1, Ordering::SeqCst);
+                BatchItemResult {
+                    index,
+                    source: index.to_string(),
+                    result: Ok(ExtractionResult::default()),
+                }
+            }
+        }
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(completed.len(), 8);
+    assert_eq!(peak.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn bounded_batch_scheduler_preserves_completion_and_error_indices() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let stage = Arc::new(AtomicUsize::new(0));
+    let pending = (0..3).collect::<VecDeque<_>>();
+    let completed = run_bounded_batch_tasks(pending, 3, {
+        let stage = Arc::clone(&stage);
+        move |index| {
+            let stage = Arc::clone(&stage);
+            async move {
+                let prerequisite = match index {
+                    0 => 2,
+                    2 => 1,
+                    _ => 0,
+                };
+                while stage.load(Ordering::SeqCst) < prerequisite {
+                    tokio::task::yield_now().await;
+                }
+                stage.fetch_add(1, Ordering::SeqCst);
+                let result = if index == 1 {
+                    Err(XbergError::Other("indexed failure".to_string()))
+                } else {
+                    Ok(ExtractionResult::default())
+                };
+                BatchItemResult {
+                    index,
+                    source: index.to_string(),
+                    result,
+                }
+            }
+        }
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(completed.iter().map(|item| item.index).collect::<Vec<_>>(), [1, 2, 0]);
+    assert!(completed[0].result.is_err());
+    assert_eq!(completed[0].source, "1");
+}
+
+#[test]
+fn engine_batch_concurrency_matches_layout_aware_resolution() {
+    let config = ExtractionConfig {
+        concurrency: Some(crate::core::config::ConcurrencyConfig { max_threads: Some(4) }),
+        ..Default::default()
+    };
+    assert_eq!(resolve_engine_batch_concurrency_for(&config, false), 4);
+
+    let expected_layout =
+        crate::core::config::concurrency::resolve_batch_concurrency(config.concurrency.as_ref(), true);
+    assert_eq!(resolve_engine_batch_concurrency_for(&config, true), expected_layout);
+
+    let explicit = ExtractionConfig {
+        max_concurrent_extractions: Some(3),
+        ..config
+    };
+    assert_eq!(resolve_engine_batch_concurrency_for(&explicit, true), 3);
+}
+
+#[test]
+fn engine_batch_concurrency_clamps_explicit_zero_to_one() {
+    let config = ExtractionConfig {
+        max_concurrent_extractions: Some(0),
+        ..Default::default()
+    };
+
+    assert_eq!(resolve_engine_batch_concurrency_for(&config, false), 1);
+}
+
+#[test]
+fn engine_batch_concurrency_without_layout_uses_configured_threads() {
+    let config = ExtractionConfig {
+        concurrency: Some(crate::core::config::ConcurrencyConfig { max_threads: Some(4) }),
+        ..Default::default()
+    };
+    let inputs = vec![ExtractInput::default()];
+
+    assert_eq!(resolve_engine_batch_concurrency(&config, &inputs), 4);
+}
+
+#[cfg(feature = "layout-detection")]
+#[test]
+fn engine_batch_concurrency_detects_per_input_layout_override() {
+    let config = ExtractionConfig {
+        concurrency: Some(crate::core::config::ConcurrencyConfig { max_threads: Some(4) }),
+        ..Default::default()
+    };
+    let inputs = vec![ExtractInput {
+        config: Some(crate::core::config::FileExtractionConfig {
+            layout: Some(Default::default()),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }];
+
+    let expected = crate::core::config::concurrency::resolve_batch_concurrency(config.concurrency.as_ref(), true);
+    assert_eq!(resolve_engine_batch_concurrency(&config, &inputs), expected);
 }
 
 #[cfg(feature = "url-ingestion")]

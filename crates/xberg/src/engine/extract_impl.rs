@@ -98,9 +98,6 @@ async fn extract_batch_concurrent(
     inputs: Vec<ExtractInput>,
     config: &ExtractionConfig,
 ) -> Result<ExtractionResult> {
-    use tokio::sync::Semaphore;
-    use tokio::task::JoinSet;
-
     let input_count = inputs.len();
     let mut seen = initial_seen_urls(&inputs);
     let seed_hosts = initial_seed_hosts(&inputs);
@@ -116,19 +113,9 @@ async fn extract_batch_concurrent(
         return Ok(output);
     }
 
-    let max_concurrent = config
-        .max_concurrent_extractions
-        .or_else(|| {
-            config
-                .concurrency
-                .as_ref()
-                .and_then(|concurrency| concurrency.max_threads)
-        })
-        .unwrap_or_else(|| crate::core::config::concurrency::resolve_thread_budget(config.concurrency.as_ref()))
-        .max(1);
-    let semaphore = Arc::new(Semaphore::new(max_concurrent));
+    let max_concurrent = resolve_engine_batch_concurrency(config, &inputs);
     let base_config = Arc::new(config.clone());
-    let mut tasks = JoinSet::new();
+    let mut pending = VecDeque::with_capacity(input_count);
 
     let mut items: Vec<Option<BatchItemResult>> = Vec::with_capacity(input_count);
     items.resize_with(input_count, || None);
@@ -159,32 +146,30 @@ async fn extract_batch_concurrent(
             }
         }
 
-        let semaphore = Arc::clone(&semaphore);
-        let base_config = Arc::clone(&base_config);
-        tasks.spawn(async move {
+        pending.push_back((index, input, source));
+    }
+
+    let task_config = Arc::clone(&base_config);
+    let completed = run_bounded_batch_tasks(pending, max_concurrent, move |(index, input, source)| {
+        let base_config = Arc::clone(&task_config);
+        async move {
             let resolved_config = resolve_input_config_arc(&input, &base_config);
             let timeout_secs = resolved_config.extraction_timeout_secs;
             let cancel_token = resolved_config.cancel_token.clone();
-            run_batch_item(index, source, semaphore, timeout_secs, cancel_token, || async move {
+            run_batch_item(index, source, timeout_secs, cancel_token, || async move {
                 Box::pin(extract_one_resolved(input, &resolved_config, index)).await
             })
             .await
-        });
-    }
+        }
+    })
+    .await?;
 
-    while let Some(task_result) = tasks.join_next().await {
-        match task_result {
-            Ok(item) => {
-                let index = item.index;
-                if index < items.len() {
-                    items[index] = Some(item);
-                } else {
-                    return Err(XbergError::Other(format!("batch task returned invalid index: {index}")));
-                }
-            }
-            Err(error) => {
-                return Err(XbergError::Other(format!("batch task failed to join: {error}")));
-            }
+    for item in completed {
+        let index = item.index;
+        if index < items.len() {
+            items[index] = Some(item);
+        } else {
+            return Err(XbergError::Other(format!("batch task returned invalid index: {index}")));
         }
     }
 
@@ -205,6 +190,67 @@ async fn extract_batch_concurrent(
     output.refresh_counts();
     follow_recursive_document_urls(&mut output, config, &mut seen, &seed_hosts).await?;
     Ok(output)
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+fn resolve_engine_batch_concurrency(config: &ExtractionConfig, inputs: &[ExtractInput]) -> usize {
+    #[cfg(feature = "layout-detection")]
+    let layout_active = config.layout.is_some()
+        || inputs.iter().any(|input| {
+            input
+                .config
+                .as_ref()
+                .is_some_and(|input_config| input_config.layout.is_some())
+        });
+    #[cfg(not(feature = "layout-detection"))]
+    let layout_active = false;
+    #[cfg(not(feature = "layout-detection"))]
+    let _ = inputs;
+
+    resolve_engine_batch_concurrency_for(config, layout_active)
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+fn resolve_engine_batch_concurrency_for(config: &ExtractionConfig, layout_active: bool) -> usize {
+    config
+        .max_concurrent_extractions
+        .unwrap_or_else(|| {
+            crate::core::config::concurrency::resolve_batch_concurrency(config.concurrency.as_ref(), layout_active)
+        })
+        .max(1)
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+async fn run_bounded_batch_tasks<T, F, Fut>(
+    mut pending: VecDeque<T>,
+    max_concurrent: usize,
+    mut task: F,
+) -> Result<Vec<BatchItemResult>>
+where
+    T: Send + 'static,
+    F: FnMut(T) -> Fut,
+    Fut: Future<Output = BatchItemResult> + Send + 'static,
+{
+    use tokio::task::JoinSet;
+
+    let mut tasks = JoinSet::new();
+    let max_concurrent = max_concurrent.max(1);
+    while tasks.len() < max_concurrent {
+        let Some(item) = pending.pop_front() else {
+            break;
+        };
+        tasks.spawn(task(item));
+    }
+
+    let mut completed = Vec::with_capacity(tasks.len() + pending.len());
+    while let Some(task_result) = tasks.join_next().await {
+        let item = task_result.map_err(|error| XbergError::Other(format!("batch task failed to join: {error}")))?;
+        completed.push(item);
+        if let Some(next) = pending.pop_front() {
+            tasks.spawn(task(next));
+        }
+    }
+    Ok(completed)
 }
 
 /// Owned http(s) URI of an input eligible for the shared-URL batch group.
@@ -416,7 +462,6 @@ struct BatchItemResult {
 async fn run_batch_item<F, Fut>(
     index: usize,
     source: String,
-    semaphore: Arc<tokio::sync::Semaphore>,
     timeout_secs: Option<u64>,
     cancel_token: Option<crate::cancellation::CancellationToken>,
     extract_fn: F,
@@ -425,18 +470,6 @@ where
     F: FnOnce() -> Fut,
     Fut: Future<Output = Result<ExtractionResult>>,
 {
-    let permit = match semaphore.acquire_owned().await {
-        Ok(permit) => permit,
-        Err(error) => {
-            return BatchItemResult {
-                index,
-                source,
-                result: Err(XbergError::Other(format!(
-                    "batch concurrency semaphore closed: {error}"
-                ))),
-            };
-        }
-    };
     let start = Instant::now();
     let extraction_future = Box::pin(crate::core::batch_mode::with_batch_mode(Box::pin(extract_fn())));
 
@@ -463,7 +496,6 @@ where
         }
     }
 
-    drop(permit);
     BatchItemResult { index, source, result }
 }
 
