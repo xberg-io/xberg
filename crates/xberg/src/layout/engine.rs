@@ -21,7 +21,7 @@ use crate::layout::postprocessing::heuristics;
 use crate::layout::types::DetectionResult;
 /// Which underlying model architecture to use for layout detection.
 #[cfg_attr(alef, alef(skip))]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ModelBackend {
     /// YOLO trained on DocLayNet (11 classes, 640x640 input).
     YoloDocLayNet,
@@ -39,7 +39,7 @@ pub enum ModelBackend {
 }
 /// Variant selection for custom model paths, used with [`ModelBackend::Custom`].
 #[cfg_attr(alef, alef(skip))]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CustomModelVariant {
     /// RT-DETR v2 model format.
     RtDetr,
@@ -62,7 +62,7 @@ pub enum CustomModelVariant {
 ///
 /// Provides fine-grained control over model selection, thresholds, and
 /// postprocessing.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LayoutEngineConfig {
     /// Which model backend to use.
     pub backend: ModelBackend,
@@ -113,6 +113,10 @@ pub struct LayoutEngine {
 }
 
 impl LayoutEngine {
+    pub(crate) fn matches_config(&self, config: &LayoutEngineConfig) -> bool {
+        self.config == *config
+    }
+
     /// Create a layout engine from a full config.
     ///
     /// `ModelBackend::RtDetr` and `CustomModelVariant::RtDetr` work on either engine
@@ -369,5 +373,39 @@ impl LayoutEngine {
         );
 
         Ok(results)
+    }
+}
+
+#[cfg(test)]
+mod cache_key_tests {
+    use super::*;
+    use crate::core::config::acceleration::{AccelerationConfig, ExecutionProviderType};
+
+    #[test]
+    fn engine_config_equality_covers_every_session_and_output_setting() {
+        let base = LayoutEngineConfig::default();
+
+        let mut backend = base.clone();
+        backend.backend = ModelBackend::YoloDocLayNet;
+        assert_ne!(base, backend);
+
+        let mut threshold = base.clone();
+        threshold.confidence_threshold = Some(0.75);
+        assert_ne!(base, threshold);
+
+        let mut heuristics = base.clone();
+        heuristics.apply_heuristics = false;
+        assert_ne!(base, heuristics);
+
+        let mut cache_dir = base.clone();
+        cache_dir.cache_dir = Some(PathBuf::from("different-cache"));
+        assert_ne!(base, cache_dir);
+
+        let mut acceleration = base.clone();
+        acceleration.acceleration = Some(AccelerationConfig {
+            provider: ExecutionProviderType::Cpu,
+            device_id: 1,
+        });
+        assert_ne!(base, acceleration);
     }
 }

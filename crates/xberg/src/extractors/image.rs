@@ -188,20 +188,25 @@ impl ImageExtractor {
             source: None,
         })?;
 
-        let img = image::load_from_memory(content).map_err(|e| crate::XbergError::Parsing {
-            message: format!("Failed to decode image for layout detection: {e}"),
-            source: None,
-        })?;
-        let rgb = img.to_rgb8();
-
-        let mut engine = crate::layout::take_or_create_engine(layout_config)
-            .map_err(|e| crate::XbergError::Other(format!("Layout engine init failed: {e}")))?;
-
-        let detection = engine
-            .detect(&rgb)
-            .map_err(|e| crate::XbergError::Other(format!("Layout detection failed: {e}")))?;
-
-        crate::layout::return_engine(engine);
+        let layout_content = content.to_vec();
+        let layout_config = layout_config.clone();
+        let (rgb, detection) = tokio::task::spawn_blocking(move || -> Result<_> {
+            let img = image::load_from_memory(&layout_content).map_err(|e| crate::XbergError::Parsing {
+                message: format!("Failed to decode image for layout detection: {e}"),
+                source: None,
+            })?;
+            drop(layout_content);
+            let rgb = img.to_rgb8();
+            let mut engine = crate::layout::take_or_create_engine(&layout_config)
+                .map_err(|e| crate::XbergError::Other(format!("Layout engine init failed: {e}")))?;
+            let detection = engine
+                .detect(&rgb)
+                .map_err(|e| crate::XbergError::Other(format!("Layout detection failed: {e}")))?;
+            crate::layout::return_engine(engine);
+            Ok((rgb, detection))
+        })
+        .await
+        .map_err(|e| crate::XbergError::Other(format!("Image layout worker failed: {e}")))??;
 
         tracing::info!(
             detections = detection.detections.len(),
