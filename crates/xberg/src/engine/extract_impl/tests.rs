@@ -345,3 +345,29 @@ fn fill_dropped_shared_slots_synthesizes_when_no_captured_error() {
         _ => panic!("expected a synthesized error naming the URL"),
     }
 }
+
+#[cfg(all(feature = "tokio-runtime", feature = "url-ingestion"))]
+#[tokio::test]
+async fn shared_url_duration_includes_fetch_without_extending_conversion_timeout() {
+    let config = ExtractionConfig {
+        extraction_timeout_secs: Some(1),
+        ..ExtractionConfig::default()
+    };
+    let shared = SharedUrlItem {
+        index: 0,
+        source: "http://example.com/".into(),
+        uri: "http://example.com/".into(),
+        config,
+    };
+    let batch_started = Instant::now() - std::time::Duration::from_millis(25);
+    let conversion = async { Ok(ExtractionResult::single(ExtractedDocument::default())) };
+
+    let item = finalize_shared_item(&shared, batch_started, conversion).await;
+
+    let output = item.result.expect("immediate conversion remains within its timeout");
+    assert_eq!(output.results.len(), 1);
+    assert!(
+        output.results[0].metadata.extraction_duration_ms.unwrap_or_default() >= 25,
+        "duration must include time before conversion began"
+    );
+}

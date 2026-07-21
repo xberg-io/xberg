@@ -5,10 +5,8 @@
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
-use std::future::Future;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::time::Instant;
 use xberg::{
     ExtractInput, ExtractInputKind, ExtractedDocument, ExtractedImage, ExtractionConfig, ExtractionErrorItem,
@@ -27,8 +25,6 @@ use crate::{
 /// envelope. Disabled by default so the timing path costs nothing (no extra `Instant::now()`
 /// calls, no allocation) when not requested.
 pub const STAGE_TIMING_ENV_VAR: &str = "XBERG_EMIT_STAGE_TIMING";
-
-const DEFAULT_MAX_BATCH_CONCURRENCY: usize = 8;
 
 /// Returns `true` when [`STAGE_TIMING_ENV_VAR`] is set to a non-empty value.
 ///
@@ -185,26 +181,10 @@ pub fn batch_command(
 ) -> Result<()> {
     match format {
         WireFormat::Json => {
-            let mut results: Vec<ExtractedDocument> = Vec::with_capacity(uris.len());
-            let mut errors: Vec<ExtractionErrorItem> = Vec::new();
-            let mut per_file_ms: Vec<f64> = Vec::with_capacity(uris.len());
             let total_t0 = Instant::now();
 
             let inputs = build_batch_inputs(&uris, file_configs_map.as_ref())?;
-            let outputs = run_json_batch_sync(inputs, &config)?;
-            for (index, (elapsed_ms, output)) in outputs.into_iter().enumerate() {
-                let output = output.with_context(|| {
-                    format!(
-                        "Failed to extract '{}'. Ensure the resource is readable and supported.",
-                        uris[index]
-                    )
-                })?;
-                per_file_ms.push(elapsed_ms);
-                results.extend(output.results);
-                errors.extend(output.errors);
-            }
-
-            fail_if_errors(&errors)?;
+            let (results, per_file_ms) = run_json_batch_sync(inputs, &config)?;
             let total_ms = total_t0.elapsed().as_secs_f64() * 1000.0;
             let envelope = BatchEnvelope {
                 results,
@@ -343,75 +323,53 @@ fn run_batch_sync(
     Ok(output.results)
 }
 
-fn batch_concurrency_limit(config: &ExtractionConfig) -> usize {
-    config
-        .max_concurrent_extractions
-        .or_else(|| {
-            config
-                .concurrency
-                .as_ref()
-                .and_then(|concurrency| concurrency.max_threads)
-        })
-        .unwrap_or_else(|| {
-            std::thread::available_parallelism()
-                .map(usize::from)
-                .unwrap_or(1)
-                .min(DEFAULT_MAX_BATCH_CONCURRENCY)
-        })
-        .max(1)
-}
-
-async fn collect_ordered_bounded<T, O, F, Fut>(items: Vec<T>, limit: usize, operation: F) -> Result<Vec<O>>
-where
-    T: Send + 'static,
-    O: Send + 'static,
-    F: Fn(usize, T) -> Fut + Clone + Send + 'static,
-    Fut: Future<Output = O> + Send + 'static,
-{
-    let item_count = items.len();
-    let mut pending = items.into_iter().enumerate();
-    let mut tasks = tokio::task::JoinSet::new();
-
-    for (index, item) in pending.by_ref().take(limit.max(1)) {
-        let operation = operation.clone();
-        tasks.spawn(async move { (index, operation(index, item).await) });
-    }
-
-    let mut ordered = Vec::with_capacity(item_count);
-    ordered.resize_with(item_count, || None);
-    while let Some(completed) = tasks.join_next().await {
-        let (index, output) = completed.context("A concurrent batch extraction task failed to join")?;
-        ordered[index] = Some(output);
-
-        if let Some((next_index, next_item)) = pending.next() {
-            let operation = operation.clone();
-            tasks.spawn(async move { (next_index, operation(next_index, next_item).await) });
+/// Return one timing per input, keyed by the core engine's `source_index` metadata.
+///
+/// A source can yield multiple documents (for example, recursive URL extraction).
+/// The first result carrying a source index defines that input's timing; later
+/// results for the same source do not replace it. Results without a source index
+/// are auxiliary and do not add entries to this input-aligned vector.
+fn batch_per_file_timings(results: &[ExtractedDocument], input_count: usize) -> Result<Vec<f64>> {
+    let mut timings = vec![None; input_count];
+    for result in results {
+        let Some(source_index) = result.metadata.additional.get("source_index") else {
+            continue;
+        };
+        let source_index = source_index
+            .as_u64()
+            .and_then(|index| usize::try_from(index).ok())
+            .context("Batch extraction result has an invalid source_index")?;
+        let slot = timings
+            .get_mut(source_index)
+            .with_context(|| format!("Batch extraction returned invalid source index {source_index}"))?;
+        if slot.is_some() {
+            continue;
         }
+        let timing = result
+            .metadata
+            .extraction_duration_ms
+            .context("Batch extraction result is missing extraction_duration_ms")? as f64;
+        *slot = Some(timing);
     }
 
-    ordered
+    timings
         .into_iter()
         .enumerate()
-        .map(|(index, output)| output.with_context(|| format!("Batch extraction omitted input {index}")))
+        .map(|(index, timing)| timing.with_context(|| format!("Batch extraction omitted timing for input {index}")))
         .collect()
 }
 
 fn run_json_batch_sync(
     inputs: Vec<ExtractInput>,
     config: &ExtractionConfig,
-) -> Result<Vec<(f64, xberg::Result<ExtractionResult>)>> {
-    let runtime = tokio::runtime::Runtime::new().context("Failed to create the batch extraction runtime")?;
-    let max_concurrent = batch_concurrency_limit(config);
-    let config = Arc::new(config.clone());
-
-    runtime.block_on(collect_ordered_bounded(inputs, max_concurrent, move |_index, input| {
-        let config = Arc::clone(&config);
-        async move {
-            let started = Instant::now();
-            let output = extract(input, &config).await;
-            (started.elapsed().as_secs_f64() * 1000.0, output)
-        }
-    }))
+) -> Result<(Vec<ExtractedDocument>, Vec<f64>)> {
+    let input_count = inputs.len();
+    let output = block_on_extract_batch(inputs, config).context(
+        "Failed to batch extract documents. Check that all resources are readable and formats are supported.",
+    )?;
+    fail_if_errors(&output.errors)?;
+    let per_file_ms = batch_per_file_timings(&output.results, input_count)?;
+    Ok((output.results, per_file_ms))
 }
 
 fn block_on_extract(input: ExtractInput, config: &ExtractionConfig) -> xberg::Result<ExtractionResult> {
@@ -501,6 +459,15 @@ mod tests {
                 None => std::env::remove_var(STAGE_TIMING_ENV_VAR),
             }
         }
+        result
+    }
+
+    fn timed_batch_result(source_index: Option<serde_json::Value>, duration_ms: Option<u64>) -> ExtractedDocument {
+        let mut result = ExtractedDocument::default();
+        if let Some(source_index) = source_index {
+            result.metadata.additional.insert("source_index".into(), source_index);
+        }
+        result.metadata.extraction_duration_ms = duration_ms;
         result
     }
 
@@ -655,54 +622,6 @@ mod tests {
     }
 
     #[test]
-    fn batch_concurrency_limit_prefers_explicit_batch_limit() {
-        let mut config = ExtractionConfig {
-            max_concurrent_extractions: Some(3),
-            ..ExtractionConfig::default()
-        };
-        config.concurrency.get_or_insert_with(Default::default).max_threads = Some(1);
-
-        assert_eq!(batch_concurrency_limit(&config), 3);
-    }
-
-    #[test]
-    fn batch_concurrency_limit_falls_back_to_global_thread_limit() {
-        let mut config = ExtractionConfig::default();
-        config.concurrency.get_or_insert_with(Default::default).max_threads = Some(2);
-
-        assert_eq!(batch_concurrency_limit(&config), 2);
-    }
-
-    #[tokio::test]
-    async fn bounded_collector_limits_parallelism_and_preserves_input_order() {
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        use std::time::Duration;
-
-        let active = Arc::new(AtomicUsize::new(0));
-        let peak = Arc::new(AtomicUsize::new(0));
-        let outputs = collect_ordered_bounded(vec![40_u64, 5, 30, 1], 2, {
-            let active = Arc::clone(&active);
-            let peak = Arc::clone(&peak);
-            move |_index, delay_ms| {
-                let active = Arc::clone(&active);
-                let peak = Arc::clone(&peak);
-                async move {
-                    let current = active.fetch_add(1, Ordering::SeqCst) + 1;
-                    peak.fetch_max(current, Ordering::SeqCst);
-                    tokio::time::sleep(Duration::from_millis(delay_ms)).await;
-                    active.fetch_sub(1, Ordering::SeqCst);
-                    delay_ms
-                }
-            }
-        })
-        .await
-        .unwrap();
-
-        assert_eq!(outputs, vec![40, 5, 30, 1]);
-        assert_eq!(peak.load(Ordering::SeqCst), 2);
-    }
-
-    #[test]
     fn json_batch_extracts_in_input_order_with_one_timing_per_input() {
         let dir = tempdir().unwrap();
         let first = dir.path().join("first.txt");
@@ -716,14 +635,98 @@ mod tests {
             ..ExtractionConfig::default()
         };
 
-        let outputs = run_json_batch_sync(inputs, &config).unwrap();
+        let (results, per_file_ms) = run_json_batch_sync(inputs, &config).unwrap();
 
-        assert_eq!(outputs.len(), uris.len());
-        assert!(outputs.iter().all(|(elapsed_ms, _)| *elapsed_ms >= 0.0));
-        let contents: Vec<String> = outputs
-            .into_iter()
-            .map(|(_, output)| single_result_from_output(output.unwrap()).unwrap().content)
+        assert_eq!(results.len(), uris.len());
+        assert_eq!(per_file_ms.len(), uris.len());
+        assert!(per_file_ms.iter().all(|elapsed_ms| *elapsed_ms >= 0.0));
+        let source_indices: Vec<u64> = results
+            .iter()
+            .map(|result| result.metadata.additional["source_index"].as_u64().unwrap())
             .collect();
+        assert_eq!(source_indices, vec![0, 1]);
+
+        let mut reordered_results = results.clone();
+        reordered_results[0].metadata.extraction_duration_ms = Some(11);
+        reordered_results[1].metadata.extraction_duration_ms = Some(22);
+        reordered_results.reverse();
+        assert_eq!(batch_per_file_timings(&reordered_results, 2).unwrap(), vec![11.0, 22.0]);
+
+        let contents: Vec<String> = results.into_iter().map(|result| result.content).collect();
         assert_eq!(contents, vec!["first document", "second document"]);
+    }
+
+    #[test]
+    fn batch_per_file_timings_accepts_empty_batch() {
+        assert_eq!(batch_per_file_timings(&[], 0).unwrap(), Vec::<f64>::new());
+    }
+
+    #[test]
+    fn batch_per_file_timings_rejects_missing_source_index() {
+        let error = batch_per_file_timings(&[timed_batch_result(None, Some(1))], 1).unwrap_err();
+        assert!(error.to_string().contains("omitted timing for input 0"));
+    }
+
+    #[test]
+    fn batch_per_file_timings_rejects_invalid_source_index() {
+        let error =
+            batch_per_file_timings(&[timed_batch_result(Some(serde_json::json!("zero")), Some(1))], 1).unwrap_err();
+        assert!(error.to_string().contains("invalid source_index"));
+    }
+
+    #[test]
+    fn batch_per_file_timings_rejects_out_of_range_source_index() {
+        let error = batch_per_file_timings(&[timed_batch_result(Some(serde_json::json!(2)), Some(1))], 1).unwrap_err();
+        assert!(error.to_string().contains("invalid source index 2"));
+    }
+
+    #[test]
+    fn batch_per_file_timings_rejects_missing_duration() {
+        let error = batch_per_file_timings(&[timed_batch_result(Some(serde_json::json!(0)), None)], 1).unwrap_err();
+        assert!(error.to_string().contains("missing extraction_duration_ms"));
+    }
+
+    #[test]
+    fn batch_per_file_timings_uses_first_result_for_each_source() {
+        let results = vec![
+            timed_batch_result(Some(serde_json::json!(1)), Some(30)),
+            timed_batch_result(Some(serde_json::json!(0)), Some(10)),
+            timed_batch_result(Some(serde_json::json!(0)), None),
+            timed_batch_result(None, None),
+        ];
+
+        assert_eq!(batch_per_file_timings(&results, 2).unwrap(), vec![10.0, 30.0]);
+    }
+
+    #[test]
+    fn json_batch_propagates_partial_batch_errors() {
+        let inputs = vec![ExtractInput::from_uri(
+            "/definitely/missing/xberg-batch-input.txt".to_string(),
+        )];
+
+        let error = run_json_batch_sync(inputs, &ExtractionConfig::default()).unwrap_err();
+
+        assert!(error.to_string().contains("Extraction failed for input 0"));
+    }
+
+    #[test]
+    fn json_batch_applies_per_file_chunking_override() {
+        let dir = tempdir().unwrap();
+        let first = dir.path().join("first.txt");
+        let second = dir.path().join("second.txt");
+        let content = "alpha beta gamma delta epsilon zeta eta theta";
+        std::fs::write(&first, content).unwrap();
+        std::fs::write(&second, content).unwrap();
+        let uris = vec![first.display().to_string(), second.display().to_string()];
+        let file_configs = std::collections::HashMap::from([(
+            uris[1].clone(),
+            serde_json::json!({"chunking": {"max_chars": 12, "max_overlap": 0}}),
+        )]);
+
+        let inputs = build_batch_inputs(&uris, Some(&file_configs)).unwrap();
+        let (results, _) = run_json_batch_sync(inputs, &ExtractionConfig::default()).unwrap();
+
+        assert!(results[0].chunks.is_none());
+        assert!(results[1].chunks.as_ref().is_some_and(|chunks| chunks.len() > 1));
     }
 }

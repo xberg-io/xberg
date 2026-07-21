@@ -279,6 +279,7 @@ async fn run_shared_url_group(
     let urls: Vec<&str> = shared_items.iter().map(|shared| shared.uri.as_str()).collect();
 
     let mut unmatched_errors: VecDeque<XbergError> = VecDeque::new();
+    let batch_started = Instant::now();
 
     match base_config.url.mode {
         UrlExtractionMode::Auto | UrlExtractionMode::Document => {
@@ -296,7 +297,7 @@ async fn run_shared_url_group(
                         Err(error) => Err(map_crawl_error(error)),
                     }
                 };
-                items[shared.index] = Some(finalize_shared_item(shared, conversion).await);
+                items[shared.index] = Some(finalize_shared_item(shared, batch_started, conversion).await);
             }
         }
         UrlExtractionMode::Crawl => {
@@ -314,7 +315,7 @@ async fn run_shared_url_group(
                         Err(error) => Err(map_crawl_error(error)),
                     }
                 };
-                items[shared.index] = Some(finalize_shared_item(shared, conversion).await);
+                items[shared.index] = Some(finalize_shared_item(shared, batch_started, conversion).await);
             }
         }
     }
@@ -352,12 +353,15 @@ fn fill_dropped_shared_slots(
 
 /// Apply batch-mode context, the per-item conversion timeout, and duration
 /// metadata to a shared-URL conversion future, mirroring `run_batch_item`.
+///
+/// `batch_started` precedes the shared fetch, so reported duration covers both
+/// fetch and conversion. The timeout still starts immediately before conversion.
 #[cfg(all(feature = "tokio-runtime", feature = "url-ingestion", not(target_arch = "wasm32")))]
-async fn finalize_shared_item<Fut>(shared: &SharedUrlItem, conversion: Fut) -> BatchItemResult
+async fn finalize_shared_item<Fut>(shared: &SharedUrlItem, batch_started: Instant, conversion: Fut) -> BatchItemResult
 where
     Fut: Future<Output = Result<ExtractionResult>>,
 {
-    let start = Instant::now();
+    let conversion_started = Instant::now();
     let future = Box::pin(crate::core::batch_mode::with_batch_mode(conversion));
 
     let mut result = match shared.config.extraction_timeout_secs {
@@ -368,7 +372,7 @@ where
                     token.cancel();
                 }
                 Err(XbergError::Timeout {
-                    elapsed_ms: start.elapsed().as_millis() as u64,
+                    elapsed_ms: conversion_started.elapsed().as_millis() as u64,
                     limit_ms: secs * 1000,
                 })
             }
@@ -377,7 +381,7 @@ where
     };
 
     if let Ok(ref mut item_output) = result {
-        let elapsed_ms = start.elapsed().as_millis() as u64;
+        let elapsed_ms = batch_started.elapsed().as_millis() as u64;
         for extraction_result in &mut item_output.results {
             extraction_result.metadata.extraction_duration_ms = Some(elapsed_ms);
         }

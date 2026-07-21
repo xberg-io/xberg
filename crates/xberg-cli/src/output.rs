@@ -67,10 +67,13 @@ pub struct ExtractEnvelope {
 /// Emitted to stdout by `xberg batch --format json`.
 #[derive(Debug, Serialize)]
 pub struct BatchEnvelope {
-    /// One result per input file, in input order.
+    /// Extraction results in input order. A single input may yield multiple results.
     pub results: Vec<ExtractedDocument>,
     /// Total wall-clock time for the whole batch in milliseconds.
     pub total_ms: f64,
-    /// Per-file wall-clock times in milliseconds, aligned with `results`.
+    /// Per-input wall-clock times in milliseconds, aligned with the input list.
+    ///
+    /// This has one entry per requested input even when an input yields multiple
+    /// entries in `results`.
     pub per_file_ms: Vec<f64>,
 }
