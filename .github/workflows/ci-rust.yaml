@@ -145,6 +145,46 @@ jobs:
         run: cargo check --locked -p xberg --no-default-features --features ocr-wasm --lib
         shell: bash
 
+  # `windows-target` carries the full ONNX Runtime ML surface (issue #1276
+  # workstream D: auto-rotate, layout-detection, paddle-ocr, embeddings,
+  # reranker, sparse/late-interaction, transcription, ner-onnx). The `rust`
+  # job above only runs on Linux/macOS, so its clippy legs can never reach the
+  # `cfg(target_os = "windows")` dependency blocks (ureq/tokenizers/liter-llm)
+  # nor the Windows-only ORT linkage. Lint that surface on a real Windows
+  # runner, mirroring publish.yaml's Windows recipe (ort-bundled + the pyke
+  # win-x64 import lib staged via setup-onnx-runtime, which exports
+  # ORT_LIB_LOCATION job-wide).
+  clippy-windows:
+    name: Clippy Windows ORT surface
+    if: github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          lfs: true
+
+      - name: Setup Rust
+        uses: xberg-io/actions/setup-rust@v1
+        with:
+          target: x86_64-pc-windows-msvc
+          cache-key-prefix: rust-windows
+          use-sccache: "true"
+
+      - name: Install system dependencies
+        uses: ./.github/actions/install-system-deps
+
+      - name: Setup ONNX Runtime
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: ${{ env.ORT_VERSION }}
+          dest-dir: crates/xberg-ffi
+
+      - name: Clippy Windows ORT surface
+        run: cargo clippy --locked -p xberg --no-default-features --features windows-target --all-targets -- -D warnings
+        shell: bash
+
   live-hf:
     name: Live HF preset tests
     if: github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]'
