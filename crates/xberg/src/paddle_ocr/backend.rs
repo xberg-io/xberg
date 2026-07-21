@@ -54,7 +54,11 @@ use xberg_paddle_ocr::OcrLite;
 pub struct PaddleOcrBackend {
     config: Arc<PaddleOcrConfig>,
     model_manager: ModelManager,
-    shared_paths: Mutex<Option<SharedModelPaths>>,
+    /// Detection + classification model paths, lazily initialized and keyed by
+    /// `"{model_version}/{model_tier}"` so a per-request `paddle_ocr_config`
+    /// override loads the detection model matching its recognition model instead
+    /// of the backend-default version/tier (issue #1279).
+    shared_paths: Mutex<AHashMap<String, SharedModelPaths>>,
     /// Per-model OCR engines, lazily initialized. Keyed by "{tier}/{model_key}".
     /// Multiple script families may share the same engine (e.g. chinese+japanese use unified_server).
     /// OcrLite inference methods take `&self`, enabling lock-free concurrent page OCR.
@@ -78,7 +82,7 @@ impl PaddleOcrBackend {
         Ok(Self {
             config: Arc::new(config),
             model_manager: ModelManager::new(cache_dir),
-            shared_paths: Mutex::new(None),
+            shared_paths: Mutex::new(AHashMap::new()),
             engine_pool: Mutex::new(AHashMap::new()),
             doc_ori_detector: once_cell::sync::OnceCell::new(),
             acceleration: None,
@@ -105,21 +109,27 @@ impl PaddleOcrBackend {
         request_accel.cloned().or_else(|| self.acceleration.clone())
     }
 
-    /// Get or initialize shared model paths (det + cls) for the configured tier.
-    fn get_or_init_shared_paths(&self) -> Result<SharedModelPaths> {
+    /// Get or initialize shared model paths (det + cls) for the given config's
+    /// version and tier.
+    ///
+    /// Keyed by `"{model_version}/{model_tier}"` so a per-request override
+    /// (`OcrConfig.paddle_ocr_config`) resolves a detection model matching its
+    /// recognition model rather than the backend default (issue #1279).
+    fn get_or_init_shared_paths(&self, config: &PaddleOcrConfig) -> Result<SharedModelPaths> {
+        let key = format!("{}/{}", config.model_version, config.model_tier);
         let mut paths = self.shared_paths.lock().map_err(|e| crate::XbergError::Plugin {
             message: format!("Failed to acquire shared paths lock: {e}"),
             plugin_name: "paddle-ocr".to_string(),
         })?;
 
-        if let Some(ref p) = *paths {
+        if let Some(p) = paths.get(&key) {
             return Ok(p.clone());
         }
 
         let shared = self
             .model_manager
-            .ensure_shared_models_versioned(&self.config.model_version, &self.config.model_tier)?;
-        *paths = Some(shared.clone());
+            .ensure_shared_models_versioned(&config.model_version, &config.model_tier)?;
+        paths.insert(key, shared.clone());
         Ok(shared)
     }
 
@@ -158,7 +168,7 @@ impl PaddleOcrBackend {
             }
         }
 
-        let shared = self.get_or_init_shared_paths()?;
+        let shared = self.get_or_init_shared_paths(config)?;
 
         crate::ort_discovery::ensure_ort_available();
 

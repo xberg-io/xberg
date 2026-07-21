@@ -449,7 +449,20 @@ pub struct OcrConfig {
     #[serde(default)]
     pub output_format: Option<OutputFormat>,
 
-    /// PaddleOCR-specific configuration (optional, JSON passthrough)
+    /// PaddleOCR-specific configuration (optional, JSON passthrough).
+    ///
+    /// Deserialized into a [`PaddleOcrConfig`](crate::PaddleOcrConfig), so any of its fields can be
+    /// overridden here — most notably `model_version` (`"pp-ocrv6"` default / `"pp-ocrv5"`) and
+    /// `model_tier`. In TOML:
+    ///
+    /// ```toml
+    /// [ocr.paddle_ocr_config]
+    /// model_version = "pp-ocrv5"
+    /// model_tier = "server"
+    /// ```
+    ///
+    /// The `XBERG_OCR_MODEL_VERSION` / `XBERG_OCR_MODEL_TIER` environment variables set the same two
+    /// keys for env-configured servers (issue #1279).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub paddle_ocr_config: Option<serde_json::Value>,
 

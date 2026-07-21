@@ -18,6 +18,8 @@ impl ExtractionConfig {
     ///
     /// - `XBERG_OCR_LANGUAGE`: OCR language (ISO 639-1 or 639-3 code, e.g., "eng", "fra", "deu")
     /// - `XBERG_OCR_BACKEND`: OCR backend ("tesseract", "paddleocr", "paddle-ocr", or "vlm")
+    /// - `XBERG_OCR_MODEL_VERSION`: PaddleOCR model generation ("pp-ocrv6" or "pp-ocrv5")
+    /// - `XBERG_OCR_MODEL_TIER`: PaddleOCR model tier (e.g. "medium"/"small"/"tiny" for v6, "mobile"/"server" for v5)
     /// - `XBERG_CHUNKING_MAX_CHARS`: Maximum characters per chunk (positive integer)
     /// - `XBERG_CHUNKING_MAX_OVERLAP`: Maximum overlap between chunks (non-negative integer)
     /// - `XBERG_CACHE_ENABLED`: Cache enabled flag ("true" or "false")
@@ -79,6 +81,31 @@ impl ExtractionConfig {
             }
             if let Some(ref mut ocr) = self.ocr {
                 ocr.backend = backend;
+            }
+        }
+
+        // PaddleOCR model selection (issue #1279). Env-configured servers had no way to change the
+        // paddle model generation/tier without an inline JSON blob, so it was always the default
+        // (`pp-ocrv6`/`medium`). Fold these into the `paddle_ocr_config` passthrough the backend
+        // already reads; env wins over any `[ocr.paddle_ocr_config]` from the config file.
+        let paddle_model_version = std::env::var("XBERG_OCR_MODEL_VERSION").ok();
+        let paddle_model_tier = std::env::var("XBERG_OCR_MODEL_TIER").ok();
+        if paddle_model_version.is_some() || paddle_model_tier.is_some() {
+            if self.ocr.is_none() {
+                self.ocr = Some(OcrConfig::default());
+            }
+            if let Some(ref mut ocr) = self.ocr {
+                let mut paddle = match ocr.paddle_ocr_config.take() {
+                    Some(serde_json::Value::Object(map)) => map,
+                    _ => serde_json::Map::new(),
+                };
+                if let Some(version) = paddle_model_version {
+                    paddle.insert("model_version".to_string(), serde_json::Value::String(version));
+                }
+                if let Some(tier) = paddle_model_tier {
+                    paddle.insert("model_tier".to_string(), serde_json::Value::String(tier));
+                }
+                ocr.paddle_ocr_config = Some(serde_json::Value::Object(paddle));
             }
         }
 
@@ -444,5 +471,61 @@ mod tests {
             other => panic!("expected Plugin variant, got {other:?}"),
         }
         clear_embedding_env();
+    }
+
+    fn clear_paddle_model_env() {
+        unsafe {
+            std::env::remove_var("XBERG_OCR_MODEL_VERSION");
+            std::env::remove_var("XBERG_OCR_MODEL_TIER");
+        }
+    }
+
+    #[test]
+    fn paddle_model_env_vars_populate_paddle_ocr_config() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        clear_paddle_model_env();
+        unsafe {
+            std::env::set_var("XBERG_OCR_MODEL_VERSION", "pp-ocrv5");
+            std::env::set_var("XBERG_OCR_MODEL_TIER", "server");
+        }
+        let mut config = ExtractionConfig::default();
+        config
+            .apply_env_overrides()
+            .expect("paddle model env vars should apply");
+        let paddle = config
+            .ocr
+            .as_ref()
+            .and_then(|o| o.paddle_ocr_config.as_ref())
+            .expect("paddle_ocr_config should be populated");
+        assert_eq!(paddle.get("model_version").and_then(|v| v.as_str()), Some("pp-ocrv5"));
+        assert_eq!(paddle.get("model_tier").and_then(|v| v.as_str()), Some("server"));
+        clear_paddle_model_env();
+    }
+
+    #[test]
+    fn paddle_model_env_wins_over_existing_config_and_preserves_other_keys() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        clear_paddle_model_env();
+        unsafe { std::env::set_var("XBERG_OCR_MODEL_VERSION", "pp-ocrv5") };
+        let mut config = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                paddle_ocr_config: Some(serde_json::json!({
+                    "model_version": "pp-ocrv6",
+                    "drop_score": 0.7,
+                })),
+                ..OcrConfig::default()
+            }),
+            ..ExtractionConfig::default()
+        };
+        config
+            .apply_env_overrides()
+            .expect("paddle model env override should apply");
+        let paddle = config.ocr.as_ref().unwrap().paddle_ocr_config.as_ref().unwrap();
+        // env wins over the config-file value ...
+        assert_eq!(paddle.get("model_version").and_then(|v| v.as_str()), Some("pp-ocrv5"));
+        // ... while unrelated keys are preserved.
+        assert_eq!(paddle.get("drop_score").and_then(|v| v.as_f64()), Some(0.7));
+        assert!(paddle.get("model_tier").is_none());
+        clear_paddle_model_env();
     }
 }
