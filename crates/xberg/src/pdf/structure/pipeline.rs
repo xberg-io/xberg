@@ -641,6 +641,9 @@ fn process_layout_segment_groups(
 /// as a paragraph break. Normal line pitch leaves well under one line height of
 /// whitespace; a blank line leaves more than one.
 const PARAGRAPH_GAP_HEIGHT_FACTOR: f32 = 1.5;
+const INLINE_STYLE_BASELINE_TOLERANCE: f32 = 0.5;
+const INLINE_STYLE_MAX_FORWARD_GAP_FONT_FACTOR: f32 = 1.0;
+const INLINE_STYLE_MAX_OVERLAP_FONT_FACTOR: f32 = 0.15;
 
 /// Detect paragraph-break y-positions from horizontal whitespace bands.
 ///
@@ -730,6 +733,7 @@ fn blocks_to_paragraphs(
 
     let mut paragraphs: Vec<PdfParagraph> = Vec::new();
     let mut current_lines: Vec<&SegmentData> = Vec::new();
+    let mut current_is_single_visual_line = true;
 
     for (line_idx, line) in lines.iter().enumerate() {
         let should_break = if current_lines.is_empty() {
@@ -737,11 +741,12 @@ fn blocks_to_paragraphs(
         } else {
             let prev = current_lines.last().unwrap();
             let font_change = (line.font_size - prev.font_size).abs() > 1.5;
-            let bold_change = line.is_bold != prev.is_bold;
-            let starts_new_line = (line.baseline_y - prev.baseline_y).abs() > 0.5;
+            let bold_change =
+                line.is_bold != prev.is_bold && !is_inline_style_transition(current_is_single_visual_line, prev, line);
+            let starts_new_line = (line.baseline_y - prev.baseline_y).abs() > INLINE_STYLE_BASELINE_TOLERANCE;
             let has_same_line_follower = lines
                 .get(line_idx + 1)
-                .is_some_and(|next| (next.baseline_y - line.baseline_y).abs() <= 0.5);
+                .is_some_and(|next| (next.baseline_y - line.baseline_y).abs() <= INLINE_STYLE_BASELINE_TOLERANCE);
             let is_list = looks_like_list_item(&line.text)
                 || (starts_new_line && has_same_line_follower && is_bare_list_marker(&line.text));
             let crossed_gap = paragraph_gap_ys.iter().any(|&gap_y| {
@@ -760,6 +765,11 @@ fn blocks_to_paragraphs(
                 paragraphs.push(para);
             }
             current_lines.clear();
+            current_is_single_visual_line = true;
+        }
+        if let Some(first) = current_lines.first() {
+            current_is_single_visual_line &=
+                (line.baseline_y - first.baseline_y).abs() <= INLINE_STYLE_BASELINE_TOLERANCE;
         }
         current_lines.push(line);
     }
@@ -779,6 +789,40 @@ fn blocks_to_paragraphs(
     );
 
     paragraphs
+}
+
+/// Whether a style transition is an inline run on the same visual line.
+///
+/// PDF glyph runs can overlap slightly because of font metrics. Larger
+/// overlaps, reverse ordering, and wide gaps remain structural boundaries.
+fn is_inline_style_transition(current_is_single_visual_line: bool, previous: &SegmentData, next: &SegmentData) -> bool {
+    if !current_is_single_visual_line || previous.is_monospace || next.is_monospace {
+        return false;
+    }
+    if !previous.font_size.is_finite()
+        || !next.font_size.is_finite()
+        || previous.font_size <= 0.0
+        || next.font_size <= 0.0
+        || !previous.baseline_y.is_finite()
+        || !next.baseline_y.is_finite()
+        || !previous.x.is_finite()
+        || !next.x.is_finite()
+        || !previous.width.is_finite()
+        || !next.width.is_finite()
+        || previous.width < 0.0
+        || next.width < 0.0
+        || next.x < previous.x
+    {
+        return false;
+    }
+    if (next.baseline_y - previous.baseline_y).abs() > INLINE_STYLE_BASELINE_TOLERANCE {
+        return false;
+    }
+
+    let font_size = previous.font_size.max(next.font_size);
+    let horizontal_gap = next.x - (previous.x + previous.width);
+    horizontal_gap >= -(font_size * INLINE_STYLE_MAX_OVERLAP_FONT_FACTOR)
+        && horizontal_gap <= font_size * INLINE_STYLE_MAX_FORWARD_GAP_FONT_FACTOR
 }
 
 /// Reconstruct PdfLine objects from a flat list of SegmentData, grouping by baseline_y.
@@ -863,6 +907,10 @@ fn finalize_paragraph(
     let first = lines[0];
     let word_count = trimmed.split_whitespace().count();
     let is_bold = lines.iter().filter(|l| l.is_bold).count() > lines.len() / 2;
+    let has_mixed_inline_styles = lines
+        .iter()
+        .skip(1)
+        .any(|line| line.is_bold != first.is_bold || line.is_italic != first.is_italic);
 
     let reconstructed_lines = reconstruct_pdf_lines(lines);
 
@@ -884,7 +932,11 @@ fn finalize_paragraph(
         let para_text = trimmed.to_string();
         let word_count = PdfParagraph::compute_word_count(&para_text, &reconstructed_lines);
         return Some(PdfParagraph {
-            text: para_text,
+            text: if has_mixed_inline_styles {
+                String::new()
+            } else {
+                para_text
+            },
             lines: reconstructed_lines,
             dominant_font_size: first.font_size,
             heading_level: Some(level),
@@ -995,7 +1047,11 @@ fn finalize_paragraph(
     let word_count = PdfParagraph::compute_word_count(&para_text, &reconstructed_lines);
 
     Some(PdfParagraph {
-        text: para_text,
+        text: if has_mixed_inline_styles {
+            String::new()
+        } else {
+            para_text
+        },
         lines: reconstructed_lines,
         dominant_font_size: first.font_size,
         heading_level,
@@ -2916,6 +2972,128 @@ mod tests {
             baseline_y: 0.0,
             assigned_role: None,
         }
+    }
+
+    fn inline_seg(text: &str, x: f32, baseline_y: f32, is_bold: bool) -> SegmentData {
+        let mut segment = seg(text, x, 20.0);
+        segment.baseline_y = baseline_y;
+        segment.y = baseline_y - segment.height;
+        segment.is_bold = is_bold;
+        segment
+    }
+
+    #[test]
+    fn inline_bold_runs_stay_in_one_paragraph() {
+        let segments = vec![
+            inline_seg("plain", 10.0, 100.0, false),
+            inline_seg("bold", 31.0, 100.0, true),
+            inline_seg("tail", 52.0, 100.0, false),
+        ];
+
+        let paragraphs = blocks_to_paragraphs(segments, &[], &[]);
+
+        assert_eq!(paragraphs.len(), 1);
+        assert_eq!(paragraphs[0].lines.len(), 1);
+        assert_eq!(paragraphs[0].lines[0].segments.len(), 3);
+        assert!(paragraphs[0].lines[0].segments[1].is_bold);
+        assert_eq!(paragraph_text(&paragraphs[0]), "plain bold tail");
+
+        let document = crate::pdf::structure::assembly::assemble_internal_document(vec![paragraphs], &[], None, &[]);
+        let element = &document.elements[0];
+        let bold = element
+            .annotations
+            .iter()
+            .find(|annotation| matches!(annotation.kind, crate::types::AnnotationKind::Bold))
+            .expect("inline bold annotation should be preserved");
+        assert_eq!(element.text, "plain bold tail");
+        assert_eq!((bold.start, bold.end), (6, 10));
+    }
+
+    #[test]
+    fn cross_line_bold_transition_remains_a_boundary() {
+        let segments = vec![
+            inline_seg("Heading", 10.0, 100.0, true),
+            inline_seg("body", 10.0, 80.0, false),
+        ];
+
+        assert_eq!(blocks_to_paragraphs(segments, &[], &[]).len(), 2);
+    }
+
+    #[test]
+    fn distant_same_line_bold_transition_remains_a_boundary() {
+        let segments = vec![
+            inline_seg("left", 10.0, 100.0, false),
+            inline_seg("right", 100.0, 100.0, true),
+        ];
+
+        assert_eq!(blocks_to_paragraphs(segments, &[], &[]).len(), 2);
+    }
+
+    #[test]
+    fn overlapping_or_reverse_bold_transition_remains_a_boundary() {
+        let overlapping = vec![
+            inline_seg("first", 30.0, 100.0, false),
+            inline_seg("second", 40.0, 100.0, true),
+        ];
+        let reversed = vec![
+            inline_seg("first", 30.0, 100.0, false),
+            inline_seg("second", 5.0, 100.0, true),
+        ];
+
+        assert_eq!(blocks_to_paragraphs(overlapping, &[], &[]).len(), 2);
+        assert_eq!(blocks_to_paragraphs(reversed, &[], &[]).len(), 2);
+    }
+
+    #[test]
+    fn slight_metric_overlap_is_still_inline() {
+        let segments = vec![
+            inline_seg("plain", 30.0, 100.0, false),
+            inline_seg("bold", 49.0, 100.0, true),
+        ];
+
+        assert_eq!(blocks_to_paragraphs(segments, &[], &[]).len(), 1);
+    }
+
+    #[test]
+    fn invalid_inline_geometry_remains_a_boundary() {
+        let plain = inline_seg("plain", 10.0, 100.0, false);
+        let mut zero_font = inline_seg("bold", 31.0, 100.0, true);
+        zero_font.font_size = 0.0;
+        let mut non_finite_x = inline_seg("bold", 31.0, 100.0, true);
+        non_finite_x.x = f32::NAN;
+        let mut non_finite_baseline = inline_seg("bold", 31.0, 100.0, true);
+        non_finite_baseline.baseline_y = f32::NAN;
+
+        assert_eq!(blocks_to_paragraphs(vec![plain.clone(), zero_font], &[], &[]).len(), 2);
+        assert_eq!(
+            blocks_to_paragraphs(vec![plain.clone(), non_finite_x], &[], &[]).len(),
+            2
+        );
+        assert_eq!(
+            blocks_to_paragraphs(vec![plain, non_finite_baseline], &[], &[]).len(),
+            2
+        );
+    }
+
+    #[test]
+    fn later_line_inline_style_transition_does_not_absorb_prior_lines() {
+        let segments = vec![
+            inline_seg("first line", 10.0, 120.0, false),
+            inline_seg("plain", 10.0, 100.0, false),
+            inline_seg("bold", 31.0, 100.0, true),
+        ];
+
+        assert_eq!(blocks_to_paragraphs(segments, &[], &[]).len(), 2);
+    }
+
+    #[test]
+    fn monospace_style_transition_remains_a_boundary() {
+        let mut plain = inline_seg("let value =", 10.0, 100.0, false);
+        plain.is_monospace = true;
+        let mut bold = inline_seg("42", 31.0, 100.0, true);
+        bold.is_monospace = true;
+
+        assert_eq!(blocks_to_paragraphs(vec![plain, bold], &[], &[]).len(), 2);
     }
 
     fn line(segments: Vec<SegmentData>) -> PdfLine {
