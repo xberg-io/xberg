@@ -145,6 +145,79 @@ pub(crate) fn render_page_with_safeguards(
     page_index: usize,
     base_dpi: u32,
 ) -> std::result::Result<pdf_oxide::rendering::RenderedImage, pdf_oxide::Error> {
+    let options = safe_render_options(doc, page_index, base_dpi);
+    pdf_oxide::rendering::render_page(doc, page_index, &options)
+}
+
+/// Render a page directly to RGB pixels without an intermediate PNG encode/decode.
+///
+/// This preserves the same DPI safeguard and white-background rendering as
+/// [`render_page_with_safeguards`]. `pdf_oxide` returns premultiplied RGBA for
+/// raw renders, so partially transparent pixels are demultiplied exactly as its
+/// PNG encoder does before the alpha channel is discarded.
+#[cfg(feature = "layout-detection")]
+pub(crate) fn render_page_to_rgb_with_safeguards(
+    doc: &pdf_oxide::PdfDocument,
+    page_index: usize,
+    base_dpi: u32,
+) -> Result<image::RgbImage> {
+    const RGBA_CHANNELS: usize = 4;
+    const RGB_CHANNELS: usize = 3;
+
+    let options = safe_render_options(doc, page_index, base_dpi).as_raw();
+    let rendered =
+        pdf_oxide::rendering::render_page(doc, page_index, &options).map_err(|error| XbergError::Parsing {
+            message: format!("Failed to render page {page_index}: {error}"),
+            source: None,
+        })?;
+    let pixel_count = (rendered.width as usize)
+        .checked_mul(rendered.height as usize)
+        .ok_or_else(|| XbergError::Parsing {
+            message: format!("Rendered page {page_index} dimensions overflow addressable memory"),
+            source: None,
+        })?;
+    let expected_len = pixel_count
+        .checked_mul(RGBA_CHANNELS)
+        .ok_or_else(|| XbergError::Parsing {
+            message: format!("Rendered page {page_index} pixel buffer size overflows addressable memory"),
+            source: None,
+        })?;
+    if rendered.data.len() != expected_len {
+        return Err(XbergError::Parsing {
+            message: format!(
+                "Rendered page {page_index} returned {} raw bytes for {}x{} RGBA pixels; expected {expected_len}",
+                rendered.data.len(),
+                rendered.width,
+                rendered.height
+            ),
+            source: None,
+        });
+    }
+
+    let mut rgb = Vec::with_capacity(pixel_count * RGB_CHANNELS);
+    for pixel in rendered.data.chunks_exact(RGBA_CHANNELS) {
+        let alpha = pixel[3];
+        if alpha == 0 || alpha == u8::MAX {
+            rgb.extend_from_slice(&pixel[..RGB_CHANNELS]);
+            continue;
+        }
+        let alpha = u32::from(alpha);
+        for channel in &pixel[..RGB_CHANNELS] {
+            rgb.push(((u32::from(*channel) * 255 + alpha / 2) / alpha).min(255) as u8);
+        }
+    }
+
+    image::RgbImage::from_raw(rendered.width, rendered.height, rgb).ok_or_else(|| XbergError::Parsing {
+        message: format!("Failed to construct RGB image for rendered page {page_index}"),
+        source: None,
+    })
+}
+
+fn safe_render_options(
+    doc: &pdf_oxide::PdfDocument,
+    page_index: usize,
+    base_dpi: u32,
+) -> pdf_oxide::rendering::RenderOptions {
     let (w_pt, h_pt) = get_page_dimensions_pt(doc, page_index);
     let safe_dpi = choose_safe_dpi(w_pt, h_pt, base_dpi);
     if safe_dpi != base_dpi {
@@ -157,8 +230,7 @@ pub(crate) fn render_page_with_safeguards(
             "reducing render DPI for page due to extreme dimensions (wide vector-heavy PDF or similar)"
         );
     }
-    let options = pdf_oxide::rendering::RenderOptions::with_dpi(safe_dpi);
-    pdf_oxide::rendering::render_page(doc, page_index, &options)
+    pdf_oxide::rendering::RenderOptions::with_dpi(safe_dpi)
 }
 
 /// Open (and optionally authenticate) a PDF document from raw bytes.

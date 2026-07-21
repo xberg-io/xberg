@@ -161,7 +161,7 @@ pub(super) fn run_layout_for_pdf_pages(
             let (pw, ph) = displayed_page_dimensions(media_width, media_height, rotation);
             chunk_page_meta.push((pw, ph));
 
-            let rgb_opt = match crate::pdf::render::render_page_with_safeguards(&doc, page_idx, 150) {
+            let rgb_opt = match crate::pdf::render::render_page_to_rgb_with_safeguards(&doc, page_idx, 150) {
                 Err(e) => {
                     tracing::warn!(
                         page = page_idx + 1,
@@ -172,22 +172,10 @@ pub(super) fn run_layout_for_pdf_pages(
                     );
                     None
                 }
-                Ok(rendered) => match image::load_from_memory(&rendered.data) {
-                    Err(e) => {
-                        tracing::warn!(
-                            page = page_idx + 1,
-                            page_width_pts = pw,
-                            page_height_pts = ph,
-                            error = %e,
-                            "layout runner: skipping page (PNG decode failed), returning empty detections"
-                        );
-                        None
-                    }
-                    // pdf_oxide applies inherited page rotation while rendering.
-                    // Keep this raster unchanged so its coordinates stay aligned
-                    // with layout detections and reused OCR input. ~keep
-                    Ok(img) => Some(img.into_rgb8()),
-                },
+                // pdf_oxide applies inherited page rotation while rendering.
+                // Keep this raster unchanged so its coordinates stay aligned
+                // with layout detections and reused OCR input. ~keep
+                Ok(image) => Some(image),
             };
             chunk_images.push(rgb_opt);
         }
@@ -364,7 +352,10 @@ mod tests {
         let mut document = Document::with_version("1.5");
         let pages_id = document.new_object_id();
         let page_id = document.new_object_id();
-        let content_id = document.add_object(Stream::new(dictionary! {}, Vec::new()));
+        let content_id = document.add_object(Stream::new(
+            dictionary! {},
+            b"q 0.2 0.4 0.8 rg 10 10 80 40 re f Q".to_vec(),
+        ));
 
         let mut page = dictionary! {
             "Type" => "Page",
@@ -401,8 +392,13 @@ mod tests {
 
     fn assert_pdf_oxide_applies_rotation(bytes: Vec<u8>) {
         let document = pdf_oxide::PdfDocument::from_bytes(bytes.clone()).expect("fixture PDF must open");
-        let rendered =
+        let png_rendered =
             crate::pdf::render::render_page_with_safeguards(&document, 0, 72).expect("rotated fixture must render");
+        let png_rgb = image::load_from_memory(&png_rendered.data)
+            .expect("PNG render must decode")
+            .into_rgb8();
+        let raw_rgb = crate::pdf::render::render_page_to_rgb_with_safeguards(&document, 0, 72)
+            .expect("raw rotated fixture must render");
         let rotations = crate::pdf::render::get_page_rotations(&bytes, 1);
         let (media_width, media_height) = document
             .get_page_media_box(0)
@@ -410,8 +406,10 @@ mod tests {
             .expect("fixture must have a MediaBox");
 
         assert_eq!(rotations, vec![90]);
+        assert_eq!(raw_rgb.dimensions(), png_rgb.dimensions());
+        assert_eq!(raw_rgb.as_raw(), png_rgb.as_raw());
         assert!(
-            rendered.height > rendered.width,
+            raw_rgb.height() > raw_rgb.width(),
             "rotated landscape page must render as portrait"
         );
         assert_eq!(
