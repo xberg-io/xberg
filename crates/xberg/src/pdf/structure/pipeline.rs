@@ -747,8 +747,8 @@ fn blocks_to_paragraphs(
             let has_same_line_follower = lines
                 .get(line_idx + 1)
                 .is_some_and(|next| (next.baseline_y - line.baseline_y).abs() <= INLINE_STYLE_BASELINE_TOLERANCE);
-            let is_list = looks_like_list_item(&line.text)
-                || (starts_new_line && has_same_line_follower && is_bare_list_marker(&line.text));
+            let is_list = starts_new_line
+                && (looks_like_list_item(&line.text) || (has_same_line_follower && is_bare_list_marker(&line.text)));
             let crossed_gap = paragraph_gap_ys.iter().any(|&gap_y| {
                 let (upper, lower) = if prev.baseline_y > line.baseline_y {
                     (prev.baseline_y, line.baseline_y)
@@ -917,6 +917,12 @@ fn finalize_paragraph(
         .any(|line| line.is_bold != first.is_bold || line.is_italic != first.is_italic);
 
     let reconstructed_lines = reconstruct_pdf_lines(lines);
+    let starts_with_split_list_marker = lines.get(1).is_some_and(|body| {
+        is_bare_list_marker(&first.text)
+            && (body.baseline_y - first.baseline_y).abs() <= INLINE_STYLE_BASELINE_TOLERANCE
+            && !body.text.trim().is_empty()
+    });
+    let is_list_candidate = looks_like_list_item(trimmed) || starts_with_split_list_marker;
 
     let structure_tree_role = {
         let role_counts: std::collections::HashMap<u8, usize> =
@@ -945,7 +951,7 @@ fn finalize_paragraph(
             dominant_font_size: first.font_size,
             heading_level: Some(level),
             is_bold,
-            is_list_item: looks_like_list_item(trimmed),
+            is_list_item: is_list_candidate,
             is_code_block: first.is_monospace && lines.len() > 1,
             is_formula: false,
             is_page_furniture: false,
@@ -1018,14 +1024,14 @@ fn finalize_paragraph(
             && (super::classify::is_section_pattern(trimmed) || is_structural_heading_word(trimmed))
             && !super::layout_classify::is_separator_text(trimmed)
             && !super::regions::looks_like_figure_label(trimmed)
-            && !looks_like_list_item(trimmed)
+            && !is_list_candidate
             && !page_number_like
         {
             heading_level = Some(2);
         }
     }
 
-    let is_list_item = heading_level.is_none() && looks_like_list_item(trimmed);
+    let is_list_item = heading_level.is_none() && is_list_candidate;
     let is_code_block =
         heading_level.is_none() && !is_list_item && lines.iter().all(|l| l.is_monospace) && lines.len() >= 2;
 
@@ -1107,14 +1113,16 @@ fn looks_like_list_item(text: &str) -> bool {
 
     let t = text.trim_start();
 
-    if t.starts_with('•')
-        || t.starts_with('·')
-        || t.starts_with('◦')
-        || t.starts_with('▪')
-        || t.starts_with('–')
-        || t.starts_with('—')
-    {
+    if t.starts_with('•') || t.starts_with('·') || t.starts_with('◦') || t.starts_with('▪') {
         return true;
+    }
+
+    if let Some(rest) = t.strip_prefix('–').or_else(|| t.strip_prefix('—')) {
+        if !rest.starts_with(' ') && !rest.starts_with('\t') {
+            return false;
+        }
+        let body = rest.trim_start_matches([' ', '\t']);
+        return !body.is_empty() && !body.starts_with('\r') && !body.starts_with('\n');
     }
 
     if let Some(rest) = t.strip_prefix("- ") {
@@ -1166,6 +1174,9 @@ fn looks_like_list_item(text: &str) -> bool {
         };
         if marker_length_allowed && marker_like && (chars.peek() == Some(&'.') || chars.peek() == Some(&')')) {
             chars.next();
+            if num_len == 1 && !all_digits && is_probable_author_byline(t) {
+                return false;
+            }
             return chars.peek().is_some_and(|c| c.is_whitespace()) && {
                 chars.next();
                 chars.peek().is_some_and(|c| c.is_alphabetic())
@@ -1174,6 +1185,38 @@ fn looks_like_list_item(text: &str) -> bool {
     }
 
     false
+}
+
+/// Whether a single-capital marker is more likely the first author initial.
+///
+/// The comma plus a second compact initial or journal-style slash supplies
+/// the contextual evidence; a standalone `A. First item` remains a list.
+pub(super) fn is_probable_author_byline(text: &str) -> bool {
+    let mut chars = text.chars();
+    if !chars.next().is_some_and(|c| c.is_ascii_uppercase()) || chars.next() != Some('.') {
+        return false;
+    }
+    let remainder = chars.as_str().trim_start();
+    let Some((surname, remainder)) = remainder.split_once(char::is_whitespace) else {
+        return false;
+    };
+    surname.ends_with(',') && starts_with_author_initial_or_slash(remainder.trim_start())
+}
+
+fn starts_with_author_initial_or_slash(text: &str) -> bool {
+    if text.starts_with('/') {
+        return true;
+    }
+    let mut chars = text.chars().peekable();
+    let mut initials = 0;
+    while chars.peek().is_some_and(|c| c.is_ascii_uppercase()) {
+        chars.next();
+        if chars.next() != Some('.') {
+            return false;
+        }
+        initials += 1;
+    }
+    initials > 0 && chars.peek().is_some_and(|c| c.is_whitespace())
 }
 
 /// Check if text is a well-known structural heading word.
@@ -3525,6 +3568,59 @@ mod tests {
     }
 
     #[test]
+    fn inline_typographic_dash_does_not_split_a_paragraph() {
+        let segments = vec![
+            inline_seg("Figures 6", 10.0, 100.0, false),
+            inline_seg("– 8 show the results", 31.0, 100.0, false),
+        ];
+
+        let paragraphs = blocks_to_paragraphs(segments, &[], &[]);
+
+        assert_eq!(paragraphs.len(), 1);
+        assert!(!paragraphs[0].is_list_item);
+    }
+
+    #[test]
+    fn typographic_dash_on_a_new_line_still_starts_a_list() {
+        let segments = vec![
+            inline_seg("Introduction", 10.0, 100.0, false),
+            inline_seg("– first item", 10.0, 80.0, false),
+        ];
+
+        let paragraphs = blocks_to_paragraphs(segments, &[], &[]);
+
+        assert_eq!(paragraphs.len(), 2);
+        assert!(paragraphs[1].is_list_item);
+    }
+
+    #[test]
+    fn split_typographic_dash_and_same_line_body_stay_a_list() {
+        let segments = vec![
+            inline_seg("Introduction", 10.0, 100.0, false),
+            inline_seg("–", 10.0, 80.0, false),
+            inline_seg("quoted body", 31.0, 80.0, false),
+        ];
+
+        let paragraphs = blocks_to_paragraphs(segments, &[], &[]);
+
+        assert_eq!(paragraphs.len(), 2);
+        assert!(paragraphs[1].is_list_item);
+    }
+
+    #[test]
+    fn split_typographic_dash_and_different_line_body_are_not_a_list() {
+        let segments = vec![
+            inline_seg("Figures 6", 10.0, 100.0, false),
+            inline_seg("– ", 31.0, 100.0, false),
+            inline_seg("8 show the results", 10.0, 80.0, false),
+        ];
+
+        let paragraphs = blocks_to_paragraphs(segments, &[], &[]);
+
+        assert!(paragraphs.iter().all(|paragraph| !paragraph.is_list_item));
+    }
+
+    #[test]
     fn cross_line_bold_transition_remains_a_boundary() {
         let segments = vec![
             inline_seg("Heading", 10.0, 100.0, true),
@@ -4774,5 +4870,29 @@ mod list_marker_tests {
         assert!(!looks_like_list_item("etc. and more prose"));
         assert!(looks_like_list_item("a. first item"));
         assert!(looks_like_list_item("iv. fourth item"));
+    }
+
+    #[test]
+    fn typographic_dash_requires_an_inline_body() {
+        assert!(looks_like_list_item("– first item"));
+        assert!(looks_like_list_item("—\tsecond item"));
+        assert!(looks_like_list_item("– “quoted item”"));
+        assert!(looks_like_list_item("— (parenthesized item)"));
+        assert!(!looks_like_list_item("–\n457"));
+        assert!(!looks_like_list_item("– \n457"));
+        assert!(!looks_like_list_item("—\t\nbody"));
+        assert!(!looks_like_list_item("–\n8 show the remaining figures"));
+        assert!(!looks_like_list_item("—continuation"));
+    }
+
+    #[test]
+    fn author_initials_are_not_list_markers() {
+        assert!(!looks_like_list_item(
+            "O. Sanni, A.P.I. Popoola / Data in Brief 22 (2019) 451"
+        ));
+        assert!(!looks_like_list_item("O. Sanni, A. Popoola / Data in Brief"));
+        assert!(looks_like_list_item("A. First item"));
+        assert!(looks_like_list_item("a. first item"));
+        assert!(looks_like_list_item("A. Compare input, output / behavior"));
     }
 }

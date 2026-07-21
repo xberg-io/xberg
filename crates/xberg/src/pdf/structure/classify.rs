@@ -293,6 +293,10 @@ fn detect_indentation_based_lists(paragraphs: &mut [PdfParagraph]) {
         };
         let word_count = para_text.split_whitespace().count();
 
+        if super::pipeline::is_probable_author_byline(&para_text) || is_numeric_prose_continuation(&para_text) {
+            continue;
+        }
+
         let has_context = if i > 0 {
             let prev_text = if !paragraphs[i - 1].text.is_empty() {
                 paragraphs[i - 1].text.clone()
@@ -334,6 +338,19 @@ fn detect_indentation_based_lists(paragraphs: &mut [PdfParagraph]) {
             paragraphs[i].layout_class = Some(LayoutHintClass::ListItem);
         }
     }
+}
+
+fn is_numeric_prose_continuation(text: &str) -> bool {
+    let mut words = text.split_whitespace();
+    let Some(first) = words.next() else {
+        return false;
+    };
+    if first.is_empty() || !first.chars().all(|c| c.is_ascii_digit()) {
+        return false;
+    }
+    words
+        .next()
+        .is_none_or(|word| word.chars().next().is_some_and(char::is_lowercase))
 }
 
 /// W2.C: Detect monospace code-block sequences.
@@ -2023,6 +2040,48 @@ mod tests {
             block_bbox: None,
             word_count,
         }
+    }
+
+    fn paragraph_at_indent(text: &str, left: f32) -> PdfParagraph {
+        let mut paragraph = make_text_paragraph(12.0, text, false);
+        paragraph.block_bbox = Some((left, 0.0, left + 200.0, 12.0));
+        paragraph
+    }
+
+    #[test]
+    fn indentation_does_not_promote_author_byline() {
+        let mut paragraphs = vec![
+            paragraph_at_indent("Header", 0.0),
+            paragraph_at_indent("O. Sanni, A.P.I. Popoola / Data in Brief", 20.0),
+            paragraph_at_indent("Footer", 0.0),
+        ];
+
+        detect_indentation_based_lists(&mut paragraphs);
+
+        assert!(!paragraphs[1].is_list_item);
+    }
+
+    #[test]
+    fn indentation_does_not_promote_numeric_continuations() {
+        let mut paragraphs = vec![
+            paragraph_at_indent("Header", 0.0),
+            paragraph_at_indent("457", 20.0),
+            paragraph_at_indent("8 show the remaining figures", 20.0),
+            paragraph_at_indent("Footer", 0.0),
+        ];
+
+        detect_indentation_based_lists(&mut paragraphs);
+
+        assert!(!paragraphs[1].is_list_item);
+        assert!(!paragraphs[2].is_list_item);
+    }
+
+    #[test]
+    fn numeric_prose_continuation_gate_is_narrow() {
+        assert!(is_numeric_prose_continuation("457"));
+        assert!(is_numeric_prose_continuation("8 show the remaining figures"));
+        assert!(!is_numeric_prose_continuation("8 Results"));
+        assert!(!is_numeric_prose_continuation("first item"));
     }
 
     #[test]
