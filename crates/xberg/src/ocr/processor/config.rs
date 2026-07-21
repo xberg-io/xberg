@@ -21,9 +21,28 @@ use xberg_tesseract::TesseractAPI;
 /// Hexadecimal string representation of the configuration hash
 pub(super) fn hash_config(config: &TesseractConfig) -> String {
     let mut hasher = blake3::Hasher::new();
-    hasher.update(config.language.as_bytes());
+    hash_bytes(&mut hasher, config.language.as_bytes());
     hasher.update(&config.psm.to_le_bytes());
-    hasher.update(config.output_format.as_bytes());
+    hasher.update(&config.oem.to_le_bytes());
+    hasher.update(&config.min_confidence.to_bits().to_le_bytes());
+    hash_bytes(&mut hasher, config.output_format.as_bytes());
+    match config.preprocessing.as_ref() {
+        Some(preprocessing) => {
+            hasher.update(&[1]);
+            hasher.update(&preprocessing.target_dpi.to_le_bytes());
+            hasher.update(&[
+                preprocessing.auto_rotate as u8,
+                preprocessing.deskew as u8,
+                preprocessing.denoise as u8,
+                preprocessing.contrast_enhance as u8,
+                preprocessing.invert_colors as u8,
+            ]);
+            hash_bytes(&mut hasher, preprocessing.binarization_method.as_bytes());
+        }
+        None => {
+            hasher.update(&[0]);
+        }
+    }
     hasher.update(&[config.enable_table_detection as u8]);
     hasher.update(&config.table_min_confidence.to_bits().to_le_bytes());
     hasher.update(&config.table_column_threshold.to_le_bytes());
@@ -33,13 +52,29 @@ pub(super) fn hash_config(config: &TesseractConfig) -> String {
     hasher.update(&[config.tessedit_dont_blkrej_good_wds as u8]);
     hasher.update(&[config.tessedit_dont_rowrej_good_wds as u8]);
     hasher.update(&[config.tessedit_enable_dict_correction as u8]);
-    hasher.update(config.tessedit_char_whitelist.as_bytes());
+    hash_bytes(&mut hasher, config.tessedit_char_whitelist.as_bytes());
+    hash_bytes(&mut hasher, config.tessedit_char_blacklist.as_bytes());
     hasher.update(&[config.tessedit_use_primary_params_model as u8]);
     hasher.update(&[config.textord_space_size_is_variable as u8]);
     hasher.update(&[config.thresholding_method as u8]);
+    hasher.update(&[config.auto_rotate as u8]);
+    match config.tessdata_path.as_ref() {
+        Some(path) => {
+            hasher.update(&[1]);
+            hash_bytes(&mut hasher, path.as_os_str().as_encoded_bytes());
+        }
+        None => {
+            hasher.update(&[0]);
+        }
+    }
 
     let hash = hasher.finalize();
     hex::encode(&hash.as_bytes()[..16])
+}
+
+fn hash_bytes(hasher: &mut blake3::Hasher, value: &[u8]) {
+    hasher.update(&(value.len() as u64).to_le_bytes());
+    hasher.update(value);
 }
 
 /// Apply Tesseract configuration variables to the API.
@@ -82,9 +117,9 @@ pub(super) fn apply_tesseract_variables(api: &TesseractAPI, config: &TesseractCo
     )
     .map_err(|e| OcrError::InvalidConfiguration(format!("Failed to set tessedit_enable_dict_correction: {}", e)))?;
 
-    if !config.tessedit_char_whitelist.is_empty() {
-        api.set_variable("tessedit_char_whitelist", &config.tessedit_char_whitelist)
-            .map_err(|e| OcrError::InvalidConfiguration(format!("Failed to set tessedit_char_whitelist: {}", e)))?;
+    for (name, value) in character_variables(config) {
+        api.set_variable(name, value)
+            .map_err(|e| OcrError::InvalidConfiguration(format!("Failed to set {name}: {e}")))?;
     }
 
     api.set_variable(
@@ -103,6 +138,13 @@ pub(super) fn apply_tesseract_variables(api: &TesseractAPI, config: &TesseractCo
         .map_err(|e| OcrError::InvalidConfiguration(format!("Failed to set thresholding_method: {}", e)))?;
 
     Ok(())
+}
+
+fn character_variables(config: &TesseractConfig) -> [(&'static str, &str); 2] {
+    [
+        ("tessedit_char_whitelist", &config.tessedit_char_whitelist),
+        ("tessedit_char_blacklist", &config.tessedit_char_blacklist),
+    ]
 }
 
 #[cfg(test)]
@@ -197,5 +239,39 @@ mod tests {
         let hash2 = hash_config(&config2);
 
         assert_ne!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_hash_config_blacklist() {
+        let config1 = create_test_config();
+        let mut config2 = create_test_config();
+        config2.tessedit_char_blacklist = "abc".to_string();
+
+        assert_ne!(hash_config(&config1), hash_config(&config2));
+    }
+
+    #[test]
+    fn test_hash_config_frames_whitelist_and_blacklist() {
+        let mut config1 = create_test_config();
+        config1.tessedit_char_whitelist = "ab".to_string();
+        config1.tessedit_char_blacklist = "c".to_string();
+        let mut config2 = create_test_config();
+        config2.tessedit_char_whitelist = "a".to_string();
+        config2.tessedit_char_blacklist = "bc".to_string();
+
+        assert_ne!(hash_config(&config1), hash_config(&config2));
+    }
+
+    #[test]
+    fn test_character_variables_include_empty_resets() {
+        let mut configured = create_test_config();
+        configured.tessedit_char_whitelist = "0123456789".to_string();
+        configured.tessedit_char_blacklist = "abc".to_string();
+        let empty = create_test_config();
+
+        assert_eq!(character_variables(&configured)[0].1, "0123456789");
+        assert_eq!(character_variables(&configured)[1].1, "abc");
+        assert_eq!(character_variables(&empty)[0].1, "");
+        assert_eq!(character_variables(&empty)[1].1, "");
     }
 }

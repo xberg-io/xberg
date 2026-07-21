@@ -21,79 +21,112 @@ use crate::ocr::types::BatchItemResult;
 use crate::ocr::types::TesseractConfig;
 use crate::types::internal::{ElementKind, InternalDocument};
 use crate::types::{OcrExtractionResult, OcrTable, OcrTableBoundingBox};
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
+use std::sync::{LazyLock, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use xberg_tesseract::{TessPageSegMode, TessPolyBlockType, TesseractAPI};
 
-/// Cached Tesseract API state, stored per-thread to avoid reloading tessdata (~100MB) for each image.
-struct CachedApi {
+const MAX_RETAINED_TESSERACT_APIS: usize = 8;
+
+#[derive(Clone, PartialEq, Eq)]
+struct ApiKey {
     tessdata_path: String,
     language: String,
-    api: TesseractAPI,
 }
 
-thread_local! {
-    /// Per-thread cache of an initialized `TesseractAPI`. Each thread owns at most one
-    /// cached instance. Because Tesseract is not thread-safe, the thread-local pattern
-    /// guarantees exclusive access without locking.
-    static CACHED_TESSERACT_API: RefCell<Option<CachedApi>> = const { RefCell::new(None) };
+struct IdlePool<K, V> {
+    state: Mutex<IdlePoolState<K, V>>,
 }
 
-/// Returns an initialized `TesseractAPI` for the given `(tessdata_path, language)` pair.
-///
-/// If the thread-local cache already holds a matching API, `clear()` is called to reset
-/// image state and the cached instance is returned. Otherwise a fresh instance is created,
-/// initialized, and stored in the cache for subsequent calls.
-///
-/// The caller receives ownership of the `TesseractAPI` via the take-and-put-back pattern:
-/// the value is removed from the cache, used by the caller, and returned via
-/// [`return_api_to_cache`] when done.
-fn get_or_init_api(tessdata_path: &str, language: &str) -> Result<TesseractAPI, OcrError> {
-    let maybe_cached = CACHED_TESSERACT_API.with(|cell| {
-        let mut slot = cell.borrow_mut();
-        if let Some(cached) = slot.as_ref()
-            && cached.tessdata_path == tessdata_path
-            && cached.language == language
-        {
-            return slot.take();
+struct IdlePoolState<K, V> {
+    capacity: usize,
+    entries: Vec<(K, V)>,
+}
+
+impl<K: PartialEq, V> IdlePool<K, V> {
+    fn new(capacity: usize) -> Self {
+        Self {
+            state: Mutex::new(IdlePoolState {
+                capacity,
+                entries: Vec::with_capacity(capacity),
+            }),
         }
-        *slot = None;
-        None
-    });
+    }
 
-    if let Some(cached) = maybe_cached {
-        cached
-            .api
-            .clear()
+    fn take(&self, key: &K) -> Option<V> {
+        let mut state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let index = state.entries.iter().position(|(entry_key, _)| entry_key == key)?;
+        Some(state.entries.swap_remove(index).1)
+    }
+
+    fn put(&self, key: K, value: V) {
+        let mut state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if state.capacity == 0 {
+            return;
+        }
+        if state.entries.len() == state.capacity {
+            state.entries.swap_remove(0);
+        }
+        state.entries.push((key, value));
+    }
+
+    #[cfg(test)]
+    fn set_capacity(&self, capacity: usize) {
+        let mut state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        state.capacity = capacity;
+        while state.entries.len() > capacity {
+            state.entries.pop();
+        }
+    }
+
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        self.state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .entries
+            .len()
+    }
+}
+
+static TESSERACT_API_POOL: LazyLock<IdlePool<ApiKey, TesseractAPI>> =
+    LazyLock::new(|| IdlePool::new(MAX_RETAINED_TESSERACT_APIS));
+
+fn get_or_init_api(key: &ApiKey) -> Result<TesseractAPI, OcrError> {
+    if let Some(api) = TESSERACT_API_POOL.take(key) {
+        api.clear()
             .map_err(|e| OcrError::ProcessingFailed(format!("Failed to clear cached Tesseract API: {}", e)))?;
-        return Ok(cached.api);
+        return Ok(api);
     }
 
     let api = TesseractAPI::new()
         .map_err(|e| OcrError::TesseractInitializationFailed(format!("Failed to allocate Tesseract engine: {}", e)))?;
-    api.init(tessdata_path, language).map_err(|e| {
-        OcrError::TesseractInitializationFailed(format!("Failed to initialize language '{}': {}", language, e))
+    api.init(&key.tessdata_path, &key.language).map_err(|e| {
+        OcrError::TesseractInitializationFailed(format!("Failed to initialize language '{}': {}", key.language, e))
     })?;
     Ok(api)
 }
 
-/// Returns a `TesseractAPI` back to the thread-local cache after use.
-///
-/// If the cache already holds a different entry (e.g. due to a re-entrant call), the
-/// returned API is simply dropped.
-fn return_api_to_cache(api: TesseractAPI, tessdata_path: String, language: String) {
-    CACHED_TESSERACT_API.with(|cell| {
-        let mut slot = cell.borrow_mut();
-        if slot.is_none() {
-            *slot = Some(CachedApi {
-                tessdata_path,
-                language,
-                api,
-            });
+struct ApiGuard {
+    api: Option<TesseractAPI>,
+    key: ApiKey,
+}
+
+impl Drop for ApiGuard {
+    fn drop(&mut self) {
+        if let Some(api) = self.api.take() {
+            TESSERACT_API_POOL.put(self.key.clone(), api);
         }
-    });
+    }
+}
+
+impl std::ops::Deref for ApiGuard {
+    type Target = TesseractAPI;
+
+    fn deref(&self) -> &Self::Target {
+        self.api.as_ref().expect("ApiGuard consumed prematurely")
+    }
 }
 
 /// Process-global document-orientation classifier (ONNX PP-LCNet), shared by
@@ -631,30 +664,12 @@ pub(super) fn perform_ocr(
 
     validate_language_and_traineddata(&config.language, &tessdata_path)?;
 
-    let api = get_or_init_api(&tessdata_path, &config.language)?;
-    struct ApiGuard {
-        api: Option<TesseractAPI>,
-        tessdata_path: String,
-        language: String,
-    }
-    impl Drop for ApiGuard {
-        fn drop(&mut self) {
-            if let Some(api) = self.api.take() {
-                return_api_to_cache(api, self.tessdata_path.clone(), self.language.clone());
-            }
-        }
-    }
-    impl std::ops::Deref for ApiGuard {
-        type Target = TesseractAPI;
-        fn deref(&self) -> &TesseractAPI {
-            self.api.as_ref().expect("ApiGuard consumed prematurely")
-        }
-    }
-    let api = ApiGuard {
-        api: Some(api),
+    let key = ApiKey {
         tessdata_path: tessdata_path.clone(),
         language: config.language.clone(),
     };
+    let api = get_or_init_api(&key)?;
+    let api = ApiGuard { api: Some(api), key };
 
     log_ci_debug(ci_debug_enabled, "init", || {
         format!("language={} datapath='{}'", config.language, tessdata_path)
@@ -1341,6 +1356,34 @@ pub(super) fn process_image_files_batch(
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    #[test]
+    fn idle_pool_reuses_only_matching_keys() {
+        let pool = IdlePool::new(2);
+        pool.put("eng", 1);
+        pool.put("deu", 2);
+
+        assert_eq!(pool.take(&"fra"), None);
+        assert_eq!(pool.take(&"eng"), Some(1));
+        assert_eq!(pool.take(&"deu"), Some(2));
+    }
+
+    #[test]
+    fn idle_pool_bounds_and_trims_retained_values() {
+        let pool = IdlePool::new(2);
+        pool.put("eng", 1);
+        pool.put("deu", 2);
+        pool.put("fra", 3);
+        assert_eq!(pool.len(), 2);
+        assert_eq!(pool.take(&"eng"), None, "oldest idle handle should be evicted");
+
+        pool.set_capacity(1);
+        assert_eq!(pool.len(), 1);
+        pool.set_capacity(0);
+        assert_eq!(pool.len(), 0);
+        pool.put("ita", 4);
+        assert_eq!(pool.len(), 0);
+    }
 
     #[test]
     fn test_is_all_languages() {

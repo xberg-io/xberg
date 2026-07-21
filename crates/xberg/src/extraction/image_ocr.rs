@@ -35,8 +35,8 @@ use crate::types::{ExtractedDocument, ExtractedImage};
 ///
 /// # Concurrency
 ///
-/// Concurrency is bounded by the configured thread budget
-/// using a semaphore to prevent resource exhaustion.
+/// Concurrency is bounded by the configured thread budget using a replenished
+/// task set, so queued images do not create an unbounded number of futures.
 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
 pub(crate) async fn process_images_with_ocr(
     mut images: Vec<ExtractedImage>,
@@ -51,37 +51,26 @@ pub(crate) async fn process_images_with_ocr(
     let output_format = config.output_format.clone();
     let acceleration = ocr_config.acceleration.clone();
 
-    use std::sync::Arc;
-    use tokio::sync::Semaphore;
+    use std::collections::VecDeque;
     use tokio::task::JoinSet;
 
     let max_tasks = crate::core::config::concurrency::resolve_thread_budget(config.concurrency.as_ref());
-    let semaphore = Arc::new(Semaphore::new(max_tasks));
 
     type OcrTaskResult = (usize, crate::Result<ExtractedDocument>);
+    type PendingOcrTask = (usize, bytes::Bytes, crate::core::config::OcrConfig);
     let mut join_set: JoinSet<OcrTaskResult> = JoinSet::new();
+    let mut pending: VecDeque<PendingOcrTask> = VecDeque::with_capacity(images.len());
 
     for (idx, image) in images.iter().enumerate() {
         let image_data = image.data.clone();
-        let permit = Arc::clone(&semaphore);
         let mut ocr_config_clone = ocr_config.clone();
         ocr_config_clone.output_format = Some(output_format.clone());
         ocr_config_clone.acceleration = acceleration.clone();
+        pending.push_back((idx, image_data, ocr_config_clone));
+    }
 
+    let spawn_task = |join_set: &mut JoinSet<OcrTaskResult>, (idx, image_data, ocr_config_clone): PendingOcrTask| {
         join_set.spawn(async move {
-            let _permit = match permit.acquire().await {
-                Ok(p) => p,
-                Err(_) => {
-                    return (
-                        idx,
-                        Err(crate::XbergError::Ocr {
-                            message: "OCR concurrency semaphore closed unexpectedly".to_string(),
-                            source: None,
-                        }),
-                    );
-                }
-            };
-
             let backend = {
                 let registry = crate::plugins::registry::get_ocr_backend_registry();
                 let registry = registry.read();
@@ -102,6 +91,13 @@ pub(crate) async fn process_images_with_ocr(
             let ocr_result = backend.process_image(&image_data, &ocr_config_clone).await;
             (idx, ocr_result)
         });
+    };
+
+    while join_set.len() < max_tasks {
+        let Some(task) = pending.pop_front() else {
+            break;
+        };
+        spawn_task(&mut join_set, task);
     }
 
     while let Some(join_result) = join_set.join_next().await {
@@ -126,6 +122,10 @@ pub(crate) async fn process_images_with_ocr(
                 });
                 images[idx].ocr_result = None;
             }
+        }
+
+        if let Some(task) = pending.pop_front() {
+            spawn_task(&mut join_set, task);
         }
     }
 

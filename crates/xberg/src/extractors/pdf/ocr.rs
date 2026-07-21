@@ -360,11 +360,18 @@ pub(crate) fn evaluate_per_page_ocr(
 ///
 /// `page_indices` are 0-indexed. Only the requested pages are rendered,
 /// returned as `(page_index, image)` pairs.
-#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(crate) fn render_selected_pages_for_ocr(
     content: &[u8],
     page_indices: &[usize],
 ) -> crate::Result<Vec<(usize, image::DynamicImage)>> {
+    let (doc, page_count, page_rotations) = open_pdf_for_page_ocr(content)?;
+    let valid_indices = valid_page_indices(page_indices, page_count);
+    render_selected_pages_from_document(&doc, &page_rotations, &valid_indices)
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn open_pdf_for_page_ocr(content: &[u8]) -> crate::Result<(pdf_oxide::PdfDocument, usize, Vec<u32>)> {
     let doc = pdf_oxide::PdfDocument::from_bytes(content.to_vec()).map_err(|e| crate::XbergError::Parsing {
         message: format!("Failed to open PDF for rendering: {}", e),
         source: None,
@@ -376,25 +383,44 @@ pub(crate) fn render_selected_pages_for_ocr(
     })?;
 
     let page_rotations = crate::pdf::render::get_page_rotations(content, page_count);
+    Ok((doc, page_count, page_rotations))
+}
 
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn valid_page_indices(page_indices: &[usize], page_count: usize) -> Vec<usize> {
+    page_indices
+        .iter()
+        .copied()
+        .filter(|&idx| {
+            if idx < page_count {
+                true
+            } else {
+                tracing::warn!(
+                    page = idx + 1,
+                    page_count,
+                    "force_ocr_pages: page {} is out of range (document has {} pages), skipping",
+                    idx + 1,
+                    page_count
+                );
+                false
+            }
+        })
+        .collect()
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn render_selected_pages_from_document(
+    doc: &pdf_oxide::PdfDocument,
+    page_rotations: &[u32],
+    page_indices: &[usize],
+) -> crate::Result<Vec<(usize, image::DynamicImage)>> {
     let mut images = Vec::with_capacity(page_indices.len());
     for &idx in page_indices {
-        if idx >= page_count {
-            tracing::warn!(
-                page = idx + 1,
-                page_count,
-                "force_ocr_pages: page {} is out of range (document has {} pages), skipping",
-                idx + 1,
-                page_count
-            );
-            continue;
-        }
-        let rendered = crate::pdf::render::render_page_with_safeguards(&doc, idx, 150).map_err(|e| {
-            crate::XbergError::Parsing {
+        let rendered =
+            crate::pdf::render::render_page_with_safeguards(doc, idx, 150).map_err(|e| crate::XbergError::Parsing {
                 message: format!("Failed to render PDF page {}: {}", idx + 1, e),
                 source: None,
-            }
-        })?;
+            })?;
         let img = image::load_from_memory(&rendered.data).map_err(|e| crate::XbergError::Parsing {
             message: format!("Failed to decode rendered page {}: {}", idx + 1, e),
             source: None,
@@ -454,9 +480,9 @@ pub(crate) async fn extract_mixed_ocr_native(
 
     let mut page_indices: Vec<usize> = ocr_set.iter().map(|&p| (p - 1) as usize).collect();
     page_indices.sort_unstable();
-    let page_images = render_selected_pages_for_ocr(content, &page_indices)?;
-
-    if page_images.is_empty() {
+    let (render_doc, page_count, page_rotations) = open_pdf_for_page_ocr(content)?;
+    page_indices = valid_page_indices(&page_indices, page_count);
+    if page_indices.is_empty() {
         return Ok((
             native_text.to_string(),
             ahash::AHashMap::new(),
@@ -491,7 +517,7 @@ pub(crate) async fn extract_mixed_ocr_native(
 
     let capture_rasters = config.images.as_ref().is_some_and(|c| c.include_page_rasters);
     let ocr_config_owned = ocr_config_resolved;
-    let total = page_images.len();
+    let total = page_indices.len();
     let mut ocr_results: ahash::AHashMap<u32, String> = ahash::AHashMap::with_capacity(total);
     let mut accumulated_llm_usage: Vec<crate::types::LlmUsage> = Vec::new();
     let mut accumulated_formulas: Vec<crate::types::Formula> = Vec::new();
@@ -499,7 +525,9 @@ pub(crate) async fn extract_mixed_ocr_native(
 
     for batch_start in (0..total).step_by(batch_size) {
         let batch_end = (batch_start + batch_size).min(total);
-        let batch_slice = &page_images[batch_start..batch_end];
+        let page_images =
+            render_selected_pages_from_document(&render_doc, &page_rotations, &page_indices[batch_start..batch_end])?;
+        let batch_slice = &page_images;
 
         type EncodedPage = (usize, Arc<Vec<u8>>, u32, u32);
         #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
@@ -3282,6 +3310,27 @@ Buffers:           50000 kB
             "render_selected_pages_for_ocr on wide page (the #1078 bug path) should succeed via safeguard, got: {:?}",
             result.err()
         );
+    }
+
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    #[tokio::test]
+    async fn mixed_ocr_all_out_of_range_pages_skips_backend_lookup() {
+        let pdf = crate::pdf::render::build_minimal_pdf_with_mediabox(612.0, 792.0);
+        let mut config = ExtractionConfig::default();
+        config.ocr = Some(crate::core::config::OcrConfig {
+            backend: "unregistered-test-backend".to_string(),
+            ..Default::default()
+        });
+
+        let result = extract_mixed_ocr_native("native", &[], &[99], &pdf, &config, None)
+            .await
+            .unwrap();
+
+        assert_eq!(result.0, "native");
+        assert!(result.1.is_empty());
+        assert!(result.2.is_empty());
+        assert!(result.3.is_none());
+        assert!(result.4.is_empty());
     }
 
     /// Verifies that formulas returned by a per-page OCR backend are accumulated and
