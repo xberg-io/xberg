@@ -36,6 +36,24 @@ pub struct BatchDiagnosticReport {
     pub batch_samples_ms: Vec<f64>,
 }
 
+/// One extraction lane for isolated throughput and process-RSS measurements.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BatchDiagnosticLane {
+    Sequential,
+    Batch,
+}
+
+/// Measurements from one isolated extraction lane.
+#[derive(Debug, Clone, Serialize)]
+pub struct BatchLaneDiagnosticReport {
+    pub lane: &'static str,
+    pub batch_size: usize,
+    pub iterations: usize,
+    pub median_ms: f64,
+    pub documents_per_second: f64,
+    pub samples_ms: Vec<f64>,
+}
+
 /// Compare warmed sequential extraction with the public native batch API.
 pub async fn run_batch_diagnostic(config: &BatchDiagnosticConfig) -> Result<BatchDiagnosticReport> {
     validate_config(config)?;
@@ -83,6 +101,46 @@ pub async fn run_batch_diagnostic(config: &BatchDiagnosticConfig) -> Result<Batc
         outputs_match: true,
         sequential_samples_ms: sequential_samples,
         batch_samples_ms: batch_samples,
+    })
+}
+
+/// Measure one warmed lane without constructing or retaining the other lane's resources.
+pub async fn run_batch_lane_diagnostic(
+    config: &BatchDiagnosticConfig,
+    lane: BatchDiagnosticLane,
+) -> Result<BatchLaneDiagnosticReport> {
+    validate_config(config)?;
+    let inputs = expanded_inputs(config);
+    let extraction_config = resolve_extraction_config(config)?;
+
+    for _ in 0..config.warmup_iterations {
+        let documents = extract_lane(&inputs, &extraction_config, lane).await?;
+        validate_lane_output(&inputs, &documents, lane)?;
+    }
+
+    let mut samples = Vec::with_capacity(config.iterations);
+    for _ in 0..config.iterations {
+        let preconditioned = extract_lane(&inputs, &extraction_config, lane).await?;
+        validate_lane_output(&inputs, &preconditioned, lane)?;
+        drop(preconditioned);
+        let started = Instant::now();
+        let documents = extract_lane(&inputs, &extraction_config, lane).await?;
+        let elapsed = started.elapsed();
+        validate_lane_output(&inputs, &documents, lane)?;
+        samples.push(duration_ms(elapsed));
+    }
+
+    let median_ms = median(&samples);
+    Ok(BatchLaneDiagnosticReport {
+        lane: match lane {
+            BatchDiagnosticLane::Sequential => "sequential",
+            BatchDiagnosticLane::Batch => "batch",
+        },
+        batch_size: inputs.len(),
+        iterations: config.iterations,
+        median_ms,
+        documents_per_second: documents_per_second(inputs.len(), median_ms),
+        samples_ms: samples,
     })
 }
 
@@ -229,6 +287,31 @@ async fn precondition_sequential(inputs: &[PathBuf], config: &ExtractionConfig) 
 
 async fn precondition_batch(inputs: &[PathBuf], config: &ExtractionConfig) -> Result<()> {
     extract_batch(inputs, config).await.map(drop)
+}
+
+async fn extract_lane(
+    inputs: &[PathBuf],
+    config: &ExtractionConfig,
+    lane: BatchDiagnosticLane,
+) -> Result<Vec<ExtractedDocument>> {
+    match lane {
+        BatchDiagnosticLane::Sequential => extract_sequential(inputs, config).await,
+        BatchDiagnosticLane::Batch => extract_batch(inputs, config).await,
+    }
+}
+
+fn validate_lane_output(inputs: &[PathBuf], documents: &[ExtractedDocument], lane: BatchDiagnosticLane) -> Result<()> {
+    if lane == BatchDiagnosticLane::Batch {
+        return validate_batch_mapping(inputs, documents);
+    }
+    if inputs.len() != documents.len() {
+        return Err(Error::Benchmark(format!(
+            "sequential returned {} documents for {} inputs",
+            documents.len(),
+            inputs.len()
+        )));
+    }
+    Ok(())
 }
 
 async fn timed_sequential(inputs: &[PathBuf], config: &ExtractionConfig) -> Result<(Vec<ExtractedDocument>, Duration)> {
@@ -415,6 +498,15 @@ mod tests {
             validate_batch_mapping(&inputs, &batch),
             Err(Error::Benchmark(message)) if message.contains("position 0")
         ));
+    }
+
+    #[test]
+    fn isolated_lane_validation_checks_count_and_batch_mapping() {
+        let inputs = vec![PathBuf::from("a.txt"), PathBuf::from("b.txt")];
+        let reversed = vec![annotated_document("b", 1, "b.txt"), annotated_document("a", 0, "a.txt")];
+
+        assert!(validate_lane_output(&inputs, &reversed, BatchDiagnosticLane::Batch).is_err());
+        assert!(validate_lane_output(&inputs, &reversed[..1], BatchDiagnosticLane::Sequential).is_err());
     }
 
     #[test]
@@ -609,5 +701,33 @@ mod tests {
         assert!(report.outputs_match);
         assert!(report.sequential_median_ms > 0.0);
         assert!(report.batch_median_ms > 0.0);
+    }
+
+    #[tokio::test]
+    async fn isolated_lane_reports_only_requested_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("input.txt");
+        std::fs::write(&input, "isolated batch diagnostic").unwrap();
+        let config = BatchDiagnosticConfig {
+            inputs: vec![input],
+            batch_size: 2,
+            warmup_iterations: 0,
+            iterations: 2,
+            extraction_config_json: None,
+            max_threads: Some(2),
+            max_concurrent_extractions: Some(2),
+        };
+
+        for (lane, expected_name) in [
+            (BatchDiagnosticLane::Sequential, "sequential"),
+            (BatchDiagnosticLane::Batch, "batch"),
+        ] {
+            let report = run_batch_lane_diagnostic(&config, lane).await.unwrap();
+            assert_eq!(report.lane, expected_name);
+            assert_eq!(report.batch_size, 2);
+            assert_eq!(report.samples_ms.len(), 2);
+            assert!(report.median_ms > 0.0);
+            assert!(report.documents_per_second > 0.0);
+        }
     }
 }
