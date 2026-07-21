@@ -11,17 +11,12 @@ part 'lib.freezed.dart';
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `DocumentExtractorDartCallbacks`, `EmbeddingBackendDartCallbacks`, `OcrBackendDartCallbacks`, `PostProcessorDartCallbacks`, `RendererDartCallbacks`, `RerankerBackendDartCallbacks`, `TokenizerBackendDartCallbacks`, `ValidatorDartCallbacks`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `can_handle`, `count_tokens`, `dimensions`, `embed`, `emits_structured_markdown`, `estimated_duration_ms`, `extract`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `priority`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render_result`, `rerank`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages`, `supported_mime_types`, `supports_document_processing`, `supports_language`, `supports_table_detection`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`, `version`, `version`
 
+
 /// Extract content from a single bytes or URI input.
-Future<ExtractionResult> extract({
-  required ExtractInput input,
-  required ExtractionConfig config,
-}) => RustLib.instance.api.crateExtract(input: input, config: config);
+Future<ExtractionResult>  extract({required ExtractInput input , required ExtractionConfig config }) => RustLib.instance.api.crateExtract(input: input, config: config);
 
 /// Extract content from multiple bytes or URI inputs.
-Future<ExtractionResult> extractBatch({
-  required List<ExtractInput> inputs,
-  required ExtractionConfig config,
-}) => RustLib.instance.api.crateExtractBatch(inputs: inputs, config: config);
+Future<ExtractionResult>  extractBatch({required List<ExtractInput> inputs , required ExtractionConfig config }) => RustLib.instance.api.crateExtractBatch(inputs: inputs, config: config);
 
 /// Discover all pages and sitemaps reachable from `uri` without extracting document content.
 ///
@@ -36,10 +31,7 @@ Future<ExtractionResult> extractBatch({
 ///
 /// Returns `Validation` if the crawl configuration fails
 /// validation or if the map operation itself fails.
-Future<MapResult> mapUrl({
-  required String uri,
-  required UrlExtractionConfig config,
-}) => RustLib.instance.api.crateMapUrl(uri: uri, config: config);
+Future<MapResult>  mapUrl({required String uri , required UrlExtractionConfig config }) => RustLib.instance.api.crateMapUrl(uri: uri, config: config);
 
 /// List all supported document formats.
 ///
@@ -53,19 +45,16 @@ Future<MapResult> mapUrl({
 /// **Returns:**
 ///
 /// A vector of `SupportedFormat` entries sorted by extension.
-Future<List<SupportedFormat>> listSupportedFormats() =>
-RustLib.instance.api.crateListSupportedFormats();
+Future<List<SupportedFormat>>  listSupportedFormats() => RustLib.instance.api.crateListSupportedFormats();
 
 /// List the names of all registered embedding backends.
 ///
 /// Used by `xberg-cli`, the api/mcp endpoints, and generated language
 /// bindings.
-Future<List<String>> listEmbeddingBackends() =>
-RustLib.instance.api.crateListEmbeddingBackends();
+Future<List<String>>  listEmbeddingBackends() => RustLib.instance.api.crateListEmbeddingBackends();
 
 /// List names of all registered document extractors.
-Future<List<String>> listDocumentExtractors() =>
-RustLib.instance.api.crateListDocumentExtractors();
+Future<List<String>>  listDocumentExtractors() => RustLib.instance.api.crateListDocumentExtractors();
 
 /// List all registered OCR backends.
 ///
@@ -74,8 +63,7 @@ RustLib.instance.api.crateListDocumentExtractors();
 /// **Returns:**
 ///
 /// A vector of OCR backend names.
-Future<List<String>> listOcrBackends() =>
-RustLib.instance.api.crateListOcrBackends();
+Future<List<String>>  listOcrBackends() => RustLib.instance.api.crateListOcrBackends();
 
 /// List all registered post-processor names.
 ///
@@ -86,16 +74,14 @@ RustLib.instance.api.crateListOcrBackends();
 ///
 /// - `Ok(List<String>)` - Vector of post-processor names
 /// - `Err(...)` if the registry lock is poisoned
-Future<List<String>> listPostProcessors() =>
-RustLib.instance.api.crateListPostProcessors();
+Future<List<String>>  listPostProcessors() => RustLib.instance.api.crateListPostProcessors();
 
 /// List names of all registered renderers.
 ///
 /// **Errors:**
 ///
 /// Returns an error if the registry lock is poisoned.
-Future<List<String>> listRenderers() =>
-RustLib.instance.api.crateListRenderers();
+Future<List<String>>  listRenderers() => RustLib.instance.api.crateListRenderers();
 
 /// List the names of all registered reranker backends.
 ///
@@ -103,19 +89,16 @@ RustLib.instance.api.crateListRenderers();
 /// bindings.
 ///
 /// Since v5.0.
-Future<List<String>> listRerankerBackends() =>
-RustLib.instance.api.crateListRerankerBackends();
+Future<List<String>>  listRerankerBackends() => RustLib.instance.api.crateListRerankerBackends();
 
 /// List the names of all registered tokenizer backends.
 ///
 /// Used by `xberg-cli`, the api/mcp endpoints, and generated language
 /// bindings.
-Future<List<String>> listTokenizerBackends() =>
-RustLib.instance.api.crateListTokenizerBackends();
+Future<List<String>>  listTokenizerBackends() => RustLib.instance.api.crateListTokenizerBackends();
 
 /// List names of all registered validators.
-Future<List<String>> listValidators() =>
-RustLib.instance.api.crateListValidators();
+Future<List<String>>  listValidators() => RustLib.instance.api.crateListValidators();
 
 /// Find unmarked claims in markdown text.
 ///
@@ -129,8 +112,7 @@ RustLib.instance.api.crateListValidators();
 /// **Returns:**
 ///
 /// A vector of trimmed line text strings for unmarked claims.
-Future<List<String>> findUnmarkedClaims({required String markdown}) =>
-RustLib.instance.api.crateFindUnmarkedClaims(markdown: markdown);
+Future<List<String>>  findUnmarkedClaims({required String markdown }) => RustLib.instance.api.crateFindUnmarkedClaims(markdown: markdown);
 
 /// Verify that an excerpt appears verbatim in source text.
 ///
@@ -141,13 +123,7 @@ RustLib.instance.api.crateFindUnmarkedClaims(markdown: markdown);
 /// **Returns:**
 ///
 /// `true` if the excerpt appears (exactly or with normalized whitespace), `false` otherwise.
-Future<bool> verifyExcerpt({
-  required String excerpt,
-  required String sourceText,
-}) => RustLib.instance.api.crateVerifyExcerpt(
-  excerpt: excerpt,
-  sourceText: sourceText,
-);
+Future<bool>  verifyExcerpt({required String excerpt , required String sourceText }) => RustLib.instance.api.crateVerifyExcerpt(excerpt: excerpt, sourceText: sourceText);
 
 /// Score a query against a document using ColBERT's MaxSim operator: for each
 /// query token vector, take the maximum dot product against any document
@@ -161,10 +137,7 @@ Future<bool> verifyExcerpt({
 /// Pure CPU primitive — available without ONNX Runtime.
 ///
 /// Since v5.0.
-Future<double> maxSimScore({
-  required MultiVectorEmbedding query,
-  required MultiVectorEmbedding doc,
-}) => RustLib.instance.api.crateMaxSimScore(query: query, doc: doc);
+Future<double>  maxSimScore({required MultiVectorEmbedding query , required MultiVectorEmbedding doc }) => RustLib.instance.api.crateMaxSimScore(query: query, doc: doc);
 
 /// Rank a set of documents against a query by MaxSim score, descending.
 ///
@@ -174,707 +147,419 @@ Future<double> maxSimScore({
 /// Pure CPU primitive — available without ONNX Runtime.
 ///
 /// Since v5.0.
-Future<List<LateInteractionMatch>> maxSimRank({
-  required MultiVectorEmbedding query,
-  required List<MultiVectorEmbedding> docs,
-}) => RustLib.instance.api.crateMaxSimRank(query: query, docs: docs);
+Future<List<LateInteractionMatch>>  maxSimRank({required MultiVectorEmbedding query , required List<MultiVectorEmbedding> docs }) => RustLib.instance.api.crateMaxSimRank(query: query, docs: docs);
 
-Future<CacheStats> createCacheStatsFromJson({required String json}) =>
-RustLib.instance.api.crateCreateCacheStatsFromJson(json: json);
-
-Future<AccelerationConfig> createAccelerationConfigFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateAccelerationConfigFromJson(json: json);
+Future<CacheStats>  createCacheStatsFromJson({required String json }) => RustLib.instance.api.crateCreateCacheStatsFromJson(json: json);
 
-Future<CaptioningConfig> createCaptioningConfigFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateCaptioningConfigFromJson(json: json);
+Future<AccelerationConfig>  createAccelerationConfigFromJson({required String json }) => RustLib.instance.api.crateCreateAccelerationConfigFromJson(json: json);
 
-Future<PageClassificationConfig> createPageClassificationConfigFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreatePageClassificationConfigFromJson(
-  json: json,
-);
+Future<CaptioningConfig>  createCaptioningConfigFromJson({required String json }) => RustLib.instance.api.crateCreateCaptioningConfigFromJson(json: json);
 
-Future<ContentFilterConfig> createContentFilterConfigFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateContentFilterConfigFromJson(json: json);
+Future<PageClassificationConfig>  createPageClassificationConfigFromJson({required String json }) => RustLib.instance.api.crateCreatePageClassificationConfigFromJson(json: json);
 
-Future<EmailConfig> createEmailConfigFromJson({required String json}) =>
-RustLib.instance.api.crateCreateEmailConfigFromJson(json: json);
+Future<ContentFilterConfig>  createContentFilterConfigFromJson({required String json }) => RustLib.instance.api.crateCreateContentFilterConfigFromJson(json: json);
 
-Future<ExtractionConfig> createExtractionConfigFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateExtractionConfigFromJson(json: json);
+Future<EmailConfig>  createEmailConfigFromJson({required String json }) => RustLib.instance.api.crateCreateEmailConfigFromJson(json: json);
 
-Future<FileExtractionConfig> createFileExtractionConfigFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateFileExtractionConfigFromJson(json: json);
+Future<ExtractionConfig>  createExtractionConfigFromJson({required String json }) => RustLib.instance.api.crateCreateExtractionConfigFromJson(json: json);
 
-Future<SvgOptions> createSvgOptionsFromJson({required String json}) =>
-RustLib.instance.api.crateCreateSvgOptionsFromJson(json: json);
+Future<FileExtractionConfig>  createFileExtractionConfigFromJson({required String json }) => RustLib.instance.api.crateCreateFileExtractionConfigFromJson(json: json);
 
-Future<ExtractInput> createExtractInputFromJson({required String json}) =>
-RustLib.instance.api.crateCreateExtractInputFromJson(json: json);
+Future<SvgOptions>  createSvgOptionsFromJson({required String json }) => RustLib.instance.api.crateCreateSvgOptionsFromJson(json: json);
 
-Future<ExtractionErrorItem> createExtractionErrorItemFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateExtractionErrorItemFromJson(json: json);
+Future<ExtractInput>  createExtractInputFromJson({required String json }) => RustLib.instance.api.crateCreateExtractInputFromJson(json: json);
 
-Future<ExtractionSummary> createExtractionSummaryFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateExtractionSummaryFromJson(json: json);
+Future<ExtractionErrorItem>  createExtractionErrorItemFromJson({required String json }) => RustLib.instance.api.crateCreateExtractionErrorItemFromJson(json: json);
 
-Future<ExtractionResult> createExtractionResultFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateExtractionResultFromJson(json: json);
+Future<ExtractionSummary>  createExtractionSummaryFromJson({required String json }) => RustLib.instance.api.crateCreateExtractionSummaryFromJson(json: json);
 
-Future<UrlExtractionConfig> createUrlExtractionConfigFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateUrlExtractionConfigFromJson(json: json);
+Future<ExtractionResult>  createExtractionResultFromJson({required String json }) => RustLib.instance.api.crateCreateExtractionResultFromJson(json: json);
 
-Future<ImageExtractionConfig> createImageExtractionConfigFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateImageExtractionConfigFromJson(json: json);
+Future<UrlExtractionConfig>  createUrlExtractionConfigFromJson({required String json }) => RustLib.instance.api.crateCreateUrlExtractionConfigFromJson(json: json);
 
-Future<TokenReductionOptions> createTokenReductionOptionsFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateTokenReductionOptionsFromJson(json: json);
+Future<ImageExtractionConfig>  createImageExtractionConfigFromJson({required String json }) => RustLib.instance.api.crateCreateImageExtractionConfigFromJson(json: json);
 
-Future<LanguageDetectionConfig> createLanguageDetectionConfigFromJson({
-  required String json,
-}) =>
-RustLib.instance.api.crateCreateLanguageDetectionConfigFromJson(json: json);
+Future<TokenReductionOptions>  createTokenReductionOptionsFromJson({required String json }) => RustLib.instance.api.crateCreateTokenReductionOptionsFromJson(json: json);
 
-Future<HtmlOutputConfig> createHtmlOutputConfigFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateHtmlOutputConfigFromJson(json: json);
+Future<LanguageDetectionConfig>  createLanguageDetectionConfigFromJson({required String json }) => RustLib.instance.api.crateCreateLanguageDetectionConfigFromJson(json: json);
 
-Future<LateInteractionConfig> createLateInteractionConfigFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateLateInteractionConfigFromJson(json: json);
+Future<HtmlOutputConfig>  createHtmlOutputConfigFromJson({required String json }) => RustLib.instance.api.crateCreateHtmlOutputConfigFromJson(json: json);
 
-Future<LayoutDetectionConfig> createLayoutDetectionConfigFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateLayoutDetectionConfigFromJson(json: json);
+Future<LateInteractionConfig>  createLateInteractionConfigFromJson({required String json }) => RustLib.instance.api.crateCreateLateInteractionConfigFromJson(json: json);
 
-Future<LlmConfig> createLlmConfigFromJson({required String json}) =>
-RustLib.instance.api.crateCreateLlmConfigFromJson(json: json);
+Future<LayoutDetectionConfig>  createLayoutDetectionConfigFromJson({required String json }) => RustLib.instance.api.crateCreateLayoutDetectionConfigFromJson(json: json);
 
-Future<StructuredExtractionConfig> createStructuredExtractionConfigFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateStructuredExtractionConfigFromJson(
-  json: json,
-);
+Future<LlmConfig>  createLlmConfigFromJson({required String json }) => RustLib.instance.api.crateCreateLlmConfigFromJson(json: json);
 
-Future<NerConfig> createNerConfigFromJson({required String json}) =>
-RustLib.instance.api.crateCreateNerConfigFromJson(json: json);
+Future<StructuredExtractionConfig>  createStructuredExtractionConfigFromJson({required String json }) => RustLib.instance.api.crateCreateStructuredExtractionConfigFromJson(json: json);
 
-Future<OcrQualityThresholds> createOcrQualityThresholdsFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateOcrQualityThresholdsFromJson(json: json);
+Future<NerConfig>  createNerConfigFromJson({required String json }) => RustLib.instance.api.crateCreateNerConfigFromJson(json: json);
 
-Future<OcrPipelineStage> createOcrPipelineStageFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateOcrPipelineStageFromJson(json: json);
+Future<OcrQualityThresholds>  createOcrQualityThresholdsFromJson({required String json }) => RustLib.instance.api.crateCreateOcrQualityThresholdsFromJson(json: json);
 
-Future<OcrPipelineConfig> createOcrPipelineConfigFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateOcrPipelineConfigFromJson(json: json);
+Future<OcrPipelineStage>  createOcrPipelineStageFromJson({required String json }) => RustLib.instance.api.crateCreateOcrPipelineStageFromJson(json: json);
 
-Future<OcrConfig> createOcrConfigFromJson({required String json}) =>
-RustLib.instance.api.crateCreateOcrConfigFromJson(json: json);
+Future<OcrPipelineConfig>  createOcrPipelineConfigFromJson({required String json }) => RustLib.instance.api.crateCreateOcrPipelineConfigFromJson(json: json);
 
-Future<PageConfig> createPageConfigFromJson({required String json}) =>
-RustLib.instance.api.crateCreatePageConfigFromJson(json: json);
+Future<OcrConfig>  createOcrConfigFromJson({required String json }) => RustLib.instance.api.crateCreateOcrConfigFromJson(json: json);
 
-Future<PdfConfig> createPdfConfigFromJson({required String json}) =>
-RustLib.instance.api.crateCreatePdfConfigFromJson(json: json);
+Future<PageConfig>  createPageConfigFromJson({required String json }) => RustLib.instance.api.crateCreatePageConfigFromJson(json: json);
 
-Future<HierarchyConfig> createHierarchyConfigFromJson({required String json}) =>
-RustLib.instance.api.crateCreateHierarchyConfigFromJson(json: json);
+Future<PdfConfig>  createPdfConfigFromJson({required String json }) => RustLib.instance.api.crateCreatePdfConfigFromJson(json: json);
 
-Future<PostProcessorConfig> createPostProcessorConfigFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreatePostProcessorConfigFromJson(json: json);
+Future<HierarchyConfig>  createHierarchyConfigFromJson({required String json }) => RustLib.instance.api.crateCreateHierarchyConfigFromJson(json: json);
 
-Future<ChunkingConfig> createChunkingConfigFromJson({required String json}) =>
-RustLib.instance.api.crateCreateChunkingConfigFromJson(json: json);
+Future<PostProcessorConfig>  createPostProcessorConfigFromJson({required String json }) => RustLib.instance.api.crateCreatePostProcessorConfigFromJson(json: json);
 
-Future<EmbeddingConfig> createEmbeddingConfigFromJson({required String json}) =>
-RustLib.instance.api.crateCreateEmbeddingConfigFromJson(json: json);
+Future<ChunkingConfig>  createChunkingConfigFromJson({required String json }) => RustLib.instance.api.crateCreateChunkingConfigFromJson(json: json);
 
-Future<RedactionConfig> createRedactionConfigFromJson({required String json}) =>
-RustLib.instance.api.crateCreateRedactionConfigFromJson(json: json);
+Future<EmbeddingConfig>  createEmbeddingConfigFromJson({required String json }) => RustLib.instance.api.crateCreateEmbeddingConfigFromJson(json: json);
 
-Future<RedactionTerm> createRedactionTermFromJson({required String json}) =>
-RustLib.instance.api.crateCreateRedactionTermFromJson(json: json);
+Future<RedactionConfig>  createRedactionConfigFromJson({required String json }) => RustLib.instance.api.crateCreateRedactionConfigFromJson(json: json);
 
-Future<RedactionPattern> createRedactionPatternFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateRedactionPatternFromJson(json: json);
+Future<RedactionTerm>  createRedactionTermFromJson({required String json }) => RustLib.instance.api.crateCreateRedactionTermFromJson(json: json);
 
-Future<RerankerConfig> createRerankerConfigFromJson({required String json}) =>
-RustLib.instance.api.crateCreateRerankerConfigFromJson(json: json);
+Future<RedactionPattern>  createRedactionPatternFromJson({required String json }) => RustLib.instance.api.crateCreateRedactionPatternFromJson(json: json);
 
-Future<SparseEmbeddingConfig> createSparseEmbeddingConfigFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateSparseEmbeddingConfigFromJson(json: json);
+Future<RerankerConfig>  createRerankerConfigFromJson({required String json }) => RustLib.instance.api.crateCreateRerankerConfigFromJson(json: json);
 
-Future<SummarizationConfig> createSummarizationConfigFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateSummarizationConfigFromJson(json: json);
+Future<SparseEmbeddingConfig>  createSparseEmbeddingConfigFromJson({required String json }) => RustLib.instance.api.crateCreateSparseEmbeddingConfigFromJson(json: json);
 
-Future<TranscriptionConfig> createTranscriptionConfigFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateTranscriptionConfigFromJson(json: json);
+Future<SummarizationConfig>  createSummarizationConfigFromJson({required String json }) => RustLib.instance.api.crateCreateSummarizationConfigFromJson(json: json);
 
-Future<TranslationConfig> createTranslationConfigFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateTranslationConfigFromJson(json: json);
+Future<TranscriptionConfig>  createTranscriptionConfigFromJson({required String json }) => RustLib.instance.api.crateCreateTranscriptionConfigFromJson(json: json);
 
-Future<TreeSitterConfig> createTreeSitterConfigFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateTreeSitterConfigFromJson(json: json);
+Future<TranslationConfig>  createTranslationConfigFromJson({required String json }) => RustLib.instance.api.crateCreateTranslationConfigFromJson(json: json);
 
-Future<TreeSitterProcessConfig> createTreeSitterProcessConfigFromJson({
-  required String json,
-}) =>
-RustLib.instance.api.crateCreateTreeSitterProcessConfigFromJson(json: json);
+Future<TreeSitterConfig>  createTreeSitterConfigFromJson({required String json }) => RustLib.instance.api.crateCreateTreeSitterConfigFromJson(json: json);
 
-Future<SupportedFormat> createSupportedFormatFromJson({required String json}) =>
-RustLib.instance.api.crateCreateSupportedFormatFromJson(json: json);
+Future<TreeSitterProcessConfig>  createTreeSitterProcessConfigFromJson({required String json }) => RustLib.instance.api.crateCreateTreeSitterProcessConfigFromJson(json: json);
 
-Future<ServerConfig> createServerConfigFromJson({required String json}) =>
-RustLib.instance.api.crateCreateServerConfigFromJson(json: json);
+Future<SupportedFormat>  createSupportedFormatFromJson({required String json }) => RustLib.instance.api.crateCreateSupportedFormatFromJson(json: json);
 
-Future<StructuredDataResult> createStructuredDataResultFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateStructuredDataResultFromJson(json: json);
+Future<ServerConfig>  createServerConfigFromJson({required String json }) => RustLib.instance.api.crateCreateServerConfigFromJson(json: json);
 
-Future<DocxAppProperties> createDocxAppPropertiesFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateDocxAppPropertiesFromJson(json: json);
+Future<StructuredDataResult>  createStructuredDataResultFromJson({required String json }) => RustLib.instance.api.crateCreateStructuredDataResultFromJson(json: json);
 
-Future<XlsxAppProperties> createXlsxAppPropertiesFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateXlsxAppPropertiesFromJson(json: json);
+Future<DocxAppProperties>  createDocxAppPropertiesFromJson({required String json }) => RustLib.instance.api.crateCreateDocxAppPropertiesFromJson(json: json);
 
-Future<PptxAppProperties> createPptxAppPropertiesFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreatePptxAppPropertiesFromJson(json: json);
+Future<XlsxAppProperties>  createXlsxAppPropertiesFromJson({required String json }) => RustLib.instance.api.crateCreateXlsxAppPropertiesFromJson(json: json);
 
-Future<CoreProperties> createCorePropertiesFromJson({required String json}) =>
-RustLib.instance.api.crateCreateCorePropertiesFromJson(json: json);
+Future<PptxAppProperties>  createPptxAppPropertiesFromJson({required String json }) => RustLib.instance.api.crateCreatePptxAppPropertiesFromJson(json: json);
 
-Future<SecurityLimits> createSecurityLimitsFromJson({required String json}) =>
-RustLib.instance.api.crateCreateSecurityLimitsFromJson(json: json);
+Future<CoreProperties>  createCorePropertiesFromJson({required String json }) => RustLib.instance.api.crateCreateCorePropertiesFromJson(json: json);
 
-Future<TokenReductionConfig> createTokenReductionConfigFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateTokenReductionConfigFromJson(json: json);
+Future<SecurityLimits>  createSecurityLimitsFromJson({required String json }) => RustLib.instance.api.crateCreateSecurityLimitsFromJson(json: json);
 
-Future<PatternMatch> createPatternMatchFromJson({required String json}) =>
-RustLib.instance.api.crateCreatePatternMatchFromJson(json: json);
+Future<TokenReductionConfig>  createTokenReductionConfigFromJson({required String json }) => RustLib.instance.api.crateCreateTokenReductionConfigFromJson(json: json);
 
-Future<FootnoteConfig> createFootnoteConfigFromJson({required String json}) =>
-RustLib.instance.api.crateCreateFootnoteConfigFromJson(json: json);
+Future<PatternMatch>  createPatternMatchFromJson({required String json }) => RustLib.instance.api.crateCreatePatternMatchFromJson(json: json);
 
-Future<FootnoteAnchor> createFootnoteAnchorFromJson({required String json}) =>
-RustLib.instance.api.crateCreateFootnoteAnchorFromJson(json: json);
+Future<FootnoteConfig>  createFootnoteConfigFromJson({required String json }) => RustLib.instance.api.crateCreateFootnoteConfigFromJson(json: json);
 
-Future<FootnoteDefinition> createFootnoteDefinitionFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateFootnoteDefinitionFromJson(json: json);
+Future<FootnoteAnchor>  createFootnoteAnchorFromJson({required String json }) => RustLib.instance.api.crateCreateFootnoteAnchorFromJson(json: json);
 
-Future<Citation> createCitationFromJson({required String json}) =>
-RustLib.instance.api.crateCreateCitationFromJson(json: json);
+Future<FootnoteDefinition>  createFootnoteDefinitionFromJson({required String json }) => RustLib.instance.api.crateCreateFootnoteDefinitionFromJson(json: json);
 
-Future<PdfAnnotation> createPdfAnnotationFromJson({required String json}) =>
-RustLib.instance.api.crateCreatePdfAnnotationFromJson(json: json);
+Future<Citation>  createCitationFromJson({required String json }) => RustLib.instance.api.crateCreateCitationFromJson(json: json);
 
-Future<PageClassification> createPageClassificationFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreatePageClassificationFromJson(json: json);
+Future<PdfAnnotation>  createPdfAnnotationFromJson({required String json }) => RustLib.instance.api.crateCreatePdfAnnotationFromJson(json: json);
 
-Future<ClassificationLabel> createClassificationLabelFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateClassificationLabelFromJson(json: json);
+Future<PageClassification>  createPageClassificationFromJson({required String json }) => RustLib.instance.api.crateCreatePageClassificationFromJson(json: json);
 
-Future<DjotContent> createDjotContentFromJson({required String json}) =>
-RustLib.instance.api.crateCreateDjotContentFromJson(json: json);
+Future<ClassificationLabel>  createClassificationLabelFromJson({required String json }) => RustLib.instance.api.crateCreateClassificationLabelFromJson(json: json);
 
-Future<FormattedBlock> createFormattedBlockFromJson({required String json}) =>
-RustLib.instance.api.crateCreateFormattedBlockFromJson(json: json);
+Future<DjotContent>  createDjotContentFromJson({required String json }) => RustLib.instance.api.crateCreateDjotContentFromJson(json: json);
 
-Future<InlineElement> createInlineElementFromJson({required String json}) =>
-RustLib.instance.api.crateCreateInlineElementFromJson(json: json);
+Future<FormattedBlock>  createFormattedBlockFromJson({required String json }) => RustLib.instance.api.crateCreateFormattedBlockFromJson(json: json);
 
-Future<DjotImage> createDjotImageFromJson({required String json}) =>
-RustLib.instance.api.crateCreateDjotImageFromJson(json: json);
+Future<InlineElement>  createInlineElementFromJson({required String json }) => RustLib.instance.api.crateCreateInlineElementFromJson(json: json);
 
-Future<DjotLink> createDjotLinkFromJson({required String json}) =>
-RustLib.instance.api.crateCreateDjotLinkFromJson(json: json);
+Future<DjotImage>  createDjotImageFromJson({required String json }) => RustLib.instance.api.crateCreateDjotImageFromJson(json: json);
 
-Future<Footnote> createFootnoteFromJson({required String json}) =>
-RustLib.instance.api.crateCreateFootnoteFromJson(json: json);
+Future<DjotLink>  createDjotLinkFromJson({required String json }) => RustLib.instance.api.crateCreateDjotLinkFromJson(json: json);
 
-Future<DocumentStructure> createDocumentStructureFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateDocumentStructureFromJson(json: json);
+Future<Footnote>  createFootnoteFromJson({required String json }) => RustLib.instance.api.crateCreateFootnoteFromJson(json: json);
 
-Future<DocumentRelationship> createDocumentRelationshipFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateDocumentRelationshipFromJson(json: json);
+Future<DocumentStructure>  createDocumentStructureFromJson({required String json }) => RustLib.instance.api.crateCreateDocumentStructureFromJson(json: json);
 
-Future<DocumentNode> createDocumentNodeFromJson({required String json}) =>
-RustLib.instance.api.crateCreateDocumentNodeFromJson(json: json);
+Future<DocumentRelationship>  createDocumentRelationshipFromJson({required String json }) => RustLib.instance.api.crateCreateDocumentRelationshipFromJson(json: json);
 
-Future<TableGrid> createTableGridFromJson({required String json}) =>
-RustLib.instance.api.crateCreateTableGridFromJson(json: json);
+Future<DocumentNode>  createDocumentNodeFromJson({required String json }) => RustLib.instance.api.crateCreateDocumentNodeFromJson(json: json);
 
-Future<GridCell> createGridCellFromJson({required String json}) =>
-RustLib.instance.api.crateCreateGridCellFromJson(json: json);
+Future<TableGrid>  createTableGridFromJson({required String json }) => RustLib.instance.api.crateCreateTableGridFromJson(json: json);
 
-Future<TextAnnotation> createTextAnnotationFromJson({required String json}) =>
-RustLib.instance.api.crateCreateTextAnnotationFromJson(json: json);
+Future<GridCell>  createGridCellFromJson({required String json }) => RustLib.instance.api.crateCreateGridCellFromJson(json: json);
 
-Future<Entity> createEntityFromJson({required String json}) =>
-RustLib.instance.api.crateCreateEntityFromJson(json: json);
+Future<TextAnnotation>  createTextAnnotationFromJson({required String json }) => RustLib.instance.api.crateCreateTextAnnotationFromJson(json: json);
 
-Future<DocumentCounts> createDocumentCountsFromJson({required String json}) =>
-RustLib.instance.api.crateCreateDocumentCountsFromJson(json: json);
+Future<Entity>  createEntityFromJson({required String json }) => RustLib.instance.api.crateCreateEntityFromJson(json: json);
 
-Future<ExtractedDocument> createExtractedDocumentFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateExtractedDocumentFromJson(json: json);
+Future<DocumentCounts>  createDocumentCountsFromJson({required String json }) => RustLib.instance.api.crateCreateDocumentCountsFromJson(json: json);
 
-Future<ArchiveEntry> createArchiveEntryFromJson({required String json}) =>
-RustLib.instance.api.crateCreateArchiveEntryFromJson(json: json);
+Future<ExtractedDocument>  createExtractedDocumentFromJson({required String json }) => RustLib.instance.api.crateCreateExtractedDocumentFromJson(json: json);
 
-Future<ProcessingWarning> createProcessingWarningFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateProcessingWarningFromJson(json: json);
+Future<ArchiveEntry>  createArchiveEntryFromJson({required String json }) => RustLib.instance.api.crateCreateArchiveEntryFromJson(json: json);
 
-Future<LlmUsage> createLlmUsageFromJson({required String json}) =>
-RustLib.instance.api.crateCreateLlmUsageFromJson(json: json);
+Future<ProcessingWarning>  createProcessingWarningFromJson({required String json }) => RustLib.instance.api.crateCreateProcessingWarningFromJson(json: json);
 
-Future<Chunk> createChunkFromJson({required String json}) =>
-RustLib.instance.api.crateCreateChunkFromJson(json: json);
+Future<LlmUsage>  createLlmUsageFromJson({required String json }) => RustLib.instance.api.crateCreateLlmUsageFromJson(json: json);
 
-Future<HeadingContext> createHeadingContextFromJson({required String json}) =>
-RustLib.instance.api.crateCreateHeadingContextFromJson(json: json);
+Future<Chunk>  createChunkFromJson({required String json }) => RustLib.instance.api.crateCreateChunkFromJson(json: json);
 
-Future<HeadingLevel> createHeadingLevelFromJson({required String json}) =>
-RustLib.instance.api.crateCreateHeadingLevelFromJson(json: json);
+Future<HeadingContext>  createHeadingContextFromJson({required String json }) => RustLib.instance.api.crateCreateHeadingContextFromJson(json: json);
 
-Future<ChunkMetadata> createChunkMetadataFromJson({required String json}) =>
-RustLib.instance.api.crateCreateChunkMetadataFromJson(json: json);
+Future<HeadingLevel>  createHeadingLevelFromJson({required String json }) => RustLib.instance.api.crateCreateHeadingLevelFromJson(json: json);
 
-Future<ExtractedImage> createExtractedImageFromJson({required String json}) =>
-RustLib.instance.api.crateCreateExtractedImageFromJson(json: json);
+Future<ChunkMetadata>  createChunkMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateChunkMetadataFromJson(json: json);
 
-Future<BoundingBox> createBoundingBoxFromJson({required String json}) =>
-RustLib.instance.api.crateCreateBoundingBoxFromJson(json: json);
+Future<ExtractedImage>  createExtractedImageFromJson({required String json }) => RustLib.instance.api.crateCreateExtractedImageFromJson(json: json);
 
-Future<ElementMetadata> createElementMetadataFromJson({required String json}) =>
-RustLib.instance.api.crateCreateElementMetadataFromJson(json: json);
+Future<BoundingBox>  createBoundingBoxFromJson({required String json }) => RustLib.instance.api.crateCreateBoundingBoxFromJson(json: json);
 
-Future<Element> createElementFromJson({required String json}) =>
-RustLib.instance.api.crateCreateElementFromJson(json: json);
+Future<ElementMetadata>  createElementMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateElementMetadataFromJson(json: json);
 
-Future<PdfFormField> createPdfFormFieldFromJson({required String json}) =>
-RustLib.instance.api.crateCreatePdfFormFieldFromJson(json: json);
+Future<Element>  createElementFromJson({required String json }) => RustLib.instance.api.crateCreateElementFromJson(json: json);
 
-Future<ExcelWorkbook> createExcelWorkbookFromJson({required String json}) =>
-RustLib.instance.api.crateCreateExcelWorkbookFromJson(json: json);
+Future<PdfFormField>  createPdfFormFieldFromJson({required String json }) => RustLib.instance.api.crateCreatePdfFormFieldFromJson(json: json);
 
-Future<ExcelSheet> createExcelSheetFromJson({required String json}) =>
-RustLib.instance.api.crateCreateExcelSheetFromJson(json: json);
+Future<ExcelWorkbook>  createExcelWorkbookFromJson({required String json }) => RustLib.instance.api.crateCreateExcelWorkbookFromJson(json: json);
 
-Future<XmlExtractionResult> createXmlExtractionResultFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateXmlExtractionResultFromJson(json: json);
+Future<ExcelSheet>  createExcelSheetFromJson({required String json }) => RustLib.instance.api.crateCreateExcelSheetFromJson(json: json);
 
-Future<TextExtractionResult> createTextExtractionResultFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateTextExtractionResultFromJson(json: json);
+Future<XmlExtractionResult>  createXmlExtractionResultFromJson({required String json }) => RustLib.instance.api.crateCreateXmlExtractionResultFromJson(json: json);
 
-Future<PptxExtractionResult> createPptxExtractionResultFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreatePptxExtractionResultFromJson(json: json);
+Future<TextExtractionResult>  createTextExtractionResultFromJson({required String json }) => RustLib.instance.api.crateCreateTextExtractionResultFromJson(json: json);
 
-Future<EmailExtractionResult> createEmailExtractionResultFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateEmailExtractionResultFromJson(json: json);
+Future<PptxExtractionResult>  createPptxExtractionResultFromJson({required String json }) => RustLib.instance.api.crateCreatePptxExtractionResultFromJson(json: json);
 
-Future<EmailAttachment> createEmailAttachmentFromJson({required String json}) =>
-RustLib.instance.api.crateCreateEmailAttachmentFromJson(json: json);
+Future<EmailExtractionResult>  createEmailExtractionResultFromJson({required String json }) => RustLib.instance.api.crateCreateEmailExtractionResultFromJson(json: json);
 
-Future<OcrExtractionResult> createOcrExtractionResultFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateOcrExtractionResultFromJson(json: json);
+Future<EmailAttachment>  createEmailAttachmentFromJson({required String json }) => RustLib.instance.api.crateCreateEmailAttachmentFromJson(json: json);
 
-Future<OcrTable> createOcrTableFromJson({required String json}) =>
-RustLib.instance.api.crateCreateOcrTableFromJson(json: json);
+Future<OcrExtractionResult>  createOcrExtractionResultFromJson({required String json }) => RustLib.instance.api.crateCreateOcrExtractionResultFromJson(json: json);
 
-Future<OcrTableBoundingBox> createOcrTableBoundingBoxFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateOcrTableBoundingBoxFromJson(json: json);
+Future<OcrTable>  createOcrTableFromJson({required String json }) => RustLib.instance.api.crateCreateOcrTableFromJson(json: json);
 
-Future<ImagePreprocessingConfig> createImagePreprocessingConfigFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateImagePreprocessingConfigFromJson(
-  json: json,
-);
+Future<OcrTableBoundingBox>  createOcrTableBoundingBoxFromJson({required String json }) => RustLib.instance.api.crateCreateOcrTableBoundingBoxFromJson(json: json);
 
-Future<TesseractConfig> createTesseractConfigFromJson({required String json}) =>
-RustLib.instance.api.crateCreateTesseractConfigFromJson(json: json);
+Future<ImagePreprocessingConfig>  createImagePreprocessingConfigFromJson({required String json }) => RustLib.instance.api.crateCreateImagePreprocessingConfigFromJson(json: json);
 
-Future<ImagePreprocessingMetadata> createImagePreprocessingMetadataFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateImagePreprocessingMetadataFromJson(
-  json: json,
-);
+Future<TesseractConfig>  createTesseractConfigFromJson({required String json }) => RustLib.instance.api.crateCreateTesseractConfigFromJson(json: json);
 
-Future<Formula> createFormulaFromJson({required String json}) =>
-RustLib.instance.api.crateCreateFormulaFromJson(json: json);
+Future<ImagePreprocessingMetadata>  createImagePreprocessingMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateImagePreprocessingMetadataFromJson(json: json);
 
-Future<CodeMetadata> createCodeMetadataFromJson({required String json}) =>
-RustLib.instance.api.crateCreateCodeMetadataFromJson(json: json);
+Future<Formula>  createFormulaFromJson({required String json }) => RustLib.instance.api.crateCreateFormulaFromJson(json: json);
 
-Future<CodeChunkInfo> createCodeChunkInfoFromJson({required String json}) =>
-RustLib.instance.api.crateCreateCodeChunkInfoFromJson(json: json);
+Future<CodeMetadata>  createCodeMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateCodeMetadataFromJson(json: json);
 
-Future<CodeDataAttribute> createCodeDataAttributeFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateCodeDataAttributeFromJson(json: json);
+Future<CodeChunkInfo>  createCodeChunkInfoFromJson({required String json }) => RustLib.instance.api.crateCreateCodeChunkInfoFromJson(json: json);
 
-Future<CodeDataNode> createCodeDataNodeFromJson({required String json}) =>
-    RustLib.instance.api.crateCreateCodeDataNodeFromJson(json: json);
+Future<CodeDataAttribute>  createCodeDataAttributeFromJson({required String json }) => RustLib.instance.api.crateCreateCodeDataAttributeFromJson(json: json);
 
-Future<Metadata> createMetadataFromJson({required String json}) =>
-RustLib.instance.api.crateCreateMetadataFromJson(json: json);
+Future<CodeDataNode>  createCodeDataNodeFromJson({required String json }) => RustLib.instance.api.crateCreateCodeDataNodeFromJson(json: json);
 
-Future<ExcelMetadata> createExcelMetadataFromJson({required String json}) =>
-RustLib.instance.api.crateCreateExcelMetadataFromJson(json: json);
+Future<Metadata>  createMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateMetadataFromJson(json: json);
 
-Future<EmailMetadata> createEmailMetadataFromJson({required String json}) =>
-RustLib.instance.api.crateCreateEmailMetadataFromJson(json: json);
+Future<ExcelMetadata>  createExcelMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateExcelMetadataFromJson(json: json);
 
-Future<ArchiveMetadata> createArchiveMetadataFromJson({required String json}) =>
-RustLib.instance.api.crateCreateArchiveMetadataFromJson(json: json);
+Future<EmailMetadata>  createEmailMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateEmailMetadataFromJson(json: json);
 
-Future<ImageMetadata> createImageMetadataFromJson({required String json}) =>
-RustLib.instance.api.crateCreateImageMetadataFromJson(json: json);
+Future<ArchiveMetadata>  createArchiveMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateArchiveMetadataFromJson(json: json);
 
-Future<XmlMetadata> createXmlMetadataFromJson({required String json}) =>
-RustLib.instance.api.crateCreateXmlMetadataFromJson(json: json);
+Future<ImageMetadata>  createImageMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateImageMetadataFromJson(json: json);
 
-Future<TextMetadata> createTextMetadataFromJson({required String json}) =>
-RustLib.instance.api.crateCreateTextMetadataFromJson(json: json);
+Future<XmlMetadata>  createXmlMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateXmlMetadataFromJson(json: json);
 
-Future<HeaderMetadata> createHeaderMetadataFromJson({required String json}) =>
-RustLib.instance.api.crateCreateHeaderMetadataFromJson(json: json);
+Future<TextMetadata>  createTextMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateTextMetadataFromJson(json: json);
 
-Future<LinkMetadata> createLinkMetadataFromJson({required String json}) =>
-RustLib.instance.api.crateCreateLinkMetadataFromJson(json: json);
+Future<HeaderMetadata>  createHeaderMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateHeaderMetadataFromJson(json: json);
 
-Future<ImageMetadataType> createImageMetadataTypeFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateImageMetadataTypeFromJson(json: json);
+Future<LinkMetadata>  createLinkMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateLinkMetadataFromJson(json: json);
 
-Future<StructuredData> createStructuredDataFromJson({required String json}) =>
-RustLib.instance.api.crateCreateStructuredDataFromJson(json: json);
+Future<ImageMetadataType>  createImageMetadataTypeFromJson({required String json }) => RustLib.instance.api.crateCreateImageMetadataTypeFromJson(json: json);
 
-Future<HtmlMetadata> createHtmlMetadataFromJson({required String json}) =>
-RustLib.instance.api.crateCreateHtmlMetadataFromJson(json: json);
+Future<StructuredData>  createStructuredDataFromJson({required String json }) => RustLib.instance.api.crateCreateStructuredDataFromJson(json: json);
 
-Future<OcrMetadata> createOcrMetadataFromJson({required String json}) =>
-RustLib.instance.api.crateCreateOcrMetadataFromJson(json: json);
+Future<HtmlMetadata>  createHtmlMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateHtmlMetadataFromJson(json: json);
 
-Future<ErrorMetadata> createErrorMetadataFromJson({required String json}) =>
-RustLib.instance.api.crateCreateErrorMetadataFromJson(json: json);
+Future<OcrMetadata>  createOcrMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateOcrMetadataFromJson(json: json);
 
-Future<PptxMetadata> createPptxMetadataFromJson({required String json}) =>
-RustLib.instance.api.crateCreatePptxMetadataFromJson(json: json);
+Future<ErrorMetadata>  createErrorMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateErrorMetadataFromJson(json: json);
 
-Future<DocxMetadata> createDocxMetadataFromJson({required String json}) =>
-RustLib.instance.api.crateCreateDocxMetadataFromJson(json: json);
+Future<PptxMetadata>  createPptxMetadataFromJson({required String json }) => RustLib.instance.api.crateCreatePptxMetadataFromJson(json: json);
 
-Future<CsvMetadata> createCsvMetadataFromJson({required String json}) =>
-RustLib.instance.api.crateCreateCsvMetadataFromJson(json: json);
+Future<DocxMetadata>  createDocxMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateDocxMetadataFromJson(json: json);
 
-Future<BibtexMetadata> createBibtexMetadataFromJson({required String json}) =>
-RustLib.instance.api.crateCreateBibtexMetadataFromJson(json: json);
+Future<CsvMetadata>  createCsvMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateCsvMetadataFromJson(json: json);
 
-Future<CitationMetadata> createCitationMetadataFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateCitationMetadataFromJson(json: json);
+Future<BibtexMetadata>  createBibtexMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateBibtexMetadataFromJson(json: json);
 
-Future<YearRange> createYearRangeFromJson({required String json}) =>
-RustLib.instance.api.crateCreateYearRangeFromJson(json: json);
+Future<CitationMetadata>  createCitationMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateCitationMetadataFromJson(json: json);
 
-Future<FictionBookMetadata> createFictionBookMetadataFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateFictionBookMetadataFromJson(json: json);
+Future<YearRange>  createYearRangeFromJson({required String json }) => RustLib.instance.api.crateCreateYearRangeFromJson(json: json);
 
-Future<DbfMetadata> createDbfMetadataFromJson({required String json}) =>
-RustLib.instance.api.crateCreateDbfMetadataFromJson(json: json);
+Future<FictionBookMetadata>  createFictionBookMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateFictionBookMetadataFromJson(json: json);
 
-Future<DbfFieldInfo> createDbfFieldInfoFromJson({required String json}) =>
-RustLib.instance.api.crateCreateDbfFieldInfoFromJson(json: json);
+Future<DbfMetadata>  createDbfMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateDbfMetadataFromJson(json: json);
 
-Future<JatsMetadata> createJatsMetadataFromJson({required String json}) =>
-RustLib.instance.api.crateCreateJatsMetadataFromJson(json: json);
+Future<DbfFieldInfo>  createDbfFieldInfoFromJson({required String json }) => RustLib.instance.api.crateCreateDbfFieldInfoFromJson(json: json);
 
-Future<ContributorRole> createContributorRoleFromJson({required String json}) =>
-RustLib.instance.api.crateCreateContributorRoleFromJson(json: json);
+Future<JatsMetadata>  createJatsMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateJatsMetadataFromJson(json: json);
 
-Future<EpubMetadata> createEpubMetadataFromJson({required String json}) =>
-RustLib.instance.api.crateCreateEpubMetadataFromJson(json: json);
+Future<ContributorRole>  createContributorRoleFromJson({required String json }) => RustLib.instance.api.crateCreateContributorRoleFromJson(json: json);
 
-Future<PstMetadata> createPstMetadataFromJson({required String json}) =>
-RustLib.instance.api.crateCreatePstMetadataFromJson(json: json);
+Future<EpubMetadata>  createEpubMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateEpubMetadataFromJson(json: json);
 
-Future<AudioMetadata> createAudioMetadataFromJson({required String json}) =>
-RustLib.instance.api.crateCreateAudioMetadataFromJson(json: json);
+Future<PstMetadata>  createPstMetadataFromJson({required String json }) => RustLib.instance.api.crateCreatePstMetadataFromJson(json: json);
 
-Future<OcrConfidence> createOcrConfidenceFromJson({required String json}) =>
-RustLib.instance.api.crateCreateOcrConfidenceFromJson(json: json);
+Future<AudioMetadata>  createAudioMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateAudioMetadataFromJson(json: json);
 
-Future<OcrRotation> createOcrRotationFromJson({required String json}) =>
-RustLib.instance.api.crateCreateOcrRotationFromJson(json: json);
+Future<OcrConfidence>  createOcrConfidenceFromJson({required String json }) => RustLib.instance.api.crateCreateOcrConfidenceFromJson(json: json);
 
-Future<OcrElement> createOcrElementFromJson({required String json}) =>
-RustLib.instance.api.crateCreateOcrElementFromJson(json: json);
+Future<OcrRotation>  createOcrRotationFromJson({required String json }) => RustLib.instance.api.crateCreateOcrRotationFromJson(json: json);
 
-Future<OcrElementConfig> createOcrElementConfigFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateOcrElementConfigFromJson(json: json);
+Future<OcrElement>  createOcrElementFromJson({required String json }) => RustLib.instance.api.crateCreateOcrElementFromJson(json: json);
 
-Future<PageStructure> createPageStructureFromJson({required String json}) =>
-RustLib.instance.api.crateCreatePageStructureFromJson(json: json);
+Future<OcrElementConfig>  createOcrElementConfigFromJson({required String json }) => RustLib.instance.api.crateCreateOcrElementConfigFromJson(json: json);
 
-Future<PageBoundary> createPageBoundaryFromJson({required String json}) =>
-RustLib.instance.api.crateCreatePageBoundaryFromJson(json: json);
+Future<PageStructure>  createPageStructureFromJson({required String json }) => RustLib.instance.api.crateCreatePageStructureFromJson(json: json);
 
-Future<PageInfo> createPageInfoFromJson({required String json}) =>
-RustLib.instance.api.crateCreatePageInfoFromJson(json: json);
+Future<PageBoundary>  createPageBoundaryFromJson({required String json }) => RustLib.instance.api.crateCreatePageBoundaryFromJson(json: json);
 
-Future<PageContent> createPageContentFromJson({required String json}) =>
-RustLib.instance.api.crateCreatePageContentFromJson(json: json);
+Future<PageInfo>  createPageInfoFromJson({required String json }) => RustLib.instance.api.crateCreatePageInfoFromJson(json: json);
 
-Future<LayoutRegion> createLayoutRegionFromJson({required String json}) =>
-RustLib.instance.api.crateCreateLayoutRegionFromJson(json: json);
+Future<PageContent>  createPageContentFromJson({required String json }) => RustLib.instance.api.crateCreatePageContentFromJson(json: json);
 
-Future<PageHierarchy> createPageHierarchyFromJson({required String json}) =>
-RustLib.instance.api.crateCreatePageHierarchyFromJson(json: json);
+Future<LayoutRegion>  createLayoutRegionFromJson({required String json }) => RustLib.instance.api.crateCreateLayoutRegionFromJson(json: json);
 
-Future<HierarchicalBlock> createHierarchicalBlockFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateHierarchicalBlockFromJson(json: json);
+Future<PageHierarchy>  createPageHierarchyFromJson({required String json }) => RustLib.instance.api.crateCreatePageHierarchyFromJson(json: json);
 
-Future<QrCode> createQrCodeFromJson({required String json}) =>
-RustLib.instance.api.crateCreateQrCodeFromJson(json: json);
+Future<HierarchicalBlock>  createHierarchicalBlockFromJson({required String json }) => RustLib.instance.api.crateCreateHierarchicalBlockFromJson(json: json);
 
-Future<QrBoundingBox> createQrBoundingBoxFromJson({required String json}) =>
-RustLib.instance.api.crateCreateQrBoundingBoxFromJson(json: json);
+Future<QrCode>  createQrCodeFromJson({required String json }) => RustLib.instance.api.crateCreateQrCodeFromJson(json: json);
 
-Future<RedactionReport> createRedactionReportFromJson({required String json}) =>
-RustLib.instance.api.crateCreateRedactionReportFromJson(json: json);
+Future<QrBoundingBox>  createQrBoundingBoxFromJson({required String json }) => RustLib.instance.api.crateCreateQrBoundingBoxFromJson(json: json);
 
-Future<RedactionFinding> createRedactionFindingFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateRedactionFindingFromJson(json: json);
+Future<RedactionReport>  createRedactionReportFromJson({required String json }) => RustLib.instance.api.crateCreateRedactionReportFromJson(json: json);
 
-Future<CellChange> createCellChangeFromJson({required String json}) =>
-RustLib.instance.api.crateCreateCellChangeFromJson(json: json);
+Future<RedactionFinding>  createRedactionFindingFromJson({required String json }) => RustLib.instance.api.crateCreateRedactionFindingFromJson(json: json);
 
-Future<PropertyChange> createPropertyChangeFromJson({required String json}) =>
-RustLib.instance.api.crateCreatePropertyChangeFromJson(json: json);
+Future<CellChange>  createCellChangeFromJson({required String json }) => RustLib.instance.api.crateCreateCellChangeFromJson(json: json);
 
-Future<DocumentRevision> createDocumentRevisionFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateDocumentRevisionFromJson(json: json);
+Future<PropertyChange>  createPropertyChangeFromJson({required String json }) => RustLib.instance.api.crateCreatePropertyChangeFromJson(json: json);
 
-Future<RevisionDelta> createRevisionDeltaFromJson({required String json}) =>
-RustLib.instance.api.crateCreateRevisionDeltaFromJson(json: json);
+Future<DocumentRevision>  createDocumentRevisionFromJson({required String json }) => RustLib.instance.api.crateCreateDocumentRevisionFromJson(json: json);
 
-Future<DocumentSummary> createDocumentSummaryFromJson({required String json}) =>
-RustLib.instance.api.crateCreateDocumentSummaryFromJson(json: json);
+Future<RevisionDelta>  createRevisionDeltaFromJson({required String json }) => RustLib.instance.api.crateCreateRevisionDeltaFromJson(json: json);
 
-Future<Table> createTableFromJson({required String json}) =>
-RustLib.instance.api.crateCreateTableFromJson(json: json);
+Future<DocumentSummary>  createDocumentSummaryFromJson({required String json }) => RustLib.instance.api.crateCreateDocumentSummaryFromJson(json: json);
 
-Future<TableCell> createTableCellFromJson({required String json}) =>
-RustLib.instance.api.crateCreateTableCellFromJson(json: json);
+Future<Table>  createTableFromJson({required String json }) => RustLib.instance.api.crateCreateTableFromJson(json: json);
 
-Future<Translation> createTranslationFromJson({required String json}) =>
-RustLib.instance.api.crateCreateTranslationFromJson(json: json);
+Future<TableCell>  createTableCellFromJson({required String json }) => RustLib.instance.api.crateCreateTableCellFromJson(json: json);
 
-Future<ExtractedUri> createExtractedUriFromJson({required String json}) =>
-RustLib.instance.api.crateCreateExtractedUriFromJson(json: json);
+Future<Translation>  createTranslationFromJson({required String json }) => RustLib.instance.api.crateCreateTranslationFromJson(json: json);
 
-Future<DetectResponse> createDetectResponseFromJson({required String json}) =>
-RustLib.instance.api.crateCreateDetectResponseFromJson(json: json);
+Future<ExtractedUri>  createExtractedUriFromJson({required String json }) => RustLib.instance.api.crateCreateExtractedUriFromJson(json: json);
 
-Future<DiffOptions> createDiffOptionsFromJson({required String json}) =>
-RustLib.instance.api.crateCreateDiffOptionsFromJson(json: json);
+Future<DetectResponse>  createDetectResponseFromJson({required String json }) => RustLib.instance.api.crateCreateDetectResponseFromJson(json: json);
 
-Future<ExtractionDiff> createExtractionDiffFromJson({required String json}) =>
-RustLib.instance.api.crateCreateExtractionDiffFromJson(json: json);
+Future<DiffOptions>  createDiffOptionsFromJson({required String json }) => RustLib.instance.api.crateCreateDiffOptionsFromJson(json: json);
 
-Future<DiffHunk> createDiffHunkFromJson({required String json}) =>
-RustLib.instance.api.crateCreateDiffHunkFromJson(json: json);
+Future<ExtractionDiff>  createExtractionDiffFromJson({required String json }) => RustLib.instance.api.crateCreateExtractionDiffFromJson(json: json);
 
-Future<TableDiff> createTableDiffFromJson({required String json}) =>
-RustLib.instance.api.crateCreateTableDiffFromJson(json: json);
+Future<DiffHunk>  createDiffHunkFromJson({required String json }) => RustLib.instance.api.crateCreateDiffHunkFromJson(json: json);
 
-Future<EmbeddedChanges> createEmbeddedChangesFromJson({required String json}) =>
-RustLib.instance.api.crateCreateEmbeddedChangesFromJson(json: json);
+Future<TableDiff>  createTableDiffFromJson({required String json }) => RustLib.instance.api.crateCreateTableDiffFromJson(json: json);
 
-Future<EmbeddedDiff> createEmbeddedDiffFromJson({required String json}) =>
-RustLib.instance.api.crateCreateEmbeddedDiffFromJson(json: json);
+Future<EmbeddedChanges>  createEmbeddedChangesFromJson({required String json }) => RustLib.instance.api.crateCreateEmbeddedChangesFromJson(json: json);
 
-Future<RerankedDocument> createRerankedDocumentFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateRerankedDocumentFromJson(json: json);
+Future<EmbeddedDiff>  createEmbeddedDiffFromJson({required String json }) => RustLib.instance.api.crateCreateEmbeddedDiffFromJson(json: json);
 
-Future<SparseEmbedding> createSparseEmbeddingFromJson({required String json}) =>
-RustLib.instance.api.crateCreateSparseEmbeddingFromJson(json: json);
+Future<RerankedDocument>  createRerankedDocumentFromJson({required String json }) => RustLib.instance.api.crateCreateRerankedDocumentFromJson(json: json);
 
-Future<SparseEmbeddingPreset> createSparseEmbeddingPresetFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateSparseEmbeddingPresetFromJson(json: json);
+Future<SparseEmbedding>  createSparseEmbeddingFromJson({required String json }) => RustLib.instance.api.crateCreateSparseEmbeddingFromJson(json: json);
 
-Future<MultiVectorEmbedding> createMultiVectorEmbeddingFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateMultiVectorEmbeddingFromJson(json: json);
+Future<SparseEmbeddingPreset>  createSparseEmbeddingPresetFromJson({required String json }) => RustLib.instance.api.crateCreateSparseEmbeddingPresetFromJson(json: json);
 
-Future<LateInteractionPreset> createLateInteractionPresetFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateLateInteractionPresetFromJson(json: json);
+Future<MultiVectorEmbedding>  createMultiVectorEmbeddingFromJson({required String json }) => RustLib.instance.api.crateCreateMultiVectorEmbeddingFromJson(json: json);
 
-Future<LateInteractionMatch> createLateInteractionMatchFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateLateInteractionMatchFromJson(json: json);
+Future<LateInteractionPreset>  createLateInteractionPresetFromJson({required String json }) => RustLib.instance.api.crateCreateLateInteractionPresetFromJson(json: json);
 
-Future<YakeParams> createYakeParamsFromJson({required String json}) =>
-RustLib.instance.api.crateCreateYakeParamsFromJson(json: json);
+Future<LateInteractionMatch>  createLateInteractionMatchFromJson({required String json }) => RustLib.instance.api.crateCreateLateInteractionMatchFromJson(json: json);
 
-Future<RakeParams> createRakeParamsFromJson({required String json}) =>
-RustLib.instance.api.crateCreateRakeParamsFromJson(json: json);
+Future<YakeParams>  createYakeParamsFromJson({required String json }) => RustLib.instance.api.crateCreateYakeParamsFromJson(json: json);
 
-Future<KeywordConfig> createKeywordConfigFromJson({required String json}) =>
-RustLib.instance.api.crateCreateKeywordConfigFromJson(json: json);
+Future<RakeParams>  createRakeParamsFromJson({required String json }) => RustLib.instance.api.crateCreateRakeParamsFromJson(json: json);
 
-Future<Keyword> createKeywordFromJson({required String json}) =>
-RustLib.instance.api.crateCreateKeywordFromJson(json: json);
+Future<KeywordConfig>  createKeywordConfigFromJson({required String json }) => RustLib.instance.api.crateCreateKeywordConfigFromJson(json: json);
 
-Future<DocumentMetadata> createDocumentMetadataFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateDocumentMetadataFromJson(json: json);
+Future<Keyword>  createKeywordFromJson({required String json }) => RustLib.instance.api.crateCreateKeywordFromJson(json: json);
 
-Future<UserChunkConfig> createUserChunkConfigFromJson({required String json}) =>
-RustLib.instance.api.crateCreateUserChunkConfigFromJson(json: json);
+Future<DocumentMetadata>  createDocumentMetadataFromJson({required String json }) => RustLib.instance.api.crateCreateDocumentMetadataFromJson(json: json);
 
-Future<ExtractionConfidence> createExtractionConfidenceFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateExtractionConfidenceFromJson(json: json);
+Future<UserChunkConfig>  createUserChunkConfigFromJson({required String json }) => RustLib.instance.api.crateCreateUserChunkConfigFromJson(json: json);
 
-Future<HeuristicsConfig> createHeuristicsConfigFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateHeuristicsConfigFromJson(json: json);
+Future<ExtractionConfidence>  createExtractionConfidenceFromJson({required String json }) => RustLib.instance.api.crateCreateExtractionConfidenceFromJson(json: json);
 
-Future<ChunkInfo> createChunkInfoFromJson({required String json}) =>
-RustLib.instance.api.crateCreateChunkInfoFromJson(json: json);
+Future<HeuristicsConfig>  createHeuristicsConfigFromJson({required String json }) => RustLib.instance.api.crateCreateHeuristicsConfigFromJson(json: json);
 
-Future<PageRange> createPageRangeFromJson({required String json}) =>
-RustLib.instance.api.crateCreatePageRangeFromJson(json: json);
+Future<ChunkInfo>  createChunkInfoFromJson({required String json }) => RustLib.instance.api.crateCreateChunkInfoFromJson(json: json);
 
-Future<MultidocInput> createMultidocInputFromJson({required String json}) =>
-RustLib.instance.api.crateCreateMultidocInputFromJson(json: json);
+Future<PageRange>  createPageRangeFromJson({required String json }) => RustLib.instance.api.crateCreatePageRangeFromJson(json: json);
 
-Future<PageSignals> createPageSignalsFromJson({required String json}) =>
-RustLib.instance.api.crateCreatePageSignalsFromJson(json: json);
+Future<MultidocInput>  createMultidocInputFromJson({required String json }) => RustLib.instance.api.crateCreateMultidocInputFromJson(json: json);
 
-Future<DocumentBoundary> createDocumentBoundaryFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateDocumentBoundaryFromJson(json: json);
+Future<PageSignals>  createPageSignalsFromJson({required String json }) => RustLib.instance.api.crateCreatePageSignalsFromJson(json: json);
 
-Future<MultidocThresholds> createMultidocThresholdsFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateMultidocThresholdsFromJson(json: json);
+Future<DocumentBoundary>  createDocumentBoundaryFromJson({required String json }) => RustLib.instance.api.crateCreateDocumentBoundaryFromJson(json: json);
 
-Future<ResolvedPreset> createResolvedPresetFromJson({required String json}) =>
-RustLib.instance.api.crateCreateResolvedPresetFromJson(json: json);
+Future<MultidocThresholds>  createMultidocThresholdsFromJson({required String json }) => RustLib.instance.api.crateCreateMultidocThresholdsFromJson(json: json);
 
-Future<PresetSample> createPresetSampleFromJson({required String json}) =>
-RustLib.instance.api.crateCreatePresetSampleFromJson(json: json);
+Future<ResolvedPreset>  createResolvedPresetFromJson({required String json }) => RustLib.instance.api.crateCreateResolvedPresetFromJson(json: json);
 
-Future<Preset> createPresetFromJson({required String json}) =>
-RustLib.instance.api.crateCreatePresetFromJson(json: json);
+Future<PresetSample>  createPresetSampleFromJson({required String json }) => RustLib.instance.api.crateCreatePresetSampleFromJson(json: json);
 
-Future<PresetSummary> createPresetSummaryFromJson({required String json}) =>
-RustLib.instance.api.crateCreatePresetSummaryFromJson(json: json);
+Future<Preset>  createPresetFromJson({required String json }) => RustLib.instance.api.crateCreatePresetFromJson(json: json);
 
-Future<PaddleOcrConfig> createPaddleOcrConfigFromJson({required String json}) =>
-RustLib.instance.api.crateCreatePaddleOcrConfigFromJson(json: json);
+Future<PresetSummary>  createPresetSummaryFromJson({required String json }) => RustLib.instance.api.crateCreatePresetSummaryFromJson(json: json);
 
-Future<ModelPaths> createModelPathsFromJson({required String json}) =>
-RustLib.instance.api.crateCreateModelPathsFromJson(json: json);
+Future<PaddleOcrConfig>  createPaddleOcrConfigFromJson({required String json }) => RustLib.instance.api.crateCreatePaddleOcrConfigFromJson(json: json);
 
-Future<OrientationResult> createOrientationResultFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateOrientationResultFromJson(json: json);
+Future<ModelPaths>  createModelPathsFromJson({required String json }) => RustLib.instance.api.crateCreateModelPathsFromJson(json: json);
 
-Future<BBox> createBBoxFromJson({required String json}) =>
-RustLib.instance.api.crateCreateBBoxFromJson(json: json);
+Future<OrientationResult>  createOrientationResultFromJson({required String json }) => RustLib.instance.api.crateCreateOrientationResultFromJson(json: json);
 
-Future<LayoutDetection> createLayoutDetectionFromJson({required String json}) =>
-RustLib.instance.api.crateCreateLayoutDetectionFromJson(json: json);
+Future<BBox>  createBBoxFromJson({required String json }) => RustLib.instance.api.crateCreateBBoxFromJson(json: json);
 
-Future<RecognizedTable> createRecognizedTableFromJson({required String json}) =>
-RustLib.instance.api.crateCreateRecognizedTableFromJson(json: json);
+Future<LayoutDetection>  createLayoutDetectionFromJson({required String json }) => RustLib.instance.api.crateCreateLayoutDetectionFromJson(json: json);
 
-Future<DetectionResult> createDetectionResultFromJson({required String json}) =>
-RustLib.instance.api.crateCreateDetectionResultFromJson(json: json);
+Future<RecognizedTable>  createRecognizedTableFromJson({required String json }) => RustLib.instance.api.crateCreateRecognizedTableFromJson(json: json);
 
-Future<EmbeddedFile> createEmbeddedFileFromJson({required String json}) =>
-RustLib.instance.api.crateCreateEmbeddedFileFromJson(json: json);
+Future<DetectionResult>  createDetectionResultFromJson({required String json }) => RustLib.instance.api.crateCreateDetectionResultFromJson(json: json);
 
-Future<PdfMetadata> createPdfMetadataFromJson({required String json}) =>
-RustLib.instance.api.crateCreatePdfMetadataFromJson(json: json);
+Future<EmbeddedFile>  createEmbeddedFileFromJson({required String json }) => RustLib.instance.api.crateCreateEmbeddedFileFromJson(json: json);
 
-Future<ProxyConfig> createProxyConfigFromJson({required String json}) =>
-RustLib.instance.api.crateCreateProxyConfigFromJson(json: json);
+Future<PdfMetadata>  createPdfMetadataFromJson({required String json }) => RustLib.instance.api.crateCreatePdfMetadataFromJson(json: json);
 
-Future<ContentConfig> createContentConfigFromJson({required String json}) =>
-RustLib.instance.api.crateCreateContentConfigFromJson(json: json);
+Future<ProxyConfig>  createProxyConfigFromJson({required String json }) => RustLib.instance.api.crateCreateProxyConfigFromJson(json: json);
 
-Future<BrowserConfig> createBrowserConfigFromJson({required String json}) =>
-RustLib.instance.api.crateCreateBrowserConfigFromJson(json: json);
+Future<ContentConfig>  createContentConfigFromJson({required String json }) => RustLib.instance.api.crateCreateContentConfigFromJson(json: json);
 
-Future<CrawlConfig> createCrawlConfigFromJson({required String json}) =>
-RustLib.instance.api.crateCreateCrawlConfigFromJson(json: json);
+Future<BrowserConfig>  createBrowserConfigFromJson({required String json }) => RustLib.instance.api.crateCreateBrowserConfigFromJson(json: json);
 
-Future<SitemapUrl> createSitemapUrlFromJson({required String json}) =>
-RustLib.instance.api.crateCreateSitemapUrlFromJson(json: json);
+Future<CrawlConfig>  createCrawlConfigFromJson({required String json }) => RustLib.instance.api.crateCreateCrawlConfigFromJson(json: json);
 
-Future<MapResult> createMapResultFromJson({required String json}) =>
-RustLib.instance.api.crateCreateMapResultFromJson(json: json);
+Future<SitemapUrl>  createSitemapUrlFromJson({required String json }) => RustLib.instance.api.crateCreateSitemapUrlFromJson(json: json);
 
-Future<SsrfPolicy> createSsrfPolicyFromJson({required String json}) =>
-RustLib.instance.api.crateCreateSsrfPolicyFromJson(json: json);
+Future<MapResult>  createMapResultFromJson({required String json }) => RustLib.instance.api.crateCreateMapResultFromJson(json: json);
 
-Future<ConversionOptions> createConversionOptionsFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreateConversionOptionsFromJson(json: json);
+Future<SsrfPolicy>  createSsrfPolicyFromJson({required String json }) => RustLib.instance.api.crateCreateSsrfPolicyFromJson(json: json);
 
-Future<PreprocessingOptions> createPreprocessingOptionsFromJson({
-  required String json,
-}) => RustLib.instance.api.crateCreatePreprocessingOptionsFromJson(json: json);
+Future<ConversionOptions>  createConversionOptionsFromJson({required String json }) => RustLib.instance.api.crateCreateConversionOptionsFromJson(json: json);
+
+Future<PreprocessingOptions>  createPreprocessingOptionsFromJson({required String json }) => RustLib.instance.api.crateCreatePreprocessingOptionsFromJson(json: json);
 
 /// Construct a `OcrBackendDartImpl` from Dart callback closures.
 /// FRB synthesises a Dart-callable function type for each closure parameter,
@@ -884,51 +569,22 @@ Future<PreprocessingOptions> createPreprocessingOptionsFromJson({
 /// it cannot bridge). The returned wrapper holds an `Arc<dyn Trait + Send + Sync>`
 /// whose backing object carries the supplied callbacks privately.
 /// `plugin_name` and `plugin_version` are required for the Plugin super-trait.
-Future<OcrBackendDartImpl> createOcrBackendDartImpl({
-  required String pluginName,
-  required String pluginVersion,
-  required FutureOr<ExtractedDocument> Function(Uint8List, OcrConfig)
-  processImage,
-  required FutureOr<ExtractedDocument> Function(String, OcrConfig)
-  processImageFile,
-  required FutureOr<bool> Function(String) supportsLanguage,
-  required FutureOr<OcrBackendType> Function() backendType,
-  required FutureOr<List<String>> Function() supportedLanguages,
-  required FutureOr<bool> Function() supportsTableDetection,
-  required FutureOr<bool> Function() supportsDocumentProcessing,
-  required FutureOr<bool> Function() emitsStructuredMarkdown,
-  required FutureOr<ExtractedDocument> Function(String, OcrConfig)
-  processDocument,
-}) => RustLib.instance.api.crateCreateOcrBackendDartImpl(
-  pluginName: pluginName,
-  pluginVersion: pluginVersion,
-  processImage: processImage,
-  processImageFile: processImageFile,
-  supportsLanguage: supportsLanguage,
-  backendType: backendType,
-  supportedLanguages: supportedLanguages,
-  supportsTableDetection: supportsTableDetection,
-  supportsDocumentProcessing: supportsDocumentProcessing,
-  emitsStructuredMarkdown: emitsStructuredMarkdown,
-  processDocument: processDocument,
-);
+Future<OcrBackendDartImpl>  createOcrBackendDartImpl({required String pluginName , required String pluginVersion , required FutureOr<ExtractedDocument> Function(Uint8List, OcrConfig) processImage , required FutureOr<ExtractedDocument> Function(String, OcrConfig) processImageFile , required FutureOr<bool> Function(String) supportsLanguage , required FutureOr<OcrBackendType> Function() backendType , required FutureOr<List<String>> Function() supportedLanguages , required FutureOr<bool> Function() supportsTableDetection , required FutureOr<bool> Function() supportsDocumentProcessing , required FutureOr<bool> Function() emitsStructuredMarkdown , required FutureOr<ExtractedDocument> Function(String, OcrConfig) processDocument }) => RustLib.instance.api.crateCreateOcrBackendDartImpl(pluginName: pluginName, pluginVersion: pluginVersion, processImage: processImage, processImageFile: processImageFile, supportsLanguage: supportsLanguage, backendType: backendType, supportedLanguages: supportedLanguages, supportsTableDetection: supportsTableDetection, supportsDocumentProcessing: supportsDocumentProcessing, emitsStructuredMarkdown: emitsStructuredMarkdown, processDocument: processDocument);
 
 /// Register a Dart implementation as a `OcrBackend` plugin.
 ///
 /// Forwards the `Arc<dyn OcrBackend>` wrapped by `OcrBackendDartImpl` to
 /// `xberg::plugins::registry::get_ocr_backend_registry()`. Errors from the host registry are stringified
 /// for FRB transport.
-Future<void> registerOcrBackend({required OcrBackendDartImpl impl}) =>
-RustLib.instance.api.crateRegisterOcrBackend(impl: impl);
+Future<void>  registerOcrBackend({required OcrBackendDartImpl impl }) => RustLib.instance.api.crateRegisterOcrBackend(impl: impl);
 
 /// Unregister a previously-registered `OcrBackend` plugin by name.
 /// Removes the plugin from `xberg::plugins::registry::get_ocr_backend_registry()` and stringifies any host error.
-Future<void> unregisterOcrBackend({required String name}) =>
-RustLib.instance.api.crateUnregisterOcrBackend(name: name);
+Future<void>  unregisterOcrBackend({required String name }) => RustLib.instance.api.crateUnregisterOcrBackend(name: name);
 
 /// Clear all registered `OcrBackend` plugins.
 /// Removes every plugin from `xberg::plugins::registry::get_ocr_backend_registry()` and stringifies any host error.
-Future<void> clearOcrBackends() => RustLib.instance.api.crateClearOcrBackends();
+Future<void>  clearOcrBackends() => RustLib.instance.api.crateClearOcrBackends();
 
 /// Construct a `PostProcessorDartImpl` from Dart callback closures.
 /// FRB synthesises a Dart-callable function type for each closure parameter,
@@ -938,43 +594,22 @@ Future<void> clearOcrBackends() => RustLib.instance.api.crateClearOcrBackends();
 /// it cannot bridge). The returned wrapper holds an `Arc<dyn Trait + Send + Sync>`
 /// whose backing object carries the supplied callbacks privately.
 /// `plugin_name` and `plugin_version` are required for the Plugin super-trait.
-Future<PostProcessorDartImpl> createPostProcessorDartImpl({
-  required String pluginName,
-  required String pluginVersion,
-  required FutureOr<void> Function(ExtractedDocument, ExtractionConfig) process,
-  required FutureOr<ProcessingStage> Function() processingStage,
-  required FutureOr<bool> Function(ExtractedDocument, ExtractionConfig)
-  shouldProcess,
-  required FutureOr<PlatformInt64> Function(ExtractedDocument)
-  estimatedDurationMs,
-  required FutureOr<PlatformInt64> Function() priority,
-}) => RustLib.instance.api.crateCreatePostProcessorDartImpl(
-  pluginName: pluginName,
-  pluginVersion: pluginVersion,
-  process: process,
-  processingStage: processingStage,
-  shouldProcess: shouldProcess,
-  estimatedDurationMs: estimatedDurationMs,
-  priority: priority,
-);
+Future<PostProcessorDartImpl>  createPostProcessorDartImpl({required String pluginName , required String pluginVersion , required FutureOr<void> Function(ExtractedDocument, ExtractionConfig) process , required FutureOr<ProcessingStage> Function() processingStage , required FutureOr<bool> Function(ExtractedDocument, ExtractionConfig) shouldProcess , required FutureOr<PlatformInt64> Function(ExtractedDocument) estimatedDurationMs , required FutureOr<PlatformInt64> Function() priority }) => RustLib.instance.api.crateCreatePostProcessorDartImpl(pluginName: pluginName, pluginVersion: pluginVersion, process: process, processingStage: processingStage, shouldProcess: shouldProcess, estimatedDurationMs: estimatedDurationMs, priority: priority);
 
 /// Register a Dart implementation as a `PostProcessor` plugin.
 ///
 /// Forwards the `Arc<dyn PostProcessor>` wrapped by `PostProcessorDartImpl` to
 /// `xberg::plugins::registry::get_post_processor_registry()`. Errors from the host registry are stringified
 /// for FRB transport.
-Future<void> registerPostProcessor({required PostProcessorDartImpl impl}) =>
-RustLib.instance.api.crateRegisterPostProcessor(impl: impl);
+Future<void>  registerPostProcessor({required PostProcessorDartImpl impl }) => RustLib.instance.api.crateRegisterPostProcessor(impl: impl);
 
 /// Unregister a previously-registered `PostProcessor` plugin by name.
 /// Removes the plugin from `xberg::plugins::registry::get_post_processor_registry()` and stringifies any host error.
-Future<void> unregisterPostProcessor({required String name}) =>
-RustLib.instance.api.crateUnregisterPostProcessor(name: name);
+Future<void>  unregisterPostProcessor({required String name }) => RustLib.instance.api.crateUnregisterPostProcessor(name: name);
 
 /// Clear all registered `PostProcessor` plugins.
 /// Removes every plugin from `xberg::plugins::registry::get_post_processor_registry()` and stringifies any host error.
-Future<void> clearPostProcessors() =>
-RustLib.instance.api.crateClearPostProcessors();
+Future<void>  clearPostProcessors() => RustLib.instance.api.crateClearPostProcessors();
 
 /// Construct a `ValidatorDartImpl` from Dart callback closures.
 /// FRB synthesises a Dart-callable function type for each closure parameter,
@@ -984,38 +619,22 @@ RustLib.instance.api.crateClearPostProcessors();
 /// it cannot bridge). The returned wrapper holds an `Arc<dyn Trait + Send + Sync>`
 /// whose backing object carries the supplied callbacks privately.
 /// `plugin_name` and `plugin_version` are required for the Plugin super-trait.
-Future<ValidatorDartImpl> createValidatorDartImpl({
-  required String pluginName,
-  required String pluginVersion,
-  required FutureOr<void> Function(ExtractedDocument, ExtractionConfig)
-  validate,
-  required FutureOr<bool> Function(ExtractedDocument, ExtractionConfig)
-  shouldValidate,
-  required FutureOr<PlatformInt64> Function() priority,
-}) => RustLib.instance.api.crateCreateValidatorDartImpl(
-  pluginName: pluginName,
-  pluginVersion: pluginVersion,
-  validate: validate,
-  shouldValidate: shouldValidate,
-  priority: priority,
-);
+Future<ValidatorDartImpl>  createValidatorDartImpl({required String pluginName , required String pluginVersion , required FutureOr<void> Function(ExtractedDocument, ExtractionConfig) validate , required FutureOr<bool> Function(ExtractedDocument, ExtractionConfig) shouldValidate , required FutureOr<PlatformInt64> Function() priority }) => RustLib.instance.api.crateCreateValidatorDartImpl(pluginName: pluginName, pluginVersion: pluginVersion, validate: validate, shouldValidate: shouldValidate, priority: priority);
 
 /// Register a Dart implementation as a `Validator` plugin.
 ///
 /// Forwards the `Arc<dyn Validator>` wrapped by `ValidatorDartImpl` to
 /// `xberg::plugins::registry::get_validator_registry()`. Errors from the host registry are stringified
 /// for FRB transport.
-Future<void> registerValidator({required ValidatorDartImpl impl}) =>
-RustLib.instance.api.crateRegisterValidator(impl: impl);
+Future<void>  registerValidator({required ValidatorDartImpl impl }) => RustLib.instance.api.crateRegisterValidator(impl: impl);
 
 /// Unregister a previously-registered `Validator` plugin by name.
 /// Removes the plugin from `xberg::plugins::registry::get_validator_registry()` and stringifies any host error.
-Future<void> unregisterValidator({required String name}) =>
-RustLib.instance.api.crateUnregisterValidator(name: name);
+Future<void>  unregisterValidator({required String name }) => RustLib.instance.api.crateUnregisterValidator(name: name);
 
 /// Clear all registered `Validator` plugins.
 /// Removes every plugin from `xberg::plugins::registry::get_validator_registry()` and stringifies any host error.
-Future<void> clearValidators() => RustLib.instance.api.crateClearValidators();
+Future<void>  clearValidators() => RustLib.instance.api.crateClearValidators();
 
 /// Construct a `DocumentExtractorDartImpl` from Dart callback closures.
 /// FRB synthesises a Dart-callable function type for each closure parameter,
@@ -1025,41 +644,22 @@ Future<void> clearValidators() => RustLib.instance.api.crateClearValidators();
 /// it cannot bridge). The returned wrapper holds an `Arc<dyn Trait + Send + Sync>`
 /// whose backing object carries the supplied callbacks privately.
 /// `plugin_name` and `plugin_version` are required for the Plugin super-trait.
-Future<DocumentExtractorDartImpl> createDocumentExtractorDartImpl({
-  required String pluginName,
-  required String pluginVersion,
-  required FutureOr<ExtractedDocument> Function(ExtractInput, ExtractionConfig)
-  extract,
-  required FutureOr<List<String>> Function() supportedMimeTypes,
-  required FutureOr<PlatformInt64> Function() priority,
-  required FutureOr<bool> Function(String, String) canHandle,
-}) => RustLib.instance.api.crateCreateDocumentExtractorDartImpl(
-  pluginName: pluginName,
-  pluginVersion: pluginVersion,
-  extract: extract,
-  supportedMimeTypes: supportedMimeTypes,
-  priority: priority,
-  canHandle: canHandle,
-);
+Future<DocumentExtractorDartImpl>  createDocumentExtractorDartImpl({required String pluginName , required String pluginVersion , required FutureOr<ExtractedDocument> Function(ExtractInput, ExtractionConfig) extract , required FutureOr<List<String>> Function() supportedMimeTypes , required FutureOr<PlatformInt64> Function() priority , required FutureOr<bool> Function(String, String) canHandle }) => RustLib.instance.api.crateCreateDocumentExtractorDartImpl(pluginName: pluginName, pluginVersion: pluginVersion, extract: extract, supportedMimeTypes: supportedMimeTypes, priority: priority, canHandle: canHandle);
 
 /// Register a Dart implementation as a `DocumentExtractor` plugin.
 ///
 /// Forwards the `Arc<dyn DocumentExtractor>` wrapped by `DocumentExtractorDartImpl` to
 /// `xberg::plugins::registry::get_document_extractor_registry()`. Errors from the host registry are stringified
 /// for FRB transport.
-Future<void> registerDocumentExtractor({
-  required DocumentExtractorDartImpl impl,
-}) => RustLib.instance.api.crateRegisterDocumentExtractor(impl: impl);
+Future<void>  registerDocumentExtractor({required DocumentExtractorDartImpl impl }) => RustLib.instance.api.crateRegisterDocumentExtractor(impl: impl);
 
 /// Unregister a previously-registered `DocumentExtractor` plugin by name.
 /// Removes the plugin from `xberg::plugins::registry::get_document_extractor_registry()` and stringifies any host error.
-Future<void> unregisterDocumentExtractor({required String name}) =>
-RustLib.instance.api.crateUnregisterDocumentExtractor(name: name);
+Future<void>  unregisterDocumentExtractor({required String name }) => RustLib.instance.api.crateUnregisterDocumentExtractor(name: name);
 
 /// Clear all registered `DocumentExtractor` plugins.
 /// Removes every plugin from `xberg::plugins::registry::get_document_extractor_registry()` and stringifies any host error.
-Future<void> clearDocumentExtractors() =>
-RustLib.instance.api.crateClearDocumentExtractors();
+Future<void>  clearDocumentExtractors() => RustLib.instance.api.crateClearDocumentExtractors();
 
 /// Construct a `EmbeddingBackendDartImpl` from Dart callback closures.
 /// FRB synthesises a Dart-callable function type for each closure parameter,
@@ -1069,36 +669,22 @@ RustLib.instance.api.crateClearDocumentExtractors();
 /// it cannot bridge). The returned wrapper holds an `Arc<dyn Trait + Send + Sync>`
 /// whose backing object carries the supplied callbacks privately.
 /// `plugin_name` and `plugin_version` are required for the Plugin super-trait.
-Future<EmbeddingBackendDartImpl> createEmbeddingBackendDartImpl({
-  required String pluginName,
-  required String pluginVersion,
-  required FutureOr<PlatformInt64> Function() dimensions,
-  required FutureOr<List<Float64List>> Function(List<String>) embed,
-}) => RustLib.instance.api.crateCreateEmbeddingBackendDartImpl(
-  pluginName: pluginName,
-  pluginVersion: pluginVersion,
-  dimensions: dimensions,
-  embed: embed,
-);
+Future<EmbeddingBackendDartImpl>  createEmbeddingBackendDartImpl({required String pluginName , required String pluginVersion , required FutureOr<PlatformInt64> Function() dimensions , required FutureOr<List<Float64List>> Function(List<String>) embed }) => RustLib.instance.api.crateCreateEmbeddingBackendDartImpl(pluginName: pluginName, pluginVersion: pluginVersion, dimensions: dimensions, embed: embed);
 
 /// Register a Dart implementation as a `EmbeddingBackend` plugin.
 ///
 /// Forwards the `Arc<dyn EmbeddingBackend>` wrapped by `EmbeddingBackendDartImpl` to
 /// `xberg::plugins::registry::get_embedding_backend_registry()`. Errors from the host registry are stringified
 /// for FRB transport.
-Future<void> registerEmbeddingBackend({
-  required EmbeddingBackendDartImpl impl,
-}) => RustLib.instance.api.crateRegisterEmbeddingBackend(impl: impl);
+Future<void>  registerEmbeddingBackend({required EmbeddingBackendDartImpl impl }) => RustLib.instance.api.crateRegisterEmbeddingBackend(impl: impl);
 
 /// Unregister a previously-registered `EmbeddingBackend` plugin by name.
 /// Removes the plugin from `xberg::plugins::registry::get_embedding_backend_registry()` and stringifies any host error.
-Future<void> unregisterEmbeddingBackend({required String name}) =>
-RustLib.instance.api.crateUnregisterEmbeddingBackend(name: name);
+Future<void>  unregisterEmbeddingBackend({required String name }) => RustLib.instance.api.crateUnregisterEmbeddingBackend(name: name);
 
 /// Clear all registered `EmbeddingBackend` plugins.
 /// Removes every plugin from `xberg::plugins::registry::get_embedding_backend_registry()` and stringifies any host error.
-Future<void> clearEmbeddingBackends() =>
-RustLib.instance.api.crateClearEmbeddingBackends();
+Future<void>  clearEmbeddingBackends() => RustLib.instance.api.crateClearEmbeddingBackends();
 
 /// Construct a `RendererDartImpl` from Dart callback closures.
 /// FRB synthesises a Dart-callable function type for each closure parameter,
@@ -1108,32 +694,22 @@ RustLib.instance.api.crateClearEmbeddingBackends();
 /// it cannot bridge). The returned wrapper holds an `Arc<dyn Trait + Send + Sync>`
 /// whose backing object carries the supplied callbacks privately.
 /// `plugin_name` and `plugin_version` are required for the Plugin super-trait.
-Future<RendererDartImpl> createRendererDartImpl({
-  required String pluginName,
-  required String pluginVersion,
-  required FutureOr<String> Function(ExtractedDocument) renderResult,
-}) => RustLib.instance.api.crateCreateRendererDartImpl(
-  pluginName: pluginName,
-  pluginVersion: pluginVersion,
-  renderResult: renderResult,
-);
+Future<RendererDartImpl>  createRendererDartImpl({required String pluginName , required String pluginVersion , required FutureOr<String> Function(ExtractedDocument) renderResult }) => RustLib.instance.api.crateCreateRendererDartImpl(pluginName: pluginName, pluginVersion: pluginVersion, renderResult: renderResult);
 
 /// Register a Dart implementation as a `Renderer` plugin.
 ///
 /// Forwards the `Arc<dyn Renderer>` wrapped by `RendererDartImpl` to
 /// `xberg::plugins::registry::get_renderer_registry()`. Errors from the host registry are stringified
 /// for FRB transport.
-Future<void> registerRenderer({required RendererDartImpl impl}) =>
-RustLib.instance.api.crateRegisterRenderer(impl: impl);
+Future<void>  registerRenderer({required RendererDartImpl impl }) => RustLib.instance.api.crateRegisterRenderer(impl: impl);
 
 /// Unregister a previously-registered `Renderer` plugin by name.
 /// Removes the plugin from `xberg::plugins::registry::get_renderer_registry()` and stringifies any host error.
-Future<void> unregisterRenderer({required String name}) =>
-RustLib.instance.api.crateUnregisterRenderer(name: name);
+Future<void>  unregisterRenderer({required String name }) => RustLib.instance.api.crateUnregisterRenderer(name: name);
 
 /// Clear all registered `Renderer` plugins.
 /// Removes every plugin from `xberg::plugins::registry::get_renderer_registry()` and stringifies any host error.
-Future<void> clearRenderers() => RustLib.instance.api.crateClearRenderers();
+Future<void>  clearRenderers() => RustLib.instance.api.crateClearRenderers();
 
 /// Construct a `RerankerBackendDartImpl` from Dart callback closures.
 /// FRB synthesises a Dart-callable function type for each closure parameter,
@@ -1143,33 +719,22 @@ Future<void> clearRenderers() => RustLib.instance.api.crateClearRenderers();
 /// it cannot bridge). The returned wrapper holds an `Arc<dyn Trait + Send + Sync>`
 /// whose backing object carries the supplied callbacks privately.
 /// `plugin_name` and `plugin_version` are required for the Plugin super-trait.
-Future<RerankerBackendDartImpl> createRerankerBackendDartImpl({
-  required String pluginName,
-  required String pluginVersion,
-  required FutureOr<Float64List> Function(String, List<String>) rerank,
-}) => RustLib.instance.api.crateCreateRerankerBackendDartImpl(
-  pluginName: pluginName,
-  pluginVersion: pluginVersion,
-  rerank: rerank,
-);
+Future<RerankerBackendDartImpl>  createRerankerBackendDartImpl({required String pluginName , required String pluginVersion , required FutureOr<Float64List> Function(String, List<String>) rerank }) => RustLib.instance.api.crateCreateRerankerBackendDartImpl(pluginName: pluginName, pluginVersion: pluginVersion, rerank: rerank);
 
 /// Register a Dart implementation as a `RerankerBackend` plugin.
 ///
 /// Forwards the `Arc<dyn RerankerBackend>` wrapped by `RerankerBackendDartImpl` to
 /// `xberg::plugins::registry::get_reranker_backend_registry()`. Errors from the host registry are stringified
 /// for FRB transport.
-Future<void> registerRerankerBackend({required RerankerBackendDartImpl impl}) =>
-RustLib.instance.api.crateRegisterRerankerBackend(impl: impl);
+Future<void>  registerRerankerBackend({required RerankerBackendDartImpl impl }) => RustLib.instance.api.crateRegisterRerankerBackend(impl: impl);
 
 /// Unregister a previously-registered `RerankerBackend` plugin by name.
 /// Removes the plugin from `xberg::plugins::registry::get_reranker_backend_registry()` and stringifies any host error.
-Future<void> unregisterRerankerBackend({required String name}) =>
-RustLib.instance.api.crateUnregisterRerankerBackend(name: name);
+Future<void>  unregisterRerankerBackend({required String name }) => RustLib.instance.api.crateUnregisterRerankerBackend(name: name);
 
 /// Clear all registered `RerankerBackend` plugins.
 /// Removes every plugin from `xberg::plugins::registry::get_reranker_backend_registry()` and stringifies any host error.
-Future<void> clearRerankerBackends() =>
-RustLib.instance.api.crateClearRerankerBackends();
+Future<void>  clearRerankerBackends() => RustLib.instance.api.crateClearRerankerBackends();
 
 /// Construct a `TokenizerBackendDartImpl` from Dart callback closures.
 /// FRB synthesises a Dart-callable function type for each closure parameter,
@@ -1179,155 +744,264 @@ RustLib.instance.api.crateClearRerankerBackends();
 /// it cannot bridge). The returned wrapper holds an `Arc<dyn Trait + Send + Sync>`
 /// whose backing object carries the supplied callbacks privately.
 /// `plugin_name` and `plugin_version` are required for the Plugin super-trait.
-Future<TokenizerBackendDartImpl> createTokenizerBackendDartImpl({
-  required String pluginName,
-  required String pluginVersion,
-  required FutureOr<PlatformInt64> Function(String) countTokens,
-}) => RustLib.instance.api.crateCreateTokenizerBackendDartImpl(
-  pluginName: pluginName,
-  pluginVersion: pluginVersion,
-  countTokens: countTokens,
-);
+Future<TokenizerBackendDartImpl>  createTokenizerBackendDartImpl({required String pluginName , required String pluginVersion , required FutureOr<PlatformInt64> Function(String) countTokens }) => RustLib.instance.api.crateCreateTokenizerBackendDartImpl(pluginName: pluginName, pluginVersion: pluginVersion, countTokens: countTokens);
 
 /// Register a Dart implementation as a `TokenizerBackend` plugin.
 ///
 /// Forwards the `Arc<dyn TokenizerBackend>` wrapped by `TokenizerBackendDartImpl` to
 /// `xberg::plugins::registry::get_tokenizer_backend_registry()`. Errors from the host registry are stringified
 /// for FRB transport.
-Future<void> registerTokenizerBackend({
-  required TokenizerBackendDartImpl impl,
-}) => RustLib.instance.api.crateRegisterTokenizerBackend(impl: impl);
+Future<void>  registerTokenizerBackend({required TokenizerBackendDartImpl impl }) => RustLib.instance.api.crateRegisterTokenizerBackend(impl: impl);
 
 /// Unregister a previously-registered `TokenizerBackend` plugin by name.
 /// Removes the plugin from `xberg::plugins::registry::get_tokenizer_backend_registry()` and stringifies any host error.
-Future<void> unregisterTokenizerBackend({required String name}) =>
-RustLib.instance.api.crateUnregisterTokenizerBackend(name: name);
+Future<void>  unregisterTokenizerBackend({required String name }) => RustLib.instance.api.crateUnregisterTokenizerBackend(name: name);
 
 /// Clear all registered `TokenizerBackend` plugins.
 /// Removes every plugin from `xberg::plugins::registry::get_tokenizer_backend_registry()` and stringifies any host error.
-Future<void> clearTokenizerBackends() =>
-RustLib.instance.api.crateClearTokenizerBackends();
+Future<void>  clearTokenizerBackends() => RustLib.instance.api.crateClearTokenizerBackends();
+
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner< Arc < dyn DocumentExtractor + Send + Sync >>>
-abstract class ArcDocumentExtractor implements RustOpaqueInterface {}
+abstract class ArcDocumentExtractor implements RustOpaqueInterface {
+
+
+
+}
+
+
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner< Arc < dyn EmbeddingBackend + Send + Sync >>>
-abstract class ArcEmbeddingBackend implements RustOpaqueInterface {}
+abstract class ArcEmbeddingBackend implements RustOpaqueInterface {
+
+
+
+}
+
+
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner< Arc < dyn OcrBackend + Send + Sync >>>
-abstract class ArcOcrBackend implements RustOpaqueInterface {}
+abstract class ArcOcrBackend implements RustOpaqueInterface {
+
+
+
+}
+
+
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner< Arc < dyn PostProcessor + Send + Sync >>>
-abstract class ArcPostProcessor implements RustOpaqueInterface {}
+abstract class ArcPostProcessor implements RustOpaqueInterface {
+
+
+
+}
+
+
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner< Arc < dyn Renderer + Send + Sync >>>
-abstract class ArcRenderer implements RustOpaqueInterface {}
+abstract class ArcRenderer implements RustOpaqueInterface {
+
+
+
+}
+
+
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner< Arc < dyn RerankerBackend + Send + Sync >>>
-abstract class ArcRerankerBackend implements RustOpaqueInterface {}
+abstract class ArcRerankerBackend implements RustOpaqueInterface {
+
+
+
+}
+
+
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner< Arc < dyn TokenizerBackend + Send + Sync >>>
-abstract class ArcTokenizerBackend implements RustOpaqueInterface {}
+abstract class ArcTokenizerBackend implements RustOpaqueInterface {
+
+
+
+}
+
+
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner< Arc < dyn Validator + Send + Sync >>>
-abstract class ArcValidator implements RustOpaqueInterface {}
+abstract class ArcValidator implements RustOpaqueInterface {
+
+
+
+}
+
+
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DocumentExtractorDartImpl>>
 abstract class DocumentExtractorDartImpl implements RustOpaqueInterface {
   ArcDocumentExtractor get field0;
 
+
   set field0(ArcDocumentExtractor field0);
+
+
+
+
 }
+
+
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<EmbeddingBackendDartImpl>>
 abstract class EmbeddingBackendDartImpl implements RustOpaqueInterface {
   ArcEmbeddingBackend get field0;
 
+
   set field0(ArcEmbeddingBackend field0);
+
+
+
+
 }
+
+
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<MetaSchema>>
 abstract class MetaSchema implements RustOpaqueInterface {
-  static Future<MetaSchema> compile({required String metaSchemaJson}) => RustLib
-  .instance
-  .api
-  .crateMetaSchemaCompile(metaSchemaJson: metaSchemaJson);
+  static Future<MetaSchema>  compile({required String metaSchemaJson })=>RustLib.instance.api.crateMetaSchemaCompile(metaSchemaJson: metaSchemaJson);
 
-  Future<Preset> parsePreset({required String path, required List<int> raw});
+
+  Future<Preset>  parsePreset({required String path , required List<int> raw });
+
+
+
+
 }
+
+
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<OcrBackendDartImpl>>
 abstract class OcrBackendDartImpl implements RustOpaqueInterface {
   ArcOcrBackend get field0;
 
+
   set field0(ArcOcrBackend field0);
+
+
+
+
 }
+
+
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<PostProcessorDartImpl>>
 abstract class PostProcessorDartImpl implements RustOpaqueInterface {
   ArcPostProcessor get field0;
 
+
   set field0(ArcPostProcessor field0);
+
+
+
+
 }
+
+
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Registry>>
 abstract class Registry implements RustOpaqueInterface {
-  Future<PlatformInt64> extendFromDir({required String dir});
+  Future<PlatformInt64>  extendFromDir({required String dir });
 
-  Future<Preset?> get_({required String id});
 
-  static Future<Registry> global() =>
-  RustLib.instance.api.crateRegistryGlobal();
+  Future<Preset?>  get_({required String id });
 
-  Future<bool> isEmpty();
 
-  Future<PlatformInt64> len();
+  static Future<Registry>  global()=>RustLib.instance.api.crateRegistryGlobal();
 
-  static Future<Registry> loadEmbedded() =>
-  RustLib.instance.api.crateRegistryLoadEmbedded();
 
-  Future<Uint8List?> sampleBytes({
-    required String presetId,
-    required String name,
-  });
+  Future<bool>  isEmpty();
 
-  Future<List<PresetSummary>> summaries();
+
+  Future<PlatformInt64>  len();
+
+
+  static Future<Registry>  loadEmbedded()=>RustLib.instance.api.crateRegistryLoadEmbedded();
+
+
+  Future<Uint8List?>  sampleBytes({required String presetId , required String name });
+
+
+  Future<List<PresetSummary>>  summaries();
+
+
+
+
 }
+
+
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<RendererDartImpl>>
 abstract class RendererDartImpl implements RustOpaqueInterface {
   ArcRenderer get field0;
 
+
   set field0(ArcRenderer field0);
+
+
+
+
 }
+
+
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<RerankerBackendDartImpl>>
 abstract class RerankerBackendDartImpl implements RustOpaqueInterface {
   ArcRerankerBackend get field0;
 
+
   set field0(ArcRerankerBackend field0);
+
+
+
+
 }
+
+
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TokenCounter>>
 abstract class TokenCounter implements RustOpaqueInterface {
   // HINT: Make it `#[frb(sync)]` to let it become the default constructor of Dart class.
-  static Future<TokenCounter> newInstance() =>
-  RustLib.instance.api.crateTokenCounterNew();
+  static Future<TokenCounter>  newInstance()=>RustLib.instance.api.crateTokenCounterNew();
+
+
+
+
 }
+
+
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TokenizerBackendDartImpl>>
 abstract class TokenizerBackendDartImpl implements RustOpaqueInterface {
   ArcTokenizerBackend get field0;
 
+
   set field0(ArcTokenizerBackend field0);
+
+
+
+
 }
+
+
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ValidatorDartImpl>>
 abstract class ValidatorDartImpl implements RustOpaqueInterface {
   ArcValidator get field0;
 
+
   set field0(ArcValidator field0);
+
+
+
+
 }
+
 
 /// Hardware acceleration configuration for ONNX Runtime models.
 ///
@@ -1348,590 +1022,451 @@ abstract class ValidatorDartImpl implements RustOpaqueInterface {
 ///     ..Default::default()
 /// };
 /// ```
-class AccelerationConfig {
+class AccelerationConfig  {
   /// Execution provider to use for ONNX inference.
   final ExecutionProviderType provider;
-
   /// GPU device ID (for CUDA/TensorRT). Ignored for CPU/CoreML/Auto.
   final PlatformInt64 deviceId;
 
-  const AccelerationConfig({required this.provider, required this.deviceId});
+  const AccelerationConfig({required this.provider ,required this.deviceId ,});
+
+
+
+
 
   @override
-  int get hashCode => provider.hashCode ^ deviceId.hashCode;
+  int get hashCode => provider.hashCode^deviceId.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is AccelerationConfig &&
-  runtimeType == other.runtimeType &&
-  provider == other.provider &&
-  deviceId == other.deviceId;
+  runtimeType == other.runtimeType
+  && provider == other.provider&& deviceId == other.deviceId;
+
 }
 
 @freezed
-sealed class AnnotationKind with _$AnnotationKind {
+sealed class AnnotationKind with _$AnnotationKind  {
   const AnnotationKind._();
 
   /// Bold (strong) text formatting.
   const factory AnnotationKind.bold() = AnnotationKind_Bold;
-
   /// Italic (emphasis) text formatting.
   const factory AnnotationKind.italic() = AnnotationKind_Italic;
-
   /// Underlined text.
   const factory AnnotationKind.underline() = AnnotationKind_Underline;
-
   /// Strikethrough text.
   const factory AnnotationKind.strikethrough() = AnnotationKind_Strikethrough;
-
   /// Inline code span.
   const factory AnnotationKind.code() = AnnotationKind_Code;
-
   /// Subscript text.
   const factory AnnotationKind.subscript() = AnnotationKind_Subscript;
-
   /// Superscript text.
   const factory AnnotationKind.superscript() = AnnotationKind_Superscript;
-
   /// Hyperlink annotation.
-  const factory AnnotationKind.link({
-    /// Hyperlink target URL.
-    required String url,
-
-    /// Optional link title attribute.
-    required String title,
-  }) = AnnotationKind_Link;
-
+  const factory AnnotationKind.link({ /// Hyperlink target URL.
+    required String url ,/// Optional link title attribute.
+    required String title , }) = AnnotationKind_Link;
   /// Highlighted text (PDF highlights, HTML `<mark>`).
   const factory AnnotationKind.highlight() = AnnotationKind_Highlight;
-
   /// Text color (CSS-compatible value, e.g. "#ff0000", "red").
-  const factory AnnotationKind.color({
-    /// CSS-compatible color value (e.g. `"#ff0000"`, `"red"`).
-    required String value,
-  }) = AnnotationKind_Color;
-
+  const factory AnnotationKind.color({ /// CSS-compatible color value (e.g. `"#ff0000"`, `"red"`).
+    required String value , }) = AnnotationKind_Color;
   /// Font size with units (e.g. "12pt", "1.2em", "16px").
-  const factory AnnotationKind.fontSize({
-    /// Font size including unit (e.g. `"12pt"`, `"1.2em"`, `"16px"`).
-    required String value,
-  }) = AnnotationKind_FontSize;
-
+  const factory AnnotationKind.fontSize({ /// Font size including unit (e.g. `"12pt"`, `"1.2em"`, `"16px"`).
+    required String value , }) = AnnotationKind_FontSize;
   /// Extensible annotation for format-specific styling.
-  const factory AnnotationKind.custom({
-    /// Name of the custom annotation kind.
-    required String name,
+  const factory AnnotationKind.custom({ /// Name of the custom annotation kind.
+    required String name ,/// Optional value or parameter for the annotation.
+    required String value , }) = AnnotationKind_Custom;
 
-    /// Optional value or parameter for the annotation.
-    required String value,
-  }) = AnnotationKind_Custom;
+
+
+
 }
 
 /// A single file extracted from an archive.
 ///
 /// When archives (ZIP, TAR, 7Z, GZIP) are extracted with recursive extraction
 /// enabled, each processable file produces its own full `ExtractedDocument`.
-class ArchiveEntry {
+class ArchiveEntry  {
   /// Archive-relative file path (e.g. "folder/document.pdf").
   final String path;
-
   /// Detected MIME type of the file.
   final String mimeType;
-
   /// Full extraction result for this file.
   final ExtractedDocument result;
 
-  const ArchiveEntry({
-    required this.path,
-    required this.mimeType,
-    required this.result,
-  });
+  const ArchiveEntry({required this.path ,required this.mimeType ,required this.result ,});
+
+
+
+
 
   @override
-  int get hashCode => path.hashCode ^ mimeType.hashCode ^ result.hashCode;
+  int get hashCode => path.hashCode^mimeType.hashCode^result.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ArchiveEntry &&
-  runtimeType == other.runtimeType &&
-  path == other.path &&
-  mimeType == other.mimeType &&
-  result == other.result;
+  runtimeType == other.runtimeType
+  && path == other.path&& mimeType == other.mimeType&& result == other.result;
+
 }
 
 /// Archive (ZIP/TAR/7Z) metadata.
 ///
 /// Extracted from compressed archive files containing file lists and size information.
-class ArchiveMetadata {
+class ArchiveMetadata  {
   /// Archive format ("ZIP", "TAR", "7Z", etc.)
   final String format;
-
   /// Total number of files in the archive
   final PlatformInt64 fileCount;
-
   /// List of file paths within the archive
   final List<String> fileList;
-
   /// Total uncompressed size in bytes
   final PlatformInt64 totalSize;
-
   /// Compressed size in bytes (if available)
   final PlatformInt64? compressedSize;
 
-  const ArchiveMetadata({
-    required this.format,
-    required this.fileCount,
-    required this.fileList,
-    required this.totalSize,
-    this.compressedSize,
-  });
+  const ArchiveMetadata({required this.format ,required this.fileCount ,required this.fileList ,required this.totalSize ,this.compressedSize ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  format.hashCode ^
-  fileCount.hashCode ^
-  fileList.hashCode ^
-  totalSize.hashCode ^
-  compressedSize.hashCode;
+  int get hashCode => format.hashCode^fileCount.hashCode^fileList.hashCode^totalSize.hashCode^compressedSize.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ArchiveMetadata &&
-  runtimeType == other.runtimeType &&
-  format == other.format &&
-  fileCount == other.fileCount &&
-  fileList == other.fileList &&
-  totalSize == other.totalSize &&
-  compressedSize == other.compressedSize;
+  runtimeType == other.runtimeType
+  && format == other.format&& fileCount == other.fileCount&& fileList == other.fileList&& totalSize == other.totalSize&& compressedSize == other.compressedSize;
+
 }
 
 /// The category of a downloaded asset.
 enum AssetCategory {
   /// A document file (PDF, DOC, etc.).
   document,
-
   /// An image file.
   image,
-
   /// An audio file.
   audio,
-
   /// A video file.
   video,
-
   /// A font file.
   font,
-
   /// A CSS stylesheet.
   stylesheet,
-
   /// A JavaScript file.
   script,
-
   /// An archive file (ZIP, TAR, etc.).
   archive,
-
   /// A data file (JSON, XML, CSV, etc.).
   data,
-
   /// An unrecognized asset type.
   other,
+  ;
+
 }
 
 /// Audio/video file metadata.
 ///
 /// Populated from container tags (ID3v2, MP4 atoms, Vorbis comments, etc.) and
 /// PCM decode properties. Available when the `transcription-types` feature is enabled.
-class AudioMetadata {
+class AudioMetadata  {
   /// Duration in milliseconds derived from the decoded audio stream.
   final PlatformInt64? durationMs;
-
   /// Audio codec (e.g. "mp3", "aac", "opus", "flac").
   final String? codec;
-
   /// Container format (e.g. "mpeg", "mp4", "ogg", "wav").
   final String? container;
-
   /// Sample rate in Hz after decode (always 16000 when resampled for Whisper).
   final PlatformInt64? sampleRateHz;
-
   /// Number of audio channels (1 = mono, 2 = stereo).
   final PlatformInt64? channels;
-
   /// Audio bitrate in kbps from the source file tags/properties.
   final PlatformInt64? bitrate;
 
-  const AudioMetadata({
-    this.durationMs,
-    this.codec,
-    this.container,
-    this.sampleRateHz,
-    this.channels,
-    this.bitrate,
-  });
+  const AudioMetadata({this.durationMs ,this.codec ,this.container ,this.sampleRateHz ,this.channels ,this.bitrate ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  durationMs.hashCode ^
-  codec.hashCode ^
-  container.hashCode ^
-  sampleRateHz.hashCode ^
-  channels.hashCode ^
-  bitrate.hashCode;
+  int get hashCode => durationMs.hashCode^codec.hashCode^container.hashCode^sampleRateHz.hashCode^channels.hashCode^bitrate.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is AudioMetadata &&
-  runtimeType == other.runtimeType &&
-  durationMs == other.durationMs &&
-  codec == other.codec &&
-  container == other.container &&
-  sampleRateHz == other.sampleRateHz &&
-  channels == other.channels &&
-  bitrate == other.bitrate;
+  runtimeType == other.runtimeType
+  && durationMs == other.durationMs&& codec == other.codec&& container == other.container&& sampleRateHz == other.sampleRateHz&& channels == other.channels&& bitrate == other.bitrate;
+
 }
 
 @freezed
-sealed class AuthConfig with _$AuthConfig {
+sealed class AuthConfig with _$AuthConfig  {
   const AuthConfig._();
 
   /// HTTP Basic authentication.
-  const factory AuthConfig.basic({
-    /// Username sent in the `Authorization: Basic` header.
-    required String username,
-
-    /// Password sent in the `Authorization: Basic` header.
-    required String password,
-  }) = AuthConfig_Basic;
-
+  const factory AuthConfig.basic({ /// Username sent in the `Authorization: Basic` header.
+    required String username ,/// Password sent in the `Authorization: Basic` header.
+    required String password , }) = AuthConfig_Basic;
   /// Bearer token authentication.
-  const factory AuthConfig.bearer({
-    /// Token sent in the `Authorization: Bearer` header.
-    required String token,
-  }) = AuthConfig_Bearer;
-
+  const factory AuthConfig.bearer({ /// Token sent in the `Authorization: Bearer` header.
+    required String token , }) = AuthConfig_Bearer;
   /// Custom authentication header.
-  const factory AuthConfig.header({
-    /// HTTP header name to set on each request.
-    required String name,
+  const factory AuthConfig.header({ /// HTTP header name to set on each request.
+    required String name ,/// HTTP header value to send.
+    required String value , }) = AuthConfig_Header;
 
-    /// HTTP header value to send.
-    required String value,
-  }) = AuthConfig_Header;
+
+
+
 }
 
 /// Bounding box in original image coordinates (x1, y1) top-left, (x2, y2) bottom-right.
-class BBox {
+class BBox  {
   /// Left edge (x-coordinate of the top-left corner).
   final double x1;
-
   /// Top edge (y-coordinate of the top-left corner).
   final double y1;
-
   /// Right edge (x-coordinate of the bottom-right corner).
   final double x2;
-
   /// Bottom edge (y-coordinate of the bottom-right corner).
   final double y2;
 
-  const BBox({
-    required this.x1,
-    required this.y1,
-    required this.x2,
-    required this.y2,
-  });
+  const BBox({required this.x1 ,required this.y1 ,required this.x2 ,required this.y2 ,});
+
+
+
+
 
   @override
-  int get hashCode => x1.hashCode ^ y1.hashCode ^ x2.hashCode ^ y2.hashCode;
+  int get hashCode => x1.hashCode^y1.hashCode^x2.hashCode^y2.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is BBox &&
-  runtimeType == other.runtimeType &&
-  x1 == other.x1 &&
-  y1 == other.y1 &&
-  x2 == other.x2 &&
-  y2 == other.y2;
+  runtimeType == other.runtimeType
+  && x1 == other.x1&& y1 == other.y1&& x2 == other.x2&& y2 == other.y2;
+
 }
 
 /// BibTeX bibliography metadata.
-class BibtexMetadata {
+class BibtexMetadata  {
   /// Number of entries in the bibliography.
   final PlatformInt64 entryCount;
-
   /// BibTeX citation keys (e.g. `"knuth1984"`) for all entries.
   final List<String> citationKeys;
-
   /// Author names collected across all bibliography entries.
   final List<String> authors;
-
   /// Earliest and latest publication years found in the bibliography.
   final YearRange? yearRange;
-
   /// Count of entries grouped by BibTeX entry type (e.g. `"article"` → 5).
   final Map<String, PlatformInt64>? entryTypes;
 
-  const BibtexMetadata({
-    required this.entryCount,
-    required this.citationKeys,
-    required this.authors,
-    this.yearRange,
-    this.entryTypes,
-  });
+  const BibtexMetadata({required this.entryCount ,required this.citationKeys ,required this.authors ,this.yearRange ,this.entryTypes ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  entryCount.hashCode ^
-  citationKeys.hashCode ^
-  authors.hashCode ^
-  yearRange.hashCode ^
-  entryTypes.hashCode;
+  int get hashCode => entryCount.hashCode^citationKeys.hashCode^authors.hashCode^yearRange.hashCode^entryTypes.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is BibtexMetadata &&
-  runtimeType == other.runtimeType &&
-  entryCount == other.entryCount &&
-  citationKeys == other.citationKeys &&
-  authors == other.authors &&
-  yearRange == other.yearRange &&
-  entryTypes == other.entryTypes;
+  runtimeType == other.runtimeType
+  && entryCount == other.entryCount&& citationKeys == other.citationKeys&& authors == other.authors&& yearRange == other.yearRange&& entryTypes == other.entryTypes;
+
 }
 
 /// Types of block-level elements in Djot.
 enum BlockType {
   /// Standard prose paragraph.
   paragraph,
-
   /// Section heading (level stored in `FormattedBlock::level`).
   heading,
-
   /// Block quotation container.
   blockquote,
-
   /// Fenced or indented code block.
   codeBlock,
-
   /// Individual item within a list.
   listItem,
-
   /// Numbered (ordered) list container.
   orderedList,
-
   /// Unnumbered (bullet) list container.
   bulletList,
-
   /// Task / checkbox list container.
   taskList,
-
   /// Definition list container.
   definitionList,
-
   /// Term part of a definition list entry.
   definitionTerm,
-
   /// Description / definition part of a definition list entry.
   definitionDescription,
-
   /// Generic `div` container with optional attributes.
   div,
-
   /// Logical section container, often associated with a heading.
   section,
-
   /// Horizontal rule / thematic break.
   thematicBreak,
-
   /// Raw content block in a specified format (e.g. HTML, LaTeX).
   rawBlock,
-
   /// Display-mode mathematical expression.
   mathDisplay,
+  ;
+
 }
 
 /// Reason for boundary detection.
 enum BoundaryReason {
   /// Start of PDF.
   start,
-
   /// Page-one marker ("Page 1", "1 of N") detected.
   pageOneMarker,
-
   /// Letterhead reset after signature block.
   letterheadReset,
-
   /// Text density shift with low bigram overlap.
   densityShift,
-
   /// End of PDF.
   end,
+  ;
+
 }
 
 /// Bounding box coordinates for element positioning.
-class BoundingBox {
+class BoundingBox  {
   /// Left x-coordinate
   final double x0;
-
   /// Bottom y-coordinate
   final double y0;
-
   /// Right x-coordinate
   final double x1;
-
   /// Top y-coordinate
   final double y1;
 
-  const BoundingBox({
-    required this.x0,
-    required this.y0,
-    required this.x1,
-    required this.y1,
-  });
+  const BoundingBox({required this.x0 ,required this.y0 ,required this.x1 ,required this.y1 ,});
+
+
+
+
 
   @override
-  int get hashCode => x0.hashCode ^ y0.hashCode ^ x1.hashCode ^ y1.hashCode;
+  int get hashCode => x0.hashCode^y0.hashCode^x1.hashCode^y1.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is BoundingBox &&
-  runtimeType == other.runtimeType &&
-  x0 == other.x0 &&
-  y0 == other.y0 &&
-  x1 == other.x1 &&
-  y1 == other.y1;
+  runtimeType == other.runtimeType
+  && x0 == other.x0&& y0 == other.y0&& x1 == other.x1&& y1 == other.y1;
+
 }
 
 /// Browser backend used for JavaScript rendering.
 enum BrowserBackend {
   /// Existing Chromium/CDP backend powered by chromiumoxide.
   chromiumoxide,
-
   /// Crawlberg-owned native browser backend derived from Obscura.
   native,
+  ;
+
 }
 
 /// Browser fallback configuration.
-class BrowserConfig {
+class BrowserConfig  {
   /// When to use the headless browser fallback.
   final BrowserMode mode;
-
   /// Browser backend used to render JavaScript-heavy pages.
   final BrowserBackend backend;
-
   /// CDP WebSocket endpoint for connecting to an external browser instance.
   final String? endpoint;
-
   /// Timeout for browser page load and rendering (in milliseconds when serialized).
   final PlatformInt64 timeout;
-
   /// Wait strategy after browser navigation.
   final BrowserWait wait;
-
   /// CSS selector to wait for when `wait` is `Selector`.
   final String? waitSelector;
-
   /// Extra time to wait after the wait condition is met.
   final PlatformInt64? extraWait;
-
   /// Proxy for browser fetches. Overrides `CrawlConfig.proxy` when set.
   /// Native backend supports http/https only (no SOCKS5).
   final ProxyConfig? proxy;
-
   /// URL patterns to block before the network request fires. Supports `*`
   /// wildcards. Useful for skipping ads/analytics/large images. Honored by
   /// `BrowserBackend::Native`; chromiumoxide ignores this field today.
   final List<String> blockUrlPatterns;
-
   /// JavaScript snippet evaluated after navigation completes.
   ///
   /// Scraping captures the native backend result in `ScrapeResult.browser.eval_result`.
   /// Interactions run this script before page actions on both browser backends but do
   /// not include the script result in `InteractionResult`.
   final String? evalScript;
-
   /// User-agent used when fetching robots.txt. Defaults to `BrowserConfig.user_agent`
   /// (or crawlberg's default) if unset. Native only.
   final String? robotsUserAgent;
-
   /// Capture the full network event stream into the result. Default false
   /// (only the document event is captured). Native only.
   final bool captureNetworkEvents;
-
   /// Enable session affinity: reuse chromiumoxide Pages for same-domain
   /// requests so cookies + fingerprint + solved challenges persist.
   /// Default: true. When false, each request gets a fresh Page.
   final bool sessionAffinity;
 
-  const BrowserConfig({
-    required this.mode,
-    required this.backend,
-    this.endpoint,
-    required this.timeout,
-    required this.wait,
-    this.waitSelector,
-    this.extraWait,
-    this.proxy,
-    required this.blockUrlPatterns,
-    this.evalScript,
-    this.robotsUserAgent,
-    required this.captureNetworkEvents,
-    required this.sessionAffinity,
-  });
+  const BrowserConfig({required this.mode ,required this.backend ,this.endpoint ,required this.timeout ,required this.wait ,this.waitSelector ,this.extraWait ,this.proxy ,required this.blockUrlPatterns ,this.evalScript ,this.robotsUserAgent ,required this.captureNetworkEvents ,required this.sessionAffinity ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  mode.hashCode ^
-  backend.hashCode ^
-  endpoint.hashCode ^
-  timeout.hashCode ^
-  wait.hashCode ^
-  waitSelector.hashCode ^
-  extraWait.hashCode ^
-  proxy.hashCode ^
-  blockUrlPatterns.hashCode ^
-  evalScript.hashCode ^
-  robotsUserAgent.hashCode ^
-  captureNetworkEvents.hashCode ^
-  sessionAffinity.hashCode;
+  int get hashCode => mode.hashCode^backend.hashCode^endpoint.hashCode^timeout.hashCode^wait.hashCode^waitSelector.hashCode^extraWait.hashCode^proxy.hashCode^blockUrlPatterns.hashCode^evalScript.hashCode^robotsUserAgent.hashCode^captureNetworkEvents.hashCode^sessionAffinity.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is BrowserConfig &&
-  runtimeType == other.runtimeType &&
-  mode == other.mode &&
-  backend == other.backend &&
-  endpoint == other.endpoint &&
-  timeout == other.timeout &&
-  wait == other.wait &&
-  waitSelector == other.waitSelector &&
-  extraWait == other.extraWait &&
-  proxy == other.proxy &&
-  blockUrlPatterns == other.blockUrlPatterns &&
-  evalScript == other.evalScript &&
-  robotsUserAgent == other.robotsUserAgent &&
-  captureNetworkEvents == other.captureNetworkEvents &&
-  sessionAffinity == other.sessionAffinity;
+  runtimeType == other.runtimeType
+  && mode == other.mode&& backend == other.backend&& endpoint == other.endpoint&& timeout == other.timeout&& wait == other.wait&& waitSelector == other.waitSelector&& extraWait == other.extraWait&& proxy == other.proxy&& blockUrlPatterns == other.blockUrlPatterns&& evalScript == other.evalScript&& robotsUserAgent == other.robotsUserAgent&& captureNetworkEvents == other.captureNetworkEvents&& sessionAffinity == other.sessionAffinity;
+
 }
 
 /// When to use the headless browser fallback.
 enum BrowserMode {
   /// Automatically detect when JS rendering is needed and fall back to browser.
   auto,
-
   /// Always use the browser for every request.
   always,
-
   /// Never use the browser fallback.
   never,
-
   /// Always use the browser with all stealth surfaces enabled.
   ///
   /// Behaves like [`Always`](BrowserMode::Always) for escalation purposes
@@ -1946,63 +1481,53 @@ enum BrowserMode {
   /// Use this instead of setting the now-removed `BrowserConfig.stealth`
   /// boolean field.
   stealth,
+  ;
+
 }
 
 /// Wait strategy for browser page rendering.
 enum BrowserWait {
   /// Wait until network activity is idle.
   networkIdle,
-
   /// Wait for a specific CSS selector to appear in the DOM.
   selector,
-
   /// Wait for a fixed duration after navigation.
   fixed,
+  ;
+
 }
 
 /// Aggregate statistics for a xberg cache directory.
-class CacheStats {
+class CacheStats  {
   /// Total number of files currently in the cache directory.
   final PlatformInt64 totalFiles;
-
   /// Combined size of all cache files in megabytes.
   final double totalSizeMb;
-
   /// Free disk space available on the cache volume, in megabytes.
   final double availableSpaceMb;
-
   /// Age of the oldest cache file in days (0.0 if the cache is empty).
   final double oldestFileAgeDays;
-
   /// Age of the most recently written cache file in days (0.0 if the cache is empty).
   final double newestFileAgeDays;
 
-  const CacheStats({
-    required this.totalFiles,
-    required this.totalSizeMb,
-    required this.availableSpaceMb,
-    required this.oldestFileAgeDays,
-    required this.newestFileAgeDays,
-  });
+  const CacheStats({required this.totalFiles ,required this.totalSizeMb ,required this.availableSpaceMb ,required this.oldestFileAgeDays ,required this.newestFileAgeDays ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  totalFiles.hashCode ^
-  totalSizeMb.hashCode ^
-  availableSpaceMb.hashCode ^
-  oldestFileAgeDays.hashCode ^
-  newestFileAgeDays.hashCode;
+  int get hashCode => totalFiles.hashCode^totalSizeMb.hashCode^availableSpaceMb.hashCode^oldestFileAgeDays.hashCode^newestFileAgeDays.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is CacheStats &&
-  runtimeType == other.runtimeType &&
-  totalFiles == other.totalFiles &&
-  totalSizeMb == other.totalSizeMb &&
-  availableSpaceMb == other.availableSpaceMb &&
-  oldestFileAgeDays == other.oldestFileAgeDays &&
-  newestFileAgeDays == other.newestFileAgeDays;
+  runtimeType == other.runtimeType
+  && totalFiles == other.totalFiles&& totalSizeMb == other.totalSizeMb&& availableSpaceMb == other.availableSpaceMb&& oldestFileAgeDays == other.oldestFileAgeDays&& newestFileAgeDays == other.newestFileAgeDays;
+
 }
 
 /// How a structured-extraction preset is dispatched to the model.
@@ -2014,44 +1539,43 @@ class CacheStats {
 enum CallMode {
   /// Use the extracted text only.
   textOnly,
-
   /// Use rasterized page images only.
   visionOnly,
-
   /// Provide both extracted text and page images to the model.
   textPlusVision,
+  ;
+
 }
 
 /// Configuration for the VLM captioning post-processor.
-class CaptioningConfig {
+class CaptioningConfig  {
   /// LLM configuration used for the VLM call.
   final LlmConfig llm;
-
   /// Optional custom caption prompt. `None` uses the default `RegionKind::Caption`
   /// prompt that ships with `crate::llm::region_extractor`.
   final String? prompt;
-
   /// Skip images whose `width * height` is below this threshold (in pixels).
   /// Default `1_000` filters out icons and decorations.
   final PlatformInt64 minImageArea;
 
-  const CaptioningConfig({
-    required this.llm,
-    this.prompt,
-    required this.minImageArea,
-  });
+  const CaptioningConfig({required this.llm ,this.prompt ,required this.minImageArea ,});
+
+
+
+
 
   @override
-  int get hashCode => llm.hashCode ^ prompt.hashCode ^ minImageArea.hashCode;
+  int get hashCode => llm.hashCode^prompt.hashCode^minImageArea.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is CaptioningConfig &&
-  runtimeType == other.runtimeType &&
-  llm == other.llm &&
-  prompt == other.prompt &&
-  minImageArea == other.minImageArea;
+  runtimeType == other.runtimeType
+  && llm == other.llm&& prompt == other.prompt&& minImageArea == other.minImageArea;
+
 }
 
 /// A single changed cell within a table.
@@ -2059,38 +1583,34 @@ class CaptioningConfig {
 /// Defined here (rather than only in `crate::diff`) so `RevisionDelta` can
 /// reference it unconditionally, without requiring the `diff` Cargo feature.
 /// `crate::diff` re-exports this type verbatim.
-class CellChange {
+class CellChange  {
   /// Zero-based row index.
   final PlatformInt64 row;
-
   /// Zero-based column index.
   final PlatformInt64 col;
-
   /// Value before the change.
   final String from;
-
   /// Value after the change.
   final String to;
 
-  const CellChange({
-    required this.row,
-    required this.col,
-    required this.from,
-    required this.to,
-  });
+  const CellChange({required this.row ,required this.col ,required this.from ,required this.to ,});
+
+
+
+
 
   @override
-  int get hashCode => row.hashCode ^ col.hashCode ^ from.hashCode ^ to.hashCode;
+  int get hashCode => row.hashCode^col.hashCode^from.hashCode^to.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is CellChange &&
-  runtimeType == other.runtimeType &&
-  row == other.row &&
-  col == other.col &&
-  from == other.from &&
-  to == other.to;
+  runtimeType == other.runtimeType
+  && row == other.row&& col == other.col&& from == other.from&& to == other.to;
+
 }
 
 /// A text chunk with optional embedding and metadata.
@@ -2098,116 +1618,98 @@ class CellChange {
 /// Chunks are created when chunking is enabled in `ExtractionConfig`. Each chunk
 /// contains the text content, optional embedding vector (if embedding generation
 /// is configured), and metadata about its position in the document.
-class Chunk {
+class Chunk  {
   /// The text content of this chunk.
   final String content;
-
   /// Semantic structural classification of this chunk.
   ///
   /// Assigned by the heuristic classifier based on content patterns and
   /// heading context. Defaults to `ChunkType::Unknown` when no rule matches.
   final ChunkType chunkType;
-
   /// Optional embedding vector for this chunk.
   ///
   /// Only populated when `EmbeddingConfig` is provided in chunking configuration.
   /// The dimensionality depends on the chosen embedding model.
   final Float64List? embedding;
-
   /// Metadata about this chunk's position and properties.
   final ChunkMetadata metadata;
 
-  const Chunk({
-    required this.content,
-    required this.chunkType,
-    this.embedding,
-    required this.metadata,
-  });
+  const Chunk({required this.content ,required this.chunkType ,this.embedding ,required this.metadata ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  content.hashCode ^
-  chunkType.hashCode ^
-  embedding.hashCode ^
-  metadata.hashCode;
+  int get hashCode => content.hashCode^chunkType.hashCode^embedding.hashCode^metadata.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is Chunk &&
-  runtimeType == other.runtimeType &&
-  content == other.content &&
-  chunkType == other.chunkType &&
-  embedding == other.embedding &&
-  metadata == other.metadata;
+  runtimeType == other.runtimeType
+  && content == other.content&& chunkType == other.chunkType&& embedding == other.embedding&& metadata == other.metadata;
+
 }
 
 /// Information about a single chunk.
-class ChunkInfo {
+class ChunkInfo  {
   /// Zero-based chunk index.
   final PlatformInt64 index;
-
   /// Page range for this chunk.
   final PageRange pages;
-
   /// Estimated processing time for this chunk in milliseconds.
   final PlatformInt64 estimatedTimeMs;
 
-  const ChunkInfo({
-    required this.index,
-    required this.pages,
-    required this.estimatedTimeMs,
-  });
+  const ChunkInfo({required this.index ,required this.pages ,required this.estimatedTimeMs ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  index.hashCode ^ pages.hashCode ^ estimatedTimeMs.hashCode;
+  int get hashCode => index.hashCode^pages.hashCode^estimatedTimeMs.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ChunkInfo &&
-  runtimeType == other.runtimeType &&
-  index == other.index &&
-  pages == other.pages &&
-  estimatedTimeMs == other.estimatedTimeMs;
+  runtimeType == other.runtimeType
+  && index == other.index&& pages == other.pages&& estimatedTimeMs == other.estimatedTimeMs;
+
 }
 
 /// Metadata about a chunk's position in the original document.
-class ChunkMetadata {
+class ChunkMetadata  {
   /// Byte offset where this chunk starts in the original text (UTF-8 valid boundary).
   final PlatformInt64 byteStart;
-
   /// Byte offset where this chunk ends in the original text (UTF-8 valid boundary).
   final PlatformInt64 byteEnd;
-
   /// Number of tokens in this chunk (if available).
   ///
   /// This is calculated by the embedding model's tokenizer if embeddings are enabled.
   final PlatformInt64? tokenCount;
-
   /// Zero-based index of this chunk in the document.
   final PlatformInt64 chunkIndex;
-
   /// Total number of chunks in the document.
   final PlatformInt64 totalChunks;
-
   /// First page number this chunk spans (1-indexed).
   ///
   /// Only populated when page tracking is enabled in extraction configuration.
   final PlatformInt64? firstPage;
-
   /// Last page number this chunk spans (1-indexed, equal to first_page for single-page chunks).
   ///
   /// Only populated when page tracking is enabled in extraction configuration.
   final PlatformInt64? lastPage;
-
   /// Heading context when using Markdown chunker.
   ///
   /// Contains the heading hierarchy this chunk falls under.
   /// Only populated when `ChunkerType::Markdown` is used.
   final HeadingContext? headingContext;
-
   /// Flattened heading trail from document root to this chunk's section.
   ///
   /// Each element is a heading's text, outermost first. Derived from
@@ -2215,7 +1717,6 @@ class ChunkMetadata {
   /// Provides a binding-friendly, RAG-shaped breadcrumb without requiring
   /// callers to walk the nested [`HeadingContext`] structure.
   final List<String> headingPath;
-
   /// Indices into `ExtractedDocument.images` for images on pages covered by this chunk.
   ///
   /// Contains zero-based indices into the top-level `images` collection for every
@@ -2223,69 +1724,45 @@ class ChunkMetadata {
   /// Empty when image extraction is disabled or the chunk spans no pages with images.
   final Int64List imageIndices;
 
-  const ChunkMetadata({
-    required this.byteStart,
-    required this.byteEnd,
-    this.tokenCount,
-    required this.chunkIndex,
-    required this.totalChunks,
-    this.firstPage,
-    this.lastPage,
-    this.headingContext,
-    required this.headingPath,
-    required this.imageIndices,
-  });
+  const ChunkMetadata({required this.byteStart ,required this.byteEnd ,this.tokenCount ,required this.chunkIndex ,required this.totalChunks ,this.firstPage ,this.lastPage ,this.headingContext ,required this.headingPath ,required this.imageIndices ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  byteStart.hashCode ^
-  byteEnd.hashCode ^
-  tokenCount.hashCode ^
-  chunkIndex.hashCode ^
-  totalChunks.hashCode ^
-  firstPage.hashCode ^
-  lastPage.hashCode ^
-  headingContext.hashCode ^
-  headingPath.hashCode ^
-  imageIndices.hashCode;
+  int get hashCode => byteStart.hashCode^byteEnd.hashCode^tokenCount.hashCode^chunkIndex.hashCode^totalChunks.hashCode^firstPage.hashCode^lastPage.hashCode^headingContext.hashCode^headingPath.hashCode^imageIndices.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ChunkMetadata &&
-  runtimeType == other.runtimeType &&
-  byteStart == other.byteStart &&
-  byteEnd == other.byteEnd &&
-  tokenCount == other.tokenCount &&
-  chunkIndex == other.chunkIndex &&
-  totalChunks == other.totalChunks &&
-  firstPage == other.firstPage &&
-  lastPage == other.lastPage &&
-  headingContext == other.headingContext &&
-  headingPath == other.headingPath &&
-  imageIndices == other.imageIndices;
+  runtimeType == other.runtimeType
+  && byteStart == other.byteStart&& byteEnd == other.byteEnd&& tokenCount == other.tokenCount&& chunkIndex == other.chunkIndex&& totalChunks == other.totalChunks&& firstPage == other.firstPage&& lastPage == other.lastPage&& headingContext == other.headingContext&& headingPath == other.headingPath&& imageIndices == other.imageIndices;
+
 }
 
 @freezed
-sealed class ChunkSizing with _$ChunkSizing {
+sealed class ChunkSizing with _$ChunkSizing  {
   const ChunkSizing._();
 
   /// Size measured in Unicode characters (default).
   const factory ChunkSizing.characters() = ChunkSizing_Characters;
-
   /// Size measured in tokens from a HuggingFace tokenizer or a registered
   /// tokenizer backend.
-  const factory ChunkSizing.tokenizer({
-    /// Name of a tokenizer backend registered via `register_tokenizer_backend`,
+  const factory ChunkSizing.tokenizer({ /// Name of a tokenizer backend registered via `register_tokenizer_backend`,
     /// or a HuggingFace model ID, e.g. "Xenova/gpt-4o", "bert-base-uncased".
     /// A registered backend name takes precedence over a HuggingFace ID.
-    required String model,
-
-    /// Optional cache directory override for tokenizer files.
+    required String model ,/// Optional cache directory override for tokenizer files.
     /// Defaults to hf-hub's standard cache (`~/.cache/huggingface/`).
     /// Can also be set via `XBERG_TOKENIZER_CACHE_DIR` environment variable.
-    required String cacheDir,
-  }) = ChunkSizing_Tokenizer;
+    required String cacheDir , }) = ChunkSizing_Tokenizer;
+
+
+
+
 }
 
 /// Semantic structural classification of a text chunk.
@@ -2296,51 +1773,38 @@ sealed class ChunkSizing with _$ChunkSizing {
 enum ChunkType {
   /// Section heading or document title.
   heading,
-
   /// Party list: names, addresses, and signatories.
   partyList,
-
   /// Definition clause ("X means…", "X shall mean…").
   definitions,
-
   /// Operative clause containing legal/contractual action verbs.
   operativeClause,
-
   /// Signature block with signatures, names, and dates.
   signatureBlock,
-
   /// Schedule, annex, appendix, or exhibit section.
   schedule,
-
   /// Table-like content with aligned columns or repeated patterns.
   tableLike,
-
   /// Mathematical formula or equation.
   formula,
-
   /// Code block or preformatted content.
   codeBlock,
-
   /// Function or method definition (tree-sitter structured code chunking).
   function,
-
   /// Class, struct, interface, or trait definition (tree-sitter structured code chunking).
   class_,
-
   /// Module, namespace, or top-level file scope (tree-sitter structured code chunking).
   module,
-
   /// Embedded or referenced image content.
   image,
-
   /// Organizational chart or hierarchy diagram.
   orgChart,
-
   /// Diagram, figure, or visual illustration.
   diagram,
-
   /// Unclassified or mixed content.
   unknown,
+  ;
+
 }
 
 /// Type of text chunker to use.
@@ -2360,15 +1824,14 @@ enum ChunkType {
 enum ChunkerType {
   /// Generic whitespace- and punctuation-aware text splitter (default).
   text,
-
   /// Markdown-aware splitter that preserves heading and code-block boundaries.
   markdown,
-
   /// YAML-aware splitter that creates one chunk per top-level key.
   yaml,
-
   /// Topic-aware chunker that splits at embedding-based topic shifts.
   semantic,
+  ;
+
 }
 
 /// Chunking configuration.
@@ -2383,7 +1846,7 @@ enum ChunkerType {
 ///     ..Default::default()
 /// };
 /// ```
-class ChunkingConfig {
+class ChunkingConfig  {
   /// Maximum size per chunk (in units determined by `sizing`).
   ///
   /// When `sizing` is `Characters` (default), this is the max character count.
@@ -2391,34 +1854,27 @@ class ChunkingConfig {
   ///
   /// Default: 1000
   final PlatformInt64 maxCharacters;
-
   /// Overlap between chunks (in units determined by `sizing`).
   ///
   /// Default: 200
   final PlatformInt64 overlap;
-
   /// Whether to trim whitespace from chunk boundaries.
   ///
   /// Default: true
   final bool trim;
-
   /// Type of chunker to use (Text or Markdown).
   ///
   /// Default: Text
   final ChunkerType chunkerType;
-
   /// Optional embedding configuration for chunk embeddings.
   final EmbeddingConfig? embedding;
-
   /// Use a preset configuration (overrides individual settings if provided).
   final String? preset;
-
   /// How to measure chunk size.
   ///
   /// Default: `Characters` (Unicode character count).
   /// Enable `chunking-tiktoken` or `chunking-tokenizers` features for token-based sizing.
   final ChunkSizing sizing;
-
   /// When `true` and `chunker_type` is `Markdown`, prepend the heading hierarchy
   /// path (e.g. `"# Title > ## Section\n\n"`) to each chunk's content string.
   ///
@@ -2427,7 +1883,6 @@ class ChunkingConfig {
   ///
   /// Default: `false`
   final bool prependHeadingContext;
-
   /// Optional cosine similarity threshold for semantic topic boundary detection.
   ///
   /// Only used when `chunker_type` is `Semantic` and an `EmbeddingConfig` is
@@ -2436,7 +1891,6 @@ class ChunkingConfig {
   /// topic boundaries (more, smaller chunks); higher values detect fewer.
   /// Range: `0.0..=1.0`.
   final double? topicThreshold;
-
   /// How to handle markdown tables that exceed the chunk size limit.
   ///
   /// Only applies when `chunker_type` is `Markdown`.
@@ -2449,201 +1903,147 @@ class ChunkingConfig {
   /// Default: `Split`
   final TableChunkingMode tableChunking;
 
-  const ChunkingConfig({
-    required this.maxCharacters,
-    required this.overlap,
-    required this.trim,
-    required this.chunkerType,
-    this.embedding,
-    this.preset,
-    required this.sizing,
-    required this.prependHeadingContext,
-    this.topicThreshold,
-    required this.tableChunking,
-  });
+  const ChunkingConfig({required this.maxCharacters ,required this.overlap ,required this.trim ,required this.chunkerType ,this.embedding ,this.preset ,required this.sizing ,required this.prependHeadingContext ,this.topicThreshold ,required this.tableChunking ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  maxCharacters.hashCode ^
-  overlap.hashCode ^
-  trim.hashCode ^
-  chunkerType.hashCode ^
-  embedding.hashCode ^
-  preset.hashCode ^
-  sizing.hashCode ^
-  prependHeadingContext.hashCode ^
-  topicThreshold.hashCode ^
-  tableChunking.hashCode;
+  int get hashCode => maxCharacters.hashCode^overlap.hashCode^trim.hashCode^chunkerType.hashCode^embedding.hashCode^preset.hashCode^sizing.hashCode^prependHeadingContext.hashCode^topicThreshold.hashCode^tableChunking.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ChunkingConfig &&
-  runtimeType == other.runtimeType &&
-  maxCharacters == other.maxCharacters &&
-  overlap == other.overlap &&
-  trim == other.trim &&
-  chunkerType == other.chunkerType &&
-  embedding == other.embedding &&
-  preset == other.preset &&
-  sizing == other.sizing &&
-  prependHeadingContext == other.prependHeadingContext &&
-  topicThreshold == other.topicThreshold &&
-  tableChunking == other.tableChunking;
+  runtimeType == other.runtimeType
+  && maxCharacters == other.maxCharacters&& overlap == other.overlap&& trim == other.trim&& chunkerType == other.chunkerType&& embedding == other.embedding&& preset == other.preset&& sizing == other.sizing&& prependHeadingContext == other.prependHeadingContext&& topicThreshold == other.topicThreshold&& tableChunking == other.tableChunking;
+
 }
 
 @freezed
-sealed class ChunkingReason with _$ChunkingReason {
+sealed class ChunkingReason with _$ChunkingReason  {
   const ChunkingReason._();
 
   /// File exceeds size threshold.
-  const factory ChunkingReason.largeFile({
-    /// Actual size in bytes.
-    required PlatformInt64 sizeBytes,
-
-    /// Threshold in bytes.
-    required PlatformInt64 thresholdBytes,
-  }) = ChunkingReason_LargeFile;
-
+  const factory ChunkingReason.largeFile({ /// Actual size in bytes.
+    required PlatformInt64 sizeBytes ,/// Threshold in bytes.
+    required PlatformInt64 thresholdBytes , }) = ChunkingReason_LargeFile;
   /// Document has many pages.
-  const factory ChunkingReason.manyPages({
-    /// Actual page count.
-    required PlatformInt64 pageCount,
-
-    /// Threshold page count.
-    required PlatformInt64 threshold,
-  }) = ChunkingReason_ManyPages;
-
+  const factory ChunkingReason.manyPages({ /// Actual page count.
+    required PlatformInt64 pageCount ,/// Threshold page count.
+    required PlatformInt64 threshold , }) = ChunkingReason_ManyPages;
   /// PDF requires OCR and is large.
-  const factory ChunkingReason.ocrRequired({
-    /// Page count.
-    required PlatformInt64 pageCount,
-
-    /// Whether OCR is forced.
-    required bool forceOcr,
-  }) = ChunkingReason_OcrRequired;
-
+  const factory ChunkingReason.ocrRequired({ /// Page count.
+    required PlatformInt64 pageCount ,/// Whether OCR is forced.
+    required bool forceOcr , }) = ChunkingReason_OcrRequired;
   /// Both size and page count exceed thresholds.
-  const factory ChunkingReason.largeAndManyPages({
-    /// Actual size in bytes.
-    required PlatformInt64 sizeBytes,
+  const factory ChunkingReason.largeAndManyPages({ /// Actual size in bytes.
+    required PlatformInt64 sizeBytes ,/// Actual page count.
+    required PlatformInt64 pageCount , }) = ChunkingReason_LargeAndManyPages;
 
-    /// Actual page count.
-    required PlatformInt64 pageCount,
-  }) = ChunkingReason_LargeAndManyPages;
+
+
+
 }
 
 /// A structured citation from a citation block.
 ///
 /// Parsed from entries like:
 /// `[^srcN]: source, locator, excerpt: "text"`
-class Citation {
+class Citation  {
   /// The label of the citation (e.g., "src1" in `[^src1]: ...`).
   final String label;
-
   /// The source reference (path, URL, or identifier).
   final String source;
-
   /// Optional locator within the source (e.g., "page 3" or "section 2.1").
   final String? locator;
-
   /// Optional excerpt — quoted text from the source.
   final String? excerpt;
 
-  const Citation({
-    required this.label,
-    required this.source,
-    this.locator,
-    this.excerpt,
-  });
+  const Citation({required this.label ,required this.source ,this.locator ,this.excerpt ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  label.hashCode ^ source.hashCode ^ locator.hashCode ^ excerpt.hashCode;
+  int get hashCode => label.hashCode^source.hashCode^locator.hashCode^excerpt.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is Citation &&
-  runtimeType == other.runtimeType &&
-  label == other.label &&
-  source == other.source &&
-  locator == other.locator &&
-  excerpt == other.excerpt;
+  runtimeType == other.runtimeType
+  && label == other.label&& source == other.source&& locator == other.locator&& excerpt == other.excerpt;
+
 }
 
 /// Citation file metadata (RIS, PubMed, EndNote).
-class CitationMetadata {
+class CitationMetadata  {
   /// Total number of citation records in the file.
   final PlatformInt64 citationCount;
-
   /// Detected citation file format (e.g. `"ris"`, `"pubmed"`, `"endnote"`).
   final String? format;
-
   /// Author names collected across all citation records.
   final List<String> authors;
-
   /// Earliest and latest publication years found in the file.
   final YearRange? yearRange;
-
   /// DOI identifiers found in the citation records.
   final List<String> dois;
-
   /// Keywords collected from all citation records.
   final List<String> keywords;
 
-  const CitationMetadata({
-    required this.citationCount,
-    this.format,
-    required this.authors,
-    this.yearRange,
-    required this.dois,
-    required this.keywords,
-  });
+  const CitationMetadata({required this.citationCount ,this.format ,required this.authors ,this.yearRange ,required this.dois ,required this.keywords ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  citationCount.hashCode ^
-  format.hashCode ^
-  authors.hashCode ^
-  yearRange.hashCode ^
-  dois.hashCode ^
-  keywords.hashCode;
+  int get hashCode => citationCount.hashCode^format.hashCode^authors.hashCode^yearRange.hashCode^dois.hashCode^keywords.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is CitationMetadata &&
-  runtimeType == other.runtimeType &&
-  citationCount == other.citationCount &&
-  format == other.format &&
-  authors == other.authors &&
-  yearRange == other.yearRange &&
-  dois == other.dois &&
-  keywords == other.keywords;
+  runtimeType == other.runtimeType
+  && citationCount == other.citationCount&& format == other.format&& authors == other.authors&& yearRange == other.yearRange&& dois == other.dois&& keywords == other.keywords;
+
 }
 
 /// A single label + confidence pair.
-class ClassificationLabel {
+class ClassificationLabel  {
   /// Label name as configured in `PageClassificationConfig::labels`.
   final String label;
-
   /// Backend-reported confidence in `[0.0, 1.0]`. `None` when the backend (e.g. an LLM
   /// prompt without explicit confidence schema) did not report one.
   final double? confidence;
 
-  const ClassificationLabel({required this.label, this.confidence});
+  const ClassificationLabel({required this.label ,this.confidence ,});
+
+
+
+
 
   @override
-  int get hashCode => label.hashCode ^ confidence.hashCode;
+  int get hashCode => label.hashCode^confidence.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ClassificationLabel &&
-  runtimeType == other.runtimeType &&
-  label == other.label &&
-  confidence == other.confidence;
+  runtimeType == other.runtimeType
+  && label == other.label&& confidence == other.confidence;
+
 }
 
 /// Code block fence style in Markdown output.
@@ -2652,12 +2052,12 @@ class ClassificationLabel {
 enum CodeBlockStyle {
   /// Indented code blocks (4 spaces). `CommonMark` standard.
   indented,
-
   /// Fenced code blocks with triple backticks. Default (GFM). Supports language hints.
   backticks,
-
   /// Fenced code blocks with tildes (~~~). Supports language hints.
   tildes,
+  ;
+
 }
 
 /// A single structurally-meaningful code chunk produced by tree-sitter parsing.
@@ -2665,49 +2065,37 @@ enum CodeBlockStyle {
 /// Purpose-built payload owned by xberg — deliberately does not expose the upstream
 /// `tree_sitter_language_pack` types, so binding generators never need to resolve an
 /// external crate's types across FFI/language boundaries.
-class CodeChunkInfo {
+class CodeChunkInfo  {
   /// The raw source text of this chunk.
   final String text;
-
   /// Hierarchical path of enclosing structural items (e.g. `["MyClass", "my_method"]`).
   final List<String> contextPath;
-
   /// Tree-sitter node kinds that appear at the top level of this chunk (e.g.
   /// `"function_definition"`, `"class_definition"`).
   final List<String> nodeTypes;
-
   /// Inclusive start byte offset of this chunk in the original source.
   final PlatformInt64 byteStart;
-
   /// Exclusive end byte offset of this chunk in the original source.
   final PlatformInt64 byteEnd;
 
-  const CodeChunkInfo({
-    required this.text,
-    required this.contextPath,
-    required this.nodeTypes,
-    required this.byteStart,
-    required this.byteEnd,
-  });
+  const CodeChunkInfo({required this.text ,required this.contextPath ,required this.nodeTypes ,required this.byteStart ,required this.byteEnd ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  text.hashCode ^
-  contextPath.hashCode ^
-  nodeTypes.hashCode ^
-  byteStart.hashCode ^
-  byteEnd.hashCode;
+  int get hashCode => text.hashCode^contextPath.hashCode^nodeTypes.hashCode^byteStart.hashCode^byteEnd.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is CodeChunkInfo &&
-  runtimeType == other.runtimeType &&
-  text == other.text &&
-  contextPath == other.contextPath &&
-  nodeTypes == other.nodeTypes &&
-  byteStart == other.byteStart &&
-  byteEnd == other.byteEnd;
+  runtimeType == other.runtimeType
+  && text == other.text&& contextPath == other.contextPath&& nodeTypes == other.nodeTypes&& byteStart == other.byteStart&& byteEnd == other.byteEnd;
+
 }
 
 /// Content rendering mode for code extraction.
@@ -2717,51 +2105,46 @@ class CodeChunkInfo {
 enum CodeContentMode {
   /// Use TSLP semantic chunks as content (default).
   chunks,
-
   /// Use raw source code as content.
   raw,
-
   /// Emit function/class headings + docstrings (no code bodies).
   structure,
+  ;
+
 }
 
 /// An XML-style attribute attached to an [`Element`](CodeDataNodeKind::Element) node.
 ///
 /// Populated only for `CodeDataNodeKind::Element`; always empty for `KeyValue` and
 /// `Sequence` nodes.
-class CodeDataAttribute {
+class CodeDataAttribute  {
   /// Attribute name (e.g. `"class"`, `"href"`).
   final String name;
-
   /// Attribute value as a raw string (quotes stripped).
   final String value;
-
   /// Inclusive start byte offset of the `name="value"` attribute token.
   final PlatformInt64 byteStart;
-
   /// Exclusive end byte offset of the `name="value"` attribute token.
   final PlatformInt64 byteEnd;
 
-  const CodeDataAttribute({
-    required this.name,
-    required this.value,
-    required this.byteStart,
-    required this.byteEnd,
-  });
+  const CodeDataAttribute({required this.name ,required this.value ,required this.byteStart ,required this.byteEnd ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-      name.hashCode ^ value.hashCode ^ byteStart.hashCode ^ byteEnd.hashCode;
+  int get hashCode => name.hashCode^value.hashCode^byteStart.hashCode^byteEnd.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is CodeDataAttribute &&
-          runtimeType == other.runtimeType &&
-          name == other.name &&
-          value == other.value &&
-          byteStart == other.byteStart &&
-          byteEnd == other.byteEnd;
+  identical(this, other) ||
+  other is CodeDataAttribute &&
+  runtimeType == other.runtimeType
+  && name == other.name&& value == other.value&& byteStart == other.byteStart&& byteEnd == other.byteEnd;
+
 }
 
 /// A node in the hierarchical data tree produced by data-format extraction.
@@ -2770,63 +2153,43 @@ class CodeDataAttribute {
 /// `tree_sitter_language_pack::DataNode` but flattens its `Span` down to plain byte
 /// offsets, so binding generators never need to resolve an external crate's types
 /// across FFI/language boundaries.
-class CodeDataNode {
+class CodeDataNode  {
   /// Whether this node is a key/value pair, XML element, or sequence item.
   final CodeDataNodeKind kind;
-
   /// Key, attribute name, tag name, or positional index (`"0"`, `"1"`, …).
   /// `None` at the document root.
   final String? key;
-
   /// Leaf scalar value, if any. `None` for containers (objects, arrays, XML
   /// elements with child elements).
   final String? value;
-
   /// Attributes on element-shape nodes (XML `STag` attributes). Empty for all
   /// other kinds.
   final List<CodeDataAttribute> attributes;
-
   /// Children for nested containers and XML element bodies.
   final List<CodeDataNode> children;
-
   /// Inclusive start byte offset of this node in the original source.
   final PlatformInt64 byteStart;
-
   /// Exclusive end byte offset of this node in the original source.
   final PlatformInt64 byteEnd;
 
-  const CodeDataNode({
-    required this.kind,
-    this.key,
-    this.value,
-    required this.attributes,
-    required this.children,
-    required this.byteStart,
-    required this.byteEnd,
-  });
+  const CodeDataNode({required this.kind ,this.key ,this.value ,required this.attributes ,required this.children ,required this.byteStart ,required this.byteEnd ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-      kind.hashCode ^
-      key.hashCode ^
-      value.hashCode ^
-      attributes.hashCode ^
-      children.hashCode ^
-      byteStart.hashCode ^
-      byteEnd.hashCode;
+  int get hashCode => kind.hashCode^key.hashCode^value.hashCode^attributes.hashCode^children.hashCode^byteStart.hashCode^byteEnd.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is CodeDataNode &&
-          runtimeType == other.runtimeType &&
-          kind == other.kind &&
-          key == other.key &&
-          value == other.value &&
-          attributes == other.attributes &&
-          children == other.children &&
-          byteStart == other.byteStart &&
-          byteEnd == other.byteEnd;
+  identical(this, other) ||
+  other is CodeDataNode &&
+  runtimeType == other.runtimeType
+  && kind == other.kind&& key == other.key&& value == other.value&& attributes == other.attributes&& children == other.children&& byteStart == other.byteStart&& byteEnd == other.byteEnd;
+
 }
 
 /// Discriminates the shape of a [`CodeDataNode`].
@@ -2838,13 +2201,13 @@ enum CodeDataNodeKind {
   /// A key/value pair or mapping (JSON/TOML/properties/YAML/HCL/CUE/KDL pair, or a
   /// wrapper "object"/"mapping" container).
   keyValue,
-
   /// An XML element with a tag name in `key` and attributes in `attributes`.
   element,
-
   /// A positional sequence item (JSON array element, YAML block sequence item,
   /// CSV/PSV row or cell).
   sequence,
+  ;
+
 }
 
 /// Code-format metadata: the structural chunks produced by tree-sitter parsing.
@@ -2852,26 +2215,31 @@ enum CodeDataNodeKind {
 /// Wrapped by [`FormatMetadata::Code`]. Kept as a named struct (rather than an inline
 /// enum-variant body) so serde can tag it under internal tagging and utoipa can emit a
 /// referenceable `CodeMetadata` component in the OpenAPI schema.
-class CodeMetadata {
+class CodeMetadata  {
   /// Structural code chunks (function/class/module boundaries).
   final List<CodeChunkInfo> chunks;
-
   /// Hierarchical key/value data tree extracted from data-format source
   /// (JSON, YAML, TOML, XML, CSV, etc.), when data extraction was enabled.
   final CodeDataNode? data;
 
-  const CodeMetadata({required this.chunks, this.data});
+  const CodeMetadata({required this.chunks ,this.data ,});
+
+
+
+
 
   @override
-  int get hashCode => chunks.hashCode ^ data.hashCode;
+  int get hashCode => chunks.hashCode^data.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is CodeMetadata &&
-          runtimeType == other.runtimeType &&
-          chunks == other.chunks &&
-          data == other.data;
+  identical(this, other) ||
+  other is CodeMetadata &&
+  runtimeType == other.runtimeType
+  && chunks == other.chunks&& data == other.data;
+
 }
 
 /// Content extraction and conversion configuration.
@@ -2879,30 +2247,24 @@ class CodeMetadata {
 /// Controls how HTML is converted to the output format. Uses
 /// html-to-markdown-rs as the conversion engine for all formats
 /// (markdown, plain text, djot).
-class ContentConfig {
+class ContentConfig  {
   /// Output format: `"markdown"` (default), `"plain"`, `"djot"`.
   final String outputFormat;
-
   /// Preprocessing aggressiveness: `"minimal"`, `"standard"` (default), `"aggressive"`.
   ///
   /// - Minimal: only scripts/styles removed.
   /// - Standard: also removes nav, nav-hinted headers/footers/asides, forms.
   /// - Aggressive: removes all footers/asides unconditionally.
   final String preprocessingPreset;
-
   /// Remove navigation elements (nav, breadcrumbs, menus). Default: `true`.
   final bool removeNavigation;
-
   /// Remove form elements. Default: `true`.
   final bool removeForms;
-
   /// HTML tag names to strip (render children only, remove the tag wrapper).
   /// Default: `["noscript"]`.
   final List<String> stripTags;
-
   /// HTML tag names to preserve as raw HTML in output.
   final List<String> preserveTags;
-
   /// CSS selectors for elements to exclude entirely (element + all content).
   ///
   /// Unlike `strip_tags` (which removes the wrapper but keeps children),
@@ -2911,69 +2273,35 @@ class ContentConfig {
   ///
   /// Example: `[".cookie-banner", "#ad-container", "[role='complementary']"]`
   final List<String> excludeSelectors;
-
   /// Skip image elements in output. Default: `false`.
   final bool skipImages;
-
   /// Max DOM traversal depth. Prevents stack overflow on deeply nested HTML.
   final PlatformInt64? maxDepth;
-
   /// Enable line wrapping. Default: `false`.
   final bool wrap;
-
   /// Wrap width when `wrap` is enabled. Default: `80`.
   final PlatformInt64 wrapWidth;
-
   /// Include document structure tree in output. Default: `true`.
   final bool includeDocumentStructure;
 
-  const ContentConfig({
-    required this.outputFormat,
-    required this.preprocessingPreset,
-    required this.removeNavigation,
-    required this.removeForms,
-    required this.stripTags,
-    required this.preserveTags,
-    required this.excludeSelectors,
-    required this.skipImages,
-    this.maxDepth,
-    required this.wrap,
-    required this.wrapWidth,
-    required this.includeDocumentStructure,
-  });
+  const ContentConfig({required this.outputFormat ,required this.preprocessingPreset ,required this.removeNavigation ,required this.removeForms ,required this.stripTags ,required this.preserveTags ,required this.excludeSelectors ,required this.skipImages ,this.maxDepth ,required this.wrap ,required this.wrapWidth ,required this.includeDocumentStructure ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  outputFormat.hashCode ^
-  preprocessingPreset.hashCode ^
-  removeNavigation.hashCode ^
-  removeForms.hashCode ^
-  stripTags.hashCode ^
-  preserveTags.hashCode ^
-  excludeSelectors.hashCode ^
-  skipImages.hashCode ^
-  maxDepth.hashCode ^
-  wrap.hashCode ^
-  wrapWidth.hashCode ^
-  includeDocumentStructure.hashCode;
+  int get hashCode => outputFormat.hashCode^preprocessingPreset.hashCode^removeNavigation.hashCode^removeForms.hashCode^stripTags.hashCode^preserveTags.hashCode^excludeSelectors.hashCode^skipImages.hashCode^maxDepth.hashCode^wrap.hashCode^wrapWidth.hashCode^includeDocumentStructure.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ContentConfig &&
-  runtimeType == other.runtimeType &&
-  outputFormat == other.outputFormat &&
-  preprocessingPreset == other.preprocessingPreset &&
-  removeNavigation == other.removeNavigation &&
-  removeForms == other.removeForms &&
-  stripTags == other.stripTags &&
-  preserveTags == other.preserveTags &&
-  excludeSelectors == other.excludeSelectors &&
-  skipImages == other.skipImages &&
-  maxDepth == other.maxDepth &&
-  wrap == other.wrap &&
-  wrapWidth == other.wrapWidth &&
-  includeDocumentStructure == other.includeDocumentStructure;
+  runtimeType == other.runtimeType
+  && outputFormat == other.outputFormat&& preprocessingPreset == other.preprocessingPreset&& removeNavigation == other.removeNavigation&& removeForms == other.removeForms&& stripTags == other.stripTags&& preserveTags == other.preserveTags&& excludeSelectors == other.excludeSelectors&& skipImages == other.skipImages&& maxDepth == other.maxDepth&& wrap == other.wrap&& wrapWidth == other.wrapWidth&& includeDocumentStructure == other.includeDocumentStructure;
+
 }
 
 /// Cross-extractor content filtering configuration.
@@ -2985,7 +2313,7 @@ class ContentConfig {
 ///
 /// When `None` on `ExtractionConfig`, each extractor uses its current
 /// default behavior unchanged.
-class ContentFilterConfig {
+class ContentFilterConfig  {
   /// Include running headers in extraction output.
   ///
   /// - PDF: Disables top-margin furniture stripping and prevents the layout
@@ -2996,7 +2324,6 @@ class ContentFilterConfig {
   ///
   /// Default: `false` (headers are stripped or excluded).
   final bool includeHeaders;
-
   /// Include running footers in extraction output.
   ///
   /// - PDF: Disables bottom-margin furniture stripping and prevents the layout
@@ -3007,7 +2334,6 @@ class ContentFilterConfig {
   ///
   /// Default: `false` (footers are stripped or excluded).
   final bool includeFooters;
-
   /// Enable the heuristic cross-page repeating text detector.
   ///
   /// When `true` (default), text that repeats verbatim across a supermajority
@@ -3023,7 +2349,6 @@ class ContentFilterConfig {
   ///
   /// Default: `true`.
   final bool stripRepeatingText;
-
   /// Include watermark text in extraction output.
   ///
   /// - PDF: Keeps watermark artifacts and arXiv identifiers.
@@ -3032,29 +2357,24 @@ class ContentFilterConfig {
   /// Default: `false` (watermarks are stripped).
   final bool includeWatermarks;
 
-  const ContentFilterConfig({
-    required this.includeHeaders,
-    required this.includeFooters,
-    required this.stripRepeatingText,
-    required this.includeWatermarks,
-  });
+  const ContentFilterConfig({required this.includeHeaders ,required this.includeFooters ,required this.stripRepeatingText ,required this.includeWatermarks ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  includeHeaders.hashCode ^
-  includeFooters.hashCode ^
-  stripRepeatingText.hashCode ^
-  includeWatermarks.hashCode;
+  int get hashCode => includeHeaders.hashCode^includeFooters.hashCode^stripRepeatingText.hashCode^includeWatermarks.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ContentFilterConfig &&
-  runtimeType == other.runtimeType &&
-  includeHeaders == other.includeHeaders &&
-  includeFooters == other.includeFooters &&
-  stripRepeatingText == other.stripRepeatingText &&
-  includeWatermarks == other.includeWatermarks;
+  runtimeType == other.runtimeType
+  && includeHeaders == other.includeHeaders&& includeFooters == other.includeFooters&& stripRepeatingText == other.stripRepeatingText&& includeWatermarks == other.includeWatermarks;
+
 }
 
 /// Content layer classification for document nodes.
@@ -3063,37 +2383,41 @@ class ContentFilterConfig {
 enum ContentLayer {
   /// Main document body content.
   body,
-
   /// Page/section header (running header).
   header,
-
   /// Page/section footer (running footer).
   footer,
-
   /// Footnote content.
   footnote,
+  ;
+
 }
 
 /// JATS contributor with role.
-class ContributorRole {
+class ContributorRole  {
   /// Contributor display name.
   final String name;
-
   /// Contributor role (e.g. `"author"`, `"editor"`).
   final String? role;
 
-  const ContributorRole({required this.name, this.role});
+  const ContributorRole({required this.name ,this.role ,});
+
+
+
+
 
   @override
-  int get hashCode => name.hashCode ^ role.hashCode;
+  int get hashCode => name.hashCode^role.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ContributorRole &&
-  runtimeType == other.runtimeType &&
-  name == other.name &&
-  role == other.role;
+  runtimeType == other.runtimeType
+  && name == other.name&& role == other.role;
+
 }
 
 /// Main conversion options for HTML to Markdown conversion.
@@ -3111,46 +2435,33 @@ class ContributorRole {
 ///     .wrap_width(100)
 ///     .build();
 /// ```
-class ConversionOptions {
+class ConversionOptions  {
   /// Heading style to use in Markdown output (ATX `#` or Setext underline).
   final HeadingStyle headingStyle;
-
   /// How to indent nested list items (spaces or tab).
   final ListIndentType listIndentType;
-
   /// Number of spaces (or tabs) to use for each level of list indentation.
   final PlatformInt64 listIndentWidth;
-
   /// Bullet character(s) to use for unordered list items (e.g. `"-"`, `"*"`).
   final String bullets;
-
   /// Character used for bold/italic emphasis markers (`*` or `_`).
   final String strongEmSymbol;
-
   /// Escape `*` characters in plain text to avoid unintended bold/italic.
   final bool escapeAsterisks;
-
   /// Escape `_` characters in plain text to avoid unintended bold/italic.
   final bool escapeUnderscores;
-
   /// Escape miscellaneous Markdown metacharacters (`[]()#` etc.) in plain text.
   final bool escapeMisc;
-
   /// Escape ASCII characters that have special meaning in certain Markdown dialects.
   final bool escapeAscii;
-
   /// Default language annotation for fenced code blocks that have no language hint.
   final String codeLanguage;
-
   /// Automatically convert bare URLs into Markdown autolinks.
   final bool autolinks;
-
   /// Emit a default title when no `<title>` tag is present.
   final bool defaultTitle;
-
   /// Render `<br>` elements inside table cells as literal line breaks.
   final bool brInTables;
-
   /// Emit tables without column padding (compact GFM format).
   ///
   /// When `true`, column widths are not computed and cells are emitted with
@@ -3159,17 +2470,14 @@ class ConversionOptions {
   ///
   /// Default `false` (aligned padding preserved).
   final bool compactTables;
-
   /// Style used for `<mark>` / highlighted text (e.g. `==text==`).
   final HighlightStyle highlightStyle;
-
   /// Populate `result.metadata` with `<head>` / `<meta>` extraction
   /// (title, description, Open Graph, Twitter Card, JSON-LD, …).
   ///
   /// Default `true`. Disabling skips the metadata pass only — table
   /// extraction into `result.tables` runs unconditionally.
   final bool extractMetadata;
-
   /// Controls how whitespace sequences are normalised in the converted output.
   ///
   /// - [`WhitespaceMode::Normalized`] (default) — collapses consecutive whitespace characters
@@ -3180,38 +2488,28 @@ class ConversionOptions {
   /// Choose `Strict` only when the source HTML uses deliberate whitespace (e.g. pre-formatted
   /// content outside `<pre>` tags). For most documents `Normalized` produces cleaner output.
   final WhitespaceMode whitespaceMode;
-
   /// Strip all newlines from the output, producing a single-line result.
   final bool stripNewlines;
-
   /// Wrap long lines at [`wrap_width`](Self::wrap_width) characters.
   final bool wrap;
-
   /// Maximum output line width in characters when [`wrap`](Self::wrap) is `true` (default `80`).
   ///
   /// Lines are broken at word boundaries so that no line exceeds this length. A value of `0`
   /// is treated as "no limit" — equivalent to leaving [`wrap`](Self::wrap) disabled. Has no
   /// effect when `wrap` is `false`.
   final PlatformInt64 wrapWidth;
-
   /// Treat the entire document as inline content (no block-level wrappers).
   final bool convertAsInline;
-
   /// Markdown notation for subscript text (e.g. `"~"`).
   final String subSymbol;
-
   /// Markdown notation for superscript text (e.g. `"^"`).
   final String supSymbol;
-
   /// How to encode hard line breaks (`<br>`) in Markdown.
   final NewlineStyle newlineStyle;
-
   /// Style used for fenced code blocks (backticks or tilde).
   final CodeBlockStyle codeBlockStyle;
-
   /// HTML tag names whose `<img>` children are kept inline instead of block.
   final List<String> keepInlineImagesIn;
-
   /// Options for the HTML pre-processing pass applied before conversion begins.
   ///
   /// Pre-processing runs before the HTML is handed to the converter and can perform operations
@@ -3222,22 +2520,16 @@ class ConversionOptions {
   /// passes. Set individual fields on [`PreprocessingOptions`] (or construct via
   /// [`ConversionOptions::builder`]) to opt in or out of specific passes.
   final PreprocessingOptions preprocessing;
-
   /// Expected character encoding of the input HTML (default `"utf-8"`).
   final String encoding;
-
   /// Emit debug information during conversion.
   final bool debug;
-
   /// HTML tag names whose content is stripped from the output entirely.
   final List<String> stripTags;
-
   /// HTML tag names that are preserved verbatim in the output.
   final List<String> preserveTags;
-
   /// Skip conversion of `<img>` elements (omit images from output).
   final bool skipImages;
-
   /// URL encoding strategy for link and image destinations.
   ///
   /// Controls how special characters in URL destinations are escaped:
@@ -3247,26 +2539,20 @@ class ConversionOptions {
   ///   unreserved character or `/`, producing a destination that all Markdown parsers handle
   ///   correctly even when the URL contains `<`, `>`, spaces, or parentheses.
   final UrlEscapeStyle urlEscapeStyle;
-
   /// Link rendering style (inline or reference).
   final LinkStyle linkStyle;
-
   /// Maximum decoded image size in bytes (default 5MB).
   final PlatformInt64 maxImageSize;
-
   /// Capture SVG elements as images.
   final bool captureSvg;
-
   /// Infer image dimensions from data.
   final bool inferDimensions;
-
   /// Maximum DOM traversal depth.
   ///
   /// `None` uses the library's internal native-stack safety limit. Explicit
   /// values above that safety limit are clamped to prevent process-aborting
   /// stack overflows on pathologically deep DOM trees.
   final PlatformInt64? maxDepth;
-
   /// CSS selectors for elements to exclude entirely (element + all content).
   ///
   /// Unlike `strip_tags` (which removes the tag wrapper but keeps children),
@@ -3279,258 +2565,92 @@ class ConversionOptions {
   /// Example: `vec![".cookie-banner".into(), "#ad-container".into(), "[role='complementary']".into()]`
   final List<String> excludeSelectors;
 
-  const ConversionOptions({
-    required this.headingStyle,
-    required this.listIndentType,
-    required this.listIndentWidth,
-    required this.bullets,
-    required this.strongEmSymbol,
-    required this.escapeAsterisks,
-    required this.escapeUnderscores,
-    required this.escapeMisc,
-    required this.escapeAscii,
-    required this.codeLanguage,
-    required this.autolinks,
-    required this.defaultTitle,
-    required this.brInTables,
-    required this.compactTables,
-    required this.highlightStyle,
-    required this.extractMetadata,
-    required this.whitespaceMode,
-    required this.stripNewlines,
-    required this.wrap,
-    required this.wrapWidth,
-    required this.convertAsInline,
-    required this.subSymbol,
-    required this.supSymbol,
-    required this.newlineStyle,
-    required this.codeBlockStyle,
-    required this.keepInlineImagesIn,
-    required this.preprocessing,
-    required this.encoding,
-    required this.debug,
-    required this.stripTags,
-    required this.preserveTags,
-    required this.skipImages,
-    required this.urlEscapeStyle,
-    required this.linkStyle,
-    required this.maxImageSize,
-    required this.captureSvg,
-    required this.inferDimensions,
-    this.maxDepth,
-    required this.excludeSelectors,
-  });
+  const ConversionOptions({required this.headingStyle ,required this.listIndentType ,required this.listIndentWidth ,required this.bullets ,required this.strongEmSymbol ,required this.escapeAsterisks ,required this.escapeUnderscores ,required this.escapeMisc ,required this.escapeAscii ,required this.codeLanguage ,required this.autolinks ,required this.defaultTitle ,required this.brInTables ,required this.compactTables ,required this.highlightStyle ,required this.extractMetadata ,required this.whitespaceMode ,required this.stripNewlines ,required this.wrap ,required this.wrapWidth ,required this.convertAsInline ,required this.subSymbol ,required this.supSymbol ,required this.newlineStyle ,required this.codeBlockStyle ,required this.keepInlineImagesIn ,required this.preprocessing ,required this.encoding ,required this.debug ,required this.stripTags ,required this.preserveTags ,required this.skipImages ,required this.urlEscapeStyle ,required this.linkStyle ,required this.maxImageSize ,required this.captureSvg ,required this.inferDimensions ,this.maxDepth ,required this.excludeSelectors ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-      headingStyle.hashCode ^
-      listIndentType.hashCode ^
-      listIndentWidth.hashCode ^
-      bullets.hashCode ^
-      strongEmSymbol.hashCode ^
-      escapeAsterisks.hashCode ^
-      escapeUnderscores.hashCode ^
-      escapeMisc.hashCode ^
-      escapeAscii.hashCode ^
-      codeLanguage.hashCode ^
-      autolinks.hashCode ^
-      defaultTitle.hashCode ^
-      brInTables.hashCode ^
-      compactTables.hashCode ^
-      highlightStyle.hashCode ^
-      extractMetadata.hashCode ^
-      whitespaceMode.hashCode ^
-      stripNewlines.hashCode ^
-      wrap.hashCode ^
-      wrapWidth.hashCode ^
-      convertAsInline.hashCode ^
-      subSymbol.hashCode ^
-      supSymbol.hashCode ^
-      newlineStyle.hashCode ^
-      codeBlockStyle.hashCode ^
-      keepInlineImagesIn.hashCode ^
-      preprocessing.hashCode ^
-      encoding.hashCode ^
-      debug.hashCode ^
-      stripTags.hashCode ^
-      preserveTags.hashCode ^
-      skipImages.hashCode ^
-      urlEscapeStyle.hashCode ^
-      linkStyle.hashCode ^
-      maxImageSize.hashCode ^
-      captureSvg.hashCode ^
-      inferDimensions.hashCode ^
-      maxDepth.hashCode ^
-      excludeSelectors.hashCode;
+  int get hashCode => headingStyle.hashCode^listIndentType.hashCode^listIndentWidth.hashCode^bullets.hashCode^strongEmSymbol.hashCode^escapeAsterisks.hashCode^escapeUnderscores.hashCode^escapeMisc.hashCode^escapeAscii.hashCode^codeLanguage.hashCode^autolinks.hashCode^defaultTitle.hashCode^brInTables.hashCode^compactTables.hashCode^highlightStyle.hashCode^extractMetadata.hashCode^whitespaceMode.hashCode^stripNewlines.hashCode^wrap.hashCode^wrapWidth.hashCode^convertAsInline.hashCode^subSymbol.hashCode^supSymbol.hashCode^newlineStyle.hashCode^codeBlockStyle.hashCode^keepInlineImagesIn.hashCode^preprocessing.hashCode^encoding.hashCode^debug.hashCode^stripTags.hashCode^preserveTags.hashCode^skipImages.hashCode^urlEscapeStyle.hashCode^linkStyle.hashCode^maxImageSize.hashCode^captureSvg.hashCode^inferDimensions.hashCode^maxDepth.hashCode^excludeSelectors.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is ConversionOptions &&
-          runtimeType == other.runtimeType &&
-          headingStyle == other.headingStyle &&
-          listIndentType == other.listIndentType &&
-          listIndentWidth == other.listIndentWidth &&
-          bullets == other.bullets &&
-          strongEmSymbol == other.strongEmSymbol &&
-          escapeAsterisks == other.escapeAsterisks &&
-          escapeUnderscores == other.escapeUnderscores &&
-          escapeMisc == other.escapeMisc &&
-          escapeAscii == other.escapeAscii &&
-          codeLanguage == other.codeLanguage &&
-          autolinks == other.autolinks &&
-          defaultTitle == other.defaultTitle &&
-          brInTables == other.brInTables &&
-          compactTables == other.compactTables &&
-          highlightStyle == other.highlightStyle &&
-          extractMetadata == other.extractMetadata &&
-          whitespaceMode == other.whitespaceMode &&
-          stripNewlines == other.stripNewlines &&
-          wrap == other.wrap &&
-          wrapWidth == other.wrapWidth &&
-          convertAsInline == other.convertAsInline &&
-          subSymbol == other.subSymbol &&
-          supSymbol == other.supSymbol &&
-          newlineStyle == other.newlineStyle &&
-          codeBlockStyle == other.codeBlockStyle &&
-          keepInlineImagesIn == other.keepInlineImagesIn &&
-          preprocessing == other.preprocessing &&
-          encoding == other.encoding &&
-          debug == other.debug &&
-          stripTags == other.stripTags &&
-          preserveTags == other.preserveTags &&
-          skipImages == other.skipImages &&
-          urlEscapeStyle == other.urlEscapeStyle &&
-          linkStyle == other.linkStyle &&
-          maxImageSize == other.maxImageSize &&
-          captureSvg == other.captureSvg &&
-          inferDimensions == other.inferDimensions &&
-          maxDepth == other.maxDepth &&
-          excludeSelectors == other.excludeSelectors;
+  identical(this, other) ||
+  other is ConversionOptions &&
+  runtimeType == other.runtimeType
+  && headingStyle == other.headingStyle&& listIndentType == other.listIndentType&& listIndentWidth == other.listIndentWidth&& bullets == other.bullets&& strongEmSymbol == other.strongEmSymbol&& escapeAsterisks == other.escapeAsterisks&& escapeUnderscores == other.escapeUnderscores&& escapeMisc == other.escapeMisc&& escapeAscii == other.escapeAscii&& codeLanguage == other.codeLanguage&& autolinks == other.autolinks&& defaultTitle == other.defaultTitle&& brInTables == other.brInTables&& compactTables == other.compactTables&& highlightStyle == other.highlightStyle&& extractMetadata == other.extractMetadata&& whitespaceMode == other.whitespaceMode&& stripNewlines == other.stripNewlines&& wrap == other.wrap&& wrapWidth == other.wrapWidth&& convertAsInline == other.convertAsInline&& subSymbol == other.subSymbol&& supSymbol == other.supSymbol&& newlineStyle == other.newlineStyle&& codeBlockStyle == other.codeBlockStyle&& keepInlineImagesIn == other.keepInlineImagesIn&& preprocessing == other.preprocessing&& encoding == other.encoding&& debug == other.debug&& stripTags == other.stripTags&& preserveTags == other.preserveTags&& skipImages == other.skipImages&& urlEscapeStyle == other.urlEscapeStyle&& linkStyle == other.linkStyle&& maxImageSize == other.maxImageSize&& captureSvg == other.captureSvg&& inferDimensions == other.inferDimensions&& maxDepth == other.maxDepth&& excludeSelectors == other.excludeSelectors;
+
 }
 
 /// Dublin Core metadata from docProps/core.xml
 ///
 /// Contains standard metadata fields defined by the Dublin Core standard
 /// and Office-specific extensions.
-class CoreProperties {
+class CoreProperties  {
   /// Document title
   final String? title;
-
   /// Document subject/topic
   final String? subject;
-
   /// Document creator/author
   final String? creator;
-
   /// Keywords or tags
   final String? keywords;
-
   /// Document description/abstract
   final String? description;
-
   /// User who last modified the document
   final String? lastModifiedBy;
-
   /// Revision number
   final String? revision;
-
   /// Creation timestamp (ISO 8601)
   final String? created;
-
   /// Last modification timestamp (ISO 8601)
   final String? modified;
-
   /// Document category
   final String? category;
-
   /// Content status (Draft, Final, etc.)
   final String? contentStatus;
-
   /// Document language
   final String? language;
-
   /// Unique identifier
   final String? identifier;
-
   /// Document version
   final String? version;
-
   /// Last print timestamp (ISO 8601)
   final String? lastPrinted;
 
-  const CoreProperties({
-    this.title,
-    this.subject,
-    this.creator,
-    this.keywords,
-    this.description,
-    this.lastModifiedBy,
-    this.revision,
-    this.created,
-    this.modified,
-    this.category,
-    this.contentStatus,
-    this.language,
-    this.identifier,
-    this.version,
-    this.lastPrinted,
-  });
+  const CoreProperties({this.title ,this.subject ,this.creator ,this.keywords ,this.description ,this.lastModifiedBy ,this.revision ,this.created ,this.modified ,this.category ,this.contentStatus ,this.language ,this.identifier ,this.version ,this.lastPrinted ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  title.hashCode ^
-  subject.hashCode ^
-  creator.hashCode ^
-  keywords.hashCode ^
-  description.hashCode ^
-  lastModifiedBy.hashCode ^
-  revision.hashCode ^
-  created.hashCode ^
-  modified.hashCode ^
-  category.hashCode ^
-  contentStatus.hashCode ^
-  language.hashCode ^
-  identifier.hashCode ^
-  version.hashCode ^
-  lastPrinted.hashCode;
+  int get hashCode => title.hashCode^subject.hashCode^creator.hashCode^keywords.hashCode^description.hashCode^lastModifiedBy.hashCode^revision.hashCode^created.hashCode^modified.hashCode^category.hashCode^contentStatus.hashCode^language.hashCode^identifier.hashCode^version.hashCode^lastPrinted.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is CoreProperties &&
-  runtimeType == other.runtimeType &&
-  title == other.title &&
-  subject == other.subject &&
-  creator == other.creator &&
-  keywords == other.keywords &&
-  description == other.description &&
-  lastModifiedBy == other.lastModifiedBy &&
-  revision == other.revision &&
-  created == other.created &&
-  modified == other.modified &&
-  category == other.category &&
-  contentStatus == other.contentStatus &&
-  language == other.language &&
-  identifier == other.identifier &&
-  version == other.version &&
-  lastPrinted == other.lastPrinted;
+  runtimeType == other.runtimeType
+  && title == other.title&& subject == other.subject&& creator == other.creator&& keywords == other.keywords&& description == other.description&& lastModifiedBy == other.lastModifiedBy&& revision == other.revision&& created == other.created&& modified == other.modified&& category == other.category&& contentStatus == other.contentStatus&& language == other.language&& identifier == other.identifier&& version == other.version&& lastPrinted == other.lastPrinted;
+
 }
 
 /// Configuration for crawl, scrape, and map operations.
-class CrawlConfig {
+class CrawlConfig  {
   /// Maximum crawl depth (number of link hops from the start URL).
   final PlatformInt64? maxDepth;
-
   /// Maximum number of pages to crawl.
   final PlatformInt64? maxPages;
-
   /// Maximum number of concurrent requests.
   final PlatformInt64? maxConcurrent;
-
   /// Whether to respect robots.txt directives.
   final bool respectRobotsTxt;
-
   /// When true, HTTP-level error responses (404 NotFound, 403 Forbidden, WAF blocks)
   /// are surfaced as `ScrapeResult` records with the matching `status_code` rather
   /// than raised as `CrawlError`. Default `false` preserves the historical
@@ -3539,112 +2659,78 @@ class CrawlConfig {
   /// the user opted into redirect-following, so receiving a 404 there is part of
   /// the normal flow rather than an unexpected error.
   final bool softHttpErrors;
-
   /// Custom user-agent string.
   final String? userAgent;
-
   /// Whether to restrict crawling to the same domain.
   final bool stayOnDomain;
-
   /// Whether to allow subdomains when `stay_on_domain` is true.
   final bool allowSubdomains;
-
   /// Regex patterns for paths to include during crawling.
   final List<String> includePaths;
-
   /// Regex patterns for paths to exclude during crawling.
   final List<String> excludePaths;
-
   /// Custom HTTP headers to send with each request.
   final Map<String, String> customHeaders;
-
   /// Timeout for individual HTTP requests (in milliseconds when serialized).
   final PlatformInt64 requestTimeout;
-
   /// Per-domain rate limit in milliseconds. When set, enforces a minimum delay
   /// between requests to the same domain. Defaults to 200ms when `None`.
   final PlatformInt64? rateLimitMs;
-
   /// Maximum number of redirects to follow.
   final PlatformInt64 maxRedirects;
-
   /// Number of retry attempts for failed requests.
   final PlatformInt64 retryCount;
-
   /// HTTP status codes that should trigger a retry.
   final Int64List retryCodes;
-
   /// Whether to enable cookie handling.
   final bool cookiesEnabled;
-
   /// Authentication configuration.
   final AuthConfig? auth;
-
   /// Maximum response body size in bytes.
   final PlatformInt64? maxBodySize;
-
   /// CSS selectors for tags to remove from HTML before processing.
   final List<String> removeTags;
-
   /// Content extraction and conversion configuration.
   final ContentConfig content;
-
   /// Maximum number of URLs to return from a map operation.
   final PlatformInt64? mapLimit;
-
   /// Search filter for map results (case-insensitive substring match on URLs).
   final String? mapSearch;
-
   /// Whether to download assets (CSS, JS, images, etc.) from the page.
   final bool downloadAssets;
-
   /// Filter for asset categories to download.
   final List<AssetCategory> assetTypes;
-
   /// Maximum size in bytes for individual asset downloads.
   final PlatformInt64? maxAssetSize;
-
   /// Browser configuration.
   final BrowserConfig browser;
-
   /// Proxy configuration for HTTP requests.
   final ProxyConfig? proxy;
-
   /// List of user-agent strings for rotation. If non-empty, overrides `user_agent`.
   final List<String> userAgents;
-
   /// Whether to capture a screenshot when using the browser.
   final bool captureScreenshot;
-
   /// Re-enqueue discovered `LinkType::Document` URLs into the crawl frontier so
   /// the crawl follows links *from* document pages (PDFs, etc.) as it would
   /// from HTML pages. Default: `false` (documents terminate at materialisation).
   final bool followDocumentUrls;
-
   /// Maximum document-depth (from the seed URL through document links only)
   /// when `follow_document_urls` is true. `None` means inherit `max_depth`.
   /// Independent of `max_depth`: a document URL is enqueued only if BOTH the
   /// outer `max_depth` and (if set) `document_url_depth` permit it.
   final PlatformInt64? documentUrlDepth;
-
   /// Whether to download non-HTML documents (PDF, DOCX, images, code, etc.) instead of skipping them.
   final bool downloadDocuments;
-
   /// Maximum size in bytes for document downloads. Defaults to 50 MB.
   final PlatformInt64? documentMaxSize;
-
   /// Allowlist of MIME types to download. If empty, uses built-in defaults.
   final List<String> documentMimeTypes;
-
   /// Path to write WARC output. If `None`, WARC output is disabled.
   final String? warcOutput;
-
   /// Named browser profile for persistent sessions (cookies, localStorage).
   final String? browserProfile;
-
   /// Whether to save changes back to the browser profile on exit.
   final bool saveBrowserProfile;
-
   /// SSRF policy for outbound network requests. Default: deny private networks,
   /// allow http/https only, max 5 redirects.
   ///
@@ -3653,380 +2739,250 @@ class CrawlConfig {
   /// added in a follow-up when `HostMatcher`'s tagged-enum FFI form is decided.
   final SsrfPolicy ssrf;
 
-  const CrawlConfig({
-    this.maxDepth,
-    this.maxPages,
-    this.maxConcurrent,
-    required this.respectRobotsTxt,
-    required this.softHttpErrors,
-    this.userAgent,
-    required this.stayOnDomain,
-    required this.allowSubdomains,
-    required this.includePaths,
-    required this.excludePaths,
-    required this.customHeaders,
-    required this.requestTimeout,
-    this.rateLimitMs,
-    required this.maxRedirects,
-    required this.retryCount,
-    required this.retryCodes,
-    required this.cookiesEnabled,
-    this.auth,
-    this.maxBodySize,
-    required this.removeTags,
-    required this.content,
-    this.mapLimit,
-    this.mapSearch,
-    required this.downloadAssets,
-    required this.assetTypes,
-    this.maxAssetSize,
-    required this.browser,
-    this.proxy,
-    required this.userAgents,
-    required this.captureScreenshot,
-    required this.followDocumentUrls,
-    this.documentUrlDepth,
-    required this.downloadDocuments,
-    this.documentMaxSize,
-    required this.documentMimeTypes,
-    this.warcOutput,
-    this.browserProfile,
-    required this.saveBrowserProfile,
-    required this.ssrf,
-  });
+  const CrawlConfig({this.maxDepth ,this.maxPages ,this.maxConcurrent ,required this.respectRobotsTxt ,required this.softHttpErrors ,this.userAgent ,required this.stayOnDomain ,required this.allowSubdomains ,required this.includePaths ,required this.excludePaths ,required this.customHeaders ,required this.requestTimeout ,this.rateLimitMs ,required this.maxRedirects ,required this.retryCount ,required this.retryCodes ,required this.cookiesEnabled ,this.auth ,this.maxBodySize ,required this.removeTags ,required this.content ,this.mapLimit ,this.mapSearch ,required this.downloadAssets ,required this.assetTypes ,this.maxAssetSize ,required this.browser ,this.proxy ,required this.userAgents ,required this.captureScreenshot ,required this.followDocumentUrls ,this.documentUrlDepth ,required this.downloadDocuments ,this.documentMaxSize ,required this.documentMimeTypes ,this.warcOutput ,this.browserProfile ,required this.saveBrowserProfile ,required this.ssrf ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  maxDepth.hashCode ^
-  maxPages.hashCode ^
-  maxConcurrent.hashCode ^
-  respectRobotsTxt.hashCode ^
-  softHttpErrors.hashCode ^
-  userAgent.hashCode ^
-  stayOnDomain.hashCode ^
-  allowSubdomains.hashCode ^
-  includePaths.hashCode ^
-  excludePaths.hashCode ^
-  customHeaders.hashCode ^
-  requestTimeout.hashCode ^
-  rateLimitMs.hashCode ^
-  maxRedirects.hashCode ^
-  retryCount.hashCode ^
-  retryCodes.hashCode ^
-  cookiesEnabled.hashCode ^
-  auth.hashCode ^
-  maxBodySize.hashCode ^
-  removeTags.hashCode ^
-  content.hashCode ^
-  mapLimit.hashCode ^
-  mapSearch.hashCode ^
-  downloadAssets.hashCode ^
-  assetTypes.hashCode ^
-  maxAssetSize.hashCode ^
-  browser.hashCode ^
-  proxy.hashCode ^
-  userAgents.hashCode ^
-  captureScreenshot.hashCode ^
-  followDocumentUrls.hashCode ^
-  documentUrlDepth.hashCode ^
-  downloadDocuments.hashCode ^
-  documentMaxSize.hashCode ^
-  documentMimeTypes.hashCode ^
-  warcOutput.hashCode ^
-  browserProfile.hashCode ^
-  saveBrowserProfile.hashCode ^
-  ssrf.hashCode;
+  int get hashCode => maxDepth.hashCode^maxPages.hashCode^maxConcurrent.hashCode^respectRobotsTxt.hashCode^softHttpErrors.hashCode^userAgent.hashCode^stayOnDomain.hashCode^allowSubdomains.hashCode^includePaths.hashCode^excludePaths.hashCode^customHeaders.hashCode^requestTimeout.hashCode^rateLimitMs.hashCode^maxRedirects.hashCode^retryCount.hashCode^retryCodes.hashCode^cookiesEnabled.hashCode^auth.hashCode^maxBodySize.hashCode^removeTags.hashCode^content.hashCode^mapLimit.hashCode^mapSearch.hashCode^downloadAssets.hashCode^assetTypes.hashCode^maxAssetSize.hashCode^browser.hashCode^proxy.hashCode^userAgents.hashCode^captureScreenshot.hashCode^followDocumentUrls.hashCode^documentUrlDepth.hashCode^downloadDocuments.hashCode^documentMaxSize.hashCode^documentMimeTypes.hashCode^warcOutput.hashCode^browserProfile.hashCode^saveBrowserProfile.hashCode^ssrf.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is CrawlConfig &&
-  runtimeType == other.runtimeType &&
-  maxDepth == other.maxDepth &&
-  maxPages == other.maxPages &&
-  maxConcurrent == other.maxConcurrent &&
-  respectRobotsTxt == other.respectRobotsTxt &&
-  softHttpErrors == other.softHttpErrors &&
-  userAgent == other.userAgent &&
-  stayOnDomain == other.stayOnDomain &&
-  allowSubdomains == other.allowSubdomains &&
-  includePaths == other.includePaths &&
-  excludePaths == other.excludePaths &&
-  customHeaders == other.customHeaders &&
-  requestTimeout == other.requestTimeout &&
-  rateLimitMs == other.rateLimitMs &&
-  maxRedirects == other.maxRedirects &&
-  retryCount == other.retryCount &&
-  retryCodes == other.retryCodes &&
-  cookiesEnabled == other.cookiesEnabled &&
-  auth == other.auth &&
-  maxBodySize == other.maxBodySize &&
-  removeTags == other.removeTags &&
-  content == other.content &&
-  mapLimit == other.mapLimit &&
-  mapSearch == other.mapSearch &&
-  downloadAssets == other.downloadAssets &&
-  assetTypes == other.assetTypes &&
-  maxAssetSize == other.maxAssetSize &&
-  browser == other.browser &&
-  proxy == other.proxy &&
-  userAgents == other.userAgents &&
-  captureScreenshot == other.captureScreenshot &&
-  followDocumentUrls == other.followDocumentUrls &&
-  documentUrlDepth == other.documentUrlDepth &&
-  downloadDocuments == other.downloadDocuments &&
-  documentMaxSize == other.documentMaxSize &&
-  documentMimeTypes == other.documentMimeTypes &&
-  warcOutput == other.warcOutput &&
-  browserProfile == other.browserProfile &&
-  saveBrowserProfile == other.saveBrowserProfile &&
-  ssrf == other.ssrf;
+  runtimeType == other.runtimeType
+  && maxDepth == other.maxDepth&& maxPages == other.maxPages&& maxConcurrent == other.maxConcurrent&& respectRobotsTxt == other.respectRobotsTxt&& softHttpErrors == other.softHttpErrors&& userAgent == other.userAgent&& stayOnDomain == other.stayOnDomain&& allowSubdomains == other.allowSubdomains&& includePaths == other.includePaths&& excludePaths == other.excludePaths&& customHeaders == other.customHeaders&& requestTimeout == other.requestTimeout&& rateLimitMs == other.rateLimitMs&& maxRedirects == other.maxRedirects&& retryCount == other.retryCount&& retryCodes == other.retryCodes&& cookiesEnabled == other.cookiesEnabled&& auth == other.auth&& maxBodySize == other.maxBodySize&& removeTags == other.removeTags&& content == other.content&& mapLimit == other.mapLimit&& mapSearch == other.mapSearch&& downloadAssets == other.downloadAssets&& assetTypes == other.assetTypes&& maxAssetSize == other.maxAssetSize&& browser == other.browser&& proxy == other.proxy&& userAgents == other.userAgents&& captureScreenshot == other.captureScreenshot&& followDocumentUrls == other.followDocumentUrls&& documentUrlDepth == other.documentUrlDepth&& downloadDocuments == other.downloadDocuments&& documentMaxSize == other.documentMaxSize&& documentMimeTypes == other.documentMimeTypes&& warcOutput == other.warcOutput&& browserProfile == other.browserProfile&& saveBrowserProfile == other.saveBrowserProfile&& ssrf == other.ssrf;
+
 }
 
 /// CSV/TSV file metadata.
-class CsvMetadata {
+class CsvMetadata  {
   /// Total number of data rows (excluding the header row if present).
   final PlatformInt64 rowCount;
-
   /// Number of columns detected.
   final PlatformInt64 columnCount;
-
   /// Field delimiter character (e.g. `","` or `"\t"`).
   final String? delimiter;
-
   /// Whether the first row was treated as a header.
   final bool hasHeader;
-
   /// Inferred data type for each column (e.g. `"string"`, `"integer"`, `"float"`).
   final List<String>? columnTypes;
 
-  const CsvMetadata({
-    required this.rowCount,
-    required this.columnCount,
-    this.delimiter,
-    required this.hasHeader,
-    this.columnTypes,
-  });
+  const CsvMetadata({required this.rowCount ,required this.columnCount ,this.delimiter ,required this.hasHeader ,this.columnTypes ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  rowCount.hashCode ^
-  columnCount.hashCode ^
-  delimiter.hashCode ^
-  hasHeader.hashCode ^
-  columnTypes.hashCode;
+  int get hashCode => rowCount.hashCode^columnCount.hashCode^delimiter.hashCode^hasHeader.hashCode^columnTypes.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is CsvMetadata &&
-  runtimeType == other.runtimeType &&
-  rowCount == other.rowCount &&
-  columnCount == other.columnCount &&
-  delimiter == other.delimiter &&
-  hasHeader == other.hasHeader &&
-  columnTypes == other.columnTypes;
+  runtimeType == other.runtimeType
+  && rowCount == other.rowCount&& columnCount == other.columnCount&& delimiter == other.delimiter&& hasHeader == other.hasHeader&& columnTypes == other.columnTypes;
+
 }
 
 /// dBASE field information.
-class DbfFieldInfo {
+class DbfFieldInfo  {
   /// Field (column) name.
   final String name;
-
   /// dBASE field type character (e.g. `"C"` for character, `"N"` for numeric).
   final String fieldType;
 
-  const DbfFieldInfo({required this.name, required this.fieldType});
+  const DbfFieldInfo({required this.name ,required this.fieldType ,});
+
+
+
+
 
   @override
-  int get hashCode => name.hashCode ^ fieldType.hashCode;
+  int get hashCode => name.hashCode^fieldType.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is DbfFieldInfo &&
-  runtimeType == other.runtimeType &&
-  name == other.name &&
-  fieldType == other.fieldType;
+  runtimeType == other.runtimeType
+  && name == other.name&& fieldType == other.fieldType;
+
 }
 
 /// dBASE (DBF) file metadata.
-class DbfMetadata {
+class DbfMetadata  {
   /// Total number of data records in the DBF file.
   final PlatformInt64 recordCount;
-
   /// Number of field (column) definitions.
   final PlatformInt64 fieldCount;
-
   /// Descriptor for each field in the table schema.
   final List<DbfFieldInfo> fields;
 
-  const DbfMetadata({
-    required this.recordCount,
-    required this.fieldCount,
-    required this.fields,
-  });
+  const DbfMetadata({required this.recordCount ,required this.fieldCount ,required this.fields ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  recordCount.hashCode ^ fieldCount.hashCode ^ fields.hashCode;
+  int get hashCode => recordCount.hashCode^fieldCount.hashCode^fields.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is DbfMetadata &&
-  runtimeType == other.runtimeType &&
-  recordCount == other.recordCount &&
-  fieldCount == other.fieldCount &&
-  fields == other.fields;
+  runtimeType == other.runtimeType
+  && recordCount == other.recordCount&& fieldCount == other.fieldCount&& fields == other.fields;
+
 }
 
 /// MIME type detection response.
-class DetectResponse {
+class DetectResponse  {
   /// Detected MIME type
   final String mimeType;
-
   /// Original filename (if provided)
   final String? filename;
 
-  const DetectResponse({required this.mimeType, this.filename});
+  const DetectResponse({required this.mimeType ,this.filename ,});
+
+
+
+
 
   @override
-  int get hashCode => mimeType.hashCode ^ filename.hashCode;
+  int get hashCode => mimeType.hashCode^filename.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is DetectResponse &&
-  runtimeType == other.runtimeType &&
-  mimeType == other.mimeType &&
-  filename == other.filename;
+  runtimeType == other.runtimeType
+  && mimeType == other.mimeType&& filename == other.filename;
+
 }
 
 /// Page-level detection result containing all detections and page metadata.
-class DetectionResult {
+class DetectionResult  {
   /// Page width in pixels (as seen by the model).
   final PlatformInt64 pageWidth;
-
   /// Page height in pixels (as seen by the model).
   final PlatformInt64 pageHeight;
-
   /// All layout detections on this page after postprocessing.
   final List<LayoutDetection> detections;
 
-  const DetectionResult({
-    required this.pageWidth,
-    required this.pageHeight,
-    required this.detections,
-  });
+  const DetectionResult({required this.pageWidth ,required this.pageHeight ,required this.detections ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  pageWidth.hashCode ^ pageHeight.hashCode ^ detections.hashCode;
+  int get hashCode => pageWidth.hashCode^pageHeight.hashCode^detections.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is DetectionResult &&
-  runtimeType == other.runtimeType &&
-  pageWidth == other.pageWidth &&
-  pageHeight == other.pageHeight &&
-  detections == other.detections;
+  runtimeType == other.runtimeType
+  && pageWidth == other.pageWidth&& pageHeight == other.pageHeight&& detections == other.detections;
+
 }
 
 /// A single contiguous hunk in a unified diff.
-class DiffHunk {
+class DiffHunk  {
   /// Starting line number in the old content (0-indexed).
   final PlatformInt64 fromLine;
-
   /// Number of lines from the old content in this hunk.
   final PlatformInt64 fromCount;
-
   /// Starting line number in the new content (0-indexed).
   final PlatformInt64 toLine;
-
   /// Number of lines from the new content in this hunk.
   final PlatformInt64 toCount;
-
   /// Lines that make up this hunk.
   final List<DiffLine> lines;
 
-  const DiffHunk({
-    required this.fromLine,
-    required this.fromCount,
-    required this.toLine,
-    required this.toCount,
-    required this.lines,
-  });
+  const DiffHunk({required this.fromLine ,required this.fromCount ,required this.toLine ,required this.toCount ,required this.lines ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  fromLine.hashCode ^
-  fromCount.hashCode ^
-  toLine.hashCode ^
-  toCount.hashCode ^
-  lines.hashCode;
+  int get hashCode => fromLine.hashCode^fromCount.hashCode^toLine.hashCode^toCount.hashCode^lines.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is DiffHunk &&
-  runtimeType == other.runtimeType &&
-  fromLine == other.fromLine &&
-  fromCount == other.fromCount &&
-  toLine == other.toLine &&
-  toCount == other.toCount &&
-  lines == other.lines;
+  runtimeType == other.runtimeType
+  && fromLine == other.fromLine&& fromCount == other.fromCount&& toLine == other.toLine&& toCount == other.toCount&& lines == other.lines;
+
 }
 
 @freezed
-sealed class DiffLine with _$DiffLine {
+sealed class DiffLine with _$DiffLine  {
   const DiffLine._();
 
   /// Unchanged context line.
-  const factory DiffLine.context({required String field0}) = DiffLine_Context;
-
+  const factory DiffLine.context({   required String field0 , }) = DiffLine_Context;
   /// Line added in the "after" version.
-  const factory DiffLine.added({required String field0}) = DiffLine_Added;
-
+  const factory DiffLine.added({   required String field0 , }) = DiffLine_Added;
   /// Line removed from the "before" version.
-  const factory DiffLine.removed({required String field0}) = DiffLine_Removed;
+  const factory DiffLine.removed({   required String field0 , }) = DiffLine_Removed;
+
+
+
+
 }
 
 /// Options controlling how two `ExtractedDocument` values are compared.
-class DiffOptions {
+class DiffOptions  {
   /// Include metadata changes in the diff. Default: `true`.
   final bool includeMetadata;
-
   /// Include embedded-children changes in the diff. Default: `true`.
   final bool includeEmbedded;
-
   /// Truncate content to this many characters before diffing.
   ///
   /// Useful for very large documents where only the first N characters matter.
   /// `None` means no truncation.
   final PlatformInt64? maxContentChars;
 
-  const DiffOptions({
-    required this.includeMetadata,
-    required this.includeEmbedded,
-    this.maxContentChars,
-  });
+  const DiffOptions({required this.includeMetadata ,required this.includeEmbedded ,this.maxContentChars ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  includeMetadata.hashCode ^
-  includeEmbedded.hashCode ^
-  maxContentChars.hashCode;
+  int get hashCode => includeMetadata.hashCode^includeEmbedded.hashCode^maxContentChars.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is DiffOptions &&
-  runtimeType == other.runtimeType &&
-  includeMetadata == other.includeMetadata &&
-  includeEmbedded == other.includeEmbedded &&
-  maxContentChars == other.maxContentChars;
+  runtimeType == other.runtimeType
+  && includeMetadata == other.includeMetadata&& includeEmbedded == other.includeEmbedded&& maxContentChars == other.maxContentChars;
+
 }
 
 /// Comprehensive Djot document structure with semantic preservation.
@@ -4040,151 +2996,129 @@ class DiffOptions {
 /// - Tables with full structure
 ///
 /// Available when the `djot` feature is enabled.
-class DjotContent {
+class DjotContent  {
   /// Plain text representation for backwards compatibility
   final String plainText;
-
   /// Structured block-level content
   final List<FormattedBlock> blocks;
-
   /// Metadata from YAML frontmatter
   final Metadata metadata;
-
   /// Extracted tables as structured data
   final List<Table> tables;
-
   /// Extracted images with metadata
   final List<DjotImage> images;
-
   /// Extracted links with URLs
   final List<DjotLink> links;
-
   /// Footnote definitions
   final List<Footnote> footnotes;
 
-  const DjotContent({
-    required this.plainText,
-    required this.blocks,
-    required this.metadata,
-    required this.tables,
-    required this.images,
-    required this.links,
-    required this.footnotes,
-  });
+  const DjotContent({required this.plainText ,required this.blocks ,required this.metadata ,required this.tables ,required this.images ,required this.links ,required this.footnotes ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  plainText.hashCode ^
-  blocks.hashCode ^
-  metadata.hashCode ^
-  tables.hashCode ^
-  images.hashCode ^
-  links.hashCode ^
-  footnotes.hashCode;
+  int get hashCode => plainText.hashCode^blocks.hashCode^metadata.hashCode^tables.hashCode^images.hashCode^links.hashCode^footnotes.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is DjotContent &&
-  runtimeType == other.runtimeType &&
-  plainText == other.plainText &&
-  blocks == other.blocks &&
-  metadata == other.metadata &&
-  tables == other.tables &&
-  images == other.images &&
-  links == other.links &&
-  footnotes == other.footnotes;
+  runtimeType == other.runtimeType
+  && plainText == other.plainText&& blocks == other.blocks&& metadata == other.metadata&& tables == other.tables&& images == other.images&& links == other.links&& footnotes == other.footnotes;
+
 }
 
 /// Image element in Djot.
-class DjotImage {
+class DjotImage  {
   /// Image source URL or path
   final String src;
-
   /// Alternative text
   final String alt;
-
   /// Optional title
   final String? title;
 
-  const DjotImage({required this.src, required this.alt, this.title});
+  const DjotImage({required this.src ,required this.alt ,this.title ,});
+
+
+
+
 
   @override
-  int get hashCode => src.hashCode ^ alt.hashCode ^ title.hashCode;
+  int get hashCode => src.hashCode^alt.hashCode^title.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is DjotImage &&
-  runtimeType == other.runtimeType &&
-  src == other.src &&
-  alt == other.alt &&
-  title == other.title;
+  runtimeType == other.runtimeType
+  && src == other.src&& alt == other.alt&& title == other.title;
+
 }
 
 /// Link element in Djot.
-class DjotLink {
+class DjotLink  {
   /// Link URL
   final String url;
-
   /// Link text content
   final String text;
-
   /// Optional title
   final String? title;
 
-  const DjotLink({required this.url, required this.text, this.title});
+  const DjotLink({required this.url ,required this.text ,this.title ,});
+
+
+
+
 
   @override
-  int get hashCode => url.hashCode ^ text.hashCode ^ title.hashCode;
+  int get hashCode => url.hashCode^text.hashCode^title.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is DjotLink &&
-  runtimeType == other.runtimeType &&
-  url == other.url &&
-  text == other.text &&
-  title == other.title;
+  runtimeType == other.runtimeType
+  && url == other.url&& text == other.text&& title == other.title;
+
 }
 
 /// Detected document boundary within a PDF.
-class DocumentBoundary {
+class DocumentBoundary  {
   /// 1-indexed start page (inclusive).
   final PlatformInt64 startPage;
-
   /// 1-indexed end page (inclusive).
   final PlatformInt64 endPage;
-
   /// Confidence in this boundary, `[0.0, 1.0]`.
   final double confidence;
-
   /// Reason for the boundary detection.
   final BoundaryReason reason;
 
-  const DocumentBoundary({
-    required this.startPage,
-    required this.endPage,
-    required this.confidence,
-    required this.reason,
-  });
+  const DocumentBoundary({required this.startPage ,required this.endPage ,required this.confidence ,required this.reason ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  startPage.hashCode ^
-  endPage.hashCode ^
-  confidence.hashCode ^
-  reason.hashCode;
+  int get hashCode => startPage.hashCode^endPage.hashCode^confidence.hashCode^reason.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is DocumentBoundary &&
-  runtimeType == other.runtimeType &&
-  startPage == other.startPage &&
-  endPage == other.endPage &&
-  confidence == other.confidence &&
-  reason == other.reason;
+  runtimeType == other.runtimeType
+  && startPage == other.startPage&& endPage == other.endPage&& confidence == other.confidence&& reason == other.reason;
+
 }
 
 /// Cheap structural counts for an extracted document.
@@ -4199,100 +3133,80 @@ class DocumentBoundary {
 /// The page count comes from the parse (the extractor already walks the page
 /// tree); it does not require opting into per-page content. `pages` is `0` for
 /// inputs that are not page-addressable (e.g. plain text).
-class DocumentCounts {
+class DocumentCounts  {
   /// Total pages in the source document (`0` when not page-addressable).
   final PlatformInt64 pages;
-
   /// Tables detected in the document.
   final PlatformInt64 tables;
-
   /// Images detected in the document.
   final PlatformInt64 images;
 
-  const DocumentCounts({
-    required this.pages,
-    required this.tables,
-    required this.images,
-  });
+  const DocumentCounts({required this.pages ,required this.tables ,required this.images ,});
+
+
+
+
 
   @override
-  int get hashCode => pages.hashCode ^ tables.hashCode ^ images.hashCode;
+  int get hashCode => pages.hashCode^tables.hashCode^images.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is DocumentCounts &&
-  runtimeType == other.runtimeType &&
-  pages == other.pages &&
-  tables == other.tables &&
-  images == other.images;
+  runtimeType == other.runtimeType
+  && pages == other.pages&& tables == other.tables&& images == other.images;
+
 }
 
 /// Metadata about a document for analysis.
-class DocumentMetadata {
+class DocumentMetadata  {
   /// MIME type of the document.
   final String mimeType;
-
   /// File size in bytes.
   final PlatformInt64 sizeBytes;
-
   /// Page count (if known, e.g., from previous analysis).
   final PlatformInt64? pageCount;
-
   /// Whether OCR is forced regardless of text layer.
   final bool forceOcr;
-
   /// User-provided chunk configuration overrides.
   final UserChunkConfig? userChunkConfig;
-
   /// Whether chunking is enabled for this job.
   final bool chunkingEnabled;
 
-  const DocumentMetadata({
-    required this.mimeType,
-    required this.sizeBytes,
-    this.pageCount,
-    required this.forceOcr,
-    this.userChunkConfig,
-    required this.chunkingEnabled,
-  });
+  const DocumentMetadata({required this.mimeType ,required this.sizeBytes ,this.pageCount ,required this.forceOcr ,this.userChunkConfig ,required this.chunkingEnabled ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  mimeType.hashCode ^
-  sizeBytes.hashCode ^
-  pageCount.hashCode ^
-  forceOcr.hashCode ^
-  userChunkConfig.hashCode ^
-  chunkingEnabled.hashCode;
+  int get hashCode => mimeType.hashCode^sizeBytes.hashCode^pageCount.hashCode^forceOcr.hashCode^userChunkConfig.hashCode^chunkingEnabled.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is DocumentMetadata &&
-  runtimeType == other.runtimeType &&
-  mimeType == other.mimeType &&
-  sizeBytes == other.sizeBytes &&
-  pageCount == other.pageCount &&
-  forceOcr == other.forceOcr &&
-  userChunkConfig == other.userChunkConfig &&
-  chunkingEnabled == other.chunkingEnabled;
+  runtimeType == other.runtimeType
+  && mimeType == other.mimeType&& sizeBytes == other.sizeBytes&& pageCount == other.pageCount&& forceOcr == other.forceOcr&& userChunkConfig == other.userChunkConfig&& chunkingEnabled == other.chunkingEnabled;
+
 }
 
 /// A single node in the document tree.
 ///
 /// Each node has deterministic `id`, typed `content`, optional `parent`/`children`
 /// for tree structure, and metadata like page number, bounding box, and content layer.
-class DocumentNode {
+class DocumentNode  {
   /// Node content — tagged enum, type-specific data only.
   final NodeContent content;
-
   /// Parent node index (`None` = root-level node).
   final PlatformInt64? parent;
-
   /// Child node indices in reading order.
   final Int64List children;
-
   /// Content layer classification.
   ///
   /// Always serialised — Kotlin-Android (and any other typed binding) treats
@@ -4300,95 +3214,69 @@ class DocumentNode {
   /// break consumer deserialisation.  `#[serde(default)]` covers the
   /// missing-field case on inbound JSON.
   final ContentLayer contentLayer;
-
   /// Page number where this node starts (1-indexed).
   final PlatformInt64? page;
-
   /// Page number where this node ends (for multi-page tables/sections).
   final PlatformInt64? pageEnd;
-
   /// Bounding box in document coordinates.
   final BoundingBox? bbox;
-
   /// Inline annotations (formatting, links) on this node's text content.
   ///
   /// Only meaningful for text-carrying nodes; empty for containers.
   final List<TextAnnotation> annotations;
-
   /// Format-specific key-value attributes.
   ///
   /// Extensible bag for miscellaneous data without a dedicated typed field: CSS classes,
   /// LaTeX environment names, Excel cell formulas, slide layout names, etc.
   final Map<String, String>? attributes;
 
-  const DocumentNode({
-    required this.content,
-    this.parent,
-    required this.children,
-    required this.contentLayer,
-    this.page,
-    this.pageEnd,
-    this.bbox,
-    required this.annotations,
-    this.attributes,
-  });
+  const DocumentNode({required this.content ,this.parent ,required this.children ,required this.contentLayer ,this.page ,this.pageEnd ,this.bbox ,required this.annotations ,this.attributes ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  content.hashCode ^
-  parent.hashCode ^
-  children.hashCode ^
-  contentLayer.hashCode ^
-  page.hashCode ^
-  pageEnd.hashCode ^
-  bbox.hashCode ^
-  annotations.hashCode ^
-  attributes.hashCode;
+  int get hashCode => content.hashCode^parent.hashCode^children.hashCode^contentLayer.hashCode^page.hashCode^pageEnd.hashCode^bbox.hashCode^annotations.hashCode^attributes.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is DocumentNode &&
-  runtimeType == other.runtimeType &&
-  content == other.content &&
-  parent == other.parent &&
-  children == other.children &&
-  contentLayer == other.contentLayer &&
-  page == other.page &&
-  pageEnd == other.pageEnd &&
-  bbox == other.bbox &&
-  annotations == other.annotations &&
-  attributes == other.attributes;
+  runtimeType == other.runtimeType
+  && content == other.content&& parent == other.parent&& children == other.children&& contentLayer == other.contentLayer&& page == other.page&& pageEnd == other.pageEnd&& bbox == other.bbox&& annotations == other.annotations&& attributes == other.attributes;
+
 }
 
 /// A resolved relationship between two nodes in the document tree.
-class DocumentRelationship {
+class DocumentRelationship  {
   /// Source node index (the referencing node).
   final PlatformInt64 source;
-
   /// Target node index (the referenced node).
   final PlatformInt64 target;
-
   /// Semantic kind of the relationship.
   final RelationshipKind kind;
 
-  const DocumentRelationship({
-    required this.source,
-    required this.target,
-    required this.kind,
-  });
+  const DocumentRelationship({required this.source ,required this.target ,required this.kind ,});
+
+
+
+
 
   @override
-  int get hashCode => source.hashCode ^ target.hashCode ^ kind.hashCode;
+  int get hashCode => source.hashCode^target.hashCode^kind.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is DocumentRelationship &&
-  runtimeType == other.runtimeType &&
-  source == other.source &&
-  target == other.target &&
-  kind == other.kind;
+  runtimeType == other.runtimeType
+  && source == other.source&& target == other.target&& kind == other.kind;
+
 }
 
 /// A single tracked change embedded in a document.
@@ -4397,17 +3285,15 @@ class DocumentRelationship {
 /// (DOCX `w:ins`/`w:del`/`w:rPrChange`, ODT `text:change-*`, …). Every
 /// extractor defaults to `ExtractedDocument.revisions = None` until a
 /// format-specific implementation is added.
-class DocumentRevision {
+class DocumentRevision  {
   /// Format-specific revision identifier.
   ///
   /// For DOCX this is the `w:id` attribute value on the change element
   /// (e.g. `"42"`). When the attribute is absent a synthetic fallback is
   /// generated (`"docx-ins-0"`, `"docx-del-3"`, …).
   final String revisionId;
-
   /// Display name of the author who made this change, when available.
   final String? author;
-
   /// ISO-8601 timestamp of the change, when available.
   ///
   /// Stored as a plain string so this type remains FFI-friendly and
@@ -4415,49 +3301,35 @@ class DocumentRevision {
   /// DOCX populates this from the `w:date` attribute (e.g.
   /// `"2024-03-15T10:30:00Z"`).
   final String? timestamp;
-
   /// Semantic kind of this revision.
   final RevisionKind kind;
-
   /// Best-effort document location for this revision.
   ///
   /// Resolution is format-dependent and may be `None` when the location
   /// cannot be determined (e.g. changes inside table cells before
   /// table-cell anchor support is added).
   final RevisionAnchor? anchor;
-
   /// The content changes that make up this revision.
   final RevisionDelta delta;
 
-  const DocumentRevision({
-    required this.revisionId,
-    this.author,
-    this.timestamp,
-    required this.kind,
-    this.anchor,
-    required this.delta,
-  });
+  const DocumentRevision({required this.revisionId ,this.author ,this.timestamp ,required this.kind ,this.anchor ,required this.delta ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  revisionId.hashCode ^
-  author.hashCode ^
-  timestamp.hashCode ^
-  kind.hashCode ^
-  anchor.hashCode ^
-  delta.hashCode;
+  int get hashCode => revisionId.hashCode^author.hashCode^timestamp.hashCode^kind.hashCode^anchor.hashCode^delta.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is DocumentRevision &&
-  runtimeType == other.runtimeType &&
-  revisionId == other.revisionId &&
-  author == other.author &&
-  timestamp == other.timestamp &&
-  kind == other.kind &&
-  anchor == other.anchor &&
-  delta == other.delta;
+  runtimeType == other.runtimeType
+  && revisionId == other.revisionId&& author == other.author&& timestamp == other.timestamp&& kind == other.kind&& anchor == other.anchor&& delta == other.delta;
+
 }
 
 /// Top-level structured document representation.
@@ -4470,22 +3342,19 @@ class DocumentRevision {
 ///
 /// Call `validate()` after construction to verify all node indices are in bounds
 /// and parent-child relationships are bidirectionally consistent.
-class DocumentStructure {
+class DocumentStructure  {
   /// All nodes in document/reading order.
   final List<DocumentNode> nodes;
-
   /// Origin format identifier (e.g. "docx", "pptx", "html", "pdf").
   ///
   /// Allows renderers to apply format-aware heuristics when converting
   /// the document tree to output formats.
   final String? sourceFormat;
-
   /// Resolved relationships between nodes (footnote refs, citations, anchor links, etc.).
   ///
   /// Populated during derivation from the internal document representation.
   /// Empty when no relationships are detected.
   final List<DocumentRelationship> relationships;
-
   /// Sorted, deduplicated list of node type names present in this document.
   ///
   /// Each value is the snake_case `node_type` tag of the corresponding
@@ -4496,295 +3365,216 @@ class DocumentStructure {
   /// at the end of derivation).
   final List<String> nodeTypes;
 
-  const DocumentStructure({
-    required this.nodes,
-    this.sourceFormat,
-    required this.relationships,
-    required this.nodeTypes,
-  });
+  const DocumentStructure({required this.nodes ,this.sourceFormat ,required this.relationships ,required this.nodeTypes ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  nodes.hashCode ^
-  sourceFormat.hashCode ^
-  relationships.hashCode ^
-  nodeTypes.hashCode;
+  int get hashCode => nodes.hashCode^sourceFormat.hashCode^relationships.hashCode^nodeTypes.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is DocumentStructure &&
-  runtimeType == other.runtimeType &&
-  nodes == other.nodes &&
-  sourceFormat == other.sourceFormat &&
-  relationships == other.relationships &&
-  nodeTypes == other.nodeTypes;
+  runtimeType == other.runtimeType
+  && nodes == other.nodes&& sourceFormat == other.sourceFormat&& relationships == other.relationships&& nodeTypes == other.nodeTypes;
+
 }
 
 /// Summary of an extracted document.
-class DocumentSummary {
+class DocumentSummary  {
   /// Summary text (plain prose).
   final String text;
-
   /// Strategy that produced this summary.
   final SummaryStrategy strategy;
-
   /// Approximate token count of the summary, when known.
   final PlatformInt64? tokenCount;
 
-  const DocumentSummary({
-    required this.text,
-    required this.strategy,
-    this.tokenCount,
-  });
+  const DocumentSummary({required this.text ,required this.strategy ,this.tokenCount ,});
+
+
+
+
 
   @override
-  int get hashCode => text.hashCode ^ strategy.hashCode ^ tokenCount.hashCode;
+  int get hashCode => text.hashCode^strategy.hashCode^tokenCount.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is DocumentSummary &&
-  runtimeType == other.runtimeType &&
-  text == other.text &&
-  strategy == other.strategy &&
-  tokenCount == other.tokenCount;
+  runtimeType == other.runtimeType
+  && text == other.text&& strategy == other.strategy&& tokenCount == other.tokenCount;
+
 }
 
 /// Application properties from docProps/app.xml for DOCX
 ///
 /// Contains Word-specific document statistics and metadata.
-class DocxAppProperties {
+class DocxAppProperties  {
   /// Application name (e.g., "Microsoft Office Word")
   final String? application;
-
   /// Application version
   final String? appVersion;
-
   /// Template filename
   final String? template;
-
   /// Total editing time in minutes
   final PlatformInt64? totalTime;
-
   /// Number of pages
   final PlatformInt64? pages;
-
   /// Number of words
   final PlatformInt64? words;
-
   /// Number of characters (excluding spaces)
   final PlatformInt64? characters;
-
   /// Number of characters (including spaces)
   final PlatformInt64? charactersWithSpaces;
-
   /// Number of lines
   final PlatformInt64? lines;
-
   /// Number of paragraphs
   final PlatformInt64? paragraphs;
-
   /// Company name
   final String? company;
-
   /// Document security level
   final PlatformInt64? docSecurity;
-
   /// Scale crop flag
   final bool? scaleCrop;
-
   /// Links up to date flag
   final bool? linksUpToDate;
-
   /// Shared document flag
   final bool? sharedDoc;
-
   /// Hyperlinks changed flag
   final bool? hyperlinksChanged;
 
-  const DocxAppProperties({
-    this.application,
-    this.appVersion,
-    this.template,
-    this.totalTime,
-    this.pages,
-    this.words,
-    this.characters,
-    this.charactersWithSpaces,
-    this.lines,
-    this.paragraphs,
-    this.company,
-    this.docSecurity,
-    this.scaleCrop,
-    this.linksUpToDate,
-    this.sharedDoc,
-    this.hyperlinksChanged,
-  });
+  const DocxAppProperties({this.application ,this.appVersion ,this.template ,this.totalTime ,this.pages ,this.words ,this.characters ,this.charactersWithSpaces ,this.lines ,this.paragraphs ,this.company ,this.docSecurity ,this.scaleCrop ,this.linksUpToDate ,this.sharedDoc ,this.hyperlinksChanged ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  application.hashCode ^
-  appVersion.hashCode ^
-  template.hashCode ^
-  totalTime.hashCode ^
-  pages.hashCode ^
-  words.hashCode ^
-  characters.hashCode ^
-  charactersWithSpaces.hashCode ^
-  lines.hashCode ^
-  paragraphs.hashCode ^
-  company.hashCode ^
-  docSecurity.hashCode ^
-  scaleCrop.hashCode ^
-  linksUpToDate.hashCode ^
-  sharedDoc.hashCode ^
-  hyperlinksChanged.hashCode;
+  int get hashCode => application.hashCode^appVersion.hashCode^template.hashCode^totalTime.hashCode^pages.hashCode^words.hashCode^characters.hashCode^charactersWithSpaces.hashCode^lines.hashCode^paragraphs.hashCode^company.hashCode^docSecurity.hashCode^scaleCrop.hashCode^linksUpToDate.hashCode^sharedDoc.hashCode^hyperlinksChanged.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is DocxAppProperties &&
-  runtimeType == other.runtimeType &&
-  application == other.application &&
-  appVersion == other.appVersion &&
-  template == other.template &&
-  totalTime == other.totalTime &&
-  pages == other.pages &&
-  words == other.words &&
-  characters == other.characters &&
-  charactersWithSpaces == other.charactersWithSpaces &&
-  lines == other.lines &&
-  paragraphs == other.paragraphs &&
-  company == other.company &&
-  docSecurity == other.docSecurity &&
-  scaleCrop == other.scaleCrop &&
-  linksUpToDate == other.linksUpToDate &&
-  sharedDoc == other.sharedDoc &&
-  hyperlinksChanged == other.hyperlinksChanged;
+  runtimeType == other.runtimeType
+  && application == other.application&& appVersion == other.appVersion&& template == other.template&& totalTime == other.totalTime&& pages == other.pages&& words == other.words&& characters == other.characters&& charactersWithSpaces == other.charactersWithSpaces&& lines == other.lines&& paragraphs == other.paragraphs&& company == other.company&& docSecurity == other.docSecurity&& scaleCrop == other.scaleCrop&& linksUpToDate == other.linksUpToDate&& sharedDoc == other.sharedDoc&& hyperlinksChanged == other.hyperlinksChanged;
+
 }
 
 /// Word document metadata.
 ///
 /// Extracted from DOCX files using shared Office Open XML metadata extraction.
 /// Integrates with `office_metadata` module for core/app/custom properties.
-class DocxMetadata {
+class DocxMetadata  {
   /// Core properties from docProps/core.xml (Dublin Core metadata)
   ///
   /// Contains title, creator, subject, keywords, dates, etc.
   /// Shared format across DOCX/PPTX/XLSX documents.
   final CoreProperties? coreProperties;
-
   /// Application properties from docProps/app.xml (Word-specific statistics)
   ///
   /// Contains word count, page count, paragraph count, editing time, etc.
   /// DOCX-specific variant of Office application properties.
   final DocxAppProperties? appProperties;
-
   /// Custom properties from docProps/custom.xml (user-defined properties)
   ///
   /// Contains key-value pairs defined by users or applications.
   /// Values can be strings, numbers, booleans, or dates.
   final Map<String, String>? customProperties;
 
-  const DocxMetadata({
-    this.coreProperties,
-    this.appProperties,
-    this.customProperties,
-  });
+  const DocxMetadata({this.coreProperties ,this.appProperties ,this.customProperties ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  coreProperties.hashCode ^
-  appProperties.hashCode ^
-  customProperties.hashCode;
+  int get hashCode => coreProperties.hashCode^appProperties.hashCode^customProperties.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is DocxMetadata &&
-  runtimeType == other.runtimeType &&
-  coreProperties == other.coreProperties &&
-  appProperties == other.appProperties &&
-  customProperties == other.customProperties;
+  runtimeType == other.runtimeType
+  && coreProperties == other.coreProperties&& appProperties == other.appProperties&& customProperties == other.customProperties;
+
 }
 
 /// Semantic element extracted from document.
 ///
 /// Represents a logical unit of content with semantic classification,
 /// unique identifier, and metadata for tracking origin and position.
-class Element {
+class Element  {
   /// Semantic type of this element
   final ElementType elementType;
-
   /// Text content of the element
   final String text;
-
   /// Metadata about the element
   final ElementMetadata metadata;
 
-  const Element({
-    required this.elementType,
-    required this.text,
-    required this.metadata,
-  });
+  const Element({required this.elementType ,required this.text ,required this.metadata ,});
+
+
+
+
 
   @override
-  int get hashCode => elementType.hashCode ^ text.hashCode ^ metadata.hashCode;
+  int get hashCode => elementType.hashCode^text.hashCode^metadata.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is Element &&
-  runtimeType == other.runtimeType &&
-  elementType == other.elementType &&
-  text == other.text &&
-  metadata == other.metadata;
+  runtimeType == other.runtimeType
+  && elementType == other.elementType&& text == other.text&& metadata == other.metadata;
+
 }
 
 /// Metadata for a semantic element.
-class ElementMetadata {
+class ElementMetadata  {
   /// Page number (1-indexed)
   final PlatformInt64? pageNumber;
-
   /// Source filename or document name
   final String? filename;
-
   /// Bounding box coordinates if available
   final BoundingBox? coordinates;
-
   /// Position index in the element sequence
   final PlatformInt64? elementIndex;
-
   /// Additional custom metadata
   final Map<String, String> additional;
 
-  const ElementMetadata({
-    this.pageNumber,
-    this.filename,
-    this.coordinates,
-    this.elementIndex,
-    required this.additional,
-  });
+  const ElementMetadata({this.pageNumber ,this.filename ,this.coordinates ,this.elementIndex ,required this.additional ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  pageNumber.hashCode ^
-  filename.hashCode ^
-  coordinates.hashCode ^
-  elementIndex.hashCode ^
-  additional.hashCode;
+  int get hashCode => pageNumber.hashCode^filename.hashCode^coordinates.hashCode^elementIndex.hashCode^additional.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ElementMetadata &&
-  runtimeType == other.runtimeType &&
-  pageNumber == other.pageNumber &&
-  filename == other.filename &&
-  coordinates == other.coordinates &&
-  elementIndex == other.elementIndex &&
-  additional == other.additional;
+  runtimeType == other.runtimeType
+  && pageNumber == other.pageNumber&& filename == other.filename&& coordinates == other.coordinates&& elementIndex == other.elementIndex&& additional == other.additional;
+
 }
 
 /// Semantic element type classification.
@@ -4794,94 +3584,70 @@ class ElementMetadata {
 enum ElementType {
   /// Document title
   title,
-
   /// Main narrative text body
   narrativeText,
-
   /// Section heading
   heading,
-
   /// List item (bullet, numbered, etc.)
   listItem,
-
   /// Table element
   table,
-
   /// Image element
   image,
-
   /// Page break marker
   pageBreak,
-
   /// Code block
   codeBlock,
-
   /// Block quote
   blockQuote,
-
   /// Footer text
   footer,
-
   /// Header text
   header,
+  ;
+
 }
 
 /// Email attachment representation.
 ///
 /// Contains metadata and optionally the content of an email attachment.
-class EmailAttachment {
+class EmailAttachment  {
   /// Attachment name (from Content-Disposition header)
   final String? name;
-
   /// Filename of the attachment
   final String? filename;
-
   /// MIME type of the attachment
   final String? mimeType;
-
   /// Size in bytes
   final PlatformInt64? size;
-
   /// Whether this attachment is an image
   final bool isImage;
-
   /// Attachment data (if extracted).
   /// Uses `bytes::Bytes` for cheap cloning of large buffers.
   final Uint8List? data;
 
-  const EmailAttachment({
-    this.name,
-    this.filename,
-    this.mimeType,
-    this.size,
-    required this.isImage,
-    this.data,
-  });
+  const EmailAttachment({this.name ,this.filename ,this.mimeType ,this.size ,required this.isImage ,this.data ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  name.hashCode ^
-  filename.hashCode ^
-  mimeType.hashCode ^
-  size.hashCode ^
-  isImage.hashCode ^
-  data.hashCode;
+  int get hashCode => name.hashCode^filename.hashCode^mimeType.hashCode^size.hashCode^isImage.hashCode^data.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is EmailAttachment &&
-  runtimeType == other.runtimeType &&
-  name == other.name &&
-  filename == other.filename &&
-  mimeType == other.mimeType &&
-  size == other.size &&
-  isImage == other.isImage &&
-  data == other.data;
+  runtimeType == other.runtimeType
+  && name == other.name&& filename == other.filename&& mimeType == other.mimeType&& size == other.size&& isImage == other.isImage&& data == other.data;
+
 }
 
 /// Configuration for email extraction.
-class EmailConfig {
+class EmailConfig  {
   /// Windows codepage number to use when an MSG file contains no codepage property.
   /// Defaults to `None`, which falls back to windows-1252.
   ///
@@ -4902,294 +3668,231 @@ class EmailConfig {
   /// - 936:  Simplified Chinese (GBK)
   final PlatformInt64? msgFallbackCodepage;
 
-  const EmailConfig({this.msgFallbackCodepage});
+  const EmailConfig({this.msgFallbackCodepage ,});
+
+
+
+
 
   @override
   int get hashCode => msgFallbackCodepage.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is EmailConfig &&
-  runtimeType == other.runtimeType &&
-  msgFallbackCodepage == other.msgFallbackCodepage;
+  runtimeType == other.runtimeType
+  && msgFallbackCodepage == other.msgFallbackCodepage;
+
 }
 
 /// Email extraction result.
 ///
 /// Complete representation of an extracted email message (.eml or .msg)
 /// including headers, body content, and attachments.
-class EmailExtractionResult {
+class EmailExtractionResult  {
   /// Email subject line
   final String? subject;
-
   /// Sender email address
   final String? fromEmail;
-
   /// Primary recipient email addresses
   final List<String> toEmails;
-
   /// CC recipient email addresses
   final List<String> ccEmails;
-
   /// BCC recipient email addresses
   final List<String> bccEmails;
-
   /// Email date/timestamp
   final String? date;
-
   /// Message-ID header value
   final String? messageId;
-
   /// Plain text version of the email body
   final String? plainText;
-
   /// HTML version of the email body
   final String? htmlContent;
-
   /// Cleaned/processed text content. Aliased as `cleaned_text` for back-compat.
   final String content;
-
   /// List of email attachments
   final List<EmailAttachment> attachments;
-
   /// Additional email headers and metadata
   final Map<String, String> metadata;
 
-  const EmailExtractionResult({
-    this.subject,
-    this.fromEmail,
-    required this.toEmails,
-    required this.ccEmails,
-    required this.bccEmails,
-    this.date,
-    this.messageId,
-    this.plainText,
-    this.htmlContent,
-    required this.content,
-    required this.attachments,
-    required this.metadata,
-  });
+  const EmailExtractionResult({this.subject ,this.fromEmail ,required this.toEmails ,required this.ccEmails ,required this.bccEmails ,this.date ,this.messageId ,this.plainText ,this.htmlContent ,required this.content ,required this.attachments ,required this.metadata ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  subject.hashCode ^
-  fromEmail.hashCode ^
-  toEmails.hashCode ^
-  ccEmails.hashCode ^
-  bccEmails.hashCode ^
-  date.hashCode ^
-  messageId.hashCode ^
-  plainText.hashCode ^
-  htmlContent.hashCode ^
-  content.hashCode ^
-  attachments.hashCode ^
-  metadata.hashCode;
+  int get hashCode => subject.hashCode^fromEmail.hashCode^toEmails.hashCode^ccEmails.hashCode^bccEmails.hashCode^date.hashCode^messageId.hashCode^plainText.hashCode^htmlContent.hashCode^content.hashCode^attachments.hashCode^metadata.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is EmailExtractionResult &&
-  runtimeType == other.runtimeType &&
-  subject == other.subject &&
-  fromEmail == other.fromEmail &&
-  toEmails == other.toEmails &&
-  ccEmails == other.ccEmails &&
-  bccEmails == other.bccEmails &&
-  date == other.date &&
-  messageId == other.messageId &&
-  plainText == other.plainText &&
-  htmlContent == other.htmlContent &&
-  content == other.content &&
-  attachments == other.attachments &&
-  metadata == other.metadata;
+  runtimeType == other.runtimeType
+  && subject == other.subject&& fromEmail == other.fromEmail&& toEmails == other.toEmails&& ccEmails == other.ccEmails&& bccEmails == other.bccEmails&& date == other.date&& messageId == other.messageId&& plainText == other.plainText&& htmlContent == other.htmlContent&& content == other.content&& attachments == other.attachments&& metadata == other.metadata;
+
 }
 
 /// Email metadata extracted from .eml and .msg files.
 ///
 /// Includes sender/recipient information, message ID, and attachment list.
-class EmailMetadata {
+class EmailMetadata  {
   /// Sender's email address
   final String? fromEmail;
-
   /// Sender's display name
   final String? fromName;
-
   /// Primary recipients
   final List<String> toEmails;
-
   /// CC recipients
   final List<String> ccEmails;
-
   /// BCC recipients
   final List<String> bccEmails;
-
   /// Message-ID header value
   final String? messageId;
-
   /// List of attachment filenames
   final List<String> attachments;
 
-  const EmailMetadata({
-    this.fromEmail,
-    this.fromName,
-    required this.toEmails,
-    required this.ccEmails,
-    required this.bccEmails,
-    this.messageId,
-    required this.attachments,
-  });
+  const EmailMetadata({this.fromEmail ,this.fromName ,required this.toEmails ,required this.ccEmails ,required this.bccEmails ,this.messageId ,required this.attachments ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  fromEmail.hashCode ^
-  fromName.hashCode ^
-  toEmails.hashCode ^
-  ccEmails.hashCode ^
-  bccEmails.hashCode ^
-  messageId.hashCode ^
-  attachments.hashCode;
+  int get hashCode => fromEmail.hashCode^fromName.hashCode^toEmails.hashCode^ccEmails.hashCode^bccEmails.hashCode^messageId.hashCode^attachments.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is EmailMetadata &&
-  runtimeType == other.runtimeType &&
-  fromEmail == other.fromEmail &&
-  fromName == other.fromName &&
-  toEmails == other.toEmails &&
-  ccEmails == other.ccEmails &&
-  bccEmails == other.bccEmails &&
-  messageId == other.messageId &&
-  attachments == other.attachments;
+  runtimeType == other.runtimeType
+  && fromEmail == other.fromEmail&& fromName == other.fromName&& toEmails == other.toEmails&& ccEmails == other.ccEmails&& bccEmails == other.bccEmails&& messageId == other.messageId&& attachments == other.attachments;
+
 }
 
 /// Changes to embedded archive children between two results.
-class EmbeddedChanges {
+class EmbeddedChanges  {
   /// Children present in `b` but not in `a` (matched by `path`).
   final List<ArchiveEntry> added;
-
   /// Children present in `a` but not in `b` (matched by `path`).
   final List<ArchiveEntry> removed;
-
   /// Children present in both but with differing content (matched by `path`).
   ///
   /// Each entry holds the diff of the nested `ExtractedDocument`.
   final List<EmbeddedDiff> changed;
 
-  const EmbeddedChanges({
-    required this.added,
-    required this.removed,
-    required this.changed,
-  });
+  const EmbeddedChanges({required this.added ,required this.removed ,required this.changed ,});
+
+
+
+
 
   @override
-  int get hashCode => added.hashCode ^ removed.hashCode ^ changed.hashCode;
+  int get hashCode => added.hashCode^removed.hashCode^changed.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is EmbeddedChanges &&
-  runtimeType == other.runtimeType &&
-  added == other.added &&
-  removed == other.removed &&
-  changed == other.changed;
+  runtimeType == other.runtimeType
+  && added == other.added&& removed == other.removed&& changed == other.changed;
+
 }
 
 /// Diff for a single embedded archive entry that appears in both results.
-class EmbeddedDiff {
+class EmbeddedDiff  {
   /// Archive-relative path identifying this entry.
   final String path;
-
   /// The recursive diff of the entry's extraction result.
   final ExtractionDiff diff;
 
-  const EmbeddedDiff({required this.path, required this.diff});
+  const EmbeddedDiff({required this.path ,required this.diff ,});
+
+
+
+
 
   @override
-  int get hashCode => path.hashCode ^ diff.hashCode;
+  int get hashCode => path.hashCode^diff.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is EmbeddedDiff &&
-  runtimeType == other.runtimeType &&
-  path == other.path &&
-  diff == other.diff;
+  runtimeType == other.runtimeType
+  && path == other.path&& diff == other.diff;
+
 }
 
 /// Embedded file descriptor extracted from the PDF name tree.
-class EmbeddedFile {
+class EmbeddedFile  {
   /// The filename as stored in the PDF name tree.
   final String name;
-
   /// Raw file bytes from the embedded stream (already decompressed by lopdf).
   final Uint8List data;
-
   /// Compressed byte count of the original stream (before decompression).
   ///
   /// Used by callers to compute the decompression ratio and detect zip-bomb-style
   /// attacks that embed a tiny compressed stream expanding to gigabytes of data.
   final PlatformInt64 compressedSize;
-
   /// MIME type if specified in the filespec, otherwise `None`.
   final String? mimeType;
 
-  const EmbeddedFile({
-    required this.name,
-    required this.data,
-    required this.compressedSize,
-    this.mimeType,
-  });
+  const EmbeddedFile({required this.name ,required this.data ,required this.compressedSize ,this.mimeType ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  name.hashCode ^
-  data.hashCode ^
-  compressedSize.hashCode ^
-  mimeType.hashCode;
+  int get hashCode => name.hashCode^data.hashCode^compressedSize.hashCode^mimeType.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is EmbeddedFile &&
-  runtimeType == other.runtimeType &&
-  name == other.name &&
-  data == other.data &&
-  compressedSize == other.compressedSize &&
-  mimeType == other.mimeType;
+  runtimeType == other.runtimeType
+  && name == other.name&& data == other.data&& compressedSize == other.compressedSize&& mimeType == other.mimeType;
+
 }
 
 /// Embedding configuration for text chunks.
 ///
 /// Configures embedding generation using ONNX models via the vendored embedding engine.
 /// Requires the `embeddings` feature to be enabled.
-class EmbeddingConfig {
+class EmbeddingConfig  {
   /// The embedding model to use (defaults to "gte-modernbert-base" preset if not specified)
   final EmbeddingModelType model;
-
   /// Whether to normalize embedding vectors (recommended for cosine similarity)
   final bool normalize;
-
   /// Batch size for embedding generation
   final PlatformInt64 batchSize;
-
   /// Show model download progress
   final bool showDownloadProgress;
-
   /// Optional alternate Hugging Face cache root for model files.
   ///
   /// When unset, hf-hub follows `HF_HUB_CACHE`, `HUGGINGFACE_HUB_CACHE`,
   /// `HF_HOME`, XDG, and platform defaults. Prefer those environment variables
   /// when configuring the cache process-wide.
   final String? cacheDir;
-
   /// Hardware acceleration for the embedding ONNX model.
   ///
   /// When set, controls which execution provider (CPU, CUDA, CoreML, TensorRT)
   /// is used for inference. Defaults to `None` (auto-select per platform).
   final AccelerationConfig? acceleration;
-
   /// Maximum wall-clock duration (in seconds) for a single `embed()` call when
   /// using [`EmbeddingModelType::Plugin`].
   ///
@@ -5202,7 +3905,6 @@ class EmbeddingConfig {
   /// for common in-process inference; increase for large batches on slow
   /// hardware.
   final PlatformInt64? maxEmbedDurationSecs;
-
   /// Maximum number of tokens fed to the tokenizer before truncation when
   /// embedding a chunk with a local ONNX model (Preset/Custom).
   ///
@@ -5217,71 +3919,43 @@ class EmbeddingConfig {
   /// tokenization.
   final PlatformInt64? maxSequenceLength;
 
-  const EmbeddingConfig({
-    required this.model,
-    required this.normalize,
-    required this.batchSize,
-    required this.showDownloadProgress,
-    this.cacheDir,
-    this.acceleration,
-    this.maxEmbedDurationSecs,
-    this.maxSequenceLength,
-  });
+  const EmbeddingConfig({required this.model ,required this.normalize ,required this.batchSize ,required this.showDownloadProgress ,this.cacheDir ,this.acceleration ,this.maxEmbedDurationSecs ,this.maxSequenceLength ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  model.hashCode ^
-  normalize.hashCode ^
-  batchSize.hashCode ^
-  showDownloadProgress.hashCode ^
-  cacheDir.hashCode ^
-  acceleration.hashCode ^
-  maxEmbedDurationSecs.hashCode ^
-  maxSequenceLength.hashCode;
+  int get hashCode => model.hashCode^normalize.hashCode^batchSize.hashCode^showDownloadProgress.hashCode^cacheDir.hashCode^acceleration.hashCode^maxEmbedDurationSecs.hashCode^maxSequenceLength.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is EmbeddingConfig &&
-  runtimeType == other.runtimeType &&
-  model == other.model &&
-  normalize == other.normalize &&
-  batchSize == other.batchSize &&
-  showDownloadProgress == other.showDownloadProgress &&
-  cacheDir == other.cacheDir &&
-  acceleration == other.acceleration &&
-  maxEmbedDurationSecs == other.maxEmbedDurationSecs &&
-  maxSequenceLength == other.maxSequenceLength;
+  runtimeType == other.runtimeType
+  && model == other.model&& normalize == other.normalize&& batchSize == other.batchSize&& showDownloadProgress == other.showDownloadProgress&& cacheDir == other.cacheDir&& acceleration == other.acceleration&& maxEmbedDurationSecs == other.maxEmbedDurationSecs&& maxSequenceLength == other.maxSequenceLength;
+
 }
 
 @freezed
-sealed class EmbeddingModelType with _$EmbeddingModelType {
+sealed class EmbeddingModelType with _$EmbeddingModelType  {
   const EmbeddingModelType._();
 
   /// Use a preset model configuration (recommended)
-  const factory EmbeddingModelType.preset({
-    /// Preset name (e.g. "balanced", "multilingual", "large").
-    required String name,
-  }) = EmbeddingModelType_Preset;
-
+  const factory EmbeddingModelType.preset({ /// Preset name (e.g. "balanced", "multilingual", "large").
+    required String name , }) = EmbeddingModelType_Preset;
   /// Use a custom ONNX model from HuggingFace
-  const factory EmbeddingModelType.custom({
-    /// HuggingFace model repository ID (e.g. "BAAI/bge-small-en-v1.5").
-    required String modelId,
-
-    /// Number of dimensions in the model's output embedding vectors.
-    required PlatformInt64 dimensions,
-  }) = EmbeddingModelType_Custom;
-
+  const factory EmbeddingModelType.custom({ /// HuggingFace model repository ID (e.g. "BAAI/bge-small-en-v1.5").
+    required String modelId ,/// Number of dimensions in the model's output embedding vectors.
+    required PlatformInt64 dimensions , }) = EmbeddingModelType_Custom;
   /// Provider-hosted embedding model via liter-llm.
   ///
   /// Uses the model specified in the nested `LlmConfig` (e.g.,
   /// `"openai/text-embedding-3-small"`).
-  const factory EmbeddingModelType.llm({
-    /// LLM provider configuration specifying the model and API credentials.
-    required LlmConfig llm,
-  }) = EmbeddingModelType_Llm;
-
+  const factory EmbeddingModelType.llm({ /// LLM provider configuration specifying the model and API credentials.
+    required LlmConfig llm , }) = EmbeddingModelType_Llm;
   /// In-process embedding backend registered via the plugin system.
   ///
   /// The caller registers an [`EmbeddingBackend`](crate::plugins::EmbeddingBackend) once
@@ -5301,10 +3975,12 @@ sealed class EmbeddingModelType with _$EmbeddingModelType {
   /// context window via `max_characters` directly.
   ///
   /// See `register_embedding_backend`.
-  const factory EmbeddingModelType.plugin({
-    /// Name the backend was registered under via `register_embedding_backend`.
-    required String name,
-  }) = EmbeddingModelType_Plugin;
+  const factory EmbeddingModelType.plugin({ /// Name the backend was registered under via `register_embedding_backend`.
+    required String name , }) = EmbeddingModelType_Plugin;
+
+
+
+
 }
 
 /// Inference backend that an [`EmbeddingPreset`] runs on.
@@ -5319,261 +3995,219 @@ sealed class EmbeddingModelType with _$EmbeddingModelType {
 enum EmbeddingsEmbeddingBackend {
   /// ONNX Runtime transformer inference (the historical, default backend).
   onnx,
-
   /// Pure-Rust static (model2vec) inference — no ONNX Runtime.
   static_,
+  ;
+
 }
 
 /// A single named entity detected in the extracted text.
-class Entity {
+class Entity  {
   /// Canonical category the entity belongs to (PERSON, ORG, LOCATION, etc.).
   final EntityCategory category;
-
   /// Raw mention text exactly as it appeared in the source.
   final String text;
-
   /// Byte-offset span in `ExtractedDocument::content` where the mention starts.
   final PlatformInt64 start;
-
   /// Byte-offset span in `ExtractedDocument::content` where the mention ends (exclusive).
   final PlatformInt64 end;
-
   /// Backend-reported confidence in `[0.0, 1.0]`. `None` when the backend does not
   /// expose confidence scores.
   final double? confidence;
 
-  const Entity({
-    required this.category,
-    required this.text,
-    required this.start,
-    required this.end,
-    this.confidence,
-  });
+  const Entity({required this.category ,required this.text ,required this.start ,required this.end ,this.confidence ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  category.hashCode ^
-  text.hashCode ^
-  start.hashCode ^
-  end.hashCode ^
-  confidence.hashCode;
+  int get hashCode => category.hashCode^text.hashCode^start.hashCode^end.hashCode^confidence.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is Entity &&
-  runtimeType == other.runtimeType &&
-  category == other.category &&
-  text == other.text &&
-  start == other.start &&
-  end == other.end &&
-  confidence == other.confidence;
+  runtimeType == other.runtimeType
+  && category == other.category&& text == other.text&& start == other.start&& end == other.end&& confidence == other.confidence;
+
 }
 
 @freezed
-sealed class EntityCategory with _$EntityCategory {
+sealed class EntityCategory with _$EntityCategory  {
   const EntityCategory._();
 
   /// A person's name.
   const factory EntityCategory.person() = EntityCategory_Person;
-
   /// A company, institution, or organisation name.
   const factory EntityCategory.organization() = EntityCategory_Organization;
-
   /// A geographic location (city, country, address).
   const factory EntityCategory.location() = EntityCategory_Location;
-
   /// A calendar date.
   const factory EntityCategory.date() = EntityCategory_Date;
-
   /// A time of day or duration.
   const factory EntityCategory.time() = EntityCategory_Time;
-
   /// A monetary amount with optional currency.
   const factory EntityCategory.money() = EntityCategory_Money;
-
   /// A percentage value.
   const factory EntityCategory.percent() = EntityCategory_Percent;
-
   /// An email address.
   const factory EntityCategory.email() = EntityCategory_Email;
-
   /// A phone number.
   const factory EntityCategory.phone() = EntityCategory_Phone;
-
   /// A URL or URI.
   const factory EntityCategory.url() = EntityCategory_Url;
-
   /// A caller-supplied custom category label.
-  const factory EntityCategory.custom({required String field0}) =
-  EntityCategory_Custom;
+  const factory EntityCategory.custom({   required String field0 , }) = EntityCategory_Custom;
+
+
+
+
 }
 
 /// EPUB metadata (Dublin Core extensions).
-class EpubMetadata {
+class EpubMetadata  {
   /// Dublin Core `coverage` field (geographic or temporal scope).
   final String? coverage;
-
   /// Dublin Core `format` field (media type of the resource).
   final String? dcFormat;
-
   /// Dublin Core `relation` field (related resource identifier).
   final String? relation;
-
   /// Dublin Core `source` field (origin resource identifier).
   final String? source;
-
   /// Dublin Core `type` field (nature or genre of the resource).
   final String? dcType;
-
   /// Path or identifier of the cover image within the EPUB container.
   final String? coverImage;
 
-  const EpubMetadata({
-    this.coverage,
-    this.dcFormat,
-    this.relation,
-    this.source,
-    this.dcType,
-    this.coverImage,
-  });
+  const EpubMetadata({this.coverage ,this.dcFormat ,this.relation ,this.source ,this.dcType ,this.coverImage ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  coverage.hashCode ^
-  dcFormat.hashCode ^
-  relation.hashCode ^
-  source.hashCode ^
-  dcType.hashCode ^
-  coverImage.hashCode;
+  int get hashCode => coverage.hashCode^dcFormat.hashCode^relation.hashCode^source.hashCode^dcType.hashCode^coverImage.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is EpubMetadata &&
-  runtimeType == other.runtimeType &&
-  coverage == other.coverage &&
-  dcFormat == other.dcFormat &&
-  relation == other.relation &&
-  source == other.source &&
-  dcType == other.dcType &&
-  coverImage == other.coverImage;
+  runtimeType == other.runtimeType
+  && coverage == other.coverage&& dcFormat == other.dcFormat&& relation == other.relation&& source == other.source&& dcType == other.dcType&& coverImage == other.coverImage;
+
 }
 
 /// Error metadata (for batch operations).
-class ErrorMetadata {
+class ErrorMetadata  {
   /// Machine-readable error type identifier (e.g. "UnsupportedFormat").
   final String errorType;
-
   /// Human-readable error description.
   final String message;
 
-  const ErrorMetadata({required this.errorType, required this.message});
+  const ErrorMetadata({required this.errorType ,required this.message ,});
+
+
+
+
 
   @override
-  int get hashCode => errorType.hashCode ^ message.hashCode;
+  int get hashCode => errorType.hashCode^message.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ErrorMetadata &&
-  runtimeType == other.runtimeType &&
-  errorType == other.errorType &&
-  message == other.message;
+  runtimeType == other.runtimeType
+  && errorType == other.errorType&& message == other.message;
+
 }
 
 /// Excel/spreadsheet format metadata.
 ///
 /// Identifies the document as a spreadsheet source via the `FormatMetadata::Excel`
 /// discriminant. Sheet count and sheet names are stored inside this struct.
-class ExcelMetadata {
+class ExcelMetadata  {
   /// Number of sheets in the workbook.
   final PlatformInt64? sheetCount;
-
   /// Names of all sheets in the workbook.
   final List<String>? sheetNames;
 
-  const ExcelMetadata({this.sheetCount, this.sheetNames});
+  const ExcelMetadata({this.sheetCount ,this.sheetNames ,});
+
+
+
+
 
   @override
-  int get hashCode => sheetCount.hashCode ^ sheetNames.hashCode;
+  int get hashCode => sheetCount.hashCode^sheetNames.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ExcelMetadata &&
-  runtimeType == other.runtimeType &&
-  sheetCount == other.sheetCount &&
-  sheetNames == other.sheetNames;
+  runtimeType == other.runtimeType
+  && sheetCount == other.sheetCount&& sheetNames == other.sheetNames;
+
 }
 
 /// Single Excel worksheet.
 ///
 /// Represents one sheet from an Excel workbook with its content
 /// converted to Markdown format and dimensional statistics.
-class ExcelSheet {
+class ExcelSheet  {
   /// Sheet name as it appears in Excel
   final String name;
-
   /// Sheet content converted to Markdown tables
   final String markdown;
-
   /// Number of rows
   final PlatformInt64 rowCount;
-
   /// Number of columns
   final PlatformInt64 colCount;
-
   /// Total number of non-empty cells
   final PlatformInt64 cellCount;
-
   /// Pre-extracted table cells (2D vector of cell values)
   /// Populated during markdown generation to avoid re-parsing markdown.
   /// None for empty sheets.
   final List<List<String>>? tableCells;
 
-  const ExcelSheet({
-    required this.name,
-    required this.markdown,
-    required this.rowCount,
-    required this.colCount,
-    required this.cellCount,
-    this.tableCells,
-  });
+  const ExcelSheet({required this.name ,required this.markdown ,required this.rowCount ,required this.colCount ,required this.cellCount ,this.tableCells ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  name.hashCode ^
-  markdown.hashCode ^
-  rowCount.hashCode ^
-  colCount.hashCode ^
-  cellCount.hashCode ^
-  tableCells.hashCode;
+  int get hashCode => name.hashCode^markdown.hashCode^rowCount.hashCode^colCount.hashCode^cellCount.hashCode^tableCells.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ExcelSheet &&
-  runtimeType == other.runtimeType &&
-  name == other.name &&
-  markdown == other.markdown &&
-  rowCount == other.rowCount &&
-  colCount == other.colCount &&
-  cellCount == other.cellCount &&
-  tableCells == other.tableCells;
+  runtimeType == other.runtimeType
+  && name == other.name&& markdown == other.markdown&& rowCount == other.rowCount&& colCount == other.colCount&& cellCount == other.cellCount&& tableCells == other.tableCells;
+
 }
 
 /// Excel workbook representation.
 ///
 /// Contains all sheets from an Excel file (.xlsx, .xls, etc.) with
 /// extracted content and metadata.
-class ExcelWorkbook {
+class ExcelWorkbook  {
   /// All sheets in the workbook
   final List<ExcelSheet> sheets;
-
   /// Workbook-level metadata (author, creation date, etc.)
   final Map<String, String> metadata;
-
   /// Collaborative-edit revision headers from `xl/revisions/revisionHeaders.xml`.
   ///
   /// Populated for legacy shared-workbook `.xlsx` files that contain the
@@ -5584,23 +4218,24 @@ class ExcelWorkbook {
   /// follow-up). `None` when `xl/revisions/revisionHeaders.xml` is absent.
   final List<DocumentRevision>? revisions;
 
-  const ExcelWorkbook({
-    required this.sheets,
-    required this.metadata,
-    this.revisions,
-  });
+  const ExcelWorkbook({required this.sheets ,required this.metadata ,this.revisions ,});
+
+
+
+
 
   @override
-  int get hashCode => sheets.hashCode ^ metadata.hashCode ^ revisions.hashCode;
+  int get hashCode => sheets.hashCode^metadata.hashCode^revisions.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ExcelWorkbook &&
-  runtimeType == other.runtimeType &&
-  sheets == other.sheets &&
-  metadata == other.metadata &&
-  revisions == other.revisions;
+  runtimeType == other.runtimeType
+  && sheets == other.sheets&& metadata == other.metadata&& revisions == other.revisions;
+
 }
 
 /// ONNX Runtime execution provider type.
@@ -5610,139 +4245,111 @@ class ExcelWorkbook {
 enum ExecutionProviderType {
   /// Auto-select: CoreML on macOS, CUDA on Linux, CPU elsewhere.
   auto,
-
   /// CPU execution provider (always available).
   cpu,
-
   /// Apple CoreML (macOS/iOS Neural Engine + GPU).
   coreMl,
-
   /// NVIDIA CUDA GPU acceleration.
   cuda,
-
   /// NVIDIA TensorRT (optimized CUDA inference).
   tensorRt,
+  ;
+
 }
 
 /// Unified extraction input for all public extraction entry points.
-class ExtractInput {
+class ExtractInput  {
   /// Source kind. `bytes` requires `bytes`; `uri` requires `uri`.
   final ExtractInputKind kind;
-
   /// Raw bytes for `kind = "bytes"`.
   final Uint8List? bytes;
-
   /// Local path, `file://` URI, or HTTP(S) URL for `kind = "uri"`.
   final String? uri;
-
   /// MIME type hint.
   final String? mimeType;
-
   /// Filename hint used for MIME detection and metadata.
   final String? filename;
-
   /// Per-input extraction overrides.
   final FileExtractionConfig? config;
 
-  const ExtractInput({
-    required this.kind,
-    this.bytes,
-    this.uri,
-    this.mimeType,
-    this.filename,
-    this.config,
-  });
+  const ExtractInput({required this.kind ,this.bytes ,this.uri ,this.mimeType ,this.filename ,this.config ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  kind.hashCode ^
-  bytes.hashCode ^
-  uri.hashCode ^
-  mimeType.hashCode ^
-  filename.hashCode ^
-  config.hashCode;
+  int get hashCode => kind.hashCode^bytes.hashCode^uri.hashCode^mimeType.hashCode^filename.hashCode^config.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ExtractInput &&
-  runtimeType == other.runtimeType &&
-  kind == other.kind &&
-  bytes == other.bytes &&
-  uri == other.uri &&
-  mimeType == other.mimeType &&
-  filename == other.filename &&
-  config == other.config;
+  runtimeType == other.runtimeType
+  && kind == other.kind&& bytes == other.bytes&& uri == other.uri&& mimeType == other.mimeType&& filename == other.filename&& config == other.config;
+
 }
 
 /// Source kind for [`ExtractInput`].
 enum ExtractInputKind {
   /// Raw in-memory bytes.
   bytes,
-
   /// A filesystem path, `file://` URI, or HTTP(S) URL.
   uri,
+  ;
+
 }
 
 /// Document extracted by the core extraction pipeline.
 ///
 /// `extract` and `extract_batch` return an `ExtractionResult` envelope whose
 /// `results` field contains these per-document payloads.
-class ExtractedDocument {
+class ExtractedDocument  {
   /// Plain-text representation of the extracted document content.
   final String content;
-
   /// MIME type of the source document (e.g. `"application/pdf"`).
   final String mimeType;
-
   /// Document-level metadata (author, title, dates, format-specific fields).
   final Metadata metadata;
-
   /// Extraction strategy used to produce the returned text.
   ///
   /// Populated when the extractor can reliably distinguish native text extraction,
   /// OCR-only extraction, or mixed native/OCR output.
   final ExtractionMethod? extractionMethod;
-
   /// Tables extracted from the document, each with structured cell data.
   final List<Table> tables;
-
   /// Cheap structural counts (pages, tables, images).
   ///
   /// Always populated by the extraction pipeline, even when the `pages` /
   /// `images` collections are `None`. See [`DocumentCounts`].
   final DocumentCounts counts;
-
   /// ISO 639-1 language codes detected in the document content.
   final List<String>? detectedLanguages;
-
   /// Text chunks when chunking is enabled.
   ///
   /// When chunking configuration is provided, the content is split into
   /// overlapping chunks for efficient processing. Each chunk contains the text,
   /// optional embeddings (if enabled), and metadata about its position.
   final List<Chunk>? chunks;
-
   /// Extracted images from the document.
   ///
   /// When image extraction is enabled via `ImageExtractionConfig`, this field
   /// contains all images found in the document with their raw data and metadata.
   /// Each image may optionally contain a nested `ocr_result` if OCR was performed.
   final List<ExtractedImage>? images;
-
   /// Per-page content when page extraction is enabled.
   ///
   /// When page extraction is configured, the document is split into per-page content
   /// with tables and images mapped to their respective pages.
   final List<PageContent>? pages;
-
   /// Semantic elements when element-based result format is enabled.
   ///
   /// When result_format is set to ElementBased, this field contains semantic
   /// elements with type classification, unique identifiers, and metadata for
   /// Unstructured-compatible element-based processing.
   final List<Element>? elements;
-
   /// Rich Djot content structure (when extracting Djot documents).
   ///
   /// When extracting Djot documents with structured extraction enabled,
@@ -5757,7 +4364,6 @@ class ExtractedDocument {
   ///
   /// Always `None` for non-Djot documents.
   final DjotContent? djotContent;
-
   /// OCR elements with full spatial and confidence metadata.
   ///
   /// When OCR is performed with element extraction enabled, this field contains
@@ -5772,7 +4378,6 @@ class ExtractedDocument {
   ///
   /// Only populated when `OcrElementConfig.include_elements` is true.
   final List<OcrElement>? ocrElements;
-
   /// Structured document tree (when document structure extraction is enabled).
   ///
   /// When `include_document_structure` is true in `ExtractionConfig`, this field
@@ -5785,20 +4390,17 @@ class ExtractedDocument {
   ///
   /// Independent of `result_format` — can be combined with Unified or ElementBased.
   final DocumentStructure? document;
-
   /// Extracted keywords when keyword extraction is enabled.
   ///
   /// When keyword extraction (RAKE or YAKE) is configured, this field contains
   /// the extracted keywords with scores, algorithm info, and position data.
   /// Previously stored in `metadata.additional["keywords"]`.
   final List<Keyword>? extractedKeywords;
-
   /// Document quality score from quality analysis.
   ///
   /// A value between 0.0 and 1.0 indicating the overall text quality.
   /// Previously stored in `metadata.additional["quality_score"]`.
   final double? qualityScore;
-
   /// Non-fatal warnings collected during processing pipeline stages.
   ///
   /// Captures errors from optional pipeline features (embedding, chunking,
@@ -5806,28 +4408,24 @@ class ExtractedDocument {
   /// but may indicate degraded results.
   /// Previously stored as individual keys in `metadata.additional`.
   final List<ProcessingWarning> processingWarnings;
-
   /// PDF annotations extracted from the document.
   ///
   /// When annotation extraction is enabled via `PdfConfig::extract_annotations`,
   /// this field contains text notes, highlights, links, stamps, and other
   /// annotations found in PDF documents.
   final List<PdfAnnotation>? annotations;
-
   /// Nested extraction results from archive contents.
   ///
   /// When extracting archives, each processable file inside produces its own
   /// full extraction result. Set to `None` for non-archive formats.
   /// Use `max_archive_depth` in config to control recursion depth.
   final List<ArchiveEntry>? children;
-
   /// URIs/links discovered during document extraction.
   ///
   /// Contains hyperlinks, image references, citations, email addresses, and
   /// other URI-like references found in the document. Always extracted when
   /// present in the source document.
   final List<ExtractedUri>? uris;
-
   /// Tracked changes embedded in the source document.
   ///
   /// Populated by per-format extractors that understand change-tracking
@@ -5838,14 +4436,12 @@ class ExtractedDocument {
   /// `content`, deleted text is absent — the revision list is the separate
   /// audit trail.
   final List<DocumentRevision>? revisions;
-
   /// Structured extraction output from LLM-based JSON schema extraction.
   ///
   /// When `structured_extraction` is configured in `ExtractionConfig`, the
   /// extracted document content is sent to a VLM with the provided JSON schema.
   /// The response is parsed and stored here as a JSON value matching the schema.
   final String? structuredOutput;
-
   /// Code intelligence results from tree-sitter analysis.
   ///
   /// Populated when extracting source code files with the `tree-sitter` feature.
@@ -5856,7 +4452,6 @@ class ExtractedDocument {
   /// C#, …) can deserialize it as a raw JSON object rather than a typed struct.
   /// The underlying type is `tree_sitter_language_pack::ProcessResult`.
   final String? codeIntelligence;
-
   /// LLM token usage and cost data for all LLM calls made during this extraction.
   ///
   /// Contains one entry per LLM call. Multiple entries are produced when
@@ -5865,20 +4460,17 @@ class ExtractedDocument {
   ///
   /// `None` when no LLM was used.
   final List<LlmUsage>? llmUsage;
-
   /// Named entities detected in `content` by the NER post-processor.
   ///
   /// `None` when no NER backend is configured. Populated by the `xberg-gliner`
   /// ONNX backend or the LLM-driven backend (see `crates/xberg/src/text/ner/`).
   final List<Entity>? entities;
-
   /// Summary of `content` produced by the summarisation post-processor.
   ///
   /// `None` when summarisation is not configured. Populated by the TextRank
   /// extractive backend (deterministic, no external service) or by the
   /// liter-llm-driven abstractive backend.
   final DocumentSummary? summary;
-
   /// Confidence score computed by the heuristics pipeline.
   ///
   /// Populated when the `heuristics` feature is enabled and confidence
@@ -5888,17 +4480,14 @@ class ExtractedDocument {
   /// `None` when confidence scoring is not configured or the feature is
   /// absent.
   final ExtractionConfidence? extractionConfidence;
-
   /// Translation of `content` produced by the translation post-processor.
   ///
   /// `None` when translation is not configured.
   final Translation? translation;
-
   /// Per-page classifications produced by the page-classification post-processor.
   ///
   /// `None` when classification is not configured.
   final List<PageClassification>? pageClassifications;
-
   /// Audit report of redactions applied by the redaction post-processor.
   ///
   /// The redaction processor rewrites `content`, `formatted_content`, every
@@ -5906,20 +4495,17 @@ class ExtractedDocument {
   /// `page_classifications` in place. This report describes what was found and how it
   /// was replaced. `None` when redaction is not configured.
   final RedactionReport? redactionReport;
-
   /// Mathematical formulas recognized in the document.
   ///
   /// Populated by the layout-guided formula pipeline when the
   /// `layout-detection` feature is enabled and the document contains regions
   /// classified as formulas. Empty otherwise.
   final List<Formula> formulas;
-
   /// Form fields extracted from a PDF's AcroForm or XFA structure.
   ///
   /// Populated by the PDF extractor when `PdfConfig::extract_form_fields` is
   /// enabled (default) and the document is a fillable form. Empty otherwise.
   final List<PdfFormField> formFields;
-
   /// Pre-rendered content in the requested output format.
   ///
   /// Populated during `derive_extraction_result` before tree derivation consumes
@@ -5927,116 +4513,24 @@ class ExtractedDocument {
   /// of the pipeline, after post-processors have operated on plain text.
   final String? formattedContent;
 
-  const ExtractedDocument({
-    required this.content,
-    required this.mimeType,
-    required this.metadata,
-    this.extractionMethod,
-    required this.tables,
-    required this.counts,
-    this.detectedLanguages,
-    this.chunks,
-    this.images,
-    this.pages,
-    this.elements,
-    this.djotContent,
-    this.ocrElements,
-    this.document,
-    this.extractedKeywords,
-    this.qualityScore,
-    required this.processingWarnings,
-    this.annotations,
-    this.children,
-    this.uris,
-    this.revisions,
-    this.structuredOutput,
-    this.codeIntelligence,
-    this.llmUsage,
-    this.entities,
-    this.summary,
-    this.extractionConfidence,
-    this.translation,
-    this.pageClassifications,
-    this.redactionReport,
-    required this.formulas,
-    required this.formFields,
-    this.formattedContent,
-  });
+  const ExtractedDocument({required this.content ,required this.mimeType ,required this.metadata ,this.extractionMethod ,required this.tables ,required this.counts ,this.detectedLanguages ,this.chunks ,this.images ,this.pages ,this.elements ,this.djotContent ,this.ocrElements ,this.document ,this.extractedKeywords ,this.qualityScore ,required this.processingWarnings ,this.annotations ,this.children ,this.uris ,this.revisions ,this.structuredOutput ,this.codeIntelligence ,this.llmUsage ,this.entities ,this.summary ,this.extractionConfidence ,this.translation ,this.pageClassifications ,this.redactionReport ,required this.formulas ,required this.formFields ,this.formattedContent ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  content.hashCode ^
-  mimeType.hashCode ^
-  metadata.hashCode ^
-  extractionMethod.hashCode ^
-  tables.hashCode ^
-  counts.hashCode ^
-  detectedLanguages.hashCode ^
-  chunks.hashCode ^
-  images.hashCode ^
-  pages.hashCode ^
-  elements.hashCode ^
-  djotContent.hashCode ^
-  ocrElements.hashCode ^
-  document.hashCode ^
-  extractedKeywords.hashCode ^
-  qualityScore.hashCode ^
-  processingWarnings.hashCode ^
-  annotations.hashCode ^
-  children.hashCode ^
-  uris.hashCode ^
-  revisions.hashCode ^
-  structuredOutput.hashCode ^
-  codeIntelligence.hashCode ^
-  llmUsage.hashCode ^
-  entities.hashCode ^
-  summary.hashCode ^
-  extractionConfidence.hashCode ^
-  translation.hashCode ^
-  pageClassifications.hashCode ^
-  redactionReport.hashCode ^
-  formulas.hashCode ^
-  formFields.hashCode ^
-  formattedContent.hashCode;
+  int get hashCode => content.hashCode^mimeType.hashCode^metadata.hashCode^extractionMethod.hashCode^tables.hashCode^counts.hashCode^detectedLanguages.hashCode^chunks.hashCode^images.hashCode^pages.hashCode^elements.hashCode^djotContent.hashCode^ocrElements.hashCode^document.hashCode^extractedKeywords.hashCode^qualityScore.hashCode^processingWarnings.hashCode^annotations.hashCode^children.hashCode^uris.hashCode^revisions.hashCode^structuredOutput.hashCode^codeIntelligence.hashCode^llmUsage.hashCode^entities.hashCode^summary.hashCode^extractionConfidence.hashCode^translation.hashCode^pageClassifications.hashCode^redactionReport.hashCode^formulas.hashCode^formFields.hashCode^formattedContent.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ExtractedDocument &&
-  runtimeType == other.runtimeType &&
-  content == other.content &&
-  mimeType == other.mimeType &&
-  metadata == other.metadata &&
-  extractionMethod == other.extractionMethod &&
-  tables == other.tables &&
-  counts == other.counts &&
-  detectedLanguages == other.detectedLanguages &&
-  chunks == other.chunks &&
-  images == other.images &&
-  pages == other.pages &&
-  elements == other.elements &&
-  djotContent == other.djotContent &&
-  ocrElements == other.ocrElements &&
-  document == other.document &&
-  extractedKeywords == other.extractedKeywords &&
-  qualityScore == other.qualityScore &&
-  processingWarnings == other.processingWarnings &&
-  annotations == other.annotations &&
-  children == other.children &&
-  uris == other.uris &&
-  revisions == other.revisions &&
-  structuredOutput == other.structuredOutput &&
-  codeIntelligence == other.codeIntelligence &&
-  llmUsage == other.llmUsage &&
-  entities == other.entities &&
-  summary == other.summary &&
-  extractionConfidence == other.extractionConfidence &&
-  translation == other.translation &&
-  pageClassifications == other.pageClassifications &&
-  redactionReport == other.redactionReport &&
-  formulas == other.formulas &&
-  formFields == other.formFields &&
-  formattedContent == other.formattedContent;
+  runtimeType == other.runtimeType
+  && content == other.content&& mimeType == other.mimeType&& metadata == other.metadata&& extractionMethod == other.extractionMethod&& tables == other.tables&& counts == other.counts&& detectedLanguages == other.detectedLanguages&& chunks == other.chunks&& images == other.images&& pages == other.pages&& elements == other.elements&& djotContent == other.djotContent&& ocrElements == other.ocrElements&& document == other.document&& extractedKeywords == other.extractedKeywords&& qualityScore == other.qualityScore&& processingWarnings == other.processingWarnings&& annotations == other.annotations&& children == other.children&& uris == other.uris&& revisions == other.revisions&& structuredOutput == other.structuredOutput&& codeIntelligence == other.codeIntelligence&& llmUsage == other.llmUsage&& entities == other.entities&& summary == other.summary&& extractionConfidence == other.extractionConfidence&& translation == other.translation&& pageClassifications == other.pageClassifications&& redactionReport == other.redactionReport&& formulas == other.formulas&& formFields == other.formFields&& formattedContent == other.formattedContent;
+
 }
 
 /// Extracted image from a document.
@@ -6044,64 +4538,48 @@ class ExtractedDocument {
 /// Contains raw image data, metadata, and optional nested OCR results.
 /// Raw bytes allow cross-language compatibility - users can convert to
 /// PIL.Image (Python), Sharp (Node.js), or other formats as needed.
-class ExtractedImage {
+class ExtractedImage  {
   /// Raw image data (PNG, JPEG, WebP, etc. bytes).
   /// Uses `bytes::Bytes` for cheap cloning of large buffers.
   final Uint8List data;
-
   /// Image format (e.g., "jpeg", "png", "webp")
   /// Uses Cow<'static, str> to avoid allocation for static literals.
   final String format;
-
   /// Zero-indexed position of this image in the document/page
   final PlatformInt64 imageIndex;
-
   /// Page/slide number where image was found (1-indexed)
   final PlatformInt64? pageNumber;
-
   /// Image width in pixels
   final PlatformInt64? width;
-
   /// Image height in pixels
   final PlatformInt64? height;
-
   /// Colorspace information (e.g., "RGB", "CMYK", "Gray")
   final String? colorspace;
-
   /// Bits per color component (e.g., 8, 16)
   final PlatformInt64? bitsPerComponent;
-
   /// Whether this image is a mask image
   final bool isMask;
-
   /// Optional description of the image
   final String? description;
-
   /// Nested OCR extraction result (if image was OCRed)
   ///
   /// When OCR is performed on this image, the result is embedded here
   /// rather than in a separate collection, making the relationship explicit.
   final ExtractedDocument? ocrResult;
-
   /// Bounding box of the image on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top).
   /// Only populated for PDF-extracted images when position data is available from the PDF extractor.
   final BoundingBox? boundingBox;
-
   /// Original source path of the image within the document archive (e.g., "media/image1.png" in DOCX).
   /// Used for rendering image references when the binary data is not extracted.
   final String? sourcePath;
-
   /// Heuristic classification of what this image likely depicts.
   /// `None` if classification was disabled or inconclusive.
   final ImageKind? imageKind;
-
   /// Confidence score for `image_kind`, in the range 0.0 to 1.0.
   final double? kindConfidence;
-
   /// Identifier shared across images that form a single logical figure
   /// (e.g. all raster tiles of one technical drawing). `None` for singletons.
   final PlatformInt64? clusterId;
-
   /// VLM-generated caption describing the image, when captioning is configured.
   ///
   /// Populated by the captioning post-processor
@@ -6109,86 +4587,34 @@ class ExtractedImage {
   /// each image through `crate::llm::region_extractor::extract_region_with_vlm` in
   /// caption mode. `None` when captioning is disabled or the VLM declined to caption.
   final String? caption;
-
   /// QR codes decoded from this image, when QR detection is enabled.
   ///
   /// Populated by the QR post-processor (`crates/xberg/src/extractors/qr.rs`) via
   /// the pure-Rust `rqrr` decoder. `None` when QR detection is disabled; an empty
   /// `Some(vec![])` when detection ran but found nothing.
   final List<QrCode>? qrCodes;
-
   /// Base64-encoded copy of `data`; populated when `ImageExtractionConfig::include_data_base64`
   /// is `true`. Omitted from JSON by default; use instead of `data` in JSON-only clients.
   final String? dataBase64;
 
-  const ExtractedImage({
-    required this.data,
-    required this.format,
-    required this.imageIndex,
-    this.pageNumber,
-    this.width,
-    this.height,
-    this.colorspace,
-    this.bitsPerComponent,
-    required this.isMask,
-    this.description,
-    this.ocrResult,
-    this.boundingBox,
-    this.sourcePath,
-    this.imageKind,
-    this.kindConfidence,
-    this.clusterId,
-    this.caption,
-    this.qrCodes,
-    this.dataBase64,
-  });
+  const ExtractedImage({required this.data ,required this.format ,required this.imageIndex ,this.pageNumber ,this.width ,this.height ,this.colorspace ,this.bitsPerComponent ,required this.isMask ,this.description ,this.ocrResult ,this.boundingBox ,this.sourcePath ,this.imageKind ,this.kindConfidence ,this.clusterId ,this.caption ,this.qrCodes ,this.dataBase64 ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  data.hashCode ^
-  format.hashCode ^
-  imageIndex.hashCode ^
-  pageNumber.hashCode ^
-  width.hashCode ^
-  height.hashCode ^
-  colorspace.hashCode ^
-  bitsPerComponent.hashCode ^
-  isMask.hashCode ^
-  description.hashCode ^
-  ocrResult.hashCode ^
-  boundingBox.hashCode ^
-  sourcePath.hashCode ^
-  imageKind.hashCode ^
-  kindConfidence.hashCode ^
-  clusterId.hashCode ^
-  caption.hashCode ^
-  qrCodes.hashCode ^
-  dataBase64.hashCode;
+  int get hashCode => data.hashCode^format.hashCode^imageIndex.hashCode^pageNumber.hashCode^width.hashCode^height.hashCode^colorspace.hashCode^bitsPerComponent.hashCode^isMask.hashCode^description.hashCode^ocrResult.hashCode^boundingBox.hashCode^sourcePath.hashCode^imageKind.hashCode^kindConfidence.hashCode^clusterId.hashCode^caption.hashCode^qrCodes.hashCode^dataBase64.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ExtractedImage &&
-  runtimeType == other.runtimeType &&
-  data == other.data &&
-  format == other.format &&
-  imageIndex == other.imageIndex &&
-  pageNumber == other.pageNumber &&
-  width == other.width &&
-  height == other.height &&
-  colorspace == other.colorspace &&
-  bitsPerComponent == other.bitsPerComponent &&
-  isMask == other.isMask &&
-  description == other.description &&
-  ocrResult == other.ocrResult &&
-  boundingBox == other.boundingBox &&
-  sourcePath == other.sourcePath &&
-  imageKind == other.imageKind &&
-  kindConfidence == other.kindConfidence &&
-  clusterId == other.clusterId &&
-  caption == other.caption &&
-  qrCodes == other.qrCodes &&
-  dataBase64 == other.dataBase64;
+  runtimeType == other.runtimeType
+  && data == other.data&& format == other.format&& imageIndex == other.imageIndex&& pageNumber == other.pageNumber&& width == other.width&& height == other.height&& colorspace == other.colorspace&& bitsPerComponent == other.bitsPerComponent&& isMask == other.isMask&& description == other.description&& ocrResult == other.ocrResult&& boundingBox == other.boundingBox&& sourcePath == other.sourcePath&& imageKind == other.imageKind&& kindConfidence == other.kindConfidence&& clusterId == other.clusterId&& caption == other.caption&& qrCodes == other.qrCodes&& dataBase64 == other.dataBase64;
+
 }
 
 /// A URI extracted from a document.
@@ -6196,81 +4622,68 @@ class ExtractedImage {
 /// Represents any link, reference, or resource pointer found during extraction.
 /// The `kind` field classifies the URI semantically, while `label` carries
 /// optional human-readable display text.
-class ExtractedUri {
+class ExtractedUri  {
   /// The URL or path string.
   final String url;
-
   /// Optional display text / label for the link.
   final String? label;
-
   /// Optional page number where the URI was found (1-indexed).
   final PlatformInt64? page;
-
   /// Semantic classification of the URI.
   final UriKind kind;
 
-  const ExtractedUri({
-    required this.url,
-    this.label,
-    this.page,
-    required this.kind,
-  });
+  const ExtractedUri({required this.url ,this.label ,this.page ,required this.kind ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  url.hashCode ^ label.hashCode ^ page.hashCode ^ kind.hashCode;
+  int get hashCode => url.hashCode^label.hashCode^page.hashCode^kind.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ExtractedUri &&
-  runtimeType == other.runtimeType &&
-  url == other.url &&
-  label == other.label &&
-  page == other.page &&
-  kind == other.kind;
+  runtimeType == other.runtimeType
+  && url == other.url&& label == other.label&& page == other.page&& kind == other.kind;
+
 }
 
 /// Combined confidence on `[0, 1]`.
 ///
 /// When OCR did not run, the `ocr_aggregate` weight folds into `text_coverage`
 /// so the weighted sum still totals 1.0.
-class ExtractionConfidence {
+class ExtractionConfidence  {
   /// Fraction of pages with a usable text layer.
   final double textCoverage;
-
   /// Mean OCR per-element recognition confidence when OCR ran; `None` when it did not.
   final double? ocrAggregate;
-
   /// Whether the merged output validates against the preset schema.
   final SchemaCompliance schemaCompliance;
-
   /// Weighted blend in `[0, 1]`.  The value compared against the fallback threshold.
   final double combined;
 
-  const ExtractionConfidence({
-    required this.textCoverage,
-    this.ocrAggregate,
-    required this.schemaCompliance,
-    required this.combined,
-  });
+  const ExtractionConfidence({required this.textCoverage ,this.ocrAggregate ,required this.schemaCompliance ,required this.combined ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  textCoverage.hashCode ^
-  ocrAggregate.hashCode ^
-  schemaCompliance.hashCode ^
-  combined.hashCode;
+  int get hashCode => textCoverage.hashCode^ocrAggregate.hashCode^schemaCompliance.hashCode^combined.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ExtractionConfidence &&
-  runtimeType == other.runtimeType &&
-  textCoverage == other.textCoverage &&
-  ocrAggregate == other.ocrAggregate &&
-  schemaCompliance == other.schemaCompliance &&
-  combined == other.combined;
+  runtimeType == other.runtimeType
+  && textCoverage == other.textCoverage&& ocrAggregate == other.ocrAggregate&& schemaCompliance == other.schemaCompliance&& combined == other.combined;
+
 }
 
 /// Main extraction configuration.
@@ -6289,26 +4702,21 @@ class ExtractionConfidence {
 /// // Load from TOML file
 /// // let config = ExtractionConfig::from_toml_file("xberg.toml")?;
 /// ```
-class ExtractionConfig {
+class ExtractionConfig  {
   /// Enable caching of extraction results
   final bool useCache;
-
   /// Enable quality post-processing
   final bool enableQualityProcessing;
-
   /// OCR configuration (None = OCR disabled)
   final OcrConfig? ocr;
-
   /// Force OCR even for searchable PDFs
   final bool forceOcr;
-
   /// Which pages get OCR'd when neither `force_ocr` nor `force_ocr_pages` applies.
   ///
   /// Defaults to [`OcrStrategy::Auto`], which OCRs only pages whose native text
   /// fails a quality check. Only applies to PDF documents. Cannot be
   /// [`OcrStrategy::ScannedPages`] while `disable_ocr` is `true`.
   final OcrStrategy ocrStrategy;
-
   /// Force OCR on specific pages only (1-indexed page numbers, must be >= 1).
   ///
   /// When set, only the listed pages are OCR'd regardless of text layer quality.
@@ -6316,7 +4724,6 @@ class ExtractionConfig {
   /// Only applies to PDF documents. Duplicates are automatically deduplicated.
   /// An `ocr` config is recommended for backend/language selection; defaults are used if absent.
   final Int64List? forceOcrPages;
-
   /// Disable OCR entirely, even for images.
   ///
   /// When `true`, OCR is skipped for all document types. Images return metadata
@@ -6325,44 +4732,33 @@ class ExtractionConfig {
   ///
   /// Cannot be `true` simultaneously with `force_ocr`.
   final bool disableOcr;
-
   /// Text chunking configuration (None = chunking disabled)
   final ChunkingConfig? chunking;
-
   /// Content filtering configuration (None = use extractor defaults).
   ///
   /// Controls whether document "furniture" (headers, footers, watermarks,
   /// repeating text) is included in or stripped from extraction results.
   /// See [`ContentFilterConfig`] for per-field documentation.
   final ContentFilterConfig? contentFilter;
-
   /// Image extraction configuration (None = no image extraction)
   final ImageExtractionConfig? images;
-
   /// PDF-specific options (None = use defaults)
   final PdfConfig? pdfOptions;
-
   /// Token reduction configuration (None = no token reduction)
   final TokenReductionOptions? tokenReduction;
-
   /// Language detection configuration (None = no language detection)
   final LanguageDetectionConfig? languageDetection;
-
   /// Page extraction configuration (None = no page tracking)
   final PageConfig? pages;
-
   /// Keyword extraction configuration (None = no keyword extraction)
   final KeywordConfig? keywords;
-
   /// Post-processor configuration (None = use defaults)
   final PostProcessorConfig? postprocessor;
-
   /// HTML to Markdown conversion options (None = use defaults)
   ///
   /// Configure how HTML documents are converted to Markdown, including heading styles,
   /// list formatting, code block styles, and preprocessing options.
   final ConversionOptions? htmlOptions;
-
   /// Styled HTML output configuration.
   ///
   /// When set alongside `output_format = OutputFormat::Html`, the extraction
@@ -6372,7 +4768,6 @@ class ExtractionConfig {
   ///
   /// When `None`, the existing plain comrak-based HTML renderer is used.
   final HtmlOutputConfig? htmlOutput;
-
   /// Default per-file timeout in seconds for batch extraction.
   ///
   /// When set, each file in a batch will be canceled after this duration
@@ -6385,20 +4780,17 @@ class ExtractionConfig {
   /// headroom to finish. Set to `None` to disable the timeout for trusted
   /// input or long-running workloads.
   final PlatformInt64? extractionTimeoutSecs;
-
   /// Maximum concurrent extractions in batch operations (None = (num_cpus × 1.5).ceil()).
   ///
   /// Limits parallelism to prevent resource exhaustion when processing
   /// large batches. Defaults to (num_cpus × 1.5).ceil() when not set.
   final PlatformInt64? maxConcurrentExtractions;
-
   /// Result structure format
   ///
   /// Controls whether results are returned in unified format (default) with all
   /// content in the `content` field, or element-based format with semantic
   /// elements (for Unstructured-compatible output).
   final ResultFormat resultFormat;
-
   /// Security limits for archive extraction.
   ///
   /// Controls maximum archive size, compression ratio, file count, and other
@@ -6408,7 +4800,6 @@ class ExtractionConfig {
   /// ingests user-controlled bytes.
   /// When `None`, default limits are used.
   final SecurityLimits? securityLimits;
-
   /// Maximum uncompressed size in bytes for a single embedded file before
   /// recursive extraction is attempted (default: 50 MiB).
   ///
@@ -6421,7 +4812,6 @@ class ExtractionConfig {
   /// Set to `None` to disable the per-embedded-file cap (falls back to
   /// `security_limits.max_archive_size` as the only guard).
   final PlatformInt64? maxEmbeddedFileBytes;
-
   /// Content text format (default: Plain).
   ///
   /// Controls the format of the extracted content:
@@ -6434,7 +4824,6 @@ class ExtractionConfig {
   /// formatted output. The `formatted_content` field may be populated
   /// when format conversion is applied.
   final OutputFormat outputFormat;
-
   /// Controls how Jupyter notebook (`.ipynb`) code cells are rendered.
   ///
   /// - `Both` (default): code source plus the notebook's saved outputs
@@ -6444,7 +4833,6 @@ class ExtractionConfig {
   /// Cells are never executed; `Outputs`/`Both` surface only outputs already
   /// stored in the notebook.
   final JupyterCellRendering jupyterCellRendering;
-
   /// Layout detection configuration (None = layout detection disabled).
   ///
   /// When set, PDF pages and images are analyzed for document structure
@@ -6456,7 +4844,6 @@ class ExtractionConfig {
   /// present whenever the `layout-types` feature is active (which includes
   /// `layout-detection` as well as the no-ORT target groups).
   final LayoutDetectionConfig? layout;
-
   /// Transcription (speech-to-text) configuration for audio/video files.
   ///
   /// When set and `enabled`, files with audio/video MIME types (mp3, mp4,
@@ -6468,7 +4855,6 @@ class ExtractionConfig {
   /// Default: `None` (transcription disabled). This is an additive,
   /// non-breaking change.
   final TranscriptionConfig? transcription;
-
   /// Run layout detection on the non-OCR PDF markdown path.
   ///
   /// When `true` and `layout` is `Some(_)`, layout regions inform heading,
@@ -6478,7 +4864,6 @@ class ExtractionConfig {
   /// (~150-300ms/page CPU, ~20-50ms/page GPU). Default: `false`.
   /// Requires the `layout-detection` feature.
   final bool useLayoutForMarkdown;
-
   /// Enable structured document tree output.
   ///
   /// When true, populates the `document` field on `ExtractedDocument` with a
@@ -6487,245 +4872,101 @@ class ExtractionConfig {
   ///
   /// Independent of `result_format` — can be combined with Unified or ElementBased.
   final bool includeDocumentStructure;
-
   /// Hardware acceleration configuration for ONNX Runtime models.
   ///
   /// Controls execution provider selection for layout detection and embedding
   /// models. When `None`, uses platform defaults (CoreML on macOS, CUDA on
   /// Linux, CPU on Windows).
   final AccelerationConfig? acceleration;
-
   /// Cache namespace for tenant isolation.
   ///
   /// When set, cache entries are stored under `{cache_dir}/{namespace}/`.
   /// Must be alphanumeric, hyphens, or underscores only (max 64 chars).
   /// Different namespaces have isolated cache spaces on the same filesystem.
   final String? cacheNamespace;
-
   /// Per-request cache TTL in seconds.
   ///
   /// Overrides the global `max_age_days` for this specific extraction.
   /// When `0`, caching is completely skipped (no read or write).
   /// When `None`, the global TTL applies.
   final PlatformInt64? cacheTtlSecs;
-
   /// Email extraction configuration (None = use defaults).
   ///
   /// Currently supports configuring the fallback codepage for MSG files
   /// that do not specify one. See `EmailConfig` for details.
   final EmailConfig? email;
-
   /// URL ingestion and crawl configuration.
   final UrlExtractionConfig url;
-
   /// Maximum recursion depth for archive extraction (default: 3).
   /// Set to 0 to disable recursive extraction (legacy behavior).
   final PlatformInt64 maxArchiveDepth;
-
   /// Tree-sitter language pack configuration (None = tree-sitter disabled).
   ///
   /// When set, enables code file extraction using tree-sitter parsers.
   /// Controls grammar download behavior and code analysis options.
   final TreeSitterConfig? treeSitter;
-
   /// Structured extraction via LLM (None = disabled).
   ///
   /// When set, the extracted document content is sent to an LLM with the
   /// provided JSON schema. The structured response is stored in
   /// `ExtractedDocument::structured_output`.
   final StructuredExtractionConfig? structuredExtraction;
-
   /// Named-entity recognition configuration. When set, the NER post-processor runs at
   /// the Middle stage and populates `ExtractedDocument::entities`.
   final NerConfig? ner;
-
   /// Redaction / anonymisation configuration. When set, the redaction post-processor
   /// runs at the Late stage and rewrites every textual field in `ExtractedDocument`,
   /// emitting an audit trail in `ExtractedDocument::redaction_report`.
   final RedactionConfig? redaction;
-
   /// Summarisation configuration. When set, the summarisation post-processor runs at
   /// the Middle stage and populates `ExtractedDocument::summary`.
   final SummarizationConfig? summarization;
-
   /// Translation configuration. When set, the translation post-processor runs at the
   /// Middle stage and populates `ExtractedDocument::translation`.
   final TranslationConfig? translation;
-
   /// Per-page classification configuration. When set, the classification post-processor
   /// runs at the Middle stage and populates `ExtractedDocument::page_classifications`.
   final PageClassificationConfig? pageClassification;
-
   /// VLM captioning configuration for extracted images. When set, the captioning
   /// post-processor runs at the Middle stage and writes a caption into each
   /// `ExtractedImage::caption`.
   final CaptioningConfig? captioning;
-
   /// Enable QR-code detection in extracted images. When `true`, the QR post-processor
   /// runs at the Middle stage and populates `ExtractedImage::qr_codes`.
   final bool? qrCodes;
 
-  const ExtractionConfig({
-    required this.useCache,
-    required this.enableQualityProcessing,
-    this.ocr,
-    required this.forceOcr,
-    required this.ocrStrategy,
-    this.forceOcrPages,
-    required this.disableOcr,
-    this.chunking,
-    this.contentFilter,
-    this.images,
-    this.pdfOptions,
-    this.tokenReduction,
-    this.languageDetection,
-    this.pages,
-    this.keywords,
-    this.postprocessor,
-    this.htmlOptions,
-    this.htmlOutput,
-    this.extractionTimeoutSecs,
-    this.maxConcurrentExtractions,
-    required this.resultFormat,
-    this.securityLimits,
-    this.maxEmbeddedFileBytes,
-    required this.outputFormat,
-    required this.jupyterCellRendering,
-    this.layout,
-    this.transcription,
-    required this.useLayoutForMarkdown,
-    required this.includeDocumentStructure,
-    this.acceleration,
-    this.cacheNamespace,
-    this.cacheTtlSecs,
-    this.email,
-    required this.url,
-    required this.maxArchiveDepth,
-    this.treeSitter,
-    this.structuredExtraction,
-    this.ner,
-    this.redaction,
-    this.summarization,
-    this.translation,
-    this.pageClassification,
-    this.captioning,
-    this.qrCodes,
-  });
+  const ExtractionConfig({required this.useCache ,required this.enableQualityProcessing ,this.ocr ,required this.forceOcr ,required this.ocrStrategy ,this.forceOcrPages ,required this.disableOcr ,this.chunking ,this.contentFilter ,this.images ,this.pdfOptions ,this.tokenReduction ,this.languageDetection ,this.pages ,this.keywords ,this.postprocessor ,this.htmlOptions ,this.htmlOutput ,this.extractionTimeoutSecs ,this.maxConcurrentExtractions ,required this.resultFormat ,this.securityLimits ,this.maxEmbeddedFileBytes ,required this.outputFormat ,required this.jupyterCellRendering ,this.layout ,this.transcription ,required this.useLayoutForMarkdown ,required this.includeDocumentStructure ,this.acceleration ,this.cacheNamespace ,this.cacheTtlSecs ,this.email ,required this.url ,required this.maxArchiveDepth ,this.treeSitter ,this.structuredExtraction ,this.ner ,this.redaction ,this.summarization ,this.translation ,this.pageClassification ,this.captioning ,this.qrCodes ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-      useCache.hashCode ^
-      enableQualityProcessing.hashCode ^
-      ocr.hashCode ^
-      forceOcr.hashCode ^
-      ocrStrategy.hashCode ^
-      forceOcrPages.hashCode ^
-      disableOcr.hashCode ^
-      chunking.hashCode ^
-      contentFilter.hashCode ^
-      images.hashCode ^
-      pdfOptions.hashCode ^
-      tokenReduction.hashCode ^
-      languageDetection.hashCode ^
-      pages.hashCode ^
-      keywords.hashCode ^
-      postprocessor.hashCode ^
-      htmlOptions.hashCode ^
-      htmlOutput.hashCode ^
-      extractionTimeoutSecs.hashCode ^
-      maxConcurrentExtractions.hashCode ^
-      resultFormat.hashCode ^
-      securityLimits.hashCode ^
-      maxEmbeddedFileBytes.hashCode ^
-      outputFormat.hashCode ^
-      jupyterCellRendering.hashCode ^
-      layout.hashCode ^
-      transcription.hashCode ^
-      useLayoutForMarkdown.hashCode ^
-      includeDocumentStructure.hashCode ^
-      acceleration.hashCode ^
-      cacheNamespace.hashCode ^
-      cacheTtlSecs.hashCode ^
-      email.hashCode ^
-      url.hashCode ^
-      maxArchiveDepth.hashCode ^
-      treeSitter.hashCode ^
-      structuredExtraction.hashCode ^
-      ner.hashCode ^
-      redaction.hashCode ^
-      summarization.hashCode ^
-      translation.hashCode ^
-      pageClassification.hashCode ^
-      captioning.hashCode ^
-      qrCodes.hashCode;
+  int get hashCode => useCache.hashCode^enableQualityProcessing.hashCode^ocr.hashCode^forceOcr.hashCode^ocrStrategy.hashCode^forceOcrPages.hashCode^disableOcr.hashCode^chunking.hashCode^contentFilter.hashCode^images.hashCode^pdfOptions.hashCode^tokenReduction.hashCode^languageDetection.hashCode^pages.hashCode^keywords.hashCode^postprocessor.hashCode^htmlOptions.hashCode^htmlOutput.hashCode^extractionTimeoutSecs.hashCode^maxConcurrentExtractions.hashCode^resultFormat.hashCode^securityLimits.hashCode^maxEmbeddedFileBytes.hashCode^outputFormat.hashCode^jupyterCellRendering.hashCode^layout.hashCode^transcription.hashCode^useLayoutForMarkdown.hashCode^includeDocumentStructure.hashCode^acceleration.hashCode^cacheNamespace.hashCode^cacheTtlSecs.hashCode^email.hashCode^url.hashCode^maxArchiveDepth.hashCode^treeSitter.hashCode^structuredExtraction.hashCode^ner.hashCode^redaction.hashCode^summarization.hashCode^translation.hashCode^pageClassification.hashCode^captioning.hashCode^qrCodes.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is ExtractionConfig &&
-          runtimeType == other.runtimeType &&
-          useCache == other.useCache &&
-          enableQualityProcessing == other.enableQualityProcessing &&
-          ocr == other.ocr &&
-          forceOcr == other.forceOcr &&
-          ocrStrategy == other.ocrStrategy &&
-          forceOcrPages == other.forceOcrPages &&
-          disableOcr == other.disableOcr &&
-          chunking == other.chunking &&
-          contentFilter == other.contentFilter &&
-          images == other.images &&
-          pdfOptions == other.pdfOptions &&
-          tokenReduction == other.tokenReduction &&
-          languageDetection == other.languageDetection &&
-          pages == other.pages &&
-          keywords == other.keywords &&
-          postprocessor == other.postprocessor &&
-          htmlOptions == other.htmlOptions &&
-          htmlOutput == other.htmlOutput &&
-          extractionTimeoutSecs == other.extractionTimeoutSecs &&
-          maxConcurrentExtractions == other.maxConcurrentExtractions &&
-          resultFormat == other.resultFormat &&
-          securityLimits == other.securityLimits &&
-          maxEmbeddedFileBytes == other.maxEmbeddedFileBytes &&
-          outputFormat == other.outputFormat &&
-          jupyterCellRendering == other.jupyterCellRendering &&
-          layout == other.layout &&
-          transcription == other.transcription &&
-          useLayoutForMarkdown == other.useLayoutForMarkdown &&
-          includeDocumentStructure == other.includeDocumentStructure &&
-          acceleration == other.acceleration &&
-          cacheNamespace == other.cacheNamespace &&
-          cacheTtlSecs == other.cacheTtlSecs &&
-          email == other.email &&
-          url == other.url &&
-          maxArchiveDepth == other.maxArchiveDepth &&
-          treeSitter == other.treeSitter &&
-          structuredExtraction == other.structuredExtraction &&
-          ner == other.ner &&
-          redaction == other.redaction &&
-          summarization == other.summarization &&
-          translation == other.translation &&
-          pageClassification == other.pageClassification &&
-          captioning == other.captioning &&
-          qrCodes == other.qrCodes;
+  identical(this, other) ||
+  other is ExtractionConfig &&
+  runtimeType == other.runtimeType
+  && useCache == other.useCache&& enableQualityProcessing == other.enableQualityProcessing&& ocr == other.ocr&& forceOcr == other.forceOcr&& ocrStrategy == other.ocrStrategy&& forceOcrPages == other.forceOcrPages&& disableOcr == other.disableOcr&& chunking == other.chunking&& contentFilter == other.contentFilter&& images == other.images&& pdfOptions == other.pdfOptions&& tokenReduction == other.tokenReduction&& languageDetection == other.languageDetection&& pages == other.pages&& keywords == other.keywords&& postprocessor == other.postprocessor&& htmlOptions == other.htmlOptions&& htmlOutput == other.htmlOutput&& extractionTimeoutSecs == other.extractionTimeoutSecs&& maxConcurrentExtractions == other.maxConcurrentExtractions&& resultFormat == other.resultFormat&& securityLimits == other.securityLimits&& maxEmbeddedFileBytes == other.maxEmbeddedFileBytes&& outputFormat == other.outputFormat&& jupyterCellRendering == other.jupyterCellRendering&& layout == other.layout&& transcription == other.transcription&& useLayoutForMarkdown == other.useLayoutForMarkdown&& includeDocumentStructure == other.includeDocumentStructure&& acceleration == other.acceleration&& cacheNamespace == other.cacheNamespace&& cacheTtlSecs == other.cacheTtlSecs&& email == other.email&& url == other.url&& maxArchiveDepth == other.maxArchiveDepth&& treeSitter == other.treeSitter&& structuredExtraction == other.structuredExtraction&& ner == other.ner&& redaction == other.redaction&& summarization == other.summarization&& translation == other.translation&& pageClassification == other.pageClassification&& captioning == other.captioning&& qrCodes == other.qrCodes;
+
 }
 
 /// The complete diff between two `ExtractedDocument` values.
-class ExtractionDiff {
+class ExtractionDiff  {
   /// Unified-diff hunks for the `content` field.
   ///
   /// Empty when the content is identical.
   final List<DiffHunk> contentDiff;
-
   /// Tables present in `b` but not in `a` (by index position, excess right-side tables).
   final List<Table> tablesAdded;
-
   /// Tables present in `a` but not in `b` (by index position, excess left-side tables).
   final List<Table> tablesRemoved;
-
   /// Cell-level changes for table pairs that share the same index and dimensions.
   final List<TableDiff> tablesChanged;
-
   /// Metadata difference, encoded as a JSON object with three top-level keys:
   /// `added` (keys present in `b` but not `a`), `removed` (keys present in `a`
   /// but not `b`), and `changed` (keys whose values differ — each entry is
@@ -6736,229 +4977,171 @@ class ExtractionDiff {
   /// (with JSON Pointer paths) feed `a.metadata` and `b.metadata` to your
   /// preferred json-patch impl directly.
   final String metadataChanged;
-
   /// Changes to embedded archive children.
   final EmbeddedChanges embeddedChanges;
 
-  const ExtractionDiff({
-    required this.contentDiff,
-    required this.tablesAdded,
-    required this.tablesRemoved,
-    required this.tablesChanged,
-    required this.metadataChanged,
-    required this.embeddedChanges,
-  });
+  const ExtractionDiff({required this.contentDiff ,required this.tablesAdded ,required this.tablesRemoved ,required this.tablesChanged ,required this.metadataChanged ,required this.embeddedChanges ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  contentDiff.hashCode ^
-  tablesAdded.hashCode ^
-  tablesRemoved.hashCode ^
-  tablesChanged.hashCode ^
-  metadataChanged.hashCode ^
-  embeddedChanges.hashCode;
+  int get hashCode => contentDiff.hashCode^tablesAdded.hashCode^tablesRemoved.hashCode^tablesChanged.hashCode^metadataChanged.hashCode^embeddedChanges.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ExtractionDiff &&
-  runtimeType == other.runtimeType &&
-  contentDiff == other.contentDiff &&
-  tablesAdded == other.tablesAdded &&
-  tablesRemoved == other.tablesRemoved &&
-  tablesChanged == other.tablesChanged &&
-  metadataChanged == other.metadataChanged &&
-  embeddedChanges == other.embeddedChanges;
+  runtimeType == other.runtimeType
+  && contentDiff == other.contentDiff&& tablesAdded == other.tablesAdded&& tablesRemoved == other.tablesRemoved&& tablesChanged == other.tablesChanged&& metadataChanged == other.metadataChanged&& embeddedChanges == other.embeddedChanges;
+
 }
 
 /// Non-fatal per-input extraction error captured by [`ExtractionResult`].
-class ExtractionErrorItem {
+class ExtractionErrorItem  {
   /// Input index in the original request.
   final PlatformInt64 index;
-
   /// Stable numeric error code.
   final PlatformInt64 code;
-
   /// Stable snake_case error kind.
   final String errorType;
-
   /// Best-effort source identifier.
   final String source;
-
   /// Error message.
   final String message;
 
-  const ExtractionErrorItem({
-    required this.index,
-    required this.code,
-    required this.errorType,
-    required this.source,
-    required this.message,
-  });
+  const ExtractionErrorItem({required this.index ,required this.code ,required this.errorType ,required this.source ,required this.message ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  index.hashCode ^
-  code.hashCode ^
-  errorType.hashCode ^
-  source.hashCode ^
-  message.hashCode;
+  int get hashCode => index.hashCode^code.hashCode^errorType.hashCode^source.hashCode^message.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ExtractionErrorItem &&
-  runtimeType == other.runtimeType &&
-  index == other.index &&
-  code == other.code &&
-  errorType == other.errorType &&
-  source == other.source &&
-  message == other.message;
+  runtimeType == other.runtimeType
+  && index == other.index&& code == other.code&& errorType == other.errorType&& source == other.source&& message == other.message;
+
 }
 
 /// How the extracted text was produced.
 enum ExtractionMethod {
   /// Text extracted directly from the document's native format (no OCR).
   native,
-
   /// All text was obtained via OCR (e.g. scanned image-only PDF).
   ocr,
-
   /// Text came from a combination of native extraction and OCR.
   mixed,
+  ;
+
 }
 
 /// Unified extraction result envelope.
-class ExtractionResult {
+class ExtractionResult  {
   /// Extracted documents in discovery order.
   final List<ExtractedDocument> results;
-
   /// Non-fatal per-input errors.
   final List<ExtractionErrorItem> errors;
-
   /// Aggregate counts for the operation.
   final ExtractionSummary summary;
-
   /// Final URLs reached after redirects during URL ingestion.
   final List<String> crawlFinalUrls;
-
   /// Total redirects followed while fetching or crawling URLs.
   final PlatformInt64 crawlRedirectCount;
-
   /// Unique normalized URLs discovered by crawls.
   final List<String> crawlUniqueNormalizedUrls;
 
-  const ExtractionResult({
-    required this.results,
-    required this.errors,
-    required this.summary,
-    required this.crawlFinalUrls,
-    required this.crawlRedirectCount,
-    required this.crawlUniqueNormalizedUrls,
-  });
+  const ExtractionResult({required this.results ,required this.errors ,required this.summary ,required this.crawlFinalUrls ,required this.crawlRedirectCount ,required this.crawlUniqueNormalizedUrls ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  results.hashCode ^
-  errors.hashCode ^
-  summary.hashCode ^
-  crawlFinalUrls.hashCode ^
-  crawlRedirectCount.hashCode ^
-  crawlUniqueNormalizedUrls.hashCode;
+  int get hashCode => results.hashCode^errors.hashCode^summary.hashCode^crawlFinalUrls.hashCode^crawlRedirectCount.hashCode^crawlUniqueNormalizedUrls.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ExtractionResult &&
-  runtimeType == other.runtimeType &&
-  results == other.results &&
-  errors == other.errors &&
-  summary == other.summary &&
-  crawlFinalUrls == other.crawlFinalUrls &&
-  crawlRedirectCount == other.crawlRedirectCount &&
-  crawlUniqueNormalizedUrls == other.crawlUniqueNormalizedUrls;
+  runtimeType == other.runtimeType
+  && results == other.results&& errors == other.errors&& summary == other.summary&& crawlFinalUrls == other.crawlFinalUrls&& crawlRedirectCount == other.crawlRedirectCount&& crawlUniqueNormalizedUrls == other.crawlUniqueNormalizedUrls;
+
 }
 
 /// Summary for a unified extraction call.
-class ExtractionSummary {
+class ExtractionSummary  {
   /// Number of inputs submitted by the caller.
   final PlatformInt64 inputs;
-
   /// Number of extraction results produced.
   final PlatformInt64 results;
-
   /// Number of per-input errors.
   final PlatformInt64 errors;
-
   /// Number of URI inputs that resolved to remote HTTP(S) URLs.
   final PlatformInt64 remoteUrls;
-
   /// Number of HTML pages crawled or scraped.
   final PlatformInt64 pagesCrawled;
-
   /// Number of downloaded non-HTML documents extracted from URLs.
   final PlatformInt64 documentsDownloaded;
 
-  const ExtractionSummary({
-    required this.inputs,
-    required this.results,
-    required this.errors,
-    required this.remoteUrls,
-    required this.pagesCrawled,
-    required this.documentsDownloaded,
-  });
+  const ExtractionSummary({required this.inputs ,required this.results ,required this.errors ,required this.remoteUrls ,required this.pagesCrawled ,required this.documentsDownloaded ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  inputs.hashCode ^
-  results.hashCode ^
-  errors.hashCode ^
-  remoteUrls.hashCode ^
-  pagesCrawled.hashCode ^
-  documentsDownloaded.hashCode;
+  int get hashCode => inputs.hashCode^results.hashCode^errors.hashCode^remoteUrls.hashCode^pagesCrawled.hashCode^documentsDownloaded.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ExtractionSummary &&
-  runtimeType == other.runtimeType &&
-  inputs == other.inputs &&
-  results == other.results &&
-  errors == other.errors &&
-  remoteUrls == other.remoteUrls &&
-  pagesCrawled == other.pagesCrawled &&
-  documentsDownloaded == other.documentsDownloaded;
+  runtimeType == other.runtimeType
+  && inputs == other.inputs&& results == other.results&& errors == other.errors&& remoteUrls == other.remoteUrls&& pagesCrawled == other.pagesCrawled&& documentsDownloaded == other.documentsDownloaded;
+
 }
 
 /// FictionBook (FB2) metadata.
-class FictionBookMetadata {
+class FictionBookMetadata  {
   /// Genre tags as declared in the FB2 `<genre>` elements.
   final List<String> genres;
-
   /// Book series (sequence) names, if any.
   final List<String> sequences;
-
   /// Short annotation / summary from the FB2 `<annotation>` element.
   final String? annotation;
 
-  const FictionBookMetadata({
-    required this.genres,
-    required this.sequences,
-    this.annotation,
-  });
+  const FictionBookMetadata({required this.genres ,required this.sequences ,this.annotation ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  genres.hashCode ^ sequences.hashCode ^ annotation.hashCode;
+  int get hashCode => genres.hashCode^sequences.hashCode^annotation.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is FictionBookMetadata &&
-  runtimeType == other.runtimeType &&
-  genres == other.genres &&
-  sequences == other.sequences &&
-  annotation == other.annotation;
+  runtimeType == other.runtimeType
+  && genres == other.genres&& sequences == other.sequences&& annotation == other.annotation;
+
 }
 
 /// Per-file extraction configuration overrides for batch processing.
@@ -6987,317 +5170,213 @@ class FictionBookMetadata {
 ///     ..Default::default()
 /// };
 /// ```
-class FileExtractionConfig {
+class FileExtractionConfig  {
   /// Override quality post-processing for this file.
   final bool? enableQualityProcessing;
-
   /// Override OCR configuration for this file (None in the Option = use batch default).
   final OcrConfig? ocr;
-
   /// Override force OCR for this file.
   final bool? forceOcr;
-
   /// Override the OCR page-selection strategy for this file.
   final OcrStrategy? ocrStrategy;
-
   /// Override force OCR pages for this file (1-indexed page numbers).
   final Int64List? forceOcrPages;
-
   /// Override disable OCR for this file.
   final bool? disableOcr;
-
   /// Override chunking configuration for this file.
   final ChunkingConfig? chunking;
-
   /// Override content filtering configuration for this file.
   final ContentFilterConfig? contentFilter;
-
   /// Override image extraction configuration for this file.
   final ImageExtractionConfig? images;
-
   /// Override PDF options for this file.
   final PdfConfig? pdfOptions;
-
   /// Override token reduction for this file.
   final TokenReductionOptions? tokenReduction;
-
   /// Override language detection for this file.
   final LanguageDetectionConfig? languageDetection;
-
   /// Override page extraction for this file.
   final PageConfig? pages;
-
   /// Override keyword extraction for this file.
   final KeywordConfig? keywords;
-
   /// Override post-processor for this file.
   final PostProcessorConfig? postprocessor;
-
   /// Override styled HTML output configuration for this file.
   final HtmlOutputConfig? htmlOutput;
-
   /// Override result format for this file.
   final ResultFormat? resultFormat;
-
   /// Override output content format for this file.
   final OutputFormat? outputFormat;
-
   /// Override document structure output for this file.
   final bool? includeDocumentStructure;
-
   /// Override layout detection for this file.
   final LayoutDetectionConfig? layout;
-
   /// Transcription configuration (see ExtractionConfig for docs).
   final TranscriptionConfig? transcription;
-
   /// Override per-file extraction timeout in seconds.
   ///
   /// When set, the extraction for this file will be canceled after the
   /// specified duration. A timed-out file produces an error result without
   /// affecting other files in the batch.
   final PlatformInt64? timeoutSecs;
-
   /// Override tree-sitter configuration for this file.
   final TreeSitterConfig? treeSitter;
-
   /// Override structured extraction configuration for this file.
   ///
   /// When set, enables LLM-based structured extraction with a JSON schema
   /// for this specific file. The extracted content is sent to a VLM/LLM
   /// and the response is parsed according to the provided schema.
   final StructuredExtractionConfig? structuredExtraction;
-
   /// Override URL ingestion and crawl configuration for this file.
   final UrlExtractionConfig? url;
-
   /// Override named-entity recognition configuration for this file.
   final NerConfig? ner;
-
   /// Override redaction configuration for this file.
   final RedactionConfig? redaction;
-
   /// Override summarization configuration for this file.
   final SummarizationConfig? summarization;
-
   /// Override translation configuration for this file.
   final TranslationConfig? translation;
-
   /// Override per-page classification configuration for this file.
   final PageClassificationConfig? pageClassification;
-
   /// Override VLM captioning configuration for this file.
   final CaptioningConfig? captioning;
-
   /// Override QR-code detection for this file.
   final bool? qrCodes;
 
-  const FileExtractionConfig({
-    this.enableQualityProcessing,
-    this.ocr,
-    this.forceOcr,
-    this.ocrStrategy,
-    this.forceOcrPages,
-    this.disableOcr,
-    this.chunking,
-    this.contentFilter,
-    this.images,
-    this.pdfOptions,
-    this.tokenReduction,
-    this.languageDetection,
-    this.pages,
-    this.keywords,
-    this.postprocessor,
-    this.htmlOutput,
-    this.resultFormat,
-    this.outputFormat,
-    this.includeDocumentStructure,
-    this.layout,
-    this.transcription,
-    this.timeoutSecs,
-    this.treeSitter,
-    this.structuredExtraction,
-    this.url,
-    this.ner,
-    this.redaction,
-    this.summarization,
-    this.translation,
-    this.pageClassification,
-    this.captioning,
-    this.qrCodes,
-  });
+  const FileExtractionConfig({this.enableQualityProcessing ,this.ocr ,this.forceOcr ,this.ocrStrategy ,this.forceOcrPages ,this.disableOcr ,this.chunking ,this.contentFilter ,this.images ,this.pdfOptions ,this.tokenReduction ,this.languageDetection ,this.pages ,this.keywords ,this.postprocessor ,this.htmlOutput ,this.resultFormat ,this.outputFormat ,this.includeDocumentStructure ,this.layout ,this.transcription ,this.timeoutSecs ,this.treeSitter ,this.structuredExtraction ,this.url ,this.ner ,this.redaction ,this.summarization ,this.translation ,this.pageClassification ,this.captioning ,this.qrCodes ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  enableQualityProcessing.hashCode ^
-  ocr.hashCode ^
-  forceOcr.hashCode ^
-  ocrStrategy.hashCode ^
-  forceOcrPages.hashCode ^
-  disableOcr.hashCode ^
-  chunking.hashCode ^
-  contentFilter.hashCode ^
-  images.hashCode ^
-  pdfOptions.hashCode ^
-  tokenReduction.hashCode ^
-  languageDetection.hashCode ^
-  pages.hashCode ^
-  keywords.hashCode ^
-  postprocessor.hashCode ^
-  htmlOutput.hashCode ^
-  resultFormat.hashCode ^
-  outputFormat.hashCode ^
-  includeDocumentStructure.hashCode ^
-  layout.hashCode ^
-  transcription.hashCode ^
-  timeoutSecs.hashCode ^
-  treeSitter.hashCode ^
-  structuredExtraction.hashCode ^
-  url.hashCode ^
-  ner.hashCode ^
-  redaction.hashCode ^
-  summarization.hashCode ^
-  translation.hashCode ^
-  pageClassification.hashCode ^
-  captioning.hashCode ^
-  qrCodes.hashCode;
+  int get hashCode => enableQualityProcessing.hashCode^ocr.hashCode^forceOcr.hashCode^ocrStrategy.hashCode^forceOcrPages.hashCode^disableOcr.hashCode^chunking.hashCode^contentFilter.hashCode^images.hashCode^pdfOptions.hashCode^tokenReduction.hashCode^languageDetection.hashCode^pages.hashCode^keywords.hashCode^postprocessor.hashCode^htmlOutput.hashCode^resultFormat.hashCode^outputFormat.hashCode^includeDocumentStructure.hashCode^layout.hashCode^transcription.hashCode^timeoutSecs.hashCode^treeSitter.hashCode^structuredExtraction.hashCode^url.hashCode^ner.hashCode^redaction.hashCode^summarization.hashCode^translation.hashCode^pageClassification.hashCode^captioning.hashCode^qrCodes.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is FileExtractionConfig &&
-  runtimeType == other.runtimeType &&
-  enableQualityProcessing == other.enableQualityProcessing &&
-  ocr == other.ocr &&
-  forceOcr == other.forceOcr &&
-  ocrStrategy == other.ocrStrategy &&
-  forceOcrPages == other.forceOcrPages &&
-  disableOcr == other.disableOcr &&
-  chunking == other.chunking &&
-  contentFilter == other.contentFilter &&
-  images == other.images &&
-  pdfOptions == other.pdfOptions &&
-  tokenReduction == other.tokenReduction &&
-  languageDetection == other.languageDetection &&
-  pages == other.pages &&
-  keywords == other.keywords &&
-  postprocessor == other.postprocessor &&
-  htmlOutput == other.htmlOutput &&
-  resultFormat == other.resultFormat &&
-  outputFormat == other.outputFormat &&
-  includeDocumentStructure == other.includeDocumentStructure &&
-  layout == other.layout &&
-  transcription == other.transcription &&
-  timeoutSecs == other.timeoutSecs &&
-  treeSitter == other.treeSitter &&
-  structuredExtraction == other.structuredExtraction &&
-  url == other.url &&
-  ner == other.ner &&
-  redaction == other.redaction &&
-  summarization == other.summarization &&
-  translation == other.translation &&
-  pageClassification == other.pageClassification &&
-  captioning == other.captioning &&
-  qrCodes == other.qrCodes;
+  runtimeType == other.runtimeType
+  && enableQualityProcessing == other.enableQualityProcessing&& ocr == other.ocr&& forceOcr == other.forceOcr&& ocrStrategy == other.ocrStrategy&& forceOcrPages == other.forceOcrPages&& disableOcr == other.disableOcr&& chunking == other.chunking&& contentFilter == other.contentFilter&& images == other.images&& pdfOptions == other.pdfOptions&& tokenReduction == other.tokenReduction&& languageDetection == other.languageDetection&& pages == other.pages&& keywords == other.keywords&& postprocessor == other.postprocessor&& htmlOutput == other.htmlOutput&& resultFormat == other.resultFormat&& outputFormat == other.outputFormat&& includeDocumentStructure == other.includeDocumentStructure&& layout == other.layout&& transcription == other.transcription&& timeoutSecs == other.timeoutSecs&& treeSitter == other.treeSitter&& structuredExtraction == other.structuredExtraction&& url == other.url&& ner == other.ner&& redaction == other.redaction&& summarization == other.summarization&& translation == other.translation&& pageClassification == other.pageClassification&& captioning == other.captioning&& qrCodes == other.qrCodes;
+
 }
 
 /// Footnote in Djot.
-class Footnote {
+class Footnote  {
   /// Footnote label
   final String label;
-
   /// Footnote content blocks
   final List<FormattedBlock> content;
 
-  const Footnote({required this.label, required this.content});
+  const Footnote({required this.label ,required this.content ,});
+
+
+
+
 
   @override
-  int get hashCode => label.hashCode ^ content.hashCode;
+  int get hashCode => label.hashCode^content.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is Footnote &&
-  runtimeType == other.runtimeType &&
-  label == other.label &&
-  content == other.content;
+  runtimeType == other.runtimeType
+  && label == other.label&& content == other.content;
+
 }
 
 /// A footnote anchor reference in markdown text.
 ///
 /// Represents a `[^label]` use-site (not a definition).
-class FootnoteAnchor {
+class FootnoteAnchor  {
   /// The label of the footnote reference (e.g., "1" in `[^1]`).
   final String label;
-
   /// Byte offset of the anchor in the markdown text.
   final PlatformInt64 offset;
 
-  const FootnoteAnchor({required this.label, required this.offset});
+  const FootnoteAnchor({required this.label ,required this.offset ,});
+
+
+
+
 
   @override
-  int get hashCode => label.hashCode ^ offset.hashCode;
+  int get hashCode => label.hashCode^offset.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is FootnoteAnchor &&
-  runtimeType == other.runtimeType &&
-  label == other.label &&
-  offset == other.offset;
+  runtimeType == other.runtimeType
+  && label == other.label&& offset == other.offset;
+
 }
 
 /// Configuration for markdown footnote and citation parsing.
-class FootnoteConfig {
+class FootnoteConfig  {
   /// Whether to parse the structured citation block (default: true).
   ///
   /// When enabled, the parser will look for and extract citations from
   /// the block after `---` + `<!-- citations ... -->`.
   final bool parseCitations;
 
-  const FootnoteConfig({required this.parseCitations});
+  const FootnoteConfig({required this.parseCitations ,});
+
+
+
+
 
   @override
   int get hashCode => parseCitations.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is FootnoteConfig &&
-  runtimeType == other.runtimeType &&
-  parseCitations == other.parseCitations;
+  runtimeType == other.runtimeType
+  && parseCitations == other.parseCitations;
+
 }
 
 /// A footnote definition from markdown text.
 ///
 /// Represents `[^label]: content` declarations (including multi-line continuations).
-class FootnoteDefinition {
+class FootnoteDefinition  {
   /// The label of the footnote (e.g., "1" in `[^1]: ...`).
   final String label;
-
   /// The full content of the footnote definition.
   final String content;
-
   /// Byte offset of the definition line in the markdown text.
   final PlatformInt64 offset;
 
-  const FootnoteDefinition({
-    required this.label,
-    required this.content,
-    required this.offset,
-  });
+  const FootnoteDefinition({required this.label ,required this.content ,required this.offset ,});
+
+
+
+
 
   @override
-  int get hashCode => label.hashCode ^ content.hashCode ^ offset.hashCode;
+  int get hashCode => label.hashCode^content.hashCode^offset.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is FootnoteDefinition &&
-  runtimeType == other.runtimeType &&
-  label == other.label &&
-  content == other.content &&
-  offset == other.offset;
+  runtimeType == other.runtimeType
+  && label == other.label&& content == other.content&& offset == other.offset;
+
 }
 
 /// Kind of a PDF form field.
@@ -7307,111 +5386,66 @@ class FootnoteDefinition {
 enum FormFieldType {
   /// Single- or multi-line text input.
   text,
-
   /// Checkbox (on/off toggle).
   checkbox,
-
   /// Radio-button group member.
   radio,
-
   /// Choice field (dropdown or list box).
   choice,
-
   /// Digital-signature field.
   signature,
-
   /// Push button.
   button,
-
   /// Field type that could not be classified.
   unknown,
+  ;
+
 }
 
 @freezed
-sealed class FormatMetadata with _$FormatMetadata {
+sealed class FormatMetadata with _$FormatMetadata  {
   const FormatMetadata._();
 
   /// Metadata extracted from a PDF document.
-  const factory FormatMetadata.pdf({required PdfMetadata field0}) =
-  FormatMetadata_Pdf;
-
+  const factory FormatMetadata.pdf({   required PdfMetadata field0 , }) = FormatMetadata_Pdf;
   /// Metadata extracted from a DOCX Word document.
-  const factory FormatMetadata.docx({required DocxMetadata field0}) =
-  FormatMetadata_Docx;
-
+  const factory FormatMetadata.docx({   required DocxMetadata field0 , }) = FormatMetadata_Docx;
   /// Metadata extracted from an Excel spreadsheet.
-  const factory FormatMetadata.excel({required ExcelMetadata field0}) =
-  FormatMetadata_Excel;
-
+  const factory FormatMetadata.excel({   required ExcelMetadata field0 , }) = FormatMetadata_Excel;
   /// Metadata extracted from an email message (EML/MSG).
-  const factory FormatMetadata.email({required EmailMetadata field0}) =
-  FormatMetadata_Email;
-
+  const factory FormatMetadata.email({   required EmailMetadata field0 , }) = FormatMetadata_Email;
   /// Metadata extracted from a PowerPoint presentation.
-  const factory FormatMetadata.pptx({required PptxMetadata field0}) =
-  FormatMetadata_Pptx;
-
+  const factory FormatMetadata.pptx({   required PptxMetadata field0 , }) = FormatMetadata_Pptx;
   /// Metadata extracted from an archive (ZIP, TAR, 7Z, etc.).
-  const factory FormatMetadata.archive({required ArchiveMetadata field0}) =
-  FormatMetadata_Archive;
-
+  const factory FormatMetadata.archive({   required ArchiveMetadata field0 , }) = FormatMetadata_Archive;
   /// Metadata extracted from a raster or vector image.
-  const factory FormatMetadata.image({required ImageMetadata field0}) =
-  FormatMetadata_Image;
-
+  const factory FormatMetadata.image({   required ImageMetadata field0 , }) = FormatMetadata_Image;
   /// Metadata extracted from an XML document.
-  const factory FormatMetadata.xml({required XmlMetadata field0}) =
-  FormatMetadata_Xml;
-
+  const factory FormatMetadata.xml({   required XmlMetadata field0 , }) = FormatMetadata_Xml;
   /// Metadata extracted from a plain-text file.
-  const factory FormatMetadata.text({required TextMetadata field0}) =
-  FormatMetadata_Text;
-
+  const factory FormatMetadata.text({   required TextMetadata field0 , }) = FormatMetadata_Text;
   /// Metadata extracted from an HTML document.
-  const factory FormatMetadata.html({required HtmlMetadata field0}) =
-  FormatMetadata_Html;
-
+  const factory FormatMetadata.html({   required HtmlMetadata field0 , }) = FormatMetadata_Html;
   /// Metadata produced by an OCR pipeline.
-  const factory FormatMetadata.ocr({required OcrMetadata field0}) =
-  FormatMetadata_Ocr;
-
+  const factory FormatMetadata.ocr({   required OcrMetadata field0 , }) = FormatMetadata_Ocr;
   /// Metadata extracted from a CSV or TSV file.
-  const factory FormatMetadata.csv({required CsvMetadata field0}) =
-  FormatMetadata_Csv;
-
+  const factory FormatMetadata.csv({   required CsvMetadata field0 , }) = FormatMetadata_Csv;
   /// Metadata extracted from a BibTeX bibliography file.
-  const factory FormatMetadata.bibtex({required BibtexMetadata field0}) =
-  FormatMetadata_Bibtex;
-
+  const factory FormatMetadata.bibtex({   required BibtexMetadata field0 , }) = FormatMetadata_Bibtex;
   /// Metadata extracted from a citation file (RIS, PubMed, EndNote).
-  const factory FormatMetadata.citation({required CitationMetadata field0}) =
-  FormatMetadata_Citation;
-
+  const factory FormatMetadata.citation({   required CitationMetadata field0 , }) = FormatMetadata_Citation;
   /// Metadata extracted from a FictionBook (FB2) e-book.
-  const factory FormatMetadata.fictionBook({
-    required FictionBookMetadata field0,
-  }) = FormatMetadata_FictionBook;
-
+  const factory FormatMetadata.fictionBook({   required FictionBookMetadata field0 , }) = FormatMetadata_FictionBook;
   /// Metadata extracted from a dBASE (DBF) database file.
-  const factory FormatMetadata.dbf({required DbfMetadata field0}) =
-  FormatMetadata_Dbf;
-
+  const factory FormatMetadata.dbf({   required DbfMetadata field0 , }) = FormatMetadata_Dbf;
   /// Metadata extracted from a JATS (Journal Article Tag Suite) XML file.
-  const factory FormatMetadata.jats({required JatsMetadata field0}) =
-  FormatMetadata_Jats;
-
+  const factory FormatMetadata.jats({   required JatsMetadata field0 , }) = FormatMetadata_Jats;
   /// Metadata extracted from an EPUB e-book.
-  const factory FormatMetadata.epub({required EpubMetadata field0}) =
-  FormatMetadata_Epub;
-
+  const factory FormatMetadata.epub({   required EpubMetadata field0 , }) = FormatMetadata_Epub;
   /// Metadata extracted from an Outlook PST archive.
-  const factory FormatMetadata.pst({required PstMetadata field0}) =
-  FormatMetadata_Pst;
-
+  const factory FormatMetadata.pst({   required PstMetadata field0 , }) = FormatMetadata_Pst;
   /// Metadata extracted from an audio or video file.
-  const factory FormatMetadata.audio({required AudioMetadata field0}) =
-  FormatMetadata_Audio;
-
+  const factory FormatMetadata.audio({   required AudioMetadata field0 , }) = FormatMetadata_Audio;
   /// Code (tree-sitter analyzable source). Carries the structural chunks (function,
   /// class, and module boundaries) produced by the tree-sitter extractor, consumed by
   /// the chunking pipeline to emit structure-aware `Chunk`s instead of falling back to
@@ -7423,61 +5457,48 @@ sealed class FormatMetadata with _$FormatMetadata {
   /// map to live in. Wrapping a struct gives serde a map to hold the tag, and keeps this
   /// variant shape consistent with every sibling (`Variant(XMetadata)`) so the derived
   /// OpenAPI discriminator can reference a named component schema.
-  const factory FormatMetadata.code({required CodeMetadata field0}) =
-  FormatMetadata_Code;
+  const factory FormatMetadata.code({   required CodeMetadata field0 , }) = FormatMetadata_Code;
+
+
+
+
 }
 
 /// Block-level element in a Djot document.
 ///
 /// Represents structural elements like headings, paragraphs, lists, code blocks, etc.
-class FormattedBlock {
+class FormattedBlock  {
   /// Type of block element
   final BlockType blockType;
-
   /// Heading level (1-6) for headings, or nesting level for lists
   final PlatformInt64? level;
-
   /// Inline content within the block
   final List<InlineElement> inlineContent;
-
   /// Language identifier for code blocks
   final String? language;
-
   /// Raw code content for code blocks
   final String? code;
-
   /// Nested blocks for containers (blockquotes, list items, divs)
   final List<FormattedBlock> children;
 
-  const FormattedBlock({
-    required this.blockType,
-    this.level,
-    required this.inlineContent,
-    this.language,
-    this.code,
-    required this.children,
-  });
+  const FormattedBlock({required this.blockType ,this.level ,required this.inlineContent ,this.language ,this.code ,required this.children ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  blockType.hashCode ^
-  level.hashCode ^
-  inlineContent.hashCode ^
-  language.hashCode ^
-  code.hashCode ^
-  children.hashCode;
+  int get hashCode => blockType.hashCode^level.hashCode^inlineContent.hashCode^language.hashCode^code.hashCode^children.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is FormattedBlock &&
-  runtimeType == other.runtimeType &&
-  blockType == other.blockType &&
-  level == other.level &&
-  inlineContent == other.inlineContent &&
-  language == other.language &&
-  code == other.code &&
-  children == other.children;
+  runtimeType == other.runtimeType
+  && blockType == other.blockType&& level == other.level&& inlineContent == other.inlineContent&& language == other.language&& code == other.code&& children == other.children;
+
 }
 
 /// A mathematical formula detected and recognized in a document.
@@ -7488,183 +5509,166 @@ class FormattedBlock {
 /// [`ExtractedDocument`](super::extraction::ExtractedDocument) but only populated
 /// when the `layout-detection` feature is active and the document contains
 /// formula regions.
-class Formula {
+class Formula  {
   /// LaTeX source of the recognized formula, without surrounding `$$` delimiters.
   ///
   /// This field contains the raw LaTeX code as produced by the OCR backend.
   /// To render the formula in Markdown or other formats, wrap with `$$..$$` delimiters as needed.
   final String latex;
-
   /// Bounding box of the formula region on its page, in rendered-image pixel coordinates.
   ///
   /// The coordinates are in the space of the OCR-rendered page image at the OCR DPI
   /// (typically 300 DPI). These coordinates are NOT comparable to bounding boxes from
   /// native PDF text extraction, which use PDF point coordinates.
   final BoundingBox bbox;
-
   /// 1-indexed page number the formula appears on in the document.
   ///
   /// This is set by the extraction pipeline based on which page the formula was found on.
   final PlatformInt64 page;
 
-  const Formula({required this.latex, required this.bbox, required this.page});
+  const Formula({required this.latex ,required this.bbox ,required this.page ,});
+
+
+
+
 
   @override
-  int get hashCode => latex.hashCode ^ bbox.hashCode ^ page.hashCode;
+  int get hashCode => latex.hashCode^bbox.hashCode^page.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is Formula &&
-  runtimeType == other.runtimeType &&
-  latex == other.latex &&
-  bbox == other.bbox &&
-  page == other.page;
+  runtimeType == other.runtimeType
+  && latex == other.latex&& bbox == other.bbox&& page == other.page;
+
 }
 
 /// Individual grid cell with position and span metadata.
-class GridCell {
+class GridCell  {
   /// Cell text content.
   final String content;
-
   /// Zero-indexed row position.
   final PlatformInt64 row;
-
   /// Zero-indexed column position.
   final PlatformInt64 col;
-
   /// Number of rows this cell spans.
   final PlatformInt64 rowSpan;
-
   /// Number of columns this cell spans.
   final PlatformInt64 colSpan;
-
   /// Whether this is a header cell.
   final bool isHeader;
-
   /// Bounding box for this cell (if available).
   final BoundingBox? bbox;
 
-  const GridCell({
-    required this.content,
-    required this.row,
-    required this.col,
-    required this.rowSpan,
-    required this.colSpan,
-    required this.isHeader,
-    this.bbox,
-  });
+  const GridCell({required this.content ,required this.row ,required this.col ,required this.rowSpan ,required this.colSpan ,required this.isHeader ,this.bbox ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  content.hashCode ^
-  row.hashCode ^
-  col.hashCode ^
-  rowSpan.hashCode ^
-  colSpan.hashCode ^
-  isHeader.hashCode ^
-  bbox.hashCode;
+  int get hashCode => content.hashCode^row.hashCode^col.hashCode^rowSpan.hashCode^colSpan.hashCode^isHeader.hashCode^bbox.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is GridCell &&
-  runtimeType == other.runtimeType &&
-  content == other.content &&
-  row == other.row &&
-  col == other.col &&
-  rowSpan == other.rowSpan &&
-  colSpan == other.colSpan &&
-  isHeader == other.isHeader &&
-  bbox == other.bbox;
+  runtimeType == other.runtimeType
+  && content == other.content&& row == other.row&& col == other.col&& rowSpan == other.rowSpan&& colSpan == other.colSpan&& isHeader == other.isHeader&& bbox == other.bbox;
+
 }
 
 /// Header/heading element metadata.
-class HeaderMetadata {
+class HeaderMetadata  {
   /// Header level: 1 (h1) through 6 (h6)
   final PlatformInt64 level;
-
   /// Normalized text content of the header
   final String text;
-
   /// HTML id attribute if present
   final String? id;
-
   /// Document tree depth at the header element
   final PlatformInt64 depth;
-
   /// Byte offset in original HTML document
   final PlatformInt64 htmlOffset;
 
-  const HeaderMetadata({
-    required this.level,
-    required this.text,
-    this.id,
-    required this.depth,
-    required this.htmlOffset,
-  });
+  const HeaderMetadata({required this.level ,required this.text ,this.id ,required this.depth ,required this.htmlOffset ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  level.hashCode ^
-  text.hashCode ^
-  id.hashCode ^
-  depth.hashCode ^
-  htmlOffset.hashCode;
+  int get hashCode => level.hashCode^text.hashCode^id.hashCode^depth.hashCode^htmlOffset.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is HeaderMetadata &&
-  runtimeType == other.runtimeType &&
-  level == other.level &&
-  text == other.text &&
-  id == other.id &&
-  depth == other.depth &&
-  htmlOffset == other.htmlOffset;
+  runtimeType == other.runtimeType
+  && level == other.level&& text == other.text&& id == other.id&& depth == other.depth&& htmlOffset == other.htmlOffset;
+
 }
 
 /// Heading context for a chunk within a Markdown document.
 ///
 /// Contains the heading hierarchy from document root to this chunk's section.
-class HeadingContext {
+class HeadingContext  {
   /// The heading hierarchy from document root to this chunk's section.
   /// Index 0 is the outermost (h1), last element is the most specific.
   final List<HeadingLevel> headings;
 
-  const HeadingContext({required this.headings});
+  const HeadingContext({required this.headings ,});
+
+
+
+
 
   @override
   int get hashCode => headings.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is HeadingContext &&
-  runtimeType == other.runtimeType &&
-  headings == other.headings;
+  runtimeType == other.runtimeType
+  && headings == other.headings;
+
 }
 
 /// A single heading in the hierarchy.
-class HeadingLevel {
+class HeadingLevel  {
   /// Heading depth (1 = h1, 2 = h2, etc.)
   final PlatformInt64 level;
-
   /// The text content of the heading.
   final String text;
 
-  const HeadingLevel({required this.level, required this.text});
+  const HeadingLevel({required this.level ,required this.text ,});
+
+
+
+
 
   @override
-  int get hashCode => level.hashCode ^ text.hashCode;
+  int get hashCode => level.hashCode^text.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is HeadingLevel &&
-  runtimeType == other.runtimeType &&
-  level == other.level &&
-  text == other.text;
+  runtimeType == other.runtimeType
+  && level == other.level&& text == other.text;
+
 }
 
 /// Heading style options for Markdown output.
@@ -7673,150 +5677,113 @@ class HeadingLevel {
 enum HeadingStyle {
   /// Underlined style (=== for h1, --- for h2).
   underlined,
-
   /// ATX style (# for h1, ## for h2, etc.). Default.
   atx,
-
   /// ATX closed style (# title #, with closing hashes).
   atxClosed,
+  ;
+
 }
 
 /// Configuration for document chunking and analysis heuristics.
 ///
 /// Every threshold is a public field so callers can override any subset via
 /// struct-update syntax: `HeuristicsConfig { text_layer_threshold: 0.5, ..Default::default() }`.
-class HeuristicsConfig {
+class HeuristicsConfig  {
   /// Enable PDF text-layer detection heuristics.
   ///
   /// When `true`, PDFs with a substantial text layer will skip chunking.
   /// Default: `true`.
   final bool enablePdfTextHeuristics;
-
   /// Minimum fraction of pages that must have text to skip chunking.
   ///
   /// Range `0.0..=1.0`. Default: `0.7` (70 % of pages).
   final double textLayerThreshold;
-
   /// File size threshold in bytes for considering chunking.
   ///
   /// Files smaller than this are processed without chunking.
   /// Default: 10 MiB (10 × 1 024 × 1 024).
   final PlatformInt64 fileSizeThresholdBytes;
-
   /// Page count threshold for considering chunking.
   ///
   /// Documents with fewer pages are processed without chunking.
   /// Default: 50.
   final PlatformInt64 pageCountThreshold;
-
   /// Target number of pages per chunk for optimal parallel processing.
   ///
   /// Default: 10.
   final PlatformInt64 targetPagesPerChunk;
-
   /// Hard cap on pages per chunk.
   ///
   /// No chunk will exceed this limit. Must be ≥ `target_pages_per_chunk`.
   /// Default: 25.
   final PlatformInt64 maxPagesPerChunk;
-
   /// File size threshold for disk-based processing.
   ///
   /// Files larger than this are buffered to disk to prevent OOM.
   /// Default: 50 MiB (50 × 1 024 × 1 024).
   final PlatformInt64 diskProcessingThresholdBytes;
-
   /// Minimum characters per page to consider a page as having text.
   ///
   /// Default: 50.
   final PlatformInt64 minCharsPerPage;
-
   /// Maximum sheet count allowed in an XLSX workbook.
   ///
   /// Workbooks beyond this are rejected pre-extraction to avoid OOM /
   /// abusive billing inflation. Default: 200.
   final PlatformInt64 maxXlsxSheetCount;
-
   /// Maximum cell count (sheets × rows × columns approximation) in an XLSX workbook.
   ///
   /// Default: 5 000 000 (≈ 200 sheets × 25 k cells).
   final PlatformInt64 maxXlsxWorkbookCells;
-
   /// Maximum number of OLE-embedded objects extractable from a single PPTX or DOCX.
   ///
   /// Protects against zip-bomb-style nested-document abuse. Default: 50.
   final PlatformInt64 maxPptxEmbeddedCount;
 
-  const HeuristicsConfig({
-    required this.enablePdfTextHeuristics,
-    required this.textLayerThreshold,
-    required this.fileSizeThresholdBytes,
-    required this.pageCountThreshold,
-    required this.targetPagesPerChunk,
-    required this.maxPagesPerChunk,
-    required this.diskProcessingThresholdBytes,
-    required this.minCharsPerPage,
-    required this.maxXlsxSheetCount,
-    required this.maxXlsxWorkbookCells,
-    required this.maxPptxEmbeddedCount,
-  });
+  const HeuristicsConfig({required this.enablePdfTextHeuristics ,required this.textLayerThreshold ,required this.fileSizeThresholdBytes ,required this.pageCountThreshold ,required this.targetPagesPerChunk ,required this.maxPagesPerChunk ,required this.diskProcessingThresholdBytes ,required this.minCharsPerPage ,required this.maxXlsxSheetCount ,required this.maxXlsxWorkbookCells ,required this.maxPptxEmbeddedCount ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  enablePdfTextHeuristics.hashCode ^
-  textLayerThreshold.hashCode ^
-  fileSizeThresholdBytes.hashCode ^
-  pageCountThreshold.hashCode ^
-  targetPagesPerChunk.hashCode ^
-  maxPagesPerChunk.hashCode ^
-  diskProcessingThresholdBytes.hashCode ^
-  minCharsPerPage.hashCode ^
-  maxXlsxSheetCount.hashCode ^
-  maxXlsxWorkbookCells.hashCode ^
-  maxPptxEmbeddedCount.hashCode;
+  int get hashCode => enablePdfTextHeuristics.hashCode^textLayerThreshold.hashCode^fileSizeThresholdBytes.hashCode^pageCountThreshold.hashCode^targetPagesPerChunk.hashCode^maxPagesPerChunk.hashCode^diskProcessingThresholdBytes.hashCode^minCharsPerPage.hashCode^maxXlsxSheetCount.hashCode^maxXlsxWorkbookCells.hashCode^maxPptxEmbeddedCount.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is HeuristicsConfig &&
-  runtimeType == other.runtimeType &&
-  enablePdfTextHeuristics == other.enablePdfTextHeuristics &&
-  textLayerThreshold == other.textLayerThreshold &&
-  fileSizeThresholdBytes == other.fileSizeThresholdBytes &&
-  pageCountThreshold == other.pageCountThreshold &&
-  targetPagesPerChunk == other.targetPagesPerChunk &&
-  maxPagesPerChunk == other.maxPagesPerChunk &&
-  diskProcessingThresholdBytes == other.diskProcessingThresholdBytes &&
-  minCharsPerPage == other.minCharsPerPage &&
-  maxXlsxSheetCount == other.maxXlsxSheetCount &&
-  maxXlsxWorkbookCells == other.maxXlsxWorkbookCells &&
-  maxPptxEmbeddedCount == other.maxPptxEmbeddedCount;
+  runtimeType == other.runtimeType
+  && enablePdfTextHeuristics == other.enablePdfTextHeuristics&& textLayerThreshold == other.textLayerThreshold&& fileSizeThresholdBytes == other.fileSizeThresholdBytes&& pageCountThreshold == other.pageCountThreshold&& targetPagesPerChunk == other.targetPagesPerChunk&& maxPagesPerChunk == other.maxPagesPerChunk&& diskProcessingThresholdBytes == other.diskProcessingThresholdBytes&& minCharsPerPage == other.minCharsPerPage&& maxXlsxSheetCount == other.maxXlsxSheetCount&& maxXlsxWorkbookCells == other.maxXlsxWorkbookCells&& maxPptxEmbeddedCount == other.maxPptxEmbeddedCount;
+
 }
 
 @freezed
-sealed class HeuristicsError with _$HeuristicsError {
+sealed class HeuristicsError with _$HeuristicsError  {
   const HeuristicsError._();
 
   /// Invalid configuration value.
-  const factory HeuristicsError.configError({required String field0}) =
-  HeuristicsError_ConfigError;
-
+  const factory HeuristicsError.configError({   required String field0 , }) = HeuristicsError_ConfigError;
   /// PDF analysis step failed (only when `heuristics-pdf` feature is active).
-  const factory HeuristicsError.pdfAnalysisError({required String field0}) =
-  HeuristicsError_PdfAnalysisError;
+  const factory HeuristicsError.pdfAnalysisError({   required String field0 , }) = HeuristicsError_PdfAnalysisError;
+
+
+
+
 }
 
 /// A text block with hierarchy level assignment.
 ///
 /// Represents a block of text with semantic heading information extracted from
 /// font size clustering and hierarchical analysis.
-class HierarchicalBlock {
+class HierarchicalBlock  {
   /// The text content of this block
   final String text;
-
   /// The font size of the text in this block
   final double fontSize;
-
   /// The hierarchy level of this block (H1-H6 or Body)
   ///
   /// Levels correspond to HTML heading tags:
@@ -7829,23 +5796,24 @@ class HierarchicalBlock {
   /// - "body": Body text (no heading level)
   final String level;
 
-  const HierarchicalBlock({
-    required this.text,
-    required this.fontSize,
-    required this.level,
-  });
+  const HierarchicalBlock({required this.text ,required this.fontSize ,required this.level ,});
+
+
+
+
 
   @override
-  int get hashCode => text.hashCode ^ fontSize.hashCode ^ level.hashCode;
+  int get hashCode => text.hashCode^fontSize.hashCode^level.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is HierarchicalBlock &&
-  runtimeType == other.runtimeType &&
-  text == other.text &&
-  fontSize == other.fontSize &&
-  level == other.level;
+  runtimeType == other.runtimeType
+  && text == other.text&& fontSize == other.fontSize&& level == other.level;
+
 }
 
 /// Hierarchy extraction configuration for PDF text structure analysis.
@@ -7853,37 +5821,35 @@ class HierarchicalBlock {
 /// Enables extraction of document hierarchy levels (H1-H6) based on font size
 /// clustering and semantic analysis. When enabled, hierarchical blocks are
 /// included in page content.
-class HierarchyConfig {
+class HierarchyConfig  {
   /// Enable hierarchy extraction
   final bool enabled;
-
   /// Number of font size clusters to use for hierarchy levels (1-7)
   ///
   /// Default: 6, which provides H1-H6 heading levels with body text.
   /// Larger values create more fine-grained hierarchy levels.
   final PlatformInt64 kClusters;
-
   /// Include bounding box information in hierarchy blocks
   final bool includeBbox;
 
-  const HierarchyConfig({
-    required this.enabled,
-    required this.kClusters,
-    required this.includeBbox,
-  });
+  const HierarchyConfig({required this.enabled ,required this.kClusters ,required this.includeBbox ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  enabled.hashCode ^ kClusters.hashCode ^ includeBbox.hashCode;
+  int get hashCode => enabled.hashCode^kClusters.hashCode^includeBbox.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is HierarchyConfig &&
-  runtimeType == other.runtimeType &&
-  enabled == other.enabled &&
-  kClusters == other.kClusters &&
-  includeBbox == other.includeBbox;
+  runtimeType == other.runtimeType
+  && enabled == other.enabled&& kClusters == other.kClusters&& includeBbox == other.includeBbox;
+
 }
 
 /// Highlight rendering style for `<mark>` elements.
@@ -7892,126 +5858,73 @@ class HierarchyConfig {
 enum HighlightStyle {
   /// Double equals syntax (==text==). Default. Pandoc-compatible.
   doubleEqual,
-
   /// Preserve as HTML (==text==). Original HTML tag.
   html,
-
   /// Render as bold (**text**). Uses strong emphasis.
   bold,
-
   /// Strip formatting, render as plain text. No markup.
   none,
+  ;
+
 }
 
 /// HTML metadata extracted from HTML documents.
 ///
 /// Includes document-level metadata, Open Graph data, Twitter Card metadata,
 /// and extracted structural elements (headers, links, images, structured data).
-class HtmlMetadata {
+class HtmlMetadata  {
   /// Document title from `<title>` tag
   final String? title;
-
   /// Document description from `<meta name="description">` tag
   final String? description;
-
   /// Document keywords from `<meta name="keywords">` tag, split on commas
   final List<String> keywords;
-
   /// Document author from `<meta name="author">` tag
   final String? author;
-
   /// Canonical URL from `<link rel="canonical">` tag
   final String? canonicalUrl;
-
   /// Base URL from `<base href="">` tag for resolving relative URLs
   final String? baseHref;
-
   /// Document language from `lang` attribute
   final String? language;
-
   /// Document text direction from `dir` attribute
   final TextDirection? textDirection;
-
   /// Open Graph metadata (og:* properties) for social media
   /// Keys like "title", "description", "image", "url", etc.
   final Map<String, String> openGraph;
-
   /// Twitter Card metadata (twitter:* properties)
   /// Keys like "card", "site", "creator", "title", "description", "image", etc.
   final Map<String, String> twitterCard;
-
   /// Additional meta tags not covered by specific fields
   /// Keys are meta name/property attributes, values are content
   final Map<String, String> metaTags;
-
   /// Extracted header elements with hierarchy
   final List<HeaderMetadata> headers;
-
   /// Extracted hyperlinks with type classification
   final List<LinkMetadata> links;
-
   /// Extracted images with source and dimensions
   final List<ImageMetadataType> images;
-
   /// Extracted structured data blocks
   final List<StructuredData> structuredData;
 
-  const HtmlMetadata({
-    this.title,
-    this.description,
-    required this.keywords,
-    this.author,
-    this.canonicalUrl,
-    this.baseHref,
-    this.language,
-    this.textDirection,
-    required this.openGraph,
-    required this.twitterCard,
-    required this.metaTags,
-    required this.headers,
-    required this.links,
-    required this.images,
-    required this.structuredData,
-  });
+  const HtmlMetadata({this.title ,this.description ,required this.keywords ,this.author ,this.canonicalUrl ,this.baseHref ,this.language ,this.textDirection ,required this.openGraph ,required this.twitterCard ,required this.metaTags ,required this.headers ,required this.links ,required this.images ,required this.structuredData ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  title.hashCode ^
-  description.hashCode ^
-  keywords.hashCode ^
-  author.hashCode ^
-  canonicalUrl.hashCode ^
-  baseHref.hashCode ^
-  language.hashCode ^
-  textDirection.hashCode ^
-  openGraph.hashCode ^
-  twitterCard.hashCode ^
-  metaTags.hashCode ^
-  headers.hashCode ^
-  links.hashCode ^
-  images.hashCode ^
-  structuredData.hashCode;
+  int get hashCode => title.hashCode^description.hashCode^keywords.hashCode^author.hashCode^canonicalUrl.hashCode^baseHref.hashCode^language.hashCode^textDirection.hashCode^openGraph.hashCode^twitterCard.hashCode^metaTags.hashCode^headers.hashCode^links.hashCode^images.hashCode^structuredData.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is HtmlMetadata &&
-  runtimeType == other.runtimeType &&
-  title == other.title &&
-  description == other.description &&
-  keywords == other.keywords &&
-  author == other.author &&
-  canonicalUrl == other.canonicalUrl &&
-  baseHref == other.baseHref &&
-  language == other.language &&
-  textDirection == other.textDirection &&
-  openGraph == other.openGraph &&
-  twitterCard == other.twitterCard &&
-  metaTags == other.metaTags &&
-  headers == other.headers &&
-  links == other.links &&
-  images == other.images &&
-  structuredData == other.structuredData;
+  runtimeType == other.runtimeType
+  && title == other.title&& description == other.description&& keywords == other.keywords&& author == other.author&& canonicalUrl == other.canonicalUrl&& baseHref == other.baseHref&& language == other.language&& textDirection == other.textDirection&& openGraph == other.openGraph&& twitterCard == other.twitterCard&& metaTags == other.metaTags&& headers == other.headers&& links == other.links&& images == other.images&& structuredData == other.structuredData;
+
 }
 
 /// Configuration for styled HTML output.
@@ -8032,24 +5945,20 @@ class HtmlMetadata {
 ///     ..Default::default()
 /// };
 /// ```
-class HtmlOutputConfig {
+class HtmlOutputConfig  {
   /// Inline CSS string injected into the output after the theme stylesheet.
   /// Concatenated after `css_file` content when both are set.
   final String? css;
-
   /// Path to a CSS file loaded once at renderer construction time.
   /// Concatenated before `css` when both are set.
   final String? cssFile;
-
   /// Built-in colour/typography theme. Default: [`HtmlTheme::Unstyled`].
   final HtmlTheme theme;
-
   /// CSS class prefix applied to every emitted class name.
   ///
   /// Default: `"kb-"`. Change this if your host application already uses
   /// classes that start with `kb-`.
   final String classPrefix;
-
   /// When `true` (default), write the resolved CSS into a `<style>` block
   /// immediately after the opening `<div class="{prefix}doc">`.
   ///
@@ -8057,32 +5966,24 @@ class HtmlOutputConfig {
   /// own stylesheet targeting the `kb-*` class names.
   final bool embedCss;
 
-  const HtmlOutputConfig({
-    this.css,
-    this.cssFile,
-    required this.theme,
-    required this.classPrefix,
-    required this.embedCss,
-  });
+  const HtmlOutputConfig({this.css ,this.cssFile ,required this.theme ,required this.classPrefix ,required this.embedCss ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  css.hashCode ^
-  cssFile.hashCode ^
-  theme.hashCode ^
-  classPrefix.hashCode ^
-  embedCss.hashCode;
+  int get hashCode => css.hashCode^cssFile.hashCode^theme.hashCode^classPrefix.hashCode^embedCss.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is HtmlOutputConfig &&
-  runtimeType == other.runtimeType &&
-  css == other.css &&
-  cssFile == other.cssFile &&
-  theme == other.theme &&
-  classPrefix == other.classPrefix &&
-  embedCss == other.embedCss;
+  runtimeType == other.runtimeType
+  && css == other.css&& cssFile == other.cssFile&& theme == other.theme&& classPrefix == other.classPrefix&& embedCss == other.embedCss;
+
 }
 
 /// Built-in HTML theme selection.
@@ -8091,47 +5992,38 @@ enum HtmlTheme {
   /// measure. CSS custom properties (`--kb-*`) are all defined so user CSS
   /// can override individual values.
   default_,
-
   /// GitHub Markdown-inspired palette and spacing.
   gitHub,
-
   /// Dark background, light text.
   dark,
-
   /// Minimal light theme with generous whitespace.
   light,
-
   /// No built-in stylesheet emitted. CSS custom properties are still defined
   /// on `:root` so user stylesheets can reference `var(--kb-*)` tokens.
   unstyled,
+  ;
+
 }
 
 /// Image extraction configuration.
-class ImageExtractionConfig {
+class ImageExtractionConfig  {
   /// Extract images from documents
   final bool extractImages;
-
   /// Target DPI for image normalization
   final PlatformInt64 targetDpi;
-
   /// Maximum dimension for images (width or height)
   final PlatformInt64 maxImageDimension;
-
   /// Whether to inject image reference placeholders into markdown output.
   /// When `true` (default), image references like `![Image 1](embedded:p1_i0)`
   /// are appended to the markdown. Set to `false` to extract images as data
   /// without polluting the markdown output.
   final bool injectPlaceholders;
-
   /// Automatically adjust DPI based on image content
   final bool autoAdjustDpi;
-
   /// Minimum DPI threshold
   final PlatformInt64 minDpi;
-
   /// Maximum DPI threshold
   final PlatformInt64 maxDpi;
-
   /// Maximum number of image objects to extract per PDF page.
   ///
   /// Some PDFs (e.g. technical diagrams stored as thousands of raster fragments)
@@ -8142,12 +6034,10 @@ class ImageExtractionConfig {
   ///
   /// `None` (default) means no limit — all images are extracted.
   final PlatformInt64? maxImagesPerPage;
-
   /// When `true`, extracted images are classified by kind and grouped
   /// into clusters where they appear to belong to one figure.
   /// Defaults to `false` — opt in explicitly to avoid unexpected ML overhead.
   final bool classify;
-
   /// When `true`, full-page renders produced during OCR preprocessing are captured
   /// and returned as `ImageKind::PageRaster` entries in `ExtractedDocument.images`.
   ///
@@ -8159,23 +6049,19 @@ class ImageExtractionConfig {
   /// Defaults to `false`. Enable when downstream consumers need page thumbnails
   /// (e.g. citation previews, visual grounding).
   final bool includePageRasters;
-
   /// Run OCR on extracted images and include the recognized text in the document content.
   ///
   /// When `true` (default) and `ExtractionConfig.ocr` is configured, extracted images
   /// are processed with the configured OCR backend. Set to `false` to extract images
   /// without OCR processing, even when OCR is enabled.
   final bool runOcrOnImages;
-
   /// When `true`, image OCR results are rendered as plain text without the
   /// `![...](...)` markdown placeholder. Only takes effect when `run_ocr_on_images`
   /// is also `true`.
   final bool ocrTextOnly;
-
   /// When `true` and `ocr_text_only` is `false`, append the OCR text after
   /// the image placeholder in the rendered output.
   final bool appendOcrText;
-
   /// Target format for re-encoding extracted images.
   ///
   /// When set to anything other than `Native`, each extracted image is
@@ -8186,13 +6072,11 @@ class ImageExtractionConfig {
   /// Defaults to `Native` — no re-encode pass is performed and
   /// `ExtractedImage.format` reflects the source extractor's output.
   final ImageOutputFormat outputFormat;
-
   /// SVG-specific knobs for the image-encode pipeline.
   ///
   /// Controls sanitization and rasterization DPI when the source or output
   /// format is SVG.  Only available when the `svg` feature is active.
   final SvgOptions svg;
-
   /// When `true`, populate `ExtractedImage::data_base64` with a Base64-encoded
   /// copy of the raw image bytes.
   ///
@@ -8201,182 +6085,122 @@ class ImageExtractionConfig {
   /// doubles the in-memory image representation for the duration of the response.
   final bool includeDataBase64;
 
-  const ImageExtractionConfig({
-    required this.extractImages,
-    required this.targetDpi,
-    required this.maxImageDimension,
-    required this.injectPlaceholders,
-    required this.autoAdjustDpi,
-    required this.minDpi,
-    required this.maxDpi,
-    this.maxImagesPerPage,
-    required this.classify,
-    required this.includePageRasters,
-    required this.runOcrOnImages,
-    required this.ocrTextOnly,
-    required this.appendOcrText,
-    required this.outputFormat,
-    required this.svg,
-    required this.includeDataBase64,
-  });
+  const ImageExtractionConfig({required this.extractImages ,required this.targetDpi ,required this.maxImageDimension ,required this.injectPlaceholders ,required this.autoAdjustDpi ,required this.minDpi ,required this.maxDpi ,this.maxImagesPerPage ,required this.classify ,required this.includePageRasters ,required this.runOcrOnImages ,required this.ocrTextOnly ,required this.appendOcrText ,required this.outputFormat ,required this.svg ,required this.includeDataBase64 ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  extractImages.hashCode ^
-  targetDpi.hashCode ^
-  maxImageDimension.hashCode ^
-  injectPlaceholders.hashCode ^
-  autoAdjustDpi.hashCode ^
-  minDpi.hashCode ^
-  maxDpi.hashCode ^
-  maxImagesPerPage.hashCode ^
-  classify.hashCode ^
-  includePageRasters.hashCode ^
-  runOcrOnImages.hashCode ^
-  ocrTextOnly.hashCode ^
-  appendOcrText.hashCode ^
-  outputFormat.hashCode ^
-  svg.hashCode ^
-  includeDataBase64.hashCode;
+  int get hashCode => extractImages.hashCode^targetDpi.hashCode^maxImageDimension.hashCode^injectPlaceholders.hashCode^autoAdjustDpi.hashCode^minDpi.hashCode^maxDpi.hashCode^maxImagesPerPage.hashCode^classify.hashCode^includePageRasters.hashCode^runOcrOnImages.hashCode^ocrTextOnly.hashCode^appendOcrText.hashCode^outputFormat.hashCode^svg.hashCode^includeDataBase64.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ImageExtractionConfig &&
-  runtimeType == other.runtimeType &&
-  extractImages == other.extractImages &&
-  targetDpi == other.targetDpi &&
-  maxImageDimension == other.maxImageDimension &&
-  injectPlaceholders == other.injectPlaceholders &&
-  autoAdjustDpi == other.autoAdjustDpi &&
-  minDpi == other.minDpi &&
-  maxDpi == other.maxDpi &&
-  maxImagesPerPage == other.maxImagesPerPage &&
-  classify == other.classify &&
-  includePageRasters == other.includePageRasters &&
-  runOcrOnImages == other.runOcrOnImages &&
-  ocrTextOnly == other.ocrTextOnly &&
-  appendOcrText == other.appendOcrText &&
-  outputFormat == other.outputFormat &&
-  svg == other.svg &&
-  includeDataBase64 == other.includeDataBase64;
+  runtimeType == other.runtimeType
+  && extractImages == other.extractImages&& targetDpi == other.targetDpi&& maxImageDimension == other.maxImageDimension&& injectPlaceholders == other.injectPlaceholders&& autoAdjustDpi == other.autoAdjustDpi&& minDpi == other.minDpi&& maxDpi == other.maxDpi&& maxImagesPerPage == other.maxImagesPerPage&& classify == other.classify&& includePageRasters == other.includePageRasters&& runOcrOnImages == other.runOcrOnImages&& ocrTextOnly == other.ocrTextOnly&& appendOcrText == other.appendOcrText&& outputFormat == other.outputFormat&& svg == other.svg&& includeDataBase64 == other.includeDataBase64;
+
 }
 
 /// Heuristic classification of what an image likely depicts.
 enum ImageKind {
   /// Photographic image (natural scene, photograph)
   photograph,
-
   /// Technical or schematic diagram
   diagram,
-
   /// Chart, graph, or plot
   chart,
-
   /// Freehand or technical drawing
   drawing,
-
   /// Text-heavy image (scanned text, document)
   textBlock,
-
   /// Decorative element or border
   decoration,
-
   /// Logo or brand mark
   logo,
-
   /// Small icon
   icon,
-
   /// Fragment of a larger tiled image (tile of a technical drawing)
   tileFragment,
-
   /// Mask or transparency map
   mask,
-
   /// Full-page render produced during OCR preprocessing; used as a citation thumbnail.
   pageRaster,
-
   /// Could not classify with reasonable confidence
   unknown,
+  ;
+
 }
 
 /// Image metadata extracted from image files.
 ///
 /// Includes dimensions, format, and EXIF data.
-class ImageMetadata {
+class ImageMetadata  {
   /// Image width in pixels
   final PlatformInt64 width;
-
   /// Image height in pixels
   final PlatformInt64 height;
-
   /// Image format (e.g., "PNG", "JPEG", "TIFF")
   final String format;
-
   /// EXIF metadata tags
   final Map<String, String> exif;
 
-  const ImageMetadata({
-    required this.width,
-    required this.height,
-    required this.format,
-    required this.exif,
-  });
+  const ImageMetadata({required this.width ,required this.height ,required this.format ,required this.exif ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  width.hashCode ^ height.hashCode ^ format.hashCode ^ exif.hashCode;
+  int get hashCode => width.hashCode^height.hashCode^format.hashCode^exif.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ImageMetadata &&
-  runtimeType == other.runtimeType &&
-  width == other.width &&
-  height == other.height &&
-  format == other.format &&
-  exif == other.exif;
+  runtimeType == other.runtimeType
+  && width == other.width&& height == other.height&& format == other.format&& exif == other.exif;
+
 }
 
 /// Image element metadata.
-class ImageMetadataType {
+class ImageMetadataType  {
   /// Image source (URL, data URI, or SVG content)
   final String src;
-
   /// Alternative text from alt attribute
   final String? alt;
-
   /// Title attribute
   final String? title;
-
   /// Image type classification
   final ImageType imageType;
 
-  const ImageMetadataType({
-    required this.src,
-    this.alt,
-    this.title,
-    required this.imageType,
-  });
+  const ImageMetadataType({required this.src ,this.alt ,this.title ,required this.imageType ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  src.hashCode ^ alt.hashCode ^ title.hashCode ^ imageType.hashCode;
+  int get hashCode => src.hashCode^alt.hashCode^title.hashCode^imageType.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ImageMetadataType &&
-  runtimeType == other.runtimeType &&
-  src == other.src &&
-  alt == other.alt &&
-  title == other.title &&
-  imageType == other.imageType;
+  runtimeType == other.runtimeType
+  && src == other.src&& alt == other.alt&& title == other.title&& imageType == other.imageType;
+
 }
 
 @freezed
-sealed class ImageOutputFormat with _$ImageOutputFormat {
+sealed class ImageOutputFormat with _$ImageOutputFormat  {
   const ImageOutputFormat._();
 
   /// Preserve whatever format the extractor produced (default).
@@ -8385,29 +6209,21 @@ sealed class ImageOutputFormat with _$ImageOutputFormat {
   /// source format: JPEG for embedded PDF images, PNG for rasterised content,
   /// or the native container format from office documents.
   const factory ImageOutputFormat.native() = ImageOutputFormat_Native;
-
   /// Re-encode all extracted images as PNG (lossless).
   const factory ImageOutputFormat.png() = ImageOutputFormat_Png;
-
   /// Re-encode all extracted images as JPEG at the given quality level.
   ///
   /// `quality` must be in `1..=100`. Values outside this range are clamped
   /// and a warning is emitted. Higher values produce larger files with less
   /// artefacting; 85 is a reasonable default.
-  const factory ImageOutputFormat.jpeg({
-    /// JPEG quality (1–100, default 85).
-    required PlatformInt64 quality,
-  }) = ImageOutputFormat_Jpeg;
-
+  const factory ImageOutputFormat.jpeg({ /// JPEG quality (1–100, default 85).
+    required PlatformInt64 quality , }) = ImageOutputFormat_Jpeg;
   /// Re-encode all extracted images as WebP at the given quality level.
   ///
   /// `quality` must be in `1..=100`. Values outside this range are clamped
   /// and a warning is emitted. 80 is a reasonable default.
-  const factory ImageOutputFormat.webp({
-    /// WebP quality (1–100, default 80).
-    required PlatformInt64 quality,
-  }) = ImageOutputFormat_Webp;
-
+  const factory ImageOutputFormat.webp({ /// WebP quality (1–100, default 80).
+    required PlatformInt64 quality , }) = ImageOutputFormat_Webp;
   /// Re-encode all extracted images as HEIF/HEIC at the given quality level.
   ///
   /// `quality` must be in `1..=100`. Values outside this range are clamped
@@ -8415,11 +6231,8 @@ sealed class ImageOutputFormat with _$ImageOutputFormat {
   ///
   /// The encode path requires the `heic` feature; on builds without it, selecting
   /// this variant returns an `EncodeFailed` warning and leaves the image untouched.
-  const factory ImageOutputFormat.heif({
-    /// HEIF quality (1–100, default 80).
-    required PlatformInt64 quality,
-  }) = ImageOutputFormat_Heif;
-
+  const factory ImageOutputFormat.heif({ /// HEIF quality (1–100, default 80).
+    required PlatformInt64 quality , }) = ImageOutputFormat_Heif;
   /// Output pure-vector SVG. Lossless. Raster sources are not re-encoded
   /// (a warning is emitted and the image bytes are left untouched).
   ///
@@ -8429,6 +6242,10 @@ sealed class ImageOutputFormat with _$ImageOutputFormat {
   ///
   /// Requires the `svg` feature.
   const factory ImageOutputFormat.svg() = ImageOutputFormat_Svg;
+
+
+
+
 }
 
 /// Image preprocessing configuration for OCR.
@@ -8436,270 +6253,198 @@ sealed class ImageOutputFormat with _$ImageOutputFormat {
 /// These settings control how images are preprocessed before OCR to improve
 /// text recognition quality. Different preprocessing strategies work better
 /// for different document types.
-class ImagePreprocessingConfig {
+class ImagePreprocessingConfig  {
   /// Target DPI for the image (300 is standard, 600 for small text).
   final PlatformInt64 targetDpi;
-
   /// Auto-detect and correct image rotation.
   final bool autoRotate;
-
   /// Correct skew (tilted images).
   final bool deskew;
-
   /// Remove noise from the image.
   final bool denoise;
-
   /// Enhance contrast for better text visibility.
   final bool contrastEnhance;
-
   /// Binarization method: "otsu", "sauvola", "adaptive".
   final String binarizationMethod;
-
   /// Invert colors (white text on black → black on white).
   final bool invertColors;
 
-  const ImagePreprocessingConfig({
-    required this.targetDpi,
-    required this.autoRotate,
-    required this.deskew,
-    required this.denoise,
-    required this.contrastEnhance,
-    required this.binarizationMethod,
-    required this.invertColors,
-  });
+  const ImagePreprocessingConfig({required this.targetDpi ,required this.autoRotate ,required this.deskew ,required this.denoise ,required this.contrastEnhance ,required this.binarizationMethod ,required this.invertColors ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  targetDpi.hashCode ^
-  autoRotate.hashCode ^
-  deskew.hashCode ^
-  denoise.hashCode ^
-  contrastEnhance.hashCode ^
-  binarizationMethod.hashCode ^
-  invertColors.hashCode;
+  int get hashCode => targetDpi.hashCode^autoRotate.hashCode^deskew.hashCode^denoise.hashCode^contrastEnhance.hashCode^binarizationMethod.hashCode^invertColors.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ImagePreprocessingConfig &&
-  runtimeType == other.runtimeType &&
-  targetDpi == other.targetDpi &&
-  autoRotate == other.autoRotate &&
-  deskew == other.deskew &&
-  denoise == other.denoise &&
-  contrastEnhance == other.contrastEnhance &&
-  binarizationMethod == other.binarizationMethod &&
-  invertColors == other.invertColors;
+  runtimeType == other.runtimeType
+  && targetDpi == other.targetDpi&& autoRotate == other.autoRotate&& deskew == other.deskew&& denoise == other.denoise&& contrastEnhance == other.contrastEnhance&& binarizationMethod == other.binarizationMethod&& invertColors == other.invertColors;
+
 }
 
 /// Image preprocessing metadata.
 ///
 /// Tracks the transformations applied to an image during OCR preprocessing,
 /// including DPI normalization, resizing, and resampling.
-class ImagePreprocessingMetadata {
+class ImagePreprocessingMetadata  {
   /// Target DPI from configuration
   final PlatformInt64 targetDpi;
-
   /// Scaling factor applied to the image
   final double scaleFactor;
-
   /// Whether DPI was auto-adjusted based on content
   final bool autoAdjusted;
-
   /// Final DPI after processing
   final PlatformInt64 finalDpi;
-
   /// Resampling algorithm used ("LANCZOS3", "CATMULLROM", etc.)
   final String resampleMethod;
-
   /// Whether dimensions were clamped to max_image_dimension
   final bool dimensionClamped;
-
   /// Calculated optimal DPI (if auto_adjust_dpi enabled)
   final PlatformInt64? calculatedDpi;
-
   /// Whether resize was skipped (dimensions already optimal)
   final bool skippedResize;
-
   /// Error message if resize failed
   final String? resizeError;
 
-  const ImagePreprocessingMetadata({
-    required this.targetDpi,
-    required this.scaleFactor,
-    required this.autoAdjusted,
-    required this.finalDpi,
-    required this.resampleMethod,
-    required this.dimensionClamped,
-    this.calculatedDpi,
-    required this.skippedResize,
-    this.resizeError,
-  });
+  const ImagePreprocessingMetadata({required this.targetDpi ,required this.scaleFactor ,required this.autoAdjusted ,required this.finalDpi ,required this.resampleMethod ,required this.dimensionClamped ,this.calculatedDpi ,required this.skippedResize ,this.resizeError ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  targetDpi.hashCode ^
-  scaleFactor.hashCode ^
-  autoAdjusted.hashCode ^
-  finalDpi.hashCode ^
-  resampleMethod.hashCode ^
-  dimensionClamped.hashCode ^
-  calculatedDpi.hashCode ^
-  skippedResize.hashCode ^
-  resizeError.hashCode;
+  int get hashCode => targetDpi.hashCode^scaleFactor.hashCode^autoAdjusted.hashCode^finalDpi.hashCode^resampleMethod.hashCode^dimensionClamped.hashCode^calculatedDpi.hashCode^skippedResize.hashCode^resizeError.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ImagePreprocessingMetadata &&
-  runtimeType == other.runtimeType &&
-  targetDpi == other.targetDpi &&
-  scaleFactor == other.scaleFactor &&
-  autoAdjusted == other.autoAdjusted &&
-  finalDpi == other.finalDpi &&
-  resampleMethod == other.resampleMethod &&
-  dimensionClamped == other.dimensionClamped &&
-  calculatedDpi == other.calculatedDpi &&
-  skippedResize == other.skippedResize &&
-  resizeError == other.resizeError;
+  runtimeType == other.runtimeType
+  && targetDpi == other.targetDpi&& scaleFactor == other.scaleFactor&& autoAdjusted == other.autoAdjusted&& finalDpi == other.finalDpi&& resampleMethod == other.resampleMethod&& dimensionClamped == other.dimensionClamped&& calculatedDpi == other.calculatedDpi&& skippedResize == other.skippedResize&& resizeError == other.resizeError;
+
 }
 
 /// Image type classification.
 enum ImageType {
   /// Data URI image
   dataUri,
-
   /// Inline SVG
   inlineSvg,
-
   /// External image URL
   external_,
-
   /// Relative path image
   relative,
+  ;
+
 }
 
 /// Inline element within a block.
 ///
 /// Represents text with formatting, links, images, etc.
-class InlineElement {
+class InlineElement  {
   /// Type of inline element
   final InlineType elementType;
-
   /// Text content
   final String content;
-
   /// Additional metadata (e.g., href for links, src/alt for images)
   final Map<String, String>? metadata;
 
-  const InlineElement({
-    required this.elementType,
-    required this.content,
-    this.metadata,
-  });
+  const InlineElement({required this.elementType ,required this.content ,this.metadata ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  elementType.hashCode ^ content.hashCode ^ metadata.hashCode;
+  int get hashCode => elementType.hashCode^content.hashCode^metadata.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is InlineElement &&
-  runtimeType == other.runtimeType &&
-  elementType == other.elementType &&
-  content == other.content &&
-  metadata == other.metadata;
+  runtimeType == other.runtimeType
+  && elementType == other.elementType&& content == other.content&& metadata == other.metadata;
+
 }
 
 /// Types of inline elements in Djot.
 enum InlineType {
   /// Plain text run.
   text,
-
   /// Bold / strong emphasis.
   strong,
-
   /// Italic / regular emphasis.
   emphasis,
-
   /// Highlighted text (marker pen).
   highlight,
-
   /// Subscript text.
   subscript,
-
   /// Superscript text.
   superscript,
-
   /// Inserted text (tracked change).
   insert,
-
   /// Deleted text (tracked change).
   delete,
-
   /// Inline code span.
   code,
-
   /// Hyperlink with URL.
   link,
-
   /// Inline image reference.
   image,
-
   /// Generic inline span with optional attributes.
   span,
-
   /// Inline mathematical expression.
   math,
-
   /// Raw inline content in a specified format.
   rawInline,
-
   /// Footnote reference marker.
   footnoteRef,
-
   /// Named symbol or emoji shortcode.
   symbol,
+  ;
+
 }
 
 /// JATS (Journal Article Tag Suite) metadata.
-class JatsMetadata {
+class JatsMetadata  {
   /// Copyright statement from the article's `<permissions>` element.
   final String? copyright;
-
   /// Open-access license URI from the article's `<license>` element.
   final String? license;
-
   /// Publication history dates keyed by event type (e.g. `"received"`, `"accepted"`).
   final Map<String, String> historyDates;
-
   /// Authors and contributors with their stated roles.
   final List<ContributorRole> contributorRoles;
 
-  const JatsMetadata({
-    this.copyright,
-    this.license,
-    required this.historyDates,
-    required this.contributorRoles,
-  });
+  const JatsMetadata({this.copyright ,this.license ,required this.historyDates ,required this.contributorRoles ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  copyright.hashCode ^
-  license.hashCode ^
-  historyDates.hashCode ^
-  contributorRoles.hashCode;
+  int get hashCode => copyright.hashCode^license.hashCode^historyDates.hashCode^contributorRoles.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is JatsMetadata &&
-  runtimeType == other.runtimeType &&
-  copyright == other.copyright &&
-  license == other.license &&
-  historyDates == other.historyDates &&
-  contributorRoles == other.contributorRoles;
+  runtimeType == other.runtimeType
+  && copyright == other.copyright&& license == other.license&& historyDates == other.historyDates&& contributorRoles == other.contributorRoles;
+
 }
 
 /// Controls how Jupyter notebook code cells are rendered during extraction.
@@ -8716,145 +6461,123 @@ class JatsMetadata {
 enum JupyterCellRendering {
   /// Render the code source as a fenced code block; omit saved outputs.
   source,
-
   /// Omit the code source; render only the saved cell outputs.
   outputs,
-
   /// Render both the code source and the saved outputs (default; preserves the
   /// historical behavior).
   both,
+  ;
+
 }
 
 /// Extracted keyword with metadata.
-class Keyword {
+class Keyword  {
   /// The keyword text.
   final String text;
-
   /// Relevance score (higher is better, algorithm-specific range).
   final double score;
-
   /// Algorithm that extracted this keyword.
   final KeywordAlgorithm algorithm;
-
   /// Optional positions where keyword appears in text (character offsets).
   final Int64List? positions;
 
-  const Keyword({
-    required this.text,
-    required this.score,
-    required this.algorithm,
-    this.positions,
-  });
+  const Keyword({required this.text ,required this.score ,required this.algorithm ,this.positions ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  text.hashCode ^ score.hashCode ^ algorithm.hashCode ^ positions.hashCode;
+  int get hashCode => text.hashCode^score.hashCode^algorithm.hashCode^positions.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is Keyword &&
-  runtimeType == other.runtimeType &&
-  text == other.text &&
-  score == other.score &&
-  algorithm == other.algorithm &&
-  positions == other.positions;
+  runtimeType == other.runtimeType
+  && text == other.text&& score == other.score&& algorithm == other.algorithm&& positions == other.positions;
+
 }
 
 /// Keyword algorithm selection.
 enum KeywordAlgorithm {
   /// YAKE (Yet Another Keyword Extractor) - statistical approach
   yake,
-
   /// RAKE (Rapid Automatic Keyword Extraction) - co-occurrence based
   rake,
+  ;
+
 }
 
 /// Keyword extraction configuration.
-class KeywordConfig {
+class KeywordConfig  {
   /// Algorithm to use for extraction.
   final KeywordAlgorithm algorithm;
-
   /// Maximum number of keywords to extract (default: 10).
   final PlatformInt64 maxKeywords;
-
   /// Minimum score threshold (0.0-1.0, default: 0.0).
   ///
   /// Keywords with scores below this threshold are filtered out.
   /// Note: Score ranges differ between algorithms.
   final double minScore;
-
   /// Language code for stopword filtering (e.g., "en", "de", "fr").
   ///
   /// If None, no stopword filtering is applied.
   final String? language;
-
   /// YAKE-specific tuning parameters.
   final YakeParams? yakeParams;
-
   /// RAKE-specific tuning parameters.
   final RakeParams? rakeParams;
 
-  const KeywordConfig({
-    required this.algorithm,
-    required this.maxKeywords,
-    required this.minScore,
-    this.language,
-    this.yakeParams,
-    this.rakeParams,
-  });
+  const KeywordConfig({required this.algorithm ,required this.maxKeywords ,required this.minScore ,this.language ,this.yakeParams ,this.rakeParams ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  algorithm.hashCode ^
-  maxKeywords.hashCode ^
-  minScore.hashCode ^
-  language.hashCode ^
-  yakeParams.hashCode ^
-  rakeParams.hashCode;
+  int get hashCode => algorithm.hashCode^maxKeywords.hashCode^minScore.hashCode^language.hashCode^yakeParams.hashCode^rakeParams.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is KeywordConfig &&
-  runtimeType == other.runtimeType &&
-  algorithm == other.algorithm &&
-  maxKeywords == other.maxKeywords &&
-  minScore == other.minScore &&
-  language == other.language &&
-  yakeParams == other.yakeParams &&
-  rakeParams == other.rakeParams;
+  runtimeType == other.runtimeType
+  && algorithm == other.algorithm&& maxKeywords == other.maxKeywords&& minScore == other.minScore&& language == other.language&& yakeParams == other.yakeParams&& rakeParams == other.rakeParams;
+
 }
 
 /// Language detection configuration.
-class LanguageDetectionConfig {
+class LanguageDetectionConfig  {
   /// Enable language detection
   final bool enabled;
-
   /// Minimum confidence threshold (0.0-1.0)
   final double minConfidence;
-
   /// Detect multiple languages in the document
   final bool detectMultiple;
 
-  const LanguageDetectionConfig({
-    required this.enabled,
-    required this.minConfidence,
-    required this.detectMultiple,
-  });
+  const LanguageDetectionConfig({required this.enabled ,required this.minConfidence ,required this.detectMultiple ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  enabled.hashCode ^ minConfidence.hashCode ^ detectMultiple.hashCode;
+  int get hashCode => enabled.hashCode^minConfidence.hashCode^detectMultiple.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is LanguageDetectionConfig &&
-  runtimeType == other.runtimeType &&
-  enabled == other.enabled &&
-  minConfidence == other.minConfidence &&
-  detectMultiple == other.detectMultiple;
+  runtimeType == other.runtimeType
+  && enabled == other.enabled&& minConfidence == other.minConfidence&& detectMultiple == other.detectMultiple;
+
 }
 
 /// Configuration for the late-interaction (ColBERT) pipeline.
@@ -8863,200 +6586,147 @@ class LanguageDetectionConfig {
 /// local ONNX ColBERT model.
 ///
 /// Since v5.0.0.
-class LateInteractionConfig {
+class LateInteractionConfig  {
   /// The late-interaction model to use (defaults to the "gte-moderncolbert" preset).
   final LateInteractionModelType model;
-
   /// Batch size for local ONNX inference.
   ///
   /// ColBERT emits a `[seq, dim]` multi-vector embedding per document, so
   /// memory scales with batch size — keep this modest.
   final PlatformInt64 batchSize;
-
   /// Maximum token sequence length for the tokenizer (documents).
   final PlatformInt64 maxLength;
-
   /// Fixed padded length for query augmentation.
   ///
   /// ColBERT queries are padded (with the mask token, kept attention-live)
   /// to exactly this many tokens rather than truncated/left as-is — this is
   /// the "query augmentation" trick from the ColBERT paper.
   final PlatformInt64 queryMaxLength;
-
   /// Show model download progress (local ONNX path only).
   final bool showDownloadProgress;
-
   /// Optional alternate Hugging Face cache root for model files.
   ///
   /// When unset, hf-hub follows the standard Hugging Face environment and
   /// platform cache conventions.
   final String? cacheDir;
-
   /// Hardware acceleration for the late-interaction ONNX model.
   final AccelerationConfig? acceleration;
-
   /// Maximum wall-clock duration (in seconds) for a single embed call when
   /// using [`LateInteractionModelType::Plugin`]. `None` disables the timeout.
   final PlatformInt64? maxEmbedDurationSecs;
 
-  const LateInteractionConfig({
-    required this.model,
-    required this.batchSize,
-    required this.maxLength,
-    required this.queryMaxLength,
-    required this.showDownloadProgress,
-    this.cacheDir,
-    this.acceleration,
-    this.maxEmbedDurationSecs,
-  });
+  const LateInteractionConfig({required this.model ,required this.batchSize ,required this.maxLength ,required this.queryMaxLength ,required this.showDownloadProgress ,this.cacheDir ,this.acceleration ,this.maxEmbedDurationSecs ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  model.hashCode ^
-  batchSize.hashCode ^
-  maxLength.hashCode ^
-  queryMaxLength.hashCode ^
-  showDownloadProgress.hashCode ^
-  cacheDir.hashCode ^
-  acceleration.hashCode ^
-  maxEmbedDurationSecs.hashCode;
+  int get hashCode => model.hashCode^batchSize.hashCode^maxLength.hashCode^queryMaxLength.hashCode^showDownloadProgress.hashCode^cacheDir.hashCode^acceleration.hashCode^maxEmbedDurationSecs.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is LateInteractionConfig &&
-  runtimeType == other.runtimeType &&
-  model == other.model &&
-  batchSize == other.batchSize &&
-  maxLength == other.maxLength &&
-  queryMaxLength == other.queryMaxLength &&
-  showDownloadProgress == other.showDownloadProgress &&
-  cacheDir == other.cacheDir &&
-  acceleration == other.acceleration &&
-  maxEmbedDurationSecs == other.maxEmbedDurationSecs;
+  runtimeType == other.runtimeType
+  && model == other.model&& batchSize == other.batchSize&& maxLength == other.maxLength&& queryMaxLength == other.queryMaxLength&& showDownloadProgress == other.showDownloadProgress&& cacheDir == other.cacheDir&& acceleration == other.acceleration&& maxEmbedDurationSecs == other.maxEmbedDurationSecs;
+
 }
 
 /// A single document match returned by [`max_sim_rank`], with its position in
 /// the input and MaxSim score.
 ///
 /// Since v5.0.0.
-class LateInteractionMatch {
+class LateInteractionMatch  {
   /// Position of this document in the original input slice.
   final PlatformInt64 index;
-
   /// MaxSim relevance score. Higher means more relevant to the query.
   final double score;
 
-  const LateInteractionMatch({required this.index, required this.score});
+  const LateInteractionMatch({required this.index ,required this.score ,});
+
+
+
+
 
   @override
-  int get hashCode => index.hashCode ^ score.hashCode;
+  int get hashCode => index.hashCode^score.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is LateInteractionMatch &&
-  runtimeType == other.runtimeType &&
-  index == other.index &&
-  score == other.score;
+  runtimeType == other.runtimeType
+  && index == other.index&& score == other.score;
+
 }
 
 @freezed
-sealed class LateInteractionModelType with _$LateInteractionModelType {
+sealed class LateInteractionModelType with _$LateInteractionModelType  {
   const LateInteractionModelType._();
 
   /// Use a preset ColBERT model (recommended).
-  const factory LateInteractionModelType.preset({
-    /// Preset name (e.g. "colbert").
-    required String name,
-  }) = LateInteractionModelType_Preset;
-
+  const factory LateInteractionModelType.preset({ /// Preset name (e.g. "colbert").
+    required String name , }) = LateInteractionModelType_Preset;
   /// Use a custom ColBERT ONNX model from HuggingFace.
-  const factory LateInteractionModelType.custom({
-    /// HuggingFace model repository ID.
-    required String modelId,
-
-    /// Path to the ONNX file within the repo. Defaults to `"onnx/model.onnx"`.
-    required String modelFile,
-
-    /// Sibling files that must be downloaded alongside `model_file`.
-    required List<String> additionalFiles,
-
-    /// Maximum token sequence length. Stored as `i64` for FFI compatibility;
+  const factory LateInteractionModelType.custom({ /// HuggingFace model repository ID.
+    required String modelId ,/// Path to the ONNX file within the repo. Defaults to `"onnx/model.onnx"`.
+    required String modelFile ,/// Sibling files that must be downloaded alongside `model_file`.
+    required List<String> additionalFiles ,/// Maximum token sequence length. Stored as `i64` for FFI compatibility;
     /// negative values are clamped to the model default.
-    required PlatformInt64 maxLength,
-  }) = LateInteractionModelType_Custom;
-
+    required PlatformInt64 maxLength , }) = LateInteractionModelType_Custom;
   /// In-process late-interaction backend registered via the plugin system.
-  const factory LateInteractionModelType.plugin({
-    /// Name the backend was registered under.
-    required String name,
-  }) = LateInteractionModelType_Plugin;
+  const factory LateInteractionModelType.plugin({ /// Name the backend was registered under.
+    required String name , }) = LateInteractionModelType_Plugin;
+
+
+
+
 }
 
 /// Static metadata for a bundled ColBERT preset (WASM/Android-safe, no ORT).
 ///
 /// Since v5.0.0.
-class LateInteractionPreset {
+class LateInteractionPreset  {
   /// Stable preset name referenced from config.
   final String name;
-
   /// HuggingFace repository hosting the ONNX model.
   final String modelRepo;
-
   /// Path to the ONNX file within the repo.
   final String modelFile;
-
   /// Sibling files that must be downloaded alongside `model_file`.
   final List<String> additionalFiles;
-
   /// Maximum document token sequence length.
   final PlatformInt64 maxLength;
-
   /// Fixed padded query length (ColBERT query augmentation).
   final PlatformInt64 queryMaxLength;
-
   /// Per-token embedding dimensionality.
   final PlatformInt64 dim;
-
   /// Human-readable description.
   final String description;
 
-  const LateInteractionPreset({
-    required this.name,
-    required this.modelRepo,
-    required this.modelFile,
-    required this.additionalFiles,
-    required this.maxLength,
-    required this.queryMaxLength,
-    required this.dim,
-    required this.description,
-  });
+  const LateInteractionPreset({required this.name ,required this.modelRepo ,required this.modelFile ,required this.additionalFiles ,required this.maxLength ,required this.queryMaxLength ,required this.dim ,required this.description ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  name.hashCode ^
-  modelRepo.hashCode ^
-  modelFile.hashCode ^
-  additionalFiles.hashCode ^
-  maxLength.hashCode ^
-  queryMaxLength.hashCode ^
-  dim.hashCode ^
-  description.hashCode;
+  int get hashCode => name.hashCode^modelRepo.hashCode^modelFile.hashCode^additionalFiles.hashCode^maxLength.hashCode^queryMaxLength.hashCode^dim.hashCode^description.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is LateInteractionPreset &&
-  runtimeType == other.runtimeType &&
-  name == other.name &&
-  modelRepo == other.modelRepo &&
-  modelFile == other.modelFile &&
-  additionalFiles == other.additionalFiles &&
-  maxLength == other.maxLength &&
-  queryMaxLength == other.queryMaxLength &&
-  dim == other.dim &&
-  description == other.description;
+  runtimeType == other.runtimeType
+  && name == other.name&& modelRepo == other.modelRepo&& modelFile == other.modelFile&& additionalFiles == other.additionalFiles&& maxLength == other.maxLength&& queryMaxLength == other.queryMaxLength&& dim == other.dim&& description == other.description;
+
 }
 
 /// The 18 canonical document layout classes.
@@ -9069,87 +6739,71 @@ class LateInteractionPreset {
 enum LayoutClass {
   /// Figure or table caption text.
   caption,
-
   /// Chart or graph visualization.
   chart,
-
   /// Footnote or endnote text.
   footnote,
-
   /// Mathematical formula or equation.
   formula,
-
   /// A single item in a bulleted or numbered list.
   listItem,
-
   /// Running footer at the bottom of a page.
   pageFooter,
-
   /// Running header at the top of a page.
   pageHeader,
-
   /// Image, chart, or other graphical element.
   picture,
-
   /// Section heading.
   sectionHeader,
-
   /// Data table.
   table,
-
   /// Body text paragraph.
   text,
-
   /// Document or chapter title.
   title,
-
   /// Table of contents or index.
   documentIndex,
-
   /// Source code block.
   code,
-
   /// Checkbox in selected state.
   checkboxSelected,
-
   /// Checkbox in unselected state.
   checkboxUnselected,
-
   /// Form field or form element.
   form,
-
   /// Key-value pair region (e.g. label + value in a form).
   keyValueRegion,
+  ;
+
 }
 
 /// A single layout detection result.
-class LayoutDetection {
+class LayoutDetection  {
   /// Detected layout class (e.g. `Table`, `Text`, `Title`).
   final LayoutClass className;
-
   /// Detection confidence score in `[0.0, 1.0]`.
   final double confidence;
-
   /// Bounding box in image pixel coordinates.
   final BBox bbox;
 
-  const LayoutDetection({
-    required this.className,
-    required this.confidence,
-    required this.bbox,
-  });
+  const LayoutDetection({required this.className ,required this.confidence ,required this.bbox ,});
+
+
+
+
 
   @override
-  int get hashCode => className.hashCode ^ confidence.hashCode ^ bbox.hashCode;
+  int get hashCode => className.hashCode^confidence.hashCode^bbox.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is LayoutDetection &&
-  runtimeType == other.runtimeType &&
-  className == other.className &&
-  confidence == other.confidence &&
-  bbox == other.bbox;
+  runtimeType == other.runtimeType
+  && className == other.className&& confidence == other.confidence&& bbox == other.bbox;
+
 }
 
 /// Layout detection configuration.
@@ -9157,19 +6811,16 @@ class LayoutDetection {
 /// Controls layout detection behavior in the extraction pipeline.
 /// When set on [`ExtractionConfig`](super::ExtractionConfig), layout detection
 /// is enabled for PDF extraction.
-class LayoutDetectionConfig {
+class LayoutDetectionConfig  {
   /// Confidence threshold override (None = use model default).
   final double? confidenceThreshold;
-
   /// Whether to apply postprocessing heuristics (default: true).
   final bool applyHeuristics;
-
   /// Table structure recognition model.
   ///
   /// Controls which model is used for table cell detection within layout-detected
   /// table regions. Defaults to [`TableModel::Tatr`].
   final TableModel tableModel;
-
   /// How to resolve overlapping native vs layout tables.
   ///
   /// When a native oxide table and a layout (TATR/SLANeXT) table overlap on the
@@ -9178,13 +6829,11 @@ class LayoutDetectionConfig {
   /// more content). Set to [`TableOverlapPreference::Native`] to favor source
   /// reading order (higher text F1) over the model's cell reflow.
   final TableOverlapPreference tableOverlapPreference;
-
   /// Hardware acceleration for ONNX models (layout detection + table structure).
   ///
   /// When set, controls which execution provider (CPU, CUDA, CoreML, TensorRT)
   /// is used for inference. Defaults to `None` (auto-select per platform).
   final AccelerationConfig? acceleration;
-
   /// Route regions classified as charts to the chart-understanding OCR task.
   ///
   /// When `true`, layout regions detected as charts are sent to the VLM
@@ -9193,35 +6842,24 @@ class LayoutDetectionConfig {
   /// opt-in and has no effect on standard text/table extraction scores.
   final bool enableChartUnderstanding;
 
-  const LayoutDetectionConfig({
-    this.confidenceThreshold,
-    required this.applyHeuristics,
-    required this.tableModel,
-    required this.tableOverlapPreference,
-    this.acceleration,
-    required this.enableChartUnderstanding,
-  });
+  const LayoutDetectionConfig({this.confidenceThreshold ,required this.applyHeuristics ,required this.tableModel ,required this.tableOverlapPreference ,this.acceleration ,required this.enableChartUnderstanding ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  confidenceThreshold.hashCode ^
-  applyHeuristics.hashCode ^
-  tableModel.hashCode ^
-  tableOverlapPreference.hashCode ^
-  acceleration.hashCode ^
-  enableChartUnderstanding.hashCode;
+  int get hashCode => confidenceThreshold.hashCode^applyHeuristics.hashCode^tableModel.hashCode^tableOverlapPreference.hashCode^acceleration.hashCode^enableChartUnderstanding.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is LayoutDetectionConfig &&
-  runtimeType == other.runtimeType &&
-  confidenceThreshold == other.confidenceThreshold &&
-  applyHeuristics == other.applyHeuristics &&
-  tableModel == other.tableModel &&
-  tableOverlapPreference == other.tableOverlapPreference &&
-  acceleration == other.acceleration &&
-  enableChartUnderstanding == other.enableChartUnderstanding;
+  runtimeType == other.runtimeType
+  && confidenceThreshold == other.confidenceThreshold&& applyHeuristics == other.applyHeuristics&& tableModel == other.tableModel&& tableOverlapPreference == other.tableOverlapPreference&& acceleration == other.acceleration&& enableChartUnderstanding == other.enableChartUnderstanding;
+
 }
 
 /// A detected layout region on a page.
@@ -9229,87 +6867,67 @@ class LayoutDetectionConfig {
 /// When layout detection is enabled, each page may have layout regions
 /// identifying different content types (text, pictures, tables, etc.)
 /// with confidence scores and spatial positions.
-class LayoutRegion {
+class LayoutRegion  {
   /// Layout class name (e.g. "picture", "table", "text", "section_header").
   final String className;
-
   /// Confidence score from the layout detection model (0.0 to 1.0).
   final double confidence;
-
   /// Bounding box in document coordinate space.
   final BoundingBox boundingBox;
-
   /// Fraction of the page area covered by this region (0.0 to 1.0).
   final double areaFraction;
 
-  const LayoutRegion({
-    required this.className,
-    required this.confidence,
-    required this.boundingBox,
-    required this.areaFraction,
-  });
+  const LayoutRegion({required this.className ,required this.confidence ,required this.boundingBox ,required this.areaFraction ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  className.hashCode ^
-  confidence.hashCode ^
-  boundingBox.hashCode ^
-  areaFraction.hashCode;
+  int get hashCode => className.hashCode^confidence.hashCode^boundingBox.hashCode^areaFraction.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is LayoutRegion &&
-  runtimeType == other.runtimeType &&
-  className == other.className &&
-  confidence == other.confidence &&
-  boundingBox == other.boundingBox &&
-  areaFraction == other.areaFraction;
+  runtimeType == other.runtimeType
+  && className == other.className&& confidence == other.confidence&& boundingBox == other.boundingBox&& areaFraction == other.areaFraction;
+
 }
 
 /// Link element metadata.
-class LinkMetadata {
+class LinkMetadata  {
   /// The href URL value
   final String href;
-
   /// Link text content (normalized)
   final String text;
-
   /// Optional title attribute
   final String? title;
-
   /// Link type classification
   final LinkType linkType;
-
   /// Rel attribute values
   final List<String> rel;
 
-  const LinkMetadata({
-    required this.href,
-    required this.text,
-    this.title,
-    required this.linkType,
-    required this.rel,
-  });
+  const LinkMetadata({required this.href ,required this.text ,this.title ,required this.linkType ,required this.rel ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  href.hashCode ^
-  text.hashCode ^
-  title.hashCode ^
-  linkType.hashCode ^
-  rel.hashCode;
+  int get hashCode => href.hashCode^text.hashCode^title.hashCode^linkType.hashCode^rel.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is LinkMetadata &&
-  runtimeType == other.runtimeType &&
-  href == other.href &&
-  text == other.text &&
-  title == other.title &&
-  linkType == other.linkType &&
-  rel == other.rel;
+  runtimeType == other.runtimeType
+  && href == other.href&& text == other.text&& title == other.title&& linkType == other.linkType&& rel == other.rel;
+
 }
 
 /// Link rendering style in Markdown output.
@@ -9319,30 +6937,28 @@ class LinkMetadata {
 enum LinkStyle {
   /// Inline links: `[text](url)`. Default.
   inline,
-
   /// Reference-style links: `[text][1]` with `[1]: url` at end of document.
   reference,
+  ;
+
 }
 
 /// Link type classification.
 enum LinkType {
   /// Anchor link (#section)
   anchor,
-
   /// Internal link (same domain)
   internal,
-
   /// External link (different domain)
   external_,
-
   /// Email link (mailto:)
   email,
-
   /// Phone link (tel:)
   phone,
-
   /// Other link type
   other,
+  ;
+
 }
 
 /// List indentation character type.
@@ -9351,24 +6967,24 @@ enum LinkType {
 enum ListIndentType {
   /// Use spaces for indentation. Default. Width controlled by `list_indent_width`.
   spaces,
-
   /// Use tabs for indentation.
   tabs,
+  ;
+
 }
 
 /// Type of list detection.
 enum ListType {
   /// Bullet points (-, *, •, etc.)
   bullet,
-
   /// Numbered lists (1., 2., etc.)
   numbered,
-
   /// Lettered lists (a., b., A., B., etc.)
   lettered,
-
   /// Indented items
   indented,
+  ;
+
 }
 
 /// Configuration for an LLM provider/model via liter-llm.
@@ -9383,84 +6999,56 @@ enum ListType {
 /// model = "openai/gpt-4o"
 /// api_key = "sk-..."  # or use XBERG_LLM_API_KEY env var
 /// ```
-class LlmConfig {
+class LlmConfig  {
   /// Provider/model string using liter-llm routing format.
   ///
   /// Examples: `"openai/gpt-4o"`, `"anthropic/claude-sonnet-4-20250514"`,
   /// `"groq/llama-3.1-70b-versatile"`.
   final String model;
-
   /// API key for the provider. When `None`, liter-llm falls back to
   /// the provider's standard environment variable (e.g., `OPENAI_API_KEY`).
   final String? apiKey;
-
   /// Custom base URL override for the provider endpoint.
   final String? baseUrl;
-
   /// Request timeout in seconds. When `None`, liter-llm's built-in 60s default
   /// applies, except the VLM OCR path which uses a 300s default (a single page
   /// image transcription routinely exceeds 60s). Set explicitly to override.
   final PlatformInt64? timeoutSecs;
-
   /// Maximum retry attempts (default: 3).
   final PlatformInt64? maxRetries;
-
   /// Sampling temperature for generation tasks.
   final double? temperature;
-
   /// Maximum tokens to generate.
   final PlatformInt64? maxTokens;
-
   /// Whether liter-llm should load provider credentials from environment variables.
   ///
   /// Mirrors liter-llm's `ClientConfigBuilder::load_env`. When `None`, liter-llm's
   /// own default behavior applies.
   final bool? loadEnv;
-
   /// Extra HTTP headers sent with every request to the provider.
   ///
   /// Mirrors liter-llm's `ClientConfigBuilder::header`, for gateways or providers
   /// that require custom auth/routing headers.
   final Map<String, String>? headers;
 
-  const LlmConfig({
-    required this.model,
-    this.apiKey,
-    this.baseUrl,
-    this.timeoutSecs,
-    this.maxRetries,
-    this.temperature,
-    this.maxTokens,
-    this.loadEnv,
-    this.headers,
-  });
+  const LlmConfig({required this.model ,this.apiKey ,this.baseUrl ,this.timeoutSecs ,this.maxRetries ,this.temperature ,this.maxTokens ,this.loadEnv ,this.headers ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-      model.hashCode ^
-      apiKey.hashCode ^
-      baseUrl.hashCode ^
-      timeoutSecs.hashCode ^
-      maxRetries.hashCode ^
-      temperature.hashCode ^
-      maxTokens.hashCode ^
-      loadEnv.hashCode ^
-      headers.hashCode;
+  int get hashCode => model.hashCode^apiKey.hashCode^baseUrl.hashCode^timeoutSecs.hashCode^maxRetries.hashCode^temperature.hashCode^maxTokens.hashCode^loadEnv.hashCode^headers.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is LlmConfig &&
-          runtimeType == other.runtimeType &&
-          model == other.model &&
-          apiKey == other.apiKey &&
-          baseUrl == other.baseUrl &&
-          timeoutSecs == other.timeoutSecs &&
-          maxRetries == other.maxRetries &&
-          temperature == other.temperature &&
-          maxTokens == other.maxTokens &&
-          loadEnv == other.loadEnv &&
-          headers == other.headers;
+  identical(this, other) ||
+  other is LlmConfig &&
+  runtimeType == other.runtimeType
+  && model == other.model&& apiKey == other.apiKey&& baseUrl == other.baseUrl&& timeoutSecs == other.timeoutSecs&& maxRetries == other.maxRetries&& temperature == other.temperature&& maxTokens == other.maxTokens&& loadEnv == other.loadEnv&& headers == other.headers;
+
 }
 
 /// Token usage and cost data for a single LLM call made during extraction.
@@ -9468,111 +7056,88 @@ class LlmConfig {
 /// Populated when VLM OCR, structured extraction, or LLM-based embeddings
 /// are used. Multiple entries may be present when multiple LLM calls occur
 /// within one extraction (e.g. VLM OCR + structured extraction).
-class LlmUsage {
+class LlmUsage  {
   /// The LLM model identifier (e.g. "openai/gpt-4o", "anthropic/claude-sonnet-4-20250514").
   final String model;
-
   /// The pipeline stage that triggered this LLM call
   /// (e.g. "vlm_ocr", "structured_extraction", "embeddings").
   final String source;
-
   /// Number of input/prompt tokens consumed.
   final PlatformInt64? inputTokens;
-
   /// Number of output/completion tokens generated.
   final PlatformInt64? outputTokens;
-
   /// Total tokens (input + output).
   final PlatformInt64? totalTokens;
-
   /// Estimated cost in USD based on the provider's published pricing.
   final double? estimatedCost;
-
   /// Why the model stopped generating (e.g. "stop", "length", "content_filter").
   final String? finishReason;
 
-  const LlmUsage({
-    required this.model,
-    required this.source,
-    this.inputTokens,
-    this.outputTokens,
-    this.totalTokens,
-    this.estimatedCost,
-    this.finishReason,
-  });
+  const LlmUsage({required this.model ,required this.source ,this.inputTokens ,this.outputTokens ,this.totalTokens ,this.estimatedCost ,this.finishReason ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  model.hashCode ^
-  source.hashCode ^
-  inputTokens.hashCode ^
-  outputTokens.hashCode ^
-  totalTokens.hashCode ^
-  estimatedCost.hashCode ^
-  finishReason.hashCode;
+  int get hashCode => model.hashCode^source.hashCode^inputTokens.hashCode^outputTokens.hashCode^totalTokens.hashCode^estimatedCost.hashCode^finishReason.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is LlmUsage &&
-  runtimeType == other.runtimeType &&
-  model == other.model &&
-  source == other.source &&
-  inputTokens == other.inputTokens &&
-  outputTokens == other.outputTokens &&
-  totalTokens == other.totalTokens &&
-  estimatedCost == other.estimatedCost &&
-  finishReason == other.finishReason;
+  runtimeType == other.runtimeType
+  && model == other.model&& source == other.source&& inputTokens == other.inputTokens&& outputTokens == other.outputTokens&& totalTokens == other.totalTokens&& estimatedCost == other.estimatedCost&& finishReason == other.finishReason;
+
 }
 
 @freezed
-sealed class LoadError with _$LoadError {
+sealed class LoadError with _$LoadError  {
   const LoadError._();
 
   /// The file is not valid JSON.
-  const factory LoadError.parse({required String path}) = LoadError_Parse;
-
+  const factory LoadError.parse({   required String path , }) = LoadError_Parse;
   /// The file parses as JSON but does not validate against the meta-schema.
-  const factory LoadError.schemaValidation({
-    required String path,
-    required String errors,
-  }) = LoadError_SchemaValidation;
-
+  const factory LoadError.schemaValidation({   required String path ,  required String errors , }) = LoadError_SchemaValidation;
   /// The file validates but cannot be deserialized into [`Preset`].
-  const factory LoadError.deserialize({required String path}) =
-  LoadError_Deserialize;
-
+  const factory LoadError.deserialize({   required String path , }) = LoadError_Deserialize;
   /// The preset's declared `id` does not match its file-system location.
-  const factory LoadError.idMismatch({
-    required String path,
-    required String declared,
-    required String expected,
-  }) = LoadError_IdMismatch;
-
+  const factory LoadError.idMismatch({   required String path ,  required String declared ,  required String expected , }) = LoadError_IdMismatch;
   /// The meta-schema itself failed to compile.
-  const factory LoadError.badMetaSchema({required String field0}) =
-  LoadError_BadMetaSchema;
-
+  const factory LoadError.badMetaSchema({   required String field0 , }) = LoadError_BadMetaSchema;
   /// A filesystem I/O error occurred while reading a preset directory.
-  const factory LoadError.io({required String field0}) = LoadError_Io;
+  const factory LoadError.io({   required String field0 , }) = LoadError_Io;
+
+
+
+
 }
 
 /// The result of a map operation, containing discovered URLs.
-class MapResult {
+class MapResult  {
   /// The list of discovered URLs.
   final List<SitemapUrl> urls;
 
-  const MapResult({required this.urls});
+  const MapResult({required this.urls ,});
+
+
+
+
 
   @override
   int get hashCode => urls.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is MapResult &&
-  runtimeType == other.runtimeType &&
-  urls == other.urls;
+  runtimeType == other.runtimeType
+  && urls == other.urls;
+
 }
 
 /// How partial results from multiple model calls (e.g. per page batch) are combined.
@@ -9583,217 +7148,129 @@ class MapResult {
 enum MergeMode {
   /// Deep-merge JSON objects field by field (later calls fill missing fields).
   objectMerge,
-
   /// Concatenate top-level arrays across calls.
   arrayConcat,
-
   /// Keep the first non-empty result; ignore subsequent calls.
   objectFirst,
+  ;
+
 }
 
 /// Extraction result metadata.
 ///
 /// Contains common fields applicable to all formats, format-specific metadata
 /// via a discriminated union, and additional custom fields from postprocessors.
-class Metadata {
+class Metadata  {
   /// Document title
   final String? title;
-
   /// Document subject or description
   final String? subject;
-
   /// Primary author(s) - always Vec for consistency
   final List<String>? authors;
-
   /// Keywords/tags - always Vec for consistency
   final List<String>? keywords;
-
   /// Primary language (ISO 639 code)
   final String? language;
-
   /// Creation timestamp (ISO 8601 format)
   final String? createdAt;
-
   /// Last modification timestamp (ISO 8601 format)
   final String? modifiedAt;
-
   /// User who created the document
   final String? createdBy;
-
   /// User who last modified the document
   final String? modifiedBy;
-
   /// Page/slide/sheet structure with boundaries
   final PageStructure? pages;
-
   /// Format-specific metadata (discriminated union)
   ///
   /// Contains detailed metadata specific to the document format.
   /// Serialized as a nested `"format"` object with a `format_type` discriminator field.
   final FormatMetadata? format;
-
   /// Image preprocessing metadata (when OCR preprocessing was applied)
   final ImagePreprocessingMetadata? imagePreprocessing;
-
   /// JSON schema (for structured data extraction)
   final String? jsonSchema;
-
   /// Error metadata (for batch operations)
   final ErrorMetadata? error;
-
   /// Extraction duration in milliseconds (for benchmarking).
   ///
   /// This field is populated by batch extraction to provide per-file timing
   /// information. It's `None` for single-file extraction (which uses external timing).
   final PlatformInt64? extractionDurationMs;
-
   /// Document category (from frontmatter or classification).
   final String? category;
-
   /// Document tags (from frontmatter).
   final List<String>? tags;
-
   /// Document version string (from frontmatter).
   final String? documentVersion;
-
   /// Abstract or summary text (from frontmatter).
   final String? abstractText;
-
   /// Output format identifier (e.g., "markdown", "html", "text").
   ///
   /// Set by the output format pipeline stage when format conversion is applied.
   /// Previously stored in `metadata.additional["output_format"]`.
   final String? outputFormat;
-
   /// Whether OCR was used during extraction.
   ///
   /// Set to `true` whenever the extraction pipeline ran an OCR backend
   /// (Tesseract, PaddleOCR, VLM, etc.) and used that output as the primary
   /// or fallback text. `false` means native text extraction was used exclusively.
   final bool ocrUsed;
-
   /// Additional custom fields from postprocessors.
   ///
   /// Serialized as a nested `"additional"` object (not flattened at root level).
   /// Uses `Cow<'static, str>` keys so static string keys avoid allocation.
   final Map<String, String> additional;
 
-  const Metadata({
-    this.title,
-    this.subject,
-    this.authors,
-    this.keywords,
-    this.language,
-    this.createdAt,
-    this.modifiedAt,
-    this.createdBy,
-    this.modifiedBy,
-    this.pages,
-    this.format,
-    this.imagePreprocessing,
-    this.jsonSchema,
-    this.error,
-    this.extractionDurationMs,
-    this.category,
-    this.tags,
-    this.documentVersion,
-    this.abstractText,
-    this.outputFormat,
-    required this.ocrUsed,
-    required this.additional,
-  });
+  const Metadata({this.title ,this.subject ,this.authors ,this.keywords ,this.language ,this.createdAt ,this.modifiedAt ,this.createdBy ,this.modifiedBy ,this.pages ,this.format ,this.imagePreprocessing ,this.jsonSchema ,this.error ,this.extractionDurationMs ,this.category ,this.tags ,this.documentVersion ,this.abstractText ,this.outputFormat ,required this.ocrUsed ,required this.additional ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  title.hashCode ^
-  subject.hashCode ^
-  authors.hashCode ^
-  keywords.hashCode ^
-  language.hashCode ^
-  createdAt.hashCode ^
-  modifiedAt.hashCode ^
-  createdBy.hashCode ^
-  modifiedBy.hashCode ^
-  pages.hashCode ^
-  format.hashCode ^
-  imagePreprocessing.hashCode ^
-  jsonSchema.hashCode ^
-  error.hashCode ^
-  extractionDurationMs.hashCode ^
-  category.hashCode ^
-  tags.hashCode ^
-  documentVersion.hashCode ^
-  abstractText.hashCode ^
-  outputFormat.hashCode ^
-  ocrUsed.hashCode ^
-  additional.hashCode;
+  int get hashCode => title.hashCode^subject.hashCode^authors.hashCode^keywords.hashCode^language.hashCode^createdAt.hashCode^modifiedAt.hashCode^createdBy.hashCode^modifiedBy.hashCode^pages.hashCode^format.hashCode^imagePreprocessing.hashCode^jsonSchema.hashCode^error.hashCode^extractionDurationMs.hashCode^category.hashCode^tags.hashCode^documentVersion.hashCode^abstractText.hashCode^outputFormat.hashCode^ocrUsed.hashCode^additional.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is Metadata &&
-  runtimeType == other.runtimeType &&
-  title == other.title &&
-  subject == other.subject &&
-  authors == other.authors &&
-  keywords == other.keywords &&
-  language == other.language &&
-  createdAt == other.createdAt &&
-  modifiedAt == other.modifiedAt &&
-  createdBy == other.createdBy &&
-  modifiedBy == other.modifiedBy &&
-  pages == other.pages &&
-  format == other.format &&
-  imagePreprocessing == other.imagePreprocessing &&
-  jsonSchema == other.jsonSchema &&
-  error == other.error &&
-  extractionDurationMs == other.extractionDurationMs &&
-  category == other.category &&
-  tags == other.tags &&
-  documentVersion == other.documentVersion &&
-  abstractText == other.abstractText &&
-  outputFormat == other.outputFormat &&
-  ocrUsed == other.ocrUsed &&
-  additional == other.additional;
+  runtimeType == other.runtimeType
+  && title == other.title&& subject == other.subject&& authors == other.authors&& keywords == other.keywords&& language == other.language&& createdAt == other.createdAt&& modifiedAt == other.modifiedAt&& createdBy == other.createdBy&& modifiedBy == other.modifiedBy&& pages == other.pages&& format == other.format&& imagePreprocessing == other.imagePreprocessing&& jsonSchema == other.jsonSchema&& error == other.error&& extractionDurationMs == other.extractionDurationMs&& category == other.category&& tags == other.tags&& documentVersion == other.documentVersion&& abstractText == other.abstractText&& outputFormat == other.outputFormat&& ocrUsed == other.ocrUsed&& additional == other.additional;
+
 }
 
 /// Combined paths to all models needed for OCR (backward compatibility).
-class ModelPaths {
+class ModelPaths  {
   /// Exact path to the detection ONNX model in the Hugging Face snapshot.
   final String detModel;
-
   /// Exact path to the classification ONNX model in the Hugging Face snapshot.
   final String clsModel;
-
   /// Exact path to the recognition ONNX model in the Hugging Face snapshot.
   final String recModel;
-
   /// Path to the character dictionary file.
   final String dictFile;
 
-  const ModelPaths({
-    required this.detModel,
-    required this.clsModel,
-    required this.recModel,
-    required this.dictFile,
-  });
+  const ModelPaths({required this.detModel ,required this.clsModel ,required this.recModel ,required this.dictFile ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  detModel.hashCode ^
-  clsModel.hashCode ^
-  recModel.hashCode ^
-  dictFile.hashCode;
+  int get hashCode => detModel.hashCode^clsModel.hashCode^recModel.hashCode^dictFile.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ModelPaths &&
-  runtimeType == other.runtimeType &&
-  detModel == other.detModel &&
-  clsModel == other.clsModel &&
-  recModel == other.recModel &&
-  dictFile == other.dictFile;
+  runtimeType == other.runtimeType
+  && detModel == other.detModel&& clsModel == other.clsModel&& recModel == other.recModel&& dictFile == other.dictFile;
+
 }
 
 /// A ColBERT multi-vector embedding: one row per attention-live token.
@@ -9804,86 +7281,91 @@ class ModelPaths {
 /// [`MultiVectorEmbedding::rows`] internally to iterate per-token slices.
 ///
 /// Since v5.0.0.
-class MultiVectorEmbedding {
+class MultiVectorEmbedding  {
   /// Number of attention-live token rows (padding rows are dropped, not
   /// zeroed — see [`engine::normalize_tokens`]).
   final PlatformInt64 numTokens;
-
   /// Dimensionality of each per-token vector.
   final PlatformInt64 dim;
-
   /// Flat row-major buffer, length `num_tokens * dim`.
   final Float64List data;
 
-  const MultiVectorEmbedding({
-    required this.numTokens,
-    required this.dim,
-    required this.data,
-  });
+  const MultiVectorEmbedding({required this.numTokens ,required this.dim ,required this.data ,});
+
+
+
+
 
   @override
-  int get hashCode => numTokens.hashCode ^ dim.hashCode ^ data.hashCode;
+  int get hashCode => numTokens.hashCode^dim.hashCode^data.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is MultiVectorEmbedding &&
-  runtimeType == other.runtimeType &&
-  numTokens == other.numTokens &&
-  dim == other.dim &&
-  data == other.data;
+  runtimeType == other.runtimeType
+  && numTokens == other.numTokens&& dim == other.dim&& data == other.data;
+
 }
 
 /// Input signals for multi-document boundary detection.
-class MultidocInput {
+class MultidocInput  {
   /// Total number of pages in the PDF.
   final PlatformInt64 pageCount;
-
   /// Per-page signals extracted from the PDF.
   final List<PageSignals> pages;
 
-  const MultidocInput({required this.pageCount, required this.pages});
+  const MultidocInput({required this.pageCount ,required this.pages ,});
+
+
+
+
 
   @override
-  int get hashCode => pageCount.hashCode ^ pages.hashCode;
+  int get hashCode => pageCount.hashCode^pages.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is MultidocInput &&
-  runtimeType == other.runtimeType &&
-  pageCount == other.pageCount &&
-  pages == other.pages;
+  runtimeType == other.runtimeType
+  && pageCount == other.pageCount&& pages == other.pages;
+
 }
 
 /// Thresholds for multi-document boundary detection.
 ///
 /// All fields are public; callers override any subset via struct-update syntax.
-class MultidocThresholds {
+class MultidocThresholds  {
   /// Text density difference threshold for `DensityShift` detection.
   /// Default: 0.3.
   final double densityShiftThreshold;
-
   /// Minimum bigram-overlap ratio below which a density shift is promoted to
   /// a `DensityShift` boundary.  Default: 0.1 (10 % overlap).
   final double bigramOverlapMin;
 
-  const MultidocThresholds({
-    required this.densityShiftThreshold,
-    required this.bigramOverlapMin,
-  });
+  const MultidocThresholds({required this.densityShiftThreshold ,required this.bigramOverlapMin ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  densityShiftThreshold.hashCode ^ bigramOverlapMin.hashCode;
+  int get hashCode => densityShiftThreshold.hashCode^bigramOverlapMin.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is MultidocThresholds &&
-  runtimeType == other.runtimeType &&
-  densityShiftThreshold == other.densityShiftThreshold &&
-  bigramOverlapMin == other.bigramOverlapMin;
+  runtimeType == other.runtimeType
+  && densityShiftThreshold == other.densityShiftThreshold&& bigramOverlapMin == other.bigramOverlapMin;
+
 }
 
 /// NER backend selector.
@@ -9891,29 +7373,26 @@ enum NerBackendKind {
   /// `xberg-gliner` ONNX inference. Requires `ner-onnx` feature. Models
   /// download lazily from `xberg-io/gliner-models`.
   onnx,
-
   /// liter-llm zero-shot NER via structured-output prompts. Requires `ner-llm`
   /// feature. Useful when domain-specific categories outstrip the ONNX taxonomy.
   llm,
+  ;
+
 }
 
 /// Configuration for the NER post-processor.
-class NerConfig {
+class NerConfig  {
   /// Backend that runs the entity detection.
   final NerBackendKind backend;
-
   /// Entity categories to detect. Defaults to a sensible PERSON/ORG/LOCATION/EMAIL set
   /// when empty.
   final List<EntityCategory> categories;
-
   /// Override the default model — only used by [`NerBackendKind::Onnx`].
   /// `None` lets the backend pick its pinned default xberg GLiNER model alias.
   final String? model;
-
   /// Optional LLM configuration — only used by [`NerBackendKind::Llm`]. Token usage
   /// for LLM backends is recorded in `ExtractedDocument::llm_usage`.
   final LlmConfig? llm;
-
   /// Arbitrary user-supplied entity labels for zero-shot detection.
   ///
   /// `xberg-gliner` natively supports zero-shot inference over caller-supplied
@@ -9925,32 +7404,24 @@ class NerConfig {
   /// `"Product"`, `"Vessel"`) without forking GLiNER's taxonomy.
   final List<String> customLabels;
 
-  const NerConfig({
-    required this.backend,
-    required this.categories,
-    this.model,
-    this.llm,
-    required this.customLabels,
-  });
+  const NerConfig({required this.backend ,required this.categories ,this.model ,this.llm ,required this.customLabels ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  backend.hashCode ^
-  categories.hashCode ^
-  model.hashCode ^
-  llm.hashCode ^
-  customLabels.hashCode;
+  int get hashCode => backend.hashCode^categories.hashCode^model.hashCode^llm.hashCode^customLabels.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is NerConfig &&
-  runtimeType == other.runtimeType &&
-  backend == other.backend &&
-  categories == other.categories &&
-  model == other.model &&
-  llm == other.llm &&
-  customLabels == other.customLabels;
+  runtimeType == other.runtimeType
+  && backend == other.backend&& categories == other.categories&& model == other.model&& llm == other.llm&& customLabels == other.customLabels;
+
 }
 
 /// Line break syntax in Markdown output.
@@ -9959,285 +7430,198 @@ class NerConfig {
 enum NewlineStyle {
   /// Two trailing spaces at end of line. Default. Standard Markdown syntax.
   spaces,
-
   /// Backslash at end of line. Alternative Markdown syntax.
   backslash,
+  ;
+
 }
 
 @freezed
-sealed class NoChunkingReason with _$NoChunkingReason {
+sealed class NoChunkingReason with _$NoChunkingReason  {
   const NoChunkingReason._();
 
   /// File is below size threshold.
-  const factory NoChunkingReason.smallFile({
-    /// Actual size in bytes.
-    required PlatformInt64 sizeBytes,
-
-    /// Threshold in bytes.
-    required PlatformInt64 thresholdBytes,
-  }) = NoChunkingReason_SmallFile;
-
+  const factory NoChunkingReason.smallFile({ /// Actual size in bytes.
+    required PlatformInt64 sizeBytes ,/// Threshold in bytes.
+    required PlatformInt64 thresholdBytes , }) = NoChunkingReason_SmallFile;
   /// Document has fewer pages than threshold.
-  const factory NoChunkingReason.fewPages({
-    /// Actual page count.
-    required PlatformInt64 pageCount,
-
-    /// Threshold page count.
-    required PlatformInt64 threshold,
-  }) = NoChunkingReason_FewPages;
-
+  const factory NoChunkingReason.fewPages({ /// Actual page count.
+    required PlatformInt64 pageCount ,/// Threshold page count.
+    required PlatformInt64 threshold , }) = NoChunkingReason_FewPages;
   /// PDF has substantial text layer (OCR not needed).
-  const factory NoChunkingReason.textLayerDetected({
-    /// Percentage of pages with text (0.0 to 1.0).
-    required double textCoverage,
-
-    /// Average characters per page.
-    required PlatformInt64 avgCharsPerPage,
-  }) = NoChunkingReason_TextLayerDetected;
-
+  const factory NoChunkingReason.textLayerDetected({ /// Percentage of pages with text (0.0 to 1.0).
+    required double textCoverage ,/// Average characters per page.
+    required PlatformInt64 avgCharsPerPage , }) = NoChunkingReason_TextLayerDetected;
   /// Document format does not support chunking.
-  const factory NoChunkingReason.formatNotChunkable({
-    /// MIME type of the document.
-    required String mimeType,
-  }) = NoChunkingReason_FormatNotChunkable;
-
+  const factory NoChunkingReason.formatNotChunkable({ /// MIME type of the document.
+    required String mimeType , }) = NoChunkingReason_FormatNotChunkable;
   /// Chunking is disabled by configuration.
-  const factory NoChunkingReason.chunkingDisabled() =
-  NoChunkingReason_ChunkingDisabled;
-
+  const factory NoChunkingReason.chunkingDisabled() = NoChunkingReason_ChunkingDisabled;
   /// Force OCR is disabled and text extraction is fast.
-  const factory NoChunkingReason.fastTextExtraction() =
-  NoChunkingReason_FastTextExtraction;
+  const factory NoChunkingReason.fastTextExtraction() = NoChunkingReason_FastTextExtraction;
+
+
+
+
 }
 
 @freezed
-sealed class NodeContent with _$NodeContent {
+sealed class NodeContent with _$NodeContent  {
   const NodeContent._();
 
   /// Document title.
-  const factory NodeContent.title({
-    /// The title text content.
-    required String text,
-  }) = NodeContent_Title;
-
+  const factory NodeContent.title({ /// The title text content.
+    required String text , }) = NodeContent_Title;
   /// Section heading with level (1-6).
-  const factory NodeContent.heading({
-    /// Heading depth (1 = h1, 2 = h2, …, 6 = h6).
-    required PlatformInt64 level,
-
-    /// The heading text content.
-    required String text,
-  }) = NodeContent_Heading;
-
+  const factory NodeContent.heading({ /// Heading depth (1 = h1, 2 = h2, …, 6 = h6).
+    required PlatformInt64 level ,/// The heading text content.
+    required String text , }) = NodeContent_Heading;
   /// Body text paragraph.
-  const factory NodeContent.paragraph({
-    /// The paragraph text content.
-    required String text,
-  }) = NodeContent_Paragraph;
-
+  const factory NodeContent.paragraph({ /// The paragraph text content.
+    required String text , }) = NodeContent_Paragraph;
   /// List container — children are `ListItem` nodes.
-  const factory NodeContent.list({
-    /// `true` for ordered (numbered) lists; `false` for unordered (bullet) lists.
-    required bool ordered,
-  }) = NodeContent_List;
-
+  const factory NodeContent.list({ /// `true` for ordered (numbered) lists; `false` for unordered (bullet) lists.
+    required bool ordered , }) = NodeContent_List;
   /// Individual list item.
-  const factory NodeContent.listItem({
-    /// The list item text content.
-    required String text,
-  }) = NodeContent_ListItem;
-
+  const factory NodeContent.listItem({ /// The list item text content.
+    required String text , }) = NodeContent_ListItem;
   /// Table with structured cell grid.
-  const factory NodeContent.table({
-    /// Structured grid of table cells.
-    required TableGrid grid,
-  }) = NodeContent_Table;
-
+  const factory NodeContent.table({ /// Structured grid of table cells.
+    required TableGrid grid , }) = NodeContent_Table;
   /// Image reference.
-  const factory NodeContent.image({
-    /// Optional alt text or caption describing the image.
-    required String description,
-
-    /// Index into the parent `ExtractedDocument::images` list.
-    required PlatformInt64 imageIndex,
-
-    /// Source URL or path of the image (from `<img src="...">` or `![](src)`).
-    required String src,
-  }) = NodeContent_Image;
-
+  const factory NodeContent.image({ /// Optional alt text or caption describing the image.
+    required String description ,/// Index into the parent `ExtractedDocument::images` list.
+    required PlatformInt64 imageIndex ,/// Source URL or path of the image (from `<img src="...">` or `![](src)`).
+    required String src , }) = NodeContent_Image;
   /// Code block.
-  const factory NodeContent.code({
-    /// The source code text content.
-    required String text,
-
-    /// Programming language identifier (e.g. `"rust"`, `"python"`).
-    required String language,
-  }) = NodeContent_Code;
-
+  const factory NodeContent.code({ /// The source code text content.
+    required String text ,/// Programming language identifier (e.g. `"rust"`, `"python"`).
+    required String language , }) = NodeContent_Code;
   /// Block quote — container, children carry the quoted content.
   const factory NodeContent.quote() = NodeContent_Quote;
-
   /// Mathematical formula / equation.
-  const factory NodeContent.formula({
-    /// The formula source text (LaTeX or plain mathematical notation).
-    required String text,
-  }) = NodeContent_Formula;
-
+  const factory NodeContent.formula({ /// The formula source text (LaTeX or plain mathematical notation).
+    required String text , }) = NodeContent_Formula;
   /// Footnote reference content.
-  const factory NodeContent.footnote({
-    /// The footnote body text.
-    required String text,
-  }) = NodeContent_Footnote;
-
+  const factory NodeContent.footnote({ /// The footnote body text.
+    required String text , }) = NodeContent_Footnote;
   /// Logical grouping container (section, key-value area).
   ///
   /// `heading_level` + `heading_text` capture the section heading directly
   /// rather than relying on a first-child positional convention.
-  const factory NodeContent.group({
-    /// Optional display label for the group (e.g. section name).
-    required String label,
-
-    /// Heading level of the section heading that opened this group (1-6).
-    required PlatformInt64 headingLevel,
-
-    /// Text of the section heading that opened this group.
-    required String headingText,
-  }) = NodeContent_Group;
-
+  const factory NodeContent.group({ /// Optional display label for the group (e.g. section name).
+    required String label ,/// Heading level of the section heading that opened this group (1-6).
+    required PlatformInt64 headingLevel ,/// Text of the section heading that opened this group.
+    required String headingText , }) = NodeContent_Group;
   /// Page break marker.
   const factory NodeContent.pageBreak() = NodeContent_PageBreak;
-
   /// Presentation slide container — children are the slide's content nodes.
-  const factory NodeContent.slide({
-    /// 1-indexed slide number.
-    required PlatformInt64 number,
-
-    /// Slide title text, if present.
-    required String title,
-  }) = NodeContent_Slide;
-
+  const factory NodeContent.slide({ /// 1-indexed slide number.
+    required PlatformInt64 number ,/// Slide title text, if present.
+    required String title , }) = NodeContent_Slide;
   /// Definition list container — children are `DefinitionItem` nodes.
   const factory NodeContent.definitionList() = NodeContent_DefinitionList;
-
   /// Individual definition list entry with term and definition.
-  const factory NodeContent.definitionItem({
-    /// The term being defined.
-    required String term,
-
-    /// The definition or description of the term.
-    required String definition,
-  }) = NodeContent_DefinitionItem;
-
+  const factory NodeContent.definitionItem({ /// The term being defined.
+    required String term ,/// The definition or description of the term.
+    required String definition , }) = NodeContent_DefinitionItem;
   /// Citation or bibliographic reference.
-  const factory NodeContent.citation({
-    /// Citation key (e.g. BibTeX key or reference ID).
-    required String key,
-
-    /// Formatted citation text as it appears in the document.
-    required String text,
-  }) = NodeContent_Citation;
-
+  const factory NodeContent.citation({ /// Citation key (e.g. BibTeX key or reference ID).
+    required String key ,/// Formatted citation text as it appears in the document.
+    required String text , }) = NodeContent_Citation;
   /// Admonition / callout container (note, warning, tip, etc.).
   ///
   /// Children carry the admonition body content.
-  const factory NodeContent.admonition({
-    /// Kind of admonition (e.g. "note", "warning", "tip", "danger").
-    required String kind,
-
-    /// Optional explicit title overriding the default kind label.
-    required String title,
-  }) = NodeContent_Admonition;
-
+  const factory NodeContent.admonition({ /// Kind of admonition (e.g. "note", "warning", "tip", "danger").
+    required String kind ,/// Optional explicit title overriding the default kind label.
+    required String title , }) = NodeContent_Admonition;
   /// Raw block preserved verbatim from the source format.
   ///
   /// Used for content that cannot be mapped to a semantic node type
   /// (e.g. JSX in MDX, raw LaTeX in markdown, embedded HTML).
-  const factory NodeContent.rawBlock({
-    /// Source format identifier (e.g. "html", "latex", "jsx").
-    required String format,
-
-    /// Verbatim source content in the specified format.
-    required String content,
-  }) = NodeContent_RawBlock;
-
+  const factory NodeContent.rawBlock({ /// Source format identifier (e.g. "html", "latex", "jsx").
+    required String format ,/// Verbatim source content in the specified format.
+    required String content , }) = NodeContent_RawBlock;
   /// Structured metadata block (email headers, YAML frontmatter, etc.).
   const factory NodeContent.metadataBlock() = NodeContent_MetadataBlock;
+
+
+
+
 }
 
 /// OCR backend types.
 enum OcrBackendType {
   /// Tesseract OCR (native Rust binding)
   tesseract,
-
   /// PaddleOCR (Python-based, via FFI)
   paddleOcr,
-
   /// Candle-based VLM OCR (TrOCR, PaddleOCR-VL).
   candle,
-
   /// Custom/third-party OCR backend
   custom,
+  ;
+
 }
 
 @freezed
-sealed class OcrBoundingGeometry with _$OcrBoundingGeometry {
+sealed class OcrBoundingGeometry with _$OcrBoundingGeometry  {
   const OcrBoundingGeometry._();
 
   /// Axis-aligned bounding box (typical for Tesseract output).
-  const factory OcrBoundingGeometry.rectangle({
-    /// Left x-coordinate in pixels
-    required PlatformInt64 left,
-
-    /// Top y-coordinate in pixels
-    required PlatformInt64 top,
-
-    /// Width in pixels
-    required PlatformInt64 width,
-
-    /// Height in pixels
-    required PlatformInt64 height,
-  }) = OcrBoundingGeometry_Rectangle;
-
+  const factory OcrBoundingGeometry.rectangle({ /// Left x-coordinate in pixels
+    required PlatformInt64 left ,/// Top y-coordinate in pixels
+    required PlatformInt64 top ,/// Width in pixels
+    required PlatformInt64 width ,/// Height in pixels
+    required PlatformInt64 height , }) = OcrBoundingGeometry_Rectangle;
   /// 4-point quadrilateral for rotated/skewed text (PaddleOCR).
   ///
   /// Points are in clockwise order starting from top-left:
   /// `[top_left, top_right, bottom_right, bottom_left]`
-  const factory OcrBoundingGeometry.quadrilateral() =
-  OcrBoundingGeometry_Quadrilateral;
+  const factory OcrBoundingGeometry.quadrilateral() = OcrBoundingGeometry_Quadrilateral;
+
+
+
+
 }
 
 /// Confidence scores for an OCR element.
 ///
 /// Separates detection confidence (how confident that text exists at this location)
 /// from recognition confidence (how confident about the actual text content).
-class OcrConfidence {
+class OcrConfidence  {
   /// Detection confidence: how confident the OCR engine is that text exists here.
   ///
   /// PaddleOCR provides this as `box_score`, Tesseract doesn't have a direct equivalent.
   /// Range: 0.0 to 1.0 (or None if not available).
   final double? detection;
-
   /// Recognition confidence: how confident about the text content.
   ///
   /// Range: 0.0 to 1.0.
   final double recognition;
 
-  const OcrConfidence({this.detection, required this.recognition});
+  const OcrConfidence({this.detection ,required this.recognition ,});
+
+
+
+
 
   @override
-  int get hashCode => detection.hashCode ^ recognition.hashCode;
+  int get hashCode => detection.hashCode^recognition.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is OcrConfidence &&
-  runtimeType == other.runtimeType &&
-  detection == other.detection &&
-  recognition == other.recognition;
+  runtimeType == other.runtimeType
+  && detection == other.detection&& recognition == other.recognition;
+
 }
 
 /// OCR configuration.
-class OcrConfig {
+class OcrConfig  {
   /// Whether OCR is enabled.
   ///
   /// Setting `enabled: false` is a shorthand for `disable_ocr: true` on the parent
@@ -10246,24 +7630,18 @@ class OcrConfig {
   ///
   /// Defaults to `true`. When `false`, all other OCR settings are ignored.
   final bool enabled;
-
   /// OCR backend: tesseract, paddleocr, paddle-ocr, or vlm
   final String backend;
-
   /// Language code(s) for OCR recognition.
   /// Accepts either a single language code ("eng") or a list (["eng", "deu"]).
   /// Defaults to ["eng"]. For Tesseract, languages are joined with "+".
   final List<String> language;
-
   /// Tesseract-specific configuration (optional)
   final TesseractConfig? tesseractConfig;
-
   /// Output format for OCR results (optional, for format conversion)
   final OutputFormat? outputFormat;
-
   /// PaddleOCR-specific configuration (optional, JSON passthrough)
   final String? paddleOcrConfig;
-
   /// Arbitrary per-call options passed through to the backend unchanged.
   ///
   /// Custom OCR backends and built-in backends that support runtime tuning
@@ -10285,19 +7663,15 @@ class OcrConfig {
   /// { "mode": "fast", "enable_layout": true, "timeout_ms": 5000 }
   /// ```
   final String? backendOptions;
-
   /// OCR element extraction configuration
   final OcrElementConfig? elementConfig;
-
   /// Quality thresholds for the native-text-to-OCR fallback decision.
   /// When None, uses compiled defaults (matching previous hardcoded behavior).
   final OcrQualityThresholds? qualityThresholds;
-
   /// Multi-backend OCR pipeline configuration. When set, enables weighted
   /// fallback across multiple OCR backends based on output quality.
   /// When None, uses the single `backend` field (same as today).
   final OcrPipelineConfig? pipeline;
-
   /// Enable automatic page rotation based on orientation detection.
   ///
   /// When enabled, uses Tesseract's `DetectOrientationScript()` to detect
@@ -10305,7 +7679,6 @@ class OcrConfig {
   /// rotated with high confidence, the image is corrected before recognition.
   /// This is critical for handling rotated scanned documents.
   final bool autoRotate;
-
   /// Ergonomic VLM fallback policy.
   ///
   /// When set to anything other than [`VlmFallbackPolicy::Disabled`] and
@@ -10319,26 +7692,22 @@ class OcrConfig {
   /// Requires [`OcrConfig::vlm_config`] to be `Some` when not `Disabled`.
   /// When [`OcrConfig::pipeline`] is explicitly set, this field is ignored.
   final VlmFallbackPolicy vlmFallback;
-
   /// VLM (Vision Language Model) OCR configuration.
   ///
   /// Required when `backend` is `"vlm"` or when `vlm_fallback` is not
   /// [`VlmFallbackPolicy::Disabled`]. Uses liter-llm to send page images to a
   /// vision model for text extraction.
   final LlmConfig? vlmConfig;
-
   /// Custom Jinja2 prompt template for VLM OCR.
   ///
   /// When `None`, uses the default template. Available variables:
   /// - `{{ language }}` — The document language code (e.g., "eng", "deu").
   final String? vlmPrompt;
-
   /// Hardware acceleration for ONNX Runtime models (e.g. PaddleOCR, layout detection).
   ///
   /// Not user-configurable via config files — injected at runtime from
   /// `ExtractionConfig::acceleration` before each `process_image` call.
   final AccelerationConfig? acceleration;
-
   /// Caller-supplied Tesseract `traineddata` bytes per language code.
   ///
   /// Primary use case is the WASM build, which has no filesystem and cannot
@@ -10350,7 +7719,6 @@ class OcrConfig {
   /// Skipped by serde to keep config files small — supply via the typed API
   /// at runtime.
   final Map<String, Uint8List>? tessdataBytes;
-
   /// Runtime override for tessdata directory path.
   ///
   /// When set, uses this path as the highest-priority tessdata location,
@@ -10359,186 +7727,110 @@ class OcrConfig {
   /// the standard resolution chain: TESSDATA_PREFIX env, cache dir, system paths.
   final String? tessdataPath;
 
-  const OcrConfig({
-    required this.enabled,
-    required this.backend,
-    required this.language,
-    this.tesseractConfig,
-    this.outputFormat,
-    this.paddleOcrConfig,
-    this.backendOptions,
-    this.elementConfig,
-    this.qualityThresholds,
-    this.pipeline,
-    required this.autoRotate,
-    required this.vlmFallback,
-    this.vlmConfig,
-    this.vlmPrompt,
-    this.acceleration,
-    this.tessdataBytes,
-    this.tessdataPath,
-  });
+  const OcrConfig({required this.enabled ,required this.backend ,required this.language ,this.tesseractConfig ,this.outputFormat ,this.paddleOcrConfig ,this.backendOptions ,this.elementConfig ,this.qualityThresholds ,this.pipeline ,required this.autoRotate ,required this.vlmFallback ,this.vlmConfig ,this.vlmPrompt ,this.acceleration ,this.tessdataBytes ,this.tessdataPath ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  enabled.hashCode ^
-  backend.hashCode ^
-  language.hashCode ^
-  tesseractConfig.hashCode ^
-  outputFormat.hashCode ^
-  paddleOcrConfig.hashCode ^
-  backendOptions.hashCode ^
-  elementConfig.hashCode ^
-  qualityThresholds.hashCode ^
-  pipeline.hashCode ^
-  autoRotate.hashCode ^
-  vlmFallback.hashCode ^
-  vlmConfig.hashCode ^
-  vlmPrompt.hashCode ^
-  acceleration.hashCode ^
-  tessdataBytes.hashCode ^
-  tessdataPath.hashCode;
+  int get hashCode => enabled.hashCode^backend.hashCode^language.hashCode^tesseractConfig.hashCode^outputFormat.hashCode^paddleOcrConfig.hashCode^backendOptions.hashCode^elementConfig.hashCode^qualityThresholds.hashCode^pipeline.hashCode^autoRotate.hashCode^vlmFallback.hashCode^vlmConfig.hashCode^vlmPrompt.hashCode^acceleration.hashCode^tessdataBytes.hashCode^tessdataPath.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is OcrConfig &&
-  runtimeType == other.runtimeType &&
-  enabled == other.enabled &&
-  backend == other.backend &&
-  language == other.language &&
-  tesseractConfig == other.tesseractConfig &&
-  outputFormat == other.outputFormat &&
-  paddleOcrConfig == other.paddleOcrConfig &&
-  backendOptions == other.backendOptions &&
-  elementConfig == other.elementConfig &&
-  qualityThresholds == other.qualityThresholds &&
-  pipeline == other.pipeline &&
-  autoRotate == other.autoRotate &&
-  vlmFallback == other.vlmFallback &&
-  vlmConfig == other.vlmConfig &&
-  vlmPrompt == other.vlmPrompt &&
-  acceleration == other.acceleration &&
-  tessdataBytes == other.tessdataBytes &&
-  tessdataPath == other.tessdataPath;
+  runtimeType == other.runtimeType
+  && enabled == other.enabled&& backend == other.backend&& language == other.language&& tesseractConfig == other.tesseractConfig&& outputFormat == other.outputFormat&& paddleOcrConfig == other.paddleOcrConfig&& backendOptions == other.backendOptions&& elementConfig == other.elementConfig&& qualityThresholds == other.qualityThresholds&& pipeline == other.pipeline&& autoRotate == other.autoRotate&& vlmFallback == other.vlmFallback&& vlmConfig == other.vlmConfig&& vlmPrompt == other.vlmPrompt&& acceleration == other.acceleration&& tessdataBytes == other.tessdataBytes&& tessdataPath == other.tessdataPath;
+
 }
 
 /// A unified OCR element representing detected text with full metadata.
 ///
 /// This is the primary type for structured OCR output, preserving all information
 /// from both Tesseract and PaddleOCR backends.
-class OcrElement {
+class OcrElement  {
   /// The recognized text content.
   final String text;
-
   /// Bounding geometry (rectangle or quadrilateral).
   final OcrBoundingGeometry geometry;
-
   /// Confidence scores for detection and recognition.
   final OcrConfidence confidence;
-
   /// Hierarchical level (word, line, block, page).
   final OcrElementLevel level;
-
   /// Rotation information (if detected).
   final OcrRotation? rotation;
-
   /// Page number (1-indexed).
   final PlatformInt64 pageNumber;
-
   /// Parent element ID for hierarchical relationships.
   ///
   /// Only used for Tesseract output which has word -> line -> block hierarchy.
   final String? parentId;
-
   /// Backend-specific metadata that doesn't fit the unified schema.
   final Map<String, String> backendMetadata;
 
-  const OcrElement({
-    required this.text,
-    required this.geometry,
-    required this.confidence,
-    required this.level,
-    this.rotation,
-    required this.pageNumber,
-    this.parentId,
-    required this.backendMetadata,
-  });
+  const OcrElement({required this.text ,required this.geometry ,required this.confidence ,required this.level ,this.rotation ,required this.pageNumber ,this.parentId ,required this.backendMetadata ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  text.hashCode ^
-  geometry.hashCode ^
-  confidence.hashCode ^
-  level.hashCode ^
-  rotation.hashCode ^
-  pageNumber.hashCode ^
-  parentId.hashCode ^
-  backendMetadata.hashCode;
+  int get hashCode => text.hashCode^geometry.hashCode^confidence.hashCode^level.hashCode^rotation.hashCode^pageNumber.hashCode^parentId.hashCode^backendMetadata.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is OcrElement &&
-  runtimeType == other.runtimeType &&
-  text == other.text &&
-  geometry == other.geometry &&
-  confidence == other.confidence &&
-  level == other.level &&
-  rotation == other.rotation &&
-  pageNumber == other.pageNumber &&
-  parentId == other.parentId &&
-  backendMetadata == other.backendMetadata;
+  runtimeType == other.runtimeType
+  && text == other.text&& geometry == other.geometry&& confidence == other.confidence&& level == other.level&& rotation == other.rotation&& pageNumber == other.pageNumber&& parentId == other.parentId&& backendMetadata == other.backendMetadata;
+
 }
 
 /// Configuration for OCR element extraction.
 ///
 /// Controls how OCR elements are extracted and filtered.
-class OcrElementConfig {
+class OcrElementConfig  {
   /// Whether to include OCR elements in the extraction result.
   ///
   /// When true, the `ocr_elements` field in `ExtractedDocument` will be populated.
   final bool includeElements;
-
   /// Minimum hierarchical level to include.
   ///
   /// Elements below this level (e.g., words when min_level is Line) will be excluded.
   final OcrElementLevel minLevel;
-
   /// Minimum recognition confidence threshold (0.0-1.0).
   ///
   /// Elements with confidence below this threshold will be filtered out.
   final double minConfidence;
-
   /// Whether to build hierarchical relationships between elements.
   ///
   /// When true, `parent_id` fields will be populated based on spatial containment.
   /// Only meaningful for Tesseract output.
   final bool buildHierarchy;
 
-  const OcrElementConfig({
-    required this.includeElements,
-    required this.minLevel,
-    required this.minConfidence,
-    required this.buildHierarchy,
-  });
+  const OcrElementConfig({required this.includeElements ,required this.minLevel ,required this.minConfidence ,required this.buildHierarchy ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  includeElements.hashCode ^
-  minLevel.hashCode ^
-  minConfidence.hashCode ^
-  buildHierarchy.hashCode;
+  int get hashCode => includeElements.hashCode^minLevel.hashCode^minConfidence.hashCode^buildHierarchy.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is OcrElementConfig &&
-  runtimeType == other.runtimeType &&
-  includeElements == other.includeElements &&
-  minLevel == other.minLevel &&
-  minConfidence == other.minConfidence &&
-  buildHierarchy == other.buildHierarchy;
+  runtimeType == other.runtimeType
+  && includeElements == other.includeElements&& minLevel == other.minLevel&& minConfidence == other.minConfidence&& buildHierarchy == other.buildHierarchy;
+
 }
 
 /// Hierarchical level of an OCR element.
@@ -10548,117 +7840,88 @@ class OcrElementConfig {
 enum OcrElementLevel {
   /// Individual word
   word,
-
   /// Line of text (default for PaddleOCR)
   line,
-
   /// Paragraph or text block
   block,
-
   /// Page-level element
   page,
+  ;
+
 }
 
 /// OCR extraction result.
 ///
 /// Result of performing OCR on an image or scanned document,
 /// including recognized text and detected tables.
-class OcrExtractionResult {
+class OcrExtractionResult  {
   /// Recognized text content
   final String content;
-
   /// Original MIME type of the processed image
   final String mimeType;
-
   /// OCR processing metadata (confidence scores, language, etc.)
   final Map<String, String> metadata;
-
   /// Tables detected and extracted via OCR
   final List<OcrTable> tables;
-
   /// Structured OCR elements with bounding boxes and confidence scores.
   /// Available when TSV output is requested or table detection is enabled.
   final List<OcrElement>? ocrElements;
 
-  const OcrExtractionResult({
-    required this.content,
-    required this.mimeType,
-    required this.metadata,
-    required this.tables,
-    this.ocrElements,
-  });
+  const OcrExtractionResult({required this.content ,required this.mimeType ,required this.metadata ,required this.tables ,this.ocrElements ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  content.hashCode ^
-  mimeType.hashCode ^
-  metadata.hashCode ^
-  tables.hashCode ^
-  ocrElements.hashCode;
+  int get hashCode => content.hashCode^mimeType.hashCode^metadata.hashCode^tables.hashCode^ocrElements.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is OcrExtractionResult &&
-  runtimeType == other.runtimeType &&
-  content == other.content &&
-  mimeType == other.mimeType &&
-  metadata == other.metadata &&
-  tables == other.tables &&
-  ocrElements == other.ocrElements;
+  runtimeType == other.runtimeType
+  && content == other.content&& mimeType == other.mimeType&& metadata == other.metadata&& tables == other.tables&& ocrElements == other.ocrElements;
+
 }
 
 /// OCR processing metadata.
 ///
 /// Captures information about OCR processing configuration and results.
-class OcrMetadata {
+class OcrMetadata  {
   /// OCR language code(s) used
   final String language;
-
   /// Tesseract Page Segmentation Mode (PSM)
   final PlatformInt64 psm;
-
   /// Output format (e.g., "text", "hocr")
   final String outputFormat;
-
   /// Number of tables detected
   final PlatformInt64 tableCount;
-
   /// Number of rows in the detected table (if a single table was found).
   final PlatformInt64? tableRows;
-
   /// Number of columns in the detected table (if a single table was found).
   final PlatformInt64? tableCols;
 
-  const OcrMetadata({
-    required this.language,
-    required this.psm,
-    required this.outputFormat,
-    required this.tableCount,
-    this.tableRows,
-    this.tableCols,
-  });
+  const OcrMetadata({required this.language ,required this.psm ,required this.outputFormat ,required this.tableCount ,this.tableRows ,this.tableCols ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  language.hashCode ^
-  psm.hashCode ^
-  outputFormat.hashCode ^
-  tableCount.hashCode ^
-  tableRows.hashCode ^
-  tableCols.hashCode;
+  int get hashCode => language.hashCode^psm.hashCode^outputFormat.hashCode^tableCount.hashCode^tableRows.hashCode^tableCols.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is OcrMetadata &&
-  runtimeType == other.runtimeType &&
-  language == other.language &&
-  psm == other.psm &&
-  outputFormat == other.outputFormat &&
-  tableCount == other.tableCount &&
-  tableRows == other.tableRows &&
-  tableCols == other.tableCols;
+  runtimeType == other.runtimeType
+  && language == other.language&& psm == other.psm&& outputFormat == other.outputFormat&& tableCount == other.tableCount&& tableRows == other.tableRows&& tableCols == other.tableCols;
+
 }
 
 /// Multi-backend OCR pipeline with quality-based fallback.
@@ -10666,51 +7929,47 @@ class OcrMetadata {
 /// Backends are tried in priority order (highest first). After each backend
 /// produces output, quality is evaluated. If it meets `quality_thresholds.pipeline_min_quality`,
 /// the result is accepted. Otherwise the next backend is tried.
-class OcrPipelineConfig {
+class OcrPipelineConfig  {
   /// Ordered list of backends to try. Sorted by priority (descending) at runtime.
   final List<OcrPipelineStage> stages;
-
   /// Quality thresholds for deciding whether to accept a result or try the next backend.
   final OcrQualityThresholds qualityThresholds;
 
-  const OcrPipelineConfig({
-    required this.stages,
-    required this.qualityThresholds,
-  });
+  const OcrPipelineConfig({required this.stages ,required this.qualityThresholds ,});
+
+
+
+
 
   @override
-  int get hashCode => stages.hashCode ^ qualityThresholds.hashCode;
+  int get hashCode => stages.hashCode^qualityThresholds.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is OcrPipelineConfig &&
-  runtimeType == other.runtimeType &&
-  stages == other.stages &&
-  qualityThresholds == other.qualityThresholds;
+  runtimeType == other.runtimeType
+  && stages == other.stages&& qualityThresholds == other.qualityThresholds;
+
 }
 
 /// A single backend stage in the OCR pipeline.
-class OcrPipelineStage {
+class OcrPipelineStage  {
   /// Backend name: "tesseract", "paddleocr", "paddle-ocr", "vlm", or a custom registered name.
   final String backend;
-
   /// Priority weight (higher = tried first). Stages are sorted by priority descending.
   final PlatformInt64 priority;
-
   /// Language override for this stage (None = use parent OcrConfig.language).
   /// Accepts either a single language code ("eng") or a list (["eng", "deu"]).
   final List<String>? language;
-
   /// Tesseract-specific config override for this stage.
   final TesseractConfig? tesseractConfig;
-
   /// PaddleOCR-specific config for this stage.
   final String? paddleOcrConfig;
-
   /// VLM config override for this pipeline stage.
   final LlmConfig? vlmConfig;
-
   /// Arbitrary per-call options passed through to the backend unchanged.
   ///
   /// Backends that support runtime tuning (mode switching, preprocessing
@@ -10725,180 +7984,115 @@ class OcrPipelineStage {
   /// ```
   final String? backendOptions;
 
-  const OcrPipelineStage({
-    required this.backend,
-    required this.priority,
-    this.language,
-    this.tesseractConfig,
-    this.paddleOcrConfig,
-    this.vlmConfig,
-    this.backendOptions,
-  });
+  const OcrPipelineStage({required this.backend ,required this.priority ,this.language ,this.tesseractConfig ,this.paddleOcrConfig ,this.vlmConfig ,this.backendOptions ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  backend.hashCode ^
-  priority.hashCode ^
-  language.hashCode ^
-  tesseractConfig.hashCode ^
-  paddleOcrConfig.hashCode ^
-  vlmConfig.hashCode ^
-  backendOptions.hashCode;
+  int get hashCode => backend.hashCode^priority.hashCode^language.hashCode^tesseractConfig.hashCode^paddleOcrConfig.hashCode^vlmConfig.hashCode^backendOptions.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is OcrPipelineStage &&
-  runtimeType == other.runtimeType &&
-  backend == other.backend &&
-  priority == other.priority &&
-  language == other.language &&
-  tesseractConfig == other.tesseractConfig &&
-  paddleOcrConfig == other.paddleOcrConfig &&
-  vlmConfig == other.vlmConfig &&
-  backendOptions == other.backendOptions;
+  runtimeType == other.runtimeType
+  && backend == other.backend&& priority == other.priority&& language == other.language&& tesseractConfig == other.tesseractConfig&& paddleOcrConfig == other.paddleOcrConfig&& vlmConfig == other.vlmConfig&& backendOptions == other.backendOptions;
+
 }
 
 /// Quality thresholds for OCR fallback decisions and pipeline quality gating.
 ///
 /// All fields default to the values that match the previous hardcoded behavior,
 /// so `OcrQualityThresholds::default()` preserves existing semantics exactly.
-class OcrQualityThresholds {
+class OcrQualityThresholds  {
   /// Minimum total non-whitespace characters to consider text substantive.
   final PlatformInt64 minTotalNonWhitespace;
-
   /// Minimum non-whitespace characters per page on average.
   final double minNonWhitespacePerPage;
-
   /// Minimum character count for a word to be "meaningful".
   final PlatformInt64 minMeaningfulWordLen;
-
   /// Minimum count of meaningful words before text is accepted.
   final PlatformInt64 minMeaningfulWords;
-
   /// Minimum alphanumeric ratio (non-whitespace chars that are alphanumeric).
   final double minAlnumRatio;
-
   /// Minimum Unicode replacement characters (U+FFFD) to trigger OCR fallback.
   final PlatformInt64 minGarbageChars;
-
   /// Maximum fraction of short (1-2 char) words before text is considered fragmented.
   final double maxFragmentedWordRatio;
-
   /// Critical fragmentation threshold — triggers OCR regardless of meaningful words.
   /// Normal English text has ~20-30% short words. 80%+ is definitive garbage.
   final double criticalFragmentedWordRatio;
-
   /// Minimum average word length. Below this with enough words indicates garbled extraction.
   final double minAvgWordLength;
-
   /// Minimum word count before average word length check applies.
   final PlatformInt64 minWordsForAvgLengthCheck;
-
   /// Minimum consecutive word repetition ratio to detect column scrambling.
   final double minConsecutiveRepeatRatio;
-
   /// Minimum word count before consecutive repetition check is applied.
   final PlatformInt64 minWordsForRepeatCheck;
-
   /// Minimum character count for "substantive markdown" OCR skip gate.
   final PlatformInt64 substantiveMinChars;
-
   /// Minimum character count for "non-text content" OCR skip gate.
   final PlatformInt64 nonTextMinChars;
-
   /// Alphanumeric+whitespace ratio threshold for skip decisions.
   final double alnumWsRatioThreshold;
-
   /// Minimum quality score (0.0-1.0) for a pipeline stage result to be accepted.
   /// If the result from a backend scores below this, try the next backend.
   final double pipelineMinQuality;
 
-  const OcrQualityThresholds({
-    required this.minTotalNonWhitespace,
-    required this.minNonWhitespacePerPage,
-    required this.minMeaningfulWordLen,
-    required this.minMeaningfulWords,
-    required this.minAlnumRatio,
-    required this.minGarbageChars,
-    required this.maxFragmentedWordRatio,
-    required this.criticalFragmentedWordRatio,
-    required this.minAvgWordLength,
-    required this.minWordsForAvgLengthCheck,
-    required this.minConsecutiveRepeatRatio,
-    required this.minWordsForRepeatCheck,
-    required this.substantiveMinChars,
-    required this.nonTextMinChars,
-    required this.alnumWsRatioThreshold,
-    required this.pipelineMinQuality,
-  });
+  const OcrQualityThresholds({required this.minTotalNonWhitespace ,required this.minNonWhitespacePerPage ,required this.minMeaningfulWordLen ,required this.minMeaningfulWords ,required this.minAlnumRatio ,required this.minGarbageChars ,required this.maxFragmentedWordRatio ,required this.criticalFragmentedWordRatio ,required this.minAvgWordLength ,required this.minWordsForAvgLengthCheck ,required this.minConsecutiveRepeatRatio ,required this.minWordsForRepeatCheck ,required this.substantiveMinChars ,required this.nonTextMinChars ,required this.alnumWsRatioThreshold ,required this.pipelineMinQuality ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  minTotalNonWhitespace.hashCode ^
-  minNonWhitespacePerPage.hashCode ^
-  minMeaningfulWordLen.hashCode ^
-  minMeaningfulWords.hashCode ^
-  minAlnumRatio.hashCode ^
-  minGarbageChars.hashCode ^
-  maxFragmentedWordRatio.hashCode ^
-  criticalFragmentedWordRatio.hashCode ^
-  minAvgWordLength.hashCode ^
-  minWordsForAvgLengthCheck.hashCode ^
-  minConsecutiveRepeatRatio.hashCode ^
-  minWordsForRepeatCheck.hashCode ^
-  substantiveMinChars.hashCode ^
-  nonTextMinChars.hashCode ^
-  alnumWsRatioThreshold.hashCode ^
-  pipelineMinQuality.hashCode;
+  int get hashCode => minTotalNonWhitespace.hashCode^minNonWhitespacePerPage.hashCode^minMeaningfulWordLen.hashCode^minMeaningfulWords.hashCode^minAlnumRatio.hashCode^minGarbageChars.hashCode^maxFragmentedWordRatio.hashCode^criticalFragmentedWordRatio.hashCode^minAvgWordLength.hashCode^minWordsForAvgLengthCheck.hashCode^minConsecutiveRepeatRatio.hashCode^minWordsForRepeatCheck.hashCode^substantiveMinChars.hashCode^nonTextMinChars.hashCode^alnumWsRatioThreshold.hashCode^pipelineMinQuality.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is OcrQualityThresholds &&
-  runtimeType == other.runtimeType &&
-  minTotalNonWhitespace == other.minTotalNonWhitespace &&
-  minNonWhitespacePerPage == other.minNonWhitespacePerPage &&
-  minMeaningfulWordLen == other.minMeaningfulWordLen &&
-  minMeaningfulWords == other.minMeaningfulWords &&
-  minAlnumRatio == other.minAlnumRatio &&
-  minGarbageChars == other.minGarbageChars &&
-  maxFragmentedWordRatio == other.maxFragmentedWordRatio &&
-  criticalFragmentedWordRatio == other.criticalFragmentedWordRatio &&
-  minAvgWordLength == other.minAvgWordLength &&
-  minWordsForAvgLengthCheck == other.minWordsForAvgLengthCheck &&
-  minConsecutiveRepeatRatio == other.minConsecutiveRepeatRatio &&
-  minWordsForRepeatCheck == other.minWordsForRepeatCheck &&
-  substantiveMinChars == other.substantiveMinChars &&
-  nonTextMinChars == other.nonTextMinChars &&
-  alnumWsRatioThreshold == other.alnumWsRatioThreshold &&
-  pipelineMinQuality == other.pipelineMinQuality;
+  runtimeType == other.runtimeType
+  && minTotalNonWhitespace == other.minTotalNonWhitespace&& minNonWhitespacePerPage == other.minNonWhitespacePerPage&& minMeaningfulWordLen == other.minMeaningfulWordLen&& minMeaningfulWords == other.minMeaningfulWords&& minAlnumRatio == other.minAlnumRatio&& minGarbageChars == other.minGarbageChars&& maxFragmentedWordRatio == other.maxFragmentedWordRatio&& criticalFragmentedWordRatio == other.criticalFragmentedWordRatio&& minAvgWordLength == other.minAvgWordLength&& minWordsForAvgLengthCheck == other.minWordsForAvgLengthCheck&& minConsecutiveRepeatRatio == other.minConsecutiveRepeatRatio&& minWordsForRepeatCheck == other.minWordsForRepeatCheck&& substantiveMinChars == other.substantiveMinChars&& nonTextMinChars == other.nonTextMinChars&& alnumWsRatioThreshold == other.alnumWsRatioThreshold&& pipelineMinQuality == other.pipelineMinQuality;
+
 }
 
 /// Rotation information for an OCR element.
-class OcrRotation {
+class OcrRotation  {
   /// Rotation angle in degrees (0, 90, 180, 270 for PaddleOCR).
   final double angleDegrees;
-
   /// Confidence score for the rotation detection.
   final double? confidence;
 
-  const OcrRotation({required this.angleDegrees, this.confidence});
+  const OcrRotation({required this.angleDegrees ,this.confidence ,});
+
+
+
+
 
   @override
-  int get hashCode => angleDegrees.hashCode ^ confidence.hashCode;
+  int get hashCode => angleDegrees.hashCode^confidence.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is OcrRotation &&
-  runtimeType == other.runtimeType &&
-  angleDegrees == other.angleDegrees &&
-  confidence == other.confidence;
+  runtimeType == other.runtimeType
+  && angleDegrees == other.angleDegrees&& confidence == other.confidence;
+
 }
 
 @freezed
-sealed class OcrStrategy with _$OcrStrategy {
+sealed class OcrStrategy with _$OcrStrategy  {
   const OcrStrategy._();
 
   /// OCR only when the native text layer fails a quality check (default).
@@ -10907,7 +8101,6 @@ sealed class OcrStrategy with _$OcrStrategy {
   /// carrying one are extracted natively. Use [`OcrStrategy::ScannedPages`]
   /// to OCR them instead.
   const factory OcrStrategy.auto() = OcrStrategy_Auto;
-
   /// Additionally OCR every page that looks like a scan.
   ///
   /// Pages are graded on raster coverage, whether the text layer is invisible
@@ -10917,138 +8110,129 @@ sealed class OcrStrategy with _$OcrStrategy {
   ///
   /// Detects that a text layer came from a scanner, not whether it is accurate,
   /// so a page carrying a good sidecar is OCR'd too.
-  const factory OcrStrategy.scannedPages({
-    /// Minimum scan confidence, in `[0.0, 1.0]`. Values outside the range are
+  const factory OcrStrategy.scannedPages({ /// Minimum scan confidence, in `[0.0, 1.0]`. Values outside the range are
     /// clamped. See [`DEFAULT_SCANNED_MIN_CONFIDENCE`] for how to pick one.
-    required double minConfidence,
-  }) = OcrStrategy_ScannedPages;
+    required double minConfidence , }) = OcrStrategy_ScannedPages;
+
+
+
+
 }
 
 /// Table detected via OCR.
 ///
 /// Represents a table structure recognized during OCR processing.
-class OcrTable {
+class OcrTable  {
   /// Table cells as a 2D vector (rows × columns)
   final List<List<String>> cells;
-
   /// Markdown representation of the table
   final String markdown;
-
   /// Page number where the table was found (1-indexed)
   final PlatformInt64 pageNumber;
-
   /// Bounding box of the table in pixel coordinates (from OCR word positions).
   final OcrTableBoundingBox? boundingBox;
 
-  const OcrTable({
-    required this.cells,
-    required this.markdown,
-    required this.pageNumber,
-    this.boundingBox,
-  });
+  const OcrTable({required this.cells ,required this.markdown ,required this.pageNumber ,this.boundingBox ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  cells.hashCode ^
-  markdown.hashCode ^
-  pageNumber.hashCode ^
-  boundingBox.hashCode;
+  int get hashCode => cells.hashCode^markdown.hashCode^pageNumber.hashCode^boundingBox.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is OcrTable &&
-  runtimeType == other.runtimeType &&
-  cells == other.cells &&
-  markdown == other.markdown &&
-  pageNumber == other.pageNumber &&
-  boundingBox == other.boundingBox;
+  runtimeType == other.runtimeType
+  && cells == other.cells&& markdown == other.markdown&& pageNumber == other.pageNumber&& boundingBox == other.boundingBox;
+
 }
 
 /// Bounding box for an OCR-detected table in pixel coordinates.
-class OcrTableBoundingBox {
+class OcrTableBoundingBox  {
   /// Left x-coordinate (pixels)
   final PlatformInt64 left;
-
   /// Top y-coordinate (pixels)
   final PlatformInt64 top;
-
   /// Right x-coordinate (pixels)
   final PlatformInt64 right;
-
   /// Bottom y-coordinate (pixels)
   final PlatformInt64 bottom;
 
-  const OcrTableBoundingBox({
-    required this.left,
-    required this.top,
-    required this.right,
-    required this.bottom,
-  });
+  const OcrTableBoundingBox({required this.left ,required this.top ,required this.right ,required this.bottom ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  left.hashCode ^ top.hashCode ^ right.hashCode ^ bottom.hashCode;
+  int get hashCode => left.hashCode^top.hashCode^right.hashCode^bottom.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is OcrTableBoundingBox &&
-  runtimeType == other.runtimeType &&
-  left == other.left &&
-  top == other.top &&
-  right == other.right &&
-  bottom == other.bottom;
+  runtimeType == other.runtimeType
+  && left == other.left&& top == other.top&& right == other.right&& bottom == other.bottom;
+
 }
 
 /// Document orientation detection result.
-class OrientationResult {
+class OrientationResult  {
   /// Detected orientation in degrees (0, 90, 180, or 270).
   final PlatformInt64 degrees;
-
   /// Confidence score (0.0-1.0).
   final double confidence;
 
-  const OrientationResult({required this.degrees, required this.confidence});
+  const OrientationResult({required this.degrees ,required this.confidence ,});
+
+
+
+
 
   @override
-  int get hashCode => degrees.hashCode ^ confidence.hashCode;
+  int get hashCode => degrees.hashCode^confidence.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is OrientationResult &&
-  runtimeType == other.runtimeType &&
-  degrees == other.degrees &&
-  confidence == other.confidence;
+  runtimeType == other.runtimeType
+  && degrees == other.degrees&& confidence == other.confidence;
+
 }
 
 @freezed
-sealed class OutputFormat with _$OutputFormat {
+sealed class OutputFormat with _$OutputFormat  {
   const OutputFormat._();
 
   /// Plain text content only (default)
   const factory OutputFormat.plain() = OutputFormat_Plain;
-
   /// Markdown format
   const factory OutputFormat.markdown() = OutputFormat_Markdown;
-
   /// Djot markup format
   const factory OutputFormat.djot() = OutputFormat_Djot;
-
   /// HTML format
   const factory OutputFormat.html() = OutputFormat_Html;
-
   /// JSON tree format with heading-driven sections.
   const factory OutputFormat.json() = OutputFormat_Json;
-
   /// Structured JSON format with full OCR element metadata.
   const factory OutputFormat.structured() = OutputFormat_Structured;
-
   /// Custom renderer registered via the RendererRegistry.
   /// The string is the renderer name (e.g., "docx", "latex").
-  const factory OutputFormat.custom({required String field0}) =
-  OutputFormat_Custom;
+  const factory OutputFormat.custom({   required String field0 , }) = OutputFormat_Custom;
+
+
+
+
 }
 
 /// Supported languages in PaddleOCR.
@@ -11057,51 +8241,38 @@ sealed class OutputFormat with _$OutputFormat {
 enum PaddleLanguage {
   /// English
   english,
-
   /// Simplified Chinese
   chinese,
-
   /// Japanese
   japanese,
-
   /// Korean
   korean,
-
   /// German
   german,
-
   /// French
   french,
-
   /// Latin script (covers most European languages)
   latin,
-
   /// Cyrillic (Russian and related)
   cyrillic,
-
   /// Traditional Chinese
   traditionalChinese,
-
   /// Thai
   thai,
-
   /// Greek
   greek,
-
   /// East Slavic (Russian, Ukrainian, Belarusian)
   eastSlavic,
-
   /// Arabic (Arabic, Persian, Urdu)
   arabic,
-
   /// Devanagari (Hindi, Marathi, Sanskrit, Nepali)
   devanagari,
-
   /// Tamil
   tamil,
-
   /// Telugu
   telugu,
+  ;
+
 }
 
 /// Configuration for PaddleOCR backend.
@@ -11125,53 +8296,42 @@ enum PaddleLanguage {
 /// let config = PaddleOcrConfig::new("en")
 ///     .with_table_detection(true);
 /// ```
-class PaddleOcrConfig {
+class PaddleOcrConfig  {
   /// Language code (e.g., "en", "ch", "jpn", "kor", "deu", "fra")
   final String language;
-
   /// Optional Hugging Face Hub cache root for model files.
   ///
   /// When unset, the standard `HF_HUB_CACHE`, legacy
   /// `HUGGINGFACE_HUB_CACHE`, and `HF_HOME` conventions are used.
   final String? cacheDir;
-
   /// Enable angle classification for rotated text (default: false).
   /// Can misfire on short text regions, rotating crops incorrectly before recognition.
   final bool useAngleCls;
-
   /// Enable table structure detection (default: false)
   final bool enableTableDetection;
-
   /// Database threshold for text detection (default: 0.3)
   /// Range: 0.0-1.0, higher values require more confident detections
   final double detDbThresh;
-
   /// Box threshold for text bounding box refinement (default: 0.5)
   /// Range: 0.0-1.0
   final double detDbBoxThresh;
-
   /// Unclip ratio for expanding text bounding boxes (default: 1.6)
   /// Controls the expansion of detected text regions
   final double detDbUnclipRatio;
-
   /// Maximum side length for detection image (default: 960)
   /// Larger images may be resized to this limit for faster inference
   final PlatformInt64 detLimitSideLen;
-
   /// Batch size for recognition inference (default: 6)
   /// Number of text regions to process simultaneously
   final PlatformInt64 recBatchNum;
-
   /// Padding in pixels added around the image before detection (default: 10).
   /// Large values can include surrounding content like table gridlines.
   final PlatformInt64 padding;
-
   /// Minimum recognition confidence score for text lines (default: 0.5).
   /// Text regions with recognition confidence below this threshold are discarded.
   /// Matches PaddleOCR Python's `drop_score` parameter.
   /// Range: 0.0-1.0
   final double dropScore;
-
   /// Model tier controlling detection/recognition model size and accuracy trade-off.
   ///
   /// For PP-OCRv5 (`model_version = "pp-ocrv5"`):
@@ -11181,7 +8341,6 @@ class PaddleOcrConfig {
   /// For PP-OCRv6 (`model_version = "pp-ocrv6"`): `"medium"` (default), `"small"`, or `"tiny"`.
   /// A legacy `"mobile"`/`"server"` tier under v6 falls back to `"medium"`.
   final String modelTier;
-
   /// Model generation: `"pp-ocrv6"` (default) or `"pp-ocrv5"`.
   ///
   /// PP-OCRv6 adds a unified CJK+Latin+JA/KO recognition model with `medium`/`small`/`tiny`
@@ -11192,56 +8351,24 @@ class PaddleOcrConfig {
   /// legacy per-script/unified fleet.
   final String modelVersion;
 
-  const PaddleOcrConfig({
-    required this.language,
-    this.cacheDir,
-    required this.useAngleCls,
-    required this.enableTableDetection,
-    required this.detDbThresh,
-    required this.detDbBoxThresh,
-    required this.detDbUnclipRatio,
-    required this.detLimitSideLen,
-    required this.recBatchNum,
-    required this.padding,
-    required this.dropScore,
-    required this.modelTier,
-    required this.modelVersion,
-  });
+  const PaddleOcrConfig({required this.language ,this.cacheDir ,required this.useAngleCls ,required this.enableTableDetection ,required this.detDbThresh ,required this.detDbBoxThresh ,required this.detDbUnclipRatio ,required this.detLimitSideLen ,required this.recBatchNum ,required this.padding ,required this.dropScore ,required this.modelTier ,required this.modelVersion ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  language.hashCode ^
-  cacheDir.hashCode ^
-  useAngleCls.hashCode ^
-  enableTableDetection.hashCode ^
-  detDbThresh.hashCode ^
-  detDbBoxThresh.hashCode ^
-  detDbUnclipRatio.hashCode ^
-  detLimitSideLen.hashCode ^
-  recBatchNum.hashCode ^
-  padding.hashCode ^
-  dropScore.hashCode ^
-  modelTier.hashCode ^
-  modelVersion.hashCode;
+  int get hashCode => language.hashCode^cacheDir.hashCode^useAngleCls.hashCode^enableTableDetection.hashCode^detDbThresh.hashCode^detDbBoxThresh.hashCode^detDbUnclipRatio.hashCode^detLimitSideLen.hashCode^recBatchNum.hashCode^padding.hashCode^dropScore.hashCode^modelTier.hashCode^modelVersion.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is PaddleOcrConfig &&
-  runtimeType == other.runtimeType &&
-  language == other.language &&
-  cacheDir == other.cacheDir &&
-  useAngleCls == other.useAngleCls &&
-  enableTableDetection == other.enableTableDetection &&
-  detDbThresh == other.detDbThresh &&
-  detDbBoxThresh == other.detDbBoxThresh &&
-  detDbUnclipRatio == other.detDbUnclipRatio &&
-  detLimitSideLen == other.detLimitSideLen &&
-  recBatchNum == other.recBatchNum &&
-  padding == other.padding &&
-  dropScore == other.dropScore &&
-  modelTier == other.modelTier &&
-  modelVersion == other.modelVersion;
+  runtimeType == other.runtimeType
+  && language == other.language&& cacheDir == other.cacheDir&& useAngleCls == other.useAngleCls&& enableTableDetection == other.enableTableDetection&& detDbThresh == other.detDbThresh&& detDbBoxThresh == other.detDbBoxThresh&& detDbUnclipRatio == other.detDbUnclipRatio&& detLimitSideLen == other.detLimitSideLen&& recBatchNum == other.recBatchNum&& padding == other.padding&& dropScore == other.dropScore&& modelTier == other.modelTier&& modelVersion == other.modelVersion;
+
 }
 
 /// Byte offset boundary for a page.
@@ -11249,97 +8376,92 @@ class PaddleOcrConfig {
 /// Tracks where a specific page's content starts and ends in the main content string,
 /// enabling mapping from byte positions to page numbers. Offsets are guaranteed to be
 /// at valid UTF-8 character boundaries when using standard String methods (push_str, push, etc.).
-class PageBoundary {
+class PageBoundary  {
   /// Byte offset where this page starts in the content string (UTF-8 valid boundary, inclusive)
   final PlatformInt64 byteStart;
-
   /// Byte offset where this page ends in the content string (UTF-8 valid boundary, exclusive)
   final PlatformInt64 byteEnd;
-
   /// Page number (1-indexed)
   final PlatformInt64 pageNumber;
 
-  const PageBoundary({
-    required this.byteStart,
-    required this.byteEnd,
-    required this.pageNumber,
-  });
+  const PageBoundary({required this.byteStart ,required this.byteEnd ,required this.pageNumber ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  byteStart.hashCode ^ byteEnd.hashCode ^ pageNumber.hashCode;
+  int get hashCode => byteStart.hashCode^byteEnd.hashCode^pageNumber.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is PageBoundary &&
-  runtimeType == other.runtimeType &&
-  byteStart == other.byteStart &&
-  byteEnd == other.byteEnd &&
-  pageNumber == other.pageNumber;
+  runtimeType == other.runtimeType
+  && byteStart == other.byteStart&& byteEnd == other.byteEnd&& pageNumber == other.pageNumber;
+
 }
 
 /// Classification result for a single page.
-class PageClassification {
+class PageClassification  {
   /// 1-indexed page number this classification belongs to.
   final PlatformInt64 pageNumber;
-
   /// Labels assigned to the page. Single-label classification yields exactly one
   /// entry; multi-label classification yields any subset of the configured label set.
   final List<ClassificationLabel> labels;
 
-  const PageClassification({required this.pageNumber, required this.labels});
+  const PageClassification({required this.pageNumber ,required this.labels ,});
+
+
+
+
 
   @override
-  int get hashCode => pageNumber.hashCode ^ labels.hashCode;
+  int get hashCode => pageNumber.hashCode^labels.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is PageClassification &&
-  runtimeType == other.runtimeType &&
-  pageNumber == other.pageNumber &&
-  labels == other.labels;
+  runtimeType == other.runtimeType
+  && pageNumber == other.pageNumber&& labels == other.labels;
+
 }
 
 /// Configuration for the page-classification post-processor.
-class PageClassificationConfig {
+class PageClassificationConfig  {
   /// Minijinja prompt template. Receives `{{ labels }}` (joined list), `{{ page_text }}`
   /// and `{{ multi_label }}` variables. `None` lets the backend pick a sensible default.
   final String? promptTemplate;
-
   /// The set of labels the classifier may emit. Must contain at least one entry.
   final List<String> labels;
-
   /// Allow multiple labels per page. Single-label mode returns at most one label.
   final bool multiLabel;
-
   /// LLM configuration used for classification.
   final LlmConfig llm;
 
-  const PageClassificationConfig({
-    this.promptTemplate,
-    required this.labels,
-    required this.multiLabel,
-    required this.llm,
-  });
+  const PageClassificationConfig({this.promptTemplate ,required this.labels ,required this.multiLabel ,required this.llm ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  promptTemplate.hashCode ^
-  labels.hashCode ^
-  multiLabel.hashCode ^
-  llm.hashCode;
+  int get hashCode => promptTemplate.hashCode^labels.hashCode^multiLabel.hashCode^llm.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is PageClassificationConfig &&
-  runtimeType == other.runtimeType &&
-  promptTemplate == other.promptTemplate &&
-  labels == other.labels &&
-  multiLabel == other.multiLabel &&
-  llm == other.llm;
+  runtimeType == other.runtimeType
+  && promptTemplate == other.promptTemplate&& labels == other.labels&& multiLabel == other.multiLabel&& llm == other.llm;
+
 }
 
 /// Page extraction and tracking configuration.
@@ -11349,37 +8471,33 @@ class PageClassificationConfig {
 ///
 /// Page range tracking in chunk metadata (first_page/last_page) is automatically enabled
 /// when page boundaries are available and chunking is configured.
-class PageConfig {
+class PageConfig  {
   /// Extract pages as separate array (ExtractedDocument.pages)
   final bool extractPages;
-
   /// Insert page markers in main content string
   final bool insertPageMarkers;
-
   /// Page marker format (use {page_num} placeholder)
   /// Default: "\n\n<!-- PAGE {page_num} -->\n\n"
   final String markerFormat;
 
-  const PageConfig({
-    required this.extractPages,
-    required this.insertPageMarkers,
-    required this.markerFormat,
-  });
+  const PageConfig({required this.extractPages ,required this.insertPageMarkers ,required this.markerFormat ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  extractPages.hashCode ^
-  insertPageMarkers.hashCode ^
-  markerFormat.hashCode;
+  int get hashCode => extractPages.hashCode^insertPageMarkers.hashCode^markerFormat.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is PageConfig &&
-  runtimeType == other.runtimeType &&
-  extractPages == other.extractPages &&
-  insertPageMarkers == other.insertPageMarkers &&
-  markerFormat == other.markerFormat;
+  runtimeType == other.runtimeType
+  && extractPages == other.extractPages&& insertPageMarkers == other.insertPageMarkers&& markerFormat == other.markerFormat;
+
 }
 
 /// Content for a single page/slide.
@@ -11396,56 +8514,47 @@ class PageConfig {
 ///
 /// This reduces memory overhead for documents with shared tables/images
 /// by avoiding redundant copies during serialization.
-class PageContent {
+class PageContent  {
   /// Page number (1-indexed)
   final PlatformInt64 pageNumber;
-
   /// Text content for this page
   final String content;
-
   /// Tables found on this page (uses Arc for memory efficiency)
   ///
   /// Serializes as `Vec<Table>` for JSON compatibility while maintaining
   /// Arc semantics in-memory for zero-copy sharing.
   final List<Table> tables;
-
   /// Indices into `ExtractedDocument.images` for images found on this page.
   ///
   /// Each value is a zero-based index into the top-level `images` collection.
   /// Only populated when `extract_images = true` in the extraction config.
   final Int64List imageIndices;
-
   /// Hierarchy information for the page (when hierarchy extraction is enabled)
   ///
   /// Contains text hierarchy levels (H1-H6) extracted from the page content.
   final PageHierarchy? hierarchy;
-
   /// Whether this page is blank (no meaningful text content)
   ///
   /// Determined during extraction based on text content analysis.
   /// A page is blank if it has fewer than 3 non-whitespace characters
   /// and contains no tables or images.
   final bool? isBlank;
-
   /// Layout detection regions for this page (when layout detection is enabled).
   ///
   /// Contains detected layout regions with class, confidence, bounding box,
   /// and area fraction. Only populated when layout detection is configured.
   final List<LayoutRegion>? layoutRegions;
-
   /// Speaker notes for this slide (PPTX only).
   ///
   /// Contains the text from the slide's notes pane (`ppt/notesSlides/notesSlide{N}.xml`).
   /// Only populated when the source is a PPTX file and notes are present.
   final String? speakerNotes;
-
   /// Section name this slide belongs to (PPTX only).
   ///
   /// PowerPoint sections group slides into logical chapters (`<p:sectionLst>` in
   /// `ppt/presentation.xml`). Only populated when the source is a PPTX file and
   /// the slide belongs to a named section.
   final String? sectionName;
-
   /// Sheet name for this page (XLSX/ODS only).
   ///
   /// Each spreadsheet sheet maps to one `PageContent` entry. This field carries the
@@ -11453,101 +8562,77 @@ class PageContent {
   /// formats and for sheets with an empty name.
   final String? sheetName;
 
-  const PageContent({
-    required this.pageNumber,
-    required this.content,
-    required this.tables,
-    required this.imageIndices,
-    this.hierarchy,
-    this.isBlank,
-    this.layoutRegions,
-    this.speakerNotes,
-    this.sectionName,
-    this.sheetName,
-  });
+  const PageContent({required this.pageNumber ,required this.content ,required this.tables ,required this.imageIndices ,this.hierarchy ,this.isBlank ,this.layoutRegions ,this.speakerNotes ,this.sectionName ,this.sheetName ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  pageNumber.hashCode ^
-  content.hashCode ^
-  tables.hashCode ^
-  imageIndices.hashCode ^
-  hierarchy.hashCode ^
-  isBlank.hashCode ^
-  layoutRegions.hashCode ^
-  speakerNotes.hashCode ^
-  sectionName.hashCode ^
-  sheetName.hashCode;
+  int get hashCode => pageNumber.hashCode^content.hashCode^tables.hashCode^imageIndices.hashCode^hierarchy.hashCode^isBlank.hashCode^layoutRegions.hashCode^speakerNotes.hashCode^sectionName.hashCode^sheetName.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is PageContent &&
-  runtimeType == other.runtimeType &&
-  pageNumber == other.pageNumber &&
-  content == other.content &&
-  tables == other.tables &&
-  imageIndices == other.imageIndices &&
-  hierarchy == other.hierarchy &&
-  isBlank == other.isBlank &&
-  layoutRegions == other.layoutRegions &&
-  speakerNotes == other.speakerNotes &&
-  sectionName == other.sectionName &&
-  sheetName == other.sheetName;
+  runtimeType == other.runtimeType
+  && pageNumber == other.pageNumber&& content == other.content&& tables == other.tables&& imageIndices == other.imageIndices&& hierarchy == other.hierarchy&& isBlank == other.isBlank&& layoutRegions == other.layoutRegions&& speakerNotes == other.speakerNotes&& sectionName == other.sectionName&& sheetName == other.sheetName;
+
 }
 
 /// Page hierarchy structure containing heading levels and block information.
 ///
 /// Used when PDF text hierarchy extraction is enabled. Contains hierarchical
 /// blocks with heading levels (H1-H6) for semantic document structure.
-class PageHierarchy {
+class PageHierarchy  {
   /// Number of hierarchy blocks on this page
   final PlatformInt64 blockCount;
-
   /// Hierarchical blocks with heading levels
   final List<HierarchicalBlock> blocks;
 
-  const PageHierarchy({required this.blockCount, required this.blocks});
+  const PageHierarchy({required this.blockCount ,required this.blocks ,});
+
+
+
+
 
   @override
-  int get hashCode => blockCount.hashCode ^ blocks.hashCode;
+  int get hashCode => blockCount.hashCode^blocks.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is PageHierarchy &&
-  runtimeType == other.runtimeType &&
-  blockCount == other.blockCount &&
-  blocks == other.blocks;
+  runtimeType == other.runtimeType
+  && blockCount == other.blockCount&& blocks == other.blocks;
+
 }
 
 /// Metadata for individual page/slide/sheet.
 ///
 /// Captures per-page information including dimensions, content counts,
 /// and visibility state (for presentations).
-class PageInfo {
+class PageInfo  {
   /// Page number (1-indexed)
   final PlatformInt64 number;
-
   /// Page title (usually for presentations)
   final String? title;
-
   /// Number of images on this page
   final PlatformInt64? imageCount;
-
   /// Number of tables on this page
   final PlatformInt64? tableCount;
-
   /// Whether this page is hidden (e.g., in presentations)
   final bool? hidden;
-
   /// Whether this page is blank (no meaningful text, no images, no tables)
   ///
   /// A page is considered blank if it has fewer than 3 non-whitespace characters
   /// and contains no tables or images. This is useful for filtering out empty pages
   /// in scanned documents or PDFs with blank separator pages.
   final bool? isBlank;
-
   /// Whether this page contains non-trivial vector graphics (paths, shapes, curves)
   ///
   /// Indicates the presence of vector-drawn content such as charts, diagrams,
@@ -11560,158 +8645,125 @@ class PageInfo {
   /// Only populated for PDFs; `None` for other document types.
   final bool hasVectorGraphics;
 
-  const PageInfo({
-    required this.number,
-    this.title,
-    this.imageCount,
-    this.tableCount,
-    this.hidden,
-    this.isBlank,
-    required this.hasVectorGraphics,
-  });
+  const PageInfo({required this.number ,this.title ,this.imageCount ,this.tableCount ,this.hidden ,this.isBlank ,required this.hasVectorGraphics ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  number.hashCode ^
-  title.hashCode ^
-  imageCount.hashCode ^
-  tableCount.hashCode ^
-  hidden.hashCode ^
-  isBlank.hashCode ^
-  hasVectorGraphics.hashCode;
+  int get hashCode => number.hashCode^title.hashCode^imageCount.hashCode^tableCount.hashCode^hidden.hashCode^isBlank.hashCode^hasVectorGraphics.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is PageInfo &&
-  runtimeType == other.runtimeType &&
-  number == other.number &&
-  title == other.title &&
-  imageCount == other.imageCount &&
-  tableCount == other.tableCount &&
-  hidden == other.hidden &&
-  isBlank == other.isBlank &&
-  hasVectorGraphics == other.hasVectorGraphics;
+  runtimeType == other.runtimeType
+  && number == other.number&& title == other.title&& imageCount == other.imageCount&& tableCount == other.tableCount&& hidden == other.hidden&& isBlank == other.isBlank&& hasVectorGraphics == other.hasVectorGraphics;
+
 }
 
 /// Page range for a chunk (0-indexed, inclusive).
-class PageRange {
+class PageRange  {
   /// Start page (0-indexed, inclusive).
   final PlatformInt64 start;
-
   /// End page (0-indexed, inclusive).
   final PlatformInt64 end;
 
-  const PageRange({required this.start, required this.end});
+  const PageRange({required this.start ,required this.end ,});
+
+
+
+
 
   @override
-  int get hashCode => start.hashCode ^ end.hashCode;
+  int get hashCode => start.hashCode^end.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is PageRange &&
-  runtimeType == other.runtimeType &&
-  start == other.start &&
-  end == other.end;
+  runtimeType == other.runtimeType
+  && start == other.start&& end == other.end;
+
 }
 
 /// Per-page signals extracted from PDF content.
-class PageSignals {
+class PageSignals  {
   /// 1-indexed page number.
   final PlatformInt64 pageNumber;
-
   /// First ~500 characters of extracted text.
   final String textExcerpt;
-
   /// `true` if page starts with letterhead-like content (ALL CAPS line in first 5 lines
   /// or a logo-image bbox at top).
   final bool startsWithLetterheadLike;
-
   /// `true` if text contains "Page 1" or "1 of N" pattern.
   final bool hasPageNumberOneMarker;
-
   /// `true` if text contains signature indicators ("Sincerely", "Signed") or
   /// a signature image bbox.
   final bool hasSignatureBlock;
-
   /// Text density: characters per page area, normalised to `[0.0, 1.0]`.
   final double layoutTextDensity;
 
-  const PageSignals({
-    required this.pageNumber,
-    required this.textExcerpt,
-    required this.startsWithLetterheadLike,
-    required this.hasPageNumberOneMarker,
-    required this.hasSignatureBlock,
-    required this.layoutTextDensity,
-  });
+  const PageSignals({required this.pageNumber ,required this.textExcerpt ,required this.startsWithLetterheadLike ,required this.hasPageNumberOneMarker ,required this.hasSignatureBlock ,required this.layoutTextDensity ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  pageNumber.hashCode ^
-  textExcerpt.hashCode ^
-  startsWithLetterheadLike.hashCode ^
-  hasPageNumberOneMarker.hashCode ^
-  hasSignatureBlock.hashCode ^
-  layoutTextDensity.hashCode;
+  int get hashCode => pageNumber.hashCode^textExcerpt.hashCode^startsWithLetterheadLike.hashCode^hasPageNumberOneMarker.hashCode^hasSignatureBlock.hashCode^layoutTextDensity.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is PageSignals &&
-  runtimeType == other.runtimeType &&
-  pageNumber == other.pageNumber &&
-  textExcerpt == other.textExcerpt &&
-  startsWithLetterheadLike == other.startsWithLetterheadLike &&
-  hasPageNumberOneMarker == other.hasPageNumberOneMarker &&
-  hasSignatureBlock == other.hasSignatureBlock &&
-  layoutTextDensity == other.layoutTextDensity;
+  runtimeType == other.runtimeType
+  && pageNumber == other.pageNumber&& textExcerpt == other.textExcerpt&& startsWithLetterheadLike == other.startsWithLetterheadLike&& hasPageNumberOneMarker == other.hasPageNumberOneMarker&& hasSignatureBlock == other.hasSignatureBlock&& layoutTextDensity == other.layoutTextDensity;
+
 }
 
 /// Unified page structure for documents.
 ///
 /// Supports different page types (PDF pages, PPTX slides, Excel sheets)
 /// with character offset boundaries for chunk-to-page mapping.
-class PageStructure {
+class PageStructure  {
   /// Total number of pages/slides/sheets
   final PlatformInt64 totalCount;
-
   /// Type of paginated unit
   final PageUnitType unitType;
-
   /// Character offset boundaries for each page
   ///
   /// Maps character ranges in the extracted content to page numbers.
   /// Used for chunk page range calculation.
   final List<PageBoundary>? boundaries;
-
   /// Detailed per-page metadata (optional, only when needed)
   final List<PageInfo>? pages;
 
-  const PageStructure({
-    required this.totalCount,
-    required this.unitType,
-    this.boundaries,
-    this.pages,
-  });
+  const PageStructure({required this.totalCount ,required this.unitType ,this.boundaries ,this.pages ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  totalCount.hashCode ^
-  unitType.hashCode ^
-  boundaries.hashCode ^
-  pages.hashCode;
+  int get hashCode => totalCount.hashCode^unitType.hashCode^boundaries.hashCode^pages.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is PageStructure &&
-  runtimeType == other.runtimeType &&
-  totalCount == other.totalCount &&
-  unitType == other.unitType &&
-  boundaries == other.boundaries &&
-  pages == other.pages;
+  runtimeType == other.runtimeType
+  && totalCount == other.totalCount&& unitType == other.unitType&& boundaries == other.boundaries&& pages == other.pages;
+
 }
 
 /// Type of paginated unit in a document.
@@ -11720,119 +8772,101 @@ class PageStructure {
 enum PageUnitType {
   /// Standard document pages (PDF, DOCX, images)
   page,
-
   /// Presentation slides (PPTX, ODP)
   slide,
-
   /// Spreadsheet sheets (XLSX, ODS)
   sheet,
+  ;
+
 }
 
 /// One detected PII span in the input text.
-class PatternMatch {
+class PatternMatch  {
   /// Inclusive byte-offset start of the match in the source text.
   final PlatformInt64 start;
-
   /// Exclusive byte-offset end of the match.
   final PlatformInt64 end;
-
   /// Category the match belongs to.
   final PiiCategory category;
-
   /// Matched substring (owned copy — pattern engine returns owned data so the
   /// caller can free the original text if needed before replacement).
   final String text;
 
-  const PatternMatch({
-    required this.start,
-    required this.end,
-    required this.category,
-    required this.text,
-  });
+  const PatternMatch({required this.start ,required this.end ,required this.category ,required this.text ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  start.hashCode ^ end.hashCode ^ category.hashCode ^ text.hashCode;
+  int get hashCode => start.hashCode^end.hashCode^category.hashCode^text.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is PatternMatch &&
-  runtimeType == other.runtimeType &&
-  start == other.start &&
-  end == other.end &&
-  category == other.category &&
-  text == other.text;
+  runtimeType == other.runtimeType
+  && start == other.start&& end == other.end&& category == other.category&& text == other.text;
+
 }
 
 /// A PDF annotation extracted from a document page.
-class PdfAnnotation {
+class PdfAnnotation  {
   /// The type of annotation.
   final PdfAnnotationType annotationType;
-
   /// Text content of the annotation (e.g., comment text, link URL).
   final String? content;
-
   /// Page number where the annotation appears (1-indexed).
   final PlatformInt64 pageNumber;
-
   /// Bounding box of the annotation on the page.
   final BoundingBox? boundingBox;
 
-  const PdfAnnotation({
-    required this.annotationType,
-    this.content,
-    required this.pageNumber,
-    this.boundingBox,
-  });
+  const PdfAnnotation({required this.annotationType ,this.content ,required this.pageNumber ,this.boundingBox ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  annotationType.hashCode ^
-  content.hashCode ^
-  pageNumber.hashCode ^
-  boundingBox.hashCode;
+  int get hashCode => annotationType.hashCode^content.hashCode^pageNumber.hashCode^boundingBox.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is PdfAnnotation &&
-  runtimeType == other.runtimeType &&
-  annotationType == other.annotationType &&
-  content == other.content &&
-  pageNumber == other.pageNumber &&
-  boundingBox == other.boundingBox;
+  runtimeType == other.runtimeType
+  && annotationType == other.annotationType&& content == other.content&& pageNumber == other.pageNumber&& boundingBox == other.boundingBox;
+
 }
 
 /// Type of PDF annotation.
 enum PdfAnnotationType {
   /// Sticky note / text annotation
   text,
-
   /// Highlighted text region
   highlight,
-
   /// Hyperlink annotation
   link,
-
   /// Rubber stamp annotation
   stamp,
-
   /// Underline text markup
   underline,
-
   /// Strikeout text markup
   strikeOut,
-
   /// Any other annotation type
   other,
+  ;
+
 }
 
 /// PDF-specific configuration.
-class PdfConfig {
+class PdfConfig  {
   /// Extract images from PDF
   final bool extractImages;
-
   /// Extract tables from PDF.
   ///
   /// When `true` (default), runs pdf_oxide's native grid detector and, if it
@@ -11840,28 +8874,21 @@ class PdfConfig {
   /// `pdf::oxide::table::extract_tables_heuristic`. Set to `false` to skip
   /// both passes — `tables` will then be empty in the result.
   final bool extractTables;
-
   /// List of passwords to try when opening encrypted PDFs
   final List<String>? passwords;
-
   /// Extract PDF metadata
   final bool extractMetadata;
-
   /// Hierarchy extraction configuration (None = hierarchy extraction disabled)
   final HierarchyConfig? hierarchy;
-
   /// Extract PDF annotations (text notes, highlights, links, stamps).
   /// Default: false
   final bool extractAnnotations;
-
   /// Top margin fraction (0.0–1.0) of page height to exclude headers/running heads.
   /// Default: 0.06 (6%)
   final double? topMarginFraction;
-
   /// Bottom margin fraction (0.0–1.0) of page height to exclude footers/page numbers.
   /// Default: 0.05 (5%)
   final double? bottomMarginFraction;
-
   /// Allow single-column pseudo tables in extraction results.
   ///
   /// By default, tables with fewer than 2 columns (layout-guided) or 3 columns
@@ -11870,7 +8897,6 @@ class PdfConfig {
   /// to be emitted as tables. Other quality filters (density, sparsity, prose
   /// detection) still apply.
   final bool allowSingleColumnTables;
-
   /// Perform OCR on inline images extracted from PDF pages and attach the
   /// recognized text to each `ExtractedImage.ocr_result`. Requires Tesseract
   /// to be available; if `ExtractionConfig.ocr` is `None` the extractor
@@ -11878,7 +8904,6 @@ class PdfConfig {
   /// gracefully (the image is returned without OCR text rather than failing
   /// the whole extraction). Default: `false`.
   final bool ocrInlineImages;
-
   /// Extract AcroForm and XFA form fields into `ExtractedDocument.form_fields`.
   ///
   /// When `true` (default), reads the document's interactive form structure
@@ -11886,7 +8911,6 @@ class PdfConfig {
   /// additive — non-form PDFs simply yield an empty list. Set to `false` to
   /// skip the form pass entirely.
   final bool extractFormFields;
-
   /// Reorder extracted text by layout-detected reading order.
   ///
   /// When `true`, projects text spans onto layout-detected regions, performs
@@ -11895,53 +8919,24 @@ class PdfConfig {
   /// feature; has no effect without it. Defaults to `false`.
   final bool readingOrder;
 
-  const PdfConfig({
-    required this.extractImages,
-    required this.extractTables,
-    this.passwords,
-    required this.extractMetadata,
-    this.hierarchy,
-    required this.extractAnnotations,
-    this.topMarginFraction,
-    this.bottomMarginFraction,
-    required this.allowSingleColumnTables,
-    required this.ocrInlineImages,
-    required this.extractFormFields,
-    required this.readingOrder,
-  });
+  const PdfConfig({required this.extractImages ,required this.extractTables ,this.passwords ,required this.extractMetadata ,this.hierarchy ,required this.extractAnnotations ,this.topMarginFraction ,this.bottomMarginFraction ,required this.allowSingleColumnTables ,required this.ocrInlineImages ,required this.extractFormFields ,required this.readingOrder ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  extractImages.hashCode ^
-  extractTables.hashCode ^
-  passwords.hashCode ^
-  extractMetadata.hashCode ^
-  hierarchy.hashCode ^
-  extractAnnotations.hashCode ^
-  topMarginFraction.hashCode ^
-  bottomMarginFraction.hashCode ^
-  allowSingleColumnTables.hashCode ^
-  ocrInlineImages.hashCode ^
-  extractFormFields.hashCode ^
-  readingOrder.hashCode;
+  int get hashCode => extractImages.hashCode^extractTables.hashCode^passwords.hashCode^extractMetadata.hashCode^hierarchy.hashCode^extractAnnotations.hashCode^topMarginFraction.hashCode^bottomMarginFraction.hashCode^allowSingleColumnTables.hashCode^ocrInlineImages.hashCode^extractFormFields.hashCode^readingOrder.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is PdfConfig &&
-  runtimeType == other.runtimeType &&
-  extractImages == other.extractImages &&
-  extractTables == other.extractTables &&
-  passwords == other.passwords &&
-  extractMetadata == other.extractMetadata &&
-  hierarchy == other.hierarchy &&
-  extractAnnotations == other.extractAnnotations &&
-  topMarginFraction == other.topMarginFraction &&
-  bottomMarginFraction == other.bottomMarginFraction &&
-  allowSingleColumnTables == other.allowSingleColumnTables &&
-  ocrInlineImages == other.ocrInlineImages &&
-  extractFormFields == other.extractFormFields &&
-  readingOrder == other.readingOrder;
+  runtimeType == other.runtimeType
+  && extractImages == other.extractImages&& extractTables == other.extractTables&& passwords == other.passwords&& extractMetadata == other.extractMetadata&& hierarchy == other.hierarchy&& extractAnnotations == other.extractAnnotations&& topMarginFraction == other.topMarginFraction&& bottomMarginFraction == other.bottomMarginFraction&& allowSingleColumnTables == other.allowSingleColumnTables&& ocrInlineImages == other.ocrInlineImages&& extractFormFields == other.extractFormFields&& readingOrder == other.readingOrder;
+
 }
 
 /// A form field extracted from a PDF's AcroForm or XFA structure.
@@ -11953,80 +8948,48 @@ class PdfConfig {
 /// The collection is empty for non-form PDFs and for non-PDF formats.
 ///
 /// [`PdfConfig::extract_form_fields`]: crate::core::config::PdfConfig::extract_form_fields
-class PdfFormField {
+class PdfFormField  {
   /// Partial field name (the leaf name within the field hierarchy).
   final String name;
-
   /// Fully-qualified field name (dotted path from the form root).
   final String fullName;
-
   /// Classified field type.
   final FormFieldType fieldType;
-
   /// Current field value, if any.
   final String? value;
-
   /// Default field value, if any.
   final String? defaultValue;
-
   /// Raw field-flags bitmask (read-only, required, multiline, …).
   final PlatformInt64 flags;
-
   /// 1-indexed page the field's widget appears on. Currently always `None` for
   /// AcroForm fields; page assignment is a deferred enhancement requiring spatial
   /// analysis of widget annotations per page.
   final PlatformInt64? page;
-
   /// Widget bounding box on its page, if known.
   final BoundingBox? bbox;
-
   /// Maximum input length for text fields, if specified.
   final PlatformInt64? maxLength;
-
   /// Tooltip / alternate field description, if present.
   final String? tooltip;
 
-  const PdfFormField({
-    required this.name,
-    required this.fullName,
-    required this.fieldType,
-    this.value,
-    this.defaultValue,
-    required this.flags,
-    this.page,
-    this.bbox,
-    this.maxLength,
-    this.tooltip,
-  });
+  const PdfFormField({required this.name ,required this.fullName ,required this.fieldType ,this.value ,this.defaultValue ,required this.flags ,this.page ,this.bbox ,this.maxLength ,this.tooltip ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  name.hashCode ^
-  fullName.hashCode ^
-  fieldType.hashCode ^
-  value.hashCode ^
-  defaultValue.hashCode ^
-  flags.hashCode ^
-  page.hashCode ^
-  bbox.hashCode ^
-  maxLength.hashCode ^
-  tooltip.hashCode;
+  int get hashCode => name.hashCode^fullName.hashCode^fieldType.hashCode^value.hashCode^defaultValue.hashCode^flags.hashCode^page.hashCode^bbox.hashCode^maxLength.hashCode^tooltip.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is PdfFormField &&
-  runtimeType == other.runtimeType &&
-  name == other.name &&
-  fullName == other.fullName &&
-  fieldType == other.fieldType &&
-  value == other.value &&
-  defaultValue == other.defaultValue &&
-  flags == other.flags &&
-  page == other.page &&
-  bbox == other.bbox &&
-  maxLength == other.maxLength &&
-  tooltip == other.tooltip;
+  runtimeType == other.runtimeType
+  && name == other.name&& fullName == other.fullName&& fieldType == other.fieldType&& value == other.value&& defaultValue == other.defaultValue&& flags == other.flags&& page == other.page&& bbox == other.bbox&& maxLength == other.maxLength&& tooltip == other.tooltip;
+
 }
 
 /// PDF-specific metadata.
@@ -12034,114 +8997,78 @@ class PdfFormField {
 /// Contains metadata fields specific to PDF documents that are not in the common
 /// `Metadata` structure. Common fields like title, authors, keywords, and dates
 /// are at the `Metadata` level.
-class PdfMetadata {
+class PdfMetadata  {
   /// PDF version (e.g., "1.7", "2.0")
   final String? pdfVersion;
-
   /// PDF producer (application that created the PDF)
   final String? producer;
-
   /// Whether the PDF is encrypted/password-protected
   final bool? isEncrypted;
-
   /// First page width in points (1/72 inch)
   final PlatformInt64? width;
-
   /// First page height in points (1/72 inch)
   final PlatformInt64? height;
-
   /// Total number of pages in the PDF document
   final PlatformInt64? pageCount;
-
   /// How strongly the document's most scan-like page resembles a scan, in `[0.0, 1.0]`.
   ///
   /// `None` when the document could not be inspected. A full-page raster with no
   /// visible text scores at least `0.85`; a born-digital slide with a full-bleed
   /// background image scores `0.50`.
   final double? scannedConfidence;
-
   /// Pages that look like scans (1-indexed), using the default confidence threshold.
   ///
   /// `None` when the document could not be inspected; empty when no page qualifies.
   final Int64List? scannedPages;
 
-  const PdfMetadata({
-    this.pdfVersion,
-    this.producer,
-    this.isEncrypted,
-    this.width,
-    this.height,
-    this.pageCount,
-    this.scannedConfidence,
-    this.scannedPages,
-  });
+  const PdfMetadata({this.pdfVersion ,this.producer ,this.isEncrypted ,this.width ,this.height ,this.pageCount ,this.scannedConfidence ,this.scannedPages ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  pdfVersion.hashCode ^
-  producer.hashCode ^
-  isEncrypted.hashCode ^
-  width.hashCode ^
-  height.hashCode ^
-  pageCount.hashCode ^
-  scannedConfidence.hashCode ^
-  scannedPages.hashCode;
+  int get hashCode => pdfVersion.hashCode^producer.hashCode^isEncrypted.hashCode^width.hashCode^height.hashCode^pageCount.hashCode^scannedConfidence.hashCode^scannedPages.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is PdfMetadata &&
-  runtimeType == other.runtimeType &&
-  pdfVersion == other.pdfVersion &&
-  producer == other.producer &&
-  isEncrypted == other.isEncrypted &&
-  width == other.width &&
-  height == other.height &&
-  pageCount == other.pageCount &&
-  scannedConfidence == other.scannedConfidence &&
-  scannedPages == other.scannedPages;
+  runtimeType == other.runtimeType
+  && pdfVersion == other.pdfVersion&& producer == other.producer&& isEncrypted == other.isEncrypted&& width == other.width&& height == other.height&& pageCount == other.pageCount&& scannedConfidence == other.scannedConfidence&& scannedPages == other.scannedPages;
+
 }
 
 @freezed
-sealed class PiiCategory with _$PiiCategory {
+sealed class PiiCategory with _$PiiCategory  {
   const PiiCategory._();
 
   /// Email address (e.g. `user@example.com`).
   const factory PiiCategory.email() = PiiCategory_Email;
-
   /// Phone number in any common format.
   const factory PiiCategory.phone() = PiiCategory_Phone;
-
   /// US Social Security Number.
   const factory PiiCategory.ssn() = PiiCategory_Ssn;
-
   /// Payment card number (Visa, Mastercard, Amex, etc.).
   const factory PiiCategory.creditCard() = PiiCategory_CreditCard;
-
   /// Postal / ZIP code.
   const factory PiiCategory.postalCode() = PiiCategory_PostalCode;
-
   /// IPv4 or IPv6 address.
   const factory PiiCategory.ipAddress() = PiiCategory_IpAddress;
-
   /// International Bank Account Number.
   const factory PiiCategory.iban() = PiiCategory_Iban;
-
   /// SWIFT / BIC bank identifier code.
   const factory PiiCategory.swiftBic() = PiiCategory_SwiftBic;
-
   /// Date of birth.
   const factory PiiCategory.dateOfBirth() = PiiCategory_DateOfBirth;
-
   /// Person name, surfaced by the optional NER backend.
   const factory PiiCategory.person() = PiiCategory_Person;
-
   /// Organization name, surfaced by the optional NER backend.
   const factory PiiCategory.organization() = PiiCategory_Organization;
-
   /// Location, surfaced by the optional NER backend.
   const factory PiiCategory.location() = PiiCategory_Location;
-
   /// Caller-supplied custom category (e.g. internal employee IDs).
   ///
   /// Surfaced by the redaction engine when a hit comes from
@@ -12151,199 +9078,128 @@ sealed class PiiCategory with _$PiiCategory {
   /// fields rather than constructing `Custom` directly via the
   /// `categories` filter — the pattern engine cannot detect arbitrary text
   /// from a category name alone.
-  const factory PiiCategory.custom({required String field0}) =
-  PiiCategory_Custom;
+  const factory PiiCategory.custom({   required String field0 , }) = PiiCategory_Custom;
+
+
+
+
 }
 
 /// Post-processor configuration.
-class PostProcessorConfig {
+class PostProcessorConfig  {
   /// Enable post-processors
   final bool enabled;
-
   /// Whitelist of processor names to run (None = all enabled)
   final List<String>? enabledProcessors;
-
   /// Blacklist of processor names to skip (None = none disabled)
   final List<String>? disabledProcessors;
-
   /// Pre-computed AHashSet for O(1) enabled processor lookup
   final List<String>? enabledSet;
-
   /// Pre-computed AHashSet for O(1) disabled processor lookup
   final List<String>? disabledSet;
 
-  const PostProcessorConfig({
-    required this.enabled,
-    this.enabledProcessors,
-    this.disabledProcessors,
-    this.enabledSet,
-    this.disabledSet,
-  });
+  const PostProcessorConfig({required this.enabled ,this.enabledProcessors ,this.disabledProcessors ,this.enabledSet ,this.disabledSet ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  enabled.hashCode ^
-  enabledProcessors.hashCode ^
-  disabledProcessors.hashCode ^
-  enabledSet.hashCode ^
-  disabledSet.hashCode;
+  int get hashCode => enabled.hashCode^enabledProcessors.hashCode^disabledProcessors.hashCode^enabledSet.hashCode^disabledSet.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is PostProcessorConfig &&
-  runtimeType == other.runtimeType &&
-  enabled == other.enabled &&
-  enabledProcessors == other.enabledProcessors &&
-  disabledProcessors == other.disabledProcessors &&
-  enabledSet == other.enabledSet &&
-  disabledSet == other.disabledSet;
+  runtimeType == other.runtimeType
+  && enabled == other.enabled&& enabledProcessors == other.enabledProcessors&& disabledProcessors == other.disabledProcessors&& enabledSet == other.enabledSet&& disabledSet == other.disabledSet;
+
 }
 
 /// Application properties from docProps/app.xml for PPTX
 ///
 /// Contains PowerPoint-specific document metadata.
-class PptxAppProperties {
+class PptxAppProperties  {
   /// Application name (e.g., "Microsoft Office PowerPoint")
   final String? application;
-
   /// Application version
   final String? appVersion;
-
   /// Total editing time in minutes
   final PlatformInt64? totalTime;
-
   /// Company name
   final String? company;
-
   /// Document security level
   final PlatformInt64? docSecurity;
-
   /// Scale crop flag
   final bool? scaleCrop;
-
   /// Links up to date flag
   final bool? linksUpToDate;
-
   /// Shared document flag
   final bool? sharedDoc;
-
   /// Hyperlinks changed flag
   final bool? hyperlinksChanged;
-
   /// Number of slides
   final PlatformInt64? slides;
-
   /// Number of notes
   final PlatformInt64? notes;
-
   /// Number of hidden slides
   final PlatformInt64? hiddenSlides;
-
   /// Number of multimedia clips
   final PlatformInt64? multimediaClips;
-
   /// Presentation format (e.g., "Widescreen", "Standard")
   final String? presentationFormat;
-
   /// Slide titles
   final List<String> slideTitles;
 
-  const PptxAppProperties({
-    this.application,
-    this.appVersion,
-    this.totalTime,
-    this.company,
-    this.docSecurity,
-    this.scaleCrop,
-    this.linksUpToDate,
-    this.sharedDoc,
-    this.hyperlinksChanged,
-    this.slides,
-    this.notes,
-    this.hiddenSlides,
-    this.multimediaClips,
-    this.presentationFormat,
-    required this.slideTitles,
-  });
+  const PptxAppProperties({this.application ,this.appVersion ,this.totalTime ,this.company ,this.docSecurity ,this.scaleCrop ,this.linksUpToDate ,this.sharedDoc ,this.hyperlinksChanged ,this.slides ,this.notes ,this.hiddenSlides ,this.multimediaClips ,this.presentationFormat ,required this.slideTitles ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  application.hashCode ^
-  appVersion.hashCode ^
-  totalTime.hashCode ^
-  company.hashCode ^
-  docSecurity.hashCode ^
-  scaleCrop.hashCode ^
-  linksUpToDate.hashCode ^
-  sharedDoc.hashCode ^
-  hyperlinksChanged.hashCode ^
-  slides.hashCode ^
-  notes.hashCode ^
-  hiddenSlides.hashCode ^
-  multimediaClips.hashCode ^
-  presentationFormat.hashCode ^
-  slideTitles.hashCode;
+  int get hashCode => application.hashCode^appVersion.hashCode^totalTime.hashCode^company.hashCode^docSecurity.hashCode^scaleCrop.hashCode^linksUpToDate.hashCode^sharedDoc.hashCode^hyperlinksChanged.hashCode^slides.hashCode^notes.hashCode^hiddenSlides.hashCode^multimediaClips.hashCode^presentationFormat.hashCode^slideTitles.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is PptxAppProperties &&
-  runtimeType == other.runtimeType &&
-  application == other.application &&
-  appVersion == other.appVersion &&
-  totalTime == other.totalTime &&
-  company == other.company &&
-  docSecurity == other.docSecurity &&
-  scaleCrop == other.scaleCrop &&
-  linksUpToDate == other.linksUpToDate &&
-  sharedDoc == other.sharedDoc &&
-  hyperlinksChanged == other.hyperlinksChanged &&
-  slides == other.slides &&
-  notes == other.notes &&
-  hiddenSlides == other.hiddenSlides &&
-  multimediaClips == other.multimediaClips &&
-  presentationFormat == other.presentationFormat &&
-  slideTitles == other.slideTitles;
+  runtimeType == other.runtimeType
+  && application == other.application&& appVersion == other.appVersion&& totalTime == other.totalTime&& company == other.company&& docSecurity == other.docSecurity&& scaleCrop == other.scaleCrop&& linksUpToDate == other.linksUpToDate&& sharedDoc == other.sharedDoc&& hyperlinksChanged == other.hyperlinksChanged&& slides == other.slides&& notes == other.notes&& hiddenSlides == other.hiddenSlides&& multimediaClips == other.multimediaClips&& presentationFormat == other.presentationFormat&& slideTitles == other.slideTitles;
+
 }
 
 /// PowerPoint (PPTX) extraction result.
 ///
 /// Contains extracted slide content, metadata, and embedded images/tables.
-class PptxExtractionResult {
+class PptxExtractionResult  {
   /// Extracted text content from all slides
   final String content;
-
   /// Presentation metadata
   final PptxMetadata metadata;
-
   /// Total number of slides
   final PlatformInt64 slideCount;
-
   /// Total number of embedded images
   final PlatformInt64 imageCount;
-
   /// Total number of tables
   final PlatformInt64 tableCount;
-
   /// Extracted images from the presentation
   final List<ExtractedImage> images;
-
   /// Slide structure with boundaries (when page tracking is enabled)
   final PageStructure? pageStructure;
-
   /// Per-slide content (when page tracking is enabled)
   final List<PageContent>? pageContents;
-
   /// Structured document representation
   final DocumentStructure? document;
-
   /// Office metadata extracted from docProps/core.xml and docProps/app.xml.
   ///
   /// Contains keys like "title", "author", "created_by", "subject", "keywords",
   /// "modified_by", "created_at", "modified_at", etc.
   final Map<String, String> officeMetadata;
-
   /// Slide comments as revisions.
   ///
   /// Each `<p:cm>` element in `ppt/comments/comment{N}.xml` becomes a
@@ -12352,130 +9208,88 @@ class PptxExtractionResult {
   /// `RevisionAnchor::Slide { index }`. `None` when no comment XML parts exist.
   final List<DocumentRevision>? revisions;
 
-  const PptxExtractionResult({
-    required this.content,
-    required this.metadata,
-    required this.slideCount,
-    required this.imageCount,
-    required this.tableCount,
-    required this.images,
-    this.pageStructure,
-    this.pageContents,
-    this.document,
-    required this.officeMetadata,
-    this.revisions,
-  });
+  const PptxExtractionResult({required this.content ,required this.metadata ,required this.slideCount ,required this.imageCount ,required this.tableCount ,required this.images ,this.pageStructure ,this.pageContents ,this.document ,required this.officeMetadata ,this.revisions ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  content.hashCode ^
-  metadata.hashCode ^
-  slideCount.hashCode ^
-  imageCount.hashCode ^
-  tableCount.hashCode ^
-  images.hashCode ^
-  pageStructure.hashCode ^
-  pageContents.hashCode ^
-  document.hashCode ^
-  officeMetadata.hashCode ^
-  revisions.hashCode;
+  int get hashCode => content.hashCode^metadata.hashCode^slideCount.hashCode^imageCount.hashCode^tableCount.hashCode^images.hashCode^pageStructure.hashCode^pageContents.hashCode^document.hashCode^officeMetadata.hashCode^revisions.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is PptxExtractionResult &&
-  runtimeType == other.runtimeType &&
-  content == other.content &&
-  metadata == other.metadata &&
-  slideCount == other.slideCount &&
-  imageCount == other.imageCount &&
-  tableCount == other.tableCount &&
-  images == other.images &&
-  pageStructure == other.pageStructure &&
-  pageContents == other.pageContents &&
-  document == other.document &&
-  officeMetadata == other.officeMetadata &&
-  revisions == other.revisions;
+  runtimeType == other.runtimeType
+  && content == other.content&& metadata == other.metadata&& slideCount == other.slideCount&& imageCount == other.imageCount&& tableCount == other.tableCount&& images == other.images&& pageStructure == other.pageStructure&& pageContents == other.pageContents&& document == other.document&& officeMetadata == other.officeMetadata&& revisions == other.revisions;
+
 }
 
 /// PowerPoint presentation metadata.
 ///
 /// Extracted from PPTX files containing slide counts and presentation details.
-class PptxMetadata {
+class PptxMetadata  {
   /// Total number of slides in the presentation
   final PlatformInt64 slideCount;
-
   /// Names of slides (if available)
   final List<String> slideNames;
-
   /// Number of embedded images
   final PlatformInt64? imageCount;
-
   /// Number of tables
   final PlatformInt64? tableCount;
 
-  const PptxMetadata({
-    required this.slideCount,
-    required this.slideNames,
-    this.imageCount,
-    this.tableCount,
-  });
+  const PptxMetadata({required this.slideCount ,required this.slideNames ,this.imageCount ,this.tableCount ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  slideCount.hashCode ^
-  slideNames.hashCode ^
-  imageCount.hashCode ^
-  tableCount.hashCode;
+  int get hashCode => slideCount.hashCode^slideNames.hashCode^imageCount.hashCode^tableCount.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is PptxMetadata &&
-  runtimeType == other.runtimeType &&
-  slideCount == other.slideCount &&
-  slideNames == other.slideNames &&
-  imageCount == other.imageCount &&
-  tableCount == other.tableCount;
+  runtimeType == other.runtimeType
+  && slideCount == other.slideCount&& slideNames == other.slideNames&& imageCount == other.imageCount&& tableCount == other.tableCount;
+
 }
 
 /// HTML preprocessing options for document cleanup before conversion.
-class PreprocessingOptions {
+class PreprocessingOptions  {
   /// Enable HTML preprocessing globally
   final bool enabled;
-
   /// Preprocessing preset level (Minimal, Standard, Aggressive)
   final PreprocessingPreset preset;
-
   /// Remove navigation elements (nav, breadcrumbs, menus, sidebars)
   final bool removeNavigation;
-
   /// Remove form elements (forms, inputs, buttons, etc.)
   final bool removeForms;
 
-  const PreprocessingOptions({
-    required this.enabled,
-    required this.preset,
-    required this.removeNavigation,
-    required this.removeForms,
-  });
+  const PreprocessingOptions({required this.enabled ,required this.preset ,required this.removeNavigation ,required this.removeForms ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-      enabled.hashCode ^
-      preset.hashCode ^
-      removeNavigation.hashCode ^
-      removeForms.hashCode;
+  int get hashCode => enabled.hashCode^preset.hashCode^removeNavigation.hashCode^removeForms.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is PreprocessingOptions &&
-          runtimeType == other.runtimeType &&
-          enabled == other.enabled &&
-          preset == other.preset &&
-          removeNavigation == other.removeNavigation &&
-          removeForms == other.removeForms;
+  identical(this, other) ||
+  other is PreprocessingOptions &&
+  runtimeType == other.runtimeType
+  && enabled == other.enabled&& preset == other.preset&& removeNavigation == other.removeNavigation&& removeForms == other.removeForms;
+
 }
 
 /// HTML preprocessing aggressiveness level.
@@ -12484,12 +9298,12 @@ class PreprocessingOptions {
 enum PreprocessingPreset {
   /// Minimal cleanup. Remove only essential noise (scripts, styles).
   minimal,
-
   /// Standard cleanup. Default. Removes navigation, forms, and other auxiliary content.
   standard,
-
   /// Aggressive cleanup. Remove extensive non-content elements and structure.
   aggressive,
+  ;
+
 }
 
 /// A curated structured-extraction preset loaded from the embedded library.
@@ -12500,222 +9314,147 @@ enum PreprocessingPreset {
 /// Downstream catalog consumers can inject presets via
 /// `extend_from_dir`. The embedded OSS library
 /// ships only the `generic_document` toy preset.
-class Preset {
+class Preset  {
   /// Stable, URL-safe preset identifier (lowercase snake_case).
   final String id;
-
   /// Monotonic version string (e.g. `v1`).
   final String version;
-
   /// Human-readable schema name forwarded to the LLM as the response/tool name.
   final String schemaName;
-
   /// One-line preset description shown in the registry UI.
   final String description;
-
   /// Top-level category for grouping in the playground.
   final PresetCategory category;
-
   /// Free-form tags used for search/filtering. May be empty.
   final List<String> tags;
-
   /// JSON Schema (Draft 2020-12) describing the structured output shape.
   final String schema;
-
   /// Instruction primer sent to the model.
   final String systemPrompt;
-
   /// Optional mustache-style template merged with caller-supplied context.
   final String? contextTemplate;
-
   /// Strategy for merging per-batch outputs across paginated calls.
   final MergeMode mergeMode;
-
   /// Default call mode suggested for this preset; heuristics may override.
   final CallMode preferredCallMode;
-
   /// When true, the prompt asks the model to wrap each field as
   /// `{value, page, bbox, confidence}` for downstream citation overlays.
   final bool emitCitations;
-
   /// Optional bundled sample (input file + reference output) for preview.
   final PresetSample? sample;
-
   /// Stable sha256 fingerprint of the canonical preset file contents.
   ///
   /// Populated at registry load — not present in the on-disk JSON files.
   /// Used as a cache-invalidation token by the worker pipeline.
   final String fingerprint;
 
-  const Preset({
-    required this.id,
-    required this.version,
-    required this.schemaName,
-    required this.description,
-    required this.category,
-    required this.tags,
-    required this.schema,
-    required this.systemPrompt,
-    this.contextTemplate,
-    required this.mergeMode,
-    required this.preferredCallMode,
-    required this.emitCitations,
-    this.sample,
-    required this.fingerprint,
-  });
+  const Preset({required this.id ,required this.version ,required this.schemaName ,required this.description ,required this.category ,required this.tags ,required this.schema ,required this.systemPrompt ,this.contextTemplate ,required this.mergeMode ,required this.preferredCallMode ,required this.emitCitations ,this.sample ,required this.fingerprint ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  id.hashCode ^
-  version.hashCode ^
-  schemaName.hashCode ^
-  description.hashCode ^
-  category.hashCode ^
-  tags.hashCode ^
-  schema.hashCode ^
-  systemPrompt.hashCode ^
-  contextTemplate.hashCode ^
-  mergeMode.hashCode ^
-  preferredCallMode.hashCode ^
-  emitCitations.hashCode ^
-  sample.hashCode ^
-  fingerprint.hashCode;
+  int get hashCode => id.hashCode^version.hashCode^schemaName.hashCode^description.hashCode^category.hashCode^tags.hashCode^schema.hashCode^systemPrompt.hashCode^contextTemplate.hashCode^mergeMode.hashCode^preferredCallMode.hashCode^emitCitations.hashCode^sample.hashCode^fingerprint.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is Preset &&
-  runtimeType == other.runtimeType &&
-  id == other.id &&
-  version == other.version &&
-  schemaName == other.schemaName &&
-  description == other.description &&
-  category == other.category &&
-  tags == other.tags &&
-  schema == other.schema &&
-  systemPrompt == other.systemPrompt &&
-  contextTemplate == other.contextTemplate &&
-  mergeMode == other.mergeMode &&
-  preferredCallMode == other.preferredCallMode &&
-  emitCitations == other.emitCitations &&
-  sample == other.sample &&
-  fingerprint == other.fingerprint;
+  runtimeType == other.runtimeType
+  && id == other.id&& version == other.version&& schemaName == other.schemaName&& description == other.description&& category == other.category&& tags == other.tags&& schema == other.schema&& systemPrompt == other.systemPrompt&& contextTemplate == other.contextTemplate&& mergeMode == other.mergeMode&& preferredCallMode == other.preferredCallMode&& emitCitations == other.emitCitations&& sample == other.sample&& fingerprint == other.fingerprint;
+
 }
 
 /// High-level category used to group presets in the registry UI.
 enum PresetCategory {
   /// Invoices, receipts, statements, purchase orders, W-9.
   finance,
-
   /// Passports, drivers licenses, insurance cards.
   identity,
-
   /// Contracts, NDAs, agreements.
   legal,
-
   /// Bills of lading, customs declarations, packing lists.
   logistics,
-
   /// Clinical records, lab reports.
   medical,
-
   /// Pay stubs, resumes, employment offers.
   hr,
-
   /// Catch-all for documents that don't fit the other categories.
   other,
+  ;
+
 }
 
 /// Pointer to a sample input + its reference output bundled with the preset.
-class PresetSample {
+class PresetSample  {
   /// Path to the sample input file, relative to the preset directory.
   final String inputPath;
-
   /// Path to the reference structured output, relative to the preset directory.
   final String outputPath;
 
-  const PresetSample({required this.inputPath, required this.outputPath});
+  const PresetSample({required this.inputPath ,required this.outputPath ,});
+
+
+
+
 
   @override
-  int get hashCode => inputPath.hashCode ^ outputPath.hashCode;
+  int get hashCode => inputPath.hashCode^outputPath.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is PresetSample &&
-  runtimeType == other.runtimeType &&
-  inputPath == other.inputPath &&
-  outputPath == other.outputPath;
+  runtimeType == other.runtimeType
+  && inputPath == other.inputPath&& outputPath == other.outputPath;
+
 }
 
 /// Lightweight projection of [`Preset`] used by the registry list endpoint
 /// (omits the full schema and prompt to keep the payload small).
-class PresetSummary {
+class PresetSummary  {
   /// Preset identifier matching [`Preset::id`].
   final String id;
-
   /// Preset version matching [`Preset::version`].
   final String version;
-
   /// Schema name matching [`Preset::schema_name`].
   final String schemaName;
-
   /// One-line preset description.
   final String description;
-
   /// Top-level category.
   final PresetCategory category;
-
   /// Free-form tags.
   final List<String> tags;
-
   /// Default call mode.
   final CallMode preferredCallMode;
-
   /// Whether the preset prompts the model for citations.
   final bool emitCitations;
-
   /// Stable fingerprint matching [`Preset::fingerprint`].
   final String fingerprint;
 
-  const PresetSummary({
-    required this.id,
-    required this.version,
-    required this.schemaName,
-    required this.description,
-    required this.category,
-    required this.tags,
-    required this.preferredCallMode,
-    required this.emitCitations,
-    required this.fingerprint,
-  });
+  const PresetSummary({required this.id ,required this.version ,required this.schemaName ,required this.description ,required this.category ,required this.tags ,required this.preferredCallMode ,required this.emitCitations ,required this.fingerprint ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  id.hashCode ^
-  version.hashCode ^
-  schemaName.hashCode ^
-  description.hashCode ^
-  category.hashCode ^
-  tags.hashCode ^
-  preferredCallMode.hashCode ^
-  emitCitations.hashCode ^
-  fingerprint.hashCode;
+  int get hashCode => id.hashCode^version.hashCode^schemaName.hashCode^description.hashCode^category.hashCode^tags.hashCode^preferredCallMode.hashCode^emitCitations.hashCode^fingerprint.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is PresetSummary &&
-  runtimeType == other.runtimeType &&
-  id == other.id &&
-  version == other.version &&
-  schemaName == other.schemaName &&
-  description == other.description &&
-  category == other.category &&
-  tags == other.tags &&
-  preferredCallMode == other.preferredCallMode &&
-  emitCitations == other.emitCitations &&
-  fingerprint == other.fingerprint;
+  runtimeType == other.runtimeType
+  && id == other.id&& version == other.version&& schemaName == other.schemaName&& description == other.description&& category == other.category&& tags == other.tags&& preferredCallMode == other.preferredCallMode&& emitCitations == other.emitCitations&& fingerprint == other.fingerprint;
+
 }
 
 /// Processing stages for post-processors.
@@ -12731,7 +9470,6 @@ enum ProcessingStage {
   /// - Entity extraction (NER)
   /// - Text quality scoring
   early,
-
   /// Middle stage - content transformation.
   ///
   /// Use for:
@@ -12740,7 +9478,6 @@ enum ProcessingStage {
   /// - Text summarization
   /// - Semantic analysis
   middle,
-
   /// Late stage - final enrichment.
   ///
   /// Use for:
@@ -12749,32 +9486,39 @@ enum ProcessingStage {
   /// - Final validation
   /// - Output formatting
   late_,
+  ;
+
 }
 
 /// A non-fatal warning from a processing pipeline stage.
 ///
 /// Captures errors from optional features that don't prevent extraction
 /// but may indicate degraded results.
-class ProcessingWarning {
+class ProcessingWarning  {
   /// The pipeline stage or feature that produced this warning
   /// (e.g., "embedding", "chunking", "language_detection", "output_format").
   final String source;
-
   /// Human-readable description of what went wrong.
   final String message;
 
-  const ProcessingWarning({required this.source, required this.message});
+  const ProcessingWarning({required this.source ,required this.message ,});
+
+
+
+
 
   @override
-  int get hashCode => source.hashCode ^ message.hashCode;
+  int get hashCode => source.hashCode^message.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ProcessingWarning &&
-  runtimeType == other.runtimeType &&
-  source == other.source &&
-  message == other.message;
+  runtimeType == other.runtimeType
+  && source == other.source&& message == other.message;
+
 }
 
 /// A single run-level or style-level property change.
@@ -12783,200 +9527,205 @@ class ProcessingWarning {
 /// and `to` store normalized property values when the source format exposes
 /// them; either side may be absent when the format only records one side of the
 /// change.
-class PropertyChange {
+class PropertyChange  {
   /// Property name, such as `"bold"`, `"italic"`, `"font_size"`, or `"font_color"`.
   final String name;
-
   /// Value before the change, when available.
   final String? from;
-
   /// Value after the change, when available.
   final String? to;
 
-  const PropertyChange({required this.name, this.from, this.to});
+  const PropertyChange({required this.name ,this.from ,this.to ,});
+
+
+
+
 
   @override
-  int get hashCode => name.hashCode ^ from.hashCode ^ to.hashCode;
+  int get hashCode => name.hashCode^from.hashCode^to.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is PropertyChange &&
-  runtimeType == other.runtimeType &&
-  name == other.name &&
-  from == other.from &&
-  to == other.to;
+  runtimeType == other.runtimeType
+  && name == other.name&& from == other.from&& to == other.to;
+
 }
 
 /// Proxy configuration for HTTP requests.
-class ProxyConfig {
+class ProxyConfig  {
   /// Proxy URL (e.g. "http://proxy:8080", "socks5://proxy:1080").
   final String url;
-
   /// Optional username for proxy authentication.
   final String? username;
-
   /// Optional password for proxy authentication.
   final String? password;
 
-  const ProxyConfig({required this.url, this.username, this.password});
+  const ProxyConfig({required this.url ,this.username ,this.password ,});
+
+
+
+
 
   @override
-  int get hashCode => url.hashCode ^ username.hashCode ^ password.hashCode;
+  int get hashCode => url.hashCode^username.hashCode^password.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ProxyConfig &&
-  runtimeType == other.runtimeType &&
-  url == other.url &&
-  username == other.username &&
-  password == other.password;
+  runtimeType == other.runtimeType
+  && url == other.url&& username == other.username&& password == other.password;
+
 }
 
 /// Page Segmentation Mode for Tesseract OCR.
 enum PSMMode {
   /// Orientation and script detection only.
   osdOnly,
-
   /// Automatic page segmentation with OSD.
   autoOsd,
-
   /// Automatic page segmentation without OSD or OCR.
   autoOnly,
-
   /// Fully automatic page segmentation with no OSD (default).
   auto,
-
   /// Assume a single column of text of variable sizes.
   singleColumn,
-
   /// Assume a single uniform block of vertically aligned text.
   singleBlockVertical,
-
   /// Assume a single uniform block of text.
   singleBlock,
-
   /// Treat the image as a single text line.
   singleLine,
-
   /// Treat the image as a single word.
   singleWord,
-
   /// Treat the image as a single word in a circle.
   circleWord,
-
   /// Treat the image as a single character.
   singleChar,
+  ;
+
 }
 
 /// Outlook PST archive metadata.
-class PstMetadata {
+class PstMetadata  {
   /// Total number of email messages found in the PST archive.
   final PlatformInt64 messageCount;
 
-  const PstMetadata({required this.messageCount});
+  const PstMetadata({required this.messageCount ,});
+
+
+
+
 
   @override
   int get hashCode => messageCount.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is PstMetadata &&
-  runtimeType == other.runtimeType &&
-  messageCount == other.messageCount;
+  runtimeType == other.runtimeType
+  && messageCount == other.messageCount;
+
 }
 
 /// Pixel-space bounding box of a QR code inside its source image.
-class QrBoundingBox {
+class QrBoundingBox  {
   /// Horizontal pixel offset of the bounding box top-left corner.
   final PlatformInt64 x;
-
   /// Vertical pixel offset of the bounding box top-left corner.
   final PlatformInt64 y;
-
   /// Width of the bounding box in pixels.
   final PlatformInt64 width;
-
   /// Height of the bounding box in pixels.
   final PlatformInt64 height;
 
-  const QrBoundingBox({
-    required this.x,
-    required this.y,
-    required this.width,
-    required this.height,
-  });
+  const QrBoundingBox({required this.x ,required this.y ,required this.width ,required this.height ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  x.hashCode ^ y.hashCode ^ width.hashCode ^ height.hashCode;
+  int get hashCode => x.hashCode^y.hashCode^width.hashCode^height.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is QrBoundingBox &&
-  runtimeType == other.runtimeType &&
-  x == other.x &&
-  y == other.y &&
-  width == other.width &&
-  height == other.height;
+  runtimeType == other.runtimeType
+  && x == other.x&& y == other.y&& width == other.width&& height == other.height;
+
 }
 
 /// One QR code decoded from an extracted image.
-class QrCode {
+class QrCode  {
   /// Decoded payload (text, URL, vCard string, …).
   final String payload;
-
   /// Detector-reported confidence in `[0.0, 1.0]`. `None` when the decoder
   /// does not expose confidence (the default `rqrr` backend always reports
   /// `Some` because successful decode implies high confidence).
   final double? confidence;
-
   /// Bounding box of the QR code inside the source image, in pixel coordinates
   /// (`x`, `y` of the top-left corner; `width`, `height` of the rectangle).
   /// `None` if the decoder did not report a bounding box.
   final QrBoundingBox? bbox;
 
-  const QrCode({required this.payload, this.confidence, this.bbox});
+  const QrCode({required this.payload ,this.confidence ,this.bbox ,});
+
+
+
+
 
   @override
-  int get hashCode => payload.hashCode ^ confidence.hashCode ^ bbox.hashCode;
+  int get hashCode => payload.hashCode^confidence.hashCode^bbox.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is QrCode &&
-  runtimeType == other.runtimeType &&
-  payload == other.payload &&
-  confidence == other.confidence &&
-  bbox == other.bbox;
+  runtimeType == other.runtimeType
+  && payload == other.payload&& confidence == other.confidence&& bbox == other.bbox;
+
 }
 
 /// RAKE-specific parameters.
-class RakeParams {
+class RakeParams  {
   /// Minimum word length to consider (default: 1).
   final PlatformInt64 minWordLength;
-
   /// Maximum words in a keyword phrase (default: 3).
   final PlatformInt64 maxWordsPerPhrase;
 
-  const RakeParams({
-    required this.minWordLength,
-    required this.maxWordsPerPhrase,
-  });
+  const RakeParams({required this.minWordLength ,required this.maxWordsPerPhrase ,});
+
+
+
+
 
   @override
-  int get hashCode => minWordLength.hashCode ^ maxWordsPerPhrase.hashCode;
+  int get hashCode => minWordLength.hashCode^maxWordsPerPhrase.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is RakeParams &&
-  runtimeType == other.runtimeType &&
-  minWordLength == other.minWordLength &&
-  maxWordsPerPhrase == other.maxWordsPerPhrase;
+  runtimeType == other.runtimeType
+  && minWordLength == other.minWordLength&& maxWordsPerPhrase == other.maxWordsPerPhrase;
+
 }
 
 /// Pre-computed table markdown for a table detection region.
@@ -12985,54 +9734,48 @@ class RakeParams {
 /// layout-aware OCR results.  The struct lives here (under `layout-types`, pure-Rust)
 /// so that consumers who do not enable `layout-detection` (ORT) can still reference
 /// the type in their own code.
-class RecognizedTable {
+class RecognizedTable  {
   /// Detection bbox that this table corresponds to (for matching).
   final BBox detectionBbox;
-
   /// Table cells as a 2D vector (rows × columns).
   final List<List<String>> cells;
-
   /// Rendered markdown table.
   final String markdown;
 
-  const RecognizedTable({
-    required this.detectionBbox,
-    required this.cells,
-    required this.markdown,
-  });
+  const RecognizedTable({required this.detectionBbox ,required this.cells ,required this.markdown ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  detectionBbox.hashCode ^ cells.hashCode ^ markdown.hashCode;
+  int get hashCode => detectionBbox.hashCode^cells.hashCode^markdown.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is RecognizedTable &&
-  runtimeType == other.runtimeType &&
-  detectionBbox == other.detectionBbox &&
-  cells == other.cells &&
-  markdown == other.markdown;
+  runtimeType == other.runtimeType
+  && detectionBbox == other.detectionBbox&& cells == other.cells&& markdown == other.markdown;
+
 }
 
 /// Configuration for the redaction post-processor.
-class RedactionConfig {
+class RedactionConfig  {
   /// Categories to redact. Empty means "every category supported by the engine."
   final List<PiiCategory> categories;
-
   /// Strategy applied to every match.
   final RedactionStrategy strategy;
-
   /// Optional NER backend — required to redact PERSON / ORGANIZATION / LOCATION
   /// categories (the pure-Rust pattern engine only covers regex-detectable PII).
   final NerConfig? ner;
-
   /// When `true`, chunk byte ranges are kept consistent with the rewritten content by
   /// adjusting `byte_start` / `byte_end` after replacement. When `false`, chunk byte
   /// ranges still refer to the *original* content offsets — useful when downstream
   /// consumers want to map findings back to the original document.
   final bool preserveOffsets;
-
   /// Arbitrary user-supplied literal terms to redact.
   ///
   /// Each term is treated as a regex hit against the document, surfacing as
@@ -13043,7 +9786,6 @@ class RedactionConfig {
   /// Use this when you need to redact tenant-specific tokens (employee IDs,
   /// project codes, internal product names) without writing a custom plugin.
   final List<RedactionTerm> customTerms;
-
   /// Arbitrary user-supplied regex patterns to redact.
   ///
   /// Same surfacing semantics as [`custom_terms`](Self::custom_terms): each
@@ -13051,81 +9793,58 @@ class RedactionConfig {
   /// at config-construction time via [`RedactionConfig::validate`].
   final List<RedactionPattern> customPatterns;
 
-  const RedactionConfig({
-    required this.categories,
-    required this.strategy,
-    this.ner,
-    required this.preserveOffsets,
-    required this.customTerms,
-    required this.customPatterns,
-  });
+  const RedactionConfig({required this.categories ,required this.strategy ,this.ner ,required this.preserveOffsets ,required this.customTerms ,required this.customPatterns ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  categories.hashCode ^
-  strategy.hashCode ^
-  ner.hashCode ^
-  preserveOffsets.hashCode ^
-  customTerms.hashCode ^
-  customPatterns.hashCode;
+  int get hashCode => categories.hashCode^strategy.hashCode^ner.hashCode^preserveOffsets.hashCode^customTerms.hashCode^customPatterns.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is RedactionConfig &&
-  runtimeType == other.runtimeType &&
-  categories == other.categories &&
-  strategy == other.strategy &&
-  ner == other.ner &&
-  preserveOffsets == other.preserveOffsets &&
-  customTerms == other.customTerms &&
-  customPatterns == other.customPatterns;
+  runtimeType == other.runtimeType
+  && categories == other.categories&& strategy == other.strategy&& ner == other.ner&& preserveOffsets == other.preserveOffsets&& customTerms == other.customTerms&& customPatterns == other.customPatterns;
+
 }
 
 /// One redaction event: which span was rewritten, why, and with what.
-class RedactionFinding {
+class RedactionFinding  {
   /// Byte-offset start in the original (pre-redaction) `ExtractedDocument::content`.
   final PlatformInt64 start;
-
   /// Byte-offset end (exclusive) in the original `ExtractedDocument::content`.
   final PlatformInt64 end;
-
   /// PII category that fired this redaction.
   final PiiCategory category;
-
   /// Strategy applied to this finding (mask, hash, token-replace, drop).
   final RedactionStrategy strategy;
-
   /// String that replaced the original mention. Always present; for `Drop` the
   /// replacement is the empty string.
   final String replacementToken;
 
-  const RedactionFinding({
-    required this.start,
-    required this.end,
-    required this.category,
-    required this.strategy,
-    required this.replacementToken,
-  });
+  const RedactionFinding({required this.start ,required this.end ,required this.category ,required this.strategy ,required this.replacementToken ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  start.hashCode ^
-  end.hashCode ^
-  category.hashCode ^
-  strategy.hashCode ^
-  replacementToken.hashCode;
+  int get hashCode => start.hashCode^end.hashCode^category.hashCode^strategy.hashCode^replacementToken.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is RedactionFinding &&
-  runtimeType == other.runtimeType &&
-  start == other.start &&
-  end == other.end &&
-  category == other.category &&
-  strategy == other.strategy &&
-  replacementToken == other.replacementToken;
+  runtimeType == other.runtimeType
+  && start == other.start&& end == other.end&& category == other.category&& strategy == other.strategy&& replacementToken == other.replacementToken;
+
 }
 
 /// One user-supplied regex pattern to redact.
@@ -13133,34 +9852,32 @@ class RedactionFinding {
 /// The pattern is compiled with the Rust `regex` crate (no look-around). Case
 /// sensitivity is encoded in the pattern via the `(?i)` inline flag when
 /// [`Self::case_sensitive`] is `false`.
-class RedactionPattern {
+class RedactionPattern  {
   /// Custom category label surfaced in [`RedactionFinding::category`](crate::types::redaction::RedactionFinding::category).
   final String label;
-
   /// Regex pattern (Rust `regex` crate dialect — no look-around).
   final String pattern;
-
   /// When `true`, match case-sensitively; otherwise prepend `(?i)` to the regex.
   final bool caseSensitive;
 
-  const RedactionPattern({
-    required this.label,
-    required this.pattern,
-    required this.caseSensitive,
-  });
+  const RedactionPattern({required this.label ,required this.pattern ,required this.caseSensitive ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  label.hashCode ^ pattern.hashCode ^ caseSensitive.hashCode;
+  int get hashCode => label.hashCode^pattern.hashCode^caseSensitive.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is RedactionPattern &&
-  runtimeType == other.runtimeType &&
-  label == other.label &&
-  pattern == other.pattern &&
-  caseSensitive == other.caseSensitive;
+  runtimeType == other.runtimeType
+  && label == other.label&& pattern == other.pattern&& caseSensitive == other.caseSensitive;
+
 }
 
 /// Audit report describing what the redaction processor found and how it replaced it.
@@ -13169,42 +9886,46 @@ class RedactionPattern {
 /// audit-log consumers can see exactly what fired. Offsets are relative to the *original*
 /// pre-redaction `content` and are intended for audit reconstruction only — the original
 /// bytes are dropped at the end of the pipeline.
-class RedactionReport {
+class RedactionReport  {
   /// Individual redaction findings in original-source byte order.
   final List<RedactionFinding> findings;
-
   /// Total number of redactions applied across the document.
   final PlatformInt64 totalRedacted;
 
-  const RedactionReport({required this.findings, required this.totalRedacted});
+  const RedactionReport({required this.findings ,required this.totalRedacted ,});
+
+
+
+
 
   @override
-  int get hashCode => findings.hashCode ^ totalRedacted.hashCode;
+  int get hashCode => findings.hashCode^totalRedacted.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is RedactionReport &&
-  runtimeType == other.runtimeType &&
-  findings == other.findings &&
-  totalRedacted == other.totalRedacted;
+  runtimeType == other.runtimeType
+  && findings == other.findings&& totalRedacted == other.totalRedacted;
+
 }
 
 /// Strategy applied when a PII match is rewritten.
 enum RedactionStrategy {
   /// Replace the matched span with a fixed mask token (default `"[REDACTED]"`).
   mask,
-
   /// Replace with a SHA-256 hash of the original value (truncated to 16 hex chars).
   /// Lets downstream consumers do equality joins without recovering the source.
   hash,
-
   /// Replace with a per-category running token (`"[PERSON_1]"`, `"[PERSON_2]"`, …)
   /// so the same person referenced twice gets the same token within the document.
   tokenReplace,
-
   /// Delete the matched span entirely.
   drop,
+  ;
+
 }
 
 /// One user-supplied literal term to redact.
@@ -13212,51 +9933,48 @@ enum RedactionStrategy {
 /// Matched as a regex-escaped substring (so callers do not need to escape
 /// metacharacters themselves). Case-insensitive by default — set
 /// [`Self::case_sensitive`] to `true` for exact byte-match semantics.
-class RedactionTerm {
+class RedactionTerm  {
   /// Custom category label surfaced in [`RedactionFinding::category`](crate::types::redaction::RedactionFinding::category).
   final String label;
-
   /// Literal value to match. Regex metacharacters are escaped automatically.
   final String value;
-
   /// When `true`, match the value as-is; otherwise match ASCII-case-insensitively.
   final bool caseSensitive;
 
-  const RedactionTerm({
-    required this.label,
-    required this.value,
-    required this.caseSensitive,
-  });
+  const RedactionTerm({required this.label ,required this.value ,required this.caseSensitive ,});
+
+
+
+
 
   @override
-  int get hashCode => label.hashCode ^ value.hashCode ^ caseSensitive.hashCode;
+  int get hashCode => label.hashCode^value.hashCode^caseSensitive.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is RedactionTerm &&
-  runtimeType == other.runtimeType &&
-  label == other.label &&
-  value == other.value &&
-  caseSensitive == other.caseSensitive;
+  runtimeType == other.runtimeType
+  && label == other.label&& value == other.value&& caseSensitive == other.caseSensitive;
+
 }
 
 /// Intensity level for the token-reduction pipeline.
 enum ReductionLevel {
   /// No reduction applied; text is returned as-is.
   off,
-
   /// Remove only the most common stopwords.
   light,
-
   /// Balanced stopword removal and redundancy filtering.
   moderate,
-
   /// Aggressive filtering; may remove less common content words.
   aggressive,
-
   /// Maximum compression; prioritizes brevity over completeness.
   maximum,
+  ;
+
 }
 
 /// Classification of a detected layout region that warrants VLM extraction.
@@ -13270,19 +9988,16 @@ enum RegionKind {
   /// VLM prompt: describe the diagram / chart, including axis labels,
   /// legend entries, and any embedded text.
   figure,
-
   /// A densely formatted or complex table that classical extraction garbles.
   ///
   /// VLM prompt: extract the table as GitHub-Flavoured Markdown.
   denseTable,
-
   /// A region whose layout the classical pipeline cannot handle (multi-column
   /// insets, heavily annotated forms, mixed text+diagram).
   ///
   /// VLM prompt: extract all text and structure as markdown, preserving
   /// reading order.
   complexLayout,
-
   /// A standalone image to be captioned (not extracted as figure markdown).
   ///
   /// VLM prompt: produce a single-sentence alt-text-style caption suitable
@@ -13290,30 +10005,28 @@ enum RegionKind {
   /// captioning post-processor to populate
   /// [`ExtractedImage::caption`](crate::types::ExtractedImage::caption).
   caption,
+  ;
+
 }
 
 /// Semantic kind of a relationship between document elements.
 enum RelationshipKind {
   /// Footnote marker -> footnote definition.
   footnoteReference,
-
   /// Citation marker -> bibliography entry.
   citationReference,
-
   /// Internal anchor link (`#id`) -> target heading/element.
   internalLink,
-
   /// Caption paragraph -> figure/table it describes.
   caption,
-
   /// Label -> labeled element (HTML `<label for>`, LaTeX `\label{}`).
   label,
-
   /// TOC entry -> target section.
   tocEntry,
-
   /// Cross-reference (LaTeX `\ref{}`, DOCX cross-reference field).
   crossReference,
+  ;
+
 }
 
 /// A single document returned by the reranker, with its position in the input and score.
@@ -13322,33 +10035,32 @@ enum RelationshipKind {
 /// (e.g. IDs, paths) can be reordered without passing them through the reranker.
 ///
 /// Since v5.0.0.
-class RerankedDocument {
+class RerankedDocument  {
   /// Position of this document in the original input `documents` slice.
   final PlatformInt64 index;
-
   /// Relevance score in `[0, 1]`. Higher means more relevant to the query.
   final double score;
-
   /// The document text.
   final String document;
 
-  const RerankedDocument({
-    required this.index,
-    required this.score,
-    required this.document,
-  });
+  const RerankedDocument({required this.index ,required this.score ,required this.document ,});
+
+
+
+
 
   @override
-  int get hashCode => index.hashCode ^ score.hashCode ^ document.hashCode;
+  int get hashCode => index.hashCode^score.hashCode^document.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is RerankedDocument &&
-  runtimeType == other.runtimeType &&
-  index == other.index &&
-  score == other.score &&
-  document == other.document;
+  runtimeType == other.runtimeType
+  && index == other.index&& score == other.score&& document == other.document;
+
 }
 
 /// Configuration for the reranking pipeline.
@@ -13357,33 +10069,27 @@ class RerankedDocument {
 /// behavior for local ONNX models.
 ///
 /// Since v5.0.0.
-class RerankerConfig {
+class RerankerConfig  {
   /// The reranker model to use (defaults to "balanced" preset if not specified).
   final RerankerModelType model;
-
   /// Return at most this many documents. `None` returns all.
   ///
   /// Applied after sorting by score, so the highest-scoring documents are kept.
   final PlatformInt64? topK;
-
   /// Batch size for local ONNX cross-encoder inference.
   final PlatformInt64 batchSize;
-
   /// Show model download progress (local ONNX path only).
   final bool showDownloadProgress;
-
   /// Optional alternate Hugging Face cache root for model files.
   ///
   /// When unset, hf-hub follows the standard Hugging Face environment and
   /// platform cache conventions.
   final String? cacheDir;
-
   /// Hardware acceleration for the reranker ONNX model.
   ///
   /// Controls which execution provider (CPU, CUDA, CoreML, TensorRT) is used for
   /// local inference. Defaults to `None` (auto-select per platform).
   final AccelerationConfig? acceleration;
-
   /// Maximum wall-clock duration (in seconds) for a single `rerank()` call when
   /// using [`RerankerModelType::Plugin`].
   ///
@@ -13396,38 +10102,24 @@ class RerankerConfig {
   /// hardware.
   final PlatformInt64? maxRerankDurationSecs;
 
-  const RerankerConfig({
-    required this.model,
-    this.topK,
-    required this.batchSize,
-    required this.showDownloadProgress,
-    this.cacheDir,
-    this.acceleration,
-    this.maxRerankDurationSecs,
-  });
+  const RerankerConfig({required this.model ,this.topK ,required this.batchSize ,required this.showDownloadProgress ,this.cacheDir ,this.acceleration ,this.maxRerankDurationSecs ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  model.hashCode ^
-  topK.hashCode ^
-  batchSize.hashCode ^
-  showDownloadProgress.hashCode ^
-  cacheDir.hashCode ^
-  acceleration.hashCode ^
-  maxRerankDurationSecs.hashCode;
+  int get hashCode => model.hashCode^topK.hashCode^batchSize.hashCode^showDownloadProgress.hashCode^cacheDir.hashCode^acceleration.hashCode^maxRerankDurationSecs.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is RerankerConfig &&
-  runtimeType == other.runtimeType &&
-  model == other.model &&
-  topK == other.topK &&
-  batchSize == other.batchSize &&
-  showDownloadProgress == other.showDownloadProgress &&
-  cacheDir == other.cacheDir &&
-  acceleration == other.acceleration &&
-  maxRerankDurationSecs == other.maxRerankDurationSecs;
+  runtimeType == other.runtimeType
+  && model == other.model&& topK == other.topK&& batchSize == other.batchSize&& showDownloadProgress == other.showDownloadProgress&& cacheDir == other.cacheDir&& acceleration == other.acceleration&& maxRerankDurationSecs == other.maxRerankDurationSecs;
+
 }
 
 /// Selects how a local ONNX reranker's raw output tensor is turned into a score.
@@ -13445,63 +10137,47 @@ class RerankerConfig {
 enum RerankerHead {
   /// Single-logit cross-encoder head (sigmoid applied by the caller).
   crossEncoder,
-
   /// Qwen3 generative-reranker head (softmax over yes/no token logits).
   qwen3Generative,
+  ;
+
 }
 
 @freezed
-sealed class RerankerModelType with _$RerankerModelType {
+sealed class RerankerModelType with _$RerankerModelType  {
   const RerankerModelType._();
 
   /// Use a preset cross-encoder model (recommended).
-  const factory RerankerModelType.preset({
-    /// Preset name (e.g. "balanced", "fast", "quality", "multilingual").
-    required String name,
-  }) = RerankerModelType_Preset;
-
+  const factory RerankerModelType.preset({ /// Preset name (e.g. "balanced", "fast", "quality", "multilingual").
+    required String name , }) = RerankerModelType_Preset;
   /// Use a custom ONNX cross-encoder from HuggingFace.
-  const factory RerankerModelType.custom({
-    /// HuggingFace model repository ID (e.g. "cross-encoder/ms-marco-MiniLM-L6-v2").
-    required String modelId,
-
-    /// Path to the ONNX file within the repo.
+  const factory RerankerModelType.custom({ /// HuggingFace model repository ID (e.g. "cross-encoder/ms-marco-MiniLM-L6-v2").
+    required String modelId ,/// Path to the ONNX file within the repo.
     ///
     /// Defaults to `"onnx/model.onnx"` when `None`. Override for repos that
     /// place the weight elsewhere (e.g. `"model.onnx"` for `rozgo/bge-reranker-v2-m3`,
     /// `"onnx/model_quantized.onnx"` for int8 variants).
-    required String modelFile,
-
-    /// Sibling files that must be downloaded alongside `model_file`.
+    required String modelFile ,/// Sibling files that must be downloaded alongside `model_file`.
     ///
     /// Empty for most repos. Set to e.g. `vec!["model.onnx.data".into()]` for
     /// `rozgo/bge-reranker-v2-m3`, which ships the weights in a co-located
     /// `model.onnx.data` blob.
-    required List<String> additionalFiles,
-
-    /// Maximum token sequence length for the tokenizer.
+    required List<String> additionalFiles ,/// Maximum token sequence length for the tokenizer.
     ///
     /// Stored as `i64` for FFI compatibility across language bindings.
     /// Must be positive; a non-positive value is rejected with a validation error.
-    required PlatformInt64 maxLength,
-
-    /// Scoring head for the ONNX model's output tensor.
+    required PlatformInt64 maxLength ,/// Scoring head for the ONNX model's output tensor.
     ///
     /// Defaults to [`RerankerHead::CrossEncoder`]. Set to
     /// [`RerankerHead::Qwen3Generative`] for Qwen3 generative-reranker
     /// checkpoints (e.g. `Qwen/Qwen3-Reranker-0.6B`).
-    required RerankerHead head,
-  }) = RerankerModelType_Custom;
-
+    required RerankerHead head , }) = RerankerModelType_Custom;
   /// Provider-hosted reranker via liter-llm (e.g. Cohere, Jina, Voyage).
   ///
   /// The model in the nested `LlmConfig` must be a rerank-capable model ID
   /// (e.g. `"cohere/rerank-english-v3.0"`).
-  const factory RerankerModelType.llm({
-    /// LLM provider configuration specifying the model and API credentials.
-    required LlmConfig llm,
-  }) = RerankerModelType_Llm;
-
+  const factory RerankerModelType.llm({ /// LLM provider configuration specifying the model and API credentials.
+    required LlmConfig llm , }) = RerankerModelType_Llm;
   /// In-process reranker registered via the plugin system.
   ///
   /// The caller registers a `RerankerBackend` once (e.g. a
@@ -13514,86 +10190,62 @@ sealed class RerankerModelType with _$RerankerModelType {
   /// `acceleration`) are ignored — the host owns the model lifecycle.
   ///
   /// See `register_reranker_backend`.
-  const factory RerankerModelType.plugin({
-    /// Name the backend was registered under via `register_reranker_backend`.
-    required String name,
-  }) = RerankerModelType_Plugin;
+  const factory RerankerModelType.plugin({ /// Name the backend was registered under via `register_reranker_backend`.
+    required String name , }) = RerankerModelType_Plugin;
+
+
+
+
 }
 
 /// Errors produced while resolving a preset against caller overrides.
 enum ResolveError {
   /// A custom schema override was supplied but is not a JSON object.
   schemaNotObject,
+  ;
+
 }
 
 /// A preset merged with caller-supplied overrides (custom schema, prompt suffix,
 /// context map). Output is what the pipeline orchestrator consumes.
-class ResolvedPreset {
+class ResolvedPreset  {
   /// Source preset identifier.
   final String id;
-
   /// Source preset version.
   final String version;
-
   /// Fingerprint of the source preset file, used as a cache token.
   final String fingerprint;
-
   /// Schema name forwarded to the LLM.
   final String schemaName;
-
   /// Effective JSON Schema (caller override or the preset's own).
   final String schema;
-
   /// System prompt with rendered context appended.
   final String systemPrompt;
-
   /// Merge strategy for paginated outputs.
   final MergeMode mergeMode;
-
   /// Preferred call mode.
   final CallMode preferredCallMode;
-
   /// Whether the prompt asks for per-field citations.
   final bool emitCitations;
 
-  const ResolvedPreset({
-    required this.id,
-    required this.version,
-    required this.fingerprint,
-    required this.schemaName,
-    required this.schema,
-    required this.systemPrompt,
-    required this.mergeMode,
-    required this.preferredCallMode,
-    required this.emitCitations,
-  });
+  const ResolvedPreset({required this.id ,required this.version ,required this.fingerprint ,required this.schemaName ,required this.schema ,required this.systemPrompt ,required this.mergeMode ,required this.preferredCallMode ,required this.emitCitations ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  id.hashCode ^
-  version.hashCode ^
-  fingerprint.hashCode ^
-  schemaName.hashCode ^
-  schema.hashCode ^
-  systemPrompt.hashCode ^
-  mergeMode.hashCode ^
-  preferredCallMode.hashCode ^
-  emitCitations.hashCode;
+  int get hashCode => id.hashCode^version.hashCode^fingerprint.hashCode^schemaName.hashCode^schema.hashCode^systemPrompt.hashCode^mergeMode.hashCode^preferredCallMode.hashCode^emitCitations.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ResolvedPreset &&
-  runtimeType == other.runtimeType &&
-  id == other.id &&
-  version == other.version &&
-  fingerprint == other.fingerprint &&
-  schemaName == other.schemaName &&
-  schema == other.schema &&
-  systemPrompt == other.systemPrompt &&
-  mergeMode == other.mergeMode &&
-  preferredCallMode == other.preferredCallMode &&
-  emitCitations == other.emitCitations;
+  runtimeType == other.runtimeType
+  && id == other.id&& version == other.version&& fingerprint == other.fingerprint&& schemaName == other.schemaName&& schema == other.schema&& systemPrompt == other.systemPrompt&& mergeMode == other.mergeMode&& preferredCallMode == other.preferredCallMode&& emitCitations == other.emitCitations;
+
 }
 
 /// Result-shape selection for extraction results.
@@ -13604,53 +10256,38 @@ class ResolvedPreset {
 enum ResultFormat {
   /// Unified format with all content in `content` field
   unified,
-
   /// Element-based format with semantic element extraction
   elementBased,
+  ;
+
 }
 
 @freezed
-sealed class RevisionAnchor with _$RevisionAnchor {
+sealed class RevisionAnchor with _$RevisionAnchor  {
   const RevisionAnchor._();
 
   /// Body paragraph, identified by its zero-based index in the document flow.
-  const factory RevisionAnchor.paragraph({
-    /// Zero-based index of the paragraph in document order.
-    required PlatformInt64 index,
-  }) = RevisionAnchor_Paragraph;
-
+  const factory RevisionAnchor.paragraph({ /// Zero-based index of the paragraph in document order.
+    required PlatformInt64 index , }) = RevisionAnchor_Paragraph;
   /// Cell inside a table.
-  const factory RevisionAnchor.tableCell({
-    /// Zero-based row index within the table.
-    required PlatformInt64 row,
-
-    /// Zero-based column index within the table.
-    required PlatformInt64 col,
-
-    /// Zero-based index of the table in document order.
-    required PlatformInt64 tableIndex,
-  }) = RevisionAnchor_TableCell;
-
+  const factory RevisionAnchor.tableCell({ /// Zero-based row index within the table.
+    required PlatformInt64 row ,/// Zero-based column index within the table.
+    required PlatformInt64 col ,/// Zero-based index of the table in document order.
+    required PlatformInt64 tableIndex , }) = RevisionAnchor_TableCell;
   /// Page, identified by its zero-based index.
-  const factory RevisionAnchor.page({
-    /// Zero-based page index.
-    required PlatformInt64 index,
-  }) = RevisionAnchor_Page;
-
+  const factory RevisionAnchor.page({ /// Zero-based page index.
+    required PlatformInt64 index , }) = RevisionAnchor_Page;
   /// Presentation slide, identified by its zero-based index.
-  const factory RevisionAnchor.slide({
-    /// Zero-based slide index.
-    required PlatformInt64 index,
-  }) = RevisionAnchor_Slide;
-
+  const factory RevisionAnchor.slide({ /// Zero-based slide index.
+    required PlatformInt64 index , }) = RevisionAnchor_Slide;
   /// Spreadsheet cell or range, identified by sheet index and optional name.
-  const factory RevisionAnchor.sheet({
-    /// Zero-based sheet index.
-    required PlatformInt64 index,
+  const factory RevisionAnchor.sheet({ /// Zero-based sheet index.
+    required PlatformInt64 index ,/// Sheet display name when available.
+    required String name , }) = RevisionAnchor_Sheet;
 
-    /// Sheet display name when available.
-    required String name,
-  }) = RevisionAnchor_Sheet;
+
+
+
 }
 
 /// The content changes that make up a single revision.
@@ -13659,49 +10296,46 @@ sealed class RevisionAnchor with _$RevisionAnchor {
 /// lines as `DiffLine::Added` / `DiffLine::Removed` entries. For format
 /// changes, `property_changes` carries normalized before/after formatting
 /// values when the source document exposes them.
-class RevisionDelta {
+class RevisionDelta  {
   /// Line-level content changes for this revision.
   final List<DiffLine> content;
-
   /// Cell-level table changes for this revision.
   final List<CellChange> tableChanges;
-
   /// Formatting or metadata property changes for this revision.
   final List<PropertyChange> propertyChanges;
 
-  const RevisionDelta({
-    required this.content,
-    required this.tableChanges,
-    required this.propertyChanges,
-  });
+  const RevisionDelta({required this.content ,required this.tableChanges ,required this.propertyChanges ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  content.hashCode ^ tableChanges.hashCode ^ propertyChanges.hashCode;
+  int get hashCode => content.hashCode^tableChanges.hashCode^propertyChanges.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is RevisionDelta &&
-  runtimeType == other.runtimeType &&
-  content == other.content &&
-  tableChanges == other.tableChanges &&
-  propertyChanges == other.propertyChanges;
+  runtimeType == other.runtimeType
+  && content == other.content&& tableChanges == other.tableChanges&& propertyChanges == other.propertyChanges;
+
 }
 
 /// Semantic classification of a tracked change.
 enum RevisionKind {
   /// Text or content was inserted.
   insertion,
-
   /// Text or content was deleted.
   deletion,
-
   /// Run-level formatting (font, size, colour, …) was changed.
   formatChange,
-
   /// A reviewer comment or annotation.
   comment,
+  ;
+
 }
 
 /// Schema-validation outcome surfaced as one of three buckets.
@@ -13711,88 +10345,60 @@ enum RevisionKind {
 enum SchemaCompliance {
   /// Every batch validated against the schema.
   allValid,
-
   /// At least one batch validated; at least one did not.
   partialValid,
-
   /// No batch validated.
   allInvalid,
+  ;
+
 }
 
 /// Configuration for security limits across extractors.
 ///
 /// All limits are intentionally conservative to prevent DoS attacks
 /// while still supporting legitimate documents.
-class SecurityLimits {
+class SecurityLimits  {
   /// Maximum uncompressed size for archives (500 MB)
   final PlatformInt64 maxArchiveSize;
-
   /// Maximum compression ratio before flagging as potential bomb (100:1)
   final PlatformInt64 maxCompressionRatio;
-
   /// Maximum number of files in archive (10,000)
   final PlatformInt64 maxFilesInArchive;
-
   /// Maximum nesting depth for structures (100)
   final PlatformInt64 maxNestingDepth;
-
   /// Maximum length of any single XML entity / attribute / token (1 MiB).
   /// This is a per-token cap, NOT a total cap — billion-laughs class
   /// attacks where a single entity expands to hundreds of MB are caught
   /// here, while normal long text content (a paragraph, a CDATA block) is
   /// caught by `max_content_size` instead.
   final PlatformInt64 maxEntityLength;
-
   /// Maximum string growth per document (100 MB)
   final PlatformInt64 maxContentSize;
-
   /// Maximum iterations per operation
   final PlatformInt64 maxIterations;
-
   /// Maximum XML depth (100 levels)
   final PlatformInt64 maxXmlDepth;
-
   /// Maximum cells per table (100,000)
   final PlatformInt64 maxTableCells;
 
-  const SecurityLimits({
-    required this.maxArchiveSize,
-    required this.maxCompressionRatio,
-    required this.maxFilesInArchive,
-    required this.maxNestingDepth,
-    required this.maxEntityLength,
-    required this.maxContentSize,
-    required this.maxIterations,
-    required this.maxXmlDepth,
-    required this.maxTableCells,
-  });
+  const SecurityLimits({required this.maxArchiveSize ,required this.maxCompressionRatio ,required this.maxFilesInArchive ,required this.maxNestingDepth ,required this.maxEntityLength ,required this.maxContentSize ,required this.maxIterations ,required this.maxXmlDepth ,required this.maxTableCells ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  maxArchiveSize.hashCode ^
-  maxCompressionRatio.hashCode ^
-  maxFilesInArchive.hashCode ^
-  maxNestingDepth.hashCode ^
-  maxEntityLength.hashCode ^
-  maxContentSize.hashCode ^
-  maxIterations.hashCode ^
-  maxXmlDepth.hashCode ^
-  maxTableCells.hashCode;
+  int get hashCode => maxArchiveSize.hashCode^maxCompressionRatio.hashCode^maxFilesInArchive.hashCode^maxNestingDepth.hashCode^maxEntityLength.hashCode^maxContentSize.hashCode^maxIterations.hashCode^maxXmlDepth.hashCode^maxTableCells.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is SecurityLimits &&
-  runtimeType == other.runtimeType &&
-  maxArchiveSize == other.maxArchiveSize &&
-  maxCompressionRatio == other.maxCompressionRatio &&
-  maxFilesInArchive == other.maxFilesInArchive &&
-  maxNestingDepth == other.maxNestingDepth &&
-  maxEntityLength == other.maxEntityLength &&
-  maxContentSize == other.maxContentSize &&
-  maxIterations == other.maxIterations &&
-  maxXmlDepth == other.maxXmlDepth &&
-  maxTableCells == other.maxTableCells;
+  runtimeType == other.runtimeType
+  && maxArchiveSize == other.maxArchiveSize&& maxCompressionRatio == other.maxCompressionRatio&& maxFilesInArchive == other.maxFilesInArchive&& maxNestingDepth == other.maxNestingDepth&& maxEntityLength == other.maxEntityLength&& maxContentSize == other.maxContentSize&& maxIterations == other.maxIterations&& maxXmlDepth == other.maxXmlDepth&& maxTableCells == other.maxTableCells;
+
 }
 
 /// API server configuration.
@@ -13807,88 +10413,71 @@ class SecurityLimits {
 /// - `cors_origins`: empty vector (allows all origins)
 /// - `max_request_body_bytes`: 104_857_600 (100 MB)
 /// - `max_multipart_field_bytes`: 104_857_600 (100 MB)
-class ServerConfig {
+class ServerConfig  {
   /// Server host address (e.g., "127.0.0.1", "0.0.0.0")
   final String host;
-
   /// Server port number
   final PlatformInt64 port;
-
   /// CORS allowed origins. Empty vector means allow all origins.
   ///
   /// If this is an empty vector, the server will accept requests from any origin.
   /// If populated with specific origins (e.g., `"https://example.com"`), only
   /// those origins will be allowed.
   final List<String> corsOrigins;
-
   /// Maximum size of request body in bytes (default: 100 MB)
   final PlatformInt64 maxRequestBodyBytes;
-
   /// Maximum size of multipart fields in bytes (default: 100 MB)
   final PlatformInt64 maxMultipartFieldBytes;
 
-  const ServerConfig({
-    required this.host,
-    required this.port,
-    required this.corsOrigins,
-    required this.maxRequestBodyBytes,
-    required this.maxMultipartFieldBytes,
-  });
+  const ServerConfig({required this.host ,required this.port ,required this.corsOrigins ,required this.maxRequestBodyBytes ,required this.maxMultipartFieldBytes ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  host.hashCode ^
-  port.hashCode ^
-  corsOrigins.hashCode ^
-  maxRequestBodyBytes.hashCode ^
-  maxMultipartFieldBytes.hashCode;
+  int get hashCode => host.hashCode^port.hashCode^corsOrigins.hashCode^maxRequestBodyBytes.hashCode^maxMultipartFieldBytes.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is ServerConfig &&
-  runtimeType == other.runtimeType &&
-  host == other.host &&
-  port == other.port &&
-  corsOrigins == other.corsOrigins &&
-  maxRequestBodyBytes == other.maxRequestBodyBytes &&
-  maxMultipartFieldBytes == other.maxMultipartFieldBytes;
+  runtimeType == other.runtimeType
+  && host == other.host&& port == other.port&& corsOrigins == other.corsOrigins&& maxRequestBodyBytes == other.maxRequestBodyBytes&& maxMultipartFieldBytes == other.maxMultipartFieldBytes;
+
 }
 
 /// A URL entry from a sitemap.
-class SitemapUrl {
+class SitemapUrl  {
   /// The URL.
   final String url;
-
   /// The last modification date, if present.
   final String? lastmod;
-
   /// The change frequency, if present.
   final String? changefreq;
-
   /// The priority, if present.
   final String? priority;
 
-  const SitemapUrl({
-    required this.url,
-    this.lastmod,
-    this.changefreq,
-    this.priority,
-  });
+  const SitemapUrl({required this.url ,this.lastmod ,this.changefreq ,this.priority ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  url.hashCode ^ lastmod.hashCode ^ changefreq.hashCode ^ priority.hashCode;
+  int get hashCode => url.hashCode^lastmod.hashCode^changefreq.hashCode^priority.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is SitemapUrl &&
-  runtimeType == other.runtimeType &&
-  url == other.url &&
-  lastmod == other.lastmod &&
-  changefreq == other.changefreq &&
-  priority == other.priority;
+  runtimeType == other.runtimeType
+  && url == other.url&& lastmod == other.lastmod&& changefreq == other.changefreq&& priority == other.priority;
+
 }
 
 /// A sparse learned embedding: vocabulary term indices and their weights.
@@ -13898,25 +10487,30 @@ class SitemapUrl {
 /// terms are retained, so the representation is genuinely sparse.
 ///
 /// Since v5.0.0.
-class SparseEmbedding {
+class SparseEmbedding  {
   /// Vocabulary token ids with non-zero weight, ascending.
   final Int64List indices;
-
   /// Weights parallel to [`SparseEmbedding::indices`].
   final Float64List values;
 
-  const SparseEmbedding({required this.indices, required this.values});
+  const SparseEmbedding({required this.indices ,required this.values ,});
+
+
+
+
 
   @override
-  int get hashCode => indices.hashCode ^ values.hashCode;
+  int get hashCode => indices.hashCode^values.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is SparseEmbedding &&
-  runtimeType == other.runtimeType &&
-  indices == other.indices &&
-  values == other.values;
+  runtimeType == other.runtimeType
+  && indices == other.indices&& values == other.values;
+
 }
 
 /// Configuration for the sparse-embedding pipeline.
@@ -13925,257 +10519,206 @@ class SparseEmbedding {
 /// local ONNX SPLADE model.
 ///
 /// Since v5.0.0.
-class SparseEmbeddingConfig {
+class SparseEmbeddingConfig  {
   /// The sparse-embedding model to use (defaults to the "opensearch-v3-distill" preset).
   final SparseEmbeddingModelType model;
-
   /// Batch size for local ONNX inference.
   ///
   /// SPLADE emits a `[seq, vocab]` logit tensor per document, so memory scales
   /// with batch size — keep this modest.
   final PlatformInt64 batchSize;
-
   /// Maximum token sequence length for the tokenizer.
   final PlatformInt64 maxLength;
-
   /// Show model download progress (local ONNX path only).
   final bool showDownloadProgress;
-
   /// Optional alternate Hugging Face cache root for model files.
   ///
   /// When unset, hf-hub follows the standard Hugging Face environment and
   /// platform cache conventions.
   final String? cacheDir;
-
   /// Hardware acceleration for the sparse-embedding ONNX model.
   final AccelerationConfig? acceleration;
-
   /// Maximum wall-clock duration (in seconds) for a single embed call when
   /// using [`SparseEmbeddingModelType::Plugin`]. `None` disables the timeout.
   final PlatformInt64? maxEmbedDurationSecs;
 
-  const SparseEmbeddingConfig({
-    required this.model,
-    required this.batchSize,
-    required this.maxLength,
-    required this.showDownloadProgress,
-    this.cacheDir,
-    this.acceleration,
-    this.maxEmbedDurationSecs,
-  });
+  const SparseEmbeddingConfig({required this.model ,required this.batchSize ,required this.maxLength ,required this.showDownloadProgress ,this.cacheDir ,this.acceleration ,this.maxEmbedDurationSecs ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  model.hashCode ^
-  batchSize.hashCode ^
-  maxLength.hashCode ^
-  showDownloadProgress.hashCode ^
-  cacheDir.hashCode ^
-  acceleration.hashCode ^
-  maxEmbedDurationSecs.hashCode;
+  int get hashCode => model.hashCode^batchSize.hashCode^maxLength.hashCode^showDownloadProgress.hashCode^cacheDir.hashCode^acceleration.hashCode^maxEmbedDurationSecs.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is SparseEmbeddingConfig &&
-  runtimeType == other.runtimeType &&
-  model == other.model &&
-  batchSize == other.batchSize &&
-  maxLength == other.maxLength &&
-  showDownloadProgress == other.showDownloadProgress &&
-  cacheDir == other.cacheDir &&
-  acceleration == other.acceleration &&
-  maxEmbedDurationSecs == other.maxEmbedDurationSecs;
+  runtimeType == other.runtimeType
+  && model == other.model&& batchSize == other.batchSize&& maxLength == other.maxLength&& showDownloadProgress == other.showDownloadProgress&& cacheDir == other.cacheDir&& acceleration == other.acceleration&& maxEmbedDurationSecs == other.maxEmbedDurationSecs;
+
 }
 
 @freezed
-sealed class SparseEmbeddingModelType with _$SparseEmbeddingModelType {
+sealed class SparseEmbeddingModelType with _$SparseEmbeddingModelType  {
   const SparseEmbeddingModelType._();
 
   /// Use a preset SPLADE model (recommended).
-  const factory SparseEmbeddingModelType.preset({
-    /// Preset name (e.g. "splade").
-    required String name,
-  }) = SparseEmbeddingModelType_Preset;
-
+  const factory SparseEmbeddingModelType.preset({ /// Preset name (e.g. "splade").
+    required String name , }) = SparseEmbeddingModelType_Preset;
   /// Use a custom SPLADE (`BertForMaskedLM`) ONNX model from HuggingFace.
-  const factory SparseEmbeddingModelType.custom({
-    /// HuggingFace model repository ID.
-    required String modelId,
-
-    /// Path to the ONNX file within the repo. Defaults to `"onnx/model.onnx"`.
-    required String modelFile,
-
-    /// Sibling files that must be downloaded alongside `model_file`.
-    required List<String> additionalFiles,
-
-    /// Maximum token sequence length. Stored as `i64` for FFI compatibility;
+  const factory SparseEmbeddingModelType.custom({ /// HuggingFace model repository ID.
+    required String modelId ,/// Path to the ONNX file within the repo. Defaults to `"onnx/model.onnx"`.
+    required String modelFile ,/// Sibling files that must be downloaded alongside `model_file`.
+    required List<String> additionalFiles ,/// Maximum token sequence length. Stored as `i64` for FFI compatibility;
     /// negative values are clamped to the model default.
-    required PlatformInt64 maxLength,
-  }) = SparseEmbeddingModelType_Custom;
-
+    required PlatformInt64 maxLength , }) = SparseEmbeddingModelType_Custom;
   /// In-process sparse-embedding backend registered via the plugin system.
-  const factory SparseEmbeddingModelType.plugin({
-    /// Name the backend was registered under.
-    required String name,
-  }) = SparseEmbeddingModelType_Plugin;
+  const factory SparseEmbeddingModelType.plugin({ /// Name the backend was registered under.
+    required String name , }) = SparseEmbeddingModelType_Plugin;
+
+
+
+
 }
 
 /// Static metadata for a bundled SPLADE preset (WASM/Android-safe, no ORT).
 ///
 /// Since v5.0.0.
-class SparseEmbeddingPreset {
+class SparseEmbeddingPreset  {
   /// Stable preset name referenced from config.
   final String name;
-
   /// HuggingFace repository hosting the ONNX model.
   final String modelRepo;
-
   /// Path to the ONNX file within the repo.
   final String modelFile;
-
   /// Sibling files that must be downloaded alongside `model_file`.
   final List<String> additionalFiles;
-
   /// Maximum token sequence length.
   final PlatformInt64 maxLength;
-
   /// Human-readable description.
   final String description;
 
-  const SparseEmbeddingPreset({
-    required this.name,
-    required this.modelRepo,
-    required this.modelFile,
-    required this.additionalFiles,
-    required this.maxLength,
-    required this.description,
-  });
+  const SparseEmbeddingPreset({required this.name ,required this.modelRepo ,required this.modelFile ,required this.additionalFiles ,required this.maxLength ,required this.description ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  name.hashCode ^
-  modelRepo.hashCode ^
-  modelFile.hashCode ^
-  additionalFiles.hashCode ^
-  maxLength.hashCode ^
-  description.hashCode;
+  int get hashCode => name.hashCode^modelRepo.hashCode^modelFile.hashCode^additionalFiles.hashCode^maxLength.hashCode^description.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is SparseEmbeddingPreset &&
-  runtimeType == other.runtimeType &&
-  name == other.name &&
-  modelRepo == other.modelRepo &&
-  modelFile == other.modelFile &&
-  additionalFiles == other.additionalFiles &&
-  maxLength == other.maxLength &&
-  description == other.description;
+  runtimeType == other.runtimeType
+  && name == other.name&& modelRepo == other.modelRepo&& modelFile == other.modelFile&& additionalFiles == other.additionalFiles&& maxLength == other.maxLength&& description == other.description;
+
 }
 
 /// SSRF policy configuration.
-class SsrfPolicy {
+class SsrfPolicy  {
   /// If true, reject URLs that resolve to private/metadata IP ranges.
   final bool denyPrivate;
-
   /// Maximum number of HTTP redirects to follow during validation.
   final PlatformInt64 maxRedirects;
 
-  const SsrfPolicy({required this.denyPrivate, required this.maxRedirects});
+  const SsrfPolicy({required this.denyPrivate ,required this.maxRedirects ,});
+
+
+
+
 
   @override
-  int get hashCode => denyPrivate.hashCode ^ maxRedirects.hashCode;
+  int get hashCode => denyPrivate.hashCode^maxRedirects.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is SsrfPolicy &&
-  runtimeType == other.runtimeType &&
-  denyPrivate == other.denyPrivate &&
-  maxRedirects == other.maxRedirects;
+  runtimeType == other.runtimeType
+  && denyPrivate == other.denyPrivate&& maxRedirects == other.maxRedirects;
+
 }
 
 /// Structured data (Schema.org, microdata, RDFa) block.
-class StructuredData {
+class StructuredData  {
   /// Type of structured data
   final StructuredDataType dataType;
-
   /// Raw JSON string representation
   final String rawJson;
-
   /// Schema type if detectable (e.g., "Article", "Event", "Product")
   final String? schemaType;
 
-  const StructuredData({
-    required this.dataType,
-    required this.rawJson,
-    this.schemaType,
-  });
+  const StructuredData({required this.dataType ,required this.rawJson ,this.schemaType ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  dataType.hashCode ^ rawJson.hashCode ^ schemaType.hashCode;
+  int get hashCode => dataType.hashCode^rawJson.hashCode^schemaType.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is StructuredData &&
-  runtimeType == other.runtimeType &&
-  dataType == other.dataType &&
-  rawJson == other.rawJson &&
-  schemaType == other.schemaType;
+  runtimeType == other.runtimeType
+  && dataType == other.dataType&& rawJson == other.rawJson&& schemaType == other.schemaType;
+
 }
 
 /// Result of parsing a structured data file (JSON, JSONL, YAML, or TOML).
-class StructuredDataResult {
+class StructuredDataResult  {
   /// The extracted text content, formatted for readability.
   final String content;
-
   /// The source format identifier (e.g. `"json"`, `"yaml"`, `"toml"`).
   final String format;
-
   /// Key-value metadata extracted from recognized text fields.
   final Map<String, String> metadata;
-
   /// JSON paths of fields that were classified as text-bearing.
   final List<String> textFields;
 
-  const StructuredDataResult({
-    required this.content,
-    required this.format,
-    required this.metadata,
-    required this.textFields,
-  });
+  const StructuredDataResult({required this.content ,required this.format ,required this.metadata ,required this.textFields ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  content.hashCode ^
-  format.hashCode ^
-  metadata.hashCode ^
-  textFields.hashCode;
+  int get hashCode => content.hashCode^format.hashCode^metadata.hashCode^textFields.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is StructuredDataResult &&
-  runtimeType == other.runtimeType &&
-  content == other.content &&
-  format == other.format &&
-  metadata == other.metadata &&
-  textFields == other.textFields;
+  runtimeType == other.runtimeType
+  && content == other.content&& format == other.format&& metadata == other.metadata&& textFields == other.textFields;
+
 }
 
 /// Structured data type classification.
 enum StructuredDataType {
   /// JSON-LD structured data
   jsonLd,
-
   /// Microdata
   microdata,
-
   /// RDFa
   rdFa,
+  ;
+
 }
 
 /// Configuration for LLM-based structured data extraction.
@@ -14199,19 +10742,15 @@ enum StructuredDataType {
 /// [structured_extraction.llm]
 /// model = "openai/gpt-4o"
 /// ```
-class StructuredExtractionConfig {
+class StructuredExtractionConfig  {
   /// JSON Schema defining the desired output structure.
   final String schema;
-
   /// Schema name passed to the LLM's structured output mode.
   final String schemaName;
-
   /// Optional schema description for the LLM.
   final String? schemaDescription;
-
   /// Enable strict mode — output must exactly match the schema.
   final bool strict;
-
   /// Custom Jinja2 extraction prompt template. When `None`, a default template is used.
   ///
   /// Available template variables:
@@ -14220,66 +10759,57 @@ class StructuredExtractionConfig {
   /// - `{{ schema_name }}` — The schema name.
   /// - `{{ schema_description }}` — The schema description (may be empty).
   final String? prompt;
-
   /// LLM configuration for the extraction.
   final LlmConfig llm;
 
-  const StructuredExtractionConfig({
-    required this.schema,
-    required this.schemaName,
-    this.schemaDescription,
-    required this.strict,
-    this.prompt,
-    required this.llm,
-  });
+  const StructuredExtractionConfig({required this.schema ,required this.schemaName ,this.schemaDescription ,required this.strict ,this.prompt ,required this.llm ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  schema.hashCode ^
-  schemaName.hashCode ^
-  schemaDescription.hashCode ^
-  strict.hashCode ^
-  prompt.hashCode ^
-  llm.hashCode;
+  int get hashCode => schema.hashCode^schemaName.hashCode^schemaDescription.hashCode^strict.hashCode^prompt.hashCode^llm.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is StructuredExtractionConfig &&
-  runtimeType == other.runtimeType &&
-  schema == other.schema &&
-  schemaName == other.schemaName &&
-  schemaDescription == other.schemaDescription &&
-  strict == other.strict &&
-  prompt == other.prompt &&
-  llm == other.llm;
+  runtimeType == other.runtimeType
+  && schema == other.schema&& schemaName == other.schemaName&& schemaDescription == other.schemaDescription&& strict == other.strict&& prompt == other.prompt&& llm == other.llm;
+
 }
 
 /// Configuration for the summarisation post-processor.
-class SummarizationConfig {
+class SummarizationConfig  {
   /// Summarisation strategy.
   final SummaryStrategy strategy;
-
   /// Maximum summary length in tokens. `None` lets the backend pick a default.
   final PlatformInt64? maxTokens;
-
   /// LLM configuration for the abstractive backend. Ignored when
   /// `strategy = Extractive`. Required when `strategy = Abstractive`.
   final LlmConfig? llm;
 
-  const SummarizationConfig({required this.strategy, this.maxTokens, this.llm});
+  const SummarizationConfig({required this.strategy ,this.maxTokens ,this.llm ,});
+
+
+
+
 
   @override
-  int get hashCode => strategy.hashCode ^ maxTokens.hashCode ^ llm.hashCode;
+  int get hashCode => strategy.hashCode^maxTokens.hashCode^llm.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is SummarizationConfig &&
-  runtimeType == other.runtimeType &&
-  strategy == other.strategy &&
-  maxTokens == other.maxTokens &&
-  llm == other.llm;
+  runtimeType == other.runtimeType
+  && strategy == other.strategy&& maxTokens == other.maxTokens&& llm == other.llm;
+
 }
 
 /// Summarisation strategy.
@@ -14287,35 +10817,41 @@ enum SummaryStrategy {
   /// Pure-Rust extractive summary (TextRank over the chunk graph). Deterministic,
   /// fast, no external service required.
   extractive,
-
   /// Abstractive summary produced by liter-llm. Requires `liter-llm` feature and
   /// a configured `LlmConfig`. Token usage is captured in
   /// [`ExtractedDocument::llm_usage`](super::extraction::ExtractedDocument::llm_usage).
   abstractive,
+  ;
+
 }
 
 /// A supported document format entry.
 ///
 /// Represents a file extension and its corresponding MIME type that Xberg can process.
-class SupportedFormat {
+class SupportedFormat  {
   /// File extension (without leading dot), e.g., "pdf", "docx"
   final String extension_;
-
   /// MIME type string, e.g., "application/pdf"
   final String mimeType;
 
-  const SupportedFormat({required this.extension_, required this.mimeType});
+  const SupportedFormat({required this.extension_ ,required this.mimeType ,});
+
+
+
+
 
   @override
-  int get hashCode => extension_.hashCode ^ mimeType.hashCode;
+  int get hashCode => extension_.hashCode^mimeType.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is SupportedFormat &&
-  runtimeType == other.runtimeType &&
-  extension_ == other.extension_ &&
-  mimeType == other.mimeType;
+  runtimeType == other.runtimeType
+  && extension_ == other.extension_&& mimeType == other.mimeType;
+
 }
 
 /// SVG-specific configuration for the image-encode pipeline.
@@ -14324,113 +10860,102 @@ class SupportedFormat {
 /// [`ImageOutputFormat::Svg`].  Available when the `svg` feature is active.
 ///
 /// Used via [`ImageExtractionConfig::svg`].
-class SvgOptions {
+class SvgOptions  {
   /// Run SVG bytes through `usvg` sanitization (strips external `href` attributes,
   /// JavaScript event handlers, and `foreignObject` elements) even when the
   /// output format is `Native`.  Defaults to `true`.
   final bool sanitize;
-
   /// Target DPI when rasterizing SVG to a pixel-based format (PNG, JPEG, WebP,
   /// HEIF).  The tree's viewBox is scaled by `render_dpi / 96.0` before the
   /// pixel buffer is allocated.  Defaults to `96.0` (1× CSS pixel density).
   final double renderDpi;
 
-  const SvgOptions({required this.sanitize, required this.renderDpi});
+  const SvgOptions({required this.sanitize ,required this.renderDpi ,});
+
+
+
+
 
   @override
-  int get hashCode => sanitize.hashCode ^ renderDpi.hashCode;
+  int get hashCode => sanitize.hashCode^renderDpi.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is SvgOptions &&
-  runtimeType == other.runtimeType &&
-  sanitize == other.sanitize &&
-  renderDpi == other.renderDpi;
+  runtimeType == other.runtimeType
+  && sanitize == other.sanitize&& renderDpi == other.renderDpi;
+
 }
 
 /// Extracted table structure.
 ///
 /// Represents a table detected and extracted from a document (PDF, image, etc.).
 /// Tables are converted to both structured cell data and Markdown format.
-class Table {
+class Table  {
   /// Table cells as a 2D vector (rows × columns)
   final List<List<String>> cells;
-
   /// Markdown representation of the table
   final String markdown;
-
   /// Page number where the table was found (1-indexed)
   final PlatformInt64 pageNumber;
-
   /// Bounding box of the table on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top).
   /// Only populated for PDF-extracted tables when position data is available.
   final BoundingBox? boundingBox;
 
-  const Table({
-    required this.cells,
-    required this.markdown,
-    required this.pageNumber,
-    this.boundingBox,
-  });
+  const Table({required this.cells ,required this.markdown ,required this.pageNumber ,this.boundingBox ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  cells.hashCode ^
-  markdown.hashCode ^
-  pageNumber.hashCode ^
-  boundingBox.hashCode;
+  int get hashCode => cells.hashCode^markdown.hashCode^pageNumber.hashCode^boundingBox.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is Table &&
-  runtimeType == other.runtimeType &&
-  cells == other.cells &&
-  markdown == other.markdown &&
-  pageNumber == other.pageNumber &&
-  boundingBox == other.boundingBox;
+  runtimeType == other.runtimeType
+  && cells == other.cells&& markdown == other.markdown&& pageNumber == other.pageNumber&& boundingBox == other.boundingBox;
+
 }
 
 /// Individual table cell with content and optional styling.
 ///
 /// Future extension point for rich table support with cell-level metadata.
-class TableCell {
+class TableCell  {
   /// Cell content as text
   final String content;
-
   /// Row span (number of rows this cell spans)
   final PlatformInt64 rowSpan;
-
   /// Column span (number of columns this cell spans)
   final PlatformInt64 colSpan;
-
   /// Whether this is a header cell
   final bool isHeader;
 
-  const TableCell({
-    required this.content,
-    required this.rowSpan,
-    required this.colSpan,
-    required this.isHeader,
-  });
+  const TableCell({required this.content ,required this.rowSpan ,required this.colSpan ,required this.isHeader ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  content.hashCode ^
-  rowSpan.hashCode ^
-  colSpan.hashCode ^
-  isHeader.hashCode;
+  int get hashCode => content.hashCode^rowSpan.hashCode^colSpan.hashCode^isHeader.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is TableCell &&
-  runtimeType == other.runtimeType &&
-  content == other.content &&
-  rowSpan == other.rowSpan &&
-  colSpan == other.colSpan &&
-  isHeader == other.isHeader;
+  runtimeType == other.runtimeType
+  && content == other.content&& rowSpan == other.rowSpan&& colSpan == other.colSpan&& isHeader == other.isHeader;
+
 }
 
 /// Controls how markdown tables are handled when they exceed the chunk size limit.
@@ -14449,72 +10974,70 @@ class TableCell {
 enum TableChunkingMode {
   /// Split tables at row boundaries (default). Continuation chunks have no header.
   split,
-
   /// Prepend the table header to every chunk that continues a split table.
   repeatHeader,
+  ;
+
 }
 
 /// Cell-level changes for a pair of tables that share the same index.
-class TableDiff {
+class TableDiff  {
   /// Zero-based index of the table in both `a.tables` and `b.tables`.
   final PlatformInt64 fromIndex;
-
   /// Zero-based index in `b.tables` (equal to `from_index` for same-dimension tables).
   final PlatformInt64 toIndex;
-
   /// Cell-level changes within the table.
   final List<CellChange> cellChanges;
 
-  const TableDiff({
-    required this.fromIndex,
-    required this.toIndex,
-    required this.cellChanges,
-  });
+  const TableDiff({required this.fromIndex ,required this.toIndex ,required this.cellChanges ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  fromIndex.hashCode ^ toIndex.hashCode ^ cellChanges.hashCode;
+  int get hashCode => fromIndex.hashCode^toIndex.hashCode^cellChanges.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is TableDiff &&
-  runtimeType == other.runtimeType &&
-  fromIndex == other.fromIndex &&
-  toIndex == other.toIndex &&
-  cellChanges == other.cellChanges;
+  runtimeType == other.runtimeType
+  && fromIndex == other.fromIndex&& toIndex == other.toIndex&& cellChanges == other.cellChanges;
+
 }
 
 /// Structured table grid with cell-level metadata.
 ///
 /// Stores row/column dimensions and a flat list of cells with position info.
-class TableGrid {
+class TableGrid  {
   /// Number of rows in the table.
   final PlatformInt64 rows;
-
   /// Number of columns in the table.
   final PlatformInt64 cols;
-
   /// All cells in row-major order.
   final List<GridCell> cells;
 
-  const TableGrid({
-    required this.rows,
-    required this.cols,
-    required this.cells,
-  });
+  const TableGrid({required this.rows ,required this.cols ,required this.cells ,});
+
+
+
+
 
   @override
-  int get hashCode => rows.hashCode ^ cols.hashCode ^ cells.hashCode;
+  int get hashCode => rows.hashCode^cols.hashCode^cells.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is TableGrid &&
-  runtimeType == other.runtimeType &&
-  rows == other.rows &&
-  cols == other.cols &&
-  cells == other.cells;
+  runtimeType == other.runtimeType
+  && rows == other.rows&& cols == other.cols&& cells == other.cells;
+
 }
 
 /// Which table structure recognition model to use.
@@ -14525,22 +11048,19 @@ class TableGrid {
 enum TableModel {
   /// TATR (Table Transformer) -- default, 30MB, DETR-based row/column detection.
   tatr,
-
   /// SLANeXT wired variant -- 365MB, optimized for bordered tables.
   slanetWired,
-
   /// SLANeXT wireless variant -- 365MB, optimized for borderless tables.
   slanetWireless,
-
   /// SLANet-plus -- 7.78MB, lightweight general-purpose.
   slanetPlus,
-
   /// Classifier-routed SLANeXT: auto-select wired/wireless per table.
   /// Uses PP-LCNet classifier (6.78MB) + both SLANeXT variants (730MB total).
   slanetAuto,
-
   /// Disable table structure model inference entirely; use heuristic path only.
   disabled,
+  ;
+
 }
 
 /// How to resolve overlapping native vs layout (TATR/SLANeXT) tables.
@@ -14554,14 +11074,14 @@ enum TableOverlapPreference {
   /// cells and therefore win, which maximizes table-structure F1 but can lower
   /// text F1 when the recognized cell reflow diverges from the source reading order.
   content,
-
   /// Prefer the native oxide table when it overlaps a layout table. Native tables
   /// preserve the source reading order, which scores higher on text F1 for
   /// documents where the layout model's cell reflow diverges from the ground truth.
   native,
-
   /// Prefer the layout (TATR/SLANeXT) table when it overlaps a native table.
   layout,
+  ;
+
 }
 
 /// Tesseract OCR configuration.
@@ -14569,12 +11089,11 @@ enum TableOverlapPreference {
 /// Provides fine-grained control over Tesseract OCR engine parameters.
 /// Most users can use the defaults, but these settings allow optimization
 /// for specific document types (invoices, handwriting, etc.).
-class TesseractConfig {
+class TesseractConfig  {
   /// Language code(s) for OCR recognition.
   /// Accepts either a single language code ("eng") or a list (["eng", "deu"]).
   /// For Tesseract backend, languages are joined with "+".
   final List<String> language;
-
   /// Page Segmentation Mode (0-13).
   ///
   /// Common values:
@@ -14582,10 +11101,8 @@ class TesseractConfig {
   /// - 6: Assume a single uniform block of text (WASM default — avoids layout-analysis hang)
   /// - 11: Sparse text with no particular order
   final PlatformInt64 psm;
-
   /// Output format ("text" or "markdown")
   final String outputFormat;
-
   /// OCR Engine Mode (0-3).
   ///
   /// - 0: Legacy engine only
@@ -14593,380 +11110,250 @@ class TesseractConfig {
   /// - 2: Legacy + LSTM
   /// - 3: Default (based on what's available)
   final PlatformInt64 oem;
-
   /// Minimum confidence threshold (0.0-100.0).
   ///
   /// Words with confidence below this threshold may be rejected or flagged.
   final double minConfidence;
-
   /// Image preprocessing configuration.
   ///
   /// Controls how images are preprocessed before OCR. Can significantly
   /// improve quality for scanned documents or low-quality images.
   final ImagePreprocessingConfig? preprocessing;
-
   /// Enable automatic table detection and reconstruction
   final bool enableTableDetection;
-
   /// Minimum confidence threshold for table detection (0.0-1.0)
   final double tableMinConfidence;
-
   /// Column threshold for table detection (pixels)
   final PlatformInt64 tableColumnThreshold;
-
   /// Row threshold ratio for table detection (0.0-1.0)
   final double tableRowThresholdRatio;
-
   /// Enable OCR result caching
   final bool useCache;
-
   /// Use pre-adapted templates for character classification
   final bool classifyUsePreAdaptedTemplates;
-
   /// Enable N-gram language model
   final bool languageModelNgramOn;
-
   /// Don't reject good words during block-level processing
   final bool tesseditDontBlkrejGoodWds;
-
   /// Don't reject good words during row-level processing
   final bool tesseditDontRowrejGoodWds;
-
   /// Enable dictionary correction
   final bool tesseditEnableDictCorrection;
-
   /// Whitelist of allowed characters (empty = all allowed)
   final String tesseditCharWhitelist;
-
   /// Blacklist of forbidden characters (empty = none forbidden)
   final String tesseditCharBlacklist;
-
   /// Use primary language params model
   final bool tesseditUsePrimaryParamsModel;
-
   /// Variable-width space detection
   final bool textordSpaceSizeIsVariable;
-
   /// Use adaptive thresholding method
   final bool thresholdingMethod;
 
-  const TesseractConfig({
-    required this.language,
-    required this.psm,
-    required this.outputFormat,
-    required this.oem,
-    required this.minConfidence,
-    this.preprocessing,
-    required this.enableTableDetection,
-    required this.tableMinConfidence,
-    required this.tableColumnThreshold,
-    required this.tableRowThresholdRatio,
-    required this.useCache,
-    required this.classifyUsePreAdaptedTemplates,
-    required this.languageModelNgramOn,
-    required this.tesseditDontBlkrejGoodWds,
-    required this.tesseditDontRowrejGoodWds,
-    required this.tesseditEnableDictCorrection,
-    required this.tesseditCharWhitelist,
-    required this.tesseditCharBlacklist,
-    required this.tesseditUsePrimaryParamsModel,
-    required this.textordSpaceSizeIsVariable,
-    required this.thresholdingMethod,
-  });
+  const TesseractConfig({required this.language ,required this.psm ,required this.outputFormat ,required this.oem ,required this.minConfidence ,this.preprocessing ,required this.enableTableDetection ,required this.tableMinConfidence ,required this.tableColumnThreshold ,required this.tableRowThresholdRatio ,required this.useCache ,required this.classifyUsePreAdaptedTemplates ,required this.languageModelNgramOn ,required this.tesseditDontBlkrejGoodWds ,required this.tesseditDontRowrejGoodWds ,required this.tesseditEnableDictCorrection ,required this.tesseditCharWhitelist ,required this.tesseditCharBlacklist ,required this.tesseditUsePrimaryParamsModel ,required this.textordSpaceSizeIsVariable ,required this.thresholdingMethod ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  language.hashCode ^
-  psm.hashCode ^
-  outputFormat.hashCode ^
-  oem.hashCode ^
-  minConfidence.hashCode ^
-  preprocessing.hashCode ^
-  enableTableDetection.hashCode ^
-  tableMinConfidence.hashCode ^
-  tableColumnThreshold.hashCode ^
-  tableRowThresholdRatio.hashCode ^
-  useCache.hashCode ^
-  classifyUsePreAdaptedTemplates.hashCode ^
-  languageModelNgramOn.hashCode ^
-  tesseditDontBlkrejGoodWds.hashCode ^
-  tesseditDontRowrejGoodWds.hashCode ^
-  tesseditEnableDictCorrection.hashCode ^
-  tesseditCharWhitelist.hashCode ^
-  tesseditCharBlacklist.hashCode ^
-  tesseditUsePrimaryParamsModel.hashCode ^
-  textordSpaceSizeIsVariable.hashCode ^
-  thresholdingMethod.hashCode;
+  int get hashCode => language.hashCode^psm.hashCode^outputFormat.hashCode^oem.hashCode^minConfidence.hashCode^preprocessing.hashCode^enableTableDetection.hashCode^tableMinConfidence.hashCode^tableColumnThreshold.hashCode^tableRowThresholdRatio.hashCode^useCache.hashCode^classifyUsePreAdaptedTemplates.hashCode^languageModelNgramOn.hashCode^tesseditDontBlkrejGoodWds.hashCode^tesseditDontRowrejGoodWds.hashCode^tesseditEnableDictCorrection.hashCode^tesseditCharWhitelist.hashCode^tesseditCharBlacklist.hashCode^tesseditUsePrimaryParamsModel.hashCode^textordSpaceSizeIsVariable.hashCode^thresholdingMethod.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is TesseractConfig &&
-  runtimeType == other.runtimeType &&
-  language == other.language &&
-  psm == other.psm &&
-  outputFormat == other.outputFormat &&
-  oem == other.oem &&
-  minConfidence == other.minConfidence &&
-  preprocessing == other.preprocessing &&
-  enableTableDetection == other.enableTableDetection &&
-  tableMinConfidence == other.tableMinConfidence &&
-  tableColumnThreshold == other.tableColumnThreshold &&
-  tableRowThresholdRatio == other.tableRowThresholdRatio &&
-  useCache == other.useCache &&
-  classifyUsePreAdaptedTemplates ==
-  other.classifyUsePreAdaptedTemplates &&
-  languageModelNgramOn == other.languageModelNgramOn &&
-  tesseditDontBlkrejGoodWds == other.tesseditDontBlkrejGoodWds &&
-  tesseditDontRowrejGoodWds == other.tesseditDontRowrejGoodWds &&
-  tesseditEnableDictCorrection == other.tesseditEnableDictCorrection &&
-  tesseditCharWhitelist == other.tesseditCharWhitelist &&
-  tesseditCharBlacklist == other.tesseditCharBlacklist &&
-  tesseditUsePrimaryParamsModel ==
-  other.tesseditUsePrimaryParamsModel &&
-  textordSpaceSizeIsVariable == other.textordSpaceSizeIsVariable &&
-  thresholdingMethod == other.thresholdingMethod;
+  runtimeType == other.runtimeType
+  && language == other.language&& psm == other.psm&& outputFormat == other.outputFormat&& oem == other.oem&& minConfidence == other.minConfidence&& preprocessing == other.preprocessing&& enableTableDetection == other.enableTableDetection&& tableMinConfidence == other.tableMinConfidence&& tableColumnThreshold == other.tableColumnThreshold&& tableRowThresholdRatio == other.tableRowThresholdRatio&& useCache == other.useCache&& classifyUsePreAdaptedTemplates == other.classifyUsePreAdaptedTemplates&& languageModelNgramOn == other.languageModelNgramOn&& tesseditDontBlkrejGoodWds == other.tesseditDontBlkrejGoodWds&& tesseditDontRowrejGoodWds == other.tesseditDontRowrejGoodWds&& tesseditEnableDictCorrection == other.tesseditEnableDictCorrection&& tesseditCharWhitelist == other.tesseditCharWhitelist&& tesseditCharBlacklist == other.tesseditCharBlacklist&& tesseditUsePrimaryParamsModel == other.tesseditUsePrimaryParamsModel&& textordSpaceSizeIsVariable == other.textordSpaceSizeIsVariable&& thresholdingMethod == other.thresholdingMethod;
+
 }
 
 /// Inline text annotation — byte-range based formatting and links.
 ///
 /// Annotations reference byte offsets into the node's text content,
 /// enabling precise identification of formatted regions.
-class TextAnnotation {
+class TextAnnotation  {
   /// Start byte offset in the node's text content (inclusive).
   final PlatformInt64 start;
-
   /// End byte offset in the node's text content (exclusive).
   final PlatformInt64 end;
-
   /// Annotation type.
   final AnnotationKind kind;
 
-  const TextAnnotation({
-    required this.start,
-    required this.end,
-    required this.kind,
-  });
+  const TextAnnotation({required this.start ,required this.end ,required this.kind ,});
+
+
+
+
 
   @override
-  int get hashCode => start.hashCode ^ end.hashCode ^ kind.hashCode;
+  int get hashCode => start.hashCode^end.hashCode^kind.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is TextAnnotation &&
-  runtimeType == other.runtimeType &&
-  start == other.start &&
-  end == other.end &&
-  kind == other.kind;
+  runtimeType == other.runtimeType
+  && start == other.start&& end == other.end&& kind == other.kind;
+
 }
 
 /// Text direction enumeration for HTML documents.
 enum TextDirection {
   /// Left-to-right text direction
   leftToRight,
-
   /// Right-to-left text direction
   rightToLeft,
-
   /// Automatic text direction detection
   auto,
+  ;
+
 }
 
 /// Plain text and Markdown extraction result.
 ///
 /// Contains the extracted text along with statistics and,
 /// for Markdown files, structural elements like headers and links.
-class TextExtractionResult {
+class TextExtractionResult  {
   /// Extracted text content
   final String content;
-
   /// Number of lines
   final PlatformInt64 lineCount;
-
   /// Number of words
   final PlatformInt64 wordCount;
-
   /// Number of characters
   final PlatformInt64 characterCount;
-
   /// Markdown headers (text only, Markdown files only)
   final List<String>? headers;
 
-  const TextExtractionResult({
-    required this.content,
-    required this.lineCount,
-    required this.wordCount,
-    required this.characterCount,
-    this.headers,
-  });
+  const TextExtractionResult({required this.content ,required this.lineCount ,required this.wordCount ,required this.characterCount ,this.headers ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  content.hashCode ^
-  lineCount.hashCode ^
-  wordCount.hashCode ^
-  characterCount.hashCode ^
-  headers.hashCode;
+  int get hashCode => content.hashCode^lineCount.hashCode^wordCount.hashCode^characterCount.hashCode^headers.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is TextExtractionResult &&
-  runtimeType == other.runtimeType &&
-  content == other.content &&
-  lineCount == other.lineCount &&
-  wordCount == other.wordCount &&
-  characterCount == other.characterCount &&
-  headers == other.headers;
+  runtimeType == other.runtimeType
+  && content == other.content&& lineCount == other.lineCount&& wordCount == other.wordCount&& characterCount == other.characterCount&& headers == other.headers;
+
 }
 
 /// Text/Markdown metadata.
 ///
 /// Extracted from plain text and Markdown files. Includes word counts and,
 /// for Markdown, structural elements like headers and links.
-class TextMetadata {
+class TextMetadata  {
   /// Number of lines in the document
   final PlatformInt64 lineCount;
-
   /// Number of words
   final PlatformInt64 wordCount;
-
   /// Number of characters
   final PlatformInt64 characterCount;
-
   /// Markdown headers (headings text only, for Markdown files)
   final List<String>? headers;
 
-  const TextMetadata({
-    required this.lineCount,
-    required this.wordCount,
-    required this.characterCount,
-    this.headers,
-  });
+  const TextMetadata({required this.lineCount ,required this.wordCount ,required this.characterCount ,this.headers ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  lineCount.hashCode ^
-  wordCount.hashCode ^
-  characterCount.hashCode ^
-  headers.hashCode;
+  int get hashCode => lineCount.hashCode^wordCount.hashCode^characterCount.hashCode^headers.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is TextMetadata &&
-  runtimeType == other.runtimeType &&
-  lineCount == other.lineCount &&
-  wordCount == other.wordCount &&
-  characterCount == other.characterCount &&
-  headers == other.headers;
+  runtimeType == other.runtimeType
+  && lineCount == other.lineCount&& wordCount == other.wordCount&& characterCount == other.characterCount&& headers == other.headers;
+
 }
 
 /// Configuration for the token-reduction pipeline.
-class TokenReductionConfig {
+class TokenReductionConfig  {
   /// Reduction intensity level.
   final ReductionLevel level;
-
   /// ISO 639-1 language code hint for stopword selection (e.g. `"en"`, `"de"`).
   final String? languageHint;
-
   /// Preserve Markdown formatting tokens during reduction.
   final bool preserveMarkdown;
-
   /// Preserve code block contents unchanged.
   final bool preserveCode;
-
   /// Cosine similarity threshold below which sentences are considered dissimilar.
   final double semanticThreshold;
-
   /// Use Rayon parallel iterators for multi-core processing.
   final bool enableParallel;
-
   /// Use SIMD-optimized text scanning where available.
   final bool useSimd;
-
   /// Per-language custom stopword lists (`language_code → stopword_list`).
   final Map<String, List<String>>? customStopwords;
-
   /// Regex patterns whose matched text is always preserved unchanged.
   final List<String> preservePatterns;
-
   /// Target fraction of text to retain (0.0–1.0); `None` = no fixed target.
   final double? targetReduction;
-
   /// Group semantically similar sentences and emit only one per cluster.
   final bool enableSemanticClustering;
 
-  const TokenReductionConfig({
-    required this.level,
-    this.languageHint,
-    required this.preserveMarkdown,
-    required this.preserveCode,
-    required this.semanticThreshold,
-    required this.enableParallel,
-    required this.useSimd,
-    this.customStopwords,
-    required this.preservePatterns,
-    this.targetReduction,
-    required this.enableSemanticClustering,
-  });
+  const TokenReductionConfig({required this.level ,this.languageHint ,required this.preserveMarkdown ,required this.preserveCode ,required this.semanticThreshold ,required this.enableParallel ,required this.useSimd ,this.customStopwords ,required this.preservePatterns ,this.targetReduction ,required this.enableSemanticClustering ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  level.hashCode ^
-  languageHint.hashCode ^
-  preserveMarkdown.hashCode ^
-  preserveCode.hashCode ^
-  semanticThreshold.hashCode ^
-  enableParallel.hashCode ^
-  useSimd.hashCode ^
-  customStopwords.hashCode ^
-  preservePatterns.hashCode ^
-  targetReduction.hashCode ^
-  enableSemanticClustering.hashCode;
+  int get hashCode => level.hashCode^languageHint.hashCode^preserveMarkdown.hashCode^preserveCode.hashCode^semanticThreshold.hashCode^enableParallel.hashCode^useSimd.hashCode^customStopwords.hashCode^preservePatterns.hashCode^targetReduction.hashCode^enableSemanticClustering.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is TokenReductionConfig &&
-  runtimeType == other.runtimeType &&
-  level == other.level &&
-  languageHint == other.languageHint &&
-  preserveMarkdown == other.preserveMarkdown &&
-  preserveCode == other.preserveCode &&
-  semanticThreshold == other.semanticThreshold &&
-  enableParallel == other.enableParallel &&
-  useSimd == other.useSimd &&
-  customStopwords == other.customStopwords &&
-  preservePatterns == other.preservePatterns &&
-  targetReduction == other.targetReduction &&
-  enableSemanticClustering == other.enableSemanticClustering;
+  runtimeType == other.runtimeType
+  && level == other.level&& languageHint == other.languageHint&& preserveMarkdown == other.preserveMarkdown&& preserveCode == other.preserveCode&& semanticThreshold == other.semanticThreshold&& enableParallel == other.enableParallel&& useSimd == other.useSimd&& customStopwords == other.customStopwords&& preservePatterns == other.preservePatterns&& targetReduction == other.targetReduction&& enableSemanticClustering == other.enableSemanticClustering;
+
 }
 
 /// Token reduction configuration.
-class TokenReductionOptions {
+class TokenReductionOptions  {
   /// Reduction mode: "off", "light", "moderate", "aggressive", "maximum"
   final String mode;
-
   /// Preserve important words (capitalized, technical terms)
   final bool preserveImportantWords;
 
-  const TokenReductionOptions({
-    required this.mode,
-    required this.preserveImportantWords,
-  });
+  const TokenReductionOptions({required this.mode ,required this.preserveImportantWords ,});
+
+
+
+
 
   @override
-  int get hashCode => mode.hashCode ^ preserveImportantWords.hashCode;
+  int get hashCode => mode.hashCode^preserveImportantWords.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is TokenReductionOptions &&
-  runtimeType == other.runtimeType &&
-  mode == other.mode &&
-  preserveImportantWords == other.preserveImportantWords;
+  runtimeType == other.runtimeType
+  && mode == other.mode&& preserveImportantWords == other.preserveImportantWords;
+
 }
 
 /// Configuration for audio/video transcription (speech-to-text).
@@ -14986,60 +11373,51 @@ class TokenReductionOptions {
 /// enabled = true
 /// model = "tiny"
 /// ```
-class TranscriptionConfig {
+class TranscriptionConfig  {
   /// Master switch. When false the block is ignored and audio files fall back
   /// to the normal "unsupported format" path.
   final bool enabled;
-
   /// Whisper model size to use.
   ///
   /// Smaller = faster + lower memory. `tiny` is the pragmatic default for
   /// first-time users and CI.
   final WhisperModel model;
-
   /// Optional language hint (ISO-639-1 code, e.g. "en", "de").
   ///
   /// When `None` (default), the current engine falls back to English.
   /// For deterministic production output, always set this explicitly.
   final String? language;
-
   /// Whether to request segment-level timestamps.
   ///
   /// Accepted for forward compatibility. The current engine always uses
   /// `<|notimestamps|>` and does not emit segment metadata yet.
   final bool timestamps;
-
   /// Hard safety limit on input duration (milliseconds).
   ///
   /// Files longer than this are rejected after decode, before model work.
   /// Default: 30 minutes. Set to `None` to disable (not recommended for
   /// untrusted input).
   final PlatformInt64? maxDurationMs;
-
   /// Hard safety limit on input size (bytes).
   ///
   /// Default: 512 MiB. Protects against pathological or malicious uploads.
   final PlatformInt64? maxBytes;
-
   /// Wall-clock timeout for the entire transcription operation (ms).
   ///
   /// Default: 10 minutes. Reserved for timeout enforcement; the current
   /// extractor does not enforce this field yet.
   final PlatformInt64? timeoutMs;
-
   /// Optional alternate Hugging Face cache root for Whisper models.
   ///
   /// When unset, hf-hub follows `HF_HUB_CACHE`, `HUGGINGFACE_HUB_CACHE`,
   /// `HF_HOME`, XDG, and platform defaults. Files remain in the standard
   /// content-addressed snapshot layout and are not copied into an Xberg cache.
   final String? modelCacheDir;
-
   /// Allow network access to download models from Hugging Face Hub.
   ///
   /// When `false`, only previously cached models may be used. Useful for
   /// air-gapped or fully offline deployments.
   final bool allowNetwork;
-
   /// Request SHA256 verification of downloaded model files.
   ///
   /// Defaults to `false` because the resolver downloads from mutable Hugging
@@ -15048,47 +11426,24 @@ class TranscriptionConfig {
   /// metadata is available.
   final bool verifyHash;
 
-  const TranscriptionConfig({
-    required this.enabled,
-    required this.model,
-    this.language,
-    required this.timestamps,
-    this.maxDurationMs,
-    this.maxBytes,
-    this.timeoutMs,
-    this.modelCacheDir,
-    required this.allowNetwork,
-    required this.verifyHash,
-  });
+  const TranscriptionConfig({required this.enabled ,required this.model ,this.language ,required this.timestamps ,this.maxDurationMs ,this.maxBytes ,this.timeoutMs ,this.modelCacheDir ,required this.allowNetwork ,required this.verifyHash ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  enabled.hashCode ^
-  model.hashCode ^
-  language.hashCode ^
-  timestamps.hashCode ^
-  maxDurationMs.hashCode ^
-  maxBytes.hashCode ^
-  timeoutMs.hashCode ^
-  modelCacheDir.hashCode ^
-  allowNetwork.hashCode ^
-  verifyHash.hashCode;
+  int get hashCode => enabled.hashCode^model.hashCode^language.hashCode^timestamps.hashCode^maxDurationMs.hashCode^maxBytes.hashCode^timeoutMs.hashCode^modelCacheDir.hashCode^allowNetwork.hashCode^verifyHash.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is TranscriptionConfig &&
-  runtimeType == other.runtimeType &&
-  enabled == other.enabled &&
-  model == other.model &&
-  language == other.language &&
-  timestamps == other.timestamps &&
-  maxDurationMs == other.maxDurationMs &&
-  maxBytes == other.maxBytes &&
-  timeoutMs == other.timeoutMs &&
-  modelCacheDir == other.modelCacheDir &&
-  allowNetwork == other.allowNetwork &&
-  verifyHash == other.verifyHash;
+  runtimeType == other.runtimeType
+  && enabled == other.enabled&& model == other.model&& language == other.language&& timestamps == other.timestamps&& maxDurationMs == other.maxDurationMs&& maxBytes == other.maxBytes&& timeoutMs == other.timeoutMs&& modelCacheDir == other.modelCacheDir&& allowNetwork == other.allowNetwork&& verifyHash == other.verifyHash;
+
 }
 
 /// Translation of the extracted content.
@@ -15097,83 +11452,67 @@ class TranscriptionConfig {
 /// `preserve_markup` was requested) the translated `formatted_content`. Chunks
 /// are translated in place inside `ExtractedDocument::chunks[*].content` rather
 /// than duplicated here.
-class Translation {
+class Translation  {
   /// BCP-47 language tag the translation was produced into (e.g. `"de"`, `"fr-CA"`).
   final String targetLang;
-
   /// BCP-47 source language. `None` when the translation backend was asked to detect.
   final String? sourceLang;
-
   /// Translated plain-text body. Matches the shape of `ExtractedDocument::content`.
   final String content;
-
   /// Translated markup body (Markdown / HTML / etc.) when `preserve_markup` was
   /// enabled on the config. `None` otherwise.
   final String? formattedContent;
 
-  const Translation({
-    required this.targetLang,
-    this.sourceLang,
-    required this.content,
-    this.formattedContent,
-  });
+  const Translation({required this.targetLang ,this.sourceLang ,required this.content ,this.formattedContent ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  targetLang.hashCode ^
-  sourceLang.hashCode ^
-  content.hashCode ^
-  formattedContent.hashCode;
+  int get hashCode => targetLang.hashCode^sourceLang.hashCode^content.hashCode^formattedContent.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is Translation &&
-  runtimeType == other.runtimeType &&
-  targetLang == other.targetLang &&
-  sourceLang == other.sourceLang &&
-  content == other.content &&
-  formattedContent == other.formattedContent;
+  runtimeType == other.runtimeType
+  && targetLang == other.targetLang&& sourceLang == other.sourceLang&& content == other.content&& formattedContent == other.formattedContent;
+
 }
 
 /// Configuration for the translation post-processor.
-class TranslationConfig {
+class TranslationConfig  {
   /// BCP-47 language tag for the target language (e.g. `"de"`, `"fr-CA"`).
   final String targetLang;
-
   /// Optional explicit source language. `None` asks the backend to auto-detect.
   final String? sourceLang;
-
   /// Translate the formatted (Markdown/HTML) rendition alongside plain text when
   /// `formatted_content` is present.
   final bool preserveMarkup;
-
   /// LLM configuration used for translation.
   final LlmConfig llm;
 
-  const TranslationConfig({
-    required this.targetLang,
-    this.sourceLang,
-    required this.preserveMarkup,
-    required this.llm,
-  });
+  const TranslationConfig({required this.targetLang ,this.sourceLang ,required this.preserveMarkup ,required this.llm ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  targetLang.hashCode ^
-  sourceLang.hashCode ^
-  preserveMarkup.hashCode ^
-  llm.hashCode;
+  int get hashCode => targetLang.hashCode^sourceLang.hashCode^preserveMarkup.hashCode^llm.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is TranslationConfig &&
-  runtimeType == other.runtimeType &&
-  targetLang == other.targetLang &&
-  sourceLang == other.sourceLang &&
-  preserveMarkup == other.preserveMarkup &&
-  llm == other.llm;
+  runtimeType == other.runtimeType
+  && targetLang == other.targetLang&& sourceLang == other.sourceLang&& preserveMarkup == other.preserveMarkup&& llm == other.llm;
+
 }
 
 /// Configuration for tree-sitter language pack integration.
@@ -15192,152 +11531,105 @@ class TranslationConfig {
 /// comments = true
 /// docstrings = true
 /// ```
-class TreeSitterConfig {
+class TreeSitterConfig  {
   /// Enable code intelligence processing (default: true).
   ///
   /// When `false`, tree-sitter analysis is completely skipped even if
   /// the config section is present.
   final bool enabled;
-
   /// Custom cache directory for downloaded grammars.
   ///
   /// When `None`, uses the default: `~/.cache/tree-sitter-language-pack/v{version}/libs/`.
   final String? cacheDir;
-
   /// Languages to pre-download on init (e.g., `["python", "rust"]`).
   final List<String>? languages;
-
   /// Language groups to pre-download (e.g., `["web", "systems", "scripting"]`).
   final List<String>? groups;
-
   /// Processing options for code analysis.
   final TreeSitterProcessConfig process;
 
-  const TreeSitterConfig({
-    required this.enabled,
-    this.cacheDir,
-    this.languages,
-    this.groups,
-    required this.process,
-  });
+  const TreeSitterConfig({required this.enabled ,this.cacheDir ,this.languages ,this.groups ,required this.process ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  enabled.hashCode ^
-  cacheDir.hashCode ^
-  languages.hashCode ^
-  groups.hashCode ^
-  process.hashCode;
+  int get hashCode => enabled.hashCode^cacheDir.hashCode^languages.hashCode^groups.hashCode^process.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is TreeSitterConfig &&
-  runtimeType == other.runtimeType &&
-  enabled == other.enabled &&
-  cacheDir == other.cacheDir &&
-  languages == other.languages &&
-  groups == other.groups &&
-  process == other.process;
+  runtimeType == other.runtimeType
+  && enabled == other.enabled&& cacheDir == other.cacheDir&& languages == other.languages&& groups == other.groups&& process == other.process;
+
 }
 
 /// Processing options for tree-sitter code analysis.
 ///
 /// Controls which analysis features are enabled when extracting code files.
-class TreeSitterProcessConfig {
+class TreeSitterProcessConfig  {
   /// Extract structural items (functions, classes, structs, etc.). Default: true.
   final bool structure;
-
   /// Extract import statements. Default: true.
   final bool imports;
-
   /// Extract export statements. Default: true.
   final bool exports;
-
   /// Extract comments. Default: false.
   final bool comments;
-
   /// Extract docstrings. Default: false.
   final bool docstrings;
-
   /// Extract symbol definitions. Default: false.
   final bool symbols;
-
   /// Include parse diagnostics. Default: false.
   final bool diagnostics;
-
   /// Extract a hierarchical key/value data tree from data-format files
   /// (JSON, YAML, TOML, XML, CSV, etc.). Default: false.
   final bool dataExtraction;
-
   /// Maximum chunk size in bytes. `None` disables chunking.
   final PlatformInt64? chunkMaxSize;
-
   /// Content rendering mode for code extraction.
   final CodeContentMode contentMode;
 
-  const TreeSitterProcessConfig({
-    required this.structure,
-    required this.imports,
-    required this.exports,
-    required this.comments,
-    required this.docstrings,
-    required this.symbols,
-    required this.diagnostics,
-    required this.dataExtraction,
-    this.chunkMaxSize,
-    required this.contentMode,
-  });
+  const TreeSitterProcessConfig({required this.structure ,required this.imports ,required this.exports ,required this.comments ,required this.docstrings ,required this.symbols ,required this.diagnostics ,required this.dataExtraction ,this.chunkMaxSize ,required this.contentMode ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-      structure.hashCode ^
-      imports.hashCode ^
-      exports.hashCode ^
-      comments.hashCode ^
-      docstrings.hashCode ^
-      symbols.hashCode ^
-      diagnostics.hashCode ^
-      dataExtraction.hashCode ^
-      chunkMaxSize.hashCode ^
-      contentMode.hashCode;
+  int get hashCode => structure.hashCode^imports.hashCode^exports.hashCode^comments.hashCode^docstrings.hashCode^symbols.hashCode^diagnostics.hashCode^dataExtraction.hashCode^chunkMaxSize.hashCode^contentMode.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TreeSitterProcessConfig &&
-          runtimeType == other.runtimeType &&
-          structure == other.structure &&
-          imports == other.imports &&
-          exports == other.exports &&
-          comments == other.comments &&
-          docstrings == other.docstrings &&
-          symbols == other.symbols &&
-          diagnostics == other.diagnostics &&
-          dataExtraction == other.dataExtraction &&
-          chunkMaxSize == other.chunkMaxSize &&
-          contentMode == other.contentMode;
+  identical(this, other) ||
+  other is TreeSitterProcessConfig &&
+  runtimeType == other.runtimeType
+  && structure == other.structure&& imports == other.imports&& exports == other.exports&& comments == other.comments&& docstrings == other.docstrings&& symbols == other.symbols&& diagnostics == other.diagnostics&& dataExtraction == other.dataExtraction&& chunkMaxSize == other.chunkMaxSize&& contentMode == other.contentMode;
+
 }
 
 /// Semantic classification of an extracted URI.
 enum UriKind {
   /// A clickable hyperlink (web URL, file link).
   hyperlink,
-
   /// An image or media resource reference.
   image,
-
   /// An internal anchor or cross-reference target.
   anchor,
-
   /// A citation or bibliographic reference (DOI, academic ref).
   citation,
-
   /// A general reference (e.g. `\ref{}` in LaTeX, `:ref:` in RST).
   reference,
-
   /// An email address (`mailto:` link or bare email).
   email,
+  ;
+
 }
 
 /// URL encoding strategy for link and image destinations.
@@ -15355,140 +11647,113 @@ enum UriKind {
 enum UrlEscapeStyle {
   /// Wrap destinations that contain spaces or newlines in angle brackets. Default.
   angle,
-
   /// Percent-encode all characters that are not RFC 3986 unreserved or `/`.
   percent,
+  ;
+
 }
 
 /// URL ingestion and crawl configuration.
-class UrlExtractionConfig {
+class UrlExtractionConfig  {
   /// URL extraction mode.
   final UrlExtractionMode mode;
-
   /// Crawlberg crawl configuration used for HTTP(S) URL extraction.
   final CrawlConfig crawl;
-
   /// Optional regex filter for document-discovered URLs.
   final String? documentUrlPattern;
-
   /// Maximum URLs to follow per extraction result.
   final PlatformInt64? maxDocumentUrlsPerResult;
-
   /// Maximum URLs followed across the whole extraction call.
   final PlatformInt64? maxTotalUrls;
-
   /// Allow bare local filesystem path inputs.
   final bool allowLocalFileInputs;
-
   /// Allow local `file://` URI inputs.
   final bool allowFileUris;
 
-  const UrlExtractionConfig({
-    required this.mode,
-    required this.crawl,
-    this.documentUrlPattern,
-    this.maxDocumentUrlsPerResult,
-    this.maxTotalUrls,
-    required this.allowLocalFileInputs,
-    required this.allowFileUris,
-  });
+  const UrlExtractionConfig({required this.mode ,required this.crawl ,this.documentUrlPattern ,this.maxDocumentUrlsPerResult ,this.maxTotalUrls ,required this.allowLocalFileInputs ,required this.allowFileUris ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  mode.hashCode ^
-  crawl.hashCode ^
-  documentUrlPattern.hashCode ^
-  maxDocumentUrlsPerResult.hashCode ^
-  maxTotalUrls.hashCode ^
-  allowLocalFileInputs.hashCode ^
-  allowFileUris.hashCode;
+  int get hashCode => mode.hashCode^crawl.hashCode^documentUrlPattern.hashCode^maxDocumentUrlsPerResult.hashCode^maxTotalUrls.hashCode^allowLocalFileInputs.hashCode^allowFileUris.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is UrlExtractionConfig &&
-  runtimeType == other.runtimeType &&
-  mode == other.mode &&
-  crawl == other.crawl &&
-  documentUrlPattern == other.documentUrlPattern &&
-  maxDocumentUrlsPerResult == other.maxDocumentUrlsPerResult &&
-  maxTotalUrls == other.maxTotalUrls &&
-  allowLocalFileInputs == other.allowLocalFileInputs &&
-  allowFileUris == other.allowFileUris;
+  runtimeType == other.runtimeType
+  && mode == other.mode&& crawl == other.crawl&& documentUrlPattern == other.documentUrlPattern&& maxDocumentUrlsPerResult == other.maxDocumentUrlsPerResult&& maxTotalUrls == other.maxTotalUrls&& allowLocalFileInputs == other.allowLocalFileInputs&& allowFileUris == other.allowFileUris;
+
 }
 
 /// URL extraction mode.
 enum UrlExtractionMode {
   /// Classify HTTP(S) resources after fetch.
   auto,
-
   /// Treat the URI as a single remote document/page.
   document,
-
   /// Crawl from the seed URI and extract discovered pages/documents.
   crawl,
+  ;
+
 }
 
 /// User-provided chunk configuration.
-class UserChunkConfig {
+class UserChunkConfig  {
   /// User-specified page ranges (overrides automatic chunking).
   final List<PageRange>? pageRanges;
-
   /// User-specified pages per chunk (overrides automatic calculation).
   final PlatformInt64? pagesPerChunk;
-
   /// Force chunking even for small documents.
   final bool forceChunking;
-
   /// Disable chunking even for large documents.
   final bool disableChunking;
 
-  const UserChunkConfig({
-    this.pageRanges,
-    this.pagesPerChunk,
-    required this.forceChunking,
-    required this.disableChunking,
-  });
+  const UserChunkConfig({this.pageRanges ,this.pagesPerChunk ,required this.forceChunking ,required this.disableChunking ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  pageRanges.hashCode ^
-  pagesPerChunk.hashCode ^
-  forceChunking.hashCode ^
-  disableChunking.hashCode;
+  int get hashCode => pageRanges.hashCode^pagesPerChunk.hashCode^forceChunking.hashCode^disableChunking.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is UserChunkConfig &&
-  runtimeType == other.runtimeType &&
-  pageRanges == other.pageRanges &&
-  pagesPerChunk == other.pagesPerChunk &&
-  forceChunking == other.forceChunking &&
-  disableChunking == other.disableChunking;
+  runtimeType == other.runtimeType
+  && pageRanges == other.pageRanges&& pagesPerChunk == other.pagesPerChunk&& forceChunking == other.forceChunking&& disableChunking == other.disableChunking;
+
 }
 
 @freezed
-sealed class VlmFallbackPolicy with _$VlmFallbackPolicy {
+sealed class VlmFallbackPolicy with _$VlmFallbackPolicy  {
   const VlmFallbackPolicy._();
 
   /// No VLM fallback (default). Behaves identically to the pre-policy single-backend mode.
   const factory VlmFallbackPolicy.disabled() = VlmFallbackPolicy_Disabled;
-
   /// Try the classical OCR backend first. If the quality score is below
   /// `quality_threshold`, send the page to the VLM.
   ///
   /// `quality_threshold` is in the `[0.0, 1.0]` range produced by
   /// `calculate_quality_score`. A value of `0.5` is a
   /// reasonable starting point; calibrate with the Stage 0 benchmark harness.
-  const factory VlmFallbackPolicy.onLowQuality({
-    /// Minimum acceptable quality score from the classical backend.
+  const factory VlmFallbackPolicy.onLowQuality({ /// Minimum acceptable quality score from the classical backend.
     /// Pages scoring below this are retried with VLM.
-    required double qualityThreshold,
-  }) = VlmFallbackPolicy_OnLowQuality;
-
+    required double qualityThreshold , }) = VlmFallbackPolicy_OnLowQuality;
   /// Skip the classical OCR backend entirely. Every page is sent to the VLM.
   const factory VlmFallbackPolicy.always() = VlmFallbackPolicy_Always;
+
+
+
+
 }
 
 /// Supported Whisper model sizes.
@@ -15499,18 +11764,16 @@ sealed class VlmFallbackPolicy with _$VlmFallbackPolicy {
 enum WhisperModel {
   /// Smallest, fastest, lowest quality. Good default for development and CI.
   tiny,
-
   /// Reasonable quality/speed tradeoff.
   base,
-
   /// Better accuracy with higher memory and cache use.
   small,
-
   /// High quality; slower and more memory-intensive.
   medium,
-
   /// Best quality (large-v3). Use only when latency and memory use are acceptable.
   largeV3,
+  ;
+
 }
 
 /// Whitespace handling strategy during conversion.
@@ -15519,260 +11782,216 @@ enum WhisperModel {
 enum WhitespaceMode {
   /// Collapse multiple whitespace characters to single spaces. Default. Matches browser behavior.
   normalized,
-
   /// Preserve all whitespace exactly as it appears in the HTML.
   strict,
+  ;
+
 }
 
 @freezed
-sealed class XbergError with _$XbergError {
+sealed class XbergError with _$XbergError  {
   const XbergError._();
 
   /// A file system or I/O operation failed. These errors always bubble up unchanged.
-  const factory XbergError.io({required String field0}) = XbergError_Io;
-
+  const factory XbergError.io({   required String field0 , }) = XbergError_Io;
   /// Document parsing failed (e.g. corrupt file, unsupported format feature).
-  const factory XbergError.parsing({required String message}) =
-  XbergError_Parsing;
-
+  const factory XbergError.parsing({   required String message , }) = XbergError_Parsing;
   /// An OCR engine returned an error or produced unusable output.
-  const factory XbergError.ocr({required String message}) = XbergError_Ocr;
-
+  const factory XbergError.ocr({   required String message , }) = XbergError_Ocr;
   /// Invalid configuration or input parameters were supplied.
-  const factory XbergError.validation({required String message}) =
-  XbergError_Validation;
-
+  const factory XbergError.validation({   required String message , }) = XbergError_Validation;
   /// A cache read or write operation failed.
-  const factory XbergError.cache({required String message}) = XbergError_Cache;
-
+  const factory XbergError.cache({   required String message , }) = XbergError_Cache;
   /// An image manipulation operation (resize, decode, DPI conversion) failed.
-  const factory XbergError.imageProcessing({required String message}) =
-  XbergError_ImageProcessing;
-
+  const factory XbergError.imageProcessing({   required String message , }) = XbergError_ImageProcessing;
   /// JSON or MessagePack serialization/deserialization failed.
-  const factory XbergError.serialization({required String message}) =
-  XbergError_Serialization;
-
+  const factory XbergError.serialization({   required String message , }) = XbergError_Serialization;
   /// A required optional system dependency (e.g. `tesseract`) was not found.
-  const factory XbergError.missingDependency({required String field0}) =
-  XbergError_MissingDependency;
-
+  const factory XbergError.missingDependency({   required String field0 , }) = XbergError_MissingDependency;
   /// A registered plugin returned an error during extraction.
-  const factory XbergError.plugin({
-    required String message,
-    required String pluginName,
-  }) = XbergError_Plugin;
-
+  const factory XbergError.plugin({   required String message ,  required String pluginName , }) = XbergError_Plugin;
   /// An internal `Mutex` or `RwLock` was found in a poisoned state.
-  const factory XbergError.lockPoisoned({required String field0}) =
-  XbergError_LockPoisoned;
-
+  const factory XbergError.lockPoisoned({   required String field0 , }) = XbergError_LockPoisoned;
   /// The document's MIME type is not supported by any registered extractor.
-  const factory XbergError.unsupportedFormat({required String field0}) =
-  XbergError_UnsupportedFormat;
-
+  const factory XbergError.unsupportedFormat({   required String field0 , }) = XbergError_UnsupportedFormat;
   /// The embedding model or embedding pipeline returned an error.
-  const factory XbergError.embedding({required String message}) =
-  XbergError_Embedding;
-
+  const factory XbergError.embedding({   required String message , }) = XbergError_Embedding;
   /// The reranker model or reranking pipeline returned an error.
   ///
   /// Since v5.0.0.
-  const factory XbergError.reranking({required String message}) =
-  XbergError_Reranking;
-
+  const factory XbergError.reranking({   required String message , }) = XbergError_Reranking;
   /// Audio/video transcription failed.
-  const factory XbergError.transcription({required String message}) =
-  XbergError_Transcription;
-
+  const factory XbergError.transcription({   required String message , }) = XbergError_Transcription;
   /// The extraction operation exceeded the configured time limit.
-  const factory XbergError.timeout({
-    required PlatformInt64 elapsedMs,
-    required PlatformInt64 limitMs,
-  }) = XbergError_Timeout;
-
+  const factory XbergError.timeout({   required PlatformInt64 elapsedMs ,  required PlatformInt64 limitMs , }) = XbergError_Timeout;
   /// The extraction was cancelled via a `CancellationToken`.
   const factory XbergError.cancelled() = XbergError_Cancelled;
-
   /// A security policy was violated (e.g. zip bomb, oversized archive).
-  const factory XbergError.security({required String message}) =
-  XbergError_Security;
-
+  const factory XbergError.security({   required String message , }) = XbergError_Security;
   /// A catch-all for uncommon errors that do not fit another variant.
-  const factory XbergError.other({required String field0}) = XbergError_Other;
+  const factory XbergError.other({   required String field0 , }) = XbergError_Other;
+
+
+
+
 }
 
 /// Application properties from docProps/app.xml for XLSX
 ///
 /// Contains Excel-specific document metadata.
-class XlsxAppProperties {
+class XlsxAppProperties  {
   /// Application name (e.g., "Microsoft Excel")
   final String? application;
-
   /// Application version
   final String? appVersion;
-
   /// Document security level
   final PlatformInt64? docSecurity;
-
   /// Scale crop flag
   final bool? scaleCrop;
-
   /// Links up to date flag
   final bool? linksUpToDate;
-
   /// Shared document flag
   final bool? sharedDoc;
-
   /// Hyperlinks changed flag
   final bool? hyperlinksChanged;
-
   /// Company name
   final String? company;
-
   /// Worksheet names
   final List<String> worksheetNames;
 
-  const XlsxAppProperties({
-    this.application,
-    this.appVersion,
-    this.docSecurity,
-    this.scaleCrop,
-    this.linksUpToDate,
-    this.sharedDoc,
-    this.hyperlinksChanged,
-    this.company,
-    required this.worksheetNames,
-  });
+  const XlsxAppProperties({this.application ,this.appVersion ,this.docSecurity ,this.scaleCrop ,this.linksUpToDate ,this.sharedDoc ,this.hyperlinksChanged ,this.company ,required this.worksheetNames ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  application.hashCode ^
-  appVersion.hashCode ^
-  docSecurity.hashCode ^
-  scaleCrop.hashCode ^
-  linksUpToDate.hashCode ^
-  sharedDoc.hashCode ^
-  hyperlinksChanged.hashCode ^
-  company.hashCode ^
-  worksheetNames.hashCode;
+  int get hashCode => application.hashCode^appVersion.hashCode^docSecurity.hashCode^scaleCrop.hashCode^linksUpToDate.hashCode^sharedDoc.hashCode^hyperlinksChanged.hashCode^company.hashCode^worksheetNames.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is XlsxAppProperties &&
-  runtimeType == other.runtimeType &&
-  application == other.application &&
-  appVersion == other.appVersion &&
-  docSecurity == other.docSecurity &&
-  scaleCrop == other.scaleCrop &&
-  linksUpToDate == other.linksUpToDate &&
-  sharedDoc == other.sharedDoc &&
-  hyperlinksChanged == other.hyperlinksChanged &&
-  company == other.company &&
-  worksheetNames == other.worksheetNames;
+  runtimeType == other.runtimeType
+  && application == other.application&& appVersion == other.appVersion&& docSecurity == other.docSecurity&& scaleCrop == other.scaleCrop&& linksUpToDate == other.linksUpToDate&& sharedDoc == other.sharedDoc&& hyperlinksChanged == other.hyperlinksChanged&& company == other.company&& worksheetNames == other.worksheetNames;
+
 }
 
 /// XML extraction result.
 ///
 /// Contains extracted text content from XML files along with
 /// structural statistics about the XML document.
-class XmlExtractionResult {
+class XmlExtractionResult  {
   /// Extracted text content (XML structure filtered out)
   final String content;
-
   /// Total number of XML elements processed
   final PlatformInt64 elementCount;
-
   /// List of unique element names found (sorted)
   final List<String> uniqueElements;
 
-  const XmlExtractionResult({
-    required this.content,
-    required this.elementCount,
-    required this.uniqueElements,
-  });
+  const XmlExtractionResult({required this.content ,required this.elementCount ,required this.uniqueElements ,});
+
+
+
+
 
   @override
-  int get hashCode =>
-  content.hashCode ^ elementCount.hashCode ^ uniqueElements.hashCode;
+  int get hashCode => content.hashCode^elementCount.hashCode^uniqueElements.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is XmlExtractionResult &&
-  runtimeType == other.runtimeType &&
-  content == other.content &&
-  elementCount == other.elementCount &&
-  uniqueElements == other.uniqueElements;
+  runtimeType == other.runtimeType
+  && content == other.content&& elementCount == other.elementCount&& uniqueElements == other.uniqueElements;
+
 }
 
 /// XML metadata extracted during XML parsing.
 ///
 /// Provides statistics about XML document structure.
-class XmlMetadata {
+class XmlMetadata  {
   /// Total number of XML elements processed
   final PlatformInt64 elementCount;
-
   /// List of unique element tag names (sorted)
   final List<String> uniqueElements;
 
-  const XmlMetadata({required this.elementCount, required this.uniqueElements});
+  const XmlMetadata({required this.elementCount ,required this.uniqueElements ,});
+
+
+
+
 
   @override
-  int get hashCode => elementCount.hashCode ^ uniqueElements.hashCode;
+  int get hashCode => elementCount.hashCode^uniqueElements.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is XmlMetadata &&
-  runtimeType == other.runtimeType &&
-  elementCount == other.elementCount &&
-  uniqueElements == other.uniqueElements;
+  runtimeType == other.runtimeType
+  && elementCount == other.elementCount&& uniqueElements == other.uniqueElements;
+
 }
 
 /// YAKE-specific parameters.
-class YakeParams {
+class YakeParams  {
   /// Window size for co-occurrence analysis (default: 2).
   ///
   /// Controls the context window for computing co-occurrence statistics.
   final PlatformInt64 windowSize;
 
-  const YakeParams({required this.windowSize});
+  const YakeParams({required this.windowSize ,});
+
+
+
+
 
   @override
   int get hashCode => windowSize.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is YakeParams &&
-  runtimeType == other.runtimeType &&
-  windowSize == other.windowSize;
+  runtimeType == other.runtimeType
+  && windowSize == other.windowSize;
+
 }
 
 /// Year range for bibliographic metadata.
-class YearRange {
+class YearRange  {
   /// Earliest (minimum) year in the range.
   final PlatformInt64? min;
-
   /// Latest (maximum) year in the range.
   final PlatformInt64? max;
-
   /// All individual years present in the collection.
   final Int64List years;
 
-  const YearRange({this.min, this.max, required this.years});
+  const YearRange({this.min ,this.max ,required this.years ,});
+
+
+
+
 
   @override
-  int get hashCode => min.hashCode ^ max.hashCode ^ years.hashCode;
+  int get hashCode => min.hashCode^max.hashCode^years.hashCode;
+
+
 
   @override
   bool operator ==(Object other) =>
   identical(this, other) ||
   other is YearRange &&
-  runtimeType == other.runtimeType &&
-  min == other.min &&
-  max == other.max &&
-  years == other.years;
+  runtimeType == other.runtimeType
+  && min == other.min&& max == other.max&& years == other.years;
+
 }

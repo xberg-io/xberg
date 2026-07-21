@@ -56,9 +56,6 @@ exceptions = [
     # on xberg. Unavoidable while on hf-hub 1.0. ~keep
     { allow = ["MPL-2.0"], crate = "colored" },
     { allow = ["LGPL-2.1-or-later"], crate = "r-efi" },
-    # dyn-eq is pulled by the tract-onnx pure-Rust inference engine (issue #1275).
-    # MPL-2.0 is file-level weak copyleft; merely linking it imposes no obligation on
-    # xberg. Unavoidable while depending on tract.
     { allow = ["MPL-2.0"], crate = "dyn-eq" },
     { allow = ["MPL-2.0"], crate = "symphonia" },
     { allow = ["MPL-2.0"], crate = "symphonia-core" },

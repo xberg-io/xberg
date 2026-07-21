@@ -303,7 +303,7 @@ jobs:
         with:
           python-version: "3.11"
           cache-prefix: benchmark-markitdown
-          install-command: "uv sync --no-install-project --no-install-workspace --group dev --group bench-markitdown"
+          install-command: "uv sync --no-install-project --no-install-workspace --group dev --group bench-markitdown --prerelease=allow"
 
       - name: Run benchmark
         env:

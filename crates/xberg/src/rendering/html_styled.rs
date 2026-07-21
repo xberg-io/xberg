@@ -747,7 +747,7 @@ mod tests {
         );
     }
 
-    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
     #[test]
     fn image_internal_suppression_preserves_figure_without_nested_ocr() {
         let mut doc = make_image_doc(false, true);

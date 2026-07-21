@@ -26,8 +26,6 @@ mod tensor;
 
 #[cfg(inference_ort)]
 mod ort_backend;
-// On no-ORT builds tract is the real backend. On native (`inference_ort`) the
-// `tract` feature compiles it only so the parity tests can compare it against ORT
 // — so there it is `cfg(test)`-only, keeping non-test builds dead-code-clean.
 #[cfg(all(feature = "tract", any(not(inference_ort), test)))]
 mod tract_backend;

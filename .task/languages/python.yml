@@ -10,7 +10,7 @@ tasks:
     silent: false
     cmds:
       - cmd: |
-          cd {{.PYTHON_PKG}} && uv sync --no-install-project --no-install-workspace --all-extras --upgrade-package "*"
+          cd {{.PYTHON_PKG}} && uv sync --no-install-project --no-install-workspace --all-extras --upgrade-package "*" --prerelease=allow
         ignore_error: false
 
   upgrade:
@@ -18,5 +18,5 @@ tasks:
     silent: false
     cmds:
       - cmd: |
-          cd {{.PYTHON_PKG}} && uv sync --no-install-project --no-install-workspace --all-extras --upgrade
+          cd {{.PYTHON_PKG}} && uv sync --no-install-project --no-install-workspace --all-extras --upgrade --prerelease=allow
         ignore_error: false

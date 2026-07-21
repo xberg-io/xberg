@@ -11,10 +11,6 @@ pub(crate) fn preprocess_rescale(img: &RgbImage, target_size: u32) -> Array4<f32
     let pixels = resized.as_raw();
     let ts = target_size as usize;
 
-    // Interleaved RGB -> planar NCHW. `resized` is exactly `ts x ts` RGB, so
-    // `(y * ts + x) * 3 + c` is always in-bounds; this construction cannot panic
-    // (unlike the fallible `from_shape_vec`), which matters on the pure-Rust
-    // `layout-tract` surface where RT-DETR calls this in no-panic library code.
     Array4::from_shape_fn((1, 3, ts, ts), |(_, c, y, x)| {
         pixels[(y * ts + x) * 3 + c] as f32 * (1.0 / 255.0)
     })

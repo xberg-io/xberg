@@ -112,7 +112,7 @@ tracing = "0.1"
 # and WASM-safe; the top-level `tract` facade instead defaults to CUDA and bundles
 # GPU backends, so it is unusable here. See issue #1275.
 tract-onnx = { version = "0.23.4", default-features = false }
-tree-sitter-language-pack = { version = "1.13.2", default-features = false, features = ["serde"] }
+tree-sitter-language-pack = { version = "1.13.3", default-features = false, features = ["serde"] }
 url = "2.5.8"
 wasm-bindgen = { version = "0.2", features = ["enable-interning"] }
 wasm-bindgen-futures = "0.4"

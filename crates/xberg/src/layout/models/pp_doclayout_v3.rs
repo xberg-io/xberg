@@ -260,18 +260,6 @@ impl PpDocLayoutV3Model {
         tracing::debug!(onnx_ms, "PP-DocLayout-V3 ONNX session.run() complete");
 
         // NOTE (issue #1275, Phase 5 probe): this match is BY NAME
-        // (`fetch_name_0`/`fetch_name_1`), which only works because this model runs
-        // on ONNX Runtime — ORT returns the graph's declared output names. tract
-        // labels outputs by the producing node's internal name instead (e.g.
-        // `/postprocessor/...`), so this match would silently fail under tract
-        // (`det_data` stays empty -> `InvalidOutput`). That is currently moot:
-        // PP-DocLayout-V3 stays ORT-only under tract — pinning all three input
-        // facts clears the earlier symbolic-shape wall, but tract 0.23.4's
-        // `LayerNormalization` op translator then fails on the DETR decoder's norm
-        // layer with a genuine shape-inference bug (see
-        // `docs-site/src/content/docs/concepts/tract-inference.md`). If a future tract upgrade ever
-        // unblocks this model, switch this match to positional/dtype comparison
-        // (like `rtdetr.rs`'s `run_inference`) instead of by-name.
         let mut det_data: Vec<f32> = Vec::new();
         let mut bbox_num: Vec<i32> = Vec::new();
 
@@ -397,7 +385,6 @@ impl PpDocLayoutV3Model {
         tracing::debug!(onnx_ms, batch, "PP-DocLayout-V3 batch ONNX session.run() complete");
 
         // NOTE: this by-name match is an ORT-only trap — see the identical note on
-        // `run_inference` above.
         let mut det_data: Vec<f32> = Vec::new();
         let mut bbox_num: Vec<i32> = Vec::new();
 

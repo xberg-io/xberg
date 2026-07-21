@@ -101,30 +101,15 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
         shell: bash
 
-      # The workspace clippy above uses each crate's *default* features, which for
-      # `xberg` is a minimal set that excludes layout-detection, OCR, and every ML
-      # model. Lint the full ORT surface explicitly so the layout models
-      # (RT-DETR, PP-DocLayout, table classifier), OCR, and embeddings are held to
-      # -D warnings — otherwise dead code / lint regressions in that code ship
-      # unnoticed (it is compiled by `task rust:test:ci` but never clippy-gated).
       - name: Clippy full ORT surface (layout + OCR + ML)
         run: cargo clippy --locked -p xberg --features full --all-targets -- -D warnings
         shell: bash
 
-      # Lint the pure-Rust `tract` inference engine on a no-ORT feature combo where
-      # it is the *actual* backend (auto-rotate via tract). `full` above never links
-      # tract, so without this the whole tract seam + its model_download path get
-      # zero -D-warnings coverage in CI (this is what caught the auto_rotate cfg /
-      # fs2 feature gaps during the Phase 4 rebase).
       - name: Clippy no-ORT tract engine
         run: cargo clippy --locked -p xberg --no-default-features --features "ocr,auto-rotate-tract" --all-targets -- -D warnings
         shell: bash
 
-      # Lint the pure-Rust `tract` layout build in isolation. This is the narrowest
-      # no-ORT layout combo (RT-DETR only, no auto-rotate/pdf), so it is the one that
       # actually exercises the `#[allow(dead_code)]` markers on hf_client /
-      # hf_resolve_file / InferenceTensor::as_f32 — the `auto-rotate-tract` leg above
-      # keeps them live. Without this, bare `layout-tract` has zero -D-warnings coverage.
       - name: Clippy no-ORT tract layout
         run: cargo clippy --locked -p xberg --no-default-features --features "layout-tract" --all-targets -- -D warnings
         shell: bash
@@ -145,15 +130,7 @@ jobs:
         run: cargo check --locked -p xberg --no-default-features --features ocr-wasm --lib
         shell: bash
 
-  # `windows-target` carries the full ONNX Runtime ML surface (issue #1276
-  # workstream D: auto-rotate, layout-detection, paddle-ocr, embeddings,
-  # reranker, sparse/late-interaction, transcription, ner-onnx). The `rust`
-  # job above only runs on Linux/macOS, so its clippy legs can never reach the
   # `cfg(target_os = "windows")` dependency blocks (ureq/tokenizers/liter-llm)
-  # nor the Windows-only ORT linkage. Lint that surface on a real Windows
-  # runner, mirroring publish.yaml's Windows recipe (ort-bundled + the pyke
-  # win-x64 import lib staged via setup-onnx-runtime, which exports
-  # ORT_LIB_LOCATION job-wide).
   clippy-windows:
     name: Clippy Windows ORT surface
     if: github.repository == 'xberg-io/xberg' && github.actor != 'dependabot[bot]'

@@ -100,8 +100,6 @@ pub struct TractSession {
 
 impl InferenceSession for TractSession {
     fn run(&self, inputs: Vec<(String, InferenceTensor)>) -> Result<Vec<(String, InferenceTensor)>, InferenceError> {
-        // tract runs positionally in the graph's declared input order; reorder the
-        // named inputs to match, converting each across the boundary.
         let mut ordered = Vec::with_capacity(self.input_names.len());
         for name in &self.input_names {
             let tensor = inputs
@@ -139,8 +137,6 @@ impl InferenceSession for TractSession {
 fn tensor_to_tract(tensor: &InferenceTensor) -> Result<Tensor, InferenceError> {
     fn build<T: Datum + Copy>(array: &ndarray::ArrayD<T>) -> Result<Tensor, InferenceError> {
         let standard = array.as_standard_layout();
-        // `as_standard_layout()` yields a C-contiguous array, so `as_slice()` is
-        // `Some` here; guard rather than panic to keep the seam fully `Result`-based.
         let slice = standard
             .as_slice()
             .ok_or_else(|| InferenceError::Tensor("standard-layout array is not contiguous".to_string()))?;
@@ -171,9 +167,6 @@ fn tract_to_tensor(tensor: &Tensor) -> Result<InferenceTensor, InferenceError> {
         DatumType::I32 => InferenceTensor::I32(extract(tensor)?),
         DatumType::U8 => InferenceTensor::U8(extract(tensor)?),
         DatumType::Bool => InferenceTensor::Bool(extract(tensor)?),
-        // Some graphs (e.g. RT-DETR class labels) surface integer outputs as tract's
-        // symbolic-dimension type `TDim`. At run time the dims are concrete, so cast
-        // to i64 to match the ONNX Runtime representation of the same output.
         DatumType::TDim => {
             let cast = tensor
                 .cast_to::<i64>()
@@ -215,10 +208,6 @@ mod conversion_tests {
 
     #[test]
     fn non_standard_layout_input_is_copied_and_preserves_values() {
-        // `reversed_axes` flips strides without copying, yielding an F-order
-        // (non-contiguous) array; `tensor_to_tract` must standardise it before
-        // slicing. `PartialEq` on `ArrayD` compares logical elements, so the
-        // round-trip must still match despite the layout change.
         let original = InferenceTensor::F32(
             ArrayD::from_shape_vec(vec![2, 3], vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0])
                 .unwrap()
@@ -430,7 +419,6 @@ mod tests {
             };
             ran += 1;
 
-            // Deterministic pseudo-image so both engines see identical input.
             let count: usize = shape.iter().product();
             let data: Vec<f32> = (0..count).map(|i| ((i % 255) as f32) / 255.0 - 0.5).collect();
             let input = ndarray::ArrayD::from_shape_vec(shape.to_vec(), data).unwrap();
@@ -559,25 +547,12 @@ mod tests {
         let ort_out = run(ort.as_ref());
         let tract_out = run(tract.as_ref());
 
-        // Compare outputs positionally: both engines emit them in the graph's
-        // declared output order, but tract labels each with the producing node's
-        // internal name (e.g. `/postprocessor/Sub_2`) whereas ORT uses the graph's
-        // declared output names (`labels`/`boxes`/`scores`) — so names are not
-        // comparable, only order and payload. (RT-DETR's model code parses outputs
-        // by dtype, not name, so this backend name difference is transparent to it.)
         assert_eq!(ort_out.len(), tract_out.len(), "RT-DETR output count");
         let mut compared_f32 = 0;
         for (index, ((_, oval), (_, tval))) in ort_out.iter().zip(&tract_out).enumerate() {
             match (oval, tval) {
                 (InferenceTensor::F32(a), InferenceTensor::F32(b)) => {
                     assert_eq!(a.shape(), b.shape(), "output {index}: RT-DETR f32 shape");
-                    // Relative error normalized by magnitude: box coordinates live in
-                    // 0..640 and scores in 0..1, so a single absolute tolerance cannot
-                    // fit both. Normalizing by max(|a|, 1) holds both to the same
-                    // fractional bound. The DETR box-decode post-processing accumulates
-                    // more float error than a bare CNN logit (empirically ~1.2e-3 here),
-                    // so the bound is 5e-3 — still orders of magnitude below any real
-                    // engine divergence.
                     let max_rel_diff = a
                         .iter()
                         .zip(b)

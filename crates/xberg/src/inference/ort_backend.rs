@@ -130,13 +130,6 @@ impl InferenceSession for OrtSession {
             .collect::<Result<_, InferenceError>>()?;
 
         // SAFETY: `ort::session::Session::run` takes `&mut self`, but ONNX
-        // Runtime's `Run` is documented as internally thread-safe and does not
-        // mutate any observable Rust-side state — the mutable receiver reflects a
-        // C-API convention, not a data race. Casting `&Session` to `&mut Session`
-        // to satisfy it lets a single session serve concurrent callers (e.g.
-        // page-parallel layout) without a `Mutex`. This is the established pattern
-        // across xberg's ORT consumers (`doc_orientation`, `sparse_embeddings`,
-        // `embeddings`). The `&mut` never escapes this block.
         #[allow(unsafe_code)]
         let outputs = unsafe {
             let session_ptr = &self.session as *const Session as *mut Session;
@@ -213,11 +206,6 @@ mod tests {
     use ndarray::ArrayD;
 
     use super::*;
-
-    // These exercise the ORT boundary conversions without needing a model: an
-    // `ort::value::Tensor` is itself a `Value`, so a value built from an ndarray
-    // can be extracted straight back. This is the seam's Phase 1 coverage; the
-    // cross-engine (tract vs ORT) parity comparison lands in Phase 2.
 
     #[test]
     fn f32_input_conversion_preserves_shape_and_data() {

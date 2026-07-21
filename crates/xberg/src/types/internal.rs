@@ -483,7 +483,10 @@ impl InternalElement {
 
     /// Mark an image element so whole-page OCR can replace its nested OCR text
     /// without removing the image placeholder or mutating the public image data.
-    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    ///
+    /// Only called by the PDF OCR merge planner (`extractors::pdf::ocr`); dead in
+    /// builds that enable `ocr`/`ocr-pipeline` without `pdf`. ~keep
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
     pub(crate) fn suppress_image_ocr_rendering(&mut self) {
         self.attributes
             .get_or_insert_with(AHashMap::new)
@@ -748,7 +751,7 @@ mod tests {
         assert_eq!(element.public_attributes(), Some(std::collections::HashMap::new()));
     }
 
-    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
     #[test]
     fn public_attributes_hide_internal_image_ocr_suppression() {
         let mut element = InternalElement::text(ElementKind::Image { image_index: 0 }, "", 0);

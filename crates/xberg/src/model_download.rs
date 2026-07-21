@@ -378,8 +378,6 @@ fn download_lock(key: &str) -> std::sync::Arc<std::sync::Mutex<()>> {
 }
 
 /// Held advisory lock for model-cache mutations shared by all Xberg processes.
-// fs2 is a native-only dependency (see the target-gated declaration in Cargo.toml); every
-// consumer of ArtifactFileLock resolves Hugging Face artifacts, which is itself native-only.
 #[cfg(all(
     not(target_arch = "wasm32"),
     any(
@@ -546,8 +544,6 @@ fn is_sha256_hex(value: &str) -> bool {
 
 /// Build an hf-hub client using its standard cache resolution unless the caller
 /// explicitly supplied an alternative Hugging Face cache root.
-// Unused on layout-only builds (layout resolves weights via `hf_download_at_revision`,
-// which builds its own client), but reachable under every other model consumer.
 #[cfg(all(
     not(target_arch = "wasm32"),
     any(
@@ -613,8 +609,6 @@ pub(crate) fn hf_cached_file(
 /// Cache lookup is always local-first. Both Hugging Face offline variables are
 /// honored before any network request. When `expected_sha256` is supplied, a bad
 /// cached entry is force-refreshed and the replacement is verified before use.
-// Unused on layout-only builds (layout resolves weights via the `hf_*_revision`
-// helpers), but reachable under every other model consumer.
 #[cfg(all(
     not(target_arch = "wasm32"),
     any(
