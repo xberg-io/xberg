@@ -54,7 +54,11 @@ fn build_stage_timings(
     config: &ExtractionConfig,
 ) -> StageTimings {
     let process_init_ms = process_start.map(|start| extraction_start.duration_since(start).as_secs_f64() * 1000.0);
-    let ort_active = config.layout.is_some() || config.ocr.is_some();
+    #[cfg(feature = "layout-detection")]
+    let layout_active = config.layout.is_some();
+    #[cfg(not(feature = "layout-detection"))]
+    let layout_active = false;
+    let ort_active = layout_active || config.ocr.is_some();
     StageTimings {
         process_init_ms: process_init_ms.unwrap_or(0.0),
         first_parse_ms: extraction_time_ms,
@@ -553,6 +557,7 @@ mod tests {
         assert_eq!(timings.first_parse_ms, 10.0);
     }
 
+    #[cfg(feature = "layout-detection")]
     #[test]
     fn build_stage_timings_populates_ort_field_when_layout_active() {
         let extraction_start = Instant::now();
