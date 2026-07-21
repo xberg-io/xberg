@@ -246,11 +246,11 @@ enum Commands {
         #[arg(long, value_delimiter = ',')]
         paths: Option<Vec<String>>,
 
-        /// Only run documents whose name contains one of these strings (comma-separated)
+        /// Also run documents whose name contains one of these strings; unions with --group
         #[arg(long, value_delimiter = ',')]
         doc: Option<Vec<String>>,
 
-        /// Run a named benchmark group (hotspot, smoke, promotion, tables, structure, lists)
+        /// Run a named benchmark group (hotspot, smoke, promotion, holdout, tables, structure, lists)
         #[arg(long)]
         group: Option<String>,
 
