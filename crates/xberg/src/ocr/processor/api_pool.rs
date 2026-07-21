@@ -136,10 +136,22 @@ impl<K: PartialEq, V> ResourceLease<K, V> {
         }
     }
 
+    #[cfg(test)]
     fn discard(mut self) {
-        let key = self.key.take().expect("resource lease key consumed prematurely");
-        drop(self.value.take());
-        self.pool.release(key, None);
+        self.release_with(|_| false);
+    }
+
+    fn release_with<F>(&mut self, reset: F)
+    where
+        F: FnOnce(&V) -> bool,
+    {
+        let Some(key) = self.key.take() else {
+            return;
+        };
+        let value = self.value.take().expect("resource lease consumed prematurely");
+        let mut reservation = ReleaseReservation::new(Arc::clone(&self.pool), key, value);
+        let retain = reset(reservation.value());
+        reservation.finish(retain);
     }
 }
 
@@ -153,8 +165,46 @@ impl<K: PartialEq, V> Deref for ResourceLease<K, V> {
 
 impl<K: PartialEq, V> Drop for ResourceLease<K, V> {
     fn drop(&mut self) {
+        self.release_with(|_| true);
+    }
+}
+
+struct ReleaseReservation<K: PartialEq, V> {
+    pool: Arc<ResourcePool<K, V>>,
+    key: Option<K>,
+    value: Option<V>,
+}
+
+impl<K: PartialEq, V> ReleaseReservation<K, V> {
+    fn new(pool: Arc<ResourcePool<K, V>>, key: K, value: V) -> Self {
+        Self {
+            pool,
+            key: Some(key),
+            value: Some(value),
+        }
+    }
+
+    fn value(&self) -> &V {
+        self.value.as_ref().expect("release reservation consumed prematurely")
+    }
+
+    fn finish(&mut self, retain: bool) {
+        let key = self.key.take().expect("release reservation key consumed prematurely");
+        let value = if retain {
+            self.value.take()
+        } else {
+            drop(self.value.take());
+            None
+        };
+        self.pool.release(key, value);
+    }
+}
+
+impl<K: PartialEq, V> Drop for ReleaseReservation<K, V> {
+    fn drop(&mut self) {
         if let Some(key) = self.key.take() {
-            self.pool.release(key, self.value.take());
+            drop(self.value.take());
+            self.pool.release(key, None);
         }
     }
 }
@@ -186,14 +236,11 @@ impl TesseractApiPool {
             api.init(tessdata_path, language).map_err(|error| {
                 OcrError::TesseractInitializationFailed(format!("Failed to initialize language '{language}': {error}"))
             })?;
+            api.clear().map_err(|error| {
+                OcrError::ProcessingFailed(format!("Failed to clear newly initialized Tesseract API: {error}"))
+            })?;
             Ok(api)
         })?;
-        if let Err(error) = lease.clear() {
-            lease.discard();
-            return Err(OcrError::ProcessingFailed(format!(
-                "Failed to clear cached Tesseract API: {error}"
-            )));
-        }
         Ok(TesseractApiLease { inner: lease })
     }
 }
@@ -207,6 +254,21 @@ impl Deref for TesseractApiLease {
 
     fn deref(&self) -> &Self::Target {
         &self.inner
+    }
+}
+
+impl Drop for TesseractApiLease {
+    fn drop(&mut self) {
+        self.inner.release_with(|api| match api.clear() {
+            Ok(()) => true,
+            Err(error) => {
+                tracing::warn!(
+                    error = %error,
+                    "Failed to clear Tesseract API before returning it to the idle pool; discarding handle"
+                );
+                false
+            }
+        });
     }
 }
 
@@ -282,5 +344,70 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(pool.counts(), (0, 0));
         assert!(pool.checkout::<(), _>("eng", || Ok(1)).is_ok());
+    }
+
+    #[test]
+    fn successful_release_reset_retains_resource() {
+        let pool = ResourcePool::new(1);
+        let reset_count = AtomicUsize::new(0);
+        let mut lease = pool.checkout::<(), _>("eng", || Ok(1)).unwrap();
+        lease.release_with(|value| {
+            assert_eq!(*value, 1);
+            reset_count.fetch_add(1, Ordering::SeqCst);
+            true
+        });
+
+        assert_eq!(reset_count.load(Ordering::SeqCst), 1);
+        assert_eq!(pool.counts(), (0, 1));
+        let reused = pool.checkout::<(), _>("eng", || Ok(2)).unwrap();
+        assert_eq!(*reused, 1);
+    }
+
+    #[test]
+    fn failed_release_reset_discards_resource() {
+        let pool = ResourcePool::new(1);
+        let mut lease = pool.checkout::<(), _>("eng", || Ok(1)).unwrap();
+        lease.release_with(|_| false);
+
+        assert_eq!(pool.counts(), (0, 0));
+        let replacement = pool.checkout::<(), _>("eng", || Ok(2)).unwrap();
+        assert_eq!(*replacement, 2);
+    }
+
+    #[test]
+    fn failed_release_reset_drops_resource_before_reopening_capacity() {
+        struct DropCounter(Arc<AtomicUsize>);
+
+        impl Drop for DropCounter {
+            fn drop(&mut self) {
+                self.0.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        let pool = ResourcePool::new(1);
+        let drops = Arc::new(AtomicUsize::new(0));
+        let mut lease = pool
+            .checkout::<(), _>("eng", || Ok(DropCounter(Arc::clone(&drops))))
+            .unwrap();
+        lease.release_with(|_| false);
+
+        assert_eq!(drops.load(Ordering::SeqCst), 1);
+        assert_eq!(pool.counts(), (0, 0));
+    }
+
+    #[test]
+    fn release_reset_panic_discards_resource_and_releases_capacity() {
+        let pool = ResourcePool::new(1);
+        let result = std::panic::catch_unwind({
+            let pool = Arc::clone(&pool);
+            move || {
+                let mut lease = pool.checkout::<(), _>("eng", || Ok(1)).unwrap();
+                lease.release_with(|_| panic!("reset panic"));
+            }
+        });
+
+        assert!(result.is_err());
+        assert_eq!(pool.counts(), (0, 0));
+        assert!(pool.checkout::<(), _>("eng", || Ok(2)).is_ok());
     }
 }

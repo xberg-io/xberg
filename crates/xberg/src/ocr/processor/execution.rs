@@ -475,10 +475,11 @@ pub(super) fn perform_ocr(
         )
     });
 
-    let img = crate::extraction::image::load_image_for_ocr(image_bytes)
-        .map_err(|e| OcrError::ImageProcessingFailed(e.to_string()))?;
-
-    let rgb_image = img.to_rgb8();
+    let rgb_image = {
+        let img = crate::extraction::image::load_image_for_ocr(image_bytes)
+            .map_err(|e| OcrError::ImageProcessingFailed(e.to_string()))?;
+        img.to_rgb8()
+    };
     let (orig_width, orig_height) = rgb_image.dimensions();
 
     log_ci_debug(ci_debug_enabled, "image", || {
@@ -519,6 +520,7 @@ pub(super) fn perform_ocr(
                 )
             });
 
+            drop(rgb_image);
             (result.rgb_data, w, h, final_dpi)
         }
         Err(e) => {
@@ -740,6 +742,8 @@ pub(super) fn perform_ocr(
             }
         }
     }
+
+    drop(image_data);
 
     api.recognize()
         .map_err(|e| OcrError::ProcessingFailed(format!("Failed to recognize text: {}", e)))?;
