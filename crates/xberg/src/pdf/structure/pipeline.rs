@@ -10,8 +10,8 @@ use rayon::prelude::*;
 
 use super::assembly::assemble_internal_document;
 use super::classify::{
-    classify_paragraphs, demote_heading_runs, demote_unnumbered_subsections, mark_arxiv_noise,
-    mark_cross_page_repeating_short_text, mark_cross_page_repeating_text, refine_heading_hierarchy,
+    classify_paragraphs, demote_heading_runs, demote_structure_annotation_headings, demote_unnumbered_subsections,
+    mark_arxiv_noise, mark_cross_page_repeating_short_text, mark_cross_page_repeating_text, refine_heading_hierarchy,
 };
 use super::constants::{FULL_LINE_FRACTION, MIN_BLOCKS_FOR_FONT_HEADING, MIN_HEADING_FONT_GAP, MIN_HEADING_FONT_RATIO};
 use super::lines::is_cjk_char;
@@ -458,6 +458,7 @@ fn process_single_page(
             );
             retain_page_furniture_safely(&mut paragraphs);
         }
+        demote_structure_annotation_headings(&mut paragraphs);
         paragraphs
     } else {
         let page_segments = heuristic_segments;
@@ -518,6 +519,7 @@ fn process_single_page(
                 "layout overrides applied"
             );
         }
+        demote_structure_annotation_headings(&mut paragraphs);
         retain_page_furniture_safely(&mut paragraphs);
         paragraphs
     }
@@ -741,6 +743,7 @@ fn blocks_to_paragraphs(
         } else {
             let prev = current_lines.last().unwrap();
             let font_change = (line.font_size - prev.font_size).abs() > 1.5;
+            let role_change = line.assigned_role != prev.assigned_role;
             let bold_change =
                 line.is_bold != prev.is_bold && !is_inline_style_transition(current_is_single_visual_line, prev, line);
             let starts_new_line = (line.baseline_y - prev.baseline_y).abs() > INLINE_STYLE_BASELINE_TOLERANCE;
@@ -757,7 +760,7 @@ fn blocks_to_paragraphs(
                 };
                 gap_y < upper && gap_y > lower
             });
-            font_change || bold_change || is_list || crossed_gap
+            font_change || role_change || bold_change || is_list || crossed_gap
         };
 
         if should_break && !current_lines.is_empty() {
@@ -3515,6 +3518,22 @@ mod tests {
         assert_eq!(pages[0][2].assigned_role, None);
     }
 
+    #[test]
+    fn assigned_sal_annotation_role_is_demoted() {
+        let paragraphs = process_heuristic_segments(vec![role_seg("__inout_bcount_full(n)", 12.0, false, Some(2))]);
+        assert_eq!(paragraphs[0].heading_level, None);
+    }
+
+    #[test]
+    fn assigned_identifier_heading_role_is_preserved() {
+        let paragraphs = blocks_to_paragraphs(
+            vec![role_seg("__in_section", 12.0, false, Some(2))],
+            &[(12.0, None)],
+            &[],
+        );
+        assert_eq!(paragraphs[0].heading_level, Some(2));
+    }
+
     /// Helper: create a segment with positional data.
     fn seg(text: &str, x: f32, width: f32) -> SegmentData {
         SegmentData {
@@ -4076,6 +4095,46 @@ mod tests {
         assert_eq!(paragraph_text(&output[1]), "first item");
         assert!(output[2].is_list_item);
         assert_eq!(paragraph_text(&output[2]), "second item");
+    }
+
+    #[test]
+    fn assigned_sal_heading_survives_merge_when_layout_confirms_it() {
+        let mut body = role_seg("unterminated body", 12.0, false, None);
+        body.y = 688.0;
+        body.baseline_y = 700.0;
+        let mut annotation = role_seg("__in", 12.0, false, Some(2));
+        annotation.y = 638.0;
+        annotation.baseline_y = 650.0;
+
+        let output = process_single_page(
+            PageInput {
+                page_index: 0,
+                struct_paragraphs: None,
+                heuristic_segments: vec![body, annotation],
+                page_hints: Some(vec![LayoutHint {
+                    class_name: LayoutHintClass::SectionHeader,
+                    confidence: 0.99,
+                    left: 70.0,
+                    bottom: 635.0,
+                    right: 275.0,
+                    top: 655.0,
+                }]),
+                table_bboxes: Vec::new(),
+                #[cfg(feature = "layout-detection")]
+                hint_validations: Vec::new(),
+                needs_classify: false,
+                paragraph_gap_ys: Vec::new(),
+                include_headers: true,
+                include_footers: true,
+            },
+            &[],
+            Some(12.0),
+        );
+
+        assert_eq!(output.len(), 2);
+        assert_eq!(paragraph_text(&output[1]), "__in");
+        assert_eq!(output[1].heading_level, Some(2));
+        assert_eq!(output[1].layout_class, Some(LayoutHintClass::SectionHeader));
     }
 
     /// Full-width line at x=10, width=490 → right edge 500.

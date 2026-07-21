@@ -7,6 +7,72 @@ use super::constants::{
 use super::regions::{looks_like_bare_url, looks_like_figure_label};
 use super::types::{LayoutHintClass, PdfParagraph};
 
+const SAL_DIRECTION_PREFIXES: [&str; 6] = [
+    "__deref__inout",
+    "__deref__out",
+    "__deref__in",
+    "__inout",
+    "__out",
+    "__in",
+];
+const SAL_DIRECTION_MODIFIERS: [&str; 7] = ["opt", "ecount", "bcount", "full", "part", "z", "nz"];
+
+/// Demote structure-tree heading tags attached to standalone SAL annotations.
+///
+/// Tagged API references sometimes expose direction annotations such as `__in`
+/// as headings. These are parameter metadata, not document structure. Keep the
+/// guard deliberately narrow, and retain headings backed by a layout heading
+/// class or code-block classification.
+pub(super) fn demote_structure_annotation_headings(paragraphs: &mut [PdfParagraph]) {
+    for para in paragraphs {
+        if para.heading_level.is_none()
+            || para.is_code_block
+            || matches!(
+                para.layout_class,
+                Some(LayoutHintClass::Title | LayoutHintClass::SectionHeader)
+            )
+        {
+            continue;
+        }
+
+        let text = paragraph_plain_text(para);
+        if is_sal_direction_annotation(text.trim()) {
+            para.heading_level = None;
+        }
+    }
+}
+
+fn is_sal_direction_annotation(text: &str) -> bool {
+    let base = if let Some((base, arguments)) = text.split_once('(') {
+        let Some(arguments) = arguments.strip_suffix(')') else {
+            return false;
+        };
+        if arguments.is_empty()
+            || !arguments
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | ','))
+        {
+            return false;
+        }
+        base
+    } else {
+        text
+    };
+
+    SAL_DIRECTION_PREFIXES.iter().any(|prefix| {
+        let Some(suffix) = base.strip_prefix(prefix) else {
+            return false;
+        };
+        suffix.is_empty()
+            || suffix.strip_prefix('_').is_some_and(|modifiers| {
+                !modifiers.is_empty()
+                    && modifiers
+                        .split('_')
+                        .all(|modifier| SAL_DIRECTION_MODIFIERS.contains(&modifier))
+            })
+    })
+}
+
 /// Classify paragraphs as headings or body using the global heading map and bold heuristic.
 pub(super) fn classify_paragraphs(paragraphs: &mut [PdfParagraph], heading_map: &[(f32, Option<u8>)]) {
     tracing::debug!(
@@ -1998,6 +2064,52 @@ mod tests {
     #[test]
     fn test_infer_section_level_no_number() {
         assert_eq!(infer_section_level("Layout Analysis Model"), 2);
+    }
+
+    #[test]
+    fn structure_sal_annotations_are_not_headings() {
+        for annotation in [
+            "__in",
+            "__in_opt",
+            "__out",
+            "__out_opt",
+            "__inout",
+            "__inout_bcount_full(n)",
+            "__deref__out_bcount(n)",
+        ] {
+            let mut para = make_text_paragraph(12.0, annotation, false);
+            para.heading_level = Some(3);
+            demote_structure_annotation_headings(std::slice::from_mut(&mut para));
+            assert_eq!(para.heading_level, None, "annotation {annotation} remained a heading");
+        }
+    }
+
+    #[test]
+    fn structure_identifier_headings_are_preserved() {
+        for identifier in ["__init__", "__input", "__in_section", "API_V2"] {
+            let mut para = make_text_paragraph(18.0, identifier, true);
+            para.heading_level = Some(2);
+            demote_structure_annotation_headings(std::slice::from_mut(&mut para));
+            assert_eq!(para.heading_level, Some(2), "identifier {identifier} was demoted");
+        }
+    }
+
+    #[test]
+    fn structure_sal_heading_with_strong_layout_evidence_is_preserved() {
+        let mut para = make_text_paragraph(18.0, "__in", true);
+        para.heading_level = Some(2);
+        para.layout_class = Some(LayoutHintClass::SectionHeader);
+        demote_structure_annotation_headings(std::slice::from_mut(&mut para));
+        assert_eq!(para.heading_level, Some(2));
+    }
+
+    #[test]
+    fn structure_sal_code_block_is_preserved() {
+        let mut para = make_text_paragraph(12.0, "__out", false);
+        para.heading_level = Some(3);
+        para.is_code_block = true;
+        demote_structure_annotation_headings(std::slice::from_mut(&mut para));
+        assert_eq!(para.heading_level, Some(3));
     }
 
     /// Helper to create a paragraph with specific text.
