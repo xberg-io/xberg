@@ -70,18 +70,19 @@ type LayoutForMarkdownOutput = (
 async fn run_layout_for_pdf_pages_async(
     content: &[u8],
     layout_config: &LayoutDetectionConfig,
+    thread_budget: usize,
 ) -> Result<LayoutForMarkdownOutput> {
     #[cfg(feature = "tokio-runtime")]
     {
         let owned_content = content.to_vec();
         let owned_config = layout_config.clone();
-        tokio::task::spawn_blocking(move || run_layout_for_pdf_pages(&owned_content, &owned_config))
+        tokio::task::spawn_blocking(move || run_layout_for_pdf_pages(&owned_content, &owned_config, thread_budget))
             .await
             .map_err(|error| XbergError::Other(format!("layout runner task failed: {error}")))?
     }
 
     #[cfg(not(feature = "tokio-runtime"))]
-    run_layout_for_pdf_pages(content, layout_config)
+    run_layout_for_pdf_pages(content, layout_config, thread_budget)
 }
 
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
@@ -116,6 +117,7 @@ fn displayed_page_dimensions(width: f32, height: f32, rotation_degrees: u32) -> 
 pub(super) fn run_layout_for_pdf_pages(
     content: &[u8],
     layout_config: &LayoutDetectionConfig,
+    thread_budget: usize,
 ) -> Result<LayoutForMarkdownOutput> {
     let doc = pdf_oxide::PdfDocument::from_bytes(content.to_vec()).map_err(|e| XbergError::Parsing {
         message: format!("layout runner: failed to open PDF: {e}"),
@@ -131,7 +133,7 @@ pub(super) fn run_layout_for_pdf_pages(
         return Ok((Vec::new(), Vec::new(), Vec::new(), Vec::new()));
     }
 
-    let mut engine = crate::layout::take_or_create_engine(layout_config)
+    let mut engine = crate::layout::take_or_create_engine(layout_config, thread_budget)
         .map_err(|e| XbergError::Other(format!("layout runner: engine init failed: {e}")))?;
 
     let page_rotations = crate::pdf::render::get_page_rotations(content, page_count);
@@ -314,7 +316,8 @@ pub(super) async fn maybe_run_layout_for_markdown(
     if config.force_ocr {
         return (None, None, None, None);
     }
-    match run_layout_for_pdf_pages_async(content, layout_config).await {
+    let thread_budget = crate::core::config::concurrency::resolve_thread_budget(config.concurrency.as_ref());
+    match run_layout_for_pdf_pages_async(content, layout_config, thread_budget).await {
         Ok((images, results, hints, detections)) => {
             let total_hints: usize = hints.iter().map(|h| h.len()).sum();
             tracing::info!(
@@ -343,8 +346,9 @@ pub(super) async fn maybe_run_layout_for_markdown(
 pub(super) async fn run_layout_for_ocr(
     content: &[u8],
     layout_config: &LayoutDetectionConfig,
+    thread_budget: usize,
 ) -> Result<LayoutForMarkdownOutput> {
-    run_layout_for_pdf_pages_async(content, layout_config).await
+    run_layout_for_pdf_pages_async(content, layout_config, thread_budget).await
 }
 
 #[cfg(all(test, feature = "pdf", feature = "layout-detection"))]

@@ -60,6 +60,20 @@ pub trait InferenceBackend: Send + Sync {
         accel: Option<&AccelerationConfig>,
     ) -> Result<Box<dyn InferenceSession>, InferenceError>;
 
+    /// Load a model with an explicit intra-op thread budget.
+    ///
+    /// Backends without configurable session threads may use the default
+    /// implementation. Native ORT overrides this for batch layout planning.
+    fn load_with_thread_budget(
+        &self,
+        model_path: &Path,
+        accel: Option<&AccelerationConfig>,
+        thread_budget: usize,
+    ) -> Result<Box<dyn InferenceSession>, InferenceError> {
+        let _ = thread_budget;
+        self.load(model_path, accel)
+    }
+
     /// Load a model from an in-memory ONNX byte buffer.
     ///
     /// Used where there is no model file to read — WASM (weights embedded via

@@ -162,13 +162,14 @@ impl TatrModel {
     pub(crate) fn from_file(
         path: &str,
         accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
+        thread_budget: usize,
     ) -> Result<Self, LayoutError> {
-        let budget = crate::core::config::concurrency::resolve_thread_budget(None);
-        let session = match build_session(path, accel, budget) {
+        let thread_budget = thread_budget.max(1);
+        let session = match build_session(path, accel, thread_budget) {
             Ok(s) => s,
             Err(first_err) => {
                 tracing::warn!("TATR: platform EP failed ({first_err}), retrying with CPU-only");
-                match Self::build_cpu_session(path, budget) {
+                match Self::build_cpu_session(path, thread_budget) {
                     Ok(s) => s,
                     Err(cpu_err) => {
                         tracing::warn!("TATR: CPU-only also failed: {cpu_err}");

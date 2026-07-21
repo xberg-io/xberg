@@ -242,46 +242,45 @@ async fn bounded_batch_scheduler_preserves_completion_and_error_indices() {
 }
 
 #[test]
-fn engine_batch_concurrency_matches_layout_aware_resolution() {
+fn engine_batch_execution_plan_matches_layout_aware_resolution() {
     let config = ExtractionConfig {
         concurrency: Some(crate::core::config::ConcurrencyConfig { max_threads: Some(4) }),
         ..Default::default()
     };
-    assert_eq!(resolve_engine_batch_concurrency_for(&config, false), 4);
-
-    let expected_layout =
-        crate::core::config::concurrency::resolve_batch_concurrency(config.concurrency.as_ref(), true);
-    assert_eq!(resolve_engine_batch_concurrency_for(&config, true), expected_layout);
+    assert_eq!(resolve_engine_batch_execution_plan_for(&config, false, 8).workers, 4);
+    let layout = resolve_engine_batch_execution_plan_for(&config, true, 8);
+    assert_eq!(layout.workers, 2);
+    assert_eq!(layout.thread_budget, 2);
 
     let explicit = ExtractionConfig {
         max_concurrent_extractions: Some(3),
         ..config
     };
-    assert_eq!(resolve_engine_batch_concurrency_for(&explicit, true), 3);
+    assert_eq!(resolve_engine_batch_execution_plan_for(&explicit, true, 8).workers, 2);
 }
 
 #[test]
-fn engine_batch_concurrency_clamps_explicit_zero_to_one() {
+fn engine_batch_execution_plan_clamps_explicit_zero_to_one() {
     let config = ExtractionConfig {
         max_concurrent_extractions: Some(0),
         ..Default::default()
     };
 
-    assert_eq!(resolve_engine_batch_concurrency_for(&config, false), 1);
+    assert_eq!(resolve_engine_batch_execution_plan_for(&config, false, 8).workers, 1);
 }
 
 #[test]
-fn engine_batch_concurrency_without_layout_uses_configured_threads() {
+fn engine_batch_execution_plan_without_layout_respects_input_count() {
     let config = ExtractionConfig {
         concurrency: Some(crate::core::config::ConcurrencyConfig { max_threads: Some(4) }),
         ..Default::default()
     };
     let inputs = vec![ExtractInput::default()];
 
-    assert_eq!(resolve_engine_batch_concurrency(&config, &inputs), 4);
+    assert_eq!(resolve_engine_batch_execution_plan(&config, &inputs).workers, 1);
 }
 
-#[cfg(feature = "layout-detection")]
+#[cfg(layout_detection)]
 #[test]
 fn engine_batch_concurrency_detects_per_input_layout_override() {
     let config = ExtractionConfig {
@@ -296,8 +295,9 @@ fn engine_batch_concurrency_detects_per_input_layout_override() {
         ..Default::default()
     }];
 
-    let expected = crate::core::config::concurrency::resolve_batch_concurrency(config.concurrency.as_ref(), true);
-    assert_eq!(resolve_engine_batch_concurrency(&config, &inputs), expected);
+    let plan = resolve_engine_batch_execution_plan(&config, &inputs);
+    assert_eq!(plan.workers, 1);
+    assert_eq!(plan.thread_budget, 4);
 }
 
 #[cfg(feature = "url-ingestion")]

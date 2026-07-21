@@ -245,6 +245,10 @@ pub(crate) fn extract_all_from_oxide_document(
                     .unwrap_or_default(),
                 #[cfg(feature = "layout-detection")]
                 acceleration: config.acceleration.as_ref(),
+                #[cfg(feature = "layout-detection")]
+                session_thread_budget: crate::core::config::concurrency::resolve_thread_budget(
+                    config.concurrency.as_ref(),
+                ),
             },
         ) {
             Ok(structured_doc) if !structured_doc.elements.is_empty() => {

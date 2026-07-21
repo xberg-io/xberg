@@ -52,9 +52,9 @@ impl YoloModel {
         input_height: u32,
         model_name: &str,
         accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
+        thread_budget: usize,
     ) -> Result<Self, LayoutError> {
-        let budget = crate::core::config::concurrency::resolve_thread_budget(None);
-        let session = crate::layout::session::build_session(path, accel, budget)?;
+        let session = crate::layout::session::build_session(path, accel, thread_budget.max(1))?;
         let input_name = session.inputs()[0].name().to_string();
         Ok(Self {
             session,

@@ -1134,7 +1134,10 @@ pub(crate) async fn extract_with_ocr(
 
     #[cfg(feature = "layout-detection")]
     let mut tatr_model = if layout_detections.is_some() {
-        crate::layout::take_or_create_tatr(config.acceleration.as_ref())
+        crate::layout::take_or_create_tatr(
+            config.acceleration.as_ref(),
+            crate::core::config::concurrency::resolve_thread_budget(config.concurrency.as_ref()),
+        )
     } else {
         None
     };

@@ -122,15 +122,22 @@ static CACHED_TATR: ModelCache<ConfiguredModel<models::tatr::TatrModel>> =
 type ModelAccelerationKey = Option<crate::core::config::acceleration::AccelerationConfig>;
 
 #[cfg(all(feature = "layout-detection", feature = "pdf"))]
-pub(crate) struct ConfiguredModel<T> {
+#[derive(Clone, PartialEq)]
+struct ModelSessionKey {
     acceleration: ModelAccelerationKey,
+    thread_budget: usize,
+}
+
+#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+pub(crate) struct ConfiguredModel<T> {
+    session_key: ModelSessionKey,
     model: T,
 }
 
 #[cfg(all(feature = "layout-detection", feature = "pdf"))]
 impl<T> ConfiguredModel<T> {
-    fn matches_acceleration(&self, acceleration: &ModelAccelerationKey) -> bool {
-        self.acceleration == *acceleration
+    fn matches_session(&self, session_key: &ModelSessionKey) -> bool {
+        self.session_key == *session_key
     }
 }
 
@@ -311,14 +318,16 @@ pub(crate) fn config_from_extraction(layout_config: &LayoutDetectionConfig) -> L
 ))]
 pub(crate) fn take_or_create_engine(
     layout_config: &LayoutDetectionConfig,
+    thread_budget: usize,
 ) -> Result<ModelLease<'static, LayoutEngine>, LayoutError> {
     let desired_config = config_from_extraction(layout_config);
     let create_config = desired_config.clone();
+    let thread_budget = thread_budget.max(1);
     CACHED_ENGINE.take_or_create_matching(
-        |engine| engine.matches_config(&desired_config),
+        |engine| engine.matches_config(&desired_config, thread_budget),
         || {
             crate::ort_discovery::ensure_ort_available();
-            LayoutEngine::from_config(create_config)
+            LayoutEngine::from_config_with_thread_budget(create_config, thread_budget)
         },
     )
 }
@@ -340,20 +349,28 @@ pub(crate) fn return_engine(engine: ModelLease<'static, LayoutEngine>) {
 #[cfg(all(feature = "layout-detection", feature = "pdf"))]
 pub(crate) fn take_or_create_tatr(
     accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
+    thread_budget: usize,
 ) -> Option<TatrLease> {
-    let accel_key = accel.cloned();
-    let attempt = begin_model_attempt(&TATR_AVAILABILITY, &accel_key)?;
+    let session_key = ModelSessionKey {
+        acceleration: accel.cloned(),
+        thread_budget: thread_budget.max(1),
+    };
+    let attempt = begin_model_attempt(&TATR_AVAILABILITY, &session_key.acceleration)?;
 
-    let create_accel = accel_key.clone();
+    let create_key = session_key.clone();
     let result = CACHED_TATR.take_or_create_matching(
-        |model| model.matches_acceleration(&accel_key),
+        |model| model.matches_session(&session_key),
         || {
             crate::ort_discovery::ensure_ort_available();
             let manager = LayoutModelManager::new(None);
             let model_path = manager.ensure_tatr_model()?;
-            let model = models::tatr::TatrModel::from_file(&model_path.to_string_lossy(), create_accel.as_ref())?;
+            let model = models::tatr::TatrModel::from_file(
+                &model_path.to_string_lossy(),
+                create_key.acceleration.as_ref(),
+                create_key.thread_budget,
+            )?;
             Ok::<_, LayoutError>(ConfiguredModel {
-                acceleration: create_accel,
+                session_key: create_key,
                 model,
             })
         },
@@ -414,6 +431,7 @@ static TABLE_CLASSIFIER_AVAILABILITY: ModelAvailability = ModelAvailability::new
 pub(crate) fn take_or_create_slanet(
     variant: &str,
     accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
+    thread_budget: usize,
 ) -> Option<SlanetLease> {
     let (cache, availability) = match variant {
         "slanet_wired" => (&CACHED_SLANET_WIRED, &SLANET_WIRED_AVAILABILITY),
@@ -422,19 +440,26 @@ pub(crate) fn take_or_create_slanet(
         _ => return None,
     };
 
-    let accel_key = accel.cloned();
-    let attempt = begin_model_attempt(availability, &accel_key)?;
+    let session_key = ModelSessionKey {
+        acceleration: accel.cloned(),
+        thread_budget: thread_budget.max(1),
+    };
+    let attempt = begin_model_attempt(availability, &session_key.acceleration)?;
 
-    let create_accel = accel_key.clone();
+    let create_key = session_key.clone();
     let result = cache.take_or_create_matching(
-        |model| model.matches_acceleration(&accel_key),
+        |model| model.matches_session(&session_key),
         || {
             crate::ort_discovery::ensure_ort_available();
             let manager = LayoutModelManager::new(None);
             let model_path = manager.ensure_slanet_model(variant)?;
-            let model = models::slanet::SlanetModel::from_file(&model_path.to_string_lossy(), create_accel.as_ref())?;
+            let model = models::slanet::SlanetModel::from_file(
+                &model_path.to_string_lossy(),
+                create_key.acceleration.as_ref(),
+                create_key.thread_budget,
+            )?;
             Ok::<_, LayoutError>(ConfiguredModel {
-                acceleration: create_accel,
+                session_key: create_key,
                 model,
             })
         },
@@ -461,13 +486,16 @@ pub(crate) fn take_or_create_slanet(
 /// safe fail-fast guard before code paths that would otherwise perform the first
 /// model load.
 #[cfg(all(feature = "layout-detection", feature = "pdf"))]
-pub(crate) fn is_tatr_available(acceleration: Option<&crate::core::config::acceleration::AccelerationConfig>) -> bool {
+pub(crate) fn is_tatr_available(
+    acceleration: Option<&crate::core::config::acceleration::AccelerationConfig>,
+    thread_budget: usize,
+) -> bool {
     if acceleration.is_none()
         && let Some(result) = TATR_AVAILABILITY.settled()
     {
         return result;
     }
-    if let Some(model) = take_or_create_tatr(acceleration) {
+    if let Some(model) = take_or_create_tatr(acceleration, thread_budget) {
         return_tatr(model);
         true
     } else {
@@ -483,31 +511,37 @@ pub(crate) fn is_tatr_available(acceleration: Option<&crate::core::config::accel
 pub(crate) fn is_slanet_available(
     variant: &str,
     acceleration: Option<&crate::core::config::acceleration::AccelerationConfig>,
+    thread_budget: usize,
 ) -> bool {
-    take_or_create_slanet(variant, acceleration).is_some()
+    take_or_create_slanet(variant, acceleration, thread_budget).is_some()
 }
 
 /// Take a cached table classifier, or create a new one.
 #[cfg(all(feature = "layout-detection", feature = "pdf"))]
 pub(crate) fn take_or_create_table_classifier(
     accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
+    thread_budget: usize,
 ) -> Option<TableClassifierLease> {
-    let accel_key = accel.cloned();
-    let attempt = begin_model_attempt(&TABLE_CLASSIFIER_AVAILABILITY, &accel_key)?;
+    let session_key = ModelSessionKey {
+        acceleration: accel.cloned(),
+        thread_budget: thread_budget.max(1),
+    };
+    let attempt = begin_model_attempt(&TABLE_CLASSIFIER_AVAILABILITY, &session_key.acceleration)?;
 
-    let create_accel = accel_key.clone();
+    let create_key = session_key.clone();
     let result = CACHED_TABLE_CLASSIFIER.take_or_create_matching(
-        |model| model.matches_acceleration(&accel_key),
+        |model| model.matches_session(&session_key),
         || {
             crate::ort_discovery::ensure_ort_available();
             let manager = LayoutModelManager::new(None);
             let model_path = manager.ensure_table_classifier()?;
-            let model = models::table_classifier::TableClassifier::from_file(
+            let model = models::table_classifier::TableClassifier::from_file_with_thread_budget(
                 &model_path.to_string_lossy(),
-                create_accel.as_ref(),
+                create_key.acceleration.as_ref(),
+                create_key.thread_budget,
             )?;
             Ok::<_, LayoutError>(ConfiguredModel {
-                acceleration: create_accel,
+                session_key: create_key,
                 model,
             })
         },
@@ -599,16 +633,23 @@ mod availability_tests {
         assert!(finish_model_attempt(None, false));
     }
 
+    fn session_key(acceleration: ModelAccelerationKey, thread_budget: usize) -> ModelSessionKey {
+        ModelSessionKey {
+            acceleration,
+            thread_budget,
+        }
+    }
+
     #[test]
     fn configured_model_pool_does_not_cross_acceleration_keys() {
         let cache = ModelCache::with_capacity(1);
-        let cpu = acceleration_key(0);
-        let other_device = acceleration_key(1);
+        let cpu = session_key(acceleration_key(0), 2);
+        let other_device = session_key(acceleration_key(1), 2);
         drop(
             cache
                 .take_or_create(|| {
                     Ok::<_, ()>(ConfiguredModel {
-                        acceleration: cpu,
+                        session_key: cpu,
                         model: 1,
                     })
                 })
@@ -617,17 +658,49 @@ mod availability_tests {
 
         let lease = cache
             .take_or_create_matching(
-                |model| model.matches_acceleration(&other_device),
+                |model| model.matches_session(&other_device),
                 || {
                     Ok::<_, ()>(ConfiguredModel {
-                        acceleration: other_device.clone(),
+                        session_key: other_device.clone(),
                         model: 2,
                     })
                 },
             )
             .unwrap();
 
-        assert!(lease.matches_acceleration(&other_device));
+        assert!(lease.matches_session(&other_device));
+        assert_eq!(**lease, 2);
+    }
+
+    #[test]
+    fn configured_model_pool_does_not_cross_thread_budgets() {
+        let cache = ModelCache::with_capacity(1);
+        let two_threads = session_key(acceleration_key(0), 2);
+        let four_threads = session_key(acceleration_key(0), 4);
+        drop(
+            cache
+                .take_or_create(|| {
+                    Ok::<_, ()>(ConfiguredModel {
+                        session_key: two_threads,
+                        model: 1,
+                    })
+                })
+                .unwrap(),
+        );
+
+        let lease = cache
+            .take_or_create_matching(
+                |model| model.matches_session(&four_threads),
+                || {
+                    Ok::<_, ()>(ConfiguredModel {
+                        session_key: four_threads.clone(),
+                        model: 2,
+                    })
+                },
+            )
+            .unwrap();
+
+        assert!(lease.matches_session(&four_threads));
         assert_eq!(**lease, 2);
     }
 }

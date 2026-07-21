@@ -45,9 +45,10 @@ impl RtDetrModel {
     pub(crate) fn from_file(
         path: &str,
         accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
+        thread_budget: usize,
     ) -> Result<Self, LayoutError> {
         let session = default_backend()
-            .load(std::path::Path::new(path), accel)
+            .load_with_thread_budget(std::path::Path::new(path), accel, thread_budget)
             .map_err(|e| LayoutError::Inference(e.to_string()))?;
         let input_names: Vec<String> = session.input_names().to_vec();
         Ok(Self { session, input_names })

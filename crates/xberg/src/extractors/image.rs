@@ -190,6 +190,7 @@ impl ImageExtractor {
 
         let layout_content = content.to_vec();
         let layout_config = layout_config.clone();
+        let thread_budget = crate::core::config::concurrency::resolve_thread_budget(config.concurrency.as_ref());
         let (rgb, detection) = tokio::task::spawn_blocking(move || -> Result<_> {
             let img = image::load_from_memory(&layout_content).map_err(|e| crate::XbergError::Parsing {
                 message: format!("Failed to decode image for layout detection: {e}"),
@@ -197,7 +198,7 @@ impl ImageExtractor {
             })?;
             drop(layout_content);
             let rgb = img.to_rgb8();
-            let mut engine = crate::layout::take_or_create_engine(&layout_config)
+            let mut engine = crate::layout::take_or_create_engine(&layout_config, thread_budget)
                 .map_err(|e| crate::XbergError::Other(format!("Layout engine init failed: {e}")))?;
             let detection = engine
                 .detect(&rgb)

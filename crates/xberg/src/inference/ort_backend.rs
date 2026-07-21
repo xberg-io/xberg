@@ -68,9 +68,10 @@ impl OrtBackend {
     fn build_session(
         source: ModelSource<'_>,
         accel: Option<&AccelerationConfig>,
+        thread_budget: usize,
     ) -> Result<Box<dyn InferenceSession>, InferenceError> {
         crate::ort_discovery::ensure_ort_available();
-        let thread_budget = crate::core::config::concurrency::resolve_thread_budget(None);
+        let thread_budget = thread_budget.max(1);
 
         let session = match Self::commit(source, accel, thread_budget, true) {
             Ok(session) => session,
@@ -104,7 +105,20 @@ impl InferenceBackend for OrtBackend {
         model_path: &Path,
         accel: Option<&AccelerationConfig>,
     ) -> Result<Box<dyn InferenceSession>, InferenceError> {
-        Self::build_session(ModelSource::File(model_path), accel)
+        Self::build_session(
+            ModelSource::File(model_path),
+            accel,
+            crate::core::config::concurrency::resolve_thread_budget(None),
+        )
+    }
+
+    fn load_with_thread_budget(
+        &self,
+        model_path: &Path,
+        accel: Option<&AccelerationConfig>,
+        thread_budget: usize,
+    ) -> Result<Box<dyn InferenceSession>, InferenceError> {
+        Self::build_session(ModelSource::File(model_path), accel, thread_budget)
     }
 
     fn load_from_memory(
@@ -112,7 +126,11 @@ impl InferenceBackend for OrtBackend {
         model_bytes: &[u8],
         accel: Option<&AccelerationConfig>,
     ) -> Result<Box<dyn InferenceSession>, InferenceError> {
-        Self::build_session(ModelSource::Memory(model_bytes), accel)
+        Self::build_session(
+            ModelSource::Memory(model_bytes),
+            accel,
+            crate::core::config::concurrency::resolve_thread_budget(None),
+        )
     }
 }
 

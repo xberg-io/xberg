@@ -64,8 +64,20 @@ impl TableClassifier {
         path: &str,
         accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
     ) -> Result<Self, LayoutError> {
+        Self::from_file_with_thread_budget(
+            path,
+            accel,
+            crate::core::config::concurrency::resolve_thread_budget(None),
+        )
+    }
+
+    pub(crate) fn from_file_with_thread_budget(
+        path: &str,
+        accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
+        thread_budget: usize,
+    ) -> Result<Self, LayoutError> {
         let session = default_backend()
-            .load(Path::new(path), accel)
+            .load_with_thread_budget(Path::new(path), accel, thread_budget)
             .map_err(|e| LayoutError::Inference(e.to_string()))?;
         let input_name = session
             .input_names()

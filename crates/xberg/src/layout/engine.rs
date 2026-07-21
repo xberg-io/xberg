@@ -110,11 +110,14 @@ pub struct DetectTimings {
 pub struct LayoutEngine {
     model: Box<dyn LayoutModel>,
     config: LayoutEngineConfig,
+    #[cfg(feature = "layout-detection")]
+    thread_budget: usize,
 }
 
 impl LayoutEngine {
-    pub(crate) fn matches_config(&self, config: &LayoutEngineConfig) -> bool {
-        self.config == *config
+    #[cfg(feature = "layout-detection")]
+    pub(crate) fn matches_config(&self, config: &LayoutEngineConfig, thread_budget: usize) -> bool {
+        self.config == *config && self.thread_budget == thread_budget.max(1)
     }
 
     /// Create a layout engine from a full config.
@@ -133,8 +136,17 @@ impl LayoutEngine {
     /// instead.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_config(config: LayoutEngineConfig) -> Result<Self, LayoutError> {
+        Self::from_config_with_thread_budget(config, crate::core::config::concurrency::resolve_thread_budget(None))
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn from_config_with_thread_budget(
+        config: LayoutEngineConfig,
+        thread_budget: usize,
+    ) -> Result<Self, LayoutError> {
         #[cfg(feature = "layout-detection")]
         crate::ort_discovery::ensure_ort_available();
+        let thread_budget = thread_budget.max(1);
 
         let model: Box<dyn LayoutModel> = match &config.backend {
             ModelBackend::YoloDocLayNet => {
@@ -148,14 +160,22 @@ impl LayoutEngine {
                 let manager = LayoutModelManager::new(config.cache_dir.clone());
                 let model_path = manager.ensure_rtdetr_model()?;
                 let path_str = model_path.to_string_lossy();
-                Box::new(RtDetrModel::from_file(&path_str, config.acceleration.as_ref())?)
+                Box::new(RtDetrModel::from_file(
+                    &path_str,
+                    config.acceleration.as_ref(),
+                    thread_budget,
+                )?)
             }
             #[cfg(feature = "layout-detection")]
             ModelBackend::PpDocLayoutV3 => {
                 let manager = LayoutModelManager::new(config.cache_dir.clone());
                 let model_path = manager.ensure_pp_doclayout_v3_model()?;
                 let path_str = model_path.to_string_lossy();
-                Box::new(PpDocLayoutV3Model::from_file(&path_str, config.acceleration.as_ref())?)
+                Box::new(PpDocLayoutV3Model::from_file_with_thread_budget(
+                    &path_str,
+                    config.acceleration.as_ref(),
+                    thread_budget,
+                )?)
             }
             #[cfg(not(feature = "layout-detection"))]
             ModelBackend::PpDocLayoutV3 => {
@@ -170,9 +190,13 @@ impl LayoutEngine {
                 let path_str = path.to_string_lossy();
                 let accel = config.acceleration.as_ref();
                 match variant {
-                    CustomModelVariant::RtDetr => Box::new(RtDetrModel::from_file(&path_str, accel)?),
+                    CustomModelVariant::RtDetr => Box::new(RtDetrModel::from_file(&path_str, accel, thread_budget)?),
                     #[cfg(feature = "layout-detection")]
-                    CustomModelVariant::PpDocLayoutV3 => Box::new(PpDocLayoutV3Model::from_file(&path_str, accel)?),
+                    CustomModelVariant::PpDocLayoutV3 => Box::new(PpDocLayoutV3Model::from_file_with_thread_budget(
+                        &path_str,
+                        accel,
+                        thread_budget,
+                    )?),
                     #[cfg(feature = "layout-detection")]
                     CustomModelVariant::YoloDocLayNet => Box::new(YoloModel::from_file(
                         &path_str,
@@ -181,6 +205,7 @@ impl LayoutEngine {
                         640,
                         "Custom-YOLO-DocLayNet",
                         accel,
+                        thread_budget,
                     )?),
                     #[cfg(feature = "layout-detection")]
                     CustomModelVariant::YoloDocStructBench => Box::new(YoloModel::from_file(
@@ -190,6 +215,7 @@ impl LayoutEngine {
                         1024,
                         "Custom-DocLayout-YOLO",
                         accel,
+                        thread_budget,
                     )?),
                     #[cfg(feature = "layout-detection")]
                     CustomModelVariant::Yolox {
@@ -202,6 +228,7 @@ impl LayoutEngine {
                         *input_height,
                         "Custom-YOLOX",
                         accel,
+                        thread_budget,
                     )?),
                     #[cfg(not(feature = "layout-detection"))]
                     CustomModelVariant::PpDocLayoutV3
@@ -219,7 +246,12 @@ impl LayoutEngine {
             }
         };
 
-        Ok(Self { model, config })
+        Ok(Self {
+            model,
+            config,
+            #[cfg(feature = "layout-detection")]
+            thread_budget,
+        })
     }
 
     /// Create a layout engine directly from RT-DETR model bytes already resolved by the caller.
@@ -243,6 +275,8 @@ impl LayoutEngine {
                 acceleration: accel.cloned(),
                 ..LayoutEngineConfig::default()
             },
+            #[cfg(feature = "layout-detection")]
+            thread_budget: crate::core::config::concurrency::resolve_thread_budget(None),
         })
     }
 

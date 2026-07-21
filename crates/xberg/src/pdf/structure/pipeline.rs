@@ -1265,6 +1265,8 @@ pub(crate) struct SegmentStructureConfig<'a> {
     pub table_overlap_preference: crate::core::config::layout::TableOverlapPreference,
     #[cfg(feature = "layout-detection")]
     pub acceleration: Option<&'a crate::core::config::acceleration::AccelerationConfig>,
+    #[cfg(feature = "layout-detection")]
+    pub session_thread_budget: usize,
 }
 
 #[cfg(feature = "layout-detection")]
@@ -1307,6 +1309,8 @@ pub(crate) fn extract_document_structure_from_segments(
         table_overlap_preference,
         #[cfg(feature = "layout-detection")]
         acceleration,
+        #[cfg(feature = "layout-detection")]
+        session_thread_budget,
     } = config;
     let page_count = all_page_segments.len();
     tracing::debug!(
@@ -1419,13 +1423,13 @@ pub(crate) fn extract_document_structure_from_segments(
 
             let has_table_model = if use_model_inference {
                 let available = match table_model {
-                    TableModel::Tatr => crate::layout::is_tatr_available(acceleration),
+                    TableModel::Tatr => crate::layout::is_tatr_available(acceleration, session_thread_budget),
                     TableModel::SlanetWired
                     | TableModel::SlanetWireless
                     | TableModel::SlanetPlus
-                    | TableModel::SlanetAuto => {
-                        slanet_variant.is_some_and(|variant| crate::layout::is_slanet_available(variant, acceleration))
-                    }
+                    | TableModel::SlanetAuto => slanet_variant.is_some_and(|variant| {
+                        crate::layout::is_slanet_available(variant, acceleration, session_thread_budget)
+                    }),
                     TableModel::Disabled => false,
                 };
 
@@ -1443,11 +1447,12 @@ pub(crate) fn extract_document_structure_from_segments(
             if has_table_model {
                 if let (Some(images @ [_, ..]), Some(results @ [_, ..])) = (layout_images, layout_results) {
                     #[cfg(not(target_arch = "wasm32"))]
-                    let parallel_tables: Vec<Vec<crate::types::Table>> = table_pages
-                        .par_iter()
+                    let recognized_tables: Vec<Vec<crate::types::Table>> = table_pages
+                        .iter()
                         .map(|tp| {
                             if let Some(variant) = slanet_variant {
-                                let Some(mut slanet) = crate::layout::take_or_create_slanet(variant, acceleration)
+                                let Some(mut slanet) =
+                                    crate::layout::take_or_create_slanet(variant, acceleration, session_thread_budget)
                                 else {
                                     tracing::warn!("SLANeXT model unavailable in worker thread");
                                     return Vec::new();
@@ -1459,8 +1464,15 @@ pub(crate) fn extract_document_structure_from_segments(
                                     let hints = &hints_pages[tp.page_idx];
                                     let mut classifier_pair = if is_auto {
                                         match (
-                                            crate::layout::take_or_create_table_classifier(acceleration),
-                                            crate::layout::take_or_create_slanet("slanet_wireless", acceleration),
+                                            crate::layout::take_or_create_table_classifier(
+                                                acceleration,
+                                                session_thread_budget,
+                                            ),
+                                            crate::layout::take_or_create_slanet(
+                                                "slanet_wireless",
+                                                acceleration,
+                                                session_thread_budget,
+                                            ),
                                         ) {
                                             (Some(classifier), Some(alternate)) => Some((classifier, alternate)),
                                             _ => None,
@@ -1496,7 +1508,9 @@ pub(crate) fn extract_document_structure_from_segments(
                                     allow_single_column,
                                 )
                             } else {
-                                let Some(mut tatr) = crate::layout::take_or_create_tatr(acceleration) else {
+                                let Some(mut tatr) =
+                                    crate::layout::take_or_create_tatr(acceleration, session_thread_budget)
+                                else {
                                     tracing::warn!("TATR model unavailable in worker thread");
                                     return Vec::new();
                                 };
@@ -1532,14 +1546,16 @@ pub(crate) fn extract_document_structure_from_segments(
                         })
                         .collect();
                     #[cfg(target_arch = "wasm32")]
-                    let parallel_tables: Vec<Vec<crate::types::Table>> = table_pages
+                    let recognized_tables: Vec<Vec<crate::types::Table>> = table_pages
                         .iter()
                         .map(|tp| {
                             if let (Some(page_image), Some(page_result)) =
                                 (images.get(tp.page_idx), results.get(tp.page_idx))
                             {
                                 let hints = &hints_pages[tp.page_idx];
-                                let Some(mut tatr) = crate::layout::take_or_create_tatr(acceleration) else {
+                                let Some(mut tatr) =
+                                    crate::layout::take_or_create_tatr(acceleration, session_thread_budget)
+                                else {
                                     return Vec::new();
                                 };
                                 let tatr_tables = super::regions::recognize_tables_for_native_page(
@@ -1567,7 +1583,7 @@ pub(crate) fn extract_document_structure_from_segments(
                             }
                         })
                         .collect();
-                    layout_tables.extend(parallel_tables.into_iter().flatten());
+                    layout_tables.extend(recognized_tables.into_iter().flatten());
                 } else {
                     for tp in &table_pages {
                         if cancel_token.is_some_and(|t| t.is_cancelled()) {

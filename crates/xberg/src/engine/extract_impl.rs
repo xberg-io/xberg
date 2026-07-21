@@ -113,7 +113,7 @@ async fn extract_batch_concurrent(
         return Ok(output);
     }
 
-    let max_concurrent = resolve_engine_batch_concurrency(config, &inputs);
+    let execution_plan = resolve_engine_batch_execution_plan(config, &inputs);
     let base_config = Arc::new(config.clone());
     let mut pending = VecDeque::with_capacity(input_count);
 
@@ -150,10 +150,10 @@ async fn extract_batch_concurrent(
     }
 
     let task_config = Arc::clone(&base_config);
-    let completed = run_bounded_batch_tasks(pending, max_concurrent, move |(index, input, source)| {
+    let completed = run_bounded_batch_tasks(pending, execution_plan.workers, move |(index, input, source)| {
         let base_config = Arc::clone(&task_config);
         async move {
-            let resolved_config = resolve_input_config_arc(&input, &base_config);
+            let resolved_config = resolve_batch_input_config(&input, &base_config, execution_plan.thread_budget);
             let timeout_secs = resolved_config.extraction_timeout_secs;
             let cancel_token = resolved_config.cancel_token.clone();
             run_batch_item(index, source, timeout_secs, cancel_token, || async move {
@@ -193,8 +193,11 @@ async fn extract_batch_concurrent(
 }
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-fn resolve_engine_batch_concurrency(config: &ExtractionConfig, inputs: &[ExtractInput]) -> usize {
-    #[cfg(feature = "layout-detection")]
+fn resolve_engine_batch_execution_plan(
+    config: &ExtractionConfig,
+    inputs: &[ExtractInput],
+) -> crate::core::config::concurrency::BatchExecutionPlan {
+    #[cfg(layout_detection)]
     let layout_active = config.layout.is_some()
         || inputs.iter().any(|input| {
             input
@@ -202,22 +205,26 @@ fn resolve_engine_batch_concurrency(config: &ExtractionConfig, inputs: &[Extract
                 .as_ref()
                 .is_some_and(|input_config| input_config.layout.is_some())
         });
-    #[cfg(not(feature = "layout-detection"))]
+    #[cfg(not(layout_detection))]
     let layout_active = false;
-    #[cfg(not(feature = "layout-detection"))]
+    #[cfg(not(layout_detection))]
     let _ = inputs;
 
-    resolve_engine_batch_concurrency_for(config, layout_active)
+    resolve_engine_batch_execution_plan_for(config, layout_active, inputs.len())
 }
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-fn resolve_engine_batch_concurrency_for(config: &ExtractionConfig, layout_active: bool) -> usize {
-    config
-        .max_concurrent_extractions
-        .unwrap_or_else(|| {
-            crate::core::config::concurrency::resolve_batch_concurrency(config.concurrency.as_ref(), layout_active)
-        })
-        .max(1)
+fn resolve_engine_batch_execution_plan_for(
+    config: &ExtractionConfig,
+    layout_active: bool,
+    input_count: usize,
+) -> crate::core::config::concurrency::BatchExecutionPlan {
+    crate::core::config::concurrency::resolve_batch_execution_plan(
+        config.concurrency.as_ref(),
+        layout_active,
+        input_count,
+        config.max_concurrent_extractions,
+    )
 }
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
@@ -535,6 +542,24 @@ fn resolve_input_config_arc(input: &ExtractInput, base_config: &Arc<ExtractionCo
         Some(overrides) => Arc::new(base_config.with_file_overrides(overrides)),
         None => Arc::clone(base_config),
     }
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+fn resolve_batch_input_config(
+    input: &ExtractInput,
+    base_config: &Arc<ExtractionConfig>,
+    thread_budget: usize,
+) -> Arc<ExtractionConfig> {
+    let resolved = resolve_input_config_arc(input, base_config);
+    if crate::core::config::concurrency::resolve_thread_budget(resolved.concurrency.as_ref()) == thread_budget {
+        return resolved;
+    }
+
+    let mut resolved = Arc::unwrap_or_clone(resolved);
+    resolved.concurrency = Some(crate::core::config::ConcurrencyConfig {
+        max_threads: Some(thread_budget),
+    });
+    Arc::new(resolved)
 }
 
 async fn extract_one_resolved(

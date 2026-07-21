@@ -30,9 +30,14 @@ use super::helpers::error_extraction_result;
 
 /// Shared batch result collection: spawns tasks via callback, collects ordered results.
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-async fn collect_batch<F, Fut>(count: usize, config: &ExtractionConfig, spawn_task: F) -> Result<Vec<ExtractedDocument>>
+async fn collect_batch<F, Fut>(
+    count: usize,
+    config: &ExtractionConfig,
+    layout_active: bool,
+    spawn_task: F,
+) -> Result<Vec<ExtractedDocument>>
 where
-    F: Fn(usize, Arc<tokio::sync::Semaphore>) -> Fut,
+    F: Fn(usize, Arc<tokio::sync::Semaphore>, usize) -> Fut,
     Fut: Future<Output = (usize, Result<ExtractedDocument>, u64)> + Send + 'static,
 {
     use tokio::sync::Semaphore;
@@ -42,20 +47,19 @@ where
         return Ok(vec![]);
     }
 
-    #[cfg(feature = "layout-types")]
-    let layout_active = config.layout.is_some();
-    #[cfg(not(feature = "layout-types"))]
-    let layout_active = false;
-    let max_concurrent = config.max_concurrent_extractions.unwrap_or_else(|| {
-        crate::core::config::concurrency::resolve_batch_concurrency(config.concurrency.as_ref(), layout_active)
-    });
-    let semaphore = Arc::new(Semaphore::new(max_concurrent));
+    let execution_plan = crate::core::config::concurrency::resolve_batch_execution_plan(
+        config.concurrency.as_ref(),
+        layout_active,
+        count,
+        config.max_concurrent_extractions,
+    );
+    let semaphore = Arc::new(Semaphore::new(execution_plan.workers));
 
     let mut tasks = JoinSet::new();
 
     for index in 0..count {
         let sem = Arc::clone(&semaphore);
-        tasks.spawn(spawn_task(index, sem));
+        tasks.spawn(spawn_task(index, sem, execution_plan.thread_budget));
     }
 
     let mut results: Vec<Option<ExtractedDocument>> = vec![None; count];
@@ -131,6 +135,15 @@ fn resolve_config(base: &ExtractionConfig, file_config: &Option<FileExtractionCo
     match file_config {
         Some(fc) => base.with_file_overrides(fc),
         None => base.clone(),
+    }
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+fn apply_batch_thread_budget(config: &mut ExtractionConfig, thread_budget: usize) {
+    if crate::core::config::concurrency::resolve_thread_budget(config.concurrency.as_ref()) != thread_budget {
+        config.concurrency = Some(crate::core::config::ConcurrencyConfig {
+            max_threads: Some(thread_budget),
+        });
     }
 }
 
@@ -216,13 +229,23 @@ pub(crate) async fn batch_extract_files(
     let config_arc = Arc::new(config.clone());
     let items_arc = Arc::new(items);
     let count = items_arc.len();
+    #[cfg(layout_detection)]
+    let layout_active = config.layout.is_some()
+        || items_arc.iter().any(|item| {
+            item.config
+                .as_ref()
+                .is_some_and(|item_config| item_config.layout.is_some())
+        });
+    #[cfg(not(layout_detection))]
+    let layout_active = false;
 
-    collect_batch(count, config, |index, sem| {
+    collect_batch(count, config, layout_active, |index, sem, thread_budget| {
         let cfg = Arc::clone(&config_arc);
         let items = Arc::clone(&items_arc);
         async move {
             let item = &items[index];
-            let resolved = resolve_config(&cfg, &item.config);
+            let mut resolved = resolve_config(&cfg, &item.config);
+            apply_batch_thread_budget(&mut resolved, thread_budget);
             let timeout = resolved.extraction_timeout_secs;
             let cancel_token = resolved.cancel_token.clone();
             run_timed_extraction(index, sem, timeout, cancel_token, || {
@@ -309,6 +332,15 @@ pub(crate) async fn batch_extract_bytes(
 ) -> Result<Vec<ExtractedDocument>> {
     let config_arc = Arc::new(config.clone());
     let count = items.len();
+    #[cfg(layout_detection)]
+    let layout_active = config.layout.is_some()
+        || items.iter().any(|item| {
+            item.config
+                .as_ref()
+                .is_some_and(|item_config| item_config.layout.is_some())
+        });
+    #[cfg(not(layout_detection))]
+    let layout_active = false;
 
     type BytesSlot = parking_lot::Mutex<Option<BatchBytesItem>>;
     let slots: Arc<Vec<BytesSlot>> = Arc::new(
@@ -318,12 +350,13 @@ pub(crate) async fn batch_extract_bytes(
             .collect(),
     );
 
-    collect_batch(count, config, |index, sem| {
+    collect_batch(count, config, layout_active, |index, sem, thread_budget| {
         let cfg = Arc::clone(&config_arc);
         let slots = Arc::clone(&slots);
         async move {
             let item = slots[index].lock().take().expect("batch item already consumed");
-            let resolved = resolve_config(&cfg, &item.config);
+            let mut resolved = resolve_config(&cfg, &item.config);
+            apply_batch_thread_budget(&mut resolved, thread_budget);
             let timeout = resolved.extraction_timeout_secs;
             let cancel_token = resolved.cancel_token.clone();
             run_timed_extraction(index, sem, timeout, cancel_token, || async move {
