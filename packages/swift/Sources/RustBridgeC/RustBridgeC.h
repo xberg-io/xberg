@@ -3557,18 +3557,6 @@ void* __swift_bridge__$Vec_AssetCategory$get_mut(void* vec_ptr, uintptr_t index)
 uintptr_t __swift_bridge__$Vec_AssetCategory$len(void* vec_ptr);
 void* __swift_bridge__$Vec_AssetCategory$as_ptr(void* vec_ptr);
 
-typedef struct TierStrategy TierStrategy;
-void __swift_bridge__$TierStrategy$_free(void* self);
-
-void* __swift_bridge__$Vec_TierStrategy$new(void);
-void __swift_bridge__$Vec_TierStrategy$drop(void* vec_ptr);
-void __swift_bridge__$Vec_TierStrategy$push(void* vec_ptr, void* item_ptr);
-void* __swift_bridge__$Vec_TierStrategy$pop(void* vec_ptr);
-void* __swift_bridge__$Vec_TierStrategy$get(void* vec_ptr, uintptr_t index);
-void* __swift_bridge__$Vec_TierStrategy$get_mut(void* vec_ptr, uintptr_t index);
-uintptr_t __swift_bridge__$Vec_TierStrategy$len(void* vec_ptr);
-void* __swift_bridge__$Vec_TierStrategy$as_ptr(void* vec_ptr);
-
 typedef struct PreprocessingPreset PreprocessingPreset;
 void __swift_bridge__$PreprocessingPreset$_free(void* self);
 
@@ -5136,7 +5124,7 @@ void* __swift_bridge__$MapResult$urls(void* self);
 void* __swift_bridge__$SsrfPolicy$new(bool deny_private, uint8_t max_redirects);
 bool __swift_bridge__$SsrfPolicy$deny_private(void* self);
 uint8_t __swift_bridge__$SsrfPolicy$max_redirects(void* self);
-void* __swift_bridge__$ConversionOptions$new(void* heading_style, void* list_indent_type, uintptr_t list_indent_width, void* bullets, void* strong_em_symbol, bool escape_asterisks, bool escape_underscores, bool escape_misc, bool escape_ascii, void* code_language, bool autolinks, bool default_title, bool br_in_tables, bool compact_tables, void* highlight_style, bool extract_metadata, void* whitespace_mode, bool strip_newlines, bool wrap, uintptr_t wrap_width, bool convert_as_inline, void* sub_symbol, void* sup_symbol, void* newline_style, void* code_block_style, void* keep_inline_images_in, void* preprocessing, void* encoding, bool debug, void* strip_tags, void* preserve_tags, bool skip_images, void* url_escape_style, void* link_style, uint64_t max_image_size, bool capture_svg, bool infer_dimensions, struct __private__OptionUsize max_depth, void* exclude_selectors, void* tier_strategy);
+void* __swift_bridge__$ConversionOptions$new(void* heading_style, void* list_indent_type, uintptr_t list_indent_width, void* bullets, void* strong_em_symbol, bool escape_asterisks, bool escape_underscores, bool escape_misc, bool escape_ascii, void* code_language, bool autolinks, bool default_title, bool br_in_tables, bool compact_tables, void* highlight_style, bool extract_metadata, void* whitespace_mode, bool strip_newlines, bool wrap, uintptr_t wrap_width, bool convert_as_inline, void* sub_symbol, void* sup_symbol, void* newline_style, void* code_block_style, void* keep_inline_images_in, void* preprocessing, void* encoding, bool debug, void* strip_tags, void* preserve_tags, bool skip_images, void* url_escape_style, void* link_style, uint64_t max_image_size, bool capture_svg, bool infer_dimensions, struct __private__OptionUsize max_depth, void* exclude_selectors);
 void* __swift_bridge__$ConversionOptions$heading_style(void* self);
 void* __swift_bridge__$ConversionOptions$list_indent_type(void* self);
 uintptr_t __swift_bridge__$ConversionOptions$list_indent_width(void* self);
@@ -5176,7 +5164,6 @@ bool __swift_bridge__$ConversionOptions$capture_svg(void* self);
 bool __swift_bridge__$ConversionOptions$infer_dimensions(void* self);
 struct __private__OptionUsize __swift_bridge__$ConversionOptions$max_depth(void* self);
 void* __swift_bridge__$ConversionOptions$exclude_selectors(void* self);
-void* __swift_bridge__$ConversionOptions$tier_strategy(void* self);
 void* __swift_bridge__$PreprocessingOptions$new(bool enabled, void* preset, bool remove_navigation, bool remove_forms);
 bool __swift_bridge__$PreprocessingOptions$enabled(void* self);
 void* __swift_bridge__$PreprocessingOptions$preset(void* self);
@@ -5256,7 +5243,6 @@ void* __swift_bridge__$BrowserWait$to_string(void* self);
 void* __swift_bridge__$BrowserBackend$to_string(void* self);
 void* __swift_bridge__$AuthConfig$to_string(void* self);
 void* __swift_bridge__$AssetCategory$to_string(void* self);
-void* __swift_bridge__$TierStrategy$to_string(void* self);
 void* __swift_bridge__$PreprocessingPreset$to_string(void* self);
 void* __swift_bridge__$HeadingStyle$to_string(void* self);
 void* __swift_bridge__$ListIndentType$to_string(void* self);
@@ -5606,7 +5592,6 @@ struct __private__ResultPtrAndPtr __swift_bridge__$browser_wait_from_json(void* 
 struct __private__ResultPtrAndPtr __swift_bridge__$browser_backend_from_json(void* json);
 struct __private__ResultPtrAndPtr __swift_bridge__$auth_config_from_json(void* json);
 struct __private__ResultPtrAndPtr __swift_bridge__$asset_category_from_json(void* json);
-struct __private__ResultPtrAndPtr __swift_bridge__$tier_strategy_from_json(void* json);
 void* __swift_bridge__$__alef_phantom_vec_cache_stats(void);
 void* __swift_bridge__$__alef_phantom_vec_acceleration_config(void);
 void* __swift_bridge__$__alef_phantom_vec_captioning_config(void);
@@ -5807,7 +5792,6 @@ void* __swift_bridge__$__alef_phantom_vec_browser_wait(void);
 void* __swift_bridge__$__alef_phantom_vec_browser_backend(void);
 void* __swift_bridge__$__alef_phantom_vec_auth_config(void);
 void* __swift_bridge__$__alef_phantom_vec_asset_category(void);
-void* __swift_bridge__$__alef_phantom_vec_tier_strategy(void);
 void* __swift_bridge__$__alef_phantom_vec_preprocessing_preset(void);
 void* __swift_bridge__$__alef_phantom_vec_heading_style(void);
 void* __swift_bridge__$__alef_phantom_vec_list_indent_type(void);

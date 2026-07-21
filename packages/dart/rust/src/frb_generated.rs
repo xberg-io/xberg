@@ -8639,7 +8639,6 @@ const _: fn() = || {
         let _: bool = ConversionOptions.infer_dimensions;
         let _: Option<i64> = ConversionOptions.max_depth;
         let _: Vec<String> = ConversionOptions.exclude_selectors;
-        let _: crate::TierStrategy = ConversionOptions.tier_strategy;
     }
     {
         let CoreProperties = None::<crate::CoreProperties>.unwrap();
@@ -12533,7 +12532,6 @@ impl SseDecode for crate::ConversionOptions {
         let mut var_inferDimensions = <bool>::sse_decode(deserializer);
         let mut var_maxDepth = <Option<i64>>::sse_decode(deserializer);
         let mut var_excludeSelectors = <Vec<String>>::sse_decode(deserializer);
-        let mut var_tierStrategy = <crate::TierStrategy>::sse_decode(deserializer);
         return crate::ConversionOptions {
             heading_style: var_headingStyle,
             list_indent_type: var_listIndentType,
@@ -12574,7 +12572,6 @@ impl SseDecode for crate::ConversionOptions {
             infer_dimensions: var_inferDimensions,
             max_depth: var_maxDepth,
             exclude_selectors: var_excludeSelectors,
-            tier_strategy: var_tierStrategy,
         };
     }
 }
@@ -19488,19 +19485,6 @@ impl SseDecode for crate::TextMetadata {
     }
 }
 
-impl SseDecode for crate::TierStrategy {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <i32>::sse_decode(deserializer);
-        return match inner {
-            0 => crate::TierStrategy::Auto,
-            1 => crate::TierStrategy::Tier2,
-            2 => crate::TierStrategy::Tier1,
-            _ => unreachable!("Invalid variant for TierStrategy: {}", inner),
-        };
-    }
-}
-
 impl SseDecode for crate::TokenReductionConfig {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -21483,7 +21467,6 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::ConversionOptions> {
             self.0.infer_dimensions.into_into_dart().into_dart(),
             self.0.max_depth.into_into_dart().into_dart(),
             self.0.exclude_selectors.into_into_dart().into_dart(),
-            self.0.tier_strategy.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -26289,23 +26272,6 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::TextMetadata>> for crat
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::TierStrategy> {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        match self.0 {
-            crate::TierStrategy::Auto => 0.into_dart(),
-            crate::TierStrategy::Tier2 => 1.into_dart(),
-            crate::TierStrategy::Tier1 => 2.into_dart(),
-            _ => unreachable!(),
-        }
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for FrbWrapper<crate::TierStrategy> {}
-impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::TierStrategy>> for crate::TierStrategy {
-    fn into_into_dart(self) -> FrbWrapper<crate::TierStrategy> {
-        self.into()
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::TokenReductionConfig> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -27871,7 +27837,6 @@ impl SseEncode for crate::ConversionOptions {
         <bool>::sse_encode(self.infer_dimensions, serializer);
         <Option<i64>>::sse_encode(self.max_depth, serializer);
         <Vec<String>>::sse_encode(self.exclude_selectors, serializer);
-        <crate::TierStrategy>::sse_encode(self.tier_strategy, serializer);
     }
 }
 
@@ -33303,23 +33268,6 @@ impl SseEncode for crate::TextMetadata {
         <i64>::sse_encode(self.word_count, serializer);
         <i64>::sse_encode(self.character_count, serializer);
         <Option<Vec<String>>>::sse_encode(self.headers, serializer);
-    }
-}
-
-impl SseEncode for crate::TierStrategy {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(
-            match self {
-                crate::TierStrategy::Auto => 0,
-                crate::TierStrategy::Tier2 => 1,
-                crate::TierStrategy::Tier1 => 2,
-                _ => {
-                    unimplemented!("");
-                }
-            },
-            serializer,
-        );
     }
 }
 

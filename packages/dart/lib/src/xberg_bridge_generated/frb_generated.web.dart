@@ -2316,9 +2316,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TextMetadata dco_decode_text_metadata(dynamic raw);
 
   @protected
-  TierStrategy dco_decode_tier_strategy(dynamic raw);
-
-  @protected
   TokenReductionConfig dco_decode_token_reduction_config(dynamic raw);
 
   @protected
@@ -4968,9 +4965,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TextMetadata sse_decode_text_metadata(SseDeserializer deserializer);
-
-  @protected
-  TierStrategy sse_decode_tier_strategy(SseDeserializer deserializer);
 
   @protected
   TokenReductionConfig sse_decode_token_reduction_config(
@@ -8468,9 +8462,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_text_metadata(TextMetadata self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_tier_strategy(TierStrategy self, SseSerializer serializer);
 
   @protected
   void sse_encode_token_reduction_config(

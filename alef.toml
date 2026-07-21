@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.41.0"
+alef_version = "0.42.0"
 # -D warnings (emitted into every generated Rust binding as #![allow(...)]).
 extra_clippy_allows = ["redundant_field_names"]
 languages = [
@@ -1338,13 +1338,12 @@ dart = "packages/dart/lib/src/"
 zig = "packages/zig/src/"
 
 [crates.exclude]
-# Pipeline-invariant html-to-markdown fields that xberg force-controls in
-# extraction/html/converter.rs; hidden from every binding so callers never set
-# a knob that silently does nothing. The rest of ConversionOptions passes through.
 fields = [
     "ConversionOptions.output_format",
     "ConversionOptions.include_document_structure",
     "ConversionOptions.extract_images",
+    # tier_strategy pulls in TierStrategy, whose Tier1 variant is #[cfg(feature = "testkit")]
+    "ConversionOptions.tier_strategy",
 ]
 types = [
     "Pool",

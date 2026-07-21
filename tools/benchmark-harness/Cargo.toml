@@ -30,9 +30,9 @@ candle-paddleocr-vl-15-bench = ["xberg/candle-paddleocr-vl"]
 
 ahash = { workspace = true }
 anyhow = { workspace = true }
-blake3 = { workspace = true }
 
 async-trait = { workspace = true }
+blake3 = { workspace = true }
 chrono = { workspace = true }
 
 clap = { workspace = true }

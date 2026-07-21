@@ -161,7 +161,6 @@ mod tests {
     #[test]
     fn test_create_client_rejects_invalid_header() {
         let mut headers = std::collections::HashMap::new();
-        // A header name containing CRLF can never parse — must surface as a Validation error.
         headers.insert("X-Bad\r\nInjected".to_string(), "value".to_string());
         let config = LlmConfig {
             model: "openai/gpt-4o".to_string(),

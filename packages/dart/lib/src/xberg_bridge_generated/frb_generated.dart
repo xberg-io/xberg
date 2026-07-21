@@ -13319,8 +13319,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ConversionOptions dco_decode_conversion_options(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 40)
-      throw Exception('unexpected arr length: expect 40 but see ${arr.length}');
+    if (arr.length != 39)
+      throw Exception('unexpected arr length: expect 39 but see ${arr.length}');
     return ConversionOptions(
       headingStyle: dco_decode_heading_style(arr[0]),
       listIndentType: dco_decode_list_indent_type(arr[1]),
@@ -13361,7 +13361,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       inferDimensions: dco_decode_bool(arr[36]),
       maxDepth: dco_decode_opt_box_autoadd_i_64(arr[37]),
       excludeSelectors: dco_decode_list_String(arr[38]),
-      tierStrategy: dco_decode_tier_strategy(arr[39]),
     );
   }
 
@@ -18115,12 +18114,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  TierStrategy dco_decode_tier_strategy(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TierStrategy.values[raw as int];
-  }
-
-  @protected
   TokenReductionConfig dco_decode_token_reduction_config(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -20626,7 +20619,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_inferDimensions = sse_decode_bool(deserializer);
     var var_maxDepth = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_excludeSelectors = sse_decode_list_String(deserializer);
-    var var_tierStrategy = sse_decode_tier_strategy(deserializer);
     return ConversionOptions(
       headingStyle: var_headingStyle,
       listIndentType: var_listIndentType,
@@ -20667,7 +20659,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       inferDimensions: var_inferDimensions,
       maxDepth: var_maxDepth,
       excludeSelectors: var_excludeSelectors,
-      tierStrategy: var_tierStrategy,
     );
   }
 
@@ -27341,13 +27332,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  TierStrategy sse_decode_tier_strategy(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var inner = sse_decode_i_32(deserializer);
-    return TierStrategy.values[inner];
-  }
-
-  @protected
   TokenReductionConfig sse_decode_token_reduction_config(
     SseDeserializer deserializer,
   ) {
@@ -30217,7 +30201,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.inferDimensions, serializer);
     sse_encode_opt_box_autoadd_i_64(self.maxDepth, serializer);
     sse_encode_list_String(self.excludeSelectors, serializer);
-    sse_encode_tier_strategy(self.tierStrategy, serializer);
   }
 
   @protected
@@ -35624,12 +35607,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_64(self.wordCount, serializer);
     sse_encode_i_64(self.characterCount, serializer);
     sse_encode_opt_list_String(self.headers, serializer);
-  }
-
-  @protected
-  void sse_encode_tier_strategy(TierStrategy self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.index, serializer);
   }
 
   @protected

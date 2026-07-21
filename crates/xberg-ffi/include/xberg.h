@@ -2138,10 +2138,6 @@ typedef struct XBERGTextExtractionResult XBERGTextExtractionResult;
  */
 typedef struct XBERGTextMetadata XBERGTextMetadata;
 /**
- * Controls which conversion tier is used.
- */
-typedef struct XBERGTierStrategy XBERGTierStrategy;
-/**
  * Per-category running counter for `RedactionStrategy.TokenReplace`.
  */
 typedef struct XBERGTokenCounter XBERGTokenCounter;
@@ -3958,13 +3954,6 @@ XBERGCaptioningConfig *xberg_extraction_config_captioning(const XBERGExtractionC
 int32_t xberg_extraction_config_qr_codes(const XBERGExtractionConfig *ptr);
 
 /**
- * Get the `source_name` field from a `ExtractionConfig`.
- * # Safety
- * Pointer must be a valid handle returned by this library.
- */
-char *xberg_extraction_config_source_name(const XBERGExtractionConfig *ptr);
-
-/**
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
  * freed with the appropriate free function.
  */
@@ -4132,13 +4121,6 @@ XBERGKeywordConfig *xberg_file_extraction_config_keywords(const XBERGFileExtract
  * Pointer must be a valid handle returned by this library.
  */
 XBERGPostProcessorConfig *xberg_file_extraction_config_postprocessor(const XBERGFileExtractionConfig *ptr);
-
-/**
- * Get the `html_options` field from a `FileExtractionConfig`.
- * # Safety
- * Pointer must be a valid handle returned by this library.
- */
-XBERGConversionOptions *xberg_file_extraction_config_html_options(const XBERGFileExtractionConfig *ptr);
 
 /**
  * Get the `html_output` field from a `FileExtractionConfig`.
@@ -17281,13 +17263,6 @@ int32_t xberg_ssrf_policy_deny_private(const XBERGSsrfPolicy *ptr);
 uint8_t xberg_ssrf_policy_max_redirects(const XBERGSsrfPolicy *ptr);
 
 /**
- * Get the `scheme_allowlist` field from a `SsrfPolicy`.
- * # Safety
- * Pointer must be a valid handle returned by this library.
- */
-char *xberg_ssrf_policy_scheme_allowlist(const XBERGSsrfPolicy *ptr);
-
-/**
  * Create a `ConversionOptions` from a JSON string. Returns null on failure.
  * # Safety
  * JSON string must be valid UTF-8 and null-terminated.
@@ -17549,27 +17524,6 @@ XBERGUrlEscapeStyle *xberg_conversion_options_url_escape_style(const XBERGConver
 XBERGLinkStyle *xberg_conversion_options_link_style(const XBERGConversionOptions *ptr);
 
 /**
- * Get the `output_format` field from a `ConversionOptions`.
- * # Safety
- * Pointer must be a valid handle returned by this library.
- */
-XBERGOutputFormat *xberg_conversion_options_output_format(const XBERGConversionOptions *ptr);
-
-/**
- * Get the `include_document_structure` field from a `ConversionOptions`.
- * # Safety
- * Pointer must be a valid handle returned by this library.
- */
-int32_t xberg_conversion_options_include_document_structure(const XBERGConversionOptions *ptr);
-
-/**
- * Get the `extract_images` field from a `ConversionOptions`.
- * # Safety
- * Pointer must be a valid handle returned by this library.
- */
-int32_t xberg_conversion_options_extract_images(const XBERGConversionOptions *ptr);
-
-/**
  * Get the `max_image_size` field from a `ConversionOptions`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
@@ -17603,13 +17557,6 @@ uintptr_t xberg_conversion_options_max_depth(const XBERGConversionOptions *ptr);
  * Pointer must be a valid handle returned by this library.
  */
 char *xberg_conversion_options_exclude_selectors(const XBERGConversionOptions *ptr);
-
-/**
- * Get the `tier_strategy` field from a `ConversionOptions`.
- * # Safety
- * Pointer must be a valid handle returned by this library.
- */
-XBERGTierStrategy *xberg_conversion_options_tier_strategy(const XBERGConversionOptions *ptr);
 
 /**
  * Create a `PreprocessingOptions` from a JSON string. Returns null on failure.
@@ -18771,21 +18718,6 @@ int32_t xberg_asset_category_from_i32(int32_t value);
  * Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t xberg_asset_category_from_str(const char *name);
-
-/**
- * Convert an integer to a `TierStrategy` variant. Returns -1 on invalid input.
- * # Safety
- * Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
- */
-int32_t xberg_tier_strategy_from_i32(int32_t value);
-
-/**
- * Convert a `TierStrategy` serde wire value (C string) to its integer discriminant. Returns -1 on invalid input.
- * # Safety
- * Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
- */
-int32_t xberg_tier_strategy_from_str(const char *name);
 
 /**
  * Convert an integer to a `PreprocessingPreset` variant. Returns -1 on invalid input.
@@ -20471,31 +20403,6 @@ char *xberg_auth_config_to_json(const XBERGAuthConfig *ptr);
  * The returned string must be freed with `xberg_free_string`.
  */
 char *xberg_auth_config_to_string(const XBERGAuthConfig *ptr);
-
-/**
- * Free a heap-allocated `TierStrategy` returned by a pointer-returning FFI function.
- * # Safety
- * Pointer must have been returned by this library, or be null.
- */
-void xberg_tier_strategy_free(XBERGTierStrategy *ptr);
-
-/**
- * Serialize a heap-allocated `TierStrategy` to a JSON string.
- * # Safety
- * `ptr` must be a valid, non-null pointer returned by a `xberg` function.
- * The returned string must be freed with `xberg_free_string`.
- */
-char *xberg_tier_strategy_to_json(const XBERGTierStrategy *ptr);
-
-/**
- * Render a heap-allocated `TierStrategy` as its string representation
- * (the unit-variant name as serialized by serde — e.g. `"completed"`,
- * without surrounding JSON quotes).
- * # Safety
- * `ptr` must be a valid, non-null pointer returned by a `xberg` function.
- * The returned string must be freed with `xberg_free_string`.
- */
-char *xberg_tier_strategy_to_string(const XBERGTierStrategy *ptr);
 
 /**
  * Free a heap-allocated `PreprocessingPreset` returned by a pointer-returning FFI function.
