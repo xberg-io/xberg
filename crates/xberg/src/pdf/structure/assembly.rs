@@ -3,7 +3,7 @@
 //! Produces an `InternalDocument` from per-page `PdfParagraph` data with tables
 //! interleaved at their correct reading-order positions.
 
-use super::lines::needs_space_between;
+use super::lines::{needs_space_between, segments_need_space};
 use super::text_repair::finalize_hyphens;
 use super::types::{LayoutHintClass, LayoutRegionPath, LayoutRegionTag, PdfParagraph};
 use crate::types::document_structure::{AnnotationKind, ContentLayer, TextAnnotation};
@@ -642,36 +642,39 @@ fn extract_text_and_annotations(para: &PdfParagraph) -> (String, Vec<TextAnnotat
             i += 1;
         }
 
-        let mut run_words: Vec<&str> = Vec::new();
-        for seg in &all_segments[run_start..i] {
+        let mut run_words: Vec<(&str, usize)> = Vec::new();
+        for (seg_offset, seg) in all_segments[run_start..i].iter().enumerate() {
+            let seg_idx = run_start + seg_offset;
             for word in seg.text.split_whitespace() {
-                run_words.push(word);
+                run_words.push((word, seg_idx));
             }
         }
 
         if !text.is_empty() && !run_words.is_empty() {
-            let prev_last = all_segments[run_start - 1]
-                .text
-                .split_whitespace()
-                .next_back()
-                .unwrap_or("");
-            let next_first = all_segments[run_start].text.split_whitespace().next().unwrap_or("");
+            let prev_seg = all_segments[run_start - 1];
+            let next_seg = all_segments[run_start];
+            let prev_last = prev_seg.text.split_whitespace().next_back().unwrap_or("");
+            let next_first = next_seg.text.split_whitespace().next().unwrap_or("");
 
             if should_dehyphenate(prev_last, next_first) {
                 text.pop();
-            } else if needs_space_between(prev_last, next_first) {
+            } else if segments_need_space(prev_seg, prev_last, next_seg, next_first) {
                 text.push(' ');
             }
         }
 
         let span_start = text.len();
 
-        for (wi, &word) in run_words.iter().enumerate() {
+        for (wi, &(word, seg_idx)) in run_words.iter().enumerate() {
             if wi > 0 {
-                let prev = run_words[wi - 1];
+                let (prev, prev_seg_idx) = run_words[wi - 1];
                 if should_dehyphenate(prev, word) {
                     text.pop();
-                } else if needs_space_between(prev, word) {
+                } else if prev_seg_idx == seg_idx {
+                    if needs_space_between(prev, word) {
+                        text.push(' ');
+                    }
+                } else if segments_need_space(all_segments[prev_seg_idx], prev, all_segments[seg_idx], word) {
                     text.push(' ');
                 }
             }
@@ -707,38 +710,53 @@ fn join_line_texts_plain(lines: &[super::types::PdfLine]) -> String {
         return String::new();
     }
 
-    let words_per_line: Vec<Vec<&str>> = lines
+    let words_per_line: Vec<Vec<(&str, &crate::pdf::hierarchy::SegmentData)>> = lines
         .iter()
-        .map(|l| l.segments.iter().flat_map(|s| s.text.split_whitespace()).collect())
+        .map(|line| {
+            line.segments
+                .iter()
+                .flat_map(|segment| segment.text.split_whitespace().map(move |word| (word, segment)))
+                .collect()
+        })
         .collect();
 
     let mut result = String::new();
     for (line_idx, line_words) in words_per_line.iter().enumerate() {
-        for (word_idx, &word) in line_words.iter().enumerate() {
+        for (word_idx, &(word, seg)) in line_words.iter().enumerate() {
             if result.is_empty() {
                 result.push_str(word);
                 continue;
             }
 
-            let prev_word = if word_idx > 0 {
-                line_words[word_idx - 1]
+            let prev = if word_idx > 0 {
+                Some(line_words[word_idx - 1])
             } else {
                 words_per_line[..line_idx]
                     .iter()
                     .rev()
                     .find_map(|lw| lw.last().copied())
-                    .unwrap_or("")
+            };
+
+            let Some((prev_word, prev_seg)) = prev else {
+                result.push_str(word);
+                continue;
             };
 
             if should_dehyphenate(prev_word, word) {
                 result.pop();
                 result.push_str(word);
-            } else if needs_space_between(prev_word, word) {
-                result.push(' ');
-                result.push_str(word);
-            } else {
-                result.push_str(word);
+                continue;
             }
+
+            let insert_space = if std::ptr::eq(prev_seg, seg) {
+                needs_space_between(prev_word, word)
+            } else {
+                segments_need_space(prev_seg, prev_word, seg, word)
+            };
+            if insert_space {
+                result.push(' ');
+            }
+            result.push_str(word);
         }
     }
     result

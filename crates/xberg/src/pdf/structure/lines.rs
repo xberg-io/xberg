@@ -1,5 +1,20 @@
 //! Character utilities for text assembly: CJK detection and spacing logic.
 
+use crate::pdf::hierarchy::SegmentData;
+
+/// Minimum horizontal gap between two same-line segments, expressed as a fraction of
+/// the trailing segment's font size, that indicates a genuine word space rather than a
+/// kerning-run split of a single word. Mirrors the threshold used by pdf_oxide
+/// fragmented-span repair (`oxide/text.rs::rebuild_text_from_fragmented_spans`,
+/// `space_threshold = font_size * 0.5`), which handles the same class of problem
+/// (reconstructing word spacing from adjacent same-line spans). That threshold is
+/// more conservative than the `x_gap > font_size * 0.15` check used on the main
+/// (non-fragmented) span-joining path in the same file, and conservatism is the
+/// right choice here: overestimating the gap only risks a missed space between two
+/// genuinely distinct short words, while underestimating it re-introduces the
+/// intra-word spaces this function exists to remove (issue #1291).
+const SEGMENT_GAP_SPACE_RATIO: f32 = 0.5;
+
 /// Returns true if the character is a CJK ideograph, Hiragana, Katakana, or Hangul.
 pub(super) fn is_cjk_char(c: char) -> bool {
     let cp = c as u32;
@@ -29,6 +44,36 @@ pub(super) fn needs_space_between(prev: &str, next: &str) -> bool {
     !(prev_ends_cjk && next_starts_cjk)
 }
 
+/// Returns true if a space should be inserted between the last word of `prev_seg`
+/// and the first word of `next_seg`, using segment geometry to distinguish a real
+/// word gap from a kerning-run split of one word across two spans.
+///
+/// pdf_oxide sometimes splits a single word into multiple text spans at kerning-run
+/// boundaries (e.g. "elit" -> "eli" + "t"). Those spans are visually adjacent (or
+/// overlapping) on the same baseline, unlike spans separated by an actual space
+/// character. When the two segments sit on different lines (a wrapped-line reflow),
+/// geometry is not meaningful and a space is always inserted, matching prior behavior.
+pub(super) fn segments_need_space(
+    prev_seg: &SegmentData,
+    prev_word: &str,
+    next_seg: &SegmentData,
+    next_word: &str,
+) -> bool {
+    if !needs_space_between(prev_word, next_word) {
+        return false;
+    }
+
+    let eff_height = next_seg.height.max(prev_seg.height).max(next_seg.font_size * 0.5);
+    let same_line = (prev_seg.baseline_y - next_seg.baseline_y).abs() < eff_height * 0.5;
+    if !same_line {
+        return true;
+    }
+
+    let prev_end_x = prev_seg.x + prev_seg.width;
+    let x_gap = next_seg.x - prev_end_x;
+    x_gap > next_seg.font_size * SEGMENT_GAP_SPACE_RATIO
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -48,5 +93,62 @@ mod tests {
         assert!(!needs_space_between("\u{4E00}", "\u{4E01}"));
         assert!(needs_space_between("hello", "\u{4E00}"));
         assert!(needs_space_between("\u{4E00}", "hello"));
+    }
+
+    fn segment(text: &str, x: f32, width: f32, font_size: f32, baseline_y: f32) -> SegmentData {
+        SegmentData {
+            text: text.to_string(),
+            x,
+            y: baseline_y,
+            width,
+            height: font_size,
+            font_size,
+            is_bold: false,
+            is_italic: false,
+            is_monospace: false,
+            baseline_y,
+            assigned_role: None,
+        }
+    }
+
+    #[test]
+    fn test_segments_need_space_kerning_split_stays_joined() {
+        let prev = segment("eli", 100.0, 15.0, 10.0, 700.0);
+        let next = segment("t", 115.0, 5.0, 10.0, 700.0);
+        assert!(!segments_need_space(&prev, "eli", &next, "t"));
+    }
+
+    #[test]
+    fn test_segments_need_space_distinct_words_insert_space() {
+        // Two distinct words on one baseline with a real word space: "office" then "is".
+        // The 10pt gap clears 0.5*font_size, so a space is inserted.
+        let prev = segment("office", 100.0, 30.0, 10.0, 700.0);
+        let next = segment("is", 140.0, 8.0, 10.0, 700.0);
+        assert!(segments_need_space(&prev, "office", &next, "is"));
+    }
+
+    #[test]
+    fn test_segments_need_space_tower_kerning_split_joins() {
+        // "Tower" split by pdf_oxide into "T" + "ower" at a kerning boundary. The "ower"
+        // span starts fractionally before the "T" span ends (x_gap ~= -1pt), under the
+        // 0.5*font_size threshold, so they rejoin into "Tower" with NO space. This is the
+        // exact case that previously produced "T ower" (issue #1291).
+        let prev = segment("T", 100.0, 7.0, 10.0, 700.0);
+        let next = segment("ower", 106.0, 22.0, 10.0, 700.0);
+        assert!(!segments_need_space(&prev, "T", &next, "ower"));
+    }
+
+    #[test]
+    fn test_segments_need_space_different_line_always_spaces() {
+        let prev = segment("end", 500.0, 20.0, 10.0, 700.0);
+        let next = segment("start", 40.0, 30.0, 10.0, 685.0);
+        assert!(segments_need_space(&prev, "end", &next, "start"));
+    }
+
+    #[test]
+    fn test_segments_need_space_cjk_adjacent_never_spaces() {
+        let prev = segment("\u{4E00}", 100.0, 12.0, 12.0, 700.0);
+        let next = segment("\u{4E01}", 112.0, 12.0, 12.0, 700.0);
+        assert!(!segments_need_space(&prev, "\u{4E00}", &next, "\u{4E01}"));
     }
 }
