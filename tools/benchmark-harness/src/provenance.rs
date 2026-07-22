@@ -205,20 +205,21 @@ impl RunProvenance {
                     Ok(eligible_documents / size)
                 })
                 .transpose()?;
-            let (requested_workers, effective_workers) = if capability.is_some() {
-                adapter.worker_provenance(inputs.config.max_concurrent)
-            } else {
-                (Some(inputs.config.max_concurrent), Some(inputs.config.max_concurrent))
-            };
+            let batch_workers = capability.map(|_| adapter.worker_provenance(inputs.config.max_concurrent));
+            let (requested_workers, effective_workers) = worker_counts(
+                inputs.config.benchmark_mode,
+                inputs.config.max_concurrent,
+                batch_workers,
+            );
             frameworks.push(FrameworkProvenance {
                 name: adapter.name().to_string(),
                 version: adapter.version(),
-                executable: adapter.executable_provenance(),
+                executable: adapter.executable_provenance_for_mode(inputs.config.benchmark_mode),
                 models: models.get(adapter.name()).cloned().unwrap_or_default(),
                 batch_capability: capability,
                 requested_workers,
                 effective_workers,
-                worker_semantics: worker_semantics(capability).to_string(),
+                worker_semantics: worker_semantics(inputs.config.benchmark_mode, capability).to_string(),
                 effective_warmup_iterations: capability.map_or(inputs.config.warmup_iterations, |value| {
                     if value.timing_scope == crate::types::BatchTimingScope::ColdEndToEndSubprocess {
                         0
@@ -338,14 +339,31 @@ fn capture_repository() -> RepositoryProvenance {
     RepositoryProvenance { commit, dirty }
 }
 
-fn worker_semantics(capability: Option<BatchCapability>) -> &'static str {
-    match capability.map(|value| value.entry_point) {
-        Some(BatchEntryPoint::XbergCliExtractBatch) => "document concurrency within the configured thread budget",
-        Some(BatchEntryPoint::DoclingConvertAll) => {
+fn worker_counts(
+    mode: BenchmarkMode,
+    configured: usize,
+    batch_workers: Option<(Option<usize>, Option<usize>)>,
+) -> (Option<usize>, Option<usize>) {
+    match (mode, batch_workers) {
+        (BenchmarkMode::Batch, Some(workers)) => workers,
+        (BenchmarkMode::SingleFile, _) => (Some(configured), Some(1)),
+        (BenchmarkMode::Batch, None) => (Some(configured), Some(configured)),
+    }
+}
+
+fn worker_semantics(mode: BenchmarkMode, capability: Option<BatchCapability>) -> &'static str {
+    match (mode, capability.map(|value| value.entry_point)) {
+        (BenchmarkMode::SingleFile, _) => "sequential single-file execution",
+        (BenchmarkMode::Batch, Some(BatchEntryPoint::XbergCliExtractBatch)) => {
+            "document concurrency within the configured thread budget"
+        }
+        (BenchmarkMode::Batch, Some(BatchEntryPoint::DoclingConvertAll)) => {
             "convert_all document stream; adapter does not override Docling workers"
         }
-        Some(BatchEntryPoint::LiteparseBatchParse) => "OCR page workers; not document-level concurrency",
-        None => "single-file harness concurrency",
+        (BenchmarkMode::Batch, Some(BatchEntryPoint::LiteparseBatchParse)) => {
+            "OCR page workers; not document-level concurrency"
+        }
+        (BenchmarkMode::Batch, None) => "batch harness concurrency",
     }
 }
 
@@ -373,5 +391,17 @@ mod tests {
         std::fs::write(&fixture, b"{}").unwrap();
         assert_eq!(relative_identity(temp.path(), &fixture), "nested/fixture.json");
         assert_eq!(relative_identity(&fixture, &fixture), "fixture.json");
+    }
+
+    #[test]
+    fn single_file_worker_provenance_is_sequential() {
+        assert_eq!(
+            worker_counts(BenchmarkMode::SingleFile, 8, Some((Some(8), Some(8)))),
+            (Some(8), Some(1))
+        );
+        assert_eq!(
+            worker_semantics(BenchmarkMode::SingleFile, None),
+            "sequential single-file execution"
+        );
     }
 }

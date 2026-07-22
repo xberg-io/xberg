@@ -1065,10 +1065,17 @@ impl FrameworkAdapter for SubprocessAdapter {
     }
 
     fn executable_provenance(&self) -> Option<crate::provenance::ExecutableProvenance> {
-        if self
-            .batch_capability
-            .is_some_and(|capability| capability.entry_point == crate::types::BatchEntryPoint::LiteparseBatchParse)
-        {
+        self.executable_provenance_for_mode(crate::config::BenchmarkMode::Batch)
+    }
+
+    fn executable_provenance_for_mode(
+        &self,
+        mode: crate::config::BenchmarkMode,
+    ) -> Option<crate::provenance::ExecutableProvenance> {
+        if self.batch_capability.is_some_and(|capability| {
+            mode == crate::config::BenchmarkMode::Batch
+                && capability.entry_point == crate::types::BatchEntryPoint::LiteparseBatchParse
+        }) {
             return which::which("lit")
                 .ok()
                 .map(|command| crate::provenance::ExecutableProvenance::from_invocation(&command, &[]));
@@ -1821,6 +1828,28 @@ mod tests {
                 .map(String::as_str),
             Some("sync")
         );
+    }
+
+    #[test]
+    fn liteparse_single_mode_records_wrapper_invocation() {
+        let adapter = SubprocessAdapter::with_batch_capability(
+            "liteparse",
+            "bash",
+            vec!["liteparse_extract.sh".to_string()],
+            vec![],
+            vec!["pdf".to_string()],
+            BatchCapability {
+                entry_point: BatchEntryPoint::LiteparseBatchParse,
+                timing_scope: crate::types::BatchTimingScope::ColdEndToEndSubprocess,
+                per_item_timing: false,
+            },
+        );
+
+        let provenance = adapter
+            .executable_provenance_for_mode(crate::config::BenchmarkMode::SingleFile)
+            .unwrap();
+        assert_eq!(provenance.name, "bash");
+        assert!(!provenance.invocation_blake3.is_empty());
     }
 
     #[test]

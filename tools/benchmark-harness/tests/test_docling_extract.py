@@ -65,6 +65,22 @@ class _Converter:
 class DoclingBatchConformanceTest(unittest.TestCase):
     """Validate the wrapper contract without importing the real Docling package."""
 
+    def test_converter_configuration_fails_closed(self) -> None:
+        """Reject a run when the requested OCR mode cannot be configured."""
+        wrapper = _load_wrapper()
+        error: RuntimeError | None = None
+
+        try:
+            wrapper.create_converter(ocr_enabled=True)
+        except RuntimeError as caught:
+            error = caught
+        else:
+            self.fail("converter configuration unexpectedly succeeded")
+
+        assert error is not None
+        assert str(error) == "failed to configure Docling with OCR explicitly enabled"
+        assert isinstance(error.__cause__, ImportError)
+
     def test_convert_all_is_single_lazy_ordered_timed_batch(self) -> None:
         """The lazy iterator must be consumed once, in order, inside the timer."""
         wrapper = _load_wrapper()

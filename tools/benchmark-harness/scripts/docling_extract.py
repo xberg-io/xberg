@@ -51,8 +51,9 @@ def create_converter(ocr_enabled: bool) -> DocumentConverter:
                 InputFormat.IMAGE: ImageFormatOption(pipeline_options=pdf_options),
             }
         )
-    except (ImportError, TypeError):
-        return DocumentConverter()
+    except (ImportError, TypeError) as exc:
+        state = "enabled" if ocr_enabled else "disabled"
+        raise RuntimeError(f"failed to configure Docling with OCR explicitly {state}") from exc
 
 
 def _render(document: Any, output_format: str) -> str:

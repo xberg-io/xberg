@@ -6,6 +6,7 @@
 
 use crate::{
     Error, Result,
+    config::BenchmarkMode,
     provenance::ExecutableProvenance,
     types::{BatchCapability, BenchmarkResult, OutputFormat},
 };
@@ -109,6 +110,11 @@ pub trait FrameworkAdapter: Send + Sync {
     /// Return a path-free identity for the executable used by this adapter.
     fn executable_provenance(&self) -> Option<ExecutableProvenance> {
         None
+    }
+
+    /// Return the executable identity for the entry point used in the selected mode.
+    fn executable_provenance_for_mode(&self, _mode: BenchmarkMode) -> Option<ExecutableProvenance> {
+        self.executable_provenance()
     }
 
     /// Requested and effective worker counts, when the adapter exposes a worker control.
