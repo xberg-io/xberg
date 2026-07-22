@@ -36,6 +36,10 @@ on:
   repository_dispatch:
     types: [publish-release]
 
+env:
+  # glibc floor for the Linux artifacts: zigbuild target suffix + post-build assertion.
+  GLIBC_FLOOR: "2.28"
+
 permissions:
   contents: read
   id-token: write
@@ -458,7 +462,12 @@ jobs:
             export CMAKE_CXX_FLAGS="${CXXFLAGS}"
             export CC="gcc ${CFLAGS}"
             export CXX="g++ ${CXXFLAGS}"
-          cibw-environment: 'MATURIN_BUILD_ARGS="--compatibility manylinux_2_28" CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=gcc CC_x86_64_unknown_linux_gnu=gcc CC_aarch64_unknown_linux_gnu=gcc CXX_x86_64_unknown_linux_gnu=g++ CXX_aarch64_unknown_linux_gnu=g++'
+            # Link Microsoft's glibc-clean ONNX Runtime, not the pyke prebuilt; auditwheel bundles it (#1284).
+            ort_version=1.24.2
+            case "$(uname -m)" in aarch64 | arm64) ort_arch=aarch64 ;; *) ort_arch=x64 ;; esac
+            curl -fsSL -o /tmp/ort.tgz "https://github.com/microsoft/onnxruntime/releases/download/v${ort_version}/onnxruntime-linux-${ort_arch}-${ort_version}.tgz"
+            mkdir -p /opt/msort && tar -xzf /tmp/ort.tgz -C /opt/msort --strip-components=1
+          cibw-environment: 'MATURIN_BUILD_ARGS="--compatibility manylinux_2_28" CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=gcc CC_x86_64_unknown_linux_gnu=gcc CC_aarch64_unknown_linux_gnu=gcc CXX_x86_64_unknown_linux_gnu=g++ CXX_aarch64_unknown_linux_gnu=g++ ORT_STRATEGY=system ORT_LIB_LOCATION=/opt/msort/lib ORT_SKIP_DOWNLOAD=1 ORT_PREFER_DYNAMIC_LINK=1 LD_LIBRARY_PATH=/opt/msort/lib'
           # The deployment target is the wheel's macOS floor: 15.0 left macOS 11-14
           # with no installable wheel (#1243). delocate bundles the libheif closure,
           # so the hook builds it from source at the target and PKG_CONFIG_PATH links
@@ -467,6 +476,12 @@ jobs:
           cibw-environment-macos: 'MATURIN_BUILD_ARGS="" CARGO_BUILD_LOCKED=true MACOSX_DEPLOYMENT_TARGET=11.0 PKG_CONFIG_PATH=/tmp/xberg-heif/lib/pkgconfig'
           cibw-before-build-windows: "rustup install 1.95-x86_64-pc-windows-msvc --profile minimal --component rust-src --component rustfmt --component clippy && rustup target add x86_64-pc-windows-msvc --toolchain 1.95-x86_64-pc-windows-msvc && pip install maturin uv && set PATH=%USERPROFILE%\\.cargo\\bin;%PATH%"
           cibw-environment-windows: 'MATURIN_BUILD_ARGS="--target x86_64-pc-windows-msvc" RUSTUP_TOOLCHAIN="1.95-x86_64-pc-windows-msvc" RUSTC_WRAPPER='
+
+      - name: Verify wheel glibc floor + bundled ONNX Runtime
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          for w in wheelhouse/*.whl; do scripts/ci/verify-glibc-floor.sh "$w" "$GLIBC_FLOOR"; done
 
       - name: Upload wheels
         uses: actions/upload-artifact@v7
@@ -636,8 +651,8 @@ jobs:
           # Ship the .node's vendored shared-lib closure (libonnxruntime + codecs)
           # beside it — the .node's RUNPATH is $ORIGIN, so co-located libs resolve
           # at require() time. Without them consumers hit ERR_DLOPEN_FAILED.
-          if [ -d build-output/vendor ] && [ -n "$(ls -A build-output/vendor 2>/dev/null)" ]; then
-            cp -v build-output/vendor/* "staging/npm/${platform}/"
+          if ls build-output/*.so >/dev/null 2>&1; then
+            cp -v build-output/*.so "staging/npm/${platform}/"
           else
             echo "::error::no vendored shared libs produced by musl build for ${platform}"; exit 1
           fi
@@ -709,8 +724,8 @@ jobs:
           # Ship the .node's vendored shared-lib closure (libonnxruntime + codecs)
           # beside it — the .node's RUNPATH is $ORIGIN, so co-located libs resolve
           # at require() time. Without them consumers hit ERR_DLOPEN_FAILED.
-          if [ -d build-output/vendor ] && [ -n "$(ls -A build-output/vendor 2>/dev/null)" ]; then
-            cp -v build-output/vendor/* "staging/npm/${platform}/"
+          if ls build-output/*.so >/dev/null 2>&1; then
+            cp -v build-output/*.so "staging/npm/${platform}/"
           else
             echo "::error::no vendored shared libs produced by manylinux build for ${platform}"; exit 1
           fi
@@ -730,6 +745,8 @@ jobs:
           print("reconciled files:", pkg["files"])
           ' "staging/npm/${platform}"
           tar -czf node-bindings-${{ matrix.target }}.tar.gz -C staging npm
+      - name: Verify glibc floor
+        run: scripts/ci/verify-glibc-floor.sh "staging/npm/linux-${{ matrix.napi_arch }}-gnu" "$GLIBC_FLOOR"
       - uses: actions/upload-artifact@v7
         with:
           name: node-bindings-${{ matrix.target }}
@@ -1122,8 +1139,9 @@ jobs:
       - name: Install system dependencies
         uses: ./.github/actions/install-system-deps
 
+      # linux-gnu links Microsoft's ONNX Runtime (system strategy), shipped beside the lib below (#1284).
       - name: Setup ONNX Runtime
-        if: contains(matrix.target, 'windows')
+        if: contains(matrix.target, 'windows') || contains(matrix.target, '-linux-gnu')
         uses: ./.github/actions/setup-onnx-runtime
         with:
           ort-version: "1.24.2"
@@ -1146,7 +1164,20 @@ jobs:
           header-path: crates/xberg-ffi/include/xberg.h
           archive-name: xberg-go-${{ matrix.platform }}.tar.gz
           output-dir: dist/go-ffi
-          glibc-version: "2.28"
+          glibc-version: ${{ env.GLIBC_FLOOR }}
+      - name: Ship + verify ONNX Runtime (glibc Linux)
+        if: contains(matrix.target, '-linux-gnu')
+        shell: bash
+        run: |
+          shopt -s nullglob
+          shipped=0
+          for t in dist/go-ffi/*.tar.gz; do
+            shipped=1
+            scripts/ci/vendor-native-closure.sh "$t"
+            scripts/ci/verify-glibc-floor.sh "$t" "$GLIBC_FLOOR"
+          done
+          [ "$shipped" = 1 ] || echo "::notice::no artifact produced (dry-run stub); skipping ship+verify"
+
       - uses: actions/upload-artifact@v7
         with:
           name: go-ffi-${{ matrix.platform }}
@@ -1181,8 +1212,9 @@ jobs:
       - name: Install system dependencies
         uses: ./.github/actions/install-system-deps
 
+      # linux-gnu links Microsoft's ONNX Runtime (system strategy), shipped beside the lib below (#1284).
       - name: Setup ONNX Runtime
-        if: contains(matrix.target, 'windows')
+        if: contains(matrix.target, 'windows') || contains(matrix.target, '-linux-gnu')
         uses: ./.github/actions/setup-onnx-runtime
         with:
           ort-version: "1.24.2"
@@ -1201,7 +1233,7 @@ jobs:
         with:
           crate-name: xberg-ffi
           target: ${{ matrix.target }}
-          glibc-version: ${{ contains(matrix.target, '-linux-gnu') && '2.28' || '' }}
+          glibc-version: ${{ contains(matrix.target, '-linux-gnu') && env.GLIBC_FLOOR || '' }}
 
       - name: Stage C FFI distribution
         # Inline: bundle library + header + LICENSE into a single tarball
@@ -1219,6 +1251,19 @@ jobs:
           cp LICENSE "$STAGE/" 2>/dev/null || true
           mkdir -p dist/c-ffi
           tar -czf "dist/c-ffi/${STAGE}.tar.gz" "$STAGE"
+
+      - name: Ship + verify ONNX Runtime (glibc Linux)
+        if: contains(matrix.target, '-linux-gnu')
+        shell: bash
+        run: |
+          shopt -s nullglob
+          shipped=0
+          for t in dist/c-ffi/*.tar.gz; do
+            shipped=1
+            scripts/ci/vendor-native-closure.sh "$t"
+            scripts/ci/verify-glibc-floor.sh "$t" "$GLIBC_FLOOR"
+          done
+          [ "$shipped" = 1 ] || echo "::notice::no artifact produced (dry-run stub); skipping ship+verify"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -1254,8 +1299,9 @@ jobs:
       - name: Install system dependencies
         uses: ./.github/actions/install-system-deps
 
+      # linux-gnu links Microsoft's ONNX Runtime (system strategy), shipped beside the lib below (#1284).
       - name: Setup ONNX Runtime
-        if: contains(matrix.target, 'windows')
+        if: contains(matrix.target, 'windows') || contains(matrix.target, '-linux-gnu')
         uses: ./.github/actions/setup-onnx-runtime
         with:
           ort-version: "1.24.2"
@@ -1276,7 +1322,18 @@ jobs:
           crate-name: xberg-ffi
           lib-name: xberg_ffi
           classifier: ${{ matrix.classifier }}
-          glibc-version: ${{ contains(matrix.target, '-linux-gnu') && '2.28' || '' }}
+          glibc-version: ${{ contains(matrix.target, '-linux-gnu') && env.GLIBC_FLOOR || '' }}
+
+      - name: Ship + verify ONNX Runtime (glibc Linux)
+        if: contains(matrix.target, '-linux-gnu')
+        shell: bash
+        run: |
+          if [ -d dist/java-natives ] && find dist/java-natives -name '*.so' -type f | grep -q .; then
+            scripts/ci/vendor-native-closure.sh dist/java-natives
+            scripts/ci/verify-glibc-floor.sh dist/java-natives "$GLIBC_FLOOR"
+          else
+            echo "::notice::no java natives produced (dry-run stub); skipping ship+verify"
+          fi
 
       - uses: actions/upload-artifact@v7
         with:
@@ -1419,7 +1476,7 @@ jobs:
           crate-name: xberg-ffi
           lib-name: xberg_ffi
           rid: ${{ matrix.rid }}
-          glibc-version: ${{ contains(matrix.target, '-linux-gnu') && '2.28' || '' }}
+          glibc-version: ${{ contains(matrix.target, '-linux-gnu') && env.GLIBC_FLOOR || '' }}
 
       - uses: actions/upload-artifact@v7
         with:
@@ -1535,6 +1592,14 @@ jobs:
         shell: bash
         run: echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
 
+      # linux-gnu links Microsoft's ONNX Runtime (system strategy), shipped beside the NIF below (#1284).
+      - name: Setup ONNX Runtime
+        if: contains(matrix.target, '-linux-gnu')
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: "1.24.2"
+          dest-dir: crates/xberg-ffi
+
       - uses: xberg-io/actions/build-elixir-natives@v1
         with:
           target: ${{ matrix.target }}
@@ -1543,8 +1608,21 @@ jobs:
           package-dir: packages/elixir
           nif-version: ${{ needs.prepare.outputs.version }}
           nif-api-version: ${{ matrix.nif }}
-          glibc-version: ${{ contains(matrix.target, '-linux-gnu') && '2.28' || '' }}
+          glibc-version: ${{ contains(matrix.target, '-linux-gnu') && env.GLIBC_FLOOR || '' }}
           dry-run: ${{ needs.prepare.outputs.dry_run }}
+
+      - name: Ship + verify ONNX Runtime (glibc Linux)
+        if: contains(matrix.target, '-linux-gnu')
+        shell: bash
+        run: |
+          shopt -s nullglob
+          shipped=0
+          for t in dist/elixir-natives/*.tar.gz; do
+            shipped=1
+            scripts/ci/vendor-native-closure.sh "$t"
+            scripts/ci/verify-glibc-floor.sh "$t" "$GLIBC_FLOOR"
+          done
+          [ "$shipped" = 1 ] || echo "::notice::no artifact produced (dry-run stub); skipping ship+verify"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -1679,8 +1757,8 @@ jobs:
           # Use zigbuild for linux-gnu targets to set glibc floor to 2.28
           if [[ "$TARGET" == *"-linux-gnu" ]]; then
             BUILD_CMD="cargo zigbuild"
-            TARGET_ARG="${TARGET}.2.28"
-            echo "[publish] glibc floor: 2.28 (target: ${TARGET_ARG})"
+            TARGET_ARG="${TARGET}.${GLIBC_FLOOR}"
+            echo "[publish] glibc floor: ${GLIBC_FLOOR} (target: ${TARGET_ARG})"
           fi
           ${BUILD_CMD} --locked -p xberg-dart --release --target "${TARGET_ARG}"
       - name: Stage native library

@@ -77,17 +77,17 @@ RUN export RUSTFLAGS='-C link-arg=-Wl,-rpath,$ORIGIN' && \
     cp ./*.node /build/ && \
     strip /build/*.node
 
-COPY docker/scripts/vendor-node-libs.sh /usr/local/bin/vendor-node-libs.sh
-RUN sh /usr/local/bin/vendor-node-libs.sh /build /build/vendor
+COPY scripts/ci/vendor-native-closure.sh /usr/local/bin/vendor-native-closure.sh
+RUN bash /usr/local/bin/vendor-native-closure.sh /build
 
 RUN file /build/*.node && \
     echo "=== Dynamic dependencies ===" && \
     readelf -d /build/*.node 2>/dev/null | grep NEEDED && \
     echo "=== Vendored libs (ship beside the .node) ===" && \
-    ls -la /build/vendor && \
+    ls -la /build/*.so && \
     echo "=== Max GLIBC symbol version (floor) ===" && \
     { objdump -T /build/*.node 2>/dev/null | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -V | tail -1 || true; }
 
 FROM scratch
 COPY --from=builder /build/*.node /
-COPY --from=builder /build/vendor/ /vendor/
+COPY --from=builder /build/*.so /

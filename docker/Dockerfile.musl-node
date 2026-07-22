@@ -7,7 +7,7 @@ ARG TARGET=x86_64-unknown-linux-musl
 WORKDIR /build
 
 RUN apk add --no-cache \
-    curl musl-dev cmake make pkgconf \
+    curl musl-dev cmake make pkgconf bash patchelf \
     perl linux-headers git file && \
     apk add --no-cache \
         gcc g++ libstdc++ libstdc++-dev \
@@ -54,15 +54,15 @@ RUN export RUSTFLAGS='-C target-feature=-crt-static -C link-arg=-Wl,-rpath,$ORIG
     cp ./*.node /build/ && \
     strip /build/*.node
 
-COPY docker/scripts/vendor-node-libs.sh /usr/local/bin/vendor-node-libs.sh
-RUN sh /usr/local/bin/vendor-node-libs.sh /build /build/vendor
+COPY scripts/ci/vendor-native-closure.sh /usr/local/bin/vendor-native-closure.sh
+RUN bash /usr/local/bin/vendor-native-closure.sh /build
 
 RUN file /build/*.node && \
     echo "=== Dynamic dependencies ===" && \
     { readelf -d /build/*.node 2>/dev/null | grep NEEDED || echo "No dynamic dependencies (fully static)"; } && \
     echo "=== Vendored libs (ship beside the .node) ===" && \
-    ls -la /build/vendor
+    ls -la /build/*.so
 
 FROM scratch
 COPY --from=builder /build/*.node /
-COPY --from=builder /build/vendor/ /vendor/
+COPY --from=builder /build/*.so /

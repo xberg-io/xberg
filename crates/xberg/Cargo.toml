@@ -177,8 +177,8 @@ paddle-ocr = [
     "ocr",
     "auto-rotate",
 ]
-# Bundle ORT binaries via the official Microsoft release (includes CoreML on macOS, CUDA on Linux).
-# When active, no system ORT library is required and ort_discovery is skipped.
+# Dev default: downloads the pyke prebuilt ONNX Runtime (needs glibc >= 2.38 to run).
+# Release links Microsoft's runtime instead (system strategy) — see publish.yaml (#1284).
 ort-bundled = ["ort?/download-binaries", "ort?/tls-rustls", "xberg-gliner?/ort-bundled"]
 # Build-time only: configures ORT to load ONNX Runtime dynamically at runtime.
 # No #[cfg] gates — passed through to the `ort` crate.

@@ -24,6 +24,7 @@ packages=(
   libssl-dev
   pkg-config
   build-essential
+  patchelf
   cmake
   libmagic-dev
   libuv1-dev
