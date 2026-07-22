@@ -50,7 +50,7 @@ where
     crate::core::config::concurrency::init_batch_thread_pool(config.concurrency.as_ref());
     let execution_plan = crate::core::config::concurrency::resolve_batch_execution_plan(
         config.concurrency.as_ref(),
-        layout_active,
+        crate::core::config::concurrency::LayoutBatchWorkload::from_layout_active(layout_active),
         count,
         config.max_concurrent_extractions,
     );

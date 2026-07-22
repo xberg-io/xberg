@@ -71,13 +71,54 @@ pub(crate) struct BatchExecutionPlan {
     pub thread_budget: usize,
 }
 
+/// How strongly a batch is known to exercise native layout inference.
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    any(
+        test,
+        feature = "tokio-runtime",
+        feature = "late-interaction",
+        feature = "reranker",
+        feature = "sparse-embeddings"
+    )
+))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LayoutBatchWorkload {
+    /// No input has layout inference configured.
+    None,
+    /// Layout may run for only part of the batch or through a non-PDF path.
+    #[cfg(layout_detection)]
+    Mixed,
+    /// Every input is a PDF using layout inference for Markdown extraction.
+    #[cfg(layout_detection)]
+    All,
+}
+
+#[cfg(all(test, feature = "tokio-runtime", not(target_arch = "wasm32")))]
+impl LayoutBatchWorkload {
+    pub(crate) fn from_layout_active(layout_active: bool) -> Self {
+        #[cfg(layout_detection)]
+        {
+            if layout_active { Self::Mixed } else { Self::None }
+        }
+        #[cfg(not(layout_detection))]
+        {
+            let _ = layout_active;
+            Self::None
+        }
+    }
+}
+
 /// Allocate batch workers and per-worker model threads without oversubscription.
 ///
 /// The total configured budget is divided between document workers so nested
 /// per-document parallelism cannot multiply the process-wide CPU budget.
-/// Layout inference is additionally limited to two workers because the retained
-/// RT-DETR and TATR pools each contain two sessions. `max_concurrent` is always a
-/// ceiling and cannot expand execution beyond the total thread budget.
+/// All-layout PDF batches use one document worker with the full thread budget.
+/// RT-DETR inference does not scale enough across two half-budget sessions to
+/// justify their additional resident memory. Mixed or uncertain layout batches
+/// retain the previous two-worker cap, while non-layout batches use the normal
+/// worker ceiling. `max_concurrent` is always a ceiling and cannot expand
+/// execution beyond the total thread budget.
 #[cfg(all(
     not(target_arch = "wasm32"),
     any(
@@ -90,11 +131,14 @@ pub(crate) struct BatchExecutionPlan {
 ))]
 pub(crate) fn resolve_batch_execution_plan(
     config: Option<&ConcurrencyConfig>,
-    layout_active: bool,
+    layout_workload: LayoutBatchWorkload,
     input_count: usize,
     max_concurrent: Option<usize>,
 ) -> BatchExecutionPlan {
-    const MAX_LAYOUT_WORKERS: usize = 2;
+    #[cfg(layout_detection)]
+    const MAX_NATIVE_LAYOUT_BATCH_WORKERS: usize = 1;
+    #[cfg(layout_detection)]
+    const MAX_MIXED_LAYOUT_BATCH_WORKERS: usize = 2;
 
     let total_budget = resolve_thread_budget(config);
     let available_inputs = input_count.max(1);
@@ -103,10 +147,12 @@ pub(crate) fn resolve_batch_execution_plan(
         .max(1)
         .min(total_budget)
         .min(available_inputs);
-    let workers = if layout_active {
-        worker_ceiling.min(MAX_LAYOUT_WORKERS)
-    } else {
-        worker_ceiling
+    let workers = match layout_workload {
+        LayoutBatchWorkload::None => worker_ceiling,
+        #[cfg(layout_detection)]
+        LayoutBatchWorkload::Mixed => worker_ceiling.min(MAX_MIXED_LAYOUT_BATCH_WORKERS),
+        #[cfg(layout_detection)]
+        LayoutBatchWorkload::All => worker_ceiling.min(MAX_NATIVE_LAYOUT_BATCH_WORKERS),
     }
     .max(1);
     let thread_budget = (total_budget / workers).max(1);
@@ -205,7 +251,7 @@ mod tests {
     fn test_batch_plan_without_layout_uses_available_budget() {
         let budget = resolve_thread_budget(None);
         assert_eq!(
-            resolve_batch_execution_plan(None, false, budget, None),
+            resolve_batch_execution_plan(None, LayoutBatchWorkload::None, budget, None),
             BatchExecutionPlan {
                 workers: budget,
                 thread_budget: 1,
@@ -214,32 +260,49 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), layout_detection))]
     fn test_layout_batch_plan_table() {
+        for budget in [1, 2, 4, 8] {
+            let config = ConcurrencyConfig {
+                max_threads: Some(budget),
+            };
+            assert_eq!(
+                resolve_batch_execution_plan(Some(&config), LayoutBatchWorkload::All, 16, None),
+                BatchExecutionPlan {
+                    workers: 1,
+                    thread_budget: budget,
+                }
+            );
+        }
+    }
+
+    #[test]
+    #[cfg(all(not(target_arch = "wasm32"), layout_detection))]
+    fn test_mixed_layout_batch_preserves_two_worker_cap() {
         for (budget, workers, thread_budget) in [(1, 1, 1), (2, 2, 1), (4, 2, 2), (8, 2, 4)] {
             let config = ConcurrencyConfig {
                 max_threads: Some(budget),
             };
             assert_eq!(
-                resolve_batch_execution_plan(Some(&config), true, 16, None),
+                resolve_batch_execution_plan(Some(&config), LayoutBatchWorkload::Mixed, 16, None),
                 BatchExecutionPlan { workers, thread_budget }
             );
         }
     }
 
     #[test]
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), layout_detection))]
     fn test_layout_batch_plan_respects_input_and_explicit_limits() {
         let config = ConcurrencyConfig { max_threads: Some(8) };
         assert_eq!(
-            resolve_batch_execution_plan(Some(&config), true, 1, Some(8)),
+            resolve_batch_execution_plan(Some(&config), LayoutBatchWorkload::All, 1, Some(8)),
             BatchExecutionPlan {
                 workers: 1,
                 thread_budget: 8,
             }
         );
         assert_eq!(
-            resolve_batch_execution_plan(Some(&config), true, 8, Some(1)),
+            resolve_batch_execution_plan(Some(&config), LayoutBatchWorkload::All, 8, Some(1)),
             BatchExecutionPlan {
                 workers: 1,
                 thread_budget: 8,
@@ -251,7 +314,7 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     fn test_non_layout_batch_plan_divides_budget_at_explicit_worker_limit() {
         let config = ConcurrencyConfig { max_threads: Some(8) };
-        let plan = resolve_batch_execution_plan(Some(&config), false, 16, Some(2));
+        let plan = resolve_batch_execution_plan(Some(&config), LayoutBatchWorkload::None, 16, Some(2));
         assert_eq!(plan.workers, 2);
         assert_eq!(plan.thread_budget, 4);
     }
@@ -260,7 +323,7 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     fn test_non_layout_batch_plan_clamps_explicit_limit_to_total_budget() {
         let config = ConcurrencyConfig { max_threads: Some(2) };
-        let plan = resolve_batch_execution_plan(Some(&config), false, 8, Some(6));
+        let plan = resolve_batch_execution_plan(Some(&config), LayoutBatchWorkload::None, 8, Some(6));
         assert_eq!(plan.workers, 2);
         assert_eq!(plan.thread_budget, 1);
     }
@@ -269,7 +332,7 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     fn test_non_layout_batch_plan_gives_single_input_full_inner_budget() {
         let config = ConcurrencyConfig { max_threads: Some(8) };
-        let plan = resolve_batch_execution_plan(Some(&config), false, 1, None);
+        let plan = resolve_batch_execution_plan(Some(&config), LayoutBatchWorkload::None, 1, None);
         assert_eq!(plan.workers, 1);
         assert_eq!(plan.thread_budget, 8);
     }
@@ -283,9 +346,17 @@ mod tests {
             };
             for input_count in 0..=12 {
                 for max_concurrent in [None, Some(0), Some(1), Some(3), Some(16)] {
-                    for layout_active in [false, true] {
+                    #[cfg(layout_detection)]
+                    let layout_workloads = [
+                        LayoutBatchWorkload::None,
+                        LayoutBatchWorkload::Mixed,
+                        LayoutBatchWorkload::All,
+                    ];
+                    #[cfg(not(layout_detection))]
+                    let layout_workloads = [LayoutBatchWorkload::None];
+                    for layout_workload in layout_workloads {
                         let plan =
-                            resolve_batch_execution_plan(Some(&config), layout_active, input_count, max_concurrent);
+                            resolve_batch_execution_plan(Some(&config), layout_workload, input_count, max_concurrent);
                         assert!(plan.workers * plan.thread_budget <= total_budget);
                         assert!(plan.workers <= total_budget);
                         assert!(plan.workers <= input_count.max(1));

@@ -5,6 +5,8 @@ use std::io::Write;
 use tempfile::tempdir;
 
 use super::*;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::core::config::concurrency::LayoutBatchWorkload;
 
 #[tokio::test]
 async fn extract_bytes_input_returns_envelope() {
@@ -242,24 +244,27 @@ async fn bounded_batch_scheduler_preserves_completion_and_error_indices() {
 }
 
 #[test]
+#[cfg(layout_detection)]
 fn engine_batch_execution_plan_matches_layout_aware_resolution() {
     let config = ExtractionConfig {
         concurrency: Some(crate::core::config::ConcurrencyConfig { max_threads: Some(4) }),
         ..Default::default()
     };
-    let non_layout = resolve_engine_batch_execution_plan_for(&config, false, 8);
+    let non_layout = resolve_engine_batch_execution_plan_for(&config, LayoutBatchWorkload::None, 8);
     assert_eq!(non_layout.workers, 4);
     assert_eq!(non_layout.thread_budget, 1);
-    let layout = resolve_engine_batch_execution_plan_for(&config, true, 8);
-    assert_eq!(layout.workers, 2);
-    assert_eq!(layout.thread_budget, 2);
+    let layout = resolve_engine_batch_execution_plan_for(&config, LayoutBatchWorkload::All, 8);
+    assert_eq!(layout.workers, 1);
+    assert_eq!(layout.thread_budget, 4);
 
     let explicit = ExtractionConfig {
         max_concurrent_extractions: Some(2),
         ..config
     };
-    assert_eq!(resolve_engine_batch_execution_plan_for(&explicit, true, 8).workers, 2);
-    let non_layout_explicit = resolve_engine_batch_execution_plan_for(&explicit, false, 8);
+    let layout_explicit = resolve_engine_batch_execution_plan_for(&explicit, LayoutBatchWorkload::All, 8);
+    assert_eq!(layout_explicit.workers, 1);
+    assert_eq!(layout_explicit.thread_budget, 4);
+    let non_layout_explicit = resolve_engine_batch_execution_plan_for(&explicit, LayoutBatchWorkload::None, 8);
     assert_eq!(non_layout_explicit.workers, 2);
     assert_eq!(non_layout_explicit.thread_budget, 2);
 }
@@ -289,7 +294,10 @@ fn engine_batch_execution_plan_clamps_explicit_zero_to_one() {
         ..Default::default()
     };
 
-    assert_eq!(resolve_engine_batch_execution_plan_for(&config, false, 8).workers, 1);
+    assert_eq!(
+        resolve_engine_batch_execution_plan_for(&config, LayoutBatchWorkload::None, 8).workers,
+        1
+    );
 }
 
 #[test]
@@ -301,6 +309,98 @@ fn engine_batch_execution_plan_without_layout_respects_input_count() {
     let inputs = vec![ExtractInput::default()];
 
     assert_eq!(resolve_engine_batch_execution_plan(&config, &inputs).workers, 1);
+}
+
+#[cfg(layout_detection)]
+#[test]
+fn engine_batch_classifies_all_markdown_pdfs_for_single_layout_worker() {
+    let config = ExtractionConfig {
+        concurrency: Some(crate::core::config::ConcurrencyConfig { max_threads: Some(8) }),
+        layout: Some(Default::default()),
+        use_layout_for_markdown: true,
+        disable_ocr: true,
+        ..Default::default()
+    };
+    let inputs = vec![ExtractInput::from_uri("document.pdf"); 4];
+
+    assert_eq!(classify_layout_batch(&config, &inputs), LayoutBatchWorkload::All);
+    let plan = resolve_engine_batch_execution_plan(&config, &inputs);
+    assert_eq!(plan.workers, 1);
+    assert_eq!(plan.thread_budget, 8);
+}
+
+#[cfg(layout_detection)]
+#[test]
+fn engine_batch_classifies_disabled_layout_as_none_when_ocr_is_disabled() {
+    let config = ExtractionConfig {
+        concurrency: Some(crate::core::config::ConcurrencyConfig { max_threads: Some(8) }),
+        layout: Some(Default::default()),
+        use_layout_for_markdown: false,
+        disable_ocr: true,
+        ..Default::default()
+    };
+    let inputs = vec![ExtractInput::from_uri("document.pdf"); 4];
+
+    assert_eq!(classify_layout_batch(&config, &inputs), LayoutBatchWorkload::None);
+    assert_eq!(resolve_engine_batch_execution_plan(&config, &inputs).workers, 4);
+}
+
+#[cfg(layout_detection)]
+#[test]
+fn engine_batch_classifies_partial_input_layout_override_as_mixed() {
+    let config = ExtractionConfig {
+        concurrency: Some(crate::core::config::ConcurrencyConfig { max_threads: Some(8) }),
+        use_layout_for_markdown: true,
+        disable_ocr: true,
+        ..Default::default()
+    };
+    let layout_input = ExtractInput {
+        config: Some(crate::core::config::FileExtractionConfig {
+            layout: Some(Default::default()),
+            ..Default::default()
+        }),
+        ..ExtractInput::from_uri("layout.pdf")
+    };
+    let inputs = vec![
+        layout_input,
+        ExtractInput::from_uri("plain.pdf"),
+        ExtractInput::from_uri("plain.pdf"),
+        ExtractInput::from_uri("plain.pdf"),
+    ];
+
+    assert_eq!(classify_layout_batch(&config, &inputs), LayoutBatchWorkload::Mixed);
+    let plan = resolve_engine_batch_execution_plan(&config, &inputs);
+    assert_eq!(plan.workers, 2);
+    assert_eq!(plan.thread_budget, 4);
+}
+
+#[cfg(layout_detection)]
+#[test]
+fn engine_batch_classifies_ocr_capable_layout_as_mixed() {
+    let config = ExtractionConfig {
+        concurrency: Some(crate::core::config::ConcurrencyConfig { max_threads: Some(8) }),
+        layout: Some(Default::default()),
+        use_layout_for_markdown: false,
+        disable_ocr: false,
+        ..Default::default()
+    };
+    let inputs = vec![ExtractInput::from_uri("image.png"); 4];
+
+    assert_eq!(classify_layout_batch(&config, &inputs), LayoutBatchWorkload::Mixed);
+    assert_eq!(resolve_engine_batch_execution_plan(&config, &inputs).workers, 2);
+}
+
+#[cfg(layout_detection)]
+#[test]
+fn engine_batch_classifies_ordinary_batch_as_non_layout() {
+    let config = ExtractionConfig {
+        concurrency: Some(crate::core::config::ConcurrencyConfig { max_threads: Some(8) }),
+        ..Default::default()
+    };
+    let inputs = vec![ExtractInput::from_uri("document.txt"); 4];
+
+    assert_eq!(classify_layout_batch(&config, &inputs), LayoutBatchWorkload::None);
+    assert_eq!(resolve_engine_batch_execution_plan(&config, &inputs).workers, 4);
 }
 
 #[cfg(all(layout_detection, feature = "url-ingestion"))]

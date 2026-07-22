@@ -201,7 +201,7 @@ fn resolve_engine_batch_execution_plan(
     config: &ExtractionConfig,
     inputs: &[ExtractInput],
 ) -> crate::core::config::concurrency::BatchExecutionPlan {
-    resolve_engine_batch_execution_plan_for(config, batch_layout_active(config, inputs), inputs.len())
+    resolve_engine_batch_execution_plan_for(config, classify_layout_batch(config, inputs), inputs.len())
 }
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
@@ -211,38 +211,124 @@ fn resolve_pending_batch_execution_plan(
 ) -> crate::core::config::concurrency::BatchExecutionPlan {
     resolve_engine_batch_execution_plan_for(
         config,
-        batch_layout_active(config, pending.iter().map(|(_, input, _)| input)),
+        classify_layout_batch(config, pending.iter().map(|(_, input, _)| input)),
         pending.len(),
     )
 }
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-fn batch_layout_active<'a>(config: &ExtractionConfig, inputs: impl IntoIterator<Item = &'a ExtractInput>) -> bool {
+fn classify_layout_batch<'a>(
+    config: &ExtractionConfig,
+    inputs: impl IntoIterator<Item = &'a ExtractInput>,
+) -> crate::core::config::concurrency::LayoutBatchWorkload {
     #[cfg(layout_detection)]
-    let layout_active = config.layout.is_some()
-        || inputs.into_iter().any(|input| {
-            input
-                .config
-                .as_ref()
-                .is_some_and(|input_config| input_config.layout.is_some())
-        });
-    #[cfg(not(layout_detection))]
-    let layout_active = false;
-    #[cfg(not(layout_detection))]
-    let _ = (config, inputs);
+    {
+        use crate::core::config::concurrency::LayoutBatchWorkload;
 
-    layout_active
+        let mut any_layout_work = false;
+        let mut all_markdown_pdf = true;
+        let mut input_count = 0;
+        for input in inputs {
+            input_count += 1;
+            let effective = resolve_input_config(input, config);
+            let pdf_evidence = pdf_batch_evidence(input);
+            let markdown_pdf = effective.layout.is_some()
+                && effective.use_layout_for_markdown
+                && pdf_evidence == PdfBatchEvidence::Likely;
+            all_markdown_pdf &= markdown_pdf;
+
+            let ocr_layout_may_run = effective.layout.is_some() && !effective.disable_ocr;
+            let markdown_layout_may_run = effective.layout.is_some()
+                && effective.use_layout_for_markdown
+                && pdf_evidence != PdfBatchEvidence::Unlikely;
+            any_layout_work |= ocr_layout_may_run || markdown_layout_may_run;
+        }
+
+        if input_count > 0 && all_markdown_pdf {
+            LayoutBatchWorkload::All
+        } else if any_layout_work {
+            LayoutBatchWorkload::Mixed
+        } else {
+            LayoutBatchWorkload::None
+        }
+    }
+    #[cfg(not(layout_detection))]
+    {
+        let _ = (config, inputs);
+        crate::core::config::concurrency::LayoutBatchWorkload::None
+    }
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32"), layout_detection))]
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PdfBatchEvidence {
+    Likely,
+    Unlikely,
+    Unknown,
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32"), layout_detection))]
+fn pdf_batch_evidence(input: &ExtractInput) -> PdfBatchEvidence {
+    const PDF_HEADER_MAGIC: &[u8] = b"%PDF-";
+
+    if input.kind == ExtractInputKind::Bytes
+        && input
+            .bytes
+            .as_deref()
+            .is_some_and(|bytes| bytes.starts_with(PDF_HEADER_MAGIC))
+    {
+        return PdfBatchEvidence::Likely;
+    }
+    if input.mime_type.as_deref().is_some_and(is_pdf_mime) {
+        return PdfBatchEvidence::Likely;
+    }
+    if input.mime_type.is_some() {
+        return PdfBatchEvidence::Unlikely;
+    }
+
+    match input.kind {
+        ExtractInputKind::Bytes => match input.bytes.as_deref() {
+            Some(_) => PdfBatchEvidence::Unlikely,
+            None => PdfBatchEvidence::Unknown,
+        },
+        ExtractInputKind::Uri => input
+            .uri
+            .as_deref()
+            .map(uri_pdf_evidence)
+            .unwrap_or(PdfBatchEvidence::Unknown),
+    }
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32"), layout_detection))]
+fn is_pdf_mime(mime_type: &str) -> bool {
+    mime_type
+        .split(';')
+        .next()
+        .is_some_and(|value| value.trim().eq_ignore_ascii_case("application/pdf"))
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32"), layout_detection))]
+fn uri_pdf_evidence(uri: &str) -> PdfBatchEvidence {
+    let path = uri.split(['?', '#']).next().unwrap_or(uri);
+    match std::path::Path::new(path)
+        .extension()
+        .and_then(|extension| extension.to_str())
+    {
+        Some(extension) if extension.eq_ignore_ascii_case("pdf") => PdfBatchEvidence::Likely,
+        Some(_) => PdfBatchEvidence::Unlikely,
+        None => PdfBatchEvidence::Unknown,
+    }
 }
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 fn resolve_engine_batch_execution_plan_for(
     config: &ExtractionConfig,
-    layout_active: bool,
+    layout_workload: crate::core::config::concurrency::LayoutBatchWorkload,
     input_count: usize,
 ) -> crate::core::config::concurrency::BatchExecutionPlan {
     crate::core::config::concurrency::resolve_batch_execution_plan(
         config.concurrency.as_ref(),
-        layout_active,
+        layout_workload,
         input_count,
         config.max_concurrent_extractions,
     )
