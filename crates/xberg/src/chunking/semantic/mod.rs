@@ -133,6 +133,8 @@ pub(crate) fn chunk_semantic(
                 heading_context: heading_ctx,
                 heading_path,
                 image_indices: Vec::new(),
+                node_ids: Vec::new(),
+                page_spans: Vec::new(),
             },
         });
     }

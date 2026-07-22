@@ -197,6 +197,8 @@ fn try_code_chunks(result: &ExtractedDocument) -> Option<Vec<crate::types::extra
                 heading_context: None,
                 heading_path: chunk.context_path.clone(),
                 image_indices: Vec::new(),
+                node_ids: Vec::new(),
+                page_spans: Vec::new(),
             },
         })
         .collect();

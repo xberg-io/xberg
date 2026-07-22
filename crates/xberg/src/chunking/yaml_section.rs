@@ -198,6 +198,8 @@ fn build_chunks_from_sections(
                     heading_context: None,
                     heading_path: Vec::new(),
                     image_indices: Vec::new(),
+                    node_ids: Vec::new(),
+                    page_spans: Vec::new(),
                 },
             });
         } else {
@@ -225,6 +227,8 @@ fn build_chunks_from_sections(
                         heading_context: None,
                         heading_path: Vec::new(),
                         image_indices: Vec::new(),
+                        node_ids: Vec::new(),
+                        page_spans: Vec::new(),
                     },
                 });
             }

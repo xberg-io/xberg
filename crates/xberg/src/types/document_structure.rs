@@ -31,12 +31,13 @@ pub struct NodeIndex(pub u32);
 ///
 /// Generated from a hash of `node_type + text + page`. The same document
 /// always produces the same IDs, making them useful for diffing, caching,
-/// and external references.
-#[cfg_attr(alef, alef(skip))]
+/// and external references. Wraps a `String` (public field, mirroring
+/// [`NodeIndex`]'s wrapper pattern) so bindings can treat it as a plain
+/// newtype rather than requiring a lossy fallback conversion.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "api", schema(value_type = String))]
-pub struct NodeId(String);
+pub struct NodeId(pub String);
 
 impl NodeId {
     /// Generate a deterministic `NodeId` from node content.
@@ -142,7 +143,7 @@ impl DocumentStructure {
     ///
     /// let mut structure = DocumentStructure {
     ///     nodes: vec![DocumentNode {
-    ///         id: NodeId::from("n1"),
+    ///         id: NodeId::default(),
     ///         content: NodeContent::Paragraph { text: "Hello".into() },
     ///         parent: None,
     ///         children: vec![],
@@ -165,6 +166,41 @@ impl DocumentStructure {
         types.sort_unstable();
         types.dedup();
         self.node_types = types.into_iter().map(|s| s.to_string()).collect();
+    }
+
+    /// Maps a document node to its byte-offset span within a document's
+    /// rendered text content (the string that chunking operates on, e.g.
+    /// Markdown or plain-text output).
+    ///
+    /// # Status: not yet implemented
+    ///
+    /// Nodes carry position information for the *source* document (`page`,
+    /// `bbox`) but not offsets into *rendered* output — rendering is a
+    /// separate step (format-specific renderers under `core/pipeline`) that
+    /// does not currently track which byte ranges of its output came from
+    /// which `NodeIndex`. Always returns `None`.
+    ///
+    /// This is the seam `ChunkMetadata::node_ids` population and
+    /// `ChunkMetadata::page_spans` population are expected to build on.
+    /// Tracked under #1294/#1295 — implementing this requires either
+    /// threading node provenance through the renderers, or re-deriving node
+    /// spans by re-scanning rendered output for node text with page/order
+    /// disambiguation.
+    ///
+    /// # Parameters
+    ///
+    /// - `node_index`: index into [`DocumentStructure::nodes`].
+    ///
+    /// Not bound to language bindings (`alef(skip)`): the tuple return type
+    /// is not FFI-friendly, and the method is a placeholder with no behavior
+    /// to expose yet. A binding-facing surface can be added once #1294/#1295
+    /// implement real offset resolution.
+    #[cfg_attr(alef, alef(skip))]
+    #[must_use]
+    pub fn node_rendered_offset(&self, _node_index: NodeIndex) -> Option<(usize, usize)> {
+        // TODO(#1294/#1295): implement real node -> rendered-offset mapping and
+        // use it to populate `ChunkMetadata::node_ids` / `ChunkMetadata::page_spans`.
+        None
     }
 }
 
@@ -208,9 +244,17 @@ pub enum RelationshipKind {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
 pub struct DocumentNode {
-    /// Deterministic identifier (hash of content + position).
-    #[cfg_attr(alef, alef(skip))]
-    #[serde(skip)]
+    /// Deterministic identifier (hash of node type + text + page + position).
+    ///
+    /// Stable and unique within a single extraction response: every internal
+    /// construction path threads the node's position (its index in
+    /// `DocumentStructure::nodes`) into the hash, so identical
+    /// `(node_type, text, page)` tuples at different positions never collide.
+    /// Always serialised — `ChunkMetadata::node_ids` references it to join
+    /// chunks back to the nodes they were derived from.
+    /// `#[serde(default)]` covers the missing-field case on inbound JSON
+    /// (e.g. documents serialised before this field existed).
+    #[serde(default)]
     pub id: NodeId,
 
     /// Node content — tagged enum, type-specific data only.
@@ -1344,10 +1388,80 @@ mod tests {
         assert!(json.get("annotations").is_none());
         assert!(json.get("attributes").is_none());
 
-        // id is intentionally excluded from the wire format (#[serde(skip)]):
-        assert!(json.get("id").is_none());
+        // id is a stable, deterministic identifier and must always be on the wire
+        // so ChunkMetadata::node_ids can reference it.
+        assert!(json.get("id").is_some());
+        assert_eq!(json.get("id").unwrap(), &serde_json::Value::String(node.id.to_string()));
 
         assert!(json.get("content").is_some());
         assert!(json.get("page").is_some());
+    }
+
+    #[test]
+    fn test_node_rendered_offset_is_unimplemented_stub() {
+        let mut doc = DocumentStructure::new();
+        doc.push_node(make_paragraph("Hello", Some(1), 0));
+        assert_eq!(
+            doc.node_rendered_offset(NodeIndex(0)),
+            None,
+            "node_rendered_offset is a documented stub (#1294/#1295) and must always return None"
+        );
+    }
+
+    #[test]
+    fn test_node_id_serializes_as_plain_string() {
+        let id = NodeId::generate("paragraph", "Hello", Some(1), 0);
+        let json = serde_json::to_value(&id).expect("serialize");
+        assert!(
+            json.is_string(),
+            "NodeId must serialize as a bare string, got: {json:?}"
+        );
+    }
+
+    #[test]
+    fn test_node_id_stable_across_generations() {
+        // Same inputs must always produce the same id (determinism).
+        let id_a = NodeId::generate("paragraph", "Hello world", Some(3), 5);
+        let id_b = NodeId::generate("paragraph", "Hello world", Some(3), 5);
+        assert_eq!(id_a, id_b);
+        assert_eq!(id_a.to_string(), id_b.to_string());
+    }
+
+    #[test]
+    fn test_node_id_unique_for_duplicate_content_at_different_positions() {
+        // Identical (type, text, page) at different positions must not collide,
+        // since the position index is folded into the hash.
+        let id_0 = NodeId::generate("paragraph", "Repeated", Some(1), 0);
+        let id_1 = NodeId::generate("paragraph", "Repeated", Some(1), 1);
+        assert_ne!(
+            id_0, id_1,
+            "duplicate content at different indices must have distinct ids"
+        );
+    }
+
+    #[test]
+    fn test_node_id_present_in_full_document_json() {
+        let mut doc = DocumentStructure::new();
+        doc.push_node(make_paragraph("First", Some(1), 0));
+        doc.push_node(make_paragraph("Repeated", Some(1), 1));
+        doc.push_node(make_paragraph("Repeated", Some(1), 2));
+
+        let json = serde_json::to_value(&doc).expect("serialize");
+        let ids: Vec<String> = json["nodes"]
+            .as_array()
+            .expect("nodes array")
+            .iter()
+            .map(|n| n["id"].as_str().expect("id present as string").to_string())
+            .collect();
+
+        assert_eq!(ids.len(), 3);
+        let mut unique = ids.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(
+            unique.len(),
+            3,
+            "all node ids in one document must be unique, got: {ids:?}"
+        );
     }
 }

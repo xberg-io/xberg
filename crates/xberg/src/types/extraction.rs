@@ -6,7 +6,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 
 use super::djot::DjotContent;
-use super::document_structure::DocumentStructure;
+use super::document_structure::{DocumentStructure, NodeId};
 use super::metadata::Metadata;
 use super::ocr_elements::OcrElement;
 use super::page::PageContent;
@@ -607,6 +607,40 @@ pub struct ChunkMetadata {
     /// Empty when image extraction is disabled or the chunk spans no pages with images.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub image_indices: Vec<u32>,
+
+    /// Ids of the [`DocumentNode`](super::document_structure::DocumentNode)s
+    /// this chunk was derived from.
+    ///
+    /// Joins a chunk back to the structured document tree via
+    /// [`DocumentNode::id`](super::document_structure::DocumentNode::id).
+    /// Empty until the node-to-rendered-offset mapping needed to compute the
+    /// intersection is implemented (tracked under #1294/#1295); this field is
+    /// the wire-format foundation for that follow-up.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub node_ids: Vec<NodeId>,
+
+    /// Per-page bounding-box spans this chunk covers.
+    ///
+    /// Empty until page-level bounding-box aggregation is implemented
+    /// (tracked under #1295); this field is the wire-format foundation for
+    /// that follow-up.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub page_spans: Vec<PageSpan>,
+}
+
+/// A single page covered by a chunk, with an optional bounding box on that page.
+///
+/// Populated by future page-level bounding-box aggregation (#1295). Currently
+/// always empty on [`ChunkMetadata::page_spans`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+pub struct PageSpan {
+    /// Page number (1-indexed).
+    pub page: u32,
+
+    /// Bounding box on this page, if known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bbox: Option<BoundingBox>,
 }
 
 /// Heuristic classification of what an image likely depicts.
@@ -975,6 +1009,119 @@ mod tests {
         let json = serde_json::to_string(&counts).unwrap();
         let back: DocumentCounts = serde_json::from_str(&json).unwrap();
         assert_eq!(counts, back);
+    }
+
+    fn empty_chunk_metadata() -> ChunkMetadata {
+        ChunkMetadata {
+            byte_start: 0,
+            byte_end: 10,
+            token_count: None,
+            chunk_index: 0,
+            total_chunks: 1,
+            first_page: None,
+            last_page: None,
+            heading_context: None,
+            heading_path: Vec::new(),
+            image_indices: Vec::new(),
+            node_ids: Vec::new(),
+            page_spans: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn chunk_metadata_node_ids_omitted_when_empty() {
+        let meta = empty_chunk_metadata();
+        let json = serde_json::to_value(&meta).expect("serialize");
+        assert!(
+            json.get("node_ids").is_none(),
+            "empty node_ids must be omitted from the wire, got: {json:?}"
+        );
+    }
+
+    #[test]
+    fn chunk_metadata_node_ids_present_when_set() {
+        let mut meta = empty_chunk_metadata();
+        meta.node_ids = vec![
+            NodeId::generate("paragraph", "a", Some(1), 0),
+            NodeId::generate("paragraph", "b", Some(1), 1),
+        ];
+        let json = serde_json::to_value(&meta).expect("serialize");
+        let ids = json
+            .get("node_ids")
+            .expect("node_ids present")
+            .as_array()
+            .expect("array");
+        assert_eq!(ids.len(), 2);
+        assert!(ids[0].is_string(), "node ids must serialize as bare strings");
+
+        let back: ChunkMetadata = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(back.node_ids, meta.node_ids);
+    }
+
+    #[test]
+    fn chunk_metadata_omitting_node_ids_deserializes_to_empty_vec() {
+        let json = r#"{
+            "byte_start": 0,
+            "byte_end": 42,
+            "chunk_index": 0,
+            "total_chunks": 1
+        }"#;
+        let meta: ChunkMetadata = serde_json::from_str(json).unwrap();
+        assert!(meta.node_ids.is_empty(), "omitted node_ids must default to empty vec");
+    }
+
+    #[test]
+    fn chunk_metadata_page_spans_omitted_when_empty() {
+        let meta = empty_chunk_metadata();
+        let json = serde_json::to_value(&meta).expect("serialize");
+        assert!(
+            json.get("page_spans").is_none(),
+            "empty page_spans must be omitted from the wire, got: {json:?}"
+        );
+    }
+
+    #[test]
+    fn chunk_metadata_page_spans_present_when_set() {
+        let mut meta = empty_chunk_metadata();
+        meta.page_spans = vec![
+            PageSpan {
+                page: 1,
+                bbox: Some(BoundingBox {
+                    x0: 0.0,
+                    y0: 0.0,
+                    x1: 100.0,
+                    y1: 200.0,
+                }),
+            },
+            PageSpan { page: 2, bbox: None },
+        ];
+        let json = serde_json::to_value(&meta).expect("serialize");
+        let spans = json
+            .get("page_spans")
+            .expect("page_spans present")
+            .as_array()
+            .expect("array");
+        assert_eq!(spans.len(), 2);
+        assert!(spans[0].get("bbox").is_some());
+        assert!(spans[1].get("bbox").is_none(), "None bbox must be omitted per-span");
+
+        let back: ChunkMetadata = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(back.page_spans, meta.page_spans);
+    }
+
+    #[test]
+    fn chunk_metadata_omitting_page_spans_deserializes_to_empty_vec() {
+        let json = r#"{
+            "byte_start": 0,
+            "byte_end": 42,
+            "chunk_index": 0,
+            "total_chunks": 1
+        }"#;
+        let meta: ChunkMetadata = serde_json::from_str(json).unwrap();
+        assert!(
+            meta.page_spans.is_empty(),
+            "omitted page_spans must default to empty vec"
+        );
     }
 
     #[test]
