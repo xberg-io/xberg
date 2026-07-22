@@ -122,6 +122,9 @@ jobs:
       - name: Validate ground truth
         run: cargo run --locked --release -p benchmark-harness -- validate-gt --fixtures tools/benchmark-harness/fixtures/pdf/ --strict
 
+      - name: Validate benchmark cohorts
+        run: cargo test --locked --release -p benchmark-harness 'cohort::tests::'
+
       # Package into a non-hidden tar so downstream jobs get the reference corpus without each hitting
       # GCS, and without depending on the artifact action's hidden-file handling.
       - name: Package reference corpus cache
@@ -159,7 +162,7 @@ jobs:
         run: scripts/ci/validate/show-disk-space.sh "Disk space after artifact upload"
 
   bench-rust:
-    name: bench-rust (${{ matrix.pipeline }}, ${{ matrix.output_format }}, ${{ matrix.mode }})
+    name: bench-rust (${{ matrix.pipeline }}, ${{ matrix.output_format }}, ${{ matrix.mode }}, ${{ matrix.cohort }})
     needs: setup
     runs-on: ${{ matrix.pipeline == 'layout' && 'runner-large-arm64' || 'runner-medium-arm64' }}
     timeout-minutes: 360
@@ -171,6 +174,7 @@ jobs:
         pipeline: [baseline, layout]
         output_format: [markdown, plaintext]
         mode: [single-file, batch]
+        cohort: [native-pdf-fast-b8, ocr-pdf-fast-b4]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -228,18 +232,21 @@ jobs:
           OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
+          COHORT: tools/benchmark-harness/cohorts/${{ matrix.cohort }}.json
+          BATCH_SIZE: ${{ matrix.mode == 'batch' && (matrix.cohort == 'native-pdf-fast-b8' && 8 || 4) || '' }}
+          OCR_ENABLED: ${{ matrix.cohort == 'ocr-pdf-fast-b4' }}
         run: scripts/benchmarks/run-benchmark.sh
 
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-rust-${{ matrix.pipeline }}-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-rust-${{ matrix.pipeline }}-${{ matrix.output_format }}-${{ matrix.mode }}-${{ matrix.cohort }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-docling:
-    name: docling (${{ matrix.output_format }}, ${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
+    name: docling (${{ matrix.output_format }}, ${{ matrix.mode }}, ${{ matrix.cohort }})
     needs: bench-rust
     if: ${{ !cancelled() }}
     runs-on: runner-medium-arm64
@@ -249,9 +256,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [single-file]
-        shard: [1, 2, 3]
+        mode: [single-file, batch]
         output_format: [markdown, plaintext]
+        cohort: [native-pdf-fast-b8, ocr-pdf-fast-b4]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -310,7 +317,9 @@ jobs:
           OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
-          SHARD: ${{ matrix.shard }}/3
+          COHORT: tools/benchmark-harness/cohorts/${{ matrix.cohort }}.json
+          BATCH_SIZE: ${{ matrix.mode == 'batch' && (matrix.cohort == 'native-pdf-fast-b8' && 8 || 4) || '' }}
+          OCR_ENABLED: ${{ matrix.cohort == 'ocr-pdf-fast-b4' }}
           UV_NO_SYNC: "1"
         run: scripts/benchmarks/run-benchmark.sh
 
@@ -318,12 +327,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-docling-${{ matrix.output_format }}-${{ matrix.mode }}-shard${{ matrix.shard }}-${{ github.run_id }}
+          name: benchmarks-docling-${{ matrix.output_format }}-${{ matrix.mode }}-${{ matrix.cohort }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-markitdown:
-    name: markitdown (${{ matrix.output_format }}, ${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
+    name: markitdown (${{ matrix.output_format }}, ${{ matrix.mode }}, native-pdf-fast-b8)
     needs: bench-rust
     if: ${{ !cancelled() }}
     runs-on: runner-medium-arm64
@@ -334,7 +343,6 @@ jobs:
       fail-fast: false
       matrix:
         mode: [single-file]
-        shard: [1, 2, 3]
         output_format: [markdown, plaintext]
         exclude:
           - output_format: plaintext
@@ -392,7 +400,7 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
           OCR_ENABLED: "false"
-          SHARD: ${{ matrix.shard }}/3
+          COHORT: tools/benchmark-harness/cohorts/native-pdf-fast-b8.json
           UV_NO_SYNC: "1"
         run: scripts/benchmarks/run-benchmark.sh
 
@@ -400,12 +408,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-markitdown-${{ matrix.output_format }}-${{ matrix.mode }}-shard${{ matrix.shard }}-${{ github.run_id }}
+          name: benchmarks-markitdown-${{ matrix.output_format }}-${{ matrix.mode }}-native-pdf-fast-b8-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-unstructured:
-    name: unstructured (${{ matrix.output_format }}, ${{ matrix.mode }}, shard ${{ matrix.shard }}/4)
+    name: unstructured (${{ matrix.output_format }}, ${{ matrix.mode }}, native-pdf-fast-b8)
     needs: bench-rust
     if: ${{ !cancelled() }}
     runs-on: runner-medium-arm64
@@ -416,7 +424,6 @@ jobs:
       fail-fast: false
       matrix:
         mode: [single-file]
-        shard: [1, 2, 3, 4]
         output_format: [markdown, plaintext]
     steps:
       - uses: actions/checkout@v6
@@ -476,7 +483,8 @@ jobs:
           OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
-          SHARD: ${{ matrix.shard }}/4
+          COHORT: tools/benchmark-harness/cohorts/native-pdf-fast-b8.json
+          OCR_ENABLED: "false"
           UV_NO_SYNC: "1"
         run: scripts/benchmarks/run-benchmark.sh
 
@@ -484,12 +492,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-unstructured-${{ matrix.output_format }}-${{ matrix.mode }}-shard${{ matrix.shard }}-${{ github.run_id }}
+          name: benchmarks-unstructured-${{ matrix.output_format }}-${{ matrix.mode }}-native-pdf-fast-b8-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-tika:
-    name: tika (${{ matrix.output_format }}, ${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
+    name: tika (${{ matrix.output_format }}, ${{ matrix.mode }}, native-pdf-fast-b8)
     needs: bench-rust
     if: ${{ !cancelled() }}
     runs-on: runner-medium-arm64
@@ -500,7 +508,6 @@ jobs:
       fail-fast: false
       matrix:
         mode: [single-file]
-        shard: [1, 2, 3]
         output_format: [markdown, plaintext]
         exclude:
           - output_format: markdown
@@ -563,19 +570,20 @@ jobs:
           OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
-          SHARD: ${{ matrix.shard }}/3
+          COHORT: tools/benchmark-harness/cohorts/native-pdf-fast-b8.json
+          OCR_ENABLED: "false"
         run: scripts/benchmarks/run-benchmark.sh
 
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-tika-${{ matrix.output_format }}-${{ matrix.mode }}-shard${{ matrix.shard }}-${{ github.run_id }}
+          name: benchmarks-tika-${{ matrix.output_format }}-${{ matrix.mode }}-native-pdf-fast-b8-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-pymupdf4llm:
-    name: pymupdf4llm (${{ matrix.output_format }}, ${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
+    name: pymupdf4llm (${{ matrix.output_format }}, ${{ matrix.mode }}, native-pdf-fast-b8)
     needs: bench-rust
     if: ${{ !cancelled() }}
     runs-on: runner-medium-arm64
@@ -586,7 +594,6 @@ jobs:
       fail-fast: false
       matrix:
         mode: [single-file]
-        shard: [1, 2, 3]
         output_format: [markdown, plaintext]
         exclude:
           - output_format: plaintext
@@ -649,7 +656,8 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
           TESSDATA_PREFIX: /usr/share/tesseract-ocr/5/tessdata
-          SHARD: ${{ matrix.shard }}/3
+          COHORT: tools/benchmark-harness/cohorts/native-pdf-fast-b8.json
+          OCR_ENABLED: "false"
           UV_NO_SYNC: "1"
         run: scripts/benchmarks/run-benchmark.sh
 
@@ -657,12 +665,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-pymupdf4llm-${{ matrix.output_format }}-${{ matrix.mode }}-shard${{ matrix.shard }}-${{ github.run_id }}
+          name: benchmarks-pymupdf4llm-${{ matrix.output_format }}-${{ matrix.mode }}-native-pdf-fast-b8-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-mineru:
-    name: mineru (${{ matrix.output_format }}, ${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
+    name: mineru (${{ matrix.output_format }}, ${{ matrix.mode }}, native-pdf-fast-b8)
     needs: bench-rust
     if: ${{ !cancelled() }}
     runs-on: runner-medium-arm64
@@ -673,12 +681,7 @@ jobs:
       fail-fast: false
       matrix:
         mode: [single-file]
-        shard: [1, 2, 3]
         output_format: [markdown, plaintext]
-        exclude:
-          - mode: single-file
-            shard: 1
-            output_format: plaintext
     steps:
       - uses: actions/checkout@v6
         with:
@@ -737,7 +740,8 @@ jobs:
           OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
-          SHARD: ${{ matrix.shard }}/3
+          COHORT: tools/benchmark-harness/cohorts/native-pdf-fast-b8.json
+          OCR_ENABLED: "false"
           UV_NO_SYNC: "1"
         run: scripts/benchmarks/run-benchmark.sh
 
@@ -745,12 +749,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-mineru-${{ matrix.output_format }}-${{ matrix.mode }}-shard${{ matrix.shard }}-${{ github.run_id }}
+          name: benchmarks-mineru-${{ matrix.output_format }}-${{ matrix.mode }}-native-pdf-fast-b8-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-liteparse:
-    name: liteparse (${{ matrix.output_format }}, ${{ matrix.mode }})
+    name: liteparse (${{ matrix.output_format }}, ${{ matrix.mode }}, ${{ matrix.cohort }})
     needs: bench-rust
     if: ${{ !cancelled() }}
     runs-on: runner-medium-arm64
@@ -762,6 +766,7 @@ jobs:
       matrix:
         mode: [single-file, batch]
         output_format: [markdown, plaintext]
+        cohort: [native-pdf-fast-b8, ocr-pdf-fast-b4]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -824,13 +829,16 @@ jobs:
           OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
+          COHORT: tools/benchmark-harness/cohorts/${{ matrix.cohort }}.json
+          BATCH_SIZE: ${{ matrix.mode == 'batch' && (matrix.cohort == 'native-pdf-fast-b8' && 8 || 4) || '' }}
+          OCR_ENABLED: ${{ matrix.cohort == 'ocr-pdf-fast-b4' }}
         run: scripts/benchmarks/run-benchmark.sh
 
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-liteparse-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-liteparse-${{ matrix.output_format }}-${{ matrix.mode }}-${{ matrix.cohort }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
@@ -1004,10 +1012,10 @@ jobs:
           #   competitors  →  "{framework}:{output_format}:{mode}"
           #
           # xberg: 2 pipelines × 2 output formats × 2 modes = 8
-          # competitors: 13 entries (format varies per tool: docling/unstructured/mineru emit
+          # competitors: 15 entries (format varies per tool: docling/unstructured/mineru emit
           #   both markdown+plaintext; markitdown/pymupdf4llm markdown-only; tika plaintext-only;
-          #   liteparse — the head-to-head competitor — emits both formats AND native batch)
-          # total expected: 21
+          #   docling and liteparse both expose verified native batch entry points)
+          # total expected: 23
           EXPECTED_FRAMEWORKS=(
             # xberg-* (slim keys — format encoded in name)
             "xberg-markdown-baseline:single"   "xberg-markdown-baseline:batch"
@@ -1015,7 +1023,9 @@ jobs:
             "xberg-plaintext-baseline:single"   "xberg-plaintext-baseline:batch"
             "xberg-plaintext-layout:single"     "xberg-plaintext-layout:batch"
             # competitors (format in key; single-file only unless noted)
+            # docling: full grid (markdown/plaintext × single/batch)
             "docling:markdown:single"    "docling:plaintext:single"
+            "docling:markdown:batch"     "docling:plaintext:batch"
             "markitdown:markdown:single"
             "unstructured:markdown:single" "unstructured:plaintext:single"
             "tika:plaintext:single"

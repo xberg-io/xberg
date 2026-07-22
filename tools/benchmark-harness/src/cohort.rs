@@ -189,6 +189,45 @@ mod tests {
     }
 
     #[test]
+    fn ocr_pdf_fast_b4_is_loadable_with_quality_ground_truth() {
+        const BATCH_SIZE: usize = 4;
+
+        let crate_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let manifest_path = crate_root.join("cohorts/ocr-pdf-fast-b4.json");
+        let manifest = CohortManifest::from_file(&manifest_path).unwrap();
+        let fixtures = manifest
+            .load_fixtures(&crate_root.join("fixtures"), &manifest_path)
+            .unwrap();
+        let expected_fixtures = [
+            "pdf_non_searchable.json",
+            "pdf_ocr_test.json",
+            "pdf_scanned_ocr.json",
+            "pdf_image_only_german.json",
+        ]
+        .map(PathBuf::from);
+
+        assert_eq!(manifest.name, "ocr-pdf-fast-b4-v1");
+        assert_eq!(manifest.batch_size, BATCH_SIZE);
+        assert_eq!(manifest.fixtures, expected_fixtures);
+        assert_eq!(fixtures.len(), BATCH_SIZE);
+        for (fixture_path, fixture) in fixtures.fixtures() {
+            assert_eq!(fixture.file_type, "pdf");
+            assert!(fixture.requires_ocr());
+            let fixture_dir = fixture_path.parent().unwrap();
+            let document_path = fixture.resolve_document_path(fixture_dir);
+            assert!(document_path.is_file());
+            assert_eq!(fixture.file_size, std::fs::metadata(document_path).unwrap().len());
+            for ground_truth_path in [
+                fixture.resolve_ground_truth_path(fixture_dir).unwrap(),
+                fixture.resolve_ground_truth_markdown_path(fixture_dir).unwrap(),
+            ] {
+                assert!(ground_truth_path.is_file());
+                assert!(std::fs::metadata(ground_truth_path).unwrap().len() > 0);
+            }
+        }
+    }
+
+    #[test]
     fn rejects_partial_duplicate_and_parent_paths() {
         let temp = tempfile::tempdir().unwrap();
         for fixtures in [
