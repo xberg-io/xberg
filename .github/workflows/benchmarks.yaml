@@ -85,6 +85,9 @@ jobs:
       - name: Install Task
         uses: xberg-io/actions/install-task@v1
 
+      - name: Validate benchmark scripts
+        run: task benchmark:validate:scripts
+
       - name: Cache benchmark harness
         uses: ./.github/actions/cache-benchmark-harness
         with:

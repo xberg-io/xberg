@@ -14,6 +14,7 @@ on:
       - "*.yml"
       - "*.md"
       - ".github/**"
+      - ".task/**"
       - "Taskfile.yml"
       - "alef.toml"
       - "pyproject.toml"
@@ -30,6 +31,7 @@ on:
       - "*.yml"
       - "*.md"
       - ".github/**"
+      - ".task/**"
       - "Taskfile.yml"
       - "alef.toml"
       - "pyproject.toml"
@@ -43,6 +45,16 @@ permissions:
   contents: read
 
 jobs:
+  benchmark-scripts:
+    name: Benchmark script regressions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Task
+        uses: xberg-io/actions/install-task@v1
+      - name: Validate benchmark scripts
+        run: task benchmark:validate:scripts
+
   validate:
     uses: xberg-io/actions/.github/workflows/reusable-validate.yml@v1
     with:
