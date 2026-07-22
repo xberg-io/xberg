@@ -1,0 +1,5 @@
+preset = "conventional"
+write = true
+
+[rules]
+no_emojis = true

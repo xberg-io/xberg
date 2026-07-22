@@ -1,0 +1,26 @@
+# AI-Rulez Configuration (migrated to V4 TOML format)
+# Documentation: https://github.com/Goldziher/ai-rulez
+
+version = '4.0'
+name = 'xberg-surrealdb'
+description = 'SurrealDB integration for xberg document storage and retrieval'
+gitignore = true
+presets = ['claude', 'codex', 'copilot', 'cursor', 'antigravity']
+builtins = ['python', 'default-commands']
+
+[[includes]]
+name = 'xberg-core'
+source = 'https://github.com/xberg-io/ai-rulez.git'
+path = 'modules/core'
+merge_strategy = 'local-override'
+
+[[marketplaces]]
+name = "basemind"
+source = "Goldziher/basemind"
+type = "github"
+
+[[plugins]]
+marketplace = "basemind"
+name = "basemind"
+scope = "project"
+enabled = true

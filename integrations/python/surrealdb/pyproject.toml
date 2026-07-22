@@ -1,0 +1,114 @@
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[project]
+name = "xberg-surrealdb"
+version = "0.2.0"
+description = """\
+  Xberg-to-SurrealDB connector for document ingestion pipelines — schema management, content deduplication, \
+  chunk storage, and index configuration\
+  """
+readme = "README.md"
+keywords = [
+    "ai",
+    "document-extraction",
+    "document-intelligence",
+    "embeddings",
+    "graph-database",
+    "hybrid-search",
+    "xberg",
+    "llm",
+    "nlp",
+    "ocr",
+    "pdf",
+    "rag",
+    "surrealdb",
+    "text-extraction",
+    "vector-search",
+]
+license = "MIT"
+authors = [{ name = "Xberg.dev", email = "admin@xberg.io" }]
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Database",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Text Processing :: General",
+    "Topic :: Text Processing :: Indexing",
+    "Typing :: Typed",
+]
+dependencies = ["anyio>=4", "xberg>=1.0.0", "surrealdb>=1.0.8", "typing-extensions>=4; python_version<'3.11'"]
+urls.Documentation = "https://docs.xberg.io"
+urls.Homepage = "https://github.com/xberg-io/xberg-surrealdb"
+urls.Issues = "https://github.com/xberg-io/xberg-surrealdb/issues"
+urls.Xberg = "https://github.com/xberg-io/xberg"
+urls.Repository = "https://github.com/xberg-io/xberg-surrealdb"
+urls.SurrealDB = "https://surrealdb.com"
+
+[dependency-groups]
+dev = ["mypy>=1.19", "pre-commit>=4", "pytest>=9", "pytest-asyncio>=0.24", "pytest-cov>=6", "ruff>=0.14"]
+
+[tool.hatch]
+build.targets.sdist.include = ["src/xberg_surrealdb", "CHANGELOG.md", "LICENSE", "README.md", "pyproject.toml"]
+build.targets.wheel.packages = ["src/xberg_surrealdb"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+lint.select = ["ALL"]
+lint.ignore = ["ANN401", "COM812", "D100", "D104", "D107", "D203", "D213", "ISC001", "PLR0913"]
+lint.per-file-ignores."examples/**" = [
+    "ANN",
+    "ASYNC240",
+    "ASYNC250",
+    "D",
+    "INP001",
+    "PLC0415",
+    "PLR2004",
+    "RET504",
+    "S106",
+    "T201",
+]
+lint.per-file-ignores."src/xberg_surrealdb/ingester.py" = ["S608"]
+lint.per-file-ignores."src/xberg_surrealdb/schema.py" = ["S608"]
+lint.per-file-ignores."tests/**" = [
+    "ANN",
+    "D",
+    "PERF401",
+    "PERF402",
+    "PLC0415",
+    "PLR2004",
+    "S101",
+    "S105",
+    "S106",
+    "S108",
+    "S608",
+    "SLF001",
+    "TC001",
+    "TC003",
+]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+exclude = ["examples/"]
+
+[tool.pytest]
+ini_options.testpaths = ["tests"]
+ini_options.asyncio_mode = "auto"
+ini_options.markers = ["integration: tests requiring a live SurrealDB instance (no mocks, slower)"]
+
+[tool.coverage]
+run.source = ["xberg_surrealdb"]
+report.fail_under = 80

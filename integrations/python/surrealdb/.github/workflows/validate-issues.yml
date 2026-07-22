@@ -1,0 +1,10 @@
+name: Validate Issues
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  validate:
+    uses: xberg-io/actions/.github/workflows/reusable-validate-issues.yml@v1
+    secrets: inherit
