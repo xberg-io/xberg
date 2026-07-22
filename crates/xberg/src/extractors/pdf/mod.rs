@@ -1151,6 +1151,107 @@ mod tests {
         result.extraction_method
     }
 
+    #[cfg(all(feature = "pdf", feature = "ocr", feature = "chunking"))]
+    fn assert_occurs_once(haystack: &str, needle: &str, projection: &str) {
+        assert_eq!(
+            haystack.matches(needle).count(),
+            1,
+            "mixed OCR text must occur exactly once in {projection}: {haystack}"
+        );
+    }
+
+    #[cfg(all(feature = "pdf", feature = "ocr", feature = "chunking"))]
+    fn mixed_native_and_scanned_pdf() -> Vec<u8> {
+        use lopdf::content::{Content, Operation};
+        use lopdf::{Document, Object, Stream, dictionary};
+
+        let mut document = Document::with_version("1.5");
+        let pages_id = document.new_object_id();
+        let font_id = document.add_object(dictionary! {
+            "Type" => "Font",
+            "Subtype" => "Type1",
+            "BaseFont" => "Helvetica",
+        });
+
+        let native_content = Content {
+            operations: vec![
+                Operation::new("BT", vec![]),
+                Operation::new("Tf", vec!["F1".into(), 18.into()]),
+                Operation::new("Td", vec![72.into(), 720.into()]),
+                Operation::new(
+                    "Tj",
+                    vec![Object::string_literal(
+                        "Issue 1281 native text remains on page one with enough meaningful words to pass the automatic per-page quality gate and preserve mixed routing.",
+                    )],
+                ),
+                Operation::new("ET", vec![]),
+            ],
+        };
+        let native_content_id = document.add_object(Stream::new(
+            dictionary! {},
+            native_content.encode().expect("native PDF content must encode"),
+        ));
+        let native_page_id = document.add_object(dictionary! {
+            "Type" => "Page",
+            "Parent" => pages_id,
+            "Contents" => native_content_id,
+            "Resources" => dictionary! { "Font" => dictionary! { "F1" => font_id } },
+            "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+        });
+
+        let image_id = document.add_object(Stream::new(
+            dictionary! {
+                "Type" => "XObject",
+                "Subtype" => "Image",
+                "Width" => 1,
+                "Height" => 1,
+                "ColorSpace" => "DeviceGray",
+                "BitsPerComponent" => 8,
+            },
+            vec![0],
+        ));
+        let scanned_content = Content {
+            operations: vec![
+                Operation::new("q", vec![]),
+                Operation::new(
+                    "cm",
+                    vec![612.into(), 0.into(), 0.into(), 792.into(), 0.into(), 0.into()],
+                ),
+                Operation::new("Do", vec![Object::Name(b"Scan".to_vec())]),
+                Operation::new("Q", vec![]),
+            ],
+        };
+        let scanned_content_id = document.add_object(Stream::new(
+            dictionary! {},
+            scanned_content.encode().expect("scanned PDF content must encode"),
+        ));
+        let scanned_page_id = document.add_object(dictionary! {
+            "Type" => "Page",
+            "Parent" => pages_id,
+            "Contents" => scanned_content_id,
+            "Resources" => dictionary! { "XObject" => dictionary! { "Scan" => image_id } },
+            "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+        });
+
+        document.objects.insert(
+            pages_id,
+            Object::Dictionary(dictionary! {
+                "Type" => "Pages",
+                "Kids" => vec![native_page_id.into(), scanned_page_id.into()],
+                "Count" => 2,
+            }),
+        );
+        let catalog_id = document.add_object(dictionary! {
+            "Type" => "Catalog",
+            "Pages" => pages_id,
+        });
+        document.trailer.set("Root", catalog_id);
+
+        let mut bytes = Vec::new();
+        document.save_to(&mut bytes).expect("mixed PDF fixture must serialize");
+        bytes
+    }
+
     #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
     #[test]
     fn ocr_tables_replace_native_tables_and_are_sorted() {
@@ -1778,16 +1879,38 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    #[cfg(all(feature = "pdf", feature = "ocr", feature = "chunking"))]
     #[serial]
-    async fn test_pdf_exposes_mixed_extraction_method() {
-        use crate::core::config::{OcrConfig, PageConfig};
+    async fn test_mixed_pdf_ocr_survives_full_postprocessing() {
+        use crate::core::config::{ChunkingConfig, OcrConfig, PageConfig};
 
-        let _backend = register_mock_ocr_backend("pdf-extraction-method-mixed", "mixed OCR page");
+        const OCR_TEXT: &str = "Issue 1281 authoritative OCR replacement on page one.";
+        const RETAINED_PAGE_TWO_MARKER: &str = "Other notable software from this era included WordPerfect";
+        let _backend = register_mock_ocr_backend("pdf-extraction-method-mixed", OCR_TEXT);
         let extractor = PdfExtractor::new();
+        let pdf_path = pdf_test_document("multi_page.pdf");
+        let content = std::fs::read(pdf_path).expect("mixed OCR fixture must be available");
+        let native_config = ExtractionConfig {
+            pages: Some(PageConfig {
+                extract_pages: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let native = extractor
+            .extract_content(&content, "application/pdf", &native_config)
+            .await
+            .expect("native PDF extraction should succeed");
+        let native =
+            crate::extraction::derive::derive_extraction_result(native, true, crate::core::config::OutputFormat::Plain);
+        let native_pages = native.pages.expect("native extraction must expose pages");
+        let stale_page_one = native_pages[0].content.clone();
+
         let config = ExtractionConfig {
             force_ocr_pages: Some(vec![1]),
             output_format: crate::core::config::OutputFormat::Markdown,
+            include_document_structure: true,
+            use_cache: false,
             ocr: Some(OcrConfig {
                 backend: "pdf-extraction-method-mixed".to_string(),
                 language: vec!["eng".to_string()],
@@ -1797,38 +1920,148 @@ mod tests {
                 extract_pages: true,
                 ..Default::default()
             }),
+            chunking: Some(ChunkingConfig {
+                max_characters: OCR_TEXT.chars().count() + 1,
+                overlap: 0,
+                ..Default::default()
+            }),
             ..Default::default()
         };
-        let pdf_path = pdf_test_document("multi_page.pdf");
+        let internal = extractor
+            .extract_content(&content, "application/pdf", &config)
+            .await
+            .expect("mixed OCR/native extraction should succeed");
+        let derived = crate::extraction::derive::derive_extraction_result(
+            internal.clone(),
+            true,
+            crate::core::config::OutputFormat::Markdown,
+        );
+        assert_occurs_once(&derived.content, OCR_TEXT, "derived plain content");
+        assert_occurs_once(
+            derived
+                .formatted_content
+                .as_deref()
+                .expect("derived Markdown output must exist"),
+            OCR_TEXT,
+            "derived Markdown output",
+        );
+        let result = crate::core::pipeline::run_pipeline(internal, &config)
+            .await
+            .expect("mixed OCR post-processing should succeed");
 
-        if let Ok(content) = std::fs::read(pdf_path) {
-            let result = extractor
-                .extract_content(&content, "application/pdf", &config)
-                .await
-                .expect("mixed OCR/native extraction should succeed");
-            let result = crate::extraction::derive::derive_extraction_result(
-                result,
-                true,
-                crate::core::config::OutputFormat::Markdown,
-            );
+        assert_eq!(extraction_method(&result), Some(ExtractionMethod::Mixed));
+        assert_occurs_once(&result.content, OCR_TEXT, "post-processed Markdown content");
+        assert!(!result.content.contains(&stale_page_one));
+        assert!(result.content.contains(RETAINED_PAGE_TWO_MARKER));
 
-            assert_eq!(extraction_method(&result), Some(ExtractionMethod::Mixed));
-            assert!(result.content.contains("mixed OCR page"));
-            assert!(
-                result
-                    .formatted_content
-                    .as_deref()
-                    .is_some_and(|content| content.contains("mixed OCR page"))
-            );
-            assert!(result.pages.as_ref().is_some_and(|pages| {
-                pages
-                    .first()
-                    .is_some_and(|page| page.content.contains("mixed OCR page"))
-            }));
-            let document = serde_json::to_string(result.document.as_ref().expect("document structure must be derived"))
-                .expect("document structure must serialize");
-            assert!(document.contains("mixed OCR page"));
-        }
+        let pages = result.pages.as_ref().expect("mixed extraction must expose pages");
+        assert_occurs_once(&pages[0].content, OCR_TEXT, "page one");
+        assert!(!pages[0].content.contains(&stale_page_one));
+        assert_occurs_once(&pages[1].content, RETAINED_PAGE_TWO_MARKER, "retained page two");
+        assert!(!pages[1].content.contains(OCR_TEXT));
+
+        let document = result.document.as_ref().expect("document structure must be derived");
+        let ocr_nodes: Vec<_> = document
+            .nodes
+            .iter()
+            .filter(|node| node.content.text().is_some_and(|text| text.contains(OCR_TEXT)))
+            .collect();
+        assert_eq!(ocr_nodes.len(), 1, "document structure must not duplicate OCR text");
+        assert_eq!(ocr_nodes[0].page, Some(1));
+        assert!(
+            !document
+                .nodes
+                .iter()
+                .any(|node| node.content.text().is_some_and(|text| text.contains(&stale_page_one)))
+        );
+
+        let chunks = result.chunks.as_ref().expect("chunking must run");
+        let ocr_chunks: Vec<_> = chunks.iter().filter(|chunk| chunk.content.contains(OCR_TEXT)).collect();
+        assert_eq!(ocr_chunks.len(), 1, "chunks must not duplicate OCR text");
+        assert_eq!(ocr_chunks[0].metadata.first_page, Some(1));
+        assert_eq!(ocr_chunks[0].metadata.last_page, Some(1));
+    }
+
+    #[tokio::test]
+    #[cfg(all(feature = "pdf", feature = "ocr", feature = "chunking"))]
+    #[serial]
+    async fn test_scanned_page_strategy_automatically_routes_only_the_scan_to_ocr() {
+        use crate::core::config::{ChunkingConfig, OcrConfig, OcrStrategy, PageConfig};
+
+        const NATIVE_TEXT: &str = "Issue 1281 native text remains on page one";
+        const OCR_TEXT: &str = "Issue 1281 automatic OCR replacement on page two.";
+        let _backend = register_mock_ocr_backend("pdf-automatic-mixed-routing", OCR_TEXT);
+        let config = ExtractionConfig {
+            ocr_strategy: OcrStrategy::ScannedPages { min_confidence: 0.7 },
+            output_format: crate::core::config::OutputFormat::Markdown,
+            include_document_structure: true,
+            use_cache: false,
+            ocr: Some(OcrConfig {
+                backend: "pdf-automatic-mixed-routing".to_string(),
+                language: vec!["eng".to_string()],
+                ..Default::default()
+            }),
+            pages: Some(PageConfig {
+                extract_pages: true,
+                ..Default::default()
+            }),
+            chunking: Some(ChunkingConfig {
+                max_characters: OCR_TEXT.chars().count() + 1,
+                overlap: 0,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let internal = PdfExtractor::new()
+            .extract_content(&mixed_native_and_scanned_pdf(), "application/pdf", &config)
+            .await
+            .expect("automatic mixed PDF extraction should succeed");
+        let derived = crate::extraction::derive::derive_extraction_result(
+            internal.clone(),
+            true,
+            crate::core::config::OutputFormat::Markdown,
+        );
+        assert_occurs_once(&derived.content, OCR_TEXT, "automatic derived content");
+        assert_occurs_once(
+            derived
+                .formatted_content
+                .as_deref()
+                .expect("automatic derived Markdown output must exist"),
+            OCR_TEXT,
+            "automatic derived Markdown output",
+        );
+        let result = crate::core::pipeline::run_pipeline(internal, &config)
+            .await
+            .expect("automatic mixed PDF post-processing should succeed");
+
+        assert_eq!(extraction_method(&result), Some(ExtractionMethod::Mixed));
+        assert_occurs_once(&result.content, NATIVE_TEXT, "automatic mixed Markdown content");
+        assert_occurs_once(&result.content, OCR_TEXT, "automatic mixed Markdown content");
+        let pages = result
+            .pages
+            .as_ref()
+            .expect("automatic mixed extraction must expose pages");
+        assert_eq!(pages.len(), 2);
+        assert!(pages[0].content.contains(NATIVE_TEXT));
+        assert!(!pages[0].content.contains(OCR_TEXT));
+        assert_occurs_once(&pages[1].content, OCR_TEXT, "automatically OCR'd page two");
+        assert!(!pages[1].content.contains(NATIVE_TEXT));
+
+        let document = result.document.as_ref().expect("document structure must be derived");
+        let ocr_nodes: Vec<_> = document
+            .nodes
+            .iter()
+            .filter(|node| node.content.text().is_some_and(|text| text.contains(OCR_TEXT)))
+            .collect();
+        assert_eq!(ocr_nodes.len(), 1);
+        assert_eq!(ocr_nodes[0].page, Some(2));
+
+        let chunks = result.chunks.as_ref().expect("automatic mixed chunking must run");
+        let ocr_chunks: Vec<_> = chunks.iter().filter(|chunk| chunk.content.contains(OCR_TEXT)).collect();
+        assert_eq!(ocr_chunks.len(), 1, "automatic chunks must not duplicate OCR text");
+        assert_eq!(ocr_chunks[0].metadata.first_page, Some(2));
+        assert_eq!(ocr_chunks[0].metadata.last_page, Some(2));
     }
 
     #[tokio::test]
