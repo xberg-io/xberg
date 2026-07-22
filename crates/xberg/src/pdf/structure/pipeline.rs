@@ -1101,19 +1101,11 @@ fn is_bare_list_marker(text: &str) -> bool {
     if matches!(t, "•" | "·" | "◦" | "▪" | "–" | "—" | "-" | "*") {
         return true;
     }
-    if let Some(inner) = t.strip_prefix('(').and_then(|r| r.strip_suffix(')')) {
-        return !inner.is_empty() && inner.chars().all(|c| c.is_alphanumeric());
-    }
-    if let Some(body) = t.strip_suffix('.').or_else(|| t.strip_suffix(')')) {
-        return !body.is_empty() && body.chars().count() <= 2 && body.chars().all(|c| c.is_alphanumeric());
-    }
-    false
+    super::list_marker::parse_ordered_list_marker(t).is_some_and(|marker| !marker.has_content)
 }
 
 /// Check if text starts with a common list marker.
 fn looks_like_list_item(text: &str) -> bool {
-    const MAX_NUMERIC_LIST_MARKER_DIGITS: usize = 3;
-
     let t = text.trim_start();
 
     if t.starts_with('•') || t.starts_with('·') || t.starts_with('◦') || t.starts_with('▪') {
@@ -1132,62 +1124,18 @@ fn looks_like_list_item(text: &str) -> bool {
         return rest.chars().next().is_some_and(|c| c.is_alphabetic());
     }
 
-    let mut chars = t.chars().peekable();
-
-    if chars.peek() == Some(&'(') {
-        chars.next();
-        if chars.peek().is_some_and(|c| c.is_alphanumeric()) {
-            chars.next();
-            while chars.peek().is_some_and(|c| c.is_alphanumeric()) {
-                chars.next();
-            }
-            if chars.peek() == Some(&')') {
-                chars.next();
-                return chars.peek().is_some_and(|c| c.is_whitespace()) && {
-                    chars.next();
-                    chars.peek().is_some_and(|c| c.is_alphabetic())
-                };
-            }
-        }
-        return false;
-    }
-
     if super::classify::is_numbered_section_heading(t) {
         return false;
     }
-
-    if chars.peek().is_some_and(|c| c.is_alphanumeric()) {
-        let mut num_len = 0;
-        let mut all_digits = true;
-        let mut all_roman = true;
-        while let Some(&c) = chars.peek() {
-            if !c.is_alphanumeric() {
-                break;
-            }
-            all_digits &= c.is_ascii_digit();
-            all_roman &= matches!(c.to_ascii_lowercase(), 'i' | 'v' | 'x' | 'l' | 'c' | 'd' | 'm');
-            chars.next();
-            num_len += 1;
-        }
-        let marker_like = all_digits || num_len == 1 || all_roman;
-        let marker_length_allowed = if all_digits {
-            num_len <= MAX_NUMERIC_LIST_MARKER_DIGITS
-        } else {
-            num_len <= 4
-        };
-        if marker_length_allowed && marker_like && (chars.peek() == Some(&'.') || chars.peek() == Some(&')')) {
-            chars.next();
-            if num_len == 1 && !all_digits && is_probable_author_byline(t) {
-                return false;
-            }
-            return chars.peek().is_some_and(|c| c.is_whitespace()) && {
-                chars.next();
-                chars.peek().is_some_and(|c| c.is_alphabetic())
-            };
-        }
-    }
-
-    false
+    let Some(marker) = super::list_marker::parse_ordered_list_marker(t) else {
+        return false;
+    };
+    marker.has_content
+        && marker.has_separator
+        && !is_probable_author_byline(t)
+        && t.get(marker.content_start..)
+            .and_then(|content| content.chars().next())
+            .is_some_and(char::is_alphabetic)
 }
 
 /// Whether a single-capital marker is more likely the first author initial.
@@ -5431,8 +5379,12 @@ mod list_marker_tests {
     fn bare_markers_are_detected() {
         assert!(is_bare_list_marker("1."));
         assert!(is_bare_list_marker("12)"));
+        assert!(is_bare_list_marker("a."));
         assert!(is_bare_list_marker("a)"));
+        assert!(is_bare_list_marker("I."));
+        assert!(is_bare_list_marker("(1)"));
         assert!(is_bare_list_marker("(2)"));
+        assert!(is_bare_list_marker("[1]"));
         assert!(is_bare_list_marker("•"));
     }
 
@@ -5440,6 +5392,7 @@ mod list_marker_tests {
     fn prose_fragments_are_not_bare_markers() {
         assert!(!is_bare_list_marker("etc."));
         assert!(!is_bare_list_marker("Inc."));
+        assert!(!is_bare_list_marker("(appendix)"));
         assert!(!is_bare_list_marker("Item"));
         assert!(!is_bare_list_marker(""));
     }
@@ -5453,6 +5406,7 @@ mod list_marker_tests {
         assert!(!looks_like_list_item("1000. Four-digit identifier"));
         assert!(looks_like_list_item("viii. eighth item"));
         assert!(looks_like_list_item("(2)\nsecond item"));
+        assert!(looks_like_list_item("[1] bracketed item"));
     }
 
     #[test]

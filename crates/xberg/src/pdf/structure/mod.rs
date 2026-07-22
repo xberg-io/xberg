@@ -11,6 +11,7 @@ pub(crate) mod geometry;
 pub(crate) mod layout_classify;
 pub(crate) mod layout_debug;
 mod lines;
+mod list_marker;
 mod paragraphs;
 mod pipeline;
 pub(crate) mod regions;
