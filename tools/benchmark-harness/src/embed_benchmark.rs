@@ -185,6 +185,8 @@ fn generate_test_chunks(count: usize, words_per_chunk: usize) -> Vec<Chunk> {
                     heading_context: None,
                     heading_path: Vec::new(),
                     image_indices: Vec::new(),
+                    node_ids: Vec::new(),
+                    page_spans: Vec::new(),
                 },
             }
         })

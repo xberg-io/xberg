@@ -12693,6 +12693,8 @@ impl From<ChunkMetadata> for xberg::ChunkMetadata {
             heading_context: v.heading_context.map(Into::into),
             heading_path: v.heading_path.into_iter().map(Into::into).collect(),
             image_indices: v.image_indices.into_iter().map(|x| x as u32).collect::<Vec<_>>(),
+            node_ids: Vec::new(),
+            page_spans: Vec::new(),
         }
     }
 }
