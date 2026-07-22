@@ -8,7 +8,7 @@
 # It runs two modes:
 #   single-file : per-document quality (TF1/SF1/combined) + cold start + single
 #                 file throughput. This feeds the gap report.
-#   batch       : native batch throughput. Xberg and LiteParse require an
+#   batch       : native batch throughput. Xberg, Docling, and LiteParse require an
 #                 explicitly homogeneous OCR cohort; mixed cohorts are rejected
 #                 because sequential fallback is not comparable batch throughput.
 #
@@ -22,7 +22,8 @@
 #   SHARD        run a subset, e.g. "1/60" for a quick smoke run (default: none)
 #   BATCH_HEURISTIC_FIXTURES non-OCR batch cohort (default: unset)
 #   BATCH_OCR_FIXTURES all-OCR batch cohort (default: unset)
-#   BATCH_WORKERS bounded native batch concurrency for every framework (default: 4)
+#   BATCH_FRAMEWORKS native-batch frameworks (default: native-capable subset of FRAMEWORKS)
+#   BATCH_WORKERS framework worker limit where its native API exposes one (default: 4)
 #   SKIP_BUILD   set to 1 to skip the cargo builds (default: build) ~keep
 #
 set -euo pipefail
@@ -43,7 +44,18 @@ TIMEOUT="${TIMEOUT:-300}"
 SHARD="${SHARD:-}"
 BATCH_HEURISTIC_FIXTURES="${BATCH_HEURISTIC_FIXTURES:-}"
 BATCH_OCR_FIXTURES="${BATCH_OCR_FIXTURES:-}"
+BATCH_FRAMEWORKS_EXPLICIT=0
+if [ "${BATCH_FRAMEWORKS+x}" = x ]; then
+  BATCH_FRAMEWORKS_EXPLICIT=1
+fi
+BATCH_FRAMEWORKS="${BATCH_FRAMEWORKS:-}"
 BATCH_WORKERS="${BATCH_WORKERS:-4}"
+
+source "$REPO_ROOT/tools/benchmark-harness/scripts/bench_local_frameworks.sh"
+
+if [ "$BATCH_FRAMEWORKS_EXPLICIT" = 1 ]; then
+  BATCH_FRAMEWORKS="$(validate_native_batch_frameworks "$BATCH_FRAMEWORKS")"
+fi
 
 if ! command -v lit >/dev/null 2>&1; then
   for cand in /tmp/liteparse/target/release ../liteparse/target/release; do
@@ -106,12 +118,13 @@ resolve_docling_python() {
 }
 
 WANT_DOCLING=0
+DOCLING_EXPLICIT=0
 if [ "$FRAMEWORKS_EXPLICIT" = 0 ]; then
   WANT_DOCLING=1
-else
-  case ",$FRAMEWORKS," in
-    *,docling,*) WANT_DOCLING=1 ;;
-  esac
+fi
+if docling_is_explicitly_requested "$FRAMEWORKS" "$BATCH_FRAMEWORKS"; then
+  WANT_DOCLING=1
+  DOCLING_EXPLICIT=1
 fi
 
 if [ "$WANT_DOCLING" = 0 ]; then
@@ -123,11 +136,15 @@ elif BENCH_PYTHON="$(resolve_docling_python)"; then
     FRAMEWORKS="$FRAMEWORKS,docling"
   fi
 else
-  if [ "$FRAMEWORKS_EXPLICIT" = 1 ]; then
+  if [ "$DOCLING_EXPLICIT" = 1 ]; then
     echo "[bench:local] docling was requested but no prepared interpreter can import it." >&2
     exit 1
   fi
   echo "[bench:local] docling not installed — skipping (install with: uv sync --locked --group bench-docling)."
+fi
+
+if [ "$BATCH_FRAMEWORKS_EXPLICIT" = 0 ]; then
+  BATCH_FRAMEWORKS="$(native_batch_frameworks "$FRAMEWORKS")"
 fi
 
 SHARD_ARGS=()
@@ -201,9 +218,13 @@ run_batch() {
   mkdir -p "$output"
   local ocr_args=()
   [ "$ocr_flag" = "OCR enabled" ] && ocr_args=(--ocr)
+  if [ -z "$BATCH_FRAMEWORKS" ]; then
+    echo "[bench:local] no verified native-batch framework selected." >&2
+    exit 1
+  fi
   "$HARNESS" run \
     --fixtures "$cohort" \
-    --frameworks "xberg-markdown-baseline,xberg-markdown-layout,liteparse" \
+    --frameworks "$BATCH_FRAMEWORKS" \
     --output "$output" \
     --mode batch \
     --max-concurrent "$BATCH_WORKERS" \

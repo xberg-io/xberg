@@ -130,17 +130,23 @@ Fixtures are JSON files organized by format directory under `fixtures/`:
 
 ## Frameworks
 
-### Xberg Bindings (13)
+### Xberg CLI Pipelines (3)
 
-Each binding is benchmarked in both single-file (sequential, fair latency) and batch (concurrent, throughput) modes:
+Xberg is benchmarked through its native CLI pipelines in single-file mode and through the
+CLI `batch` entry point for throughput:
 
-Rust, Python, Node.js, Ruby, Go, Java, C#, PHP, Elixir, WASM, C, Rust+PaddleOCR
+`xberg-markdown-baseline`, `xberg-markdown-layout`, and `xberg-markdown-paddle-ocr`.
 
 ### Reference Frameworks (7)
 
-External document extraction tools benchmarked in single-file mode:
+All external tools are benchmarked in single-file mode:
 
 Docling, MinerU, PyMuPDF4LLM, Unstructured, MarkItDown, LiteParse, Tika
+
+Only Docling (`DocumentConverter.convert_all`) and LiteParse (`lit batch-parse`) also
+participate in native-batch runs. The harness rejects the other external adapters in
+batch mode instead of substituting repeated single-file extraction. Native-batch fixture
+cohorts must be homogeneous: either every fixture requires forced OCR or none does.
 
 ## Extraction Pipelines
 
@@ -168,7 +174,7 @@ Runs benchmarks using framework adapters with configurable iterations, warmup, a
 ```bash
 benchmark-harness run \
   -f fixtures/ \
-  -F xberg-rust,xberg-python \
+  -F xberg-markdown-baseline,docling,liteparse \
   -m batch \
   -o results/ \
   -i 3 -w 1
@@ -182,7 +188,7 @@ benchmark-harness run \
 | `-m, --mode`           | `single-file` or `batch`                       | `batch`       |
 | `-i, --iterations`     | Benchmark iterations                           | `3`           |
 | `-w, --warmup`         | Warmup iterations (discarded)                  | `1`           |
-| `-c, --max-concurrent` | Max concurrent extractions                     | CPU count     |
+| `-c, --max-concurrent` | Native batch worker limit where supported       | CPU count     |
 | `-t, --timeout`        | Timeout in seconds                             | `1800`        |
 | `--ocr`                | Enable OCR                                     | `false`       |
 | `--measure-quality`    | Enable quality assessment                      | `false`       |

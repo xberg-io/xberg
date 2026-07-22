@@ -15,7 +15,7 @@ use std::str::FromStr as _;
 enum CliMode {
     /// Single-file mode: Sequential execution for fair latency comparison
     SingleFile,
-    /// Batch mode: Concurrent execution for throughput measurement
+    /// Batch mode: Verified native framework batch APIs for throughput measurement
     Batch,
 }
 
