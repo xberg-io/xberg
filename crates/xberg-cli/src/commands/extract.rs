@@ -19,6 +19,9 @@ use crate::{
     style,
 };
 
+const DEFAULT_RUNTIME_THREAD_LIMIT: usize = 8;
+const MIN_RUNTIME_THREAD_COUNT: usize = 1;
+
 /// Environment variable that enables per-stage cold-start timing in `xberg extract --format json`.
 ///
 /// Set to `1` (or any non-empty value) to include a `stage_timings` object in the JSON output
@@ -372,12 +375,33 @@ fn run_json_batch_sync(
     Ok((output.results, per_file_ms))
 }
 
+fn runtime_worker_threads(config: &ExtractionConfig) -> usize {
+    config
+        .concurrency
+        .as_ref()
+        .and_then(|concurrency| concurrency.max_threads)
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(usize::from)
+                .unwrap_or(MIN_RUNTIME_THREAD_COUNT)
+                .min(DEFAULT_RUNTIME_THREAD_LIMIT)
+        })
+        .max(MIN_RUNTIME_THREAD_COUNT)
+}
+
+fn build_runtime(config: &ExtractionConfig) -> std::io::Result<tokio::runtime::Runtime> {
+    tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(runtime_worker_threads(config))
+        .enable_all()
+        .build()
+}
+
 fn block_on_extract(input: ExtractInput, config: &ExtractionConfig) -> xberg::Result<ExtractionResult> {
-    tokio::runtime::Runtime::new()?.block_on(extract(input, config))
+    build_runtime(config)?.block_on(extract(input, config))
 }
 
 fn block_on_extract_batch(inputs: Vec<ExtractInput>, config: &ExtractionConfig) -> xberg::Result<ExtractionResult> {
-    tokio::runtime::Runtime::new()?.block_on(extract_batch(inputs, config))
+    build_runtime(config)?.block_on(extract_batch(inputs, config))
 }
 
 fn build_batch_inputs(
@@ -659,6 +683,33 @@ mod tests {
     #[test]
     fn batch_per_file_timings_accepts_empty_batch() {
         assert_eq!(batch_per_file_timings(&[], 0).unwrap(), Vec::<f64>::new());
+    }
+
+    #[test]
+    fn runtime_worker_threads_honors_explicit_budget() {
+        let config = ExtractionConfig {
+            concurrency: Some(xberg::core::config::ConcurrencyConfig { max_threads: Some(3) }),
+            ..Default::default()
+        };
+
+        assert_eq!(runtime_worker_threads(&config), 3);
+    }
+
+    #[test]
+    fn runtime_worker_threads_clamps_zero_budget() {
+        let config = ExtractionConfig {
+            concurrency: Some(xberg::core::config::ConcurrencyConfig { max_threads: Some(0) }),
+            ..Default::default()
+        };
+
+        assert_eq!(runtime_worker_threads(&config), MIN_RUNTIME_THREAD_COUNT);
+    }
+
+    #[test]
+    fn runtime_worker_threads_caps_automatic_budget() {
+        let worker_threads = runtime_worker_threads(&ExtractionConfig::default());
+
+        assert!((MIN_RUNTIME_THREAD_COUNT..=DEFAULT_RUNTIME_THREAD_LIMIT).contains(&worker_threads));
     }
 
     #[test]

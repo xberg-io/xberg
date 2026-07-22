@@ -11,7 +11,7 @@ use xberg::ExtractionConfig;
 ///
 /// This function implements the CLI's configuration hierarchy:
 /// 1. Explicit config file (if `--config` flag provided)
-/// 2. Auto-discovered config (searches `xberg.{toml,yaml,json}` in current and parent directories)
+/// 2. Auto-discovered config, unless `discover` is `false`
 /// 3. Default configuration (if no config file found)
 ///
 /// # Configuration File Formats
@@ -27,7 +27,7 @@ use xberg::ExtractionConfig;
 /// - Explicit config file has unsupported extension (must be .toml, .yaml, .yml, or .json)
 /// - Config file cannot be read or parsed
 /// - Config file contains invalid extraction settings
-pub fn load_config(config_path: Option<PathBuf>) -> Result<ExtractionConfig> {
+pub fn load_config(config_path: Option<PathBuf>, discover: bool) -> Result<ExtractionConfig> {
     if let Some(path) = config_path {
         let path_str = path.to_string_lossy();
         let path_lower = path_str.to_lowercase();
@@ -41,11 +41,13 @@ pub fn load_config(config_path: Option<PathBuf>) -> Result<ExtractionConfig> {
             anyhow::bail!("Config file must have .toml, .yaml, .yml, or .json extension (case-insensitive)");
         };
         config.with_context(|| format!("Failed to load configuration from '{}'. Ensure the file exists, is readable, and contains valid configuration.", path.display()))
-    } else {
+    } else if discover {
         match ExtractionConfig::discover() {
             Ok(Some(config)) => Ok(config),
             Ok(None) => Ok(ExtractionConfig::default()),
             Err(e) => Err(e).context("Failed to auto-discover configuration file. Searched for xberg.{toml,yaml,json} in current and parent directories. Use --config to specify an explicit path."),
         }
+    } else {
+        Ok(ExtractionConfig::default())
     }
 }

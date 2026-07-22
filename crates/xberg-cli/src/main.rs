@@ -114,6 +114,10 @@ enum Commands {
         #[arg(short, long)]
         config: Option<PathBuf>,
 
+        /// Skip project and user config discovery and start from built-in defaults.
+        #[arg(long, conflicts_with = "config")]
+        no_config_discovery: bool,
+
         /// Inline JSON configuration. Applied after config file but before individual flags.
         ///
         /// Example: --config-json '{"ocr":{"backend":"tesseract"},"chunking":{"max_chars":1000}}'
@@ -167,6 +171,10 @@ enum Commands {
         /// Path to config file (TOML, YAML, or JSON). If not specified, searches for xberg.toml/yaml/json in current and parent directories.
         #[arg(short, long)]
         config: Option<PathBuf>,
+
+        /// Skip project and user config discovery and start from built-in defaults.
+        #[arg(long, conflicts_with = "config")]
+        no_config_discovery: bool,
 
         /// Inline JSON configuration. Applied after config file but before individual flags.
         ///
@@ -564,6 +572,7 @@ fn main() -> Result<()> {
             url,
             stdin,
             config: config_path,
+            no_config_discovery,
             config_json,
             config_json_base64,
             mime_type,
@@ -578,7 +587,7 @@ fn main() -> Result<()> {
             }
             overrides.validate()?;
 
-            let mut config = load_config(config_path)?;
+            let mut config = load_config(config_path, !no_config_discovery)?;
             apply_json_overrides(&mut config, config_json, config_json_base64)?;
             overrides.apply(&mut config);
 
@@ -590,6 +599,7 @@ fn main() -> Result<()> {
             input,
             input_format,
             config: config_path,
+            no_config_discovery,
             config_json,
             config_json_base64,
             format,
@@ -604,7 +614,7 @@ fn main() -> Result<()> {
             }
             overrides.validate()?;
 
-            let mut config = load_config(config_path)?;
+            let mut config = load_config(config_path, !no_config_discovery)?;
             apply_json_overrides(&mut config, config_json, config_json_base64)?;
             overrides.apply(&mut config);
 
@@ -728,7 +738,7 @@ fn main() -> Result<()> {
             port: cli_port,
             config: config_path,
         } => {
-            let mut extraction_config = load_config(config_path.clone())?;
+            let mut extraction_config = load_config(config_path.clone(), true)?;
             extraction_config.apply_env_overrides()?;
             serve_command(cli_host, cli_port, extraction_config, config_path)?;
         }
@@ -746,7 +756,7 @@ fn main() -> Result<()> {
             #[cfg(not(feature = "mcp-http"))]
             port,
         } => {
-            let mut config = load_config(config_path)?;
+            let mut config = load_config(config_path, true)?;
             config.apply_env_overrides()?;
             mcp_command(config, transport, host, port)?;
         }
@@ -838,7 +848,7 @@ fn main() -> Result<()> {
 
             validate_chunk_params(chunk_size, chunk_overlap)?;
 
-            let base_config = load_config(config_path)?;
+            let base_config = load_config(config_path, true)?;
             let mut chunking_config = base_config.chunking.unwrap_or_default();
 
             if let Some(size) = chunk_size {

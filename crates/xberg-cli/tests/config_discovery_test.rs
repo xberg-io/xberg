@@ -586,6 +586,83 @@ fn test_default_config_when_no_file_found() {
 }
 
 #[test]
+fn test_no_config_discovery_skips_invalid_project_config() {
+    build_binary();
+
+    let dir = tempdir().unwrap();
+    fs::write(dir.path().join("xberg.toml"), "use_cache = \"not_a_bool\"\n").unwrap();
+
+    let test_file = get_test_file("text/simple.txt");
+    let output = Command::new(get_binary_path())
+        .current_dir(dir.path())
+        .args(["extract", "--no-config-discovery", test_file.as_str()])
+        .output()
+        .expect("Failed to execute xberg");
+
+    assert!(
+        output.status.success(),
+        "--no-config-discovery must ignore project config: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn test_normal_config_discovery_still_loads_project_config() {
+    build_binary();
+
+    let dir = tempdir().unwrap();
+    fs::write(dir.path().join("xberg.toml"), "use_cache = \"not_a_bool\"\n").unwrap();
+
+    let test_file = get_test_file("text/simple.txt");
+    let output = Command::new(get_binary_path())
+        .current_dir(dir.path())
+        .args(["extract", test_file.as_str()])
+        .output()
+        .expect("Failed to execute xberg");
+
+    assert!(
+        !output.status.success(),
+        "normal discovery must load the invalid project config"
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("Failed to auto-discover configuration file"),
+        "failure must identify config discovery: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn test_no_config_discovery_still_applies_config_json() {
+    build_binary();
+
+    let dir = tempdir().unwrap();
+    fs::write(dir.path().join("xberg.toml"), "use_cache = \"not_a_bool\"\n").unwrap();
+
+    let test_file = get_test_file("text/simple.txt");
+    let output = Command::new(get_binary_path())
+        .current_dir(dir.path())
+        .args([
+            "extract",
+            "--no-config-discovery",
+            "--config-json",
+            r#"{"use_cache":"not_a_bool"}"#,
+            test_file.as_str(),
+        ])
+        .output()
+        .expect("Failed to execute xberg");
+
+    assert!(
+        !output.status.success(),
+        "invalid --config-json must still be applied and rejected"
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("Failed to merge --config-json with file config"),
+        "failure must identify --config-json processing: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
 fn test_invalid_config_values() {
     build_binary();
 

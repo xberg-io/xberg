@@ -18,6 +18,7 @@ const QUIET_DIRECTIVES: &[&str] = &[
     "rustls=warn",
     "hyper_util=warn",
     "hf_hub=info",
+    "pdf_oxide=warn",
     "tower_http=info",
 ];
 
@@ -184,6 +185,28 @@ mod tests {
         assert!(
             directives.contains("hyper_util=warn"),
             "hyper_util must be suppressed to warn at default; got: {directives}"
+        );
+    }
+
+    #[test]
+    fn pdf_oxide_suppressed_at_default() {
+        let directives = filter_directives(&build_env_filter(None));
+        assert!(
+            directives.contains("pdf_oxide=warn"),
+            "pdf_oxide must be suppressed to warn by default; got: {directives}"
+        );
+    }
+
+    #[test]
+    fn pdf_oxide_user_override_wins() {
+        let directives = filter_directives(&build_env_filter(Some("info,pdf_oxide=debug")));
+        assert!(
+            directives.contains("pdf_oxide=debug"),
+            "user-supplied pdf_oxide=debug must be preserved; got: {directives}"
+        );
+        assert!(
+            !directives.contains("pdf_oxide=warn"),
+            "default pdf_oxide suppression must not replace a user override; got: {directives}"
         );
     }
 
