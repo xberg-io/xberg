@@ -111,6 +111,34 @@ pub(crate) fn segments_to_words(segments: &[SegmentData], page_height: f32) -> V
         .collect()
 }
 
+/// Column-wise merge of several table rows into a single logical row.
+///
+/// Each output column's text is the space-joined concatenation of that
+/// column's non-empty cells across `rows`, in row order, truncated to
+/// `column_count` columns. Used to collapse a fragment's word-wrapped header
+/// sub-lines into one header row here, and reused by
+/// [`super::structure::pipeline`]'s table-continuation stitching to collapse
+/// a whole table fragment (whose rows are word-wrapped sub-lines of a single
+/// logical row, once `oxide::table`'s row-gap clustering has split one
+/// physical table into several fragments) into one row when the fragments are
+/// stitched back together.
+pub(crate) fn merge_rows_columnwise(rows: &[Vec<String>], column_count: usize) -> Vec<String> {
+    let mut merged = vec![String::new(); column_count];
+    for row in rows {
+        for (idx, cell) in row.iter().enumerate().take(column_count) {
+            let trimmed = cell.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            if !merged[idx].is_empty() {
+                merged[idx].push(' ');
+            }
+            merged[idx].push_str(trimmed);
+        }
+    }
+    merged
+}
+
 /// Post-process a raw table grid to validate structure and clean up.
 ///
 /// Returns `None` if the table fails structural validation.
@@ -228,19 +256,7 @@ fn post_process_table_inner(
         return None;
     }
 
-    let mut header = vec![String::new(); column_count];
-    for row in &header_rows {
-        for (idx, cell) in row.iter().enumerate() {
-            let trimmed = cell.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
-            if !header[idx].is_empty() {
-                header[idx].push(' ');
-            }
-            header[idx].push_str(trimmed);
-        }
-    }
+    let header = merge_rows_columnwise(&header_rows, column_count);
 
     let mut processed = Vec::new();
     processed.push(header);
@@ -666,6 +682,50 @@ fn merge_interior_column(table: &mut [Vec<String>], column: usize) {
     }
 }
 
+/// Minimum non-empty cells for [`looks_like_shredded_prose_row`] to consider a
+/// row "densely filled" rather than a sparse real table row.
+const SHREDDED_PROSE_MIN_FILLED_CELLS: usize = 4;
+/// A shredded-prose cell averages this many words or fewer (unlike
+/// `PROSE_WORDS_PER_CELL`'s phrase-per-cell prose, single-word cells here are
+/// the row-shredding signal).
+const SHREDDED_PROSE_MAX_AVG_WORDS_PER_CELL: f64 = 2.5;
+/// Minimum concatenated row text length for [`looks_like_shredded_prose_row`]
+/// to consider a row substantial enough to be a real clause rather than a
+/// handful of short table values.
+const SHREDDED_PROSE_MIN_ROW_TEXT_LEN: usize = 30;
+
+/// Decide whether a single data row reads as one clause of a word-shredded,
+/// semicolon-delimited prose list rather than genuine table data: most of the
+/// row's columns are filled (a real table row from a word-wrapped table
+/// fragment leaves many columns empty; a shredded sentence naturally
+/// populates almost every column), the cells average few words each (mirrors
+/// the one-word-per-cell splitting), the row reads as a substantial run of
+/// text, and it ends on clause-terminal punctuation.
+fn looks_like_shredded_prose_row(row: &[String], num_cols: usize) -> bool {
+    let cells: Vec<&str> = row.iter().map(|c| c.trim()).filter(|c| !c.is_empty()).collect();
+    if cells.len() < SHREDDED_PROSE_MIN_FILLED_CELLS {
+        return false;
+    }
+    if num_cols == 0 || (cells.len() as f64) <= num_cols as f64 * 0.5 {
+        return false;
+    }
+
+    let concatenated_len: usize = cells.iter().map(|c| c.len()).sum();
+    if concatenated_len < SHREDDED_PROSE_MIN_ROW_TEXT_LEN {
+        return false;
+    }
+
+    let total_words: usize = cells.iter().map(|c| c.split_whitespace().count()).sum();
+    let avg_words = total_words as f64 / cells.len() as f64;
+    if avg_words > SHREDDED_PROSE_MAX_AVG_WORDS_PER_CELL {
+        return false;
+    }
+
+    cells
+        .last()
+        .is_some_and(|last| matches!(last.chars().last(), Some(';' | ':' | '.' | ',')))
+}
+
 /// Decide whether a dense grid of data rows is prose laid out in columns rather
 /// than a real table. The signal is words-per-cell: a table cell holds a value (a
 /// number, a code, a short label), while columned prose (a two-column article, a
@@ -737,6 +797,17 @@ pub(crate) fn is_well_formed_table(grid: &[Vec<String>]) -> bool {
     }
 
     let data_rows = &grid[1..];
+
+    if (1..3).contains(&data_rows.len()) && num_cols >= LARGE_TABLE_MIN_COLUMNS && !dense_numeric_grid {
+        let shredded_rows = data_rows
+            .iter()
+            .filter(|row| looks_like_shredded_prose_row(row, num_cols))
+            .count();
+        if shredded_rows == data_rows.len() {
+            return false;
+        }
+    }
+
     if data_rows.len() >= 3 && num_cols >= 2 {
         let mut prose_like_rows = 0usize;
         let mut eligible_rows = 0usize;
@@ -2177,5 +2248,122 @@ mod tests {
         ];
 
         assert!(!looks_like_code_listing(&grid));
+    }
+
+    /// Regression test for xberg-io/xberg#1301 (mode b): a colon-introduced,
+    /// semicolon-delimited 2-item list whose clauses were word-per-cell
+    /// reconstructed into a 10-column, 2-data-row grid. The existing
+    /// row-coherence guards all require >= 3 or >= 4 data rows and never fire
+    /// on this shape; `looks_like_shredded_prose_row` must reject it directly.
+    #[test]
+    fn short_word_shredded_prose_grid_is_rejected() {
+        let grid = vec![
+            vec![
+                "to exclude".into(),
+                "fractional".into(),
+                "amounts".into(),
+                "from the".into(),
+                "shareholders'".into(),
+                "".into(),
+                "subscription".into(),
+                "right;".into(),
+                "".into(),
+                "".into(),
+            ],
+            vec![
+                "where".into(),
+                "the new shares".into(),
+                "are issued".into(),
+                "against".into(),
+                "cash".into(),
+                "contributions".into(),
+                "".into(),
+                "at market price;".into(),
+                "".into(),
+                "".into(),
+            ],
+            vec![
+                "where".into(),
+                "the capital".into(),
+                "is increased".into(),
+                "against".into(),
+                "contributions".into(),
+                "".into(),
+                "in kind".into(),
+                "for the purpose".into(),
+                "of merging".into(),
+                "companies;".into(),
+            ],
+        ];
+
+        assert!(
+            !is_well_formed_table(&grid),
+            "short word-shredded prose run must be rejected as a table"
+        );
+    }
+
+    /// A single short-row prose fragment (1 data row) must also be caught —
+    /// the guard must not require >= 2 data rows either.
+    #[test]
+    fn single_row_word_shredded_prose_grid_is_rejected() {
+        let grid = vec![
+            vec![
+                "to exclude".into(),
+                "fractional".into(),
+                "amounts".into(),
+                "from the".into(),
+                "shareholders'".into(),
+                "".into(),
+                "subscription".into(),
+                "right;".into(),
+                "".into(),
+                "".into(),
+            ],
+            vec![
+                "where".into(),
+                "the new shares".into(),
+                "are issued".into(),
+                "against".into(),
+                "cash".into(),
+                "contributions".into(),
+                "".into(),
+                "at market price;".into(),
+                "".into(),
+                "".into(),
+            ],
+        ];
+
+        assert!(!is_well_formed_table(&grid));
+    }
+
+    /// A short, wide, but genuinely tabular grid (sparse per-row fill, no
+    /// clause-terminal punctuation) must survive: the guard is scoped to
+    /// dense, sentence-shaped rows, not merely "few rows and many columns".
+    #[test]
+    fn short_wide_sparse_numeric_grid_is_not_rejected_as_shredded_prose() {
+        let grid = vec![
+            vec![
+                "NAME".into(),
+                "ADDRESS".into(),
+                "PCT".into(),
+                "CLASS".into(),
+                "COMMIT".into(),
+                "TOTAL".into(),
+            ],
+            vec![
+                "Northern Pension Trust".into(),
+                "1 Lake Road, Zurich".into(),
+                "15.20%".into(),
+                "Limited Partner".into(),
+                "45,040,000.00".into(),
+                "45,233,052.00".into(),
+            ],
+        ];
+
+        assert!(
+            is_well_formed_table(&grid),
+            "a real numeric/name table row must not be mistaken for shredded prose"
+        );
+        assert!(!looks_like_shredded_prose_row(&grid[1], grid[0].len()));
     }
 }

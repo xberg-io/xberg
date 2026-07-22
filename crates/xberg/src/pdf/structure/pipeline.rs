@@ -1700,7 +1700,8 @@ pub(crate) fn extract_document_structure_from_segments(
     let overlap_preference = table_overlap_preference;
     #[cfg(not(feature = "layout-detection"))]
     let overlap_preference = crate::core::config::layout::TableOverlapPreference::Content;
-    let emitted_tables = prepare_emitted_tables(tables, layout_tables, overlap_preference);
+    let stitched_native_tables = stitch_fragmented_tables(tables.to_vec(), &all_page_segments);
+    let emitted_tables = prepare_emitted_tables(&stitched_native_tables, layout_tables, overlap_preference);
 
     let extracted_table_bboxes_by_page = table_bboxes_by_page(&emitted_tables);
     tracing::debug!(
@@ -1776,6 +1777,7 @@ pub(crate) fn extract_document_structure_from_segments(
     refine_heading_hierarchy(&mut all_page_paragraphs);
     demote_unnumbered_subsections(&mut all_page_paragraphs);
     demote_heading_runs(&mut all_page_paragraphs);
+    split_colon_semicolon_run_in_lists(&mut all_page_paragraphs);
 
     if strip_repeating_text {
         mark_cross_page_repeating_text(&mut all_page_paragraphs, &page_heights);
@@ -1824,6 +1826,311 @@ pub(crate) fn extract_document_structure_from_segments(
     Ok(doc)
 }
 
+/// Maximum vertical gap (PDF points) between one fragment's bottom edge and the
+/// next fragment's top edge for the two to be considered the same physical
+/// table split by `oxide::table`'s row-gap clustering.
+const TABLE_STITCH_Y_GAP_TOLERANCE_PTS: f64 = 4.0;
+/// Maximum difference in a chain's shared left/right edge for two fragments to
+/// be considered the same table (rather than two unrelated tables that happen
+/// to sit close together vertically).
+const TABLE_STITCH_X_TOLERANCE_PTS: f64 = 6.0;
+/// Bound on fragments merged into one stitched chain. Real continuation splits
+/// rarely exceed a handful of fragments; this caps the (already page-scoped,
+/// already `oxide::table::MAX_REGIONS_PER_PAGE`-bounded) chain walk.
+const TABLE_STITCH_MAX_CHAIN_FRAGMENTS: usize = 12;
+/// Bound on additional data rows the trailing-continuation recovery pass will
+/// attempt to pull from raw page segments below a stitched chain's last known
+/// fragment. Keeps the scan from reading arbitrarily far down the page.
+const TABLE_STITCH_TRAILING_RECOVERY_MAX_ROWS: usize = 6;
+/// Row-gap multiplier used to split recovered trailing words into per-entity
+/// bands. Mirrors `oxide::table::cluster_words_into_vertical_regions`'s
+/// `row_gap_split`; reimplemented here because that clustering helper is
+/// private to the `oxide::table` module, which this pass cannot depend on.
+const TABLE_STITCH_TRAILING_ROW_GAP_MULTIPLIER: f32 = 1.8;
+
+/// Stitch table fragments that `oxide::table`'s row-gap region clustering split
+/// out of one physical table back into a single table.
+///
+/// `oxide::table::cluster_words_into_vertical_regions` splits a page's words
+/// into regions at any row-gap exceeding `median_height * 1.8`. A table whose
+/// header wraps onto several lines, or whose rows are visually separated by
+/// generous line spacing, can land in several such regions — each one then
+/// independently goes through header/data-row post-processing, which corrupts
+/// a real multi-line header (see `post_process_table_inner`'s header cap) and
+/// mis-promotes a lone data row to a fake header. This pass reassembles those
+/// fragments after the fact: each fragment's own rows are themselves raw
+/// word-wrapped sub-lines of a single logical row (there is no reliable way to
+/// tell, post hoc, which fragment "really" had a header split correctly), so
+/// stitching column-merges every fragment's rows into exactly one row — the
+/// topmost fragment in a chain becomes the header, the rest become data rows —
+/// and then attempts to recover any trailing data rows that fell below the
+/// last known fragment without ever becoming a table fragment at all (e.g.
+/// because the row-gap clustering merged them into an unrelated, rejected
+/// region).
+///
+/// Bounded to avoid quadratic blowup: fragments are grouped by page first (an
+/// `O(n)` pass), and each page's fragment list is walked once after an
+/// `O(m log m)` sort, with the inner chain-adjacency check bounded by
+/// `TABLE_STITCH_MAX_CHAIN_FRAGMENTS`. `oxide::table::MAX_REGIONS_PER_PAGE`
+/// already caps how many fragments a single page can contribute.
+fn stitch_fragmented_tables(
+    tables: Vec<crate::types::Table>,
+    all_page_segments: &[Vec<SegmentData>],
+) -> Vec<crate::types::Table> {
+    let mut by_page: ahash::AHashMap<u32, Vec<crate::types::Table>> = ahash::AHashMap::new();
+    let mut unbboxed = Vec::new();
+    for table in tables {
+        if table.bounding_box.is_some() {
+            by_page.entry(table.page_number).or_default().push(table);
+        } else {
+            unbboxed.push(table);
+        }
+    }
+
+    let mut result = unbboxed;
+    for page_tables in by_page.into_values() {
+        result.extend(stitch_page_tables(page_tables, all_page_segments));
+    }
+    result
+}
+
+/// Stitch one page's table fragments. See [`stitch_fragmented_tables`].
+fn stitch_page_tables(
+    mut fragments: Vec<crate::types::Table>,
+    all_page_segments: &[Vec<SegmentData>],
+) -> Vec<crate::types::Table> {
+    fragments.sort_by(|a, b| {
+        let a_top = a.bounding_box.map_or(f64::MIN, |bbox| bbox.y1);
+        let b_top = b.bounding_box.map_or(f64::MIN, |bbox| bbox.y1);
+        b_top.total_cmp(&a_top)
+    });
+
+    let mut output = Vec::with_capacity(fragments.len());
+    let mut index = 0;
+    while index < fragments.len() {
+        let mut chain_end = index + 1;
+        while chain_end < fragments.len()
+            && chain_end - index < TABLE_STITCH_MAX_CHAIN_FRAGMENTS
+            && fragments_are_stitchable(&fragments[chain_end - 1], &fragments[chain_end])
+        {
+            chain_end += 1;
+        }
+
+        if chain_end - index >= 2 {
+            let chain = fragments[index..chain_end].to_vec();
+            output.push(merge_table_chain(chain, all_page_segments));
+        } else {
+            output.push(fragments[index].clone());
+        }
+        index = chain_end;
+    }
+    output
+}
+
+/// Whether `next` is the vertically-adjacent continuation of `prev` within one
+/// stitch chain: same page, same column count, near-zero row gap, and matching
+/// left/right edges.
+fn fragments_are_stitchable(prev: &crate::types::Table, next: &crate::types::Table) -> bool {
+    if prev.page_number != next.page_number {
+        return false;
+    }
+    let (Some(a), Some(b)) = (prev.bounding_box, next.bounding_box) else {
+        return false;
+    };
+
+    let prev_cols = prev.cells.first().map_or(0, Vec::len);
+    let next_cols = next.cells.first().map_or(0, Vec::len);
+    if prev_cols == 0 || prev_cols != next_cols {
+        return false;
+    }
+
+    (a.y0 - b.y1).abs() <= TABLE_STITCH_Y_GAP_TOLERANCE_PTS
+        && (a.x0 - b.x0).abs() <= TABLE_STITCH_X_TOLERANCE_PTS
+        && (a.x1 - b.x1).abs() <= TABLE_STITCH_X_TOLERANCE_PTS
+}
+
+/// Merge a chain of >= 2 stitchable fragments into one table.
+///
+/// The topmost fragment's rows collapse into the header; every other
+/// fragment's rows collapse into one data row apiece. See
+/// [`stitch_fragmented_tables`] for why a whole-fragment column merge is used
+/// instead of trying to re-derive a header/data split.
+fn merge_table_chain(chain: Vec<crate::types::Table>, all_page_segments: &[Vec<SegmentData>]) -> crate::types::Table {
+    let column_count = chain
+        .iter()
+        .filter_map(|table| table.cells.first())
+        .map(Vec::len)
+        .max()
+        .unwrap_or(0);
+
+    let page_number = chain[0].page_number;
+    let mut bbox = chain
+        .iter()
+        .find_map(|table| table.bounding_box)
+        .unwrap_or(crate::types::BoundingBox {
+            x0: 0.0,
+            y0: 0.0,
+            x1: 0.0,
+            y1: 0.0,
+        });
+    for table in &chain {
+        if let Some(b) = table.bounding_box {
+            bbox.x0 = bbox.x0.min(b.x0);
+            bbox.x1 = bbox.x1.max(b.x1);
+            bbox.y0 = bbox.y0.min(b.y0);
+            bbox.y1 = bbox.y1.max(b.y1);
+        }
+    }
+
+    let mut rows: Vec<Vec<String>> = chain
+        .iter()
+        .map(|table| crate::pdf::table_reconstruct::merge_rows_columnwise(&table.cells, column_count))
+        .collect();
+
+    if let Some(page_segments) = all_page_segments.get((page_number.saturating_sub(1)) as usize) {
+        recover_trailing_continuation_rows(&mut rows, &mut bbox, column_count, page_segments);
+    }
+
+    let markdown = crate::pdf::table_reconstruct::table_to_markdown(&rows);
+    crate::types::Table {
+        cells: rows,
+        markdown,
+        page_number,
+        bounding_box: Some(bbox),
+    }
+}
+
+/// Recover trailing data rows that never became their own table fragment.
+///
+/// `oxide::table`'s region clustering sometimes merges the last entities of a
+/// fragmented table into a region with unrelated following content (or drops
+/// them entirely when the merged region fails `post_process_table`
+/// validation), so those rows leak into the document as plain paragraph text
+/// instead of table data. This scans the raw page segments strictly below the
+/// stitched chain's known bottom edge, within its column span, and — bounded
+/// by [`TABLE_STITCH_TRAILING_RECOVERY_MAX_ROWS`] iterations — pulls one
+/// row-gap-bounded entity band at a time. A band is only accepted if
+/// reconstructing it independently yields the same column count as the
+/// stitched table; any mismatch (e.g. the band actually contains an unrelated
+/// heading below the table) stops recovery immediately rather than skipping
+/// past it, since skipping risks pulling in arbitrary downstream content.
+fn recover_trailing_continuation_rows(
+    rows: &mut Vec<Vec<String>>,
+    bbox: &mut crate::types::BoundingBox,
+    column_count: usize,
+    page_segments: &[SegmentData],
+) {
+    if column_count == 0 || page_segments.is_empty() {
+        return;
+    }
+
+    let page_height = page_segments
+        .iter()
+        .map(|s| s.y + s.height)
+        .fold(0.0_f32, f32::max)
+        .max(792.0);
+    let x_lo = (bbox.x0 - TABLE_STITCH_X_TOLERANCE_PTS) as f32;
+    let x_hi = (bbox.x1 + TABLE_STITCH_X_TOLERANCE_PTS) as f32;
+    let mut search_floor = bbox.y0 as f32;
+
+    for _ in 0..TABLE_STITCH_TRAILING_RECOVERY_MAX_ROWS {
+        let band_words: Vec<crate::pdf::table_reconstruct::HocrWord> = page_segments
+            .iter()
+            .filter(|seg| {
+                !seg.text.trim().is_empty()
+                    && seg.y + seg.height <= search_floor + TABLE_STITCH_Y_GAP_TOLERANCE_PTS as f32
+                    && seg.x + seg.width >= x_lo
+                    && seg.x <= x_hi
+            })
+            .flat_map(|seg| crate::pdf::table_reconstruct::split_segment_to_words(seg, page_height))
+            .collect();
+        if band_words.is_empty() {
+            break;
+        }
+
+        let Some((entity_words, entity_bottom_image_y)) = take_next_entity_band(&band_words) else {
+            break;
+        };
+
+        let col_gap = super::regions::tables::compute_adaptive_column_gap(&entity_words, (x_hi - x_lo).max(1.0));
+        let grid = crate::pdf::table_reconstruct::reconstruct_table(&entity_words, col_gap, 0.5);
+        if grid.is_empty() || grid[0].len() != column_count {
+            break;
+        }
+
+        let merged_row = crate::pdf::table_reconstruct::merge_rows_columnwise(&grid, column_count);
+        if merged_row.iter().all(|cell| cell.trim().is_empty()) {
+            break;
+        }
+
+        let entity_bottom_pdf_y = page_height - entity_bottom_image_y as f32;
+        rows.push(merged_row);
+        bbox.y0 = bbox.y0.min(entity_bottom_pdf_y as f64);
+        search_floor = entity_bottom_pdf_y;
+    }
+}
+
+/// Take the topmost row-gap-bounded contiguous band of words from `words`
+/// (which may span more than one logical entity), stopping at the first gap
+/// larger than `median_height * TABLE_STITCH_TRAILING_ROW_GAP_MULTIPLIER`.
+///
+/// Returns the band's words and the image-coordinate bottom edge (`top +
+/// height`, max across the band) of the last line included.
+fn take_next_entity_band(
+    words: &[crate::pdf::table_reconstruct::HocrWord],
+) -> Option<(Vec<crate::pdf::table_reconstruct::HocrWord>, u32)> {
+    if words.is_empty() {
+        return None;
+    }
+
+    let mut heights: Vec<u32> = words.iter().map(|w| w.height).collect();
+    heights.sort_unstable();
+    let median_height = heights[heights.len() / 2].max(1);
+    let row_gap_split = (median_height as f32 * TABLE_STITCH_TRAILING_ROW_GAP_MULTIPLIER) as u32;
+    let row_tolerance = (median_height / 2).max(3);
+
+    let mut sorted: Vec<&crate::pdf::table_reconstruct::HocrWord> = words.iter().collect();
+    sorted.sort_by_key(|w| w.top);
+
+    let mut band: Vec<crate::pdf::table_reconstruct::HocrWord> = Vec::new();
+    let mut band_bottom = 0u32;
+    let mut last_row_yc: Option<u32> = None;
+    let mut idx = 0;
+    while idx < sorted.len() {
+        let row_yc = sorted[idx].top + sorted[idx].height / 2;
+        let mut end = idx + 1;
+        while end < sorted.len() {
+            let yc = sorted[end].top + sorted[end].height / 2;
+            if yc.abs_diff(row_yc) <= row_tolerance {
+                end += 1;
+            } else {
+                break;
+            }
+        }
+
+        if let Some(prev_yc) = last_row_yc
+            && row_yc > prev_yc
+            && row_yc - prev_yc > row_gap_split
+            && !band.is_empty()
+        {
+            break;
+        }
+
+        for word in &sorted[idx..end] {
+            band_bottom = band_bottom.max(word.top + word.height);
+            band.push((*word).clone());
+        }
+        last_row_yc = Some(row_yc);
+        idx = end;
+    }
+
+    if band.is_empty() {
+        None
+    } else {
+        Some((band, band_bottom))
+    }
+}
+
 /// Select the exact tables that final assembly will emit.
 ///
 /// Suppression must consume this same set so a duplicate or empty table cannot
@@ -1840,7 +2147,41 @@ fn prepare_emitted_tables(
         .filter(|table| !table.markdown.trim().is_empty())
         .count();
     deduplicate_overlapping_tables(&mut emitted_tables, native_count, overlap_preference);
+    deduplicate_identical_tables(&mut emitted_tables);
     emitted_tables
+}
+
+/// Collapse byte-identical table duplicates on the same page.
+///
+/// [`deduplicate_overlapping_tables`] only merges a pair when both tables carry
+/// a `bounding_box`; a native/layout pair that detects the same physical table
+/// but disagrees on bbox presence (e.g. native reconstruction leaves
+/// `bounding_box: None` for some heuristic grids) can otherwise escape that
+/// pass entirely. This pass is origin- and bbox-agnostic: any two tables on the
+/// same page with byte-identical markdown are the same table by definition, so
+/// the second (and any further) occurrence is dropped regardless of bbox state.
+///
+/// Runs in `O(n)` over the page's table count using a hash set keyed on
+/// `(page_number, markdown)`.
+fn deduplicate_identical_tables(tables: &mut Vec<crate::types::Table>) {
+    if tables.len() < 2 {
+        return;
+    }
+
+    let mut seen: ahash::AHashSet<(u32, &str)> = ahash::AHashSet::with_capacity(tables.len());
+    let mut keep = vec![true; tables.len()];
+    for (index, table) in tables.iter().enumerate() {
+        if !seen.insert((table.page_number, table.markdown.as_str())) {
+            keep[index] = false;
+        }
+    }
+
+    let mut index = 0;
+    tables.retain(|_| {
+        let keep_this = keep[index];
+        index += 1;
+        keep_this
+    });
 }
 
 fn table_bboxes_by_page(tables: &[crate::types::Table]) -> ahash::AHashMap<usize, Vec<crate::types::BoundingBox>> {
@@ -2801,6 +3142,127 @@ fn is_dedup_candidate(p: &PdfParagraph) -> bool {
         && p.caption_for.is_none()
 }
 
+/// Minimum word count for the lead sentence before a run-in list's anchor
+/// colon; guards against matching short labels (`"Note:"`, abbreviations)
+/// that happen to be followed by a semicolon elsewhere in the text.
+const RUN_IN_LIST_MIN_LEAD_WORDS: usize = 4;
+/// Minimum semicolon-delimited clauses required to call a colon-introduced
+/// run a "list" — a single clause is just a qualified sentence, not an
+/// enumeration.
+const RUN_IN_LIST_MIN_ITEMS: usize = 2;
+/// Minimum word count per clause; guards against matching stray short
+/// fragments (e.g. an abbreviation followed by `;`) as list items.
+const RUN_IN_LIST_MIN_ITEM_WORDS: usize = 3;
+
+/// Split a colon-introduced, semicolon-delimited "run-in" list — a prose
+/// convention common in legal/contract text, e.g. "...is authorised to
+/// exclude subscription rights: to exclude fractional amounts...; where the
+/// new shares...;" — out of a single assembled paragraph into a lead
+/// paragraph plus one list-item paragraph per clause.
+///
+/// These enumerations are frequently rendered with no distinguishing
+/// indentation or line break from the surrounding prose (the source document
+/// never used a real list, just semicolon-separated clauses within one
+/// paragraph flow), so geometry-based list detection
+/// (`classify::detect_indentation_based_lists`) never sees them — that pass
+/// only promotes paragraphs already indented relative to the page's modal
+/// left margin. This pass instead recognizes the enumeration from paragraph
+/// text alone, after normal paragraph assembly, and works for both the
+/// heuristic and structure-tree paragraph paths via [`paragraph_text_raw`].
+///
+/// xberg-io/xberg#1301.
+fn split_colon_semicolon_run_in_lists(all_page_paragraphs: &mut [Vec<PdfParagraph>]) {
+    for page_paragraphs in all_page_paragraphs.iter_mut() {
+        let mut index = 0;
+        while index < page_paragraphs.len() {
+            match try_split_run_in_list(&page_paragraphs[index]) {
+                Some(replacement) => {
+                    let inserted = replacement.len();
+                    page_paragraphs.splice(index..=index, replacement);
+                    index += inserted;
+                }
+                None => index += 1,
+            }
+        }
+    }
+}
+
+/// Attempt to split one paragraph into a lead paragraph plus run-in list
+/// items. Returns `None` when the paragraph does not match the pattern, in
+/// which case it is left untouched.
+fn try_split_run_in_list(para: &PdfParagraph) -> Option<Vec<PdfParagraph>> {
+    if para.heading_level.is_some()
+        || para.is_list_item
+        || para.is_code_block
+        || para.is_formula
+        || para.is_page_furniture
+    {
+        return None;
+    }
+
+    let normalized: String = paragraph_text_raw(para)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let colon_byte = normalized.rfind(':')?;
+    let lead = normalized[..=colon_byte].trim();
+    if lead.split_whitespace().count() < RUN_IN_LIST_MIN_LEAD_WORDS {
+        return None;
+    }
+
+    let tail = normalized[colon_byte + 1..].trim_start();
+    if tail.is_empty() {
+        return None;
+    }
+
+    let items: Vec<&str> = tail
+        .split_inclusive(';')
+        .map(str::trim)
+        .filter(|segment| !segment.is_empty())
+        .collect();
+    if items.len() < RUN_IN_LIST_MIN_ITEMS || !items.iter().all(|item| is_probable_run_in_list_item(item)) {
+        return None;
+    }
+
+    let mut split = Vec::with_capacity(items.len() + 1);
+    split.push(run_in_list_fragment(para, lead.to_string(), false));
+    for item in items {
+        split.push(run_in_list_fragment(para, item.to_string(), true));
+    }
+    Some(split)
+}
+
+/// Whether one semicolon-delimited clause reads as a genuine list item:
+/// substantial (several words), a lowercase continuation of the lead
+/// sentence (real clauses read as "to exclude...", "where...", not a new
+/// capitalized sentence), and clause-terminated.
+fn is_probable_run_in_list_item(item: &str) -> bool {
+    item.split_whitespace().count() >= RUN_IN_LIST_MIN_ITEM_WORDS
+        && item.chars().next().is_some_and(char::is_lowercase)
+        && matches!(item.chars().last(), Some(';' | '.'))
+}
+
+/// Build one split-off fragment, inheriting the source paragraph's
+/// non-textual attributes (font size, boldness, page association, etc.).
+fn run_in_list_fragment(source: &PdfParagraph, text: String, is_list_item: bool) -> PdfParagraph {
+    let word_count = text.split_whitespace().count();
+    PdfParagraph {
+        text,
+        lines: Vec::new(),
+        heading_level: None,
+        is_list_item,
+        is_code_block: false,
+        is_formula: false,
+        layout_class: if is_list_item {
+            Some(super::types::LayoutHintClass::ListItem)
+        } else {
+            source.layout_class
+        },
+        word_count,
+        ..source.clone()
+    }
+}
+
 fn apply_text_repair_to_structure_tree_paragraphs(paragraphs: &mut Vec<PdfParagraph>, has_positions: bool) {
     apply_to_all_segments(paragraphs, fused_text_repairs);
     dehyphenate_paragraphs(paragraphs, has_positions);
@@ -2861,6 +3323,26 @@ mod tests {
             page_number: page,
             bounding_box: Some(crate::types::BoundingBox { x0, y0, x1, y1 }),
         }
+    }
+
+    #[test]
+    fn identical_markdown_tables_collapse_despite_missing_bbox() {
+        use crate::core::config::layout::TableOverlapPreference;
+        let native = vec![crate::types::Table {
+            cells: vec![vec!["a".into(), "b".into()]],
+            markdown: "| a | b |".to_string(),
+            page_number: 1,
+            bounding_box: None,
+        }];
+        let layout = vec![ov_table(1, (0.0, 0.0, 100.0, 100.0), "| a | b |")];
+
+        let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content);
+
+        assert_eq!(
+            emitted.len(),
+            1,
+            "byte-identical markdown on the same page collapses even when one table has no bbox"
+        );
     }
 
     #[test]
@@ -3806,6 +4288,68 @@ mod tests {
         paragraph.text = text.to_string();
         paragraph.word_count = text.split_whitespace().count();
         paragraph
+    }
+
+    /// Regression test for xberg-io/xberg#1301 (mode a): a colon-introduced,
+    /// semicolon-delimited run-in list with no distinguishing indentation or
+    /// line break — exactly how it is rendered from unstyled HTML — is split
+    /// into a lead paragraph plus one list item per clause.
+    #[test]
+    fn run_in_colon_semicolon_list_is_split_into_lead_and_items() {
+        let text = "Article 1. The management board is authorised to exclude subscription rights: \
+to exclude fractional amounts from the shareholders' subscription right; \
+where the new shares are issued against cash contributions at market price;";
+        let mut pages = vec![vec![outline_para(text)]];
+
+        split_colon_semicolon_run_in_lists(&mut pages);
+
+        assert_eq!(pages[0].len(), 3, "lead paragraph + 2 list items");
+        assert!(!pages[0][0].is_list_item);
+        assert!(
+            pages[0][0].text.ends_with("authorised to exclude subscription rights:"),
+            "lead keeps everything up to and including the anchor colon: {}",
+            pages[0][0].text
+        );
+        assert!(pages[0][1].is_list_item);
+        assert_eq!(
+            pages[0][1].text,
+            "to exclude fractional amounts from the shareholders' subscription right;"
+        );
+        assert!(pages[0][2].is_list_item);
+        assert_eq!(
+            pages[0][2].text,
+            "where the new shares are issued against cash contributions at market price;"
+        );
+    }
+
+    #[test]
+    fn run_in_list_split_requires_at_least_two_clauses() {
+        let mut pages = vec![vec![outline_para("Note: see the appendix for full details.")]];
+
+        split_colon_semicolon_run_in_lists(&mut pages);
+
+        assert_eq!(
+            pages[0].len(),
+            1,
+            "a single clause after the colon is not an enumeration"
+        );
+        assert!(!pages[0][0].is_list_item);
+    }
+
+    #[test]
+    fn run_in_list_split_leaves_unrelated_paragraphs_untouched_and_in_order() {
+        let list_text = "The board is authorised to exclude rights: to exclude fractional amounts; \
+where new shares are issued;";
+        let decoy = "- a bare dash-prefixed clause outside a list, unit #06-18 Tower 2, Singapore.";
+        let mut pages = vec![vec![outline_para(list_text), outline_para(decoy)]];
+
+        split_colon_semicolon_run_in_lists(&mut pages);
+
+        assert_eq!(pages[0].len(), 4, "lead + 2 items + the untouched trailing paragraph");
+        assert_eq!(
+            pages[0][3].text, decoy,
+            "trailing paragraph keeps its text and reading-order position"
+        );
     }
 
     #[test]
