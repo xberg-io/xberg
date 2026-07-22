@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
 # Package the license-restricted "reference" benchmark corpus slice
-# (test_documents/.corpus-cache/{pdf,ground_truth/pdf}) and upload it to the private GCS bucket,
-# keyed by the test_documents submodule SHA. Run by a maintainer (with write access to the bucket
-# and a locally materialized cache) after every corpus rebuild. See tools/benchmark-harness/CORPUS.md.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

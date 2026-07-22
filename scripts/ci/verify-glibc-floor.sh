@@ -1,13 +1,5 @@
 #!/usr/bin/env bash
-# Fail a build whose glibc Linux artifact would break on an old glibc (#1284).
-# For each xberg native library it asserts:
-#   1. no __isoc23_* / __libc_single_threaded references (need glibc >= 2.32),
 #   2. highest versioned GLIBC symbol <= the floor (default 2.28),
-#   3. libonnxruntime.so bundled beside it.
-#
-# Usage: verify-glibc-floor.sh <artifact> [max-glibc]
-#   <artifact>  a *.whl, *.tar.gz/*.tgz, or a directory
-#   max-glibc   floor as MAJOR.MINOR (default 2.28)
 set -euo pipefail
 
 MAX_GLIBC="${2:-2.28}"
@@ -16,7 +8,6 @@ log() { echo "verify-glibc-floor: $*" >&2; }
 die() { log "$*"; exit 1; }
 cleanup() { [ -n "${WORKDIR:-}" ] && rm -rf "$WORKDIR"; }
 
-# Compare two MAJOR.MINOR versions; return 0 if $1 > $2.
 gt() { [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -1)" = "$1" ] && [ "$1" != "$2" ]; }
 
 check_lib() {
@@ -37,7 +28,6 @@ check_lib() {
   log "OK $name (floor <= $MAX_GLIBC, ORT bundled)"
 }
 
-# Run the checks against every xberg native library found under $1.
 verify_tree() {
   local root="$1" found=0 lib
   while IFS= read -r lib; do

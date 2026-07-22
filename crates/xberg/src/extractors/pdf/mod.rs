@@ -817,11 +817,6 @@ impl PdfExtractor {
                 }
             }
 
-            // #1293: metadata.pages.pages[].is_blank was computed once from native
-            // content and never refreshed after OCR text overwrote page_contents
-            // above, leaving it contradicting the top-level pages[].is_blank for
-            // scanned pages. Re-derive it from the same (post-OCR) PageContent so
-            // both agree.
             if let Some(ref content_pages) = page_contents
                 && let Some(ref mut page_structure) = pdf_metadata.page_structure
                 && let Some(ref mut info_pages) = page_structure.pages

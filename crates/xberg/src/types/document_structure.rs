@@ -199,7 +199,6 @@ impl DocumentStructure {
     #[must_use]
     pub fn node_rendered_offset(&self, _node_index: NodeIndex) -> Option<(usize, usize)> {
         // TODO(#1294/#1295): implement real node -> rendered-offset mapping and
-        // use it to populate `ChunkMetadata::node_ids` / `ChunkMetadata::page_spans`.
         None
     }
 }
@@ -1388,8 +1387,6 @@ mod tests {
         assert!(json.get("annotations").is_none());
         assert!(json.get("attributes").is_none());
 
-        // id is a stable, deterministic identifier and must always be on the wire
-        // so ChunkMetadata::node_ids can reference it.
         assert!(json.get("id").is_some());
         assert_eq!(json.get("id").unwrap(), &serde_json::Value::String(node.id.to_string()));
 
@@ -1420,7 +1417,6 @@ mod tests {
 
     #[test]
     fn test_node_id_stable_across_generations() {
-        // Same inputs must always produce the same id (determinism).
         let id_a = NodeId::generate("paragraph", "Hello world", Some(3), 5);
         let id_b = NodeId::generate("paragraph", "Hello world", Some(3), 5);
         assert_eq!(id_a, id_b);
@@ -1429,8 +1425,6 @@ mod tests {
 
     #[test]
     fn test_node_id_unique_for_duplicate_content_at_different_positions() {
-        // Identical (type, text, page) at different positions must not collide,
-        // since the position index is folded into the hash.
         let id_0 = NodeId::generate("paragraph", "Repeated", Some(1), 0);
         let id_1 = NodeId::generate("paragraph", "Repeated", Some(1), 1);
         assert_ne!(

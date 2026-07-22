@@ -158,9 +158,6 @@ pub(crate) fn render_markdown(doc: &InternalDocument) -> String {
     }
 
     if doc.escape_markdown {
-        // Default (backward-compatible) behavior: only the always-safe-to-unescape
-        // targets are unescaped. Line-leading `-`/`#` stay backslash-escaped so the
-        // output round-trips safely through a CommonMark parser.
         const UNESCAPE_TARGETS: &[char] = &['_', '[', ']', '(', ')', '*', '='];
         let cow = unescape_backslash_sequences(&output, UNESCAPE_TARGETS);
         if let Cow::Owned(s) = cow {
@@ -182,9 +179,6 @@ pub(crate) fn render_markdown(doc: &InternalDocument) -> String {
                 .join("\n");
         }
     } else {
-        // Opt-out (issue #1292): also unescape `-` and `#` so prose matches the
-        // already-unescaped text used in table cells. Superset of the default
-        // targets, so the narrow line-start pass above is unnecessary here.
         const UNESCAPE_TARGETS: &[char] = &['_', '[', ']', '(', ')', '*', '=', '-', '#'];
         let cow = unescape_backslash_sequences(&output, UNESCAPE_TARGETS);
         if let Cow::Owned(s) = cow {

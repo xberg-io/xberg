@@ -1,20 +1,10 @@
 #!/usr/bin/env bash
-# Vendor a native library's shared-object closure beside it and set RPATH=$ORIGIN,
-# so the dynamically linked ONNX Runtime (and any other non-system dep) ships with
-# the artifact and resolves at load time (#1284). One shared vendorer for node,
-# the FFI libraries, and the Elixir NIF; replaces the node-specific
-# vendor-node-libs.sh. Relies on ldd resolving DT_NEEDED deps via LD_LIBRARY_PATH
-# (set by setup-onnx-runtime).
-#
-# Usage: vendor-native-closure.sh <artifact>
-#   <artifact>  a native lib (*.so/*.node), a directory of them, or a *.tar.gz/*.tgz
 set -euo pipefail
 
 log() { echo "vendor-native-closure: $*" >&2; }
 die() { log "$*"; exit 1; }
 cleanup() { [ -n "${WORKDIR:-}" ] && rm -rf "$WORKDIR"; }
 
-# glibc/musl runtime and toolchain libs that must NOT be vendored.
 is_base_lib() {
   case "$1" in
   ld-linux* | ld-musl* | libc.so* | libc.musl* | libc-*.so* | libm.so* | libmvec.so* | \
@@ -24,7 +14,6 @@ is_base_lib() {
   esac
 }
 
-# Copy every non-base DT_NEEDED dep of $1 into its own directory, then rpath it.
 vendor_one() {
   local native="$1" dir queue seen bin lib base
   dir="$(dirname "$native")"
@@ -49,12 +38,10 @@ vendor_one() {
       done
   done
   rm -f "$queue" "$seen"
-  # $ORIGIN is a runtime linker token, not a shell variable — keep it literal.
   # shellcheck disable=SC2016
   patchelf --set-rpath '$ORIGIN' "$native"
 }
 
-# Run vendor_one against every xberg native library found under $1.
 vendor_tree() {
   local root="$1" found=0 lib
   while IFS= read -r lib; do

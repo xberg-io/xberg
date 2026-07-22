@@ -1,11 +1,11 @@
 [scan]
 include = [
-    ".github/workflows/**/*.yml",
-    ".github/workflows/**/*.yaml",
-    ".github/actions/**/action.yml",
-    ".github/actions/**/action.yaml",
-    "action.yml",
-    "action.yaml",
+  ".github/workflows/**/*.yml",
+  ".github/workflows/**/*.yaml",
+  ".github/actions/**/action.yml",
+  ".github/actions/**/action.yaml",
+  "action.yml",
+  "action.yaml",
 ]
 exclude = []
 recursive = false

@@ -48,7 +48,7 @@ jobs:
     timeout-minutes: 360
     permissions:
       contents: read
-      id-token: write # WIF auth to GCS for the reference corpus cache
+      id-token: write
     outputs:
       artifact-name: benchmarks-target
     steps:
@@ -105,10 +105,6 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      # restore-corpus-cache.sh decompresses the GCS .tar.zst; the runner image
-      # ships liblzma but not the zstd CLI. apt index is fresh from the earlier
-      # install-system-deps step. Only this setup job unpacks the .zst — bench jobs
-      # consume the re-packaged plain .tar artifact, so they need no zstd.
       - name: Install zstd (corpus cache decompression)
         run: sudo apt-get install -y zstd
 
@@ -117,16 +113,12 @@ jobs:
           GCP_BENCHMARK_BUCKET: ${{ secrets.GCP_BENCHMARK_BUCKET }}
         run: scripts/benchmarks/restore-corpus-cache.sh
 
-      # Strict pre-check: fails once here if any PDF fixture cannot load its ground truth (e.g. the
-      # reference cache was not restored) instead of aborting every per-document bench job later.
       - name: Validate ground truth
         run: cargo run --locked --release -p benchmark-harness -- validate-gt --fixtures tools/benchmark-harness/fixtures/pdf/ --strict
 
       - name: Validate benchmark cohorts
         run: cargo test --locked --release -p benchmark-harness 'cohort::tests::'
 
-      # Package into a non-hidden tar so downstream jobs get the reference corpus without each hitting
-      # GCS, and without depending on the artifact action's hidden-file handling.
       - name: Package reference corpus cache
         run: tar -C test_documents -cf corpus-cache.tar .corpus-cache/pdf .corpus-cache/ground_truth
 

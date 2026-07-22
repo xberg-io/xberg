@@ -208,10 +208,6 @@ pub struct CodeDataAttribute {
 #[cfg(feature = "tree-sitter")]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
-// `children` is `Vec<CodeDataNode>`; without this guard utoipa inlines the schema
-// recursively and `ApiDoc::openapi()` overflows the stack (crashing `/openapi.json`).
-// Matches the other self-referential schemas (`FormattedBlock`, `DocumentStructure`,
-// `ArchiveEntry`).
 #[cfg_attr(feature = "api", schema(no_recursion))]
 pub struct CodeDataNode {
     /// Whether this node is a key/value pair, XML element, or sequence item.

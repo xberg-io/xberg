@@ -459,8 +459,6 @@ mod tests {
     #[test]
     fn test_records_load_failure_for_missing_ground_truth() {
         let dir = tempfile::tempdir().expect("tempdir");
-        // A fixture whose ground-truth text file does not exist — exactly the reference-cache-absent
-        // case. `Fixture::from_file` fails to load it, and validate_ground_truth must record that.
         std::fs::write(
             dir.path().join("broken.json"),
             r#"{"document":"missing.pdf","file_type":"pdf","file_size":1,"ground_truth":{"text_file":"nope.txt","source":"readoc"}}"#,

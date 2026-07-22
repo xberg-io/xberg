@@ -84,10 +84,6 @@ impl ExtractionConfig {
             }
         }
 
-        // PaddleOCR model selection (issue #1279). Env-configured servers had no way to change the
-        // paddle model generation/tier without an inline JSON blob, so it was always the default
-        // (`pp-ocrv6`/`medium`). Fold these into the `paddle_ocr_config` passthrough the backend
-        // already reads; env wins over any `[ocr.paddle_ocr_config]` from the config file.
         let paddle_model_version = std::env::var("XBERG_OCR_MODEL_VERSION").ok();
         let paddle_model_tier = std::env::var("XBERG_OCR_MODEL_TIER").ok();
         if paddle_model_version.is_some() || paddle_model_tier.is_some() {
@@ -521,9 +517,7 @@ mod tests {
             .apply_env_overrides()
             .expect("paddle model env override should apply");
         let paddle = config.ocr.as_ref().unwrap().paddle_ocr_config.as_ref().unwrap();
-        // env wins over the config-file value ...
         assert_eq!(paddle.get("model_version").and_then(|v| v.as_str()), Some("pp-ocrv5"));
-        // ... while unrelated keys are preserved.
         assert_eq!(paddle.get("drop_score").and_then(|v| v.as_f64()), Some(0.7));
         assert!(paddle.get("model_tier").is_none());
         clear_paddle_model_env();

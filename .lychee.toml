@@ -1,27 +1,27 @@
 
 
 exclude = [
-    "localhost",
-    "127\\.0\\.0\\.1",
-    "0\\.0\\.0\\.0",
+  "localhost",
+  "127\\.0\\.0\\.1",
+  "0\\.0\\.0\\.0",
 
-    "example\\.com",
-    "example\\.org",
+  "example\\.com",
+  "example\\.org",
 
-    "\\$\\{",
-    "\\{\\{",
+  "\\$\\{",
+  "\\{\\{",
 
-    "github\\.com/.*/edit/",
+  "github\\.com/.*/edit/",
 
-    "github\\.com/.*/raw/",
+  "github\\.com/.*/raw/",
 
-    "xberg\\.dev",
+  "xberg\\.dev",
 
-    "pypi\\.org/project/",
+  "pypi\\.org/project/",
 
-    "crates\\.io/crates/",
+  "crates\\.io/crates/",
 
-    "npmjs\\.com/package/",
+  "npmjs\\.com/package/",
 ]
 
 accept = [200, 204, 301, 302, 429]

@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
 # Restore the license-restricted "reference" benchmark corpus slice into
-# test_documents/.corpus-cache/ from the private GCS bucket, keyed by the test_documents submodule
-# SHA. Run in CI (after WIF auth) before benchmarks so the reference fixtures resolve. The
-# redistributable "vendor" docs come from the committed submodule and need no restore.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
