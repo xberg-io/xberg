@@ -82,7 +82,9 @@ pub(crate) fn render_djot(doc: &InternalDocument) -> String {
             }
             ElementKind::Table { table_index } => {
                 if let Some(table) = doc.tables.get(table_index as usize) {
-                    if doc.table_anchors && let Some(table_id) = table.table_id.as_deref() {
+                    if doc.table_anchors
+                        && let Some(table_id) = table.table_id.as_deref()
+                    {
                         let anchor = format!("[TABLE:{table_id}]\n\n");
                         push_with_bq(&mut out, &anchor, bq_depth);
                     }
