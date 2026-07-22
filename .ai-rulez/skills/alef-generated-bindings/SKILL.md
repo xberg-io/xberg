@@ -1,5 +1,6 @@
 ---
-priority: critical
+name: alef-generated-bindings
+description: Alef-managed generated bindings in packages/* and binding crates — the regeneration workflow (task alef:generate / alef:format), Go DocumentExtractor→Extractor rename mapping, the git-diff freshness check, and the key alef.toml sections. Load before editing anything under packages/* or a binding crate, or when regenerating, formatting, or verifying Alef output.
 ---
 
 # Alef-Generated Bindings

@@ -1,5 +1,6 @@
 ---
-priority: high
+name: crate-structure
+description: The Xberg workspace layout — the version source of truth (root Cargo.toml [workspace.package] version), the crates/ workspace members (core lib, CLI, FFI, per-language binding crates, OCR crates), the out-of-workspace binding packages under packages/ (PyPI, RubyGems, Composer, Go, Maven, NuGet, Hex), and the tools/ directory. Load when navigating the repo, deciding where code belongs, or wiring a new crate or binding package.
 ---
 
 # Crate Structure

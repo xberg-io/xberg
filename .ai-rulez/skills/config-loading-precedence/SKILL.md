@@ -1,5 +1,6 @@
 ---
-summary: Configuration loading precedence for CLI and server modes
+name: config-loading-precedence
+description: How Xberg resolves configuration — CLI-mode and server/MCP-mode precedence orders, config file auto-discovery (xberg.{toml,yaml,json}), field-level inline JSON merge (merge_json_into_config), config file formats, and apply_extraction_overrides. Load when adding a config flag or env var, changing config precedence, or debugging why a setting is or isn't taking effect.
 ---
 
 # Configuration Loading & Precedence

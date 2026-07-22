@@ -5,51 +5,52 @@ description = 'Rust document intelligence library with active Python, TypeScript
 gitignore = true
 presets = ["claude", "codex"]
 builtins = [
-    'rust',
-    'python',
-    'go',
-    'java',
-    'ruby',
-    'php',
-    'csharp',
-    'elixir',
-    'wasm',
-    'pyo3',
-    'napi-rs',
-    'magnus',
-    'ext-php-rs',
-    'rustler',
-    'cgo',
-    'default-commands',
+  'rust',
+  'python',
+  'go',
+  'java',
+  'ruby',
+  'php',
+  'csharp',
+  'elixir',
+  'wasm',
+  'pyo3',
+  'napi-rs',
+  'magnus',
+  'ext-php-rs',
+  'rustler',
+  'cgo',
+  'default-commands',
 ]
 
+compact = true
 [[includes]]
 name = 'xberg-core'
-source = 'https://github.com/xberg-io/ai-rulez.git'
+source = 'https://github.com/xberg-io/agent-conventions.git'
 path = 'modules/core'
 merge_strategy = 'local-override'
 
 [[includes]]
 name = 'xberg-languages'
-source = 'https://github.com/xberg-io/ai-rulez.git'
+source = 'https://github.com/xberg-io/agent-conventions.git'
 path = 'modules/languages'
 merge_strategy = 'local-override'
 
 [[includes]]
 name = 'xberg-cicd'
-source = 'https://github.com/xberg-io/ai-rulez.git'
+source = 'https://github.com/xberg-io/agent-conventions.git'
 path = 'modules/cicd'
 merge_strategy = 'local-override'
 
 [[includes]]
 name = 'xberg-infrastructure'
-source = 'https://github.com/xberg-io/ai-rulez.git'
+source = 'https://github.com/xberg-io/agent-conventions.git'
 path = 'modules/infrastructure'
 merge_strategy = 'local-override'
 
 [[includes]]
 name = 'xberg-e2e-generator'
-source = 'https://github.com/xberg-io/ai-rulez.git'
+source = 'https://github.com/xberg-io/agent-conventions.git'
 path = 'modules/e2e-generator'
 merge_strategy = 'local-override'
 
