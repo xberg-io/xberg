@@ -32,6 +32,14 @@ pub struct Table {
     /// blocks in `content` / `pages[].content` / `chunks[].content` with the
     /// structured entries in `tables[]`. `None` when the extractor did not
     /// assign one.
+    ///
+    /// Today, same-page fragments of one physical table are already merged
+    /// into a single `tables[]` entry before ids are assigned (see PDF table
+    /// stitching), so in practice `table_id` is unique per entry rather than
+    /// shared across several. A table split across a page boundary is
+    /// intentionally *not* linked — its per-page pieces get separate ids.
+    /// Sharing one id across page-boundary fragments is a known possible
+    /// future extension, not implemented yet.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub table_id: Option<String>,
 
