@@ -16,16 +16,20 @@
 //! [`locate_page_boundaries`](crate::core::pipeline::features) already uses to align raw page
 //! text with rendered content — rather than a byte-exact intersection.
 
+use std::collections::HashMap;
+
 use crate::types::document_structure::{ContentLayer, DocumentNode, DocumentStructure, NodeContent};
 use crate::types::{BoundingBox, Chunk};
 
 /// Minimum trimmed node-text length considered for containment matching.
 ///
-/// Very short text (e.g. a single character or short label) matches too many chunks by
-/// coincidence to be a meaningful signal of chunk membership, so nodes with shorter text are
-/// skipped for bbox aggregation (their page still appears in `page_spans`, just without a bbox
-/// contribution from that node).
-const MIN_NODE_TEXT_MATCH_LEN: usize = 4;
+/// Short text (e.g. a label, a number like "1.2.", or a common word like "Data") is likely to
+/// appear verbatim in chunks it has nothing to do with, which would pollute that page's union
+/// bbox with an unrelated node's coordinates. Ten characters is long enough that a coincidental
+/// substring match across unrelated content is unlikely, while still covering most short
+/// headings and list items. Nodes with shorter text are skipped for bbox aggregation — their
+/// page still appears in `page_spans`, just without a bbox contribution from that node.
+const MIN_NODE_TEXT_MATCH_LEN: usize = 10;
 
 /// Fill in `bbox` on each chunk's `page_spans` using the document's structured node tree.
 ///
@@ -39,37 +43,61 @@ const MIN_NODE_TEXT_MATCH_LEN: usize = 4;
 ///
 /// Chunks with empty `page_spans` (no page-boundary provenance) and nodes without a usable text
 /// or bbox are skipped. A span's `bbox` stays `None` when no node in `structure` matches.
+///
+/// Nodes are bucketed by page once, up front (see [`index_body_nodes_by_page`]), so each
+/// chunk/page_span pair only scans the (typically small) set of nodes on its own page instead of
+/// the entire node tree — this keeps the cost roughly linear in document size rather than
+/// quadratic in `chunks.len() * structure.nodes.len()`.
 pub(crate) fn populate_page_span_bboxes(chunks: &mut [Chunk], structure: &DocumentStructure) {
+    let nodes_by_page = index_body_nodes_by_page(&structure.nodes);
+
     for chunk in chunks.iter_mut() {
         if chunk.metadata.page_spans.is_empty() {
             continue;
         }
 
         for span in chunk.metadata.page_spans.iter_mut() {
-            span.bbox = union_matching_node_bboxes(&chunk.content, span.page, &structure.nodes);
+            span.bbox = nodes_by_page
+                .get(&span.page)
+                .and_then(|nodes| union_matching_node_bboxes(&chunk.content, nodes));
         }
     }
 }
 
-/// Union the bounding boxes of all nodes on `page` whose text is found in `chunk_content`.
-fn union_matching_node_bboxes(chunk_content: &str, page: u32, nodes: &[DocumentNode]) -> Option<BoundingBox> {
+/// Bucket body-layer nodes by every page they cover.
+///
+/// A node with `page_end` set (spanning pages `page..=page_end`) is indexed under every page in
+/// that range, matching the membership test `populate_page_span_bboxes` used before this index
+/// existed (`node.page..=node.page_end` covers the span's page). Non-body-layer nodes (headers,
+/// footers, footnotes) and nodes without a `page` are omitted entirely, since they never
+/// contribute to a bbox union.
+fn index_body_nodes_by_page(nodes: &[DocumentNode]) -> HashMap<u32, Vec<&DocumentNode>> {
+    let mut index: HashMap<u32, Vec<&DocumentNode>> = HashMap::new();
+
+    for node in nodes {
+        if node.content_layer != ContentLayer::Body {
+            continue;
+        }
+        let Some(start) = node.page else { continue };
+        let end = node.page_end.unwrap_or(start);
+
+        for page in start..=end {
+            index.entry(page).or_default().push(node);
+        }
+    }
+
+    index
+}
+
+/// Union the bounding boxes of all `nodes` (already scoped to a single page) whose text is found
+/// in `chunk_content`.
+fn union_matching_node_bboxes(chunk_content: &str, nodes: &[&DocumentNode]) -> Option<BoundingBox> {
     nodes
         .iter()
-        .filter(|node| node.content_layer == ContentLayer::Body)
-        .filter(|node| node_covers_page(node, page))
-        .filter_map(|node| node.bbox.map(|bbox| (node, bbox)))
+        .filter_map(|node| node.bbox.map(|bbox| (*node, bbox)))
         .filter(|(node, _)| node_text_matches_chunk(node, chunk_content))
         .map(|(_, bbox)| bbox)
         .fold(None, |acc, bbox| Some(union_bbox(acc, bbox)))
-}
-
-/// Whether `node`'s page range (`page..=page_end`, falling back to just `page`) includes `page`.
-fn node_covers_page(node: &DocumentNode, page: u32) -> bool {
-    match (node.page, node.page_end) {
-        (Some(start), Some(end)) => (start..=end).contains(&page),
-        (Some(start), None) => start == page,
-        (None, _) => false,
-    }
 }
 
 /// Check whether `node`'s matchable text (see [`node_text_for_matching`]) appears verbatim in
@@ -367,6 +395,27 @@ mod tests {
     }
 
     #[test]
+    fn should_not_match_nine_character_text_just_below_the_threshold() {
+        let structure = DocumentStructure {
+            nodes: vec![body_node("Data 1.2.", 1, Some(bbox(1.0, 1.0, 2.0, 2.0)))],
+            source_format: None,
+            relationships: Vec::new(),
+            node_types: Vec::new(),
+        };
+        let mut chunks = vec![chunk_with_spans(
+            "See Data 1.2. for the summary table on this page.",
+            vec![PageSpan { page: 1, bbox: None }],
+        )];
+
+        populate_page_span_bboxes(&mut chunks, &structure);
+
+        assert_eq!(
+            chunks[0].metadata.page_spans[0].bbox, None,
+            "9-char text is below MIN_NODE_TEXT_MATCH_LEN (10) and must not match"
+        );
+    }
+
+    #[test]
     fn union_bbox_expands_to_enclose_both_boxes() {
         let result = union_bbox(Some(bbox(0.0, 0.0, 10.0, 10.0)), bbox(5.0, -5.0, 20.0, 8.0));
         assert_eq!(result, bbox(0.0, -5.0, 20.0, 10.0));
@@ -376,5 +425,34 @@ mod tests {
     fn union_bbox_returns_next_when_acc_is_none() {
         let result = union_bbox(None, bbox(1.0, 2.0, 3.0, 4.0));
         assert_eq!(result, bbox(1.0, 2.0, 3.0, 4.0));
+    }
+
+    #[test]
+    fn index_body_nodes_by_page_buckets_multi_page_node_under_every_covered_page() {
+        let mut spanning = body_node("Table caption spanning pages.", 2, Some(bbox(5.0, 5.0, 15.0, 15.0)));
+        spanning.page_end = Some(4);
+        let single = body_node("Single page paragraph text.", 3, Some(bbox(1.0, 1.0, 2.0, 2.0)));
+        let mut header = body_node("Running header text on page.", 3, Some(bbox(9.0, 9.0, 9.0, 9.0)));
+        header.content_layer = ContentLayer::Header;
+
+        let nodes = [spanning, single, header];
+        let index = index_body_nodes_by_page(&nodes);
+
+        assert_eq!(
+            index.get(&2).map(Vec::len),
+            Some(1),
+            "page 2 must only see the spanning node"
+        );
+        assert_eq!(
+            index.get(&3).map(Vec::len),
+            Some(2),
+            "page 3 must see both the spanning node and the single-page node, but not the header"
+        );
+        assert_eq!(
+            index.get(&4).map(Vec::len),
+            Some(1),
+            "page 4 must only see the spanning node"
+        );
+        assert!(index.get(&1).is_none(), "page 1 has no covering nodes");
     }
 }
