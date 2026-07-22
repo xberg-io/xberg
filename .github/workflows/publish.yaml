@@ -2502,14 +2502,20 @@ jobs:
           # pkg/web/xberg_wasm.js or pkg/web/xberg_wasm_bg.wasm ships a package
           # that 404s at import time (the live-demo failure this bug reports).
           TARBALL=$(npm pack --silent)
+          # List the tarball once, then match against the captured text. Piping
+          # `tar -tzf` into `grep -qx` lets grep exit on first match and SIGPIPE
+          # `tar` while it is still inflating the ~40 MB gzip; under `pipefail`
+          # that makes the pipeline report non-zero and `if !` misreads it as a
+          # false "missing" (the bundle is actually present). ~keep
+          listing=$(tar -tzf "$TARBALL")
+          rm -f "$TARBALL"
           MISSING=0
           for f in "package/pkg/web/xberg_wasm.js" "package/pkg/web/xberg_wasm_bg.wasm"; do
-            if ! tar -tzf "$TARBALL" | grep -qx "$f"; then
+            if ! grep -qxF "$f" <<<"$listing"; then
               echo "FATAL: npm tarball is missing $f" >&2
               MISSING=1
             fi
           done
-          rm -f "$TARBALL"
           if [[ "$MISSING" -ne 0 ]]; then
             echo "FATAL: wasm npm package is missing required web bundle files; aborting publish." >&2
             exit 1
