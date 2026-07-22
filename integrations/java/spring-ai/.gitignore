@@ -1,0 +1,56 @@
+# Maven build output
+target/
+
+# Compiled class files
+*.class
+
+# Package files (except libs/)
+*.jar
+!libs/*.jar
+*.war
+*.ear
+
+# IntelliJ IDEA
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+
+# Eclipse
+.settings/
+.classpath
+.project
+
+# Log files
+*.log
+
+# macOS
+.DS_Store
+
+# Git worktrees
+.worktrees/
+
+
+# Additional generated artifacts
+.remote-cache/
+.alef/
+.gemini/
+GEMINI.md
+
+# polylint local cache
+.polylint/
+
+# BEGIN ai-rulez (DO NOT EDIT - managed by ai-rulez)
+.agents/
+.ai-rulez/.generated-manifest.json
+.claude/
+.codex/
+.cursor/
+.github/agents/
+.github/commands/
+.github/copilot-instructions.md
+.github/skills/
+AGENTS.md
+CLAUDE.md
+# END ai-rulez

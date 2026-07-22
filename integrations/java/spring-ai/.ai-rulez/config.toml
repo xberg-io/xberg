@@ -1,0 +1,26 @@
+# AI-Rulez Configuration (migrated to V4 TOML format)
+# Documentation: https://github.com/Goldziher/ai-rulez
+
+version = '4.0'
+name = 'xberg-spring-ai'
+description = 'Spring AI DocumentReader integration for xberg'
+gitignore = true
+presets = ['claude', 'codex', 'copilot', 'cursor', 'antigravity']
+builtins = ['java', 'default-commands']
+
+[[includes]]
+name = 'xberg-core'
+source = 'https://github.com/xberg-io/ai-rulez.git'
+path = 'modules/core'
+merge_strategy = 'local-override'
+
+[[marketplaces]]
+name = "basemind"
+source = "Goldziher/basemind"
+type = "github"
+
+[[plugins]]
+marketplace = "basemind"
+name = "basemind"
+scope = "project"
+enabled = true
