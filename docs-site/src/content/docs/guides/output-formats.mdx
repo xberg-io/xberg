@@ -46,6 +46,60 @@ No configuration required. The result contains:
 
 ---
 
+## Table Identity and Anchors
+
+Every `Table` in `tables[]` (and in `pages[].tables`) carries a `table_id` and `columns`, so consumers can reconcile a table's markdown block in rendered content with its structured entry:
+
+- **`table_id`** (`str | None`) — a stable identifier the extraction pipeline assigns deterministically (for example `"table-3"`, in document order), so the same input document always produces the same ids. Same-page fragments of one physical table are already merged into a single `tables[]` entry before ids are assigned, so in practice `table_id` is unique per entry rather than shared across several. A table split across a page boundary is *not* linked today — its per-page pieces get separate ids; sharing one id across page-boundary fragments is a documented future extension. `None` when the extractor did not assign one.
+- **`columns`** (`list[str] | None`) — the header cells (the first row of `cells`), populated even when the fragment's own header row was merged away or lives in a sibling fragment. This makes a single fragment interpretable in isolation without needing `table_id` to look up siblings. `None` when no header row could be determined.
+
+Set `table_anchors=True` on `ExtractionConfig` to have the renderer additionally emit a `[TABLE:{table_id}]` marker immediately before each table's Markdown block in `content`, `pages[].content`, and `chunks[].content` — a lightweight anchor a consumer can regex for to splice structured table data into rendered output. Only takes effect when `output_format` is `Markdown` or `Djot`. Defaults to `False`, so existing output is byte-identical unless explicitly enabled.
+
+<Tabs syncKey="lang">
+<TabItem label="Python">
+
+```python title="table_anchors.py"
+from xberg import ExtractInput, ExtractionConfig, extract
+
+config = ExtractionConfig(output_format="markdown", table_anchors=True)
+output = await extract(ExtractInput(kind="uri", uri="report.pdf"), config=config)
+result = output.results[0]
+# result.content contains "[TABLE:table-1]" immediately before that table's markdown.
+for table in result.tables or []:
+    print(table.table_id, table.columns)
+```
+
+</TabItem>
+<TabItem label="Rust">
+
+```rust title="table_anchors.rs"
+use xberg::{extract, ExtractInput, ExtractionConfig, OutputFormat};
+
+let config = ExtractionConfig {
+    output_format: OutputFormat::Markdown,
+    table_anchors: true,
+    ..Default::default()
+};
+let output = extract(ExtractInput::from_uri("report.pdf"), &config).await?;
+let result = &output.results[0];
+for table in &result.tables {
+    println!("{:?} {:?}", table.table_id, table.columns);
+}
+```
+
+</TabItem>
+<TabItem label="TOML">
+
+```toml title="xberg.toml"
+output_format = "markdown"
+table_anchors = true
+```
+
+</TabItem>
+</Tabs>
+
+---
+
 ## Content Output Format
 
 `output_format` sets the format of the `content` field. It is independent of `result_format` (element-based / document structure) and applies to every extraction.
