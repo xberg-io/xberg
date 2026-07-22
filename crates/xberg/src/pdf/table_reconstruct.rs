@@ -10,6 +10,20 @@ pub(crate) use crate::table_core::{HocrWord, reconstruct_table, table_to_markdow
 const DENSE_NUMERIC_MIN_DATA_ROWS: usize = 6;
 const DENSE_NUMERIC_MIN_COLUMNS: usize = 6;
 const DENSE_NUMERIC_MIN_CELL_PERCENT: usize = 75;
+const LARGE_TABLE_MIN_COLUMNS: usize = 6;
+const DEFAULT_MIN_DATA_ROW_DIGIT_CELLS: usize = 3;
+const REPEATED_DATA_ROW_COUNT: usize = 3;
+const ROW_SHAPE_MIN_OVERLAP_PERCENT: usize = 80;
+const DENSE_SCALAR_MIN_DATA_ROWS: usize = 20;
+const DENSE_SCALAR_MIN_COLUMNS: usize = 6;
+const DENSE_SCALAR_MIN_FILLED_PERCENT: usize = 75;
+const DENSE_SCALAR_MIN_COMPACT_PERCENT: usize = 90;
+const DENSE_SCALAR_MIN_DIGIT_PERCENT: usize = 25;
+const DENSE_SCALAR_MAX_CELL_CHARS: usize = 24;
+const SPURIOUS_COLUMN_MIN_DATA_ROWS: usize = 20;
+const SPURIOUS_COLUMN_MIN_COLUMNS: usize = 6;
+const SPURIOUS_COLUMN_MIN_RETAINED_DENSITY_PERCENT: usize = 75;
+const FOOTER_MIN_ALPHA_PERCENT: usize = 70;
 
 #[cfg(feature = "pdf")]
 use super::hierarchy::SegmentData;
@@ -187,17 +201,7 @@ fn post_process_table_inner(
         return None;
     }
 
-    let data_start = table
-        .iter()
-        .enumerate()
-        .find_map(|(idx, row)| {
-            let digit_cells = row
-                .iter()
-                .filter(|cell| cell.chars().any(|c| c.is_ascii_digit()))
-                .count();
-            if digit_cells >= 3 { Some(idx) } else { None }
-        })
-        .unwrap_or(0);
+    let data_start = find_data_start(&table, layout_guided);
 
     let mut header_rows = if data_start > 0 {
         table[..data_start].to_vec()
@@ -268,6 +272,8 @@ fn post_process_table_inner(
         return None;
     }
 
+    prune_spurious_interior_column(&mut processed, layout_guided);
+
     let data_row_count = processed.len() - 1;
     if data_row_count > 0 {
         for c in 0..processed[0].len() {
@@ -324,7 +330,12 @@ fn post_process_table_inner(
             }
         }
         let threshold = if layout_guided { 85 } else { 70 };
-        if !dense_numeric_grid && non_empty_cells >= 6 && single_word_cells * 100 > non_empty_cells * threshold {
+        let dense_scalar_grid = layout_guided && is_dense_scalar_grid(&processed);
+        if !dense_numeric_grid
+            && !dense_scalar_grid
+            && non_empty_cells >= 6
+            && single_word_cells * 100 > non_empty_cells * threshold
+        {
             return None;
         }
     }
@@ -492,6 +503,167 @@ fn post_process_table_inner(
     }
 
     Some(processed)
+}
+
+fn find_data_start(table: &[Vec<String>], layout_guided: bool) -> usize {
+    let first_numeric_row = table
+        .iter()
+        .position(|row| digit_cell_count(row) >= DEFAULT_MIN_DATA_ROW_DIGIT_CELLS)
+        .unwrap_or(0);
+    let column_count = table.first().map_or(0, Vec::len);
+    if !layout_guided || column_count < LARGE_TABLE_MIN_COLUMNS || table.len() < REPEATED_DATA_ROW_COUNT {
+        return first_numeric_row;
+    }
+
+    let repeated_start = table.windows(REPEATED_DATA_ROW_COUNT).position(|rows| {
+        rows.iter()
+            .all(|row| digit_cell_count(row) >= DEFAULT_MIN_DATA_ROW_DIGIT_CELLS)
+            && rows.windows(2).all(|pair| row_shapes_match(&pair[0], &pair[1]))
+    });
+    repeated_start
+        .filter(|&start| {
+            start == first_numeric_row
+                || looks_like_multiline_numeric_header(&table[first_numeric_row], &table[first_numeric_row + 1..start])
+        })
+        .unwrap_or(first_numeric_row)
+}
+
+fn looks_like_multiline_numeric_header(header: &[String], continuation_rows: &[Vec<String>]) -> bool {
+    let filled_header_cells = header.iter().filter(|cell| !cell.trim().is_empty()).count();
+    let multiword_labels = header
+        .iter()
+        .filter(|cell| {
+            let text = cell.trim();
+            text.split_whitespace().count() >= 2 && text.chars().any(char::is_alphabetic)
+        })
+        .count();
+    let continuation_cells: Vec<&str> = continuation_rows
+        .iter()
+        .flat_map(|row| row.iter())
+        .map(|cell| cell.trim())
+        .filter(|cell| !cell.is_empty())
+        .collect();
+    let has_parenthesized_unit = continuation_cells
+        .iter()
+        .any(|cell| cell.starts_with('(') && cell.contains(')'));
+
+    !continuation_rows.is_empty()
+        && multiword_labels >= 2
+        && continuation_cells.len() < filled_header_cells
+        && has_parenthesized_unit
+}
+
+fn digit_cell_count(row: &[String]) -> usize {
+    row.iter()
+        .filter(|cell| cell.chars().any(|character| character.is_ascii_digit()))
+        .count()
+}
+
+fn row_shapes_match(left: &[String], right: &[String]) -> bool {
+    let column_count = left.len().max(right.len());
+    let mut occupied_union = 0usize;
+    let mut occupied_intersection = 0usize;
+    for column in 0..column_count {
+        let left_filled = left.get(column).is_some_and(|cell| !cell.trim().is_empty());
+        let right_filled = right.get(column).is_some_and(|cell| !cell.trim().is_empty());
+        occupied_union += usize::from(left_filled || right_filled);
+        occupied_intersection += usize::from(left_filled && right_filled);
+    }
+    occupied_union > 0
+        && occupied_intersection.saturating_mul(100) >= occupied_union.saturating_mul(ROW_SHAPE_MIN_OVERLAP_PERCENT)
+}
+
+/// Remove one empty-header interior track that only catches a stray word in a
+/// large, otherwise dense layout-guided table. Such tracks arise when a footer
+/// word has an x-position that does not occur in the table body.
+fn prune_spurious_interior_column(table: &mut [Vec<String>], layout_guided: bool) -> bool {
+    let Some(header) = table.first() else {
+        return false;
+    };
+    let column_count = header.len();
+    let data_row_count = table.len().saturating_sub(1);
+    if !layout_guided || column_count < SPURIOUS_COLUMN_MIN_COLUMNS || data_row_count < SPURIOUS_COLUMN_MIN_DATA_ROWS {
+        return false;
+    }
+
+    let candidates: Vec<usize> = (1..column_count - 1)
+        .filter(|&column| header[column].trim().is_empty())
+        .filter(|&column| {
+            let populated_rows: Vec<usize> = table[1..]
+                .iter()
+                .enumerate()
+                .filter_map(|(index, row)| {
+                    row.get(column)
+                        .is_some_and(|cell| !cell.trim().is_empty())
+                        .then_some(index)
+                })
+                .collect();
+            populated_rows.as_slice() == [data_row_count - 1]
+                && table.last().is_some_and(|row| looks_like_footer_row(row))
+        })
+        .collect();
+    let [column] = candidates.as_slice() else {
+        return false;
+    };
+
+    let retained_cells = data_row_count.saturating_mul(column_count - 1);
+    let retained_filled = table[1..]
+        .iter()
+        .flat_map(|row| row.iter().enumerate())
+        .filter(|(index, cell)| *index != *column && !cell.trim().is_empty())
+        .count();
+    if retained_cells == 0
+        || retained_filled.saturating_mul(100)
+            < retained_cells.saturating_mul(SPURIOUS_COLUMN_MIN_RETAINED_DENSITY_PERCENT)
+    {
+        return false;
+    }
+
+    merge_interior_column(table, *column);
+    true
+}
+
+fn looks_like_footer_row(row: &[String]) -> bool {
+    let non_empty: Vec<&str> = row
+        .iter()
+        .map(|cell| cell.trim())
+        .filter(|cell| !cell.is_empty())
+        .collect();
+    if non_empty.len() < 2 || !non_empty.iter().any(|cell| cell.split_whitespace().count() >= 2) {
+        return false;
+    }
+    let text = non_empty.join(" ");
+    let alphanumeric = text.chars().filter(|character| character.is_alphanumeric()).count();
+    let alphabetic = text.chars().filter(|character| character.is_alphabetic()).count();
+    alphanumeric > 0 && alphabetic.saturating_mul(100) >= alphanumeric.saturating_mul(FOOTER_MIN_ALPHA_PERCENT)
+}
+
+fn merge_interior_column(table: &mut [Vec<String>], column: usize) {
+    let left_occupancy = table[1..]
+        .iter()
+        .filter(|row| row.get(column - 1).is_some_and(|cell| !cell.trim().is_empty()))
+        .count();
+    let right_occupancy = table[1..]
+        .iter()
+        .filter(|row| row.get(column + 1).is_some_and(|cell| !cell.trim().is_empty()))
+        .count();
+    let merge_right = right_occupancy >= left_occupancy;
+
+    for row in table {
+        let text = row.remove(column).trim().to_string();
+        if text.is_empty() {
+            continue;
+        }
+        let target = if merge_right { column } else { column - 1 };
+        let existing = row[target].trim();
+        row[target] = if existing.is_empty() {
+            text
+        } else if merge_right {
+            format!("{text} {existing}")
+        } else {
+            format!("{existing} {text}")
+        };
+    }
 }
 
 /// Decide whether a dense grid of data rows is prose laid out in columns rather
@@ -689,6 +861,39 @@ fn is_dense_numeric_grid(grid: &[Vec<String>]) -> bool {
 
     non_empty_cells > 0
         && numeric_cells.saturating_mul(100) >= non_empty_cells.saturating_mul(DENSE_NUMERIC_MIN_CELL_PERCENT)
+}
+
+fn is_dense_scalar_grid(grid: &[Vec<String>]) -> bool {
+    let Some(header) = grid.first() else {
+        return false;
+    };
+    let data_rows = grid.len().saturating_sub(1);
+    if header.len() < DENSE_SCALAR_MIN_COLUMNS || data_rows < DENSE_SCALAR_MIN_DATA_ROWS {
+        return false;
+    }
+
+    let total_cells = data_rows.saturating_mul(header.len());
+    let mut filled_cells = 0usize;
+    let mut compact_cells = 0usize;
+    let mut digit_cells = 0usize;
+    for cell in grid.iter().skip(1).flat_map(|row| row.iter()) {
+        let trimmed = cell.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        filled_cells += 1;
+        if trimmed.chars().count() <= DENSE_SCALAR_MAX_CELL_CHARS && trimmed.split_whitespace().count() <= 2 {
+            compact_cells += 1;
+        }
+        if trimmed.chars().any(|c| c.is_ascii_digit()) {
+            digit_cells += 1;
+        }
+    }
+
+    total_cells > 0
+        && filled_cells.saturating_mul(100) >= total_cells.saturating_mul(DENSE_SCALAR_MIN_FILLED_PERCENT)
+        && compact_cells.saturating_mul(100) >= filled_cells.saturating_mul(DENSE_SCALAR_MIN_COMPACT_PERCENT)
+        && digit_cells.saturating_mul(100) >= filled_cells.saturating_mul(DENSE_SCALAR_MIN_DIGIT_PERCENT)
 }
 
 fn is_numeric_value_cell(cell: &str) -> bool {
@@ -1100,6 +1305,298 @@ mod tests {
                 post_process_table(table, true, false).is_some_and(|processed| is_well_formed_table(&processed));
             assert!(!accepted, "repetitive {columns}-column compact grid must be rejected");
         }
+    }
+
+    fn dense_grid_with_columns(columns: usize, rows: usize) -> Vec<Vec<String>> {
+        let mut table = vec![(0..columns).map(|column| format!("Column {column}")).collect()];
+        table.extend((0..rows).map(|row| (0..columns).map(|column| format!("{}.{column}", row + 1)).collect()));
+        table
+    }
+
+    #[test]
+    fn prunes_one_empty_header_interior_track_and_preserves_lone_text() {
+        let mut table = dense_grid_with_columns(7, SPURIOUS_COLUMN_MIN_DATA_ROWS);
+        table[0][3].clear();
+        for row in table.iter_mut().skip(1) {
+            row[3].clear();
+        }
+        *table.last_mut().expect("data row") = vec![
+            "footer note".into(),
+            "continues here".into(),
+            "with text".into(),
+            "sustained".into(),
+            "near table".into(),
+            "boundary words".into(),
+            "end".into(),
+        ];
+
+        assert!(prune_spurious_interior_column(&mut table, true));
+        assert_eq!(table[0].len(), 6);
+        assert!(
+            table
+                .last()
+                .expect("data row")
+                .iter()
+                .any(|cell| cell.contains("sustained"))
+        );
+    }
+
+    #[test]
+    fn preserves_legitimate_named_sparse_column() {
+        let mut table = dense_grid_with_columns(7, SPURIOUS_COLUMN_MIN_DATA_ROWS);
+        table[0][3] = "Optional flag".into();
+        for row in table.iter_mut().skip(1) {
+            row[3].clear();
+        }
+        table.last_mut().expect("data row")[3] = "Y".into();
+
+        assert!(!prune_spurious_interior_column(&mut table, true));
+        assert_eq!(table[0].len(), 7);
+        assert_eq!(table[0][3], "Optional flag");
+    }
+
+    #[test]
+    fn preserves_unnamed_sparse_column_populated_in_table_body() {
+        let mut table = dense_grid_with_columns(7, SPURIOUS_COLUMN_MIN_DATA_ROWS);
+        table[0][3].clear();
+        for row in table.iter_mut().skip(1) {
+            row[3].clear();
+        }
+        let middle = table.len() / 2;
+        table[middle] = vec![
+            "boundary note".into(),
+            "continues here".into(),
+            "with text".into(),
+            "sustained".into(),
+            "inside table".into(),
+            "body words".into(),
+            "end".into(),
+        ];
+
+        assert!(!prune_spurious_interior_column(&mut table, true));
+        assert_eq!(table[0].len(), 7);
+        assert_eq!(table[middle][3], "sustained");
+    }
+
+    #[test]
+    fn preserves_multiple_sparse_interior_columns() {
+        let mut table = dense_grid_with_columns(8, SPURIOUS_COLUMN_MIN_DATA_ROWS);
+        for column in [2, 5] {
+            table[0][column].clear();
+            for row in table.iter_mut().skip(1) {
+                row[column].clear();
+            }
+        }
+
+        assert!(!prune_spurious_interior_column(&mut table, true));
+        assert_eq!(table[0].len(), 8);
+    }
+
+    #[test]
+    fn sparse_track_does_not_turn_prose_into_table() {
+        let mut table = vec![vec![String::new(); 7]];
+        table.extend((0..SPURIOUS_COLUMN_MIN_DATA_ROWS).map(|row| {
+            vec![
+                format!("section {row}"),
+                format!("page {row}"),
+                "quick".into(),
+                String::new(),
+                "brown".into(),
+                "fox".into(),
+                "continues".into(),
+            ]
+        }));
+
+        let accepted = post_process_table(table, true, false).is_some_and(|processed| is_well_formed_table(&processed));
+        assert!(!accepted);
+    }
+
+    #[test]
+    fn repeated_row_shape_finds_three_numeric_fields_after_two_row_header() {
+        let table = vec![
+            vec![
+                "Report 2024".into(),
+                "Patient status".into(),
+                "Metric 70".into(),
+                "Treatment group".into(),
+                "Metric 91".into(),
+                "Final outcome".into(),
+            ],
+            vec![
+                "".into(),
+                "".into(),
+                "(score)".into(),
+                "".into(),
+                "(years)".into(),
+                "".into(),
+            ],
+            vec![
+                "R1".into(),
+                "active".into(),
+                "4.36".into(),
+                "A".into(),
+                "52".into(),
+                "SVR".into(),
+            ],
+            vec![
+                "R2".into(),
+                "active".into(),
+                "6.37".into(),
+                "B".into(),
+                "35".into(),
+                "SVR".into(),
+            ],
+            vec![
+                "R3".into(),
+                "active".into(),
+                "7.84".into(),
+                "A".into(),
+                "46".into(),
+                "SVR".into(),
+            ],
+        ];
+
+        assert_eq!(find_data_start(&table, true), 2);
+        assert_eq!(find_data_start(&table, false), 0);
+    }
+
+    #[test]
+    fn categorical_subtotal_does_not_hide_leading_numeric_data_row() {
+        let table = vec![
+            vec![
+                "R1".into(),
+                "New York".into(),
+                "4.36".into(),
+                "needs review".into(),
+                "52".into(),
+                "SVR".into(),
+            ],
+            vec![
+                "Subtotal for region".into(),
+                "".into(),
+                "".into(),
+                "".into(),
+                "".into(),
+                "".into(),
+            ],
+            vec![
+                "R2".into(),
+                "active".into(),
+                "6.37".into(),
+                "B".into(),
+                "35".into(),
+                "SVR".into(),
+            ],
+            vec![
+                "R3".into(),
+                "active".into(),
+                "7.84".into(),
+                "A".into(),
+                "46".into(),
+                "SVR".into(),
+            ],
+            vec![
+                "R4".into(),
+                "active".into(),
+                "5.12".into(),
+                "B".into(),
+                "41".into(),
+                "SVR".into(),
+            ],
+        ];
+
+        assert_eq!(find_data_start(&table, true), 0);
+    }
+
+    #[test]
+    fn repeated_shape_does_not_skip_numeric_rows_without_header_gap() {
+        let table = vec![
+            vec!["1".into(), "2".into(), "3".into(), "".into(), "5".into(), "".into()],
+            vec!["1".into(), "2".into(), "".into(), "4".into(), "5".into(), "".into()],
+            vec!["1".into(), "2".into(), "3".into(), "4".into(), "".into(), "".into()],
+            vec!["1".into(), "2".into(), "3".into(), "4".into(), "".into(), "".into()],
+            vec!["1".into(), "2".into(), "3".into(), "4".into(), "".into(), "".into()],
+        ];
+
+        assert_eq!(find_data_start(&table, true), 0);
+    }
+
+    #[test]
+    fn retains_large_scalar_table_with_numeric_multiline_header() {
+        let mut table = vec![
+            vec![
+                "".into(),
+                "".into(),
+                "".into(),
+                "".into(),
+                "".into(),
+                "".into(),
+                "Core amino".into(),
+                "acid".into(),
+                "".into(),
+                "".into(),
+                "".into(),
+            ],
+            vec![
+                "Patient".into(),
+                "Genotype".into(),
+                "Viral load".into(),
+                "".into(),
+                "Sex".into(),
+                "Age".into(),
+                "70".into(),
+                "91".into(),
+                "rs12979860".into(),
+                "End of treatment".into(),
+                "".into(),
+            ],
+            vec![
+                "no".into(),
+                "".into(),
+                "(10 IU/ml) 6".into(),
+                "".into(),
+                "".into(),
+                "(years)".into(),
+                "".into(),
+                "".into(),
+                "".into(),
+                "response".into(),
+                "a".into(),
+            ],
+        ];
+        for row in 1..=SPURIOUS_COLUMN_MIN_DATA_ROWS {
+            table.push(vec![
+                format!("R{row}"),
+                "1a".into(),
+                format!("{}.36", row + 3),
+                String::new(),
+                if row % 2 == 0 { "F".into() } else { "M".into() },
+                format!("{}.6", row + 30),
+                "R".into(),
+                "C".into(),
+                if row % 2 == 0 { "CT".into() } else { "CC".into() },
+                "SVR".into(),
+                String::new(),
+            ]);
+        }
+        table.push(vec![
+            "a SVR, sustained".into(),
+            "virologic response;".into(),
+            "non-SVR, no".into(),
+            "sustained".into(),
+            "virologic".into(),
+            "response".into(),
+            "".into(),
+            "".into(),
+            "".into(),
+            "".into(),
+            "".into(),
+        ]);
+
+        let processed = post_process_table(table, true, false).expect("large scalar table should be retained");
+        assert_eq!(processed[0].len(), 9);
+        assert!(processed[0][0].contains("Patient"));
+        assert!(is_well_formed_table(&processed));
     }
 
     #[test]
