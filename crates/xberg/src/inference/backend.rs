@@ -64,6 +64,11 @@ pub trait InferenceBackend: Send + Sync {
     ///
     /// Backends without configurable session threads may use the default
     /// implementation. Native ORT overrides this for batch layout planning.
+    ///
+    /// Only called from the layout models (`#[cfg(feature = "layout-detection")]`),
+    /// so the default method is dead in feature slices without layout — allowed
+    /// rather than cfg-gated, matching [`load_from_memory`](Self::load_from_memory).
+    #[allow(dead_code)]
     fn load_with_thread_budget(
         &self,
         model_path: &Path,

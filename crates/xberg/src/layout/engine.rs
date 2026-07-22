@@ -110,12 +110,20 @@ pub struct DetectTimings {
 pub struct LayoutEngine {
     model: Box<dyn LayoutModel>,
     config: LayoutEngineConfig,
+    // Read only by `matches_config`, which is itself dead in layout-detection
+    // slices without pdf/ocr; allowed so the field follows the method.
     #[cfg(feature = "layout-detection")]
+    #[allow(dead_code)]
     thread_budget: usize,
 }
 
 impl LayoutEngine {
+    // Only called by `take_or_create_engine` (`layout/mod.rs`), which is gated on
+    // `any(pdf, ocr, ocr-wasm)`, so this is dead in layout-detection slices without
+    // those formats (e.g. the retrieval-preset build). Allowed rather than cfg-gated,
+    // matching the seam methods on `InferenceBackend`.
     #[cfg(feature = "layout-detection")]
+    #[allow(dead_code)]
     pub(crate) fn matches_config(&self, config: &LayoutEngineConfig, thread_budget: usize) -> bool {
         self.config == *config && self.thread_budget == thread_budget.max(1)
     }
