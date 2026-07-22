@@ -120,6 +120,12 @@ static ARXIV_WATERMARK_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
 });
 
 /// Render an `InternalDocument` to GFM Markdown.
+///
+/// Whether the output backslash-escapes CommonMark-significant leading characters
+/// (`-`, `#`, plus the always-unescaped `_[]()*=`) is controlled by
+/// `doc.escape_markdown`, which the pipeline sets from
+/// [`ExtractionConfig::escape_markdown`](crate::core::config::ExtractionConfig::escape_markdown).
+/// Defaults to `true` (escaped), preserving prior behavior.
 pub(crate) fn render_markdown(doc: &InternalDocument) -> String {
     tracing::debug!(element_count = doc.elements.len(), "markdown rendering starting");
     let arena = Arena::new();
@@ -151,27 +157,39 @@ pub(crate) fn render_markdown(doc: &InternalDocument) -> String {
         output = s;
     }
 
-    {
+    if doc.escape_markdown {
+        // Default (backward-compatible) behavior: only the always-safe-to-unescape
+        // targets are unescaped. Line-leading `-`/`#` stay backslash-escaped so the
+        // output round-trips safely through a CommonMark parser.
         const UNESCAPE_TARGETS: &[char] = &['_', '[', ']', '(', ')', '*', '='];
         let cow = unescape_backslash_sequences(&output, UNESCAPE_TARGETS);
         if let Cow::Owned(s) = cow {
             output = s;
         }
-    }
 
-    if output.contains("\\*") || output.contains("\\#") {
-        output = output
-            .lines()
-            .map(|line| {
-                let trimmed = line.trim_start();
-                if trimmed.starts_with("\\* ") || trimmed.starts_with("\\#.") || trimmed.starts_with("\\#\\.") {
-                    line.replacen("\\*", "*", 1).replacen("\\#", "#", 1)
-                } else {
-                    line.to_string()
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
+        if output.contains("\\*") || output.contains("\\#") {
+            output = output
+                .lines()
+                .map(|line| {
+                    let trimmed = line.trim_start();
+                    if trimmed.starts_with("\\* ") || trimmed.starts_with("\\#.") || trimmed.starts_with("\\#\\.") {
+                        line.replacen("\\*", "*", 1).replacen("\\#", "#", 1)
+                    } else {
+                        line.to_string()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+        }
+    } else {
+        // Opt-out (issue #1292): also unescape `-` and `#` so prose matches the
+        // already-unescaped text used in table cells. Superset of the default
+        // targets, so the narrow line-start pass above is unnecessary here.
+        const UNESCAPE_TARGETS: &[char] = &['_', '[', ']', '(', ')', '*', '=', '-', '#'];
+        let cow = unescape_backslash_sequences(&output, UNESCAPE_TARGETS);
+        if let Cow::Owned(s) = cow {
+            output = s;
+        }
     }
 
     if let Cow::Owned(s) = collapse_excess_newlines(&output) {
@@ -242,6 +260,97 @@ pub(crate) fn comrak_options<'a>() -> Options<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::internal_builder::InternalDocumentBuilder;
+
+    /// Issue #1292: by default, prose containing a leading `#06-18`-style token
+    /// keeps its backslash escapes so the markdown round-trips safely through a
+    /// CommonMark parser. This must remain the behavior when `escape_markdown`
+    /// is left at its default (`true`).
+    #[test]
+    fn render_markdown_default_escapes_leading_hash_and_dash_in_prose() {
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_paragraph("#06-18 widget replacement", vec![], None, None);
+        let doc = b.build();
+        assert!(doc.escape_markdown, "escape_markdown must default to true");
+
+        let rendered = render_markdown(&doc);
+        assert!(
+            rendered.contains("\\#06-18"),
+            "expected default rendering to keep the backslash escape: {rendered}"
+        );
+    }
+
+    /// Issue #1292: a bare "- clause" paragraph must still render with its
+    /// leading dash escaped by default, otherwise a CommonMark parser would
+    /// reinterpret it as a list item.
+    #[test]
+    fn render_markdown_default_escapes_leading_dash_in_prose() {
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_paragraph("- clause applies here", vec![], None, None);
+        let doc = b.build();
+
+        let rendered = render_markdown(&doc);
+        assert!(
+            rendered.contains("\\- clause"),
+            "expected default rendering to escape a leading dash: {rendered}"
+        );
+    }
+
+    /// Issue #1292: `escape_markdown = false` strips the `#`/`-` escapes so prose
+    /// reads identically to the (always-clean) table cell text.
+    #[test]
+    fn render_markdown_escape_markdown_false_yields_clean_prose() {
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_paragraph("#06-18 widget replacement", vec![], None, None);
+        b.push_paragraph("- clause applies here", vec![], None, None);
+        let mut doc = b.build();
+        doc.escape_markdown = false;
+
+        let rendered = render_markdown(&doc);
+        assert!(
+            rendered.contains("#06-18 widget replacement"),
+            "expected clean, unescaped hash: {rendered}"
+        );
+        assert!(!rendered.contains("\\#06-18"), "escape must be stripped: {rendered}");
+        assert!(
+            rendered.contains("- clause applies here"),
+            "expected clean, unescaped dash: {rendered}"
+        );
+        assert!(!rendered.contains("\\- clause"), "escape must be stripped: {rendered}");
+    }
+
+    /// Issue #1292: with `escape_markdown = false`, the same literal text rendered
+    /// in prose and inside a table cell must be byte-identical, since table cells
+    /// are never escaped.
+    #[test]
+    fn render_markdown_escape_markdown_false_matches_table_cell_rendering() {
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_paragraph("#06-18 widget replacement", vec![], None, None);
+        b.push_table_from_cells(
+            &[
+                vec!["Part".to_string(), "Description".to_string()],
+                vec!["#06-18".to_string(), "Widget".to_string()],
+            ],
+            None,
+            None,
+        );
+        let mut doc = b.build();
+        doc.escape_markdown = false;
+
+        let rendered = render_markdown(&doc);
+        assert!(
+            rendered.contains("#06-18 widget replacement"),
+            "prose must be clean: {rendered}"
+        );
+        assert!(
+            rendered.contains("| #06-18 "),
+            "table cell must remain clean and unescaped: {rendered}"
+        );
+        assert!(
+            !rendered.contains("\\#06-18"),
+            "no escaped variant should appear anywhere: {rendered}"
+        );
+    }
 
     #[test]
     fn unescape_backslash_sequences_empty_input_returns_borrowed() {

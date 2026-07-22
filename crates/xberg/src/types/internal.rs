@@ -226,6 +226,14 @@ pub struct InternalDocument {
     /// `ImageExtractionConfig.append_ocr_text`.
     #[serde(skip)]
     pub append_ocr_text: bool,
+
+    /// When `true` (the default), Markdown rendering backslash-escapes
+    /// CommonMark-significant characters (`_[]()*=-#`) so the output round-trips
+    /// safely through a CommonMark parser. When `false`, those escapes are
+    /// stripped so prose reads identically to the already-unescaped text used in
+    /// table cells. Set by the pipeline from `ExtractionConfig::escape_markdown`.
+    #[serde(skip)]
+    pub escape_markdown: bool,
 }
 
 impl From<crate::types::extraction::ExtractedDocument> for InternalDocument {
@@ -283,6 +291,7 @@ impl InternalDocument {
             revisions: None,
             ocr_text_only: false,
             append_ocr_text: false,
+            escape_markdown: true,
             form_fields: Vec::new(),
             formulas: Vec::new(),
         }

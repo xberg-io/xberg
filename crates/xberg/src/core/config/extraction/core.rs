@@ -208,6 +208,23 @@ pub struct ExtractionConfig {
     #[serde(default)]
     pub output_format: OutputFormat,
 
+    /// Escape Markdown special characters in rendered prose (default: `true`).
+    ///
+    /// When `output_format` is `Markdown` or `Djot`, the renderer backslash-escapes
+    /// CommonMark-significant leading characters (e.g. `-`, `#`) so that literal
+    /// text such as `#06-18` or `- clause` round-trips safely through a CommonMark
+    /// parser instead of being reinterpreted as a heading or list marker.
+    ///
+    /// Table cell text is never escaped, so escaped prose can look inconsistent
+    /// with table cells containing the same characters. Set this to `false` to
+    /// disable prose escaping and make `content`, `pages[].content`, and
+    /// `chunks[].content` read identically to table cell text — useful for LLM
+    /// prompts or search indexing where CommonMark round-tripping does not matter.
+    ///
+    /// Defaults to `true` to preserve existing behavior.
+    #[serde(default = "default_true")]
+    pub escape_markdown: bool,
+
     /// Controls how Jupyter notebook (`.ipynb`) code cells are rendered.
     ///
     /// - `Both` (default): code source plus the notebook's saved outputs
@@ -443,6 +460,7 @@ impl Default for ExtractionConfig {
             use_layout_for_markdown: false,
             result_format: crate::types::ResultFormat::Unified,
             output_format: OutputFormat::Plain,
+            escape_markdown: true,
             jupyter_cell_rendering: JupyterCellRendering::Both,
             include_document_structure: false,
             acceleration: None,

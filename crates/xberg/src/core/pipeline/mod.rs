@@ -58,6 +58,7 @@ use initialization::{get_processors_from_cache, initialize_features, initialize_
 pub async fn run_pipeline(mut doc: InternalDocument, config: &ExtractionConfig) -> Result<ExtractedDocument> {
     doc.ocr_text_only = config.images.as_ref().map(|i| i.ocr_text_only).unwrap_or(false);
     doc.append_ocr_text = config.images.as_ref().map(|i| i.append_ocr_text).unwrap_or(false);
+    doc.escape_markdown = config.escape_markdown;
 
     #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
     let image_ocr_enabled = config.images.as_ref().map(|i| i.run_ocr_on_images).unwrap_or(true);
@@ -292,7 +293,9 @@ pub async fn run_pipeline(mut doc: InternalDocument, config: &ExtractionConfig) 
 /// - Async validators
 #[cfg(not(feature = "tokio-runtime"))]
 #[cfg_attr(alef, alef(skip))]
-pub fn run_pipeline_sync(doc: InternalDocument, config: &ExtractionConfig) -> Result<ExtractedDocument> {
+pub fn run_pipeline_sync(mut doc: InternalDocument, config: &ExtractionConfig) -> Result<ExtractedDocument> {
+    doc.escape_markdown = config.escape_markdown;
+
     #[cfg(feature = "chunking")]
     let chunker_heading_source = {
         let needs_markdown = config.chunking.as_ref().is_some_and(|c| {
