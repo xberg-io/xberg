@@ -816,6 +816,22 @@ impl PdfExtractor {
                     }
                 }
             }
+
+            // #1293: metadata.pages.pages[].is_blank was computed once from native
+            // content and never refreshed after OCR text overwrote page_contents
+            // above, leaving it contradicting the top-level pages[].is_blank for
+            // scanned pages. Re-derive it from the same (post-OCR) PageContent so
+            // both agree.
+            if let Some(ref content_pages) = page_contents
+                && let Some(ref mut page_structure) = pdf_metadata.page_structure
+                && let Some(ref mut info_pages) = page_structure.pages
+            {
+                for info in info_pages.iter_mut() {
+                    if let Some(content_page) = content_pages.iter().find(|p| p.page_number == info.number) {
+                        info.is_blank = content_page.is_blank;
+                    }
+                }
+            }
         }
 
         #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "chunking"))]
@@ -2371,6 +2387,83 @@ mod tests {
                 page.is_blank,
                 Some(false),
                 "page {} has OCR content, is_blank must be Some(false) (issue #1095)",
+                page.page_number
+            );
+        }
+    }
+
+    /// Regression for #1293: `metadata.pages.pages[].is_blank` must agree with the
+    /// top-level `pages[].is_blank` for OCR'd pages. Previously `PageInfo.is_blank`
+    /// was computed once from native content in `build_page_structure` and never
+    /// refreshed after OCR text overwrote `PageContent`, so a scanned page with no
+    /// native text but real OCR text reported `is_blank=true` in metadata while the
+    /// top-level page reported `is_blank=false`.
+    #[tokio::test]
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    #[serial]
+    async fn test_metadata_page_info_is_blank_matches_page_content_after_ocr() {
+        use crate::core::config::{OcrConfig, PageConfig};
+
+        let _backend = register_mock_ocr_backend("is-blank-metadata-fix-1293", "extracted ocr text content here");
+        let extractor = PdfExtractor::new();
+        let config = ExtractionConfig {
+            force_ocr: true,
+            ocr: Some(OcrConfig {
+                backend: "is-blank-metadata-fix-1293".to_string(),
+                language: vec!["eng".to_string()],
+                ..Default::default()
+            }),
+            pages: Some(PageConfig {
+                extract_pages: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let pdf_path = pdf_test_document("non_searchable.pdf");
+        let content = std::fs::read(&pdf_path).unwrap_or_else(|e| panic!("non_searchable.pdf must be readable: {e}"));
+        let result = extractor
+            .extract_content(&content, "application/pdf", &config)
+            .await
+            .expect("extraction should succeed");
+        let result = crate::extraction::derive::derive_extraction_result(
+            result,
+            false,
+            crate::core::config::OutputFormat::Plain,
+        );
+
+        let pages = result
+            .pages
+            .clone()
+            .expect("pages must be present when extract_pages=true");
+        let metadata_pages = result
+            .metadata
+            .pages
+            .as_ref()
+            .and_then(|structure| structure.pages.as_ref())
+            .expect("metadata.pages.pages must be present when extract_pages=true");
+
+        assert!(!pages.is_empty(), "must have at least one page");
+        assert_eq!(
+            pages.len(),
+            metadata_pages.len(),
+            "page counts must match between the two sources"
+        );
+
+        for page in &pages {
+            let info = metadata_pages
+                .iter()
+                .find(|p| p.number == page.page_number)
+                .unwrap_or_else(|| panic!("metadata.pages.pages missing entry for page {}", page.page_number));
+            assert_eq!(
+                info.is_blank, page.is_blank,
+                "page {}: metadata.pages.pages[].is_blank ({:?}) must match top-level pages[].is_blank ({:?}) (issue #1293)",
+                page.page_number, info.is_blank, page.is_blank
+            );
+            assert_eq!(
+                info.is_blank,
+                Some(false),
+                "page {} has OCR content, metadata is_blank must be Some(false) (issue #1293)",
                 page.page_number
             );
         }
