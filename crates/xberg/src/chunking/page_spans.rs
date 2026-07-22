@@ -454,6 +454,6 @@ mod tests {
             Some(1),
             "page 4 must only see the spanning node"
         );
-        assert!(index.get(&1).is_none(), "page 1 has no covering nodes");
+        assert!(!index.contains_key(&1), "page 1 has no covering nodes");
     }
 }
