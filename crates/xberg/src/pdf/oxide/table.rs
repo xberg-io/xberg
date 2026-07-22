@@ -114,6 +114,7 @@ pub(crate) fn extract_tables_native(doc: &mut OxideDocument) -> Result<Vec<Table
                 markdown,
                 page_number,
                 bounding_box,
+                ..Default::default()
             });
         }
     }
@@ -209,6 +210,7 @@ pub(crate) fn extract_tables_bordered(doc: &mut OxideDocument, skip_pages: &Hash
                 markdown,
                 page_number,
                 bounding_box,
+                ..Default::default()
             });
         }
     }
@@ -539,6 +541,7 @@ fn reconstruct_region_table_with_reason(
         markdown,
         page_number,
         bounding_box,
+        ..Default::default()
     })
 }
 

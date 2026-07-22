@@ -274,6 +274,7 @@ pub(in crate::pdf::structure) fn extract_tables_from_layout_hints(
             markdown,
             page_number: (page_index + 1) as u32,
             bounding_box,
+            ..Default::default()
         });
     }
 

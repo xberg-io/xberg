@@ -953,6 +953,7 @@ impl super::tables::Table {
                 x1: b.right as f64,
                 y1: b.bottom as f64,
             }),
+            ..Default::default()
         }
     }
 }

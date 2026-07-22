@@ -679,6 +679,13 @@ pub(crate) fn build_comrak_ast<'a>(doc: &InternalDocument, arena: &'a comrak::Ar
 
             ElementKind::Table { table_index } => {
                 if let Some(table) = doc.tables.get(table_index as usize) {
+                    if doc.table_anchors {
+                        if let Some(table_id) = table.table_id.as_deref() {
+                            let anchor = mk(arena, NodeValue::Paragraph);
+                            anchor.append(mk_text(arena, &format!("[TABLE:{table_id}]")));
+                            parent.append(anchor);
+                        }
+                    }
                     if !table.cells.is_empty() {
                         tracing::trace!(table_index, rows = table.cells.len(), "rendering table");
                         let table_node = build_table(arena, &table.cells);

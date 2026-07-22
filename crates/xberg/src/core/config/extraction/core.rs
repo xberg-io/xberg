@@ -225,6 +225,22 @@ pub struct ExtractionConfig {
     #[serde(default = "default_true")]
     pub escape_markdown: bool,
 
+    /// Emit an opt-in anchor marker before each table's rendered Markdown
+    /// block (default: `false`).
+    ///
+    /// When `output_format` is `Markdown` (or `Djot`) and this is `true`, the
+    /// renderer inserts a `[TABLE:{table_id}]` marker immediately before each
+    /// table's Markdown in `content`, `pages[].content`, and
+    /// `chunks[].content`, where `table_id` matches the corresponding
+    /// entry's [`crate::types::Table::table_id`]. This lets a consumer
+    /// reconcile a rendered Markdown table block with its structured
+    /// `tables[]` entry.
+    ///
+    /// Defaults to `false` so existing output is byte-identical unless
+    /// explicitly enabled.
+    #[serde(default)]
+    pub table_anchors: bool,
+
     /// Controls how Jupyter notebook (`.ipynb`) code cells are rendered.
     ///
     /// - `Both` (default): code source plus the notebook's saved outputs
@@ -468,6 +484,7 @@ impl Default for ExtractionConfig {
             result_format: crate::types::ResultFormat::Unified,
             output_format: OutputFormat::Plain,
             escape_markdown: true,
+            table_anchors: false,
             jupyter_cell_rendering: JupyterCellRendering::Both,
             include_document_structure: false,
             acceleration: None,

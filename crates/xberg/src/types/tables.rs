@@ -21,6 +21,28 @@ pub struct Table {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub bounding_box: Option<BoundingBox>,
+
+    /// Stable identifier shared by every `tables[]` entry that represents a
+    /// fragment of the same physical table.
+    ///
+    /// Assigned deterministically by the extraction pipeline (e.g. a
+    /// sequential `"table-N"` in document order); never derived from
+    /// randomness or wall-clock time, so the same input document always
+    /// produces the same ids. Consumers can use it to reconcile the markdown
+    /// blocks in `content` / `pages[].content` / `chunks[].content` with the
+    /// structured entries in `tables[]`. `None` when the extractor did not
+    /// assign one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub table_id: Option<String>,
+
+    /// Header cells for this fragment, i.e. the first row of `cells`.
+    ///
+    /// Populated even when this fragment's own header row was merged away or
+    /// physically lives in a sibling fragment (see `table_id`), so a single
+    /// fragment is interpretable in isolation. `None` when no header row
+    /// could be determined.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub columns: Option<Vec<String>>,
 }
 
 /// Individual table cell with content and optional styling.
@@ -65,6 +87,7 @@ mod tests {
                 x1: 500.0,
                 y1: 700.0,
             }),
+            ..Default::default()
         };
 
         let json = serde_json::to_string(&table).unwrap();
@@ -89,6 +112,7 @@ mod tests {
             markdown: "| X |".to_string(),
             page_number: 2,
             bounding_box: None,
+            ..Default::default()
         };
 
         let json = serde_json::to_string(&table).unwrap();
@@ -118,6 +142,7 @@ mod tests {
                 x1: 30.0,
                 y1: 40.0,
             }),
+            ..Default::default()
         };
 
         let cloned = table.clone();
@@ -142,6 +167,7 @@ mod tests {
                 x1: 540.0,
                 y1: 600.75,
             }),
+            ..Default::default()
         };
 
         let json_value = serde_json::to_value(&original).unwrap();
@@ -151,5 +177,54 @@ mod tests {
         assert_eq!(deserialized.markdown, original.markdown);
         assert_eq!(deserialized.page_number, original.page_number);
         assert_eq!(deserialized.bounding_box, original.bounding_box);
+    }
+
+    #[test]
+    fn test_table_id_and_columns_serialize_when_present() {
+        let table = Table {
+            cells: vec![
+                vec!["Name".to_string(), "Age".to_string()],
+                vec!["Alice".to_string(), "30".to_string()],
+            ],
+            markdown: "| Name | Age |\n|---|---|\n| Alice | 30 |".to_string(),
+            page_number: 1,
+            table_id: Some("table-1".to_string()),
+            columns: Some(vec!["Name".to_string(), "Age".to_string()]),
+            ..Default::default()
+        };
+
+        let json = serde_json::to_string(&table).unwrap();
+        assert!(json.contains("\"table_id\":\"table-1\""));
+        assert!(json.contains("\"columns\":[\"Name\",\"Age\"]"));
+
+        let deserialized: Table = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.table_id.as_deref(), Some("table-1"));
+        assert_eq!(deserialized.columns, Some(vec!["Name".to_string(), "Age".to_string()]));
+    }
+
+    #[test]
+    fn test_table_id_and_columns_omitted_when_absent() {
+        let table = Table {
+            cells: vec![vec!["X".to_string()]],
+            markdown: "| X |".to_string(),
+            page_number: 1,
+            ..Default::default()
+        };
+
+        let json = serde_json::to_string(&table).unwrap();
+        assert!(!json.contains("table_id"));
+        assert!(!json.contains("columns"));
+
+        let deserialized: Table = serde_json::from_str(&json).unwrap();
+        assert!(deserialized.table_id.is_none());
+        assert!(deserialized.columns.is_none());
+    }
+
+    #[test]
+    fn test_table_deserialization_without_table_id_or_columns_fields() {
+        let json = r#"{"cells":[["A","B"]],"markdown":"| A | B |","page_number":1}"#;
+        let table: Table = serde_json::from_str(json).unwrap();
+        assert!(table.table_id.is_none());
+        assert!(table.columns.is_none());
     }
 }

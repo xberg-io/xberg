@@ -1426,6 +1426,7 @@ pub(crate) async fn extract_with_ocr(
                             markdown: rt.markdown.clone(),
                             page_number: (page_idx + 1) as u32,
                             bounding_box: None,
+                            ..Default::default()
                         });
                     }
                 }
@@ -2282,6 +2283,7 @@ mod tests {
             markdown: "| kept |".to_string(),
             page_number: 2,
             bounding_box: None,
+            ..Default::default()
         });
         doc.images.push(crate::types::ExtractedImage {
             image_index: 0,

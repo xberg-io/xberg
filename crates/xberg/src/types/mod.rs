@@ -94,6 +94,7 @@ mod tests {
             markdown: "| A | B |\n|---|---|\n".to_string(),
             page_number: 1,
             bounding_box: None,
+            ..Default::default()
         };
 
         let json = serde_json::to_value(&table).unwrap();
@@ -113,6 +114,7 @@ mod tests {
             markdown: "| X | Y |\n|---|---|\n| 1 | 2 |\n".to_string(),
             page_number: 5,
             bounding_box: None,
+            ..Default::default()
         };
 
         let json = serde_json::to_string(&original).unwrap();
@@ -130,6 +132,7 @@ mod tests {
             markdown: "| shared |".to_string(),
             page_number: 1,
             bounding_box: None,
+            ..Default::default()
         });
 
         let tables_before = [Arc::clone(&shared_table), Arc::clone(&shared_table)].to_vec();
@@ -146,12 +149,14 @@ mod tests {
                 markdown: "| A |".to_string(),
                 page_number: 1,
                 bounding_box: None,
+                ..Default::default()
             },
             Table {
                 cells: vec![vec!["B".to_string()]],
                 markdown: "| B |".to_string(),
                 page_number: 2,
                 bounding_box: None,
+                ..Default::default()
             },
         ];
 
@@ -175,12 +180,14 @@ mod tests {
                     markdown: "| Table1 |".to_string(),
                     page_number: 3,
                     bounding_box: None,
+                    ..Default::default()
                 }),
                 Arc::new(Table {
                     cells: vec![vec!["Table2".to_string()]],
                     markdown: "| Table2 |".to_string(),
                     page_number: 3,
                     bounding_box: None,
+                    ..Default::default()
                 }),
             ],
             image_indices: Vec::new(),
@@ -234,6 +241,7 @@ mod tests {
             markdown: "| shared across pages |".to_string(),
             page_number: 0,
             bounding_box: None,
+            ..Default::default()
         });
 
         let page1 = PageContent {
@@ -303,6 +311,7 @@ mod tests {
             markdown: "| A |".to_string(),
             page_number: 1,
             bounding_box: None,
+            ..Default::default()
         };
 
         let table2 = Table {
@@ -310,6 +319,7 @@ mod tests {
             markdown: "| B |".to_string(),
             page_number: 2,
             bounding_box: None,
+            ..Default::default()
         };
 
         let json = serde_json::to_string(&vec![table1, table2]).unwrap();

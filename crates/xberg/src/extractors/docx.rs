@@ -942,6 +942,7 @@ fn convert_docx_table_to_table(docx_table: &crate::extraction::docx::parser::Tab
         markdown,
         page_number,
         bounding_box: None,
+        ..Default::default()
     }
 }
 

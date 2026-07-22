@@ -384,6 +384,7 @@ fn assemble_tatr_table(
             markdown: grid_output.markdown,
             page_number: (page_index + 1) as u32,
             bounding_box: Some(bounding_box),
+            ..Default::default()
         },
         eligible_word_ids,
         consumed_word_ids,
@@ -1284,6 +1285,7 @@ pub(in crate::pdf::structure) fn recognize_tables_slanet(
             markdown,
             page_number: (page_index + 1) as u32,
             bounding_box,
+            ..Default::default()
         });
     }
 
@@ -1727,6 +1729,7 @@ mod tests {
                     x1: hint.right as f64,
                     y1: hint.top as f64,
                 }),
+                ..Default::default()
             },
             consumed_word_ids: eligible_word_ids.clone(),
             eligible_word_ids,
@@ -1903,6 +1906,7 @@ mod tests {
                     markdown: "| value |".to_string(),
                     page_number: 1,
                     bounding_box: None,
+                    ..Default::default()
                 };
                 Some(sparse)
             } else {

@@ -980,6 +980,7 @@ mod tests {
                 x1: right,
                 y1: top_y,
             }),
+            ..Default::default()
         }
     }
 
@@ -1241,6 +1242,7 @@ mod tests {
             markdown: "| A | B |\n|---|---|\n| 1 | 2 |".to_string(),
             page_number: 1,
             bounding_box: None,
+            ..Default::default()
         }];
         let doc = assemble_internal_document(pages, &tables, None, &[]);
         assert!(doc.elements.iter().any(|e| e.text == "Before"));
@@ -1258,6 +1260,7 @@ mod tests {
             markdown: "| Table |".to_string(),
             page_number: 2,
             bounding_box: None,
+            ..Default::default()
         }];
         let doc = assemble_internal_document(pages, &tables, None, &[]);
         assert!(doc.elements.iter().any(|e| e.text == "Page 1"));
@@ -1340,6 +1343,7 @@ mod tests {
             markdown: "| Extra |".to_string(),
             page_number: 5,
             bounding_box: None,
+            ..Default::default()
         }];
         let doc = assemble_internal_document(pages, &tables, None, &[]);
         assert!(doc.elements.iter().any(|e| e.text == "Page 1"));
@@ -1354,6 +1358,7 @@ mod tests {
             markdown: "   ".to_string(),
             page_number: 1,
             bounding_box: None,
+            ..Default::default()
         }];
         let doc = assemble_internal_document(pages, &tables, None, &[]);
         assert!(doc.tables.is_empty() || doc.tables.iter().all(|t| t.markdown.trim().is_empty()));

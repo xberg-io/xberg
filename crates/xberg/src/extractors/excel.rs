@@ -204,6 +204,7 @@ impl ExcelExtractor {
                     markdown: sheet.markdown.clone(),
                     page_number,
                     bounding_box: None,
+                    ..Default::default()
                 });
 
                 pages.push(PageContent {

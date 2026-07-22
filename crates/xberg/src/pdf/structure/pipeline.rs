@@ -1836,10 +1836,37 @@ fn stitch_fragmented_tables(
     }
 
     let mut result = unbboxed;
-    for page_tables in by_page.into_values() {
-        result.extend(stitch_page_tables(page_tables, all_page_segments));
+    let mut page_numbers: Vec<u32> = by_page.keys().copied().collect();
+    // `by_page` is an `ahash::AHashMap`, whose iteration order is not
+    // deterministic across runs. Process pages in ascending order so that
+    // `assign_deterministic_table_ids` below produces stable ids for the same
+    // input document on every run.
+    page_numbers.sort_unstable();
+    for page_number in page_numbers {
+        if let Some(page_tables) = by_page.remove(&page_number) {
+            result.extend(stitch_page_tables(page_tables, all_page_segments));
+        }
     }
+    assign_deterministic_table_ids(&mut result);
     result
+}
+
+/// Assign a stable, deterministic `table_id` (and, when missing, `columns`) to
+/// every table in `tables`, in the given order.
+///
+/// Ids are sequential (`"table-1"`, `"table-2"`, ...) rather than derived from
+/// randomness or wall-clock time, so the same input document always produces
+/// the same ids. Fragments of one physical table that [`stitch_page_tables`]
+/// merged into a single [`crate::types::Table`] naturally share one id, since
+/// by this point they are already one entry; distinct tables receive distinct
+/// ids because they remain distinct entries.
+fn assign_deterministic_table_ids(tables: &mut [crate::types::Table]) {
+    for (index, table) in tables.iter_mut().enumerate() {
+        table.table_id = Some(format!("table-{}", index + 1));
+        if table.columns.is_none() {
+            table.columns = table.cells.first().cloned();
+        }
+    }
 }
 
 /// Stitch one page's table fragments. See [`stitch_fragmented_tables`].
@@ -1940,11 +1967,14 @@ fn merge_table_chain(chain: Vec<crate::types::Table>, all_page_segments: &[Vec<S
     }
 
     let markdown = crate::pdf::table_reconstruct::table_to_markdown(&rows);
+    let columns = rows.first().cloned();
     crate::types::Table {
         cells: rows,
         markdown,
         page_number,
         bounding_box: Some(bbox),
+        columns,
+        ..Default::default()
     }
 }
 
@@ -3270,7 +3300,103 @@ mod tests {
             markdown: markdown.to_string(),
             page_number: page,
             bounding_box: Some(crate::types::BoundingBox { x0, y0, x1, y1 }),
+            ..Default::default()
         }
+    }
+
+    /// Helper: a table fragment with real cell content (needed to satisfy
+    /// `fragments_are_stitchable`'s column-count check) at `bbox` on `page`.
+    fn cell_table(page: u32, bbox: (f64, f64, f64, f64), cells: &[&[&str]]) -> crate::types::Table {
+        let (x0, y0, x1, y1) = bbox;
+        let cells: Vec<Vec<String>> = cells
+            .iter()
+            .map(|row| row.iter().map(|s| s.to_string()).collect())
+            .collect();
+        crate::types::Table {
+            cells,
+            markdown: String::new(),
+            page_number: page,
+            bounding_box: Some(crate::types::BoundingBox { x0, y0, x1, y1 }),
+            ..Default::default()
+        }
+    }
+
+    /// Issue #1297: fragments of one physical table (stitched into a single
+    /// chain) collapse into one `tables[]` entry, which naturally carries one
+    /// `table_id`. A separate, non-adjacent table gets a distinct id.
+    #[test]
+    fn stitched_fragments_share_one_table_id_distinct_tables_differ() {
+        let frag_top = cell_table(1, (0.0, 90.0, 100.0, 110.0), &[&["H1", "H2"]]);
+        let frag_bottom = cell_table(1, (0.0, 70.0, 100.0, 89.0), &[&["a", "b"]]);
+        let other_page_table = cell_table(2, (0.0, 0.0, 100.0, 20.0), &[&["X", "Y"]]);
+
+        let all_page_segments: Vec<Vec<SegmentData>> = Vec::new();
+        let result = stitch_fragmented_tables(vec![frag_top, frag_bottom, other_page_table], &all_page_segments);
+
+        assert_eq!(result.len(), 2, "the two page-1 fragments must stitch into one table");
+
+        let page_1_table = result
+            .iter()
+            .find(|t| t.page_number == 1)
+            .expect("page 1 table present");
+        let page_2_table = result
+            .iter()
+            .find(|t| t.page_number == 2)
+            .expect("page 2 table present");
+
+        assert_eq!(page_1_table.cells.len(), 2, "stitched chain has both fragments' rows");
+        assert!(page_1_table.table_id.is_some(), "stitched table must have a table_id");
+        assert!(page_2_table.table_id.is_some(), "unrelated table must have a table_id");
+        assert_ne!(
+            page_1_table.table_id, page_2_table.table_id,
+            "distinct physical tables must have distinct ids"
+        );
+    }
+
+    /// Issue #1297: `table_id` assignment must be deterministic across runs
+    /// for the same input (no randomness, no wall-clock dependence).
+    #[test]
+    fn table_id_assignment_is_deterministic_across_runs() {
+        let build_input = || {
+            vec![
+                cell_table(2, (0.0, 0.0, 100.0, 20.0), &[&["X", "Y"]]),
+                cell_table(1, (0.0, 0.0, 100.0, 20.0), &[&["A", "B"]]),
+            ]
+        };
+        let all_page_segments: Vec<Vec<SegmentData>> = Vec::new();
+
+        let first_run = stitch_fragmented_tables(build_input(), &all_page_segments);
+        let second_run = stitch_fragmented_tables(build_input(), &all_page_segments);
+
+        let first_ids: Vec<_> = first_run.iter().map(|t| (t.page_number, t.table_id.clone())).collect();
+        let second_ids: Vec<_> = second_run.iter().map(|t| (t.page_number, t.table_id.clone())).collect();
+        assert_eq!(first_ids, second_ids, "table_id assignment must be deterministic");
+    }
+
+    /// Issue #1297: every emitted table fragment carries `columns` (its own
+    /// header row), even a fragment that stitching left untouched.
+    #[test]
+    fn stitching_populates_columns_on_merged_and_standalone_fragments() {
+        let frag_top = cell_table(1, (0.0, 90.0, 100.0, 110.0), &[&["H1", "H2"]]);
+        let frag_bottom = cell_table(1, (0.0, 70.0, 100.0, 89.0), &[&["a", "b"]]);
+        let standalone = cell_table(3, (0.0, 0.0, 100.0, 20.0), &[&["Name", "Age"], &["Alice", "30"]]);
+
+        let all_page_segments: Vec<Vec<SegmentData>> = Vec::new();
+        let result = stitch_fragmented_tables(vec![frag_top, frag_bottom, standalone], &all_page_segments);
+
+        let stitched = result.iter().find(|t| t.page_number == 1).unwrap();
+        assert_eq!(
+            stitched.columns,
+            Some(vec!["H1".to_string(), "H2".to_string()]),
+            "stitched table's columns come from the topmost fragment's header row"
+        );
+
+        let standalone_result = result.iter().find(|t| t.page_number == 3).unwrap();
+        assert_eq!(
+            standalone_result.columns,
+            Some(vec!["Name".to_string(), "Age".to_string()]),
+            "a standalone fragment's columns come from its own first row"
+        );
     }
 
     #[test]
@@ -3281,6 +3407,7 @@ mod tests {
             markdown: "| a | b |".to_string(),
             page_number: 1,
             bounding_box: None,
+            ..Default::default()
         }];
         let layout = vec![ov_table(1, (0.0, 0.0, 100.0, 100.0), "| a | b |")];
 

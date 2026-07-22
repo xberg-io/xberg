@@ -105,6 +105,7 @@ impl InternalDocumentExtractor for CsvExtractor {
             markdown,
             page_number: 1,
             bounding_box: None,
+            ..Default::default()
         };
 
         let csv_metadata = CsvMetadata {
@@ -138,6 +139,7 @@ impl InternalDocumentExtractor for CsvExtractor {
             markdown: table.markdown.clone(),
             page_number: table.page_number,
             bounding_box: table.bounding_box,
+            ..Default::default()
         });
         doc.mime_type = mime_type.to_string();
 

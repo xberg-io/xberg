@@ -404,6 +404,7 @@ impl SyncExtractor for HtmlExtractor {
                 markdown: t.markdown,
                 page_number: (i + 1) as u32,
                 bounding_box: None,
+                ..Default::default()
             });
         }
 
@@ -590,6 +591,7 @@ mod tests {
                     markdown: t.markdown,
                     page_number: (i + 1) as u32,
                     bounding_box: None,
+                    ..Default::default()
                 }
             })
             .collect()

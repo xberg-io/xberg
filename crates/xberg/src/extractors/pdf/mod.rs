@@ -1271,6 +1271,7 @@ mod tests {
             markdown: markdown.to_string(),
             page_number,
             bounding_box: None,
+            ..Default::default()
         };
         let mut tables = vec![table("native", 1)];
 
@@ -1289,6 +1290,7 @@ mod tests {
             markdown: "native".to_string(),
             page_number: 1,
             bounding_box: None,
+            ..Default::default()
         }];
 
         replace_tables_with_ocr_output(&mut tables, Vec::new());
@@ -1335,6 +1337,7 @@ mod tests {
             markdown: "| native table |".to_string(),
             page_number: 2,
             bounding_box: None,
+            ..Default::default()
         };
         native.tables.push(table.clone());
         native.push_element(InternalElement::text(ElementKind::Paragraph, "native page one", 0).with_page(1));
@@ -1377,6 +1380,7 @@ mod tests {
             markdown: "| native fallback |".to_string(),
             page_number: 1,
             bounding_box: None,
+            ..Default::default()
         };
         let (mut doc, origin, structured) = select_pdf_document(
             ExtractionMethod::Ocr,

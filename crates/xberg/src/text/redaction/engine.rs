@@ -703,6 +703,7 @@ mod tests {
                 markdown: format!("| Name | {email} |"),
                 page_number: 1,
                 bounding_box: None,
+                ..Default::default()
             }],
             pages: Some(vec![crate::types::PageContent {
                 page_number: 1,

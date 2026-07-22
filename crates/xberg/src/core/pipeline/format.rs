@@ -175,6 +175,7 @@ mod tests {
             markdown: "| A | B |".to_string(),
             page_number: 1,
             bounding_box: None,
+            ..Default::default()
         };
 
         let result = ExtractedDocument {
