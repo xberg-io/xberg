@@ -41,6 +41,7 @@ pub mod adapter;
 pub mod adapters;
 pub mod aggregate;
 pub mod batch_diagnostic;
+pub mod cohort;
 pub mod comparison;
 pub mod config;
 pub mod consolidate;
@@ -63,6 +64,7 @@ pub mod pipeline_benchmark;
 pub mod pool_metrics;
 pub mod profile_report;
 pub mod profiling;
+pub mod provenance;
 pub mod quality;
 pub mod registry;
 pub mod runner;
@@ -115,6 +117,7 @@ pub use aggregate::{
     FrameworkModeAggregation, NewConsolidatedResults, PerFixtureRow, Percentiles, PerformancePercentiles,
     QualityPercentiles, RankedFramework, aggregate_new_format,
 };
+pub use cohort::CohortManifest;
 pub use config::{BenchmarkConfig, BenchmarkMode, ProfilingConfig, load_framework_sizes};
 pub use consolidate::load_run_results;
 pub use error::{Error, Result};
@@ -123,6 +126,7 @@ pub use monitoring::{ResourceMonitor, ResourceSample, ResourceStats};
 pub use output::{write_by_extension_analysis, write_json};
 pub use pool_metrics::{FilePoolMetrics, PoolMetricsReport};
 pub use profile_report::{Hotspot, MemorySnapshot, ProfileReport};
+pub use provenance::{ModelProvenance, RunProvenance, write_run_provenance};
 pub use quality::{compute_quality, compute_quality_with_structure};
 pub use registry::AdapterRegistry;
 pub use runner::BenchmarkRunner;

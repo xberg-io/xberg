@@ -283,6 +283,25 @@ pub struct BenchmarkRunner {
     cold_start_durations: HashMap<String, Duration>,
     framework_sizes: HashMap<String, DiskSizeInfo>,
     output_format: OutputFormat,
+    fixed_batch_size: Option<usize>,
+}
+
+fn fixed_batch_ranges(item_count: usize, batch_size: Option<usize>) -> Result<Vec<std::ops::Range<usize>>> {
+    let Some(batch_size) = batch_size else {
+        return Ok((item_count > 0).then_some(0..item_count).into_iter().collect());
+    };
+    if batch_size == 0 {
+        return Err(Error::Config("fixed batch size must be greater than zero".to_string()));
+    }
+    if !item_count.is_multiple_of(batch_size) {
+        return Err(Error::Config(format!(
+            "{item_count} eligible documents cannot be partitioned into complete batches of {batch_size}"
+        )));
+    }
+    Ok((0..item_count)
+        .step_by(batch_size)
+        .map(|start| start..start + batch_size)
+        .collect())
 }
 
 /// Resolve the installation size to report for a benchmark result framework.
@@ -326,6 +345,34 @@ fn resolve_installation_size(framework: &str, sizes: &HashMap<String, DiskSizeIn
 }
 
 impl BenchmarkRunner {
+    fn select_frameworks(&self, framework_names: &[String]) -> Result<Vec<Arc<dyn FrameworkAdapter>>> {
+        if framework_names.is_empty() {
+            let mut names = self.registry.adapter_names();
+            names.sort();
+            return Ok(names
+                .into_iter()
+                .filter_map(|name| self.registry.get(&name))
+                .filter(|adapter| adapter.supported_output_formats().contains(&self.output_format))
+                .collect());
+        }
+
+        let mut selected = Vec::with_capacity(framework_names.len());
+        for name in framework_names {
+            let adapter = self
+                .registry
+                .get(name)
+                .ok_or_else(|| Error::Config(format!("requested framework '{name}' is not registered")))?;
+            if !adapter.supported_output_formats().contains(&self.output_format) {
+                return Err(Error::Config(format!(
+                    "framework '{name}' does not support {} output",
+                    self.output_format
+                )));
+            }
+            selected.push(adapter);
+        }
+        Ok(selected)
+    }
+
     async fn setup_frameworks(frameworks: &[Arc<dyn FrameworkAdapter>]) -> Result<()> {
         let mut initialized = Vec::with_capacity(frameworks.len());
         for adapter in frameworks {
@@ -395,6 +442,7 @@ impl BenchmarkRunner {
             cold_start_durations: HashMap::new(),
             framework_sizes,
             output_format,
+            fixed_batch_size: None,
         }
     }
 
@@ -406,6 +454,46 @@ impl BenchmarkRunner {
             self.fixtures.load_fixture(path)?;
         }
         Ok(())
+    }
+
+    /// Load exactly the fixtures declared by an ordered cohort manifest.
+    pub fn load_cohort(&mut self, fixture_root: &Path, manifest_path: &Path) -> Result<crate::CohortManifest> {
+        let manifest = crate::CohortManifest::from_file(manifest_path)?;
+        self.fixtures = manifest.load_fixtures(fixture_root, manifest_path)?;
+        Ok(manifest)
+    }
+
+    /// Require native batch invocations to use complete, fixed-size partitions.
+    pub fn set_fixed_batch_size(&mut self, batch_size: usize) -> Result<()> {
+        if batch_size == 0 {
+            return Err(Error::Config("fixed batch size must be greater than zero".to_string()));
+        }
+        self.fixed_batch_size = Some(batch_size);
+        Ok(())
+    }
+
+    /// Capture path-safe run provenance for the selected adapters and loaded corpus.
+    pub fn capture_provenance(
+        &self,
+        framework_names: &[String],
+        fixture_root: &Path,
+        cohort: Option<&crate::CohortManifest>,
+        cohort_manifest_path: Option<&Path>,
+        fixed_batch_size: Option<usize>,
+        models: &[crate::ModelProvenance],
+    ) -> Result<crate::RunProvenance> {
+        let frameworks = self.select_frameworks(framework_names)?;
+        crate::RunProvenance::capture(crate::provenance::ProvenanceInputs {
+            config: &self.config,
+            output_format: self.output_format,
+            fixture_root,
+            fixtures: &self.fixtures,
+            frameworks: &frameworks,
+            cohort,
+            cohort_manifest_path,
+            fixed_batch_size,
+            models,
+        })
     }
 
     /// Retain only fixtures for the given shard (1-based index, total shards)
@@ -879,30 +967,7 @@ impl BenchmarkRunner {
     /// # Returns
     /// Vector of benchmark results
     pub async fn run(&mut self, framework_names: &[String]) -> Result<Vec<BenchmarkResult>> {
-        let frameworks = if framework_names.is_empty() {
-            self.registry
-                .adapter_names()
-                .into_iter()
-                .filter_map(|name| self.registry.get(&name))
-                .filter(|adapter| adapter.supported_output_formats().contains(&self.output_format))
-                .collect::<Vec<_>>()
-        } else {
-            let mut selected = Vec::with_capacity(framework_names.len());
-            for name in framework_names {
-                let adapter = self
-                    .registry
-                    .get(name)
-                    .ok_or_else(|| Error::Config(format!("requested framework '{name}' is not registered")))?;
-                if !adapter.supported_output_formats().contains(&self.output_format) {
-                    return Err(Error::Config(format!(
-                        "framework '{name}' does not support {} output",
-                        self.output_format
-                    )));
-                }
-                selected.push(adapter);
-            }
-            selected
-        };
+        let frameworks = self.select_frameworks(framework_names)?;
 
         if frameworks.is_empty() {
             return Err(Error::Benchmark("No frameworks available for benchmarking".to_string()));
@@ -1055,33 +1120,41 @@ impl BenchmarkRunner {
                         continue;
                     }
 
-                    let (file_paths, force_ocr_flags): (Vec<PathBuf>, Vec<bool>) = entries.iter().cloned().unzip();
+                    let ranges = fixed_batch_ranges(entries.len(), self.fixed_batch_size).map_err(|error| {
+                        Error::Config(format!(
+                            "framework '{adapter_name}' fixed batch validation failed: {error}"
+                        ))
+                    })?;
 
-                    let adapter = Arc::clone(adapter);
-                    let config = config.clone();
-                    let cold_start = self.cold_start_durations.get(adapter_name).copied();
+                    for range in ranges {
+                        let (file_paths, force_ocr_flags): (Vec<PathBuf>, Vec<bool>) =
+                            entries[range].iter().cloned().unzip();
+                        let adapter = Arc::clone(adapter);
+                        let config = config.clone();
+                        let cold_start = self.cold_start_durations.get(adapter_name).copied();
 
-                    match Self::run_batch_iterations_static(
-                        file_paths,
-                        adapter,
-                        &config,
-                        cold_start,
-                        force_ocr_flags,
-                        self.output_format,
-                    )
-                    .await
-                    {
-                        Ok(mut batch_results) => {
-                            for result in &mut batch_results {
-                                self.enrich_with_framework_size(result);
+                        match Self::run_batch_iterations_static(
+                            file_paths,
+                            adapter,
+                            &config,
+                            cold_start,
+                            force_ocr_flags,
+                            self.output_format,
+                        )
+                        .await
+                        {
+                            Ok(mut batch_results) => {
+                                for result in &mut batch_results {
+                                    self.enrich_with_framework_size(result);
+                                }
+                                results.extend(batch_results);
                             }
-                            results.extend(batch_results);
-                        }
-                        Err(e) => {
-                            if let Err(teardown_error) = Self::teardown_frameworks(&frameworks).await {
-                                eprintln!("Warning: teardown after batch failure also failed: {teardown_error}");
+                            Err(e) => {
+                                if let Err(teardown_error) = Self::teardown_frameworks(&frameworks).await {
+                                    eprintln!("Warning: teardown after batch failure also failed: {teardown_error}");
+                                }
+                                return Err(e);
                             }
-                            return Err(e);
                         }
                     }
                 }
@@ -1171,6 +1244,20 @@ mod tests {
     use crate::types::{FrameworkCapabilities, OcrStatus};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    #[test]
+    fn fixed_batch_ranges_are_complete_and_ordered() {
+        assert_eq!(fixed_batch_ranges(8, Some(4)).unwrap(), [0..4, 4..8]);
+        let legacy_batch = fixed_batch_ranges(3, None).unwrap();
+        assert_eq!(legacy_batch.len(), 1);
+        assert_eq!(legacy_batch[0], 0..3);
+    }
+
+    #[test]
+    fn fixed_batch_ranges_reject_partial_batches() {
+        assert!(fixed_batch_ranges(5, Some(4)).is_err());
+        assert!(fixed_batch_ranges(0, Some(0)).is_err());
+    }
+
     struct SequenceAdapter {
         calls: AtomicUsize,
     }
@@ -1185,6 +1272,90 @@ mod tests {
 
     struct FailedWarmupAdapter {
         teardown_calls: Arc<AtomicUsize>,
+    }
+
+    struct RecordingBatchAdapter {
+        batches: Arc<std::sync::Mutex<Vec<Vec<String>>>>,
+    }
+
+    impl RecordingBatchAdapter {
+        fn success(file_path: &Path, output_format: OutputFormat) -> BenchmarkResult {
+            BenchmarkResult {
+                framework: "recording".to_string(),
+                output_format,
+                file_path: file_path.to_path_buf(),
+                file_size: 1,
+                success: true,
+                error_message: None,
+                error_kind: ErrorKind::None,
+                duration: Duration::from_millis(1),
+                extraction_duration: None,
+                subprocess_overhead: None,
+                metrics: PerformanceMetrics::default(),
+                quality: None,
+                iterations: vec![],
+                statistics: None,
+                cold_start_duration: None,
+                file_extension: "pdf".to_string(),
+                framework_capabilities: FrameworkCapabilities::default(),
+                pdf_metadata: None,
+                ocr_status: OcrStatus::NotUsed,
+                extracted_text: Some("ok".to_string()),
+                system_load: None,
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl FrameworkAdapter for RecordingBatchAdapter {
+        fn name(&self) -> &str {
+            "recording"
+        }
+
+        fn supports_format(&self, file_type: &str) -> bool {
+            file_type == "pdf"
+        }
+
+        fn supported_output_formats(&self) -> Vec<OutputFormat> {
+            vec![OutputFormat::Markdown]
+        }
+
+        async fn extract(
+            &self,
+            file_path: &Path,
+            _timeout: Duration,
+            _force_ocr: bool,
+            output_format: OutputFormat,
+        ) -> Result<BenchmarkResult> {
+            Ok(Self::success(file_path, output_format))
+        }
+
+        async fn extract_batch(
+            &self,
+            file_paths: &[&Path],
+            _timeout: Duration,
+            _force_ocr: &[bool],
+            output_format: OutputFormat,
+        ) -> Result<Vec<BenchmarkResult>> {
+            self.batches.lock().unwrap().push(
+                file_paths
+                    .iter()
+                    .map(|path| path.file_name().unwrap().to_string_lossy().into_owned())
+                    .collect(),
+            );
+            Ok(file_paths
+                .iter()
+                .map(|path| Self::success(path, output_format))
+                .collect())
+        }
+
+        fn batch_capability(&self) -> Option<BatchCapability> {
+            Some(BatchCapability {
+                entry_point: crate::types::BatchEntryPoint::XbergCliExtractBatch,
+                timing_scope: BatchTimingScope::WarmSteadyState,
+                per_item_timing: false,
+            })
+        }
     }
 
     impl SequenceAdapter {
@@ -1532,6 +1703,96 @@ mod tests {
         let runner = BenchmarkRunner::new(config, registry);
 
         assert_eq!(runner.fixture_count(), 0);
+    }
+
+    fn write_ordered_cohort(temp: &Path, file_types: &[&str]) -> PathBuf {
+        let fixtures = ["d.json", "b.json", "a.json", "c.json"];
+        for (fixture_name, file_type) in fixtures.iter().zip(file_types) {
+            let document_name = fixture_name.replace(".json", ".pdf");
+            std::fs::write(temp.join(&document_name), b"x").unwrap();
+            std::fs::write(
+                temp.join(fixture_name),
+                serde_json::json!({
+                    "document": document_name,
+                    "file_type": file_type,
+                    "file_size": 1
+                })
+                .to_string(),
+            )
+            .unwrap();
+        }
+        let manifest = temp.join("cohort.json");
+        std::fs::write(
+            &manifest,
+            serde_json::json!({
+                "schema_version": 1,
+                "name": "ordered",
+                "batch_size": 2,
+                "fixtures": fixtures
+            })
+            .to_string(),
+        )
+        .unwrap();
+        manifest
+    }
+
+    #[tokio::test]
+    async fn fixed_batches_preserve_manifest_order_across_native_calls() {
+        let temp = tempfile::tempdir().unwrap();
+        let manifest = write_ordered_cohort(temp.path(), &["pdf", "pdf", "pdf", "pdf"]);
+        let batches = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut registry = AdapterRegistry::new();
+        registry
+            .register(Arc::new(RecordingBatchAdapter {
+                batches: Arc::clone(&batches),
+            }))
+            .unwrap();
+        let config = BenchmarkConfig {
+            benchmark_mode: BenchmarkMode::Batch,
+            warmup_iterations: 0,
+            benchmark_iterations: 1,
+            ..Default::default()
+        };
+        let mut runner = BenchmarkRunner::new(config, registry);
+        runner.load_cohort(temp.path(), &manifest).unwrap();
+        runner.set_fixed_batch_size(2).unwrap();
+
+        runner.run(&["recording".to_string()]).await.unwrap();
+
+        assert_eq!(
+            *batches.lock().unwrap(),
+            [
+                vec!["d.pdf".to_string(), "b.pdf".to_string()],
+                vec!["a.pdf".to_string(), "c.pdf".to_string()]
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn fixed_batches_reject_partial_adapter_filter_before_native_call() {
+        let temp = tempfile::tempdir().unwrap();
+        let manifest = write_ordered_cohort(temp.path(), &["pdf", "txt", "pdf", "pdf"]);
+        let batches = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut registry = AdapterRegistry::new();
+        registry
+            .register(Arc::new(RecordingBatchAdapter {
+                batches: Arc::clone(&batches),
+            }))
+            .unwrap();
+        let config = BenchmarkConfig {
+            benchmark_mode: BenchmarkMode::Batch,
+            warmup_iterations: 0,
+            benchmark_iterations: 1,
+            ..Default::default()
+        };
+        let mut runner = BenchmarkRunner::new(config, registry);
+        runner.load_cohort(temp.path(), &manifest).unwrap();
+        runner.set_fixed_batch_size(2).unwrap();
+
+        let error = runner.run(&["recording".to_string()]).await.unwrap_err();
+
+        assert!(error.to_string().contains("cannot be partitioned"));
+        assert!(batches.lock().unwrap().is_empty());
     }
 
     #[tokio::test]

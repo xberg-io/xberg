@@ -174,6 +174,7 @@ Runs benchmarks using framework adapters with configurable iterations, warmup, a
 ```bash
 benchmark-harness run \
   -f fixtures/ \
+  --cohort cohorts/layout-pdf-fast.json \
   -F xberg-markdown-baseline,docling,liteparse \
   -m batch \
   -o results/ \
@@ -183,6 +184,8 @@ benchmark-harness run \
 | Flag                   | Description                                    | Default       |
 | ---------------------- | ---------------------------------------------- | ------------- |
 | `-f, --fixtures`       | Fixture directory or file                      | required      |
+| `--cohort`             | Exact ordered cohort manifest                  | none          |
+| `--batch-size`         | Require complete fixed-size native batches     | cohort value  |
 | `-F, --frameworks`     | Comma-separated framework names                | all available |
 | `-o, --output`         | Output directory                               | `results`     |
 | `-m, --mode`           | `single-file` or `batch`                       | `batch`       |
@@ -193,6 +196,16 @@ benchmark-harness run \
 | `--ocr`                | Enable OCR                                     | `false`       |
 | `--measure-quality`    | Enable quality assessment                      | `false`       |
 | `--shard`              | Run fixture subset (`INDEX/TOTAL`, e.g. `1/3`) | none          |
+| `--model-id`           | `FRAMEWORK=OWNER/REPOSITORY@REVISION#DIGEST`; repeatable | none       |
+
+An exact cohort preserves manifest order and rejects duplicates, parent paths, missing
+fixtures, and a fixture count that is not divisible by its batch size. In batch mode each
+framework's compatible fixture set must also divide evenly; the harness never emits a partial
+native batch. Sharding cannot be combined with exact cohorts or fixed batch sizing.
+
+`results.json` remains backward-compatible. Each run also writes `provenance.json` with the
+repository state, ordered fixture/document digests, framework executable identities, model IDs,
+timing configuration, and worker semantics. It deliberately stores no local absolute paths.
 
 ### `consolidate` -- Merge multi-job results
 

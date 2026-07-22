@@ -50,6 +50,52 @@ fn normalize_run_frameworks(frameworks: &[String], batch_mode: bool) -> Vec<Stri
     normalized
 }
 
+fn parse_model_provenance(values: &[String]) -> Result<Vec<benchmark_harness::ModelProvenance>> {
+    values
+        .iter()
+        .map(|value| {
+            let (framework, identifier) = value.split_once('=').ok_or_else(|| {
+                benchmark_harness::Error::Config(format!(
+                    "invalid model identity '{value}': expected FRAMEWORK=OWNER/REPOSITORY@REVISION#DIGEST"
+                ))
+            })?;
+            let valid_component = |value: &str| {
+                !value.is_empty()
+                    && value
+                        .chars()
+                        .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.'))
+            };
+            let structured = identifier
+                .split_once('#')
+                .and_then(|(repository_revision, digest)| {
+                    repository_revision
+                        .split_once('@')
+                        .map(|(repository, revision)| (repository, revision, digest))
+                })
+                .is_some_and(|(repository, revision, digest)| {
+                    let mut repository_parts = repository.split('/');
+                    valid_component(repository_parts.next().unwrap_or_default())
+                        && valid_component(repository_parts.next().unwrap_or_default())
+                        && repository_parts.next().is_none()
+                        && valid_component(revision)
+                        && !digest.is_empty()
+                        && digest.chars().all(|character| {
+                            character.is_ascii_alphanumeric() || matches!(character, ':' | '-' | '_' | '.')
+                        })
+                });
+            if framework.is_empty() || !structured {
+                return Err(benchmark_harness::Error::Config(format!(
+                    "invalid model identity '{value}': expected path-free FRAMEWORK=OWNER/REPOSITORY@REVISION#DIGEST"
+                )));
+            }
+            Ok(benchmark_harness::ModelProvenance {
+                framework: framework.to_string(),
+                identifier: identifier.to_string(),
+            })
+        })
+        .collect()
+}
+
 #[derive(Parser)]
 #[command(name = "benchmark-harness")]
 #[command(about = "Benchmark harness for document extraction frameworks", long_about = None)]
@@ -76,9 +122,17 @@ enum Commands {
 
     /// Run benchmarks
     Run {
-        /// Directory or file pattern to search for fixtures
+        /// Fixture directory, or a single fixture when --cohort is omitted
         #[arg(short, long)]
         fixtures: PathBuf,
+
+        /// Exact ordered cohort manifest, resolved relative to the fixture directory
+        #[arg(long)]
+        cohort: Option<PathBuf>,
+
+        /// Require complete native batches of exactly this many documents
+        #[arg(long)]
+        batch_size: Option<usize>,
 
         /// Frameworks to benchmark (comma-separated)
         #[arg(short = 'F', long, value_delimiter = ',')]
@@ -123,6 +177,10 @@ enum Commands {
         /// Run only a subset of fixtures (format: INDEX/TOTAL, e.g. 1/3 for first of 3 shards)
         #[arg(long)]
         shard: Option<String>,
+
+        /// Model identity as FRAMEWORK=OWNER/REPOSITORY@REVISION#DIGEST (repeatable)
+        #[arg(long = "model-id")]
+        model_ids: Vec<String>,
     },
 
     /// Consolidate multiple benchmark runs
@@ -426,6 +484,8 @@ async fn main() -> Result<()> {
 
         Commands::Run {
             fixtures,
+            cohort,
+            batch_size,
             frameworks,
             output,
             max_concurrent,
@@ -437,6 +497,7 @@ async fn main() -> Result<()> {
             measure_quality,
             output_format,
             shard,
+            model_ids,
         } => {
             use benchmark_harness::{AdapterRegistry, BenchmarkRunner};
             use std::sync::Arc;
@@ -467,6 +528,7 @@ async fn main() -> Result<()> {
             let parsed_format = OutputFormat::from_str(&output_format).map_err(benchmark_harness::Error::Config)?;
             let batch_mode = matches!(config.benchmark_mode, BenchmarkMode::Batch);
             let frameworks = normalize_run_frameworks(&frameworks, batch_mode);
+            let model_provenance = parse_model_provenance(&model_ids)?;
 
             let mut registry = AdapterRegistry::new();
 
@@ -591,7 +653,41 @@ async fn main() -> Result<()> {
             }
 
             let mut runner = BenchmarkRunner::with_output_format(config, registry, parsed_format);
-            runner.load_fixtures(&fixtures)?;
+            let cohort_manifest = if let Some(manifest_path) = cohort.as_deref() {
+                Some(runner.load_cohort(&fixtures, manifest_path)?)
+            } else {
+                runner.load_fixtures(&fixtures)?;
+                None
+            };
+
+            if batch_size.is_some() && !batch_mode {
+                return Err(benchmark_harness::Error::Config(
+                    "fixed batch sizing requires --mode batch".to_string(),
+                ));
+            }
+            let fixed_batch_size = if batch_mode {
+                match (cohort_manifest.as_ref(), batch_size) {
+                    (Some(manifest), Some(requested)) if requested != manifest.batch_size => {
+                        return Err(benchmark_harness::Error::Config(format!(
+                            "--batch-size {requested} does not match cohort batch_size {}",
+                            manifest.batch_size
+                        )));
+                    }
+                    (Some(manifest), _) => Some(manifest.batch_size),
+                    (None, requested) => requested,
+                }
+            } else {
+                None
+            };
+            if let Some(size) = fixed_batch_size {
+                runner.set_fixed_batch_size(size)?;
+            }
+
+            if (cohort.is_some() || fixed_batch_size.is_some()) && shard.is_some() {
+                return Err(benchmark_harness::Error::Config(
+                    "--shard cannot be combined with exact cohort or fixed batch sizing".to_string(),
+                ));
+            }
 
             if let Some(ref shard_spec) = shard {
                 let parts: Vec<&str> = shard_spec.split('/').collect();
@@ -633,6 +729,15 @@ async fn main() -> Result<()> {
                 return Ok(());
             }
 
+            let provenance = runner.capture_provenance(
+                &frameworks,
+                &fixtures,
+                cohort_manifest.as_ref(),
+                cohort.as_deref(),
+                fixed_batch_size,
+                &model_provenance,
+            )?;
+
             println!("\nRunning benchmarks...");
             let results = runner.run(&frameworks).await?;
 
@@ -663,6 +768,10 @@ async fn main() -> Result<()> {
             let by_ext_file = output.join("by-extension.json");
             write_by_extension_analysis(&results, &by_ext_file)?;
             println!("Per-extension analysis written to: {}", by_ext_file.display());
+
+            let provenance_file = output.join("provenance.json");
+            benchmark_harness::write_run_provenance(&provenance, &provenance_file)?;
+            println!("Run provenance written to: {}", provenance_file.display());
 
             if !failed_frameworks.is_empty() {
                 return Err(benchmark_harness::Error::Benchmark(format!(
@@ -1239,7 +1348,7 @@ fn format_size(bytes: u64) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Cli, Commands, normalize_run_frameworks};
+    use super::{Cli, Commands, normalize_run_frameworks, parse_model_provenance};
     use clap::Parser;
 
     #[test]
@@ -1293,5 +1402,31 @@ mod tests {
         .unwrap();
 
         assert!(matches!(cli.command, Commands::ScoreOutputs { .. }));
+    }
+
+    #[test]
+    fn run_cli_accepts_exact_cohort_and_model_identity() {
+        let cli = Cli::try_parse_from([
+            "benchmark-harness",
+            "run",
+            "--fixtures",
+            "fixtures",
+            "--cohort",
+            "cohorts/fast.json",
+            "--batch-size",
+            "4",
+            "--model-id",
+            "docling=ds4sd/docling-models@main#abc123",
+        ])
+        .unwrap();
+
+        assert!(matches!(
+            cli.command,
+            Commands::Run {
+                batch_size: Some(4),
+                ..
+            }
+        ));
+        assert!(parse_model_provenance(&["invalid".to_string()]).is_err());
     }
 }

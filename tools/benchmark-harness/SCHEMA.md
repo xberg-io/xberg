@@ -237,6 +237,14 @@ have been removed. They are replaced by three native pipelines run directly via 
 Batch variants append `-batch` to the framework name (e.g. `xberg-markdown-baseline-batch`),
 which the harness normalises to aggregate key `xberg-markdown-baseline:batch`.
 
+### Run provenance sidecar
+
+The `run` command writes `provenance.json` beside the backward-compatible `results.json` array.
+Schema version 1 records the Xberg repository commit/dirty bit, the ordered fixture descriptors
+and document BLAKE3 digests, cohort manifest identity, adapter versions and executable digests,
+explicit model revision identities, timing configuration, fixed batch partitions, requested
+workers, and framework-specific worker semantics. Local absolute paths are never serialized.
+
 ### Key Format Rationale
 
 The format component is implicit in the xberg framework name itself. Duplicating it in the

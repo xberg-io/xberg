@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "name": "layout-pdf-fast-v1",
+  "batch_size": 4,
+  "fixtures": ["pdf_tiny_memo.json", "pdf_tables.json", "pdf_medium_tables.json", "pdf_google_docs.json"]
+}

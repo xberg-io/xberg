@@ -6,6 +6,7 @@
 
 use crate::{
     Error, Result,
+    provenance::ExecutableProvenance,
     types::{BatchCapability, BenchmarkResult, OutputFormat},
 };
 use async_trait::async_trait;
@@ -103,6 +104,16 @@ pub trait FrameworkAdapter: Send + Sync {
     /// Get version information for this framework
     fn version(&self) -> String {
         "unknown".to_string()
+    }
+
+    /// Return a path-free identity for the executable used by this adapter.
+    fn executable_provenance(&self) -> Option<ExecutableProvenance> {
+        None
+    }
+
+    /// Requested and effective worker counts, when the adapter exposes a worker control.
+    fn worker_provenance(&self, requested: usize) -> (Option<usize>, Option<usize>) {
+        (Some(requested), Some(requested))
     }
 
     /// Perform any necessary setup before benchmarking

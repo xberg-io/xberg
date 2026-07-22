@@ -27,6 +27,23 @@ Verify the corpus resolves before a run:
 `cargo run -p benchmark-harness -- validate-gt --fixtures tools/benchmark-harness/fixtures/pdf/ --strict`
 (exit non-zero if any fixture's GT is missing — e.g. the reference cache was not restored).
 
+## Reproducible cohorts
+
+Tracked manifests under `cohorts/` select fixture descriptors in an exact order and declare a
+fixed native batch size. Paths are normalized relative paths rooted at the directory passed to
+`--fixtures`. The manifest fixture count must be divisible by `batch_size`; adapter filtering is
+validated again at runtime so an unsupported fixture cannot silently create a partial batch.
+
+Use the small iteration cohort with:
+
+```bash
+cargo run -p benchmark-harness -- run \
+  --fixtures tools/benchmark-harness/fixtures \
+  --cohort tools/benchmark-harness/cohorts/layout-pdf-fast.json \
+  --frameworks xberg-markdown-layout,docling,liteparse \
+  --mode batch
+```
+
 ## CI (`.github/workflows/benchmarks.yaml`)
 
 The `setup` job authenticates to GCS via Workload Identity Federation, restores `.corpus-cache` for

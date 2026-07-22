@@ -1064,6 +1064,32 @@ impl FrameworkAdapter for SubprocessAdapter {
         self.supported_output_formats.clone()
     }
 
+    fn executable_provenance(&self) -> Option<crate::provenance::ExecutableProvenance> {
+        if self
+            .batch_capability
+            .is_some_and(|capability| capability.entry_point == crate::types::BatchEntryPoint::LiteparseBatchParse)
+        {
+            return which::which("lit")
+                .ok()
+                .map(|command| crate::provenance::ExecutableProvenance::from_invocation(&command, &[]));
+        }
+        Some(crate::provenance::ExecutableProvenance::from_invocation(
+            &self.command,
+            &self.args,
+        ))
+    }
+
+    fn worker_provenance(&self, requested: usize) -> (Option<usize>, Option<usize>) {
+        match self.batch_capability.map(|capability| capability.entry_point) {
+            Some(crate::types::BatchEntryPoint::DoclingConvertAll) => (None, None),
+            Some(
+                crate::types::BatchEntryPoint::XbergCliExtractBatch
+                | crate::types::BatchEntryPoint::LiteparseBatchParse,
+            ) => (Some(requested), Some(self.batch_workers)),
+            None => (Some(requested), Some(requested)),
+        }
+    }
+
     async fn extract(
         &self,
         file_path: &Path,
@@ -1221,7 +1247,22 @@ impl FrameworkAdapter for SubprocessAdapter {
     }
 
     fn version(&self) -> String {
-        "unknown".to_string()
+        let output = match self.batch_capability.map(|capability| capability.entry_point) {
+            Some(crate::types::BatchEntryPoint::DoclingConvertAll) => std::process::Command::new(&self.command)
+                .args(["-c", "import importlib.metadata as m; print(m.version('docling'))"])
+                .output(),
+            Some(crate::types::BatchEntryPoint::LiteparseBatchParse) => {
+                std::process::Command::new("lit").arg("--version").output()
+            }
+            _ => std::process::Command::new(&self.command).arg("--version").output(),
+        };
+        output
+            .ok()
+            .filter(|output| output.status.success())
+            .and_then(|output| String::from_utf8(output.stdout).ok())
+            .and_then(|value| value.lines().next().map(str::trim).map(str::to_string))
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| "unknown".to_string())
     }
 
     fn batch_capability(&self) -> Option<BatchCapability> {
