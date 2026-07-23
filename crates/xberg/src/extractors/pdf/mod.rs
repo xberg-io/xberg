@@ -28,6 +28,65 @@ use extraction::extract_all_from_oxide_document;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 use ocr::extract_with_ocr;
 
+#[cfg(feature = "pdf")]
+const PDF_OUTLINES_MARKER: &[u8] = b"/Outlines";
+#[cfg(feature = "pdf")]
+const PDF_PREVIOUS_XREF_MARKER: &[u8] = b"/Prev";
+
+#[cfg(feature = "pdf")]
+fn contains_pdf_marker(content: &[u8], marker: &[u8]) -> bool {
+    memchr::memmem::find(content, marker).is_some()
+}
+
+#[cfg(feature = "pdf")]
+fn catalog_needs_lopdf_compatibility_pass(catalog: Option<&pdf_oxide::object::Object>) -> bool {
+    let Some(catalog) = catalog else {
+        return true;
+    };
+    let Some(dictionary) = catalog.as_dict() else {
+        return true;
+    };
+    dictionary.contains_key("Outlines")
+}
+
+#[cfg(feature = "pdf")]
+fn raw_pdf_needs_lopdf_compatibility_pass(content: &[u8]) -> bool {
+    contains_pdf_marker(content, PDF_PREVIOUS_XREF_MARKER) || contains_pdf_marker(content, PDF_OUTLINES_MARKER)
+}
+
+#[cfg(feature = "pdf")]
+fn parsed_pdf_needs_lopdf_compatibility_pass(document: &crate::pdf::oxide::OxideDocument) -> bool {
+    match document.doc.catalog() {
+        Ok(catalog) => catalog_needs_lopdf_compatibility_pass(Some(&catalog)),
+        Err(error) => {
+            tracing::debug!(
+                error = %error,
+                "pdf_oxide catalog inspection failed; retaining lopdf compatibility pass"
+            );
+            catalog_needs_lopdf_compatibility_pass(None)
+        }
+    }
+}
+
+#[cfg(feature = "pdf")]
+fn extract_lopdf_compatibility_data(
+    content: &[u8],
+) -> (
+    Vec<crate::pdf::bookmarks::PdfOutlineEntry>,
+    Vec<crate::types::ExtractedUri>,
+    Option<Vec<crate::types::DocumentRevision>>,
+) {
+    match lopdf::Document::load_mem(content) {
+        Ok(lopdf_doc) => {
+            let entries = crate::pdf::bookmarks::extract_outline_entries(&lopdf_doc);
+            let uris = crate::pdf::bookmarks::extract_bookmarks_from_entries(&entries);
+            let revisions = crate::pdf::xref_revisions::extract_pdf_xref_revisions(content, &lopdf_doc);
+            (entries, uris, revisions)
+        }
+        Err(_) => (Vec::new(), Vec::new(), None),
+    }
+}
+
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PdfDocumentOrigin {
@@ -405,16 +464,6 @@ impl PdfExtractor {
     ) -> Result<InternalDocument> {
         let _ = &path;
 
-        let (outline_entries, bookmark_uris, pdf_revisions) = match lopdf::Document::load_mem(content) {
-            Ok(lopdf_doc) => {
-                let entries = crate::pdf::bookmarks::extract_outline_entries(&lopdf_doc);
-                let uris = crate::pdf::bookmarks::extract_bookmarks_from_entries(&entries);
-                let revisions = crate::pdf::xref_revisions::extract_pdf_xref_revisions(content, &lopdf_doc);
-                (entries, uris, revisions)
-            }
-            Err(_) => (Vec::new(), Vec::new(), None),
-        };
-
         #[cfg(all(feature = "pdf", feature = "layout-detection"))]
         #[allow(unused_mut, unused_variables)]
         let (
@@ -429,6 +478,29 @@ impl PdfExtractor {
         #[cfg(not(feature = "layout-detection"))]
         let layout_hints: Option<&[Vec<crate::pdf::structure::types::LayoutHint>]> = None;
 
+        let passwords = config
+            .pdf_options
+            .as_ref()
+            .and_then(|options| options.passwords.as_deref())
+            .unwrap_or(&[]);
+        let raw_compatibility_signal = raw_pdf_needs_lopdf_compatibility_pass(content);
+        let compatibility_data = raw_compatibility_signal.then(|| extract_lopdf_compatibility_data(content));
+        let mut oxide_document = crate::pdf::oxide::OxideDocument::open_bytes_with_passwords(content, passwords)?;
+
+        let compatibility_data = match compatibility_data {
+            Some(data) => Some(data),
+            None if parsed_pdf_needs_lopdf_compatibility_pass(&oxide_document) => {
+                // Avoid holding both parser object graphs at once. Compressed
+                // catalog outlines are rare, so reopen pdf_oxide for this path. ~keep
+                drop(oxide_document);
+                let data = extract_lopdf_compatibility_data(content);
+                oxide_document = crate::pdf::oxide::OxideDocument::open_bytes_with_passwords(content, passwords)?;
+                Some(data)
+            }
+            None => None,
+        };
+        let (outline_entries, bookmark_uris, pdf_revisions) = compatibility_data.unwrap_or_default();
+
         #[allow(unused_variables, unused_mut)]
         let (
             mut pdf_metadata,
@@ -442,7 +514,7 @@ impl PdfExtractor {
             mut extracted_images,
             pdf_form_fields,
         ) = extract_all_from_oxide_document(
-            content,
+            oxide_document,
             config,
             &outline_entries,
             layout_hints,
@@ -1151,6 +1223,57 @@ mod tests {
     use crate::core::config::OcrQualityThresholds;
     #[cfg(all(feature = "pdf", feature = "ocr"))]
     use serial_test::serial;
+
+    #[cfg(feature = "pdf")]
+    fn catalog(
+        entries: impl IntoIterator<Item = (&'static str, pdf_oxide::object::Object)>,
+    ) -> pdf_oxide::object::Object {
+        pdf_oxide::object::Object::Dictionary(
+            entries
+                .into_iter()
+                .map(|(key, value)| (key.to_string(), value))
+                .collect(),
+        )
+    }
+
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn lopdf_compatibility_pass_skips_pdf_without_relevant_signals() {
+        let catalog = catalog([]);
+
+        assert!(!raw_pdf_needs_lopdf_compatibility_pass(
+            b"%PDF-1.7\nordinary content\n%%EOF",
+        ));
+        assert!(!catalog_needs_lopdf_compatibility_pass(Some(&catalog)));
+    }
+
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn lopdf_compatibility_pass_keeps_raw_pdf_signals() {
+        let catalog = catalog([]);
+
+        assert!(raw_pdf_needs_lopdf_compatibility_pass(
+            b"%PDF-1.7\ntrailer << /Prev 42 >>",
+        ));
+        assert!(raw_pdf_needs_lopdf_compatibility_pass(
+            b"%PDF-1.7\n<< /Outlines 7 0 R >>",
+        ));
+        assert!(!catalog_needs_lopdf_compatibility_pass(Some(&catalog)));
+    }
+
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn lopdf_compatibility_pass_keeps_parsed_catalog_outline() {
+        let catalog = catalog([("Outlines", pdf_oxide::object::Object::Null)]);
+
+        assert!(catalog_needs_lopdf_compatibility_pass(Some(&catalog)));
+    }
+
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn lopdf_compatibility_pass_fails_open_without_catalog() {
+        assert!(catalog_needs_lopdf_compatibility_pass(None));
+    }
 
     #[cfg(feature = "pdf")]
     fn pdf_test_document(name: &str) -> std::path::PathBuf {

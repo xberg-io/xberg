@@ -25,7 +25,7 @@ pub(crate) type PdfExtractionPhaseResult = (
 
 /// Extract text, metadata, tables, and annotations from a PDF document using the pdf_oxide backend.
 ///
-/// Opens the document via `OxideDocument`, then delegates to each oxide extraction module.
+/// Accepts an authenticated `OxideDocument`, then delegates to each oxide extraction module.
 /// The return type is `PdfExtractionPhaseResult` so callers can switch transparently between
 /// backends.
 ///
@@ -37,7 +37,7 @@ pub(crate) type PdfExtractionPhaseResult = (
 /// - Font encoding issue detection is not available; the flag is always `false`.
 #[cfg(feature = "pdf")]
 pub(crate) fn extract_all_from_oxide_document(
-    content: &[u8],
+    mut doc: crate::pdf::oxide::OxideDocument,
     config: &ExtractionConfig,
     outline_entries: &[crate::pdf::bookmarks::PdfOutlineEntry],
     layout_hints: Option<&[Vec<crate::pdf::structure::types::LayoutHint>]>,
@@ -47,13 +47,6 @@ pub(crate) fn extract_all_from_oxide_document(
     #[cfg(not(feature = "layout-detection"))] _layout_results: Option<()>,
 ) -> Result<PdfExtractionPhaseResult> {
     let _span = tracing::debug_span!("extract_pdf_oxide").entered();
-
-    let passwords = config
-        .pdf_options
-        .as_ref()
-        .and_then(|o| o.passwords.as_deref())
-        .unwrap_or(&[]);
-    let mut doc = crate::pdf::oxide::OxideDocument::open_bytes_with_passwords(content, passwords)?;
 
     #[cfg_attr(not(feature = "layout-detection"), allow(unused_mut))]
     let (mut native_text, mut boundaries, page_contents, mut pdf_metadata) =
