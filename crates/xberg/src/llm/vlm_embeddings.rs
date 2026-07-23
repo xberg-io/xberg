@@ -88,10 +88,7 @@ pub(crate) async fn embed_via_llm<T: AsRef<str>>(
     let mut data = response.data;
     data.sort_by_key(|obj| obj.index);
 
-    let mut embeddings: Vec<Vec<f32>> = data
-        .into_iter()
-        .map(|obj| obj.embedding.into_iter().map(|v| v as f32).collect())
-        .collect();
+    let mut embeddings: Vec<Vec<f32>> = data.into_iter().map(|obj| obj.embedding).collect();
 
     if normalize {
         for embedding in &mut embeddings {
