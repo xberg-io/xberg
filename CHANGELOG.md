@@ -16,11 +16,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Owned-buffer OCR dispatch.** `OcrBackend::process_image_owned` lets backends move image buffers
   into blocking work without an extra copy; the default implementation preserves existing backend
   behavior.
+- **Configurable MCP `allowed_hosts` (#1306).** `xberg mcp --transport http` can now run behind a
+  reverse proxy or ingress: supply extra `Host` values via `--allowed-host` (repeatable),
+  `XBERG_MCP_ALLOWED_HOSTS`, or an `[mcp] allowed_hosts` config key. Supplied hosts extend, never
+  replace, rmcp's loopback-only DNS-rebinding default, so the empty case is unchanged.
 
 ### Fixed
 
 - **Wrapped side-by-side financial tables.** PDF table reconstruction now coalesces proven wrapped
   row runs while preserving unrelated rows and a rectangular table schema.
+- **Misaligned hosted-provider embeddings (#1302).** A provider returning fewer vectors than inputs,
+  or numbering them with a gap, could silently attach the wrong vector to a chunk (or leave chunks
+  unembedded) and still return success. Provider indices are now validated as the contiguous `0..n`
+  set and the vector count is checked against the chunk count, failing loudly instead.
+- **Phantom-column false tables (#1301).** Native TATR table recognition rejected prose that the
+  layout model shaped into a grid with a single populated column (a spurious empty second column);
+  grids now need at least two populated columns unless `allow_single_column_tables` is set.
+- **CLI Linux runtime dependency bundling (#1308).** The published Linux CLI now vendors its native
+  runtime closure so it runs without host-installed shared libraries.
 - **NuGet package no longer rejected as too large.** The single `XbergIo.Xberg` package bundled
   every runtime's native closure and exceeded nuget.org's upload cap. Natives are now split into
   per-RID `XbergIo.Xberg.runtime.<rid>` packages pulled in transitively via `runtime.json`, so the
