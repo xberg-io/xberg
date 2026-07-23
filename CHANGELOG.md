@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   into blocking work without an extra copy; the default implementation preserves existing backend
   behavior.
 
+### Fixed
+
+- **Wrapped side-by-side financial tables.** PDF table reconstruction now coalesces proven wrapped
+  row runs while preserving unrelated rows and a rectangular table schema.
+
 ## [1.0.0-rc.33] - 2026-07-23
 
 ### Added

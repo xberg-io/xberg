@@ -47,6 +47,10 @@ const SIDE_BY_SIDE_CHILD_GAP_HEIGHT_MULTIPLIER: u32 = 6;
 const SIDE_BY_SIDE_MIN_TRACK_ROW_PERCENT: usize = 20;
 const SIDE_BY_SIDE_MIN_NUMERIC_TRACKS: usize = 2;
 const SIDE_BY_SIDE_MAX_TRACK_DELTA: usize = 1;
+const WRAPPED_FINANCIAL_COLUMNS: usize = 4;
+const WRAPPED_FINANCIAL_DESCRIPTOR_COLUMNS: usize = 2;
+const WRAPPED_FINANCIAL_MAX_CONTINUATION_ROWS: usize = 6;
+const WRAPPED_FINANCIAL_MIN_CONTINUATION_ROWS: usize = 2;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct SideTableShape {
@@ -360,6 +364,7 @@ fn reconstruct_region_tables(
         return vec![parent];
     }
 
+    let (left, right) = normalize_side_by_side_financial_tables(left, right);
     tracing::trace!(
         page = page_number,
         parent_columns = parent.cells.first().map_or(0, Vec::len),
@@ -384,6 +389,136 @@ fn reconstruct_side_by_side_child(
         .max(1)
         .saturating_mul(SIDE_BY_SIDE_CHILD_GAP_HEIGHT_MULTIPLIER);
     reconstruct_region_table_with_column_gap(region, page_height, page_number, allow_single_column, child_gap).ok()
+}
+
+fn normalize_side_by_side_financial_tables(mut left: Table, mut right: Table) -> (Table, Table) {
+    if is_wrapped_financial_side_table(&left) && is_wrapped_financial_side_table(&right) {
+        normalize_wrapped_financial_side_table(&mut left);
+        normalize_wrapped_financial_side_table(&mut right);
+    }
+    (left, right)
+}
+
+fn is_wrapped_financial_side_table(table: &Table) -> bool {
+    if table.cells.first().is_some_and(|row| is_explicit_financial_header(row)) {
+        return false;
+    }
+    let Some(rows) = table.cells.get(1..) else {
+        return false;
+    };
+    if table.cells.first().map_or(0, Vec::len) != WRAPPED_FINANCIAL_COLUMNS
+        || rows.is_empty()
+        || rows.iter().any(|row| row.len() != WRAPPED_FINANCIAL_COLUMNS)
+    {
+        return false;
+    }
+
+    let min_support = rows
+        .len()
+        .saturating_mul(SIDE_BY_SIDE_MIN_TRACK_ROW_PERCENT)
+        .div_ceil(100)
+        .max(2);
+    let leading_descriptors = (0..WRAPPED_FINANCIAL_DESCRIPTOR_COLUMNS)
+        .all(|column| rows.iter().filter(|row| is_descriptor_cell(&row[column])).count() >= min_support);
+    let trailing_numeric = (WRAPPED_FINANCIAL_DESCRIPTOR_COLUMNS..WRAPPED_FINANCIAL_COLUMNS)
+        .all(|column| rows.iter().filter(|row| is_numeric_word(&row[column])).count() >= min_support);
+
+    leading_descriptors && trailing_numeric && has_bounded_financial_continuation(rows)
+}
+
+fn has_bounded_financial_continuation(rows: &[Vec<String>]) -> bool {
+    (0..rows.len()).any(|start| financial_continuation_end(rows, start).is_some())
+}
+
+fn normalize_wrapped_financial_side_table(table: &mut Table) {
+    let mut rows = Vec::with_capacity(table.cells.len());
+    let Some(header) = table.cells.first() else {
+        return;
+    };
+    rows.push(header.clone());
+
+    let mut index = 1;
+    while index < table.cells.len() {
+        let row = &table.cells[index];
+        let Some(end) = financial_continuation_end(&table.cells, index) else {
+            rows.push(row.clone());
+            index += 1;
+            continue;
+        };
+        let Some(collapsed) = collapse_financial_rows(&table.cells[index..=end]) else {
+            rows.extend_from_slice(&table.cells[index..=end]);
+            index = end + 1;
+            continue;
+        };
+        rows.push(collapsed);
+        index = end + 1;
+    }
+
+    table.cells = rows;
+    table.markdown = crate::pdf::table_reconstruct::table_to_markdown(&table.cells);
+}
+
+fn financial_row_has_numeric_values(row: &[String]) -> bool {
+    row.get(WRAPPED_FINANCIAL_DESCRIPTOR_COLUMNS..)
+        .is_some_and(|values| values.iter().any(|value| is_numeric_word(value)))
+}
+
+fn financial_row_has_descriptor(row: &[String]) -> bool {
+    row.get(..WRAPPED_FINANCIAL_DESCRIPTOR_COLUMNS)
+        .is_some_and(|values| values.iter().any(|value| !value.trim().is_empty()))
+}
+
+fn financial_row_is_continuation(row: &[String]) -> bool {
+    financial_row_has_descriptor(row)
+        && row
+            .get(WRAPPED_FINANCIAL_DESCRIPTOR_COLUMNS..)
+            .is_some_and(|values| values.iter().all(|value| value.trim().is_empty()))
+}
+
+fn is_explicit_financial_header(row: &[String]) -> bool {
+    row.len() == WRAPPED_FINANCIAL_COLUMNS
+        && row.iter().all(|cell| !cell.trim().is_empty())
+        && row[..WRAPPED_FINANCIAL_DESCRIPTOR_COLUMNS]
+            .iter()
+            .all(|cell| is_descriptor_cell(cell))
+        && row[WRAPPED_FINANCIAL_DESCRIPTOR_COLUMNS..]
+            .iter()
+            .all(|cell| is_descriptor_cell(cell))
+}
+
+fn financial_continuation_end(rows: &[Vec<String>], start: usize) -> Option<usize> {
+    let mut continuation_rows = 0;
+    for (index, row) in rows.iter().enumerate().skip(start) {
+        if financial_row_is_continuation(row) {
+            continuation_rows += 1;
+            if continuation_rows > WRAPPED_FINANCIAL_MAX_CONTINUATION_ROWS {
+                return None;
+            }
+            continue;
+        }
+        return ((WRAPPED_FINANCIAL_MIN_CONTINUATION_ROWS..=WRAPPED_FINANCIAL_MAX_CONTINUATION_ROWS)
+            .contains(&continuation_rows)
+            && financial_row_has_numeric_values(row))
+        .then_some(index);
+    }
+    None
+}
+
+fn collapse_financial_rows(rows: &[Vec<String>]) -> Option<Vec<String>> {
+    let terminal = rows.last()?;
+    let descriptor = rows
+        .iter()
+        .flat_map(|row| row.iter().take(WRAPPED_FINANCIAL_DESCRIPTOR_COLUMNS))
+        .map(|cell| cell.trim())
+        .filter(|cell| !cell.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    Some(vec![
+        descriptor,
+        String::new(),
+        terminal.get(2)?.clone(),
+        terminal.get(3)?.clone(),
+    ])
 }
 
 fn side_tables_have_independent_shape(left: &Table, right: &Table) -> bool {
@@ -1339,6 +1474,165 @@ mod tests {
         );
         assert_eq!(tables[0].cells[0].len(), 3);
         assert_eq!(tables[1].cells[0].len(), 4);
+    }
+
+    fn wrapped_financial_side(prefix: &str) -> Table {
+        let cells = vec![
+            vec![
+                format!("{prefix} Alpha"),
+                "Series 2024-A".to_string(),
+                String::new(),
+                String::new(),
+            ],
+            vec![
+                "Class A1R".to_string(),
+                "three-month SOFR".to_string(),
+                String::new(),
+                String::new(),
+            ],
+            vec![
+                "5.87%".to_string(),
+                "04/15/37".to_string(),
+                "5,718".to_string(),
+                "5,742,049".to_string(),
+            ],
+            vec![
+                format!("{prefix} Beta"),
+                "Series 2025-B".to_string(),
+                String::new(),
+                String::new(),
+            ],
+            vec![
+                "Class BR".to_string(),
+                "three-month SOFR".to_string(),
+                String::new(),
+                String::new(),
+            ],
+            vec![
+                "6.08%".to_string(),
+                "01/15/34".to_string(),
+                "500".to_string(),
+                "500,639".to_string(),
+            ],
+        ];
+        Table {
+            markdown: crate::pdf::table_reconstruct::table_to_markdown(&cells),
+            cells,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn normalizes_wrapped_side_by_side_financial_tables() {
+        let left = wrapped_financial_side("Cayman");
+        let right = wrapped_financial_side("Ireland");
+
+        let (left, right) = normalize_side_by_side_financial_tables(left, right);
+
+        assert_eq!(left.cells.len(), 4);
+        assert_eq!(right.cells.len(), 4);
+        assert_eq!(
+            left.cells[3],
+            vec![
+                "Cayman Beta Series 2025-B Class BR three-month SOFR 6.08% 01/15/34",
+                "",
+                "500",
+                "500,639"
+            ]
+        );
+        assert!(
+            left.cells.iter().all(|row| row.len() == WRAPPED_FINANCIAL_COLUMNS),
+            "normalization must preserve a rectangular four-column grid"
+        );
+        assert!(
+            left.markdown
+                .lines()
+                .filter(|line| line.starts_with('|'))
+                .all(|line| line.matches('|').count() == WRAPPED_FINANCIAL_COLUMNS + 1),
+            "every markdown row and separator must retain four cells"
+        );
+        assert!(left.markdown.contains("|  | 500 | 500,639 |"));
+    }
+
+    #[test]
+    fn preserves_ordinary_four_column_side_by_side_tables() {
+        let cells = vec![
+            vec!["Security", "Region", "Quantity", "Value"],
+            vec!["Alpha", "Cayman", "100", "1,000"],
+            vec!["Beta", "Ireland", "200", "2,000"],
+            vec!["Gamma", "France", "300", "3,000"],
+        ]
+        .into_iter()
+        .map(|row| row.into_iter().map(str::to_string).collect())
+        .collect::<Vec<Vec<String>>>();
+        let table = Table {
+            markdown: crate::pdf::table_reconstruct::table_to_markdown(&cells),
+            cells,
+            ..Default::default()
+        };
+
+        let (left, right) = normalize_side_by_side_financial_tables(table.clone(), table.clone());
+
+        assert_eq!(left.cells, table.cells);
+        assert_eq!(right.cells, table.cells);
+        assert_eq!(left.markdown, table.markdown);
+        assert_eq!(right.markdown, table.markdown);
+    }
+
+    #[test]
+    fn preserves_semantic_four_column_financial_tables_with_wrapped_descriptors() {
+        let cells = vec![
+            vec!["Security", "Instrument", "Par", "Value"],
+            vec!["Alpha Holdings", "Senior secured note", "", ""],
+            vec!["Series 2024-A", "Floating rate", "", ""],
+            vec!["Matures 04/15/37", "USD", "5,718", "5,742,049"],
+            vec!["Beta Holdings", "Senior secured note", "", ""],
+            vec!["Series 2025-B", "Fixed rate", "", ""],
+            vec!["Matures 01/15/34", "EUR", "500", "500,639"],
+        ]
+        .into_iter()
+        .map(|row| row.into_iter().map(str::to_string).collect())
+        .collect::<Vec<Vec<String>>>();
+        let table = Table {
+            markdown: crate::pdf::table_reconstruct::table_to_markdown(&cells),
+            cells,
+            ..Default::default()
+        };
+
+        let (left, right) = normalize_side_by_side_financial_tables(table.clone(), table.clone());
+
+        assert_eq!(left.cells, table.cells);
+        assert_eq!(right.cells, table.cells);
+        assert_eq!(left.markdown, table.markdown);
+        assert_eq!(right.markdown, table.markdown);
+    }
+
+    #[test]
+    fn does_not_merge_financial_continuation_across_intervening_row() {
+        let mut table = wrapped_financial_side("Cayman");
+        table.cells.insert(
+            1,
+            vec![
+                "Disclosure".to_string(),
+                String::new(),
+                "not applicable".to_string(),
+                String::new(),
+            ],
+        );
+        table.markdown = crate::pdf::table_reconstruct::table_to_markdown(&table.cells);
+
+        let (left, _) = normalize_side_by_side_financial_tables(table.clone(), table);
+
+        assert_eq!(left.cells[0][0], "Cayman Alpha");
+        assert_eq!(
+            left.cells[1],
+            vec!["Disclosure", "", "not applicable", ""],
+            "the intervening row must remain byte-for-byte unchanged"
+        );
+        assert!(
+            !left.cells[0][0].contains("Class A1R"),
+            "an intervening non-continuation row must stop coalescing"
+        );
     }
 
     #[test]
