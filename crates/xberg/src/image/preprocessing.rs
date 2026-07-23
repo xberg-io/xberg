@@ -29,6 +29,7 @@ pub struct NormalizeResult {
 ///
 /// # Returns
 /// * `NormalizeResult` containing processed image data and metadata
+#[cfg(test)]
 pub(crate) fn normalize_image_dpi(
     rgb_data: &[u8],
     width: usize,
@@ -36,14 +37,28 @@ pub(crate) fn normalize_image_dpi(
     config: &ExtractionConfig,
     current_dpi: Option<f64>,
 ) -> Result<NormalizeResult> {
-    if width > 65536 || height > 65536 {
+    validate_rgb_data(rgb_data, width, height)?;
+    normalize_image_dpi_owned(rgb_data.to_vec(), width, height, config, current_dpi).map_err(|(error, _)| error)
+}
+
+fn validate_rgb_data(rgb_data: &[u8], width: usize, height: usize) -> Result<()> {
+    const MAX_IMAGE_DIMENSION: usize = 65_536;
+    const RGB_CHANNEL_COUNT: usize = 3;
+
+    if width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION {
         return Err(XbergError::validation(format!(
-            "Image dimensions {}x{} exceed maximum 65536x65536",
-            width, height
+            "Image dimensions {width}x{height} exceed maximum {MAX_IMAGE_DIMENSION}x{MAX_IMAGE_DIMENSION}"
         )));
     }
 
-    let expected_size = height * width * 3;
+    let expected_size = width
+        .checked_mul(height)
+        .and_then(|pixel_count| pixel_count.checked_mul(RGB_CHANNEL_COUNT))
+        .ok_or_else(|| {
+            XbergError::validation(format!(
+                "RGB data size calculation overflowed for {width}x{height} image"
+            ))
+        })?;
     if rgb_data.len() != expected_size {
         return Err(XbergError::validation(format!(
             "RGB data size {} does not match expected size {} for {}x{} image",
@@ -52,6 +67,20 @@ pub(crate) fn normalize_image_dpi(
             width,
             height
         )));
+    }
+
+    Ok(())
+}
+
+pub(crate) fn normalize_image_dpi_owned(
+    rgb_data: Vec<u8>,
+    width: usize,
+    height: usize,
+    config: &ExtractionConfig,
+    current_dpi: Option<f64>,
+) -> std::result::Result<NormalizeResult, (XbergError, Vec<u8>)> {
+    if let Err(error) = validate_rgb_data(&rgb_data, width, height) {
+        return Err((error, rgb_data));
     }
 
     let current_dpi = current_dpi.unwrap_or(PDF_POINTS_PER_INCH);
@@ -65,7 +94,7 @@ pub(crate) fn normalize_image_dpi(
 
     if !needs_resize(width as u32, height as u32, scale_factor, config) {
         return Ok(create_skip_result(
-            rgb_data.to_vec(),
+            rgb_data,
             width,
             height,
             original_dpi,
@@ -80,8 +109,8 @@ pub(crate) fn normalize_image_dpi(
     let (new_width, new_height, final_scale, dimension_clamped) =
         calculate_new_dimensions(width as u32, height as u32, scale_factor, config);
 
-    perform_resize(
-        rgb_data,
+    match perform_resize(
+        &rgb_data,
         width as u32,
         height as u32,
         new_width,
@@ -93,7 +122,10 @@ pub(crate) fn normalize_image_dpi(
         dimension_clamped,
         calculated_dpi,
         config,
-    )
+    ) {
+        Ok(result) => Ok(result),
+        Err(error) => Err((error, rgb_data)),
+    }
 }
 
 /// Calculate target DPI based on configuration
@@ -274,6 +306,52 @@ mod tests {
         let normalized = result.unwrap();
         assert_eq!(normalized.dimensions, (100, 100));
         assert!(normalized.metadata.skipped_resize);
+    }
+
+    #[test]
+    fn test_normalize_image_dpi_owned_reuses_skip_buffer() {
+        let config = ExtractionConfig {
+            target_dpi: 72,
+            max_image_dimension: 4096,
+            auto_adjust_dpi: false,
+            min_dpi: 72,
+            max_dpi: 600,
+        };
+
+        let rgb_data = create_test_rgb_data(100, 100);
+        let original_ptr = rgb_data.as_ptr();
+        let original_capacity = rgb_data.capacity();
+        let normalized = normalize_image_dpi_owned(rgb_data, 100, 100, &config, Some(72.0)).unwrap();
+
+        assert_eq!(normalized.rgb_data.as_ptr(), original_ptr);
+        assert_eq!(normalized.rgb_data.capacity(), original_capacity);
+        assert!(normalized.metadata.skipped_resize);
+    }
+
+    #[test]
+    fn test_normalize_image_dpi_owned_preserves_invalid_buffer() {
+        let config = ExtractionConfig::default();
+        let rgb_data = vec![7; 11];
+        let original_ptr = rgb_data.as_ptr();
+        let original_capacity = rgb_data.capacity();
+
+        let returned_data = match normalize_image_dpi_owned(rgb_data, 2, 2, &config, Some(300.0)) {
+            Ok(_) => panic!("invalid RGB buffer unexpectedly passed validation"),
+            Err((_, returned_data)) => returned_data,
+        };
+
+        assert_eq!(returned_data, vec![7; 11]);
+        assert_eq!(returned_data.as_ptr(), original_ptr);
+        assert_eq!(returned_data.capacity(), original_capacity);
+    }
+
+    #[test]
+    fn test_normalize_image_dpi_owned_rejects_maximum_size_without_panicking() {
+        let config = ExtractionConfig::default();
+
+        let result = normalize_image_dpi_owned(Vec::new(), 65_536, 65_536, &config, Some(300.0));
+
+        assert!(result.is_err());
     }
 
     #[test]

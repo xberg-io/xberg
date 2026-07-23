@@ -9,7 +9,7 @@ use super::validation::{
     resolve_all_installed_languages, resolve_tessdata_path, strip_control_characters, validate_language_and_traineddata,
 };
 use crate::core::config::ExtractionConfig;
-use crate::image::normalize_image_dpi;
+use crate::image::normalize_image_dpi_owned;
 use crate::ocr::cache::OcrCache;
 use crate::ocr::conversion::{TsvRow, iterator_word_to_element, tsv_row_to_element};
 use crate::ocr::error::OcrError;
@@ -478,9 +478,10 @@ pub(super) fn perform_ocr(
     let rgb_image = {
         let img = crate::extraction::image::load_image_for_ocr(image_bytes)
             .map_err(|e| OcrError::ImageProcessingFailed(e.to_string()))?;
-        img.to_rgb8()
+        img.into_rgb8()
     };
     let (orig_width, orig_height) = rgb_image.dimensions();
+    let rgb_data = rgb_image.into_raw();
 
     log_ci_debug(ci_debug_enabled, "image", || {
         format!("dimensions={}x{} color_type=RGB8", orig_width, orig_height)
@@ -495,41 +496,35 @@ pub(super) fn perform_ocr(
         })
         .unwrap_or_default();
 
-    let (image_data, width, height, source_dpi) = match normalize_image_dpi(
-        rgb_image.as_raw(),
-        orig_width as usize,
-        orig_height as usize,
-        &dpi_config,
-        None,
-    ) {
-        Ok(result) => {
-            let w = result.dimensions.0 as u32;
-            let h = result.dimensions.1 as u32;
-            let final_dpi = result.metadata.final_dpi;
+    let (image_data, width, height, source_dpi) =
+        match normalize_image_dpi_owned(rgb_data, orig_width as usize, orig_height as usize, &dpi_config, None) {
+            Ok(result) => {
+                let w = result.dimensions.0 as u32;
+                let h = result.dimensions.1 as u32;
+                let final_dpi = result.metadata.final_dpi;
 
-            log_ci_debug(ci_debug_enabled, "dpi_normalization", || {
-                format!(
-                    "original={}x{} normalized={}x{} target_dpi={} final_dpi={} resized={}",
-                    orig_width,
-                    orig_height,
-                    w,
-                    h,
-                    result.metadata.target_dpi,
-                    final_dpi,
-                    !result.metadata.skipped_resize
-                )
-            });
+                log_ci_debug(ci_debug_enabled, "dpi_normalization", || {
+                    format!(
+                        "original={}x{} normalized={}x{} target_dpi={} final_dpi={} resized={}",
+                        orig_width,
+                        orig_height,
+                        w,
+                        h,
+                        result.metadata.target_dpi,
+                        final_dpi,
+                        !result.metadata.skipped_resize
+                    )
+                });
 
-            drop(rgb_image);
-            (result.rgb_data, w, h, final_dpi)
-        }
-        Err(e) => {
-            tracing::warn!("DPI normalization failed, using original image: {}", e);
-            let w = orig_width;
-            let h = orig_height;
-            (rgb_image.into_raw(), w, h, 300)
-        }
-    };
+                (result.rgb_data, w, h, final_dpi)
+            }
+            Err((e, image_data)) => {
+                tracing::warn!("DPI normalization failed, using original image: {}", e);
+                let w = orig_width;
+                let h = orig_height;
+                (image_data, w, h, 300)
+            }
+        };
 
     let bytes_per_pixel: u32 = 3;
     let bytes_per_line = width * bytes_per_pixel;

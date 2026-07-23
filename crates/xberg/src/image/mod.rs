@@ -5,4 +5,4 @@ pub mod preprocessing;
 /// Image resize helpers used before OCR to normalize resolution.
 pub mod resize;
 
-pub(crate) use preprocessing::normalize_image_dpi;
+pub(crate) use preprocessing::normalize_image_dpi_owned;
