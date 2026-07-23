@@ -134,10 +134,14 @@ fn project_spans_to_regions(spans: &[TextSpan], hints: &[LayoutHint]) -> Vec<Reg
 #[cfg(feature = "layout-detection")]
 const READING_ORDER_EPS: f32 = 1e-3;
 
+/// Maximum horizontal expansion on either side, relative to the PDF page width.
+#[cfg(feature = "layout-detection")]
+const HORIZONTAL_DILATION_THRESHOLD_NORM: f32 = 0.15;
+
 /// A layout block (bbox in PDF points, bottom-left origin) used by the
 /// predecessor-graph reading-order reconstruction.
 #[cfg(feature = "layout-detection")]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 struct OrderBlock {
     left: f32,
     bottom: f32,
@@ -219,6 +223,54 @@ fn build_updown_maps(blocks: &[OrderBlock]) -> (Vec<Vec<usize>>, Vec<Vec<usize>>
     (up, dn)
 }
 
+/// Expand each block horizontally toward its first predecessor and successor.
+///
+/// This mirrors Docling's effective `_do_horizontal_dilation` behavior: both
+/// candidate expansions are derived from the original relation maps and boxes,
+/// each side is capped at 15% of the actual PDF page width, and rejection of
+/// either candidate leaves the block entirely unchanged.
+#[cfg(feature = "layout-detection")]
+fn dilate_horizontally(
+    blocks: &[OrderBlock],
+    up: &[Vec<usize>],
+    down: &[Vec<usize>],
+    page_width_pts: f32,
+) -> Vec<OrderBlock> {
+    let threshold = HORIZONTAL_DILATION_THRESHOLD_NORM * page_width_pts;
+    blocks
+        .iter()
+        .enumerate()
+        .map(|(index, block)| {
+            let mut left = block.left;
+            let mut right = block.right;
+
+            if let Some(&predecessor_index) = up[index].first() {
+                let predecessor = &blocks[predecessor_index];
+                let dilated_left = left.min(predecessor.left);
+                let dilated_right = right.max(predecessor.right);
+                if left - dilated_left > threshold || dilated_right - right > threshold {
+                    return *block;
+                }
+                left = dilated_left;
+                right = dilated_right;
+            }
+
+            if let Some(&successor_index) = down[index].first() {
+                let successor = &blocks[successor_index];
+                let dilated_left = left.min(successor.left);
+                let dilated_right = right.max(successor.right);
+                if left - dilated_left > threshold || dilated_right - right > threshold {
+                    return *block;
+                }
+                left = dilated_left;
+                right = dilated_right;
+            }
+
+            OrderBlock { left, right, ..*block }
+        })
+        .collect()
+}
+
 /// Walk up the predecessor map from `start`, always taking the first not-yet-
 /// visited predecessor, until reaching a block whose predecessors are all
 /// visited. Guarantees every predecessor is emitted before its successor.
@@ -286,12 +338,19 @@ fn is_multi_column(blocks: &[OrderBlock]) -> bool {
 /// Order `blocks` (layout regions with content) in reading order via the
 /// predecessor graph. Returns block indices in reading order.
 ///
-/// Port of docling `ReadingOrderPredictor._predict_page`, sans the horizontal
-/// dilation refinement (`_do_horizontal_dilation`), which is a follow-up.
+/// Port of docling `ReadingOrderPredictor._predict_page`, including its
+/// horizontal dilation refinement when the actual PDF page width is available.
 #[cfg(feature = "layout-detection")]
-fn order_blocks_by_graph(blocks: &[OrderBlock]) -> Vec<usize> {
+fn order_blocks_by_graph(blocks: &[OrderBlock], page_width_pts: Option<f32>) -> Vec<usize> {
     let n = blocks.len();
-    let (up, mut dn) = build_updown_maps(blocks);
+    let (raw_up, raw_dn) = build_updown_maps(blocks);
+    let (up, mut dn) = match page_width_pts.filter(|width| width.is_finite() && *width > 0.0) {
+        Some(page_width_pts) => {
+            let dilated = dilate_horizontally(blocks, &raw_up, &raw_dn, page_width_pts);
+            build_updown_maps(&dilated)
+        }
+        None => (raw_up, raw_dn),
+    };
 
     for children in dn.iter_mut() {
         children.sort_by(|&a, &b| reading_order_cmp(&blocks[a], &blocks[b]));
@@ -565,7 +624,12 @@ fn uncovered_group(
     }
 }
 
-fn ordered_indices(blocks: &[Option<OrderBlock>], first_indices: &[usize], no_reorder: bool) -> Vec<usize> {
+fn ordered_indices(
+    blocks: &[Option<OrderBlock>],
+    first_indices: &[usize],
+    no_reorder: bool,
+    page_width_pts: Option<f32>,
+) -> Vec<usize> {
     if no_reorder {
         let mut order = (0..blocks.len()).collect::<Vec<_>>();
         order.sort_by_key(|index| first_indices[*index]);
@@ -582,7 +646,7 @@ fn ordered_indices(blocks: &[Option<OrderBlock>], first_indices: &[usize], no_re
         .map(|index| blocks[*index].expect("validated block"))
         .collect::<Vec<_>>();
     let valid_order = if is_multi_column(&valid_blocks) {
-        order_blocks_by_graph(&valid_blocks)
+        order_blocks_by_graph(&valid_blocks, page_width_pts)
     } else {
         let mut order = (0..valid_blocks.len()).collect::<Vec<_>>();
         order.sort_by(|left, right| {
@@ -606,6 +670,7 @@ fn order_planned_groups(
     groups: Vec<PlannedGroup>,
     root_blocks: &[Option<OrderBlock>],
     no_reorder: bool,
+    page_width_pts: Option<f32>,
 ) -> Vec<LayoutSegmentGroup> {
     let mut by_root = std::collections::BTreeMap::<usize, Vec<PlannedGroup>>::new();
     for group in groups {
@@ -629,7 +694,7 @@ fn order_planned_groups(
         .collect::<Vec<_>>();
 
     let mut ordered = Vec::new();
-    for root_position in ordered_indices(&root_order_blocks, &root_first_indices, no_reorder) {
+    for root_position in ordered_indices(&root_order_blocks, &root_first_indices, no_reorder, page_width_pts) {
         let root_id = root_ids[root_position];
         let mut children = by_root.remove(&root_id).expect("known root");
         let child_blocks = children.iter().map(|group| group.order_block).collect::<Vec<_>>();
@@ -637,7 +702,7 @@ fn order_planned_groups(
             .iter()
             .map(|group| group.first_segment_index)
             .collect::<Vec<_>>();
-        let child_order = ordered_indices(&child_blocks, &child_first, no_reorder);
+        let child_order = ordered_indices(&child_blocks, &child_first, no_reorder, page_width_pts);
         let mut slots = children.drain(..).map(Some).collect::<Vec<_>>();
         ordered.extend(
             child_order
@@ -660,6 +725,7 @@ pub(crate) fn plan_segment_groups_by_layout(
     hints: &[LayoutHint],
     wrapper_ownership: &[bool],
     no_reorder: bool,
+    page_width_pts: Option<f32>,
 ) -> Vec<LayoutSegmentGroup> {
     if segments.is_empty() {
         return Vec::new();
@@ -759,7 +825,7 @@ pub(crate) fn plan_segment_groups_by_layout(
             root_blocks[group.root_id] = group.order_block;
         }
     }
-    order_planned_groups(groups, &root_blocks, no_reorder)
+    order_planned_groups(groups, &root_blocks, no_reorder, page_width_pts)
 }
 
 /// Compatibility helper used by the legacy reading-order unit tests.
@@ -767,9 +833,10 @@ pub(crate) fn plan_segment_groups_by_layout(
 pub(crate) fn reorder_segments_by_layout(
     segments: Vec<crate::pdf::hierarchy::SegmentData>,
     hints: &[LayoutHint],
+    page_width_pts: Option<f32>,
 ) -> Vec<crate::pdf::hierarchy::SegmentData> {
     let no_reorder = crate::pdf::structure::layout_debug::layout_debug_flags().no_reorder;
-    plan_segment_groups_by_layout(&segments, hints, &[], no_reorder)
+    plan_segment_groups_by_layout(&segments, hints, &[], no_reorder, page_width_pts)
         .into_iter()
         .flat_map(|group| group.segment_indices)
         .map(|index| segments[index].clone())
@@ -928,6 +995,171 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "layout-detection")]
+    fn order_block(left: f32, bottom: f32, right: f32, top: f32) -> OrderBlock {
+        OrderBlock {
+            left,
+            bottom,
+            right,
+            top,
+        }
+    }
+
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn horizontal_dilation_uses_page_width_threshold() {
+        let target = order_block(100.0, 100.0, 200.0, 120.0);
+        let accepted_predecessor = order_block(-50.0, 200.0, 200.0, 220.0);
+        let accepted_blocks = vec![target, accepted_predecessor];
+        let accepted = dilate_horizontally(
+            &accepted_blocks,
+            &[vec![1], Vec::new()],
+            &[Vec::new(), Vec::new()],
+            1_000.0,
+        );
+        assert_eq!(accepted[0].left, -50.0, "widening exactly 15% must be accepted");
+
+        let rejected_predecessor = order_block(-50.1, 200.0, 200.0, 220.0);
+        let rejected_blocks = vec![target, rejected_predecessor];
+        let rejected = dilate_horizontally(
+            &rejected_blocks,
+            &[vec![1], Vec::new()],
+            &[Vec::new(), Vec::new()],
+            1_000.0,
+        );
+        assert_eq!(
+            rejected[0], target,
+            "widening greater than 15% must leave the block unchanged"
+        );
+    }
+
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn horizontal_dilation_rolls_back_predecessor_when_successor_exceeds_threshold() {
+        let target = order_block(100.0, 100.0, 200.0, 120.0);
+        let predecessor = order_block(0.0, 200.0, 200.0, 220.0);
+        let successor = order_block(100.0, 0.0, 400.1, 20.0);
+        let blocks = vec![target, predecessor, successor];
+
+        let dilated = dilate_horizontally(
+            &blocks,
+            &[vec![1], Vec::new(), Vec::new()],
+            &[vec![2], Vec::new(), Vec::new()],
+            1_000.0,
+        );
+
+        assert_eq!(
+            dilated[0], target,
+            "a rejected successor expansion must discard the accepted predecessor expansion"
+        );
+    }
+
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn horizontal_dilation_preserves_raw_blocks() {
+        let blocks = vec![
+            order_block(100.0, 100.0, 200.0, 120.0),
+            order_block(0.0, 200.0, 200.0, 220.0),
+        ];
+        let original = blocks.clone();
+
+        let dilated = dilate_horizontally(&blocks, &[vec![1], Vec::new()], &[Vec::new(), Vec::new()], 1_000.0);
+
+        assert_eq!(blocks, original, "dilation must not mutate the raw geometry");
+        assert_ne!(dilated[0], blocks[0], "the copied geometry should be widened");
+    }
+
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn horizontal_dilation_uses_only_first_neighbors() {
+        let blocks = vec![
+            order_block(40.0, 40.0, 50.0, 50.0),
+            order_block(35.0, 60.0, 50.0, 70.0),
+            order_block(20.0, 80.0, 50.0, 90.0),
+            order_block(40.0, 20.0, 55.0, 30.0),
+            order_block(40.0, 0.0, 70.0, 10.0),
+        ];
+        let mut up = vec![Vec::new(); blocks.len()];
+        let mut down = vec![Vec::new(); blocks.len()];
+        up[0] = vec![1, 2];
+        down[0] = vec![3, 4];
+
+        let dilated = dilate_horizontally(&blocks, &up, &down, 100.0);
+
+        assert_eq!(dilated[0].left, 35.0);
+        assert_eq!(dilated[0].right, 55.0);
+    }
+
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn invalid_page_width_preserves_legacy_graph_order() {
+        let blocks = vec![
+            order_block(0.0, 200.0, 100.0, 220.0),
+            order_block(0.0, 100.0, 100.0, 120.0),
+            order_block(200.0, 200.0, 300.0, 220.0),
+            order_block(200.0, 100.0, 300.0, 120.0),
+        ];
+        let legacy = order_blocks_by_graph(&blocks, None);
+
+        for invalid_width in [f32::NAN, f32::INFINITY, 0.0, -1.0] {
+            assert_eq!(
+                order_blocks_by_graph(&blocks, Some(invalid_width)),
+                legacy,
+                "invalid page width {invalid_width:?} must preserve the legacy graph"
+            );
+        }
+    }
+
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn graph_relations_are_rebuilt_from_dilated_blocks() {
+        let blocks = vec![
+            order_block(0.0, 200.0, 120.0, 220.0),
+            order_block(80.0, 300.0, 160.0, 320.0),
+            order_block(120.0, 300.0, 240.0, 320.0),
+            order_block(160.0, 200.0, 280.0, 220.0),
+        ];
+
+        assert_eq!(order_blocks_by_graph(&blocks, None), [1, 0, 2, 3]);
+        assert_eq!(
+            order_blocks_by_graph(&blocks, Some(400.0)),
+            [1, 2, 0, 3],
+            "dilated geometry must replace the raw predecessor maps"
+        );
+    }
+
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn segment_plan_uses_pdf_page_width_for_dilation() {
+        use crate::pdf::structure::types::LayoutHintClass;
+
+        let segments = vec![
+            planned_segment("bottom-left", 10.0, 205.0, 10.0, 10.0),
+            planned_segment("top-left", 90.0, 305.0, 10.0, 10.0),
+            planned_segment("top-right", 200.0, 305.0, 10.0, 10.0),
+            planned_segment("bottom-right", 250.0, 205.0, 10.0, 10.0),
+        ];
+        let hints = vec![
+            planned_hint(LayoutHintClass::Text, 0.0, 200.0, 120.0, 220.0),
+            planned_hint(LayoutHintClass::Text, 80.0, 300.0, 160.0, 320.0),
+            planned_hint(LayoutHintClass::Text, 120.0, 300.0, 240.0, 320.0),
+            planned_hint(LayoutHintClass::Text, 160.0, 200.0, 280.0, 220.0),
+        ];
+        let flattened = |page_width_pts| {
+            plan_segment_groups_by_layout(&segments, &hints, &[], false, page_width_pts)
+                .into_iter()
+                .flat_map(|group| group.segment_indices)
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(flattened(None), [1, 0, 2, 3]);
+        assert_eq!(
+            flattened(Some(400.0)),
+            [1, 2, 0, 3],
+            "the page width must reach the graph refinement"
+        );
+    }
+
     #[test]
     fn plan_preserves_wrapper_and_child_paths() {
         use crate::pdf::structure::types::LayoutHintClass;
@@ -941,7 +1173,7 @@ mod tests {
             planned_hint(LayoutHintClass::Text, 10.0, 60.0, 50.0, 90.0),
         ];
 
-        let groups = plan_segment_groups_by_layout(&segments, &hints, &[], false);
+        let groups = plan_segment_groups_by_layout(&segments, &hints, &[], false, None);
         assert_eq!(groups.len(), 2);
         let child = groups.iter().find(|group| group.hint_indices == [1]).unwrap();
         assert_eq!(child.segment_indices, [0]);
@@ -962,7 +1194,7 @@ mod tests {
             planned_hint(LayoutHintClass::Caption, 0.0, 0.0, 21.0, 100.0),
         ];
 
-        let groups = plan_segment_groups_by_layout(&segments, &hints, &[], true);
+        let groups = plan_segment_groups_by_layout(&segments, &hints, &[], true, None);
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].segment_indices, [0]);
         assert!(groups[0].hint_indices.is_empty());
@@ -982,7 +1214,7 @@ mod tests {
                 planned_hint(class_name, 5.0, 0.0, 95.0, 100.0),
             ];
 
-            let groups = plan_segment_groups_by_layout(&segments, &hints, &[], true);
+            let groups = plan_segment_groups_by_layout(&segments, &hints, &[], true, None);
             assert_eq!(groups.len(), 1, "{class_name:?}");
             assert_eq!(groups[0].segment_indices, [0], "{class_name:?}");
             assert_eq!(groups[0].hint_indices, [1], "{class_name:?}");
@@ -999,7 +1231,7 @@ mod tests {
         let segments = vec![planned_segment("outside", 200.0, 200.0, 20.0, 10.0)];
         let hints = vec![planned_hint(LayoutHintClass::Text, 0.0, 0.0, 100.0, 100.0)];
 
-        let groups = plan_segment_groups_by_layout(&segments, &hints, &[], true);
+        let groups = plan_segment_groups_by_layout(&segments, &hints, &[], true, None);
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].segment_indices, [0]);
         assert!(groups[0].hint_indices.is_empty());
@@ -1017,7 +1249,7 @@ mod tests {
         ];
         let hints = vec![planned_hint(LayoutHintClass::Text, 0.0, 40.0, 100.0, 70.0)];
 
-        let groups = plan_segment_groups_by_layout(&segments, &hints, &[], true);
+        let groups = plan_segment_groups_by_layout(&segments, &hints, &[], true, None);
         let flattened = groups
             .iter()
             .flat_map(|group| group.segment_indices.iter().copied())
@@ -1036,13 +1268,13 @@ mod tests {
 
         let segments = vec![planned_segment("overflow", f32::MAX, 10.0, f32::MAX, 10.0)];
         let hints = vec![planned_hint(LayoutHintClass::Text, 0.0, 0.0, 100.0, 100.0)];
-        let groups = plan_segment_groups_by_layout(&segments, &hints, &[], true);
+        let groups = plan_segment_groups_by_layout(&segments, &hints, &[], true, None);
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].segment_indices, [0]);
         assert!(groups[0].hint_indices.is_empty());
 
         let invalid_hint = vec![planned_hint(LayoutHintClass::Text, 0.0, 0.0, f32::INFINITY, 100.0)];
-        let groups = plan_segment_groups_by_layout(&segments, &invalid_hint, &[], true);
+        let groups = plan_segment_groups_by_layout(&segments, &invalid_hint, &[], true, None);
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].segment_indices, [0]);
         assert!(groups[0].region_path.is_none());
@@ -1057,7 +1289,7 @@ mod tests {
             planned_hint(LayoutHintClass::Picture, 0.0, 0.0, 100.0, 100.0),
             planned_hint(LayoutHintClass::Caption, 10.0, 60.0, 50.0, 90.0),
         ];
-        let groups = plan_segment_groups_by_layout(&segments, &hints, &[false], true);
+        let groups = plan_segment_groups_by_layout(&segments, &hints, &[false], true, None);
         let path = groups[0].region_path.unwrap();
         assert_eq!(path.root.id, 1);
         assert!(path.child.is_none());
@@ -1245,7 +1477,7 @@ mod tests {
             },
         ];
 
-        let reordered = reorder_segments_by_layout(segments, &hints);
+        let reordered = reorder_segments_by_layout(segments, &hints, Some(500.0));
         let order: Vec<&str> = reordered.iter().map(|s| s.text.as_str()).collect();
         assert_eq!(
             order,
@@ -1300,7 +1532,7 @@ mod tests {
             hint(260.0, 100.0, 460.0, 450.0),
         ];
 
-        let reordered = reorder_segments_by_layout(segments, &hints);
+        let reordered = reorder_segments_by_layout(segments, &hints, Some(500.0));
         let order: Vec<&str> = reordered.iter().map(|s| s.text.as_str()).collect();
         assert_eq!(
             order,
@@ -1464,7 +1696,7 @@ mod tests {
             top: 500.0,
         }];
 
-        let reordered = reorder_segments_by_layout(segments, &hints);
+        let reordered = reorder_segments_by_layout(segments, &hints, Some(500.0));
         let order: Vec<&str> = reordered.iter().map(|s| s.text.as_str()).collect();
 
         assert_eq!(
@@ -1515,7 +1747,7 @@ mod tests {
             top: 500.0,
         }];
 
-        let reordered = reorder_segments_by_layout(segments, &hints);
+        let reordered = reorder_segments_by_layout(segments, &hints, Some(500.0));
         let order: Vec<&str> = reordered.iter().map(|s| s.text.as_str()).collect();
 
         assert_eq!(

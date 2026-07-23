@@ -393,6 +393,9 @@ struct PageInput {
     /// Empty when layout-detection is not active.
     #[cfg(feature = "layout-detection")]
     hint_validations: Vec<super::regions::layout_validation::RegionValidation>,
+    /// Actual PDF page width in points, used by layout reading-order refinement.
+    #[cfg(feature = "layout-detection")]
+    page_width_pts: Option<f32>,
     /// Whether this page's structure-tree paragraphs need font-size classification.
     needs_classify: bool,
     /// Y-coordinates of paragraph gaps detected from segment boundaries.
@@ -423,6 +426,8 @@ fn process_single_page(
         table_bboxes,
         #[cfg(feature = "layout-detection")]
         hint_validations,
+        #[cfg(feature = "layout-detection")]
+        page_width_pts,
         needs_classify,
         paragraph_gap_ys,
         include_headers,
@@ -483,6 +488,7 @@ fn process_single_page(
                         doc_body_font_size,
                         include_headers,
                         include_footers,
+                        page_width_pts,
                     },
                 )
             } else {
@@ -574,6 +580,7 @@ struct LayoutParagraphContext<'a> {
     doc_body_font_size: Option<f32>,
     include_headers: bool,
     include_footers: bool,
+    page_width_pts: Option<f32>,
 }
 
 #[cfg(feature = "layout-detection")]
@@ -589,6 +596,7 @@ fn process_layout_segment_groups(
         hints,
         wrapper_ownership,
         no_reorder,
+        context.page_width_pts,
     );
     if matches!(groups.as_slice(), [group] if group.hint_indices.is_empty() && group.region_path.is_none()) {
         return segments_to_paragraphs(segments, context.heading_map, context.paragraph_gap_ys);
@@ -1697,6 +1705,10 @@ pub(crate) fn extract_document_structure_from_segments(
                 table_bboxes: extracted_table_bboxes_by_page.get(&i).cloned().unwrap_or_default(),
                 #[cfg(feature = "layout-detection")]
                 hint_validations: validations_by_page.get(&i).cloned().unwrap_or_default(),
+                #[cfg(feature = "layout-detection")]
+                page_width_pts: layout_results
+                    .and_then(|results| results.get(i))
+                    .map(|result| result.page_width_pts),
                 needs_classify: false,
                 paragraph_gap_ys,
                 include_headers,
@@ -4625,6 +4637,8 @@ where new shares are issued;";
                 table_bboxes: Vec::new(),
                 #[cfg(feature = "layout-detection")]
                 hint_validations: Vec::new(),
+                #[cfg(feature = "layout-detection")]
+                page_width_pts: None,
                 needs_classify: false,
                 paragraph_gap_ys: Vec::new(),
                 include_headers: true,
@@ -4652,6 +4666,7 @@ where new shares are issued;";
                     page_hints,
                     table_bboxes: Vec::new(),
                     hint_validations: Vec::new(),
+                    page_width_pts: None,
                     needs_classify: false,
                     paragraph_gap_ys: paragraph_gap_ys.clone(),
                     include_headers: true,
@@ -4684,6 +4699,67 @@ where new shares are issued;";
         assert_eq!(format!("{empty:?}"), format!("{legacy:?}"));
         assert_eq!(format!("{invalid:?}"), format!("{legacy:?}"));
         assert_eq!(format!("{non_overlapping:?}"), format!("{legacy:?}"));
+    }
+
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn page_width_reaches_layout_reading_order_graph() {
+        let positioned_segment = |text: &str, x: f32, y: f32| {
+            let mut segment = heuristic_segment(text, y + 10.0, 10.0, false);
+            segment.x = x;
+            segment.y = y;
+            segment.height = 10.0;
+            segment
+        };
+        let segments = vec![
+            positioned_segment("bottom-left", 10.0, 205.0),
+            positioned_segment("top-left", 90.0, 305.0),
+            positioned_segment("top-right", 200.0, 305.0),
+            positioned_segment("bottom-right", 250.0, 205.0),
+        ];
+        let hint = |left, bottom, right, top| LayoutHint {
+            class_name: crate::pdf::structure::types::LayoutHintClass::Text,
+            confidence: 0.95,
+            left,
+            bottom,
+            right,
+            top,
+        };
+        let hints = vec![
+            hint(0.0, 200.0, 120.0, 220.0),
+            hint(80.0, 300.0, 160.0, 320.0),
+            hint(120.0, 300.0, 240.0, 320.0),
+            hint(160.0, 200.0, 280.0, 220.0),
+        ];
+        let process = |page_width_pts| {
+            process_single_page(
+                PageInput {
+                    page_index: 0,
+                    struct_paragraphs: None,
+                    heuristic_segments: segments.clone(),
+                    page_hints: Some(hints.clone()),
+                    table_bboxes: Vec::new(),
+                    hint_validations: Vec::new(),
+                    page_width_pts,
+                    needs_classify: false,
+                    paragraph_gap_ys: Vec::new(),
+                    include_headers: true,
+                    include_footers: true,
+                },
+                &[],
+                None,
+            )
+            .iter()
+            .map(paragraph_text)
+            .collect::<Vec<_>>()
+        };
+
+        assert_eq!(process(None), ["top-left", "bottom-left", "top-right", "bottom-right"]);
+        assert_eq!(
+            process(Some(400.0)),
+            ["top-left", "top-right", "bottom-left", "bottom-right"],
+            "the actual page width must reach layout graph dilation"
+        );
     }
 
     #[test]
@@ -4757,6 +4833,8 @@ where new shares are issued;";
                 table_bboxes: Vec::new(),
                 #[cfg(feature = "layout-detection")]
                 hint_validations: Vec::new(),
+                #[cfg(feature = "layout-detection")]
+                page_width_pts: None,
                 needs_classify: false,
                 paragraph_gap_ys: Vec::new(),
                 include_headers: true,
@@ -4799,6 +4877,8 @@ where new shares are issued;";
                 table_bboxes: Vec::new(),
                 #[cfg(feature = "layout-detection")]
                 hint_validations: Vec::new(),
+                #[cfg(feature = "layout-detection")]
+                page_width_pts: Some(612.0),
                 needs_classify: false,
                 paragraph_gap_ys: Vec::new(),
                 include_headers: true,
@@ -5466,6 +5546,8 @@ where new shares are issued;";
                 table_bboxes: vec![],
                 #[cfg(feature = "layout-detection")]
                 hint_validations: vec![],
+                #[cfg(feature = "layout-detection")]
+                page_width_pts: None,
                 needs_classify: false,
                 paragraph_gap_ys: vec![],
                 include_headers: true,
@@ -5516,6 +5598,8 @@ where new shares are issued;";
                 table_bboxes: vec![],
                 #[cfg(feature = "layout-detection")]
                 hint_validations: vec![],
+                #[cfg(feature = "layout-detection")]
+                page_width_pts: None,
                 needs_classify: false,
                 paragraph_gap_ys: vec![],
                 include_headers: true,
