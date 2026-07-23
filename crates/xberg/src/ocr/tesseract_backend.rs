@@ -182,6 +182,10 @@ impl Plugin for TesseractBackend {
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 impl OcrBackend for TesseractBackend {
     async fn process_image(&self, image_bytes: &[u8], config: &OcrConfig) -> Result<ExtractedDocument> {
+        self.process_image_owned(Arc::new(image_bytes.to_vec()), config).await
+    }
+
+    async fn process_image_owned(&self, image_bytes: Arc<Vec<u8>>, config: &OcrConfig) -> Result<ExtractedDocument> {
         let tess_config = self.config_to_tesseract(config);
         let tess_config_clone = tess_config.clone();
         let output_format = config.output_format.clone();
@@ -196,14 +200,13 @@ impl OcrBackend for TesseractBackend {
                 message: format!("Tesseract concurrency limiter closed unexpectedly: {error}"),
                 source: None,
             })?;
-        let image_bytes = image_bytes.to_vec();
 
         let operation = move || {
             #[cfg(not(target_arch = "wasm32"))]
             let _permit = permit;
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match output_format {
-                Some(fmt) => processor.process_image_with_format(&image_bytes, &tess_config_clone, fmt),
-                None => processor.process_image(&image_bytes, &tess_config_clone),
+                Some(fmt) => processor.process_image_with_format(image_bytes.as_slice(), &tess_config_clone, fmt),
+                None => processor.process_image(image_bytes.as_slice(), &tess_config_clone),
             }))
             .unwrap_or_else(|_| {
                 Err(crate::ocr::error::OcrError::ProcessingFailed(

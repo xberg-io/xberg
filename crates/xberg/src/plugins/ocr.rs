@@ -162,6 +162,15 @@ pub trait OcrBackend: Plugin {
     /// ```
     async fn process_image(&self, image_bytes: &[u8], config: &OcrConfig) -> Result<ExtractedDocument>;
 
+    /// Process an owned image buffer and extract text via OCR.
+    ///
+    /// The default implementation delegates to [`Self::process_image`]. Backends
+    /// that hand work to an owned blocking task can override this method to avoid
+    /// copying the image buffer.
+    async fn process_image_owned(&self, image_bytes: Arc<Vec<u8>>, config: &OcrConfig) -> Result<ExtractedDocument> {
+        self.process_image(image_bytes.as_slice(), config).await
+    }
+
     /// Process a file and extract text via OCR.
     ///
     /// Default implementation reads the file and calls `process_image`.
@@ -570,6 +579,21 @@ mod tests {
         };
 
         let result = backend.process_image(b"fake image data", &config).await.unwrap();
+        assert_eq!(result.content, "Mocked OCR text");
+        assert_eq!(result.mime_type, "text/plain");
+    }
+
+    #[tokio::test]
+    async fn test_ocr_backend_process_image_owned_default_impl_is_object_safe() {
+        let backend: Arc<dyn OcrBackend> = Arc::new(MockOcrBackend {
+            languages: vec!["eng".to_string()],
+        });
+
+        let result = backend
+            .process_image_owned(Arc::new(b"fake image data".to_vec()), &OcrConfig::default())
+            .await
+            .unwrap();
+
         assert_eq!(result.content, "Mocked OCR text");
         assert_eq!(result.mime_type, "text/plain");
     }

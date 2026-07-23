@@ -662,7 +662,7 @@ pub(crate) async fn extract_mixed_ocr_native(
                 let data_clone = Arc::clone(data);
                 let idx = *page_idx;
                 join_set.spawn(async move {
-                    let result = backend_clone.process_image(&data_clone, &config_clone).await;
+                    let result = backend_clone.process_image_owned(data_clone, &config_clone).await;
                     (idx, result)
                 });
             }
@@ -1325,7 +1325,7 @@ pub(crate) async fn extract_with_ocr(
                 let data_clone = Arc::clone(image_data);
                 let idx = *page_idx;
                 join_set.spawn(async move {
-                    let result = backend_clone.process_image(&data_clone, &config_clone).await;
+                    let result = backend_clone.process_image_owned(data_clone, &config_clone).await;
                     (idx, result)
                 });
             }

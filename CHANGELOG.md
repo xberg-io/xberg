@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Owned-buffer OCR dispatch.** `OcrBackend::process_image_owned` lets backends move image buffers
+  into blocking work without an extra copy; the default implementation preserves existing backend
+  behavior.
+
 ## [1.0.0-rc.33] - 2026-07-23
 
 ### Added
