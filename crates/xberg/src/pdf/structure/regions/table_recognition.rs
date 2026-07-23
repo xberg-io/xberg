@@ -78,6 +78,12 @@ pub(in crate::pdf::structure) fn word_hint_iow(
     word_rect.intersection_over_self(&region_rect)
 }
 
+#[cfg(feature = "layout-detection")]
+pub(in crate::pdf::structure) struct NativeTatrRecognitionOptions {
+    pub(in crate::pdf::structure) page_index: usize,
+    pub(in crate::pdf::structure) allow_single_column: bool,
+}
+
 /// Recognize tables on a native PDF page using TATR structure prediction.
 ///
 /// Crops table regions from the rendered layout detection image, runs TATR
@@ -97,7 +103,7 @@ pub(in crate::pdf::structure) fn recognize_tables_for_native_page(
     words: &[crate::pdf::table_reconstruct::HocrWord],
     page_result: &crate::pdf::structure::types::PageLayoutResult,
     page_height: f32,
-    page_index: usize,
+    options: NativeTatrRecognitionOptions,
     tatr_model: &mut crate::layout::models::tatr::TatrModel,
 ) -> Vec<Table> {
     let rgb_image = page_image;
@@ -118,7 +124,8 @@ pub(in crate::pdf::structure) fn recognize_tables_for_native_page(
         words,
         page_result,
         page_height,
-        page_index,
+        page_index: options.page_index,
+        allow_single_column: options.allow_single_column,
     };
 
     for hint in table_hints {
@@ -201,6 +208,7 @@ struct TatrPageContext<'a> {
     page_result: &'a crate::pdf::structure::types::PageLayoutResult,
     page_height: f32,
     page_index: usize,
+    allow_single_column: bool,
 }
 
 #[cfg(feature = "layout-detection")]
@@ -219,15 +227,7 @@ fn recognize_tatr_hint(
         context.page_index,
     )?;
     let cell_grid = infer_tatr_grid(tatr_model, &crop, context.page_index)?;
-    assemble_tatr_table(
-        &cell_grid,
-        &crop,
-        hint,
-        context.words,
-        allowed_word_ids,
-        context.page_height,
-        context.page_index,
-    )
+    assemble_tatr_table(&cell_grid, &crop, hint, allowed_word_ids, context)
 }
 
 #[cfg(feature = "layout-detection")]
@@ -353,12 +353,16 @@ fn assemble_tatr_table(
     cell_grid: &[Vec<crate::layout::models::tatr::CellBBox>],
     crop: &TatrCrop,
     hint: &LayoutHint,
-    words: &[crate::pdf::table_reconstruct::HocrWord],
     allowed_word_ids: Option<&std::collections::BTreeSet<usize>>,
-    page_height: f32,
-    page_index: usize,
+    context: &TatrPageContext<'_>,
 ) -> Option<RecognizedTatrTable> {
-    let indexed_table_words = collect_tatr_words(hint, words, allowed_word_ids, crop.extended_bottom_pt, page_height);
+    let indexed_table_words = collect_tatr_words(
+        hint,
+        context.words,
+        allowed_word_ids,
+        crop.extended_bottom_pt,
+        context.page_height,
+    );
     let table_words: Vec<_> = indexed_table_words.iter().map(|(_, word)| *word).collect();
     let grid_output = build_tatr_grid_table(
         cell_grid,
@@ -368,10 +372,10 @@ fn assemble_tatr_table(
         crop.sx,
         crop.sy,
     );
-    if !tatr_grid_is_credible(&grid_output, page_index) {
+    if !tatr_grid_is_credible(&grid_output, context.page_index, context.allow_single_column) {
         return None;
     }
-    let bounding_box = tatr_table_bbox(hint, &table_words, &grid_output, page_height);
+    let bounding_box = tatr_table_bbox(hint, &table_words, &grid_output, context.page_height);
     let eligible_word_ids = indexed_table_words.iter().map(|(word_id, _)| *word_id).collect();
     let consumed_word_ids = grid_output
         .consumed_word_indices
@@ -382,7 +386,7 @@ fn assemble_tatr_table(
         table: Table {
             cells: grid_output.grid,
             markdown: grid_output.markdown,
-            page_number: (page_index + 1) as u32,
+            page_number: (context.page_index + 1) as u32,
             bounding_box: Some(bounding_box),
             ..Default::default()
         },
@@ -432,7 +436,7 @@ fn collect_tatr_words<'a>(
 }
 
 #[cfg(feature = "layout-detection")]
-fn tatr_grid_is_credible(grid_output: &TatrGridOutput, page_index: usize) -> bool {
+fn tatr_grid_is_credible(grid_output: &TatrGridOutput, page_index: usize, allow_single_column: bool) -> bool {
     tracing::debug!(
         page = page_index,
         grid_rows = grid_output.grid.len(),
@@ -442,6 +446,23 @@ fn tatr_grid_is_credible(grid_output: &TatrGridOutput, page_index: usize) -> boo
     );
     if grid_output.markdown.is_empty() {
         tracing::debug!(page = page_index, "TATR: empty markdown output");
+        return false;
+    }
+    let column_count = grid_output.grid.iter().map(Vec::len).max().unwrap_or(0);
+    let effective_columns = (0..column_count)
+        .filter(|column| {
+            grid_output
+                .grid
+                .iter()
+                .any(|row| row.get(*column).is_some_and(|cell| !cell.trim().is_empty()))
+        })
+        .count();
+    if effective_columns < 2 && !allow_single_column {
+        tracing::debug!(
+            page = page_index,
+            effective_columns,
+            "TATR table rejected: fewer than two populated columns"
+        );
         return false;
     }
     let total_cells = grid_output.model_grid_cell_count;
@@ -1857,7 +1878,70 @@ mod tests {
             model_grid_cell_count: 20,
         };
 
-        assert!(tatr_grid_is_credible(&output, 0));
+        assert!(tatr_grid_is_credible(&output, 0, false));
+    }
+
+    #[test]
+    fn phantom_second_column_is_rejected_by_default() {
+        let output = TatrGridOutput {
+            grid: (0..5)
+                .map(|row| vec![format!("prose row {row}"), String::new()])
+                .collect(),
+            markdown: "| prose |  |".to_string(),
+            consumed_bottom: Some(10),
+            consumed_word_indices: (0..5).collect(),
+            model_grid_cell_count: 10,
+        };
+
+        assert!(!tatr_grid_is_credible(&output, 0, false));
+    }
+
+    #[test]
+    fn phantom_second_column_honors_single_column_opt_in() {
+        let output = TatrGridOutput {
+            grid: (0..5).map(|row| vec![format!("value {row}"), String::new()]).collect(),
+            markdown: "| value |  |".to_string(),
+            consumed_bottom: Some(10),
+            consumed_word_indices: (0..5).collect(),
+            model_grid_cell_count: 10,
+        };
+
+        assert!(tatr_grid_is_credible(&output, 0, true));
+    }
+
+    #[test]
+    fn sparse_two_effective_columns_are_credible() {
+        let output = TatrGridOutput {
+            grid: vec![
+                vec!["left 1".to_string(), String::new(), String::new()],
+                vec!["left 2".to_string(), String::new(), String::new()],
+                vec!["left 3".to_string(), String::new(), "right".to_string()],
+                vec![String::new(), String::new(), String::new()],
+                vec![String::new(), String::new(), String::new()],
+            ],
+            markdown: "| left |  | right |".to_string(),
+            consumed_bottom: Some(10),
+            consumed_word_indices: (0..4).collect(),
+            model_grid_cell_count: 15,
+        };
+
+        assert!(tatr_grid_is_credible(&output, 0, false));
+    }
+
+    #[test]
+    fn ragged_grid_counts_populated_columns_beyond_first_row() {
+        let output = TatrGridOutput {
+            grid: vec![
+                vec!["left header".to_string()],
+                vec!["left".to_string(), String::new(), "right".to_string()],
+            ],
+            markdown: "| left |  | right |".to_string(),
+            consumed_bottom: Some(10),
+            consumed_word_indices: (0..3).collect(),
+            model_grid_cell_count: 6,
+        };
+
+        assert!(tatr_grid_is_credible(&output, 0, false));
     }
 
     #[test]

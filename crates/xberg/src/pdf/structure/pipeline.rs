@@ -1534,7 +1534,10 @@ pub(crate) fn extract_document_structure_from_segments(
                                         &tp.words,
                                         page_result,
                                         tp.page_height,
-                                        tp.page_idx,
+                                        super::regions::NativeTatrRecognitionOptions {
+                                            page_index: tp.page_idx,
+                                            allow_single_column,
+                                        },
                                         &mut tatr,
                                     );
                                     if !tatr_tables.is_empty() {
@@ -1573,7 +1576,10 @@ pub(crate) fn extract_document_structure_from_segments(
                                     &tp.words,
                                     page_result,
                                     tp.page_height,
-                                    tp.page_idx,
+                                    super::regions::NativeTatrRecognitionOptions {
+                                        page_index: tp.page_idx,
+                                        allow_single_column,
+                                    },
                                     &mut tatr,
                                 );
                                 if !tatr_tables.is_empty() {
