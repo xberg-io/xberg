@@ -204,6 +204,47 @@ fn is_debug_enabled() -> bool {
     std::env::var("BENCHMARK_DEBUG").is_ok()
 }
 
+const DOCLING_VERSION_PROBE: &str = r#"
+import importlib.metadata as metadata
+import sys
+
+version = None
+for distribution in ("docling", "docling-slim"):
+    try:
+        candidate = metadata.version(distribution).strip()
+    except metadata.PackageNotFoundError:
+        continue
+    if candidate:
+        version = candidate
+        break
+
+if version is None:
+    try:
+        import docling
+    except ImportError:
+        candidate = ""
+    else:
+        module_version = getattr(docling, "__version__", None)
+        candidate = str(module_version).strip() if module_version is not None else ""
+    if candidate:
+        version = candidate
+
+if version is None:
+    sys.exit(1)
+
+print(version)
+"#;
+
+fn first_output_line(output: std::process::Output) -> Option<String> {
+    output
+        .status
+        .success()
+        .then_some(output.stdout)
+        .and_then(|stdout| String::from_utf8(stdout).ok())
+        .and_then(|value| value.lines().next().map(str::trim).map(str::to_string))
+        .filter(|value| !value.is_empty())
+}
+
 fn config_json_enables_ocr(args: &[String]) -> bool {
     args.windows(2)
         .rev()
@@ -1307,7 +1348,8 @@ impl FrameworkAdapter for SubprocessAdapter {
     fn version(&self) -> String {
         let output = match self.batch_capability.map(|capability| capability.entry_point) {
             Some(crate::types::BatchEntryPoint::DoclingConvertAll) => std::process::Command::new(&self.command)
-                .args(["-c", "import importlib.metadata as m; print(m.version('docling'))"])
+                .args(["-c", DOCLING_VERSION_PROBE])
+                .envs(self.env.iter().map(|(key, value)| (key, value)))
                 .output(),
             Some(crate::types::BatchEntryPoint::LiteparseBatchParse) => {
                 std::process::Command::new("lit").arg("--version").output()
@@ -1316,10 +1358,7 @@ impl FrameworkAdapter for SubprocessAdapter {
         };
         output
             .ok()
-            .filter(|output| output.status.success())
-            .and_then(|output| String::from_utf8(output.stdout).ok())
-            .and_then(|value| value.lines().next().map(str::trim).map(str::to_string))
-            .filter(|value| !value.is_empty())
+            .and_then(first_output_line)
             .unwrap_or_else(|| "unknown".to_string())
     }
 
@@ -1612,6 +1651,100 @@ mod tests {
             timing_scope: crate::types::BatchTimingScope::ColdEndToEndSubprocess,
             per_item_timing,
         }
+    }
+
+    #[cfg(unix)]
+    fn fake_docling_site(
+        docling_distribution: Option<&str>,
+        slim_distribution: Option<&str>,
+        module_version: Option<&str>,
+    ) -> (tempfile::TempDir, PathBuf) {
+        use std::os::unix::fs::PermissionsExt;
+
+        let site = tempfile::tempdir().unwrap();
+        let package_dir = site.path().join("docling");
+        std::fs::create_dir(&package_dir).unwrap();
+        let module = module_version
+            .map(|version| format!("__version__ = {version:?}\n"))
+            .unwrap_or_default();
+        std::fs::write(package_dir.join("__init__.py"), module).unwrap();
+
+        for (name, normalized_name, version) in [
+            ("docling", "docling", docling_distribution),
+            ("docling-slim", "docling_slim", slim_distribution),
+        ] {
+            let Some(version) = version else {
+                continue;
+            };
+            let metadata_dir = site.path().join(format!("{normalized_name}-{version}.dist-info"));
+            std::fs::create_dir(&metadata_dir).unwrap();
+            std::fs::write(
+                metadata_dir.join("METADATA"),
+                format!("Metadata-Version: 2.1\nName: {name}\nVersion: {version}\n"),
+            )
+            .unwrap();
+        }
+
+        let python = which::which("python3").unwrap();
+        let wrapper = site.path().join("isolated-python");
+        std::fs::write(
+            &wrapper,
+            format!("#!/bin/sh\nexec \"{}\" -S \"$@\"\n", python.display()),
+        )
+        .unwrap();
+        let mut permissions = std::fs::metadata(&wrapper).unwrap().permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&wrapper, permissions).unwrap();
+        (site, wrapper)
+    }
+
+    #[cfg(unix)]
+    fn docling_version_from_site(
+        docling_distribution: Option<&str>,
+        slim_distribution: Option<&str>,
+        module_version: Option<&str>,
+    ) -> String {
+        let (site, python) = fake_docling_site(docling_distribution, slim_distribution, module_version);
+        let adapter = SubprocessAdapter::with_batch_capability(
+            "docling",
+            python,
+            vec![],
+            vec![("PYTHONPATH".to_string(), site.path().to_string_lossy().into_owned())],
+            vec!["pdf".to_string()],
+            BatchCapability {
+                entry_point: BatchEntryPoint::DoclingConvertAll,
+                timing_scope: crate::types::BatchTimingScope::ColdEndToEndSubprocess,
+                per_item_timing: false,
+            },
+        );
+        adapter.version()
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn docling_version_prefers_full_distribution() {
+        assert_eq!(
+            docling_version_from_site(Some("1.2.3"), Some("2.3.4"), Some("3.4.5")),
+            "1.2.3"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn docling_version_falls_back_to_slim_distribution() {
+        assert_eq!(docling_version_from_site(None, Some("2.3.4"), Some("3.4.5")), "2.3.4");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn docling_version_falls_back_to_module_version() {
+        assert_eq!(docling_version_from_site(None, None, Some("3.4.5")), "3.4.5");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn docling_version_is_unknown_when_all_sources_are_empty() {
+        assert_eq!(docling_version_from_site(None, None, Some("")), "unknown");
     }
 
     #[test]
