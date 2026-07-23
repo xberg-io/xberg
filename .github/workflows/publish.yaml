@@ -2749,12 +2749,30 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
-      - name: Pack NuGet package
+      - name: Pack NuGet packages (meta + one per-RID runtime package)
+        # rc.33 shipped every RID's native closure in the single XbergIo.Xberg
+        # package and nuget.org rejected the push with 413 (package too large).
+        # Split into a lean AnyCPU meta-package (managed dll + runtime.json) plus
+        # one XbergIo.Xberg.runtime.<rid> package per RID, each carrying only its
+        # own runtimes/<rid>/native/ payload — the standard runtime-package
+        # split, same shape as e.g. SQLitePCLRaw. The RID list here must match
+        # packages/csharp/Xberg/runtime.json.template. ~keep
         run: |
+          set -euo pipefail
           dotnet pack packages/csharp/Xberg/Xberg.csproj \
             -c Release \
             -p:Version=${{ needs.prepare.outputs.version }} \
             -o dist/nuget
+
+          for dir in packages/csharp/Xberg/runtimes/*/; do
+            rid="$(basename "$dir")"
+            dotnet pack packages/csharp/Xberg.Runtime/Xberg.Runtime.csproj \
+              -c Release \
+              -p:Version=${{ needs.prepare.outputs.version }} \
+              -p:Rid="${rid}" \
+              -p:NativeStageDir="$(pwd)/packages/csharp/Xberg/runtimes/${rid}/native" \
+              -o dist/nuget
+          done
         shell: bash
 
       - uses: xberg-io/actions/publish-nuget@v1

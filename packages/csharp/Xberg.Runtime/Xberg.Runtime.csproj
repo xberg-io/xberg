@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <!-- Runtime-only package: ships the pre-built native closure for a single RID
+         under runtimes/<rid>/native/, with no managed assembly of its own.
+         IncludeBuildOutput=false + NU5128 suppression stop `dotnet pack` from
+         warning about a missing lib/ref asset — there isn't one, by design. -->
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <IsPackable>true</IsPackable>
+    <!-- Rid and NativeStageDir are required MSBuild properties passed at pack
+         time by CI, one invocation per RID, e.g.:
+           dotnet pack Xberg.Runtime.csproj -c Release \
+             -p:Version=$VERSION -p:Rid=win-x64 \
+             -p:NativeStageDir=$(pwd)/packages/csharp/Xberg/runtimes/win-x64/native \
+             -o dist/nuget
+         The RID set here must match packages/csharp/Xberg/runtime.json.template. -->
+    <PackageId Condition="'$(Rid)' != ''">XbergIo.Xberg.runtime.$(Rid)</PackageId>
+    <Version>1.0.0-rc.33</Version>
+    <Description>Native runtime assets for XbergIo.Xberg ($(Rid)). Not intended for direct reference — pulled in transitively via the XbergIo.Xberg meta-package's runtime.json.</Description>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <RepositoryUrl>https://github.com/xberg-io/xberg</RepositoryUrl>
+    <Authors>Na&apos;aman Hirschfeld &lt;naaman@xberg.io&gt;</Authors>
+    <Company>Alef Team</Company>
+    <Product>Xberg</Product>
+  </PropertyGroup>
+
+  <Target Name="RequireRidAndNativeStageDir" BeforeTargets="Pack;Build;CoreCompile">
+    <Error Condition="'$(Rid)' == ''" Text="Xberg.Runtime.csproj requires -p:Rid=&lt;runtime-identifier&gt;." />
+    <Error Condition="'$(NativeStageDir)' == ''" Text="Xberg.Runtime.csproj requires -p:NativeStageDir=&lt;path-to-staged-runtimes-rid-native-dir&gt;." />
+  </Target>
+
+  <ItemGroup>
+    <None Include="../../../LICENSE" Pack="true" PackagePath="/" />
+    <None Include="$(NativeStageDir)/**" Pack="true" PackagePath="runtimes/$(Rid)/native/" Condition="'$(NativeStageDir)' != ''" />
+  </ItemGroup>
+</Project>

@@ -17,20 +17,41 @@
     <Nullable>enable</Nullable>
     <!-- AnyCPU managed assembly so the PE `Machine` header stays processor-neutral
          and consumers never see `warning CS8012: ... targets a different processor`.
-         Native asset resolution at consumer build time is driven by the
-         `runtimes/<rid>/native/` payload baked into the NuGet package — not a
-         single `<RuntimeIdentifier>` on the package author's side, which would
-         force runtime-specific output and break AnyCPU packaging. -->
+         Native asset resolution at consumer build time is driven by `runtime.json`
+         (see below) pulling in the matching `XbergIo.Xberg.runtime.<rid>` package —
+         not a single `<RuntimeIdentifier>` on the package author's side, which
+         would force runtime-specific output and break AnyCPU packaging. This
+         package itself carries NO native payload (fixes the 413 nupkg-too-large
+         publish failure from bundling every RID's native closure into one
+         package; see xberg-io/xberg#1280 and the rc.33 publish failure). -->
     <PlatformTarget>AnyCPU</PlatformTarget>
-    <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;osx-x64;osx-arm64</RuntimeIdentifiers>
+    <RuntimeIdentifiers>win-x64;linux-x64;linux-arm64;linux-musl-x64;linux-musl-arm64;osx-arm64</RuntimeIdentifiers>
   </PropertyGroup>
 
   <ItemGroup>
     <None Include="../../../LICENSE" Pack="true" PackagePath="/" />
-    <None Include="runtimes/**" Pack="true" PackagePath="runtimes/" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
     <Compile Include="../src/**/*.cs" />
   </ItemGroup>
+
+  <!-- Generates runtime.json from runtime.json.template, substituting the actual
+       package $(Version) for the {{VERSION}} placeholder, and packs it at the
+       package root. NuGet's RID-graph restore reads this file to pull in the
+       `XbergIo.Xberg.runtime.<rid>` package matching the consumer's RID — the
+       same mechanism used by e.g. SQLitePCLRaw.core's runtime.json. Must be
+       regenerated per-pack because the version is only known at pack time
+       (`-p:Version=...`, injected by the release workflow). -->
+  <Target Name="GenerateRuntimeJson" BeforeTargets="_GetPackageFiles">
+    <PropertyGroup>
+      <_RuntimeJsonTemplate>$(MSBuildThisFileDirectory)runtime.json.template</_RuntimeJsonTemplate>
+      <_GeneratedRuntimeJson>$(IntermediateOutputPath)runtime.json</_GeneratedRuntimeJson>
+      <_RuntimeJsonContent>$([System.IO.File]::ReadAllText('$(_RuntimeJsonTemplate)').Replace('{{VERSION}}', '$(Version)'))</_RuntimeJsonContent>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(_GeneratedRuntimeJson)" Lines="$(_RuntimeJsonContent)" Overwrite="true" />
+    <ItemGroup>
+      <None Include="$(_GeneratedRuntimeJson)" Pack="true" PackagePath="/" />
+    </ItemGroup>
+  </Target>
 </Project>

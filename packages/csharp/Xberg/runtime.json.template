@@ -1,0 +1,34 @@
+{
+  "runtimes": {
+    "win-x64": {
+      "XbergIo.Xberg": {
+        "XbergIo.Xberg.runtime.win-x64": "{{VERSION}}"
+      }
+    },
+    "linux-x64": {
+      "XbergIo.Xberg": {
+        "XbergIo.Xberg.runtime.linux-x64": "{{VERSION}}"
+      }
+    },
+    "linux-arm64": {
+      "XbergIo.Xberg": {
+        "XbergIo.Xberg.runtime.linux-arm64": "{{VERSION}}"
+      }
+    },
+    "linux-musl-x64": {
+      "XbergIo.Xberg": {
+        "XbergIo.Xberg.runtime.linux-musl-x64": "{{VERSION}}"
+      }
+    },
+    "linux-musl-arm64": {
+      "XbergIo.Xberg": {
+        "XbergIo.Xberg.runtime.linux-musl-arm64": "{{VERSION}}"
+      }
+    },
+    "osx-arm64": {
+      "XbergIo.Xberg": {
+        "XbergIo.Xberg.runtime.osx-arm64": "{{VERSION}}"
+      }
+    }
+  }
+}
