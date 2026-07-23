@@ -126,7 +126,8 @@ enum Commands {
         #[arg(short, long)]
         fixtures: PathBuf,
 
-        /// Exact ordered cohort manifest, resolved relative to the fixture directory
+        /// Exact ordered cohort manifest. Absolute paths are used directly; existing
+        /// relative paths use the current directory; others use the fixture directory.
         #[arg(long)]
         cohort: Option<PathBuf>,
 
@@ -1442,5 +1443,17 @@ mod tests {
             }
         ));
         assert!(parse_model_provenance(&["invalid".to_string()]).is_err());
+    }
+
+    #[test]
+    fn run_help_documents_cohort_path_precedence() {
+        let Err(error) = Cli::try_parse_from(["benchmark-harness", "run", "--help"]) else {
+            panic!("--help should exit through clap");
+        };
+        let help = error.to_string();
+
+        assert!(help.contains("Absolute paths are used directly"));
+        assert!(help.contains("existing relative paths use the current directory"));
+        assert!(help.contains("others use the fixture directory"));
     }
 }
