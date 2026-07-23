@@ -1837,11 +1837,6 @@ fn stitch_fragmented_tables(
 
     let mut result = unbboxed;
     let mut page_numbers: Vec<u32> = by_page.keys().copied().collect();
-    // `by_page` is an `ahash::AHashMap`, whose iteration order is not
-    // deterministic across runs. Process pages in ascending order so this
-    // function's output order — and therefore the `table_id` that
-    // [`prepare_emitted_tables`] later assigns from final document order — is
-    // stable for the same input document on every run.
     page_numbers.sort_unstable();
     for page_number in page_numbers {
         if let Some(page_tables) = by_page.remove(&page_number) {
@@ -2136,12 +2131,6 @@ fn prepare_emitted_tables(
         .count();
     deduplicate_overlapping_tables(&mut emitted_tables, native_count, overlap_preference);
     deduplicate_identical_tables(&mut emitted_tables);
-    // Assign ids/columns once, here, over the final post-dedup set: this is the
-    // last point before assembly where every table this document will actually
-    // emit — native (already possibly stitched, see `stitch_fragmented_tables`)
-    // and layout-detected alike — is present in one list. Assigning any earlier
-    // (e.g. inside `stitch_fragmented_tables`, which only sees native tables)
-    // would leave layout-detected survivors of dedup with no `table_id`.
     assign_deterministic_table_ids(&mut emitted_tables);
     emitted_tables
 }
@@ -3329,11 +3318,6 @@ mod tests {
             .iter()
             .map(|row| row.iter().map(|s| s.to_string()).collect())
             .collect();
-        // `prepare_emitted_tables` drops tables with empty markdown, so give
-        // every fixture table distinct, non-empty markdown derived from its
-        // cells (real fragment markdown is set by `merge_table_chain` /
-        // `table_to_markdown`; this is a cheap stand-in for construction-only
-        // tests below).
         let markdown = cells.iter().map(|row| row.join("|")).collect::<Vec<_>>().join("\n");
         crate::types::Table {
             cells,

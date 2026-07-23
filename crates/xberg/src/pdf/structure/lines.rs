@@ -56,10 +56,6 @@ pub(super) fn segments_need_space(
         return false;
     }
 
-    // A kerning-run split never changes style mid-word: pdf_oxide only fragments a
-    // single styled run. When the two segments differ in weight/slant/pitch this is a
-    // real word boundary (e.g. an inline bold or italic run), not a span split, so a
-    // space is required regardless of how tight the horizontal gap is.
     if prev_seg.is_bold != next_seg.is_bold
         || prev_seg.is_italic != next_seg.is_italic
         || prev_seg.is_monospace != next_seg.is_monospace
@@ -124,8 +120,6 @@ mod tests {
 
     #[test]
     fn test_segments_need_space_distinct_words_insert_space() {
-        // Two distinct words on one baseline with a real word space: "office" then "is".
-        // The 10pt gap clears the configured ratio, so a space is inserted.
         let prev = segment("office", 100.0, 30.0, 10.0, 700.0);
         let next = segment("is", 140.0, 8.0, 10.0, 700.0);
         assert!(segments_need_space(&prev, "office", &next, "is"));
@@ -140,10 +134,6 @@ mod tests {
 
     #[test]
     fn test_segments_need_space_style_change_inserts_space() {
-        // Distinct words across an inline style change (plain -> bold) can abut with a
-        // tiny gap (here x_gap = 1pt, well under the configured threshold), but a style change is a
-        // real word boundary, not a kerning split, so a space must be inserted. Guards
-        // the inline-bold-run regression.
         let prev = segment("plain", 10.0, 20.0, 20.0, 100.0);
         let next = {
             let mut s = segment("bold", 31.0, 20.0, 20.0, 100.0);
@@ -155,10 +145,6 @@ mod tests {
 
     #[test]
     fn test_segments_need_space_tower_kerning_split_joins() {
-        // "Tower" split by pdf_oxide into "T" + "ower" at a kerning boundary. The "ower"
-        // span starts fractionally before the "T" span ends (x_gap ~= -1pt), under the
-        // configured positive-gap threshold, so they rejoin into "Tower" with NO space.
-        // This is the exact case that previously produced "T ower" (issue #1291).
         let prev = segment("T", 100.0, 7.0, 10.0, 700.0);
         let next = segment("ower", 106.0, 22.0, 10.0, 700.0);
         assert!(!segments_need_space(&prev, "T", &next, "ower"));

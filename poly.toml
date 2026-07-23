@@ -123,6 +123,7 @@ onnx = "onnx"
 openwebui = "openwebui"
 opf = "opf"
 ove = "ove"
+ower = "ower"
 pard = "pard"
 portait = "portait"
 programa = "programa"
@@ -168,7 +169,7 @@ use_default_ignores = true
 preserve_patterns = ["SAFETY", "SPDX", "Copyright", "License", "licensed under"]
 
 [per-file-ignores]
-"**/api.py" = ["F401", "I001", "TC006", "UP035"]
+"**/api.py" = ["F401", "I001", "RET504", "TC006", "UP035"]
 "**/*.pyi" = ["A002", "F401", "I001", "PYI033", "TC006", "UP035"]
 "**/options.py" = ["F401", "I001", "RUF100"]
 "**/__init__.py" = ["I001"]
@@ -413,8 +414,6 @@ preserve_patterns = ["SAFETY", "SPDX", "Copyright", "License", "licensed under"]
   "TC003",
 ]
 "tools/perf/*.py" = ["D103", "T201"]
-# Runnable example/demo scripts (integrations/**/examples): prints, no module/function
-# docstrings, implicit-namespace layout, and blocking stdlib calls are expected.
 "**/examples/**" = [
   "ANN",
   "ASYNC240",
