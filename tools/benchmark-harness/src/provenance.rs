@@ -14,7 +14,7 @@ use crate::fixture::FixtureManager;
 use crate::types::{BatchCapability, BatchEntryPoint, OutputFormat};
 use crate::{CohortManifest, Error, Result};
 
-const PROVENANCE_SCHEMA_VERSION: u32 = 1;
+const PROVENANCE_SCHEMA_VERSION: u32 = 2;
 
 /// A path-free executable identity.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -101,6 +101,12 @@ pub struct FrameworkProvenance {
     pub batch_capability: Option<BatchCapability>,
     pub requested_workers: Option<usize>,
     pub effective_workers: Option<usize>,
+    /// Configured thread budget for Xberg native batch runs.
+    ///
+    /// This is distinct from the document concurrency cap in
+    /// [`Self::requested_workers`] and is unavailable for other frameworks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub configured_thread_budget: Option<usize>,
     pub worker_semantics: String,
     pub effective_warmup_iterations: usize,
     pub eligible_documents: usize,
@@ -211,6 +217,8 @@ impl RunProvenance {
                 inputs.config.max_concurrent,
                 batch_workers,
             );
+            let configured_thread_budget =
+                configured_thread_budget(inputs.config.benchmark_mode, capability, adapter.as_ref());
             frameworks.push(FrameworkProvenance {
                 name: adapter.name().to_string(),
                 version: adapter.version(),
@@ -219,6 +227,7 @@ impl RunProvenance {
                 batch_capability: capability,
                 requested_workers,
                 effective_workers,
+                configured_thread_budget,
                 worker_semantics: worker_semantics(inputs.config.benchmark_mode, capability).to_string(),
                 effective_warmup_iterations: capability.map_or(inputs.config.warmup_iterations, |value| {
                     if value.timing_scope == crate::types::BatchTimingScope::ColdEndToEndSubprocess {
@@ -355,7 +364,7 @@ fn worker_semantics(mode: BenchmarkMode, capability: Option<BatchCapability>) ->
     match (mode, capability.map(|value| value.entry_point)) {
         (BenchmarkMode::SingleFile, _) => "sequential single-file execution",
         (BenchmarkMode::Batch, Some(BatchEntryPoint::XbergCliExtractBatch)) => {
-            "configured total thread budget; document concurrency is resolved per workload"
+            "configured document concurrency cap; Xberg thread budget is recorded separately"
         }
         (BenchmarkMode::Batch, Some(BatchEntryPoint::DoclingConvertAll)) => {
             "convert_all document stream; adapter does not override Docling workers"
@@ -365,6 +374,19 @@ fn worker_semantics(mode: BenchmarkMode, capability: Option<BatchCapability>) ->
         }
         (BenchmarkMode::Batch, None) => "batch harness concurrency",
     }
+}
+
+fn configured_thread_budget(
+    mode: BenchmarkMode,
+    capability: Option<BatchCapability>,
+    adapter: &dyn FrameworkAdapter,
+) -> Option<usize> {
+    matches!(
+        (mode, capability.map(|value| value.entry_point)),
+        (BenchmarkMode::Batch, Some(BatchEntryPoint::XbergCliExtractBatch))
+    )
+    .then(|| adapter.configured_thread_budget())
+    .flatten()
 }
 
 #[cfg(test)]
@@ -416,7 +438,119 @@ mod tests {
                     per_item_timing: true,
                 })
             ),
-            "configured total thread budget; document concurrency is resolved per workload"
+            "configured document concurrency cap; Xberg thread budget is recorded separately"
         );
+    }
+
+    #[test]
+    fn xberg_batch_provenance_uses_actual_adapter_thread_budget() {
+        use crate::adapters::subprocess::SubprocessAdapter;
+
+        let capability = BatchCapability {
+            entry_point: BatchEntryPoint::XbergCliExtractBatch,
+            timing_scope: crate::types::BatchTimingScope::ColdEndToEndSubprocess,
+            per_item_timing: true,
+        };
+        let mismatched_config = BenchmarkConfig {
+            max_concurrent: 2,
+            xberg_max_threads: Some(4),
+            ..Default::default()
+        };
+        let adapter = SubprocessAdapter::with_batch_capability(
+            "xberg-test",
+            "echo",
+            vec![],
+            vec![],
+            vec!["pdf".to_string()],
+            capability,
+        )
+        .with_batch_workers(2)
+        .with_xberg_max_threads(8);
+
+        assert_eq!(
+            configured_thread_budget(BenchmarkMode::Batch, Some(capability), &adapter),
+            Some(8)
+        );
+        assert_ne!(adapter.configured_thread_budget(), mismatched_config.xberg_max_threads);
+        assert_eq!(
+            configured_thread_budget(BenchmarkMode::SingleFile, Some(capability), &adapter),
+            None
+        );
+    }
+
+    #[test]
+    fn xberg_batch_provenance_agrees_with_legacy_fallback() {
+        use crate::adapters::subprocess::SubprocessAdapter;
+
+        let capability = BatchCapability {
+            entry_point: BatchEntryPoint::XbergCliExtractBatch,
+            timing_scope: crate::types::BatchTimingScope::ColdEndToEndSubprocess,
+            per_item_timing: true,
+        };
+        let config = BenchmarkConfig {
+            max_concurrent: 3,
+            ..Default::default()
+        };
+        let adapter = SubprocessAdapter::with_batch_capability(
+            "xberg-test",
+            "echo",
+            vec![],
+            vec![],
+            vec!["pdf".to_string()],
+            capability,
+        )
+        .with_batch_workers(3);
+
+        assert_eq!(
+            configured_thread_budget(BenchmarkMode::Batch, Some(capability), &adapter),
+            Some(config.max_concurrent)
+        );
+    }
+
+    #[test]
+    fn non_xberg_batch_provenance_has_no_thread_budget() {
+        use crate::adapters::subprocess::SubprocessAdapter;
+
+        let capability = BatchCapability {
+            entry_point: BatchEntryPoint::DoclingConvertAll,
+            timing_scope: crate::types::BatchTimingScope::ColdEndToEndSubprocess,
+            per_item_timing: false,
+        };
+        let adapter = SubprocessAdapter::with_batch_capability(
+            "docling",
+            "python",
+            vec![],
+            vec![],
+            vec!["pdf".to_string()],
+            capability,
+        )
+        .with_batch_workers(3)
+        .with_xberg_max_threads(8);
+
+        assert_eq!(adapter.configured_thread_budget(), None);
+        assert_eq!(
+            configured_thread_budget(BenchmarkMode::Batch, Some(capability), &adapter),
+            None
+        );
+    }
+
+    #[test]
+    fn old_framework_provenance_deserializes_without_thread_budget() {
+        let provenance: FrameworkProvenance = serde_json::from_value(serde_json::json!({
+            "name": "xberg-markdown-baseline-batch",
+            "version": "1.0.0",
+            "executable": null,
+            "models": [],
+            "batch_capability": null,
+            "requested_workers": 4,
+            "effective_workers": null,
+            "worker_semantics": "legacy",
+            "effective_warmup_iterations": 0,
+            "eligible_documents": 4,
+            "batch_partitions": 1
+        }))
+        .unwrap();
+
+        assert_eq!(provenance.configured_thread_budget, None);
     }
 }

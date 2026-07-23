@@ -146,6 +146,12 @@ enum Commands {
         #[arg(short = 'c', long)]
         max_concurrent: Option<usize>,
 
+        /// Xberg's configured native-batch thread budget.
+        ///
+        /// Defaults to --max-concurrent and does not affect other frameworks.
+        #[arg(long)]
+        xberg_max_threads: Option<usize>,
+
         /// Timeout in seconds
         #[arg(short = 't', long)]
         timeout: Option<u64>,
@@ -489,6 +495,7 @@ async fn main() -> Result<()> {
             frameworks,
             output,
             max_concurrent,
+            xberg_max_threads,
             timeout,
             mode,
             warmup,
@@ -514,6 +521,7 @@ async fn main() -> Result<()> {
             let config = BenchmarkConfig {
                 output_dir: output.clone(),
                 max_concurrent: max_concurrent.unwrap_or_else(num_cpus::get),
+                xberg_max_threads,
                 timeout: std::time::Duration::from_secs(timeout.unwrap_or(1800)),
                 benchmark_mode: mode.into(),
                 warmup_iterations: warmup,
@@ -576,7 +584,10 @@ async fn main() -> Result<()> {
                     if should_init(&framework_name) {
                         match create_xberg_adapter(*pipeline, *format, batch_mode, ocr)
                             .map(|adapter| adapter.with_batch_workers(config.max_concurrent))
-                        {
+                            .map(|adapter| {
+                                adapter
+                                    .with_xberg_max_threads(config.xberg_max_threads.unwrap_or(config.max_concurrent))
+                            }) {
                             Ok(adapter) => {
                                 if let Err(err) = registry.register(Arc::new(adapter)) {
                                     eprintln!("[adapter] ✗ {} (registration failed: {})", framework_name, err);
@@ -1415,6 +1426,8 @@ mod tests {
             "cohorts/fast.json",
             "--batch-size",
             "4",
+            "--xberg-max-threads",
+            "8",
             "--model-id",
             "docling=ds4sd/docling-models@main#abc123",
         ])
@@ -1424,6 +1437,7 @@ mod tests {
             cli.command,
             Commands::Run {
                 batch_size: Some(4),
+                xberg_max_threads: Some(8),
                 ..
             }
         ));

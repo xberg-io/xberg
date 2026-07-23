@@ -182,6 +182,13 @@ pub struct BenchmarkConfig {
     /// Maximum number of concurrent extractions
     pub max_concurrent: usize,
 
+    /// Xberg's configured thread budget for native batch extraction.
+    ///
+    /// When unset, Xberg uses [`Self::max_concurrent`] to preserve the legacy
+    /// benchmark behavior. This setting does not affect other frameworks.
+    #[serde(default)]
+    pub xberg_max_threads: Option<usize>,
+
     /// Output directory for results
     pub output_dir: PathBuf,
 
@@ -211,6 +218,7 @@ impl Default for BenchmarkConfig {
             file_types: None,
             timeout: Duration::from_secs(1800),
             max_concurrent: num_cpus::get(),
+            xberg_max_threads: None,
             output_dir: PathBuf::from("results"),
             measure_quality: false,
             benchmark_mode: BenchmarkMode::Batch,
@@ -247,6 +255,7 @@ impl BenchmarkConfig {
             file_types: None,
             timeout,
             max_concurrent,
+            xberg_max_threads: None,
             output_dir,
             measure_quality: false,
             benchmark_mode,
@@ -271,6 +280,10 @@ impl BenchmarkConfig {
 
         if self.max_concurrent == 0 {
             return Err(crate::Error::Config("max_concurrent must be > 0".to_string()));
+        }
+
+        if self.xberg_max_threads == Some(0) {
+            return Err(crate::Error::Config("xberg_max_threads must be > 0".to_string()));
         }
 
         if self.benchmark_iterations == 0 {
@@ -353,6 +366,34 @@ mod tests {
         assert!(config.is_err());
         let msg = format!("{}", config.unwrap_err());
         assert!(msg.contains("max_concurrent must be > 0"));
+    }
+
+    #[test]
+    fn test_zero_xberg_max_threads_rejected() {
+        let config = BenchmarkConfig {
+            xberg_max_threads: Some(0),
+            ..Default::default()
+        };
+
+        let error = config.validate().unwrap_err();
+        assert!(error.to_string().contains("xberg_max_threads must be > 0"));
+    }
+
+    #[test]
+    fn test_xberg_max_threads_defaults_to_legacy_behavior() {
+        let config = BenchmarkConfig::default();
+        assert_eq!(config.xberg_max_threads, None);
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_legacy_config_deserializes_without_xberg_max_threads() {
+        let mut legacy = serde_json::to_value(BenchmarkConfig::default()).unwrap();
+        legacy.as_object_mut().unwrap().remove("xberg_max_threads");
+
+        let config: BenchmarkConfig = serde_json::from_value(legacy).unwrap();
+        assert_eq!(config.xberg_max_threads, None);
+        assert!(config.validate().is_ok());
     }
 
     #[test]

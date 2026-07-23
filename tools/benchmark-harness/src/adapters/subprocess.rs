@@ -240,6 +240,11 @@ pub struct SubprocessAdapter {
     configured_ocr_status: Option<OcrStatus>,
     /// Worker limit passed to native batch implementations.
     batch_workers: usize,
+    /// Explicit `--max-threads` budget passed only to Xberg's native batch CLI.
+    ///
+    /// When unset, Xberg receives [`Self::batch_workers`] to preserve the
+    /// legacy coupled behavior.
+    xberg_max_threads: Option<usize>,
 }
 
 impl SubprocessAdapter {
@@ -543,6 +548,7 @@ impl SubprocessAdapter {
             single_file_args: None,
             configured_ocr_status: None,
             batch_workers: 1,
+            xberg_max_threads: None,
         }
     }
 
@@ -580,6 +586,7 @@ impl SubprocessAdapter {
             single_file_args: None,
             configured_ocr_status: None,
             batch_workers: 1,
+            xberg_max_threads: None,
         }
     }
 
@@ -626,6 +633,16 @@ impl SubprocessAdapter {
     pub fn with_batch_workers(mut self, workers: usize) -> Self {
         self.batch_workers = workers.max(1);
         self
+    }
+
+    /// Set Xberg's configured thread budget independently of batch workers.
+    pub fn with_xberg_max_threads(mut self, max_threads: usize) -> Self {
+        self.xberg_max_threads = Some(max_threads.max(1));
+        self
+    }
+
+    fn effective_xberg_max_threads(&self) -> usize {
+        self.xberg_max_threads.unwrap_or(self.batch_workers)
     }
 
     /// Get the effective timeout, clamped by the adapter's max_timeout if set.
@@ -710,12 +727,16 @@ impl SubprocessAdapter {
         }
         cmd.args(self.request_args(force_ocr));
 
-        if self.name.starts_with("xberg-") {
-            let worker_budget = self.batch_workers.to_string();
+        if self
+            .batch_capability
+            .is_some_and(|capability| capability.entry_point == BatchEntryPoint::XbergCliExtractBatch)
+        {
+            let batch_workers = self.batch_workers.to_string();
+            let max_threads = self.effective_xberg_max_threads().to_string();
             cmd.arg("--max-concurrent")
-                .arg(&worker_budget)
+                .arg(batch_workers)
                 .arg("--max-threads")
-                .arg(worker_budget);
+                .arg(max_threads);
         }
 
         if self.format_aware {
@@ -1119,6 +1140,12 @@ impl FrameworkAdapter for SubprocessAdapter {
             Some(crate::types::BatchEntryPoint::LiteparseBatchParse) => (Some(requested), Some(self.batch_workers)),
             None => (Some(requested), Some(requested)),
         }
+    }
+
+    fn configured_thread_budget(&self) -> Option<usize> {
+        self.batch_capability
+            .is_some_and(|capability| capability.entry_point == BatchEntryPoint::XbergCliExtractBatch)
+            .then(|| self.effective_xberg_max_threads())
     }
 
     async fn extract(
@@ -1903,6 +1930,28 @@ mod tests {
     }
 
     #[test]
+    fn xberg_thread_budget_builder_uses_requested_nonzero_limit() {
+        let requested =
+            SubprocessAdapter::new("test", "echo", vec![], vec![], vec!["pdf".to_string()]).with_xberg_max_threads(9);
+        let zero =
+            SubprocessAdapter::new("test", "echo", vec![], vec![], vec!["pdf".to_string()]).with_xberg_max_threads(0);
+
+        assert_eq!(requested.xberg_max_threads, Some(9));
+        assert_eq!(zero.xberg_max_threads, Some(1));
+        assert_eq!(requested.configured_thread_budget(), None);
+    }
+
+    #[test]
+    fn xberg_thread_budget_defaults_to_batch_workers() {
+        let adapter =
+            SubprocessAdapter::new("test", "echo", vec![], vec![], vec!["pdf".to_string()]).with_batch_workers(7);
+
+        assert_eq!(adapter.xberg_max_threads, None);
+        assert_eq!(adapter.effective_xberg_max_threads(), 7);
+        assert_eq!(adapter.configured_thread_budget(), None);
+    }
+
+    #[test]
     fn xberg_worker_provenance_does_not_guess_dynamic_document_concurrency() {
         let adapter = SubprocessAdapter::with_batch_capability(
             "xberg-test",
@@ -1919,11 +1968,50 @@ mod tests {
         .with_batch_workers(4);
 
         assert_eq!(adapter.worker_provenance(4), (Some(4), None));
+        assert_eq!(adapter.configured_thread_budget(), Some(4));
     }
 
     #[cfg(unix)]
     #[tokio::test]
-    async fn xberg_batch_passes_worker_budget_to_concurrency_and_thread_limits() {
+    async fn xberg_batch_passes_distinct_concurrency_and_thread_limits() {
+        let script = r#"
+            concurrent=""
+            threads=""
+            while [ "$#" -gt 0 ]; do
+                case "$1" in
+                    --max-concurrent) concurrent="$2"; shift 2 ;;
+                    --max-threads) threads="$2"; shift 2 ;;
+                    *) shift ;;
+                esac
+            done
+            [ "$concurrent" = "3" ] && [ "$threads" = "7" ] || exit 64
+            sleep 0.02
+            printf '{"results":[{"content":"ok"}],"total_ms":0,"per_file_ms":[1]}'
+        "#;
+        let adapter = SubprocessAdapter::with_batch_capability(
+            "xberg-test",
+            "sh",
+            vec!["-c".to_string(), script.to_string(), "worker-budget-probe".to_string()],
+            vec![],
+            vec!["pdf".to_string()],
+            test_batch_capability(true),
+        )
+        .with_batch_workers(3)
+        .with_xberg_max_threads(7);
+        let file = tempfile::NamedTempFile::new().unwrap();
+
+        let results = adapter
+            .extract_batch(&[file.path()], Duration::from_secs(1), &[false], OutputFormat::Markdown)
+            .await
+            .unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert!(results[0].success);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn xberg_batch_defaults_thread_limit_to_worker_limit() {
         let script = r#"
             concurrent=""
             threads=""
@@ -1941,7 +2029,7 @@ mod tests {
         let adapter = SubprocessAdapter::with_batch_capability(
             "xberg-test",
             "sh",
-            vec!["-c".to_string(), script.to_string(), "worker-budget-probe".to_string()],
+            vec!["-c".to_string(), script.to_string(), "legacy-budget-probe".to_string()],
             vec![],
             vec!["pdf".to_string()],
             test_batch_capability(true),

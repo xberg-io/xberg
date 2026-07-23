@@ -122,6 +122,14 @@ pub trait FrameworkAdapter: Send + Sync {
         (Some(requested), Some(requested))
     }
 
+    /// Return the configured execution thread budget, when the adapter exposes one.
+    ///
+    /// This reports the value the adapter will pass to the framework, not merely
+    /// the benchmark configuration that requested it.
+    fn configured_thread_budget(&self) -> Option<usize> {
+        None
+    }
+
     /// Perform any necessary setup before benchmarking
     async fn setup(&self) -> Result<()> {
         Ok(())

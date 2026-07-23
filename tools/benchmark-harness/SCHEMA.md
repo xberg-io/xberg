@@ -240,10 +240,25 @@ which the harness normalises to aggregate key `xberg-markdown-baseline:batch`.
 ### Run provenance sidecar
 
 The `run` command writes `provenance.json` beside the backward-compatible `results.json` array.
-Schema version 1 records the Xberg repository commit/dirty bit, the ordered fixture descriptors
+Schema version 2 records the Xberg repository commit/dirty bit, the ordered fixture descriptors
 and document BLAKE3 digests, cohort manifest identity, adapter versions and executable digests,
 explicit model revision identities, timing configuration, fixed batch partitions, requested
-workers, and framework-specific worker semantics. Local absolute paths are never serialized.
+workers, framework-specific worker semantics, and the configured Xberg batch thread budget.
+Local absolute paths are never serialized.
+
+For Xberg native batch rows, `frameworks[].configured_thread_budget` is the value the adapter
+actually passes to `xberg batch --max-threads`. It is distinct from
+`frameworks[].requested_workers`, which records the `--max-concurrent` document-concurrency
+cap. `effective_workers` remains `null` because Xberg resolves effective document concurrency
+from the workload. Non-Xberg and single-file rows omit `configured_thread_budget`.
+
+#### Run provenance migration from schema 1 to schema 2
+
+- Added optional `FrameworkProvenance.configured_thread_budget`.
+- Existing schema-1 sidecars remain readable; a missing field deserializes as `null`.
+- Consumers should treat `null` as unavailable, not infer a thread budget from worker fields.
+- Producers that omit `--xberg-max-threads` record the legacy fallback value from
+  `--max-concurrent`.
 
 ### Key Format Rationale
 
