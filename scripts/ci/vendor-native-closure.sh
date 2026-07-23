@@ -14,9 +14,57 @@ is_base_lib() {
   esac
 }
 
+set_origin_rpath() {
+  local elf="$1"
+  # Every copied library may have its own transitive DT_NEEDED entries. Giving
+  # each ELF an origin-relative RUNPATH keeps the flattened bundle relocatable.
+  # shellcheck disable=SC2016
+  patchelf --set-rpath '$ORIGIN' "$elf"
+}
+
+verify_local_closure() {
+  local native="$1" dir report lib base resolved
+  dir="$(cd "$(dirname "$native")" && pwd)"
+  report="$(mktemp)"
+
+  # install-system-deps exports /usr/local/lib for the build. Drop it here so
+  # this check proves the packaged RUNPATH works without the build environment.
+  if ! env -u LD_LIBRARY_PATH ldd "$native" >"$report" 2>&1; then
+    cat "$report" >&2
+    rm -f "$report"
+    die "$(basename "$native") has unresolved dependencies after vendoring"
+  fi
+  if grep -q 'not found' "$report"; then
+    cat "$report" >&2
+    rm -f "$report"
+    die "$(basename "$native") has unresolved dependencies after vendoring"
+  fi
+
+  while IFS= read -r lib; do
+    [ -f "$lib" ] || continue
+    base="$(basename "$lib")"
+    is_base_lib "$base" && continue
+    resolved="$(readlink -f "$lib")"
+    case "$resolved" in
+    "$dir"/*) ;;
+    *)
+      cat "$report" >&2
+      rm -f "$report"
+      die "$base still resolves outside the bundle: $resolved"
+      ;;
+    esac
+  done < <(
+    sed -n 's/.*=> *\(\/[^ ]*\).*/\1/p; s/^[[:space:]]*\(\/[^ ]*\) (0x[0-9a-f]*)$/\1/p' "$report"
+  )
+
+  rm -f "$report"
+  log "verified local dependency closure for $(basename "$native")"
+}
+
 vendor_one() {
-  local native="$1" dir queue seen bin lib base
-  dir="$(dirname "$native")"
+  local native="$1" dir queue seen bin lib base destination
+  dir="$(cd "$(dirname "$native")" && pwd)"
+  native="$dir/$(basename "$native")"
   queue="$(mktemp)"
   seen="$(mktemp)"
   printf '%s\n' "$native" >"$queue"
@@ -31,15 +79,19 @@ vendor_one() {
         is_base_lib "$base" && continue
         grep -qxF "$base" "$seen" 2>/dev/null && continue
         printf '%s\n' "$base" >>"$seen"
-        cp -L "$lib" "$dir/$base"
-        chmod u+w "$dir/$base" 2>/dev/null || true
-        printf '%s\n' "$dir/$base" >>"$queue"
+        destination="$dir/$base"
+        if [ "$(readlink -f "$lib")" != "$(readlink -f "$destination" 2>/dev/null || true)" ]; then
+          cp -L "$lib" "$destination"
+        fi
+        chmod u+w "$destination" 2>/dev/null || true
+        set_origin_rpath "$destination"
+        printf '%s\n' "$destination" >>"$queue"
         log "vendored $base beside $(basename "$native")"
       done
   done
   rm -f "$queue" "$seen"
-  # shellcheck disable=SC2016
-  patchelf --set-rpath '$ORIGIN' "$native"
+  set_origin_rpath "$native"
+  verify_local_closure "$native"
 }
 
 vendor_tree() {
@@ -63,7 +115,15 @@ main() {
     tar -czf "$artifact" -C "$WORKDIR" .
     ;;
   *.so | *.node) vendor_one "$artifact" ;;
-  *) [ -d "$artifact" ] || die "unsupported artifact '$artifact'"; vendor_tree "$artifact" ;;
+  *)
+    if [ -f "$artifact" ]; then
+      vendor_one "$artifact"
+    elif [ -d "$artifact" ]; then
+      vendor_tree "$artifact"
+    else
+      die "unsupported artifact '$artifact'"
+    fi
+    ;;
   esac
   log "done"
 }

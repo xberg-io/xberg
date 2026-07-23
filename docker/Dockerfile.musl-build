@@ -42,16 +42,20 @@ RUN cargo build --release --package xberg-cli --features all && \
 
 RUN patchelf --set-rpath '$ORIGIN/lib' /build/xberg
 
+# Seed dependency discovery with the executable as well as the libraries that
+# are copied explicitly below. Otherwise direct dependencies such as libheif
+# never enter the recursive closure.
 RUN set -eu; \
-    mkdir -p /build/lib; \
+    mkdir -p /build/lib/libheif; \
     cp /usr/lib/libstdc++.so.6 /build/lib/; \
     cp /usr/lib/libgcc_s.so.1 /build/lib/; \
     cp /usr/lib/libonnxruntime.so* /build/lib/ 2>/dev/null || true; \
     cp /lib/ld-musl-*.so.1 /build/lib/ 2>/dev/null || true; \
+    cp -a /usr/lib/libheif/. /build/lib/libheif/; \
     LOADER="$(ls /build/lib/ld-musl-*.so.1 | head -n1)"; \
     while :; do \
         before=$(ls /build/lib | wc -l); \
-        for so in /build/lib/*.so*; do \
+        for so in /build/xberg /build/lib/*.so* /build/lib/libheif/*.so*; do \
             case "$so" in *ld-musl-*) continue ;; esac; \
             "$LOADER" --list "$so" 2>/dev/null \
                 | awk '/=>/ { print $3 }' \
@@ -66,7 +70,7 @@ RUN set -eu; \
         after=$(ls /build/lib | wc -l); \
         [ "$before" = "$after" ] && break; \
     done; \
-    for so in /build/lib/*.so*; do \
+    for so in /build/xberg /build/lib/*.so* /build/lib/libheif/*.so*; do \
         case "$so" in *ld-musl-*) continue ;; esac; \
         if "$LOADER" --library-path /build/lib --list "$so" 2>&1 | grep -q 'not found'; then \
             echo "FAIL: $so has unresolved dependencies inside the bundle:" >&2; \
@@ -74,19 +78,22 @@ RUN set -eu; \
             exit 1; \
         fi; \
     done; \
+    ls /build/lib/libheif.so* >/dev/null; \
+    ls /build/lib/libheif/*.so* >/dev/null; \
     echo "OK: every bundled library resolves inside /build/lib/"
 
 RUN mv /build/xberg /build/xberg.bin && \
     INTERP_NAME=$(basename /lib/ld-musl-*.so.1) && \
-    printf '#!/bin/sh\nSCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"\nexec "$SCRIPT_DIR/lib/%s" --library-path "$SCRIPT_DIR/lib" "$SCRIPT_DIR/xberg.bin" "$@"\n' \
+    printf '#!/bin/sh\nSCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"\nexport LIBHEIF_PLUGIN_PATH="$SCRIPT_DIR/lib/libheif${LIBHEIF_PLUGIN_PATH:+:$LIBHEIF_PLUGIN_PATH}"\nexec "$SCRIPT_DIR/lib/%s" --library-path "$SCRIPT_DIR/lib" "$SCRIPT_DIR/xberg.bin" "$@"\n' \
         "$INTERP_NAME" > /build/xberg && \
     chmod +x /build/xberg
 
-RUN file /build/xberg && \
+RUN file /build/xberg /build/xberg.bin && \
     echo "=== Dynamic dependencies ===" && \
-    readelf -d /build/xberg 2>/dev/null | grep -E "NEEDED|RPATH|RUNPATH" || echo "No dependencies" && \
+    readelf -d /build/xberg.bin 2>/dev/null | grep -E "NEEDED|RPATH|RUNPATH" && \
     echo "=== Bundled libraries ===" && \
-    ls -la /build/lib/
+    find /build/lib -maxdepth 2 -type f -print && \
+    /build/xberg --version
 
 FROM scratch
 COPY --from=builder /build/xberg /xberg

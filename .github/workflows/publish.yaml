@@ -1036,6 +1036,7 @@ jobs:
         run: |
           STAGE="xberg-cli-${TARGET}"
           mkdir -p "$STAGE"
+          cp LICENSE THIRD_PARTY_LICENSES.md "$STAGE/"
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             cp "$BINARY_PATH" "$STAGE/xberg.exe"
             7z a "${STAGE}.zip" "$STAGE" >/dev/null
@@ -1055,6 +1056,13 @@ jobs:
                 echo "::error::vendored ONNX Runtime links non-system libraries:"; echo "$deps"; exit 1
               fi
               codesign --force -s - "$STAGE/libonnxruntime.dylib" || true
+            fi
+            # Linux CLI builds enable the formats feature, which dynamically
+            # links libheif. Ship its complete non-system dependency closure.
+            if [[ "$TARGET" == *-unknown-linux-gnu ]]; then
+              bash scripts/ci/vendor-native-closure.sh "$STAGE/xberg"
+              compgen -G "$STAGE/libheif.so*" >/dev/null
+              env -u LD_LIBRARY_PATH "$STAGE/xberg" --version
             fi
             tar -czf "${STAGE}.tar.gz" "$STAGE"
           fi
@@ -1098,6 +1106,7 @@ jobs:
         run: |
           STAGE="xberg-cli-${TARGET}"
           mkdir -p "$STAGE/lib"
+          cp LICENSE THIRD_PARTY_LICENSES.md "$STAGE/"
           cp build-output/xberg "$STAGE/xberg"
           cp build-output/xberg.bin "$STAGE/xberg.bin"
           cp -a build-output/lib/. "$STAGE/lib/"
