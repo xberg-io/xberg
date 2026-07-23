@@ -9,8 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.33] - 2026-07-23
+
 ### Added
 
+- **Stable node ids on the document tree.** `DocumentNode.id` is now populated with a
+  deterministic, content-derived id (stable across extractions), and each chunk carries
+  `metadata.nodeIds` linking it back to the nodes it was derived from. Both are exposed as plain
+  strings across all language bindings. (#1296)
 - **Per-page chunk coordinates (`pageSpans`).** Each chunk now carries `metadata.pageSpans`, a
   list of `{page, bbox}` entries — one per page the chunk overlaps, in page order — for viewer
   highlighting. The bounding box is the union of that page's body-layer node boxes within the
@@ -51,6 +57,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   uses both controls, records batch subprocess overhead from the reported batch total, and keeps
   user configuration and verbose PDF logs from contaminating measurements.
 - **Linux glibc artifacts no longer require a newer glibc than they advertise.** The prebuilt ONNX Runtime that was statically linked into the Python wheel and the Go/C FFI, Java, and Elixir artifacts is compiled against glibc ≥ 2.38 and pulled unversioned `__isoc23_*` and `__libc_single_threaded` symbols into the binary. Because the manylinux tag only reflects *versioned* glibc requirements, these installed everywhere but crashed at import/load on glibc 2.28–2.37 (`undefined symbol: __isoc23_strtoll`). They now link Microsoft's ONNX Runtime (glibc-clean, floors at 2.27) — the same runtime the C#, Node, and Docker builds already use — and ship it beside the binary, so the symbols are gone and the floor is honest. A CI check now fails any glibc artifact that references too-new symbols or omits the bundled runtime. musl, macOS, and Windows are unaffected.
+
+### Changed
+
+- **Dependencies refreshed across all languages.** Rust, Python, Node, Ruby, Java, and Dart
+  dependency versions were bumped to their latest compatible releases.
 
 ## [1.0.0-rc.31] - 2026-07-21
 

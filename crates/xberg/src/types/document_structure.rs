@@ -139,11 +139,11 @@ impl DocumentStructure {
     /// # Examples
     ///
     /// ```rust
-    /// use xberg::types::document_structure::{DocumentStructure, DocumentNode, NodeContent, NodeId};
+    /// use xberg::types::document_structure::{DocumentStructure, DocumentNode, NodeContent};
     ///
     /// let mut structure = DocumentStructure {
     ///     nodes: vec![DocumentNode {
-    ///         id: NodeId::default(),
+    ///         id: String::new(),
     ///         content: NodeContent::Paragraph { text: "Hello".into() },
     ///         parent: None,
     ///         children: vec![],
@@ -259,7 +259,7 @@ pub struct DocumentNode {
     /// `#[serde(default)]` covers the missing-field case on inbound JSON
     /// (e.g. documents serialised before this field existed).
     #[serde(default)]
-    pub id: NodeId,
+    pub id: String,
 
     /// Node content — tagged enum, type-specific data only.
     pub content: NodeContent,
@@ -840,7 +840,7 @@ mod tests {
     fn make_paragraph(text: &str, page: Option<u32>, index: u32) -> DocumentNode {
         let content = NodeContent::Paragraph { text: text.to_string() };
         DocumentNode {
-            id: NodeId::generate(content.node_type_str(), text, page, index),
+            id: NodeId::generate(content.node_type_str(), text, page, index).to_string(),
             content,
             parent: None,
             children: vec![],
@@ -879,7 +879,7 @@ mod tests {
             heading_text: Some("Section 1".to_string()),
         };
         let group = DocumentNode {
-            id: NodeId::generate("group", "Section 1", Some(1), 0),
+            id: NodeId::generate("group", "Section 1", Some(1), 0).to_string(),
             content: group_content,
             parent: None,
             children: vec![],
@@ -917,7 +917,7 @@ mod tests {
         let mut doc = DocumentStructure::new();
 
         let parent = DocumentNode {
-            id: NodeId::generate("group", "", Some(1), 0),
+            id: NodeId::generate("group", "", Some(1), 0).to_string(),
             content: NodeContent::Group {
                 label: None,
                 heading_level: None,
@@ -946,7 +946,7 @@ mod tests {
         let mut doc = DocumentStructure::new();
 
         let parent = DocumentNode {
-            id: NodeId::generate("group", "", Some(1), 0),
+            id: NodeId::generate("group", "", Some(1), 0).to_string(),
             content: NodeContent::Group {
                 label: None,
                 heading_level: None,
@@ -1239,7 +1239,7 @@ mod tests {
             heading_text: Some("Introduction".to_string()),
         };
         let group = DocumentNode {
-            id: NodeId::generate("group", "Introduction", Some(1), 0),
+            id: NodeId::generate("group", "Introduction", Some(1), 0).to_string(),
             content: group_content,
             parent: None,
             children: vec![],
@@ -1261,7 +1261,7 @@ mod tests {
             text: "Hello world".to_string(),
         };
         let para = DocumentNode {
-            id: NodeId::generate("paragraph", "Hello world", Some(1), 1),
+            id: NodeId::generate("paragraph", "Hello world", Some(1), 1).to_string(),
             content: para_content,
             parent: None,
             children: vec![],

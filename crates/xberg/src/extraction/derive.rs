@@ -130,7 +130,7 @@ fn derive_document_structure_inner(doc: &mut InternalDocument) -> DocumentStruct
 
             let heading_node_index = ds.len() as u32;
             let heading_node = DocumentNode {
-                id: NodeId::generate("heading", &text, elem.page, heading_node_index),
+                id: NodeId::generate("heading", &text, elem.page, heading_node_index).to_string(),
                 content: NodeContent::Heading { level, text },
                 parent: Some(group_idx),
                 children: vec![],
@@ -308,7 +308,7 @@ fn push_node_with_annotations(
 
     let node_index_val = ds.len() as u32;
     let node = DocumentNode {
-        id: NodeId::generate(node_type, text_for_id, elem.page, node_index_val),
+        id: NodeId::generate(node_type, text_for_id, elem.page, node_index_val).to_string(),
         content,
         parent: None,
         children: vec![],

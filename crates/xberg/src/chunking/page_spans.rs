@@ -146,12 +146,11 @@ fn union_bbox(acc: Option<BoundingBox>, next: BoundingBox) -> BoundingBox {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::document_structure::NodeId;
     use crate::types::{ChunkMetadata, ChunkType, PageSpan};
 
     fn body_node(text: &str, page: u32, bbox: Option<BoundingBox>) -> DocumentNode {
         DocumentNode {
-            id: NodeId::default(),
+            id: String::new(),
             content: NodeContent::Paragraph { text: text.to_string() },
             parent: None,
             children: Vec::new(),

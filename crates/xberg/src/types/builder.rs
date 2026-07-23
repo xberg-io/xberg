@@ -427,7 +427,7 @@ impl DocumentStructureBuilder {
         self.node_count += 1;
 
         let node = DocumentNode {
-            id: NodeId::generate(node_type, text, page, index),
+            id: NodeId::generate(node_type, text, page, index).to_string(),
             content,
             parent: None,
             children: vec![],

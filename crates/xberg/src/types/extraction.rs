@@ -6,7 +6,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 
 use super::djot::DjotContent;
-use super::document_structure::{DocumentStructure, NodeId};
+use super::document_structure::DocumentStructure;
 use super::metadata::Metadata;
 use super::ocr_elements::OcrElement;
 use super::page::PageContent;
@@ -617,7 +617,7 @@ pub struct ChunkMetadata {
     /// intersection is implemented (tracked under #1294/#1295); this field is
     /// the wire-format foundation for that follow-up.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
-    pub node_ids: Vec<NodeId>,
+    pub node_ids: Vec<String>,
 
     /// Per-page bounding-box spans this chunk covers, for viewer highlighting (#1295).
     ///
@@ -1057,8 +1057,8 @@ mod tests {
     fn chunk_metadata_node_ids_present_when_set() {
         let mut meta = empty_chunk_metadata();
         meta.node_ids = vec![
-            NodeId::generate("paragraph", "a", Some(1), 0),
-            NodeId::generate("paragraph", "b", Some(1), 1),
+            crate::types::document_structure::NodeId::generate("paragraph", "a", Some(1), 0).to_string(),
+            crate::types::document_structure::NodeId::generate("paragraph", "b", Some(1), 1).to_string(),
         ];
         let json = serde_json::to_value(&meta).expect("serialize");
         let ids = json

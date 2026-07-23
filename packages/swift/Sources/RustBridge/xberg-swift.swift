@@ -139,6 +139,9 @@ public func listTokenizerBackends() throws -> RustVec<RustString> {
 public func listValidators() throws -> RustVec<RustString> {
     try { let val = __swift_bridge__$list_validators(); if val.is_ok { return RustVec(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
+public func classifyChunks(_ result: ExtractedDocument, _ config: ChunkClassificationConfig) throws -> () {
+    try { let val = __swift_bridge__$classify_chunks({result.isOwned = false; return result.ptr;}(), {config.isOwned = false; return config.ptr;}()); if val != nil { throw RustString(ptr: val!) } else { return } }()
+}
 public func maxSimScore(_ query: MultiVectorEmbedding, _ doc: MultiVectorEmbedding) -> Double {
     __swift_bridge__$max_sim_score({query.isOwned = false; return query.ptr;}(), {doc.isOwned = false; return doc.ptr;}())
 }
@@ -576,6 +579,9 @@ func __swift_bridge__SwiftTokenizerBackendBox_alef_count_tokens (_ this: UnsafeM
     Unmanaged<SwiftTokenizerBackendBox>.fromOpaque(this).takeUnretainedValue().alef_count_tokens(text: RustString(ptr: text))
 }
 
+public func chunkClassificationConfigFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> ChunkClassificationConfig {
+    try { let val = __swift_bridge__$chunk_classification_config_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return ChunkClassificationConfig(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
+}
 public func extractionConfigFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> ExtractionConfig {
     try { let val = __swift_bridge__$extraction_config_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return ExtractionConfig(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
@@ -602,6 +608,9 @@ public func accelerationConfigFromJson<GenericIntoRustString: IntoRustString>(_ 
 }
 public func captioningConfigFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> CaptioningConfig {
     try { let val = __swift_bridge__$captioning_config_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return CaptioningConfig(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
+}
+public func chunkClassificationDefinitionFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> ChunkClassificationDefinition {
+    try { let val = __swift_bridge__$chunk_classification_definition_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return ChunkClassificationDefinition(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
 public func pageClassificationConfigFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> PageClassificationConfig {
     try { let val = __swift_bridge__$page_classification_config_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return PageClassificationConfig(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
@@ -824,6 +833,9 @@ public func headingLevelFromJson<GenericIntoRustString: IntoRustString>(_ json: 
 }
 public func chunkMetadataFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> ChunkMetadata {
     try { let val = __swift_bridge__$chunk_metadata_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return ChunkMetadata(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
+}
+public func pageSpanFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> PageSpan {
+    try { let val = __swift_bridge__$page_span_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return PageSpan(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
 public func extractedImageFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> ExtractedImage {
     try { let val = __swift_bridge__$extracted_image_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return ExtractedImage(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
@@ -1422,6 +1434,12 @@ public func __alef_phantom_vec_acceleration_config() -> RustVec<AccelerationConf
 public func __alef_phantom_vec_captioning_config() -> RustVec<CaptioningConfig> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_captioning_config())
 }
+public func __alef_phantom_vec_chunk_classification_definition() -> RustVec<ChunkClassificationDefinition> {
+    RustVec(ptr: __swift_bridge__$__alef_phantom_vec_chunk_classification_definition())
+}
+public func __alef_phantom_vec_chunk_classification_config() -> RustVec<ChunkClassificationConfig> {
+    RustVec(ptr: __swift_bridge__$__alef_phantom_vec_chunk_classification_config())
+}
 public func __alef_phantom_vec_page_classification_config() -> RustVec<PageClassificationConfig> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_page_classification_config())
 }
@@ -1610,6 +1628,9 @@ public func __alef_phantom_vec_heading_level() -> RustVec<HeadingLevel> {
 }
 public func __alef_phantom_vec_chunk_metadata() -> RustVec<ChunkMetadata> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_chunk_metadata())
+}
+public func __alef_phantom_vec_page_span() -> RustVec<PageSpan> {
+    RustVec(ptr: __swift_bridge__$__alef_phantom_vec_page_span())
 }
 public func __alef_phantom_vec_extracted_image() -> RustVec<ExtractedImage> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_extracted_image())
@@ -2235,6 +2256,9 @@ public func __alef_phantom_vec_embedded_file() -> RustVec<EmbeddedFile> {
 public func __alef_phantom_vec_pdf_metadata() -> RustVec<PdfMetadata> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_pdf_metadata())
 }
+public func __alef_phantom_vec_chunk_classification_enrichment_config() -> RustVec<ChunkClassificationEnrichmentConfig> {
+    RustVec(ptr: __swift_bridge__$__alef_phantom_vec_chunk_classification_enrichment_config())
+}
 public func __alef_phantom_vec_html_theme() -> RustVec<HtmlTheme> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_html_theme())
 }
@@ -2568,6 +2592,186 @@ extension CaptioningConfig: Vectorizable {
 }
 
 
+public class ChunkClassificationDefinition: ChunkClassificationDefinitionRefMut {
+    public var isOwned: Bool = true
+
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+
+    deinit {
+        if isOwned {
+            __swift_bridge__$ChunkClassificationDefinition$_free(ptr)
+        }
+    }
+}
+public class ChunkClassificationDefinitionRefMut: ChunkClassificationDefinitionRef {
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+}
+public class ChunkClassificationDefinitionRef {
+    public var ptr: UnsafeMutableRawPointer
+
+    public init(ptr: UnsafeMutableRawPointer) {
+        self.ptr = ptr
+    }
+}
+extension ChunkClassificationDefinitionRef {
+    public func label() -> RustString {
+        RustString(ptr: __swift_bridge__$ChunkClassificationDefinition$label(ptr))
+    }
+
+    public func description() -> RustString {
+        RustString(ptr: __swift_bridge__$ChunkClassificationDefinition$description(ptr))
+    }
+}
+extension ChunkClassificationDefinition: Vectorizable {
+    public static func vecOfSelfNew() -> UnsafeMutableRawPointer {
+        __swift_bridge__$Vec_ChunkClassificationDefinition$new()
+    }
+
+    public static func vecOfSelfFree(vecPtr: UnsafeMutableRawPointer) {
+        __swift_bridge__$Vec_ChunkClassificationDefinition$drop(vecPtr)
+    }
+
+    public static func vecOfSelfPush(vecPtr: UnsafeMutableRawPointer, value: ChunkClassificationDefinition) {
+        __swift_bridge__$Vec_ChunkClassificationDefinition$push(vecPtr, {value.isOwned = false; return value.ptr;}())
+    }
+
+    public static func vecOfSelfPop(vecPtr: UnsafeMutableRawPointer) -> Optional<Self> {
+        let pointer = __swift_bridge__$Vec_ChunkClassificationDefinition$pop(vecPtr)
+        if pointer == nil {
+            return nil
+        } else {
+            return (ChunkClassificationDefinition(ptr: pointer!) as! Self)
+        }
+    }
+
+    public static func vecOfSelfGet(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<ChunkClassificationDefinitionRef> {
+        let pointer = __swift_bridge__$Vec_ChunkClassificationDefinition$get(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return ChunkClassificationDefinitionRef(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfGetMut(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<ChunkClassificationDefinitionRefMut> {
+        let pointer = __swift_bridge__$Vec_ChunkClassificationDefinition$get_mut(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return ChunkClassificationDefinitionRefMut(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfAsPtr(vecPtr: UnsafeMutableRawPointer) -> UnsafePointer<ChunkClassificationDefinitionRef> {
+        UnsafePointer<ChunkClassificationDefinitionRef>(OpaquePointer(__swift_bridge__$Vec_ChunkClassificationDefinition$as_ptr(vecPtr)))
+    }
+
+    public static func vecOfSelfLen(vecPtr: UnsafeMutableRawPointer) -> UInt {
+        __swift_bridge__$Vec_ChunkClassificationDefinition$len(vecPtr)
+    }
+}
+
+
+public class ChunkClassificationConfig: ChunkClassificationConfigRefMut {
+    public var isOwned: Bool = true
+
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+
+    deinit {
+        if isOwned {
+            __swift_bridge__$ChunkClassificationConfig$_free(ptr)
+        }
+    }
+}
+public class ChunkClassificationConfigRefMut: ChunkClassificationConfigRef {
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+}
+public class ChunkClassificationConfigRef {
+    public var ptr: UnsafeMutableRawPointer
+
+    public init(ptr: UnsafeMutableRawPointer) {
+        self.ptr = ptr
+    }
+}
+extension ChunkClassificationConfigRef {
+    public func promptTemplate() -> Optional<RustString> {
+        { let val = __swift_bridge__$ChunkClassificationConfig$prompt_template(ptr); if val != nil { return RustString(ptr: val!) } else { return nil } }()
+    }
+
+    public func definitions() -> RustVec<ChunkClassificationDefinition> {
+        RustVec(ptr: __swift_bridge__$ChunkClassificationConfig$definitions(ptr))
+    }
+
+    public func llm() -> LlmConfig {
+        LlmConfig(ptr: __swift_bridge__$ChunkClassificationConfig$llm(ptr))
+    }
+
+    public func batchSize() -> UInt {
+        __swift_bridge__$ChunkClassificationConfig$batch_size(ptr)
+    }
+
+    public func maxConcurrency() -> UInt {
+        __swift_bridge__$ChunkClassificationConfig$max_concurrency(ptr)
+    }
+}
+extension ChunkClassificationConfig: Vectorizable {
+    public static func vecOfSelfNew() -> UnsafeMutableRawPointer {
+        __swift_bridge__$Vec_ChunkClassificationConfig$new()
+    }
+
+    public static func vecOfSelfFree(vecPtr: UnsafeMutableRawPointer) {
+        __swift_bridge__$Vec_ChunkClassificationConfig$drop(vecPtr)
+    }
+
+    public static func vecOfSelfPush(vecPtr: UnsafeMutableRawPointer, value: ChunkClassificationConfig) {
+        __swift_bridge__$Vec_ChunkClassificationConfig$push(vecPtr, {value.isOwned = false; return value.ptr;}())
+    }
+
+    public static func vecOfSelfPop(vecPtr: UnsafeMutableRawPointer) -> Optional<Self> {
+        let pointer = __swift_bridge__$Vec_ChunkClassificationConfig$pop(vecPtr)
+        if pointer == nil {
+            return nil
+        } else {
+            return (ChunkClassificationConfig(ptr: pointer!) as! Self)
+        }
+    }
+
+    public static func vecOfSelfGet(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<ChunkClassificationConfigRef> {
+        let pointer = __swift_bridge__$Vec_ChunkClassificationConfig$get(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return ChunkClassificationConfigRef(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfGetMut(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<ChunkClassificationConfigRefMut> {
+        let pointer = __swift_bridge__$Vec_ChunkClassificationConfig$get_mut(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return ChunkClassificationConfigRefMut(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfAsPtr(vecPtr: UnsafeMutableRawPointer) -> UnsafePointer<ChunkClassificationConfigRef> {
+        UnsafePointer<ChunkClassificationConfigRef>(OpaquePointer(__swift_bridge__$Vec_ChunkClassificationConfig$as_ptr(vecPtr)))
+    }
+
+    public static func vecOfSelfLen(vecPtr: UnsafeMutableRawPointer) -> UInt {
+        __swift_bridge__$Vec_ChunkClassificationConfig$len(vecPtr)
+    }
+}
+
+
 public class PageClassificationConfig: PageClassificationConfigRefMut {
     public var isOwned: Bool = true
 
@@ -2856,8 +3060,8 @@ public class ExtractionConfig: ExtractionConfigRefMut {
     }
 }
 extension ExtractionConfig {
-    public convenience init<GenericIntoRustString: IntoRustString>(_ use_cache: Bool, _ enable_quality_processing: Bool, _ ocr: Optional<OcrConfig>, _ force_ocr: Bool, _ ocr_strategy: OcrStrategy, _ force_ocr_pages: Optional<RustVec<UInt32>>, _ disable_ocr: Bool, _ chunking: Optional<ChunkingConfig>, _ content_filter: Optional<ContentFilterConfig>, _ images: Optional<ImageExtractionConfig>, _ pdf_options: Optional<PdfConfig>, _ token_reduction: Optional<TokenReductionOptions>, _ language_detection: Optional<LanguageDetectionConfig>, _ pages: Optional<PageConfig>, _ keywords: Optional<KeywordConfig>, _ postprocessor: Optional<PostProcessorConfig>, _ html_options: Optional<ConversionOptions>, _ html_output: Optional<HtmlOutputConfig>, _ extraction_timeout_secs: Optional<UInt64>, _ max_concurrent_extractions: Optional<UInt>, _ result_format: ResultFormat, _ security_limits: Optional<SecurityLimits>, _ max_embedded_file_bytes: Optional<UInt64>, _ output_format: OutputFormat, _ jupyter_cell_rendering: JupyterCellRendering, _ layout: Optional<LayoutDetectionConfig>, _ transcription: Optional<TranscriptionConfig>, _ use_layout_for_markdown: Bool, _ include_document_structure: Bool, _ acceleration: Optional<AccelerationConfig>, _ cache_namespace: Optional<GenericIntoRustString>, _ cache_ttl_secs: Optional<UInt64>, _ email: Optional<EmailConfig>, _ url: UrlExtractionConfig, _ max_archive_depth: UInt, _ tree_sitter: Optional<TreeSitterConfig>, _ structured_extraction: Optional<StructuredExtractionConfig>, _ ner: Optional<NerConfig>, _ redaction: Optional<RedactionConfig>, _ summarization: Optional<SummarizationConfig>, _ translation: Optional<TranslationConfig>, _ page_classification: Optional<PageClassificationConfig>, _ captioning: Optional<CaptioningConfig>, _ qr_codes: Optional<Bool>) {
-        self.init(ptr: __swift_bridge__$ExtractionConfig$new(use_cache, enable_quality_processing, { if let val = ocr { val.isOwned = false; return val.ptr } else { return nil } }(), force_ocr, {ocr_strategy.isOwned = false; return ocr_strategy.ptr;}(), { if let val = force_ocr_pages { val.isOwned = false; return val.ptr } else { return nil } }(), disable_ocr, { if let val = chunking { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = content_filter { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = images { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = pdf_options { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = token_reduction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = language_detection { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = pages { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = keywords { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = postprocessor { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = html_options { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = html_output { val.isOwned = false; return val.ptr } else { return nil } }(), extraction_timeout_secs.intoFfiRepr(), max_concurrent_extractions.intoFfiRepr(), {result_format.isOwned = false; return result_format.ptr;}(), { if let val = security_limits { val.isOwned = false; return val.ptr } else { return nil } }(), max_embedded_file_bytes.intoFfiRepr(), {output_format.isOwned = false; return output_format.ptr;}(), {jupyter_cell_rendering.isOwned = false; return jupyter_cell_rendering.ptr;}(), { if let val = layout { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = transcription { val.isOwned = false; return val.ptr } else { return nil } }(), use_layout_for_markdown, include_document_structure, { if let val = acceleration { val.isOwned = false; return val.ptr } else { return nil } }(), { if let rustString = optionalStringIntoRustString(cache_namespace) { rustString.isOwned = false; return rustString.ptr } else { return nil } }(), cache_ttl_secs.intoFfiRepr(), { if let val = email { val.isOwned = false; return val.ptr } else { return nil } }(), {url.isOwned = false; return url.ptr;}(), max_archive_depth, { if let val = tree_sitter { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = structured_extraction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = ner { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = redaction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = summarization { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = translation { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = page_classification { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = captioning { val.isOwned = false; return val.ptr } else { return nil } }(), qr_codes.intoFfiRepr()))
+    public convenience init<GenericIntoRustString: IntoRustString>(_ use_cache: Bool, _ enable_quality_processing: Bool, _ ocr: Optional<OcrConfig>, _ force_ocr: Bool, _ ocr_strategy: OcrStrategy, _ force_ocr_pages: Optional<RustVec<UInt32>>, _ disable_ocr: Bool, _ chunking: Optional<ChunkingConfig>, _ content_filter: Optional<ContentFilterConfig>, _ images: Optional<ImageExtractionConfig>, _ pdf_options: Optional<PdfConfig>, _ token_reduction: Optional<TokenReductionOptions>, _ language_detection: Optional<LanguageDetectionConfig>, _ pages: Optional<PageConfig>, _ keywords: Optional<KeywordConfig>, _ postprocessor: Optional<PostProcessorConfig>, _ html_options: Optional<ConversionOptions>, _ html_output: Optional<HtmlOutputConfig>, _ extraction_timeout_secs: Optional<UInt64>, _ max_concurrent_extractions: Optional<UInt>, _ result_format: ResultFormat, _ security_limits: Optional<SecurityLimits>, _ max_embedded_file_bytes: Optional<UInt64>, _ output_format: OutputFormat, _ escape_markdown: Bool, _ table_anchors: Bool, _ jupyter_cell_rendering: JupyterCellRendering, _ layout: Optional<LayoutDetectionConfig>, _ transcription: Optional<TranscriptionConfig>, _ use_layout_for_markdown: Bool, _ include_document_structure: Bool, _ acceleration: Optional<AccelerationConfig>, _ cache_namespace: Optional<GenericIntoRustString>, _ cache_ttl_secs: Optional<UInt64>, _ email: Optional<EmailConfig>, _ url: UrlExtractionConfig, _ max_archive_depth: UInt, _ tree_sitter: Optional<TreeSitterConfig>, _ structured_extraction: Optional<StructuredExtractionConfig>, _ ner: Optional<NerConfig>, _ redaction: Optional<RedactionConfig>, _ summarization: Optional<SummarizationConfig>, _ translation: Optional<TranslationConfig>, _ page_classification: Optional<PageClassificationConfig>, _ chunk_classification: Optional<ChunkClassificationConfig>, _ captioning: Optional<CaptioningConfig>, _ qr_codes: Optional<Bool>) {
+        self.init(ptr: __swift_bridge__$ExtractionConfig$new(use_cache, enable_quality_processing, { if let val = ocr { val.isOwned = false; return val.ptr } else { return nil } }(), force_ocr, {ocr_strategy.isOwned = false; return ocr_strategy.ptr;}(), { if let val = force_ocr_pages { val.isOwned = false; return val.ptr } else { return nil } }(), disable_ocr, { if let val = chunking { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = content_filter { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = images { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = pdf_options { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = token_reduction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = language_detection { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = pages { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = keywords { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = postprocessor { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = html_options { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = html_output { val.isOwned = false; return val.ptr } else { return nil } }(), extraction_timeout_secs.intoFfiRepr(), max_concurrent_extractions.intoFfiRepr(), {result_format.isOwned = false; return result_format.ptr;}(), { if let val = security_limits { val.isOwned = false; return val.ptr } else { return nil } }(), max_embedded_file_bytes.intoFfiRepr(), {output_format.isOwned = false; return output_format.ptr;}(), escape_markdown, table_anchors, {jupyter_cell_rendering.isOwned = false; return jupyter_cell_rendering.ptr;}(), { if let val = layout { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = transcription { val.isOwned = false; return val.ptr } else { return nil } }(), use_layout_for_markdown, include_document_structure, { if let val = acceleration { val.isOwned = false; return val.ptr } else { return nil } }(), { if let rustString = optionalStringIntoRustString(cache_namespace) { rustString.isOwned = false; return rustString.ptr } else { return nil } }(), cache_ttl_secs.intoFfiRepr(), { if let val = email { val.isOwned = false; return val.ptr } else { return nil } }(), {url.isOwned = false; return url.ptr;}(), max_archive_depth, { if let val = tree_sitter { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = structured_extraction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = ner { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = redaction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = summarization { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = translation { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = page_classification { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = chunk_classification { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = captioning { val.isOwned = false; return val.ptr } else { return nil } }(), qr_codes.intoFfiRepr()))
     }
 }
 public class ExtractionConfigRefMut: ExtractionConfigRef {
@@ -2969,6 +3173,14 @@ extension ExtractionConfigRef {
         RustString(ptr: __swift_bridge__$ExtractionConfig$output_format(ptr))
     }
 
+    public func escapeMarkdown() -> Bool {
+        __swift_bridge__$ExtractionConfig$escape_markdown(ptr)
+    }
+
+    public func tableAnchors() -> Bool {
+        __swift_bridge__$ExtractionConfig$table_anchors(ptr)
+    }
+
     public func jupyterCellRendering() -> RustString {
         RustString(ptr: __swift_bridge__$ExtractionConfig$jupyter_cell_rendering(ptr))
     }
@@ -3039,6 +3251,10 @@ extension ExtractionConfigRef {
 
     public func pageClassification() -> Optional<PageClassificationConfig> {
         { let val = __swift_bridge__$ExtractionConfig$page_classification(ptr); if val != nil { return PageClassificationConfig(ptr: val!) } else { return nil } }()
+    }
+
+    public func chunkClassification() -> Optional<ChunkClassificationConfig> {
+        { let val = __swift_bridge__$ExtractionConfig$chunk_classification(ptr); if val != nil { return ChunkClassificationConfig(ptr: val!) } else { return nil } }()
     }
 
     public func captioning() -> Optional<CaptioningConfig> {
@@ -3113,8 +3329,8 @@ public class FileExtractionConfig: FileExtractionConfigRefMut {
     }
 }
 extension FileExtractionConfig {
-    public convenience init(_ enable_quality_processing: Optional<Bool>, _ ocr: Optional<OcrConfig>, _ force_ocr: Optional<Bool>, _ ocr_strategy: Optional<OcrStrategy>, _ force_ocr_pages: Optional<RustVec<UInt32>>, _ disable_ocr: Optional<Bool>, _ chunking: Optional<ChunkingConfig>, _ content_filter: Optional<ContentFilterConfig>, _ images: Optional<ImageExtractionConfig>, _ pdf_options: Optional<PdfConfig>, _ token_reduction: Optional<TokenReductionOptions>, _ language_detection: Optional<LanguageDetectionConfig>, _ pages: Optional<PageConfig>, _ keywords: Optional<KeywordConfig>, _ postprocessor: Optional<PostProcessorConfig>, _ html_output: Optional<HtmlOutputConfig>, _ result_format: Optional<ResultFormat>, _ output_format: Optional<OutputFormat>, _ include_document_structure: Optional<Bool>, _ layout: Optional<LayoutDetectionConfig>, _ transcription: Optional<TranscriptionConfig>, _ timeout_secs: Optional<UInt64>, _ tree_sitter: Optional<TreeSitterConfig>, _ structured_extraction: Optional<StructuredExtractionConfig>, _ url: Optional<UrlExtractionConfig>, _ ner: Optional<NerConfig>, _ redaction: Optional<RedactionConfig>, _ summarization: Optional<SummarizationConfig>, _ translation: Optional<TranslationConfig>, _ page_classification: Optional<PageClassificationConfig>, _ captioning: Optional<CaptioningConfig>, _ qr_codes: Optional<Bool>) {
-        self.init(ptr: __swift_bridge__$FileExtractionConfig$new(enable_quality_processing.intoFfiRepr(), { if let val = ocr { val.isOwned = false; return val.ptr } else { return nil } }(), force_ocr.intoFfiRepr(), { if let val = ocr_strategy { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = force_ocr_pages { val.isOwned = false; return val.ptr } else { return nil } }(), disable_ocr.intoFfiRepr(), { if let val = chunking { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = content_filter { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = images { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = pdf_options { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = token_reduction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = language_detection { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = pages { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = keywords { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = postprocessor { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = html_output { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = result_format { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = output_format { val.isOwned = false; return val.ptr } else { return nil } }(), include_document_structure.intoFfiRepr(), { if let val = layout { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = transcription { val.isOwned = false; return val.ptr } else { return nil } }(), timeout_secs.intoFfiRepr(), { if let val = tree_sitter { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = structured_extraction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = url { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = ner { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = redaction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = summarization { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = translation { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = page_classification { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = captioning { val.isOwned = false; return val.ptr } else { return nil } }(), qr_codes.intoFfiRepr()))
+    public convenience init(_ enable_quality_processing: Optional<Bool>, _ ocr: Optional<OcrConfig>, _ force_ocr: Optional<Bool>, _ ocr_strategy: Optional<OcrStrategy>, _ force_ocr_pages: Optional<RustVec<UInt32>>, _ disable_ocr: Optional<Bool>, _ chunking: Optional<ChunkingConfig>, _ content_filter: Optional<ContentFilterConfig>, _ images: Optional<ImageExtractionConfig>, _ pdf_options: Optional<PdfConfig>, _ token_reduction: Optional<TokenReductionOptions>, _ language_detection: Optional<LanguageDetectionConfig>, _ pages: Optional<PageConfig>, _ keywords: Optional<KeywordConfig>, _ postprocessor: Optional<PostProcessorConfig>, _ html_output: Optional<HtmlOutputConfig>, _ result_format: Optional<ResultFormat>, _ output_format: Optional<OutputFormat>, _ include_document_structure: Optional<Bool>, _ layout: Optional<LayoutDetectionConfig>, _ transcription: Optional<TranscriptionConfig>, _ timeout_secs: Optional<UInt64>, _ tree_sitter: Optional<TreeSitterConfig>, _ structured_extraction: Optional<StructuredExtractionConfig>, _ url: Optional<UrlExtractionConfig>, _ ner: Optional<NerConfig>, _ redaction: Optional<RedactionConfig>, _ summarization: Optional<SummarizationConfig>, _ translation: Optional<TranslationConfig>, _ page_classification: Optional<PageClassificationConfig>, _ chunk_classification: Optional<ChunkClassificationConfig>, _ captioning: Optional<CaptioningConfig>, _ qr_codes: Optional<Bool>) {
+        self.init(ptr: __swift_bridge__$FileExtractionConfig$new(enable_quality_processing.intoFfiRepr(), { if let val = ocr { val.isOwned = false; return val.ptr } else { return nil } }(), force_ocr.intoFfiRepr(), { if let val = ocr_strategy { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = force_ocr_pages { val.isOwned = false; return val.ptr } else { return nil } }(), disable_ocr.intoFfiRepr(), { if let val = chunking { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = content_filter { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = images { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = pdf_options { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = token_reduction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = language_detection { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = pages { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = keywords { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = postprocessor { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = html_output { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = result_format { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = output_format { val.isOwned = false; return val.ptr } else { return nil } }(), include_document_structure.intoFfiRepr(), { if let val = layout { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = transcription { val.isOwned = false; return val.ptr } else { return nil } }(), timeout_secs.intoFfiRepr(), { if let val = tree_sitter { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = structured_extraction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = url { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = ner { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = redaction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = summarization { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = translation { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = page_classification { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = chunk_classification { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = captioning { val.isOwned = false; return val.ptr } else { return nil } }(), qr_codes.intoFfiRepr()))
     }
 }
 public class FileExtractionConfigRefMut: FileExtractionConfigRef {
@@ -3248,6 +3464,10 @@ extension FileExtractionConfigRef {
 
     public func pageClassification() -> Optional<PageClassificationConfig> {
         { let val = __swift_bridge__$FileExtractionConfig$page_classification(ptr); if val != nil { return PageClassificationConfig(ptr: val!) } else { return nil } }()
+    }
+
+    public func chunkClassification() -> Optional<ChunkClassificationConfig> {
+        { let val = __swift_bridge__$FileExtractionConfig$chunk_classification(ptr); if val != nil { return ChunkClassificationConfig(ptr: val!) } else { return nil } }()
     }
 
     public func captioning() -> Optional<CaptioningConfig> {
@@ -4895,8 +5115,8 @@ public class OcrQualityThresholds: OcrQualityThresholdsRefMut {
     }
 }
 extension OcrQualityThresholds {
-    public convenience init(_ min_total_non_whitespace: UInt, _ min_non_whitespace_per_page: Double, _ min_meaningful_word_len: UInt, _ min_meaningful_words: UInt, _ min_alnum_ratio: Double, _ min_garbage_chars: UInt, _ max_fragmented_word_ratio: Double, _ critical_fragmented_word_ratio: Double, _ min_avg_word_length: Double, _ min_words_for_avg_length_check: UInt, _ min_consecutive_repeat_ratio: Double, _ min_words_for_repeat_check: UInt, _ substantive_min_chars: UInt, _ non_text_min_chars: UInt, _ alnum_ws_ratio_threshold: Double, _ pipeline_min_quality: Double) {
-        self.init(ptr: __swift_bridge__$OcrQualityThresholds$new(min_total_non_whitespace, min_non_whitespace_per_page, min_meaningful_word_len, min_meaningful_words, min_alnum_ratio, min_garbage_chars, max_fragmented_word_ratio, critical_fragmented_word_ratio, min_avg_word_length, min_words_for_avg_length_check, min_consecutive_repeat_ratio, min_words_for_repeat_check, substantive_min_chars, non_text_min_chars, alnum_ws_ratio_threshold, pipeline_min_quality))
+    public convenience init(_ min_total_non_whitespace: UInt, _ min_non_whitespace_per_page: Double, _ min_meaningful_word_len: UInt, _ min_meaningful_words: UInt, _ min_alnum_ratio: Double, _ min_garbage_chars: UInt, _ max_fragmented_word_ratio: Double, _ critical_fragmented_word_ratio: Double, _ min_avg_word_length: Double, _ min_words_for_avg_length_check: UInt, _ min_consecutive_repeat_ratio: Double, _ min_words_for_repeat_check: UInt, _ substantive_min_chars: UInt, _ non_text_min_chars: UInt, _ alnum_ws_ratio_threshold: Double, _ pipeline_min_quality: Double, _ min_undecodable_ratio: Double) {
+        self.init(ptr: __swift_bridge__$OcrQualityThresholds$new(min_total_non_whitespace, min_non_whitespace_per_page, min_meaningful_word_len, min_meaningful_words, min_alnum_ratio, min_garbage_chars, max_fragmented_word_ratio, critical_fragmented_word_ratio, min_avg_word_length, min_words_for_avg_length_check, min_consecutive_repeat_ratio, min_words_for_repeat_check, substantive_min_chars, non_text_min_chars, alnum_ws_ratio_threshold, pipeline_min_quality, min_undecodable_ratio))
     }
 }
 public class OcrQualityThresholdsRefMut: OcrQualityThresholdsRef {
@@ -4974,6 +5194,10 @@ extension OcrQualityThresholdsRef {
 
     public func pipelineMinQuality() -> Double {
         __swift_bridge__$OcrQualityThresholds$pipeline_min_quality(ptr)
+    }
+
+    public func minUndecodableRatio() -> Double {
+        __swift_bridge__$OcrQualityThresholds$min_undecodable_ratio(ptr)
     }
 }
 extension OcrQualityThresholds: Vectorizable {
@@ -9567,6 +9791,10 @@ public class DocumentNodeRef {
     }
 }
 extension DocumentNodeRef {
+    public func id() -> RustString {
+        RustString(ptr: __swift_bridge__$DocumentNode$id(ptr))
+    }
+
     public func content() -> RustString {
         RustString(ptr: __swift_bridge__$DocumentNode$content(ptr))
     }
@@ -10942,6 +11170,18 @@ extension ChunkMetadataRef {
     public func imageIndices() -> RustVec<UInt32> {
         RustVec(ptr: __swift_bridge__$ChunkMetadata$image_indices(ptr))
     }
+
+    public func nodeIds() -> RustVec<RustString> {
+        RustVec(ptr: __swift_bridge__$ChunkMetadata$node_ids(ptr))
+    }
+
+    public func pageSpans() -> RustVec<RustString> {
+        RustVec(ptr: __swift_bridge__$ChunkMetadata$page_spans(ptr))
+    }
+
+    public func classifications() -> RustVec<RustString> {
+        RustVec(ptr: __swift_bridge__$ChunkMetadata$classifications(ptr))
+    }
 }
 extension ChunkMetadata: Vectorizable {
     public static func vecOfSelfNew() -> UnsafeMutableRawPointer {
@@ -10989,6 +11229,90 @@ extension ChunkMetadata: Vectorizable {
 
     public static func vecOfSelfLen(vecPtr: UnsafeMutableRawPointer) -> UInt {
         __swift_bridge__$Vec_ChunkMetadata$len(vecPtr)
+    }
+}
+
+
+public class PageSpan: PageSpanRefMut {
+    public var isOwned: Bool = true
+
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+
+    deinit {
+        if isOwned {
+            __swift_bridge__$PageSpan$_free(ptr)
+        }
+    }
+}
+public class PageSpanRefMut: PageSpanRef {
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+}
+public class PageSpanRef {
+    public var ptr: UnsafeMutableRawPointer
+
+    public init(ptr: UnsafeMutableRawPointer) {
+        self.ptr = ptr
+    }
+}
+extension PageSpanRef {
+    public func page() -> UInt32 {
+        __swift_bridge__$PageSpan$page(ptr)
+    }
+
+    public func bbox() -> Optional<BoundingBox> {
+        { let val = __swift_bridge__$PageSpan$bbox(ptr); if val != nil { return BoundingBox(ptr: val!) } else { return nil } }()
+    }
+}
+extension PageSpan: Vectorizable {
+    public static func vecOfSelfNew() -> UnsafeMutableRawPointer {
+        __swift_bridge__$Vec_PageSpan$new()
+    }
+
+    public static func vecOfSelfFree(vecPtr: UnsafeMutableRawPointer) {
+        __swift_bridge__$Vec_PageSpan$drop(vecPtr)
+    }
+
+    public static func vecOfSelfPush(vecPtr: UnsafeMutableRawPointer, value: PageSpan) {
+        __swift_bridge__$Vec_PageSpan$push(vecPtr, {value.isOwned = false; return value.ptr;}())
+    }
+
+    public static func vecOfSelfPop(vecPtr: UnsafeMutableRawPointer) -> Optional<Self> {
+        let pointer = __swift_bridge__$Vec_PageSpan$pop(vecPtr)
+        if pointer == nil {
+            return nil
+        } else {
+            return (PageSpan(ptr: pointer!) as! Self)
+        }
+    }
+
+    public static func vecOfSelfGet(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<PageSpanRef> {
+        let pointer = __swift_bridge__$Vec_PageSpan$get(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return PageSpanRef(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfGetMut(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<PageSpanRefMut> {
+        let pointer = __swift_bridge__$Vec_PageSpan$get_mut(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return PageSpanRefMut(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfAsPtr(vecPtr: UnsafeMutableRawPointer) -> UnsafePointer<PageSpanRef> {
+        UnsafePointer<PageSpanRef>(OpaquePointer(__swift_bridge__$Vec_PageSpan$as_ptr(vecPtr)))
+    }
+
+    public static func vecOfSelfLen(vecPtr: UnsafeMutableRawPointer) -> UInt {
+        __swift_bridge__$Vec_PageSpan$len(vecPtr)
     }
 }
 
@@ -18094,8 +18418,8 @@ public class Table: TableRefMut {
     }
 }
 extension Table {
-    public convenience init<GenericIntoRustString: IntoRustString>(_ cells: GenericIntoRustString, _ markdown: GenericIntoRustString, _ page_number: UInt32, _ bounding_box: Optional<BoundingBox>) {
-        self.init(ptr: __swift_bridge__$Table$new({ let rustString = cells.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), { let rustString = markdown.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), page_number, { if let val = bounding_box { val.isOwned = false; return val.ptr } else { return nil } }()))
+    public convenience init<GenericIntoRustString: IntoRustString>(_ cells: GenericIntoRustString, _ markdown: GenericIntoRustString, _ page_number: UInt32, _ bounding_box: Optional<BoundingBox>, _ table_id: Optional<GenericIntoRustString>, _ columns: Optional<RustVec<GenericIntoRustString>>) {
+        self.init(ptr: __swift_bridge__$Table$new({ let rustString = cells.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), { let rustString = markdown.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), page_number, { if let val = bounding_box { val.isOwned = false; return val.ptr } else { return nil } }(), { if let rustString = optionalStringIntoRustString(table_id) { rustString.isOwned = false; return rustString.ptr } else { return nil } }(), { if let val = columns { val.isOwned = false; return val.ptr } else { return nil } }()))
     }
 }
 public class TableRefMut: TableRef {
@@ -18125,6 +18449,14 @@ extension TableRef {
 
     public func boundingBox() -> Optional<BoundingBox> {
         { let val = __swift_bridge__$Table$bounding_box(ptr); if val != nil { return BoundingBox(ptr: val!) } else { return nil } }()
+    }
+
+    public func tableId() -> Optional<RustString> {
+        { let val = __swift_bridge__$Table$table_id(ptr); if val != nil { return RustString(ptr: val!) } else { return nil } }()
+    }
+
+    public func columns() -> Optional<RustVec<RustString>> {
+        { let val = __swift_bridge__$Table$columns(ptr); if val != nil { return RustVec(ptr: val!) } else { return nil } }()
     }
 }
 extension Table: Vectorizable {
@@ -22451,6 +22783,86 @@ extension PdfMetadata: Vectorizable {
 
     public static func vecOfSelfLen(vecPtr: UnsafeMutableRawPointer) -> UInt {
         __swift_bridge__$Vec_PdfMetadata$len(vecPtr)
+    }
+}
+
+
+public class ChunkClassificationEnrichmentConfig: ChunkClassificationEnrichmentConfigRefMut {
+    public var isOwned: Bool = true
+
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+
+    deinit {
+        if isOwned {
+            __swift_bridge__$ChunkClassificationEnrichmentConfig$_free(ptr)
+        }
+    }
+}
+public class ChunkClassificationEnrichmentConfigRefMut: ChunkClassificationEnrichmentConfigRef {
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+}
+public class ChunkClassificationEnrichmentConfigRef {
+    public var ptr: UnsafeMutableRawPointer
+
+    public init(ptr: UnsafeMutableRawPointer) {
+        self.ptr = ptr
+    }
+}
+extension ChunkClassificationEnrichmentConfigRef {
+    public func config() -> ChunkClassificationConfig {
+        ChunkClassificationConfig(ptr: __swift_bridge__$ChunkClassificationEnrichmentConfig$config(ptr))
+    }
+}
+extension ChunkClassificationEnrichmentConfig: Vectorizable {
+    public static func vecOfSelfNew() -> UnsafeMutableRawPointer {
+        __swift_bridge__$Vec_ChunkClassificationEnrichmentConfig$new()
+    }
+
+    public static func vecOfSelfFree(vecPtr: UnsafeMutableRawPointer) {
+        __swift_bridge__$Vec_ChunkClassificationEnrichmentConfig$drop(vecPtr)
+    }
+
+    public static func vecOfSelfPush(vecPtr: UnsafeMutableRawPointer, value: ChunkClassificationEnrichmentConfig) {
+        __swift_bridge__$Vec_ChunkClassificationEnrichmentConfig$push(vecPtr, {value.isOwned = false; return value.ptr;}())
+    }
+
+    public static func vecOfSelfPop(vecPtr: UnsafeMutableRawPointer) -> Optional<Self> {
+        let pointer = __swift_bridge__$Vec_ChunkClassificationEnrichmentConfig$pop(vecPtr)
+        if pointer == nil {
+            return nil
+        } else {
+            return (ChunkClassificationEnrichmentConfig(ptr: pointer!) as! Self)
+        }
+    }
+
+    public static func vecOfSelfGet(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<ChunkClassificationEnrichmentConfigRef> {
+        let pointer = __swift_bridge__$Vec_ChunkClassificationEnrichmentConfig$get(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return ChunkClassificationEnrichmentConfigRef(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfGetMut(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<ChunkClassificationEnrichmentConfigRefMut> {
+        let pointer = __swift_bridge__$Vec_ChunkClassificationEnrichmentConfig$get_mut(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return ChunkClassificationEnrichmentConfigRefMut(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfAsPtr(vecPtr: UnsafeMutableRawPointer) -> UnsafePointer<ChunkClassificationEnrichmentConfigRef> {
+        UnsafePointer<ChunkClassificationEnrichmentConfigRef>(OpaquePointer(__swift_bridge__$Vec_ChunkClassificationEnrichmentConfig$as_ptr(vecPtr)))
+    }
+
+    public static func vecOfSelfLen(vecPtr: UnsafeMutableRawPointer) -> UInt {
+        __swift_bridge__$Vec_ChunkClassificationEnrichmentConfig$len(vecPtr)
     }
 }
 
