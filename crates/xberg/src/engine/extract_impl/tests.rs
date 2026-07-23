@@ -168,6 +168,131 @@ async fn extract_batch_applies_item_timeout() {
 }
 
 #[tokio::test]
+async fn batch_scheduler_prioritizes_larger_inputs() {
+    let directory = tempdir().unwrap();
+    let large_path = directory.path().join("large.pdf");
+    let mut large_file = File::create(&large_path).unwrap();
+    large_file.write_all(&[0; 32]).unwrap();
+
+    let pending = [
+        (0, ExtractInput::from_bytes([0], "application/pdf", None), "small"),
+        (1, ExtractInput::from_uri(large_path.to_string_lossy()), "large"),
+        (2, ExtractInput::from_bytes([0; 8], "application/pdf", None), "medium"),
+    ]
+    .into_iter()
+    .map(|(index, input, source)| (index, input, source.to_string()))
+    .collect();
+
+    let scheduled = prioritize_pending_batch_items(pending, &ExtractionConfig::default()).await;
+
+    assert_eq!(
+        scheduled.iter().map(|(index, _, _)| *index).collect::<Vec<_>>(),
+        [1, 2, 0]
+    );
+}
+
+#[tokio::test]
+async fn batch_scheduler_respects_per_input_local_policy() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("large.pdf");
+    File::create(&path).unwrap().write_all(&[0; 32]).unwrap();
+    let mut denied = ExtractInput::from_uri(path.to_string_lossy());
+    denied.config = Some(crate::core::config::FileExtractionConfig {
+        url: Some(crate::core::config::UrlExtractionConfig {
+            allow_local_file_inputs: false,
+            ..Default::default()
+        }),
+        ..Default::default()
+    });
+    let pending = [
+        (0, ExtractInput::from_bytes([0], "application/pdf", None), "small"),
+        (1, denied, "denied"),
+        (2, ExtractInput::from_bytes([0; 8], "application/pdf", None), "medium"),
+    ]
+    .into_iter()
+    .map(|(index, input, source)| (index, input, source.to_string()))
+    .collect();
+
+    let scheduled = prioritize_pending_batch_items(pending, &ExtractionConfig::default()).await;
+
+    assert_eq!(
+        scheduled.iter().map(|(index, _, _)| *index).collect::<Vec<_>>(),
+        [2, 1, 0]
+    );
+}
+
+#[tokio::test]
+async fn batch_scheduler_preserves_tie_order_and_remote_slots() {
+    let pending = [
+        (0, ExtractInput::from_bytes([0; 8], "application/pdf", None), "first"),
+        (1, ExtractInput::from_uri("https://example.com/a.pdf"), "remote"),
+        (2, ExtractInput::from_bytes([0; 32], "application/pdf", None), "large"),
+        (3, ExtractInput::from_bytes([0; 8], "application/pdf", None), "second"),
+    ]
+    .into_iter()
+    .map(|(index, input, source)| (index, input, source.to_string()))
+    .collect();
+
+    let scheduled = prioritize_pending_batch_items(pending, &ExtractionConfig::default()).await;
+
+    assert_eq!(
+        scheduled.iter().map(|(index, _, _)| *index).collect::<Vec<_>>(),
+        [2, 1, 0, 3]
+    );
+}
+
+#[test]
+fn batch_scheduler_prioritizes_only_when_work_will_queue() {
+    assert!(!should_prioritize_pending_batch_items(4, 1));
+    assert!(!should_prioritize_pending_batch_items(4, 4));
+    assert!(should_prioritize_pending_batch_items(5, 4));
+}
+
+#[test]
+fn batch_scheduler_does_not_probe_disallowed_local_inputs() {
+    let bare = ExtractInput::from_uri("/private/automount/doc.pdf");
+    let file_uri = ExtractInput::from_uri("file:///private/automount/doc.pdf");
+    let mut config = ExtractionConfig::default();
+    config.url.allow_local_file_inputs = false;
+    config.url.allow_file_uris = false;
+
+    assert_eq!(local_batch_path(&bare, &config), None);
+    assert_eq!(local_batch_path(&file_uri, &config), None);
+}
+
+#[tokio::test]
+async fn batch_scheduler_restores_public_result_order_after_prioritizing() {
+    let directory = tempdir().unwrap();
+    let contents = ["small".to_string(), "large ".repeat(32), "medium medium".to_string()];
+    let mut inputs = Vec::new();
+    for (index, content) in contents.iter().enumerate() {
+        let path = directory.path().join(format!("{index}.txt"));
+        File::create(&path).unwrap().write_all(content.as_bytes()).unwrap();
+        inputs.push(ExtractInput::from_uri(path.to_string_lossy()));
+    }
+
+    let config = ExtractionConfig {
+        concurrency: Some(crate::core::config::ConcurrencyConfig { max_threads: Some(2) }),
+        max_concurrent_extractions: Some(2),
+        ..Default::default()
+    };
+    let output = crate::engine::Engine::new_default()
+        .extract_batch(inputs, &config)
+        .await
+        .unwrap();
+
+    assert!(output.errors.is_empty());
+    assert_eq!(
+        output
+            .results
+            .iter()
+            .map(|document| document.content.trim())
+            .collect::<Vec<_>>(),
+        contents.iter().map(|content| content.trim()).collect::<Vec<_>>()
+    );
+}
+
+#[tokio::test]
 async fn bounded_batch_scheduler_caps_in_flight_tasks() {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};

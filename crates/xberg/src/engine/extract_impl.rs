@@ -153,6 +153,11 @@ async fn extract_batch_concurrent(
     }
 
     let execution_plan = resolve_pending_batch_execution_plan(config, &pending);
+    let pending = if should_prioritize_pending_batch_items(pending.len(), execution_plan.workers) {
+        prioritize_pending_batch_items(pending, config).await
+    } else {
+        pending
+    };
     let task_config = resolve_batch_base_config(&base_config, execution_plan.thread_budget);
     let completed = run_bounded_batch_tasks(pending, execution_plan.workers, move |(index, input, source)| {
         let base_config = Arc::clone(&task_config);
@@ -214,6 +219,121 @@ fn resolve_pending_batch_execution_plan(
         classify_layout_batch(config, pending.iter().map(|(_, input, _)| input)),
         pending.len(),
     )
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+fn should_prioritize_pending_batch_items(pending_count: usize, workers: usize) -> bool {
+    workers > 1 && pending_count > workers
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+async fn prioritize_pending_batch_items(
+    pending: VecDeque<PendingBatchItem>,
+    base_config: &ExtractionConfig,
+) -> VecDeque<PendingBatchItem> {
+    const MAX_CONCURRENT_SIZE_HINTS: usize = 16;
+    const SIZE_HINT_BUDGET: std::time::Duration = std::time::Duration::from_millis(25);
+
+    let mut costs = vec![None; pending.len()];
+    let mut local_paths = Vec::new();
+
+    for (position, (_, input, _)) in pending.iter().enumerate() {
+        match input.kind {
+            ExtractInputKind::Bytes => {
+                costs[position] = input.bytes.as_ref().map(|bytes| bytes.len() as u64);
+            }
+            ExtractInputKind::Uri => {
+                let effective_config = resolve_input_config(input, base_config);
+                let cancelled = effective_config
+                    .cancel_token
+                    .as_ref()
+                    .is_some_and(crate::cancellation::CancellationToken::is_cancelled);
+                if !cancelled && let Some(path) = local_batch_path(input, &effective_config) {
+                    local_paths.push((position, path));
+                }
+            }
+        }
+    }
+
+    let collect_costs = async {
+        let mut pending_paths: VecDeque<_> = local_paths.into();
+        let mut probes = tokio::task::JoinSet::new();
+        while probes.len() < MAX_CONCURRENT_SIZE_HINTS {
+            let Some((position, path)) = pending_paths.pop_front() else {
+                break;
+            };
+            probes.spawn(metadata_size_hint(position, path));
+        }
+
+        while let Some(result) = probes.join_next().await {
+            match result {
+                Ok((position, Some(cost))) => costs[position] = Some(cost),
+                Ok((position, None)) => {
+                    tracing::debug!(position, "batch input size hint unavailable; preserving FIFO slot");
+                }
+                Err(error) => {
+                    tracing::debug!(%error, "batch input size hint task failed; preserving FIFO slot");
+                }
+            }
+
+            if let Some((position, path)) = pending_paths.pop_front() {
+                probes.spawn(metadata_size_hint(position, path));
+            }
+        }
+    };
+    if tokio::time::timeout(SIZE_HINT_BUDGET, collect_costs).await.is_err() {
+        tracing::debug!("batch input size hint budget exhausted; preserving unfinished FIFO slots");
+    }
+
+    reorder_pending_batch_items(pending, &costs)
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+async fn metadata_size_hint(position: usize, path: PathBuf) -> (usize, Option<u64>) {
+    let cost = tokio::fs::metadata(path).await.ok().map(|metadata| metadata.len());
+    (position, cost)
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+fn local_batch_path(input: &ExtractInput, config: &ExtractionConfig) -> Option<PathBuf> {
+    let uri = input.uri.as_deref()?;
+    if uri.starts_with(HTTP_SCHEME) || uri.starts_with(HTTPS_SCHEME) {
+        return None;
+    }
+    if uri.starts_with(FILE_SCHEME) {
+        return config.url.allow_file_uris.then(|| file_uri_to_path(uri).ok()).flatten();
+    }
+    if uri.contains("://") {
+        return None;
+    }
+    config.url.allow_local_file_inputs.then(|| PathBuf::from(uri))
+}
+
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+fn reorder_pending_batch_items(
+    pending: VecDeque<PendingBatchItem>,
+    costs: &[Option<u64>],
+) -> VecDeque<PendingBatchItem> {
+    let mut prioritized = Vec::new();
+    let mut prioritized_positions = Vec::new();
+    let mut scheduled = Vec::with_capacity(pending.len());
+
+    for (position, item) in pending.into_iter().enumerate() {
+        if let Some(cost) = costs.get(position).copied().flatten() {
+            prioritized_positions.push(position);
+            prioritized.push((cost, position, item));
+            scheduled.push(None);
+        } else {
+            scheduled.push(Some(item));
+        }
+    }
+
+    prioritized.sort_by(|left, right| right.0.cmp(&left.0).then_with(|| left.1.cmp(&right.1)));
+    for (position, (_, _, item)) in prioritized_positions.into_iter().zip(prioritized) {
+        scheduled[position] = Some(item);
+    }
+
+    scheduled.into_iter().flatten().collect()
 }
 
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
