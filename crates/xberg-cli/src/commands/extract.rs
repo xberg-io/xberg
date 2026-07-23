@@ -389,6 +389,21 @@ fn runtime_worker_threads(config: &ExtractionConfig) -> usize {
         .max(MIN_RUNTIME_THREAD_COUNT)
 }
 
+/// Size the async scheduler to the number of documents that can run concurrently.
+///
+/// `concurrency.max_threads` remains the core's total CPU/Rayon budget; it is only
+/// an upper bound here so the CLI does not create a second equally-sized worker pool.
+fn batch_runtime_worker_threads(config: &ExtractionConfig, input_count: usize) -> usize {
+    let total_cpu_budget = runtime_worker_threads(config);
+    let available_inputs = input_count.max(MIN_RUNTIME_THREAD_COUNT);
+    let document_workers = config
+        .max_concurrent_extractions
+        .unwrap_or(total_cpu_budget)
+        .max(MIN_RUNTIME_THREAD_COUNT);
+
+    total_cpu_budget.min(document_workers).min(available_inputs)
+}
+
 fn build_runtime(config: &ExtractionConfig) -> std::io::Result<tokio::runtime::Runtime> {
     tokio::runtime::Builder::new_multi_thread()
         .worker_threads(runtime_worker_threads(config))
@@ -401,7 +416,12 @@ fn block_on_extract(input: ExtractInput, config: &ExtractionConfig) -> xberg::Re
 }
 
 fn block_on_extract_batch(inputs: Vec<ExtractInput>, config: &ExtractionConfig) -> xberg::Result<ExtractionResult> {
-    build_runtime(config)?.block_on(extract_batch(inputs, config))
+    let worker_threads = batch_runtime_worker_threads(config, inputs.len());
+    tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(worker_threads)
+        .enable_all()
+        .build()?
+        .block_on(extract_batch(inputs, config))
 }
 
 fn build_batch_inputs(
@@ -710,6 +730,51 @@ mod tests {
         let worker_threads = runtime_worker_threads(&ExtractionConfig::default());
 
         assert!((MIN_RUNTIME_THREAD_COUNT..=DEFAULT_RUNTIME_THREAD_LIMIT).contains(&worker_threads));
+    }
+
+    #[test]
+    fn batch_runtime_worker_threads_caps_b4_to_four_with_eight_thread_budget() {
+        let config = ExtractionConfig {
+            concurrency: Some(xberg::core::config::ConcurrencyConfig { max_threads: Some(8) }),
+            max_concurrent_extractions: Some(8),
+            ..Default::default()
+        };
+
+        assert_eq!(batch_runtime_worker_threads(&config, 4), 4);
+    }
+
+    #[test]
+    fn batch_runtime_worker_threads_uses_one_worker_for_zero_or_one_input() {
+        let config = ExtractionConfig {
+            concurrency: Some(xberg::core::config::ConcurrencyConfig { max_threads: Some(8) }),
+            max_concurrent_extractions: Some(4),
+            ..Default::default()
+        };
+
+        assert_eq!(batch_runtime_worker_threads(&config, 0), MIN_RUNTIME_THREAD_COUNT);
+        assert_eq!(batch_runtime_worker_threads(&config, 1), MIN_RUNTIME_THREAD_COUNT);
+    }
+
+    #[test]
+    fn batch_runtime_worker_threads_respects_document_worker_limit() {
+        let config = ExtractionConfig {
+            concurrency: Some(xberg::core::config::ConcurrencyConfig { max_threads: Some(8) }),
+            max_concurrent_extractions: Some(2),
+            ..Default::default()
+        };
+
+        assert_eq!(batch_runtime_worker_threads(&config, 6), 2);
+    }
+
+    #[test]
+    fn batch_runtime_worker_threads_never_exceeds_total_cpu_budget() {
+        let config = ExtractionConfig {
+            concurrency: Some(xberg::core::config::ConcurrencyConfig { max_threads: Some(3) }),
+            max_concurrent_extractions: Some(8),
+            ..Default::default()
+        };
+
+        assert_eq!(batch_runtime_worker_threads(&config, 6), 3);
     }
 
     #[test]
