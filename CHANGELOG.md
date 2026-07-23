@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.35] - 2026-07-23
+
+### Added
+
+- **Chunk-to-node linkage (#1296).** `ChunkMetadata.node_ids` is now populated with the `id` values
+  of the `document.nodes[]` whose text a chunk covers, so consumers can join a chunk back to the
+  structural nodes it came from. Populated on the PDF/structure path via best-effort verbatim text
+  containment (deduplicated, in node-traversal order); empty for structure-less documents.
+
+### Changed
+
+- **Base64 embedding transport (#1303).** Hosted embedding vectors are now requested in base64,
+  which liter-llm decodes ~3× faster and bit-exact than a JSON float array. Providers that ignore
+  the hint and still return a float array continue to work unchanged.
+
 ## [1.0.0-rc.34] - 2026-07-23
 
 ### Added

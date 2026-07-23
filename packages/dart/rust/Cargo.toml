@@ -1,6 +1,6 @@
 [package]
 name = "xberg-dart"
-version = "1.0.0-rc.34"
+version = "1.0.0-rc.35"
 edition = "2024"
 license = "MIT"
 
