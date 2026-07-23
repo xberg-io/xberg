@@ -61,8 +61,10 @@ pub fn mcp_command(
     transport: String,
     #[cfg(feature = "mcp-http")] host: String,
     #[cfg(feature = "mcp-http")] port: u16,
+    #[cfg(feature = "mcp-http")] allowed_hosts: Vec<String>,
     #[cfg(not(feature = "mcp-http"))] _host: String,
     #[cfg(not(feature = "mcp-http"))] _port: u16,
+    #[cfg(not(feature = "mcp-http"))] _allowed_hosts: Vec<String>,
 ) -> Result<()> {
     tracing::debug!("Starting Xberg MCP server with transport: {}", transport);
     let rt = tokio::runtime::Runtime::new()?;
@@ -84,8 +86,13 @@ pub fn mcp_command(
             #[cfg(feature = "mcp-http")]
             {
                 tracing::debug!("Starting MCP server on http://{}:{}", host, port);
-                rt.block_on(xberg::mcp::start_mcp_server_http_with_config(&host, port, config))
-                    .map_err(|e| anyhow::anyhow!("Failed to start MCP server on {}:{}: {}", host, port, e))?;
+                rt.block_on(xberg::mcp::start_mcp_server_http_with_config(
+                    &host,
+                    port,
+                    config,
+                    &allowed_hosts,
+                ))
+                .map_err(|e| anyhow::anyhow!("Failed to start MCP server on {}:{}: {}", host, port, e))?;
             }
         }
         other => {
@@ -94,4 +101,33 @@ pub fn mcp_command(
     }
 
     Ok(())
+}
+
+/// Resolve the MCP HTTP transport's extra `allowed_hosts` using the precedence cascade:
+/// CLI flag > `XBERG_MCP_ALLOWED_HOSTS` env var > `[mcp] allowed_hosts` config-file key >
+/// default (rmcp's loopback-only allowlist, unchanged).
+///
+/// The config-file tier is only consulted when `config_path` is `Some` (an explicit
+/// `--config` flag); auto-discovered config files are not searched for this key, since
+/// the CLI's discovery helper does not currently surface the discovered path.
+///
+/// # Errors
+///
+/// Returns an error if `config_path` is set but the file cannot be read or parsed.
+#[cfg(feature = "mcp")]
+pub fn resolve_mcp_allowed_hosts(cli_hosts: &[String], config_path: Option<&std::path::Path>) -> Result<Vec<String>> {
+    use anyhow::Context;
+
+    let env_value = std::env::var(xberg::mcp::MCP_ALLOWED_HOSTS_ENV).ok();
+    let config_hosts = match config_path {
+        Some(path) => xberg::mcp::read_mcp_allowed_hosts_from_file(path)
+            .with_context(|| format!("Failed to read MCP allowed_hosts from config file '{}'", path.display()))?,
+        None => Vec::new(),
+    };
+
+    Ok(xberg::mcp::resolve_extra_allowed_hosts(
+        cli_hosts,
+        env_value.as_deref(),
+        &config_hosts,
+    ))
 }

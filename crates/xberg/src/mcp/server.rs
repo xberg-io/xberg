@@ -19,7 +19,9 @@ use rmcp::{
 use tower::util::BoxCloneService;
 
 #[cfg(feature = "mcp-http")]
-use rmcp::transport::streamable_http_server::{StreamableHttpService, session::local::LocalSessionManager};
+use rmcp::transport::streamable_http_server::{
+    StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
+};
 
 /// Xberg MCP server.
 ///
@@ -864,6 +866,25 @@ async fn mcp_shutdown_signal() {
     }
 }
 
+/// Build the rmcp Streamable HTTP server config, extending (never replacing) the
+/// built-in loopback-only `allowed_hosts` default with any caller-supplied hosts.
+///
+/// Extending rather than replacing keeps `localhost`/`127.0.0.1`/`::1` working even when
+/// the server also needs to accept a reverse-proxy or ingress hostname in the `Host`
+/// header. Entries are trimmed and de-duplicated against the existing list; blank hosts
+/// are ignored. An empty `extra_allowed_hosts` leaves rmcp's default unchanged.
+#[cfg(feature = "mcp-http")]
+fn build_streamable_http_config(extra_allowed_hosts: &[String]) -> StreamableHttpServerConfig {
+    let mut config = StreamableHttpServerConfig::default();
+    for host in extra_allowed_hosts {
+        let host = host.trim();
+        if !host.is_empty() && !config.allowed_hosts.iter().any(|existing| existing == host) {
+            config.allowed_hosts.push(host.to_string());
+        }
+    }
+    config
+}
+
 /// Start MCP server with HTTP Stream transport.
 ///
 /// Uses rmcp's built-in StreamableHttpService for HTTP/SSE support per MCP spec.
@@ -872,6 +893,10 @@ async fn mcp_shutdown_signal() {
 ///
 /// * `host` - Host to bind to (e.g., "127.0.0.1" or "0.0.0.0")
 /// * `port` - Port number (e.g., 8001)
+/// * `extra_allowed_hosts` - Additional `Host` header values to accept, on top of rmcp's
+///   loopback-only default (`localhost`, `127.0.0.1`, `::1`). Needed when the server runs
+///   behind a reverse proxy or ingress that forwards a different hostname. Pass an empty
+///   slice to keep the default loopback-only behavior.
 ///
 /// # Example
 ///
@@ -880,7 +905,7 @@ async fn mcp_shutdown_signal() {
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-///     start_mcp_server_http("127.0.0.1", 8001).await?;
+///     start_mcp_server_http("127.0.0.1", 8001, &[]).await?;
 ///     Ok(())
 /// }
 /// ```
@@ -889,6 +914,7 @@ async fn mcp_shutdown_signal() {
 pub async fn start_mcp_server_http(
     host: impl AsRef<str>,
     port: u16,
+    extra_allowed_hosts: &[String],
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use axum::Router;
     use std::net::SocketAddr;
@@ -896,7 +922,7 @@ pub async fn start_mcp_server_http(
     let http_service = StreamableHttpService::new(
         || XbergMcp::new().map_err(|e| std::io::Error::other(e.to_string())),
         LocalSessionManager::default().into(),
-        Default::default(),
+        build_streamable_http_config(extra_allowed_hosts),
     );
 
     let router = Router::new().nest_service("/mcp", http_service);
@@ -926,6 +952,10 @@ pub async fn start_mcp_server_http(
 /// * `host` - Host to bind to (e.g., "127.0.0.1" or "0.0.0.0")
 /// * `port` - Port number (e.g., 8001)
 /// * `config` - Custom extraction configuration
+/// * `extra_allowed_hosts` - Additional `Host` header values to accept, on top of rmcp's
+///   loopback-only default (`localhost`, `127.0.0.1`, `::1`). Needed when the server runs
+///   behind a reverse proxy or ingress that forwards a different hostname. Pass an empty
+///   slice to keep the default loopback-only behavior.
 ///
 /// # Example
 ///
@@ -936,7 +966,7 @@ pub async fn start_mcp_server_http(
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 ///     let config = ExtractionConfig::default();
-///     start_mcp_server_http_with_config("127.0.0.1", 8001, config).await?;
+///     start_mcp_server_http_with_config("127.0.0.1", 8001, config, &[]).await?;
 ///     Ok(())
 /// }
 /// ```
@@ -946,6 +976,7 @@ pub async fn start_mcp_server_http_with_config(
     host: impl AsRef<str>,
     port: u16,
     config: ExtractionConfig,
+    extra_allowed_hosts: &[String],
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use axum::Router;
     use std::net::SocketAddr;
@@ -953,7 +984,7 @@ pub async fn start_mcp_server_http_with_config(
     let http_service = StreamableHttpService::new(
         move || Ok(XbergMcp::with_config(config.clone())),
         LocalSessionManager::default().into(),
-        Default::default(),
+        build_streamable_http_config(extra_allowed_hosts),
     );
 
     let router = Router::new().nest_service("/mcp", http_service);
@@ -1463,5 +1494,47 @@ mod tests {
     fn test_complete_output_formats() {
         let candidates = complete_output_formats("j");
         assert_eq!(candidates, vec!["json"]);
+    }
+
+    #[cfg(feature = "mcp-http")]
+    #[test]
+    fn test_build_streamable_http_config_empty_preserves_rmcp_default() {
+        let config = build_streamable_http_config(&[]);
+        let default_config = StreamableHttpServerConfig::default();
+        assert_eq!(
+            config.allowed_hosts, default_config.allowed_hosts,
+            "empty extra hosts must leave rmcp's default untouched"
+        );
+    }
+
+    #[cfg(feature = "mcp-http")]
+    #[test]
+    fn test_build_streamable_http_config_extends_default_without_replacing_it() {
+        let default_hosts = StreamableHttpServerConfig::default().allowed_hosts;
+        let config = build_streamable_http_config(&["proxy.example.com".to_string()]);
+
+        for host in &default_hosts {
+            assert!(
+                config.allowed_hosts.contains(host),
+                "loopback host '{host}' must still be present after extending"
+            );
+        }
+        assert!(
+            config.allowed_hosts.contains(&"proxy.example.com".to_string()),
+            "supplied host must be added"
+        );
+    }
+
+    #[cfg(feature = "mcp-http")]
+    #[test]
+    fn test_build_streamable_http_config_trims_and_deduplicates_hosts() {
+        let config = build_streamable_http_config(&[" proxy.example.com ".to_string(), "localhost".to_string()]);
+
+        let occurrences = config.allowed_hosts.iter().filter(|h| *h == "localhost").count();
+        assert_eq!(
+            occurrences, 1,
+            "duplicate of an existing default host must not be added again"
+        );
+        assert!(config.allowed_hosts.contains(&"proxy.example.com".to_string()));
     }
 }

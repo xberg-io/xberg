@@ -42,10 +42,10 @@ pub use embed::embed_command;
 pub use extract::{
     BatchInputFormat, ExtractInputSource, batch_command, extract_command, load_batch_input_manifest, uri_to_local_path,
 };
-#[cfg(feature = "mcp")]
-pub use server::mcp_command;
 #[cfg(feature = "api")]
 pub use server::serve_command;
+#[cfg(feature = "mcp")]
+pub use server::{mcp_command, resolve_mcp_allowed_hosts};
 
 /// Validates that a directory exists and is accessible.
 ///

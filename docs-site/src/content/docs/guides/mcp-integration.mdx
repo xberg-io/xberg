@@ -73,6 +73,32 @@ Configure in Claude Desktop or Cursor:
 }
 ```
 
+#### Allowed hosts behind a reverse proxy
+
+The HTTP transport validates the inbound `Host` header and, by default, only accepts loopback hosts (`localhost`, `127.0.0.1`, `::1`) to guard against DNS-rebinding attacks. If Xberg sits behind a reverse proxy or ingress that forwards requests using a different hostname (e.g. `xberg.internal.example.com`), add that hostname to the allowlist. Supplied hosts *extend* the loopback default — they never replace it, so local health checks keep working.
+
+Precedence (highest to lowest):
+
+1. `--allowed-host <HOST>` CLI flag (repeatable)
+2. `XBERG_MCP_ALLOWED_HOSTS` environment variable (comma-separated)
+3. `[mcp] allowed_hosts` key in the config file passed via `--config` (not applied to an auto-discovered config file)
+4. Default: loopback only
+
+```bash title="Terminal"
+xberg mcp --transport http --host 0.0.0.0 --port 8001 \
+  --allowed-host xberg.internal.example.com --allowed-host xberg.internal.example.com:8001
+```
+
+```bash title="Terminal (env var)"
+export XBERG_MCP_ALLOWED_HOSTS="xberg.internal.example.com,xberg.internal.example.com:8001"
+xberg mcp --transport http --host 0.0.0.0 --port 8001
+```
+
+```toml title="xberg.toml"
+[mcp]
+allowed_hosts = ["xberg.internal.example.com", "xberg.internal.example.com:8001"]
+```
+
 ---
 
 ## Tools

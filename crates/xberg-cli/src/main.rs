@@ -63,8 +63,6 @@ use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser, Subcommand};
 #[cfg(feature = "embeddings")]
 use commands::embed_command;
-#[cfg(feature = "mcp")]
-use commands::mcp_command;
 use commands::overrides::ExtractionOverrides;
 #[cfg(feature = "api")]
 use commands::serve_command;
@@ -82,6 +80,8 @@ use commands::{
 };
 #[cfg(feature = "core-cli")]
 use commands::{chunk_command, validate_chunk_params};
+#[cfg(feature = "mcp")]
+use commands::{mcp_command, resolve_mcp_allowed_hosts};
 use input::{
     apply_json_overrides, resolve_batch_inputs, resolve_extract_input, validate_batch_input_uris,
     validate_extract_input,
@@ -309,6 +309,15 @@ enum Commands {
         /// HTTP port (only for --transport http)
         #[arg(long, default_value = "8001")]
         port: u16,
+
+        /// Additional Host header value to accept on the HTTP transport (repeatable; only
+        /// for --transport http). Extends, but never replaces, rmcp's loopback-only
+        /// allowlist (localhost, 127.0.0.1, ::1) — needed when running behind a reverse
+        /// proxy or ingress that forwards a different hostname. Precedence: this flag >
+        /// XBERG_MCP_ALLOWED_HOSTS env var (comma-separated) > `[mcp] allowed_hosts` in the
+        /// config file (only when --config is given explicitly) > default (loopback only).
+        #[arg(long = "allowed-host")]
+        allowed_host: Vec<String>,
     },
 
     /// API utilities
@@ -797,10 +806,12 @@ fn main() -> Result<()> {
             host,
             #[cfg(not(feature = "mcp-http"))]
             port,
+            allowed_host,
         } => {
+            let allowed_hosts = resolve_mcp_allowed_hosts(&allowed_host, config_path.as_deref())?;
             let mut config = load_config(config_path, true)?;
             config.apply_env_overrides()?;
-            mcp_command(config, transport, host, port)?;
+            mcp_command(config, transport, host, port, allowed_hosts)?;
         }
 
         Commands::Cache { command } => match command {
