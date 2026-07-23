@@ -5,7 +5,7 @@
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use xberg::{
@@ -194,11 +194,11 @@ pub fn batch_command(
                 total_ms,
                 per_file_ms,
             };
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&envelope)
-                    .context("Failed to serialize batch extraction results to JSON")?
-            );
+            let stdout = std::io::stdout();
+            let mut stdout = stdout.lock();
+            serde_json::to_writer_pretty(&mut stdout, &envelope)
+                .context("Failed to serialize batch extraction results to JSON")?;
+            writeln!(stdout).context("Failed to write batch extraction results to stdout")?;
         }
         WireFormat::Text => {
             let results = run_batch_sync(&uris, file_configs_map.as_ref(), &config)?;
