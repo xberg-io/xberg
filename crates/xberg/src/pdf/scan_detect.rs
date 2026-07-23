@@ -1,7 +1,10 @@
 //! Scanned-page detection for PDFs.
 
 use pdf_oxide::PdfDocument;
+use pdf_oxide::document::ReadingOrder;
 use pdf_oxide::extractors::auto::{ImageCodecClass, ProducerPrior};
+use pdf_oxide::fonts::MappingProvenance;
+use pdf_oxide::layout::TextSpan;
 
 #[cfg(test)]
 use crate::core::config::DEFAULT_SCANNED_MIN_CONFIDENCE;
@@ -161,6 +164,78 @@ pub(crate) fn detect(doc: &PdfDocument) -> Option<ScanDetection> {
     })
 }
 
+/// Non-whitespace character counts `(fabricated, total)` for one page's spans.
+///
+/// `fabricated` counts characters belonging to a span whose
+/// [`MappingProvenance`] is [`MappingProvenance::Fallback`] — pdf_oxide 0.3.75's
+/// direct signal that no ISO 32000-1 §9.10.2 mapping tier produced the
+/// character's Unicode value, so it was fabricated by the extractor rather than
+/// read from the file (issue #1254). Every other provenance (`ActualText` ..
+/// `EmbeddedCmap`) was read from the file and never counts as fabricated. A
+/// span with `provenance: None` ("unknown", e.g. not populated by this
+/// pdf_oxide build) still contributes to `total` but never to `fabricated`, so
+/// a page with only unknown provenance can never look fabricated on its own.
+///
+/// Pure and independent of any [`PdfDocument`], so it is unit-testable with
+/// hand-built spans.
+fn fabricated_char_counts(spans: &[TextSpan]) -> (usize, usize) {
+    let mut fabricated = 0usize;
+    let mut total = 0usize;
+    for span in spans {
+        let non_whitespace = span.text.chars().filter(|c| !c.is_whitespace()).count();
+        total += non_whitespace;
+        if span.provenance == Some(MappingProvenance::Fallback) {
+            fabricated += non_whitespace;
+        }
+    }
+    (fabricated, total)
+}
+
+/// Whether page `page_index` has a fabricated text layer: `min_chars` or more
+/// non-whitespace characters, at least `min_ratio` of which carry
+/// `MappingProvenance::Fallback` (issue #1254).
+///
+/// Advisory like the rest of scan detection: a page pdf_oxide cannot extract or
+/// that panics during extraction is reported as not fabricated rather than
+/// aborting the caller.
+fn page_has_fabricated_text(doc: &PdfDocument, page_index: usize, min_ratio: f64, min_chars: usize) -> bool {
+    let page_text = match super::oxide::guard_oxide_panic(
+        || {
+            doc.extract_page_text_with_options(page_index, ReadingOrder::ColumnAware)
+                .map_err(|error| error.to_string())
+        },
+        |message| message,
+    ) {
+        Ok(page_text) => page_text,
+        Err(_) => return false,
+    };
+
+    let (fabricated, total) = fabricated_char_counts(&page_text.spans);
+    if total < min_chars {
+        return false;
+    }
+
+    (fabricated as f64 / total as f64) >= min_ratio
+}
+
+/// Zero-based indices of pages whose text layer is fabricated per
+/// [`page_has_fabricated_text`] (issue #1254).
+///
+/// Independent of raster scan detection: a text-bearing page with a broken
+/// glyph-to-Unicode mapping (e.g. a subset `Identity-H` font with no
+/// `/ToUnicode` CMap) has low image coverage and would otherwise never be
+/// selected by [`detect`], so this is evaluated separately and its result is
+/// meant to be unioned into the caller's scanned-page set.
+pub(crate) fn fabricated_provenance_page_indices(doc: &PdfDocument, min_ratio: f64, min_chars: usize) -> Vec<usize> {
+    let Ok(page_count) = doc.page_count() else {
+        return Vec::new();
+    };
+
+    (0..page_count)
+        .filter(|&page_index| page_has_fabricated_text(doc, page_index, min_ratio, min_chars))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -315,6 +390,73 @@ mod tests {
             slide.scanned_page_indices(DEFAULT_SCANNED_MIN_CONFIDENCE as f32),
             Vec::<usize>::new()
         );
+    }
+
+    /// Build a span with the given text and provenance for the fabricated-fraction tests.
+    fn provenance_span(text: &str, provenance: Option<MappingProvenance>) -> TextSpan {
+        TextSpan {
+            text: text.to_string(),
+            provenance,
+            ..TextSpan::default()
+        }
+    }
+
+    #[test]
+    fn all_fallback_page_counts_every_char_as_fabricated() {
+        let spans = vec![provenance_span("garbled", Some(MappingProvenance::Fallback))];
+        let (fabricated, total) = fabricated_char_counts(&spans);
+        assert_eq!(fabricated, 7);
+        assert_eq!(total, 7);
+    }
+
+    #[test]
+    fn all_to_unicode_page_never_counts_as_fabricated() {
+        let spans = vec![provenance_span("legible text", Some(MappingProvenance::ToUnicode))];
+        let (fabricated, total) = fabricated_char_counts(&spans);
+        assert_eq!(fabricated, 0);
+        assert_eq!(total, 11);
+    }
+
+    #[test]
+    fn all_none_provenance_page_never_counts_as_fabricated() {
+        let spans = vec![provenance_span("unknown provenance", None)];
+        let (fabricated, total) = fabricated_char_counts(&spans);
+        assert_eq!(fabricated, 0);
+        assert_eq!(total, 17);
+    }
+
+    #[test]
+    fn mixed_provenance_sums_only_fallback_spans() {
+        let spans = vec![
+            provenance_span("good", Some(MappingProvenance::ToUnicode)),
+            provenance_span("bad", Some(MappingProvenance::Fallback)),
+            provenance_span("also good", Some(MappingProvenance::EncodingName)),
+        ];
+        let (fabricated, total) = fabricated_char_counts(&spans);
+        assert_eq!(fabricated, 3);
+        assert_eq!(total, 4 + 3 + 8);
+    }
+
+    /// Boundary behavior of the ratio check itself (mirrors `page_has_fabricated_text`'s
+    /// `(fabricated / total) >= min_ratio` comparison without requiring a `PdfDocument`).
+    #[test]
+    fn ratio_at_threshold_triggers_but_just_below_does_not() {
+        let spans = vec![
+            provenance_span("aaaa", Some(MappingProvenance::Fallback)),
+            provenance_span("aaaa", Some(MappingProvenance::ToUnicode)),
+        ];
+        let (fabricated, total) = fabricated_char_counts(&spans);
+        let ratio = fabricated as f64 / total as f64;
+        assert!((ratio - 0.5).abs() < f64::EPSILON);
+        assert!(ratio >= 0.5, "exactly-at-threshold ratio must trigger");
+        assert!(ratio < 0.500001, "sanity: ratio is exactly one half");
+    }
+
+    #[test]
+    fn empty_spans_have_zero_total_and_never_trigger() {
+        let (fabricated, total) = fabricated_char_counts(&[]);
+        assert_eq!(fabricated, 0);
+        assert_eq!(total, 0);
     }
 
     #[test]

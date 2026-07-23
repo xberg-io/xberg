@@ -19,8 +19,9 @@ pub(crate) fn extract_metadata_from_oxide_document(
     page_boundaries: Option<&[PageBoundary]>,
     content: &str,
     scanned_min_confidence: f64,
+    ocr_quality_thresholds: &crate::core::config::OcrQualityThresholds,
 ) -> Result<PdfExtractionMetadata> {
-    let pdf_specific = extract_pdf_specific_metadata(doc, scanned_min_confidence)?;
+    let pdf_specific = extract_pdf_specific_metadata(doc, scanned_min_confidence, ocr_quality_thresholds)?;
     let common = extract_common_metadata(doc)?;
 
     let page_structure = if let Some(boundaries) = page_boundaries {
@@ -43,7 +44,11 @@ pub(crate) fn extract_metadata_from_oxide_document(
 }
 
 /// Extract only PDF-specific metadata (version, producer, encryption, dimensions, page count).
-fn extract_pdf_specific_metadata(doc: &mut OxideDocument, scanned_min_confidence: f64) -> Result<PdfMetadata> {
+fn extract_pdf_specific_metadata(
+    doc: &mut OxideDocument,
+    scanned_min_confidence: f64,
+    ocr_quality_thresholds: &crate::core::config::OcrQualityThresholds,
+) -> Result<PdfMetadata> {
     let (major, minor) = doc.doc.version();
     let pdf_version = if major > 0 {
         Some(format!("{}.{}", major, minor))
@@ -76,12 +81,30 @@ fn extract_pdf_specific_metadata(doc: &mut OxideDocument, scanned_min_confidence
     // Advisory: a document we cannot grade reports no scan evidence. ~keep
     let detection = crate::pdf::scan_detect::detect(&doc.doc);
     let scanned_confidence = detection.as_ref().map(|d| d.confidence);
-    let scanned_pages = detection.as_ref().map(|d| {
+    let mut scanned_pages: Option<Vec<u32>> = detection.as_ref().map(|d| {
         d.scanned_page_indices(scanned_min_confidence as f32)
             .into_iter()
             .map(|index| index as u32 + 1)
             .collect()
     });
+
+    // A page whose text layer pdf_oxide could not read from the file (issue
+    // #1254) has low image coverage and is never selected by `detect` above, so
+    // it is unioned in separately here. ~keep
+    if ocr_quality_thresholds.enable_provenance_ocr_routing {
+        let fabricated_pages = crate::pdf::scan_detect::fabricated_provenance_page_indices(
+            &doc.doc,
+            ocr_quality_thresholds.min_provenance_fallback_ratio,
+            ocr_quality_thresholds.min_total_non_whitespace,
+        );
+        if !fabricated_pages.is_empty() {
+            let mut merged = scanned_pages.unwrap_or_default();
+            merged.extend(fabricated_pages.into_iter().map(|index| index as u32 + 1));
+            merged.sort_unstable();
+            merged.dedup();
+            scanned_pages = Some(merged);
+        }
+    }
 
     Ok(PdfMetadata {
         pdf_version,

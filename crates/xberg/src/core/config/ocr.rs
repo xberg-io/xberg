@@ -161,6 +161,24 @@ pub struct OcrQualityThresholds {
     /// two do not trip this check.
     #[serde(default = "default_min_undecodable_ratio")]
     pub min_undecodable_ratio: f64,
+
+    /// Whether to route a page to OCR when pdf_oxide reports that a high
+    /// fraction of its text was fabricated rather than read from the file
+    /// (`MappingProvenance::Fallback`, pdf_oxide 0.3.75+, issue #1254). This is
+    /// a direct fact from the extractor's ISO 32000-1 §9.10.2 mapping cascade,
+    /// distinct from the character-heuristic proxy behind `min_undecodable_ratio`.
+    /// Defaults to `true`.
+    #[serde(default = "default_enable_provenance_ocr_routing")]
+    pub enable_provenance_ocr_routing: bool,
+
+    /// Minimum fraction of a page's non-whitespace characters with
+    /// `MappingProvenance::Fallback` provenance before the page is treated as
+    /// having a fabricated text layer and routed to OCR (issue #1254). Gated by
+    /// `min_total_non_whitespace` so a short page with a stray fallback
+    /// character cannot trip it. Only used when `enable_provenance_ocr_routing`
+    /// is `true`.
+    #[serde(default = "default_min_provenance_fallback_ratio")]
+    pub min_provenance_fallback_ratio: f64,
 }
 
 impl Default for OcrQualityThresholds {
@@ -183,6 +201,8 @@ impl Default for OcrQualityThresholds {
             alnum_ws_ratio_threshold: 0.4,
             pipeline_min_quality: 0.5,
             min_undecodable_ratio: default_min_undecodable_ratio(),
+            enable_provenance_ocr_routing: default_enable_provenance_ocr_routing(),
+            min_provenance_fallback_ratio: default_min_provenance_fallback_ratio(),
         }
     }
 }
@@ -238,6 +258,17 @@ fn default_pipeline_min_quality() -> f64 {
 /// Pages at or above this fraction of undecodable (PUA/replacement/control-garbage)
 /// characters are treated as having an unreadable text layer (issue #1254).
 fn default_min_undecodable_ratio() -> f64 {
+    0.5
+}
+/// Provenance-based fabricated-text OCR routing is on by default: it is a
+/// direct fact from pdf_oxide 0.3.75+, not a heuristic, so false positives are
+/// rare (issue #1254).
+fn default_enable_provenance_ocr_routing() -> bool {
+    true
+}
+/// Pages at or above this fraction of `MappingProvenance::Fallback` characters
+/// are treated as having a fabricated text layer (issue #1254).
+fn default_min_provenance_fallback_ratio() -> f64 {
     0.5
 }
 
@@ -1420,6 +1451,21 @@ mod tests {
         assert_eq!(thresholds.min_meaningful_words, 3);
         assert_eq!(thresholds.min_garbage_chars, 5);
         assert!((thresholds.pipeline_min_quality - 0.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_provenance_ocr_routing_defaults_enabled_with_half_ratio() {
+        let thresholds = OcrQualityThresholds::default();
+        assert!(thresholds.enable_provenance_ocr_routing);
+        assert!((thresholds.min_provenance_fallback_ratio - 0.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_provenance_ocr_routing_deserializes_overrides() {
+        let json = r#"{"enable_provenance_ocr_routing": false, "min_provenance_fallback_ratio": 0.75}"#;
+        let thresholds: OcrQualityThresholds = serde_json::from_str(json).unwrap();
+        assert!(!thresholds.enable_provenance_ocr_routing);
+        assert!((thresholds.min_provenance_fallback_ratio - 0.75).abs() < f64::EPSILON);
     }
 
     #[test]
