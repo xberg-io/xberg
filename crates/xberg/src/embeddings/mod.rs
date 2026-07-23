@@ -573,6 +573,18 @@ pub(crate) fn generate_embeddings_for_chunks(
     let texts: Vec<&str> = chunks.iter().map(|c| c.content.as_str()).collect();
     let embeddings_result = embed_texts(&texts, config)?;
 
+    if embeddings_result.len() != chunks.len() {
+        return Err(crate::XbergError::Validation {
+            message: format!(
+                "Embedding generation returned {got} vectors for {expected} chunks; refusing to attach \
+                 embeddings because a positional zip would misalign vectors with the wrong chunks",
+                got = embeddings_result.len(),
+                expected = chunks.len(),
+            ),
+            source: None,
+        });
+    }
+
     for (chunk, embedding) in chunks.iter_mut().zip(embeddings_result) {
         chunk.embedding = Some(embedding);
     }

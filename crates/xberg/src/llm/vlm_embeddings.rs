@@ -88,6 +88,9 @@ pub(crate) async fn embed_via_llm<T: AsRef<str>>(
     let mut data = response.data;
     data.sort_by_key(|obj| obj.index);
 
+    let sorted_indices: Vec<u32> = data.iter().map(|obj| obj.index).collect();
+    validate_contiguous_indices(&sorted_indices, texts.len(), &config.model)?;
+
     let mut embeddings: Vec<Vec<f32>> = data.into_iter().map(|obj| obj.embedding).collect();
 
     if normalize {
@@ -97,6 +100,45 @@ pub(crate) async fn embed_via_llm<T: AsRef<str>>(
     }
 
     Ok((embeddings, usage))
+}
+
+/// Verify that a sorted list of provider-returned embedding indices exactly covers
+/// `0..expected_len` with no gaps, duplicates, or out-of-range entries.
+///
+/// The liter-llm response is re-sorted by `index` and then mapped positionally
+/// onto the input texts. A provider that omits an object or numbers the response
+/// with a gap would otherwise shift every embedding after the gap by one
+/// position, silently attaching the wrong vector to the wrong text. This check
+/// makes that failure explicit instead of letting it through as `Ok`.
+///
+/// # Errors
+///
+/// - `XbergError::Embedding` if `sorted_indices.len() != expected_len`, or if any
+///   `sorted_indices[i] != i` (indicating a gap, a duplicate, or an out-of-range index).
+#[cfg(any(
+    all(
+        feature = "tokio-runtime",
+        any(feature = "embeddings", feature = "static-embeddings"),
+        not(target_arch = "wasm32")
+    ),
+    test
+))]
+fn validate_contiguous_indices(sorted_indices: &[u32], expected_len: usize, model: &str) -> crate::Result<()> {
+    let is_contiguous = sorted_indices.len() == expected_len
+        && sorted_indices
+            .iter()
+            .enumerate()
+            .all(|(position, &index)| position as u64 == u64::from(index));
+
+    if is_contiguous {
+        return Ok(());
+    }
+
+    Err(crate::XbergError::embedding(format!(
+        "LLM embedding response incomplete or non-contiguous (model={model}): expected indices 0..{expected_len} \
+         (one per input text), got {got} objects with indices {sorted_indices:?}",
+        got = sorted_indices.len(),
+    )))
 }
 
 /// L2-normalize an embedding vector in-place.
@@ -141,5 +183,39 @@ mod tests {
         let mut v = vec![0.0f32, 0.0, 0.0];
         normalize_l2(&mut v);
         assert!(v.iter().all(|&x| x == 0.0));
+    }
+
+    #[test]
+    fn should_accept_complete_contiguous_indices() {
+        let sorted_indices = vec![0u32, 1, 2, 3];
+        let result = validate_contiguous_indices(&sorted_indices, 4, "test-model");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn should_reject_short_index_set_missing_last_entry() {
+        let sorted_indices = vec![0u32, 1, 2];
+        let result = validate_contiguous_indices(&sorted_indices, 4, "test-model");
+        let err = result.expect_err("short index set must be rejected");
+        let message = err.to_string();
+        assert!(message.contains("test-model"), "error should name the model: {message}");
+        assert!(
+            message.contains("0..4"),
+            "error should state the expected range: {message}"
+        );
+    }
+
+    #[test]
+    fn should_reject_index_set_with_gap() {
+        let sorted_indices = vec![0u32, 1, 3];
+        let result = validate_contiguous_indices(&sorted_indices, 4, "test-model");
+        assert!(result.is_err(), "a gap in indices must be rejected");
+    }
+
+    #[test]
+    fn should_reject_index_set_with_duplicate() {
+        let sorted_indices = vec![0u32, 1, 1, 2];
+        let result = validate_contiguous_indices(&sorted_indices, 4, "test-model");
+        assert!(result.is_err(), "a duplicate index must be rejected");
     }
 }
