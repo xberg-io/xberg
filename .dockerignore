@@ -22,6 +22,7 @@
 !crates/xberg-wasm/
 !packages/elixir/native/xberg_nif/
 !docker/
+!scripts/ci/vendor-native-closure.sh
 
 # Re-exclude build artifacts inside allowed dirs
 **/target/
