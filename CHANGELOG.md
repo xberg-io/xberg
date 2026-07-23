@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.34] - 2026-07-23
+
 ### Added
 
 - **Owned-buffer OCR dispatch.** `OcrBackend::process_image_owned` lets backends move image buffers
@@ -19,6 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Wrapped side-by-side financial tables.** PDF table reconstruction now coalesces proven wrapped
   row runs while preserving unrelated rows and a rectangular table schema.
+- **NuGet package no longer rejected as too large.** The single `XbergIo.Xberg` package bundled
+  every runtime's native closure and exceeded nuget.org's upload cap. Natives are now split into
+  per-RID `XbergIo.Xberg.runtime.<rid>` packages pulled in transitively via `runtime.json`, so the
+  .NET package publishes again.
+- **Native and Windows artifact publishing restored.** The glibc-Linux C-FFI/Go/Java/Elixir builds,
+  Node NAPI Docker builds, and Windows Python wheels failed to publish; the ONNX Runtime vendoring
+  scripts had lost their executable bit and the `windows-target` build omitted the `classification`
+  feature that the generated bindings reference. Both are fixed so all native/binding channels build
+  and publish.
 
 ## [1.0.0-rc.33] - 2026-07-23
 
