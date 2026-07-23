@@ -279,6 +279,7 @@ impl OcrBackend for TesseractBackend {
                         markdown: t.markdown,
                         page_number: t.page_number,
                         bounding_box,
+                        ..Default::default()
                     }
                 })
                 .collect(),
@@ -386,6 +387,7 @@ impl OcrBackend for TesseractBackend {
                         markdown: t.markdown,
                         page_number: t.page_number,
                         bounding_box,
+                        ..Default::default()
                     }
                 })
                 .collect(),

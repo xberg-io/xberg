@@ -5,6 +5,7 @@
 
 pub mod acceleration;
 pub mod captioning;
+pub mod chunk_classification;
 pub mod classification;
 pub mod concurrency;
 pub mod content_filter;
@@ -68,6 +69,7 @@ pub use sparse_embedding::{SparseEmbeddingConfig, SparseEmbeddingModelType};
 pub use tree_sitter::{CodeContentMode, TreeSitterConfig, TreeSitterProcessConfig};
 
 pub use captioning::CaptioningConfig;
+pub use chunk_classification::{ChunkClassificationConfig, ChunkClassificationDefinition};
 pub use classification::PageClassificationConfig;
 pub use ner::{NerBackendKind, NerConfig};
 pub use redaction::{RedactionConfig, RedactionPattern, RedactionTerm};

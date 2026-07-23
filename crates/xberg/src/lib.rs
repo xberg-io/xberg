@@ -187,14 +187,14 @@ pub use core::extract::{extract, extract_batch};
 pub use core::split::{SplitConfig, SplitSegment, SplitStrategy, split_and_extract};
 
 pub use core::config::{
-    AccelerationConfig, CallMode, CaptioningConfig, ChunkSizing, ChunkerType, ChunkingConfig, ContentFilterConfig,
-    EmailConfig, EmbeddingConfig, EmbeddingModelType, ExecutionProviderType, ExtractInput, ExtractInputKind,
-    ExtractionConfig, ExtractionErrorItem, ExtractionResult, ExtractionSummary, FileExtractionConfig,
-    ImageExtractionConfig, JupyterCellRendering, LanguageDetectionConfig, LlmConfig, MergeMode, NerBackendKind,
-    NerConfig, OcrConfig, OutputFormat, PageClassificationConfig, PageConfig, PostProcessorConfig, RedactionConfig,
-    RedactionPattern, RedactionTerm, RerankerConfig, RerankerHead, RerankerModelType, StructuredExtractionConfig,
-    SummarizationConfig, TableChunkingMode, TokenReductionOptions, TranslationConfig, UrlExtractionConfig,
-    UrlExtractionMode,
+    AccelerationConfig, CallMode, CaptioningConfig, ChunkClassificationConfig, ChunkClassificationDefinition,
+    ChunkSizing, ChunkerType, ChunkingConfig, ContentFilterConfig, EmailConfig, EmbeddingConfig, EmbeddingModelType,
+    ExecutionProviderType, ExtractInput, ExtractInputKind, ExtractionConfig, ExtractionErrorItem, ExtractionResult,
+    ExtractionSummary, FileExtractionConfig, ImageExtractionConfig, JupyterCellRendering, LanguageDetectionConfig,
+    LlmConfig, MergeMode, NerBackendKind, NerConfig, OcrConfig, OutputFormat, PageClassificationConfig, PageConfig,
+    PostProcessorConfig, RedactionConfig, RedactionPattern, RedactionTerm, RerankerConfig, RerankerHead,
+    RerankerModelType, StructuredExtractionConfig, SummarizationConfig, TableChunkingMode, TokenReductionOptions,
+    TranslationConfig, UrlExtractionConfig, UrlExtractionMode,
 };
 pub use core::config::{
     LateInteractionConfig, LateInteractionModelType, SparseEmbeddingConfig, SparseEmbeddingModelType,

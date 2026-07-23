@@ -11,8 +11,10 @@
 //! ## Stage order
 //!
 //! 1. Classification — operates on the full document text (`content`)
-//! 2. NER — operates on the full document text (`content`)
-//! 3. Captioning — operates on images extracted into `ExtractedDocument::images`
+//! 2. Chunk classification — multi-labels each entry of `ExtractedDocument::chunks`
+//!    in place; a no-op when the document has no chunks
+//! 3. NER — operates on the full document text (`content`)
+//! 4. Captioning — operates on images extracted into `ExtractedDocument::images`
 //!
 //! Transcription is reserved for a future backend and is kept present in the
 //! config surface so callers can wire it today; any attempt to activate it
@@ -72,6 +74,17 @@ pub struct ClassificationEnrichmentConfig {
     pub config: crate::core::config::PageClassificationConfig,
 }
 
+/// Chunk-classification enrichment knob: how to multi-label individual chunks.
+///
+/// Operates on `ExtractedDocument::chunks` in place — the caller must have
+/// already produced chunks (e.g. via `ExtractionConfig::chunking`) for this
+/// stage to have any effect; a document with no chunks is a no-op.
+#[cfg(feature = "classification")]
+pub struct ChunkClassificationEnrichmentConfig {
+    /// Label-definition set and LLM/batching settings for the chunk-classification stage.
+    pub config: crate::core::config::ChunkClassificationConfig,
+}
+
 /// Captioning enrichment knob: which LLM to use for image captions.
 ///
 /// The enrichment stage calls [`crate::captioning::caption_image`] for every
@@ -103,6 +116,10 @@ pub struct EnrichmentConfig {
     /// Document-classification stage.  `None` skips classification.
     #[cfg(feature = "classification")]
     pub classification: Option<ClassificationEnrichmentConfig>,
+
+    /// Chunk-classification stage.  `None` skips per-chunk multi-label classification.
+    #[cfg(feature = "classification")]
+    pub chunk_classification: Option<ChunkClassificationEnrichmentConfig>,
 
     /// Image-captioning stage.  `None` skips captioning.
     #[cfg(feature = "captioning")]
@@ -181,7 +198,8 @@ pub struct EnrichedResult {
 /// - [`crate::XbergError::Other`] when `config.transcription` is `Some`:
 ///   the transcription backend is not yet implemented.
 #[cfg_attr(alef, alef(skip))]
-pub async fn enrich(extraction: ExtractedDocument, config: &EnrichmentConfig) -> crate::Result<EnrichedResult> {
+#[cfg_attr(not(feature = "classification"), allow(unused_mut))]
+pub async fn enrich(mut extraction: ExtractedDocument, config: &EnrichmentConfig) -> crate::Result<EnrichedResult> {
     // read inside `#[cfg(...)]` branches that are all compiled out — silence
     #[cfg(not(any(
         feature = "transcription-types",
@@ -208,6 +226,11 @@ pub async fn enrich(extraction: ExtractedDocument, config: &EnrichmentConfig) ->
     } else {
         None
     };
+
+    #[cfg(feature = "classification")]
+    if let Some(ref cfg) = config.chunk_classification {
+        crate::text::classification::classify_chunks(&mut extraction, &cfg.config).await?;
+    }
 
     #[cfg(feature = "ner")]
     let entities = if let Some(ref cfg) = config.ner {

@@ -28,7 +28,7 @@ pub mod classification;
 #[cfg(not(feature = "classification"))]
 /// Page-classification API stub (classification feature not enabled on this target).
 pub mod classification {
-    use crate::{ClassificationLabel, ExtractedDocument, PageClassificationConfig, Result};
+    use crate::{ChunkClassificationConfig, ClassificationLabel, ExtractedDocument, PageClassificationConfig, Result};
 
     /// Classify pages in an extraction result.
     pub async fn classify_pages(_result: &mut ExtractedDocument, _config: &PageClassificationConfig) -> Result<()> {
@@ -42,6 +42,15 @@ pub mod classification {
     /// targets without the `classification` feature (e.g. `android-target`,
     /// `wasm-target`).
     pub async fn classify_text(_text: &str, _config: &PageClassificationConfig) -> Result<Vec<ClassificationLabel>> {
+        Err(crate::XbergError::Other(
+            "classification feature not available on this target".into(),
+        ))
+    }
+
+    /// Classify chunks in an extraction result. Stub form mirrors the real
+    /// `classify_chunks` signature so language bindings keep compiling on
+    /// targets without the `classification` feature.
+    pub async fn classify_chunks(_result: &mut ExtractedDocument, _config: &ChunkClassificationConfig) -> Result<()> {
         Err(crate::XbergError::Other(
             "classification feature not available on this target".into(),
         ))

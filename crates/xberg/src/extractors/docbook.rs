@@ -593,6 +593,7 @@ fn parse_docbook_single_pass(content: &str, plain: bool, budget: &mut SecurityBu
                                 markdown,
                                 page_number: table_index + 1,
                                 bounding_box: None,
+                                ..Default::default()
                             });
                             table_index += 1;
                         }

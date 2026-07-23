@@ -128,6 +128,7 @@ pub(crate) fn process_table(content: &str, output: &mut String, tables: &mut Vec
             markdown: markdown.clone(),
             page_number: 1,
             bounding_box: None,
+            ..Default::default()
         };
         tables.push(table);
     }

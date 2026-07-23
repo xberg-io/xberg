@@ -942,6 +942,7 @@ The native-text-to-OCR fallback decision (should a PDF page with an embedded tex
 | `min_meaningful_words`           | `3`     | Minimum count of meaningful words before native text is accepted instead of OCR.              |
 | `min_alnum_ratio`                | `0.3`   | Minimum alphanumeric ratio of non-whitespace characters.                                      |
 | `critical_fragmented_word_ratio` | `0.80`  | Fraction of 1-2 character words that forces OCR regardless of other signals.                  |
+| `min_undecodable_ratio`          | `0.5`   | Minimum fraction of non-whitespace characters that must be undecodable (PUA, replacement, or control garbage) before a page's text layer is treated as unreadable and routed to OCR. See [Automatic OCR for Undecodable Text Layers](#automatic-ocr-for-undecodable-text-layers). |
 
 <Tabs syncKey="lang">
 <TabItem label="Python">
@@ -984,6 +985,66 @@ pipeline_min_quality = 0.6
 
 </TabItem>
 </Tabs>
+
+### Automatic OCR for Undecodable Text Layers
+
+PDFs with a font whose CID/glyph indices have no `ToUnicode` mapping (common with subset Identity-H fonts) often "extract" successfully but decode to garbage — Unicode Private Use Area (PUA) codepoints, replacement characters (U+FFFD), or non-whitespace control characters instead of legible text. Previously this garbage passed the native-text quality check and OCR never ran. Xberg now detects this case and routes the page to OCR automatically, the same as a scanned page (issue #1254).
+
+A page is treated as having an undecodable text layer, and routed to OCR under `OcrStrategy.Auto`, when:
+
+- it has at least `min_total_non_whitespace` (default `64`) non-whitespace characters — short snippets with a stray symbol don't trip this check, and
+- at least `min_undecodable_ratio` (default `0.5`) of those non-whitespace characters are undecodable (PUA, U+FFFD, or non-whitespace control characters).
+
+Tune the ratio via `OcrQualityThresholds.min_undecodable_ratio` on `OcrConfig.quality_thresholds`:
+
+<Tabs syncKey="lang">
+<TabItem label="Python">
+
+```python title="undecodable_text_layer.py"
+from xberg import ExtractInput, ExtractionConfig, OcrConfig, OcrQualityThresholds, extract
+
+config = ExtractionConfig(
+    ocr=OcrConfig(
+        quality_thresholds=OcrQualityThresholds(min_undecodable_ratio=0.3),
+    ),
+)
+output = await extract(ExtractInput(kind="uri", uri="identity-h-subset-font.pdf"), config=config)
+result = output.results[0]
+# Pages whose text layer decoded to >=30% PUA/replacement/control garbage were OCR'd.
+```
+
+</TabItem>
+<TabItem label="Rust">
+
+```rust title="undecodable_text_layer.rs"
+use xberg::{ExtractionConfig, OcrConfig, OcrQualityThresholds};
+
+let config = ExtractionConfig {
+    ocr: Some(OcrConfig {
+        quality_thresholds: Some(OcrQualityThresholds {
+            min_undecodable_ratio: 0.3,
+            ..Default::default()
+        }),
+        ..Default::default()
+    }),
+    ..Default::default()
+};
+```
+
+</TabItem>
+<TabItem label="TOML">
+
+```toml title="xberg.toml"
+[ocr.quality_thresholds]
+min_undecodable_ratio = 0.3
+```
+
+</TabItem>
+</Tabs>
+
+:::note[Known limitation]
+This only covers glyph indices that decode into the PUA/replacement/control range. The related case where a broken CID-to-Unicode mapping resolves onto *plausible* ASCII (so the text layer "looks" readable but is actually wrong) is not detected — it requires upstream support in `pdf_oxide` and is blocked on [pdf_oxide#876](https://github.com/xberg-io/pdf_oxide/issues/876).
+:::
 
 ### Multi-Backend Pipeline
 

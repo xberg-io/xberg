@@ -445,6 +445,7 @@ mod tests {
             markdown: "| Header1 | Header2 |\n| Cell1 | Cell2 |".to_string(),
             page_number: 1,
             bounding_box: None,
+            ..Default::default()
         };
 
         let image = ExtractedImage {

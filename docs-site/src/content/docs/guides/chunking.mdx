@@ -109,9 +109,155 @@ Each chunk in `result.chunks` contains:
 | `metadata.token_count`                  | Token count (when embeddings enabled)            |
 | `metadata.heading_context`              | Active heading hierarchy (Markdown chunker only) |
 | `metadata.heading_path` | Flattened RAG-shaped heading breadcrumb (e.g., `["Title", "Section", "Subsection"]`) for vector database retrieval and context. |
+| `metadata.page_spans` | Per-page coordinates the chunk covers — see [Per-Page Chunk Coordinates](#per-page-chunk-coordinates) below. |
+| `metadata.classifications` | Multi-label classification result — see [Chunk Classification](#chunk-classification) below. |
 | `embedding`                             | Embedding vector (when configured)               |
 
 Chunks can be sized by token count instead of characters — enable the `chunking-tokenizers` feature and set `sizing` to `tokenizer`.
+
+## Per-Page Chunk Coordinates
+
+`metadata.page_spans` is a list of `{ page, bbox? }` entries, one per page the chunk overlaps, in page order — the first and last entries' `page` fields equal `metadata.first_page`/`metadata.last_page`. Use it to drive viewer highlighting (draw a box on the source page for a given chunk) without re-deriving page geometry from `content` offsets.
+
+- Populated whenever page-boundary provenance is available — the same condition under which `first_page`/`last_page` are populated.
+- `bbox` on each entry is additionally populated when `include_document_structure` is enabled, as the union of that page's body-layer node bounding boxes found within the chunk.
+- Empty (and omitted from JSON output) when page-boundary provenance is unavailable.
+
+```json title="chunk with page_spans"
+{
+  "content": "...",
+  "metadata": {
+    "first_page": 2,
+    "last_page": 3,
+    "page_spans": [
+      { "page": 2, "bbox": { "x0": 72.0, "y0": 120.5, "x1": 540.0, "y1": 640.2 } },
+      { "page": 3 }
+    ]
+  }
+}
+```
+
+Cross-page fragment stitching for `page_spans` mirrors the same-page-only scope of [table identity](/guides/output-formats/#table-identity-and-anchors) — each page's span is reported independently.
+
+## Chunk Classification
+
+Classify each chunk against a caller-supplied, description-backed label set — the chunk-level analogue of [Page Classification](/guides/page-classification/). Set `ExtractionConfig.chunk_classification` to a `ChunkClassificationConfig`:
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `definitions` | `list[{label, description}]` | — | Label taxonomy. Unlike page classification's bare label list, every label carries a `description` injected into the prompt, so the model can disambiguate similarly named labels in large taxonomies. Must contain at least one entry. |
+| `llm` | `LlmConfig` | — | LLM configuration used for classification. |
+| `batch_size` | `int` | `10` | Number of chunks grouped into a single classification request. Larger batches amortize the fixed cost of the definitions block (repeated verbatim per request) across more chunks, at the risk of exceeding context limits for large taxonomies. |
+| `max_concurrency` | `int` | `4` | Maximum number of in-flight batch requests, bounded to avoid rate-limiting the configured LLM provider. |
+| `prompt_template` | `str \| None` | `None` | Minijinja template. Receives `{{ definitions }}` (rendered label + description list) and `{{ chunks }}` (numbered chunk texts in the batch). `None` uses the built-in default. |
+
+Unlike page classification, chunk classification is always multi-label — a chunk may match zero, one, or many definitions. Leaving `chunk_classification` unset (the default) disables the post-processor entirely and makes no LLM calls.
+
+<Tabs syncKey="lang">
+<TabItem label="Python">
+
+```python title="chunk_classification.py"
+from xberg import (
+    ChunkClassificationConfig,
+    ChunkClassificationDefinition,
+    ChunkingConfig,
+    ExtractInput,
+    ExtractionConfig,
+    LlmConfig,
+    extract,
+)
+
+config = ExtractionConfig(
+    chunking=ChunkingConfig(chunker_type="markdown"),
+    chunk_classification=ChunkClassificationConfig(
+        definitions=[
+            ChunkClassificationDefinition(
+                label="pricing",
+                description="Discusses cost, fees, or subscription tiers.",
+            ),
+            ChunkClassificationDefinition(
+                label="liability",
+                description="Discusses indemnification, warranties, or limitation of liability.",
+            ),
+        ],
+        llm=LlmConfig(model="openai/gpt-4o-mini"),
+        batch_size=10,
+        max_concurrency=4,
+    ),
+)
+output = await extract(ExtractInput(kind="uri", uri="contract.pdf"), config=config)
+result = output.results[0]
+for chunk in result.chunks or []:
+    for label in chunk.metadata.classifications:
+        print(label.label, label.confidence)
+```
+
+</TabItem>
+<TabItem label="Rust">
+
+```rust title="chunk_classification.rs"
+use xberg::{
+    ChunkClassificationConfig, ChunkClassificationDefinition, ChunkingConfig, ExtractInput,
+    ExtractionConfig, LlmConfig, extract,
+};
+
+let config = ExtractionConfig {
+    chunking: Some(ChunkingConfig { chunker_type: "markdown".into(), ..Default::default() }),
+    chunk_classification: Some(ChunkClassificationConfig {
+        prompt_template: None,
+        definitions: vec![
+            ChunkClassificationDefinition {
+                label: "pricing".into(),
+                description: "Discusses cost, fees, or subscription tiers.".into(),
+            },
+            ChunkClassificationDefinition {
+                label: "liability".into(),
+                description: "Discusses indemnification, warranties, or limitation of liability.".into(),
+            },
+        ],
+        llm: LlmConfig { model: "openai/gpt-4o-mini".into(), ..Default::default() },
+        batch_size: 10,
+        max_concurrency: 4,
+    }),
+    ..Default::default()
+};
+let output = extract(ExtractInput::from_uri("contract.pdf"), &config).await?;
+let result = &output.results[0];
+for chunk in result.chunks.iter().flatten() {
+    for label in &chunk.metadata.classifications {
+        println!("{} {:?}", label.label, label.confidence);
+    }
+}
+```
+
+</TabItem>
+<TabItem label="TOML">
+
+```toml title="xberg.toml"
+[chunking]
+chunker_type = "markdown"
+
+[[chunk_classification.definitions]]
+label = "pricing"
+description = "Discusses cost, fees, or subscription tiers."
+
+[[chunk_classification.definitions]]
+label = "liability"
+description = "Discusses indemnification, warranties, or limitation of liability."
+
+[chunk_classification.llm]
+model = "openai/gpt-4o-mini"
+
+batch_size = 10
+max_concurrency = 4
+```
+
+</TabItem>
+</Tabs>
+
+:::note[Feature gate]
+Requires the `classification` Cargo feature. Included in `full`.
+:::
 
 ## Token Sizing with Your Own Tokenizer (Plugin Variant)
 
@@ -166,4 +312,6 @@ Language bindings register through the same API — implement the trait's method
 ## See also
 
 - [Embeddings](/guides/embeddings/) — generate vectors for semantic search
+- [Page Classification](/guides/page-classification/) — the page-level analogue of chunk classification
+- [Output Formats](/guides/output-formats/#table-identity-and-anchors) — table identity and anchor markers
 - [Configuration Reference](/reference/configuration/#chunkingconfig) — all chunking options

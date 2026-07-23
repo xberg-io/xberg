@@ -6,7 +6,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 
 use super::djot::DjotContent;
-use super::document_structure::{DocumentStructure, NodeId};
+use super::document_structure::DocumentStructure;
 use super::metadata::Metadata;
 use super::ocr_elements::OcrElement;
 use super::page::PageContent;
@@ -617,21 +617,34 @@ pub struct ChunkMetadata {
     /// intersection is implemented (tracked under #1294/#1295); this field is
     /// the wire-format foundation for that follow-up.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
-    pub node_ids: Vec<NodeId>,
+    pub node_ids: Vec<String>,
 
-    /// Per-page bounding-box spans this chunk covers.
+    /// Per-page bounding-box spans this chunk covers, for viewer highlighting (#1295).
     ///
-    /// Empty until page-level bounding-box aggregation is implemented
-    /// (tracked under #1295); this field is the wire-format foundation for
-    /// that follow-up.
+    /// One entry per page the chunk overlaps, in page order — the first and last entries'
+    /// `page` fields equal [`first_page`](Self::first_page)/[`last_page`](Self::last_page).
+    /// Populated whenever page-boundary provenance is available (the same condition under
+    /// which `first_page`/`last_page` are populated); each entry's `bbox` is additionally
+    /// populated when the document's structured node tree ([`ExtractedDocument::document`]) is
+    /// available, as the union of that page's body-layer node bounding boxes found within this
+    /// chunk. Empty when page-boundary provenance is unavailable (mirrors `first_page`/
+    /// `last_page` being `None`).
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub page_spans: Vec<PageSpan>,
+
+    /// Multi-label classification result for this chunk.
+    ///
+    /// Populated by the chunk-classification post-processor when
+    /// [`ExtractionConfig::chunk_classification`](crate::core::config::ExtractionConfig::chunk_classification)
+    /// is set. A chunk may match zero, one, or many of the configured label
+    /// definitions. Empty when chunk classification was not configured.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub classifications: Vec<super::classification::ClassificationLabel>,
 }
 
 /// A single page covered by a chunk, with an optional bounding box on that page.
 ///
-/// Populated by future page-level bounding-box aggregation (#1295). Currently
-/// always empty on [`ChunkMetadata::page_spans`].
+/// See [`ChunkMetadata::page_spans`] (#1295) for population semantics.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
 pub struct PageSpan {
@@ -940,6 +953,7 @@ impl super::tables::Table {
                 x1: b.right as f64,
                 y1: b.bottom as f64,
             }),
+            ..Default::default()
         }
     }
 }
@@ -1025,6 +1039,7 @@ mod tests {
             image_indices: Vec::new(),
             node_ids: Vec::new(),
             page_spans: Vec::new(),
+            classifications: Vec::new(),
         }
     }
 
@@ -1042,8 +1057,8 @@ mod tests {
     fn chunk_metadata_node_ids_present_when_set() {
         let mut meta = empty_chunk_metadata();
         meta.node_ids = vec![
-            NodeId::generate("paragraph", "a", Some(1), 0),
-            NodeId::generate("paragraph", "b", Some(1), 1),
+            crate::types::document_structure::NodeId::generate("paragraph", "a", Some(1), 0).to_string(),
+            crate::types::document_structure::NodeId::generate("paragraph", "b", Some(1), 1).to_string(),
         ];
         let json = serde_json::to_value(&meta).expect("serialize");
         let ids = json

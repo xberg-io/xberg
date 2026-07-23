@@ -9,13 +9,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.33] - 2026-07-23
+
+### Added
+
+- **Stable node ids on the document tree.** `DocumentNode.id` is now populated with a
+  deterministic, content-derived id (stable across extractions), and each chunk carries
+  `metadata.nodeIds` linking it back to the nodes it was derived from. Both are exposed as plain
+  strings across all language bindings. (#1296)
+- **Per-page chunk coordinates (`pageSpans`).** Each chunk now carries `metadata.pageSpans`, a
+  list of `{page, bbox}` entries — one per page the chunk overlaps, in page order — for viewer
+  highlighting. The bounding box is the union of that page's body-layer node boxes within the
+  chunk (omitted when unavailable). Empty (and omitted from the wire format) when page provenance
+  is unavailable. (#1295)
+- **Stable table ids, headers, and opt-in anchors.** `Table` gains `tableId` (a deterministic,
+  reproducible id assigned in document order across the final emitted table set) and `columns`
+  (the header row, so a fragment is interpretable on its own). A new `table_anchors` extraction
+  option (default off) emits a `[TABLE:{tableId}]` marker before each rendered table so consumers
+  can reconcile the markdown in `content` with the structured `tables[]` entries. (#1297)
+- **Configurable multi-label chunk classification.** New `ChunkClassificationConfig` (label
+  `definitions`, an `LlmConfig`, `batch_size`, `max_concurrency`), set via
+  `ExtractionConfig.chunk_classification`, classifies each chunk with zero, one, or many labels via
+  bounded-concurrency LLM batches and writes them to `metadata.classifications`
+  (`[{label, confidence?}]`). Opt-in — absent config performs no classification and makes no LLM
+  calls. The chunk-level analogue of page classification; requires the `classification` feature. (#1255)
+- **Automatic OCR of undecodable text layers.** Pages whose embedded text decodes mostly into the
+  Unicode Private Use Area, replacement, or control-character garbage (e.g. Identity-H fonts with no
+  `ToUnicode`) are now routed to OCR like scanned pages, controlled by
+  `OcrQualityThresholds.min_undecodable_ratio` (default 0.5) and gated by a 64-character floor so
+  occasional symbols never trip it. (#1254)
+
 ### Fixed
 
+- **Concatenated-PDF extraction audit.** A cluster of structure/reading-order defects surfaced by an
+  audit of concatenated legal PDFs: duplicate `tables[]` entries and double-counted table counts are
+  deduplicated (#1288); fragmented per-row tables are stitched back into one table with a propagated
+  header (#1290); bullet lists are no longer flattened into paragraphs or shredded into
+  word-per-cell tables (#1301); spurious intra-word spaces in native text (`"T ower"`) are removed
+  via geometry-aware span joining (#1291); markdown escaping is consistent with an
+  `escape_markdown` opt-out (#1292); OCR'd pages no longer report contradictory `isBlank` (#1293);
+  chunk `firstPage`/`lastPage` provenance is restored on long PDFs (#1294); and heading context no
+  longer leaks across document boundaries (#1289).
+- **Container users can enable page classification** via a `classification` CLI feature carried into
+  the `all`/container builds. (#1298)
 - **CLI batch resource limits and benchmark isolation.** `extract` and `batch` now support
   `--no-config-discovery`, and their Tokio runtime honors `--max-threads`. The benchmark harness
   uses both controls, records batch subprocess overhead from the reported batch total, and keeps
   user configuration and verbose PDF logs from contaminating measurements.
 - **Linux glibc artifacts no longer require a newer glibc than they advertise.** The prebuilt ONNX Runtime that was statically linked into the Python wheel and the Go/C FFI, Java, and Elixir artifacts is compiled against glibc ≥ 2.38 and pulled unversioned `__isoc23_*` and `__libc_single_threaded` symbols into the binary. Because the manylinux tag only reflects *versioned* glibc requirements, these installed everywhere but crashed at import/load on glibc 2.28–2.37 (`undefined symbol: __isoc23_strtoll`). They now link Microsoft's ONNX Runtime (glibc-clean, floors at 2.27) — the same runtime the C#, Node, and Docker builds already use — and ship it beside the binary, so the symbols are gone and the floor is honest. A CI check now fails any glibc artifact that references too-new symbols or omits the bundled runtime. musl, macOS, and Windows are unaffected.
+
+### Changed
+
+- **Dependencies refreshed across all languages.** Rust, Python, Node, Ruby, Java, and Dart
+  dependency versions were bumped to their latest compatible releases.
 
 ## [1.0.0-rc.31] - 2026-07-21
 

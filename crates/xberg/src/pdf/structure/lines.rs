@@ -4,16 +4,9 @@ use crate::pdf::hierarchy::SegmentData;
 
 /// Minimum horizontal gap between two same-line segments, expressed as a fraction of
 /// the trailing segment's font size, that indicates a genuine word space rather than a
-/// kerning-run split of a single word. Mirrors the threshold used by pdf_oxide
-/// fragmented-span repair (`oxide/text.rs::rebuild_text_from_fragmented_spans`,
-/// `space_threshold = font_size * 0.5`), which handles the same class of problem
-/// (reconstructing word spacing from adjacent same-line spans). That threshold is
-/// more conservative than the `x_gap > font_size * 0.15` check used on the main
-/// (non-fragmented) span-joining path in the same file, and conservatism is the
-/// right choice here: overestimating the gap only risks a missed space between two
-/// genuinely distinct short words, while underestimating it re-introduces the
-/// intra-word spaces this function exists to remove (issue #1291).
-const SEGMENT_GAP_SPACE_RATIO: f32 = 0.5;
+/// kerning-run split of a single word. This matches pdf_oxide's main span-joining
+/// convention. Zero and negative gaps remain joined, preserving kerning-run repair.
+const SEGMENT_GAP_SPACE_RATIO: f32 = 0.15;
 
 /// Returns true if the character is a CJK ideograph, Hiragana, Katakana, or Hangul.
 pub(super) fn is_cjk_char(c: char) -> bool {
@@ -132,16 +125,23 @@ mod tests {
     #[test]
     fn test_segments_need_space_distinct_words_insert_space() {
         // Two distinct words on one baseline with a real word space: "office" then "is".
-        // The 10pt gap clears 0.5*font_size, so a space is inserted.
+        // The 10pt gap clears the configured ratio, so a space is inserted.
         let prev = segment("office", 100.0, 30.0, 10.0, 700.0);
         let next = segment("is", 140.0, 8.0, 10.0, 700.0);
         assert!(segments_need_space(&prev, "office", &next, "is"));
     }
 
     #[test]
+    fn test_segments_need_space_two_point_word_gap_inserts_space() {
+        let prev = segment("MongoKit", 100.0, 40.0, 10.0, 700.0);
+        let next = segment("is", 142.0, 8.0, 10.0, 700.0);
+        assert!(segments_need_space(&prev, "MongoKit", &next, "is"));
+    }
+
+    #[test]
     fn test_segments_need_space_style_change_inserts_space() {
         // Distinct words across an inline style change (plain -> bold) can abut with a
-        // tiny gap (here x_gap = 1pt, well under 0.5*font_size), but a style change is a
+        // tiny gap (here x_gap = 1pt, well under the configured threshold), but a style change is a
         // real word boundary, not a kerning split, so a space must be inserted. Guards
         // the inline-bold-run regression.
         let prev = segment("plain", 10.0, 20.0, 20.0, 100.0);
@@ -157,11 +157,23 @@ mod tests {
     fn test_segments_need_space_tower_kerning_split_joins() {
         // "Tower" split by pdf_oxide into "T" + "ower" at a kerning boundary. The "ower"
         // span starts fractionally before the "T" span ends (x_gap ~= -1pt), under the
-        // 0.5*font_size threshold, so they rejoin into "Tower" with NO space. This is the
-        // exact case that previously produced "T ower" (issue #1291).
+        // configured positive-gap threshold, so they rejoin into "Tower" with NO space.
+        // This is the exact case that previously produced "T ower" (issue #1291).
         let prev = segment("T", 100.0, 7.0, 10.0, 700.0);
         let next = segment("ower", 106.0, 22.0, 10.0, 700.0);
         assert!(!segments_need_space(&prev, "T", &next, "ower"));
+    }
+
+    #[test]
+    fn test_segments_need_space_positive_kerning_gap_stays_joined() {
+        let prev = segment("T", 100.0, 7.0, 10.0, 700.0);
+        let below_threshold = segment("ower", 108.0, 22.0, 10.0, 700.0);
+        let at_threshold = segment("ower", 108.5, 22.0, 10.0, 700.0);
+        let above_threshold = segment("ower", 108.6, 22.0, 10.0, 700.0);
+
+        assert!(!segments_need_space(&prev, "T", &below_threshold, "ower"));
+        assert!(!segments_need_space(&prev, "T", &at_threshold, "ower"));
+        assert!(segments_need_space(&prev, "T", &above_threshold, "ower"));
     }
 
     #[test]

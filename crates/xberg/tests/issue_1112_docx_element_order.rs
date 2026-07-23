@@ -47,6 +47,7 @@ fn test_internal_document_walk_preserves_reading_order() {
         markdown: "| Header A | Header B |\n| Cell 1 | Cell 2 |".to_string(),
         page_number: 1,
         bounding_box: None,
+        ..Default::default()
     });
     doc.elements
         .push(InternalElement::text(ElementKind::Table { table_index: 0 }, "", 0));

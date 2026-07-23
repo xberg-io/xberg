@@ -181,6 +181,12 @@ fn build_chunks_from_sections(
             ),
             _ => (None, None),
         };
+        // A single page lookup (not a range) is used above, so first_page and
+        // last_page are always equal here; page_spans mirrors that with a
+        // single-entry span rather than re-deriving a range.
+        let page_spans: Vec<crate::types::PageSpan> = first_page
+            .map(|page| vec![crate::types::PageSpan { page, bbox: None }])
+            .unwrap_or_default();
 
         if config.max_characters == 0 || content.len() <= config.max_characters {
             chunks.push(Chunk {
@@ -199,7 +205,8 @@ fn build_chunks_from_sections(
                     heading_path: Vec::new(),
                     image_indices: Vec::new(),
                     node_ids: Vec::new(),
-                    page_spans: Vec::new(),
+                    page_spans: page_spans.clone(),
+                    classifications: Vec::new(),
                 },
             });
         } else {
@@ -228,7 +235,8 @@ fn build_chunks_from_sections(
                         heading_path: Vec::new(),
                         image_indices: Vec::new(),
                         node_ids: Vec::new(),
-                        page_spans: Vec::new(),
+                        page_spans: page_spans.clone(),
+                        classifications: Vec::new(),
                     },
                 });
             }

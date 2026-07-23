@@ -8,6 +8,9 @@
 #[cfg(feature = "classification")]
 pub mod classification;
 
+#[cfg(feature = "classification")]
+pub mod chunk_classification;
+
 #[cfg(feature = "summarization")]
 pub mod summarization;
 
@@ -36,6 +39,9 @@ pub mod redaction;
 pub fn register_builtin() -> crate::Result<()> {
     #[cfg(feature = "classification")]
     classification::register()?;
+
+    #[cfg(feature = "classification")]
+    chunk_classification::register()?;
 
     #[cfg(feature = "summarization")]
     summarization::register()?;

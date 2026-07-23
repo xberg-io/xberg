@@ -139,11 +139,11 @@ impl DocumentStructure {
     /// # Examples
     ///
     /// ```rust
-    /// use xberg::types::document_structure::{DocumentStructure, DocumentNode, NodeContent, NodeId};
+    /// use xberg::types::document_structure::{DocumentStructure, DocumentNode, NodeContent};
     ///
     /// let mut structure = DocumentStructure {
     ///     nodes: vec![DocumentNode {
-    ///         id: NodeId::default(),
+    ///         id: String::new(),
     ///         content: NodeContent::Paragraph { text: "Hello".into() },
     ///         parent: None,
     ///         children: vec![],
@@ -180,12 +180,17 @@ impl DocumentStructure {
     /// does not currently track which byte ranges of its output came from
     /// which `NodeIndex`. Always returns `None`.
     ///
-    /// This is the seam `ChunkMetadata::node_ids` population and
-    /// `ChunkMetadata::page_spans` population are expected to build on.
-    /// Tracked under #1294/#1295 — implementing this requires either
-    /// threading node provenance through the renderers, or re-deriving node
-    /// spans by re-scanning rendered output for node text with page/order
-    /// disambiguation.
+    /// This is the seam `ChunkMetadata::node_ids` population (tracked under #1296) is expected
+    /// to build on; implementing it requires either threading node provenance through the
+    /// renderers, or re-deriving node spans by re-scanning rendered output for node text with
+    /// page/order disambiguation.
+    ///
+    /// `ChunkMetadata::page_spans` (#1295) does not depend on this method: it derives its page
+    /// numbers from the existing byte-range-to-page boundary mapping (the same one used for
+    /// `first_page`/`last_page`, see `chunking::boundaries::calculate_page_spans`) and fills in
+    /// bounding boxes via a page-scoped textual containment check against node text (see
+    /// `chunking::page_spans::populate_page_span_bboxes`), without requiring an exact node ->
+    /// byte-offset mapping.
     ///
     /// # Parameters
     ///
@@ -193,12 +198,12 @@ impl DocumentStructure {
     ///
     /// Not bound to language bindings (`alef(skip)`): the tuple return type
     /// is not FFI-friendly, and the method is a placeholder with no behavior
-    /// to expose yet. A binding-facing surface can be added once #1294/#1295
-    /// implement real offset resolution.
+    /// to expose yet. A binding-facing surface can be added once #1296
+    /// implements real offset resolution.
     #[cfg_attr(alef, alef(skip))]
     #[must_use]
     pub fn node_rendered_offset(&self, _node_index: NodeIndex) -> Option<(usize, usize)> {
-        // TODO(#1294/#1295): implement real node -> rendered-offset mapping and
+        // TODO(#1296): implement real node -> rendered-offset mapping.
         None
     }
 }
@@ -254,7 +259,7 @@ pub struct DocumentNode {
     /// `#[serde(default)]` covers the missing-field case on inbound JSON
     /// (e.g. documents serialised before this field existed).
     #[serde(default)]
-    pub id: NodeId,
+    pub id: String,
 
     /// Node content — tagged enum, type-specific data only.
     pub content: NodeContent,
@@ -835,7 +840,7 @@ mod tests {
     fn make_paragraph(text: &str, page: Option<u32>, index: u32) -> DocumentNode {
         let content = NodeContent::Paragraph { text: text.to_string() };
         DocumentNode {
-            id: NodeId::generate(content.node_type_str(), text, page, index),
+            id: NodeId::generate(content.node_type_str(), text, page, index).to_string(),
             content,
             parent: None,
             children: vec![],
@@ -874,7 +879,7 @@ mod tests {
             heading_text: Some("Section 1".to_string()),
         };
         let group = DocumentNode {
-            id: NodeId::generate("group", "Section 1", Some(1), 0),
+            id: NodeId::generate("group", "Section 1", Some(1), 0).to_string(),
             content: group_content,
             parent: None,
             children: vec![],
@@ -912,7 +917,7 @@ mod tests {
         let mut doc = DocumentStructure::new();
 
         let parent = DocumentNode {
-            id: NodeId::generate("group", "", Some(1), 0),
+            id: NodeId::generate("group", "", Some(1), 0).to_string(),
             content: NodeContent::Group {
                 label: None,
                 heading_level: None,
@@ -941,7 +946,7 @@ mod tests {
         let mut doc = DocumentStructure::new();
 
         let parent = DocumentNode {
-            id: NodeId::generate("group", "", Some(1), 0),
+            id: NodeId::generate("group", "", Some(1), 0).to_string(),
             content: NodeContent::Group {
                 label: None,
                 heading_level: None,
@@ -1234,7 +1239,7 @@ mod tests {
             heading_text: Some("Introduction".to_string()),
         };
         let group = DocumentNode {
-            id: NodeId::generate("group", "Introduction", Some(1), 0),
+            id: NodeId::generate("group", "Introduction", Some(1), 0).to_string(),
             content: group_content,
             parent: None,
             children: vec![],
@@ -1256,7 +1261,7 @@ mod tests {
             text: "Hello world".to_string(),
         };
         let para = DocumentNode {
-            id: NodeId::generate("paragraph", "Hello world", Some(1), 1),
+            id: NodeId::generate("paragraph", "Hello world", Some(1), 1).to_string(),
             content: para_content,
             parent: None,
             children: vec![],

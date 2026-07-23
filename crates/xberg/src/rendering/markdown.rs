@@ -346,6 +346,70 @@ mod tests {
         );
     }
 
+    /// Issue #1297: by default (`table_anchors = false`), rendered markdown
+    /// contains no `[TABLE:...]` marker, so existing output stays unchanged.
+    #[test]
+    fn render_markdown_default_has_no_table_anchor() {
+        let mut b = InternalDocumentBuilder::new("test");
+        let idx = b.push_table_from_cells(&[vec!["A".to_string(), "B".to_string()]], None, None);
+        let mut doc = b.build();
+        doc.tables[idx as usize].table_id = Some("table-1".to_string());
+        assert!(!doc.table_anchors, "table_anchors must default to false");
+
+        let rendered = render_markdown(&doc);
+        assert!(
+            !rendered.contains("[TABLE:"),
+            "no anchor should appear when table_anchors is disabled: {rendered}"
+        );
+    }
+
+    /// Issue #1297: with `table_anchors = true`, rendered markdown contains a
+    /// `[TABLE:{table_id}]` marker immediately before the table's markdown.
+    #[test]
+    fn render_markdown_table_anchors_enabled_emits_marker() {
+        let mut b = InternalDocumentBuilder::new("test");
+        let idx = b.push_table_from_cells(
+            &[
+                vec!["Name".to_string(), "Age".to_string()],
+                vec!["Alice".to_string(), "30".to_string()],
+            ],
+            None,
+            None,
+        );
+        let mut doc = b.build();
+        doc.tables[idx as usize].table_id = Some("table-1".to_string());
+        doc.table_anchors = true;
+
+        let rendered = render_markdown(&doc);
+        assert!(
+            rendered.contains("[TABLE:table-1]"),
+            "expected the table anchor marker: {rendered}"
+        );
+
+        let anchor_pos = rendered.find("[TABLE:table-1]").unwrap();
+        let table_pos = rendered.find("| Name").unwrap();
+        assert!(
+            anchor_pos < table_pos,
+            "anchor must precede the table markdown: {rendered}"
+        );
+    }
+
+    /// Issue #1297: when a table has no `table_id`, no anchor is emitted even
+    /// with `table_anchors = true` (nothing to reference).
+    #[test]
+    fn render_markdown_table_anchors_enabled_without_table_id_emits_no_marker() {
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_table_from_cells(&[vec!["A".to_string(), "B".to_string()]], None, None);
+        let mut doc = b.build();
+        doc.table_anchors = true;
+
+        let rendered = render_markdown(&doc);
+        assert!(
+            !rendered.contains("[TABLE:"),
+            "no anchor should appear without a table_id: {rendered}"
+        );
+    }
+
     #[test]
     fn unescape_backslash_sequences_empty_input_returns_borrowed() {
         let result = unescape_backslash_sequences("", &['_']);

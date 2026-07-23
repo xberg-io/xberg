@@ -226,6 +226,7 @@ impl OrgModeExtractor {
                             markdown,
                             page_number: 1,
                             bounding_box: None,
+                            ..Default::default()
                         });
                         current_table.clear();
                     }
@@ -240,6 +241,7 @@ impl OrgModeExtractor {
                     markdown,
                     page_number: 1,
                     bounding_box: None,
+                    ..Default::default()
                 });
             }
         }

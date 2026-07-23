@@ -38,6 +38,21 @@ const NUMERIC_HEADER_MAX_ROWS: usize = 2;
 const DENSE_NUMERIC_COLUMN_GAP_CAP: u32 = 20;
 const SPLIT_NUMERIC_TRACK_MIN_ROWS_PER_SIDE: usize = 2;
 const SPLIT_NUMERIC_TRACK_MIN_TOTAL_ROWS: usize = 6;
+const SIDE_BY_SIDE_MIN_PARENT_COLUMNS: usize = 7;
+const SIDE_BY_SIDE_CENTER_TOLERANCE_PERCENT: u64 = 8;
+const SIDE_BY_SIDE_MIN_GUTTER_HEIGHT_PERCENT: u64 = 100;
+const SIDE_BY_SIDE_MIN_WIDTH_PERCENT: u64 = 35;
+const SIDE_BY_SIDE_MIN_WORDS_PER_SIDE: usize = 6;
+const SIDE_BY_SIDE_CHILD_GAP_HEIGHT_MULTIPLIER: u32 = 6;
+const SIDE_BY_SIDE_MIN_TRACK_ROW_PERCENT: usize = 20;
+const SIDE_BY_SIDE_MIN_NUMERIC_TRACKS: usize = 2;
+const SIDE_BY_SIDE_MAX_TRACK_DELTA: usize = 1;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct SideTableShape {
+    columns: usize,
+    numeric_tracks: usize,
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum HeuristicTableRejection {
@@ -114,6 +129,7 @@ pub(crate) fn extract_tables_native(doc: &mut OxideDocument) -> Result<Vec<Table
                 markdown,
                 page_number,
                 bounding_box,
+                ..Default::default()
             });
         }
     }
@@ -209,6 +225,7 @@ pub(crate) fn extract_tables_bordered(doc: &mut OxideDocument, skip_pages: &Hash
                 markdown,
                 page_number,
                 bounding_box,
+                ..Default::default()
             });
         }
     }
@@ -304,13 +321,217 @@ pub(crate) fn extract_tables_heuristic(
         }
 
         for region in regions {
-            if let Some(table) = reconstruct_region_table(&region, page_height, page_number, allow_single_column) {
-                tables.push(table);
-            }
+            tables.extend(reconstruct_region_tables(
+                &region,
+                page_height,
+                page_number,
+                allow_single_column,
+            ));
         }
     }
 
     Ok(tables)
+}
+
+fn reconstruct_region_tables(
+    region: &[crate::pdf::table_reconstruct::HocrWord],
+    page_height: f32,
+    page_number: u32,
+    allow_single_column: bool,
+) -> Vec<Table> {
+    let Some(parent) = reconstruct_region_table(region, page_height, page_number, allow_single_column) else {
+        return Vec::new();
+    };
+    if parent.cells.first().map_or(0, Vec::len) < SIDE_BY_SIDE_MIN_PARENT_COLUMNS {
+        return vec![parent];
+    }
+
+    let Some((left_region, right_region)) = split_side_by_side_region(region) else {
+        return vec![parent];
+    };
+    let Some(left) = reconstruct_side_by_side_child(&left_region, page_height, page_number, allow_single_column) else {
+        return vec![parent];
+    };
+    let Some(right) = reconstruct_side_by_side_child(&right_region, page_height, page_number, allow_single_column)
+    else {
+        return vec![parent];
+    };
+    if !side_tables_have_independent_shape(&left, &right) {
+        return vec![parent];
+    }
+
+    tracing::trace!(
+        page = page_number,
+        parent_columns = parent.cells.first().map_or(0, Vec::len),
+        left_columns = left.cells.first().map_or(0, Vec::len),
+        right_columns = right.cells.first().map_or(0, Vec::len),
+        "split independently valid side-by-side heuristic tables"
+    );
+    vec![left, right]
+}
+
+fn reconstruct_side_by_side_child(
+    region: &[crate::pdf::table_reconstruct::HocrWord],
+    page_height: f32,
+    page_number: u32,
+    allow_single_column: bool,
+) -> Option<Table> {
+    let mut heights: Vec<u32> = region.iter().map(|word| word.height).collect();
+    heights.sort_unstable();
+    let child_gap = heights
+        .get(heights.len() / 2)
+        .copied()?
+        .max(1)
+        .saturating_mul(SIDE_BY_SIDE_CHILD_GAP_HEIGHT_MULTIPLIER);
+    reconstruct_region_table_with_column_gap(region, page_height, page_number, allow_single_column, child_gap).ok()
+}
+
+fn side_tables_have_independent_shape(left: &Table, right: &Table) -> bool {
+    let Some(left_shape) = side_table_shape(left) else {
+        return false;
+    };
+    let Some(right_shape) = side_table_shape(right) else {
+        return false;
+    };
+    left_shape.columns.abs_diff(right_shape.columns) <= SIDE_BY_SIDE_MAX_TRACK_DELTA
+        && left_shape.numeric_tracks.abs_diff(right_shape.numeric_tracks) <= SIDE_BY_SIDE_MAX_TRACK_DELTA
+}
+
+fn side_table_shape(table: &Table) -> Option<SideTableShape> {
+    let columns = table.cells.first()?.len();
+    let rows = table.cells.get(1..)?;
+    if rows.is_empty() || rows.iter().any(|row| row.len() != columns) {
+        return None;
+    }
+    let min_support = rows
+        .len()
+        .saturating_mul(SIDE_BY_SIDE_MIN_TRACK_ROW_PERCENT)
+        .div_ceil(100)
+        .max(2);
+    let descriptor_tracks = (0..columns)
+        .filter(|column| rows.iter().filter(|row| is_descriptor_cell(&row[*column])).count() >= min_support)
+        .count();
+    let numeric_tracks = (0..columns)
+        .filter(|column| rows.iter().filter(|row| is_numeric_word(&row[*column])).count() >= min_support)
+        .count();
+    (descriptor_tracks >= 1 && numeric_tracks >= SIDE_BY_SIDE_MIN_NUMERIC_TRACKS).then_some(SideTableShape {
+        columns,
+        numeric_tracks,
+    })
+}
+
+fn is_descriptor_cell(text: &str) -> bool {
+    !is_numeric_word(text) && text.chars().filter(|character| character.is_alphabetic()).count() >= 3
+}
+
+fn split_side_by_side_region(
+    region: &[crate::pdf::table_reconstruct::HocrWord],
+) -> Option<(
+    Vec<crate::pdf::table_reconstruct::HocrWord>,
+    Vec<crate::pdf::table_reconstruct::HocrWord>,
+)> {
+    if region.len() < SIDE_BY_SIDE_MIN_WORDS_PER_SIDE.saturating_mul(2) {
+        return None;
+    }
+
+    let (region_left, region_right) = region_horizontal_bounds(region)?;
+    let region_width = region_right.saturating_sub(region_left);
+    if region_width == 0 {
+        return None;
+    }
+    let seam = central_region_seam(region, region_left, region_width)?;
+    let (left, right) = partition_region_at_seam(region, seam)?;
+    if left.len() < SIDE_BY_SIDE_MIN_WORDS_PER_SIDE || right.len() < SIDE_BY_SIDE_MIN_WORDS_PER_SIDE {
+        return None;
+    }
+    balanced_region_sides(&left, &right, region_left, region_right, region_width).then_some((left, right))
+}
+
+fn region_horizontal_bounds(region: &[crate::pdf::table_reconstruct::HocrWord]) -> Option<(u32, u32)> {
+    Some((
+        region.iter().map(|word| word.left).min()?,
+        region.iter().map(|word| word.left.saturating_add(word.width)).max()?,
+    ))
+}
+
+fn central_region_seam(
+    region: &[crate::pdf::table_reconstruct::HocrWord],
+    region_left: u32,
+    region_width: u32,
+) -> Option<u64> {
+    let region_center = u64::from(region_left) + u64::from(region_width) / 2;
+    let tolerance = u64::from(region_width).saturating_mul(SIDE_BY_SIDE_CENTER_TOLERANCE_PERCENT) / 100;
+    let min_gutter = u64::from(median_word_height(region)).saturating_mul(SIDE_BY_SIDE_MIN_GUTTER_HEIGHT_PERCENT) / 100;
+    merged_horizontal_intervals(region)
+        .windows(2)
+        .filter_map(|pair| {
+            let gap = u64::from(pair[1].0.saturating_sub(pair[0].1));
+            let center = (u64::from(pair[0].1) + u64::from(pair[1].0)) / 2;
+            (gap >= min_gutter && center.abs_diff(region_center) <= tolerance).then_some((gap, center))
+        })
+        .max_by_key(|(gap, _)| *gap)
+        .map(|(_, center)| center)
+}
+
+fn merged_horizontal_intervals(region: &[crate::pdf::table_reconstruct::HocrWord]) -> Vec<(u32, u32)> {
+    let mut intervals: Vec<_> = region
+        .iter()
+        .map(|word| (word.left, word.left.saturating_add(word.width)))
+        .collect();
+    intervals.sort_unstable_by_key(|interval| interval.0);
+    let mut merged = Vec::<(u32, u32)>::new();
+    for interval in intervals {
+        match merged.last_mut() {
+            Some(previous) if interval.0 <= previous.1 => previous.1 = previous.1.max(interval.1),
+            _ => merged.push(interval),
+        }
+    }
+    merged
+}
+
+fn median_word_height(region: &[crate::pdf::table_reconstruct::HocrWord]) -> u32 {
+    let mut heights: Vec<u32> = region.iter().map(|word| word.height).collect();
+    heights.sort_unstable();
+    heights.get(heights.len() / 2).copied().unwrap_or(1).max(1)
+}
+
+fn partition_region_at_seam(
+    region: &[crate::pdf::table_reconstruct::HocrWord],
+    seam: u64,
+) -> Option<(
+    Vec<crate::pdf::table_reconstruct::HocrWord>,
+    Vec<crate::pdf::table_reconstruct::HocrWord>,
+)> {
+    let mut left = Vec::new();
+    let mut right = Vec::new();
+    for word in region {
+        if u64::from(word.left.saturating_add(word.width)) <= seam {
+            left.push(word.clone());
+        } else if u64::from(word.left) >= seam {
+            right.push(word.clone());
+        } else {
+            return None;
+        }
+    }
+    Some((left, right))
+}
+
+fn balanced_region_sides(
+    left: &[crate::pdf::table_reconstruct::HocrWord],
+    right: &[crate::pdf::table_reconstruct::HocrWord],
+    region_left: u32,
+    region_right: u32,
+    region_width: u32,
+) -> bool {
+    let left_right = left.iter().map(|word| word.left.saturating_add(word.width)).max();
+    let right_left = right.iter().map(|word| word.left).min();
+    let (Some(left_right), Some(right_left)) = (left_right, right_left) else {
+        return false;
+    };
+    let left_width = u64::from(left_right.saturating_sub(region_left));
+    let right_width = u64::from(region_right.saturating_sub(right_left));
+    let minimum = u64::from(region_width).saturating_mul(SIDE_BY_SIDE_MIN_WIDTH_PERCENT) / 100;
+    left_width >= minimum && right_width >= minimum
 }
 
 /// Cluster words on a single page into vertically-contiguous regions.
@@ -477,14 +698,23 @@ fn reconstruct_region_table_with_reason(
     page_number: u32,
     allow_single_column: bool,
 ) -> std::result::Result<Table, HeuristicTableRejection> {
-    use crate::pdf::table_reconstruct::{
-        is_well_formed_table, looks_like_code_listing, post_process_table, reconstruct_table, table_to_markdown,
-    };
-
     let region_left = region.iter().map(|w| w.left).min().unwrap_or(0);
     let region_right = region.iter().map(|w| w.left + w.width).max().unwrap_or(0);
     let region_width = region_right.saturating_sub(region_left) as f32;
     let col_gap = heuristic_column_gap(region, region_width);
+    reconstruct_region_table_with_column_gap(region, page_height, page_number, allow_single_column, col_gap)
+}
+
+fn reconstruct_region_table_with_column_gap(
+    region: &[crate::pdf::table_reconstruct::HocrWord],
+    page_height: f32,
+    page_number: u32,
+    allow_single_column: bool,
+    col_gap: u32,
+) -> std::result::Result<Table, HeuristicTableRejection> {
+    use crate::pdf::table_reconstruct::{
+        is_well_formed_table, looks_like_code_listing, post_process_table, reconstruct_table, table_to_markdown,
+    };
 
     let column_positions = crate::table_core::detect_columns(region, col_gap);
     let mut grid = reconstruct_table(region, col_gap, 0.5);
@@ -539,6 +769,7 @@ fn reconstruct_region_table_with_reason(
         markdown,
         page_number,
         bounding_box,
+        ..Default::default()
     })
 }
 
@@ -1044,6 +1275,96 @@ mod tests {
             height: 10,
             confidence: 95.0,
         }
+    }
+
+    fn extend_grid_words(words: &mut Vec<crate::pdf::table_reconstruct::HocrWord>, x_positions: &[u32]) {
+        for left in x_positions {
+            words.push(make_word("Heading", *left, 100, 30));
+        }
+        for row in 0..6 {
+            for (column, left) in x_positions.iter().enumerate() {
+                words.push(make_word(&format!("{}.{column}", row + 1), *left, 130 + row * 12, 30));
+            }
+        }
+    }
+
+    fn extend_financial_table_words(
+        words: &mut Vec<crate::pdf::table_reconstruct::HocrWord>,
+        x_positions: &[u32],
+        descriptor_prefix: &str,
+    ) {
+        for (column, left) in x_positions.iter().enumerate() {
+            let heading = if column == 0 { "Security" } else { "Value" };
+            words.push(make_word(heading, *left, 100, 30));
+        }
+        for row in 0..8 {
+            words.push(make_word(
+                &format!("{descriptor_prefix} bond {row}"),
+                x_positions[0],
+                130 + row * 12,
+                60,
+            ));
+            for (column, left) in x_positions.iter().enumerate().skip(1) {
+                words.push(make_word(
+                    &format!("{},{}", row + 1, column * 113),
+                    *left,
+                    130 + row * 12,
+                    30,
+                ));
+            }
+        }
+    }
+
+    #[test]
+    fn splits_independently_valid_side_by_side_tables() {
+        let mut words = Vec::new();
+        extend_financial_table_words(&mut words, &[20, 140, 220], "Cayman");
+        extend_financial_table_words(&mut words, &[320, 400, 480, 560], "Ireland");
+
+        let (left, right) = split_side_by_side_region(&words).expect("central seam should be credible");
+        assert!(
+            reconstruct_region_table(&left, 792.0, 1, false).is_some(),
+            "left child must independently pass the existing validation chain"
+        );
+        assert!(
+            reconstruct_region_table(&right, 792.0, 1, false).is_some(),
+            "right child must independently pass the existing validation chain"
+        );
+
+        let tables = reconstruct_region_tables(&words, 792.0, 1, false);
+        assert_eq!(
+            tables.len(),
+            2,
+            "valid side-by-side children should replace the fused parent"
+        );
+        assert_eq!(tables[0].cells[0].len(), 3);
+        assert_eq!(tables[1].cells[0].len(), 4);
+    }
+
+    #[test]
+    fn preserves_ordinary_five_column_table() {
+        let mut words = Vec::new();
+        extend_grid_words(&mut words, &[20, 120, 220, 320, 420]);
+
+        assert!(
+            split_side_by_side_region(&words).is_none(),
+            "occupied central column must prevent a side-by-side split"
+        );
+    }
+
+    #[test]
+    fn preserves_grouped_eight_column_table_without_descriptors() {
+        let mut words = Vec::new();
+        extend_grid_words(&mut words, &[20, 100, 180, 260]);
+        extend_grid_words(&mut words, &[320, 400, 480, 560]);
+
+        let tables = reconstruct_region_tables(&words, 792.0, 1, false);
+        assert_eq!(
+            tables.len(),
+            1,
+            "central grouping alone must not split an ordinary table"
+        );
+        assert_eq!(tables[0].cells[0].len(), 8);
     }
 
     /// Heuristic table extraction must not panic on an empty / minimal PDF.

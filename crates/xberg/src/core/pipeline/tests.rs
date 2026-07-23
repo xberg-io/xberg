@@ -180,6 +180,7 @@ async fn test_pipeline_preserves_tables() {
         markdown: "| A | B |".to_string(),
         page_number: 0,
         bounding_box: None,
+        ..Default::default()
     };
 
     let mut doc = make_doc("test", "text/plain");

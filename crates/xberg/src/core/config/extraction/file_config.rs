@@ -184,6 +184,10 @@ pub struct FileExtractionConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub page_classification: Option<super::super::classification::PageClassificationConfig>,
 
+    /// Override per-chunk classification configuration for this file.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chunk_classification: Option<super::super::chunk_classification::ChunkClassificationConfig>,
+
     /// Override VLM captioning configuration for this file.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub captioning: Option<super::super::captioning::CaptioningConfig>,

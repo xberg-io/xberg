@@ -345,6 +345,7 @@ mod tests {
             markdown: String::new(),
             page_number: 1,
             bounding_box: None,
+            ..Default::default()
         }
     }
 

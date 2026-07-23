@@ -470,6 +470,7 @@ impl FictionBookExtractor {
                             markdown,
                             page_number: table_index + 1,
                             bounding_box: None,
+                            ..Default::default()
                         });
                         table_index += 1;
                     }

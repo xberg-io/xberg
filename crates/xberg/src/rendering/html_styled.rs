@@ -670,6 +670,7 @@ mod tests {
             markdown: String::new(),
             page_number: 1,
             bounding_box: None,
+            ..Default::default()
         };
         let idx = doc.push_table(table);
         doc.push_element(InternalElement::text(ElementKind::Table { table_index: idx }, "", 0));

@@ -7,7 +7,7 @@ use crate::chunking::text_splitter::{Characters, ChunkCapacity, ChunkConfig};
 use crate::error::{Result, XbergError};
 use crate::types::{Chunk, ChunkMetadata, HeadingContext, PageBoundary};
 
-use super::boundaries::calculate_page_range;
+use super::boundaries::{calculate_page_range, calculate_page_spans};
 use super::classifier::classify_chunk;
 
 /// Derive `heading_path` from a `HeadingContext`.
@@ -110,10 +110,12 @@ where
         let byte_start = chunk_text.as_ptr() as usize - source_start;
         let byte_end = byte_start + chunk_text.len();
 
-        let (first_page, last_page) = if let Some(boundaries) = page_boundaries {
-            calculate_page_range(byte_start, byte_end, boundaries)?
+        let (first_page, last_page, page_spans) = if let Some(boundaries) = page_boundaries {
+            let (first_page, last_page) = calculate_page_range(byte_start, byte_end, boundaries)?;
+            let page_spans = calculate_page_spans(byte_start, byte_end, boundaries)?;
+            (first_page, last_page, page_spans)
         } else {
-            (None, None)
+            (None, None, Vec::new())
         };
 
         chunks.push(Chunk {
@@ -132,7 +134,8 @@ where
                 heading_path: Vec::new(),
                 image_indices: Vec::new(),
                 node_ids: Vec::new(),
-                page_spans: Vec::new(),
+                page_spans,
+                classifications: Vec::new(),
             },
         });
     }

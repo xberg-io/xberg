@@ -55,6 +55,7 @@ pub(crate) fn extract_tables_from_events(events: &[Event]) -> Vec<Table> {
                         markdown,
                         page_number: idx + 1,
                         bounding_box: None,
+                        ..Default::default()
                     });
                     table_index += 1;
                 }

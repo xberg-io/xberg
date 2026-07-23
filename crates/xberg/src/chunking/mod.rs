@@ -57,6 +57,7 @@ pub mod classifier;
 pub mod config;
 pub mod core;
 mod headings;
+pub(crate) mod page_spans;
 pub mod processor;
 pub mod rag;
 pub mod semantic;

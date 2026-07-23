@@ -459,6 +459,7 @@ impl MdxExtractor {
                             markdown,
                             page_number: 1,
                             bounding_box: None,
+                            ..Default::default()
                         };
                         b.push_table(table, None, None);
                     }

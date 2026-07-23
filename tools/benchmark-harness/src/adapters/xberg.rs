@@ -31,9 +31,26 @@ const XBERG_CLI_BINARY_ENV_VAR: &str = "XBERG_CLI_BINARY";
 /// `SubprocessAdapter::parse_output` (`adapters/subprocess.rs`), which is out of scope for this
 /// change — see the module-level TODO below.
 const STAGE_TIMING_ENV_VAR: &str = "XBERG_EMIT_STAGE_TIMING";
-const BENCHMARK_CONFIG_JSON: &str = r#"{"extraction_timeout_secs":1740,"use_cache":false}"#;
+const NATIVE_BENCHMARK_CONFIG_JSON: &str = r#"{"extraction_timeout_secs":1740,"use_cache":false}"#;
+const TESSERACT_BENCHMARK_CONFIG_JSON: &str = r#"{
+    "extraction_timeout_secs":1740,
+    "use_cache":false,
+    "ocr":{
+        "enabled":true,
+        "backend":"tesseract",
+        "tesseract_config":{"use_cache":false}
+    }
+}"#;
 
-fn benchmark_base_args(batch: bool, content_format: &str) -> Vec<String> {
+fn benchmark_config_json(tesseract_ocr_enabled: bool) -> &'static str {
+    if tesseract_ocr_enabled {
+        TESSERACT_BENCHMARK_CONFIG_JSON
+    } else {
+        NATIVE_BENCHMARK_CONFIG_JSON
+    }
+}
+
+fn benchmark_base_args(batch: bool, content_format: &str, tesseract_ocr_enabled: bool) -> Vec<String> {
     let subcommand = if batch { "batch" } else { "extract" };
     vec![
         subcommand.to_string(),
@@ -43,7 +60,7 @@ fn benchmark_base_args(batch: bool, content_format: &str) -> Vec<String> {
         "--content-format".to_string(),
         content_format.to_string(),
         "--config-json".to_string(),
-        BENCHMARK_CONFIG_JSON.to_string(),
+        benchmark_config_json(tesseract_ocr_enabled).to_string(),
     ]
 }
 
@@ -87,23 +104,15 @@ pub fn create_xberg_adapter(
         OutputFormat::Plaintext => "plain",
     };
 
-    let mut args = benchmark_base_args(batch, content_format);
+    let tesseract_ocr_enabled = ocr_enabled && matches!(pipeline, XbergPipeline::Baseline | XbergPipeline::Layout);
+    let mut args = benchmark_base_args(batch, content_format, tesseract_ocr_enabled);
 
     match pipeline {
-        XbergPipeline::Baseline => {
-            args.push("--ocr".to_string());
-            args.push(ocr_enabled.to_string());
-            args.push("--ocr-backend".to_string());
-            args.push("tesseract".to_string());
-        }
+        XbergPipeline::Baseline => {}
         XbergPipeline::Layout => {
             args.push("--layout".to_string());
             args.push("true".to_string());
             args.push("--use-layout-for-markdown".to_string());
-            args.push("--ocr".to_string());
-            args.push(ocr_enabled.to_string());
-            args.push("--ocr-backend".to_string());
-            args.push("tesseract".to_string());
         }
         XbergPipeline::PaddleOcr => {
             args.push("--ocr".to_string());
@@ -296,6 +305,14 @@ fn validate_xberg_cli_override(path: &Path) -> Result<()> {
 mod tests {
     use super::*;
 
+    fn merged_benchmark_config(tesseract_ocr_enabled: bool) -> xberg::ExtractionConfig {
+        xberg::core::config::merge::merge_config_json(
+            &xberg::ExtractionConfig::default(),
+            benchmark_config_json(tesseract_ocr_enabled),
+        )
+        .unwrap()
+    }
+
     fn create_executable_file(directory: &Path) -> PathBuf {
         let path = directory.join(if cfg!(windows) { "xberg.exe" } else { "xberg" });
         std::fs::write(&path, b"test executable").unwrap();
@@ -339,16 +356,43 @@ mod tests {
 
     #[test]
     fn benchmark_config_disables_extraction_cache() {
-        let config: serde_json::Value = serde_json::from_str(BENCHMARK_CONFIG_JSON).unwrap();
-        assert_eq!(config["use_cache"], false);
+        for tesseract_ocr_enabled in [false, true] {
+            assert!(!merged_benchmark_config(tesseract_ocr_enabled).use_cache);
+        }
+    }
+
+    #[test]
+    fn tesseract_benchmark_config_disables_ocr_cache() {
+        let config = merged_benchmark_config(true);
+        let ocr = config.ocr.unwrap();
+        let tesseract = ocr.tesseract_config.unwrap();
+
+        assert!(ocr.enabled);
+        assert_eq!(ocr.backend, "tesseract");
+        assert!(!tesseract.use_cache);
+    }
+
+    #[test]
+    fn native_benchmark_config_does_not_enable_ocr() {
+        assert!(merged_benchmark_config(false).ocr.is_none());
     }
 
     #[test]
     fn benchmark_invocations_disable_user_config_discovery() {
         for batch in [false, true] {
-            let args = benchmark_base_args(batch, "markdown");
+            let args = benchmark_base_args(batch, "markdown", false);
             assert!(args.iter().any(|arg| arg == "--no-config-discovery"));
         }
+    }
+
+    #[test]
+    fn tesseract_benchmark_args_do_not_override_nested_config() {
+        let args = benchmark_base_args(false, "markdown", true);
+
+        assert!(!args.iter().any(|arg| arg == "--ocr"));
+        assert!(!args.iter().any(|arg| arg == "--ocr-backend"));
+        let config_index = args.iter().position(|arg| arg == "--config-json").unwrap();
+        assert_eq!(args[config_index + 1], TESSERACT_BENCHMARK_CONFIG_JSON);
     }
 
     #[test]

@@ -8,7 +8,7 @@ pub mod merge;
 #[cfg(feature = "embeddings")]
 pub mod topic;
 
-use crate::chunking::boundaries::calculate_page_range;
+use crate::chunking::boundaries::{calculate_page_range, calculate_page_spans};
 use crate::chunking::boundary_detection::detect_plain_text_boundaries;
 use crate::chunking::builder::heading_path_from_context;
 use crate::chunking::classifier::classify_chunk;
@@ -111,10 +111,12 @@ pub(crate) fn chunk_semantic(
         let heading_ctx = resolve_heading_context(mc.byte_start, &heading_map, page_boundaries);
         let chunk_type = classify_chunk(&mc.text, heading_ctx.as_ref());
 
-        let (first_page, last_page) = if let Some(pb) = page_boundaries {
-            calculate_page_range(mc.byte_start, mc.byte_end, pb).unwrap_or((None, None))
+        let (first_page, last_page, page_spans) = if let Some(pb) = page_boundaries {
+            let (first_page, last_page) = calculate_page_range(mc.byte_start, mc.byte_end, pb).unwrap_or((None, None));
+            let page_spans = calculate_page_spans(mc.byte_start, mc.byte_end, pb).unwrap_or_default();
+            (first_page, last_page, page_spans)
         } else {
-            (None, None)
+            (None, None, Vec::new())
         };
 
         let heading_path = heading_path_from_context(&heading_ctx);
@@ -134,7 +136,8 @@ pub(crate) fn chunk_semantic(
                 heading_path,
                 image_indices: Vec::new(),
                 node_ids: Vec::new(),
-                page_spans: Vec::new(),
+                page_spans,
+                classifications: Vec::new(),
             },
         });
     }

@@ -152,6 +152,15 @@ pub struct OcrQualityThresholds {
     /// If the result from a backend scores below this, try the next backend.
     #[serde(default = "default_pipeline_min_quality")]
     pub pipeline_min_quality: f64,
+
+    /// Minimum fraction of non-whitespace characters that are undecodable
+    /// (Unicode Private Use Area, replacement characters, or non-whitespace
+    /// control characters) before a page's text layer is treated as
+    /// unreadable and routed to OCR (issue #1254). Gated by
+    /// `min_total_non_whitespace` so short snippets with a stray symbol or
+    /// two do not trip this check.
+    #[serde(default = "default_min_undecodable_ratio")]
+    pub min_undecodable_ratio: f64,
 }
 
 impl Default for OcrQualityThresholds {
@@ -173,6 +182,7 @@ impl Default for OcrQualityThresholds {
             non_text_min_chars: 20,
             alnum_ws_ratio_threshold: 0.4,
             pipeline_min_quality: 0.5,
+            min_undecodable_ratio: default_min_undecodable_ratio(),
         }
     }
 }
@@ -223,6 +233,11 @@ fn default_alnum_ws_ratio_threshold() -> f64 {
     0.4
 }
 fn default_pipeline_min_quality() -> f64 {
+    0.5
+}
+/// Pages at or above this fraction of undecodable (PUA/replacement/control-garbage)
+/// characters are treated as having an unreadable text layer (issue #1254).
+fn default_min_undecodable_ratio() -> f64 {
     0.5
 }
 

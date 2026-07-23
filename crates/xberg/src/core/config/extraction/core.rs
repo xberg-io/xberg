@@ -225,6 +225,22 @@ pub struct ExtractionConfig {
     #[serde(default = "default_true")]
     pub escape_markdown: bool,
 
+    /// Emit an opt-in anchor marker before each table's rendered Markdown
+    /// block (default: `false`).
+    ///
+    /// When `output_format` is `Markdown` (or `Djot`) and this is `true`, the
+    /// renderer inserts a `[TABLE:{table_id}]` marker immediately before each
+    /// table's Markdown in `content`, `pages[].content`, and
+    /// `chunks[].content`, where `table_id` matches the corresponding
+    /// entry's [`crate::types::Table::table_id`]. This lets a consumer
+    /// reconcile a rendered Markdown table block with its structured
+    /// `tables[]` entry.
+    ///
+    /// Defaults to `false` so existing output is byte-identical unless
+    /// explicitly enabled.
+    #[serde(default)]
+    pub table_anchors: bool,
+
     /// Controls how Jupyter notebook (`.ipynb`) code cells are rendered.
     ///
     /// - `Both` (default): code source plus the notebook's saved outputs
@@ -381,6 +397,13 @@ pub struct ExtractionConfig {
     #[cfg_attr(feature = "alef-meta", alef(since = "5.0.0"))]
     pub page_classification: Option<super::super::classification::PageClassificationConfig>,
 
+    /// Per-chunk multi-label classification configuration. When set, the
+    /// chunk-classification post-processor runs at the Middle stage (after
+    /// chunking) and populates `ChunkMetadata::classifications` on every chunk.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "alef-meta", alef(since = "5.0.0"))]
+    pub chunk_classification: Option<super::super::chunk_classification::ChunkClassificationConfig>,
+
     /// VLM captioning configuration for extracted images. When set, the captioning
     /// post-processor runs at the Middle stage and writes a caption into each
     /// `ExtractedImage::caption`.
@@ -461,6 +484,7 @@ impl Default for ExtractionConfig {
             result_format: crate::types::ResultFormat::Unified,
             output_format: OutputFormat::Plain,
             escape_markdown: true,
+            table_anchors: false,
             jupyter_cell_rendering: JupyterCellRendering::Both,
             include_document_structure: false,
             acceleration: None,
@@ -478,6 +502,7 @@ impl Default for ExtractionConfig {
             summarization: None,
             translation: None,
             page_classification: None,
+            chunk_classification: None,
             captioning: None,
             qr_codes: None,
             cancel_token: None,
@@ -547,6 +572,7 @@ impl ExtractionConfig {
             ref summarization,
             ref translation,
             ref page_classification,
+            ref chunk_classification,
             ref captioning,
             ref qr_codes,
         } = *overrides;
@@ -652,6 +678,9 @@ impl ExtractionConfig {
         }
         if let Some(v) = page_classification {
             config.page_classification = Some(v.clone());
+        }
+        if let Some(v) = chunk_classification {
+            config.chunk_classification = Some(v.clone());
         }
         if let Some(v) = captioning {
             config.captioning = Some(v.clone());

@@ -351,6 +351,7 @@ fn try_code_chunks(result: &ExtractedDocument) -> Option<Vec<crate::types::extra
                 image_indices: Vec::new(),
                 node_ids: Vec::new(),
                 page_spans: Vec::new(),
+                classifications: Vec::new(),
             },
         })
         .collect();
@@ -463,6 +464,12 @@ pub(super) fn execute_chunking(result: &mut ExtractedDocument, config: &Extracti
                                 .collect();
                         }
                     }
+                }
+
+                if let Some(ref structure) = result.document
+                    && let Some(ref mut chunks) = result.chunks
+                {
+                    crate::chunking::page_spans::populate_page_span_bboxes(chunks, structure);
                 }
 
                 #[cfg(feature = "embeddings")]

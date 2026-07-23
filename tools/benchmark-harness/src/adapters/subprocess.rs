@@ -204,6 +204,15 @@ fn is_debug_enabled() -> bool {
     std::env::var("BENCHMARK_DEBUG").is_ok()
 }
 
+fn config_json_enables_ocr(args: &[String]) -> bool {
+    args.windows(2)
+        .rev()
+        .find(|pair| pair[0] == "--config-json")
+        .and_then(|pair| serde_json::from_str::<serde_json::Value>(&pair[1]).ok())
+        .and_then(|config| config.pointer("/ocr/enabled").and_then(serde_json::Value::as_bool))
+        == Some(true)
+}
+
 /// Base adapter for subprocess-based extraction
 ///
 /// This adapter spawns a subprocess to perform extraction and monitors
@@ -242,19 +251,24 @@ impl SubprocessAdapter {
             return args;
         }
 
-        if let Some(index) = args.iter().position(|arg| arg == "--no-ocr") {
-            args[index] = "--ocr".to_string();
-        } else if let Some(index) = args.iter().position(|arg| arg == "--ocr") {
-            if let Some(value) = args.get_mut(index + 1)
-                && matches!(value.as_str(), "true" | "false")
-            {
-                *value = "true".to_string();
+        let is_xberg = self.name.starts_with("xberg-");
+        let has_cli_ocr_override = args.iter().any(|arg| matches!(arg.as_str(), "--ocr" | "--no-ocr"));
+        let preserve_configured_xberg_ocr = is_xberg && !has_cli_ocr_override && config_json_enables_ocr(base_args);
+        if !preserve_configured_xberg_ocr {
+            if let Some(index) = args.iter().position(|arg| arg == "--no-ocr") {
+                args[index] = "--ocr".to_string();
+            } else if let Some(index) = args.iter().position(|arg| arg == "--ocr") {
+                if let Some(value) = args.get_mut(index + 1)
+                    && matches!(value.as_str(), "true" | "false")
+                {
+                    *value = "true".to_string();
+                }
+            } else {
+                args.push("--ocr".to_string());
             }
-        } else {
-            args.push("--ocr".to_string());
         }
 
-        if self.name.starts_with("xberg-") {
+        if is_xberg {
             if let Some(index) = args.iter().position(|arg| arg == "--force-ocr") {
                 if let Some(value) = args.get_mut(index + 1) {
                     *value = "true".to_string();
@@ -338,6 +352,9 @@ impl SubprocessAdapter {
         };
         let monitor = child_pid.map(ResourceMonitor::new_for_pid);
         if let Some(monitor) = &monitor {
+            #[cfg(unix)]
+            monitor.prepare().await;
+            #[cfg(not(unix))]
             monitor.start(sample_interval).await;
         }
         #[cfg(unix)]
@@ -353,6 +370,12 @@ impl SubprocessAdapter {
         };
         #[cfg(not(unix))]
         let barrier_error: Option<Error> = None;
+        #[cfg(unix)]
+        if barrier_error.is_none()
+            && let Some(monitor) = &monitor
+        {
+            monitor.activate(sample_interval).await;
+        }
         #[cfg(unix)]
         let wait_timeout = timeout;
         #[cfg(not(unix))]
@@ -390,10 +413,9 @@ impl SubprocessAdapter {
         } else {
             ResourceStats::default()
         };
-        #[cfg(not(unix))]
         let error = if child_pid.is_some() && resource_stats.sample_count == 0 && error.is_none() {
             Some(Error::Benchmark(format!(
-                "{operation} completed before RSS monitoring captured a sample; result is not measurable on this platform"
+                "{operation} completed before RSS monitoring captured a target sample; result is not measurable on this platform"
             )))
         } else {
             error
@@ -1913,6 +1935,7 @@ mod tests {
                 esac
             done
             [ "$concurrent" = "7" ] && [ "$threads" = "7" ] || exit 64
+            sleep 0.02
             printf '{"results":[{"content":"ok"}],"total_ms":0,"per_file_ms":[1]}'
         "#;
         let adapter = SubprocessAdapter::with_batch_capability(
@@ -1961,6 +1984,88 @@ mod tests {
 
         let args = adapter.request_args(true);
         assert_eq!(&args[..2], ["--ocr", "true"]);
+        assert!(args.windows(2).any(|pair| pair == ["--force-ocr", "true"]));
+    }
+
+    #[test]
+    fn forced_ocr_preserves_enabled_xberg_json_config_without_cli_ocr_override() {
+        let config = r#"{"use_cache":false,"ocr":{"enabled":true,"backend":"tesseract","tesseract_config":{"use_cache":false}}}"#;
+        let adapter = SubprocessAdapter::new(
+            "xberg-markdown-baseline",
+            "echo",
+            vec!["--config-json".to_string(), config.to_string()],
+            vec![],
+            vec!["pdf".to_string()],
+        );
+
+        let args = adapter.request_args(true);
+        assert_eq!(args[1], config);
+        assert!(!args.iter().any(|arg| arg == "--ocr"));
+        assert!(args.windows(2).any(|pair| pair == ["--force-ocr", "true"]));
+    }
+
+    #[test]
+    fn forced_ocr_adds_force_flag_to_xberg_json_ocr_config() {
+        let adapter = SubprocessAdapter::new(
+            "xberg-markdown-baseline",
+            "echo",
+            vec!["--config-json".to_string(), r#"{"ocr":{"enabled":true}}"#.to_string()],
+            vec![],
+            vec!["pdf".to_string()],
+        );
+
+        let args = adapter.request_args(true);
+        assert!(args.windows(2).any(|pair| pair == ["--force-ocr", "true"]));
+    }
+
+    #[test]
+    fn forced_ocr_upgrades_explicit_xberg_cli_override_despite_json_config() {
+        let adapter = SubprocessAdapter::new(
+            "xberg-markdown-baseline",
+            "echo",
+            vec![
+                "--config-json".to_string(),
+                r#"{"ocr":{"enabled":true}}"#.to_string(),
+                "--ocr".to_string(),
+                "false".to_string(),
+            ],
+            vec![],
+            vec!["pdf".to_string()],
+        );
+
+        let args = adapter.request_args(true);
+        let ocr_index = args.iter().position(|arg| arg == "--ocr").unwrap();
+        assert_eq!(args[ocr_index + 1], "true");
+        assert!(args.windows(2).any(|pair| pair == ["--force-ocr", "true"]));
+    }
+
+    #[test]
+    fn forced_ocr_adds_cli_ocr_for_native_xberg_config() {
+        let adapter = SubprocessAdapter::new(
+            "xberg-markdown-baseline",
+            "echo",
+            vec!["--config-json".to_string(), r#"{"use_cache":false}"#.to_string()],
+            vec![],
+            vec!["pdf".to_string()],
+        );
+
+        let args = adapter.request_args(true);
+        assert!(args.iter().any(|arg| arg == "--ocr"));
+        assert!(args.windows(2).any(|pair| pair == ["--force-ocr", "true"]));
+    }
+
+    #[test]
+    fn forced_ocr_uses_existing_behavior_for_malformed_xberg_config_json() {
+        let adapter = SubprocessAdapter::new(
+            "xberg-markdown-baseline",
+            "echo",
+            vec!["--config-json".to_string(), "{malformed".to_string()],
+            vec![],
+            vec!["pdf".to_string()],
+        );
+
+        let args = adapter.request_args(true);
+        assert!(args.iter().any(|arg| arg == "--ocr"));
         assert!(args.windows(2).any(|pair| pair == ["--force-ocr", "true"]));
     }
 
@@ -2069,7 +2174,10 @@ mod tests {
         let adapter = SubprocessAdapter::with_batch_capability(
             "test",
             "sh",
-            vec!["-c".to_string(), "printf '[{\"content\":\"only one\"}]'".to_string()],
+            vec![
+                "-c".to_string(),
+                "sleep 0.02; printf '[{\"content\":\"only one\"}]'".to_string(),
+            ],
             vec![],
             vec!["pdf".to_string()],
             test_batch_capability(false),
@@ -2096,7 +2204,7 @@ mod tests {
             "sh",
             vec![
                 "-c".to_string(),
-                "printf '{\"results\":[{\"content\":\"one\",\"metadata\":{\"ocr_used\":false}},{\"content\":\"two\",\"metadata\":{\"ocr_used\":true}}],\"total_ms\":2000,\"per_file_ms\":[100,200]}'"
+                "sleep 0.02; printf '{\"results\":[{\"content\":\"one\",\"metadata\":{\"ocr_used\":false}},{\"content\":\"two\",\"metadata\":{\"ocr_used\":true}}],\"total_ms\":2000,\"per_file_ms\":[100,200]}'"
                     .to_string(),
             ],
             vec![],
@@ -2208,7 +2316,7 @@ mod tests {
             "sh",
             vec![
                 "-c".to_string(),
-                "printf '{\"results\":[{\"content\":\"one\"},{\"content\":\"two\"}],\"total_ms\":10,\"per_file_ms\":[null,null]}'"
+                "sleep 0.02; printf '{\"results\":[{\"content\":\"one\"},{\"content\":\"two\"}],\"total_ms\":10,\"per_file_ms\":[null,null]}'"
                     .to_string(),
             ],
             vec![],
@@ -2244,7 +2352,8 @@ mod tests {
             "sh",
             vec![
                 "-c".to_string(),
-                "printf '{\"results\":[{\"content\":\"one\"}],\"total_ms\":10,\"per_file_ms\":[1]}'".to_string(),
+                "sleep 0.02; printf '{\"results\":[{\"content\":\"one\"}],\"total_ms\":10,\"per_file_ms\":[1]}'"
+                    .to_string(),
             ],
             vec![],
             vec!["pdf".to_string()],
@@ -2277,7 +2386,8 @@ mod tests {
             "sh",
             vec![
                 "-c".to_string(),
-                "printf '{\"results\":[{\"content\":\"one\"}],\"total_ms\":10,\"per_file_ms\":[null]}'".to_string(),
+                "sleep 0.02; printf '{\"results\":[{\"content\":\"one\"}],\"total_ms\":10,\"per_file_ms\":[null]}'"
+                    .to_string(),
             ],
             vec![],
             vec!["pdf".to_string()],
@@ -2304,7 +2414,10 @@ mod tests {
         let adapter = SubprocessAdapter::with_batch_capability(
             "test",
             "sh",
-            vec!["-c".to_string(), "printf 'batch failed' >&2; exit 9".to_string()],
+            vec![
+                "-c".to_string(),
+                "sleep 0.02; printf 'batch failed' >&2; exit 9".to_string(),
+            ],
             vec![],
             vec!["pdf".to_string()],
             test_batch_capability(false),
@@ -2377,7 +2490,7 @@ mod tests {
             "sh",
             vec![
                 "-c".to_string(),
-                "printf '{\"results\":[{\"content\":\"one\"},{\"content\":\"two\"}],\"total_ms\":10,\"per_file_ms\":[1]}'"
+                "sleep 0.02; printf '{\"results\":[{\"content\":\"one\"},{\"content\":\"two\"}],\"total_ms\":10,\"per_file_ms\":[1]}'"
                     .to_string(),
             ],
             vec![],
@@ -2447,7 +2560,7 @@ mod tests {
 
         assert!(matches!(execution.error, Some(Error::Timeout(_))));
         assert!(execution.resource_stats.baseline_memory_bytes > 0);
-        assert!(execution.resource_stats.peak_memory_bytes >= execution.resource_stats.baseline_memory_bytes);
+        assert!(execution.resource_stats.peak_memory_bytes > 0);
         assert!(execution.resource_stats.sample_count > 0);
         assert!(start.elapsed() < Duration::from_secs(2));
     }
@@ -2483,7 +2596,7 @@ mod tests {
 
     #[cfg(unix)]
     #[tokio::test]
-    async fn measured_ultrashort_command_has_a_nonzero_rss_sample() {
+    async fn measured_ultrashort_command_is_not_measurable_from_blocked_shell_rss() {
         let mut cmd = SubprocessAdapter::measured_command("sh");
         cmd.args(["-c", "printf ok"])
             .stdout(Stdio::piped())
@@ -2500,18 +2613,24 @@ mod tests {
         .await
         .unwrap();
 
-        assert!(outcome.error.is_none());
+        assert!(
+            matches!(&outcome.error, Some(Error::Benchmark(message)) if message.contains("target sample")),
+            "ultrashort command must fail RSS measurability: {:?}",
+            outcome.error
+        );
         assert!(outcome.output.unwrap().status.success());
         assert!(outcome.resource_stats.baseline_memory_bytes > 0);
-        assert!(outcome.resource_stats.peak_memory_bytes >= outcome.resource_stats.baseline_memory_bytes);
-        assert!(outcome.resource_stats.sample_count > 0);
+        assert_eq!(outcome.resource_stats.peak_memory_bytes, 0);
+        assert_eq!(outcome.resource_stats.sample_count, 0);
     }
 
     #[cfg(unix)]
     #[tokio::test]
     async fn measured_nonzero_exit_preserves_resource_stats() {
         let mut cmd = SubprocessAdapter::measured_command("sh");
-        cmd.args(["-c", "exit 7"]).stdout(Stdio::piped()).stderr(Stdio::piped());
+        cmd.args(["-c", "sleep 0.02; exit 7"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
         SubprocessAdapter::configure_measured_stdin(&mut cmd);
         SubprocessAdapter::configure_child_process(&mut cmd);
 
@@ -2519,7 +2638,7 @@ mod tests {
             &mut cmd,
             Duration::from_secs(1),
             "failing command",
-            Duration::from_millis(100),
+            Duration::from_millis(1),
         )
         .await
         .unwrap();

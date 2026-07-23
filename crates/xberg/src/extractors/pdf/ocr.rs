@@ -18,8 +18,28 @@ use crate::core::config::OcrQualityThresholds;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 const MIN_AVG_NON_WHITESPACE_TO_TRUST: f64 = 150.0;
 
+/// Inclusive start of the Unicode Private Use Area (BMP: U+E000-U+F8FF). Codepoints here
+/// have no standard meaning; a font's glyph-index-to-character mapping that resolves into
+/// this range signals an undecodable text layer rather than real text (issue #1254).
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+const PUA_RANGE_START: u32 = 0xE000;
+
+/// Inclusive end of the Unicode Private Use Area (BMP).
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+const PUA_RANGE_END: u32 = 0xF8FF;
+
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 type EncodedPage = (usize, std::sync::Arc<Vec<u8>>, u32, u32);
+
+/// Returns `true` for characters that indicate a broken glyph-to-Unicode mapping rather
+/// than legible text: Unicode Private Use Area codepoints (a common fallback target for
+/// undecodable CID/glyph indices), the replacement character (U+FFFD), and non-whitespace
+/// control characters. Ordinary symbols, punctuation, and emoji are unaffected.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn is_undecodable_char(ch: char) -> bool {
+    let code = ch as u32;
+    (PUA_RANGE_START..=PUA_RANGE_END).contains(&code) || ch == '\u{FFFD}' || (ch.is_control() && !ch.is_whitespace())
+}
 
 #[cfg_attr(alef, alef(skip))]
 #[derive(Debug, Default)]
@@ -41,6 +61,12 @@ pub struct NativeTextStats {
     pub avg_word_length: f64,
     /// Total word count (whitespace-delimited).
     pub word_count: usize,
+    /// Fraction of non-whitespace characters that are undecodable — Unicode Private Use
+    /// Area, replacement characters, or non-whitespace control characters (0.0-1.0). High
+    /// values indicate a text layer whose glyph-to-Unicode mapping is broken (issue #1254),
+    /// e.g. a subset `Identity-H`/`CIDToGIDMap /Identity` font with no `/ToUnicode` CMap and
+    /// no `cmap`/`post` table to fall back to.
+    pub undecodable_ratio: f64,
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -116,10 +142,14 @@ impl NativeTextStats {
         let mut non_whitespace = 0usize;
         let mut alnum = 0usize;
         let mut garbage_char_count = 0usize;
+        let mut undecodable_count = 0usize;
 
         for ch in text.chars() {
             if ch == '\u{FFFD}' {
                 garbage_char_count += 1;
+            }
+            if is_undecodable_char(ch) {
+                undecodable_count += 1;
             }
             if !ch.is_whitespace() {
                 non_whitespace += 1;
@@ -128,6 +158,12 @@ impl NativeTextStats {
                 }
             }
         }
+
+        let undecodable_ratio = if non_whitespace == 0 {
+            0.0
+        } else {
+            undecodable_count as f64 / non_whitespace as f64
+        };
 
         let meaningful_words = text
             .split_whitespace()
@@ -177,6 +213,7 @@ impl NativeTextStats {
             consecutive_repeat_ratio,
             avg_word_length,
             word_count: words.len(),
+            undecodable_ratio,
         }
     }
 
@@ -209,6 +246,7 @@ pub(crate) fn evaluate_native_text_for_ocr(
             consecutive_repeat_ratio: 0.0,
             avg_word_length: 0.0,
             word_count: 0,
+            undecodable_ratio: 0.0,
         };
         return OcrFallbackDecision {
             stats: empty_stats,
@@ -231,10 +269,18 @@ pub(crate) fn evaluate_native_text_for_ocr(
 
     let has_substantial_content = avg_non_whitespace >= MIN_AVG_NON_WHITESPACE_TO_TRUST;
 
+    // A page with a high fraction of undecodable characters (PUA / replacement / control
+    // garbage) has a broken glyph-to-Unicode mapping regardless of how "substantial" the
+    // page otherwise looks — it is gated only by a minimum character count so a stray
+    // symbol or two on an otherwise short page can't trip it (issue #1254). ~keep
+    let has_undecodable_text_layer = stats.non_whitespace >= thresholds.min_total_non_whitespace
+        && stats.undecodable_ratio >= thresholds.min_undecodable_ratio;
+
     let definitive_failure = stats.non_whitespace == 0
         || stats.alnum == 0
         || stats.garbage_char_count >= thresholds.min_garbage_chars
         || stats.fragmented_word_ratio >= thresholds.critical_fragmented_word_ratio
+        || has_undecodable_text_layer
         || (!has_substantial_content
             && (stats.fragmented_word_ratio >= thresholds.max_fragmented_word_ratio
                 && stats.meaningful_words < thresholds.min_meaningful_words))
@@ -1380,6 +1426,7 @@ pub(crate) async fn extract_with_ocr(
                             markdown: rt.markdown.clone(),
                             page_number: (page_idx + 1) as u32,
                             bounding_box: None,
+                            ..Default::default()
                         });
                     }
                 }
@@ -1987,6 +2034,105 @@ mod tests {
         assert!(!decision.fallback);
     }
 
+    /// Builds a PUA-heavy string simulating an undecodable glyph-index text layer:
+    /// a font whose CID/glyph indices resolve into the Private Use Area rather than
+    /// real Unicode (issue #1254).
+    #[cfg(feature = "ocr")]
+    fn pua_garbage_text() -> String {
+        (0..200)
+            .map(|i| char::from_u32(0xE000 + (i % 400)).expect("valid PUA codepoint"))
+            .collect::<String>()
+            .chars()
+            .collect::<Vec<char>>()
+            .chunks(6)
+            .map(|chunk| chunk.iter().collect::<String>())
+            .collect::<Vec<String>>()
+            .join(" ")
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn test_undecodable_ratio_helper_flags_pua_heavy_text() {
+        let garbage = pua_garbage_text();
+        let stats = NativeTextStats::from(&garbage);
+        assert!(
+            stats.undecodable_ratio >= 0.99,
+            "expected near-total undecodable ratio for all-PUA text, got {}",
+            stats.undecodable_ratio
+        );
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn test_undecodable_ratio_helper_ignores_occasional_symbols() {
+        let text = "This is a normal paragraph with meaningful words \u{2022} and one bullet symbol, \
+                    plus a trademark\u{2122} and a section sign \u{00A7} sprinkled in for good measure.";
+        let stats = NativeTextStats::from(text);
+        assert!(
+            stats.undecodable_ratio < 0.05,
+            "expected a near-zero undecodable ratio for normal prose with a few symbols, got {}",
+            stats.undecodable_ratio
+        );
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn test_undecodable_ratio_helper_excludes_cjk_kana_hangul_emoji() {
+        // CJK ideographs, Hiragana/Katakana, Hangul, and astral-plane emoji all live outside
+        // the BMP Private Use Area (U+E000-U+F8FF), so legitimate multilingual text must never
+        // be flagged as an undecodable glyph-index layer (issue #1254 false-positive guard).
+        let text = "\u{65E5}\u{672C}\u{8A9E} \u{D55C}\u{AD6D}\u{C5B4} \u{4E2D}\u{6587} \
+                    \u{3072}\u{3089}\u{304C}\u{306A} \u{30AB}\u{30BF}\u{30AB}\u{30CA} \
+                    with latin words and emoji \u{1F600}\u{1F680}";
+        let stats = NativeTextStats::from(text);
+        assert_eq!(
+            stats.undecodable_ratio, 0.0,
+            "CJK/Kana/Hangul/emoji must not count as undecodable, got {}",
+            stats.undecodable_ratio
+        );
+    }
+
+    /// A text layer that decodes almost entirely into the Unicode Private Use Area — the
+    /// signature of a `Type0`/`Identity-H` font with `CIDToGIDMap /Identity`, no
+    /// `/ToUnicode` CMap, and an embedded subset with neither `cmap` nor `post` — must be
+    /// routed to OCR exactly like a scanned page, even though it has a full, visible,
+    /// glyph-rich text layer (issue #1254).
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn test_undecodable_text_layer_routes_to_ocr() {
+        let garbage = pua_garbage_text();
+        let decision = evaluate_native_text_for_ocr(&garbage, Some(1), &t());
+        assert!(
+            decision.fallback,
+            "a page whose text layer is mostly undecodable glyph indices must trigger OCR fallback"
+        );
+    }
+
+    /// Normal prose that happens to contain a handful of real symbols (bullets, trademark
+    /// signs, section marks) must NOT be misclassified as an undecodable text layer.
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn test_normal_text_with_symbols_does_not_route_to_ocr() {
+        let text = "This is a normal paragraph with meaningful words \u{2022} and one bullet symbol, \
+                    plus a trademark\u{2122} and a section sign \u{00A7} sprinkled in for good measure. \
+                    It contains multiple sentences that form a coherent, legible text block.";
+        let decision = evaluate_native_text_for_ocr(text, Some(1), &t());
+        assert!(
+            !decision.fallback,
+            "normal prose with a few symbols must not trigger OCR fallback via the undecodable-ratio signal"
+        );
+    }
+
+    /// A genuinely scanned page (no native text layer at all) must still route to OCR,
+    /// preserving pre-existing behavior alongside the new undecodable-text-layer trigger.
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn test_scanned_empty_page_still_routes_to_ocr() {
+        let decision = evaluate_native_text_for_ocr("   \n\t  ", Some(1), &t());
+        assert!(decision.fallback, "an empty/scanned page must still route to OCR");
+        assert_eq!(decision.stats.undecodable_ratio, 0.0);
+    }
+
     #[cfg(feature = "ocr")]
     #[test]
     fn test_per_page_single_bad_page_triggers() {
@@ -2154,6 +2300,7 @@ mod tests {
             markdown: "| kept |".to_string(),
             page_number: 2,
             bounding_box: None,
+            ..Default::default()
         });
         doc.images.push(crate::types::ExtractedImage {
             image_index: 0,

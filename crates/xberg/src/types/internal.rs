@@ -234,6 +234,12 @@ pub struct InternalDocument {
     /// table cells. Set by the pipeline from `ExtractionConfig::escape_markdown`.
     #[serde(skip)]
     pub escape_markdown: bool,
+
+    /// When `true`, Markdown rendering inserts a `[TABLE:{table_id}]` marker
+    /// immediately before each table's rendered Markdown block. Set by the
+    /// pipeline from `ExtractionConfig::table_anchors`. Defaults to `false`.
+    #[serde(skip)]
+    pub table_anchors: bool,
 }
 
 impl From<crate::types::extraction::ExtractedDocument> for InternalDocument {
@@ -292,6 +298,7 @@ impl InternalDocument {
             ocr_text_only: false,
             append_ocr_text: false,
             escape_markdown: true,
+            table_anchors: false,
             form_fields: Vec::new(),
             formulas: Vec::new(),
         }

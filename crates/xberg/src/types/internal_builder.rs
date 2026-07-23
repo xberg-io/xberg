@@ -181,6 +181,7 @@ impl InternalDocumentBuilder {
             markdown,
             page_number: page.unwrap_or(0),
             bounding_box: None,
+            ..Default::default()
         };
         self.push_table(table, page, bbox)
     }
@@ -731,6 +732,7 @@ mod tests {
             markdown: "| A | B |".to_string(),
             page_number: 1,
             bounding_box: None,
+            ..Default::default()
         };
         b.push_table(table, Some(1), None);
         let doc = b.build();

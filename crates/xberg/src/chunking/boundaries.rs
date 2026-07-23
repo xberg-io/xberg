@@ -4,7 +4,7 @@
 //! enabling accurate page-level metadata for document processing.
 
 use crate::error::{Result, XbergError};
-use crate::types::PageBoundary;
+use crate::types::{PageBoundary, PageSpan};
 
 /// Validates the consistency and correctness of page boundaries.
 ///
@@ -121,6 +121,56 @@ pub(crate) fn calculate_page_range(
     }
 
     Ok((first_page, last_page))
+}
+
+/// Calculate the ordered list of pages a byte range spans, as [`PageSpan`]s.
+///
+/// Uses the same overlap test as [`calculate_page_range`] (`byte_start <
+/// boundary.byte_end && byte_end > boundary.byte_start`), so the page numbers
+/// returned here are always consistent with `calculate_page_range`'s
+/// `first_page`/`last_page` for the same inputs — the first and last entries'
+/// `page` fields equal `first_page`/`last_page` respectively.
+///
+/// Every returned [`PageSpan`] has `bbox: None`; bounding boxes are filled in
+/// by a later pass (see `chunking::page_spans::populate_page_span_bboxes`)
+/// once the document's structured node tree is available.
+///
+/// # Arguments
+///
+/// * `byte_start` - Starting byte offset of the chunk
+/// * `byte_end` - Ending byte offset of the chunk
+/// * `boundaries` - Page boundary markers from the document
+///
+/// # Returns
+///
+/// A `Vec<PageSpan>` in page order, one entry per page the range overlaps.
+/// Returns an empty vector if boundaries are empty or the range doesn't
+/// overlap any page.
+///
+/// # Errors
+///
+/// Returns `XbergError::Validation` if boundaries are invalid.
+pub(crate) fn calculate_page_spans(
+    byte_start: usize,
+    byte_end: usize,
+    boundaries: &[PageBoundary],
+) -> Result<Vec<PageSpan>> {
+    if boundaries.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    validate_page_boundaries(boundaries)?;
+
+    let spans = boundaries
+        .iter()
+        .filter(|boundary| byte_start < boundary.byte_end && byte_end > boundary.byte_start)
+        .map(|boundary| PageSpan {
+            page: boundary.page_number,
+            bbox: None,
+        })
+        .collect();
+
+    Ok(spans)
 }
 
 #[cfg(test)]
@@ -317,5 +367,104 @@ mod tests {
             },
         ];
         assert!(validate_page_boundaries(&boundaries).is_ok());
+    }
+
+    #[test]
+    fn should_return_single_page_span_when_chunk_is_within_one_page() {
+        let boundaries = vec![
+            PageBoundary {
+                byte_start: 0,
+                byte_end: 100,
+                page_number: 1,
+            },
+            PageBoundary {
+                byte_start: 100,
+                byte_end: 200,
+                page_number: 2,
+            },
+        ];
+
+        let spans = calculate_page_spans(10, 50, &boundaries).unwrap();
+        assert_eq!(spans.len(), 1, "single-page chunk must produce exactly one span");
+        assert_eq!(spans[0].page, 1);
+        assert_eq!(
+            spans[0].bbox, None,
+            "bbox is filled in a later pass, not by calculate_page_spans"
+        );
+    }
+
+    #[test]
+    fn should_return_one_span_per_page_when_chunk_spans_multiple_pages() {
+        let boundaries = vec![
+            PageBoundary {
+                byte_start: 0,
+                byte_end: 100,
+                page_number: 3,
+            },
+            PageBoundary {
+                byte_start: 100,
+                byte_end: 200,
+                page_number: 4,
+            },
+            PageBoundary {
+                byte_start: 200,
+                byte_end: 300,
+                page_number: 5,
+            },
+        ];
+
+        let spans = calculate_page_spans(50, 250, &boundaries).unwrap();
+        let pages: Vec<u32> = spans.iter().map(|s| s.page).collect();
+        assert_eq!(
+            pages,
+            vec![3, 4, 5],
+            "chunk spanning pages 3-5 must produce one span per page in order"
+        );
+        assert!(spans.iter().all(|s| s.bbox.is_none()));
+    }
+
+    #[test]
+    fn should_return_empty_spans_when_boundaries_are_empty() {
+        let spans = calculate_page_spans(0, 50, &[]).unwrap();
+        assert!(spans.is_empty());
+    }
+
+    #[test]
+    fn should_return_empty_spans_when_chunk_does_not_overlap_any_page() {
+        let boundaries = vec![PageBoundary {
+            byte_start: 0,
+            byte_end: 100,
+            page_number: 1,
+        }];
+
+        let spans = calculate_page_spans(200, 250, &boundaries).unwrap();
+        assert!(spans.is_empty());
+    }
+
+    #[test]
+    fn should_match_calculate_page_range_first_and_last_page() {
+        let boundaries = vec![
+            PageBoundary {
+                byte_start: 0,
+                byte_end: 100,
+                page_number: 1,
+            },
+            PageBoundary {
+                byte_start: 100,
+                byte_end: 200,
+                page_number: 2,
+            },
+            PageBoundary {
+                byte_start: 200,
+                byte_end: 300,
+                page_number: 3,
+            },
+        ];
+
+        let (first_page, last_page) = calculate_page_range(50, 250, &boundaries).unwrap();
+        let spans = calculate_page_spans(50, 250, &boundaries).unwrap();
+
+        assert_eq!(spans.first().map(|s| s.page), first_page);
+        assert_eq!(spans.last().map(|s| s.page), last_page);
     }
 }

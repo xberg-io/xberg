@@ -817,13 +817,15 @@ fn list_item_is_ordered(para: &PdfParagraph) -> bool {
             .unwrap_or_default();
         first_line_text.as_str()
     };
-    let t = text.trim_start();
-    let digit_end = t.bytes().position(|b| !b.is_ascii_digit()).unwrap_or(0);
-    digit_end > 0 && matches!(t.as_bytes().get(digit_end), Some(b'.') | Some(b')'))
+    super::list_marker::parse_ordered_list_marker(text).is_some()
 }
 
 /// Strip a bullet/number prefix and return the clean suffix plus its byte offset.
 fn normalize_list_text(text: &str) -> (&str, usize) {
+    if let Some(marker) = super::list_marker::parse_ordered_list_marker(text) {
+        let normalized = &text[marker.content_start..];
+        return (normalized, marker.content_start);
+    }
     let trimmed = text.trim_start();
     const BULLET_CHARS: &[char] = &['\u{2022}', '\u{00B7}'];
     let mut normalized = trimmed;
@@ -978,6 +980,7 @@ mod tests {
                 x1: right,
                 y1: top_y,
             }),
+            ..Default::default()
         }
     }
 
@@ -1239,6 +1242,7 @@ mod tests {
             markdown: "| A | B |\n|---|---|\n| 1 | 2 |".to_string(),
             page_number: 1,
             bounding_box: None,
+            ..Default::default()
         }];
         let doc = assemble_internal_document(pages, &tables, None, &[]);
         assert!(doc.elements.iter().any(|e| e.text == "Before"));
@@ -1256,6 +1260,7 @@ mod tests {
             markdown: "| Table |".to_string(),
             page_number: 2,
             bounding_box: None,
+            ..Default::default()
         }];
         let doc = assemble_internal_document(pages, &tables, None, &[]);
         assert!(doc.elements.iter().any(|e| e.text == "Page 1"));
@@ -1338,6 +1343,7 @@ mod tests {
             markdown: "| Extra |".to_string(),
             page_number: 5,
             bounding_box: None,
+            ..Default::default()
         }];
         let doc = assemble_internal_document(pages, &tables, None, &[]);
         assert!(doc.elements.iter().any(|e| e.text == "Page 1"));
@@ -1352,6 +1358,7 @@ mod tests {
             markdown: "   ".to_string(),
             page_number: 1,
             bounding_box: None,
+            ..Default::default()
         }];
         let doc = assemble_internal_document(pages, &tables, None, &[]);
         assert!(doc.tables.is_empty() || doc.tables.iter().all(|t| t.markdown.trim().is_empty()));
@@ -1557,6 +1564,52 @@ mod tests {
             .find(|annotation| matches!(annotation.kind, AnnotationKind::Bold))
             .expect("bold annotation should be present");
         assert_eq!(&item.text[bold.start as usize..bold.end as usize], "Bold item");
+    }
+
+    #[test]
+    fn ordered_marker_families_render_without_source_prefixes() {
+        for (source, expected) in [
+            ("a. alpha item", "alpha item"),
+            ("I. Roman item", "Roman item"),
+            ("(1) parenthesized item", "parenthesized item"),
+            ("[1] bracketed item", "bracketed item"),
+        ] {
+            let mut paragraph = make_paragraph(source, None);
+            paragraph.is_list_item = true;
+            let document = assemble_internal_document(vec![vec![paragraph]], &[], None, &[]);
+            let item = document
+                .elements
+                .iter()
+                .find(|element| matches!(element.kind, ElementKind::ListItem { .. }))
+                .expect("list item should be emitted");
+
+            assert_eq!(item.kind, ElementKind::ListItem { ordered: true }, "source: {source}");
+            assert_eq!(item.text, expected, "source: {source}");
+        }
+    }
+
+    #[test]
+    fn split_ordered_marker_and_body_render_as_one_clean_item() {
+        let lines = vec![PdfLine {
+            segments: vec![plain_segment("I."), plain_segment("Split body")],
+            baseline_y: 700.0,
+            dominant_font_size: 12.0,
+            is_bold: false,
+            is_monospace: false,
+        }];
+        let mut paragraph = make_paragraph("", None);
+        paragraph.lines = lines;
+        paragraph.is_list_item = true;
+
+        let document = assemble_internal_document(vec![vec![paragraph]], &[], None, &[]);
+        let item = document
+            .elements
+            .iter()
+            .find(|element| matches!(element.kind, ElementKind::ListItem { .. }))
+            .expect("list item should be emitted");
+
+        assert_eq!(item.kind, ElementKind::ListItem { ordered: true });
+        assert_eq!(item.text, "Split body");
     }
 
     #[test]

@@ -7,6 +7,12 @@ vars:
   FLAMEGRAPH_DIR: "flamegraphs"
 
 tasks:
+  validate:scripts:
+    desc: "Validate local benchmark shell helpers"
+    cmds:
+      - tools/benchmark-harness/tests/test_bench_local_frameworks.sh
+      - tools/benchmark-harness/scripts/bench_local_profiles_test.sh
+
   run:
     desc: "Run benchmark harness with profiling support"
     requires:

@@ -263,3 +263,20 @@ fn test_tj_positioned_runs_keep_interword_spaces() {
         "expected the spaced phrase 'Comparison rate' in extracted text"
     );
 }
+
+/// Regression test for same-line word gaps being mistaken for kerning-run splits.
+#[test]
+fn test_681693_same_line_words_keep_spaces() {
+    if !test_documents_available() {
+        return;
+    }
+    let path = get_test_file_path("pdf/681693.pdf");
+    if !path.exists() {
+        return;
+    }
+    let content = extract_markdown("pdf/681693.pdf");
+    assert!(
+        content.contains("Your data is clean:"),
+        "expected genuine same-line word gaps to remain spaces in 681693.pdf"
+    );
+}

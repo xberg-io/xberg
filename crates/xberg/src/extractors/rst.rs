@@ -414,6 +414,7 @@ impl RstExtractor {
                         markdown,
                         page_number: 1,
                         bounding_box: None,
+                        ..Default::default()
                     });
                 }
                 let _ = start;
@@ -464,6 +465,7 @@ impl RstExtractor {
             markdown,
             page_number: 1,
             bounding_box: None,
+            ..Default::default()
         })
     }
 

@@ -212,8 +212,14 @@ fn collect_process_tree_cpu(pid: Pid, system: &System) -> f64 {
 ///
 /// Tracks both low-level CPU/memory metrics and optional heap allocation data.
 /// Use the "memory-profiling" feature for enhanced allocation analysis.
+struct PreparedSampler {
+    system: System,
+    refresh_kind: ProcessRefreshKind,
+}
+
 #[derive(Default)]
 struct SamplerState {
+    prepared: Option<PreparedSampler>,
     task: Option<JoinHandle<()>>,
     stop_sender: Option<Sender<()>>,
 }
@@ -299,45 +305,67 @@ impl ResourceMonitor {
         Some((sample, snapshot))
     }
 
-    /// Start monitoring resources in the background
+    /// Prepare resource monitoring without recording a sample.
     ///
-    /// Spawns a background task that samples memory and CPU usage at the specified interval.
-    /// When "memory-profiling" feature is enabled, also captures heap allocation data.
-    ///
-    /// # Arguments
-    /// * `sample_interval` - How often to sample (e.g., Duration::from_millis(10))
-    pub async fn start(&self, sample_interval: Duration) {
+    /// Captures the target process tree's baseline RSS and retains the refreshed
+    /// system state for [`Self::activate`]. This is useful when a subprocess is
+    /// blocked behind a start barrier: the blocked shell remains baseline metadata
+    /// and is never counted as target workload RSS.
+    pub async fn prepare(&self) {
         let mut sampler = self.sampler.lock().await;
-        if self.running.load(Ordering::SeqCst) {
+        if self.running.load(Ordering::SeqCst) || sampler.prepared.is_some() {
             return;
         }
 
         let pid = self.pid;
-        let initial_sample = tokio::task::spawn_blocking(move || {
+        let prepared = tokio::task::spawn_blocking(move || {
             let mut system = System::new();
-            let start = std::time::Instant::now();
             let refresh_kind = ProcessRefreshKind::nothing().with_memory().with_cpu();
 
-            system.refresh_processes_specifics(ProcessesToUpdate::All, false, refresh_kind);
+            system.refresh_processes_specifics(ProcessesToUpdate::All, true, refresh_kind);
             let baseline_rss = collect_process_tree_memory(pid, &system);
-            let sample = Self::collect_sample(pid, &system, start.elapsed());
 
-            (system, start, refresh_kind, baseline_rss, sample)
+            (PreparedSampler { system, refresh_kind }, baseline_rss)
         })
         .await;
-        let Ok((mut system, start, refresh_kind, baseline_rss, initial_sample)) = initial_sample else {
+        let Ok((prepared, baseline_rss)) = prepared else {
             return;
         };
 
-        let mut baseline_memory = self.baseline_memory_bytes.lock().await;
-        let mut samples = self.samples.lock().await;
-        let mut snapshots = self.snapshots.lock().await;
-        *baseline_memory = baseline_rss;
-        if let Some((sample, snapshot)) = initial_sample {
-            samples.push(sample);
-            snapshots.push(snapshot);
+        *self.baseline_memory_bytes.lock().await = baseline_rss;
+        sampler.prepared = Some(prepared);
+    }
+
+    /// Activate periodic sampling after [`Self::prepare`].
+    ///
+    /// Resets the sampling clock and schedules the first target-window sample one
+    /// interval after activation. Delaying that first sample prevents a released
+    /// start-barrier shell from being mistaken for the target before it calls
+    /// `exec`. If the target exits before the first refresh, no sample is recorded.
+    pub async fn activate(&self, sample_interval: Duration) {
+        self.activate_prepared(sample_interval, false).await;
+    }
+
+    async fn activate_prepared(&self, sample_interval: Duration, record_initial_sample: bool) {
+        let mut sampler = self.sampler.lock().await;
+        if self.running.load(Ordering::SeqCst) {
+            return;
         }
-        drop((baseline_memory, samples, snapshots));
+        let Some(prepared) = sampler.prepared.take() else {
+            return;
+        };
+
+        let PreparedSampler {
+            mut system,
+            refresh_kind,
+        } = prepared;
+        let pid = self.pid;
+        let start = std::time::Instant::now();
+
+        if record_initial_sample && let Some((sample, snapshot)) = Self::collect_sample(pid, &system, start.elapsed()) {
+            self.samples.lock().await.push(sample);
+            self.snapshots.lock().await.push(snapshot);
+        }
 
         let samples = Arc::clone(&self.samples);
         let snapshots = Arc::clone(&self.snapshots);
@@ -356,7 +384,7 @@ impl ResourceMonitor {
                 if !running.load(Ordering::SeqCst) {
                     break;
                 }
-                system.refresh_processes_specifics(ProcessesToUpdate::All, false, refresh_kind);
+                system.refresh_processes_specifics(ProcessesToUpdate::All, true, refresh_kind);
                 if let Some((sample, snapshot)) = Self::collect_sample(pid, &system, start.elapsed()) {
                     samples.blocking_lock().push(sample);
                     snapshots.blocking_lock().push(snapshot);
@@ -366,6 +394,18 @@ impl ResourceMonitor {
         });
         sampler.stop_sender = Some(stop_tx);
         sampler.task = Some(task);
+    }
+
+    /// Start monitoring resources in the background
+    ///
+    /// Spawns a background task that samples memory and CPU usage at the specified interval.
+    /// When "memory-profiling" feature is enabled, also captures heap allocation data.
+    ///
+    /// # Arguments
+    /// * `sample_interval` - How often to sample (e.g., Duration::from_millis(10))
+    pub async fn start(&self, sample_interval: Duration) {
+        self.prepare().await;
+        self.activate_prepared(sample_interval, true).await;
     }
 
     /// Take a single synchronous memory and CPU measurement of the current process tree.
@@ -401,6 +441,7 @@ impl ResourceMonitor {
         let (stop_sender, task) = {
             let mut sampler = self.sampler.lock().await;
             self.running.store(false, Ordering::SeqCst);
+            sampler.prepared = None;
             (sampler.stop_sender.take(), sampler.task.take())
         };
         if let Some(stop_sender) = stop_sender {
@@ -512,7 +553,10 @@ impl ResourceMonitor {
                     ..Default::default()
                 };
             }
-            return ResourceStats::default();
+            return ResourceStats {
+                baseline_memory_bytes: baseline_bytes,
+                ..Default::default()
+            };
         }
 
         let memory_values: Vec<u64> = samples.iter().map(|s| s.memory_bytes).collect();
@@ -720,6 +764,18 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn prepare_captures_baseline_without_recording_a_sample() {
+        let monitor = ResourceMonitor::new();
+
+        monitor.prepare().await;
+        let baseline = monitor.baseline_memory().await;
+        let samples = monitor.stop().await;
+
+        assert!(baseline > 0, "prepare must capture baseline RSS");
+        assert!(samples.is_empty(), "prepare must not record baseline RSS as a sample");
+    }
+
+    #[tokio::test]
     async fn cancelled_start_does_not_poison_monitor_lifecycle() {
         let monitor = Arc::new(ResourceMonitor::new());
         let sampler_guard = monitor.sampler.lock().await;
@@ -737,6 +793,7 @@ mod tests {
         tokio::time::timeout(Duration::from_secs(1), monitor.start(Duration::from_millis(1)))
             .await
             .expect("a cancelled start must not leave the monitor marked as running");
+        tokio::time::sleep(Duration::from_millis(5)).await;
         let samples = tokio::time::timeout(Duration::from_secs(1), monitor.stop())
             .await
             .expect("monitor must remain stoppable after restarting");
@@ -833,7 +890,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_resource_stats_empty() {
-        let stats = ResourceMonitor::calculate_stats(&[], &[], 0);
+        let stats = ResourceMonitor::calculate_stats(&[], &[], 42);
+        assert_eq!(stats.baseline_memory_bytes, 42);
         assert_eq!(stats.peak_memory_bytes, 0);
         assert_eq!(stats.sample_count, 0);
     }
