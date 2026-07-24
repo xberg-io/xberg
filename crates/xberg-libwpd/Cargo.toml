@@ -1,0 +1,35 @@
+[package]
+name = "xberg-libwpd"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "WordPerfect (.wpd) text extraction for Xberg via libwpd + librevenge, built from source (MPL-2.0 arm)"
+license = "MIT"
+repository.workspace = true
+homepage = "https://xberg.io"
+readme = "README.md"
+keywords = ["wordperfect", "libwpd", "document", "extraction", "bindings"]
+categories = ["external-ffi-bindings", "text-processing"]
+build = "build.rs"
+links = "xberg_libwpd"
+
+[package.metadata.cargo-machete]
+ignored = ["cc", "reqwest", "flate2", "tar", "sha2"]
+
+[lib]
+name = "xberg_libwpd"
+crate-type = ["lib"]
+
+[dependencies]
+thiserror = { workspace = true }
+
+# libwpd and librevenge are built from vendored-at-build-time C++ source, so the
+# native toolchain and downloader are only needed on the desktop targets that
+# actually compile them. WordPerfect support is gated off wasm/android/windows.
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.build-dependencies]
+cc = "1.3"
+reqwest = { workspace = true, default-features = false, features = ["blocking", "rustls"] }
+flate2 = "1.0"
+tar = "0.4"
+sha2 = "0.10"

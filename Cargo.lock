@@ -11849,6 +11849,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "xberg-libwpd"
+version = "1.0.0-rc.36"
+dependencies = [
+ "cc",
+ "flate2",
+ "reqwest",
+ "sha2 0.10.9",
+ "tar",
+ "thiserror 2.0.19",
+]
+
+[[package]]
 name = "xberg-node"
 version = "1.0.0-rc.36"
 dependencies = [

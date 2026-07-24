@@ -7,6 +7,7 @@ members = [
     "crates/xberg-gliner",
     "crates/xberg-jni",
     "crates/xberg-libheif",
+    "crates/xberg-libwpd",
     "crates/xberg-node",
     "crates/xberg-paddle-ocr",
     "crates/xberg-php",
