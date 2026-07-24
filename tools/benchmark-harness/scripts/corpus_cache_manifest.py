@@ -120,11 +120,23 @@ def verify_cache(manifest_path: Path, cache_root: Path) -> int:
     return len(expected) // 3
 
 
-def verify_archive(manifest_path: Path, archive_path: Path) -> int:
-    expected_files = {
+def _is_legacy_appledouble(path: PurePosixPath) -> bool:
+    return len(path.parts) > 1 and path.parts[0] == ".corpus-cache" and path.name.startswith("._")
+
+
+def _expected_archive_files(manifest_path: Path) -> dict[PurePosixPath, str]:
+    return {
         PurePosixPath(".corpus-cache") / PurePosixPath(path.as_posix()): digest
         for path, digest in _expected_files(manifest_path).items()
     }
+
+
+def verify_archive(
+    manifest_path: Path,
+    archive_path: Path,
+    allow_legacy_appledouble: bool = False,
+) -> int:
+    expected_files = _expected_archive_files(manifest_path)
     expected_directories = {
         parent for path in expected_files for parent in path.parents if parent != PurePosixPath(".")
     }
@@ -141,6 +153,8 @@ def verify_archive(manifest_path: Path, archive_path: Path) -> int:
                     raise ValueError(f"unexpected archive directory: {member.name}")
             elif member.isfile():
                 if path not in expected_files:
+                    if allow_legacy_appledouble and _is_legacy_appledouble(path):
+                        continue
                     raise ValueError(f"unexpected archive file: {member.name}")
                 source = archive.extractfile(member)
                 if source is None:
@@ -206,8 +220,14 @@ def atomic_swap(current: Path, replacement: Path) -> None:
         raise OSError(error_number, os.strerror(error_number))
 
 
-def extract_archive(manifest_path: Path, archive_path: Path, destination: Path) -> int:
-    count = verify_archive(manifest_path, archive_path)
+def extract_archive(
+    manifest_path: Path,
+    archive_path: Path,
+    destination: Path,
+    allow_legacy_appledouble: bool = False,
+) -> int:
+    count = verify_archive(manifest_path, archive_path, allow_legacy_appledouble)
+    expected_files = _expected_archive_files(manifest_path)
     destination.mkdir(parents=True, exist_ok=True)
     if any(destination.iterdir()):
         raise ValueError(f"archive extraction destination is not empty: {destination}")
@@ -218,6 +238,8 @@ def extract_archive(manifest_path: Path, archive_path: Path, destination: Path) 
             target = destination.joinpath(*path.parts)
             if member.isdir():
                 target.mkdir(parents=True, exist_ok=True)
+                continue
+            if allow_legacy_appledouble and path not in expected_files and _is_legacy_appledouble(path):
                 continue
             source = archive.extractfile(member)
             if source is None:
@@ -242,11 +264,13 @@ def _parse_args() -> argparse.Namespace:
     archive_parser = subcommands.add_parser("verify-archive")
     archive_parser.add_argument("--manifest", type=Path, required=True)
     archive_parser.add_argument("--archive", type=Path, required=True)
+    archive_parser.add_argument("--allow-legacy-appledouble", action="store_true")
 
     extract_parser = subcommands.add_parser("extract-archive")
     extract_parser.add_argument("--manifest", type=Path, required=True)
     extract_parser.add_argument("--archive", type=Path, required=True)
     extract_parser.add_argument("--destination", type=Path, required=True)
+    extract_parser.add_argument("--allow-legacy-appledouble", action="store_true")
 
     swap_parser = subcommands.add_parser("atomic-swap")
     swap_parser.add_argument("--current", type=Path, required=True)
@@ -263,10 +287,19 @@ def main() -> int:
             count = verify_cache(args.manifest, args.cache_root)
             print(f"Verified {count} reference PDFs and their ground truth.")
         elif args.command == "verify-archive":
-            count = verify_archive(args.manifest, args.archive)
+            count = verify_archive(
+                args.manifest,
+                args.archive,
+                args.allow_legacy_appledouble,
+            )
             print(f"Verified archive membership for {count} reference PDFs.")
         elif args.command == "extract-archive":
-            count = extract_archive(args.manifest, args.archive, args.destination)
+            count = extract_archive(
+                args.manifest,
+                args.archive,
+                args.destination,
+                args.allow_legacy_appledouble,
+            )
             print(f"Safely extracted archive for {count} reference PDFs.")
         else:
             atomic_swap(args.current, args.replacement)

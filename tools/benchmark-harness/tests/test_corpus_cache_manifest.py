@@ -213,6 +213,108 @@ class CorpusCacheManifestTest(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, expected_error):
                         CORPUS_CACHE_MANIFEST.verify_archive(manifest, archive_path)
 
+    def test_legacy_appledouble_compatibility_is_narrow_and_does_not_extract(self) -> None:
+        """Only legacy archives may ignore regular AppleDouble sidecars."""
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            manifest = self._write_manifest(
+                root,
+                [_reference_document("reference", b"pdf", b"md", b"text")],
+            )
+            archive_path = root / "cache.tar"
+            valid_members = [
+                (".corpus-cache/pdf/reference.pdf", b"pdf"),
+                (".corpus-cache/ground_truth/pdf/reference.md", b"md"),
+                (".corpus-cache/ground_truth/pdf/reference.txt", b"text"),
+            ]
+            appledouble_member = (".corpus-cache/._pdf", b"metadata")
+            self._write_archive(archive_path, [*valid_members, appledouble_member])
+
+            with self.assertRaisesRegex(ValueError, "unexpected archive file"):
+                CORPUS_CACHE_MANIFEST.verify_archive(manifest, archive_path)
+            assert (
+                CORPUS_CACHE_MANIFEST.verify_archive(
+                    manifest,
+                    archive_path,
+                    allow_legacy_appledouble=True,
+                )
+                == 1
+            )
+
+            destination = root / "extracted"
+            assert (
+                CORPUS_CACHE_MANIFEST.extract_archive(
+                    manifest,
+                    archive_path,
+                    destination,
+                    allow_legacy_appledouble=True,
+                )
+                == 1
+            )
+            assert not (destination / ".corpus-cache/._pdf").exists()
+
+            rejected_members = [
+                (".corpus-cache/pdf/unexpected.bin", b"extra"),
+                ("../._escape", b"unsafe"),
+            ]
+            for name, content in rejected_members:
+                with self.subTest(name=name):
+                    self._write_archive(archive_path, [*valid_members, (name, content)])
+                    with self.assertRaisesRegex(
+                        ValueError,
+                        "unexpected archive file|unsafe or duplicate archive member",
+                    ):
+                        CORPUS_CACHE_MANIFEST.verify_archive(
+                            manifest,
+                            archive_path,
+                            allow_legacy_appledouble=True,
+                        )
+
+            special_members = [
+                (tarfile.DIRTYPE, "unexpected archive directory"),
+                (tarfile.SYMTYPE, "unsupported archive member type"),
+                (tarfile.LNKTYPE, "unsupported archive member type"),
+                (tarfile.FIFOTYPE, "unsupported archive member type"),
+            ]
+            for member_type, expected_error in special_members:
+                with self.subTest(member_type=member_type):
+                    self._write_archive(archive_path, valid_members)
+                    member = tarfile.TarInfo(".corpus-cache/._metadata")
+                    member.type = member_type
+                    member.linkname = ".corpus-cache/pdf/reference.pdf"
+                    with tarfile.open(archive_path, "a") as archive:
+                        archive.addfile(member)
+                    with self.assertRaisesRegex(ValueError, expected_error):
+                        CORPUS_CACHE_MANIFEST.verify_archive(
+                            manifest,
+                            archive_path,
+                            allow_legacy_appledouble=True,
+                        )
+
+            expected_id = "._reference"
+            expected_manifest = self._write_manifest(
+                root,
+                [_reference_document(expected_id, b"pdf", b"md", b"text")],
+            )
+            expected_members = [
+                (f".corpus-cache/pdf/{expected_id}.pdf", b"pdf"),
+                (f".corpus-cache/ground_truth/pdf/{expected_id}.md", b"md"),
+                (f".corpus-cache/ground_truth/pdf/{expected_id}.txt", b"text"),
+            ]
+            self._write_archive(archive_path, expected_members)
+            expected_destination = root / "expected-extracted"
+            assert (
+                CORPUS_CACHE_MANIFEST.extract_archive(
+                    expected_manifest,
+                    archive_path,
+                    expected_destination,
+                    allow_legacy_appledouble=True,
+                )
+                == 1
+            )
+            for relative_path, expected_content in expected_members:
+                assert (expected_destination / relative_path).read_bytes() == expected_content
+
     def test_atomic_swap_exchanges_complete_cache_trees(self) -> None:
         """An installed tree must replace the old tree in one exchange."""
         with tempfile.TemporaryDirectory() as temporary_directory:

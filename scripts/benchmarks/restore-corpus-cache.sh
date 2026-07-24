@@ -102,12 +102,14 @@ legacy_object() {
 
 if object_exists "$CONTENT_OBJECT"; then
   OBJECT="$CONTENT_OBJECT"
+  LEGACY_OBJECT=false
 else
   object_status=$?
   if [ "$object_status" -eq 2 ]; then
     exit 1
   fi
   if OBJECT="$(legacy_object)"; then
+    LEGACY_OBJECT=true
     echo "Using verified-compatible legacy corpus object ${OBJECT}."
   else
     object_status=$?
@@ -124,10 +126,15 @@ echo "Restoring reference corpus ${CACHE_KEY:0:12} from ${OBJECT}..."
 gcloud storage cp "$OBJECT" "$TARBALL"
 mkdir -p "${WORK_DIR}/extract"
 zstd -dc "$TARBALL" >"$RAW_TAR"
+ARCHIVE_COMPATIBILITY_ARGS=()
+if [ "$LEGACY_OBJECT" = true ]; then
+  ARCHIVE_COMPATIBILITY_ARGS+=(--allow-legacy-appledouble)
+fi
 python3 "$CACHE_MANIFEST" extract-archive \
   --manifest "$SNAPSHOT_MANIFEST" \
   --archive "$RAW_TAR" \
-  --destination "${WORK_DIR}/extract"
+  --destination "${WORK_DIR}/extract" \
+  "${ARCHIVE_COMPATIBILITY_ARGS[@]}"
 RESTORED_CACHE="${WORK_DIR}/extract/.corpus-cache"
 python3 "$CACHE_MANIFEST" verify --manifest "$SNAPSHOT_MANIFEST" --cache-root "$RESTORED_CACHE"
 

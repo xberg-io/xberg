@@ -94,7 +94,8 @@ create_archive() {
   local pdf_content="$2"
   local markdown_content="$3"
   local text_content="$4"
-  python3 - "$archive_path" "$pdf_content" "$markdown_content" "$text_content" <<'PY'
+  local extra_member="${5:-}"
+  python3 - "$archive_path" "$pdf_content" "$markdown_content" "$text_content" "$extra_member" <<'PY'
 import io
 import sys
 import tarfile
@@ -107,6 +108,8 @@ members = {
     ".corpus-cache/ground_truth/pdf/reference.md": sys.argv[3].encode(),
     ".corpus-cache/ground_truth/pdf/reference.txt": sys.argv[4].encode(),
 }
+if sys.argv[5]:
+    members[sys.argv[5]] = b"extra-metadata"
 with tarfile.open(archive_path, "w") as archive:
     for name, content in members.items():
         member = tarfile.TarInfo(name)
@@ -258,7 +261,12 @@ should_restore_compatible_legacy_parent_and_preserve_unrelated_namespace() {
   seed_existing_cache "$fixture_root"
 
   local legacy_object="${fixture_root}/fake-gcs/test-bucket/corpus-cache/${parent_revision}.tar.zst"
-  create_archive "$legacy_object" "new-pdf" "new-markdown" "new-text"
+  create_archive \
+    "$legacy_object" \
+    "new-pdf" \
+    "new-markdown" \
+    "new-text" \
+    ".corpus-cache/._pdf"
   run_restore "$fixture_root"
 
   assert_equals "0" "$RUN_STATUS" "compatible legacy restore status"
@@ -282,6 +290,8 @@ should_restore_compatible_legacy_parent_and_preserve_unrelated_namespace() {
     "preserve-me" \
     "${fixture_root}/test_documents/.corpus-cache/model-store/model.bin" \
     "unrelated cache namespace"
+  [ ! -e "${fixture_root}/test_documents/.corpus-cache/._pdf" ] ||
+    fail "legacy AppleDouble metadata was extracted"
 
   local digest
   digest="$(cache_digest "$fixture_root")"
@@ -470,9 +480,70 @@ should_surface_storage_errors_without_altering_old_cache() {
     "storage error must not trigger legacy fallback"
 }
 
+should_reject_appledouble_in_v2_without_altering_old_cache() {
+  setup_fixture "v2-appledouble"
+  local fixture_root="$FIXTURE_ROOT"
+  write_manifest "$fixture_root" "current-pdf" "current-markdown" "current-text"
+  commit_documents "$fixture_root" "manifest"
+  seed_existing_cache "$fixture_root"
+  local old_cache_fingerprint
+  old_cache_fingerprint="$(cache_fingerprint "${fixture_root}/test_documents/.corpus-cache")"
+
+  local digest
+  digest="$(cache_digest "$fixture_root")"
+  create_archive \
+    "${fixture_root}/fake-gcs/test-bucket/corpus-cache/v2/${digest}.tar.zst" \
+    "current-pdf" \
+    "current-markdown" \
+    "current-text" \
+    ".corpus-cache/._pdf"
+  run_restore "$fixture_root"
+
+  assert_equals "1" "$RUN_STATUS" "v2 AppleDouble restore status"
+  assert_contains "unexpected archive file: .corpus-cache/._pdf" "$RUN_OUTPUT" "v2 exact archive contract"
+  assert_equals \
+    "$old_cache_fingerprint" \
+    "$(cache_fingerprint "${fixture_root}/test_documents/.corpus-cache")" \
+    "complete cache after v2 AppleDouble rejection"
+}
+
+should_reject_non_appledouble_legacy_extra_without_altering_old_cache() {
+  setup_fixture "legacy-extra"
+  local fixture_root="$FIXTURE_ROOT"
+  write_manifest "$fixture_root" "current-pdf" "current-markdown" "current-text"
+  commit_documents "$fixture_root" "parent manifest"
+  local parent_revision
+  parent_revision="$(git -C "${fixture_root}/test_documents" rev-parse HEAD)"
+  printf 'child\n' >"${fixture_root}/test_documents/child.txt"
+  commit_documents "$fixture_root" "child revision"
+  seed_existing_cache "$fixture_root"
+  local old_cache_fingerprint
+  old_cache_fingerprint="$(cache_fingerprint "${fixture_root}/test_documents/.corpus-cache")"
+
+  create_archive \
+    "${fixture_root}/fake-gcs/test-bucket/corpus-cache/${parent_revision}.tar.zst" \
+    "current-pdf" \
+    "current-markdown" \
+    "current-text" \
+    ".corpus-cache/pdf/unexpected.bin"
+  run_restore "$fixture_root"
+
+  assert_equals "1" "$RUN_STATUS" "legacy extra restore status"
+  assert_contains \
+    "unexpected archive file: .corpus-cache/pdf/unexpected.bin" \
+    "$RUN_OUTPUT" \
+    "legacy non-AppleDouble rejection"
+  assert_equals \
+    "$old_cache_fingerprint" \
+    "$(cache_fingerprint "${fixture_root}/test_documents/.corpus-cache")" \
+    "complete cache after legacy extra rejection"
+}
+
 should_restore_compatible_legacy_parent_and_preserve_unrelated_namespace
 should_refuse_incompatible_legacy_manifest_without_altering_old_cache
 should_leave_old_cache_unchanged_when_archive_is_corrupt
 should_refuse_lock_contention_without_altering_old_cache
 should_clean_up_after_download_interruption_without_altering_old_cache
 should_surface_storage_errors_without_altering_old_cache
+should_reject_appledouble_in_v2_without_altering_old_cache
+should_reject_non_appledouble_legacy_extra_without_altering_old_cache
