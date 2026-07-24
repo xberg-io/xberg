@@ -49,6 +49,26 @@ Xberg supports both HEIF-family input decoding and optional HEIF image output.
 `libx265` is needed only for the latter and is redistributed only when the
 platform's `libheif` build links it.
 
+## libwpd + librevenge (WordPerfect) — MPL-2.0
+
+- **Feature:** optional `wordperfect` Cargo feature (part of `full`/`formats`),
+  via the `xberg-libwpd` crate. Desktop only (Linux and macOS).
+- **License:** libwpd and librevenge are dual-licensed **MPL-2.0 OR
+  LGPL-2.1+**. Xberg builds and links them under the **MPL-2.0** arm.
+- **Linking:** **Static, from source.** `xberg-libwpd`'s build script fetches
+  the upstream librevenge and libwpd release tarballs (checksum-verified),
+  compiles them from source, and statically links them together with a small
+  C++ shim. MPL-2.0 is file-level (weak) copyleft and explicitly permits static
+  linking into a larger, differently-licensed work; obligations are limited to
+  keeping the libwpd/librevenge source and any modifications to their files
+  available under MPL-2.0 and preserving license notices. No copyleft reaches
+  Xberg's MIT core or the language bindings. The LGPL arm is intentionally not
+  used, as LGPL static linking would impose relink/object-file obligations on
+  redistributed binaries.
+- **Modifications:** none; both libraries are built from unmodified upstream
+  source (librevenge 0.0.6, libwpd 0.10.3). Upstream source:
+  <https://libwpd.sourceforge.net/>.
+
 ## ONNX Runtime (OCR / ML features)
 
 - **Feature:** optional (`paddle-ocr`, `layout-detection`, `embeddings`,

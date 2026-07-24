@@ -76,6 +76,15 @@ else
   echo "✓ libheif already installed"
 fi
 
+if ! brew list boost &>/dev/null; then
+  echo "Installing boost (build-time header dep of librevenge + libwpd)..."
+  retry_with_backoff brew install boost || {
+    echo "::warning::Failed to install boost after retries"
+  }
+else
+  echo "✓ boost already installed"
+fi
+
 if ! brew list pkg-config &>/dev/null; then
   echo "Installing pkg-config..."
   retry_with_backoff brew install pkg-config || {

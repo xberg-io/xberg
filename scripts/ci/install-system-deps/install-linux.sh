@@ -33,6 +33,10 @@ packages=(
   libx265-dev
   libdav1d-dev
   libnuma-dev
+  # boost (header-only spirit) and zlib headers are build-time deps of
+  # librevenge + libwpd, compiled from source by the xberg-libwpd crate. ~keep
+  libboost-dev
+  zlib1g-dev
   # liblzma-dev provides the liblzma.so linker symlink. The swift package
   # statically links libxberg_ffi.a, whose lzma-sys transitive dep surfaces
   # `-llzma` at the swift link step; the runner ships liblzma5 (runtime) but
