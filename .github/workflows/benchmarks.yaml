@@ -71,7 +71,8 @@ jobs:
         uses: xberg-io/actions/setup-rust@v1
         with:
           cache-key-prefix: benchmarks-setup
-          use-sccache: "true"
+          use-sccache: "false"
+          disable-cache: "false"
           report-stats: "true"
 
       - name: Setup ONNX Runtime
