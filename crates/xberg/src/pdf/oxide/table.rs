@@ -866,7 +866,9 @@ fn reconstruct_region_table_with_column_gap(
         "heuristic table reconstructed grid"
     );
 
-    let cleaned = post_process_table(grid, true, allow_single_column).ok_or(HeuristicTableRejection::PostProcessing)?;
+    let mut cleaned =
+        post_process_table(grid, true, allow_single_column).ok_or(HeuristicTableRejection::PostProcessing)?;
+    repair_heuristic_header_delimiters(&mut cleaned);
     if cleaned.len() <= 1 {
         return Err(HeuristicTableRejection::TooFewRows);
     }
@@ -906,6 +908,73 @@ fn reconstruct_region_table_with_column_gap(
         bounding_box,
         ..Default::default()
     })
+}
+
+fn repair_heuristic_header_delimiters(rows: &mut [Vec<String>]) {
+    let Some(header) = rows.first_mut() else {
+        return;
+    };
+
+    for column in 0..header.len().saturating_sub(1) {
+        let (left_cells, right_cells) = header.split_at_mut(column + 1);
+        let left = &mut left_cells[column];
+        let right = &mut right_cells[0];
+
+        let Some((closer, remainder)) = leading_single_closer(right) else {
+            continue;
+        };
+        if unmatched_opener(left) != matching_opener(closer) {
+            continue;
+        }
+
+        left.push(closer);
+        *right = remainder.to_string();
+    }
+}
+
+fn leading_single_closer(text: &str) -> Option<(char, &str)> {
+    let mut chars = text.chars();
+    let closer = chars.next()?;
+    matching_opener(closer)?;
+
+    let remainder = chars.as_str().trim_start();
+    if remainder.is_empty()
+        || remainder
+            .chars()
+            .next()
+            .is_some_and(|character| matching_opener(character).is_some())
+    {
+        return None;
+    }
+
+    Some((closer, remainder))
+}
+
+fn unmatched_opener(text: &str) -> Option<char> {
+    let mut openers = Vec::new();
+    for character in text.chars() {
+        if matches!(character, '(' | '[' | '{') {
+            openers.push(character);
+            continue;
+        }
+
+        let Some(expected) = matching_opener(character) else {
+            continue;
+        };
+        if openers.pop() != Some(expected) {
+            return None;
+        }
+    }
+    openers.last().copied()
+}
+
+fn matching_opener(closer: char) -> Option<char> {
+    match closer {
+        ')' => Some('('),
+        ']' => Some('['),
+        '}' => Some('{'),
+        _ => None,
+    }
 }
 
 fn heuristic_column_gap(region: &[crate::pdf::table_reconstruct::HocrWord], region_width: f32) -> u32 {
@@ -1737,6 +1806,20 @@ mod tests {
         assert_eq!(table.cells.len(), 7);
         assert!(table.cells.iter().all(|row| row.len() == 7), "{:?}", table.cells);
         assert!(
+            table.cells[0]
+                .windows(2)
+                .any(|cells| cells == ["icorr (A/cm2)", "Polarization resistance ( Ω )"]),
+            "{:?}",
+            table.cells[0]
+        );
+        assert!(
+            table
+                .markdown
+                .contains("| icorr (A/cm2) | Polarization resistance ( Ω ) |"),
+            "{}",
+            table.markdown
+        );
+        assert!(
             table.cells[1..]
                 .iter()
                 .all(|row| row.iter().all(|cell| !cell.trim().is_empty()))
@@ -2080,6 +2163,81 @@ mod tests {
             ),
             "unexpected rejection: {rejection:?}"
         );
+    }
+
+    #[test]
+    fn repairs_unmatched_header_delimiter_across_adjacent_cells() {
+        let mut rows = vec![
+            vec![
+                "icorr (A/cm2".to_string(),
+                ") Polarization resistance ( Ω )".to_string(),
+            ],
+            vec!["1.25".to_string(), "320".to_string()],
+        ];
+
+        repair_heuristic_header_delimiters(&mut rows);
+
+        assert_eq!(rows[0], ["icorr (A/cm2)", "Polarization resistance ( Ω )"]);
+        assert_eq!(rows[1], ["1.25", "320"]);
+    }
+
+    #[test]
+    fn repairs_each_supported_header_delimiter() {
+        for (left, right, expected_left, expected_right) in [
+            ("mean (ms", ") latency", "mean (ms)", "latency"),
+            ("range [low", "] high", "range [low]", "high"),
+            ("mapping {key", "} value", "mapping {key}", "value"),
+        ] {
+            let mut rows = vec![vec![left.to_string(), right.to_string()]];
+
+            repair_heuristic_header_delimiters(&mut rows);
+
+            assert_eq!(rows[0], [expected_left, expected_right]);
+        }
+    }
+
+    #[test]
+    fn preserves_balanced_mismatched_and_nonleading_header_delimiters() {
+        for (left, right) in [
+            ("rate (ms)", ") latency"),
+            ("range [low", ") latency"),
+            ("rate (ms", "latency ) total"),
+            ("ordinary header", ") notes"),
+            ("rate (ms", ")) latency"),
+            ("rate (ms", ") ] latency"),
+        ] {
+            let mut rows = vec![vec![left.to_string(), right.to_string()]];
+            let expected = rows.clone();
+
+            repair_heuristic_header_delimiters(&mut rows);
+
+            assert_eq!(rows, expected, "unexpected repair for {left:?} and {right:?}");
+        }
+    }
+
+    #[test]
+    fn preserves_data_row_delimiter_boundaries() {
+        let mut rows = vec![
+            vec!["Metric".to_string(), "Value".to_string()],
+            vec!["sample (raw".to_string(), ") normalized".to_string()],
+        ];
+        let expected = rows.clone();
+
+        repair_heuristic_header_delimiters(&mut rows);
+
+        assert_eq!(rows, expected);
+    }
+
+    #[test]
+    fn respects_nested_header_delimiter_order() {
+        let mut matching = vec![vec!["Statistic ([SD".to_string(), "] range".to_string()]];
+        repair_heuristic_header_delimiters(&mut matching);
+        assert_eq!(matching[0], ["Statistic ([SD]", "range"]);
+
+        let mut mismatched = vec![vec!["Statistic ([SD".to_string(), ") range".to_string()]];
+        let expected = mismatched.clone();
+        repair_heuristic_header_delimiters(&mut mismatched);
+        assert_eq!(mismatched, expected);
     }
 
     #[test]
