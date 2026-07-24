@@ -210,6 +210,10 @@ fn rejoin_inline_scripts(spans: Vec<pdf_oxide::layout::TextSpan>) -> Vec<pdf_oxi
         });
     }
 
+    if by_base.is_empty() {
+        return spans;
+    }
+
     let mut repaired = Vec::with_capacity(spans.len());
     for (index, span) in spans.iter().enumerate() {
         if attached[index] {
@@ -1018,6 +1022,22 @@ mod tests {
 
         assert_eq!(repaired.len(), 2);
         assert_eq!(repaired[1].font_size, 6.7);
+    }
+
+    #[test]
+    fn should_return_original_allocation_when_no_scripts_attach() {
+        let spans = vec![
+            positioned_span("alpha", 10.0, 20.0, 25.0, 10.0, vec![0.0, 5.0, 10.0, 15.0, 20.0]),
+            positioned_span("beta", 40.0, 20.0, 20.0, 10.0, vec![0.0, 5.0, 10.0, 15.0]),
+        ];
+        let original_allocation = spans.as_ptr();
+
+        let repaired = super::rejoin_inline_scripts(spans);
+
+        assert_eq!(repaired.as_ptr(), original_allocation);
+        assert_eq!(repaired.len(), 2);
+        assert_eq!(repaired[0].text, "alpha");
+        assert_eq!(repaired[1].text, "beta");
     }
 
     #[test]
