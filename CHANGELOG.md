@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- PaddleOCR now applies `PaddleOcrConfig::rec_batch_num` to recognition inference.
+
 ## [1.0.0-rc.37] - 2026-07-24
 
 Republish of rc.36 under a fresh version: rc.36 again partially published (the core PyPI linux
