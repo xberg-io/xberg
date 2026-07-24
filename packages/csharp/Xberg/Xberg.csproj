@@ -27,20 +27,8 @@
 
   <ItemGroup>
     <None Include="../../../LICENSE" Pack="true" PackagePath="/" />
-    <!-- Thin meta-package: no runtimes/** payload here. Native closures ship in the
-         per-RID XbergIo.Xberg.runtime.<rid> packages (see ../Xberg.Runtime); this
-         package only carries the managed assembly plus runtime.json, which tells
-         NuGet's RID-fallback graph which runtime package to pull in for the
-         consumer's RID (xberg #1280 / rc.35 413 fix). runtime.json is rendered
-         from runtime.json.template by CI before pack; RequireRuntimeJson guards
-         against packing without it. -->
-    <None Include="runtime.json" Pack="true" PackagePath="/" Condition="Exists('runtime.json')" />
+    <None Include="runtimes/**" Pack="true" PackagePath="runtimes/" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
-
-  <Target Name="RequireRuntimeJson" BeforeTargets="Pack">
-    <Error Condition="!Exists('runtime.json')"
-           Text="packages/csharp/Xberg/runtime.json is missing. Render it from runtime.json.template (substituting {{VERSION}}) before packing Xberg.csproj." />
-  </Target>
 
   <ItemGroup>
     <Compile Include="../src/**/*.cs" />

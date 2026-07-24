@@ -52,6 +52,15 @@ let package = Package(
       // Linux.
       linkerSettings: [
         .linkedLibrary("lzma"),
+        // The pre-built static library pulls in C++ dependencies (onnxruntime,
+        // tesseract, ClipperLib) that reference the C++ runtime/ABI
+        // (`__cxa_throw`, `__gxx_personality_v0`, `__cxa_guard_acquire`, ...). A
+        // `.a` archive does not carry the transitive `-lc++`/`-lstdc++`
+        // system-lib dependency, so the consumer must link the C++ standard
+        // library explicitly or the final link fails with undefined symbols
+        // from those crates.
+        .linkedLibrary("c++", .when(platforms: [.macOS, .iOS])),
+        .linkedLibrary("stdc++", .when(platforms: [.linux])),
         .linkedFramework("Security", .when(platforms: [.macOS, .iOS])),
         .linkedFramework("CoreFoundation", .when(platforms: [.macOS, .iOS])),
         .linkedFramework("SystemConfiguration", .when(platforms: [.macOS])),

@@ -162,10 +162,6 @@ impl OcrBackend for TesseractWasmBackend {
                 source: Some(Box::new(e)),
             })?;
 
-        // Set an explicit page segmentation mode before recognition. Respect
-        // a caller-configured PSM, but never let an unset or out-of-range
-        // value fall through to Tesseract's own PSM_AUTO default, which is
-        // known to hang/abort in this WASI build (issue #855).
         let psm_mode = resolve_psm(config);
         api.set_page_seg_mode(psm_mode).map_err(|e| crate::XbergError::Ocr {
             message: format!("Failed to set Tesseract page segmentation mode: {e}"),
@@ -177,9 +173,6 @@ impl OcrBackend for TesseractWasmBackend {
             source: Some(Box::new(e)),
         })?;
 
-        // Bound recognition with a deadline so a pathological image fails
-        // with a proper error instead of hanging or aborting the WASI
-        // runtime (issue #855).
         let monitor = TessMonitor::new();
         monitor
             .set_deadline(RECOGNITION_DEADLINE_MS)
@@ -287,7 +280,7 @@ mod tests {
     fn should_respect_explicit_psm_from_tesseract_config() {
         let config = OcrConfig {
             tesseract_config: Some(crate::types::TesseractConfig {
-                psm: 7, // PSM_SINGLE_LINE
+                psm: 7, 
                 ..Default::default()
             }),
             ..Default::default()
@@ -298,13 +291,9 @@ mod tests {
 
     #[test]
     fn should_respect_explicit_psm_auto_when_caller_opts_in() {
-        // A caller may deliberately request PSM_AUTO despite the hang risk;
-        // resolve_psm must not silently override an explicit choice. The
-        // deadline wired around `recognize_with_monitor` is what bounds the
-        // risk in that case, not PSM substitution.
         let config = OcrConfig {
             tesseract_config: Some(crate::types::TesseractConfig {
-                psm: 3, // PSM_AUTO
+                psm: 3, 
                 ..Default::default()
             }),
             ..Default::default()

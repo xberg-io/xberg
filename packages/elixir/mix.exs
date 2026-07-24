@@ -36,7 +36,7 @@ defmodule Xberg.MixProject do
   defp deps do
     [
     {:jason, "~> 1.4"},
-    {:rustler, "~> 0.37", runtime: false},
+    {:rustler, "~> 0.38", runtime: false},
     {:rustler_precompiled, "~> 0.9"},
     {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
     {:ex_doc, "~> 0.40", only: :dev, runtime: false}

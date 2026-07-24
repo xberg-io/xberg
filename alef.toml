@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.43.0"
+alef_version = "0.44.0"
 # -D warnings (emitted into every generated Rust binding as #![allow(...)]).
 extra_clippy_allows = ["redundant_field_names"]
 languages = [

@@ -16,6 +16,21 @@ vars:
     integrations/python/langchain
     integrations/python/llama-index
   SPRING_AI: "integrations/java/spring-ai"
+  # Publishable Python distributions, mirroring the publish-integrations-pypi job. The
+  # llama-index dev aggregator (integrations/python/llama-index) is version 0.0.0 and is NOT
+  # published — only its two sub-packages are. `uv build` needs no network (builds sdist/wheel
+  # from source), so this is safe to run before the core is published. ~keep
+  PY_BUILD_DIRS: >-
+    integrations/python/crewai
+    integrations/python/txtai
+    integrations/python/surrealdb
+    integrations/python/langchain
+    integrations/python/llama-index/readers/llama-index-readers-xberg
+    integrations/python/llama-index/node_parsers/llama-index-node-parser-xberg
+  NODE_DIRS: >-
+    integrations/node/n8n-nodes-xberg
+    integrations/node/langchain-xberg
+    integrations/node/llamaindex-xberg
 
 tasks:
   sync:
@@ -43,3 +58,29 @@ tasks:
           cd {{.SPRING_AI}} && command -v mvn >/dev/null 2>&1 \
             && mvn -q versions:use-latest-releases -DgenerateBackupPoms=false \
             || echo "Maven not found, skipping spring-ai upgrade"
+
+  # ---- Local dry-run of the release publish jobs (catch packaging breaks before tagging) ----
+  # Version-sync drift is already guarded by `task version:check`
+  # (it runs scripts/sync_integration_versions.py --check).
+
+  build:
+    desc: "Build publishable integration artifacts locally (packaging dry-run; Python only, pre-release-safe)"
+    cmds:
+      - task: build:python
+
+  build:python:
+    desc: "Build integration Python sdists+wheels (uv build; no network, safe pre-release)"
+    cmds:
+      - for: { var: PY_BUILD_DIRS }
+        cmd: cd {{.ITEM}} && uv build --sdist --wheel
+
+  build:node:
+    desc: "Install+build the npm integrations (needs the pinned @xberg-io/xberg already on npm)"
+    cmds:
+      - for: { var: NODE_DIRS }
+        cmd: cd {{.ITEM}} && npm install --no-audit --no-fund && npm run build
+
+  build:java:
+    desc: "Package the spring-ai integration (needs io.xberg:xberg already on Maven Central)"
+    cmds:
+      - cd {{.SPRING_AI}} && mvn -q -DskipTests package

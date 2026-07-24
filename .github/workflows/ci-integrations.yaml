@@ -86,7 +86,10 @@ jobs:
         with:
           node-version: "22"
       - name: Install
-        run: npm ci
+        # `npm install` (not `npm ci`): the integration pins `@xberg-io/xberg` to the exact rc,
+        # which only lands on npm during the release run, so the committed lockfile cannot be
+        # authoritative for the core entry and `npm ci`'s strict match is impossible. ~keep
+        run: npm install --no-audit --no-fund
       - name: Lint
         run: npm run lint --if-present
       - name: Build
