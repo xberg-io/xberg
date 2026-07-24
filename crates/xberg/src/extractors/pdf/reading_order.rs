@@ -391,6 +391,8 @@ const MIN_SINGLE_COLUMN_COMMON_WIDTH_RATIO: f32 = 0.5;
 /// wrapper. This preserves Title/ListItem/Text classification while a partial
 /// child (for example, a narrow caption overlapping a form) cannot steal text.
 const MIN_SEMANTIC_CHILD_SEGMENT_COVERAGE: f32 = 0.8;
+/// Maximum same-baseline gap that still represents a kerning-run split.
+const ATOMIC_FRAGMENT_GAP_RATIO: f32 = 0.15;
 
 /// One root in the page's region-preserving reading-order plan.
 ///
@@ -589,6 +591,89 @@ fn choose_segment_owner(
             })
             .map_or(winner.0, |candidate| candidate.0),
     )
+}
+
+fn contains_cjk(text: &str) -> bool {
+    text.chars().any(|character| {
+        matches!(
+            character as u32,
+            0x4E00..=0x9FFF
+                | 0x3040..=0x309F
+                | 0x30A0..=0x30FF
+                | 0xAC00..=0xD7AF
+                | 0x3400..=0x4DBF
+                | 0xF900..=0xFAFF
+                | 0x20000..=0x2A6DF
+                | 0x2A700..=0x2B73F
+                | 0x2B740..=0x2B81F
+                | 0x2B820..=0x2CEAF
+                | 0x2CEB0..=0x2EBEF
+                | 0x30000..=0x3134F
+                | 0x31350..=0x323AF
+                | 0x2F800..=0x2FA1F
+        )
+    })
+}
+
+fn segments_form_atomic_fragment(
+    previous: &crate::pdf::hierarchy::SegmentData,
+    next: &crate::pdf::hierarchy::SegmentData,
+) -> bool {
+    let (Some(previous_last), Some(next_first)) = (previous.text.chars().last(), next.text.chars().next()) else {
+        return false;
+    };
+    if previous_last.is_whitespace()
+        || next_first.is_whitespace()
+        || contains_cjk(&previous.text)
+        || contains_cjk(&next.text)
+        || segment_block(previous).is_none()
+        || segment_block(next).is_none()
+        || !previous.font_size.is_finite()
+        || previous.font_size <= 0.0
+        || previous.font_size != next.font_size
+        || previous.is_bold != next.is_bold
+        || previous.is_italic != next.is_italic
+        || previous.is_monospace != next.is_monospace
+        || previous.assigned_role != next.assigned_role
+        || !previous.baseline_y.is_finite()
+        || !next.baseline_y.is_finite()
+        || next.x < previous.x
+    {
+        return false;
+    }
+
+    let effective_height = next.height.max(previous.height).max(next.font_size * 0.5);
+    let same_baseline = (previous.baseline_y - next.baseline_y).abs() < effective_height * 0.5;
+    let horizontal_gap = next.x - (previous.x + previous.width);
+    let kerning_limit = next.font_size * ATOMIC_FRAGMENT_GAP_RATIO;
+    same_baseline && (-kerning_limit..=kerning_limit).contains(&horizontal_gap)
+}
+
+fn reconcile_atomic_fragment_owners(segments: &[crate::pdf::hierarchy::SegmentData], owners: &mut [Option<usize>]) {
+    debug_assert_eq!(segments.len(), owners.len());
+    let mut run_start = 0;
+    while run_start < segments.len() {
+        let mut run_end = run_start + 1;
+        while run_end < segments.len() && segments_form_atomic_fragment(&segments[run_end - 1], &segments[run_end]) {
+            run_end += 1;
+        }
+
+        let mut run_owner = None;
+        let has_conflicting_owner = owners[run_start..run_end]
+            .iter()
+            .flatten()
+            .any(|owner| match run_owner {
+                Some(current) => current != *owner,
+                None => {
+                    run_owner = Some(*owner);
+                    false
+                }
+            });
+        if !has_conflicting_owner && let Some(run_owner) = run_owner {
+            owners[run_start..run_end].fill(Some(run_owner));
+        }
+        run_start = run_end;
+    }
 }
 
 fn has_single_column_segment_geometry(
@@ -830,10 +915,11 @@ pub(crate) fn plan_segment_groups_by_layout(
         return pathless_group(segments.len());
     }
     let roots = root_hint_indices(hints, &eligible, &blocks);
-    let owners = segments
+    let mut owners = segments
         .iter()
         .map(|segment| choose_segment_owner(segment, hints, &eligible, &blocks, &roots))
         .collect::<Vec<_>>();
+    reconcile_atomic_fragment_owners(segments, &mut owners);
     if owners.iter().all(Option::is_none) {
         return pathless_group(segments.len());
     }
@@ -1087,6 +1173,35 @@ mod tests {
             right,
             top,
         }
+    }
+
+    fn assert_fragments_remain_separate(
+        segments: Vec<crate::pdf::hierarchy::SegmentData>,
+        classes: [LayoutHintClass; 2],
+    ) {
+        let hints = [
+            planned_hint(
+                classes[0],
+                segments[0].x,
+                segments[0].y,
+                segments[0].x + segments[0].width,
+                segments[0].y + segments[0].height,
+            ),
+            planned_hint(
+                classes[1],
+                segments[1].x,
+                segments[1].y,
+                segments[1].x + segments[1].width,
+                segments[1].y + segments[1].height,
+            ),
+        ];
+        let groups = plan_segment_groups_by_layout(&segments, &hints, &[], true, None);
+        let flattened = groups
+            .iter()
+            .flat_map(|group| group.segment_indices.iter().copied())
+            .collect::<Vec<_>>();
+        assert_eq!(groups.len(), 2);
+        assert_eq!(flattened, [0, 1]);
     }
 
     #[cfg(feature = "layout-detection")]
@@ -1563,6 +1678,180 @@ mod tests {
             assert_eq!(path.root.id, 0, "{class_name:?}");
             assert_eq!(path.child.unwrap().id, 1, "{class_name:?}");
         }
+    }
+
+    #[test]
+    fn split_eli_t_fragments_share_the_owned_layout_owner() {
+        use crate::pdf::structure::types::LayoutHintClass;
+
+        let mut eli = planned_segment("eli", 100.0, 700.0, 15.0017, 11.0);
+        eli.font_size = 11.0;
+        let mut orphan_t = planned_segment("t", 115.0, 700.0, 5.0, 11.0);
+        orphan_t.font_size = 11.0;
+        let segments = vec![eli, orphan_t];
+        let hints = vec![planned_hint(LayoutHintClass::Text, 100.0, 700.0, 115.0, 711.0)];
+
+        let groups = plan_segment_groups_by_layout(&segments, &hints, &[], true, None);
+
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].segment_indices, [0, 1]);
+        assert_eq!(groups[0].hint_indices, [0]);
+        assert_eq!(groups[0].region_path.unwrap().root.id, 0);
+    }
+
+    #[test]
+    fn split_t_able_fragments_share_the_owned_layout_owner() {
+        use crate::pdf::structure::types::LayoutHintClass;
+
+        let mut orphan_t = planned_segment("T", 100.0, 700.0, 7.224, 11.0);
+        orphan_t.font_size = 11.0;
+        let mut able = planned_segment("able", 106.0, 700.0, 22.0, 11.0);
+        able.font_size = 11.0;
+        let segments = vec![orphan_t, able];
+        let hints = vec![planned_hint(LayoutHintClass::Text, 106.0, 700.0, 128.0, 711.0)];
+
+        let groups = plan_segment_groups_by_layout(&segments, &hints, &[], true, None);
+
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].segment_indices, [0, 1]);
+        assert_eq!(groups[0].hint_indices, [0]);
+        assert_eq!(groups[0].region_path.unwrap().root.id, 0);
+    }
+
+    #[test]
+    fn atomic_fragments_with_distinct_text_owners_preserve_both_paths() {
+        use crate::pdf::structure::types::LayoutHintClass;
+
+        let segments = vec![
+            planned_segment("eli", 100.0, 700.0, 15.0, 10.0),
+            planned_segment("t", 115.0, 700.0, 5.0, 10.0),
+        ];
+        let hints = vec![
+            planned_hint(LayoutHintClass::Text, 100.0, 700.0, 115.0, 710.0),
+            planned_hint(LayoutHintClass::Text, 115.0, 700.0, 120.0, 710.0),
+        ];
+
+        let groups = plan_segment_groups_by_layout(&segments, &hints, &[], true, None);
+
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0].segment_indices, [0]);
+        assert_eq!(groups[0].region_path.unwrap().root.id, 0);
+        assert_eq!(groups[1].segment_indices, [1]);
+        assert_eq!(groups[1].region_path.unwrap().root.id, 1);
+    }
+
+    #[test]
+    fn atomic_fragment_ownership_rejects_spacing_and_geometry_boundaries() {
+        use crate::pdf::structure::types::LayoutHintClass;
+
+        let text_classes = [LayoutHintClass::Text; 2];
+        assert_fragments_remain_separate(
+            vec![
+                planned_segment("office", 100.0, 700.0, 30.0, 10.0),
+                planned_segment("is", 140.0, 700.0, 8.0, 10.0),
+            ],
+            text_classes,
+        );
+        assert_fragments_remain_separate(
+            vec![
+                planned_segment("right", 200.0, 700.0, 20.0, 10.0),
+                planned_segment("left", 10.0, 700.0, 20.0, 10.0),
+            ],
+            text_classes,
+        );
+        assert_fragments_remain_separate(
+            vec![
+                planned_segment("end", 100.0, 700.0, 15.0, 10.0),
+                planned_segment("start", 115.0, 680.0, 20.0, 10.0),
+            ],
+            text_classes,
+        );
+    }
+
+    #[test]
+    fn atomic_fragment_ownership_rejects_excessive_overlap() {
+        use crate::pdf::structure::types::LayoutHintClass;
+
+        let segments = vec![
+            planned_segment("owned", 100.0, 700.0, 30.0, 10.0),
+            planned_segment("orphan", 110.0, 700.0, 200.0, 10.0),
+        ];
+        let hints = vec![planned_hint(LayoutHintClass::Text, 100.0, 700.0, 130.0, 710.0)];
+
+        let groups = plan_segment_groups_by_layout(&segments, &hints, &[], true, None);
+        let flattened = groups
+            .iter()
+            .flat_map(|group| group.segment_indices.iter().copied())
+            .collect::<Vec<_>>();
+
+        assert_eq!(groups.len(), 2);
+        assert_eq!(flattened, [0, 1]);
+    }
+
+    #[test]
+    fn atomic_fragment_ownership_rejects_style_and_text_boundaries() {
+        use crate::pdf::structure::types::LayoutHintClass;
+
+        let text_classes = [LayoutHintClass::Text; 2];
+        let mut bold = planned_segment("t", 115.0, 700.0, 5.0, 10.0);
+        bold.is_bold = true;
+        assert_fragments_remain_separate(
+            vec![planned_segment("eli", 100.0, 700.0, 15.0, 10.0), bold],
+            text_classes,
+        );
+        let mut different_size = planned_segment("t", 115.0, 700.0, 5.0, 10.0);
+        different_size.font_size = 11.0;
+        assert_fragments_remain_separate(
+            vec![planned_segment("eli", 100.0, 700.0, 15.0, 10.0), different_size],
+            text_classes,
+        );
+        assert_fragments_remain_separate(
+            vec![
+                planned_segment("eli ", 100.0, 700.0, 15.0, 10.0),
+                planned_segment("t", 115.0, 700.0, 5.0, 10.0),
+            ],
+            text_classes,
+        );
+        assert_fragments_remain_separate(
+            vec![
+                planned_segment("\u{4e00}", 100.0, 700.0, 12.0, 10.0),
+                planned_segment("\u{4e01}", 112.0, 700.0, 12.0, 10.0),
+            ],
+            text_classes,
+        );
+    }
+
+    #[test]
+    fn atomic_fragment_ownership_rejects_semantic_boundaries() {
+        use crate::pdf::structure::types::LayoutHintClass;
+
+        assert_fragments_remain_separate(
+            vec![
+                planned_segment("semantic", 100.0, 700.0, 40.0, 10.0),
+                planned_segment("boundary", 140.0, 700.0, 40.0, 10.0),
+            ],
+            [LayoutHintClass::Text, LayoutHintClass::Caption],
+        );
+    }
+
+    #[test]
+    fn atomic_fragment_ownership_rejects_invalid_geometry_without_dropping_segments() {
+        use crate::pdf::structure::types::LayoutHintClass;
+
+        let segments = vec![
+            planned_segment("valid", 100.0, 700.0, 20.0, 10.0),
+            planned_segment("invalid", f32::NAN, 700.0, 10.0, 10.0),
+        ];
+        let hints = vec![planned_hint(LayoutHintClass::Text, 100.0, 700.0, 120.0, 710.0)];
+
+        let groups = plan_segment_groups_by_layout(&segments, &hints, &[], true, None);
+        let flattened = groups
+            .iter()
+            .flat_map(|group| group.segment_indices.iter().copied())
+            .collect::<Vec<_>>();
+
+        assert_eq!(groups.len(), 2);
+        assert_eq!(flattened, [0, 1]);
     }
 
     #[test]
