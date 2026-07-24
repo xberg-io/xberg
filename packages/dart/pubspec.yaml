@@ -20,6 +20,6 @@ dev_dependencies:
   test: "^1.25.0"
   lints: "^6.1.0"
   # Required by flutter_rust_bridge_codegen 2.x for sealed classes.
-  freezed: "^3.2.5"
+  freezed: ^4.0.0-dev.3
   build_runner: "^2.15.0"
   json_serializable: "^6.13.2"
