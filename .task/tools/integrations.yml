@@ -134,7 +134,7 @@ tasks:
       vars: [PACKAGE, WHEEL_DIR]
     dir: integrations/{{.PACKAGE}}
     cmds:
-      - uv sync --all-extras --prerelease=allow --no-install-package xberg
+      - uv sync --locked --all-extras --prerelease=allow --no-install-package xberg
       - uv pip install --python .venv/bin/python --reinstall "{{.WHEEL_DIR}}"/*.whl
       - uv run --no-sync pytest -q
 
@@ -147,7 +147,7 @@ tasks:
         for package in {{.PY_TEST_PACKAGES}}; do
           (
             cd "integrations/${package}"
-            uv sync --all-extras --prerelease=allow --no-install-package xberg
+            uv sync --locked --all-extras --prerelease=allow --no-install-package xberg
             uv pip install --python .venv/bin/python --reinstall "{{.WHEEL_DIR}}"/*.whl
             uv run --no-sync pytest -q
           )
