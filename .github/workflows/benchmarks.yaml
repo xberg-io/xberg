@@ -834,6 +834,15 @@ jobs:
             echo "HF_HOME=$HOME/.cache/huggingface"
             echo "HF_HUB_CACHE=$HOME/.cache/huggingface/hub"
             echo "MINERU_MODEL_SOURCE=huggingface"
+            # The weights are delivered complete via the run-scoped artifact
+            # below, so resolve purely from the local cache. Without this,
+            # huggingface_hub still makes revision/ETag calls to huggingface.co
+            # at extraction time; this runner cannot reach HF, so those calls
+            # hang out the full per-doc timeout (900s) even though every weight
+            # is already on disk. Offline mode also turns a genuinely missing
+            # file into an immediate error instead of a timeout.
+            echo "HF_HUB_OFFLINE=1"
+            echo "TRANSFORMERS_OFFLINE=1"
           } >> "$GITHUB_ENV"
 
       # Model weights arrive as a run-scoped artifact from prefetch-mineru-models
