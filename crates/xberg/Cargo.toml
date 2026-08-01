@@ -217,6 +217,25 @@ ort-bundled = ["ort?/download-binaries", "ort?/tls-rustls", "xberg-gliner?/ort-b
 # Build-time only: configures ORT to load ONNX Runtime dynamically at runtime.
 # No #[cfg] gates — passed through to the `ort` crate.
 ort-dynamic = ["ort?/load-dynamic", "xberg-gliner?/ort-dynamic"]
+# Static-links a from-source ONNX Runtime build (see scripts/ci/build-static-onnxruntime.sh)
+# via ort-sys's "system strategy": set ORT_LIB_LOCATION (or ORT_LIB_PATH) to that build's
+# output directory and ORT_PREFER_DYNAMIC_LINK=0. crates/xberg/build.rs asserts one of
+# those env vars is set whenever this feature is active, so a misconfigured build fails
+# loudly at compile time instead of silently falling back to a different strategy.
+#
+# Enables `paddle-ocr` for the real ONNX-backed OCR path. This necessarily pulls in
+# `auto-rotate`, and therefore `ort-bundled`, transitively (see `paddle-ocr`'s own
+# definition below) — Cargo feature unification has no "minus" operator, so that
+# coupling can't be broken from here without editing `paddle-ocr`/`auto-rotate`
+# themselves, which is out of scope for this prototype. This is harmless in practice:
+# ort-sys's build script checks ORT_LIB_LOCATION/ORT_LIB_PATH *before* ever consulting
+# the `download-binaries` feature (see `ort-sys` build/main.rs), so the pyke-download
+# path is dead code as long as the env var is set — exactly the precedence the existing
+# `ort-bundled` release pipeline already relies on (see that feature's doc comment above
+# and scripts/ci/actions/setup-onnx-runtime), just with `ORT_PREFER_DYNAMIC_LINK=0`
+# instead of `=1` so the result is a statically-linked binary. Prototype scope:
+# x86_64-unknown-linux-gnu only.
+ort-static = ["paddle-ocr"]
 # CoreML EP opt-in. On macOS the target-specific `ort` dependency table already enables
 # `ort/coreml` unconditionally, and `ort_discovery.rs` gates the CoreML EP code behind
 # `target_os = "macos"`; this feature exists for parity with `cuda`/`tensorrt` below and to
