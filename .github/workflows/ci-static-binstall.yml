@@ -43,9 +43,16 @@ jobs:
       - name: Install system dependencies
         uses: ./.github/actions/install-system-deps
 
-      - name: Cache static ONNX Runtime build
+      # Restore + save are split (rather than a single actions/cache step) so the
+      # ~60-minute from-source ONNX Runtime build is cached the moment it succeeds,
+      # independent of whether the later Rust link / self-containment / smoke steps
+      # pass. A single actions/cache step only persists in its post-job hook, which
+      # did not survive this job failing at the Rust step — so every failed iteration
+      # re-paid the full build. The save runs right after the build (before anything
+      # that can fail), so a broken downstream step no longer discards the artifact.
+      - name: Restore static ONNX Runtime build
         id: cache-static-ort
-        uses: actions/cache@v5
+        uses: actions/cache/restore@v5
         with:
           path: ${{ runner.temp }}/static-ort
           key: static-ort-${{ env.ORT_VERSION }}-${{ env.TARGET_TRIPLE }}-v1
@@ -56,6 +63,13 @@ jobs:
           TARGET_TRIPLE: ${{ env.TARGET_TRIPLE }}
           ORT_VERSION: ${{ env.ORT_VERSION }}
         run: scripts/ci/build-static-onnxruntime.sh "${{ runner.temp }}/static-ort"
+
+      - name: Save static ONNX Runtime build
+        if: steps.cache-static-ort.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ runner.temp }}/static-ort
+          key: static-ort-${{ env.ORT_VERSION }}-${{ env.TARGET_TRIPLE }}-v1
 
       - name: Build xberg-cli (static, self-contained)
         env:
