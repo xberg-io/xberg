@@ -734,6 +734,16 @@ impl PdfExtractor {
             .as_ref()
             .map(|images| crate::pdf::render::get_page_rotations(content, images.len()))
             .unwrap_or_default();
+        // Gate matches `markdown_page_rotations` (and the `markdown_layout_*` bindings this
+        // block reads/clears): all three are only in scope under pdf + layout-detection +
+        // (ocr | ocr-pipeline). Without this gate the block references undefined names on any
+        // pdf build that omits layout-detection or OCR — e.g. the static `ort-static` binstall
+        // build, which enables OCR via paddle-ocr but not layout-detection. ~keep
+        #[cfg(all(
+            feature = "pdf",
+            feature = "layout-detection",
+            any(feature = "ocr", feature = "ocr-pipeline")
+        ))]
         if !markdown_layout_reusable_for_ocr(markdown_layout_gate_decisions.as_deref(), &markdown_page_rotations) {
             markdown_layout_images = None;
             markdown_layout_detections = None;
