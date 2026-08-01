@@ -42,6 +42,11 @@ pdf-surface = ["xberg/pdf"]
 pdf-heuristic = ["pdf-surface"]
 pdf-ocr = ["pdf-heuristic", "ocr-surface", "xberg/ocr"]
 formats = ["pdf-surface", "xberg/formats"]
+# `formats` minus `heic` — for the static/binstall CI target, which cannot pull in
+# libheif (a C library with no working static-linking story here; see the `heic`
+# feature's doc comment in crates/xberg/Cargo.toml for the dav1d/CMake blocker).
+# Mirrors xberg's own `formats-no-heic` aggregate.
+formats-no-heic = ["pdf-surface", "xberg/formats-no-heic"]
 analysis = ["xberg/analysis"]
 url-surface = []
 core-cli = ["url-surface", "xberg/url-ingestion", "xberg/cli"]
@@ -57,6 +62,17 @@ ort-bundled = ["legacy-base", "xberg/ort-bundled"]
 # libonnxruntime.dylib relative to the executable, so the release tarball just
 # ships the dylib next to the `xberg` binary — no ORT_DYLIB_PATH needed.
 ort-dynamic = ["legacy-base", "xberg/ort-dynamic"]
+# Static-link ONNX Runtime instead of downloading/loading it — see the `ort-static`
+# doc comment in crates/xberg/Cargo.toml for the full linking story and
+# scripts/ci/build-static-onnxruntime.sh for the from-source build this depends on.
+# Used by the static/binstall CI target (.github/workflows/ci-static-binstall.yml).
+#
+# Deliberately omits `legacy-base` (unlike every other ORT-surface feature above): it
+# hardcodes `formats` (heic-including — see `heic`'s doc comment in
+# crates/xberg/Cargo.toml), and the whole point of this feature is a self-contained
+# build with no dynamically-linked libheif. Pair it with `formats-no-heic` explicitly
+# instead of `formats` to get PDF/office extraction back without libheif.
+ort-static = ["ocr-surface", "xberg/ort-static"]
 
 # Native Intel macOS (x86_64-apple-darwin) platform aggregate. Passthrough to
 # the xberg `macos-intel-target` set (full feature parity, ort loaded
