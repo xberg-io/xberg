@@ -1,0 +1,126 @@
+name: CI Static Binstall
+
+# Prototype: a self-contained, statically-linked `xberg` CLI for a single target
+# (x86_64-unknown-linux-gnu) so it can be `cargo binstall`'d without a system ONNX
+# Runtime / libheif install. See crates/xberg/Cargo.toml's `ort-static` feature and
+# scripts/ci/build-static-onnxruntime.sh for the linking story.
+
+on:
+  push:
+    branches: [feat/static-native-binstall]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-static-binstall-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: short
+  ORT_VERSION: "1.28.0"
+  TARGET_TRIPLE: "x86_64-unknown-linux-gnu"
+
+permissions:
+  contents: read
+
+jobs:
+  static-binstall:
+    name: Static self-contained xberg-cli (x86_64-unknown-linux-gnu)
+    if: github.repository == 'xberg-io/xberg'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Setup Rust
+        uses: xberg-io/actions/setup-rust@v1
+        with:
+          cache-key-prefix: static-binstall-${{ env.TARGET_TRIPLE }}
+          use-sccache: "true"
+
+      - name: Install system dependencies
+        uses: ./.github/actions/install-system-deps
+
+      - name: Cache static ONNX Runtime build
+        id: cache-static-ort
+        uses: actions/cache@v5
+        with:
+          path: ${{ runner.temp }}/static-ort
+          key: static-ort-${{ env.ORT_VERSION }}-${{ env.TARGET_TRIPLE }}-v1
+
+      - name: Build static ONNX Runtime
+        if: steps.cache-static-ort.outputs.cache-hit != 'true'
+        env:
+          TARGET_TRIPLE: ${{ env.TARGET_TRIPLE }}
+          ORT_VERSION: ${{ env.ORT_VERSION }}
+        run: scripts/ci/build-static-onnxruntime.sh "${{ runner.temp }}/static-ort"
+
+      - name: Build xberg-cli (static, self-contained)
+        env:
+          ORT_LIB_LOCATION: ${{ runner.temp }}/static-ort
+          ORT_PREFER_DYNAMIC_LINK: "0"
+        run: |
+          cargo build --release -p xberg-cli --target "$TARGET_TRIPLE" \
+            --no-default-features \
+            --features formats-no-heic,analysis,core-cli,ort-static
+
+      - name: Verify self-containedness
+        run: |
+          set -euo pipefail
+          bin="target/${TARGET_TRIPLE}/release/xberg"
+
+          echo "--- ldd ---"
+          ldd "$bin" || true
+
+          echo "--- patchelf --print-needed ---"
+          needed="$(patchelf --print-needed "$bin")"
+          echo "$needed"
+
+          # Must never re-appear: the ONNX Runtime and libheif/libde265/libaom decode
+          # stack this build is specifically meant to avoid dynamically linking.
+          forbidden_patterns=(onnxruntime heif de265 aom dav1d)
+          for pattern in "${forbidden_patterns[@]}"; do
+            if echo "$needed" | grep -qi "$pattern"; then
+              echo "::error::binary links against forbidden library matching '$pattern':"
+              echo "$needed" | grep -i "$pattern"
+              exit 1
+            fi
+          done
+
+          # Anything beyond the base system set (libc, libm, libgcc_s, the dynamic
+          # linker, and libstdc++ for the C++ static libs it links) means something
+          # else leaked in as a dynamic dependency.
+          allowed_prefixes=(libc.so libm.so libgcc_s.so libpthread.so librt.so libdl.so ld-linux libstdc++.so)
+          unexpected=0
+          while IFS= read -r lib; do
+            [ -z "$lib" ] && continue
+            match=0
+            for allowed in "${allowed_prefixes[@]}"; do
+              if [[ "$lib" == "$allowed"* ]]; then
+                match=1
+                break
+              fi
+            done
+            if [[ "$match" -eq 0 ]]; then
+              echo "::error::binary links against unexpected shared library: $lib"
+              unexpected=1
+            fi
+          done <<<"$needed"
+
+          if [[ "$unexpected" -ne 0 ]]; then
+            exit 1
+          fi
+
+          echo "no forbidden or unexpected dynamic dependencies"
+
+      - name: Smoke test - version
+        run: '"./target/${TARGET_TRIPLE}/release/xberg" --version'
+
+      - name: Smoke test - plain-text extraction
+        run: |
+          set -euo pipefail
+          output="$(printf 'hello world' | "./target/${TARGET_TRIPLE}/release/xberg" extract --stdin --mime-type text/plain)"
+          echo "$output"
+          echo "$output" | grep -q "hello world"
