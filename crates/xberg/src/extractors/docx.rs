@@ -3956,4 +3956,47 @@ mod tests {
             result.err()
         );
     }
+
+    /// With no `security_limits` override the container must still enforce the default
+    /// `SecurityLimits::max_files_in_archive`: "unset" means the default ceiling, not "no
+    /// ceiling". One entry past that default must be rejected.
+    #[tokio::test]
+    async fn test_docx_extract_content_rejects_archive_over_default_entry_limit() {
+        let default_limit = crate::extractors::security::SecurityLimits::default().max_files_in_archive;
+        let document_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body><w:p><w:r><w:t>Hello</w:t></w:r></w:p></w:body>
+</w:document>"#;
+        // The builder adds its own fixed parts, so this alone already exceeds the ceiling.
+        let extra_files: Vec<(String, String)> = (0..=default_limit)
+            .map(|i| (format!("word/extra_{}.xml", i), "<x/>".to_string()))
+            .collect();
+        let extra_refs: Vec<(&str, &str)> = extra_files.iter().map(|(p, x)| (p.as_str(), x.as_str())).collect();
+        let data = build_test_docx_with_files(document_xml, &extra_refs);
+
+        let extractor = DocxExtractor::new();
+        let config = ExtractionConfig::default();
+        assert!(
+            config.security_limits.is_none(),
+            "this test must exercise the unset fallback, not an explicit limit"
+        );
+
+        let result = extractor
+            .extract_content(
+                &data,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                &config,
+            )
+            .await;
+
+        assert!(
+            result.is_err(),
+            "an archive over the default max_files_in_archive must be rejected when no limit is configured"
+        );
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains(&default_limit.to_string()),
+            "error should mention the default limit ({default_limit}), got: {err_msg}"
+        );
+    }
 }
