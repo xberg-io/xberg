@@ -1200,4 +1200,44 @@ mod tests {
             result.err()
         );
     }
+
+    /// With no `security_limits` override the container must still enforce the default
+    /// `SecurityLimits::max_files_in_archive`: "unset" means the default ceiling, not "no
+    /// ceiling". One entry past that default must be rejected.
+    #[tokio::test]
+    async fn test_pptx_extract_content_rejects_archive_over_default_entry_limit() {
+        use crate::core::config::ExtractionConfig;
+
+        let default_limit = crate::extractors::security::SecurityLimits::default().max_files_in_archive;
+        let slide_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+       xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+    <p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>Hello</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld>
+</p:sld>"#;
+        // The builder adds its own fixed parts, so this alone already exceeds the ceiling.
+        let extra_parts: Vec<(String, Vec<u8>)> = (0..=default_limit)
+            .map(|i| (format!("ppt/extra_{}.xml", i), b"<x/>".to_vec()))
+            .collect();
+        let extra_refs: Vec<(&str, &[u8])> = extra_parts.iter().map(|(p, d)| (p.as_str(), d.as_slice())).collect();
+        let pptx = crate::extraction::pptx::tests::build_single_slide_pptx(slide_xml, None, &extra_refs);
+
+        let extractor = PptxExtractor::new();
+        let mime = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+        let config = ExtractionConfig::default();
+        assert!(
+            config.security_limits.is_none(),
+            "this test must exercise the unset fallback, not an explicit limit"
+        );
+
+        let result = extractor.extract_content(&pptx, mime, &config).await;
+        assert!(
+            result.is_err(),
+            "an archive over the default max_files_in_archive must be rejected when no limit is configured"
+        );
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains(&default_limit.to_string()),
+            "error should mention the default limit ({default_limit}), got: {err_msg}"
+        );
+    }
 }

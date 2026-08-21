@@ -715,4 +715,47 @@ mod tests {
             inner_cap_warnings[0].message
         );
     }
+
+    #[tokio::test]
+    async fn test_embedded_objects_fall_back_to_default_max_files_in_archive_when_unset() {
+        // `security_limits: None` must mean "the `SecurityLimits` default", not "no limit".
+        // One entry past the default ceiling must be skipped and reported. The entries are
+        // empty so the loop skips each processed one before extraction; the test costs one
+        // ZIP central directory, not ten thousand extractions.
+        let default_limit = crate::extractors::security::SecurityLimits::default().max_files_in_archive;
+        let entries: Vec<String> = (0..=default_limit)
+            .map(|i| format!("word/embeddings/blob{i}"))
+            .collect();
+        let entry_refs: Vec<(&str, &[u8])> = entries.iter().map(|p| (p.as_str(), &[][..])).collect();
+        let zip_bytes = make_zip_with_files(&entry_refs);
+
+        let config = ExtractionConfig::default();
+        assert!(
+            config.security_limits.is_none(),
+            "this test must exercise the unset fallback, not an explicit limit"
+        );
+
+        let (children, warnings) =
+            extract_ooxml_embedded_objects(&zip_bytes, "word/embeddings/", "test", &config).await;
+
+        assert!(children.is_empty(), "empty entries never produce children");
+        assert_eq!(
+            warnings.len(),
+            1,
+            "exactly one cap warning expected, nothing else: {:?}",
+            warnings
+        );
+        assert!(
+            warnings[0].message.contains("Skipped 1 "),
+            "exactly one entry past the default ceiling must be skipped: {}",
+            warnings[0].message
+        );
+        assert!(
+            warnings[0]
+                .message
+                .contains(&format!("max_files_in_archive ({default_limit})")),
+            "warning must name the default limit that was hit: {}",
+            warnings[0].message
+        );
+    }
 }
