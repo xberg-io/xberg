@@ -3457,7 +3457,8 @@ mod tests {
             paragraphs[0].is_code_block,
             "a singleton multi-line listing must be fenced"
         );
-        let document = super::super::assembly::assemble_internal_document(vec![paragraphs], &[], None, &[]);
+        let document =
+            super::super::assembly::assemble_internal_document(vec![paragraphs], &[], None, &[], &Default::default());
         let markdown = crate::rendering::render_markdown(&document);
         assert_eq!(
             markdown.trim(),

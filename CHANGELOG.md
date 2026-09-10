@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.6] - 2026-09-10
+
+### Fixed
+
+- PDF de-hyphenation no longer welds a compound whose own hyphen falls on a line break. Two
+  sites decide whether a trailing hyphen survives; only one consulted the lexical evidence, so
+  `long-term`, `cost-effective` and `antigen-presenting` came out as `longterm`, `costeffective`
+  and `antigenpresenting` — tokens that do not exist, and so unreachable by any lexical search.
+  The assembly site now asks the same question the paragraph site already asked, weighing both
+  the static compound list and the witnesses collected from the document itself. A hyphen the
+  wrap genuinely inserted is still removed (GH#1613).
+- Legacy binary `.ppt` no longer loses slide titles. PowerPoint keeps a slide's text in two
+  places, and the extractor read only one: titles held in the document-level outline
+  collection (`SlideListWithText`) landed in the loose-text bucket, which is discarded whenever
+  any slide exists, so they were absent from the output entirely. Outline text is now attributed
+  to its slide by persist order and merged in, skipping any line the slide's own drawing already
+  carries so a title drawn on the canvas is not duplicated (GH#1612).
+
+- The documented install versions for Java, Kotlin Android, Swift, Zig and the spring-ai
+  integration no longer lag the release. These snippets sit outside `task version:sync`, which
+  covers the generated API-reference badges but not hand-authored install directives, so they
+  had been telling users to install 1.1.3 (GH#1593 covers the same class of staleness in
+  `test_apps`, which is still open).
+
 ## [1.1.5] - 2026-09-10
 
 ### Fixed

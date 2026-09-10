@@ -22,7 +22,7 @@ Add the dependency to your `pom.xml`. Requires Java 21+ and Spring AI 2.0.0.
 <dependency>
     <groupId>io.xberg</groupId>
     <artifactId>spring-ai-xberg</artifactId>
-    <version>1.1.3</version>
+    <version>1.1.6</version>
 </dependency>
 ```
 

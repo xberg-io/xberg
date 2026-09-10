@@ -9,6 +9,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.6] - 2026-09-10
+
+### Fixed
+
+- PDF de-hyphenation no longer welds a compound whose own hyphen falls on a line break. Two
+  sites decide whether a trailing hyphen survives; only one consulted the lexical evidence, so
+  `long-term`, `cost-effective` and `antigen-presenting` came out as `longterm`, `costeffective`
+  and `antigenpresenting` — tokens that do not exist, and so unreachable by any lexical search.
+  The assembly site now asks the same question the paragraph site already asked, weighing both
+  the static compound list and the witnesses collected from the document itself. A hyphen the
+  wrap genuinely inserted is still removed (GH#1613).
+- Legacy binary `.ppt` no longer loses slide titles. PowerPoint keeps a slide's text in two
+  places, and the extractor read only one: titles held in the document-level outline
+  collection (`SlideListWithText`) landed in the loose-text bucket, which is discarded whenever
+  any slide exists, so they were absent from the output entirely. Outline text is now attributed
+  to its slide by persist order and merged in, skipping any line the slide's own drawing already
+  carries so a title drawn on the canvas is not duplicated (GH#1612).
+
+- The documented install versions for Java, Kotlin Android, Swift, Zig and the spring-ai
+  integration no longer lag the release. These snippets sit outside `task version:sync`, which
+  covers the generated API-reference badges but not hand-authored install directives, so they
+  had been telling users to install 1.1.3 (GH#1593 covers the same class of staleness in
+  `test_apps`, which is still open).
+
+## [1.1.5] - 2026-09-10
+
+### Fixed
+
+- The Java binding compiles again. A method returning `Option<Vec<u8>>` — `Registry.sampleBytes`
+  is the only one today — was generated declaring `Optional<byte[]>` while returning a bare
+  `byte[]`, which javac rejects. 1.1.4 therefore published no Java artifact at all, and the
+  spring-ai integration was blocked waiting on it. Fixed upstream in alef 0.85.12; this release
+  regenerates on it.
+
+## [1.1.4] - 2026-09-09
+
+### Fixed
+
+- PDF reading order no longer tears a subscript off the symbol it names. Spans were ordered by the
+  top of their bounding box, but a subscript is drawn 35-40% smaller than its base, so its top sits
+  several points lower even though its baseline is a fraction of a point away. An unrelated span
+  from the next column could sort between a base run and its own subscript, and the symbol the
+  subscript names no longer existed anywhere in the output. Ordering now quantises the baseline
+  into row bands before comparing horizontally, which is what every other caller of that comparator
+  already did (GH#1600).
+- PDF table detection no longer bridges two separate tables across the graphics-free gap between
+  them. A cell was built from intersection points alone, so a section heading printed in that gap
+  was absorbed into one of the tables as a single-cell row. A candidate cell now also requires a
+  drawn vertical rule spanning its own Y-range on both sides. The span tolerance is load-bearing:
+  at the tighter X-axis value, rows of a table whose rules are inset by a few points are dropped
+  (GH#1601).
+- PDF two-column detection no longer loses the page's split to a hanging-number indent. When any
+  span straddled a correctly detected gutter, the split was replaced outright by the midpoint of
+  the widest whole-page whitespace corridor — on a hanging-number layout, the indent between the
+  numbers and the text. The reorder then hoisted every clause number out of its clause. A
+  relocation is now rejected when it would move the split more than a quarter of the page width,
+  which leaves every legitimate corridor move in the corpus intact (GH#1603).
+- PDF paragraph grouping no longer splits a numbered heading that wraps onto a shorter second line.
+  The wrap exemption compared the two lines' right edges, but a heading fills its column on its
+  FIRST line and the continuation is whatever is left over, so the metric was anti-correlated with
+  the answer. The pair is now also exempt when the continuation opens lowercase AND the heading
+  line reaches within a tolerance of the width of what would be merged onto it — the "fills its
+  column" half the original rule stated but never measured. The lowercase test alone is not
+  sufficient: body prose beginning lowercase under a complete numbered heading has the same
+  signature (GH#1605).
+- PDF paragraph grouping now recognises a numbered heading whose line arrives as more than one text
+  span. The break terms tested the predicate against a single span, so a heading set with a hanging
+  section number — `3.1.7` in one span, its title in the next, on one baseline — never looked like a
+  numbered heading and was left to the ordinary paragraph-gap rule. That rule needs a gap wider than
+  ordinary line pitch, so every such heading whose body starts on the next line was welded into it.
+  The line's spans are now re-joined before the predicate runs, which is what the continuation-merge
+  pass already did (GH#1609).
+- PDF paragraph grouping now recognises a heading whose number is not its first token — `ARTIKEL 1.`,
+  `Chapter 1`, `Appendix 1`, `Annex III`, `Exhibit A`. The numbered-heading predicate is the only
+  boundary signal available when a heading shares font, size, weight and leading with its
+  neighbour, so a heading it could not see was welded onto the line above it, and a run of such
+  headings collapsed into a single element. Recognition is by shape, not by a keyword list: one
+  capitalised word standing in front of an enumerator. Prose that opens the same way — `Artikel 12
+  van de wet is van toepassing.` — stays prose, because behind a keyword the text after the
+  enumerator must still be capitalised (GH#1608).
+- PDF heading detection no longer skips a numbered heading that is only two words long. Promotion
+  of a bold, body-size line to a heading required more than two words — a floor that keeps short
+  bold fragments out — and a numbered section title such as `3. PRIJZEN` or `1. INTRODUCTION` falls
+  below it. Those lines stayed plain bold paragraphs, and a run of them was then coalesced into a
+  single bold line in the rendered output, while the element stream still reported them separately.
+  A numbered section heading is now exempt from the word-count floor; everything else still has to
+  clear it (GH#1611).
+- OCR no longer adopts a markdown table rebuild that loses content. The rebuilt page replaced the
+  original whenever it was merely non-empty, so a rebuild that dropped text still won. The rebuild
+  is now rejected, with a warning naming both word counts, when it retains fewer words than the
+  content it would replace (GH#1599).
+- PaddleOCR's default `model_tier` of `mobile` now resolves to the pp-ocrv6 `small` detection model
+  (9.9 MB) rather than `medium` (62 MB). A tier named `mobile` silently loading the largest
+  available model made a 21-page document take over ten minutes. `small` and `medium` share the
+  same 18,708-character dictionary, so recognition coverage is unchanged. The documented model
+  sizes were also wrong and have been corrected (GH#1602).
+- The PHP extension now loads on Debian 12 and other distributions built against GCC 12. The Linux
+  publish runners ship GCC 13+, and the extension picked up a `GLIBCXX_3.4.31` symbol from their
+  libstdc++ while Debian 12 provides at most `GLIBCXX_3.4.30`. libstdc++ is now linked statically;
+  the highest glibc requirement was already below Debian 12's (GH#1606).
+
 ## [1.1.3] - 2026-09-08
 
 ### Added

@@ -88,7 +88,7 @@ regex = "1.13"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.11"
-skrifa = "0.46"                                                                             # capped by harfrust: 0.47 moves to read-fonts 0.44 while harfrust 0.13 is still on 0.43, and text_rasterizer passes a harfrust FontRef to skrifa's OutlineFace ~keep
+skrifa = "0.46"                                                                             # capped by harfrust: 0.47 moves to read-fonts 0.44 while harfrust 0.13 is still on 0.43, and text_rasterizer passes a harfrust FontRef to skrifa's OutlineFace. `cargo upgrade --incompatible` raises this and leaves the comment behind; re-pin it. Re-verified 2026-09-10: 0.47 fails with `no method named head found for harfrust::FontRef` ~keep
 smallvec = "1.16"
 stringprep = "0.1"
 subsetter = { version = "0.2", default-features = false }                                  # drops the duplicate skrifa 0.42/read-fonts 0.39 stack ~keep

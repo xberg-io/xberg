@@ -63,7 +63,7 @@ type HeadingMap = Vec<(f32, Option<u8>)>;
 /// Lowercased `(left, right)` word pairs the document itself writes as a single
 /// hyphenated token elsewhere in the text, gathered once per document (#1543).
 /// Threaded alongside [`HeadingMap`] as a document-scoped shared reference. ~keep
-type HyphenWitnesses = ahash::AHashSet<(String, String)>;
+pub(super) type HyphenWitnesses = ahash::AHashSet<(String, String)>;
 
 /// Document-scoped text-repair evidence, collected once per document by
 /// [`collect_hyphen_witnesses`] and [`collect_word_witnesses`] and threaded through
@@ -3307,7 +3307,13 @@ pub(crate) fn extract_document_structure_from_segments(
     );
 
     let effective_image_positions = if inject_placeholders { image_positions } else { &[] };
-    let mut doc = assemble_internal_document(all_page_paragraphs, &emitted_tables, images, effective_image_positions);
+    let mut doc = assemble_internal_document(
+        all_page_paragraphs,
+        &emitted_tables,
+        images,
+        effective_image_positions,
+        &witnesses.hyphens,
+    );
 
     for elem in &mut doc.elements {
         if elem.text.is_empty() {
@@ -5160,7 +5166,11 @@ fn collect_word_witnesses(all_page_segments: &[Vec<SegmentData>]) -> WordWitness
     witnesses
 }
 
-fn should_preserve_lexical_hyphen(trailing_word: &str, leading_word: &str, hyphen_witnesses: &HyphenWitnesses) -> bool {
+pub(super) fn should_preserve_lexical_hyphen(
+    trailing_word: &str,
+    leading_word: &str,
+    hyphen_witnesses: &HyphenWitnesses,
+) -> bool {
     let trim_non_lexical = |ch: char| !ch.is_alphanumeric() && ch != '-';
     let left = trailing_word.trim_matches(trim_non_lexical);
     let right = leading_word.trim_matches(trim_non_lexical);
@@ -7976,7 +7986,13 @@ mod tests {
         assert!(paragraphs[0].lines[0].segments[1].is_bold);
         assert_eq!(paragraph_text(&paragraphs[0]), "plain bold tail");
 
-        let document = crate::pdf::structure::assembly::assemble_internal_document(vec![paragraphs], &[], None, &[]);
+        let document = crate::pdf::structure::assembly::assemble_internal_document(
+            vec![paragraphs],
+            &[],
+            None,
+            &[],
+            &Default::default(),
+        );
         let element = &document.elements[0];
         let bold = element
             .annotations
@@ -8489,7 +8505,8 @@ mod tests {
         ]];
 
         compact_final_heading_hierarchy(&mut pages);
-        let document = crate::pdf::structure::assembly::assemble_internal_document(pages, &[], None, &[]);
+        let document =
+            crate::pdf::structure::assembly::assemble_internal_document(pages, &[], None, &[], &Default::default());
         let markdown = crate::rendering::render_markdown(&document);
         let headings = markdown
             .lines()
@@ -9035,7 +9052,7 @@ where new shares are issued;";
         );
         assert_eq!(output[0].word_count, 2);
 
-        let document = assemble_internal_document(vec![output], &[], None, &[]);
+        let document = assemble_internal_document(vec![output], &[], None, &[], &Default::default());
         let element = &document.elements[0];
         assert_eq!(element.text, "Introduction, body");
         assert_eq!(element.annotations.len(), 1);
@@ -9063,7 +9080,7 @@ where new shares are issued;";
         ]);
         assert_eq!(paragraph_text(&compound[0]), "A cost-effective design");
 
-        let document = assemble_internal_document(vec![compound], &[], None, &[]);
+        let document = assemble_internal_document(vec![compound], &[], None, &[], &Default::default());
         assert_eq!(document.elements[0].text, "A cost-effective design");
 
         let code = process_heuristic_segments(vec![

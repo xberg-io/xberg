@@ -73,18 +73,10 @@ _ARCH_32 = frozenset({"x86", "arm"})
 # alef-generated, so the repair belongs in alef's C# backend and a hand-patch here would be
 # reverted by the next regen. Each entry must name its issue. Remove an entry when the
 # upstream fix lands -- the check then proves the fix rather than merely asserting it. ~keep
-_DISCARDED_VALIDATE_RESULT = "GH#1596 -- int32_t validation result declared void and discarded"
 _SAMPLE_BYTES = "GH#1595 -- bytes-returning fn rendered with the string template"
 _INT32_AS_LONG = "GH#1597 -- int32_t return declared JAVA_LONG"
 KNOWN_BROKEN = {
-    "C#": {
-        "xberg_registry_sample_bytes": _SAMPLE_BYTES,
-        "xberg_extraction_config_validate": _DISCARDED_VALIDATE_RESULT,
-        "xberg_heuristics_config_validate": _DISCARDED_VALIDATE_RESULT,
-        "xberg_llm_config_validate": _DISCARDED_VALIDATE_RESULT,
-        "xberg_pdf_config_validate": _DISCARDED_VALIDATE_RESULT,
-        "xberg_redaction_config_validate": _DISCARDED_VALIDATE_RESULT,
-    },
+    "C#": {},
     "java": {
         "xberg_registry_sample_bytes": _SAMPLE_BYTES,
         "xberg_last_error_code": _INT32_AS_LONG,

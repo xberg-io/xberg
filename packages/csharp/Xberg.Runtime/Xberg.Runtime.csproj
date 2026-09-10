@@ -7,10 +7,10 @@
          the matching XbergIo.Xberg.runtime.<rid> at the consumer's restore. -->
     <PublishedRID Condition="'$(PublishedRID)' == ''">win-x64</PublishedRID>
     <PackageId>XbergIo.Xberg.runtime.$(PublishedRID)</PackageId>
-    <Version>1.1.5</Version>
-    <AssemblyVersion>1.1.5.0</AssemblyVersion>
-    <FileVersion>1.1.5.0</FileVersion>
-    <InformationalVersion>1.1.5</InformationalVersion>
+    <Version>1.1.6</Version>
+    <AssemblyVersion>1.1.6.0</AssemblyVersion>
+    <FileVersion>1.1.6.0</FileVersion>
+    <InformationalVersion>1.1.6</InformationalVersion>
     <Description>High-performance document intelligence library — native runtime assets for $(PublishedRID).</Description>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <RepositoryUrl>https://github.com/xberg-io/xberg</RepositoryUrl>

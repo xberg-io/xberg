@@ -6065,6 +6065,14 @@
             "$ref": "#/$defs/RegistrationVariantSpec"
           },
           "type": "array"
+        },
+        "wrapper_options": {
+          "default": [],
+          "description": "Chaining methods on the wrapper type that every variant of this registration exposes as\nan extra optional parameter.\n\nOnly meaningful when the base registration takes a wrapper-typed metadata param with a\nstatic constructor (the `wrapper_call` shape). Each entry names a method on that wrapper\ntaking exactly one argument and returning the wrapper, e.g. `RouteBuilder::cors`. A\nvariant then gains an optional param of that argument's type and, when the caller passes\none, chains the method onto the constructed wrapper before delegating.\n\nExists because a verb shortcut that can only pin constructor args is strictly weaker than\nthe base registration it wraps: everything the builder can express after construction --\nper-route CORS, compression, timeouts -- becomes unreachable through the shortcut, and a\nbinding whose only route API is the shortcut cannot express it at all.\n\n```toml\n[[crates.services.registrations]]\nmethod = \"route\"\nwrapper_options = [\"cors\", \"compression\"]\n```",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "required": [
@@ -8216,7 +8224,7 @@
       "type": "object"
     }
   },
-  "$id": "https://github.com/xberg-io/alef/releases/download/v0.85.7/alef.schema.json",
+  "$id": "https://github.com/xberg-io/alef/releases/download/v0.85.15/alef.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "JSON Schema for the JSON representation of alef.toml.",
@@ -8335,6 +8343,6 @@
   ],
   "title": "Alef configuration",
   "type": "object",
-  "version": "0.85.7",
-  "x-alef-version": "0.85.7"
+  "version": "0.85.15",
+  "x-alef-version": "0.85.15"
 }

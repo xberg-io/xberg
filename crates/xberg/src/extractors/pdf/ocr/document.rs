@@ -84,6 +84,7 @@ pub(super) fn assemble_mixed_ocr_page_document(
             &doc.tables,
             Some(&doc.images),
             &[],
+            &Default::default(),
         );
         assembled.processing_warnings = std::mem::take(&mut doc.processing_warnings);
         doc = assembled;
@@ -1881,6 +1882,7 @@ pub(super) fn heuristically_restructured_ocr_pages(
             collected_tables,
             None,
             &[],
+            &Default::default(),
         ));
     }
 

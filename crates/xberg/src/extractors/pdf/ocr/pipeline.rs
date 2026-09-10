@@ -986,6 +986,7 @@ pub(crate) async fn extract_mixed_ocr_native(
                         &existing.tables,
                         Some(&existing.images),
                         &[],
+                        &Default::default(),
                     );
                     new_page_doc.prebuilt_ocr_elements = existing.prebuilt_ocr_elements.clone();
                     new_page_doc.processing_warnings = existing.processing_warnings.clone();
@@ -2275,6 +2276,7 @@ pub(super) async fn extract_with_ocr_for_page(
                     &collected_tables,
                     None,
                     &[],
+                    &Default::default(),
                 ))
             } else {
                 match heuristically_restructured_ocr_pages(&pages, &ocr_page_heights, &collected_tables, config) {
@@ -2321,6 +2323,7 @@ pub(super) async fn extract_with_ocr_for_page(
                             &collected_tables,
                             None,
                             &[],
+                            &Default::default(),
                         ))
                     }
                 }

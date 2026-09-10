@@ -2631,7 +2631,8 @@ mod tests {
         assert_eq!(paragraphs[0].heading_level, Some(1));
         assert_eq!(paragraphs[1].heading_level, None);
 
-        let assembled = crate::pdf::structure::assemble_internal_document(vec![paragraphs], &[], None, &[]);
+        let assembled =
+            crate::pdf::structure::assemble_internal_document(vec![paragraphs], &[], None, &[], &Default::default());
         assert_eq!(assembled.elements.len(), 2);
         assert_eq!(assembled.elements[0].kind, ElementKind::Heading { level: 1 });
         assert_eq!(assembled.elements[1].kind, ElementKind::Paragraph);
@@ -3159,7 +3160,8 @@ mod tests {
         assert_eq!(paragraphs[0].text, "Document title");
         assert_eq!(paragraphs[1].text, "Body text");
 
-        let assembled = crate::pdf::structure::assemble_internal_document(vec![paragraphs], &[], None, &[]);
+        let assembled =
+            crate::pdf::structure::assemble_internal_document(vec![paragraphs], &[], None, &[], &Default::default());
         assert_eq!(assembled.elements.len(), 2);
         assert_eq!(assembled.elements[0].kind, ElementKind::Heading { level: 1 });
         assert_eq!(assembled.elements[1].kind, ElementKind::Paragraph);

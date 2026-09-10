@@ -78,6 +78,14 @@ const RT_TEXT_BYTES_ATOM: u16 = 0x0FA8;
 /// cannot be used as a slide boundary (#87).
 const RT_SLIDE: u16 = 0x03EE;
 const RT_MAIN_MASTER: u16 = 0x03F8;
+/// Document-level outline collection. A legacy deck keeps a slide's title here rather than in
+/// the slide's own drawing, and reading only the drawing lost every such title
+/// (xberg-io/xberg#1612). This is NOT a slide boundary -- see
+/// `test_extract_texts_segments_on_slide_not_slide_list_with_text`. ~keep
+const RT_SLIDE_LIST_WITH_TEXT: u16 = 0x0FF0;
+/// Introduces one slide's entries inside [`RT_SLIDE_LIST_WITH_TEXT`]; the nth such atom starts
+/// the outline records belonging to the nth slide, which is how outline text is attributed. ~keep
+const RT_SLIDE_PERSIST_ATOM: u16 = 0x03F3;
 const RT_NOTES: u16 = 0x03F0;
 
 /// `OfficeArtBlip` record types for the raster formats a `Pictures` stream
@@ -203,6 +211,10 @@ fn extract_texts_from_records(
     let mut in_notes = false;
     let mut notes_end: Option<usize> = None;
     let mut current_notes_texts: Vec<String> = Vec::new();
+    // Outline text keyed by slide position, harvested from `SlideListWithText` (#1612).
+    let mut outline_texts: Vec<Vec<String>> = Vec::new();
+    let mut outline_end: Option<usize> = None;
+    let mut outline_slide_index: Option<usize> = None;
 
     while pos + 8 <= data.len() {
         // A slide/notes container's text only spans its own declared byte
@@ -223,6 +235,12 @@ fn extract_texts_from_records(
             current_slide_texts.clear();
             in_slide_text = false;
             slide_end = None;
+        }
+        if let Some(end) = outline_end
+            && pos >= end
+        {
+            outline_end = None;
+            outline_slide_index = None;
         }
         if let Some(end) = notes_end
             && pos >= end
@@ -290,6 +308,21 @@ fn extract_texts_from_records(
                 pos = content_end;
                 continue;
             }
+            RT_SLIDE_LIST_WITH_TEXT => {
+                outline_end = Some(content_end);
+                outline_slide_index = None;
+                pos += 8;
+                continue;
+            }
+            RT_SLIDE_PERSIST_ATOM if outline_end.is_some() => {
+                let next = outline_slide_index.map_or(0, |i| i + 1);
+                outline_slide_index = Some(next);
+                if outline_texts.len() <= next {
+                    outline_texts.resize(next + 1, Vec::new());
+                }
+                pos = content_end;
+                continue;
+            }
             RT_TEXT_CHARS_ATOM => {
                 if content_end <= data.len() {
                     let text_data = &data[content_start..content_end];
@@ -300,13 +333,20 @@ fn extract_texts_from_records(
                     let text = String::from_utf16_lossy(&chars);
                     let cleaned = clean_ppt_text(&text);
                     if !cleaned.is_empty() {
-                        if in_notes {
-                            current_notes_texts.push(cleaned.clone());
-                        }
-                        if in_slide_text {
-                            current_slide_texts.push(cleaned);
-                        } else if !in_notes {
-                            loose_texts.push(cleaned);
+                        if let Some(index) = outline_slide_index {
+                            // Outline text belongs to a slide, not to `loose_texts` -- which is
+                            // discarded whenever any slide exists, and is where every legacy
+                            // title used to end up (#1612).
+                            outline_texts[index].push(cleaned);
+                        } else {
+                            if in_notes {
+                                current_notes_texts.push(cleaned.clone());
+                            }
+                            if in_slide_text {
+                                current_slide_texts.push(cleaned);
+                            } else if !in_notes {
+                                loose_texts.push(cleaned);
+                            }
                         }
                     }
                 }
@@ -319,13 +359,20 @@ fn extract_texts_from_records(
                     let text: String = text_data.iter().map(|&b| cp1252_to_char(b)).collect();
                     let cleaned = clean_ppt_text(&text);
                     if !cleaned.is_empty() {
-                        if in_notes {
-                            current_notes_texts.push(cleaned.clone());
-                        }
-                        if in_slide_text {
-                            current_slide_texts.push(cleaned);
-                        } else if !in_notes {
-                            loose_texts.push(cleaned);
+                        if let Some(index) = outline_slide_index {
+                            // Outline text belongs to a slide, not to `loose_texts` -- which is
+                            // discarded whenever any slide exists, and is where every legacy
+                            // title used to end up (#1612).
+                            outline_texts[index].push(cleaned);
+                        } else {
+                            if in_notes {
+                                current_notes_texts.push(cleaned.clone());
+                            }
+                            if in_slide_text {
+                                current_slide_texts.push(cleaned);
+                            } else if !in_notes {
+                                loose_texts.push(cleaned);
+                            }
                         }
                     }
                 }
@@ -358,6 +405,31 @@ fn extract_texts_from_records(
         if !trimmed.is_empty() {
             speaker_notes.push(trimmed);
         }
+    }
+
+    // Prepend each slide's outline text, skipping any line the slide's own drawing already
+    // carries. A title drawn on the canvas appears in both places, and those decks are exactly
+    // the ones whose titles already survived -- recovering the outline copy must not double
+    // them (#1612). Attribution is positional: the nth `SlidePersistAtom` introduces the nth
+    // slide's outline records, matching the persist order `slides` is built in.
+    for (index, outline) in outline_texts.iter().enumerate() {
+        let Some(slide) = slides.get_mut(index) else {
+            continue;
+        };
+        let recovered: Vec<&str> = outline
+            .iter()
+            .map(String::as_str)
+            .filter(|line| !slide.text.lines().any(|existing| existing == *line))
+            .collect();
+        if recovered.is_empty() {
+            continue;
+        }
+        let joined = recovered.join("\n");
+        slide.text = if slide.text.is_empty() {
+            joined
+        } else {
+            format!("{joined}\n{}", slide.text)
+        };
     }
 
     Ok((slides, loose_texts, speaker_notes))
@@ -776,6 +848,82 @@ mod tests {
         assert!(loose_texts.is_empty());
         assert!(notes.is_empty());
         assert!(warnings.is_empty(), "well-formed records should not warn: {warnings:?}");
+    }
+
+    /// xberg-io/xberg#1612: a legacy deck keeps a slide's title in the document-level
+    /// outline collection (`SlideListWithText`) and only the body in the slide's own drawing.
+    /// The walk collected text from `Slide` containers only, so every such title landed in
+    /// `loose_texts` -- which is discarded unless there are no slides at all -- and vanished.
+    ///
+    /// This does NOT re-segment on `SlideListWithText`; see
+    /// `test_extract_texts_segments_on_slide_not_slide_list_with_text`, which still pins that.
+    /// Slides are still one-per-`Slide`; the outline text is attributed to them by the order of
+    /// the `SlidePersistAtom` entries that introduce each slide's outline records. ~keep
+    #[test]
+    fn test_extract_texts_recovers_titles_from_slide_list_with_text() {
+        const RT_SLIDE_LIST_WITH_TEXT: u16 = 0x0FF0;
+        const RT_SLIDE_PERSIST_ATOM: u16 = 0x03F3;
+
+        let mut outline = Vec::new();
+        outline.extend_from_slice(&record_header(0x0000, RT_SLIDE_PERSIST_ATOM, 0));
+        outline.extend_from_slice(&text_chars_atom("Search strategy development"));
+        outline.extend_from_slice(&record_header(0x0000, RT_SLIDE_PERSIST_ATOM, 0));
+        outline.extend_from_slice(&text_chars_atom("Results and discussion"));
+        let slwt = container(RT_SLIDE_LIST_WITH_TEXT, &outline);
+
+        let slide1 = container(RT_SLIDE, &text_chars_atom("=> FILE HCAPLUS"));
+        let slide2 = container(RT_SLIDE, &text_chars_atom("=> DISPLAY L1"));
+
+        let mut data = Vec::new();
+        data.extend_from_slice(&slwt);
+        data.extend_from_slice(&slide1);
+        data.extend_from_slice(&slide2);
+
+        let mut warnings = Vec::new();
+        let (slides, loose_texts, notes) =
+            extract_texts_from_records(&data, false, &mut warnings).expect("record parsing should succeed");
+
+        assert_eq!(slides.len(), 2, "still one slide per Slide container");
+        assert_eq!(slides[0].number, 1);
+        assert_eq!(slides[0].text, "Search strategy development\n=> FILE HCAPLUS");
+        assert_eq!(slides[1].number, 2);
+        assert_eq!(slides[1].text, "Results and discussion\n=> DISPLAY L1");
+        assert!(
+            loose_texts.is_empty(),
+            "outline text belongs to a slide, not to loose text"
+        );
+        assert!(notes.is_empty());
+        assert!(warnings.is_empty(), "well-formed records should not warn: {warnings:?}");
+    }
+
+    /// A title that is *also* drawn on the slide canvas must appear once, not twice: the
+    /// reporter noted that decks where the title is drawn are exactly the ones whose titles
+    /// already survived, so recovering the outline copy must not double them. ~keep
+    #[test]
+    fn test_outline_title_already_drawn_on_the_slide_is_not_duplicated() {
+        const RT_SLIDE_LIST_WITH_TEXT: u16 = 0x0FF0;
+        const RT_SLIDE_PERSIST_ATOM: u16 = 0x03F3;
+
+        let mut outline = Vec::new();
+        outline.extend_from_slice(&record_header(0x0000, RT_SLIDE_PERSIST_ATOM, 0));
+        outline.extend_from_slice(&text_chars_atom("Title Slide"));
+        let slwt = container(RT_SLIDE_LIST_WITH_TEXT, &outline);
+
+        let mut slide_children = Vec::new();
+        slide_children.extend_from_slice(&text_chars_atom("Title Slide"));
+        slide_children.extend_from_slice(&text_chars_atom("With a subtitle"));
+        let slide1 = container(RT_SLIDE, &slide_children);
+
+        let mut data = Vec::new();
+        data.extend_from_slice(&slwt);
+        data.extend_from_slice(&slide1);
+
+        let mut warnings = Vec::new();
+        let (slides, _loose, _notes) =
+            extract_texts_from_records(&data, false, &mut warnings).expect("record parsing should succeed");
+
+        assert_eq!(slides.len(), 1);
+        assert_eq!(slides[0].text, "Title Slide\nWith a subtitle");
     }
 
     /// A `Notes` container's text must not bleed into the slide that follows

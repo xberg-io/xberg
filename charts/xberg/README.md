@@ -9,14 +9,14 @@ The chart is published as an OCI artifact to GHCR.
 ## Install
 
 ```bash
-helm install xberg oci://ghcr.io/xberg-io/charts/xberg --version 1.1.5
+helm install xberg oci://ghcr.io/xberg-io/charts/xberg --version 1.1.6
 ```
 
 Override values inline or with a file:
 
 ```bash
 helm install xberg oci://ghcr.io/xberg-io/charts/xberg \
-  --version 1.1.5 \
+  --version 1.1.6 \
   --set service.type=LoadBalancer \
   --set cache.size=5Gi
 ```
