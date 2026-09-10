@@ -1008,6 +1008,15 @@ impl TesseractAPI {
         if vec_ptr.is_null() {
             return Err(TesseractError::NullPointerError);
         }
+        struct TextArrayGuard(*mut *mut c_char);
+        impl Drop for TextArrayGuard {
+            fn drop(&mut self) {
+                // SAFETY: `TessDeleteTextArray()` deallocates both the array
+                // and all contained strings.
+                unsafe { TessDeleteTextArray(self.0) };
+            }
+        }
+        let _text_array = TextArrayGuard(vec_ptr);
         let mut result = Vec::new();
         let mut i = 0;
         loop {
@@ -1019,7 +1028,6 @@ impl TesseractAPI {
             result.push(c_str.to_str()?.to_owned());
             i += 1;
         }
-        unsafe { TessDeleteTextArray(vec_ptr) };
         Ok(result)
     }
 
