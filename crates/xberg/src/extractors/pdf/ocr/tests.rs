@@ -8391,4 +8391,162 @@ Name: ___
              does not -- this is the root cause of GH#1584's 'vlm fallback does not trigger'"
         );
     }
+
+    /// A minimal `OcrBackend` that counts how many times `process_image` actually ran,
+    /// shared by the cancellation tests below. Does not implement `process_document`, so
+    /// a non-empty `images` slice always drives the per-page batch loop in
+    /// `extract_with_ocr_for_page` (the fan-out under test) rather than the document-level
+    /// branch exercised by `test_process_document_propagation` above.
+    #[cfg(feature = "ocr")]
+    struct CountingOcrBackend {
+        calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    #[cfg(feature = "ocr")]
+    #[async_trait::async_trait]
+    impl crate::plugins::OcrBackend for CountingOcrBackend {
+        fn backend_type(&self) -> crate::plugins::OcrBackendType {
+            crate::plugins::OcrBackendType::Custom
+        }
+        fn supports_language(&self, _: &str) -> bool {
+            true
+        }
+        async fn process_image(
+            &self,
+            _: &[u8],
+            _: &crate::core::config::OcrConfig,
+        ) -> crate::Result<crate::types::ExtractedDocument> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(crate::types::ExtractedDocument::default())
+        }
+    }
+
+    #[cfg(feature = "ocr")]
+    impl crate::plugins::Plugin for CountingOcrBackend {
+        fn name(&self) -> &str {
+            "cancel-counting-backend"
+        }
+        fn version(&self) -> String {
+            "1.0.0".to_string()
+        }
+        fn initialize(&self) -> crate::Result<()> {
+            Ok(())
+        }
+        fn shutdown(&self) -> crate::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// GH: `extraction_timeout_secs` firing calls `config.cancel_token.cancel()`, but the
+    /// PDF OCR page fan-out in `pipeline.rs` never checked it, so already-spawned per-page
+    /// OCR work kept running after the caller had already received a `Timeout` error --
+    /// burning CPU and holding the shared Tesseract concurrency permits, degrading
+    /// unrelated concurrent extractions. This test proves a *pre-cancelled* token makes the
+    /// fan-out skip every page's backend call rather than merely being present alongside
+    /// them: `calls` asserts the exact count 0, not just "less than 3".
+    #[cfg(feature = "ocr")]
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn extract_with_ocr_skips_backend_calls_when_cancel_token_is_already_cancelled() {
+        use crate::cancellation::CancellationToken;
+        use crate::core::config::OcrConfig;
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let calls = Arc::new(AtomicUsize::new(0));
+        let backend = Arc::new(CountingOcrBackend { calls: calls.clone() });
+        crate::plugins::register_ocr_backend(backend).unwrap();
+
+        let token = CancellationToken::new();
+        token.cancel();
+
+        let config = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                backend: "cancel-counting-backend".to_string(),
+                ..Default::default()
+            }),
+            cancel_token: Some(token),
+            ..Default::default()
+        };
+
+        let images = [
+            image::DynamicImage::new_rgb8(4, 4),
+            image::DynamicImage::new_rgb8(4, 4),
+            image::DynamicImage::new_rgb8(4, 4),
+        ];
+
+        let result = extract_with_ocr(
+            None,
+            Some(&images),
+            #[cfg(feature = "layout-detection")]
+            None,
+            &config,
+            None,
+        )
+        .await;
+
+        crate::plugins::unregister_ocr_backend("cancel-counting-backend").unwrap();
+
+        assert!(
+            matches!(result, Err(crate::XbergError::Cancelled)),
+            "a cancelled fan-out must report the cancellation itself, not a wholesale OCR \
+             backend failure: {result:?}"
+        );
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            0,
+            "process_image must never run once cancel_token.is_cancelled() is already true"
+        );
+    }
+
+    /// Companion negative control for the test above: same three-page batch, same backend,
+    /// but no cancellation requested. Proves the new cancellation checks are a true no-op
+    /// on the normal path -- every page still reaches the backend exactly once, not "at
+    /// least one" or "some".
+    #[cfg(feature = "ocr")]
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn extract_with_ocr_calls_backend_for_every_page_when_not_cancelled() {
+        use crate::core::config::OcrConfig;
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let calls = Arc::new(AtomicUsize::new(0));
+        let backend = Arc::new(CountingOcrBackend { calls: calls.clone() });
+        crate::plugins::register_ocr_backend(backend).unwrap();
+
+        let config = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                backend: "cancel-counting-backend".to_string(),
+                ..Default::default()
+            }),
+            cancel_token: None,
+            ..Default::default()
+        };
+
+        let images = [
+            image::DynamicImage::new_rgb8(4, 4),
+            image::DynamicImage::new_rgb8(4, 4),
+            image::DynamicImage::new_rgb8(4, 4),
+        ];
+
+        let result = extract_with_ocr(
+            None,
+            Some(&images),
+            #[cfg(feature = "layout-detection")]
+            None,
+            &config,
+            None,
+        )
+        .await;
+
+        crate::plugins::unregister_ocr_backend("cancel-counting-backend").unwrap();
+
+        assert!(result.is_ok(), "unexpected error: {result:?}");
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            3,
+            "every one of the 3 pages must reach process_image when cancel_token is None"
+        );
+    }
 }
