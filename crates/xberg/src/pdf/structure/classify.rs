@@ -7,7 +7,8 @@
 
 use super::constants::{
     MAX_BOLD_HEADING_WORD_COUNT, MAX_HEADING_DISTANCE_MULTIPLIER, MAX_HEADING_WORD_COUNT, MAX_TITLE_WORD_COUNT,
-    MIN_BLOCKS_FOR_FONT_HEADING, MIN_HEADING_FONT_GAP, MIN_HEADING_FONT_RATIO,
+    MIN_BLOCKS_FOR_FONT_HEADING, MIN_HEADING_FONT_GAP, MIN_HEADING_FONT_RATIO, MIN_TABULAR_NUMERIC_TOKENS,
+    TABULAR_NUMERIC_TOKEN_DIVISOR,
 };
 use super::regions::{looks_like_bare_url, looks_like_figure_label};
 use super::types::{LayoutHintClass, PdfParagraph};
@@ -1035,6 +1036,10 @@ fn infer_section_level(text: &str) -> u8 {
 /// when a capital follows it, so a decimal, an abbreviation or a numbered prefix does not trip it,
 /// and [`is_section_pattern`] keeps "ARTICLE IV." and "3.2. Methods" exactly as it does for the bold
 /// branch. GH#1599. ~keep
+///
+/// Past the same word floor, a run of bare numerals disqualifies as well: that is an OCR'd table
+/// flattened onto one line, which no sentence-shape test objects to. See
+/// [`reads_as_tabular_row`]. ~keep
 pub(super) fn reads_as_body_content(text: &str, word_count: usize) -> bool {
     let trimmed = text.trim();
     if trimmed.starts_with(['\u{2022}', '\u{00B7}', '\u{25E6}', '\u{25AA}']) {
@@ -1043,13 +1048,55 @@ pub(super) fn reads_as_body_content(text: &str, word_count: usize) -> bool {
     if is_section_pattern(trimmed) || word_count <= MAX_TITLE_WORD_COUNT {
         return false;
     }
-    if ends_with_sentence_period(trimmed) {
-        return true;
+    ends_with_sentence_period(trimmed) || crosses_interior_sentence_boundary(trimmed) || reads_as_tabular_row(trimmed)
+}
+
+/// Whether one sentence ends inside `text` and another begins after it.
+///
+/// The separator is any whitespace, not a literal space. `pipeline::paragraph_text` joins a
+/// block's physical lines with `\n`, so on a scanned page the boundary that matters most -- a
+/// sentence ending at the end of a line -- arrives here as `".\nAttempted"`. A scan for `". A"`
+/// saw none of those, while the renderer went on to join the same lines with a space, so the
+/// emitted heading displayed the very boundary the gate could not see. Measured on GH#1599's
+/// reproducer: `"...county rd 12.\nAttempted alternate route via ridge trail - impassable"`, 18
+/// words, promoted to `##`.
+///
+/// A trailing ellipsis does not open a new sentence, for the reason
+/// [`ends_with_sentence_period`] documents at the end of a line -- it is a truncation marker, and
+/// a truncated title followed by a capitalised word is still a title. ~keep
+fn crosses_interior_sentence_boundary(text: &str) -> bool {
+    let mut previous_token_ends_sentence = false;
+    for token in text.split_whitespace() {
+        if previous_token_ends_sentence && token.chars().next().is_some_and(char::is_uppercase) {
+            return true;
+        }
+        previous_token_ends_sentence = ends_with_sentence_period(token);
     }
-    let characters: Vec<char> = trimmed.chars().collect();
-    characters
-        .windows(3)
-        .any(|window| window[0] == '.' && window[1] == ' ' && window[2].is_uppercase())
+    false
+}
+
+/// Whether `text` reads as a table row flattened onto one line rather than a heading.
+///
+/// An OCR'd table reaches the heading gate as a single line of joined cells -- on GH#1599's
+/// reproducer, `"Samples Status\no 6 Complete\n02 6 Complete\n03 4 Partial\no7 0 N/A - blocked"`,
+/// promoted to `##`. Every sentence-shape signal is absent from it, because it is not a sentence;
+/// what it has instead is bare numerals, which a heading does not. A heading names something, a
+/// row carries counts.
+///
+/// Deliberately strict about what counts: every character of the token must be an ASCII digit, so
+/// `3.2`, `92%`, `B-114` and `o7` are all prose here. Both the count and the share must clear
+/// their thresholds, so a long title mentioning a couple of years stays a title. ~keep
+fn reads_as_tabular_row(text: &str) -> bool {
+    let mut token_count = 0usize;
+    let mut numeric_token_count = 0usize;
+    for token in text.split_whitespace() {
+        token_count += 1;
+        if !token.is_empty() && token.bytes().all(|byte| byte.is_ascii_digit()) {
+            numeric_token_count += 1;
+        }
+    }
+    numeric_token_count >= MIN_TABULAR_NUMERIC_TOKENS
+        && numeric_token_count * TABULAR_NUMERIC_TOKEN_DIVISOR >= token_count
 }
 
 pub(super) fn ends_with_sentence_period(text: &str) -> bool {
@@ -2068,6 +2115,68 @@ mod tests {
         assert!(!reads_as_body_content(
             "Determining an Access Sub Page Write Permission For Extended Page Tables",
             11,
+        ));
+    }
+
+    /// GH#1599 residue: the block reaching the gate joins its physical lines with `\n`, so the
+    /// sentence boundary that promoted this line to `##` was `".\nAttempted"`, not `". Attempted"`.
+    /// This is the reproducer's text verbatim, at the word count the gate is handed.
+    #[test]
+    fn should_treat_a_sentence_boundary_at_a_line_break_as_body_content() {
+        assert!(reads_as_body_content(
+            "Site 07 access blocked by washout on county rd 12.\nAttempted alternate route via ridge trail - impassable",
+            18,
+        ));
+    }
+
+    /// The boundary must be a sentence boundary, not merely a line break: a title that wraps mid
+    /// phrase stays a title however many lines it takes.
+    #[test]
+    fn should_keep_a_wrapped_title_whose_line_break_is_not_a_sentence_boundary() {
+        assert!(!reads_as_body_content(
+            "Determining an Access Sub Page Write\nPermission For Extended Page Tables In Long Mode",
+            14,
+        ));
+    }
+
+    /// A trailing ellipsis is a truncation marker, not a sentence terminator -- the same judgement
+    /// [`ends_with_sentence_period`] makes at the end of a line, applied mid line.
+    #[test]
+    fn should_keep_a_truncated_title_followed_by_a_capitalised_word() {
+        assert!(!reads_as_body_content(
+            "Impaired Glucose Tolerance and Cardiovascular Risk Across Northern Regions ... Continued Analysis Here",
+            13,
+        ));
+    }
+
+    /// GH#1599 residue: an OCR'd table arrives as one line of joined cells and has no sentence
+    /// shape to object to, because it is not a sentence. The reproducer's table verbatim.
+    #[test]
+    fn should_treat_a_flattened_table_row_as_body_content() {
+        assert!(reads_as_body_content(
+            "Samples Status\no 6 Complete\n02 6 Complete\n03 4 Partial\no7 0 N/A - blocked",
+            16,
+        ));
+    }
+
+    /// The share threshold, not just the count: a title may name several years without becoming a
+    /// table. Three bare numerals clear [`MIN_TABULAR_NUMERIC_TOKENS`]; three of fourteen tokens
+    /// does not clear the share.
+    #[test]
+    fn should_keep_a_long_heading_that_merely_mentions_several_numbers() {
+        assert!(!reads_as_body_content(
+            "Quarterly Site Inspection Results for 2019 2020 and 2021 Across the Northern Basin Region",
+            14,
+        ));
+    }
+
+    /// Only a bare numeral counts. Measurements, percentages and part numbers are prose tokens, so
+    /// a line full of them is judged on its sentence shape like any other.
+    #[test]
+    fn should_not_count_measurements_or_part_numbers_as_tabular_numerals() {
+        assert!(!reads_as_body_content(
+            "Average turnaround 3.2 days data completeness 92% sensor B-114 drift o7 across every northern site",
+            15,
         ));
     }
 

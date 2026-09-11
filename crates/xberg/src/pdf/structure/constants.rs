@@ -65,6 +65,14 @@ pub(super) const MIN_HEADING_FONT_GAP: f32 = 1.5;
 /// A document or section title can legitimately end in a full stop; running prose promoted by font
 /// size cannot be told apart from one any other way. See `classify::reads_as_body_content`. ~keep
 pub(super) const MAX_TITLE_WORD_COUNT: usize = 12;
+/// Bare numerals a line must carry before it can read as a flattened data row rather than a
+/// heading. See `classify::reads_as_tabular_row`. Two numbers are ordinary in a title ("Q3 2024
+/// Results"); three start to be a row of counts. ~keep
+pub(super) const MIN_TABULAR_NUMERIC_TOKENS: usize = 3;
+/// Reciprocal of the share of a line's tokens that must be bare numerals before it reads as a
+/// flattened data row: `numeric * 4 >= tokens` is `numeric / tokens >= 1/4`. Expressed as an
+/// integer divisor so the test stays exact. ~keep
+pub(super) const TABULAR_NUMERIC_TOKEN_DIVISOR: usize = 4;
 /// Maximum word count for a bold paragraph to be promoted to a section heading.
 pub(super) const MAX_BOLD_HEADING_WORD_COUNT: usize = 12;
 /// Minimum layout-hint confidence required for a `Text`/`Caption`/`Footnote` hint to
