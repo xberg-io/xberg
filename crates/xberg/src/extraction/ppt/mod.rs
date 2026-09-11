@@ -97,6 +97,26 @@ const RT_BLIP_JPEG_ALT: u16 = 0xF02A;
 const RT_BLIP_PNG: u16 = 0xF01E;
 const RT_BLIP_DIB: u16 = 0xF01F;
 
+/// `UserEditAtom` -- one per save, chained newest-to-oldest through `offsetLastEdit`.
+const RT_USER_EDIT_ATOM: u16 = 0x0FF5;
+/// `PersistDirectoryAtom` -- maps persist ids to stream offsets for one save.
+const RT_PERSIST_DIRECTORY_ATOM: u16 = 0x1772;
+
+/// Byte offset of `offsetToCurrentEdit` within the `Current User` stream: an 8-byte
+/// record header, then `size` (4) and `headerToken` (4) precede it (MS-PPT 2.3.2). ~keep
+const CURRENT_USER_OFFSET_TO_CURRENT_EDIT: usize = 16;
+
+/// A `persistId` is the low 20 bits of a `PersistDirectoryEntry`'s first dword; the
+/// high 12 bits are `cPersist`, the number of consecutive ids the entry covers
+/// (MS-PPT 2.3.6). ~keep
+const PERSIST_ID_MASK: u32 = 0x000F_FFFF;
+const PERSIST_COUNT_SHIFT: u32 = 20;
+
+/// Upper bound on `UserEditAtom` hops. A `.ppt` accumulates one per save, so a legitimate
+/// chain is long but finite; this only exists so a corrupt or hostile `offsetLastEdit`
+/// cycle cannot spin forever. Chains longer than this fall back to stream order. ~keep
+const MAX_USER_EDIT_CHAIN: usize = 4096;
+
 /// Maximum accepted size for a single embedded picture (100 MB), mirroring
 /// the DOCX/PPTX image cap (`crate::extraction::docx::MAX_IMAGE_FILE_SIZE`).
 /// Bounds allocation from a hostile `recLen` in the untrusted `Pictures`
@@ -140,8 +160,24 @@ pub(crate) fn extract_ppt_text_with_options(
     }
 
     let mut processing_warnings = Vec::new();
-    let (mut slides, loose_texts, speaker_notes) =
-        extract_texts_from_records(&ppt_stream, include_master_slides, &mut processing_warnings)?;
+    // Absent or unreadable `Current User` stream leaves this `None`, and the walk keeps the
+    // stream order it always used. See [`live_slide_offsets`] for why a partial answer is
+    // deliberately not produced.
+    let current_user_stream = read_stream(&mut comp, "/Current User").unwrap_or_default();
+    let live_slides = live_slide_offsets(&ppt_stream, &current_user_stream);
+    if live_slides.is_none() {
+        tracing::debug!(
+            target: "xberg::ppt",
+            "no live slide list resolved from the persist chain; using stream order"
+        );
+    }
+
+    let (mut slides, loose_texts, speaker_notes) = extract_texts_from_records(
+        &ppt_stream,
+        include_master_slides,
+        live_slides.as_deref(),
+        &mut processing_warnings,
+    )?;
 
     // Computed from the pre-fallback data so `loose_texts` is never counted
     // twice below (once here, once folded into the synthetic slide).
@@ -186,6 +222,172 @@ pub(crate) fn extract_ppt_text_with_options(
     })
 }
 
+/// Read a little-endian `u32` at `offset`, or `None` if it does not fit in `data`.
+fn read_u32_le(data: &[u8], offset: usize) -> Option<u32> {
+    let bytes = data.get(offset..offset.checked_add(4)?)?;
+    Some(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+}
+
+/// Resolve the live slide containers, in presentation order, as byte offsets into the
+/// "PowerPoint Document" stream.
+///
+/// A `.ppt` stream is append-only across saves: editing a deck writes new copies of the
+/// objects that changed and leaves the old ones in place. Walking the stream and calling
+/// every `RT_SLIDE` container a slide therefore counts deleted and superseded revisions
+/// as slides, and numbers them by byte order rather than by the order they are presented
+/// in. The format states both answers explicitly and this reads them:
+///
+/// ```text
+/// Current User stream
+///   CurrentUserAtom.offsetToCurrentEdit ─▶ UserEditAtom (0x0FF5)
+///                                            .offsetPersistDirectory ─▶ PersistDirectoryAtom (0x1772)
+///                                            .offsetLastEdit         ─▶ the previous save's UserEditAtom
+///
+/// Document > SlideListWithText (0x0FF0, recInstance 0)
+///   SlidePersistAtom (0x03F3) per slide, in presentation order,
+///   each naming the persist id of that slide's Slide container
+/// ```
+///
+/// Persist directories are merged newest-first, so a later save's entry for an id wins
+/// and older revisions of the same object are never reachable.
+///
+/// Returns `None` whenever the chain cannot be read in full -- absent `Current User`
+/// stream, unparseable atom, offset out of range, or a slide list naming an id no
+/// directory resolves. The caller then keeps stream order, which is what this extractor
+/// did unconditionally before. A partial answer would be worse than the old behaviour:
+/// it would drop real slides. See GH#1614. ~keep
+fn live_slide_offsets(ppt_stream: &[u8], current_user_stream: &[u8]) -> Option<Vec<usize>> {
+    let first_edit = read_u32_le(current_user_stream, CURRENT_USER_OFFSET_TO_CURRENT_EDIT)? as usize;
+
+    // persist id -> stream offset, newest save wins.
+    let mut persist: ahash::AHashMap<u32, usize> = ahash::AHashMap::new();
+    let mut next_edit = Some(first_edit);
+    let mut hops = 0usize;
+
+    while let Some(edit_offset) = next_edit {
+        hops += 1;
+        if hops > MAX_USER_EDIT_CHAIN {
+            return None;
+        }
+        let header = ppt_stream.get(edit_offset..edit_offset.checked_add(8)?)?;
+        if u16::from_le_bytes([header[2], header[3]]) != RT_USER_EDIT_ATOM {
+            return None;
+        }
+        let content = edit_offset + 8;
+        let offset_last_edit = read_u32_le(ppt_stream, content + 8)? as usize;
+        let offset_persist_directory = read_u32_le(ppt_stream, content + 12)? as usize;
+
+        merge_persist_directory(ppt_stream, offset_persist_directory, &mut persist)?;
+
+        // `offsetLastEdit` is 0 at the first save. Anything that does not move BACKWARD is
+        // a cycle or corruption, and following it would not terminate. ~keep
+        next_edit = match offset_last_edit {
+            0 => None,
+            previous if previous < edit_offset => Some(previous),
+            _ => return None,
+        };
+    }
+
+    let slide_ids = slide_persist_ids_in_presentation_order(ppt_stream)?;
+    if slide_ids.is_empty() {
+        return None;
+    }
+    slide_ids
+        .into_iter()
+        .map(|id| {
+            let offset = *persist.get(&id)?;
+            let header = ppt_stream.get(offset..offset.checked_add(8)?)?;
+            (u16::from_le_bytes([header[2], header[3]]) == RT_SLIDE).then_some(offset)
+        })
+        .collect()
+}
+
+/// Merge one save's `PersistDirectoryAtom` into `persist` without overwriting an entry a
+/// newer save already claimed. Returns `None` if the atom is not where the `UserEditAtom`
+/// says it is, or is internally inconsistent.
+fn merge_persist_directory(
+    ppt_stream: &[u8],
+    directory_offset: usize,
+    persist: &mut ahash::AHashMap<u32, usize>,
+) -> Option<()> {
+    let header = ppt_stream.get(directory_offset..directory_offset.checked_add(8)?)?;
+    if u16::from_le_bytes([header[2], header[3]]) != RT_PERSIST_DIRECTORY_ATOM {
+        return None;
+    }
+    let length = u32::from_le_bytes([header[4], header[5], header[6], header[7]]) as usize;
+    let start = directory_offset + 8;
+    let entries = ppt_stream.get(start..start.checked_add(length)?)?;
+
+    let mut cursor = 0usize;
+    while cursor + 4 <= entries.len() {
+        let packed = read_u32_le(entries, cursor)?;
+        let first_id = packed & PERSIST_ID_MASK;
+        let count = (packed >> PERSIST_COUNT_SHIFT) as usize;
+        cursor += 4;
+        for index in 0..count {
+            let offset = read_u32_le(entries, cursor)? as usize;
+            cursor += 4;
+            // `or_insert` and not `insert`: directories arrive newest-first, so the first
+            // writer of an id is the live revision and later (older) saves must not
+            // clobber it. ~keep
+            persist.entry(first_id + index as u32).or_insert(offset);
+        }
+    }
+    Some(())
+}
+
+/// The persist ids named by the document's `SlideListWithText` (`recInstance` 0), in the
+/// order the deck presents them.
+///
+/// `recInstance` distinguishes the three lists a document can carry -- 0 slides,
+/// 1 master, 2 notes -- and only the first is the presentation's slide order. It is the
+/// top 12 bits of the record header's first `u16`. ~keep
+fn slide_persist_ids_in_presentation_order(ppt_stream: &[u8]) -> Option<Vec<u32>> {
+    let mut pos = 0usize;
+    while pos + 8 <= ppt_stream.len() {
+        let ver_instance = u16::from_le_bytes([ppt_stream[pos], ppt_stream[pos + 1]]);
+        let rec_type = u16::from_le_bytes([ppt_stream[pos + 2], ppt_stream[pos + 3]]);
+        let rec_len = u32::from_le_bytes([
+            ppt_stream[pos + 4],
+            ppt_stream[pos + 5],
+            ppt_stream[pos + 6],
+            ppt_stream[pos + 7],
+        ]) as usize;
+        let content_start = pos + 8;
+        let content_end = content_start.checked_add(rec_len)?;
+        if content_end > ppt_stream.len() {
+            return None;
+        }
+
+        if rec_type == RT_SLIDE_LIST_WITH_TEXT && (ver_instance >> 4) == 0 {
+            let mut ids = Vec::new();
+            let mut inner = content_start;
+            while inner + 8 <= content_end {
+                let inner_type = u16::from_le_bytes([ppt_stream[inner + 2], ppt_stream[inner + 3]]);
+                let inner_len = u32::from_le_bytes([
+                    ppt_stream[inner + 4],
+                    ppt_stream[inner + 5],
+                    ppt_stream[inner + 6],
+                    ppt_stream[inner + 7],
+                ]) as usize;
+                if inner_type == RT_SLIDE_PERSIST_ATOM {
+                    ids.push(read_u32_le(ppt_stream, inner + 8)?);
+                }
+                inner = inner.checked_add(8)?.checked_add(inner_len)?;
+            }
+            return Some(ids);
+        }
+
+        // Descend into containers so a nested SlideListWithText is still found.
+        pos = if (ver_instance & 0x000F) == 0x0F {
+            content_start
+        } else {
+            content_end
+        };
+    }
+    None
+}
+
 /// Parse PowerPoint record headers and extract text atoms.
 ///
 /// Returns `(slides, loose_texts, speaker_notes)`, where `slides` carries
@@ -198,6 +400,7 @@ pub(crate) fn extract_ppt_text_with_options(
 fn extract_texts_from_records(
     data: &[u8],
     include_master_slides: bool,
+    live_slides: Option<&[usize]>,
     warnings: &mut Vec<ProcessingWarning>,
 ) -> Result<(Vec<PptSlideText>, Vec<String>, Vec<String>)> {
     let mut slides: Vec<PptSlideText> = Vec::new();
@@ -277,6 +480,20 @@ fn extract_texts_from_records(
 
         match rec_type {
             RT_SLIDE => {
+                // With a resolved persist chain, only the containers the live slide list
+                // names are slides, and their number is their position in that list. A
+                // container the list does not name is a deleted or superseded revision the
+                // stream still carries, and must not be extracted or counted (#1614).
+                let presentation_number = match live_slides {
+                    Some(offsets) => match offsets.iter().position(|&offset| offset == pos) {
+                        Some(index) => index as u32 + 1,
+                        None => {
+                            pos = content_end;
+                            continue;
+                        }
+                    },
+                    None => current_slide_number + 1,
+                };
                 if in_slide_text {
                     slides.push(PptSlideText {
                         number: current_slide_number,
@@ -284,7 +501,7 @@ fn extract_texts_from_records(
                     });
                     current_slide_texts.clear();
                 }
-                current_slide_number += 1;
+                current_slide_number = presentation_number;
                 in_slide_text = true;
                 slide_end = Some(content_end);
                 pos += 8;
@@ -405,6 +622,14 @@ fn extract_texts_from_records(
         if !trimmed.is_empty() {
             speaker_notes.push(trimmed);
         }
+    }
+
+    // Presentation order, not stream order: with a live slide list the walk visits the
+    // containers in whatever order the saves left them, and the number assigned above is
+    // the authority. Sorting here also restores the positional contract the outline merge
+    // below depends on -- the nth entry of `slides` is the nth slide of the deck (#1614).
+    if live_slides.is_some() {
+        slides.sort_by_key(|slide| slide.number);
     }
 
     // Prepend each slide's outline text, skipping any line the slide's own drawing already
@@ -806,6 +1031,180 @@ mod tests {
         buf
     }
 
+    /// Build a `SlidePersistAtom` naming `persist_id`. Only the leading `persistIdRef`
+    /// matters to the reader; the remaining 16 bytes are the documented tail.
+    fn slide_persist_atom(persist_id: u32) -> Vec<u8> {
+        let mut buf = record_header(0x0000, RT_SLIDE_PERSIST_ATOM, 20);
+        buf.extend_from_slice(&persist_id.to_le_bytes());
+        buf.extend_from_slice(&[0u8; 16]);
+        buf
+    }
+
+    /// Build a `PersistDirectoryAtom` holding one single-id entry per `(id, offset)` pair.
+    fn persist_directory(entries: &[(u32, u32)]) -> Vec<u8> {
+        let mut body = Vec::new();
+        for (id, offset) in entries {
+            body.extend_from_slice(&((1u32 << PERSIST_COUNT_SHIFT) | (id & PERSIST_ID_MASK)).to_le_bytes());
+            body.extend_from_slice(&offset.to_le_bytes());
+        }
+        let mut buf = record_header(0x0000, RT_PERSIST_DIRECTORY_ATOM, body.len() as u32);
+        buf.extend_from_slice(&body);
+        buf
+    }
+
+    /// Build a `UserEditAtom`. `offset_last_edit` is 0 for the first save.
+    fn user_edit_atom(offset_last_edit: u32, offset_persist_directory: u32) -> Vec<u8> {
+        let mut buf = record_header(0x0000, RT_USER_EDIT_ATOM, 28);
+        buf.extend_from_slice(&1u32.to_le_bytes()); // lastSlideIdRef
+        buf.extend_from_slice(&[0u8; 4]); // version / minorVersion / majorVersion
+        buf.extend_from_slice(&offset_last_edit.to_le_bytes());
+        buf.extend_from_slice(&offset_persist_directory.to_le_bytes());
+        buf.extend_from_slice(&[0u8; 12]); // docPersistIdRef, persistIdSeed, lastView, unused
+        buf
+    }
+
+    /// Build a `Current User` stream whose `CurrentUserAtom` points at `offset_to_current_edit`.
+    fn current_user_stream(offset_to_current_edit: u32) -> Vec<u8> {
+        let mut buf = record_header(0x0000, 0x0FF6, 0x14);
+        buf.extend_from_slice(&0x14u32.to_le_bytes()); // size
+        buf.extend_from_slice(&0xE391_C05Fu32.to_le_bytes()); // headerToken
+        buf.extend_from_slice(&offset_to_current_edit.to_le_bytes());
+        buf.extend_from_slice(&[0u8; 8]);
+        buf
+    }
+
+    /// GH#1614: a `.ppt` stream is append-only across saves, so a superseded copy of a
+    /// slide is still present in the bytes. Walking the stream counts it as a slide of the
+    /// presentation; the live persist directory does not name it.
+    #[test]
+    fn a_superseded_slide_revision_is_not_extracted_as_a_slide() {
+        let stale = container(RT_SLIDE, &text_chars_atom("stale revision"));
+        let live_one = container(RT_SLIDE, &text_chars_atom("first slide"));
+        let live_two = container(RT_SLIDE, &text_chars_atom("second slide"));
+
+        let mut data = Vec::new();
+        let stale_offset = data.len() as u32;
+        data.extend_from_slice(&stale);
+        let one_offset = data.len() as u32;
+        data.extend_from_slice(&live_one);
+        let two_offset = data.len() as u32;
+        data.extend_from_slice(&live_two);
+
+        let slide_list = container(
+            RT_SLIDE_LIST_WITH_TEXT,
+            &[slide_persist_atom(1), slide_persist_atom(2)].concat(),
+        );
+        data.extend_from_slice(&slide_list);
+
+        // Older save: persist id 1 pointed at the stale copy. Newer save: it points at the
+        // live one, and adds id 2.
+        let old_dir_offset = data.len() as u32;
+        data.extend_from_slice(&persist_directory(&[(1, stale_offset)]));
+        let new_dir_offset = data.len() as u32;
+        data.extend_from_slice(&persist_directory(&[(1, one_offset), (2, two_offset)]));
+
+        let old_edit_offset = data.len() as u32;
+        data.extend_from_slice(&user_edit_atom(0, old_dir_offset));
+        let new_edit_offset = data.len() as u32;
+        data.extend_from_slice(&user_edit_atom(old_edit_offset, new_dir_offset));
+
+        let live =
+            live_slide_offsets(&data, &current_user_stream(new_edit_offset)).expect("the persist chain must resolve");
+        assert_eq!(
+            live,
+            vec![one_offset as usize, two_offset as usize],
+            "the stale revision's offset must not appear in the live slide list"
+        );
+
+        let mut warnings = Vec::new();
+        let (slides, _, _) = extract_texts_from_records(&data, false, Some(&live), &mut warnings)
+            .expect("record parsing should succeed");
+
+        assert_eq!(slides.len(), 2, "three Slide containers, two live slides");
+        assert_eq!(slides[0].text, "first slide");
+        assert_eq!(slides[1].text, "second slide");
+        assert!(
+            !slides.iter().any(|slide| slide.text.contains("stale")),
+            "a superseded revision must not reach the output"
+        );
+
+        // The fixture reproduces the defect, rather than merely being consistent with the
+        // fix: walked without the live list -- which is what this extractor did for every
+        // deck -- the stale revision is extracted and numbered as slide 1. ~keep
+        let mut stream_order_warnings = Vec::new();
+        let (stream_order_slides, _, _) = extract_texts_from_records(&data, false, None, &mut stream_order_warnings)
+            .expect("record parsing should succeed");
+        assert_eq!(
+            stream_order_slides.len(),
+            3,
+            "stream order counts the superseded revision"
+        );
+        assert_eq!(stream_order_slides[0].text, "stale revision");
+    }
+
+    /// GH#1614, the other half: `SlideListWithText` states the presentation order, which
+    /// need not be the byte order the saves left the containers in.
+    #[test]
+    fn slides_are_numbered_by_presentation_order_not_stream_order() {
+        let first_in_stream = container(RT_SLIDE, &text_chars_atom("appears second"));
+        let second_in_stream = container(RT_SLIDE, &text_chars_atom("appears first"));
+
+        let mut data = Vec::new();
+        let stream_a = data.len() as u32;
+        data.extend_from_slice(&first_in_stream);
+        let stream_b = data.len() as u32;
+        data.extend_from_slice(&second_in_stream);
+
+        // Persist id 1 is the deck's first slide and lives LATER in the stream.
+        let slide_list = container(
+            RT_SLIDE_LIST_WITH_TEXT,
+            &[slide_persist_atom(1), slide_persist_atom(2)].concat(),
+        );
+        data.extend_from_slice(&slide_list);
+
+        let dir_offset = data.len() as u32;
+        data.extend_from_slice(&persist_directory(&[(1, stream_b), (2, stream_a)]));
+        let edit_offset = data.len() as u32;
+        data.extend_from_slice(&user_edit_atom(0, dir_offset));
+
+        let live =
+            live_slide_offsets(&data, &current_user_stream(edit_offset)).expect("the persist chain must resolve");
+        assert_eq!(live, vec![stream_b as usize, stream_a as usize]);
+
+        let mut warnings = Vec::new();
+        let (slides, _, _) = extract_texts_from_records(&data, false, Some(&live), &mut warnings)
+            .expect("record parsing should succeed");
+
+        assert_eq!(
+            slides.iter().map(|s| (s.number, s.text.as_str())).collect::<Vec<_>>(),
+            vec![(1, "appears first"), (2, "appears second")],
+            "slide numbers and order come from the slide list, not the byte order"
+        );
+    }
+
+    /// A deck whose chain cannot be read must keep the stream-order behaviour this
+    /// extractor had before, rather than losing slides to a partial answer.
+    #[test]
+    fn an_unreadable_persist_chain_falls_back_to_stream_order() {
+        let mut data = Vec::new();
+        data.extend_from_slice(&container(RT_SLIDE, &text_chars_atom("one")));
+        data.extend_from_slice(&container(RT_SLIDE, &text_chars_atom("two")));
+
+        assert!(
+            live_slide_offsets(&data, &[]).is_none(),
+            "an empty Current User stream resolves nothing"
+        );
+        assert!(
+            live_slide_offsets(&data, &current_user_stream(9_999)).is_none(),
+            "an offsetToCurrentEdit past the end of the stream resolves nothing"
+        );
+
+        let mut warnings = Vec::new();
+        let (slides, _, _) =
+            extract_texts_from_records(&data, false, None, &mut warnings).expect("record parsing should succeed");
+        assert_eq!(slides.len(), 2, "stream order still yields both slides");
+    }
+
     /// #87: `SlideListWithText` (0x0FF0) is a per-document container of
     /// `SlidePersistAtom` outline-view entries -- it does not occur once per
     /// slide, and (as in real files) commonly holds no text of its own. The
@@ -834,7 +1233,7 @@ mod tests {
 
         let mut warnings = Vec::new();
         let (slides, loose_texts, notes) =
-            extract_texts_from_records(&data, false, &mut warnings).expect("record parsing should succeed");
+            extract_texts_from_records(&data, false, None, &mut warnings).expect("record parsing should succeed");
 
         assert_eq!(
             slides.len(),
@@ -881,7 +1280,7 @@ mod tests {
 
         let mut warnings = Vec::new();
         let (slides, loose_texts, notes) =
-            extract_texts_from_records(&data, false, &mut warnings).expect("record parsing should succeed");
+            extract_texts_from_records(&data, false, None, &mut warnings).expect("record parsing should succeed");
 
         assert_eq!(slides.len(), 2, "still one slide per Slide container");
         assert_eq!(slides[0].number, 1);
@@ -920,7 +1319,7 @@ mod tests {
 
         let mut warnings = Vec::new();
         let (slides, _loose, _notes) =
-            extract_texts_from_records(&data, false, &mut warnings).expect("record parsing should succeed");
+            extract_texts_from_records(&data, false, None, &mut warnings).expect("record parsing should succeed");
 
         assert_eq!(slides.len(), 1);
         assert_eq!(slides[0].text, "Title Slide\nWith a subtitle");
@@ -939,7 +1338,7 @@ mod tests {
 
         let mut warnings = Vec::new();
         let (slides, loose_texts, speaker_notes) =
-            extract_texts_from_records(&data, false, &mut warnings).expect("record parsing should succeed");
+            extract_texts_from_records(&data, false, None, &mut warnings).expect("record parsing should succeed");
 
         assert_eq!(slides.len(), 1);
         assert_eq!(slides[0].number, 1);
@@ -965,7 +1364,7 @@ mod tests {
 
         let mut warnings = Vec::new();
         let (slides, _loose_texts, _notes) =
-            extract_texts_from_records(&data, false, &mut warnings).expect("record parsing should succeed");
+            extract_texts_from_records(&data, false, None, &mut warnings).expect("record parsing should succeed");
 
         assert_eq!(
             slides.len(),
@@ -1004,7 +1403,7 @@ mod tests {
 
         let mut warnings = Vec::new();
         let (slides, _loose_texts, _notes) =
-            extract_texts_from_records(&data, false, &mut warnings).expect("record parsing should succeed");
+            extract_texts_from_records(&data, false, None, &mut warnings).expect("record parsing should succeed");
 
         assert_eq!(
             slides.len(),

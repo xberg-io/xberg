@@ -199,6 +199,31 @@ fn failed_ocr_fallback_is_total_loss(native_text: &str) -> bool {
     native_text.trim().is_empty()
 }
 
+/// Whether the OCR backend an AUTOMATIC trigger would use is actually registered.
+///
+/// `ocr-pipeline` can be enabled with no backend at all -- `ocr` implies
+/// `ocr-pipeline`, not the reverse -- and a host application can clear the registry at
+/// runtime. In such a build an automatic trigger has nothing to run, and attempting it
+/// turned an ordinary extraction that never requested OCR into a hard `Plugin` error
+/// naming a backend the caller never chose.
+///
+/// EXPLICIT requests deliberately do not consult this. `force_ocr`, `force_ocr_pages`,
+/// `ocr_inline_images` and a caller-supplied `ocr` config all asked for something this
+/// build cannot do, and must be told so rather than silently given native text.
+///
+/// A configured pipeline resolves each of its own stage backends internally, so this
+/// reports available for it and leaves that route's behaviour unchanged. See GH#1610. ~keep
+#[cfg(feature = "ocr-pipeline")]
+fn automatic_ocr_backend_is_registered() -> bool {
+    let ocr_config = crate::core::config::OcrConfig::default();
+    if ocr_config.pipeline.is_some() {
+        return true;
+    }
+    let registry = crate::plugins::registry::get_ocr_backend_registry();
+    let registry = registry.read();
+    registry.get(&ocr_config.backend).is_ok()
+}
+
 /// Page count via `xberg_native_pdf`. `None` when it cannot open or count the document,
 /// in which case the caller falls back to [`lopdf_page_count`].
 #[cfg(feature = "pdf")]
@@ -1916,57 +1941,88 @@ impl PdfExtractor {
             }
         } else if let Some(scanned_pages) =
             scanned_pages_to_ocr(config, &pdf_metadata, &native_text, boundaries.as_deref())
+                .filter(|_| config.ocr.is_some() || automatic_ocr_backend_is_registered())
         {
             // A scanner's invisible sidecar passes the gate below, so detected
             // pages are selected before it runs. ~keep
             if let Some(ref bounds) = boundaries
                 && !bounds.is_empty()
             {
-                let (
-                    mixed,
-                    results_map,
-                    mixed_structured_pages,
-                    mixed_llm_usage,
-                    mixed_rstrs,
-                    mixed_formulas,
-                    mixed_preprocessing,
-                    mixed_ocr_confidence,
-                    mixed_warnings,
-                ) = ocr::extract_mixed_ocr_native(&native_text, bounds, &scanned_pages, content, config, path).await?;
-                // `Mixed` must mean "OCR contributed text", not "OCR was attempted". When
-                // every candidate page was rejected (blank render, failed decode, empty
-                // backend output) nothing was replaced and the result IS the native text --
-                // reporting `Mixed` there tells a caller the document was OCR'd when it was
-                // not, which is how a silent whole-document OCR failure reads as success. ~keep
-                let mixed_method = extraction_method_after_mixed_ocr(&results_map);
-                let ocr_contributed = mixed_method == ExtractionMethod::Mixed;
-                if !ocr_contributed {
-                    tracing::warn!(
-                        candidate_pages = scanned_pages.len(),
-                        "OCR was attempted on every detected scanned page but no page produced usable \
-                         text; reporting the native extraction method rather than `mixed`"
-                    );
-                }
-                ocr_llm_usage = mixed_llm_usage;
-                ocr_results_map = Some(results_map);
-                structured_ocr_pages = Some(mixed_structured_pages);
-                ocr_page_rasters = mixed_rstrs;
-                if !mixed_formulas.is_empty() {
-                    ocr_formulas = mixed_formulas;
-                }
-                ocr_preprocessing_by_page.extend(mixed_preprocessing);
-                ocr_confidence_by_page.extend(mixed_ocr_confidence);
-                ocr_fallback_warnings.extend(mixed_warnings);
-                if ocr_contributed {
-                    (mixed, mixed_method)
-                } else {
-                    (mixed, ExtractionMethod::Native)
+                // This OCR run is AUTOMATIC -- scanned-page detection asked for it, the
+                // caller did not -- so a failure here must degrade to the native text rather
+                // than abort, exactly as the quality-gate fallback below already does. With
+                // `ocr-pipeline` enabled and no backend registered (a legitimate feature
+                // selection: `ocr` implies `ocr-pipeline`, not the reverse) the `?` that used
+                // to be here failed an ordinary PDF extraction that never requested OCR. The
+                // EXPLICIT sites (`force_ocr_pages` above, `ocr_inline_images`) keep their
+                // hard error, because there the caller asked for something the build cannot
+                // do. See GH#1610. ~keep
+                match ocr::extract_mixed_ocr_native(&native_text, bounds, &scanned_pages, content, config, path).await {
+                    Ok((
+                        mixed,
+                        results_map,
+                        mixed_structured_pages,
+                        mixed_llm_usage,
+                        mixed_rstrs,
+                        mixed_formulas,
+                        mixed_preprocessing,
+                        mixed_ocr_confidence,
+                        mixed_warnings,
+                    )) => {
+                        // `Mixed` must mean "OCR contributed text", not "OCR was attempted". When
+                        // every candidate page was rejected (blank render, failed decode, empty
+                        // backend output) nothing was replaced and the result IS the native text --
+                        // reporting `Mixed` there tells a caller the document was OCR'd when it was
+                        // not, which is how a silent whole-document OCR failure reads as success. ~keep
+                        let mixed_method = extraction_method_after_mixed_ocr(&results_map);
+                        let ocr_contributed = mixed_method == ExtractionMethod::Mixed;
+                        if !ocr_contributed {
+                            tracing::warn!(
+                                candidate_pages = scanned_pages.len(),
+                                "OCR was attempted on every detected scanned page but no page produced usable \
+                                 text; reporting the native extraction method rather than `mixed`"
+                            );
+                        }
+                        ocr_llm_usage = mixed_llm_usage;
+                        ocr_results_map = Some(results_map);
+                        structured_ocr_pages = Some(mixed_structured_pages);
+                        ocr_page_rasters = mixed_rstrs;
+                        if !mixed_formulas.is_empty() {
+                            ocr_formulas = mixed_formulas;
+                        }
+                        ocr_preprocessing_by_page.extend(mixed_preprocessing);
+                        ocr_confidence_by_page.extend(mixed_ocr_confidence);
+                        ocr_fallback_warnings.extend(mixed_warnings);
+                        if ocr_contributed {
+                            (mixed, mixed_method)
+                        } else {
+                            (mixed, ExtractionMethod::Native)
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            error = %e,
+                            candidate_pages = ?scanned_pages,
+                            "Automatic OCR of detected scanned pages failed; using native text extraction result"
+                        );
+                        if failed_ocr_fallback_is_total_loss(&native_text) {
+                            return Err(e);
+                        }
+                        ocr_fallback_warnings.push(crate::types::ProcessingWarning {
+                            source: std::borrow::Cow::Borrowed("ocr"),
+                            message: std::borrow::Cow::Owned(format!(
+                                "Automatic OCR of detected scanned pages {scanned_pages:?} failed ({e}); those \
+                                 pages retain their native text, which may be empty or incomplete."
+                            )),
+                        });
+                        (native_text, ExtractionMethod::Native)
+                    }
                 }
             } else {
                 tracing::warn!("scanned pages detected but no page boundaries available; using native text");
                 (native_text, ExtractionMethod::Native)
             }
-        } else if config.ocr.is_some() || native_text.trim().is_empty() {
+        } else if config.ocr.is_some() || (native_text.trim().is_empty() && automatic_ocr_backend_is_registered()) {
             // Under `Auto`, a PDF with NO native text at all (a scan / missing text layer)
             // must reach OCR even when no explicit `ocr` config was given — the default
             // `ocr: None` ("OCR disabled") otherwise silently discarded the detected scan

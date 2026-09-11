@@ -34,7 +34,14 @@
     "artifacts": "npx --yes -p @napi-rs/cli@^3.7.3 napi artifacts",
     "prepublishOnly": "npx --yes -p @napi-rs/cli@^3.7.3 napi prepublish -t npm --skip-optional-publish"
   },
-  "engines": { "node": ">= 22" },
-  "publishConfig": { "access": "public" },
-  "devDependencies": { "@napi-rs/cli": "^3.7.3", "@types/node": "^26.0.0" }
+  "engines": {
+    "node": ">= 22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.9.1",
+    "@types/node": "^26.5.1"
+  }
 }

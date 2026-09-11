@@ -13,6 +13,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- PDF no longer deletes text a table's bounding box covers but its grid leaves out. Suppression
+  of text a table already renders was decided on geometry alone, and a reconstructed grid need
+  not span every printed column inside its own bounding box. On a four-column fault-finding grid
+  reconstructed with two columns, every run in the two omitted columns vanished from the
+  document — not in a cell, not in any element, nowhere. A covered run is now suppressed only
+  when the table actually carries its text (GH#1616).
+- PDF no longer cuts a numbered heading that wraps onto a second line. The wrap exemption
+  compared the two lines' right edges, and a wrap's last line is short by definition, so it could
+  never fire: the heading kept only its first line and the rest of its title was emitted as body
+  text. A heading's own continuation is now recognised by its left edge, which is the title's
+  hanging indent rather than the margin body text returns to. Regression in 1.1.5 (GH#1615).
+- An extraction that never requested OCR no longer fails when no OCR backend is registered.
+  `ocr-pipeline` can be enabled without any backend — `ocr` implies `ocr-pipeline`, not the
+  reverse — and in that build the automatic scanned-page trigger aborted an ordinary PDF
+  extraction with `OCR backend 'tesseract' not registered`. Automatic triggers now check
+  availability and skip with a warning; an explicit `force_ocr`, `force_ocr_pages`,
+  `ocr_inline_images` or caller-supplied `ocr` config still fails loudly (GH#1610).
+- Legacy binary `.ppt` no longer extracts deleted slide revisions or presents slides in the
+  wrong order. The format is append-only across saves, so editing a deck leaves superseded
+  copies in the stream; treating every `Slide` container as a slide produced 190 slides for a
+  96-slide presentation, numbered by byte order. Live slides and their order now come from the
+  persist chain (`Current User` → `UserEditAtom` → `PersistDirectoryAtom`) and the document's
+  slide list, falling back to the previous behaviour if the chain cannot be read in full. Slide
+  numbers are the page every element and chunk of a deck is cited by, so both defects reached
+  consumers as wrong page numbers (GH#1614).
 - PDF de-hyphenation no longer welds a compound whose own hyphen falls on a line break. Two
   sites decide whether a trailing hyphen survives; only one consulted the lexical evidence, so
   `long-term`, `cost-effective` and `antigen-presenting` came out as `longterm`, `costeffective`
@@ -44,6 +69,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   regenerates on it.
 
 ## [1.1.4] - 2026-09-09
+
+### Changed
+
+- **BREAKING (Ruby):** `FormatMetadata` reaches Ruby as a flat hash. It previously arrived as
+  `{format_type:, _0: {...}}`, where `_0` was the name serde invents for an unnamed tuple field;
+  it now arrives as `{format_type: 'excel', sheet_count: 2, ...}`, the canonical wire the core
+  declares. Code reading `metadata.format[:_0][:sheet_count]` must read
+  `metadata.format[:sheet_count]`. This shipped unannounced in 1.1.4 and is recorded here
+  retroactively; no other binding's shape changed (GH#1594).
 
 ### Fixed
 

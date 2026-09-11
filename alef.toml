@@ -43,17 +43,6 @@ user_owned = [
   "e2e/zig/build.zig",
   "packages/kotlin-android/gradle/wrapper/gradle-wrapper.properties",
   "packages/kotlin-android/src/test/kotlin/io/xberg/XbergScaffoldTest.kt",
-  "test_apps/csharp/Xberg.E2eTests.csproj",
-  "test_apps/dart/pubspec.yaml",
-  "test_apps/go/go.mod",
-  "test_apps/homebrew/README.md",
-  "test_apps/java/pom.xml",
-  "test_apps/kotlin_android/build.gradle.kts",
-  "test_apps/kotlin_android/gradle/wrapper/gradle-wrapper.properties",
-  "test_apps/node/package.json",
-  "test_apps/swift_e2e/Package.swift",
-  "test_apps/wasm/package.json",
-  "test_apps/zig/build.zig",
 ]
 
 [workspace.dto]

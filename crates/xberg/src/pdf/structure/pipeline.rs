@@ -673,8 +673,8 @@ struct PageInput {
     heuristic_segments: Vec<SegmentData>,
     /// Layout hints for this page, if layout detection was run.
     page_hints: Option<Vec<LayoutHint>>,
-    /// Bounding boxes of tables that were successfully extracted for this page.
-    table_bboxes: Vec<crate::types::BoundingBox>,
+    /// Footprint and cell text of tables successfully extracted for this page.
+    table_bboxes: Vec<TableCoverage>,
     /// Whether native semantic classification should be preserved while layout
     /// hints continue to control reading order and record region provenance.
     preserve_native_semantics: bool,
@@ -1759,6 +1759,12 @@ const INLINE_STYLE_MAX_OVERLAP_FONT_FACTOR: f32 = 0.15;
 /// because the next word did not fit -- without also treating a long heading
 /// followed by a much shorter, unrelated line as a wrap. See #1467.
 const HEADING_WRAP_RIGHT_EDGE_TOLERANCE_FONT_FACTOR: f32 = 2.0;
+/// How closely a wrapped heading's continuation must resume at the same left edge
+/// as the line it continues, in font-sizes. Measured on GH#1615's reproducer the
+/// two align exactly (both x 83.64) while the body line that must NOT merge sits
+/// 35.4pt away at the margin, so the separation is wide and the tolerance only has
+/// to absorb sub-pixel drift. ~keep
+const HEADING_HANGING_INDENT_LEFT_EDGE_TOLERANCE_FONT_FACTOR: f32 = 0.5;
 
 /// Detect paragraph-break y-positions from horizontal whitespace bands.
 ///
@@ -2015,7 +2021,10 @@ fn blocks_to_paragraphs(
             let follows_section = starts_new_line
                 && current_is_single_visual_line
                 && super::classify::is_numbered_section_heading(&visual_line_texts[prev_idx])
-                && !heading_wraps_onto(prev, line);
+                && !heading_wraps_onto(prev, line)
+                && !current_lines
+                    .first()
+                    .is_some_and(|heading_start| heading_continuation_is_hanging_indent(heading_start, prev, line));
             let crossed_gap = paragraph_gap_ys.iter().any(|&gap_y| {
                 let previous_baseline = prev.upright_baseline();
                 let current_baseline = line.upright_baseline();
@@ -2156,6 +2165,60 @@ pub(super) fn heading_wraps_onto(prev: &SegmentData, line: &SegmentData) -> bool
 /// heading stops hundreds of points short of the body prose it was being welded
 /// into. A lowercase opening alone cannot tell those apart -- both continue in
 /// lowercase -- which is why it must not be the whole test. See #1609. ~keep
+/// Whether `line` is the continuation of a numbered heading set with a HANGING
+/// INDENT: the number at the left margin, the title starting to its right, and a
+/// title too long for one line resuming at the title's own left edge.
+///
+/// Two things must hold, and the second alone is not enough. `heading_start` is the
+/// first segment of the heading's visual line and `prev` its last, so
+/// `prev` starting to the right of `heading_start` is what establishes that this
+/// heading HAS a hanging indent at all. Only then does `line` sharing `prev`'s left
+/// edge mean "the title continues" rather than "the next line happens to be at the
+/// same margin".
+///
+/// Measured on GH#1615's reproducer, where the wrap and the body that must NOT merge
+/// are identical on every other signal this grouper checks -- same font, same weight,
+/// same line pitch:
+///
+/// ```text
+/// 5.7.3                                     x 48.24            the number, at the margin
+/// Roof terminal combined duct vertical and  x 83.64  y 774.96  the title, indented 35.4pt
+/// twin pipe duct vertical                   x 83.64  y 762.24  the wrap -- aligns with the title
+/// Appliance category: C33                   x 48.24  y 745.08  the body -- returns to the margin
+/// ```
+///
+/// This is why the right-edge test in [`heading_wraps_onto`] cannot stand alone: a
+/// wrap's LAST line is short by definition -- being short is what makes it the last
+/// line -- so its right edge never matches the line it continues, and every two-line
+/// heading looked like a heading handing off to unrelated content.
+///
+/// The hanging-indent requirement is what keeps #1467 working: there the heading is a
+/// single segment at the margin and the callout beneath it is at the same margin, so
+/// `heading_start` and `prev` coincide, no indent is established, and the pair still
+/// splits. `starts_section` is evaluated independently of all this, so a following
+/// line that is itself a numbered heading breaks regardless. ~keep
+pub(super) fn heading_continuation_is_hanging_indent(
+    heading_start: &SegmentData,
+    prev: &SegmentData,
+    line: &SegmentData,
+) -> bool {
+    if !prev.has_same_rotation(line) || !prev.has_same_rotation(heading_start) {
+        return false;
+    }
+    if !prev.font_size.is_finite() || !line.font_size.is_finite() {
+        return false;
+    }
+    let (heading_left, _) = heading_start.upright_advance_extent();
+    let (prev_left, _) = prev.upright_advance_extent();
+    let (line_left, _) = line.upright_advance_extent();
+    if !heading_left.is_finite() || !prev_left.is_finite() || !line_left.is_finite() {
+        return false;
+    }
+    let tolerance =
+        HEADING_HANGING_INDENT_LEFT_EDGE_TOLERANCE_FONT_FACTOR * prev.font_size.max(line.font_size).max(1.0);
+    prev_left - heading_left > tolerance && (prev_left - line_left).abs() <= tolerance
+}
+
 pub(super) fn heading_fills_column(prev: &SegmentData, next_right_edge: f32) -> bool {
     if !prev.font_size.is_finite() || !next_right_edge.is_finite() {
         return false;
@@ -3987,37 +4050,87 @@ fn deduplicate_identical_tables(tables: &mut Vec<crate::types::Table>) {
     });
 }
 
-fn table_bboxes_by_page(tables: &[crate::types::Table]) -> ahash::AHashMap<usize, Vec<crate::types::BoundingBox>> {
-    let mut bboxes_by_page: ahash::AHashMap<usize, Vec<crate::types::BoundingBox>> = ahash::AHashMap::new();
-    for table in tables {
-        if let Some(bbox) = table.bounding_box {
-            bboxes_by_page
-                .entry(table.page_number.saturating_sub(1) as usize)
-                .or_default()
-                .push(bbox);
-        }
-    }
-    bboxes_by_page
+/// A table's footprint on a page together with the text its grid actually carries.
+///
+/// The two are recorded side by side because suppression needs both: geometry alone
+/// cannot tell whether the grid REPRESENTS a run it happens to cover. See
+/// [`filter_segments_by_table_bboxes`]. ~keep
+#[derive(Clone)]
+struct TableCoverage {
+    bbox: crate::types::BoundingBox,
+    /// Every cell's text, whitespace-collapsed and lowercased, joined by `\u{1}`.
+    /// Built once per table so the per-segment test is a substring search.
+    cell_text: String,
 }
 
-/// Filter out segments that overlap >=50% with any table bounding box.
+/// Collapse runs of whitespace and lowercase, so a cell that joined several printed
+/// runs still contains each run's normalized form as a substring.
+fn normalize_for_table_coverage(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()
+}
+
+fn table_bboxes_by_page(tables: &[crate::types::Table]) -> ahash::AHashMap<usize, Vec<TableCoverage>> {
+    let mut coverage_by_page: ahash::AHashMap<usize, Vec<TableCoverage>> = ahash::AHashMap::new();
+    for table in tables {
+        if let Some(bbox) = table.bounding_box {
+            // `cells` is authoritative when populated, but a table can reach here
+            // carrying only rendered `markdown` (layout-sourced tables, and the
+            // overlap-preference merge, both produce that shape). Falling back to the
+            // markdown keeps suppression working for those instead of silently
+            // disabling it, which would emit their contents twice. ~keep
+            let cell_text = if table.cells.iter().any(|row| !row.is_empty()) {
+                table
+                    .cells
+                    .iter()
+                    .flat_map(|row| row.iter())
+                    .map(|cell| normalize_for_table_coverage(cell))
+                    .collect::<Vec<_>>()
+                    .join("\u{1}")
+            } else {
+                normalize_for_table_coverage(&table.markdown.replace(['|', '-'], " "))
+            };
+            coverage_by_page
+                .entry(table.page_number.saturating_sub(1) as usize)
+                .or_default()
+                .push(TableCoverage { bbox, cell_text });
+        }
+    }
+    coverage_by_page
+}
+
+/// Filter out segments a table both COVERS and CARRIES.
 ///
-/// Segments with zero area or empty text are always kept.
-fn filter_segments_by_table_bboxes(
-    segments: Vec<SegmentData>,
-    table_bboxes: &[crate::types::BoundingBox],
-) -> Vec<SegmentData> {
-    if table_bboxes.is_empty() {
+/// Suppression exists so text a table already renders is not emitted a second time as
+/// prose. Geometry alone was the whole test, and that is unsound: a reconstructed grid
+/// need not span every printed column inside its own bounding box, and the runs in the
+/// columns it left out were dropped from the prose flow without ever reaching a cell.
+/// They were deleted from the document -- not in a cell, not in an element, nowhere.
+/// Measured on GH#1616: a four-column fault-finding grid was reconstructed with two
+/// columns over a bbox spanning all four, and 26 words vanished across two pages.
+///
+/// The text test restores the invariant that a bounding box cannot delete content the
+/// grid does not represent: a covered run is dropped only when some cell actually
+/// carries it. Matching is on whitespace-collapsed, lowercased text so a cell that
+/// joined several printed runs still matches each of them, which is the normal case --
+/// cell assembly merges runs, so requiring equality would suppress almost nothing and
+/// reintroduce the duplication this filter exists to prevent.
+///
+/// Segments with zero area or empty text are always kept. ~keep
+fn filter_segments_by_table_bboxes(segments: Vec<SegmentData>, tables: &[TableCoverage]) -> Vec<SegmentData> {
+    if tables.is_empty() {
         return segments;
     }
     segments
         .into_iter()
         .filter(|seg| {
             let seg_area = seg.width * seg.height;
-            if seg_area <= 0.0 || seg.text.trim().is_empty() {
+            let seg_text = seg.text.trim();
+            if seg_area <= 0.0 || seg_text.is_empty() {
                 return true;
             }
-            !table_bboxes.iter().any(|bb| {
+            let normalized = normalize_for_table_coverage(seg_text);
+            !tables.iter().any(|table| {
+                let bb = &table.bbox;
                 let inter_left = seg.x.max(bb.x0 as f32);
                 let inter_right = (seg.x + seg.width).min(bb.x1 as f32);
                 let inter_bottom = seg.y.max(bb.y0 as f32);
@@ -4026,7 +4139,7 @@ fn filter_segments_by_table_bboxes(
                     return false;
                 }
                 let inter_area = (inter_right - inter_left) * (inter_top - inter_bottom);
-                inter_area / seg_area >= 0.5
+                inter_area / seg_area >= 0.5 && table.cell_text.contains(&normalized)
             })
         })
         .collect()
@@ -6939,7 +7052,7 @@ mod tests {
     fn emitted_table_still_suppresses_covered_text() {
         use crate::core::config::layout::TableOverlapPreference;
 
-        let native_tables = vec![ov_table(1, (0.0, 0.0, 100.0, 100.0), "| value |")];
+        let native_tables = vec![ov_table(1, (0.0, 0.0, 100.0, 100.0), "| duplicated table text |")];
         let emitted_tables = prepare_emitted_tables(&native_tables, Vec::new(), TableOverlapPreference::Content);
         let bboxes_by_page = table_bboxes_by_page(&emitted_tables);
         let segment = SegmentData {
@@ -7405,6 +7518,77 @@ mod tests {
         );
     }
 
+    /// GH#1615. A numbered heading whose title does not fit on one line is set with
+    /// a hanging indent: the number at the margin, the title to its right, and the
+    /// overflow resuming at the TITLE's left edge. `follows_section` closed the
+    /// element after the first line anyway, because `heading_wraps_onto` compares
+    /// RIGHT edges and a wrap's last line is short by definition.
+    ///
+    /// Geometry from the reporter's page 1, verbatim (PDF user space):
+    ///
+    /// ```text
+    /// 5.7.3                                     x 48.24
+    /// Roof terminal combined duct vertical and  x 83.64  y 774.96
+    /// twin pipe duct vertical                   x 83.64  y 762.24
+    /// ```
+    #[test]
+    fn a_wrapped_numbered_heading_keeps_its_second_line() {
+        let segments = vec![
+            SegmentData {
+                is_bold: true,
+                font_size: 11.04,
+                ..column_seg("5.7.3", 48.24, 30.0, 774.96)
+            },
+            SegmentData {
+                is_bold: true,
+                font_size: 11.04,
+                ..column_seg("Roof terminal combined duct vertical and", 83.64, 211.0, 774.96)
+            },
+            SegmentData {
+                is_bold: true,
+                font_size: 11.04,
+                ..column_seg("twin pipe duct vertical", 83.64, 114.0, 762.24)
+            },
+        ];
+        let paragraphs = blocks_to_paragraphs(segments, &[], &[]);
+        assert_eq!(paragraphs.len(), 1, "the heading and its own wrap are one element");
+        assert_eq!(
+            paragraph_segment_text(&paragraphs[0]),
+            "5.7.3 Roof terminal combined duct vertical and twin pipe duct vertical"
+        );
+    }
+
+    /// GH#1615's own control, page 3 of the same reproducer. Identical heading,
+    /// identical fonts, identical line pitch -- the ONLY difference is that the
+    /// following line starts at the margin (x 48.24) rather than the title's left
+    /// edge (x 83.64), because it is body text and not a wrap. It must still split.
+    #[test]
+    fn a_numbered_heading_followed_by_margin_aligned_body_still_splits() {
+        let segments = vec![
+            SegmentData {
+                is_bold: true,
+                font_size: 11.04,
+                ..column_seg("5.7.5", 48.24, 30.0, 774.96)
+            },
+            SegmentData {
+                is_bold: true,
+                font_size: 11.04,
+                ..column_seg("Roof terminal combined duct vertical and", 83.64, 211.0, 774.96)
+            },
+            SegmentData {
+                is_bold: true,
+                font_size: 11.04,
+                ..column_seg("The appliance category is C33 for this duct.", 48.24, 216.0, 762.24)
+            },
+        ];
+        let paragraphs = blocks_to_paragraphs(segments, &[], &[]);
+        assert_eq!(paragraphs.len(), 2, "body text at the margin is not the heading's wrap");
+        assert_eq!(
+            paragraph_segment_text(&paragraphs[0]),
+            "5.7.5 Roof terminal combined duct vertical and"
+        );
+    }
+
     /// GH#1608 page 9: with the predicate blind to the keyword form, a run of
     /// such headings has no break signal at all and collapses into one element --
     /// the exact failure the `starts_section` term exists to prevent.
@@ -7612,6 +7796,83 @@ mod tests {
     }
 
     /// Helper: one segment of a hanging-indent column, 11pt on an 11pt line.
+    /// GH#1616: a reconstructed grid need not span every printed column inside its own
+    /// bounding box. The runs in the columns it left out were dropped from the prose flow
+    /// and never reached a cell, so they were deleted from the document.
+    ///
+    /// The shape measured on the reporter's page 51: a four-column fault-finding grid
+    /// (cause / `Nee` / `Ja` / remedy) reconstructed with two columns over a bbox spanning
+    /// all four, x 48.00 .. 555.24.
+    #[test]
+    fn a_table_bbox_does_not_delete_text_its_grid_leaves_out() {
+        let coverage = vec![TableCoverage {
+            bbox: crate::types::BoundingBox {
+                x0: 48.0,
+                y0: 312.48,
+                x1: 555.24,
+                y1: 405.28,
+            },
+            cell_text: table_cell_text(&[
+                "Ja  Ja",
+                "Controleer de ontsteekpenafstand. Controleer de afstelling, zie § 7.10 Gas-luchtregeling.",
+            ]),
+        }];
+        let segments = vec![
+            column_seg("Ja", 300.0, 12.0, 380.0),
+            column_seg("Controleer de ontsteekpenafstand.", 340.0, 180.0, 380.0),
+            column_seg("Onjuiste ontsteekafstand.", 52.0, 140.0, 380.0),
+            column_seg("Nee", 250.0, 20.0, 366.0),
+            column_seg("Zwakke vonk.", 52.0, 70.0, 340.0),
+        ];
+
+        let kept: Vec<String> = filter_segments_by_table_bboxes(segments, &coverage)
+            .into_iter()
+            .map(|seg| seg.text)
+            .collect();
+
+        assert_eq!(
+            kept,
+            vec![
+                "Onjuiste ontsteekafstand.".to_string(),
+                "Nee".to_string(),
+                "Zwakke vonk.".to_string(),
+            ],
+            "runs the grid does not carry must survive; the two it does carry are suppressed"
+        );
+    }
+
+    /// The other half of the same invariant, and the reason the geometric test cannot
+    /// simply be dropped: text a table DOES carry must still be suppressed, or every
+    /// table's contents are emitted twice.
+    #[test]
+    fn a_table_still_suppresses_the_prose_copy_of_its_own_cells() {
+        let coverage = vec![TableCoverage {
+            bbox: crate::types::BoundingBox {
+                x0: 48.0,
+                y0: 300.0,
+                x1: 500.0,
+                y1: 400.0,
+            },
+            cell_text: table_cell_text(&["Mogelijke oorzaken:", "Oplossing:"]),
+        }];
+        let segments = vec![
+            column_seg("Mogelijke oorzaken:", 52.0, 100.0, 380.0),
+            column_seg("Oplossing:", 300.0, 60.0, 380.0),
+        ];
+        assert!(
+            filter_segments_by_table_bboxes(segments, &coverage).is_empty(),
+            "a covered run the grid carries is still suppressed"
+        );
+    }
+
+    fn table_cell_text(cells: &[&str]) -> String {
+        cells
+            .iter()
+            .map(|cell| normalize_for_table_coverage(cell))
+            .collect::<Vec<_>>()
+            .join("\u{1}")
+    }
+
     fn column_seg(text: &str, x: f32, width: f32, baseline_y: f32) -> SegmentData {
         SegmentData {
             text: text.to_string(),
@@ -8894,11 +9155,14 @@ where new shares are issued;";
         assert_eq!(
             process(
                 Some(400.0),
-                vec![crate::types::BoundingBox {
-                    x0: 0.0,
-                    y0: 0.0,
-                    x1: 50.0,
-                    y1: 50.0,
+                vec![TableCoverage {
+                    bbox: crate::types::BoundingBox {
+                        x0: 0.0,
+                        y0: 0.0,
+                        x1: 50.0,
+                        y1: 50.0,
+                    },
+                    cell_text: String::new(),
                 }],
                 true,
             ),

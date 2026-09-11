@@ -21,10 +21,10 @@
 #![cfg(feature = "pdf")]
 
 mod helpers;
-use helpers::{
-    UriBatchInput, extract_bytes_document_blocking, extract_uri_document_blocking, extract_uri_documents_blocking,
-};
-
+// The glob below already brings in every helper this file uses. A second, explicit
+// import listed four of them unconditionally while two -- `UriBatchInput` and
+// `extract_uri_documents_blocking` -- are reached only from the `tokio-runtime`-gated
+// batch test, so a `pdf`-only build failed on `unused_imports` under `-D warnings`. ~keep
 use helpers::*;
 use xberg::core::config::ExtractionConfig;
 
