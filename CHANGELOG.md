@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- A long-running process can now release the embedding and reranker models it no longer
+  uses. `embeddings::evict_model` and `reranking::evict_model` (and the same functions in
+  `sparse_embeddings` and `late_interaction`) drop one model, `clear_engine_cache` drops
+  every model in a cache, and `xberg::clear_engine_caches` drops all of them.
+  `set_engine_cache_limit` bounds the number of resident engines in a cache and drops the
+  least recently used one first. The default stays unbounded, so existing callers see no
+  change (GH#1626).
+
 ## [1.1.6] - 2026-09-10
 
 ### Fixed

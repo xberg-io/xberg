@@ -17,12 +17,15 @@ use serde::{Deserialize, Serialize};
 pub mod engine;
 
 #[cfg(feature = "sparse-embeddings")]
-use std::sync::{Arc, RwLock};
+use std::num::NonZeroUsize;
+#[cfg(feature = "sparse-embeddings")]
+use std::sync::Arc;
 
 #[cfg(feature = "sparse-embeddings")]
-use ahash::AHashMap;
-#[cfg(feature = "sparse-embeddings")]
 use engine::SparseEmbeddingEngine;
+
+#[cfg(feature = "sparse-embeddings")]
+use crate::engine_cache::EngineCache;
 
 /// Default ONNX file for a `Custom` SPLADE repo when none is specified.
 #[cfg(feature = "sparse-embeddings")]
@@ -47,6 +50,7 @@ pub struct SparseEmbedding {
 mod engine_cache_key_tests {
     use super::*;
     use crate::core::config::acceleration::{AccelerationConfig, ExecutionProviderType};
+    use ahash::AHashMap;
 
     fn key(
         additional_files: &[String],
@@ -162,9 +166,6 @@ pub fn list_presets() -> Vec<String> {
 }
 
 #[cfg(feature = "sparse-embeddings")]
-type CachedEngine = Arc<SparseEmbeddingEngine>;
-
-#[cfg(feature = "sparse-embeddings")]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct SparseEmbeddingEngineCacheKey {
     repo_name: String,
@@ -200,8 +201,8 @@ impl SparseEmbeddingEngineCacheKey {
 }
 
 #[cfg(feature = "sparse-embeddings")]
-static ENGINE_CACHE: LazyLock<RwLock<AHashMap<SparseEmbeddingEngineCacheKey, CachedEngine>>> =
-    LazyLock::new(|| RwLock::new(AHashMap::new()));
+static ENGINE_CACHE: LazyLock<EngineCache<SparseEmbeddingEngineCacheKey, SparseEmbeddingEngine>> =
+    LazyLock::new(EngineCache::unbounded);
 
 /// Bounds concurrent blocking inference tasks spawned by [`embed_sparse_async`].
 #[cfg(all(feature = "sparse-embeddings", feature = "tokio-runtime"))]
@@ -275,45 +276,80 @@ fn get_or_init_engine(
         crate::onnx::OnnxAccelerationCacheKey::new(accel.as_ref()),
     );
 
-    match ENGINE_CACHE.read() {
-        Ok(cache) => {
-            if let Some(cached) = cache.get(&engine_key) {
-                return Ok(Arc::clone(cached));
-            }
+    ENGINE_CACHE.get_or_try_init(engine_key, || {
+        crate::ort_discovery::ensure_ort_available();
+
+        let files = crate::onnx::download_model_files(
+            repo_name,
+            model_file,
+            additional_files,
+            revision,
+            cache_dir.as_deref(),
+            progress,
+            Some(SPARSE_EMBEDDING_SHA256_MANIFEST),
+            sparse_err,
+        )?;
+        let tokenizer = crate::onnx::load_tokenizer(&files, max_length, sparse_err)?;
+        let session = crate::onnx::build_session(&files.model, accel.as_ref(), sparse_err)?;
+
+        Ok(SparseEmbeddingEngine::new(tokenizer, session))
+    })
+}
+
+/// Resolve the repository and model file that identify `model` in the engine cache.
+#[cfg(feature = "sparse-embeddings")]
+fn resolve_model_identity(model: &crate::core::config::SparseEmbeddingModelType) -> crate::Result<(String, String)> {
+    use crate::core::config::SparseEmbeddingModelType as M;
+    match model {
+        M::Preset { name } => {
+            let preset =
+                get_preset(name).ok_or_else(|| sparse_err(format!("Unknown sparse-embedding preset: {name}")))?;
+            Ok((preset.model_repo, preset.model_file))
         }
-        Err(poison) => {
-            if let Some(cached) = poison.get_ref().get(&engine_key) {
-                return Ok(Arc::clone(cached));
-            }
-        }
+        M::Custom {
+            model_id, model_file, ..
+        } => Ok((
+            model_id.clone(),
+            model_file.clone().unwrap_or_else(|| DEFAULT_MODEL_FILE.to_string()),
+        )),
+        M::Plugin { .. } => Err(sparse_err(
+            "Plugin sparse-embedding backends keep no local model to evict; use Preset or Custom".to_string(),
+        )),
     }
+}
 
-    let mut cache = match ENGINE_CACHE.write() {
-        Ok(guard) => guard,
-        Err(poison) => poison.into_inner(),
-    };
-    if let Some(cached) = cache.get(&engine_key) {
-        return Ok(Arc::clone(cached));
-    }
+/// Drop every resident sparse-embedding engine loaded for `model` so its memory can be freed.
+///
+/// Engines are matched by repository and model file, whatever sequence length,
+/// acceleration or cache directory they were loaded with. A caller that still
+/// holds an engine keeps it alive until it drops its handle. Returns the number
+/// of engines removed; `Ok(0)` means none was resident.
+///
+/// # Errors
+///
+/// - [`crate::XbergError::Embedding`] for an unknown preset or a `Plugin` model.
+#[cfg(feature = "sparse-embeddings")]
+#[cfg_attr(alef, alef(skip))]
+pub fn evict_model(model: &crate::core::config::SparseEmbeddingModelType) -> crate::Result<usize> {
+    let (repo_name, model_file) = resolve_model_identity(model)?;
+    Ok(ENGINE_CACHE.evict_where(|key| key.repo_name == repo_name && key.model_file == model_file))
+}
 
-    crate::ort_discovery::ensure_ort_available();
+/// Drop every resident sparse-embedding engine. Returns the number of engines removed.
+#[cfg(feature = "sparse-embeddings")]
+#[cfg_attr(alef, alef(skip))]
+pub fn clear_engine_cache() -> usize {
+    ENGINE_CACHE.clear()
+}
 
-    let files = crate::onnx::download_model_files(
-        repo_name,
-        model_file,
-        additional_files,
-        revision,
-        cache_dir.as_deref(),
-        progress,
-        Some(SPARSE_EMBEDDING_SHA256_MANIFEST),
-        sparse_err,
-    )?;
-    let tokenizer = crate::onnx::load_tokenizer(&files, max_length, sparse_err)?;
-    let session = crate::onnx::build_session(&files.model, accel.as_ref(), sparse_err)?;
-
-    let engine = Arc::new(SparseEmbeddingEngine::new(tokenizer, session));
-    cache.insert(engine_key, Arc::clone(&engine));
-    Ok(engine)
+/// Bound the number of sparse-embedding engines kept resident, or lift the bound with `None`.
+///
+/// When a new engine would exceed the bound, the least recently used one is
+/// dropped first. Lowering the bound drops engines at once. The default is no bound.
+#[cfg(feature = "sparse-embeddings")]
+#[cfg_attr(alef, alef(skip))]
+pub fn set_engine_cache_limit(max_resident: Option<NonZeroUsize>) {
+    ENGINE_CACHE.set_limit(max_resident);
 }
 
 #[cfg(feature = "sparse-embeddings")]

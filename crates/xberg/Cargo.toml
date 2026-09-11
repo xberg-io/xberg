@@ -492,6 +492,7 @@ embedding-presets = []
 embeddings = [
     "onnx-runtime",
     "dep:ndarray",
+    "dep:lru",
     "chunking",
     "tokio-runtime",
     "embedding-presets",
@@ -502,6 +503,7 @@ embeddings = [
 static-embeddings = [
     "embedding-presets",
     "tokio-runtime",
+    "dep:lru",
     "dep:model2vec-rs",
     # Supplies model2vec-rs's tokenizers 0.21 instance a regex backend without esaxx_fast (GH#1389).
     "dep:tokenizers-model2vec",
@@ -517,19 +519,19 @@ static-embeddings = [
 reranker-presets = []
 # reranker: full cross-encoder inference via ONNX Runtime (ORT-dependent,
 # WASM-incompatible). NOTE: reranker-presets is a subset of reranker; always implied.
-reranker = ["reranker-presets", "onnx-runtime", "dep:ndarray", "tokio-runtime"]
+reranker = ["reranker-presets", "onnx-runtime", "dep:ndarray", "dep:lru", "tokio-runtime"]
 # v5.0.0: SPLADE sparse embeddings for hybrid dense+sparse retrieval.
 # sparse-embedding-presets: static preset metadata (WASM/Android-safe, no ORT).
 sparse-embedding-presets = []
 # sparse-embeddings: SPLADE inference via ONNX Runtime (ORT-dependent,
 # WASM-incompatible). Builds on the shared crate::onnx helper (onnx-runtime).
-sparse-embeddings = ["sparse-embedding-presets", "onnx-runtime", "dep:ndarray", "tokio-runtime"]
+sparse-embeddings = ["sparse-embedding-presets", "onnx-runtime", "dep:ndarray", "dep:lru", "tokio-runtime"]
 # v5.0.0: ColBERT late-interaction (multi-vector) embeddings for MaxSim retrieval.
 # late-interaction-presets: static preset metadata + pure-CPU MaxSim (WASM/Android-safe, no ORT).
 late-interaction-presets = []
 # late-interaction: ColBERT multi-vector inference via ONNX Runtime (ORT-dependent,
 # WASM-incompatible). Builds on the shared crate::onnx helper (onnx-runtime).
-late-interaction = ["late-interaction-presets", "onnx-runtime", "dep:ndarray", "tokio-runtime"]
+late-interaction = ["late-interaction-presets", "onnx-runtime", "dep:ndarray", "dep:lru", "tokio-runtime"]
 stopwords = []
 quality = ["dep:unicode-normalization", "dep:chardetng", "stopwords"]
 
@@ -1299,6 +1301,7 @@ lofty = { version = "0.25", optional = true }
 # xberg-io/liter-llm). hf-hub 1.0 now rides the same reqwest/aws-lc-rs stack.
 log = { workspace = true }
 lopdf = { version = "0.45.0", optional = true, default-features = false }
+lru = { version = "0.18", optional = true }
 mail-parser = { version = "0.11.9", features = ["full_encoding"], optional = true }
 # AsciiMath parser, used to reach LaTeX through the shared MathML converter.
 mathemascii = { version = "0.4.0", optional = true }

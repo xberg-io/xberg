@@ -817,11 +817,12 @@ jobs:
 
             if cargo test --locked \
               -p xberg \
-              --features "reranker,reranker-presets,embeddings,sparse-embeddings,late-interaction,tokio-runtime" \
+              --features "reranker,reranker-presets,embeddings,static-embeddings,sparse-embeddings,late-interaction,tokio-runtime" \
               --test reranker_live \
               --test embedding_preset_live \
               --test sparse_embedding_preset_live \
               --test late_interaction_preset_live \
+              --test engine_cache_live \
               -- --nocapture; then
               exit 0
             fi

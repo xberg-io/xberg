@@ -11768,6 +11768,7 @@ dependencies = [
  "lofty",
  "log",
  "lopdf",
+ "lru",
  "mail-parser",
  "mathemascii",
  "mel_spec",

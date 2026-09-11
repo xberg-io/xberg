@@ -20,12 +20,15 @@ use serde::{Deserialize, Serialize};
 pub mod engine;
 
 #[cfg(feature = "late-interaction")]
-use std::sync::{Arc, RwLock};
+use std::num::NonZeroUsize;
+#[cfg(feature = "late-interaction")]
+use std::sync::Arc;
 
 #[cfg(feature = "late-interaction")]
-use ahash::AHashMap;
-#[cfg(feature = "late-interaction")]
 use engine::LateInteractionEngine;
+
+#[cfg(feature = "late-interaction")]
+use crate::engine_cache::EngineCache;
 
 /// Default ONNX file for a `Custom` ColBERT repo when none is specified.
 #[cfg(feature = "late-interaction")]
@@ -54,6 +57,7 @@ pub struct MultiVectorEmbedding {
 mod engine_cache_key_tests {
     use super::*;
     use crate::core::config::acceleration::{AccelerationConfig, ExecutionProviderType};
+    use ahash::AHashMap;
 
     fn key(
         additional_files: &[String],
@@ -278,9 +282,6 @@ pub fn max_sim_rank(query: &MultiVectorEmbedding, docs: &[MultiVectorEmbedding])
 }
 
 #[cfg(feature = "late-interaction")]
-type CachedEngine = Arc<LateInteractionEngine>;
-
-#[cfg(feature = "late-interaction")]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct LateInteractionEngineCacheKey {
     repo_name: String,
@@ -324,8 +325,8 @@ impl LateInteractionEngineCacheKey {
 }
 
 #[cfg(feature = "late-interaction")]
-static ENGINE_CACHE: LazyLock<RwLock<AHashMap<LateInteractionEngineCacheKey, CachedEngine>>> =
-    LazyLock::new(|| RwLock::new(AHashMap::new()));
+static ENGINE_CACHE: LazyLock<EngineCache<LateInteractionEngineCacheKey, LateInteractionEngine>> =
+    LazyLock::new(EngineCache::unbounded);
 
 /// Bounds concurrent blocking inference tasks spawned by [`embed_multi_vector_async`].
 #[cfg(all(feature = "late-interaction", feature = "tokio-runtime"))]
@@ -411,56 +412,91 @@ fn get_or_init_engine(
         crate::onnx::OnnxAccelerationCacheKey::new(accel.as_ref()),
     );
 
-    match ENGINE_CACHE.read() {
-        Ok(cache) => {
-            if let Some(cached) = cache.get(&engine_key) {
-                return Ok(Arc::clone(cached));
-            }
+    ENGINE_CACHE.get_or_try_init(engine_key, || {
+        crate::ort_discovery::ensure_ort_available();
+
+        let files = crate::onnx::download_model_files(
+            repo_name,
+            model_file,
+            additional_files,
+            revision,
+            cache_dir.as_deref(),
+            progress,
+            Some(LATE_INTERACTION_SHA256_MANIFEST),
+            late_err,
+        )?;
+        let tokenizer = crate::onnx::load_tokenizer(&files, max_length, late_err)?;
+        let session = crate::onnx::build_session(&files.model, accel.as_ref(), late_err)?;
+
+        let query_marker_id = tokenizer.token_to_id("[Q]");
+        let doc_marker_id = tokenizer.token_to_id("[D]");
+        let mask_id = tokenizer.token_to_id("[MASK]");
+
+        Ok(LateInteractionEngine::new(
+            tokenizer,
+            session,
+            query_marker_id,
+            doc_marker_id,
+            mask_id,
+            query_max_length,
+        ))
+    })
+}
+
+/// Resolve the repository and model file that identify `model` in the engine cache.
+#[cfg(feature = "late-interaction")]
+fn resolve_model_identity(model: &crate::core::config::LateInteractionModelType) -> crate::Result<(String, String)> {
+    use crate::core::config::LateInteractionModelType as M;
+    match model {
+        M::Preset { name } => {
+            let preset =
+                get_preset(name).ok_or_else(|| late_err(format!("Unknown late-interaction preset: {name}")))?;
+            Ok((preset.model_repo, preset.model_file))
         }
-        Err(poison) => {
-            if let Some(cached) = poison.get_ref().get(&engine_key) {
-                return Ok(Arc::clone(cached));
-            }
-        }
+        M::Custom {
+            model_id, model_file, ..
+        } => Ok((
+            model_id.clone(),
+            model_file.clone().unwrap_or_else(|| DEFAULT_MODEL_FILE.to_string()),
+        )),
+        M::Plugin { .. } => Err(late_err(
+            "Plugin late-interaction backends keep no local model to evict; use Preset or Custom".to_string(),
+        )),
     }
+}
 
-    let mut cache = match ENGINE_CACHE.write() {
-        Ok(guard) => guard,
-        Err(poison) => poison.into_inner(),
-    };
-    if let Some(cached) = cache.get(&engine_key) {
-        return Ok(Arc::clone(cached));
-    }
+/// Drop every resident late-interaction engine loaded for `model` so its memory can be freed.
+///
+/// Engines are matched by repository and model file, whatever sequence lengths,
+/// acceleration or cache directory they were loaded with. A caller that still
+/// holds an engine keeps it alive until it drops its handle. Returns the number
+/// of engines removed; `Ok(0)` means none was resident.
+///
+/// # Errors
+///
+/// - [`crate::XbergError::Embedding`] for an unknown preset or a `Plugin` model.
+#[cfg(feature = "late-interaction")]
+#[cfg_attr(alef, alef(skip))]
+pub fn evict_model(model: &crate::core::config::LateInteractionModelType) -> crate::Result<usize> {
+    let (repo_name, model_file) = resolve_model_identity(model)?;
+    Ok(ENGINE_CACHE.evict_where(|key| key.repo_name == repo_name && key.model_file == model_file))
+}
 
-    crate::ort_discovery::ensure_ort_available();
+/// Drop every resident late-interaction engine. Returns the number of engines removed.
+#[cfg(feature = "late-interaction")]
+#[cfg_attr(alef, alef(skip))]
+pub fn clear_engine_cache() -> usize {
+    ENGINE_CACHE.clear()
+}
 
-    let files = crate::onnx::download_model_files(
-        repo_name,
-        model_file,
-        additional_files,
-        revision,
-        cache_dir.as_deref(),
-        progress,
-        Some(LATE_INTERACTION_SHA256_MANIFEST),
-        late_err,
-    )?;
-    let tokenizer = crate::onnx::load_tokenizer(&files, max_length, late_err)?;
-    let session = crate::onnx::build_session(&files.model, accel.as_ref(), late_err)?;
-
-    let query_marker_id = tokenizer.token_to_id("[Q]");
-    let doc_marker_id = tokenizer.token_to_id("[D]");
-    let mask_id = tokenizer.token_to_id("[MASK]");
-
-    let engine = Arc::new(LateInteractionEngine::new(
-        tokenizer,
-        session,
-        query_marker_id,
-        doc_marker_id,
-        mask_id,
-        query_max_length,
-    ));
-    cache.insert(engine_key, Arc::clone(&engine));
-    Ok(engine)
+/// Bound the number of late-interaction engines kept resident, or lift the bound with `None`.
+///
+/// When a new engine would exceed the bound, the least recently used one is
+/// dropped first. Lowering the bound drops engines at once. The default is no bound.
+#[cfg(feature = "late-interaction")]
+#[cfg_attr(alef, alef(skip))]
+pub fn set_engine_cache_limit(max_resident: Option<NonZeroUsize>) {
+    ENGINE_CACHE.set_limit(max_resident);
 }
 
 #[cfg(feature = "late-interaction")]

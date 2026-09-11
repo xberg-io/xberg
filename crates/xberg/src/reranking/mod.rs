@@ -27,14 +27,18 @@ use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
 
 #[cfg(feature = "reranker")]
-use ahash::AHashMap;
-#[cfg(feature = "reranker")]
 use engine::RerankerEngine;
 #[cfg(feature = "reranker")]
-use std::sync::{Arc, RwLock};
+use std::num::NonZeroUsize;
+#[cfg(feature = "reranker")]
+use std::sync::Arc;
 
 #[cfg(feature = "reranker")]
-type CachedEngine = Arc<RerankerEngine>;
+use crate::engine_cache::EngineCache;
+
+/// Path of the ONNX model inside a `Custom` reranker repository when none is given.
+#[cfg(feature = "reranker")]
+const CUSTOM_MODEL_FILE: &str = "onnx/model.onnx";
 
 #[cfg(feature = "reranker")]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -54,6 +58,7 @@ mod engine_cache_key_tests {
     use super::*;
     use crate::core::config::acceleration::{AccelerationConfig, ExecutionProviderType};
     use crate::core::config::reranker::RerankerHead;
+    use ahash::AHashMap;
 
     fn key(
         additional_files: &[String],
@@ -129,8 +134,8 @@ impl RerankerEngineCacheKey {
 }
 
 #[cfg(feature = "reranker")]
-static ENGINE_CACHE: LazyLock<RwLock<AHashMap<RerankerEngineCacheKey, CachedEngine>>> =
-    LazyLock::new(|| RwLock::new(AHashMap::new()));
+static ENGINE_CACHE: LazyLock<EngineCache<RerankerEngineCacheKey, RerankerEngine>> =
+    LazyLock::new(EngineCache::unbounded);
 
 /// Global semaphore that limits concurrent ONNX reranker inference calls.
 ///
@@ -420,32 +425,7 @@ fn get_or_init_engine(
         head,
     );
 
-    {
-        match ENGINE_CACHE.read() {
-            Ok(cache) => {
-                if let Some(cached) = cache.get(&engine_key) {
-                    return Ok(Arc::clone(cached));
-                }
-            }
-            Err(poison_error) => {
-                let cache = poison_error.get_ref();
-                if let Some(cached) = cache.get(&engine_key) {
-                    return Ok(Arc::clone(cached));
-                }
-            }
-        }
-    }
-
-    {
-        let mut cache = match ENGINE_CACHE.write() {
-            Ok(guard) => guard,
-            Err(poison_error) => poison_error.into_inner(),
-        };
-
-        if let Some(cached) = cache.get(&engine_key) {
-            return Ok(Arc::clone(cached));
-        }
-
+    ENGINE_CACHE.get_or_try_init(engine_key, || {
         crate::ort_discovery::ensure_ort_available();
 
         let files = crate::onnx::download_model_files(
@@ -469,17 +449,74 @@ fn get_or_init_engine(
             crate::core::config::reranker::RerankerHead::CrossEncoder => (None, None),
         };
 
-        let new_engine = Arc::new(RerankerEngine::new(
+        Ok(RerankerEngine::new(
             tokenizer,
             session,
             head,
             true_token_id,
             false_token_id,
-        ));
-        cache.insert(engine_key, Arc::clone(&new_engine));
+        ))
+    })
+}
 
-        Ok(new_engine)
+/// Resolve the repository and model file that identify `model` in the engine cache.
+#[cfg(feature = "reranker")]
+fn resolve_model_identity(model: &crate::core::config::RerankerModelType) -> crate::Result<(String, String)> {
+    use crate::core::config::RerankerModelType as M;
+    match model {
+        M::Preset { name } => {
+            let preset = get_preset(name)
+                .ok_or_else(|| crate::XbergError::reranking(format!("Unknown reranker preset: {name}")))?;
+            Ok((preset.model_repo, preset.model_file))
+        }
+        M::Custom {
+            model_id, model_file, ..
+        } => Ok((
+            model_id.clone(),
+            model_file.clone().unwrap_or_else(|| CUSTOM_MODEL_FILE.to_string()),
+        )),
+        M::Llm { .. } => Err(crate::XbergError::reranking(
+            "LLM rerankers keep no local model to evict; the provider serves them over HTTP.",
+        )),
+        M::Plugin { .. } => Err(crate::XbergError::reranking(
+            "Plugin rerankers keep no local model to evict; the registered backend owns the model lifecycle.",
+        )),
     }
+}
+
+/// Drop every resident reranker engine loaded for `model` so its memory can be freed.
+///
+/// Engines are matched by repository and model file, whatever sequence length,
+/// acceleration or cache directory they were loaded with. A caller that still
+/// holds an engine keeps it alive until it drops its handle. Returns the number
+/// of engines removed; `Ok(0)` means none was resident.
+///
+/// # Errors
+///
+/// - [`crate::XbergError::Reranking`] for an unknown preset, or for an `Llm` or
+///   `Plugin` model, which keep no local engine.
+#[cfg(feature = "reranker")]
+#[cfg_attr(alef, alef(skip))]
+pub fn evict_model(model: &crate::core::config::RerankerModelType) -> crate::Result<usize> {
+    let (repo_name, model_file) = resolve_model_identity(model)?;
+    Ok(ENGINE_CACHE.evict_where(|key| key.repo_name == repo_name && key.model_file == model_file))
+}
+
+/// Drop every resident reranker engine. Returns the number of engines removed.
+#[cfg(feature = "reranker")]
+#[cfg_attr(alef, alef(skip))]
+pub fn clear_engine_cache() -> usize {
+    ENGINE_CACHE.clear()
+}
+
+/// Bound the number of reranker engines kept resident, or lift the bound with `None`.
+///
+/// When a new engine would exceed the bound, the least recently used one is
+/// dropped first. Lowering the bound drops engines at once. The default is no bound.
+#[cfg(feature = "reranker")]
+#[cfg_attr(alef, alef(skip))]
+pub fn set_engine_cache_limit(max_resident: Option<NonZeroUsize>) {
+    ENGINE_CACHE.set_limit(max_resident);
 }
 
 /// Resolve model info (repo, model file, additional_files, max_length, head) from a RerankerModelType config.
@@ -521,7 +558,7 @@ fn resolve_model_info(
                 }
                 n => n as usize,
             };
-            let file = model_file.clone().unwrap_or_else(|| "onnx/model.onnx".to_string());
+            let file = model_file.clone().unwrap_or_else(|| CUSTOM_MODEL_FILE.to_string());
             Ok((model_id.clone(), file, additional_files.clone(), len, *head))
         }
         crate::core::config::RerankerModelType::Llm { .. } => Err(crate::XbergError::reranking(
@@ -839,6 +876,30 @@ pub async fn rerank_async(
     tokio::task::spawn_blocking(move || rerank(query, documents, &config))
         .await
         .map_err(|e| crate::XbergError::reranking(format!("Reranker task panicked: {e}")))?
+}
+
+#[cfg(all(test, feature = "reranker"))]
+mod eviction_tests {
+    use super::*;
+    use crate::core::config::RerankerModelType;
+
+    #[test]
+    fn evict_model_reports_zero_when_the_model_is_not_resident() {
+        let removed = evict_model(&RerankerModelType::Preset {
+            name: "bge-reranker-base".to_string(),
+        })
+        .expect("a known preset resolves");
+        assert_eq!(removed, 0);
+    }
+
+    #[test]
+    fn evict_model_rejects_a_plugin_model_which_keeps_no_local_engine() {
+        let err = evict_model(&RerankerModelType::Plugin {
+            name: "custom".to_string(),
+        })
+        .unwrap_err();
+        assert!(err.to_string().contains("no local model to evict"), "{err}");
+    }
 }
 
 #[cfg(test)]

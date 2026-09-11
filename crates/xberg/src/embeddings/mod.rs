@@ -82,19 +82,15 @@ use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
 
 #[cfg(feature = "embeddings")]
-use ahash::AHashMap;
-#[cfg(feature = "embeddings")]
 use engine::EmbeddingEngine;
 #[cfg(any(
     feature = "embeddings",
     all(feature = "static-embeddings", feature = "tokio-runtime")
 ))]
 use std::sync::Arc;
-#[cfg(feature = "embeddings")]
-use std::sync::RwLock;
 
-#[cfg(feature = "embeddings")]
-type CachedEngine = Arc<EmbeddingEngine>;
+#[cfg(any(feature = "embeddings", feature = "static-embeddings"))]
+use crate::engine_cache::EngineCache;
 
 #[cfg(feature = "embeddings")]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -113,6 +109,7 @@ struct EmbeddingEngineCacheKey {
 mod engine_cache_key_tests {
     use super::*;
     use crate::core::config::acceleration::{AccelerationConfig, ExecutionProviderType};
+    use ahash::AHashMap;
 
     fn key(
         additional_files: &[String],
@@ -189,8 +186,8 @@ impl EmbeddingEngineCacheKey {
 }
 
 #[cfg(feature = "embeddings")]
-static ENGINE_CACHE: LazyLock<RwLock<AHashMap<EmbeddingEngineCacheKey, CachedEngine>>> =
-    LazyLock::new(|| RwLock::new(AHashMap::new()));
+static ENGINE_CACHE: LazyLock<EngineCache<EmbeddingEngineCacheKey, EmbeddingEngine>> =
+    LazyLock::new(EngineCache::unbounded);
 
 /// Global semaphore that limits concurrent ONNX embedding inference calls.
 ///
@@ -464,7 +461,7 @@ fn resolve_model_info(
         }
         crate::core::config::EmbeddingModelType::Custom { model_id, .. } => Ok((
             model_id.clone(),
-            "onnx/model.onnx".to_string(),
+            CUSTOM_MODEL_FILE.to_string(),
             Vec::new(),
             engine::Pooling::Mean,
         )),
@@ -505,32 +502,7 @@ fn get_or_init_engine(
         crate::onnx::OnnxAccelerationCacheKey::new(accel.as_ref()),
     );
 
-    {
-        match ENGINE_CACHE.read() {
-            Ok(cache) => {
-                if let Some(cached) = cache.get(&engine_key) {
-                    return Ok(Arc::clone(cached));
-                }
-            }
-            Err(poison_error) => {
-                let cache = poison_error.get_ref();
-                if let Some(cached) = cache.get(&engine_key) {
-                    return Ok(Arc::clone(cached));
-                }
-            }
-        }
-    }
-
-    {
-        let mut cache = match ENGINE_CACHE.write() {
-            Ok(guard) => guard,
-            Err(poison_error) => poison_error.into_inner(),
-        };
-
-        if let Some(cached) = cache.get(&engine_key) {
-            return Ok(Arc::clone(cached));
-        }
-
+    ENGINE_CACHE.get_or_try_init(engine_key, || {
         crate::ort_discovery::ensure_ort_available();
 
         let files = crate::onnx::download_model_files(
@@ -546,11 +518,8 @@ fn get_or_init_engine(
         let tokenizer = crate::onnx::load_tokenizer(&files, max_sequence_length, embed_err)?;
         let session = crate::onnx::build_session(&files.model, accel.as_ref(), embed_err)?;
 
-        let new_engine = Arc::new(EmbeddingEngine::new(tokenizer, session, pooling));
-        cache.insert(engine_key, Arc::clone(&new_engine));
-
-        Ok(new_engine)
-    }
+        Ok(EmbeddingEngine::new(tokenizer, session, pooling))
+    })
 }
 
 /// Eagerly download and cache an embedding model without returning the handle.
@@ -581,6 +550,18 @@ pub fn warm_model(
     )
     .map(|_| ())
 }
+
+/// Path of the ONNX model inside a `Custom` embedding repository.
+#[cfg(any(feature = "embeddings", feature = "static-embeddings"))]
+const CUSTOM_MODEL_FILE: &str = "onnx/model.onnx";
+
+// The cache functions live in their own module so the feature gate sits on the module
+// declaration: alef copies a feature named in a function's own `#[cfg]` into every binding
+// manifest, and `static-embeddings` is not a binding feature. ~keep
+#[cfg(any(feature = "embeddings", feature = "static-embeddings"))]
+mod eviction;
+#[cfg(any(feature = "embeddings", feature = "static-embeddings"))]
+pub use eviction::{clear_engine_cache, evict_model, set_engine_cache_limit};
 
 /// Normalize an embedding vector in-place (L2 normalization).
 #[cfg(any(feature = "embeddings", feature = "static-embeddings"))]
@@ -974,9 +955,19 @@ fn static_engine_cache_key(cache_dir: Option<&std::path::Path>) -> String {
 #[cfg(feature = "static-embeddings")]
 type CachedStaticEngine = std::sync::Arc<static_engine::StaticEmbeddingEngine>;
 
+/// Identifies a loaded static (model2vec) engine.
 #[cfg(feature = "static-embeddings")]
-static STATIC_ENGINE_CACHE: LazyLock<std::sync::RwLock<ahash::AHashMap<String, CachedStaticEngine>>> =
-    LazyLock::new(|| std::sync::RwLock::new(ahash::AHashMap::new()));
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct StaticEngineCacheKey {
+    repo_name: String,
+    model_file: String,
+    revision: String,
+    cache_root: String,
+}
+
+#[cfg(feature = "static-embeddings")]
+static STATIC_ENGINE_CACHE: LazyLock<EngineCache<StaticEngineCacheKey, static_engine::StaticEmbeddingEngine>> =
+    LazyLock::new(EngineCache::unbounded);
 
 /// Get or initialize a static-embedding engine from cache, downloading model
 /// files on first use (native/Android only — see [`static_engine`]).
@@ -987,40 +978,15 @@ fn get_or_init_static_engine(
     cache_directory: Option<&std::path::Path>,
     progress: crate::core::config::DownloadProgress,
 ) -> crate::Result<CachedStaticEngine> {
-    let cache_key = static_engine_cache_key(cache_directory);
-    let engine_key = format!("{repo_name}_{model_file}_{EMBEDDING_MODEL_REVISION}_{cache_key}");
-
-    {
-        match STATIC_ENGINE_CACHE.read() {
-            Ok(cache) => {
-                if let Some(cached) = cache.get(&engine_key) {
-                    return Ok(std::sync::Arc::clone(cached));
-                }
-            }
-            Err(poison) => {
-                if let Some(cached) = poison.get_ref().get(&engine_key) {
-                    return Ok(std::sync::Arc::clone(cached));
-                }
-            }
-        }
-    }
-
-    let mut cache = match STATIC_ENGINE_CACHE.write() {
-        Ok(guard) => guard,
-        Err(poison) => poison.into_inner(),
+    let engine_key = StaticEngineCacheKey {
+        repo_name: repo_name.to_string(),
+        model_file: model_file.to_string(),
+        revision: EMBEDDING_MODEL_REVISION.to_string(),
+        cache_root: static_engine_cache_key(cache_directory),
     };
-    if let Some(cached) = cache.get(&engine_key) {
-        return Ok(std::sync::Arc::clone(cached));
-    }
-
-    let engine = std::sync::Arc::new(static_engine::download_and_build(
-        repo_name,
-        model_file,
-        cache_directory,
-        progress,
-    )?);
-    cache.insert(engine_key, std::sync::Arc::clone(&engine));
-    Ok(engine)
+    STATIC_ENGINE_CACHE.get_or_try_init(engine_key, || {
+        static_engine::download_and_build(repo_name, model_file, cache_directory, progress)
+    })
 }
 
 /// Generate embeddings asynchronously for a list of text strings.
