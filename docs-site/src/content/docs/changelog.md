@@ -30,6 +30,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   extraction with `OCR backend 'tesseract' not registered`. Automatic triggers now check
   availability and skip with a warning; an explicit `force_ocr`, `force_ocr_pages`,
   `ocr_inline_images` or caller-supplied `ocr` config still fails loudly (GH#1610).
+- Legacy binary `.ppt` now reports which slide each embedded picture belongs to. Pictures were
+  read from the OLE `Pictures` stream, which stores blips in save order and names no slide, so
+  every extracted image carried no page number and every image node was emitted after the last
+  slide. A slide whose only content is a picture therefore produced nothing at all on its own
+  number and read as a blank slide, and captions or any other data keyed on an image's page were
+  filed against the end of the deck. The owning slide is now resolved through the drawing that
+  references the blip; a picture no live shape references is still extracted, without a slide
+  (GH#1620).
 - Legacy binary `.ppt` no longer extracts deleted slide revisions or presents slides in the
   wrong order. The format is append-only across saves, so editing a deck leaves superseded
   copies in the stream; treating every `Slide` container as a slide produced 190 slides for a

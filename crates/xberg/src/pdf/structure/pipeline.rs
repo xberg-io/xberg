@@ -1742,6 +1742,32 @@ const PARAGRAPH_GAP_HEIGHT_FACTOR: f32 = 1.5;
 /// finds is lost.
 const PARAGRAPH_BREAK_LEADING_MULTIPLE: f32 = 1.5;
 const INLINE_STYLE_BASELINE_TOLERANCE: f32 = 0.5;
+/// Largest baseline offset, as a multiple of the larger font size, at which a smaller abutting run
+/// still reads as a sub/superscript of its neighbour rather than as the next wrapped line.
+///
+/// ~keep GH#1617: the five torn pairs on the reproducer sit 0.63--1.07pt off a 11.59pt baseline,
+/// i.e. 0.054--0.092 font-sizes, while a wrapped line is separated by a full leading (>= 1.0). The
+/// 3x margin either side is why this is expressible as a predicate instead of by widening
+/// `INLINE_STYLE_BASELINE_TOLERANCE`, which is read at seven sites here and gates dehyphenation at
+/// `spans_visual_line_break`.
+const SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR: f32 = 0.35;
+/// Largest ratio of the smaller run's font size to the larger one's for the pair to read as a
+/// sub/superscript.
+///
+/// ~keep GH#1617: 0.63--0.73 on the reproducer against 1.00 for every ordinary same-size style-run
+/// boundary, so a same-size boundary cannot reach this predicate at all.
+const SCRIPT_RUN_MAX_FONT_SIZE_RATIO: f32 = 0.85;
+/// Largest forward gap, as a multiple of the larger font size, between a run's end and an abutting
+/// sub/superscript's start.
+///
+/// ~keep GH#1617: `rated` starts at 211.92 where `P` ends at 211.94 -- scripts abut or overlap their
+/// base, so this stays far below `INLINE_STYLE_MAX_FORWARD_GAP_FONT_FACTOR`.
+const SCRIPT_RUN_MAX_FORWARD_GAP_FONT_FACTOR: f32 = 0.25;
+/// How many already-accumulated segments back to look for a sub/superscript's base.
+///
+/// ~keep GH#1617: two is enough on the reproducer (`dB` then `L`); four covers a row with a couple
+/// more cells to the right of the base without letting the search wander off the current row.
+const SCRIPT_RUN_BASE_LOOKBACK: usize = 4;
 const INLINE_STYLE_MAX_FORWARD_GAP_FONT_FACTOR: f32 = 1.0;
 const INLINE_FONT_SIZE_MAX_FORWARD_GAP_FONT_FACTOR: f32 = 1.5;
 const INLINE_STYLE_MAX_OVERLAP_FONT_FACTOR: f32 = 0.15;
@@ -1969,13 +1995,25 @@ fn blocks_to_paragraphs(
             false
         } else {
             let prev = current_lines.last().unwrap();
+            // The look-back exists because a subscript is not always adjacent to its base in segment
+            // order. Its baseline is below the row's, and the upstream row-band sort keys on top-y,
+            // so a cell further right on the row can be emitted between the two: on GH#1617's
+            // reproducer `WA` (x 211.08) arrives after `dB` (x 253.30) and is compared against it
+            // rather than against `L` (x 206.78), which it actually abuts. Reuniting them in the
+            // ORDER the page prints would need per-glyph positions; suppressing the break is what
+            // keeps the subscript from becoming an element of its own, which is the defect. ~keep
             let font_change = (line.font_size - prev.font_size).abs() > 1.5
                 && !is_inline_style_transition(
                     current_is_single_visual_line,
                     prev,
                     line,
                     INLINE_FONT_SIZE_MAX_FORWARD_GAP_FONT_FACTOR,
-                );
+                )
+                && !current_lines
+                    .iter()
+                    .rev()
+                    .take(SCRIPT_RUN_BASE_LOOKBACK)
+                    .any(|candidate| is_script_run_of(candidate, line));
             let role_change = line.assigned_role != prev.assigned_role;
             let bold_change = line.is_bold != prev.is_bold
                 && !is_inline_style_transition(
@@ -2087,11 +2125,7 @@ fn is_inline_style_transition(
     next: &SegmentData,
     max_forward_gap_font_factor: f32,
 ) -> bool {
-    if !current_is_single_visual_line
-        || previous.is_monospace
-        || next.is_monospace
-        || previous.assigned_role != next.assigned_role
-    {
+    if previous.is_monospace || next.is_monospace || previous.assigned_role != next.assigned_role {
         return false;
     }
     if !previous.has_same_rotation(next) {
@@ -2112,17 +2146,81 @@ fn is_inline_style_transition(
     {
         return false;
     }
-    if (next.upright_baseline() - previous.upright_baseline()).abs() > INLINE_STYLE_BASELINE_TOLERANCE {
-        return false;
-    }
-
     let font_size = previous.font_size.max(next.font_size);
+    let baseline_delta = (next.upright_baseline() - previous.upright_baseline()).abs();
     let (previous_start, previous_end) = previous.upright_advance_extent();
     let (next_start, _) = next.upright_advance_extent();
     let advance_gap = next_start - previous_end;
+
+    // A sub/superscript is judged against the run it abuts, NOT against the paragraph's first
+    // segment, so it is deliberately decided ahead of `current_is_single_visual_line`. That flag
+    // answers "has this paragraph wrapped yet", and by the time a subscript appears on a product
+    // card's fourth row the answer is yes -- which is why the reproducer stayed torn while every
+    // unit test of the pair in isolation passed. The predicate below is tight enough to stand on
+    // its own: same rotation, same role, non-monospace, a materially smaller font, a baseline
+    // offset of a fraction of it, and a start inside or abutting the previous run. See GH#1617.
+    //
+    // Containment rather than `INLINE_STYLE_MAX_OVERLAP_FONT_FACTOR` is what reaches the four pairs
+    // whose base glyph is not a span of its own: the row arrives as one `TJ` whose kerning spreads
+    // its glyphs across the column, so the script starts *within* the previous run's extent, not a
+    // few tenths of a point behind its end. ~keep
+    if is_script_run_of(previous, next) {
+        return true;
+    }
+
+    if !current_is_single_visual_line || baseline_delta > INLINE_STYLE_BASELINE_TOLERANCE {
+        return false;
+    }
     next_start >= previous_start
         && advance_gap >= -(font_size * INLINE_STYLE_MAX_OVERLAP_FONT_FACTOR)
         && advance_gap <= font_size * max_forward_gap_font_factor
+}
+
+/// Whether two runs on nearly the same baseline differ the way a sub/superscript differs from its
+/// base: measurably smaller, and raised or lowered by a small fraction of the base's font size.
+///
+/// Deliberately requires a *non-zero* offset. A run at the identical baseline is already handled by
+/// `INLINE_STYLE_BASELINE_TOLERANCE`, so this predicate only ever relaxes a comparison the existing
+/// gate rejects outright -- it cannot change the outcome of any pair that passes today. ~keep
+fn is_script_run_offset(previous: &SegmentData, next: &SegmentData, baseline_delta: f32, font_size: f32) -> bool {
+    let smaller_font_size = previous.font_size.min(next.font_size);
+    baseline_delta > 0.0
+        && baseline_delta <= font_size * SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR
+        && smaller_font_size <= font_size * SCRIPT_RUN_MAX_FONT_SIZE_RATIO
+}
+
+/// Whether `next` reads as a sub/superscript attached to `previous`: same rotation and role,
+/// neither monospace, a materially smaller font raised or lowered by a fraction of it, and a start
+/// inside or abutting `previous`'s advance extent.
+fn is_script_run_of(previous: &SegmentData, next: &SegmentData) -> bool {
+    if previous.is_monospace || next.is_monospace || previous.assigned_role != next.assigned_role {
+        return false;
+    }
+    if !previous.has_same_rotation(next) {
+        return false;
+    }
+    if !previous.font_size.is_finite()
+        || !next.font_size.is_finite()
+        || previous.font_size <= 0.0
+        || next.font_size <= 0.0
+        || !previous.upright_baseline().is_finite()
+        || !next.upright_baseline().is_finite()
+        || !previous.x.is_finite()
+        || !next.x.is_finite()
+        || !previous.width.is_finite()
+        || !next.width.is_finite()
+        || previous.width < 0.0
+        || next.width < 0.0
+    {
+        return false;
+    }
+    let font_size = previous.font_size.max(next.font_size);
+    let baseline_delta = (next.upright_baseline() - previous.upright_baseline()).abs();
+    let (previous_start, previous_end) = previous.upright_advance_extent();
+    let (next_start, _) = next.upright_advance_extent();
+    is_script_run_offset(previous, next, baseline_delta, font_size)
+        && next_start >= previous_start
+        && next_start - previous_end <= font_size * SCRIPT_RUN_MAX_FORWARD_GAP_FONT_FACTOR
 }
 
 /// Whether `line` reads as the wrapped continuation of the numbered-heading
@@ -4058,15 +4156,25 @@ fn deduplicate_identical_tables(tables: &mut Vec<crate::types::Table>) {
 #[derive(Clone)]
 struct TableCoverage {
     bbox: crate::types::BoundingBox,
-    /// Every cell's text, whitespace-collapsed and lowercased, joined by `\u{1}`.
+    /// Every cell's alphanumeric glyphs, lowercased and concatenated in row-major order.
     /// Built once per table so the per-segment test is a substring search.
     cell_text: String,
 }
 
-/// Collapse runs of whitespace and lowercase, so a cell that joined several printed
-/// runs still contains each run's normalized form as a substring.
+/// Reduce text to lowercase alphanumerics, dropping whitespace and punctuation entirely.
+///
+/// Cell assembly does not preserve a printed run's boundaries: one visual line commonly spans
+/// several cells, and a wrapped cell inserts separators a printed run does not have. GH#1616's
+/// first fix compared whitespace-collapsed text, so any run the grid split across cells failed to
+/// match and was emitted a second time as prose -- on `issue-912` that cost 81 of 263 words,
+/// dropping precision from 0.984 to 0.692 while recall stayed flat, which is the signature of
+/// duplication rather than loss. Concatenating glyphs makes the test indifferent to where the grid
+/// chose to put its boundaries, which is the only thing it was ever wrong about. ~keep
 fn normalize_for_table_coverage(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()
+    text.chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
 }
 
 fn table_bboxes_by_page(tables: &[crate::types::Table]) -> ahash::AHashMap<usize, Vec<TableCoverage>> {
@@ -4084,10 +4192,9 @@ fn table_bboxes_by_page(tables: &[crate::types::Table]) -> ahash::AHashMap<usize
                     .iter()
                     .flat_map(|row| row.iter())
                     .map(|cell| normalize_for_table_coverage(cell))
-                    .collect::<Vec<_>>()
-                    .join("\u{1}")
+                    .collect::<String>()
             } else {
-                normalize_for_table_coverage(&table.markdown.replace(['|', '-'], " "))
+                normalize_for_table_coverage(&table.markdown)
             };
             coverage_by_page
                 .entry(table.page_number.saturating_sub(1) as usize)
@@ -4110,10 +4217,11 @@ fn table_bboxes_by_page(tables: &[crate::types::Table]) -> ahash::AHashMap<usize
 ///
 /// The text test restores the invariant that a bounding box cannot delete content the
 /// grid does not represent: a covered run is dropped only when some cell actually
-/// carries it. Matching is on whitespace-collapsed, lowercased text so a cell that
-/// joined several printed runs still matches each of them, which is the normal case --
-/// cell assembly merges runs, so requiring equality would suppress almost nothing and
-/// reintroduce the duplication this filter exists to prevent.
+/// carries it. Matching is on [`normalize_for_table_coverage`]'s glyph concatenation, so
+/// it is indifferent to where cell assembly put its boundaries -- a printed run split
+/// across two cells, or a visual line spanning several, still matches. Requiring the
+/// grid's own whitespace instead suppressed almost nothing and re-emitted whole tables
+/// as prose (GH#1616 again, from the other side).
 ///
 /// Segments with zero area or empty text are always kept. ~keep
 fn filter_segments_by_table_bboxes(segments: Vec<SegmentData>, tables: &[TableCoverage]) -> Vec<SegmentData> {
@@ -7841,6 +7949,46 @@ mod tests {
         );
     }
 
+    /// GH#1616's first fix compared whitespace-collapsed text, which a grid's own cell boundaries
+    /// defeat: one printed line commonly spans several cells and a wrapped cell inserts separators
+    /// the printed run does not have. On `issue-912` the table's own rows came back a second time
+    /// as prose -- 81 extra word instances in 263, precision 0.984 -> 0.692 with recall unmoved.
+    ///
+    /// Geometry here is taken from that page: a ledger row rendered as one run, reconstructed into
+    /// two cells that split it mid-list and add a stray separator comma.
+    #[test]
+    fn should_suppress_a_printed_run_the_grid_split_across_two_cells() {
+        let coverage = vec![TableCoverage {
+            bbox: crate::types::BoundingBox {
+                x0: 48.0,
+                y0: 300.0,
+                x1: 560.0,
+                y1: 400.0,
+            },
+            cell_text: table_cell_text(&["Chq. No. 085900 BILL NO.133, 132,", "139, ,138, 143, 140,"]),
+        }];
+        let segments = vec![
+            column_seg(
+                "Chq. No. 085900 BILL NO.133, 132, 139,138, 143, 140,",
+                60.0,
+                400.0,
+                350.0,
+            ),
+            column_seg("Being payment against a bill the grid omits", 60.0, 400.0, 320.0),
+        ];
+
+        let kept: Vec<String> = filter_segments_by_table_bboxes(segments, &coverage)
+            .into_iter()
+            .map(|seg| seg.text)
+            .collect();
+
+        assert_eq!(
+            kept,
+            vec!["Being payment against a bill the grid omits".to_string()],
+            "a run the grid carries across a cell boundary must not be emitted again as prose"
+        );
+    }
+
     /// The other half of the same invariant, and the reason the geometric test cannot
     /// simply be dropped: text a table DOES carry must still be suppressed, or every
     /// table's contents are emitted twice.
@@ -7866,11 +8014,7 @@ mod tests {
     }
 
     fn table_cell_text(cells: &[&str]) -> String {
-        cells
-            .iter()
-            .map(|cell| normalize_for_table_coverage(cell))
-            .collect::<Vec<_>>()
-            .join("\u{1}")
+        cells.iter().map(|cell| normalize_for_table_coverage(cell)).collect()
     }
 
     fn column_seg(text: &str, x: f32, width: f32, baseline_y: f32) -> SegmentData {
@@ -8302,6 +8446,96 @@ mod tests {
         assert_eq!(paragraphs.len(), 2);
         assert_eq!(paragraph_text(&paragraphs[0]), "Heading");
         assert_eq!(paragraph_text(&paragraphs[1]), "body");
+    }
+
+    /// Geometry taken from GH#1617's reproducer, where the base symbol is a span of its own.
+    #[test]
+    fn should_keep_a_subscript_with_a_base_symbol_that_is_its_own_span() {
+        let mut base = inline_seg("P", 206.76, 662.768, false);
+        base.width = 5.18;
+        base.font_size = 11.59;
+        base.height = 11.59;
+        let mut subscript = inline_seg("rated", 211.92, 661.700, false);
+        subscript.width = 12.99;
+        subscript.font_size = 8.51;
+        subscript.height = 8.51;
+
+        let paragraphs = blocks_to_paragraphs(vec![base, subscript], &[], &[]);
+
+        assert_eq!(paragraphs.len(), 1, "a subscript must not become its own element");
+        assert_eq!(paragraph_text(&paragraphs[0]), "P rated");
+    }
+
+    /// GH#1617's other four pairs: the base glyph sits inside a single `TJ` row span whose kerning
+    /// spreads it across the column, so the subscript starts *within* the previous run's extent.
+    #[test]
+    fn should_keep_a_subscript_that_starts_inside_its_row_span() {
+        let mut row = inline_seg("Geluidsniveau L dB", 59.28, 586.208, false);
+        row.width = 340.0;
+        row.font_size = 11.59;
+        row.height = 11.59;
+        let mut subscript = inline_seg("WA", 211.08, 585.579, false);
+        subscript.width = 8.4;
+        subscript.font_size = 7.34;
+        subscript.height = 7.34;
+
+        let paragraphs = blocks_to_paragraphs(vec![row, subscript], &[], &[]);
+
+        assert_eq!(
+            paragraphs.len(),
+            1,
+            "a subscript inside its row span must not become its own element"
+        );
+        assert_eq!(paragraph_text(&paragraphs[0]), "Geluidsniveau L dB WA");
+    }
+
+    /// The predicate must not swallow a genuine wrapped line: a smaller run one full leading below
+    /// its predecessor is a new line, not a subscript.
+    #[test]
+    fn should_still_split_a_smaller_run_a_full_leading_below_its_predecessor() {
+        let mut heading = inline_seg("Nominale warmteafgifte", 59.28, 662.768, false);
+        heading.width = 129.06;
+        heading.font_size = 11.59;
+        heading.height = 11.59;
+        let mut body = inline_seg("rated", 59.28, 648.860, false);
+        body.width = 12.99;
+        body.font_size = 8.51;
+        body.height = 8.51;
+
+        let paragraphs = blocks_to_paragraphs(vec![heading, body], &[], &[]);
+
+        assert_eq!(
+            paragraphs.len(),
+            2,
+            "a full-leading drop is a line break, not a subscript"
+        );
+    }
+
+    /// A run after a subscript sits back on the paragraph's own baseline; the subscript must not
+    /// latch `current_is_single_visual_line` off and split it.
+    #[test]
+    fn should_keep_the_run_following_a_subscript_on_the_same_line() {
+        let mut base = inline_seg("P", 206.76, 662.768, false);
+        base.width = 5.18;
+        base.font_size = 11.59;
+        base.height = 11.59;
+        let mut subscript = inline_seg("rated", 211.92, 661.700, false);
+        subscript.width = 12.99;
+        subscript.font_size = 8.51;
+        subscript.height = 8.51;
+        let mut unit = inline_seg("kW", 225.40, 662.768, false);
+        unit.width = 13.37;
+        unit.font_size = 11.59;
+        unit.height = 11.59;
+
+        let paragraphs = blocks_to_paragraphs(vec![base, subscript, unit], &[], &[]);
+
+        assert_eq!(
+            paragraphs.len(),
+            1,
+            "the unit after a subscript must stay on the same line"
+        );
+        assert_eq!(paragraph_text(&paragraphs[0]), "P rated kW");
     }
 
     #[test]

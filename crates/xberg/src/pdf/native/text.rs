@@ -1634,6 +1634,14 @@ pub(crate) fn reorder_dense_two_column_page(spans: &mut [xberg_native_pdf::layou
         return false;
     };
 
+    tracing::debug!(
+        target: "xberg::pdf::column_split",
+        detected_split_x,
+        final_split_x = split_x,
+        page_width,
+        span_count = spans.len(),
+        "dense two-column page reordered"
+    );
     apply_span_order(spans, &final_order);
     true
 }

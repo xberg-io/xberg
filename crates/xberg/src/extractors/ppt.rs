@@ -72,6 +72,13 @@ impl PptExtractor {
                 }
             }
 
+            // Inside the slide loop, so an image node sits on the slide that displays it
+            // rather than behind the last one -- which is what made a picture-only slide
+            // read as an empty slide (#1620). ~keep
+            for image in images.iter().filter(|image| image.page_number == Some(slide.number)) {
+                builder.push_image(None, image.clone(), image.page_number, None);
+            }
+
             if let Some(notes) = speaker_notes.get(i)
                 && !notes.is_empty()
             {
@@ -80,8 +87,10 @@ impl PptExtractor {
             }
         }
 
-        for image in images {
-            builder.push_image(None, image.clone(), image.page_number, None);
+        // A blip no live shape referenced resolves to no slide (#1620); it is still
+        // extracted, appended here as it always was, rather than dropped. ~keep
+        for image in images.iter().filter(|image| image.page_number.is_none()) {
+            builder.push_image(None, image.clone(), None, None);
         }
 
         builder.build()
@@ -245,6 +254,58 @@ impl InternalDocumentExtractor for PptExtractor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::internal::ElementKind;
+
+    fn image_on(page: Option<u32>, index: u32) -> ExtractedImage {
+        ExtractedImage {
+            data: bytes::Bytes::from_static(b"png"),
+            format: std::borrow::Cow::Borrowed("png"),
+            image_index: index,
+            page_number: page,
+            ..Default::default()
+        }
+    }
+
+    /// #1620: an image node must sit on the slide that displays it. Emitting every image
+    /// after the slide loop put each one behind the last slide, which made a slide whose
+    /// only content is a picture read as an empty slide.
+    #[test]
+    fn should_emit_each_image_node_on_its_own_slide() {
+        let slides = vec![
+            PptSlideText {
+                number: 1,
+                text: "First".to_string(),
+            },
+            // Picture-only: no text at all, so before the fix this slide had no content.
+            PptSlideText {
+                number: 2,
+                text: String::new(),
+            },
+            PptSlideText {
+                number: 3,
+                text: "Third".to_string(),
+            },
+        ];
+        let images = vec![image_on(Some(2), 0), image_on(None, 1)];
+
+        let document = PptExtractor::build_internal_document(&slides, &[], &images);
+
+        let order: Vec<String> = document
+            .elements
+            .iter()
+            .filter_map(|element| match &element.kind {
+                ElementKind::Slide { number } => Some(format!("slide{number}")),
+                ElementKind::Image { .. } => Some("image".to_string()),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(
+            order,
+            vec!["slide1", "slide2", "image", "slide3", "image"],
+            "the referenced image belongs to slide 2; the unreferenced one still trails the deck"
+        );
+    }
 
     #[tokio::test]
     async fn test_ppt_extractor_plugin_interface() {

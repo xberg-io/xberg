@@ -38,6 +38,9 @@ pub struct PptExtractionResult {
     /// Pictures recovered from the OLE `Pictures` stream (raw
     /// `OfficeArtBlip` payloads). Empty when the deck has no `Pictures`
     /// stream, the stream is empty, or image extraction was not requested.
+    /// `page_number` is the slide whose drawing displays the picture, resolved
+    /// through `pib` -> `msofbtBSE.foDelay`; it stays `None` for a blip no live
+    /// shape references (#1620).
     pub images: Vec<ExtractedImage>,
     /// Non-fatal degradations encountered while extracting (see
     /// `core::diagnostics`). Empty when extraction was complete.
@@ -96,6 +99,30 @@ const RT_BLIP_JPEG: u16 = 0xF01D;
 const RT_BLIP_JPEG_ALT: u16 = 0xF02A;
 const RT_BLIP_PNG: u16 = 0xF01E;
 const RT_BLIP_DIB: u16 = 0xF01F;
+
+/// `msofbtBSE` -- one per blip in the document's `BStoreContainer`. A shape's `pib`
+/// property is a 1-based index into these, in container order (MS-ODRAW 2.2.32). ~keep
+const MSOFBT_BSE: u16 = 0xF007;
+/// Byte offset of `foDelay` inside an `msofbtBSE`'s content, past `btWin32` (1), `btMacOS`
+/// (1), `rgbUid` (16), `tag` (2), `size` (4) and `cRef` (4). `foDelay` is the blip record's
+/// own start offset in the `Pictures` stream, which is the key `Pictures` is walked by. ~keep
+const BSE_FO_DELAY_OFFSET: usize = 28;
+
+/// `msofbtOPT` and its secondary/tertiary siblings, each a table of `OfficeArtFOPTE`
+/// property entries (MS-ODRAW 2.3.1). `pib` is normally in the primary table, but a
+/// shape that overflows its property set spills into the other two. ~keep
+const MSOFBT_OPT: [u16; 3] = [0xF00B, 0xF121, 0xF122];
+/// An `OfficeArtFOPTE` is a 2-byte `opid` followed by a 4-byte value.
+const FOPT_ENTRY_LEN: usize = 6;
+/// The low 14 bits of `opid` are the property number; bit 14 is `fBid` and bit 15 is
+/// `fComplex`, neither of which changes where the entry sits. ~keep
+const FOPT_PROPERTY_ID_MASK: u16 = 0x3FFF;
+/// `pib` -- the 1-based `BStoreContainer` index of the blip a picture shape displays.
+const MSO_PROPERTY_PIB: u16 = 0x0104;
+
+/// Depth cap for the OfficeArt container walk. Real nesting is under a dozen levels; this
+/// only stops a hostile self-describing container tree from exhausting the stack. ~keep
+const MAX_OFFICE_ART_DEPTH: usize = 16;
 
 /// `UserEditAtom` -- one per save, chained newest-to-oldest through `offsetLastEdit`.
 const RT_USER_EDIT_ATOM: u16 = 0x0FF5;
@@ -203,7 +230,8 @@ pub(crate) fn extract_ppt_text_with_options(
     let images = if extract_images {
         match read_stream(&mut comp, "/Pictures") {
             Ok(pictures_stream) if !pictures_stream.is_empty() => {
-                extract_pictures_from_stream(&pictures_stream, &mut processing_warnings)
+                let slide_numbers = picture_slide_numbers(&ppt_stream, live_slides.as_deref());
+                extract_pictures_from_stream(&pictures_stream, &slide_numbers, &mut processing_warnings)
             }
             _ => Vec::new(),
         }
@@ -660,6 +688,144 @@ fn extract_texts_from_records(
     Ok((slides, loose_texts, speaker_notes))
 }
 
+/// One record header from the PowerPoint/OfficeArt record tree, flattened out of its
+/// containers so callers can filter by type without re-walking.
+struct ArtRecord {
+    rec_instance: u16,
+    rec_type: u16,
+    content_start: usize,
+    content_end: usize,
+}
+
+/// Collect every record header in `data[start..end]`, descending into containers.
+///
+/// A record is a container when `recVer` (the low nibble of the first field) is 0xF; its
+/// children are the records inside its own declared byte range. A `recLen` that would run
+/// past `end` stops the walk at that level rather than over-reading -- the stream is
+/// untrusted, and a truncated tail is the common shape of a salvageable corrupt deck.
+fn collect_art_records(data: &[u8], start: usize, end: usize, depth: usize, out: &mut Vec<ArtRecord>) {
+    if depth > MAX_OFFICE_ART_DEPTH {
+        return;
+    }
+    let mut pos = start;
+    while pos + 8 <= end {
+        let rec_ver_instance = u16::from_le_bytes([data[pos], data[pos + 1]]);
+        let rec_type = u16::from_le_bytes([data[pos + 2], data[pos + 3]]);
+        let rec_len = u32::from_le_bytes([data[pos + 4], data[pos + 5], data[pos + 6], data[pos + 7]]) as usize;
+        let content_start = pos + 8;
+        let Some(content_end) = content_start.checked_add(rec_len).filter(|&candidate| candidate <= end) else {
+            return;
+        };
+        out.push(ArtRecord {
+            rec_instance: rec_ver_instance >> 4,
+            rec_type,
+            content_start,
+            content_end,
+        });
+        if rec_ver_instance & 0x000F == 0x0F {
+            collect_art_records(data, content_start, content_end, depth + 1, out);
+        }
+        pos = content_end;
+    }
+}
+
+/// The `Pictures`-stream offset of every blip, in `BStoreContainer` order, so that a
+/// shape's 1-based `pib` indexes straight into the result.
+fn blip_stream_offsets(data: &[u8], records: &[ArtRecord]) -> Vec<u32> {
+    records
+        .iter()
+        .filter(|record| record.rec_type == MSOFBT_BSE)
+        .filter_map(|record| {
+            let at = record.content_start.checked_add(BSE_FO_DELAY_OFFSET)?;
+            (at.checked_add(4)? <= record.content_end).then(|| read_u32_le(data, at))?
+        })
+        .collect()
+}
+
+/// The blip indices (`pib`) referenced by shapes inside one slide's byte range.
+///
+/// Reading `pib` wherever it appears in the slide's property tables -- rather than only
+/// under a shape whose `msofbtSp` says `msosptPictureFrame` -- is deliberate: a picture
+/// placed as the fill of an ordinary autoshape carries the same property and displays the
+/// same blip on the same slide. ~keep
+fn slide_blip_indices(data: &[u8], records: &[ArtRecord], slide_start: usize, slide_end: usize) -> Vec<u32> {
+    let mut indices = Vec::new();
+    for record in records
+        .iter()
+        .filter(|record| MSOFBT_OPT.contains(&record.rec_type))
+        .filter(|record| record.content_start >= slide_start && record.content_end <= slide_end)
+    {
+        for entry in 0..record.rec_instance as usize {
+            let Some(at) = entry
+                .checked_mul(FOPT_ENTRY_LEN)
+                .and_then(|o| record.content_start.checked_add(o))
+            else {
+                break;
+            };
+            if at + FOPT_ENTRY_LEN > record.content_end {
+                break;
+            }
+            let opid = u16::from_le_bytes([data[at], data[at + 1]]);
+            if opid & FOPT_PROPERTY_ID_MASK == MSO_PROPERTY_PIB
+                && let Some(pib) = read_u32_le(data, at + 2)
+                && pib > 0
+            {
+                indices.push(pib);
+            }
+        }
+    }
+    indices
+}
+
+/// Map each blip's `Pictures`-stream offset to the slide that displays it (#1620).
+///
+/// `Pictures` is a blob store in save order and says nothing about slides; what owns a
+/// picture is the drawing, via `pib` -> `msofbtBSE.foDelay` -> that offset. Without this
+/// every `.ppt` image came back with no page at all.
+///
+/// A blip displayed on several slides is recorded against the first, so that a logo
+/// repeated through a deck stays one extracted image rather than one per slide. A blip no
+/// live shape references is absent from the map and keeps today's behaviour. ~keep
+fn picture_slide_numbers(data: &[u8], live_slides: Option<&[usize]>) -> std::collections::HashMap<u32, u32> {
+    let mut records = Vec::new();
+    collect_art_records(data, 0, data.len(), 0, &mut records);
+
+    let blip_offsets = blip_stream_offsets(data, &records);
+    let mut by_offset = std::collections::HashMap::new();
+    if blip_offsets.is_empty() {
+        return by_offset;
+    }
+
+    let slide_ranges: Vec<(usize, usize)> = match live_slides {
+        // Presentation order, already resolved from the persist chain (#1614).
+        Some(offsets) => offsets
+            .iter()
+            .filter_map(|&offset| {
+                records
+                    .iter()
+                    .find(|record| record.rec_type == RT_SLIDE && record.content_start == offset + 8)
+                    .map(|record| (record.content_start, record.content_end))
+            })
+            .collect(),
+        // Mirrors the text walk's fallback: number the `RT_SLIDE` containers in stream order.
+        None => records
+            .iter()
+            .filter(|record| record.rec_type == RT_SLIDE)
+            .map(|record| (record.content_start, record.content_end))
+            .collect(),
+    };
+
+    for (index, (slide_start, slide_end)) in slide_ranges.iter().enumerate() {
+        let slide_number = index as u32 + 1;
+        for pib in slide_blip_indices(data, &records, *slide_start, *slide_end) {
+            if let Some(&offset) = blip_offsets.get(pib as usize - 1) {
+                by_offset.entry(offset).or_insert(slide_number);
+            }
+        }
+    }
+    by_offset
+}
+
 /// Walk a `Pictures` stream (a flat run of `OfficeArtBlip` records, MS-ODRAW
 /// 2.2.23) and emit one `ExtractedImage` per raster blip.
 ///
@@ -671,7 +837,11 @@ fn extract_texts_from_records(
 /// Every length is validated against the remaining buffer before slicing,
 /// so a hostile `recLen` can only shrink the walk (skip a record or stop
 /// early), never over-read or allocate unboundedly.
-fn extract_pictures_from_stream(data: &[u8], warnings: &mut Vec<ProcessingWarning>) -> Vec<ExtractedImage> {
+fn extract_pictures_from_stream(
+    data: &[u8],
+    slide_numbers: &std::collections::HashMap<u32, u32>,
+    warnings: &mut Vec<ProcessingWarning>,
+) -> Vec<ExtractedImage> {
     let mut images = Vec::new();
     let mut pos = 0usize;
     let mut image_index: u32 = 0;
@@ -753,7 +923,12 @@ fn extract_pictures_from_stream(data: &[u8], warnings: &mut Vec<ProcessingWarnin
                 data: Bytes::copy_from_slice(picture_bytes),
                 format,
                 image_index,
-                page_number: None,
+                // `foDelay` in the BSE names this record's own start offset, so `pos` is the
+                // key the drawing refers to it by (#1620). ~keep
+                page_number: u32::try_from(pos)
+                    .ok()
+                    .and_then(|offset| slide_numbers.get(&offset))
+                    .copied(),
                 width: None,
                 height: None,
                 colorspace: None,
@@ -1453,7 +1628,7 @@ mod tests {
         let data = blip_record_one_uid(0x46A, RT_BLIP_JPEG, picture);
 
         let mut warnings = Vec::new();
-        let images = extract_pictures_from_stream(&data, &mut warnings);
+        let images = extract_pictures_from_stream(&data, &Default::default(), &mut warnings);
 
         assert_eq!(images.len(), 1);
         assert_eq!(images[0].format, "jpeg");
@@ -1468,7 +1643,7 @@ mod tests {
         let data = blip_record_two_uid(0x6E1, RT_BLIP_PNG, picture);
 
         let mut warnings = Vec::new();
-        let images = extract_pictures_from_stream(&data, &mut warnings);
+        let images = extract_pictures_from_stream(&data, &Default::default(), &mut warnings);
 
         assert_eq!(images.len(), 1);
         assert_eq!(images[0].format, "png");
@@ -1482,7 +1657,7 @@ mod tests {
         let data = blip_record_one_uid(0x7A8, RT_BLIP_DIB, picture);
 
         let mut warnings = Vec::new();
-        let images = extract_pictures_from_stream(&data, &mut warnings);
+        let images = extract_pictures_from_stream(&data, &Default::default(), &mut warnings);
 
         assert_eq!(images.len(), 1);
         assert_eq!(images[0].format, "dib");
@@ -1499,7 +1674,7 @@ mod tests {
         data.extend_from_slice(&png);
 
         let mut warnings = Vec::new();
-        let images = extract_pictures_from_stream(&data, &mut warnings);
+        let images = extract_pictures_from_stream(&data, &Default::default(), &mut warnings);
 
         assert_eq!(images.len(), 2);
         assert_eq!(images[0].image_index, 0);
@@ -1525,7 +1700,7 @@ mod tests {
         data.extend_from_slice(&jpeg);
 
         let mut warnings = Vec::new();
-        let images = extract_pictures_from_stream(&data, &mut warnings);
+        let images = extract_pictures_from_stream(&data, &Default::default(), &mut warnings);
 
         assert_eq!(images.len(), 1);
         assert_eq!(images[0].format, "jpeg");
@@ -1540,7 +1715,7 @@ mod tests {
         data.extend_from_slice(&[0u8; 4]); // far short of the declared recLen
 
         let mut warnings = Vec::new();
-        let images = extract_pictures_from_stream(&data, &mut warnings);
+        let images = extract_pictures_from_stream(&data, &Default::default(), &mut warnings);
 
         assert!(images.is_empty());
         assert!(
@@ -1561,7 +1736,7 @@ mod tests {
             .collect::<Vec<u8>>();
 
         let mut warnings = Vec::new();
-        let images = extract_pictures_from_stream(&data, &mut warnings);
+        let images = extract_pictures_from_stream(&data, &Default::default(), &mut warnings);
 
         assert!(images.is_empty());
         assert!(
@@ -1575,7 +1750,7 @@ mod tests {
     #[test]
     fn should_return_no_images_when_pictures_stream_is_empty() {
         let mut warnings = Vec::new();
-        let images = extract_pictures_from_stream(&[], &mut warnings);
+        let images = extract_pictures_from_stream(&[], &Default::default(), &mut warnings);
         assert!(images.is_empty());
         assert!(warnings.is_empty());
     }
@@ -1643,5 +1818,107 @@ mod tests {
             extract_ppt_text_with_options(&content, false, true).expect("synthetic OLE container should parse");
 
         assert!(result.images.is_empty());
+    }
+
+    /// Build an `msofbtBSE` whose `foDelay` names `pictures_offset`. Only `foDelay` is
+    /// read; the surrounding documented fields are present so offsets are realistic.
+    fn bse_record(pictures_offset: u32) -> Vec<u8> {
+        let mut content = Vec::new();
+        content.extend_from_slice(&[0x06, 0x06]); // btWin32, btMacOS
+        content.extend_from_slice(&[0u8; 16]); // rgbUid
+        content.extend_from_slice(&[0u8; 2]); // tag
+        content.extend_from_slice(&0u32.to_le_bytes()); // size
+        content.extend_from_slice(&1u32.to_le_bytes()); // cRef
+        content.extend_from_slice(&pictures_offset.to_le_bytes()); // foDelay
+        content.extend_from_slice(&[0u8; 4]); // unused1..3, cbName
+        let mut buf = record_header(0x0000, MSOFBT_BSE, content.len() as u32);
+        buf.extend_from_slice(&content);
+        buf
+    }
+
+    /// Build an `msofbtOPT` property table carrying one `pib` entry.
+    fn opt_with_pib(pib: u32) -> Vec<u8> {
+        let mut content = Vec::new();
+        // `fBid` (bit 14) set, as a real picture shape writes it.
+        content.extend_from_slice(&(MSO_PROPERTY_PIB | 0x4000).to_le_bytes());
+        content.extend_from_slice(&pib.to_le_bytes());
+        let mut buf = record_header(1 << 4, MSOFBT_OPT[0], content.len() as u32);
+        buf.extend_from_slice(&content);
+        buf
+    }
+
+    /// #1620: a picture's slide comes from the drawing that references it, not from the
+    /// `Pictures` stream, which is in save order and names no slide at all.
+    #[test]
+    fn should_attribute_each_picture_to_the_slide_whose_drawing_references_it() {
+        let first_picture = b"\xFF\xD8\xFFfirst-picture";
+        let second_picture = b"\xFF\xD8\xFFsecond";
+        let first_blip = blip_record_one_uid(0x46A, RT_BLIP_JPEG, first_picture);
+        let second_blip = blip_record_one_uid(0x46A, RT_BLIP_JPEG, second_picture);
+        let second_offset = first_blip.len() as u32;
+        let mut pictures_stream = first_blip.clone();
+        pictures_stream.extend_from_slice(&second_blip);
+
+        // `pib` 1 -> the blip at 0, `pib` 2 -> the blip after it.
+        let mut bstore = bse_record(0);
+        bstore.extend_from_slice(&bse_record(second_offset));
+        let drawing_group = container(0xF001, &bstore);
+
+        // Slide 1 shows the *second* blip and slide 2 the first, so a passing test cannot
+        // be explained by the stream order the walk would otherwise fall back to.
+        let mut stream = drawing_group;
+        stream.extend_from_slice(&container(RT_SLIDE, &opt_with_pib(2)));
+        let mut slide_two = text_chars_atom("Slide Two");
+        slide_two.extend_from_slice(&opt_with_pib(1));
+        stream.extend_from_slice(&container(RT_SLIDE, &slide_two));
+
+        let content = build_test_ppt_ole(&stream, Some(&pictures_stream));
+        let result = extract_ppt_text_with_options(&content, false, true).expect("synthetic deck should parse");
+
+        assert_eq!(result.images.len(), 2, "both blips must still be extracted");
+        assert_eq!(&result.images[0].data[..], &first_picture[..]);
+        assert_eq!(
+            result.images[0].page_number,
+            Some(2),
+            "first blip is referenced by slide 2"
+        );
+        assert_eq!(&result.images[1].data[..], &second_picture[..]);
+        assert_eq!(
+            result.images[1].page_number,
+            Some(1),
+            "second blip is referenced by slide 1"
+        );
+    }
+
+    /// #1620: a blip in `Pictures` that no live shape displays keeps the pre-fix
+    /// behaviour -- still extracted, but attributed to no slide.
+    #[test]
+    fn should_leave_a_picture_no_shape_references_without_a_slide_number() {
+        let picture = b"\xFF\xD8\xFForphan";
+        let pictures_stream = blip_record_one_uid(0x46A, RT_BLIP_JPEG, picture);
+        let mut stream = container(0xF001, &bse_record(0));
+        stream.extend_from_slice(&container(RT_SLIDE, &text_chars_atom("Slide One")));
+
+        let content = build_test_ppt_ole(&stream, Some(&pictures_stream));
+        let result = extract_ppt_text_with_options(&content, false, true).expect("synthetic deck should parse");
+
+        assert_eq!(result.images.len(), 1);
+        assert_eq!(result.images[0].page_number, None);
+    }
+
+    /// #1620: a `pib` pointing past the end of the `BStoreContainer` is a corrupt deck,
+    /// not a panic -- the picture simply resolves to no slide.
+    #[test]
+    fn should_ignore_a_blip_index_beyond_the_blip_store() {
+        let picture = b"\xFF\xD8\xFFonly";
+        let pictures_stream = blip_record_one_uid(0x46A, RT_BLIP_JPEG, picture);
+        let mut stream = container(0xF001, &bse_record(0));
+        stream.extend_from_slice(&container(RT_SLIDE, &opt_with_pib(99)));
+
+        let content = build_test_ppt_ole(&stream, Some(&pictures_stream));
+        let result = extract_ppt_text_with_options(&content, false, true).expect("synthetic deck should parse");
+
+        assert_eq!(result.images.len(), 1);
+        assert_eq!(result.images[0].page_number, None);
     }
 }

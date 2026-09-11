@@ -116,8 +116,8 @@ fn summarization_test_config() -> ExtractionConfig {
 
 #[cfg(feature = "summarization")]
 fn restore_builtin_summarization() {
-    crate::plugins::unregister_post_processor("summarization").unwrap();
-    crate::plugins::processor::builtin::summarization::register().unwrap();
+    retry_while_registry_in_use(|| crate::plugins::unregister_post_processor("summarization"));
+    retry_while_registry_in_use(crate::plugins::processor::builtin::summarization::register);
 }
 
 /// Maximum attempts before a lifecycle mutation is treated as genuinely stuck.
@@ -125,11 +125,11 @@ fn restore_builtin_summarization() {
 /// Carries `retry_while_registry_in_use`'s own cfg: without it the constants outlive the only
 /// function that reads them on any feature set that compiles it out, and `-D warnings` turns
 /// that into a hard error on the narrow no-ORT legs while every wide-feature leg stays green. ~keep
-#[cfg(any(all(feature = "quality", feature = "summarization"), feature = "tokio-runtime"))]
+#[cfg(any(feature = "summarization", feature = "tokio-runtime"))]
 const REGISTRY_MUTATION_ATTEMPTS: usize = 100;
 
 /// Delay between attempts, long enough for a concurrent extraction to drop its snapshot lease.
-#[cfg(any(all(feature = "quality", feature = "summarization"), feature = "tokio-runtime"))]
+#[cfg(any(feature = "summarization", feature = "tokio-runtime"))]
 const REGISTRY_MUTATION_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(20);
 
 /// Retry a post-processor lifecycle mutation while the registry reports it is in use.
@@ -139,7 +139,7 @@ const REGISTRY_MUTATION_RETRY_DELAY: std::time::Duration = std::time::Duration::
 /// `.unwrap()`ing it asserts an exclusivity this binary cannot provide. `#[serial]` only orders a
 /// test against the crate's other `#[serial]` tests, while dozens of non-serial tests here run
 /// real extractions and hold that lease. Honour the contract instead of racing it. ~keep
-#[cfg(any(all(feature = "quality", feature = "summarization"), feature = "tokio-runtime"))]
+#[cfg(any(feature = "summarization", feature = "tokio-runtime"))]
 fn retry_while_registry_in_use<T>(mut mutation: impl FnMut() -> crate::Result<T>) -> T {
     for _ in 0..REGISTRY_MUTATION_ATTEMPTS {
         match mutation() {
@@ -1378,7 +1378,7 @@ async fn captioning_prepass_keeps_redaction_and_chunks_consistent() {
     }
 
     initialization::initialize_features();
-    crate::plugins::processor::builtin::redaction::register().unwrap();
+    retry_while_registry_in_use(crate::plugins::processor::builtin::redaction::register);
     let registry = crate::plugins::registry::get_post_processor_registry();
     registry.write().register(Arc::new(StubCaptioningProcessor)).unwrap();
     clear_processor_cache().unwrap();
@@ -1421,7 +1421,7 @@ async fn captioning_prepass_keeps_redaction_and_chunks_consistent() {
 
     let processed = run_pipeline(doc, &config).await;
 
-    crate::plugins::processor::builtin::captioning::register().unwrap();
+    retry_while_registry_in_use(crate::plugins::processor::builtin::captioning::register);
     clear_processor_cache().unwrap();
 
     let processed = processed.unwrap();
@@ -1579,7 +1579,7 @@ async fn captioning_prepass_preserves_full_code_intelligence_scratch_payload() {
     let processed = run_pipeline(doc, &config).await.unwrap();
 
     // Restore the real captioning processor for subsequent tests in this module.
-    crate::plugins::processor::builtin::captioning::register().unwrap();
+    retry_while_registry_in_use(crate::plugins::processor::builtin::captioning::register);
     clear_processor_cache().unwrap();
 
     assert_eq!(

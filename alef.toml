@@ -3428,7 +3428,7 @@ e2e = "cd e2e/python && uv run --no-sync python -m pytest tests/ -q"
 
 [crates.test.node]
 precondition = "command -v pnpm >/dev/null 2>&1"
-before = "bash scripts/e2e/build-mock-server.sh && cd crates/xberg-node && pnpm install && CARGO_BUILD_JOBS=1 pnpm exec napi build --output-dir . --release --platform && cd ../../e2e/node && pnpm install --frozen-lockfile=false"
+before = "bash scripts/e2e/build-mock-server.sh && cd crates/xberg-node && pnpm install && CARGO_BUILD_JOBS=1 pnpm exec napi build --output-dir . --release --platform && cd ../../e2e/node && pnpm install --no-frozen-lockfile"
 e2e = "cd e2e/node && pnpm test"
 
 [crates.test.go]

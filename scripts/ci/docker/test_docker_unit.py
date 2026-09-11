@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Unit tests for Docker CI helpers that do not require a Docker daemon."""
 
 from __future__ import annotations
@@ -19,7 +18,7 @@ class CliImageSizeTests(unittest.TestCase):
         assert cli_image_size_is_allowed(0) is False
 
     def test_reports_exact_bytes_and_mebibytes(self) -> None:
-        assert format_image_size(CLI_IMAGE_LIMIT_BYTES) == "200.000000 MiB (209715200 bytes)"
+        assert format_image_size(CLI_IMAGE_LIMIT_BYTES) == "250.000000 MiB (262144000 bytes)"
 
 
 if __name__ == "__main__":
