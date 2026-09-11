@@ -261,6 +261,8 @@ mod tests {
             extraction_service: std::sync::Arc::new(std::sync::Mutex::new(extraction_service)),
             #[cfg(feature = "api")]
             job_store: std::sync::Arc::new(crate::api::jobs::JobStore::new()),
+            #[cfg(feature = "api")]
+            job_timeout_secs: crate::core::ServerConfig::default().job_timeout_secs,
             #[cfg(feature = "prometheus")]
             prometheus_registry: crate::telemetry::init_prometheus(),
         };

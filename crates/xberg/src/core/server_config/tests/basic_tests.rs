@@ -10,6 +10,7 @@ fn test_default_config() {
     assert!(config.cors_origins.is_empty());
     assert_eq!(config.max_request_body_bytes, 104_857_600);
     assert_eq!(config.max_multipart_field_bytes, 104_857_600);
+    assert_eq!(config.job_timeout_secs, 600);
 }
 
 #[test]

@@ -53,6 +53,14 @@ const DEFAULT_MAX_REQUEST_BODY_BYTES: usize = 104_857_600;
 /// Default maximum multipart field size: 100 MB
 const DEFAULT_MAX_MULTIPART_FIELD_BYTES: usize = 104_857_600;
 
+/// Default fallback timeout, in seconds, for `POST /extract-async` jobs: 600 (10 minutes).
+///
+/// Matches `ExtractionConfig::default_extraction_timeout()` so a request that omits
+/// `extraction_timeout_secs` and one that sends it as an explicit `null` time out after the
+/// same duration, rather than the previous mismatch (600s via the serde default vs. a
+/// hardcoded 300s fallback here).
+const DEFAULT_JOB_TIMEOUT_SECS: u64 = 600;
+
 /// API server configuration.
 ///
 /// This struct holds all configuration options for the Xberg API server,
@@ -65,6 +73,7 @@ const DEFAULT_MAX_MULTIPART_FIELD_BYTES: usize = 104_857_600;
 /// - `cors_origins`: empty vector (allows all origins)
 /// - `max_request_body_bytes`: 104_857_600 (100 MB)
 /// - `max_multipart_field_bytes`: 104_857_600 (100 MB)
+/// - `job_timeout_secs`: 600 (10 minutes)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ServerConfig {
@@ -91,6 +100,16 @@ pub struct ServerConfig {
     /// Maximum size of multipart fields in bytes (default: 100 MB)
     #[serde(default = "default_max_multipart_field_bytes")]
     pub max_multipart_field_bytes: usize,
+
+    /// Fallback timeout, in seconds, for `POST /extract-async` jobs whose request does not
+    /// pin down `extraction_timeout_secs` (default: 600, 10 minutes).
+    ///
+    /// A per-request `extraction_timeout_secs: Some(n)` always overrides this value. An
+    /// explicit `extraction_timeout_secs: null` deliberately does NOT mean "run unbounded" —
+    /// it still falls back to this server-configured cap, because an unbounded job on a
+    /// shared server is a denial-of-service risk.
+    #[serde(default = "default_job_timeout_secs")]
+    pub job_timeout_secs: u64,
 }
 
 impl Default for ServerConfig {
@@ -101,6 +120,7 @@ impl Default for ServerConfig {
             cors_origins: Vec::new(),
             max_request_body_bytes: default_max_request_body_bytes(),
             max_multipart_field_bytes: default_max_multipart_field_bytes(),
+            job_timeout_secs: default_job_timeout_secs(),
         }
     }
 }
@@ -119,6 +139,10 @@ fn default_max_request_body_bytes() -> usize {
 
 fn default_max_multipart_field_bytes() -> usize {
     DEFAULT_MAX_MULTIPART_FIELD_BYTES
+}
+
+fn default_job_timeout_secs() -> u64 {
+    DEFAULT_JOB_TIMEOUT_SECS
 }
 
 impl ServerConfig {
@@ -239,10 +263,11 @@ impl ServerConfig {
     /// - `XBERG_CORS_ORIGINS` - Comma-separated list of allowed origins
     /// - `XBERG_MAX_REQUEST_BODY_BYTES` - Max request body size in bytes
     /// - `XBERG_MAX_MULTIPART_FIELD_BYTES` - Max multipart field size in bytes
+    /// - `XBERG_JOB_TIMEOUT_SECS` - Async job fallback timeout in seconds
     ///
     /// The resulting configuration is validated with [`Self::validate`] before it is returned,
-    /// so an override that supplies a malformed host, port, CORS origin or upload limit is
-    /// rejected here rather than when the server binds.
+    /// so an override that supplies a malformed host, port, CORS origin, upload limit or job
+    /// timeout is rejected here rather than when the server binds.
     ///
     /// # Errors
     ///
@@ -250,6 +275,7 @@ impl ServerConfig {
     /// - `XBERG_PORT` cannot be parsed as u16
     /// - `XBERG_MAX_REQUEST_BODY_BYTES` cannot be parsed as usize
     /// - `XBERG_MAX_MULTIPART_FIELD_BYTES` cannot be parsed as usize
+    /// - `XBERG_JOB_TIMEOUT_SECS` cannot be parsed as u64
     /// - the overridden configuration fails [`Self::validate`]
     ///
     /// # Example
@@ -279,6 +305,7 @@ impl ServerConfig {
             &mut self.cors_origins,
             &mut self.max_request_body_bytes,
             &mut self.max_multipart_field_bytes,
+            &mut self.job_timeout_secs,
         )?;
 
         self.validate()?;

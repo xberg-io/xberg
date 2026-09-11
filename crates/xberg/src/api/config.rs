@@ -53,11 +53,13 @@ pub(crate) fn load_server_config(config_path: Option<&str>) -> Result<ServerConf
     config.apply_env_overrides()?;
 
     tracing::info!(
-        "Server configuration loaded: host={}, port={}, request_body_limit={} MB, multipart_field_limit={} MB, CORS={}",
+        "Server configuration loaded: host={}, port={}, request_body_limit={} MB, multipart_field_limit={} MB, \
+         job_timeout={}s, CORS={}",
         config.host,
         config.port,
         config.max_request_body_mb(),
         config.max_multipart_field_mb(),
+        config.job_timeout_secs,
         if config.cors_allows_all() {
             "allow all origins".to_string()
         } else {

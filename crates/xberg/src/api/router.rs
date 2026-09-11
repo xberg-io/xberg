@@ -123,6 +123,42 @@ pub fn create_router_with_limits(config: ExtractionConfig, limits: ApiSizeLimits
     create_router_with_limits_and_server_config(config, limits, ServerConfig::default())
 }
 
+/// Build the [`ApiState`] shared by every route, including a fresh extraction service and
+/// (behind `feature = "api"`) a fresh job store.
+///
+/// Extracted from [`create_router_with_limits_and_server_config`] so the wiring from
+/// `server_config` into `ApiState` — in particular `job_timeout_secs` — is unit-testable
+/// without building a full router.
+fn build_api_state(config: ExtractionConfig, server_config: &ServerConfig) -> ApiState {
+    // Fallback for embedders that only ever use this built-in router: install the
+    // Prometheus-backed meter provider before the extraction service (and therefore the
+    // `telemetry::metrics::get_metrics()` `OnceLock`) is built below. Callers who construct
+    // their own extraction pipeline outside this router must call
+    // `xberg::telemetry::init_prometheus()` themselves, before their first extraction —
+    // see that function's doc comment. This call is idempotent, so calling it again here
+    // after an embedder's own explicit call is harmless. ~keep
+    #[cfg(feature = "prometheus")]
+    let prometheus_registry = crate::telemetry::init_prometheus();
+
+    let extraction_service_builder = ExtractionServiceBuilder::new().with_tracing();
+    #[cfg(feature = "otel")]
+    let extraction_service_builder = extraction_service_builder.with_metrics();
+    let extraction_service = extraction_service_builder
+        .build()
+        .expect("the built-in extraction service uses a valid concurrency limit");
+
+    ApiState {
+        default_config: Arc::new(config),
+        extraction_service: Arc::new(std::sync::Mutex::new(extraction_service)),
+        #[cfg(feature = "api")]
+        job_store: Arc::new(super::jobs::JobStore::new()),
+        #[cfg(feature = "api")]
+        job_timeout_secs: server_config.job_timeout_secs,
+        #[cfg(feature = "prometheus")]
+        prometheus_registry,
+    }
+}
+
 /// Create the API router with custom size limits and server configuration.
 ///
 /// This function provides full control over request limits, CORS, and server settings via ServerConfig.
@@ -160,31 +196,7 @@ pub(crate) fn create_router_with_limits_and_server_config(
     limits: ApiSizeLimits,
     server_config: ServerConfig,
 ) -> Router {
-    // Fallback for embedders that only ever use this built-in router: install the
-    // Prometheus-backed meter provider before the extraction service (and therefore the
-    // `telemetry::metrics::get_metrics()` `OnceLock`) is built below. Callers who construct
-    // their own extraction pipeline outside this router must call
-    // `xberg::telemetry::init_prometheus()` themselves, before their first extraction —
-    // see that function's doc comment. This call is idempotent, so calling it again here
-    // after an embedder's own explicit call is harmless. ~keep
-    #[cfg(feature = "prometheus")]
-    let prometheus_registry = crate::telemetry::init_prometheus();
-
-    let extraction_service_builder = ExtractionServiceBuilder::new().with_tracing();
-    #[cfg(feature = "otel")]
-    let extraction_service_builder = extraction_service_builder.with_metrics();
-    let extraction_service = extraction_service_builder
-        .build()
-        .expect("the built-in extraction service uses a valid concurrency limit");
-
-    let state = ApiState {
-        default_config: Arc::new(config),
-        extraction_service: Arc::new(std::sync::Mutex::new(extraction_service)),
-        #[cfg(feature = "api")]
-        job_store: Arc::new(super::jobs::JobStore::new()),
-        #[cfg(feature = "prometheus")]
-        prometheus_registry,
-    };
+    let state = build_api_state(config, &server_config);
 
     let cors_layer = if server_config.cors_allows_all() {
         tracing::warn!(
@@ -325,6 +337,17 @@ mod tests {
         let limits = ApiSizeLimits::from_mb(100, 100);
         let server_config = ServerConfig::default();
         let _router = create_router_with_limits_and_server_config(extraction_config, limits, server_config);
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn build_api_state_copies_job_timeout_secs_from_server_config() {
+        let server_config = ServerConfig {
+            job_timeout_secs: 42,
+            ..ServerConfig::default()
+        };
+        let state = build_api_state(ExtractionConfig::default(), &server_config);
+        assert_eq!(state.job_timeout_secs, 42);
     }
 
     #[test]

@@ -195,6 +195,15 @@ pub struct ApiState {
     /// In-memory job store for async extraction polling.
     #[cfg(feature = "api")]
     pub job_store: Arc<super::jobs::JobStore>,
+    /// Fallback timeout, in seconds, applied to a `POST /extract-async` job whose effective
+    /// config does not pin down `extraction_timeout_secs` — copied from
+    /// `ServerConfig::job_timeout_secs` when the router is built. A per-request
+    /// `extraction_timeout_secs: Some(n)` always overrides this value; an explicit
+    /// `extraction_timeout_secs: null` still falls back to it (see
+    /// `ServerConfig::job_timeout_secs` for why an explicit `null` is deliberately not
+    /// "unbounded").
+    #[cfg(feature = "api")]
+    pub job_timeout_secs: u64,
     /// Prometheus registry backing `GET /metrics`.
     ///
     /// Installed by [`crate::telemetry::init_prometheus`] as the global OTel meter

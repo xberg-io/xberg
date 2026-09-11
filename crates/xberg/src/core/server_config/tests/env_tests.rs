@@ -146,6 +146,56 @@ fn test_apply_env_max_multipart_field_bytes_override() {
 
 #[serial_test::serial]
 #[test]
+fn test_apply_env_job_timeout_secs_override() {
+    let original = std::env::var("XBERG_JOB_TIMEOUT_SECS").ok();
+    unsafe {
+        std::env::set_var("XBERG_JOB_TIMEOUT_SECS", "120");
+    }
+
+    let mut config = ServerConfig::default();
+    config.apply_env_overrides().unwrap();
+
+    assert_eq!(config.job_timeout_secs, 120);
+
+    unsafe {
+        if let Some(orig) = original {
+            std::env::set_var("XBERG_JOB_TIMEOUT_SECS", orig);
+        } else {
+            std::env::remove_var("XBERG_JOB_TIMEOUT_SECS");
+        }
+    }
+}
+
+#[serial_test::serial]
+#[test]
+fn test_apply_env_job_timeout_secs_invalid() {
+    let original = std::env::var("XBERG_JOB_TIMEOUT_SECS").ok();
+    unsafe {
+        std::env::set_var("XBERG_JOB_TIMEOUT_SECS", "not_a_number");
+    }
+
+    let mut config = ServerConfig::default();
+    let result = config.apply_env_overrides();
+
+    assert!(result.is_err());
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("XBERG_JOB_TIMEOUT_SECS must be a valid u64")
+    );
+
+    unsafe {
+        if let Some(orig) = original {
+            std::env::set_var("XBERG_JOB_TIMEOUT_SECS", orig);
+        } else {
+            std::env::remove_var("XBERG_JOB_TIMEOUT_SECS");
+        }
+    }
+}
+
+#[serial_test::serial]
+#[test]
 fn test_apply_env_multiple_overrides() {
     let host_orig = std::env::var("XBERG_HOST").ok();
     let port_orig = std::env::var("XBERG_PORT").ok();

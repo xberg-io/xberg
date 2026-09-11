@@ -1155,6 +1155,19 @@ fn resolve_cache_base() -> std::path::PathBuf {
     crate::cache_dir::resolve_cache_base()
 }
 
+/// Resolve the timeout applied to an async extraction job's `tokio::time::timeout` wrapper.
+///
+/// A per-request `extraction_timeout_secs: Some(n)` always wins over the server default. When
+/// the effective config's field is `None` — whether the request omitted it (serde already
+/// filled in `ExtractionConfig::default_extraction_timeout()`) or sent it as an explicit
+/// `null` — `server_default_secs` (`ApiState::job_timeout_secs`) applies. An explicit `null`
+/// deliberately does NOT mean "run unbounded": an unbounded job on a shared server is a
+/// denial-of-service risk.
+#[cfg(feature = "api")]
+fn resolve_job_timeout_secs(request_timeout_secs: Option<u64>, server_default_secs: u64) -> u64 {
+    request_timeout_secs.unwrap_or(server_default_secs)
+}
+
 /// Submit an async extraction job.
 ///
 /// POST /extract-async
@@ -1217,6 +1230,7 @@ pub(crate) async fn extract_async_handler(
 
     let job_store = Arc::clone(&state.job_store);
     let job_id_bg = job_id.clone();
+    let job_timeout_secs = state.job_timeout_secs;
 
     tokio::spawn(async move {
         let store = job_store;
@@ -1224,7 +1238,7 @@ pub(crate) async fn extract_async_handler(
 
         store.set_running(&jid, super::jobs::now_rfc3339());
 
-        let timeout_secs = effective_config.extraction_timeout_secs.unwrap_or(300);
+        let timeout_secs = resolve_job_timeout_secs(effective_config.extraction_timeout_secs, job_timeout_secs);
         let timeout_dur = std::time::Duration::from_secs(timeout_secs);
 
         let extraction_fut = async {
@@ -1394,6 +1408,8 @@ mod tests {
             extraction_service: std::sync::Arc::new(std::sync::Mutex::new(extraction_service)),
             #[cfg(feature = "api")]
             job_store: std::sync::Arc::new(crate::api::jobs::JobStore::new()),
+            #[cfg(feature = "api")]
+            job_timeout_secs: crate::core::ServerConfig::default().job_timeout_secs,
             #[cfg(feature = "prometheus")]
             prometheus_registry: crate::telemetry::init_prometheus(),
         };
@@ -1914,6 +1930,33 @@ mod tests {
             "Expected missing ner-onnx validation error, got: {}",
             error_msg
         );
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn resolve_job_timeout_secs_uses_server_default_when_request_omits_it() {
+        assert_eq!(resolve_job_timeout_secs(None, 600), 600);
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn resolve_job_timeout_secs_uses_server_default_when_request_sends_explicit_null() {
+        // `None` here is what an explicit `extraction_timeout_secs: null` deserializes to;
+        // it must still fall back to the server cap rather than running unbounded. ~keep
+        let request_field_value: Option<u64> = None;
+        assert_eq!(resolve_job_timeout_secs(request_field_value, 600), 600);
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn resolve_job_timeout_secs_honors_a_custom_server_default() {
+        assert_eq!(resolve_job_timeout_secs(None, 120), 120);
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn resolve_job_timeout_secs_lets_per_request_value_override_server_default() {
+        assert_eq!(resolve_job_timeout_secs(Some(45), 600), 45);
     }
 
     #[cfg(feature = "api")]

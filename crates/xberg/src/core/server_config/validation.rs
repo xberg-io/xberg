@@ -8,6 +8,7 @@
 
 use super::ServerConfig;
 use crate::Result;
+use crate::XbergError;
 use crate::core::config_validation::{validate_cors_origin, validate_host, validate_port, validate_upload_size};
 
 /// Validate every network-facing field of a [`ServerConfig`].
@@ -16,7 +17,8 @@ use crate::core::config_validation::{validate_cors_origin, validate_host, valida
 ///
 /// Returns [`crate::XbergError::Validation`] when `host` is neither an IP address nor a
 /// hostname, when `port` is outside 1-65535, when any entry of `cors_origins` is neither
-/// `*` nor an HTTP(S) URL, or when either upload limit is zero.
+/// `*` nor an HTTP(S) URL, when either upload limit is zero, or when `job_timeout_secs` is
+/// zero.
 pub(super) fn validate(config: &ServerConfig) -> Result<()> {
     validate_host(&config.host)?;
     validate_port(u32::from(config.port))?;
@@ -27,8 +29,26 @@ pub(super) fn validate(config: &ServerConfig) -> Result<()> {
 
     validate_upload_size(config.max_request_body_bytes)?;
     validate_upload_size(config.max_multipart_field_bytes)?;
+    validate_job_timeout_secs(config.job_timeout_secs)?;
 
     Ok(())
+}
+
+/// Reject a zero job timeout: `Duration::from_secs(0)` expires immediately, so every async
+/// job would fail before it could run.
+fn validate_job_timeout_secs(job_timeout_secs: u64) -> Result<()> {
+    if job_timeout_secs > 0 {
+        Ok(())
+    } else {
+        Err(XbergError::Validation {
+            message: format!(
+                "Job timeout must be greater than 0, got {job_timeout_secs}. \
+                 Set 'server.job_timeout_secs' (or XBERG_JOB_TIMEOUT_SECS) \
+                 to a positive number of seconds such as 600 (10 minutes)."
+            ),
+            source: None,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -122,6 +142,20 @@ mod tests {
             "Validation error: Upload size must be greater than 0, got 0. \
              Set 'server.max_request_body_bytes' / 'server.max_multipart_field_bytes' \
              to a positive byte count such as 104857600 (100 MB)."
+        );
+    }
+
+    #[test]
+    fn should_reject_config_when_job_timeout_secs_is_zero() {
+        let config = ServerConfig {
+            job_timeout_secs: 0,
+            ..ServerConfig::default()
+        };
+        assert_eq!(
+            outcome(&config),
+            "Validation error: Job timeout must be greater than 0, got 0. \
+             Set 'server.job_timeout_secs' (or XBERG_JOB_TIMEOUT_SECS) \
+             to a positive number of seconds such as 600 (10 minutes)."
         );
     }
 }

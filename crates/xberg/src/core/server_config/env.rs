@@ -14,6 +14,7 @@ use crate::{Result, XbergError};
 /// - `XBERG_CORS_ORIGINS` - Comma-separated list of allowed origins
 /// - `XBERG_MAX_REQUEST_BODY_BYTES` - Max request body size in bytes
 /// - `XBERG_MAX_MULTIPART_FIELD_BYTES` - Max multipart field size in bytes
+/// - `XBERG_JOB_TIMEOUT_SECS` - Async job fallback timeout in seconds
 ///
 /// # Errors
 ///
@@ -21,12 +22,14 @@ use crate::{Result, XbergError};
 /// - `XBERG_PORT` cannot be parsed as u16
 /// - `XBERG_MAX_REQUEST_BODY_BYTES` cannot be parsed as usize
 /// - `XBERG_MAX_MULTIPART_FIELD_BYTES` cannot be parsed as usize
+/// - `XBERG_JOB_TIMEOUT_SECS` cannot be parsed as u64
 pub(crate) fn apply_env_overrides(
     host: &mut String,
     port: &mut u16,
     cors_origins: &mut Vec<String>,
     max_request_body_bytes: &mut usize,
     max_multipart_field_bytes: &mut usize,
+    job_timeout_secs: &mut u64,
 ) -> Result<()> {
     if let Ok(env_host) = std::env::var("XBERG_HOST") {
         *host = env_host;
@@ -63,6 +66,15 @@ pub(crate) fn apply_env_overrides(
             XbergError::validation(format!(
                 "XBERG_MAX_MULTIPART_FIELD_BYTES must be a valid usize, got '{}': {}",
                 bytes_str, e
+            ))
+        })?;
+    }
+
+    if let Ok(secs_str) = std::env::var("XBERG_JOB_TIMEOUT_SECS") {
+        *job_timeout_secs = secs_str.parse::<u64>().map_err(|e| {
+            XbergError::validation(format!(
+                "XBERG_JOB_TIMEOUT_SECS must be a valid u64, got '{}': {}",
+                secs_str, e
             ))
         })?;
     }
