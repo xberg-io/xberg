@@ -134,14 +134,14 @@ tokio = { version = "1.53.1", features = [
     "time",
     "io-util",
 ] }
-toml = "1.1.5"
+toml = "1.1.6"
 tracing = "0.1"
 # Pure-Rust ONNX inference engine (Sonos). Alternative InferenceBackend to `ort` on
 # no-ORT targets (wasm32, x86_64-linux-android). The ONNX frontend crate is CPU-only
 # and WASM-safe; the top-level `tract` facade instead defaults to CUDA and bundles
 # GPU backends, so it is unusable here. See issue #1275.
 tract-onnx = { version = "0.23.7", default-features = false }
-tree-sitter-language-pack = { version = "1.17.0", default-features = false, features = ["serde"] }
+tree-sitter-language-pack = { version = "1.18.0", default-features = false, features = ["serde"] }
 url = "2.5.8"
 # usvg (re-exported by resvg) with only the `writer` feature so `Tree::to_string`
 # / `WriteOptions` are available for SVG sanitize re-serialization. `writer` pulls
