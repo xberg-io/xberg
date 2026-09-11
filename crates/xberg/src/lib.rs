@@ -108,6 +108,16 @@ pub mod sparse_embeddings;
 #[cfg(any(feature = "late-interaction-presets", feature = "late-interaction"))]
 pub mod late_interaction;
 
+/// Process-wide caches of loaded model engines.
+#[cfg(any(
+    feature = "embeddings",
+    feature = "static-embeddings",
+    feature = "reranker",
+    feature = "sparse-embeddings",
+    feature = "late-interaction"
+))]
+mod engine_cache;
+
 // `layout-detection` renders PDF pages itself and needs `image::dpi` to honour a configured
 // render DPI (#1577); it does not imply `ocr-pipeline`, so the module gate has to cover both or
 // `pdf + layout-detection` fails to compile. The submodules that genuinely need the OCR
@@ -417,6 +427,26 @@ pub fn embed_texts(texts: Vec<String>, config: &core::config::EmbeddingConfig) -
 ))]
 #[cfg_attr(alef, alef(skip))]
 pub use embeddings::embed_texts_async;
+
+/// Drop every resident model engine: dense, static, sparse and late-interaction
+/// embeddings and rerankers. Returns the number of engines removed.
+///
+/// A caller that still holds an engine keeps it alive until it drops its
+/// handle. The next call that needs a model loads it again. A build without
+/// any engine feature has nothing to drop and returns 0.
+#[cfg_attr(alef, alef(skip))]
+pub fn clear_engine_caches() -> usize {
+    let removed = 0;
+    #[cfg(any(feature = "embeddings", feature = "static-embeddings"))]
+    let removed = removed + embeddings::clear_engine_cache();
+    #[cfg(feature = "reranker")]
+    let removed = removed + reranking::clear_engine_cache();
+    #[cfg(feature = "sparse-embeddings")]
+    let removed = removed + sparse_embeddings::clear_engine_cache();
+    #[cfg(feature = "late-interaction")]
+    let removed = removed + late_interaction::clear_engine_cache();
+    removed
+}
 
 /// Get an embedding preset by name.
 ///

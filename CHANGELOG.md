@@ -19,6 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unbounded. Previously this fallback was a hardcoded 300 seconds, inconsistent with the 600
   second default used everywhere else. See the Changed section for the source-compatibility impact.
 
+- A long-running process can now release the embedding and reranker models it no longer
+  uses. `embeddings::evict_model` and `reranking::evict_model` (and the same functions in
+  `sparse_embeddings` and `late_interaction`) drop one model, `clear_engine_cache` drops
+  every model in a cache, and `xberg::clear_engine_caches` drops all of them.
+  `set_engine_cache_limit` bounds the number of resident engines in a cache and drops the
+  least recently used one first. The default stays unbounded, so existing callers see no
+  change (GH#1626).
+
 ### Fixed
 
 - `extraction_confidence` no longer reports a failed structured extraction as fully
