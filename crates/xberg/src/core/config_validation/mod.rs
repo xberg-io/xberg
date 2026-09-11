@@ -32,8 +32,8 @@ mod sections;
 #[cfg(feature = "api-types")]
 pub(crate) use dependencies::{validate_cors_origin, validate_host, validate_port, validate_upload_size};
 pub(crate) use sections::{
-    validate_chunking_params, validate_confidence, validate_csv_delimiter, validate_dpi, validate_language_code,
-    validate_ocr_backend, validate_token_reduction_level, validate_vlm_backend_config,
+    TESSERACT_LANGUAGE_CODES, validate_chunking_params, validate_confidence, validate_csv_delimiter, validate_dpi,
+    validate_language_code, validate_ocr_backend, validate_token_reduction_level, validate_vlm_backend_config,
 };
 
 // `layout_wastes_plain_output` is `pub`, not `pub(crate)`, unlike its siblings above: it backs

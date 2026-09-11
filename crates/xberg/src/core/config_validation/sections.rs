@@ -209,6 +209,26 @@ const VALID_LANGUAGE_CODES: &[&str] = &[
     "chs",
 ];
 
+/// Canonical set of Tesseract-supported ISO 639-3 traineddata language codes.
+///
+/// This is the single source of truth for which codes Tesseract can OCR with. It lives here,
+/// feature-independent, rather than in `ocr::validation` (which is gated behind `feature = "ocr"`
+/// and would otherwise not exist for a build that compiles `OcrConfig` without the `ocr` feature).
+/// `ocr::validation::TESSERACT_SUPPORTED_LANGUAGE_CODES` builds its lookup set from this exact
+/// array instead of maintaining a second hardcoded copy — two independently maintained allowlists
+/// silently drifted apart before (GH#1621: `fao` was Tesseract-supported but missing here), and a
+/// single array that both call sites read from makes that drift impossible. ~keep
+pub(crate) const TESSERACT_LANGUAGE_CODES: &[&str] = &[
+    "afr", "amh", "ara", "asm", "aze", "aze_cyrl", "bel", "ben", "bod", "bos", "bre", "bul", "cat", "ceb", "ces",
+    "chi_sim", "chi_tra", "chr", "cos", "cym", "dan", "deu", "div", "dzo", "ell", "eng", "enm", "epo", "equ", "est",
+    "eus", "fao", "fas", "fil", "fin", "fra", "frk", "frm", "fry", "gla", "gle", "glg", "grc", "guj", "hat", "heb",
+    "hin", "hrv", "hun", "hye", "iku", "ind", "isl", "ita", "ita_old", "jav", "jpn", "kan", "kat", "kat_old", "kaz",
+    "khm", "kir", "kmr", "kor", "lao", "lat", "lav", "lit", "ltz", "mal", "mar", "mkd", "mlt", "mon", "mri", "msa",
+    "mya", "nep", "nld", "nor", "oci", "ori", "osd", "pan", "pol", "por", "pus", "que", "ron", "rus", "san", "sin",
+    "slk", "slv", "snd", "spa", "spa_old", "sqi", "srp", "srp_latn", "sun", "swa", "swe", "syr", "tam", "tat", "tel",
+    "tgk", "tha", "tir", "ton", "tur", "uig", "ukr", "urd", "uzb", "uzb_cyrl", "vie", "yid", "yor",
+];
+
 /// Valid tesseract PSM (Page Segmentation Mode) values.
 ///
 /// 0 is deliberately absent. Tesseract's PSM 0 is `PSM_OSD_ONLY` -- orientation and script
@@ -395,7 +415,11 @@ pub(crate) fn validate_language_code(code: &str) -> Result<()> {
         return Ok(());
     }
 
-    if VALID_LANGUAGE_CODES.contains(&code_lower.as_str()) || VALID_LANGUAGE_CODES.contains(&code_normalized.as_str()) {
+    if VALID_LANGUAGE_CODES.contains(&code_lower.as_str())
+        || VALID_LANGUAGE_CODES.contains(&code_normalized.as_str())
+        || TESSERACT_LANGUAGE_CODES.contains(&code_lower.as_str())
+        || TESSERACT_LANGUAGE_CODES.contains(&code_normalized.as_str())
+    {
         return Ok(());
     }
 

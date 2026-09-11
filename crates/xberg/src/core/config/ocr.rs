@@ -1483,6 +1483,26 @@ mod tests {
         assert_eq!(config.language, vec!["eng".to_string(), "deu".to_string()]);
     }
 
+    /// GH#1621: `fao` (Faroese) is a real Tesseract-supported ISO 639-3 code, but
+    /// `OcrConfig::validate` rejected it because the general validator's allowlist
+    /// (`core::config_validation::sections::VALID_LANGUAGE_CODES`) omitted it while the
+    /// Tesseract-specific list (`ocr::validation::TESSERACT_SUPPORTED_LANGUAGE_CODES`)
+    /// already carried it. ~keep
+    #[test]
+    fn should_accept_fao_for_tesseract_backend_regression_gh_1621() {
+        let config = OcrConfig {
+            backend: "tesseract".to_string(),
+            language: vec!["fao".to_string()],
+            ..Default::default()
+        };
+        let result = config.validate();
+        assert!(
+            result.is_ok(),
+            "expected 'fao' to be accepted as a valid Tesseract language code, got {:?}",
+            result
+        );
+    }
+
     #[test]
     fn test_language_deserialization_single_string() {
         let json = r#"{"language": "eng"}"#;

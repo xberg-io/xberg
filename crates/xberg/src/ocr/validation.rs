@@ -5,130 +5,15 @@ use ahash::AHashSet;
 use std::sync::LazyLock;
 
 /// Set of all Tesseract ISO 639-based language codes recognized by this library.
+///
+/// Built from `core::config_validation::TESSERACT_LANGUAGE_CODES`, the single feature-independent
+/// source of truth, rather than a second hardcoded list — see that const's doc comment (GH#1621).
+/// ~keep
 pub static TESSERACT_SUPPORTED_LANGUAGE_CODES: LazyLock<AHashSet<&'static str>> = LazyLock::new(|| {
-    let mut set = AHashSet::new();
-    set.insert("afr");
-    set.insert("amh");
-    set.insert("ara");
-    set.insert("asm");
-    set.insert("aze");
-    set.insert("aze_cyrl");
-    set.insert("bel");
-    set.insert("ben");
-    set.insert("bod");
-    set.insert("bos");
-    set.insert("bre");
-    set.insert("bul");
-    set.insert("cat");
-    set.insert("ceb");
-    set.insert("ces");
-    set.insert("chi_sim");
-    set.insert("chi_tra");
-    set.insert("chr");
-    set.insert("cos");
-    set.insert("cym");
-    set.insert("dan");
-    set.insert("deu");
-    set.insert("div");
-    set.insert("dzo");
-    set.insert("ell");
-    set.insert("eng");
-    set.insert("enm");
-    set.insert("epo");
-    set.insert("equ");
-    set.insert("est");
-    set.insert("eus");
-    set.insert("fao");
-    set.insert("fas");
-    set.insert("fil");
-    set.insert("fin");
-    set.insert("fra");
-    set.insert("frk");
-    set.insert("frm");
-    set.insert("fry");
-    set.insert("gla");
-    set.insert("gle");
-    set.insert("glg");
-    set.insert("grc");
-    set.insert("guj");
-    set.insert("hat");
-    set.insert("heb");
-    set.insert("hin");
-    set.insert("hrv");
-    set.insert("hun");
-    set.insert("hye");
-    set.insert("iku");
-    set.insert("ind");
-    set.insert("isl");
-    set.insert("ita");
-    set.insert("ita_old");
-    set.insert("jav");
-    set.insert("jpn");
-    set.insert("kan");
-    set.insert("kat");
-    set.insert("kat_old");
-    set.insert("kaz");
-    set.insert("khm");
-    set.insert("kir");
-    set.insert("kmr");
-    set.insert("kor");
-    set.insert("lao");
-    set.insert("lat");
-    set.insert("lav");
-    set.insert("lit");
-    set.insert("ltz");
-    set.insert("mal");
-    set.insert("mar");
-    set.insert("mkd");
-    set.insert("mlt");
-    set.insert("mon");
-    set.insert("mri");
-    set.insert("msa");
-    set.insert("mya");
-    set.insert("nep");
-    set.insert("nld");
-    set.insert("nor");
-    set.insert("oci");
-    set.insert("ori");
-    set.insert("osd");
-    set.insert("pan");
-    set.insert("pol");
-    set.insert("por");
-    set.insert("pus");
-    set.insert("que");
-    set.insert("ron");
-    set.insert("rus");
-    set.insert("san");
-    set.insert("sin");
-    set.insert("slk");
-    set.insert("slv");
-    set.insert("snd");
-    set.insert("spa");
-    set.insert("spa_old");
-    set.insert("sqi");
-    set.insert("srp");
-    set.insert("srp_latn");
-    set.insert("sun");
-    set.insert("swa");
-    set.insert("swe");
-    set.insert("syr");
-    set.insert("tam");
-    set.insert("tat");
-    set.insert("tel");
-    set.insert("tgk");
-    set.insert("tha");
-    set.insert("tir");
-    set.insert("ton");
-    set.insert("tur");
-    set.insert("uig");
-    set.insert("ukr");
-    set.insert("urd");
-    set.insert("uzb");
-    set.insert("uzb_cyrl");
-    set.insert("vie");
-    set.insert("yid");
-    set.insert("yor");
-    set
+    crate::core::config_validation::TESSERACT_LANGUAGE_CODES
+        .iter()
+        .copied()
+        .collect()
 });
 
 /// Validate a Tesseract language code (or `+`-separated list of codes).
@@ -170,6 +55,22 @@ pub(crate) fn validate_tesseract_version(version: u32) -> Result<(), OcrError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// GH#1621: the general `OcrConfig` validator (`core::config_validation::validate_language_code`)
+    /// and this Tesseract-specific validator drifted apart because they held two independently
+    /// maintained allowlists. Both now read from the same `TESSERACT_LANGUAGE_CODES` array, so this
+    /// test asserts that invariant holds for every entry — it fails the moment a future edit adds a
+    /// code to only one of the two call sites. ~keep
+    #[test]
+    fn every_tesseract_supported_code_is_accepted_by_the_general_validator() {
+        for code in TESSERACT_SUPPORTED_LANGUAGE_CODES.iter() {
+            assert!(
+                crate::core::config_validation::validate_language_code(code).is_ok(),
+                "general OcrConfig validator rejects tesseract-supported code '{code}'; \
+                 the two language-code lists have diverged again"
+            );
+        }
+    }
 
     #[test]
     fn test_validate_language_code_all_keyword() {
