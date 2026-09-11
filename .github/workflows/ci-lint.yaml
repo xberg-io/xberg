@@ -278,6 +278,21 @@ jobs:
       # goes red on a stale tree, which is the point. ~keep
       - name: Verify alef-generated bindings are current
         run: task alef:verify
+      # `alef verify` above already reports schema drift, but only as an informational
+      # log line buried in its full-surface output -- it never fails, by upstream design:
+      # a version-stamp-only difference still describes the same alef.toml config surface,
+      # so editor validation stays correct either way (confirmed against alef 0.85.16's
+      # `alef schema --help`). `alef schema --check` is the strict form and fails on that
+      # same stamp-only drift, so it is deliberately NOT used to fail this job -- that would
+      # force a schema-refresh commit on every alef version bump for a file nothing in this
+      # repo consumes (no $schema reference, no editor config, no other CI job reads it).
+      # Surface it as a workflow annotation instead, so it's visible in the PR checks UI
+      # without adding a hard gate for a difference alef itself calls informational. ~keep
+      - name: Check vendored alef schema freshness (informational)
+        run: |
+          if ! output=$(alef schema --check 2>&1); then
+            echo "::warning::${output}"
+          fi
 
   e2e-freshness:
     if: github.event.pull_request.draft != true

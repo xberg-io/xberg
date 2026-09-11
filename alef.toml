@@ -352,6 +352,15 @@ exclude = [
   "**/vendored/**",
   "**/stopwords/**",
   "**/testdata/**",
+  # Lint coverage on the ~354 generated e2e files is deliberately zero, not accidentally
+  # zero: they are per-language Alef output and cannot be made to satisfy hand-written-code
+  # lint rules (docstring/annotation/complexity checks fire on generator structure, not
+  # human choices). The real gate is execution + freshness, both already wired: the CI E2E
+  # workflow's `e2e-tests` matrix runs all 14 languages, and the `e2e-freshness` job
+  # (`task e2e:verify`) regenerates and diffs the tree so a stale commit fails CI. `poly
+  # lint e2e/**` reporting "0 files linted, exit 0" is therefore not a silent gap -- do not
+  # remove this exclude to "fix" that read without first replacing execution+freshness with
+  # something at least as strong. ~keep
   "e2e/**",
   "**/*.diff",
   "**/*.patch",
