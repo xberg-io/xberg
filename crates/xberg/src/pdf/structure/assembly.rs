@@ -295,6 +295,132 @@ fn image_element(
         .with_page(page_number)
 }
 
+/// Minimum fraction of a paragraph's own area a table's bounding box must cover before the
+/// paragraph is even considered for table-duplicate suppression. Mirrors the coverage
+/// threshold `pdf::structure::pipeline::filter_segments_by_table_bboxes` uses for the
+/// equivalent native-span check (GH#1616).
+const MIN_TABLE_COVERAGE_AREA_RATIO: f32 = 0.5;
+
+/// Lowercased alphanumeric tokens, for an order-insensitive table-coverage text match.
+///
+/// GH#1622: a substring match on normalized glyph concatenation -- the shape
+/// `pdf::structure::pipeline::filter_segments_by_table_bboxes` uses for the #1616 native-span
+/// fix -- assumes the paragraph's word order matches the table's cell order. That holds for
+/// native text spans (extracted in their own visual order) but not for OCR: TATR's cell grid
+/// is a row/column intersection independent of the flattened paragraph's own line-by-line OCR
+/// order, so a malformed grid routinely reassembles the same words in a different order (e.g.
+/// "Site 01 | Samples 6 | Status Complete" from a grid vs. "Site Samples Status 01 6 Complete"
+/// from the flattened paragraph). Measured on `ocr1599.pdf`: a substring match found zero
+/// matches against this exact pair and suppressed nothing. Token-multiset containment is
+/// insensitive to the reordering while still requiring every one of the paragraph's own words
+/// to be accounted for in the table -- the same multiset-containment shape
+/// `extractors::pdf::ocr::document::ocr_structure_heuristic_token_retention` already uses for
+/// GH#1622's other symptom. Reimplemented locally rather than shared (`avoid-duplication`):
+/// this is the third such shape in the crate (after `image.rs`'s `alphanumeric_token_retention`
+/// and `document.rs`'s), each over different geometry/visibility; consolidating them behind
+/// one shared home is a reasonable follow-up but out of scope for this fix. ~keep
+fn table_coverage_tokens(text: &str) -> Vec<String> {
+    text.split(|character: char| !character.is_alphanumeric())
+        .filter(|token| !token.is_empty())
+        .map(str::to_lowercase)
+        .collect()
+}
+
+/// Multiset of tokens everything a table actually carries -- cells when populated, otherwise
+/// the rendered markdown -- for the "carries" half of the coverage test below.
+fn table_coverage_token_counts(table: &crate::types::Table) -> std::collections::HashMap<String, usize> {
+    let tokens = if table.cells.iter().any(|row| !row.is_empty()) {
+        table
+            .cells
+            .iter()
+            .flat_map(|row| row.iter())
+            .flat_map(|cell| table_coverage_tokens(cell))
+            .collect::<Vec<_>>()
+    } else {
+        table_coverage_tokens(&table.markdown)
+    };
+    let mut counts = std::collections::HashMap::new();
+    for token in tokens {
+        *counts.entry(token).or_insert(0usize) += 1;
+    }
+    counts
+}
+
+/// Whether every token of `text` (as a multiset) is accounted for within `table_token_counts`
+/// -- order-insensitive containment, so a table whose cell grid reassembled the same words in
+/// a different sequence than the source paragraph still counts as carrying it.
+fn table_carries_every_token(text: &str, table_token_counts: &std::collections::HashMap<String, usize>) -> bool {
+    let mut remaining = table_token_counts.clone();
+    for token in table_coverage_tokens(text) {
+        match remaining.get_mut(&token) {
+            Some(count) if *count > 0 => *count -= 1,
+            _ => return false,
+        }
+    }
+    true
+}
+
+/// The text `paragraph` would actually render as, mirroring `push_paragraph_element`'s own
+/// `get_text` closure: `.text` when populated (the bare-text-heuristic-path shape), otherwise
+/// joined from `.lines` (the geometry-backed shape every OCR-layout paragraph actually uses --
+/// `.text` is empty there, so reading `.text` alone always saw an empty string and never
+/// matched any table).
+fn paragraph_effective_text(paragraph: &PdfParagraph, hyphen_witnesses: &super::pipeline::HyphenWitnesses) -> String {
+    if !paragraph.text.is_empty() {
+        paragraph.text.clone()
+    } else {
+        join_line_texts_plain(&paragraph.lines, hyphen_witnesses)
+    }
+}
+
+/// Whether `paragraph` (whose rendered text is `paragraph_text`) should be suppressed from
+/// the paragraph stream because `table` already renders its text as a grid cell.
+///
+/// GH#1622 investigation: `assemble_page_elements_with_tables` interleaved tables into the
+/// paragraph stream by geometric slot but never suppressed the source paragraph, so a
+/// TATR-recognized table's flattened source text still appeared as an ordinary paragraph
+/// immediately next to the correctly-gridded table -- observed directly on a fixture while
+/// investigating GH#1622 (the sidebar/status table on `ocr1599.pdf` renders twice). Geometry
+/// alone is deliberately not sufficient: GH#1616 already established that a reconstructed
+/// grid need not span every printed run inside its own bounding box, so suppressing on
+/// coverage alone deletes columns the grid left out. Requiring the table's own normalized
+/// cell/markdown text to actually contain the paragraph's normalized text (mirroring
+/// `pdf::structure::pipeline::filter_segments_by_table_bboxes`, the #1616 fix for the
+/// equivalent native-span path) keeps a paragraph that merely overlaps a table's bbox but
+/// carries text the grid does not. ~keep
+fn paragraph_is_covered_and_carried_by_table(
+    paragraph: &PdfParagraph,
+    paragraph_text: &str,
+    table: &crate::types::Table,
+    table_token_counts: &std::collections::HashMap<String, usize>,
+) -> bool {
+    let Some((left, bottom, right, top)) = paragraph.block_bbox else {
+        return false;
+    };
+    let Some(bbox) = table.bounding_box else {
+        return false;
+    };
+    let para_area = (right - left) * (top - bottom);
+    if !(para_area.is_finite() && para_area > 0.0) {
+        return false;
+    }
+    let text = paragraph_text.trim();
+    if text.is_empty() {
+        return false;
+    }
+
+    let inter_left = left.max(bbox.x0 as f32);
+    let inter_right = right.min(bbox.x1 as f32);
+    let inter_bottom = bottom.max(bbox.y0 as f32);
+    let inter_top = top.min(bbox.y1 as f32);
+    if inter_left >= inter_right || inter_bottom >= inter_top {
+        return false;
+    }
+    let inter_area = (inter_right - inter_left) * (inter_top - inter_bottom);
+
+    inter_area / para_area >= MIN_TABLE_COVERAGE_AREA_RATIO && table_carries_every_token(text, table_token_counts)
+}
+
 /// Push paragraph elements in their established reading order, with tables interleaved.
 ///
 /// Returns the element and structural-transition positions for every non-caption
@@ -326,10 +452,24 @@ fn assemble_page_elements_with_tables(
 
     positioned.sort_by(|a, b| b.0.total_cmp(&a.0));
 
+    let table_token_counts: Vec<(&crate::types::Table, std::collections::HashMap<String, usize>)> = tables
+        .iter()
+        .filter(|table| !table.markdown.trim().is_empty())
+        .map(|&table| (table, table_coverage_token_counts(table)))
+        .collect();
+
     let ordered_paragraphs: Vec<(usize, &PdfParagraph)> = paragraphs
         .iter()
         .enumerate()
-        .filter(|(_, para)| para.caption_for.is_none())
+        .filter(|(_, para)| {
+            if para.caption_for.is_some() {
+                return false;
+            }
+            let effective_text = paragraph_effective_text(para, hyphen_witnesses);
+            !table_token_counts
+                .iter()
+                .any(|(table, counts)| paragraph_is_covered_and_carried_by_table(para, &effective_text, table, counts))
+        })
         .collect();
     let mut tables_at_slot: Vec<Vec<&crate::types::Table>> =
         (0..=ordered_paragraphs.len()).map(|_| Vec::new()).collect();
@@ -2611,5 +2751,100 @@ mod tests {
 
         let document = assemble_internal_document(vec![vec![para]], &[], None, &[], &Default::default());
         assert_eq!(paragraph_text(&document), "Zie de installatiehandleiding voor details");
+    }
+
+    /// GH#1622 duplication finding, direction 1 (suppressed when carried): a paragraph
+    /// whose text a positioned table's own grid actually contains must not also render as
+    /// a separate paragraph -- observed directly on `ocr1599.pdf`'s sidebar/status table,
+    /// which rendered its flattened source text as prose immediately before rendering the
+    /// same content again as a correctly-gridded table.
+    #[test]
+    fn should_suppress_paragraph_fully_carried_by_a_positioned_table() {
+        let table = make_table_in_box(
+            "| Site | Samples | Status |\n| --- | --- | --- |\n| 01 | 6 | Complete |",
+            40.0,
+            560.0,
+            800.0,
+        );
+        let paragraph = make_paragraph_in_box("Site Samples Status 01 6 Complete", 760.0, 40.0, 560.0);
+
+        let document = assemble_internal_document(vec![vec![paragraph]], &[table], None, &[], &Default::default());
+
+        let labels = page_element_labels(&document);
+        assert_eq!(
+            labels,
+            ["<table>"],
+            "the flattened source paragraph must not survive alongside the table that carries it"
+        );
+    }
+
+    /// GH#1622 duplication finding, direction 2 (negative control against over-deletion,
+    /// mirroring GH#1616 from the other side): a paragraph that overlaps a table's bounding
+    /// box but carries a word absent from the table's own grid text must survive -- the grid
+    /// does not necessarily span every printed run inside its own bbox (GH#1616), so
+    /// suppression on geometry alone would delete a column the grid left out.
+    #[test]
+    fn should_keep_paragraph_overlapping_a_table_bbox_but_not_carried_by_its_grid() {
+        let table = make_table_in_box("| Site | Samples |\n| --- | --- |\n| 01 | 6 |", 40.0, 560.0, 800.0);
+        let paragraph_text = "Site Samples Status Escalation 01 6 Complete-pending-review";
+        let paragraph = make_paragraph_in_box(paragraph_text, 760.0, 40.0, 560.0);
+
+        let document = assemble_internal_document(vec![vec![paragraph]], &[table], None, &[], &Default::default());
+
+        let labels = page_element_labels(&document);
+        assert!(
+            labels.contains(&paragraph_text),
+            "a paragraph carrying text the grid does not represent must not be deleted, got {labels:?}"
+        );
+        assert!(labels.contains(&"<table>"));
+    }
+
+    /// GH#1622: TATR's cell grid can reassemble the same words in a different order than the
+    /// flattened source paragraph (row/column intersection is independent of OCR line order) --
+    /// measured directly on `ocr1599.pdf`, where a substring match found no overlap between
+    /// "Site Samples Status 01 6 Complete" (paragraph) and "Site 01 | Samples 6 | Status
+    /// Complete" (table) and suppressed nothing. Token-multiset containment must still catch
+    /// this reordering.
+    #[test]
+    fn should_suppress_paragraph_whose_words_the_table_reassembled_in_a_different_order() {
+        let table = make_table_in_box(
+            "| Site 01 | Samples 6 | Status Complete |\n| --- | --- | --- |",
+            40.0,
+            560.0,
+            800.0,
+        );
+        let paragraph = make_paragraph_in_box("Site Samples Status 01 6 Complete", 760.0, 40.0, 560.0);
+
+        let document = assemble_internal_document(vec![vec![paragraph]], &[table], None, &[], &Default::default());
+
+        let labels = page_element_labels(&document);
+        assert_eq!(
+            labels,
+            ["<table>"],
+            "a reordered-but-fully-carried paragraph must still be suppressed, got {labels:?}"
+        );
+    }
+
+    /// Text-only match is not sufficient: a paragraph carrying the same words as a table but
+    /// positioned entirely outside its bounding box must survive untouched.
+    #[test]
+    fn should_keep_identical_text_paragraph_outside_the_table_bbox() {
+        let table = make_table_in_box(
+            "| Site | Samples | Status |\n| --- | --- | --- |\n| 01 | 6 | Complete |",
+            40.0,
+            560.0,
+            800.0,
+        );
+        let paragraph_text = "Site Samples Status 01 6 Complete";
+        let paragraph = make_paragraph_in_box(paragraph_text, 200.0, 40.0, 560.0);
+
+        let document = assemble_internal_document(vec![vec![paragraph]], &[table], None, &[], &Default::default());
+
+        let labels = page_element_labels(&document);
+        assert!(
+            labels.contains(&paragraph_text),
+            "geometry must still gate suppression even on an exact text match, got {labels:?}"
+        );
+        assert!(labels.contains(&"<table>"));
     }
 }
