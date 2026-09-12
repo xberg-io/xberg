@@ -306,11 +306,12 @@ mod tests {
         let data = b"2 begincodespacerange\n<00> <80>\n<8140> <9FFC>\nendcodespacerange\n";
         let map = parse_cid_cmap(data).unwrap();
         assert_eq!(map.codespace_widths(), vec![1, 2]);
+        // Offsets 0/1/3 decode as 'A', the 2-byte lead 0x8140, and a space; 4 is past the end. ~keep
         let bytes = [0x41u8, 0x81, 0x40, 0x20];
-        assert_eq!(map.code_length(&bytes, 0), 1); // 'A' -> 1 byte
-        assert_eq!(map.code_length(&bytes, 1), 2); // 0x8140 -> 2 bytes
-        assert_eq!(map.code_length(&bytes, 3), 1); // space -> 1 byte
-        assert_eq!(map.code_length(&bytes, 4), 0); // past the end
+        assert_eq!(map.code_length(&bytes, 0), 1);
+        assert_eq!(map.code_length(&bytes, 1), 2);
+        assert_eq!(map.code_length(&bytes, 3), 1);
+        assert_eq!(map.code_length(&bytes, 4), 0);
     }
 
     #[test]
