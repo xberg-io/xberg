@@ -17,11 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-request `extraction_timeout_secs` still always overrides it, and an explicit
   `extraction_timeout_secs: null` still falls back to this server cap rather than running
   unbounded. Previously this fallback was a hardcoded 300 seconds, inconsistent with the 600
-  second default used everywhere else. Note for Rust callers: `ServerConfig` is not
-  `#[non_exhaustive]`, so code that builds one with a struct literal listing every field must
-  add `job_timeout_secs` or switch to `..ServerConfig::default()`. Callers using
-  `ServerConfig::default()`, `from_file`, or deserialization are unaffected -- the field carries
-  `#[serde(default)]`.
+  second default used everywhere else. See the Changed section for the source-compatibility impact.
 
 ### Fixed
 
@@ -158,6 +154,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking (Rust source, Java):** `ServerConfig` adds `job_timeout_secs`. Exhaustive Rust struct
+  literals must set the field or use `..ServerConfig::default()`, and the Java record's canonical
+  constructor gains a sixth component, so `new ServerConfig(host, port, corsOrigins,
+  maxRequestBodyBytes, maxMultipartFieldBytes)` no longer compiles -- use `ServerConfig.builder()`,
+  which is unaffected. Every other binding is source-compatible: the field is last and defaulted in
+  the Python dataclass (`= 600`), the Kotlin data class (`= 600L`) and C# (`{ get; init; } = 600`);
+  a defaulted keyword in Ruby and PHP; an optional pointer with `omitempty` in Go; and an additive
+  `xberg_server_config_job_timeout_secs` getter in the C FFI (gated on `api-types`). Deserializing
+  callers are unaffected everywhere -- the field carries `#[serde(default)]`.
+- Public binding-facing structs in this crate are deliberately **not** `#[non_exhaustive]`: alef
+  generates `impl From<Mirror> for xberg::T` with a struct literal in roughly ten binding crates,
+  and `#[non_exhaustive]` forbids that cross-crate (E0639) -- including the `..Default::default()`
+  spread. `Default` plus `#[serde(default)]` is the forward-compatibility mechanism instead, and a
+  field addition is recorded here as a labelled source break rather than prevented by the type
+  system. `#[non_exhaustive]` is reserved for types excluded from binding generation.
 - Retroactive note for 1.1.4: `Metadata#format` in the Ruby binding changed shape and no
   changelog entry recorded it at the time. The format-specific payload had been nested under a
   `_0` key (`format.fetch(:_0).fetch(:title)`); since 1.1.4 the payload's fields sit directly
