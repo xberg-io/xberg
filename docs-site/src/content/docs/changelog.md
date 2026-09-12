@@ -23,6 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `detect_mime_type_from_bytes` no longer refuses text that is not valid UTF-8. A byte buffer with
+  no filename or declared type -- a Windows-1252 or ISO-8859-1 CSV export, say -- returned
+  `UnsupportedFormat` even though the extractors that would receive it decode legacy encodings
+  through `encoding_rs`. Such content is now reported as `text/plain`, the same answer the UTF-8
+  path already gave for the same document, so the two encodings of one file behave alike. Content
+  holding a NUL byte, or with too few printable bytes to read as prose, is still rejected
+  (GH#1625).
+
 - The Go binding no longer discards the message of every error the native layer reports. Each
   known error code was mapped to a typed sentinel (`ErrTimeout`, `ErrParsing`, `ErrOcr`, and ~20
   more) and returned before the message was ever read, so the detail the native layer had

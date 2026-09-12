@@ -1526,9 +1526,59 @@ fn detect_mime_type_from_bytes_with_inspection(
         return Ok(PLAIN_TEXT_MIME_TYPE.to_string());
     }
 
+    // The bytes are not valid UTF-8, but a legacy single-byte encoding (Windows-1252,
+    // ISO-8859-1) can still be text our extractors read -- e.g. the CSV extractor's own
+    // `encoding_rs`/`chardetng` decoding (xberg-io/xberg#1625). Detecting that encoding
+    // here would duplicate that decoder, so this only asks whether the raw bytes are
+    // plausibly text at all, via the byte-value distribution a real single-byte-encoded
+    // document has. ~keep
+    if looks_like_legacy_encoded_text(content) {
+        return Ok(PLAIN_TEXT_MIME_TYPE.to_string());
+    }
+
     Err(XbergError::UnsupportedFormat(
         "Could not determine MIME type from bytes".to_string(),
     ))
+}
+
+/// Minimum fraction of `content` bytes that must fall in [`is_legacy_text_byte`]'s range for
+/// non-UTF-8 `content` to be accepted as legacy-encoded plain text (#1625).
+///
+/// Genuine prose in a single-byte Western encoding is close to 100% printable ASCII plus a
+/// small fraction of accented high bytes; unrelated binary formats mix in enough control and
+/// otherwise-unmapped bytes to fall well short of this even though single-byte encodings like
+/// Windows-1252 map every byte value and so "decode" without error either way.
+const LEGACY_TEXT_PRINTABLE_BYTE_RATIO: f64 = 0.95;
+
+/// The five byte values in `0x80..=0x9F` that Windows-1252 leaves undefined. Every other byte in
+/// that range maps to a printable character -- including the curly quotes, en/em dashes and
+/// ellipsis that Word and Excel emit, which are the most common marker that a file is CP1252 and
+/// not ISO-8859-1. Treating the whole range as non-text rejected a 38-byte CP1252 sentence
+/// containing one pair of curly quotes, because two bytes out of 38 already exceed
+/// [`LEGACY_TEXT_PRINTABLE_BYTE_RATIO`]. ~keep
+const WINDOWS_1252_UNDEFINED_BYTES: [u8; 5] = [0x81, 0x8D, 0x8F, 0x90, 0x9D];
+
+/// Whether `byte` is one that a legacy single-byte text encoding (Windows-1252, ISO-8859-1) maps
+/// to a printable character, or is common whitespace.
+fn is_legacy_text_byte(byte: u8) -> bool {
+    match byte {
+        0x09 | 0x0A | 0x0D | 0x20..=0x7E | 0xA0..=0xFF => true,
+        0x80..=0x9F => !WINDOWS_1252_UNDEFINED_BYTES.contains(&byte),
+        _ => false,
+    }
+}
+
+/// Heuristic check for legacy-encoded (non-UTF-8) plain text, used only after the UTF-8 fast
+/// path above has already failed. A NUL byte rules out text outright; otherwise the content is
+/// accepted when at least [`LEGACY_TEXT_PRINTABLE_BYTE_RATIO`] of its bytes are printable
+/// (see [`is_legacy_text_byte`]).
+fn looks_like_legacy_encoded_text(content: &[u8]) -> bool {
+    if content.is_empty() || content.contains(&0) {
+        return false;
+    }
+
+    let printable_count = content.iter().filter(|&&byte| is_legacy_text_byte(byte)).count();
+    (printable_count as f64 / content.len() as f64) >= LEGACY_TEXT_PRINTABLE_BYTE_RATIO
 }
 
 fn is_geojson(value: &serde_json::Value) -> bool {
@@ -3416,5 +3466,66 @@ mod tests {
             "declared alias MIME types are advertised as supported but unroutable:\n  {}",
             unclaimed.join("\n  ")
         );
+    }
+
+    // #1625: a caller with no MIME type who sends legacy-encoded (non-UTF-8) text, such as a
+    // Windows-1252 CSV export, must not be refused when xberg's extractors can read it.
+    #[test]
+    fn should_detect_windows1252_text_as_plain_text() {
+        // "name;city\r\nJosé;München\r\n" encoded as Windows-1252 (0xE9 = 'é', 0xFC = 'ü').
+        let windows_1252 = b"name;city\r\nJos\xe9;M\xfcnchen\r\n";
+
+        assert_eq!(detect_mime_type_from_bytes(windows_1252).unwrap(), PLAIN_TEXT_MIME_TYPE);
+    }
+
+    #[test]
+    fn should_still_detect_utf8_text_as_plain_text() {
+        let utf8 = "name;city\r\nJosé;München\r\n".as_bytes();
+
+        assert_eq!(detect_mime_type_from_bytes(utf8).unwrap(), PLAIN_TEXT_MIME_TYPE);
+    }
+
+    #[test]
+    fn should_reject_non_utf8_binary_content_not_recognized_as_a_known_format() {
+        // Bytes chosen to defeat both signals a too-eager fallback might rely on: an
+        // encoding that maps every byte (so decoding alone "succeeds" without error)
+        // and a low but nonzero share of ASCII, so the input still is not text.
+        let binary: Vec<u8> = (0u8..=255).cycle().take(600).collect();
+        assert!(std::str::from_utf8(&binary).is_err(), "fixture must not be valid UTF-8");
+
+        let result = detect_mime_type_from_bytes(&binary);
+        assert!(
+            matches!(result, Err(XbergError::UnsupportedFormat(_))),
+            "expected UnsupportedFormat, got {result:?}"
+        );
+    }
+
+    // The fixture above carries NUL bytes, so it is rejected by the NUL guard before the byte
+    // ratio is ever computed -- it cannot show that the ratio itself discriminates. This one
+    // omits NUL so that the ratio is the only thing left to reject it. ~keep
+    #[test]
+    fn should_reject_nul_free_binary_content_on_the_printable_byte_ratio_alone() {
+        let binary: Vec<u8> = (1u8..=255).cycle().take(600).collect();
+        assert!(
+            !binary.contains(&0),
+            "fixture must exercise the ratio, not the NUL guard"
+        );
+        assert!(!looks_like_legacy_encoded_text(&binary));
+
+        let result = detect_mime_type_from_bytes(&binary);
+        assert!(
+            matches!(result, Err(XbergError::UnsupportedFormat(_))),
+            "expected UnsupportedFormat, got {result:?}"
+        );
+    }
+
+    // #1625: curly quotes are the commonest sign that a file is Windows-1252 rather than
+    // ISO-8859-1, and they live in `0x80..=0x9F`. A short sentence holding one pair of them
+    // must still read as text. ~keep
+    #[test]
+    fn should_detect_windows1252_curly_quotes_as_plain_text() {
+        let windows_1252 = b"He said \x93hello\x94 to Jos\xe9 and left.\r\n";
+
+        assert_eq!(detect_mime_type_from_bytes(windows_1252).unwrap(), PLAIN_TEXT_MIME_TYPE);
     }
 }
