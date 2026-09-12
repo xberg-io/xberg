@@ -29,6 +29,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A body paragraph is no longer deleted for repeating text that appears elsewhere on the same page.
+  The second `strip_repeating_text` pass keyed on lowercased paragraph text with no check that a
+  table was involved, so a sentence matching an earlier title -- differing only in case, with no
+  table on the page at all -- was silently removed. The pass now runs only on pages that have a
+  detected table, removes a paragraph only when that table's own cells carry the same text, and
+  compares case-sensitively. Measured over 230 PDFs: 44 documents changed, 3472 words recovered and
+  32 lost, both loss cases inspected and benign (one is a restructure whose total content grew, the
+  other two mojibake tokens) (GH#1623).
+
 - OCR text is no longer discarded when a scanned page region is detected as a table but its cell
   grid cannot be recognised. `recognize_single_table` returned nothing whenever TATR failed,
   produced no rows or columns, or the grid failed validation, which threw away every OCR element

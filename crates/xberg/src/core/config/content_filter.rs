@@ -61,6 +61,13 @@ pub struct ContentFilterConfig {
     /// of pages is classified as furniture and stripped.  Disable this if brand
     /// names or repeated headings are being incorrectly removed by the heuristic.
     ///
+    /// This flag also gates a same-page rule: a body paragraph is removed when
+    /// its text is also carried by a table detected on the same page (catches
+    /// table content that PDF extraction renders both as a table and as body
+    /// text). The comparison preserves case and never touches headings, list
+    /// items, code blocks, formulas, or captions, so it cannot delete a body
+    /// sentence merely for repeating an earlier heading's words (GH#1623).
+    ///
     /// Note: when a layout-detection model is active, the model may independently
     /// classify page-header / page-footer / footnote regions as furniture on a
     /// per-page basis. To preserve those regions, set `include_headers = true`,
