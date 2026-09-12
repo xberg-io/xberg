@@ -21,6 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `extraction_confidence` no longer reports a failed structured extraction as fully
+  schema-valid. The pipeline passed `SchemaCompliance::AllValid` unconditionally, which is 40% of
+  the combined score under the default weights, so a run whose LLM call failed -- or that was
+  built without the `liter-llm` feature, or ran on wasm -- scored exactly as high as one that
+  validated. A requested `structured_extraction` that leaves no `structured_output` now scores
+  `AllInvalid`. Extractions with no `structured_extraction` configured are unaffected and keep
+  their previous score; `ConfidenceSignals` is unchanged in shape, so no serialized form moves
+  (GH#1624).
+
 - `detect_mime_type_from_bytes` no longer refuses text that is not valid UTF-8. A byte buffer with
   no filename or declared type -- a Windows-1252 or ISO-8859-1 CSV export, say -- returned
   `UnsupportedFormat` even though the extractors that would receive it decode legacy encodings

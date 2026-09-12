@@ -206,6 +206,138 @@ async fn test_run_pipeline_basic() {
     assert_eq!(processed.content, "test");
 }
 
+/// Build a minimal `StructuredExtractionConfig` pointed at a closed local port so the LLM
+/// call (when `liter-llm` is compiled in) fails fast without touching the network, and the
+/// non-`liter-llm` build takes its "requires the 'liter-llm' feature" warning branch instead.
+/// Either way `structured_output` stays `None` -- the case GH#1624 is about. ~keep
+#[cfg(feature = "heuristics")]
+fn make_failing_structured_extraction_config() -> crate::core::config::llm::StructuredExtractionConfig {
+    crate::core::config::llm::StructuredExtractionConfig {
+        schema: serde_json::json!({"type": "object"}),
+        schema_name: crate::core::config::llm::StructuredExtractionConfig::default_schema_name(),
+        schema_description: None,
+        strict: false,
+        prompt: None,
+        llm: crate::core::config::llm::LlmConfig {
+            model: "openai/gpt-4o-mini".to_string(),
+            base_url: Some("http://127.0.0.1:1/v1".to_string()),
+            timeout_secs: Some(1),
+            max_retries: Some(0),
+            ..Default::default()
+        },
+    }
+}
+
+#[tokio::test]
+#[serial]
+#[cfg(feature = "heuristics")]
+async fn test_requested_structured_extraction_without_output_does_not_score_schema_all_valid() {
+    let doc = make_doc("Ordinary paragraph with enough text for coverage.", "text/plain");
+    let config = ExtractionConfig {
+        structured_extraction: Some(make_failing_structured_extraction_config()),
+        ..Default::default()
+    };
+
+    let processed = run_pipeline(doc, &config).await.unwrap();
+
+    assert!(
+        processed.structured_output.is_none(),
+        "the LLM call must not succeed against a closed local port"
+    );
+    let confidence = processed
+        .extraction_confidence
+        .expect("the heuristics feature must populate extraction_confidence");
+    assert_eq!(
+        confidence.schema_compliance,
+        crate::heuristics::confidence::SchemaCompliance::AllInvalid,
+        "GH#1624: a requested-but-unproduced structured_output must not score as AllValid"
+    );
+    assert_eq!(
+        confidence.combined, 0.6,
+        "text_coverage 1.0 folds the OCR weight in (0.6) but the schema weight must drop out"
+    );
+}
+
+#[tokio::test]
+#[serial]
+#[cfg(feature = "heuristics")]
+async fn test_ordinary_extraction_without_structured_config_keeps_full_schema_score() {
+    let doc = make_doc("Ordinary paragraph with enough text for coverage.", "text/plain");
+    let config = ExtractionConfig::default();
+
+    let processed = run_pipeline(doc, &config).await.unwrap();
+
+    let confidence = processed
+        .extraction_confidence
+        .expect("the heuristics feature must populate extraction_confidence");
+    assert_eq!(
+        confidence.schema_compliance,
+        crate::heuristics::confidence::SchemaCompliance::AllValid,
+        "structured extraction was never requested, so nothing failed validation"
+    );
+    assert_eq!(
+        confidence.combined, 1.0,
+        "an ordinary extraction with no structured config must not lose confidence score"
+    );
+}
+
+#[test]
+#[cfg(feature = "heuristics")]
+fn schema_compliance_helper_scores_failure_strictly_below_otherwise_identical_success() {
+    use crate::heuristics::confidence::{ConfidenceSignals, ConfidenceWeights, SchemaCompliance, score_confidence};
+
+    let requested_config = ExtractionConfig {
+        structured_extraction: Some(make_failing_structured_extraction_config()),
+        ..Default::default()
+    };
+    let succeeded = ExtractedDocument {
+        structured_output: Some(serde_json::json!({"title": "ok"})),
+        ..Default::default()
+    };
+    let failed = ExtractedDocument {
+        structured_output: None,
+        ..Default::default()
+    };
+
+    let success_compliance = structured_extraction_compliance(&requested_config, &succeeded);
+    let failure_compliance = structured_extraction_compliance(&requested_config, &failed);
+    assert_eq!(success_compliance, SchemaCompliance::AllValid);
+    assert_eq!(failure_compliance, SchemaCompliance::AllInvalid);
+
+    let weights = ConfidenceWeights::default();
+    let text_coverage = 0.8_f32;
+    let ocr_aggregate = Some(0.7_f32);
+    let success_confidence = score_confidence(
+        ConfidenceSignals {
+            text_coverage,
+            ocr_aggregate,
+            schema_compliance: success_compliance,
+        },
+        weights,
+    );
+    let failure_confidence = score_confidence(
+        ConfidenceSignals {
+            text_coverage,
+            ocr_aggregate,
+            schema_compliance: failure_compliance,
+        },
+        weights,
+    );
+
+    let expected_success: f32 =
+        text_coverage * weights.text_coverage + 0.7 * weights.ocr_aggregate + 1.0 * weights.schema_compliance;
+    let expected_failure: f32 =
+        text_coverage * weights.text_coverage + 0.7 * weights.ocr_aggregate + 0.0 * weights.schema_compliance;
+    assert_eq!(success_confidence.combined, expected_success);
+    assert_eq!(failure_confidence.combined, expected_failure);
+    assert!(
+        failure_confidence.combined < success_confidence.combined,
+        "a failed structured extraction ({}) must score strictly below an otherwise identical successful one ({})",
+        failure_confidence.combined,
+        success_confidence.combined
+    );
+}
+
 #[tokio::test]
 #[serial]
 #[cfg(feature = "quality")]

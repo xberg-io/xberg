@@ -574,9 +574,10 @@ pub async fn run_pipeline(mut doc: InternalDocument, config: &ExtractionConfig) 
 
     #[cfg(feature = "heuristics")]
     {
-        use crate::heuristics::confidence::{ConfidenceSignals, ConfidenceWeights, SchemaCompliance, score_confidence};
+        use crate::heuristics::confidence::{ConfidenceSignals, ConfidenceWeights, score_confidence};
         let text_coverage = measure_text_coverage(&result);
-        let signals = ConfidenceSignals::from_extraction_result(&result, SchemaCompliance::AllValid, text_coverage);
+        let schema_compliance = structured_extraction_compliance(config, &result);
+        let signals = ConfidenceSignals::from_extraction_result(&result, schema_compliance, text_coverage);
         result.extraction_confidence = Some(score_confidence(signals, ConfidenceWeights::default()));
     }
 
@@ -736,9 +737,10 @@ pub fn run_pipeline_sync(mut doc: InternalDocument, config: &ExtractionConfig) -
 
     #[cfg(feature = "heuristics")]
     {
-        use crate::heuristics::confidence::{ConfidenceSignals, ConfidenceWeights, SchemaCompliance, score_confidence};
+        use crate::heuristics::confidence::{ConfidenceSignals, ConfidenceWeights, score_confidence};
         let text_coverage = measure_text_coverage(&result);
-        let signals = ConfidenceSignals::from_extraction_result(&result, SchemaCompliance::AllValid, text_coverage);
+        let schema_compliance = structured_extraction_compliance(config, &result);
+        let signals = ConfidenceSignals::from_extraction_result(&result, schema_compliance, text_coverage);
         result.extraction_confidence = Some(score_confidence(signals, ConfidenceWeights::default()));
     }
 
@@ -766,6 +768,29 @@ fn populate_document_counts(result: &mut ExtractedDocument) {
         tables: result.tables.len(),
         images: result.images.as_ref().map_or(0, Vec::len),
     };
+}
+
+/// Determine the [`SchemaCompliance`](crate::heuristics::confidence::SchemaCompliance) signal
+/// to feed into confidence scoring for a completed pipeline run (GH#1624).
+///
+/// Reuses the existing three variants instead of adding a fourth: `AllValid` covers both "no
+/// schema was requested" (nothing to violate) and "the requested schema produced output";
+/// `AllInvalid` covers every case where structured extraction was requested but the pipeline
+/// still has no `structured_output` -- an LLM failure, the `liter-llm` feature being absent, or
+/// wasm's unsupported-stage warning all leave that field `None`. Before this fix the pipeline
+/// passed `AllValid` unconditionally, so a failed or skipped structured extraction scored as
+/// if it had fully validated. ~keep
+#[cfg(feature = "heuristics")]
+fn structured_extraction_compliance(
+    config: &ExtractionConfig,
+    result: &ExtractedDocument,
+) -> crate::heuristics::confidence::SchemaCompliance {
+    use crate::heuristics::confidence::SchemaCompliance;
+    if config.structured_extraction.is_some() && result.structured_output.is_none() {
+        SchemaCompliance::AllInvalid
+    } else {
+        SchemaCompliance::AllValid
+    }
 }
 
 /// Measure the fraction of pages with usable (non-blank) text, for

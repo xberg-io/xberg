@@ -545,6 +545,49 @@ mod tests {
         assert_eq!(original, deserialized);
     }
 
+    /// GH#1624's decisive assertion: with every other signal held identical, a failed
+    /// structured extraction (`AllInvalid`) must score strictly below a successful one
+    /// (`AllValid`) -- not just differently, and not by an unverified margin.
+    #[test]
+    fn should_score_all_invalid_strictly_below_all_valid_with_identical_other_signals() {
+        let text_coverage = 0.8;
+        let ocr_aggregate = Some(0.7);
+        let weights = ConfidenceWeights::default();
+
+        let successful = score_confidence(
+            ConfidenceSignals {
+                text_coverage,
+                ocr_aggregate,
+                schema_compliance: SchemaCompliance::AllValid,
+            },
+            weights,
+        );
+        let failed = score_confidence(
+            ConfidenceSignals {
+                text_coverage,
+                ocr_aggregate,
+                schema_compliance: SchemaCompliance::AllInvalid,
+            },
+            weights,
+        );
+
+        let expected_successful: f32 = text_coverage * weights.text_coverage
+            + 0.7 * weights.ocr_aggregate
+            + SchemaCompliance::AllValid.score() * weights.schema_compliance;
+        let expected_failed: f32 = text_coverage * weights.text_coverage
+            + 0.7 * weights.ocr_aggregate
+            + SchemaCompliance::AllInvalid.score() * weights.schema_compliance;
+
+        assert_eq!(successful.combined, expected_successful);
+        assert_eq!(failed.combined, expected_failed);
+        assert!(
+            failed.combined < successful.combined,
+            "failed ({}) must score strictly below successful ({})",
+            failed.combined,
+            successful.combined
+        );
+    }
+
     #[test]
     fn should_round_trip_extraction_confidence_with_no_ocr_through_json() {
         let signals = ConfidenceSignals {
