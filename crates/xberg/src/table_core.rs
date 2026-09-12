@@ -376,6 +376,55 @@ pub(crate) fn reconstruct_table_with_columns(
     (remove_empty_rows_and_columns(result), kept_col_positions)
 }
 
+/// Fraction of a cell's median word height within which two words belong to the same visual line.
+///
+/// Sized to sit between the two deltas it must tell apart: a sub/superscript is offset from its
+/// base's vertical centre by a fraction of its own height (0.6pt against an 11.59pt line on the
+/// GH#1628 reproducer), while a wrapped second line is a full line height away. Shares the shape,
+/// but not the value, of [`CELL_MERGE_GAP_HEIGHT_RATIO`], which measures a horizontal gap. ~keep
+const CELL_LINE_GROUP_HEIGHT_RATIO: f64 = 0.5;
+
+/// Order one cell's words for joining: top-to-bottom by visual line, left-to-right within a line.
+///
+/// Arrival order is wrong for a cell containing a sub/superscript (xberg-io/xberg#1628). A
+/// sub/superscript is drawn as its own content-stream segment sitting a fraction of a point below
+/// the line it annotates, so every reading-order sort upstream of here places it after the whole
+/// line rather than beside the symbol it belongs to — `eta_S %` joins as `eta % S`.
+///
+/// Sorting the cell by `left` alone fixes that and introduces something worse: a cell holding two
+/// wrapped lines interleaves them (`Hello world` / `again here` becomes `Hello again world here`),
+/// which would scramble every wrapped cell in the corpus rather than only cells with scripts.
+/// Grouping into visual lines first separates the two cases, because the vertical deltas differ by
+/// an order of magnitude — see [`CELL_LINE_GROUP_HEIGHT_RATIO`]. ~keep
+fn order_cell_words_in_reading_order(mut cell_words: Vec<&HocrWord>) -> Vec<&HocrWord> {
+    if cell_words.len() <= 1 {
+        return cell_words;
+    }
+
+    let mut heights: Vec<u32> = cell_words.iter().map(|word| word.height).collect();
+    heights.sort_unstable();
+    let line_gap = heights[heights.len() / 2] as f64 * CELL_LINE_GROUP_HEIGHT_RATIO;
+
+    cell_words.sort_by(|a, b| a.y_center().total_cmp(&b.y_center()).then_with(|| a.left.cmp(&b.left)));
+
+    let mut lines: Vec<Vec<&HocrWord>> = Vec::new();
+    for word in cell_words {
+        let same_line = lines.last().is_some_and(|line| {
+            let centre = line.iter().map(|w| w.y_center()).sum::<f64>() / line.len() as f64;
+            (word.y_center() - centre).abs() <= line_gap
+        });
+        match lines.last_mut() {
+            Some(line) if same_line => line.push(word),
+            _ => lines.push(vec![word]),
+        }
+    }
+
+    for line in &mut lines {
+        line.sort_by_key(|word| word.left);
+    }
+    lines.into_iter().flatten().collect()
+}
+
 /// Assign each original word to its nearest detected row/column and combine
 /// same-cell words into space-joined cell text. `col_positions` may come from
 /// merged cell tokens (see [`merge_words_into_cell_tokens`]) rather than from
@@ -384,7 +433,7 @@ pub(crate) fn reconstruct_table_with_columns(
 fn assign_words_to_cells(words: &[HocrWord], row_positions: &[u32], col_positions: &[u32]) -> Vec<Vec<String>> {
     let num_rows = row_positions.len();
     let num_cols = col_positions.len();
-    let mut table: Vec<Vec<Vec<String>>> = vec![vec![vec![]; num_cols]; num_rows];
+    let mut table: Vec<Vec<Vec<&HocrWord>>> = vec![vec![vec![]; num_cols]; num_rows];
 
     for word in words {
         if let (Some(r), Some(c)) = (
@@ -393,7 +442,7 @@ fn assign_words_to_cells(words: &[HocrWord], row_positions: &[u32], col_position
         ) && r < num_rows
             && c < num_cols
         {
-            table[r][c].push(word.text.clone());
+            table[r][c].push(word);
         }
     }
 
@@ -402,11 +451,15 @@ fn assign_words_to_cells(words: &[HocrWord], row_positions: &[u32], col_position
         .map(|row| {
             row.into_iter()
                 .map(|cell_words| {
-                    if cell_words.is_empty() {
-                        String::new()
-                    } else {
-                        cell_words.join(" ")
-                    }
+                    // A "word" whose whole segment held no whitespace keeps that segment's own
+                    // trailing space (`split_segment_to_words_lifted` returns it unsplit), which
+                    // then stacks on the separator below and renders `Q_HE GJ` as `Q  HE GJ`.
+                    // Collapse each word's own whitespace so the join alone owns the spacing. ~keep
+                    order_cell_words_in_reading_order(cell_words)
+                        .into_iter()
+                        .flat_map(|word| word.text.split_whitespace())
+                        .collect::<Vec<_>>()
+                        .join(" ")
                 })
                 .collect()
         })
@@ -1063,6 +1116,70 @@ mod tests {
             "X and Y touch with a 0px gap and must merge into one cell"
         );
         assert_eq!(table[0], vec!["X Y".to_string(), "Z".to_string()]);
+    }
+
+    /// GH#1628: a cell's words must read left-to-right, not in the order they happened to
+    /// arrive in `words`.
+    ///
+    /// A sub/superscript is drawn as its own content-stream segment sitting a fraction of a point
+    /// below the line it annotates, so every reading-order sort upstream of here places it after
+    /// the whole line rather than beside the symbol it belongs to. By the time words reach this
+    /// function the subscript's `left` still says exactly where it goes --- `eta`(206),
+    /// `S`(211), `%`(253) --- but slice order says `eta`, `%`, `S`, and the join followed slice
+    /// order. The reported output was `E % S` for `eta_S %` and `Q GJ HE` for `Q_HE GJ`.
+    ///
+    /// Left ordering is the correct rule here regardless of subscripts: every word in one cell
+    /// sits in the same row band by construction (`find_row_index` put it there), so `left` is
+    /// reading order for that cell.
+    #[test]
+    fn issue_1628_cell_words_join_in_left_to_right_order() {
+        let words = vec![
+            word("eta", 206, 100, 7, 12),
+            word("%", 253, 100, 6, 12),
+            word("S", 211, 104, 3, 7),
+        ];
+
+        let table = assign_words_to_cells(&words, &[100], &[206]);
+
+        assert_eq!(
+            table,
+            vec![vec!["eta S %".to_string()]],
+            "a subscript must join between the symbol it annotates and the next unit, not after it"
+        );
+    }
+
+    /// GH#1628 negative control: a cell holding two visual lines must NOT interleave them.
+    ///
+    /// This is the failure mode a naive left-only sort introduces, and it is strictly worse than
+    /// the bug being fixed: it scrambles every wrapped cell in the corpus, not just cells with
+    /// sub/superscripts. Line grouping is what separates the two cases --- a subscript sits a
+    /// fraction of its own height off its base's centre, a second line sits a full line height
+    /// away.
+    #[test]
+    fn issue_1628_cell_with_two_visual_lines_does_not_interleave_them() {
+        let words = vec![
+            word("Hello", 100, 100, 30, 12),
+            word("world", 140, 100, 30, 12),
+            word("again", 100, 116, 30, 12),
+            word("here", 140, 116, 30, 12),
+        ];
+
+        let table = assign_words_to_cells(&words, &[106], &[100]);
+
+        assert_eq!(table, vec![vec!["Hello world again here".to_string()]]);
+    }
+
+    /// GH#1628: a segment whose text holds no whitespace is returned unsplit, so its word keeps
+    /// the segment's own trailing space. Joining those words then stacks that space on the
+    /// separator and renders `Q_HE GJ` as `Q  HE GJ`. Each word's own whitespace must collapse so
+    /// the join alone owns the spacing.
+    #[test]
+    fn issue_1628_cell_join_does_not_stack_a_word_s_own_trailing_space() {
+        let words = vec![word("Q ", 206, 100, 8, 12), word("HE", 213, 104, 7, 7)];
+
+        let table = assign_words_to_cells(&words, &[100], &[206]);
+
+        assert_eq!(table, vec![vec!["Q HE".to_string()]]);
     }
 
     /// Degenerate-input guard: every word on one row is a degenerate case

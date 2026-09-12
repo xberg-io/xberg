@@ -1742,32 +1742,12 @@ const PARAGRAPH_GAP_HEIGHT_FACTOR: f32 = 1.5;
 /// finds is lost.
 const PARAGRAPH_BREAK_LEADING_MULTIPLE: f32 = 1.5;
 const INLINE_STYLE_BASELINE_TOLERANCE: f32 = 0.5;
-/// Largest baseline offset, as a multiple of the larger font size, at which a smaller abutting run
-/// still reads as a sub/superscript of its neighbour rather than as the next wrapped line.
-///
-/// ~keep GH#1617: the five torn pairs on the reproducer sit 0.63--1.07pt off a 11.59pt baseline,
-/// i.e. 0.054--0.092 font-sizes, while a wrapped line is separated by a full leading (>= 1.0). The
-/// 3x margin either side is why this is expressible as a predicate instead of by widening
-/// `INLINE_STYLE_BASELINE_TOLERANCE`, which is read at seven sites here and gates dehyphenation at
-/// `spans_visual_line_break`.
-const SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR: f32 = 0.35;
-/// Largest ratio of the smaller run's font size to the larger one's for the pair to read as a
-/// sub/superscript.
-///
-/// ~keep GH#1617: 0.63--0.73 on the reproducer against 1.00 for every ordinary same-size style-run
-/// boundary, so a same-size boundary cannot reach this predicate at all.
-const SCRIPT_RUN_MAX_FONT_SIZE_RATIO: f32 = 0.85;
-/// Largest forward gap, as a multiple of the larger font size, between a run's end and an abutting
-/// sub/superscript's start.
-///
-/// ~keep GH#1617: `rated` starts at 211.92 where `P` ends at 211.94 -- scripts abut or overlap their
-/// base, so this stays far below `INLINE_STYLE_MAX_FORWARD_GAP_FONT_FACTOR`.
-const SCRIPT_RUN_MAX_FORWARD_GAP_FONT_FACTOR: f32 = 0.25;
 /// How many already-accumulated segments back to look for a sub/superscript's base.
 ///
 /// ~keep GH#1617: two is enough on the reproducer (`dB` then `L`); four covers a row with a couple
 /// more cells to the right of the base without letting the search wander off the current row.
-const SCRIPT_RUN_BASE_LOOKBACK: usize = 4;
+/// GH#1628 reuses this window for the word-level table path, which searches the same segment list.
+pub(crate) const SCRIPT_RUN_BASE_LOOKBACK: usize = 4;
 const INLINE_STYLE_MAX_FORWARD_GAP_FONT_FACTOR: f32 = 1.0;
 const INLINE_FONT_SIZE_MAX_FORWARD_GAP_FONT_FACTOR: f32 = 1.5;
 const INLINE_STYLE_MAX_OVERLAP_FONT_FACTOR: f32 = 0.15;
@@ -2184,15 +2164,13 @@ fn is_inline_style_transition(
 /// gate rejects outright -- it cannot change the outcome of any pair that passes today. ~keep
 fn is_script_run_offset(previous: &SegmentData, next: &SegmentData, baseline_delta: f32, font_size: f32) -> bool {
     let smaller_font_size = previous.font_size.min(next.font_size);
-    baseline_delta > 0.0
-        && baseline_delta <= font_size * SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR
-        && smaller_font_size <= font_size * SCRIPT_RUN_MAX_FONT_SIZE_RATIO
+    crate::script_run::is_script_run_baseline_offset(baseline_delta, font_size, smaller_font_size)
 }
 
 /// Whether `next` reads as a sub/superscript attached to `previous`: same rotation and role,
 /// neither monospace, a materially smaller font raised or lowered by a fraction of it, and a start
 /// inside or abutting `previous`'s advance extent.
-fn is_script_run_of(previous: &SegmentData, next: &SegmentData) -> bool {
+pub(crate) fn is_script_run_of(previous: &SegmentData, next: &SegmentData) -> bool {
     if previous.is_monospace || next.is_monospace || previous.assigned_role != next.assigned_role {
         return false;
     }
@@ -2219,8 +2197,7 @@ fn is_script_run_of(previous: &SegmentData, next: &SegmentData) -> bool {
     let (previous_start, previous_end) = previous.upright_advance_extent();
     let (next_start, _) = next.upright_advance_extent();
     is_script_run_offset(previous, next, baseline_delta, font_size)
-        && next_start >= previous_start
-        && next_start - previous_end <= font_size * SCRIPT_RUN_MAX_FORWARD_GAP_FONT_FACTOR
+        && crate::script_run::is_script_run_forward_gap(previous_start, previous_end, next_start, font_size)
 }
 
 /// Whether `line` reads as the wrapped continuation of the numbered-heading

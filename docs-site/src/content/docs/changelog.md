@@ -31,6 +31,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A reconstructed PDF table cell now reads left to right instead of in the order its words happened
+  to arrive. The reported symptom was a sub/superscript printing after the rest of the cell --
+  `eta_S %` came out as `eta % S`, `Q_HE GJ` as `Q GJ HE` -- because a script is drawn as its own
+  content-stream segment a fraction of a point below the line it annotates, so every reading-order
+  sort upstream placed it after the whole line. The same defect also transposed values between
+  columns when two columns were merged into one cell: on a balance sheet whose header reads
+  `2017 2016`, the row beneath it emitted the 2016 figure first, silently attributing each year's
+  number to the other year. A cell's words are now grouped into visual lines and ordered left to
+  right within each line. Grouping first is load-bearing -- ordering by horizontal position alone
+  interleaves the two halves of a wrapped cell. Each word's own whitespace is also collapsed, so a
+  segment carrying a trailing space no longer stacks it on the separator. Table cells recovered by
+  OCR go through the same ordering (GH#1628).
+
 - Image OCR now honours a PNG's embedded `pHYs` pixel density instead of assuming 72 DPI. A genuine
   300-DPI PNG submitted with `target_dpi = 300` was resized anyway, because the extractor decoded,
   resized and re-encoded the image -- discarding the density chunk -- before the OCR backend, and

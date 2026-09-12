@@ -1822,30 +1822,128 @@ fn is_numeric_word(text: &str) -> bool {
 /// (`extract_cell`), which synthesizes its own per-MCID spans but carries the
 /// source block's `rotation_degrees` forward rather than hardcoding `0.0`.
 ///
-/// Embedded newlines inside span text are collapsed to spaces to produce
-/// clean single-line cell strings.
+/// Embedded newlines inside span text are collapsed to spaces, and any internal run of
+/// whitespace within a single span's own text (GH#1628: a wide kerning adjustment inside one
+/// `Tj`/`TJ` run can decode to more than one literal space glyph, which `str::trim()` -- which
+/// only strips the *ends* -- does not catch) collapses to one, so joining never stacks a span's
+/// own embedded space on top of the separator this function inserts between spans.
+///
+/// A pair of spans that reads as a sub/superscript run (see [`is_script_run_of`]) is kept in the
+/// same reading-order "row" as the base it is attached to (GH#1628): a subscript's lower baseline
+/// would otherwise place it in a different cross-axis row than the base symbol it abuts, ahead of
+/// every other same-height span in the cell regardless of physical x-adjacency. See
+/// [`crate::script_run`] for the decision rule shared with prose assembly, and
+/// [`sort_spans_in_reading_order`] for how row membership is resolved.
 fn cell_text_in_reading_order(cell: &xberg_native_pdf::structure::table_extractor::TableCell) -> String {
     if cell.spans.is_empty() {
         return cell.text.trim().replace('\n', " ").to_string();
     }
 
-    let mut sorted: Vec<&xberg_native_pdf::layout::TextSpan> = cell.spans.iter().collect();
-    sorted.sort_by(|a, b| {
-        let (advance_a, cross_a) = super::span_geometry::upright_origin(a);
-        let (advance_b, cross_b) = super::span_geometry::upright_origin(b);
-        cross_b
-            .total_cmp(&cross_a)
-            .then_with(|| advance_a.total_cmp(&advance_b))
-    });
+    let sorted = sort_spans_in_reading_order(cell.spans.iter().collect());
 
     let joined: String = sorted
         .iter()
-        .map(|span| span.text.trim().replace('\n', " "))
+        .map(|span| span.text.split_whitespace().collect::<Vec<_>>().join(" "))
         .filter(|s| !s.is_empty())
         .collect::<Vec<_>>()
         .join(" ");
 
     joined
+}
+
+/// How many already-placed (in advance-axis order) spans back a candidate script run's base may
+/// be found among. Mirrors `pdf::structure::pipeline::SCRIPT_RUN_BASE_LOOKBACK`'s rationale
+/// (a base is not always the immediately preceding span once other same-row content interleaves)
+/// at a value sized for a table cell's much shorter span lists.
+const TABLE_SCRIPT_RUN_BASE_LOOKBACK: usize = 4;
+
+/// Sort a cell's spans into reading order: top-to-bottom by row, left-to-right within a row.
+///
+/// Spans are first ordered along their own advance axis to establish physical left-to-right
+/// adjacency, then each span is assigned a `row_key` -- its own cross-axis position, unless it is
+/// a script run of one of the up to [`TABLE_SCRIPT_RUN_BASE_LOOKBACK`] spans immediately before it
+/// in that advance order, in which case it inherits that base's `row_key` instead (transitively,
+/// so a chain of script runs shares one row). The final sort is by `row_key` descending (top rows
+/// first, matching the original cross-descending order) then advance ascending -- which now also
+/// resolves a script run's position relative to *every* other span in its row by physical
+/// x-position, not only relative to its own base.
+fn sort_spans_in_reading_order(
+    spans: Vec<&xberg_native_pdf::layout::TextSpan>,
+) -> Vec<&xberg_native_pdf::layout::TextSpan> {
+    let mut by_advance = spans;
+    by_advance.sort_by(|a, b| {
+        let (advance_a, _) = super::span_geometry::upright_origin(a);
+        let (advance_b, _) = super::span_geometry::upright_origin(b);
+        advance_a.total_cmp(&advance_b)
+    });
+
+    let mut row_key: Vec<f32> = by_advance
+        .iter()
+        .map(|span| super::span_geometry::upright_origin(span).1)
+        .collect();
+
+    for index in 0..by_advance.len() {
+        let lookback_start = index.saturating_sub(TABLE_SCRIPT_RUN_BASE_LOOKBACK);
+        for candidate in (lookback_start..index).rev() {
+            if is_script_run_of(by_advance[candidate], by_advance[index]) {
+                row_key[index] = row_key[candidate];
+                break;
+            }
+        }
+    }
+
+    let mut order: Vec<usize> = (0..by_advance.len()).collect();
+    order.sort_by(|&i, &j| {
+        let (advance_i, _) = super::span_geometry::upright_origin(by_advance[i]);
+        let (advance_j, _) = super::span_geometry::upright_origin(by_advance[j]);
+        row_key[j]
+            .total_cmp(&row_key[i])
+            .then_with(|| advance_i.total_cmp(&advance_j))
+    });
+
+    order.into_iter().map(|index| by_advance[index]).collect()
+}
+
+/// Whether `next` reads as a sub/superscript attached to `previous`: same rotation, neither
+/// monospace, a materially smaller font raised or lowered by a fraction of it, and a start inside
+/// or abutting `previous`'s advance extent.
+///
+/// The float arithmetic (the baseline-offset and forward-gap tests) is single-sourced in
+/// [`crate::script_run`], shared with `pdf::structure::pipeline::is_script_run_of`'s prose
+/// equivalent; only the type-specific guards and geometry accessors below differ, because
+/// `TextSpan` has no `assigned_role` field to compare (a cell's own spans are already assumed to
+/// share one, so no widening happens here that the prose predicate's role guard would have
+/// blocked). ~keep GH#1628
+fn is_script_run_of(previous: &xberg_native_pdf::layout::TextSpan, next: &xberg_native_pdf::layout::TextSpan) -> bool {
+    if previous.is_monospace || next.is_monospace || !super::span_geometry::has_same_rotation(previous, next) {
+        return false;
+    }
+    if !previous.font_size.is_finite()
+        || !next.font_size.is_finite()
+        || previous.font_size <= 0.0
+        || next.font_size <= 0.0
+        || !previous.bbox.width.is_finite()
+        || !next.bbox.width.is_finite()
+        || previous.bbox.width < 0.0
+        || next.bbox.width < 0.0
+    {
+        return false;
+    }
+
+    let (previous_start, previous_end) = super::span_geometry::upright_advance_extent(previous);
+    let (next_start, _) = super::span_geometry::upright_advance_extent(next);
+    let (_, previous_cross) = super::span_geometry::upright_origin(previous);
+    let (_, next_cross) = super::span_geometry::upright_origin(next);
+    if !previous_cross.is_finite() || !next_cross.is_finite() {
+        return false;
+    }
+
+    let font_size = previous.font_size.max(next.font_size);
+    let smaller_font_size = previous.font_size.min(next.font_size);
+    let baseline_delta = (next_cross - previous_cross).abs();
+
+    crate::script_run::is_script_run_baseline_offset(baseline_delta, font_size, smaller_font_size)
+        && crate::script_run::is_script_run_forward_gap(previous_start, previous_end, next_start, font_size)
 }
 
 /// Convert a xberg_native_pdf `ExtractedTable` to xberg's cell grid and markdown.
@@ -2162,6 +2260,117 @@ mod tests {
             text, "Engine oil need",
             "a 90-degree-rotated cell must be read along its own advance axis (page-y), \
              not raw page-space X/Y; got: {text:?}"
+        );
+    }
+
+    /// Build a synthetic TextSpan with an explicit width and font size, for the GH#1628
+    /// script-run tests, where both matter to the adjacency arithmetic.
+    fn make_span_ext(text: &str, x: f32, y: f32, width: f32, font_size: f32) -> xberg_native_pdf::layout::TextSpan {
+        xberg_native_pdf::layout::TextSpan {
+            text: text.to_string(),
+            bbox: xberg_native_pdf::geometry::Rect {
+                x,
+                y,
+                width,
+                height: font_size,
+            },
+            font_size,
+            ..make_span("", 0.0, 0.0)
+        }
+    }
+
+    /// GH#1628: a subscript ("S" in `eta_S %`) sits at a lower baseline than the base symbol
+    /// it annotates ("eta") and a materially smaller font. The plain cross-axis-then-advance
+    /// comparator sorts every same-height span into its own row ahead of the subscript
+    /// regardless of physical x-adjacency, so the unit that physically follows the base ("%")
+    /// prints before the subscript. `sub` starts inside `base`'s advance extent (kerned TJ
+    /// fusion, the same shape #1617 fixed for prose) and its baseline sits 0.7pt below a
+    /// 11.59pt baseline -- both drawn from GH#1617's own reproducer measurements.
+    #[test]
+    fn test_cell_text_in_reading_order_keeps_script_run_adjacent_to_base() {
+        use xberg_native_pdf::structure::table_extractor::TableCell;
+
+        let base = make_span_ext("eta", 100.0, 200.0, 6.5, 11.59);
+        let sub = make_span_ext("S", 104.0, 199.3, 4.0, 8.0);
+        let unit = make_span_ext("%", 115.0, 200.0, 6.0, 11.59);
+
+        let cell = TableCell {
+            text: "wrong order".to_string(),
+            colspan: 1,
+            rowspan: 1,
+            mcids: vec![],
+            spans: vec![unit, base, sub],
+            bbox: None,
+            is_header: false,
+        };
+
+        let text = cell_text_in_reading_order(&cell);
+        assert_eq!(
+            text, "eta S %",
+            "a subscript adjacent to its base must print immediately after it, not after \
+             every same-height span in the cell; got: {text:?}"
+        );
+    }
+
+    /// Pins that an NBSP-only span (U+00A0, common in justified PDFs) still collapses away.
+    ///
+    /// This is a preserved-behaviour pin, NOT a regression test for GH#1628: U+00A0 *is*
+    /// `White_Space` in Unicode, so `char::is_whitespace` is true for it and the previous
+    /// `str::trim()` implementation already emptied such a span. Measured, not assumed --- the
+    /// original suspicion that NBSP was the source of the doubled gap in `Q GJ  HE` was wrong,
+    /// and the real cause is the internal multi-space run the test below covers. Kept so the
+    /// `split_whitespace` rewrite cannot quietly lose the NBSP handling it inherited.
+    #[test]
+    fn test_cell_text_in_reading_order_collapses_nbsp_only_span() {
+        use xberg_native_pdf::structure::table_extractor::TableCell;
+
+        let cell = TableCell {
+            text: "wrong order".to_string(),
+            colspan: 1,
+            rowspan: 1,
+            mcids: vec![],
+            spans: vec![
+                make_span("Q", 100.0, 200.0),
+                make_span("\u{a0}", 150.0, 200.0),
+                make_span("GJ", 200.0, 200.0),
+            ],
+            bbox: None,
+            is_header: false,
+        };
+
+        let text = cell_text_in_reading_order(&cell);
+        assert_eq!(
+            text, "Q GJ",
+            "an NBSP-only span must not introduce a second space alongside the join \
+             separator; got: {text:?}"
+        );
+    }
+
+    /// GH#1628: a wide kerning adjustment inside a single `Tj`/`TJ` run can decode to more than
+    /// one literal space glyph, so a single span's own `text` can carry an internal run of spaces
+    /// (`str::trim()` only strips the *ends*, so this survives untouched). Joining that span with
+    /// its neighbour via `join(" ")` then stacks the join's own separator on top of the span's
+    /// already-embedded space, producing a visibly doubled gap the neighbouring spans' own
+    /// individual trimming cannot catch.
+    #[test]
+    fn test_cell_text_in_reading_order_collapses_internal_multi_space_run() {
+        use xberg_native_pdf::structure::table_extractor::TableCell;
+
+        let cell = TableCell {
+            text: "wrong order".to_string(),
+            colspan: 1,
+            rowspan: 1,
+            mcids: vec![],
+            spans: vec![make_span("Q", 100.0, 200.0), make_span("GJ  HE", 150.0, 200.0)],
+            bbox: None,
+            is_header: false,
+        };
+
+        let text = cell_text_in_reading_order(&cell);
+        assert_eq!(
+            text, "Q GJ HE",
+            "an internal multi-space run inside one span's own text must collapse to a single \
+             space, not stack with the join separator; got: {text:?}"
         );
     }
 

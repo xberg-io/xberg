@@ -69,6 +69,11 @@ pub mod text;
 pub mod types;
 pub mod utils;
 
+/// Pure-arithmetic sub/superscript ("script run") decision rule, shared by PDF prose assembly,
+/// native table cells and word-level table reconstruction.
+#[cfg(any(feature = "ocr", feature = "pdf", paddle_ocr))]
+pub(crate) mod script_run;
+
 #[cfg(any(feature = "ocr", feature = "pdf", paddle_ocr))]
 pub mod table_core;
 
