@@ -52,6 +52,7 @@ fn test_type0_identity_encoding_without_tounicode_returns_none() {
         cid_vertical_metrics: None,
         cid_default_vertical_metrics: xberg_native_pdf::fonts::VerticalMetrics::SPEC_DEFAULT,
         cjk_substitution: None,
+        embedded_cid_map: None,
         type0_unicode_memo: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
     };
 
@@ -108,6 +109,7 @@ fn test_simple_font_identity_encoding_works_for_valid_codes() {
         cid_vertical_metrics: None,
         cid_default_vertical_metrics: xberg_native_pdf::fonts::VerticalMetrics::SPEC_DEFAULT,
         cjk_substitution: None,
+        embedded_cid_map: None,
         type0_unicode_memo: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
     };
 
@@ -169,6 +171,7 @@ fn test_type0_missing_tounicode_is_an_error() {
         cid_vertical_metrics: None,
         cid_default_vertical_metrics: xberg_native_pdf::fonts::VerticalMetrics::SPEC_DEFAULT,
         cjk_substitution: None,
+        embedded_cid_map: None,
         type0_unicode_memo: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
     };
 
@@ -229,6 +232,7 @@ fn test_tounicode_with_valid_mappings_works() {
         cid_vertical_metrics: None,
         cid_default_vertical_metrics: xberg_native_pdf::fonts::VerticalMetrics::SPEC_DEFAULT,
         cjk_substitution: None,
+        embedded_cid_map: None,
         type0_unicode_memo: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
     };
 
@@ -277,6 +281,7 @@ fn test_multi_byte_character_codes_are_processed() {
         cid_vertical_metrics: None,
         cid_default_vertical_metrics: xberg_native_pdf::fonts::VerticalMetrics::SPEC_DEFAULT,
         cjk_substitution: None,
+        embedded_cid_map: None,
         type0_unicode_memo: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
     };
 
@@ -329,6 +334,7 @@ fn test_extraction_priority_chain() {
         cid_vertical_metrics: None,
         cid_default_vertical_metrics: xberg_native_pdf::fonts::VerticalMetrics::SPEC_DEFAULT,
         cjk_substitution: None,
+        embedded_cid_map: None,
         type0_unicode_memo: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
     };
 
@@ -384,6 +390,7 @@ fn test_symbolic_font_encoding() {
         cid_vertical_metrics: None,
         cid_default_vertical_metrics: xberg_native_pdf::fonts::VerticalMetrics::SPEC_DEFAULT,
         cjk_substitution: None,
+        embedded_cid_map: None,
         type0_unicode_memo: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
     };
 
@@ -440,6 +447,7 @@ fn test_pdf_without_tounicode_doesnt_scramble_text() {
         cid_vertical_metrics: None,
         cid_default_vertical_metrics: xberg_native_pdf::fonts::VerticalMetrics::SPEC_DEFAULT,
         cjk_substitution: None,
+        embedded_cid_map: None,
         type0_unicode_memo: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
     };
 

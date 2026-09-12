@@ -5,6 +5,7 @@
 //! most accurate character-to-Unicode mapping.
 
 use super::adobe_glyph_list::ADOBE_GLYPH_LIST;
+use crate::cache::MutexExt;
 use crate::document::PdfDocument;
 use crate::error::{Error, Result};
 use crate::fonts::TrueTypeCMap;
@@ -98,6 +99,20 @@ pub struct FontInfo {
     pub cid_system_info: Option<CIDSystemInfo>,
     /// CIDFont subtype ("CIDFontType0" for CFF, "CIDFontType2" for TrueType)
     pub cid_font_type: Option<String>,
+    /// Charcode → CID mapping parsed from an embedded `/Encoding` CMap
+    /// stream (GH #1631), when that stream contains real `begincidrange` /
+    /// `begincidchar` data. `None` for every other case: `/Encoding` is a
+    /// name (Identity-H/V or a predefined CMap name), the stream had no
+    /// recognisable CID data (e.g. bare `usecmap`), or the font is not
+    /// Type0. See [`FontInfo::code_to_cid`] for the full resolution order.
+    ///
+    /// `pub` (matching every other `FontInfo` field) but the value type
+    /// ([`super::cid_cmap::CidCMap`]) is `#[doc(hidden)]` and has no public
+    /// constructor — external code can read/hold/clone this field or set
+    /// it to `None`, but cannot construct a non-`None` value itself. Not
+    /// part of this crate's public API or semver contract.
+    #[doc(hidden)]
+    pub embedded_cid_map: Option<Arc<super::cid_cmap::CidCMap>>,
     /// `FontMatrix[a]` element — scales glyph-space widths to text-space units.
     /// Standard Type1/TrueType: 0.001 (widths in 1/1000 em).
     /// Type3 with `FontMatrix [1 0 0 1 0 0]`: 1.0 (widths already in text-space units).
@@ -349,6 +364,111 @@ impl VerticalMetrics {
 /// inside `FontInfo::from_dict`.
 pub(crate) fn wmode_from_predefined_cmap_name(name: &str) -> u8 {
     if name == "V" || name.ends_with("-V") { 1 } else { 0 }
+}
+
+/// The predefined PDF CMap names (ISO 32000-1 Annex F / Adobe Technical
+/// Notes #5078/#5079/#5080/#5093) whose character code is directly the
+/// UCS-2 (BMP) Unicode value of the intended character. For these — and
+/// only these — a code→CID lookup is exactly the inverse of the vendored
+/// CID→Unicode tables in `cid_mappings`.
+///
+/// Deliberately excludes near-miss names this crate has NOT verified
+/// against Adobe's actual CMap resource data: `UniJIS-UCS2-HW-*` (a
+/// halfwidth-preferring variant of the JIS table, not proven identical for
+/// every CID) and `UniJISPro-UCS2-*` (Pro variants add CIDs beyond the base
+/// Adobe-Japan1 table). Those fall through to
+/// `warn_unsupported_predefined_cmap_once` rather than risk a subtly wrong
+/// mapping.
+const UNICODE_KEYED_PREDEFINED_CMAP_NAMES: [&str; 16] = [
+    "UniGB-UCS2-H",
+    "UniGB-UCS2-V",
+    "UniGB-UTF16-H",
+    "UniGB-UTF16-V",
+    "UniJIS-UCS2-H",
+    "UniJIS-UCS2-V",
+    "UniJIS-UTF16-H",
+    "UniJIS-UTF16-V",
+    "UniCNS-UCS2-H",
+    "UniCNS-UCS2-V",
+    "UniCNS-UTF16-H",
+    "UniCNS-UTF16-V",
+    "UniKS-UCS2-H",
+    "UniKS-UCS2-V",
+    "UniKS-UTF16-H",
+    "UniKS-UTF16-V",
+];
+
+/// `true` when `name` is one of [`UNICODE_KEYED_PREDEFINED_CMAP_NAMES`].
+fn is_unicode_keyed_predefined_cmap_name(name: &str) -> bool {
+    UNICODE_KEYED_PREDEFINED_CMAP_NAMES.contains(&name)
+}
+
+/// Resolve the [`super::predefined_cidfont::CharacterCollection`] a
+/// Unicode-keyed predefined CMap name belongs to.
+///
+/// `/CIDSystemInfo` `Ordering` is authoritative when it names a known
+/// collection (ISO 32000-1 §9.7.3); otherwise the collection is derived
+/// from the name's `Uni{GB,JIS,CNS,KS}` prefix. Mirrors the same
+/// CIDSystemInfo-first, name-fallback precedence `from_dict` already uses
+/// for `cjk_substitution`.
+fn unicode_keyed_predefined_collection(
+    name: &str,
+    cid_system_info: Option<&CIDSystemInfo>,
+) -> Option<super::predefined_cidfont::CharacterCollection> {
+    use super::predefined_cidfont::CharacterCollection;
+
+    if !is_unicode_keyed_predefined_cmap_name(name) {
+        return None;
+    }
+
+    let ordering_collection = cid_system_info.and_then(|info| match info.ordering.as_str() {
+        "Japan1" => Some(CharacterCollection::AdobeJapan1),
+        "GB1" => Some(CharacterCollection::AdobeGB1),
+        "CNS1" => Some(CharacterCollection::AdobeCNS1),
+        "Korea1" => Some(CharacterCollection::AdobeKorea1),
+        _ => None,
+    });
+    if ordering_collection.is_some() {
+        return ordering_collection;
+    }
+
+    if name.starts_with("UniGB") {
+        Some(CharacterCollection::AdobeGB1)
+    } else if name.starts_with("UniJIS") {
+        Some(CharacterCollection::AdobeJapan1)
+    } else if name.starts_with("UniCNS") {
+        Some(CharacterCollection::AdobeCNS1)
+    } else if name.starts_with("UniKS") {
+        Some(CharacterCollection::AdobeKorea1)
+    } else {
+        None
+    }
+}
+
+/// Logs once (per process) that `name` is a predefined CMap this crate has
+/// no code→CID table for, so a Type0 font using it falls back to the
+/// long-standing (still wrong, but not newly wrong) code-as-CID behaviour.
+/// Covers the legacy multi-byte families (`90ms-RKSJ-H`, `GBK-EUC-H`,
+/// `B5-H`, `EUC-H`, …) and the UTF-8 predefined CMaps (`UniJIS-UTF8-H`, …) —
+/// none of these have a vendored charcode→CID table in this crate.
+fn warn_unsupported_predefined_cmap_once(name: &str, base_font: &str) {
+    static WARNED: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+        std::sync::OnceLock::new();
+    let warned = WARNED.get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()));
+    let mut warned = warned.lock_or_recover();
+    if !warned.insert(name.to_string()) {
+        return;
+    }
+    tracing::warn!(
+        target: crate::LOG_TARGET_ROOT,
+        operation = "code_to_cid",
+        error_code = "unsupported_predefined_cmap",
+        cmap_name = name,
+        font = base_font,
+        "no charcode\u{2192}CID table for this predefined CMap; using the character code as the \
+         CID, which is only correct by coincidence. Glyph widths and any CID-keyed lookups for \
+         this font are likely wrong."
+    );
 }
 
 impl FontInfo {
@@ -695,7 +815,7 @@ impl FontInfo {
             None
         };
 
-        let (encoding_wmode, encoding, diff_multi_char_map, diff_glyph_names) =
+        let (encoding_wmode, encoding, diff_multi_char_map, diff_glyph_names, embedded_cid_map) =
             Self::resolve_encoding_fields(font_dict, doc, &base_font, flags, font_program_enc_cache)?;
 
         // Parse ToUnicode CMap if present (Phase 5.1: Lazy Loading)
@@ -1097,6 +1217,7 @@ impl FontInfo {
             cid_to_gid_map,
             cid_system_info,
             cid_font_type,
+            embedded_cid_map,
             font_matrix_a,
             widths,
             first_char,
@@ -1320,7 +1441,13 @@ impl FontInfo {
         base_font: &str,
         flags: Option<i32>,
         font_program_enc_cache: Option<HashMap<u8, char>>,
-    ) -> Result<(u8, Encoding, HashMap<u8, String>, HashMap<u8, String>)> {
+    ) -> Result<(
+        u8,
+        Encoding,
+        HashMap<u8, String>,
+        HashMap<u8, String>,
+        Option<Arc<super::cid_cmap::CidCMap>>,
+    )> {
         fn is_symbolic_font(flags_opt: Option<i32>, base_font: &str) -> bool {
             if let Some(flags_value) = flags_opt {
                 const SYMBOLIC_BIT: i32 = 1 << 2;
@@ -1337,6 +1464,7 @@ impl FontInfo {
         // the original name to recover wmode. Defaults to `0` (horizontal)
         // when no encoding object is present. ~keep
         let mut encoding_wmode: u8 = 0;
+        let mut embedded_cid_map: Option<Arc<super::cid_cmap::CidCMap>> = None;
         let (encoding, diff_multi_char_map, diff_glyph_names) = if let Some(enc_obj) = font_dict.get("Encoding") {
             let resolved_enc_obj = if let Some(obj_ref) = enc_obj.as_reference() {
                 doc.load_object(obj_ref)?
@@ -1348,6 +1476,24 @@ impl FontInfo {
             // before parse_encoding flattens the variant. ~keep
             let (_enc_name, wm) = Self::resolve_encoding_writing_mode(&resolved_enc_obj, doc);
             encoding_wmode = wm;
+
+            // GH #1631: when `/Encoding` is a genuine CMap stream, attempt
+            // to parse its real charcode→CID data (`begincidrange`/
+            // `begincidchar`/`begincodespacerange`) rather than relying on
+            // `/CMapName` heuristics alone. `decode_stream_data` fails
+            // (harmlessly) for a non-stream encoding object (a `/Name` or a
+            // plain `/Differences` dictionary), which is not a CID CMap in
+            // the first place. A stream that decodes but carries no
+            // recognisable CID data (e.g. bare `usecmap`) also stays
+            // `None` — `parse_cid_cmap` reports that as an empty map, and
+            // an empty map is treated identically to "no embedded map" by
+            // every caller. ~keep
+            embedded_cid_map = resolved_enc_obj
+                .decode_stream_data()
+                .ok()
+                .and_then(|bytes| super::cid_cmap::parse_cid_cmap(&bytes).ok())
+                .filter(|cid_map| !cid_map.is_empty())
+                .map(Arc::new);
 
             if is_symbolic_font(flags, base_font) {
                 tracing::debug!(
@@ -1460,7 +1606,13 @@ impl FontInfo {
             )
         };
 
-        Ok((encoding_wmode, encoding, diff_multi_char_map, diff_glyph_names))
+        Ok((
+            encoding_wmode,
+            encoding,
+            diff_multi_char_map,
+            diff_glyph_names,
+            embedded_cid_map,
+        ))
     }
 
     /// Parse encoding from an encoding object.
@@ -2830,10 +2982,92 @@ impl FontInfo {
     /// IMPORTANT: We do NOT apply heuristics to override ToUnicode. If the PDF has
     /// a buggy ToUnicode CMap, that is a PDF authoring error, not our responsibility
     /// to "fix" by guessing what the author meant.
+    /// Resolve a Type0 character code (from the content stream) to its CID.
+    ///
+    /// GH #1631: a Type0/CIDFont font maps character codes to CIDs through a
+    /// CMap, and CIDs to glyph metrics through `/W`/`/DW` — two distinct
+    /// steps. Callers that skip the first and feed a raw character code
+    /// into [`Self::get_glyph_width`] get systematically wrong widths on
+    /// any Type0 font that is not Identity-H/V.
+    ///
+    /// Resolution order:
+    ///
+    /// 1. An embedded `/Encoding` CMap stream with real `begincidrange`/
+    ///    `begincidchar` data ([`Self::embedded_cid_map`]) — the actual
+    ///    PDF-authored mapping, so it takes precedence over everything
+    ///    else. A code outside every declared range/char returns CID `0`
+    ///    (`.notdef`) rather than falling through to a guess: for a real,
+    ///    intentionally partial embedded CMap, the code truly has no CID.
+    /// 2. `Encoding::Identity` (`Identity-H`/`Identity-V`, or an
+    ///    Adobe-collection stream this crate already treats as identity):
+    ///    CID == code, per ISO 32000-1 §9.7.5.2.
+    /// 3. A named predefined CMap recognised as one of the Unicode-keyed
+    ///    `Uni*-UCS2-*` / `Uni*-UTF16-*` family: the code IS the UCS-2/BMP
+    ///    Unicode value of the intended character, so the CID is looked up
+    ///    by inverting the vendored CID→Unicode table for the font's
+    ///    character collection (`/CIDSystemInfo` `Ordering` when present,
+    ///    else derived from the CMap name).
+    /// 4. Anything else — legacy multi-byte predefined CMaps this crate has
+    ///    no table for (`90ms-RKSJ-H`, `GBK-EUC-H`, `B5-H`, `UniJIS-UTF8-H`,
+    ///    …), or an unrecognised embedded CMap that parsed to no usable
+    ///    data. There is no honest CID to produce here; this preserves the
+    ///    long-standing code-as-CID behaviour (still wrong for these fonts,
+    ///    but not made *newly* wrong by this change) and logs once per
+    ///    font so the limitation is diagnosable rather than silent.
+    pub fn code_to_cid(&self, code: u32) -> u16 {
+        if let Some(cid_map) = &self.embedded_cid_map {
+            return cid_map.lookup(code).unwrap_or(0);
+        }
+        match &self.encoding {
+            Encoding::Identity => u16::try_from(code).unwrap_or(0),
+            Encoding::Standard(name) => {
+                if let Some(collection) = unicode_keyed_predefined_collection(name, self.cid_system_info.as_ref())
+                    && let Some(cid) = collection.unicode_to_cid(code)
+                {
+                    return cid;
+                }
+                if is_unicode_keyed_predefined_cmap_name(name) {
+                    // Recognised as UCS2/UTF16-family by name but no CID
+                    // collection could be resolved (unknown ordering, code
+                    // outside the table) — CID 0 lets /DW apply rather than
+                    // guessing with the raw code. ~keep
+                    return 0;
+                }
+                warn_unsupported_predefined_cmap_once(name, &self.base_font);
+                u16::try_from(code).unwrap_or(0)
+            }
+            _ => u16::try_from(code).unwrap_or(0),
+        }
+    }
+
+    /// [`Self::code_to_cid`], guarded for callers that read a raw
+    /// content-stream code (from `TextCharIter`/`char_codes`) without
+    /// already knowing whether this font is Type0.
+    ///
+    /// A non-Type0 (simple) font has no code→CID step at all — `code`
+    /// (truncated to `u16`) is its own width-table key — so this returns it
+    /// unchanged. Calling `code_to_cid` directly on a simple font would
+    /// misinterpret its ordinary `/Encoding` name (e.g. `WinAnsiEncoding`)
+    /// as an unrecognised *predefined CID CMap* and spuriously log the
+    /// "unsupported predefined CMap" warning meant for CID fonts (GH
+    /// #1631). Every call site that does not already sit inside a
+    /// `subtype == "Type0"` branch should use this instead.
+    pub fn code_to_cid_if_type0(&self, code: u32) -> u16 {
+        if self.subtype == "Type0" {
+            self.code_to_cid(code)
+        } else {
+            u16::try_from(code).unwrap_or(0)
+        }
+    }
+
     /// Get glyph width for a character code.
     ///
     /// Returns width in 1000ths of em (PDF units) per PDF Spec ISO 32000-1:2008, Section 9.7.4.
     /// Must be multiplied by (font_size / 1000) to get actual width in user space units.
+    ///
+    /// For a Type0 (CID) font, `char_code` must already be a **CID**, not a
+    /// raw content-stream character code — see [`Self::code_to_cid`] for the
+    /// step this method deliberately does not perform (GH #1631).
     ///
     /// # Arguments
     ///
@@ -6232,6 +6466,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
         assert!(font.is_bold());
 
@@ -6273,6 +6508,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
         assert!(!font2.is_bold());
     }
@@ -6317,6 +6553,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
         assert!(font.is_italic());
 
@@ -6358,6 +6595,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
         assert!(font2.is_italic());
     }
@@ -6404,6 +6642,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
 
         assert_eq!(font.char_to_unicode(0x41), Some("X".to_string()));
@@ -6661,6 +6900,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
 
         let logs = capture_warnings(|| {
@@ -6720,6 +6960,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
 
         assert_eq!(font.char_to_unicode(0x41), Some("A".to_string()));
@@ -6766,6 +7007,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
 
         assert_eq!(font_type0.char_to_unicode(0x41), Some("A".to_string()));
@@ -6809,6 +7051,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
 
         assert_eq!(font_type1.char_to_unicode(0x41), Some("A".to_string()));
@@ -6952,6 +7195,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
 
         let font2 = font.clone();
@@ -7082,6 +7326,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
 
         assert_eq!(font.char_to_unicode(0x41), Some("X".to_string()));
@@ -7130,6 +7375,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
 
         assert_eq!(font_with_force_bold.get_font_weight(), FontWeight::Bold);
@@ -7173,6 +7419,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
 
         assert_eq!(font_without_force_bold.get_font_weight(), FontWeight::Normal);
@@ -7220,6 +7467,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
 
         assert_eq!(font_heavy_stem.get_font_weight(), FontWeight::Bold);
@@ -7263,6 +7511,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
 
         assert_eq!(font_medium_stem.get_font_weight(), FontWeight::Medium);
@@ -7306,6 +7555,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
 
         assert_eq!(font_light_stem.get_font_weight(), FontWeight::Normal);
@@ -7353,6 +7603,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
 
         assert_eq!(font_explicit.get_font_weight(), FontWeight::Light);
@@ -7396,6 +7647,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
 
         assert_eq!(font_force_bold.get_font_weight(), FontWeight::Bold);
@@ -7439,6 +7691,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
 
         assert_eq!(font_name.get_font_weight(), FontWeight::Bold);
@@ -7486,6 +7739,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
         assert_eq!(font_black.get_font_weight(), FontWeight::Black);
         assert!(font_black.is_bold());
@@ -7528,6 +7782,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
         assert_eq!(font_extrabold.get_font_weight(), FontWeight::ExtraBold);
         assert!(font_extrabold.is_bold());
@@ -7570,6 +7825,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
         assert_eq!(font_bold.get_font_weight(), FontWeight::Bold);
         assert!(font_bold.is_bold());
@@ -7612,6 +7868,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
         assert_eq!(font_semibold.get_font_weight(), FontWeight::SemiBold);
         assert!(font_semibold.is_bold());
@@ -7654,6 +7911,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
         assert_eq!(font_medium.get_font_weight(), FontWeight::Medium);
         assert!(!font_medium.is_bold());
@@ -7696,6 +7954,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
         assert_eq!(font_light.get_font_weight(), FontWeight::Light);
         assert!(!font_light.is_bold());
@@ -7738,6 +7997,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
         assert_eq!(font_extralight.get_font_weight(), FontWeight::ExtraLight);
         assert!(!font_extralight.is_bold());
@@ -7780,6 +8040,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
         assert_eq!(font_thin.get_font_weight(), FontWeight::Thin);
         assert!(!font_thin.is_bold());
@@ -7822,6 +8083,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
         assert_eq!(font_normal.get_font_weight(), FontWeight::Normal);
         assert!(!font_normal.is_bold());
@@ -8070,6 +8332,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
 
         assert_eq!(font.get_glyph_width(1), 500.0);
@@ -8122,6 +8385,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
 
         assert_eq!(font.get_glyph_width(1), 500.0);
@@ -8172,6 +8436,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
 
         assert_eq!(font.get_glyph_width(1), 600.0);
@@ -8229,6 +8494,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
 
         assert_eq!(font.get_glyph_width(1), 1000.0);
@@ -8283,6 +8549,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
         overrides(&mut f);
         f
@@ -10169,6 +10436,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
 
         assert_eq!(font.get_glyph_width(65), 722.0);
@@ -10217,6 +10485,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
 
         assert_eq!(font.get_glyph_width(65), 600.0);
@@ -10264,6 +10533,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
 
         assert_eq!(font.get_glyph_width(65), 999.0);
@@ -10309,6 +10579,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
 
         assert_eq!(font.get_glyph_width(65), 500.0);
@@ -10360,6 +10631,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         };
 
         let table = font.get_byte_to_width_table();
@@ -10503,6 +10775,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         }
     }
 

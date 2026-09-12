@@ -53,7 +53,16 @@ impl<'doc> TextExtractor<'doc> {
                 // (1 or 2) is determined by the font's encoding / ToUnicode CMap
                 // codespace, not hardcoded to 2. Per ISO 32000-1:2008 §9.7.6.2. ~keep
                 let mut w_sum = 0.0f32;
-                for (cid, nbytes) in TextCharIter::new(text, Some(font)) {
+                for (code, nbytes) in TextCharIter::new(text, Some(font)) {
+                    // GH #1631: `code` is a raw content-stream character
+                    // code, not a CID — it must go through `code_to_cid`
+                    // before it keys /W/DW/W2, or a non-Identity
+                    // predefined/embedded CMap gets the wrong width. The
+                    // Tw-eligibility check below stays on the untranslated
+                    // `code`: ISO 32000-1 §9.3.3 gates on the single-byte
+                    // *character code* 32, not on whatever CID it resolves
+                    // to. ~keep
+                    let cid = font.code_to_cid(code as u32);
                     let mut w = font.get_glyph_width(cid) * fs_factor * hs_factor;
                     w += cs_hs;
                     // Per ISO 32000-1:2008 §9.3.3: Tw applies ONLY to the
@@ -62,7 +71,7 @@ impl<'doc> TextExtractor<'doc> {
                     // code plus its byte width, so gate on a single-byte 32 — a
                     // 2-byte CID #32 (0x0020) in an Identity-H/CJK font must not
                     // take Tw (it would over-advance and mis-position the run). ~keep
-                    if nbytes == 1 && cid == 32 {
+                    if nbytes == 1 && code == 32 {
                         w += ws_hs;
                     }
                     w_sum += w;
@@ -78,11 +87,14 @@ impl<'doc> TextExtractor<'doc> {
                 // glyph-stretching axis — it does not scale w1y, Tc, or
                 // Tw in vertical mode. ~keep
                 let mut w_sum = 0.0f32;
-                for (cid, nbytes) in TextCharIter::new(text, Some(font)) {
+                for (code, nbytes) in TextCharIter::new(text, Some(font)) {
+                    // GH #1631: translate the raw code to a CID before the
+                    // /W2 lookup; the Tw check stays on the raw code. ~keep
+                    let cid = font.code_to_cid(code as u32);
                     let w1y = font.get_vertical_metrics(cid).w1y;
                     let mut w = w1y * fs_factor;
                     w += char_space;
-                    if nbytes == 1 && cid == 32 {
+                    if nbytes == 1 && code == 32 {
                         w += word_space;
                     }
                     w_sum += w;
@@ -231,13 +243,16 @@ impl<'doc> TextExtractor<'doc> {
                 // 2-byte codes per ToUnicode codespace. ~keep
                 buffer.append(text)?;
                 let mut w_sum = 0.0f32;
-                for (char_code, nbytes) in TextCharIter::new(text, Some(font)) {
-                    let mut w = font.get_glyph_width(char_code) * fs_factor * hs_factor;
+                for (code, nbytes) in TextCharIter::new(text, Some(font)) {
+                    // GH #1631: translate to a CID before the width lookup;
+                    // Tw stays keyed on the raw code (§9.3.3). ~keep
+                    let cid = font.code_to_cid(code as u32);
+                    let mut w = font.get_glyph_width(cid) * fs_factor * hs_factor;
                     w += cs_hs;
                     // Per ISO 32000-1:2008 §9.3.3: Tw applies only to the
                     // single-byte character code 32 — a 2-byte CID 32 inside
                     // an Identity-H/CJK font must not take Tw. ~keep
-                    if nbytes == 1 && char_code == 32 {
+                    if nbytes == 1 && code == 32 {
                         w += ws_hs;
                     }
                     w_sum += w;
@@ -253,13 +268,14 @@ impl<'doc> TextExtractor<'doc> {
                 // axis per §9.3.4). ~keep
                 buffer.append(text)?;
                 let mut w_sum = 0.0f32;
-                for (char_code, nbytes) in TextCharIter::new(text, Some(font)) {
-                    let w1y = font.get_vertical_metrics(char_code).w1y;
+                for (code, nbytes) in TextCharIter::new(text, Some(font)) {
+                    let cid = font.code_to_cid(code as u32);
+                    let w1y = font.get_vertical_metrics(cid).w1y;
                     let mut w = w1y * fs_factor;
                     w += char_space;
                     // Per ISO 32000-1:2008 §9.3.3: Tw applies only to the
                     // single-byte character code 32. ~keep
-                    if nbytes == 1 && char_code == 32 {
+                    if nbytes == 1 && code == 32 {
                         w += word_space;
                     }
                     w_sum += w;
@@ -442,10 +458,13 @@ impl<'doc> TextExtractor<'doc> {
                 // keyword patterns but whose ToUnicode CMap declares a 2-byte
                 // codespace range (§9.7.5). ~keep
                 let mut w_sum = 0.0f32;
-                for (cid, nbytes) in TextCharIter::new(text, Some(font)) {
+                for (code, nbytes) in TextCharIter::new(text, Some(font)) {
+                    // GH #1631: translate to a CID before the width lookup;
+                    // Tw stays keyed on the raw code (§9.3.3). ~keep
+                    let cid = font.code_to_cid(code as u32);
                     let mut w = font.get_glyph_width(cid) * fs_factor * hs_factor;
                     w += cs_hs;
-                    if nbytes == 1 && cid == 32 {
+                    if nbytes == 1 && code == 32 {
                         w += ws_hs;
                     }
                     w_sum += w;
@@ -460,11 +479,12 @@ impl<'doc> TextExtractor<'doc> {
                 // (§9.3.4). ~keep
                 buffer.append(text)?;
                 let mut w_sum = 0.0f32;
-                for (cid, nbytes) in TextCharIter::new(text, Some(font)) {
+                for (code, nbytes) in TextCharIter::new(text, Some(font)) {
+                    let cid = font.code_to_cid(code as u32);
                     let w1y = font.get_vertical_metrics(cid).w1y;
                     let mut w = w1y * fs_factor;
                     w += char_space;
-                    if nbytes == 1 && cid == 32 {
+                    if nbytes == 1 && code == 32 {
                         w += word_space;
                     }
                     w_sum += w;
@@ -873,7 +893,12 @@ impl<'doc> TextExtractor<'doc> {
             let glyph_width_font_units = if let Some(widths) = simple_widths.as_ref() {
                 widths[char_code as usize]
             } else if let Some(font) = font {
-                font.get_glyph_width(char_code)
+                // GH #1631: `simple_widths` is `None` here only because this
+                // font is Type0 (the `None`-font case is handled by the
+                // `else` arm below), so `char_code` is a raw content-stream
+                // code that must be translated to a CID before the /W
+                // lookup. ~keep
+                font.get_glyph_width(font.code_to_cid_if_type0(char_code as u32))
             } else {
                 500.0
             };
@@ -900,8 +925,9 @@ impl<'doc> TextExtractor<'doc> {
             let mut tx = if wmode == 0 {
                 glyph_width_user_space + char_space * hs_factor + if ws_applies { word_space * hs_factor } else { 0.0 }
             } else {
+                // GH #1631: translate to a CID before the /W2 lookup. ~keep
                 let w1y = font
-                    .map(|f| f.get_vertical_metrics(char_code).w1y)
+                    .map(|f| f.get_vertical_metrics(f.code_to_cid_if_type0(char_code as u32)).w1y)
                     .unwrap_or(crate::fonts::VerticalMetrics::SPEC_DEFAULT.w1y);
                 w1y * fs_factor + char_space + if ws_applies { word_space } else { 0.0 }
             };

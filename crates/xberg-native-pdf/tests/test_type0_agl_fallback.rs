@@ -59,6 +59,7 @@ fn test_type0_agl_fallback_for_standard_ascii() {
         cid_vertical_metrics: None,
         cid_default_vertical_metrics: xberg_native_pdf::fonts::VerticalMetrics::SPEC_DEFAULT,
         cjk_substitution: None,
+        embedded_cid_map: None,
         type0_unicode_memo: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
     };
 
@@ -120,6 +121,7 @@ fn test_type0_lmroman_agl_fallback() {
         cid_vertical_metrics: None,
         cid_default_vertical_metrics: xberg_native_pdf::fonts::VerticalMetrics::SPEC_DEFAULT,
         cjk_substitution: None,
+        embedded_cid_map: None,
         type0_unicode_memo: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
     };
 
@@ -181,6 +183,7 @@ fn test_type0_agl_fallback_then_replacement() {
         cid_vertical_metrics: None,
         cid_default_vertical_metrics: xberg_native_pdf::fonts::VerticalMetrics::SPEC_DEFAULT,
         cjk_substitution: None,
+        embedded_cid_map: None,
         type0_unicode_memo: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
     };
 

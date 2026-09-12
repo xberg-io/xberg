@@ -29,6 +29,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A Type0 (composite) font's content-stream character codes are now translated to CIDs before glyph
+  widths and vertical metrics are looked up, instead of being used as if they already were CIDs.
+  The two coincide only for `Identity-H`/`Identity-V`, which is presumably why this went unnoticed.
+  A PDF using a non-Identity predefined CMap (`UniCNS-UCS2-H`, `UniJIS-UCS2-H`, `UniGB-UCS2-H`,
+  `UniKS-UCS2-H`, or their `-V`/`UTF16` counterparts) or an embedded `/Encoding` CMap stream got a
+  wrong width for nearly every glyph -- some over-advancing by up to 4x through the `/DW` fallback,
+  others under-advancing -- which rendered as stretched or overlapping text and, in extracted text,
+  could split one sentence into a spurious extra paragraph. CIDs now resolve from an embedded
+  `/Encoding` CMap stream's own `begincidrange`/`begincidchar` data when present (including a
+  variable-width codespace), else from the font's `/CIDSystemInfo` character collection for the
+  four Unicode-keyed predefined families above, else via `Identity-H`/`Identity-V` as before.
+  Measured over the 230-document local PDF corpus: 227 byte-identical -- the expected result, since
+  most PDFs use Identity-H -- and 2 changed, both merging text that a stale glyph position had
+  fragmented. Legacy multi-byte predefined CMaps this crate carries no code-to-CID table for
+  (`90ms-RKSJ-H`, `GBK-EUC-H`, `B5-H`, the `UTF8` family, `UniJIS-UCS2-HW-*`, `UniJISPro-*`, and
+  others) are unchanged -- still wrong, not newly broken -- and now log once per font instead of
+  failing silently (GH#1631).
+
 - A reconstructed PDF table cell now reads left to right instead of in the order its words happened
   to arrive. The reported symptom was a sub/superscript printing after the rest of the cell --
   `eta_S %` came out as `eta % S`, `Q_HE GJ` as `Q GJ HE` -- because a script is drawn as its own

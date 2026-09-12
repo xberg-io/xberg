@@ -2379,11 +2379,15 @@ fn measure_text_advance(text: &[u8], gs: &GraphicsState, fonts: &HashMap<String,
                 count += 1;
             }
         } else {
-            // Type0: iterate 2-byte codes (approx). ~keep
+            // Type0: iterate 2-byte codes (approx). GH #1631: the code read
+            // here is a content-stream character code, not a CID — it must
+            // go through `code_to_cid` before `get_glyph_width` or a
+            // non-Identity predefined/embedded CMap gets the wrong width,
+            // same defect as the rasterizer's main path. ~keep
             let mut i = 0;
             while i + 1 < text.len() {
                 let code = ((text[i] as u16) << 8) | text[i + 1] as u16;
-                units += info.get_glyph_width(code);
+                units += info.get_glyph_width(info.code_to_cid(code as u32));
                 count += 1;
                 i += 2;
             }

@@ -78,6 +78,24 @@ impl CharacterCollection {
             CharacterCollection::AdobeKorea1 => super::cid_mappings::lookup_adobe_korea1(cid),
         }
     }
+
+    /// Look up the CID whose predefined `Uni*-UCS2-H`/`-V`/`Uni*-UTF16-H`/`-V`
+    /// code point (GH #1631) is `unicode`. The inverse of [`Self::cid_to_unicode`].
+    ///
+    /// Only meaningful for a Type0 font whose `/Encoding` is one of the
+    /// canonical Unicode-keyed predefined CMap names — see
+    /// `is_unicode_keyed_predefined_cmap` in `font_dict.rs`, which gates
+    /// calls into this. Returns `None` when `unicode` has no CID in this
+    /// collection.
+    #[inline]
+    pub fn unicode_to_cid(self, unicode: u32) -> Option<u16> {
+        match self {
+            CharacterCollection::AdobeJapan1 => super::cid_mappings::unicode_to_cid_japan1(unicode),
+            CharacterCollection::AdobeGB1 => super::cid_mappings::unicode_to_cid_gb1(unicode),
+            CharacterCollection::AdobeCNS1 => super::cid_mappings::unicode_to_cid_cns1(unicode),
+            CharacterCollection::AdobeKorea1 => super::cid_mappings::unicode_to_cid_korea1(unicode),
+        }
+    }
 }
 
 /// Adobe predefined CMap suffixes that producers append to a base font name to

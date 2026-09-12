@@ -716,7 +716,7 @@ enum BfSectionKind {
 /// Lines of a `begin…end` section body worth attempting to parse: skips blank
 /// lines and lines that are entirely a PostScript comment (`%` to
 /// end-of-line), neither of which represent a malformation.
-fn significant_lines(section: &str) -> impl Iterator<Item = &str> {
+pub(crate) fn significant_lines(section: &str) -> impl Iterator<Item = &str> {
     section
         .lines()
         .map(str::trim)
@@ -781,7 +781,11 @@ fn bf_sections_in_document_order(content: &str) -> impl Iterator<Item = (BfSecti
 }
 
 /// Extract sections between begin and end markers.
-fn extract_sections<'a>(content: &'a str, begin: &str, end: &str) -> Vec<&'a str> {
+///
+/// `pub(crate)` so [`super::cid_cmap`]'s `begincidrange`/`begincidchar`/
+/// `begincodespacerange` parser can reuse this tokenizer instead of
+/// duplicating it. ~keep
+pub(crate) fn extract_sections<'a>(content: &'a str, begin: &str, end: &str) -> Vec<&'a str> {
     let mut sections = Vec::new();
     let mut remaining = content;
 

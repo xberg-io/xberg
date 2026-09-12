@@ -60,6 +60,7 @@ fn test_ligature_extraction_fi() {
         cid_vertical_metrics: None,
         cid_default_vertical_metrics: xberg_native_pdf::fonts::VerticalMetrics::SPEC_DEFAULT,
         cjk_substitution: None,
+        embedded_cid_map: None,
         type0_unicode_memo: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
     };
 
@@ -116,6 +117,7 @@ fn test_ligature_extraction_fl() {
         cid_vertical_metrics: None,
         cid_default_vertical_metrics: xberg_native_pdf::fonts::VerticalMetrics::SPEC_DEFAULT,
         cjk_substitution: None,
+        embedded_cid_map: None,
         type0_unicode_memo: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
     };
 
@@ -172,6 +174,7 @@ fn test_ligature_extraction_ffi() {
         cid_vertical_metrics: None,
         cid_default_vertical_metrics: xberg_native_pdf::fonts::VerticalMetrics::SPEC_DEFAULT,
         cjk_substitution: None,
+        embedded_cid_map: None,
         type0_unicode_memo: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
     };
 
@@ -229,6 +232,7 @@ fn test_ligature_extraction_ffl() {
         cid_vertical_metrics: None,
         cid_default_vertical_metrics: xberg_native_pdf::fonts::VerticalMetrics::SPEC_DEFAULT,
         cjk_substitution: None,
+        embedded_cid_map: None,
         type0_unicode_memo: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
     };
 

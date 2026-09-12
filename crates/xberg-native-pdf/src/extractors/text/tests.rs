@@ -226,6 +226,7 @@ fn create_test_font() -> FontInfo {
         cid_vertical_metrics: None,
         cid_default_vertical_metrics: crate::fonts::VerticalMetrics::SPEC_DEFAULT,
         cjk_substitution: None,
+        embedded_cid_map: None,
     }
 }
 

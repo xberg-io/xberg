@@ -249,7 +249,7 @@ pub(crate) fn fallback_char_to_unicode(char_code: u32) -> String {
 }
 
 /// Byte grouping mode for CID font character code decoding.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ByteMode {
     /// Single-byte codes (simple fonts, some predefined CMaps)
     OneByte,
@@ -257,6 +257,13 @@ pub(crate) enum ByteMode {
     TwoByte,
     /// Shift-JIS variable-width (1 or 2 bytes depending on lead byte)
     ShiftJIS,
+    /// Variable-width codespace declared by an embedded `/Encoding` CMap
+    /// stream that mixes byte widths (e.g. 1-byte ASCII plus 2-byte CJK,
+    /// GH #1631). Each code's width is resolved per-position via
+    /// [`crate::fonts::cid_cmap::CidCMap::code_length`] rather than a single
+    /// fixed width for the whole stream — see `get_byte_mode` for when this
+    /// is selected over the fixed-width variants above.
+    Codespace(std::sync::Arc<crate::fonts::cid_cmap::CidCMap>),
 }
 
 /// True when a Type0 font's `/Encoding` is a UTF-8 (variable-width) CMap —
@@ -281,6 +288,24 @@ pub(crate) fn font_has_utf8_cmap(font: &FontInfo) -> bool {
 pub(crate) fn get_byte_mode(font: Option<&FontInfo>) -> ByteMode {
     if let Some(font) = font {
         if font.subtype == "Type0" {
+            // An embedded `/Encoding` CMap stream's own `begincodespacerange`
+            // is the most authoritative segmentation signal there is (ISO
+            // 32000-1 §9.7.6.2) — it is the actual PDF-authored declaration
+            // of how many bytes each code occupies, not a name heuristic or
+            // a proxy from the (conceptually separate) `/ToUnicode` stream.
+            // A genuinely mixed-width codespace gets its own per-position
+            // mode (GH #1631); a single declared width is just that fixed
+            // mode. No codespace declared (or no embedded CMap at all) falls
+            // through to the existing heuristics below unchanged. ~keep
+            if let Some(cid_map) = &font.embedded_cid_map {
+                match cid_map.codespace_widths().as_slice() {
+                    [1] => return ByteMode::OneByte,
+                    [2] => return ByteMode::TwoByte,
+                    [] => {}
+                    _ => return ByteMode::Codespace(std::sync::Arc::clone(cid_map)),
+                }
+            }
+
             // If the ToUnicode CMap declares a 2-byte codespace range, always use
             // TwoByte mode regardless of the encoding name. This handles CJK fonts
             // whose /Encoding name is a custom CMap stream that doesn't match the
@@ -357,7 +382,7 @@ impl<'a> Iterator for TextCharIter<'a> {
             return None;
         }
 
-        let (char_code, bytes_consumed) = match self.byte_mode {
+        let (char_code, bytes_consumed) = match &self.byte_mode {
             ByteMode::TwoByte if self.index + 1 < self.bytes.len() => (
                 ((self.bytes[self.index] as u16) << 8) | (self.bytes[self.index + 1] as u16),
                 2,
@@ -370,6 +395,14 @@ impl<'a> Iterator for TextCharIter<'a> {
                 } else {
                     (b as u16, 1)
                 }
+            }
+            ByteMode::Codespace(cid_map) => {
+                let len = cid_map.code_length(self.bytes, self.index).max(1);
+                let mut code: u32 = 0;
+                for &b in &self.bytes[self.index..(self.index + len).min(self.bytes.len())] {
+                    code = (code << 8) | b as u32;
+                }
+                (u16::try_from(code).unwrap_or(0), len)
             }
             _ => (self.bytes[self.index] as u16, 1),
         };
@@ -630,6 +663,7 @@ mod tests {
             cid_vertical_metrics: None,
             cid_default_vertical_metrics: VerticalMetrics::SPEC_DEFAULT,
             cjk_substitution: None,
+            embedded_cid_map: None,
         }
     }
 

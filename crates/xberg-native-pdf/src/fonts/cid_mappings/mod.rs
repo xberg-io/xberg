@@ -115,6 +115,98 @@ pub fn lookup_adobe_arabic(cid: u16) -> Option<u32> {
     adobe_arabic::lookup(cid)
 }
 
+/// Reverse (Unicode → CID) lookups for the predefined `Uni*-UCS2-*` /
+/// `Uni*-UTF16-*` CMap family (GH #1631).
+///
+/// Those predefined CMaps map a 2-byte character code that IS the UCS-2 (BMP)
+/// encoding of the intended Unicode scalar directly to a CID — so inverting
+/// the CID→Unicode tables above (already sourced from the matching
+/// `UniXXX-UCS2-H` CMap data, see each table's module doc) reconstructs
+/// exactly the code→CID mapping a conforming reader needs, without
+/// hardcoding a per-document offset.
+///
+/// A Unicode value can be the target of more than one CID in these tables
+/// (compatibility/duplicate entries merged in from UTF16/UTF32 fallback
+/// data). On such a collision the *lowest* CID wins — an arbitrary but
+/// deterministic and defensible tie-break, since the lowest CID in a
+/// character collection is conventionally the canonical/primary one. This
+/// module does not attempt to disambiguate further.
+mod reverse {
+    use std::collections::HashMap;
+    use std::sync::OnceLock;
+
+    /// Build a Unicode → CID map by inverting a `cid -> Option<unicode>`
+    /// forward lookup over the full `u16` domain. Run once and cached by
+    /// the caller's `OnceLock`; `0..=u16::MAX` is 65536 O(1) `phf` probes,
+    /// negligible next to the parse cost of a single PDF page.
+    fn build_reverse_map(forward: fn(u16) -> Option<u32>) -> HashMap<u32, u16> {
+        let mut map = HashMap::new();
+        for cid in 0..=u16::MAX {
+            if let Some(unicode) = forward(cid) {
+                map.entry(unicode).or_insert(cid);
+            }
+        }
+        map
+    }
+
+    fn reverse_lookup(
+        cache: &OnceLock<HashMap<u32, u16>>,
+        forward: fn(u16) -> Option<u32>,
+        unicode: u32,
+    ) -> Option<u16> {
+        cache.get_or_init(|| build_reverse_map(forward)).get(&unicode).copied()
+    }
+
+    static REV_GB1: OnceLock<HashMap<u32, u16>> = OnceLock::new();
+    static REV_JAPAN1: OnceLock<HashMap<u32, u16>> = OnceLock::new();
+    static REV_CNS1: OnceLock<HashMap<u32, u16>> = OnceLock::new();
+    static REV_KOREA1: OnceLock<HashMap<u32, u16>> = OnceLock::new();
+
+    pub(super) fn unicode_to_cid_gb1(unicode: u32) -> Option<u16> {
+        reverse_lookup(&REV_GB1, super::lookup_adobe_gb1, unicode)
+    }
+
+    pub(super) fn unicode_to_cid_japan1(unicode: u32) -> Option<u16> {
+        reverse_lookup(&REV_JAPAN1, super::lookup_adobe_japan1, unicode)
+    }
+
+    pub(super) fn unicode_to_cid_cns1(unicode: u32) -> Option<u16> {
+        reverse_lookup(&REV_CNS1, super::lookup_adobe_cns1, unicode)
+    }
+
+    pub(super) fn unicode_to_cid_korea1(unicode: u32) -> Option<u16> {
+        reverse_lookup(&REV_KOREA1, super::lookup_adobe_korea1, unicode)
+    }
+}
+
+/// Reverse lookup for Adobe-GB1: the CID whose `UniGB-UCS2-H` code point is
+/// `unicode`, or `None` if no CID maps there.
+#[inline]
+pub fn unicode_to_cid_gb1(unicode: u32) -> Option<u16> {
+    reverse::unicode_to_cid_gb1(unicode)
+}
+
+/// Reverse lookup for Adobe-Japan1: the CID whose `UniJIS-UCS2-H` code point
+/// is `unicode`, or `None` if no CID maps there.
+#[inline]
+pub fn unicode_to_cid_japan1(unicode: u32) -> Option<u16> {
+    reverse::unicode_to_cid_japan1(unicode)
+}
+
+/// Reverse lookup for Adobe-CNS1: the CID whose `UniCNS-UCS2-H` code point is
+/// `unicode`, or `None` if no CID maps there.
+#[inline]
+pub fn unicode_to_cid_cns1(unicode: u32) -> Option<u16> {
+    reverse::unicode_to_cid_cns1(unicode)
+}
+
+/// Reverse lookup for Adobe-Korea1: the CID whose `UniKS-UCS2-H` code point
+/// is `unicode`, or `None` if no CID maps there.
+#[inline]
+pub fn unicode_to_cid_korea1(unicode: u32) -> Option<u16> {
+    reverse::unicode_to_cid_korea1(unicode)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -161,5 +253,36 @@ mod tests {
     fn test_adobe_korea1_hangul() {
         // Test Hangul syllable from CID (from Adobe cid2code.txt) ~keep
         assert_eq!(lookup_adobe_korea1(1086), Some(0xAC00));
+    }
+
+    #[test]
+    fn test_unicode_to_cid_cns1_round_trips_ascii() {
+        // GH #1631: 'T' (U+0054) must resolve to CID 53 under UniCNS-UCS2-H,
+        // matching the CID = code - 31 relationship measured on the reported
+        // document — reconstructed here from the vendored table, not
+        // hardcoded. ~keep
+        assert_eq!(unicode_to_cid_cns1(0x54), Some(53));
+        assert_eq!(lookup_adobe_cns1(53), Some(0x54));
+    }
+
+    #[test]
+    fn test_unicode_to_cid_gb1_round_trips_ascii() {
+        assert_eq!(unicode_to_cid_gb1(0x41), Some(34));
+    }
+
+    #[test]
+    fn test_unicode_to_cid_japan1_round_trips_ascii() {
+        assert_eq!(unicode_to_cid_japan1(0x41), Some(34));
+    }
+
+    #[test]
+    fn test_unicode_to_cid_korea1_round_trips_ascii() {
+        assert_eq!(unicode_to_cid_korea1(0x41), Some(34));
+    }
+
+    #[test]
+    fn test_unicode_to_cid_returns_none_for_unmapped_codepoint() {
+        // U+FFFE is a noncharacter; no Adobe collection should map to it. ~keep
+        assert_eq!(unicode_to_cid_cns1(0xFFFE), None);
     }
 }

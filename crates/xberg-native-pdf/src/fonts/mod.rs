@@ -15,6 +15,15 @@ mod adobe_glyph_list;
 pub mod bundled;
 pub mod cff_encoding;
 pub mod character_mapper;
+/// Embedded `/Encoding` CMap stream parser (charcode → CID), distinct from
+/// `cmap`'s `/ToUnicode` (charcode → Unicode string) parser.
+///
+/// `pub` so [`FontInfo::embedded_cid_map`](font_dict::FontInfo::embedded_cid_map)
+/// (a `pub` field, matching every other `FontInfo` field) can name
+/// [`cid_cmap::CidCMap`] in its type — external crates can hold/clone/compare
+/// the value or set it to `None`, but every constructor and lookup method
+/// stays `pub(crate)`, so the type is opaque outside this crate in practice.
+pub mod cid_cmap;
 /// CID to Unicode mappings for predefined Adobe CJK character collections.
 pub mod cid_mappings;
 pub mod cmap;
