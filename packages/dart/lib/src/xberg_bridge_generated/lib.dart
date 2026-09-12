@@ -16835,6 +16835,7 @@ class SecurityLimits {
 /// - `cors_origins`: empty vector (allows all origins)
 /// - `max_request_body_bytes`: 104_857_600 (100 MB)
 /// - `max_multipart_field_bytes`: 104_857_600 (100 MB)
+/// - `job_timeout_secs`: 600 (10 minutes)
 class ServerConfig {
   /// Server host address (e.g., "127.0.0.1", "0.0.0.0")
   final String host;
@@ -16855,12 +16856,22 @@ class ServerConfig {
   /// Maximum size of multipart fields in bytes (default: 100 MB)
   final PlatformInt64 maxMultipartFieldBytes;
 
+  /// Fallback timeout, in seconds, for `POST /extract-async` jobs whose request does not
+  /// pin down `extraction_timeout_secs` (default: 600, 10 minutes).
+  ///
+  /// A per-request `extraction_timeout_secs: Some(n)` always overrides this value. An
+  /// explicit `extraction_timeout_secs: null` deliberately does NOT mean "run unbounded" —
+  /// it still falls back to this server-configured cap, because an unbounded job on a
+  /// shared server is a denial-of-service risk.
+  final PlatformInt64 jobTimeoutSecs;
+
   const ServerConfig({
     required this.host,
     required this.port,
     required this.corsOrigins,
     required this.maxRequestBodyBytes,
     required this.maxMultipartFieldBytes,
+    required this.jobTimeoutSecs,
   });
 
   @override
@@ -16869,7 +16880,8 @@ class ServerConfig {
       port.hashCode ^
       corsOrigins.hashCode ^
       maxRequestBodyBytes.hashCode ^
-      maxMultipartFieldBytes.hashCode;
+      maxMultipartFieldBytes.hashCode ^
+      jobTimeoutSecs.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -16880,7 +16892,8 @@ class ServerConfig {
           port == other.port &&
           corsOrigins == other.corsOrigins &&
           maxRequestBodyBytes == other.maxRequestBodyBytes &&
-          maxMultipartFieldBytes == other.maxMultipartFieldBytes;
+          maxMultipartFieldBytes == other.maxMultipartFieldBytes &&
+          jobTimeoutSecs == other.jobTimeoutSecs;
 }
 
 /// A URL entry from a sitemap.

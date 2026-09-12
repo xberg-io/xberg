@@ -23819,8 +23819,8 @@ public class ServerConfig: ServerConfigRefMut {
     }
 }
 extension ServerConfig {
-    public convenience init<GenericIntoRustString: IntoRustString>(_ host: GenericIntoRustString, _ port: UInt16, _ cors_origins: RustVec<GenericIntoRustString>, _ max_request_body_bytes: UInt, _ max_multipart_field_bytes: UInt) {
-        self.init(ptr: __swift_bridge__$ServerConfig$new({ let rustString = host.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), port, { let val = cors_origins; val.isOwned = false; return val.ptr }(), max_request_body_bytes, max_multipart_field_bytes))
+    public convenience init<GenericIntoRustString: IntoRustString>(_ host: GenericIntoRustString, _ port: UInt16, _ cors_origins: RustVec<GenericIntoRustString>, _ max_request_body_bytes: UInt, _ max_multipart_field_bytes: UInt, _ job_timeout_secs: UInt64) {
+        self.init(ptr: __swift_bridge__$ServerConfig$new({ let rustString = host.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), port, { let val = cors_origins; val.isOwned = false; return val.ptr }(), max_request_body_bytes, max_multipart_field_bytes, job_timeout_secs))
     }
 }
 public class ServerConfigRefMut: ServerConfigRef {
@@ -23854,6 +23854,10 @@ extension ServerConfigRef {
 
     public func maxMultipartFieldBytes() -> UInt {
         __swift_bridge__$ServerConfig$max_multipart_field_bytes(ptr)
+    }
+
+    public func jobTimeoutSecs() -> UInt64 {
+        __swift_bridge__$ServerConfig$job_timeout_secs(ptr)
     }
 }
 extension ServerConfig: Vectorizable {

@@ -2474,6 +2474,7 @@ typedef struct XBERGSecurityLimits XBERGSecurityLimits;
  * - `cors_origins`: empty vector (allows all origins)
  * - `max_request_body_bytes`: 104_857_600 (100 MB)
  * - `max_multipart_field_bytes`: 104_857_600 (100 MB)
+ * - `job_timeout_secs`: 600 (10 minutes)
  */
 typedef struct XBERGServerConfig XBERGServerConfig;
 /**
@@ -22888,6 +22889,15 @@ uintptr_t xberg_server_config_max_request_body_bytes(XBERGAlefHandle handle);
  * Pointer must be a valid handle returned by this library.
  */
 uintptr_t xberg_server_config_max_multipart_field_bytes(XBERGAlefHandle handle);
+#endif
+
+#if defined(XBERG_FEATURE_API_TYPES)
+/**
+ * Get the `job_timeout_secs` field from a `ServerConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uint64_t xberg_server_config_job_timeout_secs(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_API_TYPES)

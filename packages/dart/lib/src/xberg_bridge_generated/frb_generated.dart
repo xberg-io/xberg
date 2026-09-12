@@ -23649,14 +23649,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ServerConfig dco_decode_server_config(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return ServerConfig(
       host: dco_decode_String(arr[0]),
       port: dco_decode_i_64(arr[1]),
       corsOrigins: dco_decode_list_String(arr[2]),
       maxRequestBodyBytes: dco_decode_i_64(arr[3]),
       maxMultipartFieldBytes: dco_decode_i_64(arr[4]),
+      jobTimeoutSecs: dco_decode_i_64(arr[5]),
     );
   }
 
@@ -34624,12 +34625,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_corsOrigins = sse_decode_list_String(deserializer);
     var var_maxRequestBodyBytes = sse_decode_i_64(deserializer);
     var var_maxMultipartFieldBytes = sse_decode_i_64(deserializer);
+    var var_jobTimeoutSecs = sse_decode_i_64(deserializer);
     return ServerConfig(
       host: var_host,
       port: var_port,
       corsOrigins: var_corsOrigins,
       maxRequestBodyBytes: var_maxRequestBodyBytes,
       maxMultipartFieldBytes: var_maxMultipartFieldBytes,
+      jobTimeoutSecs: var_jobTimeoutSecs,
     );
   }
 
@@ -44673,6 +44676,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_list_String(self.corsOrigins, serializer);
     sse_encode_i_64(self.maxRequestBodyBytes, serializer);
     sse_encode_i_64(self.maxMultipartFieldBytes, serializer);
+    sse_encode_i_64(self.jobTimeoutSecs, serializer);
   }
 
   @protected

@@ -14370,6 +14370,7 @@ const _: fn() = || {
         let _: Vec<String> = ServerConfig.cors_origins;
         let _: i64 = ServerConfig.max_request_body_bytes;
         let _: i64 = ServerConfig.max_multipart_field_bytes;
+        let _: i64 = ServerConfig.job_timeout_secs;
     }
     {
         let SitemapUrl = None::<crate::SitemapUrl>.unwrap();
@@ -24615,12 +24616,14 @@ impl SseDecode for crate::ServerConfig {
         let mut var_corsOrigins = <Vec<String>>::sse_decode(deserializer);
         let mut var_maxRequestBodyBytes = <i64>::sse_decode(deserializer);
         let mut var_maxMultipartFieldBytes = <i64>::sse_decode(deserializer);
+        let mut var_jobTimeoutSecs = <i64>::sse_decode(deserializer);
         return crate::ServerConfig {
             host: var_host,
             port: var_port,
             cors_origins: var_corsOrigins,
             max_request_body_bytes: var_maxRequestBodyBytes,
             max_multipart_field_bytes: var_maxMultipartFieldBytes,
+            job_timeout_secs: var_jobTimeoutSecs,
         };
     }
 }
@@ -32641,6 +32644,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::ServerConfig> {
             self.0.cors_origins.into_into_dart().into_dart(),
             self.0.max_request_body_bytes.into_into_dart().into_dart(),
             self.0.max_multipart_field_bytes.into_into_dart().into_dart(),
+            self.0.job_timeout_secs.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -41129,6 +41133,7 @@ impl SseEncode for crate::ServerConfig {
         <Vec<String>>::sse_encode(self.cors_origins, serializer);
         <i64>::sse_encode(self.max_request_body_bytes, serializer);
         <i64>::sse_encode(self.max_multipart_field_bytes, serializer);
+        <i64>::sse_encode(self.job_timeout_secs, serializer);
     }
 }
 
