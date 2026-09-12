@@ -9,10 +9,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.1.6] - 2026-09-10
+## [1.1.6] - 2026-09-12
+
+### Added
+
+- `ServerConfig` gained `job_timeout_secs` (default 600 seconds, override via
+  `XBERG_JOB_TIMEOUT_SECS` or `server.job_timeout_secs`) as the configurable fallback timeout
+  for `POST /extract-async` jobs whose request does not pin down `extraction_timeout_secs`. A
+  per-request `extraction_timeout_secs` still always overrides it, and an explicit
+  `extraction_timeout_secs: null` still falls back to this server cap rather than running
+  unbounded. Previously this fallback was a hardcoded 300 seconds, inconsistent with the 600
+  second default used everywhere else. Note for Rust callers: `ServerConfig` is not
+  `#[non_exhaustive]`, so code that builds one with a struct literal listing every field must
+  add `job_timeout_secs` or switch to `..ServerConfig::default()`. Callers using
+  `ServerConfig::default()`, `from_file`, or deserialization are unaffected -- the field carries
+  `#[serde(default)]`.
 
 ### Fixed
 
+- The Go binding no longer discards the message of every error the native layer reports. Each
+  known error code was mapped to a typed sentinel (`ErrTimeout`, `ErrParsing`, `ErrOcr`, and ~20
+  more) and returned before the message was ever read, so the detail the native layer had
+  already produced -- observed durations, limits, plugin names, counts -- was dropped for all of
+  them; only unrecognised codes kept their text. A timeout surfaced as the sentinel's own
+  placeholder-stripped text, `extraction timed out after ms (limit: ms)`, which reads as a
+  formatting bug but is the whole message the binding ever had, and left callers unable to tell
+  which timeout had fired. The message is now read first and returned alongside the sentinel, so
+  `errors.Is(err, xberg.ErrTimeout)` still matches while `err.Error()` carries the real
+  interpolated text. Go was the only binding affected; C#, Java and Zig already read the message
+  before switching on the code. Regression in 1.1.0, when the typed sentinels were introduced.
+- The Python package's public option classes regained `from_json`. `from xberg import
+  ExtractInput` resolves to a generated dataclass that shadows the native class at the same
+  name, and that dataclass carried none of the native class's methods, so `ExtractInput.from_json(...)`
+  raised `AttributeError` while `xberg._xberg.ExtractInput.from_json(...)` worked -- the same
+  name meaning two different things depending on the import. 134 public classes were affected.
+  The dataclasses now delegate `from_json` to the native class, so both import paths behave the
+  same. Other native-only methods on those classes (`validate`, `is_empty`, the
+  `PaddleOcrConfig.with_*` builders) are still absent from the dataclass twins and are tracked
+  separately.
+- An extraction cancelled by `extraction_timeout_secs` now actually stops its per-page PDF OCR
+  work. The timeout fires `cancel_token.cancel()` at every timeout site, but nothing in the OCR
+  page fan-out read the token, so pages kept being OCR'd after the caller already had its
+  `Timeout` error -- burning CPU and holding OCR concurrency permits, which degrades later
+  extractions in a long-lived process (a server, or anything extracting in a loop). The token is
+  now checked both before spawning a page and inside each spawned task, because the spawn loop
+  finishes almost immediately while tasks queue on the OCR semaphore long after it. A cancelled
+  run also reports `Cancelled` instead of tripping the all-pages-failed guard and reporting a
+  wholesale OCR backend failure.
+- PDF no longer promotes ordinary body text to a heading. Two gates decide headings
+  independently and neither tested the line's shape, so any line past the title-length floor
+  could be promoted. The sentence-boundary check that should have caught this looked for a
+  literal `". "` followed by a capital, but paragraph text joins a block's physical lines with a
+  newline, so every sentence boundary landing at a line end was invisible to the gate while the
+  renderer joined the same lines with a space and displayed it -- the gate and the output
+  disagreed about what the text was. Boundaries are now found across any whitespace, and a line
+  that is mostly bare numerals is treated as a flattened data row rather than a heading. Across
+  490 documents: 484 unchanged, 5 with fewer headings, 0 with more (GH#1599).
+
+- Hardened the document-global heading/list heuristic's safety check on the scanned-PDF
+  layout-markdown path (`use_layout_for_markdown` / layout detection, force-OCR route). That
+  heuristic rebuilds paragraphs from bare line geometry with no knowledge of the ML layout
+  regions the OCR path already classified, and can silently drop a line its own font-clustering
+  pass treats as furniture or noise; the guard against this only checked that the whole
+  document still had one non-empty element, so a single surviving word anywhere passed it even
+  if an entire page's body vanished. The guard is now a per-restructuring canonical-character
+  retention check against the lossless OCR assembly, and falls back to that lossless assembly
+  whenever any content would otherwise be lost. Compares characters rather than word tokens: a
+  restructuring pass legitimately re-wraps text across the line boundaries it reads (measured
+  case: "list of findings" split across a line came back "list offindings", one dropped space),
+  and a word-token comparison read that benign re-wrap as content loss and rejected legitimate
+  heading/list promotion along with it. This closes a real gap in the guard's own logic; it was
+  not reproduced against a specific "entire page lost" report and should not be read as a
+  confirmed fix for one (GH#1622).
+- PDF table/paragraph assembly (`assemble_page_elements_with_tables`) now suppresses a
+  paragraph whose words a positioned table's own grid fully carries, so a recognized table no
+  longer also renders its flattened source text as an ordinary paragraph immediately next to
+  the grid -- observed directly (not inferred) on a scanned-PDF fixture with layout detection
+  enabled, where a table's status-row text appeared once as prose and once as a correctly
+  gridded table. Mirrors the GH#1616 precedent from the other direction: suppression requires
+  the table's own cell/markdown content to actually account for every one of the paragraph's
+  words (an order-insensitive multiset match, since a reconstructed grid can reassemble the
+  same words in a different order than the source paragraph), not geometry alone, so a
+  paragraph carrying text the grid does not represent still survives. Note: this closes the
+  duplication for paragraph/table pairs that share a coordinate space (the native-PDF table
+  path). Investigating this also surfaced a separate, unresolved coordinate-space mismatch
+  between OCR/TATR-recognized table bounding boxes and OCR paragraph bounding boxes on the
+  force-OCR + layout-detection route specifically, which currently prevents this same guard
+  from geometrically matching on that route; fixing that is out of scope here and is not yet
+  done (GH#1622).
 - PDF no longer deletes text a table's bounding box covers but its grid leaves out. Suppression
   of text a table already renders was decided on geometry alone, and a reconstructed grid need
   not span every printed column inside its own bounding box. On a four-column fault-finding grid
@@ -65,6 +149,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   covers the generated API-reference badges but not hand-authored install directives, so they
   had been telling users to install 1.1.3 (GH#1593 covers the same class of staleness in
   `test_apps`, which is still open).
+- `OcrConfig` no longer rejects valid Tesseract language codes such as `fao` (Faroese) with
+  `Invalid language code 'fao'. Use ISO 639-1 or ISO 639-3 codes.`. Config validation checked
+  the language against a general-purpose allowlist that was missing 66 codes Tesseract actually
+  supports, while a separate, Tesseract-specific list already carried them; the two lists had
+  never been reconciled. Config validation itself only started running for configs loaded from
+  files, JSON overrides, or set programmatically in 1.1.0 (previously it ran only in tests), which
+  is when this allowlist gap first became user-visible. Both validators now read from one shared
+  list of Tesseract-supported codes, so this class of divergence cannot recur (GH#1621).
+
+### Changed
+
+- Retroactive note for 1.1.4: `Metadata#format` in the Ruby binding changed shape and no
+  changelog entry recorded it at the time. The format-specific payload had been nested under a
+  `_0` key (`format.fetch(:_0).fetch(:title)`); since 1.1.4 the payload's fields sit directly
+  alongside the `format_type` tag (`format.fetch(:title)`). Ruby callers written against the
+  older shape raise `KeyError` on `_0`. The binding has emitted the flat shape since 1.1.4; the
+  generated Ruby e2e specs were still asserting the nested one, which is why this went unnoticed
+  for two releases. Only the Ruby binding is affected. Part of GH#1594, which also tracks the
+  Swift binding still discarding the payload entirely -- that half is not yet fixed.
 
 ## [1.1.5] - 2026-09-10
 

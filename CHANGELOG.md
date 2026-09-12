@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.1.6] - 2026-09-10
+## [1.1.6] - 2026-09-12
 
 ### Added
 
@@ -17,9 +17,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-request `extraction_timeout_secs` still always overrides it, and an explicit
   `extraction_timeout_secs: null` still falls back to this server cap rather than running
   unbounded. Previously this fallback was a hardcoded 300 seconds, inconsistent with the 600
-  second default used everywhere else.
+  second default used everywhere else. Note for Rust callers: `ServerConfig` is not
+  `#[non_exhaustive]`, so code that builds one with a struct literal listing every field must
+  add `job_timeout_secs` or switch to `..ServerConfig::default()`. Callers using
+  `ServerConfig::default()`, `from_file`, or deserialization are unaffected -- the field carries
+  `#[serde(default)]`.
 
 ### Fixed
+
+- The Go binding no longer discards the message of every error the native layer reports. Each
+  known error code was mapped to a typed sentinel (`ErrTimeout`, `ErrParsing`, `ErrOcr`, and ~20
+  more) and returned before the message was ever read, so the detail the native layer had
+  already produced -- observed durations, limits, plugin names, counts -- was dropped for all of
+  them; only unrecognised codes kept their text. A timeout surfaced as the sentinel's own
+  placeholder-stripped text, `extraction timed out after ms (limit: ms)`, which reads as a
+  formatting bug but is the whole message the binding ever had, and left callers unable to tell
+  which timeout had fired. The message is now read first and returned alongside the sentinel, so
+  `errors.Is(err, xberg.ErrTimeout)` still matches while `err.Error()` carries the real
+  interpolated text. Go was the only binding affected; C#, Java and Zig already read the message
+  before switching on the code. Regression in 1.1.0, when the typed sentinels were introduced.
+- The Python package's public option classes regained `from_json`. `from xberg import
+  ExtractInput` resolves to a generated dataclass that shadows the native class at the same
+  name, and that dataclass carried none of the native class's methods, so `ExtractInput.from_json(...)`
+  raised `AttributeError` while `xberg._xberg.ExtractInput.from_json(...)` worked -- the same
+  name meaning two different things depending on the import. 134 public classes were affected.
+  The dataclasses now delegate `from_json` to the native class, so both import paths behave the
+  same. Other native-only methods on those classes (`validate`, `is_empty`, the
+  `PaddleOcrConfig.with_*` builders) are still absent from the dataclass twins and are tracked
+  separately.
+- An extraction cancelled by `extraction_timeout_secs` now actually stops its per-page PDF OCR
+  work. The timeout fires `cancel_token.cancel()` at every timeout site, but nothing in the OCR
+  page fan-out read the token, so pages kept being OCR'd after the caller already had its
+  `Timeout` error -- burning CPU and holding OCR concurrency permits, which degrades later
+  extractions in a long-lived process (a server, or anything extracting in a loop). The token is
+  now checked both before spawning a page and inside each spawned task, because the spawn loop
+  finishes almost immediately while tasks queue on the OCR semaphore long after it. A cancelled
+  run also reports `Cancelled` instead of tripping the all-pages-failed guard and reporting a
+  wholesale OCR backend failure.
+- PDF no longer promotes ordinary body text to a heading. Two gates decide headings
+  independently and neither tested the line's shape, so any line past the title-length floor
+  could be promoted. The sentence-boundary check that should have caught this looked for a
+  literal `". "` followed by a capital, but paragraph text joins a block's physical lines with a
+  newline, so every sentence boundary landing at a line end was invisible to the gate while the
+  renderer joined the same lines with a space and displayed it -- the gate and the output
+  disagreed about what the text was. Boundaries are now found across any whitespace, and a line
+  that is mostly bare numerals is treated as a flattened data row rather than a heading. Across
+  490 documents: 484 unchanged, 5 with fewer headings, 0 with more (GH#1599).
 
 - Hardened the document-global heading/list heuristic's safety check on the scanned-PDF
   layout-markdown path (`use_layout_for_markdown` / layout detection, force-OCR route). That
@@ -112,6 +155,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   files, JSON overrides, or set programmatically in 1.1.0 (previously it ran only in tests), which
   is when this allowlist gap first became user-visible. Both validators now read from one shared
   list of Tesseract-supported codes, so this class of divergence cannot recur (GH#1621).
+
+### Changed
+
+- Retroactive note for 1.1.4: `Metadata#format` in the Ruby binding changed shape and no
+  changelog entry recorded it at the time. The format-specific payload had been nested under a
+  `_0` key (`format.fetch(:_0).fetch(:title)`); since 1.1.4 the payload's fields sit directly
+  alongside the `format_type` tag (`format.fetch(:title)`). Ruby callers written against the
+  older shape raise `KeyError` on `_0`. The binding has emitted the flat shape since 1.1.4; the
+  generated Ruby e2e specs were still asserting the nested one, which is why this went unnoticed
+  for two releases. Only the Ruby binding is affected. Part of GH#1594, which also tracks the
+  Swift binding still discarding the payload entirely -- that half is not yet fixed.
 
 ## [1.1.5] - 2026-09-10
 
