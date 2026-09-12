@@ -443,6 +443,113 @@ pub(crate) fn load_image_for_ocr(image_bytes: &[u8], limits: &SecurityLimits) ->
     decode_image_to_rgb8_with_security_limits(image_bytes, limits).map(image::DynamicImage::ImageRgb8)
 }
 
+/// Meters-per-inch, used to convert a PNG `pHYs` pixels-per-metre density into DPI.
+#[cfg(feature = "ocr-pipeline")]
+const PNG_METERS_PER_INCH: f64 = 0.0254;
+
+/// Read the embedded pixel density from a PNG's `pHYs` chunk, if present, and report it as DPI.
+///
+/// PNG stores physical pixel density in pixels-per-unit on each axis, independent of the image's
+/// actual pixel dimensions (GH#1630: xberg 1.1.5 discarded this and always assumed 72 DPI, so a
+/// genuine 300 DPI scan was rescaled even when the caller's `target_dpi` was already 300).
+///
+/// Performs a bounded scan of the chunk stream (8-byte signature, then `length + type + data +
+/// crc` chunks), stopping at the first `IDAT` since `pHYs` always precedes the image data when
+/// present. Returns `None` — leaving the caller's existing 72 DPI assumption untouched — for
+/// anything that is not a well-formed PNG carrying a metre-unit `pHYs` chunk with a positive,
+/// finite horizontal density: not a PNG, no `pHYs` chunk, a malformed chunk stream, an
+/// unspecified/unknown unit (unit code 0), or (defensively) a non-finite conversion.
+///
+/// Only the horizontal density (`xppu`) is reported. `source_dpi` downstream is a single scalar
+/// hint to Tesseract; real-world scans essentially never have anisotropic `pHYs` axes, so `xppu`
+/// alone is enough without adding a second, almost-always-identical value to plumb through.
+///
+/// `ocr-pipeline`, not `ocr`, is the gate: `ocr` implies `ocr-pipeline`, and every caller of this
+/// function (`ocr::processor::execution::resolve_known_source_dpi` via the `ocr` backend, and
+/// `extractors::image::normalize_image_bytes_for_ocr` via the extractor boundary, which only
+/// requires `ocr-pipeline`) must see the same symbol regardless of which builds `ocr` on top of.
+#[cfg(feature = "ocr-pipeline")]
+pub(crate) fn png_pixel_density_dpi(bytes: &[u8]) -> Option<f64> {
+    const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+    const PHYS_CHUNK_DATA_LEN: usize = 9;
+    const PHYS_UNIT_METER: u8 = 1;
+
+    if bytes.len() < PNG_SIGNATURE.len() || bytes[..PNG_SIGNATURE.len()] != PNG_SIGNATURE {
+        return None;
+    }
+
+    let mut offset = PNG_SIGNATURE.len();
+    while offset.checked_add(8)? <= bytes.len() {
+        let length = u32::from_be_bytes(bytes[offset..offset + 4].try_into().ok()?) as usize;
+        let chunk_type = &bytes[offset + 4..offset + 8];
+        let data_start = offset + 8;
+        let data_end = data_start.checked_add(length)?;
+        if data_end.checked_add(4)? > bytes.len() {
+            return None;
+        }
+        if chunk_type == b"IDAT" {
+            return None;
+        }
+        if chunk_type == b"pHYs" {
+            if length != PHYS_CHUNK_DATA_LEN {
+                return None;
+            }
+            let data = &bytes[data_start..data_end];
+            let xppu = u32::from_be_bytes(data[0..4].try_into().ok()?);
+            let unit = data[8];
+            if unit != PHYS_UNIT_METER || xppu == 0 {
+                return None;
+            }
+            let dpi = f64::from(xppu) * PNG_METERS_PER_INCH;
+            return (dpi.is_finite() && dpi > 0.0).then_some(dpi);
+        }
+        offset = data_end + 4;
+    }
+    None
+}
+
+/// Read a caller-supplied source-resolution hint out of `OcrConfig.backend_options`, in DPI.
+///
+/// Mirrors `ocr::tesseract_backend::TesseractBackend::source_dpi_from_backend_options` (which
+/// reads the same `[SOURCE_DPI_BACKEND_OPTION]` key off the same `backend_options` field after
+/// the config has been converted to a `TesseractConfig`): an absent, malformed, or non-positive
+/// value is "unknown" rather than an error. That copy lives in a module gated on the full `ocr`
+/// feature and is only reachable once a caller has a backend, so it cannot be reused directly
+/// from the extractor boundary (`extractors::image::normalize_image_bytes_for_ocr`), which only
+/// requires `ocr-pipeline` and runs *before* any backend conversion. This is the canonical
+/// implementation for that earlier point; `TesseractBackend`'s copy should eventually delegate
+/// here instead of re-implementing the same three-line filter (GH#1621 is exactly this drift
+/// shape: two independently maintained readers of the same value).
+///
+/// [SOURCE_DPI_BACKEND_OPTION]: crate::core::config::ocr::SOURCE_DPI_BACKEND_OPTION
+#[cfg(feature = "ocr-pipeline")]
+pub(crate) fn explicit_source_dpi_from_ocr_config(config: &crate::core::config::OcrConfig) -> Option<f64> {
+    config
+        .backend_options
+        .as_ref()
+        .and_then(|options| options.get(crate::core::config::ocr::SOURCE_DPI_BACKEND_OPTION))
+        .and_then(serde_json::Value::as_f64)
+        .filter(|dpi| dpi.is_finite() && *dpi > 0.0)
+}
+
+/// Resolve the resolution to report for a raster, in priority order:
+///
+/// 1. `explicit_source_dpi` — a caller-supplied hint (see
+///    [`explicit_source_dpi_from_ocr_config`] for the `OcrConfig.backend_options` reader; the PDF
+///    OCR route supplies its own via `TesseractConfig::source_dpi` directly). A caller that
+///    explicitly said "my source is 72 DPI" must not be overridden by embedded metadata.
+/// 2. The image's own embedded pixel-density metadata, when present (GH#1630; currently PNG
+///    `pHYs` only — see [`png_pixel_density_dpi`]).
+/// 3. `None`, meaning the historical 72 DPI assumption applies further down the pipeline.
+///
+/// Shared by both consumers — `ocr::processor::execution::perform_ocr` and
+/// `extractors::image::normalize_image_bytes_for_ocr` — so the precedence cannot drift between
+/// them the way two independent PNG chunk scanners would (GH#1621).
+#[cfg(feature = "ocr-pipeline")]
+pub(crate) fn resolve_known_source_dpi(explicit_source_dpi: Option<f64>, image_bytes: &[u8]) -> Option<f64> {
+    explicit_source_dpi.or_else(|| png_pixel_density_dpi(image_bytes))
+}
+
 pub(crate) fn decode_image_to_rgb8_with_security_limits(
     image_bytes: &[u8],
     limits: &SecurityLimits,
@@ -1112,6 +1219,105 @@ mod tests {
         assert!(!is_jp2(&[0xFF, 0x4F, 0xFF, 0x51]));
         assert!(!is_jp2(&[0x89, 0x50, 0x4E, 0x47]));
         assert!(!is_jp2(&[]));
+    }
+
+    // GH#1630: PNG pHYs density detection.
+    #[cfg(feature = "ocr")]
+    mod png_density {
+        use super::*;
+        use image::ImageFormat;
+
+        /// Standard PNG CRC-32 (polynomial 0xEDB88320), needed to splice a well-formed `pHYs`
+        /// chunk into a real encoded PNG for the test fixtures below.
+        fn png_crc32(data: &[u8]) -> u32 {
+            let mut crc: u32 = 0xFFFF_FFFF;
+            for &byte in data {
+                crc ^= u32::from(byte);
+                for _ in 0..8 {
+                    let mask = (crc & 1).wrapping_neg();
+                    crc = (crc >> 1) ^ (0xEDB8_8320 & mask);
+                }
+            }
+            !crc
+        }
+
+        fn png_chunk(chunk_type: &[u8; 4], data: &[u8]) -> Vec<u8> {
+            let mut body = Vec::with_capacity(4 + data.len());
+            body.extend_from_slice(chunk_type);
+            body.extend_from_slice(data);
+            let mut out = Vec::with_capacity(4 + body.len() + 4);
+            out.extend_from_slice(&(u32::try_from(data.len()).unwrap()).to_be_bytes());
+            out.extend_from_slice(&body);
+            out.extend_from_slice(&png_crc32(&body).to_be_bytes());
+            out
+        }
+
+        /// Splice a `pHYs` chunk expressing `ppu` pixels-per-metre (both axes) into a real
+        /// encoded PNG, immediately after IHDR (signature 8 bytes + IHDR chunk 25 bytes), which
+        /// is where an encoder conventionally places it and always before IDAT.
+        fn png_with_phys(png_bytes: &[u8], ppu: u32) -> Vec<u8> {
+            const SIGNATURE_AND_IHDR_LEN: usize = 8 + 25;
+            let mut data = Vec::with_capacity(9);
+            data.extend_from_slice(&ppu.to_be_bytes());
+            data.extend_from_slice(&ppu.to_be_bytes());
+            data.push(1); // unit = meter
+            let phys = png_chunk(b"pHYs", &data);
+
+            let mut out = Vec::with_capacity(png_bytes.len() + phys.len());
+            out.extend_from_slice(&png_bytes[..SIGNATURE_AND_IHDR_LEN]);
+            out.extend_from_slice(&phys);
+            out.extend_from_slice(&png_bytes[SIGNATURE_AND_IHDR_LEN..]);
+            out
+        }
+
+        /// 11811 px/m is the reporter's fixture value: 11811 * 0.0254 = 299.9994 DPI, not an
+        /// exact 300 — the detector and any consumer must tolerate that rather than requiring an
+        /// exact integer match.
+        const ELEVEN_THOUSAND_EIGHT_HUNDRED_ELEVEN_PPU: u32 = 11811;
+        const EXPECTED_DPI_FROM_11811_PPU: f64 = 299.999_4;
+        const DPI_TOLERANCE: f64 = 0.001;
+
+        #[test]
+        fn should_decode_source_density_from_png_phys_chunk() {
+            let png = create_test_image(4, 4, ImageFormat::Png);
+            let with_phys = png_with_phys(&png, ELEVEN_THOUSAND_EIGHT_HUNDRED_ELEVEN_PPU);
+
+            let dpi = png_pixel_density_dpi(&with_phys).expect("pHYs chunk must be detected");
+
+            assert!(
+                (dpi - EXPECTED_DPI_FROM_11811_PPU).abs() < DPI_TOLERANCE,
+                "expected ~{EXPECTED_DPI_FROM_11811_PPU} DPI, got {dpi}"
+            );
+        }
+
+        #[test]
+        fn should_return_none_for_png_without_phys_chunk() {
+            let png = create_test_image(4, 4, ImageFormat::Png);
+
+            assert_eq!(
+                png_pixel_density_dpi(&png),
+                None,
+                "a PNG with no embedded density metadata must not report a fabricated DPI"
+            );
+        }
+
+        #[test]
+        fn should_return_none_for_non_png_bytes() {
+            assert_eq!(png_pixel_density_dpi(b"not a png"), None);
+            assert_eq!(png_pixel_density_dpi(&[]), None);
+        }
+
+        #[test]
+        fn should_return_none_for_unspecified_phys_unit() {
+            let png = create_test_image(4, 4, ImageFormat::Png);
+            let mut with_phys = png_with_phys(&png, ELEVEN_THOUSAND_EIGHT_HUNDRED_ELEVEN_PPU);
+            // Flip the unit byte (last byte of the 9-byte pHYs data) from meter (1) to
+            // unspecified (0): signature(8) + IHDR(25) + pHYs length/type(8) + xppu/yppu(8).
+            let unit_byte_offset = 8 + 25 + 8 + 8;
+            with_phys[unit_byte_offset] = 0;
+
+            assert_eq!(png_pixel_density_dpi(&with_phys), None);
+        }
     }
 }
 

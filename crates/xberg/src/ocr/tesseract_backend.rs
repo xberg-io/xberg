@@ -135,12 +135,10 @@ impl TesseractBackend {
     /// Non-finite and non-positive values are rejected because they would propagate into the
     /// `target_dpi / source_dpi` scale factor as a NaN or a negative resize.
     fn source_dpi_from_backend_options(config: &OcrConfig) -> Option<f64> {
-        config
-            .backend_options
-            .as_ref()
-            .and_then(|options| options.get(crate::core::config::ocr::SOURCE_DPI_BACKEND_OPTION))
-            .and_then(serde_json::Value::as_f64)
-            .filter(|dpi| dpi.is_finite() && *dpi > 0.0)
+        // Delegates rather than repeating the read: the extractor boundary resolves the same
+        // override before resizing (GH#1630), and two readers of one option that validate it
+        // independently are the drift shape GH#1621 was caused by. ~keep
+        crate::extraction::image::explicit_source_dpi_from_ocr_config(config)
     }
 
     /// Get cached available languages, lazily querying Tesseract if needed.

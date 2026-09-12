@@ -1360,6 +1360,7 @@ fn normalize_image_bytes_for_ocr(
     content: &[u8],
     images_config: &crate::core::config::ImageExtractionConfig,
     security_limits: &crate::extractors::security::SecurityLimits,
+    ocr_config: &crate::core::config::OcrConfig,
 ) -> Result<NormalizedOcrImage> {
     let rgb = match crate::extraction::image::decode_image_to_rgb8_with_security_limits(content, security_limits) {
         Ok(decoded) => decoded,
@@ -1368,8 +1369,13 @@ fn normalize_image_bytes_for_ocr(
     };
     let (width, height) = rgb.dimensions();
     let dpi_config = crate::types::ImageDpiConfig::from(images_config);
+    // GH#1630: an explicit `OcrConfig.backend_options["source_dpi"]` hint wins, then embedded
+    // PNG `pHYs` density, then `None` (the historical 72 DPI assumption). Shared with
+    // `ocr::processor::execution::perform_ocr` (GH#1621: no second density scanner).
+    let explicit_source_dpi = crate::extraction::image::explicit_source_dpi_from_ocr_config(ocr_config);
+    let known_source_dpi = crate::extraction::image::resolve_known_source_dpi(explicit_source_dpi, content);
     let (planned_width, planned_height) =
-        crate::image::preprocessing::normalized_image_dimensions(width, height, &dpi_config, None);
+        crate::image::preprocessing::normalized_image_dimensions(width, height, &dpi_config, known_source_dpi);
     let encoded_source_bytes = u64::try_from(content.len())
         .map_err(|_| crate::extraction::image_decode::image_dimension_error(width, height, u64::MAX, u64::MAX))?;
     let current_bytes = u64::try_from(rgb.as_raw().len())
@@ -1391,7 +1397,7 @@ fn normalize_image_bytes_for_ocr(
         width as usize,
         height as usize,
         &dpi_config,
-        None,
+        known_source_dpi,
     ) {
         Ok(result) => result,
         Err((error, _)) => {
@@ -1645,7 +1651,7 @@ impl ImageExtractor {
         let normalized_ocr_bytes = config
             .images
             .as_ref()
-            .map(|images_config| normalize_image_bytes_for_ocr(content, images_config, security_limits))
+            .map(|images_config| normalize_image_bytes_for_ocr(content, images_config, security_limits, ocr_config))
             .transpose()?;
         #[cfg(feature = "ocr-pipeline")]
         let ocr_input: &[u8] = normalized_ocr_bytes
@@ -2534,6 +2540,7 @@ mod tests {
             &png,
             &images_config,
             &crate::extractors::security::SecurityLimits::default(),
+            &crate::core::config::OcrConfig::default(),
         )
         .expect("normal image should remain within the default decode budget");
 
@@ -2561,6 +2568,177 @@ mod tests {
             Some(150)
         );
         assert!(metadata.dimension_clamped);
+    }
+
+    // GH#1630: standalone image OCR discarded PNG `pHYs` density and always assumed 72 DPI, so
+    // a genuine 300 DPI scan was resampled even when the requested `target_dpi` was already 300.
+    // This is the actual site the reporter's repro exercised: `extract_with_ocr` normalizes the
+    // bytes here, at the extractor boundary, before any backend (including `perform_ocr`, fixed
+    // separately) ever sees them.
+    mod png_source_dpi_at_extractor_boundary {
+        use super::*;
+
+        /// Standard PNG CRC-32 (polynomial 0xEDB88320), needed to splice a well-formed `pHYs`
+        /// chunk into a real encoded PNG. Test-fixture construction only — the parser being
+        /// exercised, `extraction::image::png_pixel_density_dpi`, is defined once and shared;
+        /// see GH#1621.
+        fn png_crc32(data: &[u8]) -> u32 {
+            let mut crc: u32 = 0xFFFF_FFFF;
+            for &byte in data {
+                crc ^= u32::from(byte);
+                for _ in 0..8 {
+                    let mask = (crc & 1).wrapping_neg();
+                    crc = (crc >> 1) ^ (0xEDB8_8320 & mask);
+                }
+            }
+            !crc
+        }
+
+        fn png_chunk(chunk_type: &[u8; 4], data: &[u8]) -> Vec<u8> {
+            let mut body = Vec::with_capacity(4 + data.len());
+            body.extend_from_slice(chunk_type);
+            body.extend_from_slice(data);
+            let mut out = Vec::with_capacity(8 + body.len());
+            out.extend_from_slice(&(u32::try_from(data.len()).unwrap()).to_be_bytes());
+            out.extend_from_slice(&body);
+            out.extend_from_slice(&png_crc32(&body).to_be_bytes());
+            out
+        }
+
+        /// Splice a `pHYs` chunk expressing `ppu` pixels-per-metre (both axes, unit = meter)
+        /// into a real encoded PNG, immediately after IHDR (signature 8 bytes + IHDR chunk 25
+        /// bytes) and always before IDAT.
+        fn png_with_phys_density(width: u32, height: u32, ppu: u32) -> Vec<u8> {
+            const SIGNATURE_AND_IHDR_LEN: usize = 8 + 25;
+            let img = image::RgbImage::from_pixel(width, height, image::Rgb([255, 255, 255]));
+            let png = encode_rgb_as_png(img.as_raw(), width, height).expect("encode fixture PNG");
+
+            let mut phys_data = Vec::with_capacity(9);
+            phys_data.extend_from_slice(&ppu.to_be_bytes());
+            phys_data.extend_from_slice(&ppu.to_be_bytes());
+            phys_data.push(1); // unit = meter
+            let phys_chunk = png_chunk(b"pHYs", &phys_data);
+
+            let mut out = Vec::with_capacity(png.len() + phys_chunk.len());
+            out.extend_from_slice(&png[..SIGNATURE_AND_IHDR_LEN]);
+            out.extend_from_slice(&phys_chunk);
+            out.extend_from_slice(&png[SIGNATURE_AND_IHDR_LEN..]);
+            out
+        }
+
+        /// 11811 px/m is the reporter's fixture value: 11811 * 0.0254 = 299.9994 DPI, not an
+        /// exact 300 — every assertion below tolerates that rather than requiring an exact
+        /// integer match.
+        const REPORTER_FIXTURE_PPU: u32 = 11_811;
+        const EXPECTED_DPI_FROM_REPORTER_FIXTURE: f64 = 299.999_4;
+        const DPI_TOLERANCE: f64 = 0.001;
+
+        fn images_config_targeting(target_dpi: i32) -> crate::core::config::ImageExtractionConfig {
+            crate::core::config::ImageExtractionConfig {
+                target_dpi,
+                auto_adjust_dpi: false,
+                ..Default::default()
+            }
+        }
+
+        /// Unit-level check on `normalize_image_bytes_for_ocr` directly: a `target_dpi=300`
+        /// request against a genuine ~300 DPI PNG must not resize, and must report the true
+        /// embedded density rather than the fabricated 72 assumption.
+        #[cfg(feature = "ocr-pipeline")]
+        #[test]
+        fn does_not_resize_when_target_dpi_matches_known_png_density() {
+            let png = png_with_phys_density(16, 16, REPORTER_FIXTURE_PPU);
+            let images_config = images_config_targeting(300);
+
+            let normalized = normalize_image_bytes_for_ocr(
+                &png,
+                &images_config,
+                &crate::extractors::security::SecurityLimits::default(),
+                &crate::core::config::OcrConfig::default(),
+            )
+            .expect("normalization must succeed");
+
+            let metadata = normalized.metadata.expect("preprocessing metadata is recorded");
+            assert!(
+                metadata.skipped_resize,
+                "a 300 target against a ~300 detected source must not resize"
+            );
+            assert!(
+                (metadata.original_dpi.horizontal - EXPECTED_DPI_FROM_REPORTER_FIXTURE).abs() < DPI_TOLERANCE,
+                "expected ~{EXPECTED_DPI_FROM_REPORTER_FIXTURE} DPI, got {}",
+                metadata.original_dpi.horizontal
+            );
+        }
+
+        /// Control: a PNG with no density metadata must still default to 72 DPI and still
+        /// resize against a 300 target — the pre-fix, and still-correct-for-this-case, behaviour.
+        #[cfg(feature = "ocr-pipeline")]
+        #[test]
+        fn still_resizes_and_assumes_72_dpi_when_png_has_no_density_metadata() {
+            let img = image::RgbImage::from_pixel(16, 16, image::Rgb([255, 255, 255]));
+            let png = encode_rgb_as_png(img.as_raw(), 16, 16).expect("encode fixture PNG");
+            let images_config = images_config_targeting(300);
+
+            let normalized = normalize_image_bytes_for_ocr(
+                &png,
+                &images_config,
+                &crate::extractors::security::SecurityLimits::default(),
+                &crate::core::config::OcrConfig::default(),
+            )
+            .expect("normalization must succeed");
+
+            let metadata = normalized.metadata.expect("preprocessing metadata is recorded");
+            assert!(
+                !metadata.skipped_resize,
+                "a 300 target against an assumed-72 source must resize"
+            );
+            assert_eq!(
+                metadata.original_dpi,
+                crate::types::ImageDpi::from((72.0, 72.0)),
+                "no embedded metadata must leave the historical 72 assumption unchanged"
+            );
+        }
+
+        /// The decisive, end-to-end regression test: the reporter's own repro (minus corpus
+        /// bytes — a synthetic PNG built with valid CRCs and an explicit `pHYs`), run through
+        /// the real public `xberg::extract` API with `target_dpi=300`, `auto_adjust_dpi=false`,
+        /// `use_cache=false`, `force_ocr=true`. Before the fix this reports
+        /// `original_dpi: 72.0`, `scale_factor: ~4.17`, and a resized raster; after the fix it
+        /// must report `original_dpi ≈ 300` and no resize.
+        #[cfg(feature = "ocr")]
+        #[tokio::test]
+        async fn end_to_end_extract_honours_embedded_png_density_at_the_reporters_target_dpi() {
+            let png = png_with_phys_density(16, 16, REPORTER_FIXTURE_PPU);
+
+            let config = ExtractionConfig {
+                images: Some(images_config_targeting(300)),
+                ocr: Some(crate::core::config::OcrConfig::default()),
+                force_ocr: true,
+                use_cache: false,
+                disable_ocr: false,
+                ..Default::default()
+            };
+
+            let input = crate::core::config::ExtractInput::from_bytes(png, "image/png", Some("gh1630.png".to_string()));
+            let result = crate::extract(input, &config).await.expect("extraction must succeed");
+            let doc = result.results.first().expect("one document must be returned");
+            let metadata = doc
+                .metadata
+                .image_preprocessing
+                .clone()
+                .expect("image_preprocessing metadata must be recorded for OCR'd images");
+
+            assert!(
+                (metadata.original_dpi.horizontal - EXPECTED_DPI_FROM_REPORTER_FIXTURE).abs() < DPI_TOLERANCE,
+                "GH#1630: expected original_dpi ~{EXPECTED_DPI_FROM_REPORTER_FIXTURE}, got {}",
+                metadata.original_dpi.horizontal
+            );
+            assert!(
+                metadata.skipped_resize,
+                "GH#1630: target_dpi=300 against a genuine ~300 DPI source must not resize \
+                 (scale_factor was previously target/72 = ~4.17)"
+            );
+        }
     }
 
     #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]

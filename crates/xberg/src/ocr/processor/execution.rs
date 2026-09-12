@@ -9,6 +9,9 @@ use super::validation::{
     resolve_all_installed_languages, resolve_tessdata_path, strip_control_characters, validate_language_and_traineddata,
 };
 use crate::core::config::ExtractionConfig;
+/// GH#1630/GH#1621: the explicit-hint-then-embedded-PNG-density-then-`None` precedence is
+/// defined once and shared with `extractors::image::normalize_image_bytes_for_ocr`.
+use crate::extraction::image::resolve_known_source_dpi;
 use crate::extractors::security::SecurityLimits;
 use crate::image::normalize_image_dpi_owned;
 use crate::ocr::cache::OcrCache;
@@ -501,10 +504,11 @@ struct PreparedOcrImage {
 /// Prepare the raster Tesseract will recognize, and report the resolution it should be told.
 ///
 /// `known_source_dpi` is the true resolution of `rgb_data` when the caller knows it (the PDF OCR
-/// route derives it from the render), and `None` when it genuinely does not (raw images handed in
-/// by a user). Both branches below honour it: the unpreprocessed branch reports it verbatim
-/// instead of the [`RAW_IMAGE_SOURCE_DPI`] assumption, and the preprocessed branch feeds it to
-/// DPI normalization so the resize scales from the real resolution.
+/// route derives it from the render, and [`resolve_known_source_dpi`] also reads it from PNG
+/// density metadata), and `None` when it genuinely does not (raw images handed in by a user).
+/// Both branches below honour it: the unpreprocessed branch reports it verbatim instead of the
+/// [`RAW_IMAGE_SOURCE_DPI`] assumption, and the preprocessed branch feeds it to DPI normalization
+/// so the resize scales from the real resolution.
 fn prepare_ocr_image(
     rgb_data: Vec<u8>,
     width: u32,
@@ -1265,6 +1269,7 @@ pub(super) fn perform_ocr(
     });
 
     let images_config = extraction_config.and_then(|extraction_config| extraction_config.images.as_ref());
+    let known_source_dpi = resolve_known_source_dpi(config.source_dpi, image_bytes);
     let prepared_image = prepare_ocr_image(
         rgb_data,
         orig_width,
@@ -1272,7 +1277,7 @@ pub(super) fn perform_ocr(
         config.preprocessing.as_ref(),
         images_config,
         ci_debug_enabled,
-        config.source_dpi,
+        known_source_dpi,
     );
     #[cfg_attr(not(auto_rotate), allow(unused_mut))]
     let mut image_data = prepared_image.data;
@@ -3587,6 +3592,216 @@ mod tests {
 
         assert_eq!(prepared.source_dpi, 150);
         assert!(!prepared.apply_pix_preprocessing);
+    }
+
+    // GH#1630: standalone image OCR discarded PNG `pHYs` density and always assumed 72 DPI,
+    // resampling a genuine 300 DPI scan even when the requested `target_dpi` was already 300.
+    mod png_source_dpi {
+        use super::*;
+
+        /// Standard PNG CRC-32 (polynomial 0xEDB88320), needed to splice a well-formed `pHYs`
+        /// chunk into a real encoded PNG.
+        fn png_crc32(data: &[u8]) -> u32 {
+            let mut crc: u32 = 0xFFFF_FFFF;
+            for &byte in data {
+                crc ^= u32::from(byte);
+                for _ in 0..8 {
+                    let mask = (crc & 1).wrapping_neg();
+                    crc = (crc >> 1) ^ (0xEDB8_8320 & mask);
+                }
+            }
+            !crc
+        }
+
+        fn png_chunk(chunk_type: &[u8; 4], data: &[u8]) -> Vec<u8> {
+            let mut body = Vec::with_capacity(4 + data.len());
+            body.extend_from_slice(chunk_type);
+            body.extend_from_slice(data);
+            let mut out = Vec::with_capacity(8 + body.len());
+            out.extend_from_slice(&(u32::try_from(data.len()).unwrap()).to_be_bytes());
+            out.extend_from_slice(&body);
+            out.extend_from_slice(&png_crc32(&body).to_be_bytes());
+            out
+        }
+
+        fn encode_png(width: u32, height: u32) -> Vec<u8> {
+            let img = image::RgbImage::from_pixel(width, height, image::Rgb([255, 255, 255]));
+            let mut png = Vec::new();
+            {
+                use image::ImageEncoder;
+                image::codecs::png::PngEncoder::new(&mut png)
+                    .write_image(img.as_raw(), width, height, image::ExtendedColorType::Rgb8)
+                    .expect("encode PNG");
+            }
+            png
+        }
+
+        /// Splice a `pHYs` chunk expressing `ppu` pixels-per-metre (both axes, unit = meter)
+        /// into a real encoded PNG, immediately after IHDR (signature 8 bytes + IHDR chunk 25
+        /// bytes) and always before IDAT.
+        fn png_with_phys_density(width: u32, height: u32, ppu: u32) -> Vec<u8> {
+            const SIGNATURE_AND_IHDR_LEN: usize = 8 + 25;
+            let mut phys_data = Vec::with_capacity(9);
+            phys_data.extend_from_slice(&ppu.to_be_bytes());
+            phys_data.extend_from_slice(&ppu.to_be_bytes());
+            phys_data.push(1); // unit = meter
+            let phys_chunk = png_chunk(b"pHYs", &phys_data);
+
+            let png = encode_png(width, height);
+            let mut out = Vec::with_capacity(png.len() + phys_chunk.len());
+            out.extend_from_slice(&png[..SIGNATURE_AND_IHDR_LEN]);
+            out.extend_from_slice(&phys_chunk);
+            out.extend_from_slice(&png[SIGNATURE_AND_IHDR_LEN..]);
+            out
+        }
+
+        /// 11811 px/m is the reporter's fixture value: 11811 * 0.0254 = 299.9994 DPI, not an
+        /// exact 300 — every assertion below tolerates that rather than requiring an exact
+        /// integer match.
+        const REPORTER_FIXTURE_PPU: u32 = 11_811;
+        const EXPECTED_DPI_FROM_REPORTER_FIXTURE: f64 = 299.999_4;
+        const DPI_TOLERANCE: f64 = 0.001;
+        const TEST_IMAGE_SIDE: u32 = 4;
+
+        fn rgb_fixture() -> Vec<u8> {
+            vec![255u8; TEST_IMAGE_SIDE as usize * TEST_IMAGE_SIDE as usize * RGB_CHANNEL_COUNT]
+        }
+
+        fn preprocessing_targeting(target_dpi: i32) -> crate::types::ImagePreprocessingConfig {
+            crate::types::ImagePreprocessingConfig {
+                target_dpi,
+                ..Default::default()
+            }
+        }
+
+        fn images_config_without_auto_adjust() -> crate::core::config::ImageExtractionConfig {
+            crate::core::config::ImageExtractionConfig {
+                auto_adjust_dpi: false,
+                ..Default::default()
+            }
+        }
+
+        #[test]
+        fn should_prefer_explicit_source_dpi_over_embedded_png_density() {
+            let png = png_with_phys_density(TEST_IMAGE_SIDE, TEST_IMAGE_SIDE, REPORTER_FIXTURE_PPU);
+
+            let resolved = resolve_known_source_dpi(Some(150.0), &png);
+
+            assert_eq!(
+                resolved,
+                Some(150.0),
+                "a caller-supplied source_dpi hint must win over embedded PNG metadata"
+            );
+        }
+
+        #[test]
+        fn should_decode_source_density_from_embedded_png_metadata() {
+            let png = png_with_phys_density(TEST_IMAGE_SIDE, TEST_IMAGE_SIDE, REPORTER_FIXTURE_PPU);
+
+            let resolved = resolve_known_source_dpi(None, &png).expect("pHYs density must be detected");
+
+            assert!(
+                (resolved - EXPECTED_DPI_FROM_REPORTER_FIXTURE).abs() < DPI_TOLERANCE,
+                "expected ~{EXPECTED_DPI_FROM_REPORTER_FIXTURE} DPI, got {resolved}"
+            );
+        }
+
+        #[test]
+        fn should_resolve_none_when_neither_explicit_hint_nor_embedded_density_exist() {
+            let png = encode_png(TEST_IMAGE_SIDE, TEST_IMAGE_SIDE);
+
+            assert_eq!(
+                resolve_known_source_dpi(None, &png),
+                None,
+                "a PNG without density metadata must not fabricate a source DPI"
+            );
+        }
+
+        /// No resize when the requested target already matches the embedded source density: the
+        /// GH#1630 reporter's own repro (`target_dpi=300` against a genuine 300 DPI scan).
+        #[test]
+        fn should_skip_resize_when_target_dpi_matches_known_png_density() {
+            let png = png_with_phys_density(TEST_IMAGE_SIDE, TEST_IMAGE_SIDE, REPORTER_FIXTURE_PPU);
+            let known_source_dpi = resolve_known_source_dpi(None, &png);
+            let images_config = images_config_without_auto_adjust();
+            let preprocessing = preprocessing_targeting(300);
+
+            let prepared = prepare_ocr_image(
+                rgb_fixture(),
+                TEST_IMAGE_SIDE,
+                TEST_IMAGE_SIDE,
+                Some(&preprocessing),
+                Some(&images_config),
+                false,
+                known_source_dpi,
+            );
+
+            assert_eq!(prepared.width, TEST_IMAGE_SIDE);
+            assert_eq!(prepared.height, TEST_IMAGE_SIDE);
+            let metadata = prepared
+                .image_preprocessing
+                .expect("preprocessing metadata is recorded");
+            assert!(
+                metadata.skipped_resize,
+                "a 300 target against a ~300 detected source must not resize"
+            );
+        }
+
+        /// A different target DPI still resizes correctly once the true source density is known,
+        /// rather than scaling from the wrong 72 assumption.
+        #[test]
+        fn should_resize_correctly_for_a_different_target_dpi() {
+            let png = png_with_phys_density(TEST_IMAGE_SIDE, TEST_IMAGE_SIDE, REPORTER_FIXTURE_PPU);
+            let known_source_dpi = resolve_known_source_dpi(None, &png);
+            let images_config = images_config_without_auto_adjust();
+            let preprocessing = preprocessing_targeting(150);
+
+            let prepared = prepare_ocr_image(
+                rgb_fixture(),
+                TEST_IMAGE_SIDE,
+                TEST_IMAGE_SIDE,
+                Some(&preprocessing),
+                Some(&images_config),
+                false,
+                known_source_dpi,
+            );
+
+            assert_eq!(
+                prepared.width, 2,
+                "halving from a ~300 DPI source to a 150 DPI target halves the raster"
+            );
+            assert_eq!(prepared.height, 2);
+        }
+
+        /// Control: a PNG carrying no density metadata must keep defaulting to 72 DPI, exactly
+        /// as before this fix.
+        #[test]
+        fn should_default_to_72_dpi_when_png_has_no_density_metadata() {
+            let png = encode_png(TEST_IMAGE_SIDE, TEST_IMAGE_SIDE);
+            let known_source_dpi = resolve_known_source_dpi(None, &png);
+            assert_eq!(known_source_dpi, None);
+
+            let images_config = images_config_without_auto_adjust();
+            let preprocessing = preprocessing_targeting(300);
+            let prepared = prepare_ocr_image(
+                rgb_fixture(),
+                TEST_IMAGE_SIDE,
+                TEST_IMAGE_SIDE,
+                Some(&preprocessing),
+                Some(&images_config),
+                false,
+                known_source_dpi,
+            );
+
+            let metadata = prepared
+                .image_preprocessing
+                .expect("preprocessing metadata is recorded");
+            assert_eq!(
+                metadata.original_dpi,
+                crate::types::ImageDpi::from((f64::from(RAW_IMAGE_SOURCE_DPI), f64::from(RAW_IMAGE_SOURCE_DPI))),
+                "no embedded metadata must leave the historical 72 assumption unchanged"
+            );
+        }
     }
 
     #[test]

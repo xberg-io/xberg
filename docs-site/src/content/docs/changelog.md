@@ -31,6 +31,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Image OCR now honours a PNG's embedded `pHYs` pixel density instead of assuming 72 DPI. A genuine
+  300-DPI PNG submitted with `target_dpi = 300` was resized anyway, because the extractor decoded,
+  resized and re-encoded the image -- discarding the density chunk -- before the OCR backend, and
+  therefore before the existing `ocr.backend_options["source_dpi"]` override, ever saw it. Embedded
+  density is now resolved at the extractor boundary and at the backend from one shared
+  implementation, with the explicit override still taking precedence over it. An image carrying no
+  density metadata still defaults to 72 DPI and still resizes (GH#1630).
+
 - A body paragraph is no longer deleted for repeating text that appears elsewhere on the same page.
   The second `strip_repeating_text` pass keyed on lowercased paragraph text with no check that a
   table was involved, so a sentence matching an earlier title -- differing only in case, with no
