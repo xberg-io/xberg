@@ -69,9 +69,13 @@ pub mod text;
 pub mod types;
 pub mod utils;
 
-/// Pure-arithmetic sub/superscript ("script run") decision rule, shared by PDF prose assembly,
-/// native table cells and word-level table reconstruction.
-#[cfg(any(feature = "ocr", feature = "pdf", paddle_ocr))]
+/// Pure-arithmetic sub/superscript ("script run") decision rule, shared by PDF prose assembly
+/// and native table cells.
+///
+/// Gated on `pdf` alone, NOT on `table_core`'s wider `any(ocr, pdf, paddle_ocr)`: both consumers
+/// (`pdf::structure::pipeline`, `pdf::native::table`) are `pdf`-only, so the wider gate left every
+/// item here dead on an `ocr`-without-`pdf` leg -- which CI builds with `-D warnings`. ~keep
+#[cfg(feature = "pdf")]
 pub(crate) mod script_run;
 
 #[cfg(any(feature = "ocr", feature = "pdf", paddle_ocr))]
