@@ -117,10 +117,14 @@ mod tests {
         assert!(err.to_string().contains("no local model to evict"), "{err}");
     }
 
-    #[test]
-    fn set_engine_cache_limit_accepts_a_bound_and_lifts_it_again() {
-        set_engine_cache_limit(NonZeroUsize::new(1));
-        set_engine_cache_limit(None);
-        assert_eq!(clear_engine_cache(), 0);
-    }
+    // `set_engine_cache_limit` has no test here: it only forwards to the process-global
+    // `ENGINE_CACHE`/`STATIC_ENGINE_CACHE`, which are populated exclusively by
+    // `get_or_init_engine`/`get_or_init_static_engine` downloading a real model. There is no
+    // seam at this layer to insert a resident engine without a live download, so a round-trip
+    // test here can only call the setter and assert `Ok(())`, which passes whether or not the
+    // bound does anything (confirmed: it still passes with `EngineCache::set_limit` neutered).
+    // The actual eviction-on-bound and eviction-on-lower behavior is proven with real,
+    // network-free `u32` engines in `super::super::engine_cache`'s own bound tests
+    // (`bound_of_n_with_n_plus_one_models_drops_the_least_recently_used` and
+    // `lowering_the_limit_drops_engines_at_once`). ~keep
 }
