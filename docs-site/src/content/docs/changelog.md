@@ -21,7 +21,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unbounded. Previously this fallback was a hardcoded 300 seconds, inconsistent with the 600
   second default used everywhere else. See the Changed section for the source-compatibility impact.
 
+- A long-running process can now release the embedding and reranker models it no longer
+  uses. `embeddings::evict_model` and `reranking::evict_model` (and the same functions in
+  `sparse_embeddings` and `late_interaction`) drop one model, `clear_engine_cache` drops
+  every model in a cache, and `xberg::clear_engine_caches` drops all of them.
+  `set_engine_cache_limit` bounds the number of resident engines in a cache and drops the
+  least recently used one first. The default stays unbounded, so existing callers see no
+  change (GH#1626).
+
 ### Fixed
+
+- OCR text is no longer discarded when a scanned page region is detected as a table but its cell
+  grid cannot be recognised. `recognize_single_table` returned nothing whenever TATR failed,
+  produced no rows or columns, or the grid failed validation, which threw away every OCR element
+  that had been assigned to that region. A region that cannot be recognised as a table now falls
+  back to emitting its text in reading order, and only when that text is not already carried by
+  one of the page's paragraphs, so nothing is duplicated. Together with the restructuring-heuristic
+  retention guard below, recognised OCR text is no longer silently lost on the layout path
+  (GH#1622).
 
 - `extraction_confidence` no longer reports a failed structured extraction as fully
   schema-valid. The pipeline passed `SchemaCompliance::AllValid` unconditionally, which is 40% of

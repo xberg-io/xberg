@@ -2009,17 +2009,17 @@ pub(super) async fn extract_with_ocr_for_page(
                                 source: None,
                             })?
                         };
-                        crate::ocr::layout_assembly::recognize_page_tables(
+                        crate::ocr::layout_assembly::recognize_page_tables_with_fallback(
                             &rgb,
                             scaled_det,
                             &render_ocr_elements,
                             model,
                         )
                     }
-                    _ => Vec::new(),
+                    _ => crate::ocr::layout_assembly::RecognizedTablesOutcome::default(),
                 };
 
-                for rt in &recognized_tables {
+                for rt in &recognized_tables.tables {
                     if !rt.markdown.is_empty() {
                         // The id is this table's 1-based position in `collected_tables`;
                         // pages are processed strictly in increasing `page_idx` order
@@ -2055,6 +2055,10 @@ pub(super) async fn extract_with_ocr_for_page(
                         ocr_scaled_detection.as_ref(),
                         points_per_pixel,
                         page_rotation_degrees,
+                    );
+                    append_unrecognized_table_fallback_paragraphs(
+                        &mut paragraphs,
+                        &recognized_tables.unrecognized_table_text,
                     );
                     apply_ocr_layout_content_filter(&mut paragraphs, config);
                     #[cfg(feature = "pdf")]
@@ -3499,6 +3503,59 @@ pub(super) fn discard_rejected_ocr_page_payloads(
             .page
             .is_none_or(|page_number| !ocr_page_is_rejected(page_number, rejected_pages, page_index_offset))
     });
+}
+/// Default font size for a synthetic fallback paragraph: matches
+/// `pdf::structure::adapters::DEFAULT_OCR_FONT_SIZE_PT`, the value the rest of the OCR paragraph
+/// pipeline uses when no real font-size evidence is available.
+#[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
+const FALLBACK_TABLE_TEXT_FONT_SIZE_PT: f32 = 12.0;
+
+/// Append reading-order text from `Table` regions TATR could not structurally reconstruct (an
+/// invalid or degenerate cell grid, see [`crate::ocr::layout_assembly::TableRegionOutcome`]) as
+/// ordinary paragraphs, so OCR text is never silently discarded when table recognition fails
+/// (xberg-io/xberg#1622).
+///
+/// Skips any fallback text already present verbatim in one of the page's existing paragraphs:
+/// `assemble_ocr_page_paragraphs`'s own `Table`-tagged paragraph is built from a separate OCR
+/// representation (the hOCR-derived `InternalDocument`) and, in the common case, already carries
+/// the same text as the `OcrElement` list this fallback is drawn from. The check guards only the
+/// case where the two representations diverge, avoiding a duplicate paragraph in the ordinary
+/// case. ~keep
+#[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
+pub(super) fn append_unrecognized_table_fallback_paragraphs(
+    paragraphs: &mut Vec<crate::pdf::structure::types::PdfParagraph>,
+    fallback_texts: &[String],
+) {
+    if fallback_texts.is_empty() {
+        return;
+    }
+    let existing_text = paragraphs
+        .iter()
+        .map(|paragraph| paragraph.text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    for text in fallback_texts {
+        let trimmed = text.trim();
+        if trimmed.is_empty() || existing_text.contains(trimmed) {
+            continue;
+        }
+        paragraphs.push(crate::pdf::structure::types::PdfParagraph {
+            text: trimmed.to_string(),
+            lines: Vec::new(),
+            dominant_font_size: FALLBACK_TABLE_TEXT_FONT_SIZE_PT,
+            heading_level: None,
+            is_bold: false,
+            is_list_item: false,
+            is_code_block: false,
+            is_formula: false,
+            is_page_furniture: false,
+            layout_class: None,
+            layout_region_path: None,
+            caption_for: None,
+            block_bbox: None,
+            word_count: crate::pdf::structure::types::PdfParagraph::compute_word_count(trimmed, &[]),
+        });
+    }
 }
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn retain_ocr_formulas_for_accepted_pages(

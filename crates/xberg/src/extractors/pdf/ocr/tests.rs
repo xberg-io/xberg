@@ -8549,4 +8549,114 @@ Name: ___
             "every one of the 3 pages must reach process_image when cancel_token is None"
         );
     }
+
+    /// Regression lock for the ground truth this fix relies on: a `Table`-classified paragraph
+    /// with no corresponding successfully recognized table already survives
+    /// `assemble_internal_document` untouched today (verified directly against
+    /// `crate::pdf::structure::assemble_internal_document` while investigating #1622). This is
+    /// why `append_unrecognized_table_fallback_paragraphs` below only needs to guard the
+    /// divergent case where the OCR element list and the hOCR-derived paragraph disagree,
+    /// rather than always injecting a fallback paragraph. ~keep
+    #[cfg(all(feature = "ocr", feature = "layout-detection"))]
+    #[test]
+    fn table_classified_paragraph_with_no_recognized_table_survives_assembly() {
+        use crate::pdf::structure::assemble_internal_document;
+        use crate::pdf::structure::types::{LayoutHintClass, PdfParagraph};
+
+        let paragraph = PdfParagraph {
+            text: "42 43 44 orphaned table text".to_string(),
+            lines: Vec::new(),
+            dominant_font_size: 12.0,
+            heading_level: None,
+            is_bold: false,
+            is_list_item: false,
+            is_code_block: false,
+            is_formula: false,
+            is_page_furniture: false,
+            layout_class: Some(LayoutHintClass::Table),
+            layout_region_path: None,
+            caption_for: None,
+            block_bbox: Some((0.0, 700.0, 200.0, 720.0)),
+            word_count: 5,
+        };
+
+        let doc = assemble_internal_document(vec![vec![paragraph]], &[], None, &[], &Default::default());
+
+        assert_eq!(doc.elements.len(), 1);
+        assert_eq!(doc.elements[0].text, "42 43 44 orphaned table text");
+    }
+
+    #[cfg(all(feature = "ocr", feature = "layout-detection"))]
+    #[test]
+    fn append_unrecognized_table_fallback_paragraphs_adds_missing_fallback_text() {
+        use crate::pdf::structure::types::PdfParagraph;
+
+        fn paragraph(text: &str) -> PdfParagraph {
+            PdfParagraph {
+                text: text.to_string(),
+                lines: Vec::new(),
+                dominant_font_size: 12.0,
+                heading_level: None,
+                is_bold: false,
+                is_list_item: false,
+                is_code_block: false,
+                is_formula: false,
+                is_page_furniture: false,
+                layout_class: None,
+                layout_region_path: None,
+                caption_for: None,
+                block_bbox: None,
+                word_count: text.split_whitespace().count(),
+            }
+        }
+
+        let mut paragraphs = vec![paragraph("an unrelated body paragraph")];
+        append_unrecognized_table_fallback_paragraphs(&mut paragraphs, &["recovered orphaned table text".to_string()]);
+
+        assert_eq!(
+            paragraphs.len(),
+            2,
+            "the fallback text must be appended as its own paragraph"
+        );
+        assert_eq!(paragraphs[1].text, "recovered orphaned table text");
+        assert_eq!(
+            paragraphs[1].layout_class, None,
+            "a fallback paragraph must render as ordinary text, not be re-tagged as a Table region"
+        );
+    }
+
+    #[cfg(all(feature = "ocr", feature = "layout-detection"))]
+    #[test]
+    fn append_unrecognized_table_fallback_paragraphs_skips_text_already_present() {
+        use crate::pdf::structure::types::PdfParagraph;
+
+        let existing = PdfParagraph {
+            text: "duplicate content already carried by an existing paragraph".to_string(),
+            lines: Vec::new(),
+            dominant_font_size: 12.0,
+            heading_level: None,
+            is_bold: false,
+            is_list_item: false,
+            is_code_block: false,
+            is_formula: false,
+            is_page_furniture: false,
+            layout_class: None,
+            layout_region_path: None,
+            caption_for: None,
+            block_bbox: None,
+            word_count: 7,
+        };
+
+        let mut paragraphs = vec![existing];
+        append_unrecognized_table_fallback_paragraphs(
+            &mut paragraphs,
+            &["duplicate content already carried by an existing paragraph".to_string()],
+        );
+
+        assert_eq!(
+            paragraphs.len(),
+            1,
+            "text already present verbatim must not be duplicated as a second paragraph"
+        );
+    }
 }

@@ -29,6 +29,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- OCR text is no longer discarded when a scanned page region is detected as a table but its cell
+  grid cannot be recognised. `recognize_single_table` returned nothing whenever TATR failed,
+  produced no rows or columns, or the grid failed validation, which threw away every OCR element
+  that had been assigned to that region. A region that cannot be recognised as a table now falls
+  back to emitting its text in reading order, and only when that text is not already carried by
+  one of the page's paragraphs, so nothing is duplicated. Together with the restructuring-heuristic
+  retention guard below, recognised OCR text is no longer silently lost on the layout path
+  (GH#1622).
+
 - `extraction_confidence` no longer reports a failed structured extraction as fully
   schema-valid. The pipeline passed `SchemaCompliance::AllValid` unconditionally, which is 40% of
   the combined score under the default weights, so a run whose LLM call failed -- or that was

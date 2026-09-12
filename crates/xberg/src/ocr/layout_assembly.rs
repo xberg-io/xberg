@@ -15,52 +15,125 @@ const MIN_CONFIDENCE: f32 = 0.3;
 /// Minimum intersection-over-word-area required to assign an OCR element to a table cell.
 const MIN_CELL_ELEMENT_IOW: f32 = 0.2;
 
+/// Outcome of table recognition for all `Table` regions detected on a page.
+///
+/// `unrecognized_table_text` carries the reading-order OCR text of every `Table` region whose
+/// cell grid TATR could not structurally reconstruct (see [`TableRegionOutcome::FallbackText`]),
+/// so a caller can still surface it as ordinary text instead of silently losing it
+/// (xberg-io/xberg#1622). ~keep
+#[derive(Debug, Default, Clone)]
+pub(crate) struct RecognizedTablesOutcome {
+    pub(crate) tables: Vec<RecognizedTable>,
+    pub(crate) unrecognized_table_text: Vec<String>,
+}
+
 /// Run TATR table recognition for all Table regions in a page.
 ///
 /// For each Table detection, crops the page image, runs TATR inference,
 /// matches OCR elements to cells, and produces markdown tables.
+///
+/// Preserved with its original `Vec<RecognizedTable>` signature for the standalone-image OCR
+/// route (`extractors::image`), which has no page-level paragraph stream to fall back into and
+/// so has no use for [`recognize_page_tables_with_fallback`]'s `unrecognized_table_text`.
 pub(crate) fn recognize_page_tables(
     page_image: &image::RgbImage,
     detection: &DetectionResult,
     elements: &[OcrElement],
     tatr_model: &mut TatrModel,
 ) -> Vec<RecognizedTable> {
-    let mut tables = Vec::new();
+    recognize_page_tables_with_fallback(page_image, detection, elements, tatr_model).tables
+}
+
+/// Same as [`recognize_page_tables`], but also surfaces the reading-order text of `Table`
+/// regions TATR could not structurally reconstruct, so a caller with a page-level paragraph
+/// stream (the PDF OCR pipeline) can fall back to plain text instead of losing that region's OCR
+/// output entirely (xberg-io/xberg#1622).
+pub(crate) fn recognize_page_tables_with_fallback(
+    page_image: &image::RgbImage,
+    detection: &DetectionResult,
+    elements: &[OcrElement],
+    tatr_model: &mut TatrModel,
+) -> RecognizedTablesOutcome {
+    let mut outcome = RecognizedTablesOutcome::default();
 
     for det in &detection.detections {
         if det.class_name != LayoutClass::Table || det.confidence < MIN_CONFIDENCE {
             continue;
         }
 
-        let result = recognize_single_table(page_image, &det.bbox, elements, tatr_model);
-        if let Some((cells, markdown)) = result {
-            tables.push(RecognizedTable {
+        match recognize_single_table(page_image, &det.bbox, elements, tatr_model) {
+            TableRegionOutcome::Recognized(cells, markdown) => outcome.tables.push(RecognizedTable {
                 detection_bbox: det.bbox,
                 cells,
                 markdown,
-            });
+            }),
+            TableRegionOutcome::FallbackText(text) => outcome.unrecognized_table_text.push(text),
+            TableRegionOutcome::Empty => {}
         }
     }
 
-    tables
+    outcome
+}
+
+/// Result of attempting to recognize a single `Table`-classified region.
+#[derive(Debug, Clone, PartialEq)]
+enum TableRegionOutcome {
+    /// TATR reconstructed a valid cell grid: `(cells, markdown)`.
+    Recognized(Vec<Vec<String>>, String),
+    /// TATR could not reconstruct the region's structure, but OCR found text inside it. Carries
+    /// that text in reading order so it is not silently discarded (xberg-io/xberg#1622).
+    FallbackText(String),
+    /// Nothing recoverable: an empty crop, or a region with no matching OCR text at all (e.g. a
+    /// genuinely blank or non-textual region misclassified as a table).
+    Empty,
+}
+
+/// Build the [`TableRegionOutcome`] for elements that failed structural recognition: reading-order
+/// text when there is any, otherwise [`TableRegionOutcome::Empty`].
+fn fallback_table_outcome(table_elements: &[&OcrElement]) -> TableRegionOutcome {
+    let text = reading_order_text(table_elements);
+    if text.is_empty() {
+        TableRegionOutcome::Empty
+    } else {
+        TableRegionOutcome::FallbackText(text)
+    }
+}
+
+/// Join `elements`' text in top-to-bottom, left-to-right reading order.
+///
+/// Mirrors the ordering [`text_from_assigned_elements`] uses inside a single cell, but over the
+/// whole region instead of one cell's worth of elements.
+fn reading_order_text(elements: &[&OcrElement]) -> String {
+    let mut ordered = elements.to_vec();
+    ordered.sort_by(|left, right| {
+        let (left_x, left_y) = element_center_f32(left);
+        let (right_x, right_y) = element_center_f32(right);
+        left_y.total_cmp(&right_y).then_with(|| left_x.total_cmp(&right_x))
+    });
+    ordered
+        .iter()
+        .map(|element| element.text.trim())
+        .filter(|text| !text.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Recognize a single table from a cropped region of the page.
-///
-/// Returns `(cells, markdown)` where cells is the 2D grid of cell text content.
 fn recognize_single_table(
     page_image: &image::RgbImage,
     table_bbox: &BBox,
     elements: &[OcrElement],
     tatr_model: &mut TatrModel,
-) -> Option<(Vec<Vec<String>>, String)> {
+) -> TableRegionOutcome {
     let crop_x = table_bbox.x1.max(0.0) as u32;
     let crop_y = table_bbox.y1.max(0.0) as u32;
     let crop_w = (table_bbox.width() as u32).min(page_image.width().saturating_sub(crop_x));
     let crop_h = (table_bbox.height() as u32).min(page_image.height().saturating_sub(crop_y));
 
+    let table_elements = select_table_elements(elements, table_bbox);
+
     if crop_w == 0 || crop_h == 0 {
-        return None;
+        return fallback_table_outcome(&table_elements);
     }
 
     let cropped = image::imageops::crop_imm(page_image, crop_x, crop_y, crop_w, crop_h).to_image();
@@ -69,29 +142,40 @@ fn recognize_single_table(
         Ok(r) => r,
         Err(e) => {
             tracing::warn!("TATR inference failed: {e}");
-            return None;
+            return fallback_table_outcome(&table_elements);
         }
     };
 
     if tatr_result.rows.is_empty() || tatr_result.columns.is_empty() {
-        return None;
+        return fallback_table_outcome(&table_elements);
     }
 
     let crop_table_bbox = effective_table_bbox(tatr_result.table_bbox, crop_w as f32, crop_h as f32);
     let (cell_grid, structure) = tatr::build_cell_grid_with_structure(&tatr_result, Some(crop_table_bbox));
     if cell_grid.is_empty() || cell_grid[0].is_empty() {
-        return None;
+        return fallback_table_outcome(&table_elements);
     }
 
-    if !is_cell_grid_valid(&cell_grid) {
+    table_region_outcome(&cell_grid, &table_elements, crop_x as f32, crop_y as f32, &structure)
+}
+
+/// Validate the reconstructed cell grid and either build the markdown table or fall back to the
+/// region's raw OCR text (xberg-io/xberg#1622). Split out from [`recognize_single_table`] so it
+/// is unit-testable without a live [`TatrModel`].
+fn table_region_outcome(
+    cell_grid: &[Vec<tatr::CellBBox>],
+    table_elements: &[&OcrElement],
+    offset_x: f32,
+    offset_y: f32,
+    structure: &tatr::TableStructure,
+) -> TableRegionOutcome {
+    if !is_cell_grid_valid(cell_grid) {
         tracing::debug!("TATR cell grid is invalid (too many empty cells or malformed); skipping table");
-        return None;
+        return fallback_table_outcome(table_elements);
     }
 
-    let table_elements = select_table_elements(elements, table_bbox);
-
-    let (cells, markdown) = build_markdown_table(&cell_grid, &table_elements, crop_x as f32, crop_y as f32, &structure);
-    Some((cells, markdown))
+    let (cells, markdown) = build_markdown_table(cell_grid, table_elements, offset_x, offset_y, structure);
+    TableRegionOutcome::Recognized(cells, markdown)
 }
 
 /// Choose the crop-local bounding box used to widen table columns to the
@@ -671,5 +755,74 @@ mod tests {
             markdown, "| Title | Region |\n| Sub | Head |\n| --- | --- |\n| A | B |",
             "the separator must follow both TATR-detected header rows, not just row 0 (#176)"
         );
+    }
+
+    #[test]
+    fn should_fall_back_to_reading_order_text_when_cell_grid_is_invalid() {
+        // A single-column grid fails `is_cell_grid_valid`'s "< 2 columns" degenerate check.
+        let grid = vec![vec![cell(0.0, 0.0, 100.0, 20.0)]];
+        let elements = [word("recovered", 10, 5, 30, 10), word("text", 50, 5, 20, 10)];
+        let element_refs = elements.iter().collect::<Vec<_>>();
+
+        let outcome = table_region_outcome(&grid, &element_refs, 0.0, 0.0, &no_structure());
+
+        assert_eq!(
+            outcome,
+            TableRegionOutcome::FallbackText("recovered text".to_string()),
+            "an invalid cell grid must not silently discard the region's OCR text (#1622)"
+        );
+    }
+
+    #[test]
+    fn should_report_empty_when_invalid_grid_region_has_no_ocr_text() {
+        let grid = vec![vec![cell(0.0, 0.0, 100.0, 20.0)]];
+        let elements: [OcrElement; 0] = [];
+        let element_refs = elements.iter().collect::<Vec<_>>();
+
+        let outcome = table_region_outcome(&grid, &element_refs, 0.0, 0.0, &no_structure());
+
+        assert_eq!(
+            outcome,
+            TableRegionOutcome::Empty,
+            "a region with no OCR text has nothing to fall back to"
+        );
+    }
+
+    #[test]
+    fn should_still_recognize_a_valid_grid_via_table_region_outcome() {
+        let grid = vec![
+            vec![cell(0.0, 0.0, 50.0, 50.0), cell(50.0, 0.0, 100.0, 50.0)],
+            vec![cell(0.0, 50.0, 50.0, 100.0), cell(50.0, 50.0, 100.0, 100.0)],
+        ];
+        let elements = [
+            word("one", 10, 10, 10, 10),
+            word("two", 60, 10, 10, 10),
+            word("three", 10, 60, 10, 10),
+            word("four", 60, 60, 10, 10),
+        ];
+        let element_refs = elements.iter().collect::<Vec<_>>();
+
+        let outcome = table_region_outcome(&grid, &element_refs, 0.0, 0.0, &no_structure());
+
+        assert_eq!(
+            outcome,
+            TableRegionOutcome::Recognized(
+                vec![
+                    vec!["one".to_string(), "two".to_string()],
+                    vec!["three".to_string(), "four".to_string()]
+                ],
+                "| one | two |\n| --- | --- |\n| three | four |".to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn should_surface_unrecognized_table_text_from_recognize_page_tables_outcome_default() {
+        // `RecognizedTablesOutcome::default()` is what the pipeline falls back to when there is
+        // no render-scaled detection or no TATR model available for a page; it must carry no
+        // tables and no fallback text rather than panicking downstream on an absent field.
+        let outcome = RecognizedTablesOutcome::default();
+        assert!(outcome.tables.is_empty());
+        assert!(outcome.unrecognized_table_text.is_empty());
     }
 }
