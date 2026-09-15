@@ -363,11 +363,8 @@ where
     K: Clone + Eq + Hash,
     F: FnOnce() -> Result<V>,
 {
-    {
-        let cache = cache.read();
-        if let Some(value) = cache.get(&key) {
-            return Ok(Arc::clone(value));
-        }
+    if let Some(value) = cached_arc(cache, &key) {
+        return Ok(value);
     }
 
     let mut cache = cache.write();
@@ -378,6 +375,13 @@ where
     let value = Arc::new(build()?);
     cache.insert(key, Arc::clone(&value));
     Ok(value)
+}
+
+fn cached_arc<K, V>(cache: &RwLock<AHashMap<K, Arc<V>>>, key: &K) -> Option<Arc<V>>
+where
+    K: Eq + Hash,
+{
+    cache.read().get(key).cloned()
 }
 
 /// `xberg-gliner` ONNX backend wrapper.
@@ -436,7 +440,7 @@ impl GlineBackend {
     }
 }
 
-pub(crate) fn get_or_init_backend(model_name: Option<&str>) -> Result<Arc<GlineBackend>> {
+pub(crate) fn get_or_init_backend_blocking(model_name: Option<&str>) -> Result<Arc<GlineBackend>> {
     let thread_budget = crate::core::config::concurrency::resolve_thread_budget(None);
     let key = backend_cache_key(model_name, thread_budget)?;
     let model_id = key.model_id.clone();
@@ -444,6 +448,34 @@ pub(crate) fn get_or_init_backend(model_name: Option<&str>) -> Result<Arc<GlineB
     get_or_insert_arc(&BACKEND_CACHE, key, || {
         GlineBackend::new_with_thread_budget(Some(&model_id), thread_budget)
     })
+}
+
+/// Return the process-wide cached GLiNER backend for the requested model.
+///
+/// Model download and ONNX initialization run on Tokio's blocking pool. Concurrent
+/// callers requesting the same canonical model and runtime thread budget receive
+/// clones of the same Arc. Initialization errors are not cached, so a later call
+/// can retry after a transient download or filesystem failure. Warm cache hits return
+/// immediately without scheduling work on the blocking pool.
+///
+/// # Errors
+///
+/// Returns an error when the model name is invalid, its artifacts cannot be loaded,
+/// ONNX initialization fails, or the blocking initialization task cannot complete.
+pub async fn get_or_init_backend(model_name: Option<&str>) -> Result<Arc<GlineBackend>> {
+    let thread_budget = crate::core::config::concurrency::resolve_thread_budget(None);
+    let key = backend_cache_key(model_name, thread_budget)?;
+    if let Some(backend) = cached_arc(&BACKEND_CACHE, &key) {
+        return Ok(backend);
+    }
+
+    let model_name = model_name.map(str::to_owned);
+    tokio::task::spawn_blocking(move || get_or_init_backend_blocking(model_name.as_deref()))
+        .await
+        .map_err(|error| crate::XbergError::Plugin {
+            message: format!("GLiNER initialization task failed: {error}"),
+            plugin_name: "ner-gliner".to_string(),
+        })?
 }
 
 #[async_trait]
@@ -816,6 +848,30 @@ mod tests {
         assert!(Arc::ptr_eq(&first, &second));
         assert_eq!(*second, 7);
         assert_eq!(build_count.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn backend_cache_helper_retries_after_initialization_error() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let cache = RwLock::new(AHashMap::default());
+        let key = backend_cache_key(Some("balanced"), 4).expect("key");
+        let build_count = AtomicUsize::new(0);
+
+        let first = get_or_insert_arc(&cache, key.clone(), || {
+            build_count.fetch_add(1, Ordering::Relaxed);
+            Err(crate::XbergError::validation("transient initialization failure"))
+        });
+        assert!(first.is_err());
+
+        let second = get_or_insert_arc(&cache, key, || {
+            build_count.fetch_add(1, Ordering::Relaxed);
+            Ok(7usize)
+        })
+        .expect("retry succeeds");
+
+        assert_eq!(*second, 7);
+        assert_eq!(build_count.load(Ordering::Relaxed), 2);
     }
 
     #[test]

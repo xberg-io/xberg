@@ -1058,7 +1058,9 @@ fn make_ner_backend(
         NerBackendKind::Onnx => {
             #[cfg(feature = "ner-onnx")]
             {
-                Ok(crate::text::ner::gline::get_or_init_backend(config.model.as_deref())?)
+                Ok(crate::text::ner::gline::get_or_init_backend_blocking(
+                    config.model.as_deref(),
+                )?)
             }
             #[cfg(not(feature = "ner-onnx"))]
             {
