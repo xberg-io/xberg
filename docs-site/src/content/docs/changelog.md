@@ -11,7 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.2.2] - 2026-09-15
 
+### Added
+
+- **(ocr): registered backend capabilities now expose their declared language sets.** Rust consumers
+  can validate language selection against the installed OCR backends without maintaining a second
+  hardcoded language list. (GH#1643)
+
 ### Fixed
+
+- **(ocr): nested Tesseract language selection is authoritative when present.** The outer OCR
+  language now applies only when no `tesseract_config` exists, matching the documented config
+  boundary used by server-side validation. (GH#1643)
 
 - **(pdf): a two-column page is no longer split down the middle of a column because one line
   crosses its gutter.** The corridor search treated whitespace as "no span's bbox", so a single

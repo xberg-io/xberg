@@ -2,16 +2,13 @@
 //!
 //! This module defines the trait for implementing custom OCR backends.
 
-use crate::Result;
 use crate::core::config::OcrConfig;
 use crate::plugins::Plugin;
 use crate::types::ExtractedDocument;
+use crate::{Result, XbergError};
 use async_trait::async_trait;
 use std::path::Path;
 use std::sync::Arc;
-
-#[cfg(not(feature = "tokio-runtime"))]
-use crate::XbergError;
 
 /// OCR backend types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Deserialize, serde::Serialize)]
@@ -473,6 +470,28 @@ pub trait OcrBackend: Plugin {
     }
 }
 
+/// Runtime capabilities reported by a registered OCR backend.
+#[cfg_attr(alef, alef(skip))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OcrBackendCapability {
+    /// The backend's registered name.
+    name: String,
+    /// The exhaustive supported language set, or `None` when the backend does not declare one.
+    supported_languages: Option<Vec<String>>,
+}
+
+impl OcrBackendCapability {
+    /// Return the backend's registered name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Return the exhaustive language set, or `None` when the backend does not declare one.
+    pub fn supported_languages(&self) -> Option<&[String]> {
+        self.supported_languages.as_deref()
+    }
+}
+
 /// Register an OCR backend with the global registry.
 ///
 /// The OCR backend will be registered with its name from the `name()` method
@@ -601,6 +620,51 @@ pub fn list_ocr_backends() -> crate::Result<Vec<String>> {
     let registry = registry.read();
 
     Ok(registry.list())
+}
+
+/// List the runtime capabilities of all registered OCR backends.
+///
+/// The result is sorted by backend name. A `None` language set means the backend does not provide
+/// an exhaustive enumeration, so callers must not interpret it as supporting no languages.
+#[cfg_attr(alef, alef(skip))]
+pub fn list_ocr_backend_capabilities() -> crate::Result<Vec<OcrBackendCapability>> {
+    use crate::plugins::registry::get_ocr_backend_registry;
+
+    let backends = get_ocr_backend_registry().read().registered_snapshot();
+    Ok(backends
+        .into_iter()
+        .map(|(name, backend)| capability_from(name, backend))
+        .collect())
+}
+
+/// Check whether a registered OCR backend supports one language code.
+///
+/// This avoids allocating a complete language manifest when a caller only needs to validate one
+/// requested code. Backend callbacks run after the registry read lock is released.
+#[cfg_attr(alef, alef(skip))]
+pub fn ocr_backend_supports_language(backend_name: &str, language: &str) -> crate::Result<bool> {
+    use crate::plugins::registry::get_ocr_backend_registry;
+
+    let backend = {
+        let registry = get_ocr_backend_registry();
+        registry.read().registered(backend_name)
+    };
+    let backend = backend.ok_or_else(|| XbergError::Plugin {
+        message: format!("OCR backend '{backend_name}' not registered"),
+        plugin_name: backend_name.to_string(),
+    })?;
+    Ok(backend.supports_language(language))
+}
+
+fn capability_from(name: String, backend: Arc<dyn OcrBackend>) -> OcrBackendCapability {
+    let supported_languages = match backend.supported_languages() {
+        languages if languages.is_empty() => None,
+        languages => Some(languages),
+    };
+    OcrBackendCapability {
+        name,
+        supported_languages,
+    }
 }
 
 /// Clear all OCR backends from the global registry.
@@ -776,6 +840,29 @@ mod tests {
         assert!(supported.contains(&"eng".to_string()));
         assert!(supported.contains(&"deu".to_string()));
         assert!(supported.contains(&"fra".to_string()));
+    }
+
+    #[test]
+    fn backend_capability_reports_the_registered_backends_declared_languages() {
+        let backend: Arc<dyn OcrBackend> = Arc::new(MockOcrBackend {
+            languages: vec!["eng".to_string(), "deu".to_string()],
+        });
+
+        let capability = capability_from("mock-ocr".to_string(), backend);
+        assert_eq!(capability.name(), "mock-ocr");
+        assert_eq!(
+            capability.supported_languages(),
+            Some(["eng".to_string(), "deu".to_string()].as_slice())
+        );
+    }
+
+    #[test]
+    fn backend_capability_distinguishes_an_unspecified_language_set() {
+        let backend: Arc<dyn OcrBackend> = Arc::new(MockOcrBackend { languages: Vec::new() });
+
+        let capability = capability_from("mock-ocr".to_string(), backend);
+        assert_eq!(capability.name(), "mock-ocr");
+        assert_eq!(capability.supported_languages(), None);
     }
 
     #[test]

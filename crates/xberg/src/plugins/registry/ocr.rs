@@ -334,6 +334,19 @@ impl OcrBackendRegistry {
         names
     }
 
+    pub(crate) fn registered(&self, name: &str) -> Option<Arc<dyn OcrBackend>> {
+        if let Some(backend) = self.backends.get(name) {
+            return Some(Arc::clone(backend));
+        }
+        let normalized = name.to_ascii_lowercase();
+        let canonical = if normalized == "paddleocr" {
+            "paddle-ocr"
+        } else {
+            normalized.as_str()
+        };
+        self.backends.get(canonical).cloned()
+    }
+
     pub(crate) fn registered_snapshot(&self) -> Vec<(String, Arc<dyn OcrBackend>)> {
         let mut backends: Vec<_> = self
             .backends
@@ -520,6 +533,10 @@ mod tests {
 
         let retrieved = registry.get("test-ocr").unwrap();
         assert_eq!(retrieved.name(), "test-ocr");
+        assert_eq!(
+            registry.registered("TEST-OCR").expect("registered backend").name(),
+            "test-ocr"
+        );
 
         let eng_backend = registry.get_for_language("eng").unwrap();
         assert_eq!(eng_backend.name(), "test-ocr");

@@ -403,19 +403,19 @@ pub use doctor::{DoctorCheck, DoctorReport, ProbeStatus, doctor};
 pub use plugins::{
     clear_document_extractors, clear_embedding_backends, clear_ocr_backends, clear_post_processors, clear_renderers,
     clear_reranker_backends, clear_tokenizer_backends, clear_validators, list_document_extractors,
-    list_embedding_backends, list_ocr_backends, list_post_processors, list_renderers, list_reranker_backends,
-    list_tokenizer_backends, list_validators, register_document_extractor, register_embedding_backend,
-    register_ocr_backend, register_post_processor, register_renderer, register_reranker_backend,
-    register_tokenizer_backend, register_validator, unregister_document_extractor, unregister_embedding_backend,
-    unregister_ocr_backend, unregister_post_processor, unregister_renderer, unregister_reranker_backend,
-    unregister_tokenizer_backend, unregister_validator,
+    list_embedding_backends, list_ocr_backend_capabilities, list_ocr_backends, list_post_processors, list_renderers,
+    list_reranker_backends, list_tokenizer_backends, list_validators, ocr_backend_supports_language,
+    register_document_extractor, register_embedding_backend, register_ocr_backend, register_post_processor,
+    register_renderer, register_reranker_backend, register_tokenizer_backend, register_validator,
+    unregister_document_extractor, unregister_embedding_backend, unregister_ocr_backend, unregister_post_processor,
+    unregister_renderer, unregister_reranker_backend, unregister_tokenizer_backend, unregister_validator,
 };
 
 #[cfg_attr(alef, alef(skip))]
 pub use plugins::{
-    ConfidenceSemantics, DocumentExtractor, EmbeddingBackend, InternalDocumentExtractor, OcrBackend, OcrBackendType,
-    PageOrientationHandling, Plugin, PostProcessor, ProcessingStage, Renderer, RerankerBackend, TokenizerBackend,
-    Validator,
+    ConfidenceSemantics, DocumentExtractor, EmbeddingBackend, InternalDocumentExtractor, OcrBackend,
+    OcrBackendCapability, OcrBackendType, PageOrientationHandling, Plugin, PostProcessor, ProcessingStage, Renderer,
+    RerankerBackend, TokenizerBackend, Validator,
 };
 
 #[cfg(feature = "embedding-presets")]
