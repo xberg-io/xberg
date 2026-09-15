@@ -802,11 +802,28 @@ pub fn rerank(
     }
 }
 
+#[cfg(all(feature = "reranker", feature = "tokio-runtime"))]
+fn spawn_blocking_holding_permit<T, F>(
+    permit: tokio::sync::OwnedSemaphorePermit,
+    operation: F,
+) -> tokio::task::JoinHandle<T>
+where
+    T: Send + 'static,
+    F: FnOnce() -> T + Send + 'static,
+{
+    tokio::task::spawn_blocking(move || {
+        let result = operation();
+        drop(permit);
+        result
+    })
+}
+
 /// Rerank documents asynchronously.
 ///
 /// Async counterpart to [`rerank`]. Offloads blocking ONNX inference to a
 /// dedicated blocking thread pool via Tokio's `spawn_blocking`, keeping the
-/// async executor free.
+/// async executor free. Once blocking work starts, its concurrency permit is
+/// retained until completion even if the calling future is dropped.
 ///
 #[doc(alias = "rerank")]
 #[cfg(all(feature = "reranker", feature = "tokio-runtime"))]
@@ -867,13 +884,13 @@ pub async fn rerank_async(
         | crate::core::config::RerankerModelType::Custom { .. } => {}
     }
 
-    let _permit = RERANK_SEMAPHORE
-        .acquire()
+    let permit = Arc::clone(&*RERANK_SEMAPHORE)
+        .acquire_owned()
         .await
         .map_err(|_| crate::XbergError::reranking("Reranker semaphore closed".to_string()))?;
 
     let config = std::sync::Arc::new(config.clone());
-    tokio::task::spawn_blocking(move || rerank(query, documents, &config))
+    spawn_blocking_holding_permit(permit, move || rerank(query, documents, &config))
         .await
         .map_err(|e| crate::XbergError::reranking(format!("Reranker task panicked: {e}")))?
 }
@@ -982,6 +999,41 @@ mod tests {
         let logits = vec![1.0_f32, 2.0_f32, 0.5_f32];
         let results = build_results(&documents, logits, Some(0));
         assert!(results.is_empty(), "top_k=0 must return an empty vec");
+    }
+
+    #[cfg(all(feature = "reranker", feature = "tokio-runtime"))]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn aborted_waiter_keeps_rerank_permit_until_blocking_work_finishes() {
+        const PERMIT_RETURN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1);
+
+        let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(1));
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let semaphore_for_task = std::sync::Arc::clone(&semaphore);
+
+        let waiter = tokio::spawn(async move {
+            let permit = semaphore_for_task.acquire_owned().await.unwrap();
+            spawn_blocking_holding_permit(permit, move || {
+                started_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+            })
+            .await
+            .unwrap();
+        });
+
+        started_rx.await.unwrap();
+        waiter.abort();
+        assert!(waiter.await.unwrap_err().is_cancelled());
+        assert!(
+            std::sync::Arc::clone(&semaphore).try_acquire_owned().is_err(),
+            "aborting the async waiter must not release a permit held by running blocking work"
+        );
+
+        release_tx.send(()).unwrap();
+        let _permit = tokio::time::timeout(PERMIT_RETURN_TIMEOUT, semaphore.acquire())
+            .await
+            .expect("permit must be released after blocking work finishes")
+            .unwrap();
     }
 
     #[test]
