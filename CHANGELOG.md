@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **(ocr): PDF OCR output now includes page-local element coordinate frames.**
+  `metadata.additional.ocr_page_coordinate_frames` records each page's processed raster width,
+  height, pixel unit, and top-left origin once, keyed by the existing element page number. This
+  lets multi-page consumers normalize boxes without reusing another page's dimensions. (GH#1645)
+
 ## [1.2.2] - 2026-09-15
 
 ### Fixed

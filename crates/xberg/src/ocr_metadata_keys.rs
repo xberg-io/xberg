@@ -32,3 +32,7 @@ pub(crate) const OCR_AUTO_ROTATED_METADATA_KEY: &str = "auto_rotated";
 /// `ocr::processor::execution` and `is_dictionary_invalid_noise` in `extractors::pdf::ocr`.
 pub(crate) const OCR_TESSERACT_DICT_INVALID_WORD_RATIO_METADATA_KEY: &str = "tesseract_dict_invalid_word_ratio";
 pub(crate) const OCR_IMAGE_PREPROCESSING_METADATA_KEY: &str = "image_preprocessing";
+/// One page-local pixel coordinate frame carried temporarily by an OCR element.
+pub(crate) const OCR_PAGE_COORDINATE_FRAME_METADATA_KEY: &str = "_xberg_ocr_page_coordinate_frame";
+/// Page-local pixel coordinate frames for public OCR element geometry.
+pub(crate) const OCR_PAGE_COORDINATE_FRAMES_METADATA_KEY: &str = "ocr_page_coordinate_frames";

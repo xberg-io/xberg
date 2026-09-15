@@ -2859,6 +2859,7 @@ mod tests {
             &mut elements,
             &config,
             7,
+            800,
             1000,
             crate::pdf::native::text::PageMarginFractions {
                 top: 0.10,
@@ -2869,6 +2870,18 @@ mod tests {
         assert_eq!(elements.len(), 1);
         assert_eq!(elements[0].text, "body");
         assert_eq!(elements[0].page_number, 7);
+        assert_eq!(
+            elements[0]
+                .backend_metadata
+                .get(crate::ocr_metadata_keys::OCR_PAGE_COORDINATE_FRAME_METADATA_KEY),
+            Some(&serde_json::json!({
+                "page_number": 7,
+                "unit": "pixel",
+                "origin": "top_left",
+                "width": 800,
+                "height": 1000,
+            }))
+        );
         assert!(outcome.removed);
         assert!(!outcome.missing_geometry);
     }
@@ -2902,6 +2915,7 @@ mod tests {
             &config,
             1,
             0,
+            0,
             crate::pdf::native::text::PageMarginFractions {
                 top: 0.10,
                 bottom: 0.10,
@@ -2910,8 +2924,119 @@ mod tests {
 
         assert_eq!(elements.len(), 1);
         assert_eq!(elements[0].text, "unknown position");
+        assert_eq!(
+            elements[0]
+                .backend_metadata
+                .get(crate::ocr_metadata_keys::OCR_PAGE_COORDINATE_FRAME_METADATA_KEY),
+            None
+        );
         assert!(!outcome.removed);
         assert!(outcome.missing_geometry);
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn should_describe_each_ocr_page_coordinate_frame_once() {
+        assert_eq!(
+            ocr_page_coordinate_frame(1, 1200, 1800),
+            Some(serde_json::json!({
+                "page_number": 1,
+                "unit": "pixel",
+                "origin": "top_left",
+                "width": 1200,
+                "height": 1800,
+            }))
+        );
+        assert_eq!(
+            ocr_page_coordinate_frame(2, 2400, 3200),
+            Some(serde_json::json!({
+                "page_number": 2,
+                "unit": "pixel",
+                "origin": "top_left",
+                "width": 2400,
+                "height": 3200,
+            }))
+        );
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn should_stamp_one_distinct_coordinate_frame_per_public_ocr_page() {
+        let config = crate::core::config::OcrConfig {
+            element_config: Some(crate::types::OcrElementConfig {
+                include_elements: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let element = crate::types::OcrElement {
+            text: "word".to_string(),
+            ..Default::default()
+        };
+        let mut first_page = vec![element.clone(), element.clone()];
+        let mut second_page = vec![element.clone(), element];
+
+        let (first_page, _) = public_ocr_elements_for_pdf_page(
+            &mut first_page,
+            &config,
+            1,
+            1200,
+            1800,
+            crate::pdf::native::text::PageMarginFractions::default(),
+        );
+        let (second_page, _) = public_ocr_elements_for_pdf_page(
+            &mut second_page,
+            &config,
+            2,
+            2400,
+            3200,
+            crate::pdf::native::text::PageMarginFractions::default(),
+        );
+
+        assert_eq!(
+            first_page[0]
+                .backend_metadata
+                .get(crate::ocr_metadata_keys::OCR_PAGE_COORDINATE_FRAME_METADATA_KEY),
+            Some(&serde_json::json!({
+                "page_number": 1,
+                "unit": "pixel",
+                "origin": "top_left",
+                "width": 1200,
+                "height": 1800,
+            }))
+        );
+        assert_eq!(
+            second_page[0]
+                .backend_metadata
+                .get(crate::ocr_metadata_keys::OCR_PAGE_COORDINATE_FRAME_METADATA_KEY),
+            Some(&serde_json::json!({
+                "page_number": 2,
+                "unit": "pixel",
+                "origin": "top_left",
+                "width": 2400,
+                "height": 3200,
+            }))
+        );
+        assert_eq!(
+            first_page[1]
+                .backend_metadata
+                .get(crate::ocr_metadata_keys::OCR_PAGE_COORDINATE_FRAME_METADATA_KEY),
+            None
+        );
+        assert_eq!(
+            second_page[1]
+                .backend_metadata
+                .get(crate::ocr_metadata_keys::OCR_PAGE_COORDINATE_FRAME_METADATA_KEY),
+            None
+        );
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn should_withhold_ocr_page_coordinate_frame_when_dimensions_are_invalid() {
+        assert_eq!(ocr_page_coordinate_frame(1, 0, 1800), None);
+        assert_eq!(ocr_page_coordinate_frame(1, 1200, 0), None);
+        assert_eq!(ocr_page_coordinate_frame(0, 1200, 1800), None);
     }
 
     #[cfg(feature = "ocr")]

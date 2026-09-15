@@ -350,11 +350,13 @@ pub(super) fn build_mixed_ocr_page_document(
 )> {
     let mut backend_tables = std::mem::take(&mut result.tables);
     let mut raw_backend_elements = result.ocr_elements.take().unwrap_or_default();
-    let (_, element_layout_height) = resolved_ocr_layout_dimensions(&result.metadata, image_width_px, image_height_px);
+    let (element_layout_width, element_layout_height) =
+        resolved_ocr_layout_dimensions(&result.metadata, image_width_px, image_height_px);
     let (backend_elements, element_margin_outcome) = public_ocr_elements_for_pdf_page(
         &mut raw_backend_elements,
         public_ocr_config,
         page_number,
+        element_layout_width,
         element_layout_height,
         margins,
     );
@@ -1670,6 +1672,7 @@ pub(super) fn public_ocr_elements_for_pdf_page(
     elements: &mut [crate::types::OcrElement],
     config: &crate::core::config::ocr::OcrConfig,
     page_number: u32,
+    page_width: u32,
     page_height: u32,
     margins: crate::pdf::native::text::PageMarginFractions,
 ) -> (Vec<crate::types::OcrElement>, OcrMarginFilterOutcome) {
@@ -1681,7 +1684,55 @@ pub(super) fn public_ocr_elements_for_pdf_page(
     if outcome.removed {
         public_elements = filter_public_ocr_elements(&public_elements, config);
     }
+    if let (Some(element), Some(frame)) = (
+        public_elements.first_mut(),
+        ocr_page_coordinate_frame(page_number, page_width, page_height),
+    ) {
+        element.backend_metadata.insert(
+            crate::ocr_metadata_keys::OCR_PAGE_COORDINATE_FRAME_METADATA_KEY.to_string(),
+            frame,
+        );
+    }
     (public_elements, outcome)
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[derive(serde::Serialize)]
+struct OcrPageCoordinateFrame {
+    page_number: u32,
+    unit: OcrCoordinateUnit,
+    origin: OcrCoordinateOrigin,
+    width: u32,
+    height: u32,
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[derive(serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+enum OcrCoordinateUnit {
+    Pixel,
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[derive(serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+enum OcrCoordinateOrigin {
+    TopLeft,
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn ocr_page_coordinate_frame(page_number: u32, width: u32, height: u32) -> Option<serde_json::Value> {
+    if page_number == 0 || width == 0 || height == 0 {
+        return None;
+    }
+    serde_json::to_value(OcrPageCoordinateFrame {
+        page_number,
+        unit: OcrCoordinateUnit::Pixel,
+        origin: OcrCoordinateOrigin::TopLeft,
+        width,
+        height,
+    })
+    .ok()
 }
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) fn should_use_document_processing(

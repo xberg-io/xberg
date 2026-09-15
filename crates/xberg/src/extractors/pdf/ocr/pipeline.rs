@@ -1811,7 +1811,7 @@ pub(super) async fn extract_with_ocr_for_page(
             if let Some(ref mut elems) = ocr_result.ocr_elements {
                 #[cfg(feature = "pdf")]
                 let public_elements = {
-                    let (_, layout_height) = resolved_ocr_layout_dimensions(
+                    let (layout_width, layout_height) = resolved_ocr_layout_dimensions(
                         &ocr_result.metadata,
                         encoded_batch[offset].2,
                         encoded_batch[offset].3,
@@ -1820,6 +1820,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         elems,
                         base_ocr_config,
                         document_page_number,
+                        layout_width,
                         layout_height,
                         page_margins,
                     );
