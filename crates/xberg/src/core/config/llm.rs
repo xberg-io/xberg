@@ -322,7 +322,7 @@ pub struct LlmConfig {
     /// [`LlmConfig::validate`] rather than reaching liter-llm, which would refuse it
     /// at client-build time with the same complaint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(feature = "alef-meta", alef(since = "1.3.0"))]
+    #[cfg_attr(feature = "alef-meta", alef(since = "1.2.3"))]
     pub max_response_bytes: Option<usize>,
 }
 
