@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **(llm): `LlmConfig` exposes liter-llm's provider response-byte cap.** liter-llm's
+  `ClientConfigBuilder::max_response_bytes` bounds every HTTP response body read from a
+  provider, but xberg's `LlmConfig` never forwarded it, so downstream products had no way to
+  bound provider responses. `LlmConfig::max_response_bytes` mirrors it: it bounds response
+  bodies on every non-streaming call and the error body read on a failed request (a
+  successful streaming response keeps its own existing frame bounds), and defaults to `None`
+  (unbounded), matching liter-llm. `Some(0)` is rejected by `LlmConfig::validate` rather than
+  reaching liter-llm's own builder. (xberg-io/xberg-enterprise#1568, xberg-io/xberg-enterprise#1861)
+
 ## [1.2.3] - 2026-09-16
 
 ### Added

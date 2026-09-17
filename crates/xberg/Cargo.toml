@@ -1711,6 +1711,10 @@ name = "structured_live"
 required-features = ["structured", "pdf"]
 
 [[test]]
+name = "llm_response_byte_cap"
+required-features = ["structured"]
+
+[[test]]
 name = "sqlite_geopackage_extraction"
 required-features = ["sqlite"]
 

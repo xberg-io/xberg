@@ -447,18 +447,20 @@ fn to_liter_llm_config(config: &LlmConfig) -> liter_llm::client::LlmConfig {
 /// own [`liter_llm::client::LlmConfig::into_client_builder`] via
 /// [`to_liter_llm_config`], rather than re-implemented here, so this function
 /// cannot drift from liter-llm's own mapping as new fields are added upstream.
-/// `headers` is applied separately (see [`to_liter_llm_config`]). `providers` has no
-/// equivalent on [`ClientConfig`] at all; it is instead registered as a side effect
-/// via [`register_configured_providers`] — see that function's doc for the
-/// process-global registry semantics this implies.
+/// `headers` and `max_response_bytes` are applied separately (see
+/// [`to_liter_llm_config`]): neither has an equivalent on
+/// [`liter_llm::client::LlmConfig`], only on the builder returned by
+/// `into_client_builder()`. `providers` has no equivalent on [`ClientConfig`] at all;
+/// it is instead registered as a side effect via [`register_configured_providers`] —
+/// see that function's doc for the process-global registry semantics this implies.
 ///
 /// Split out of [`create_client`] so the mapping is observable in tests without
 /// constructing a live HTTP client.
 ///
 /// [`LlmConfig::validate`] runs first, rejecting an out-of-range `top_p`,
-/// `presence_penalty`, or `frequency_penalty` before any provider registration or
-/// header validation below — the same "fail before doing anything else" position as
-/// the existing `validate_cache_backend` check.
+/// `presence_penalty`, `frequency_penalty`, or a zero `max_response_bytes` before any
+/// provider registration or header validation below — the same "fail before doing
+/// anything else" position as the existing `validate_cache_backend` check.
 fn build_client_config(config: &LlmConfig) -> crate::Result<ClientConfig> {
     config.validate()?;
     register_configured_providers(config)?;
@@ -482,6 +484,22 @@ fn build_client_config(config: &LlmConfig) -> crate::Result<ClientConfig> {
                 }
             })?;
         }
+    }
+
+    // liter-llm's `max_response_bytes` builder method is native-only (`native-http`,
+    // non-wasm32) — see the doc comment on `LlmConfig::max_response_bytes`.
+    // `LlmConfig::validate` above already rejects `Some(0)`, so this only ever forwards
+    // a value liter-llm accepts, but the fallible builder call is still mapped for
+    // defense in depth.
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(limit) = config.max_response_bytes {
+        builder = builder.max_response_bytes(limit).map_err(|e| {
+            let msg = format!("Invalid LLM max_response_bytes {limit}: {e}");
+            crate::XbergError::Validation {
+                message: msg,
+                source: Some(Box::new(e)),
+            }
+        })?;
     }
 
     Ok(builder.build())
@@ -1668,6 +1686,52 @@ mod tests {
         };
 
         assert!(build_client_config(&config).is_ok());
+    }
+
+    /// `build_client_config` must succeed with a nonzero `max_response_bytes` set, applying
+    /// liter-llm's native-only builder method (`ClientConfigBuilder::max_response_bytes`).
+    #[test]
+    fn test_build_client_config_accepts_nonzero_max_response_bytes() {
+        let config = LlmConfig {
+            model: "openai/gpt-4o".to_string(),
+            api_key: Some("test-key".to_string()),
+            max_response_bytes: Some(4096),
+            ..LlmConfig::default()
+        };
+
+        assert!(build_client_config(&config).is_ok());
+    }
+
+    /// An unset `max_response_bytes` must still build a client (unbounded, matching
+    /// liter-llm's own default).
+    #[test]
+    fn test_build_client_config_accepts_unset_max_response_bytes() {
+        let config = LlmConfig {
+            model: "openai/gpt-4o".to_string(),
+            api_key: Some("test-key".to_string()),
+            max_response_bytes: None,
+            ..LlmConfig::default()
+        };
+
+        assert!(build_client_config(&config).is_ok());
+    }
+
+    /// `build_client_config` must reject `max_response_bytes: Some(0)` — caught by
+    /// `LlmConfig::validate` before liter-llm's own builder is ever reached.
+    #[test]
+    fn test_build_client_config_rejects_zero_max_response_bytes() {
+        let config = LlmConfig {
+            model: "openai/gpt-4o".to_string(),
+            max_response_bytes: Some(0),
+            ..LlmConfig::default()
+        };
+
+        match build_client_config(&config) {
+            Err(crate::XbergError::Validation { message, .. }) => {
+                assert!(message.contains("max_response_bytes"), "{message}");
+            }
+            other => panic!("expected a Validation error, got {other:?}"),
+        }
     }
 
     /// Regression test for https://github.com/xberg-io/xberg/issues/1381

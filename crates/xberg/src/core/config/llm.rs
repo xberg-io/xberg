@@ -306,6 +306,24 @@ pub struct LlmConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "alef-meta", alef(since = "1.1.0"))]
     pub max_concurrency: Option<usize>,
+
+    /// Maximum size, in bytes, of a single HTTP response body read from the LLM
+    /// provider.
+    ///
+    /// Bounds response bodies on every non-streaming call (chat completions,
+    /// embeddings, model listings, …) and the error body read on a failed
+    /// request; a successful streaming response keeps its own existing frame
+    /// bounds and is unaffected. `None` (the default) means unbounded, matching
+    /// liter-llm's own default.
+    ///
+    /// Mirrors liter-llm's `client::ClientConfigBuilder::max_response_bytes`, which
+    /// is native-only (`native-http`, non-`wasm32`) — see
+    /// `llm::client::build_client_config`. `Some(0)` is rejected by
+    /// [`LlmConfig::validate`] rather than reaching liter-llm, which would refuse it
+    /// at client-build time with the same complaint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "alef-meta", alef(since = "1.3.0"))]
+    pub max_response_bytes: Option<usize>,
 }
 
 impl LlmConfig {
@@ -319,6 +337,7 @@ impl LlmConfig {
     /// `validate_cache_backend` check in that function.
     pub fn validate(&self) -> crate::Result<()> {
         self.validate_sampling_parameters()?;
+        validate_response_byte_cap(self.max_response_bytes)?;
         #[cfg(target_arch = "wasm32")]
         validate_wasm_credential_provider(self.credential_provider.as_deref())?;
         Ok(())
@@ -340,8 +359,25 @@ impl LlmConfig {
     #[cfg(test)]
     pub(crate) fn validate_for_wasm_target(&self) -> crate::Result<()> {
         self.validate_sampling_parameters()?;
+        validate_response_byte_cap(self.max_response_bytes)?;
         validate_wasm_credential_provider(self.credential_provider.as_deref())
     }
+}
+
+/// Reject `max_response_bytes: Some(0)` at config validation, before
+/// `llm::client::build_client_config` ever reaches liter-llm — liter-llm's own
+/// `ClientConfigBuilder::max_response_bytes` refuses a zero limit for the same reason
+/// (a zero-byte cap could never read any response), so this surfaces the identical
+/// failure earlier, against the field name a caller actually set. An unset limit is
+/// always valid.
+fn validate_response_byte_cap(limit: Option<usize>) -> crate::Result<()> {
+    if limit == Some(0) {
+        return Err(crate::XbergError::Validation {
+            message: "Invalid LLM max_response_bytes 0: must be nonzero".to_string(),
+            source: None,
+        });
+    }
+    Ok(())
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -655,6 +691,7 @@ impl std::fmt::Debug for LlmConfig {
             .field("bedrock", &self.bedrock)
             .field("credential_provider", &self.credential_provider)
             .field("max_concurrency", &self.max_concurrency)
+            .field("max_response_bytes", &self.max_response_bytes)
             .finish()
     }
 }
@@ -1244,6 +1281,41 @@ frequency_penalty = -0.5
                 ..Default::default()
             };
             assert!(cfg.validate().is_ok(), "seed {value} should be accepted");
+        }
+    }
+
+    /// `max_response_bytes: Some(0)` must be rejected by `validate` as a named
+    /// `XbergError::Validation`, before `llm::client::build_client_config` ever reaches
+    /// liter-llm.
+    #[test]
+    fn test_llm_config_validate_rejects_zero_max_response_bytes() {
+        let cfg = LlmConfig {
+            model: "openai/gpt-4o".to_string(),
+            max_response_bytes: Some(0),
+            ..Default::default()
+        };
+        match cfg.validate() {
+            Err(crate::XbergError::Validation { message, .. }) => {
+                assert!(message.contains("max_response_bytes"), "{message}");
+            }
+            other => panic!("expected a Validation error for max_response_bytes 0, got {other:?}"),
+        }
+    }
+
+    /// A nonzero `max_response_bytes`, and an unset one, must both be accepted by
+    /// `validate`.
+    #[test]
+    fn test_llm_config_validate_accepts_nonzero_or_unset_max_response_bytes() {
+        for value in [None, Some(1), Some(usize::MAX)] {
+            let cfg = LlmConfig {
+                model: "openai/gpt-4o".to_string(),
+                max_response_bytes: value,
+                ..Default::default()
+            };
+            assert!(
+                cfg.validate().is_ok(),
+                "max_response_bytes {value:?} should be accepted"
+            );
         }
     }
 
