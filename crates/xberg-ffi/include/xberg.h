@@ -16396,6 +16396,26 @@ uintptr_t xberg_llm_config_max_concurrency(XBERGAlefHandle handle);
 int32_t xberg_llm_config_has_max_concurrency(XBERGAlefHandle handle);
 
 /**
+ * Get the `max_response_bytes` field from a `LlmConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uintptr_t xberg_llm_config_max_response_bytes(XBERGAlefHandle handle);
+
+/**
+ * Report whether the `max_response_bytes` field on a `LlmConfig` is `Some`.
+ *
+ * `xberg_llm_config_max_response_bytes` cannot distinguish a `None` field from
+ * a legitimate zero-valued `Some` at the C ABI boundary -- there is no null
+ * representation for a numeric return, so both collapse to the same sentinel.
+ * Call this function first: `1` means the field getter's return value is
+ * meaningful, `0` means the field is absent and the getter's sentinel must be
+ * ignored, `-1` reports an invalid handle (see `xberg_last_error_code`). #
+ * Safety Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_llm_config_has_max_response_bytes(XBERGAlefHandle handle);
+
+/**
  * Validate the request-time sampling parameters that have a documented range:
  * `top_p` (`[0.0, 1.0]`), `presence_penalty`, and `frequency_penalty` (both
  * `[-2.0, 2.0]`, matching liter-llm's/OpenAI's semantics). An unset field is

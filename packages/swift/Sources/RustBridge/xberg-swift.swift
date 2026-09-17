@@ -16091,6 +16091,10 @@ extension LlmConfigRef {
     public func maxConcurrency() -> Optional<UInt> {
         __swift_bridge__$LlmConfig$max_concurrency(ptr).intoSwiftRepr()
     }
+
+    public func maxResponseBytes() -> Optional<UInt> {
+        __swift_bridge__$LlmConfig$max_response_bytes(ptr).intoSwiftRepr()
+    }
 }
 extension LlmConfig: Vectorizable {
     public static func vecOfSelfNew() -> UnsafeMutableRawPointer {

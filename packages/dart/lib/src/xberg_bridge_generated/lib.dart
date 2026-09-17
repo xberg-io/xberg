@@ -11588,6 +11588,22 @@ class LlmConfig {
   /// compatibility in generated language bindings.
   final PlatformInt64? maxConcurrency;
 
+  /// Maximum size, in bytes, of a single HTTP response body read from the LLM
+  /// provider.
+  ///
+  /// Bounds response bodies on every non-streaming call (chat completions,
+  /// embeddings, model listings, …) and the error body read on a failed
+  /// request; a successful streaming response keeps its own existing frame
+  /// bounds and is unaffected. `None` (the default) means unbounded, matching
+  /// liter-llm's own default.
+  ///
+  /// Mirrors liter-llm's `client::ClientConfigBuilder::max_response_bytes`, which
+  /// is native-only (`native-http`, non-`wasm32`) — see
+  /// `llm::client::build_client_config`. `Some(0)` is rejected by
+  /// [`LlmConfig::validate`] rather than reaching liter-llm, which would refuse it
+  /// at client-build time with the same complaint.
+  final PlatformInt64? maxResponseBytes;
+
   const LlmConfig({
     required this.model,
     this.apiKey,
@@ -11616,6 +11632,7 @@ class LlmConfig {
     this.bedrock,
     this.credentialProvider,
     this.maxConcurrency,
+    this.maxResponseBytes,
   });
 
   @override
@@ -11646,7 +11663,8 @@ class LlmConfig {
       healthCheckSecs.hashCode ^
       bedrock.hashCode ^
       credentialProvider.hashCode ^
-      maxConcurrency.hashCode;
+      maxConcurrency.hashCode ^
+      maxResponseBytes.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -11679,7 +11697,8 @@ class LlmConfig {
           healthCheckSecs == other.healthCheckSecs &&
           bedrock == other.bedrock &&
           credentialProvider == other.credentialProvider &&
-          maxConcurrency == other.maxConcurrency;
+          maxConcurrency == other.maxConcurrency &&
+          maxResponseBytes == other.maxResponseBytes;
 }
 
 /// A custom provider configuration entry, in addition to liter-llm's built-in providers.

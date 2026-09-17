@@ -21097,8 +21097,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   LlmConfig dco_decode_llm_config(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 27)
-      throw Exception('unexpected arr length: expect 27 but see ${arr.length}');
+    if (arr.length != 28)
+      throw Exception('unexpected arr length: expect 28 but see ${arr.length}');
     return LlmConfig(
       model: dco_decode_String(arr[0]),
       apiKey: dco_decode_opt_String(arr[1]),
@@ -21129,6 +21129,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         arr[25],
       ),
       maxConcurrency: dco_decode_opt_box_autoadd_i_64(arr[26]),
+      maxResponseBytes: dco_decode_opt_box_autoadd_i_64(arr[27]),
     );
   }
 
@@ -31008,6 +31009,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_credentialProvider =
         sse_decode_opt_box_autoadd_credential_provider_config(deserializer);
     var var_maxConcurrency = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_maxResponseBytes = sse_decode_opt_box_autoadd_i_64(deserializer);
     return LlmConfig(
       model: var_model,
       apiKey: var_apiKey,
@@ -31036,6 +31038,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       bedrock: var_bedrock,
       credentialProvider: var_credentialProvider,
       maxConcurrency: var_maxConcurrency,
+      maxResponseBytes: var_maxResponseBytes,
     );
   }
 
@@ -41573,6 +41576,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       serializer,
     );
     sse_encode_opt_box_autoadd_i_64(self.maxConcurrency, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.maxResponseBytes, serializer);
   }
 
   @protected

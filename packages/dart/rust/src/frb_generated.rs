@@ -13587,6 +13587,7 @@ const _: fn() = || {
         let _: Option<crate::BedrockConfig> = LlmConfig.bedrock;
         let _: Option<crate::CredentialProviderConfig> = LlmConfig.credential_provider;
         let _: Option<i64> = LlmConfig.max_concurrency;
+        let _: Option<i64> = LlmConfig.max_response_bytes;
     }
     {
         let LlmProviderConfig = None::<crate::LlmProviderConfig>.unwrap();
@@ -20881,6 +20882,7 @@ impl SseDecode for crate::LlmConfig {
         let mut var_bedrock = <Option<crate::BedrockConfig>>::sse_decode(deserializer);
         let mut var_credentialProvider = <Option<crate::CredentialProviderConfig>>::sse_decode(deserializer);
         let mut var_maxConcurrency = <Option<i64>>::sse_decode(deserializer);
+        let mut var_maxResponseBytes = <Option<i64>>::sse_decode(deserializer);
         return crate::LlmConfig {
             model: var_model,
             api_key: var_apiKey,
@@ -20909,6 +20911,7 @@ impl SseDecode for crate::LlmConfig {
             bedrock: var_bedrock,
             credential_provider: var_credentialProvider,
             max_concurrency: var_maxConcurrency,
+            max_response_bytes: var_maxResponseBytes,
         };
     }
 }
@@ -30426,6 +30429,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::LlmConfig> {
             self.0.bedrock.into_into_dart().into_dart(),
             self.0.credential_provider.into_into_dart().into_dart(),
             self.0.max_concurrency.into_into_dart().into_dart(),
+            self.0.max_response_bytes.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -38105,6 +38109,7 @@ impl SseEncode for crate::LlmConfig {
         <Option<crate::BedrockConfig>>::sse_encode(self.bedrock, serializer);
         <Option<crate::CredentialProviderConfig>>::sse_encode(self.credential_provider, serializer);
         <Option<i64>>::sse_encode(self.max_concurrency, serializer);
+        <Option<i64>>::sse_encode(self.max_response_bytes, serializer);
     }
 }
 
