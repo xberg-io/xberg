@@ -9,7 +9,7 @@ use crate::error::{Result, XbergError};
 use crate::types::{ExtractedImage, ProcessingWarning};
 use bytes::Bytes;
 use std::borrow::Cow;
-use std::io::Cursor;
+use std::io::{Cursor, Read};
 
 /// Warning source tag for `.ppt` extraction diagnostics (#171 convention).
 const PPT_WARNING_SOURCE: &str = "ppt";
@@ -42,9 +42,28 @@ pub struct PptExtractionResult {
     /// through `pib` -> `msofbtBSE.foDelay`; it stays `None` for a blip no live
     /// shape references (#1620).
     pub images: Vec<ExtractedImage>,
+    /// Embedded OLE objects recovered from the deck's live external-object list, in the
+    /// order that list declares them. Identifying and extracting one needs the async
+    /// pipeline and the caller's `ExtractionConfig`, so `extractors::ppt` does that and
+    /// this stops at the bytes (#1660).
+    pub embedded_objects: Vec<PptEmbeddedObject>,
     /// Non-fatal degradations encountered while extracting (see
     /// `core::diagnostics`). Empty when extraction was complete.
     pub processing_warnings: Vec<ProcessingWarning>,
+}
+
+/// One embedded OLE object recovered from a deck.
+#[cfg_attr(alef, alef(skip))]
+pub struct PptEmbeddedObject {
+    /// 1-based position in the deck's external-object list, counted over what the list
+    /// **declares** rather than over what was recovered. An object whose storage cannot
+    /// be read is absent from the results but still consumes its number, so the objects
+    /// that follow it keep the names they would have had; renumbering the survivors
+    /// would quietly rename a document because an unrelated one failed.
+    pub index: u32,
+    /// The object's own OLE compound file, decompressed. A `.doc`, `.xls` or `.ppt` in
+    /// its own right.
+    pub data: Vec<u8>,
 }
 
 /// One slide's text, numbered by its position in the deck's own persist
@@ -186,6 +205,30 @@ const MAX_USER_EDIT_CHAIN: usize = 4096;
 /// this only stops a hostile self-nesting container from recursing without bound.
 const MAX_SLIDE_LIST_SEARCH_DEPTH: usize = 16;
 
+/// `ExObjListContainer` -- the document's list of external objects (MS-PPT 2.10.1). It is
+/// a child of the live `DocumentContainer`, so an older save's list is never read. ~keep
+const RT_EXTERNAL_OBJECT_LIST: u16 = 0x0409;
+/// `ExEmbedContainer` -- one *embedded* external object. Its linked sibling
+/// `ExLinkContainer` (0x0FD7) keeps only a presentation picture and never the object's
+/// own bytes, so there is nothing for this path to recover from one. ~keep
+const RT_EXTERNAL_OLE_EMBED: u16 = 0x0FCC;
+/// `ExOleObjAtom` -- an embedded object's ids, including which storage holds it
+/// (MS-PPT 2.10.12).
+const RT_EXTERNAL_OLE_OBJECT_ATOM: u16 = 0x0FC3;
+/// `ExOleObjStg` -- an embedded object's storage: a whole OLE compound file.
+const RT_EXTERNAL_OLE_OBJECT_STG: u16 = 0x1011;
+/// `recInstance` on an `ExOleObjStg` meaning its payload is `ExOleObjStgCompressedAtom`:
+/// a 4-byte decompressed size followed by a zlib stream (MS-PPT 2.10.35). Any other
+/// value means the payload is the compound file verbatim. ~keep
+const EX_OLE_OBJ_STG_COMPRESSED: u16 = 1;
+/// Byte offset of `persistIdRef` within an `ExOleObjAtom`'s payload, past `drawAspect`
+/// (4), `type` (4), `exObjId` (4) and `subType` (4) -- MS-PPT 2.10.12, which is also the
+/// field order Apache POI's `ExOleObjAtom` reads. Nothing downstream trusts this offset
+/// on its own: `embedded_object_storage` requires whatever it resolves to be an
+/// `RT_EXTERNAL_OLE_OBJECT_STG` record before reading a byte of it, so a wrong offset
+/// costs the object rather than yielding a neighbouring record as a document. ~keep
+const EX_OLE_OBJ_ATOM_PERSIST_ID_REF_OFFSET: usize = 16;
+
 /// Maximum accepted size for a single embedded picture (100 MB), mirroring
 /// the DOCX/PPTX image cap (`crate::extraction::docx::MAX_IMAGE_FILE_SIZE`).
 /// Bounds allocation from a hostile `recLen` in the untrusted `Pictures`
@@ -201,7 +244,15 @@ const MAX_PICTURE_SIZE: usize = 100 * 1024 * 1024;
 /// like "Click to edit Master title style") is included instead of being skipped.
 #[cfg(test)]
 pub(crate) fn extract_ppt_text(content: &[u8]) -> Result<PptExtractionResult> {
-    extract_ppt_text_with_options(content, false, true)
+    extract_ppt_text_with_options(content, false, true, test_embedded_object_cap())
+}
+
+/// The per-object cap the in-crate tests run under. Read from the config default rather
+/// than restated, so a change to that default cannot leave the tests measuring a limit
+/// no caller uses.
+#[cfg(test)]
+fn test_embedded_object_cap() -> Option<u64> {
+    crate::core::config::ExtractionConfig::default_max_embedded_file_bytes()
 }
 
 /// Extract text from PPT bytes with configurable master slide inclusion and
@@ -212,10 +263,14 @@ pub(crate) fn extract_ppt_text(content: &[u8]) -> Result<PptExtractionResult> {
 ///
 /// When `extract_images` is `true`, the OLE `Pictures` stream (if present)
 /// is walked for embedded raster images (#1417).
+///
+/// When `max_embedded_object_bytes` is `Some`, the deck's embedded OLE objects are
+/// recovered and capped at that many bytes each (#1660); `None` skips them entirely.
 pub(crate) fn extract_ppt_text_with_options(
     content: &[u8],
     include_master_slides: bool,
     extract_images: bool,
+    max_embedded_object_bytes: Option<u64>,
 ) -> Result<PptExtractionResult> {
     let cursor = Cursor::new(content);
     let mut comp = cfb::CompoundFile::open(cursor)
@@ -285,6 +340,13 @@ pub(crate) fn extract_ppt_text_with_options(
         Vec::new()
     };
 
+    let embedded_objects = match (chain.as_ref(), max_embedded_object_bytes) {
+        (Some(chain), Some(max_object_bytes)) => {
+            extract_embedded_objects(&ppt_stream, chain, max_object_bytes, &mut processing_warnings)
+        }
+        _ => Vec::new(),
+    };
+
     Ok(PptExtractionResult {
         text: text.trim().to_string(),
         slides,
@@ -292,6 +354,7 @@ pub(crate) fn extract_ppt_text_with_options(
         metadata,
         speaker_notes,
         images,
+        embedded_objects,
         processing_warnings,
     })
 }
@@ -967,6 +1030,125 @@ fn extract_texts_from_records(
     Ok((slides, loose_texts, speaker_notes))
 }
 
+/// Recover the deck's live embedded OLE objects, in the order its external-object list
+/// declares them.
+///
+/// ```text
+/// DocumentContainer (0x03E8) > ExObjListContainer (0x0409)
+///   ExEmbedContainer (0x0FCC) per embedded object
+///     ExOleObjAtom (0x0FC3) .persistIdRef ─▶ ExOleObjStg (0x1011)
+///                                              the object's own compound file
+/// ```
+///
+/// The storage is reached through the persist directory and never by scanning the stream
+/// for `ExOleObjStg` records. A `.ppt` is append-only across saves, so editing an
+/// embedded object leaves every superseded copy of its storage in the bytes; a scan would
+/// extract those too and has no way to tell which is current. This is the same reason the
+/// slide walk goes through [`persist_chain`] (#1639), and why an unreadable chain yields
+/// nothing here rather than a best-effort scan. ~keep
+///
+/// The bytes come back unidentified: naming the inner document and extracting it needs
+/// the async pipeline and the caller's `ExtractionConfig`, neither of which this sync
+/// parser has, so `extractors::ppt` does that step (#1660).
+fn extract_embedded_objects(
+    ppt_stream: &[u8],
+    chain: &PersistChain,
+    max_object_bytes: u64,
+    warnings: &mut Vec<ProcessingWarning>,
+) -> Vec<PptEmbeddedObject> {
+    let mut objects = Vec::new();
+    let Some((_, document_payload)) = live_document_payload(ppt_stream, chain) else {
+        return objects;
+    };
+
+    let mut records = Vec::new();
+    collect_art_records(document_payload, 0, document_payload.len(), 0, &mut records);
+    let Some(list) = records.iter().find(|record| record.rec_type == RT_EXTERNAL_OBJECT_LIST) else {
+        return objects;
+    };
+    let (list_start, list_end) = (list.content_start, list.content_end);
+
+    for (position, embed) in records
+        .iter()
+        .filter(|record| record.rec_type == RT_EXTERNAL_OLE_EMBED)
+        .filter(|record| record.content_start >= list_start && record.content_end <= list_end)
+        .enumerate()
+    {
+        let index = position as u32 + 1;
+        let Some(persist_id) = records
+            .iter()
+            .find(|record| {
+                record.rec_type == RT_EXTERNAL_OLE_OBJECT_ATOM
+                    && record.content_start >= embed.content_start
+                    && record.content_end <= embed.content_end
+            })
+            .and_then(|atom| {
+                let at = atom.content_start.checked_add(EX_OLE_OBJ_ATOM_PERSIST_ID_REF_OFFSET)?;
+                (at.checked_add(4)? <= atom.content_end).then(|| read_u32_le(document_payload, at))?
+            })
+        else {
+            continue;
+        };
+
+        match embedded_object_storage(ppt_stream, chain, persist_id, max_object_bytes) {
+            Some(data) => objects.push(PptEmbeddedObject { index, data }),
+            None => crate::core::diagnostics::push_warning(
+                warnings,
+                PPT_WARNING_SOURCE,
+                format!("Embedded object {index}: its storage could not be read, so its content was not extracted"),
+            ),
+        }
+    }
+
+    objects
+}
+
+/// The compound file held by the `ExOleObjStg` that `persist_id` names, or `None` when
+/// the directory does not resolve it, the record there is not a storage, or its payload
+/// does not yield a document within `max_object_bytes`.
+///
+/// The record-type check is what keeps a misresolved id harmless: it can only skip an
+/// object, never hand back a neighbouring record's bytes as a document.
+fn embedded_object_storage(
+    ppt_stream: &[u8],
+    chain: &PersistChain,
+    persist_id: u32,
+    max_object_bytes: u64,
+) -> Option<Vec<u8>> {
+    let offset = *chain.entries.get(&persist_id)?;
+    let header = ppt_stream.get(offset..offset.checked_add(8)?)?;
+    if u16::from_le_bytes([header[2], header[3]]) != RT_EXTERNAL_OLE_OBJECT_STG {
+        return None;
+    }
+    let rec_instance = u16::from_le_bytes([header[0], header[1]]) >> 4;
+    let rec_len = u32::from_le_bytes([header[4], header[5], header[6], header[7]]) as usize;
+    let content_start = offset.checked_add(8)?;
+    let payload = ppt_stream.get(content_start..content_start.checked_add(rec_len)?)?;
+
+    decompress_object_storage(payload, rec_instance, max_object_bytes)
+}
+
+/// Unwrap an `ExOleObjStg` payload into the compound file it carries.
+///
+/// The leading 4-byte decompressed size of a compressed payload is attacker-controlled
+/// and is never checked against what actually comes out, so it may size the allocation
+/// hint and nothing else. `take` is what bounds the read, deliberately one byte past
+/// `max_object_bytes` so an over-cap object is rejected here rather than silently
+/// truncated into a half compound file. Mirrors how `extraction::ooxml_embedded` bounds
+/// a declared ZIP member size. ~keep
+fn decompress_object_storage(payload: &[u8], rec_instance: u16, max_object_bytes: u64) -> Option<Vec<u8>> {
+    if rec_instance != EX_OLE_OBJ_STG_COMPRESSED {
+        return (payload.len() as u64 <= max_object_bytes).then(|| payload.to_vec());
+    }
+    let declared = read_u32_le(payload, 0)? as u64;
+    let mut out = Vec::with_capacity(declared.min(max_object_bytes) as usize);
+    flate2::read::ZlibDecoder::new(payload.get(4..)?)
+        .take(max_object_bytes.saturating_add(1))
+        .read_to_end(&mut out)
+        .ok()?;
+    (out.len() as u64 <= max_object_bytes).then_some(out)
+}
+
 /// One record header from the PowerPoint/OfficeArt record tree, flattened out of its
 /// containers so callers can filter by type without re-walking.
 struct ArtRecord {
@@ -1552,6 +1734,98 @@ mod tests {
         buf.extend_from_slice(&[0u8; 8]); // persistIdSeed, lastView, unused
         buf
     }
+
+    /// Build an `ExOleObjAtom` naming `persist_id` as the object's storage. Layout per
+    /// MS-PPT 2.10.12: `drawAspect` (4), `type` (4), `exObjId` (4), `subType` (4),
+    /// `persistIdRef` (4), `options` (4). Only `persistIdRef` is read.
+    fn ex_ole_obj_atom(ex_obj_id: u32, persist_id: u32) -> Vec<u8> {
+        let mut buf = record_header(0x0000, RT_EXTERNAL_OLE_OBJECT_ATOM, 24);
+        buf.extend_from_slice(&1u32.to_le_bytes()); // drawAspect
+        buf.extend_from_slice(&[0u8; 4]); // type: embedded
+        buf.extend_from_slice(&ex_obj_id.to_le_bytes());
+        buf.extend_from_slice(&[0u8; 4]); // subType
+        buf.extend_from_slice(&persist_id.to_le_bytes());
+        buf.extend_from_slice(&[0u8; 4]); // options
+        buf
+    }
+
+    /// Build an `ExObjListContainer` holding one `ExEmbedContainer` per `(exObjId,
+    /// persistIdRef)` pair.
+    fn ex_obj_list(objects: &[(u32, u32)]) -> Vec<u8> {
+        let mut body = Vec::new();
+        for &(ex_obj_id, persist_id) in objects {
+            body.extend_from_slice(&container(
+                RT_EXTERNAL_OLE_EMBED,
+                &ex_ole_obj_atom(ex_obj_id, persist_id),
+            ));
+        }
+        container(RT_EXTERNAL_OBJECT_LIST, &body)
+    }
+
+    /// Build an `ExOleObjStg` carrying `object`, zlib-deflated behind its 4-byte
+    /// decompressed size the way a real deck writes one (MS-PPT 2.10.35).
+    fn ex_ole_obj_stg_compressed(object: &[u8]) -> Vec<u8> {
+        use std::io::Write;
+        let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+        encoder.write_all(object).expect("deflate the object");
+        let deflated = encoder.finish().expect("finish the zlib stream");
+
+        let mut content = Vec::with_capacity(4 + deflated.len());
+        content.extend_from_slice(&(object.len() as u32).to_le_bytes());
+        content.extend_from_slice(&deflated);
+
+        let mut buf = record_header(
+            EX_OLE_OBJ_STG_COMPRESSED << 4,
+            RT_EXTERNAL_OLE_OBJECT_STG,
+            content.len() as u32,
+        );
+        buf.extend_from_slice(&content);
+        buf
+    }
+
+    /// Build an `ExOleObjStg` carrying `object` verbatim (`recInstance` 0).
+    fn ex_ole_obj_stg_uncompressed(object: &[u8]) -> Vec<u8> {
+        let mut buf = record_header(0x0000, RT_EXTERNAL_OLE_OBJECT_STG, object.len() as u32);
+        buf.extend_from_slice(object);
+        buf
+    }
+
+    /// Assemble a deck whose live `DocumentContainer` declares `objects`, followed by the
+    /// `ExOleObjStg` records at `storages`, and a persist chain naming all of them.
+    ///
+    /// Returns the "PowerPoint Document" stream and the `Current User` stream.
+    fn deck_with_embedded_objects(objects: &[(u32, u32)], storages: &[(u32, Vec<u8>)]) -> (Vec<u8>, Vec<u8>) {
+        let mut data = Vec::new();
+        let mut entries = Vec::new();
+
+        let document_offset = data.len() as u32;
+        let mut document_body = ex_obj_list(objects);
+        document_body.extend_from_slice(&container(
+            RT_SLIDE_LIST_WITH_TEXT,
+            &slide_persist_atom(SLIDE_PERSIST_ID),
+        ));
+        data.extend_from_slice(&container(RT_DOCUMENT, &document_body));
+        entries.push((DOCUMENT_PERSIST_ID, document_offset));
+
+        let slide_offset = data.len() as u32;
+        data.extend_from_slice(&container(RT_SLIDE, &text_chars_atom("Embedded Table Slide")));
+        entries.push((SLIDE_PERSIST_ID, slide_offset));
+
+        for (persist_id, storage) in storages {
+            entries.push((*persist_id, data.len() as u32));
+            data.extend_from_slice(storage);
+        }
+
+        let dir_offset = data.len() as u32;
+        data.extend_from_slice(&persist_directory(&entries));
+        let edit_offset = data.len() as u32;
+        data.extend_from_slice(&user_edit_atom(0, dir_offset, DOCUMENT_PERSIST_ID));
+
+        (data, current_user_stream(edit_offset))
+    }
+
+    const DOCUMENT_PERSIST_ID: u32 = 1;
+    const SLIDE_PERSIST_ID: u32 = 2;
 
     /// Build a `Current User` stream whose `CurrentUserAtom` points at `offset_to_current_edit`.
     fn current_user_stream(offset_to_current_edit: u32) -> Vec<u8> {
@@ -2349,6 +2623,215 @@ mod tests {
         assert!(warnings.is_empty());
     }
 
+    /// Resolve the deck's embedded objects the way `extract_ppt_text_with_options` does.
+    fn embedded_objects_of(
+        ppt_stream: &[u8],
+        current_user_stream: &[u8],
+    ) -> (Vec<(u32, Vec<u8>)>, Vec<ProcessingWarning>) {
+        let mut warnings = Vec::new();
+        let objects = match persist_chain(ppt_stream, current_user_stream) {
+            Some(chain) => extract_embedded_objects(
+                ppt_stream,
+                &chain,
+                test_embedded_object_cap().expect("the config default states a per-object cap"),
+                &mut warnings,
+            ),
+            None => Vec::new(),
+        };
+        let objects = objects.into_iter().map(|object| (object.index, object.data)).collect();
+        (objects, warnings)
+    }
+
+    /// GH#1660: an embedded object's bytes live in an `ExOleObjStg` the `ExOleObjAtom`
+    /// names by persist id, zlib-deflated. Before this they were walked over as opaque
+    /// record bytes and the object's whole content was lost.
+    #[test]
+    fn should_recover_an_embedded_object_from_its_persisted_storage() {
+        let object = b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1 pretend compound file, the table lives here";
+        let (data, current_user) = deck_with_embedded_objects(&[(1, 10)], &[(10, ex_ole_obj_stg_compressed(object))]);
+
+        let (objects, warnings) = embedded_objects_of(&data, &current_user);
+
+        assert_eq!(objects, vec![(1, object.to_vec())]);
+        assert!(warnings.is_empty(), "a clean recovery reports nothing");
+    }
+
+    /// Two objects come back in the order the external-object list declares them, not in
+    /// the order their storages happen to sit in the stream.
+    #[test]
+    fn should_recover_objects_in_external_object_list_order() {
+        let first = b"first object bytes";
+        let second = b"second object bytes";
+        // Storages deliberately laid down in the opposite order to the list.
+        let (data, current_user) = deck_with_embedded_objects(
+            &[(1, 11), (2, 10)],
+            &[
+                (10, ex_ole_obj_stg_compressed(second)),
+                (11, ex_ole_obj_stg_compressed(first)),
+            ],
+        );
+
+        let (objects, _) = embedded_objects_of(&data, &current_user);
+
+        assert_eq!(objects, vec![(1, first.to_vec()), (2, second.to_vec())]);
+    }
+
+    /// An `ExOleObjStgUncompressedAtom` (`recInstance` 0) carries the compound file
+    /// verbatim, with no 4-byte size prefix to strip.
+    #[test]
+    fn should_read_an_uncompressed_object_storage_verbatim() {
+        let object = b"uncompressed compound file bytes";
+        let (data, current_user) = deck_with_embedded_objects(&[(1, 10)], &[(10, ex_ole_obj_stg_uncompressed(object))]);
+
+        let (objects, _) = embedded_objects_of(&data, &current_user);
+
+        assert_eq!(objects, vec![(1, object.to_vec())]);
+    }
+
+    /// GH#1660, the reason resolution goes through the persist directory: a `.ppt` stream
+    /// is append-only across saves, so editing an embedded object leaves the previous
+    /// save's storage in the bytes. Scanning the stream for `ExOleObjStg` records would
+    /// extract both copies; the live directory names only one. This is the object-storage
+    /// counterpart of `a_superseded_slide_revision_is_not_extracted_as_a_slide` (#1639).
+    #[test]
+    fn a_superseded_object_storage_revision_is_not_extracted() {
+        let stale = b"the previous save's table";
+        let live = b"the current table";
+        // Both storages are in the stream; only persist id 11 is named by the list.
+        let (data, current_user) = deck_with_embedded_objects(
+            &[(1, 11)],
+            &[
+                (10, ex_ole_obj_stg_compressed(stale)),
+                (11, ex_ole_obj_stg_compressed(live)),
+            ],
+        );
+
+        let (objects, _) = embedded_objects_of(&data, &current_user);
+
+        assert_eq!(
+            objects,
+            vec![(1, live.to_vec())],
+            "the superseded revision is still in the stream and must not be extracted"
+        );
+    }
+
+    /// A deck whose persist chain cannot be read yields no objects rather than falling
+    /// back to a stream scan, because that fallback is exactly what would resurrect the
+    /// superseded revisions the test above pins down.
+    #[test]
+    fn an_unreadable_persist_chain_yields_no_embedded_objects() {
+        let (data, _) = deck_with_embedded_objects(&[(1, 10)], &[(10, ex_ole_obj_stg_compressed(b"table"))]);
+
+        let (objects, _) = embedded_objects_of(&data, &[]);
+
+        assert!(objects.is_empty(), "no chain, no objects -- never a best-effort scan");
+    }
+
+    /// A `persistIdRef` resolving to a record that is not an `ExOleObjStg` is skipped.
+    /// This is what keeps a misread offset from handing a neighbouring record's bytes
+    /// back as though they were a document.
+    #[test]
+    fn a_persist_id_naming_something_other_than_a_storage_is_skipped() {
+        // Persist id 2 is the deck's Slide container, not a storage.
+        let (data, current_user) = deck_with_embedded_objects(&[(1, SLIDE_PERSIST_ID)], &[]);
+
+        let (objects, warnings) = embedded_objects_of(&data, &current_user);
+
+        assert!(objects.is_empty());
+        assert_eq!(
+            warnings.len(),
+            1,
+            "the skipped object is reported, not silently dropped"
+        );
+    }
+
+    /// An object whose payload inflates past the cap is skipped rather than truncated:
+    /// half a compound file is not a document, and the declared size cannot be trusted
+    /// to refuse it up front.
+    #[test]
+    fn an_object_storage_over_the_cap_is_skipped_with_a_warning() {
+        let object = vec![b'A'; 4096];
+        let (data, current_user) = deck_with_embedded_objects(&[(1, 10)], &[(10, ex_ole_obj_stg_compressed(&object))]);
+
+        let chain = persist_chain(&data, &current_user).expect("the persist chain must resolve");
+        let mut warnings = Vec::new();
+        let objects = extract_embedded_objects(&data, &chain, 1024, &mut warnings);
+
+        assert!(
+            objects.is_empty(),
+            "an object over the cap must not come back truncated"
+        );
+        assert_eq!(warnings.len(), 1);
+    }
+
+    /// An object whose storage cannot be read consumes its number anyway, so the objects
+    /// declared after it keep the names they would otherwise have had. Numbering the
+    /// survivors instead would rename a readable document because an unrelated one
+    /// failed, which is exactly the kind of silent reattribution #1639 and #1640 were.
+    #[test]
+    fn a_failed_object_does_not_renumber_the_ones_declared_after_it() {
+        let third = b"the third object, readable";
+        // Object 2 names persist id 99, which no directory entry resolves.
+        let (data, current_user) = deck_with_embedded_objects(
+            &[(1, SLIDE_PERSIST_ID), (2, 99), (3, 12)],
+            &[(12, ex_ole_obj_stg_compressed(third))],
+        );
+
+        let (objects, warnings) = embedded_objects_of(&data, &current_user);
+
+        assert_eq!(
+            objects,
+            vec![(3, third.to_vec())],
+            "the readable object keeps its declared position of 3"
+        );
+        assert_eq!(warnings.len(), 2, "both unreadable objects are reported");
+    }
+
+    /// A deck that declares no external objects produces none. `test_documents/ppt/simple.ppt`
+    /// is the real-world case: it carries 65 `ExObjRefAtom`s and 12 hyperlink atoms and not a
+    /// single embedded object, so a walk keyed on anything looser than `ExEmbedContainer`
+    /// would invent objects for it.
+    #[test]
+    fn a_deck_with_no_external_object_list_yields_no_embedded_objects() {
+        let mut data = Vec::new();
+        let document_offset = data.len() as u32;
+        data.extend_from_slice(&container(
+            RT_DOCUMENT,
+            &container(RT_SLIDE_LIST_WITH_TEXT, &slide_persist_atom(SLIDE_PERSIST_ID)),
+        ));
+        let slide_offset = data.len() as u32;
+        data.extend_from_slice(&container(RT_SLIDE, &text_chars_atom("only text")));
+        let dir_offset = data.len() as u32;
+        data.extend_from_slice(&persist_directory(&[
+            (DOCUMENT_PERSIST_ID, document_offset),
+            (SLIDE_PERSIST_ID, slide_offset),
+        ]));
+        let edit_offset = data.len() as u32;
+        data.extend_from_slice(&user_edit_atom(0, dir_offset, DOCUMENT_PERSIST_ID));
+
+        let (objects, warnings) = embedded_objects_of(&data, &current_user_stream(edit_offset));
+
+        assert!(objects.is_empty());
+        assert!(warnings.is_empty());
+    }
+
+    /// `test_documents/ppt/simple.ppt` has no embedded OLE objects, and must keep coming
+    /// back with none now that the deck is walked for them.
+    #[test]
+    fn real_simple_ppt_reports_no_embedded_objects() {
+        let test_file = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test_documents/ppt/simple.ppt");
+        if !test_file.exists() {
+            return;
+        }
+        let content = std::fs::read(&test_file).expect("Failed to read test PPT");
+        let result = extract_ppt_text(&content).expect("Failed to extract PPT text");
+
+        assert!(
+            result.embedded_objects.is_empty(),
+            "simple.ppt declares no ExEmbedContainer; its ExObjRefAtoms are hyperlink references"
+        );
+    }
+
     /// Build a minimal OLE/CFB container with a "PowerPoint Document" stream
     /// and, optionally, a "Pictures" stream, mirroring what a real `.ppt`
     /// looks like closely enough to drive `extract_ppt_text_with_options`
@@ -2379,8 +2862,8 @@ mod tests {
         let pictures_stream = blip_record_one_uid(0x46A, RT_BLIP_JPEG, picture);
         let content = build_test_ppt_ole(&ppt_stream, Some(&pictures_stream));
 
-        let result =
-            extract_ppt_text_with_options(&content, false, true).expect("synthetic OLE container should parse");
+        let result = extract_ppt_text_with_options(&content, false, true, test_embedded_object_cap())
+            .expect("synthetic OLE container should parse");
 
         assert_eq!(result.images.len(), 1);
         assert_eq!(result.images[0].format, "jpeg");
@@ -2394,8 +2877,8 @@ mod tests {
         let pictures_stream = blip_record_one_uid(0x46A, RT_BLIP_JPEG, b"jpeg-bytes");
         let content = build_test_ppt_ole(&ppt_stream, Some(&pictures_stream));
 
-        let result =
-            extract_ppt_text_with_options(&content, false, false).expect("synthetic OLE container should parse");
+        let result = extract_ppt_text_with_options(&content, false, false, test_embedded_object_cap())
+            .expect("synthetic OLE container should parse");
 
         assert!(
             result.images.is_empty(),
@@ -2408,8 +2891,8 @@ mod tests {
         let ppt_stream = container(RT_SLIDE, &text_chars_atom("Slide One"));
         let content = build_test_ppt_ole(&ppt_stream, None);
 
-        let result =
-            extract_ppt_text_with_options(&content, false, true).expect("synthetic OLE container should parse");
+        let result = extract_ppt_text_with_options(&content, false, true, test_embedded_object_cap())
+            .expect("synthetic OLE container should parse");
 
         assert!(result.images.is_empty());
     }
@@ -2467,7 +2950,8 @@ mod tests {
         stream.extend_from_slice(&container(RT_SLIDE, &slide_two));
 
         let content = build_test_ppt_ole(&stream, Some(&pictures_stream));
-        let result = extract_ppt_text_with_options(&content, false, true).expect("synthetic deck should parse");
+        let result = extract_ppt_text_with_options(&content, false, true, test_embedded_object_cap())
+            .expect("synthetic deck should parse");
 
         assert_eq!(result.images.len(), 2, "both blips must still be extracted");
         assert_eq!(&result.images[0].data[..], &first_picture[..]);
@@ -2494,7 +2978,8 @@ mod tests {
         stream.extend_from_slice(&container(RT_SLIDE, &text_chars_atom("Slide One")));
 
         let content = build_test_ppt_ole(&stream, Some(&pictures_stream));
-        let result = extract_ppt_text_with_options(&content, false, true).expect("synthetic deck should parse");
+        let result = extract_ppt_text_with_options(&content, false, true, test_embedded_object_cap())
+            .expect("synthetic deck should parse");
 
         assert_eq!(result.images.len(), 1);
         assert_eq!(result.images[0].page_number, None);
@@ -2510,7 +2995,8 @@ mod tests {
         stream.extend_from_slice(&container(RT_SLIDE, &opt_with_pib(99)));
 
         let content = build_test_ppt_ole(&stream, Some(&pictures_stream));
-        let result = extract_ppt_text_with_options(&content, false, true).expect("synthetic deck should parse");
+        let result = extract_ppt_text_with_options(&content, false, true, test_embedded_object_cap())
+            .expect("synthetic deck should parse");
 
         assert_eq!(result.images.len(), 1);
         assert_eq!(result.images[0].page_number, None);

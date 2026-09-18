@@ -5,11 +5,11 @@
 use crate::Result;
 use crate::core::config::ExtractionConfig;
 use crate::core::mime::LEGACY_POWERPOINT_MIME_TYPE;
-use crate::extraction::ppt::PptSlideText;
+use crate::extraction::ppt::{PptEmbeddedObject, PptSlideText};
 use crate::plugins::{InternalDocumentExtractor, Plugin};
-use crate::types::ExtractedImage;
 use crate::types::internal::InternalDocument;
 use crate::types::internal_builder::InternalDocumentBuilder;
+use crate::types::{ArchiveEntry, ExtractedImage, ProcessingWarning};
 use crate::types::{Metadata, PageInfo, PageStructure, PageUnitType};
 use ahash::AHashMap;
 use async_trait::async_trait;
@@ -32,6 +32,10 @@ impl Default for PptExtractor {
         Self::new()
     }
 }
+
+/// Warning source tag for embedded-object failures, distinct from the `ppt` tag the
+/// record parser uses so a caller can tell a malformed deck from an unreadable object.
+const PPT_EMBEDDED_WARNING_SOURCE: &str = "ppt_embedded_objects";
 
 /// Join a title's outline paragraphs -- kept as `\n` inside `PptSlideText::title`, one
 /// `\r` paragraph mark per break -- into the single line a `Slide` node's title is
@@ -140,6 +144,56 @@ impl PptExtractor {
 
         builder.build()
     }
+
+    /// Identify each recovered OLE object and extract it recursively, as
+    /// `extractors::pptx` does for the members of `ppt/embeddings/`.
+    ///
+    /// A legacy deck names its embedded objects nowhere, so each is pathed by the
+    /// position the deck's external-object list declares it at. That number is fixed by
+    /// the file, not by how many objects happened to be readable, so one object failing
+    /// does not rename the rest.
+    ///
+    /// An object that cannot be identified or extracted is reported and skipped: one
+    /// unreadable object must not cost the caller the deck's text or the other objects.
+    async fn extract_embedded_objects(
+        objects: &[PptEmbeddedObject],
+        config: &ExtractionConfig,
+    ) -> (Vec<ArchiveEntry>, Vec<ProcessingWarning>) {
+        let mut children = Vec::new();
+        let mut warnings = Vec::new();
+
+        let mut child_config = config.clone();
+        child_config.max_archive_depth = config.max_archive_depth.saturating_sub(1);
+
+        for object in objects {
+            let path = format!("embedded-object-{}", object.index);
+            let Some((inner_bytes, inner_mime)) =
+                crate::extraction::ooxml_embedded::extract_ole_embedded_object(&object.data)
+            else {
+                crate::core::diagnostics::push_warning(
+                    &mut warnings,
+                    PPT_EMBEDDED_WARNING_SOURCE,
+                    format!("Skipped embedded object '{path}': format identification not supported"),
+                );
+                continue;
+            };
+
+            match crate::core::extractor::extract_bytes(&inner_bytes, &inner_mime, &child_config).await {
+                Ok(result) => children.push(ArchiveEntry {
+                    path,
+                    mime_type: inner_mime,
+                    result: Box::new(result),
+                }),
+                Err(e) => crate::core::diagnostics::push_warning(
+                    &mut warnings,
+                    PPT_EMBEDDED_WARNING_SOURCE,
+                    format!("Failed to extract embedded object '{path}': {e}"),
+                ),
+            }
+        }
+
+        (children, warnings)
+    }
 }
 
 impl Plugin for PptExtractor {
@@ -179,6 +233,15 @@ impl InternalDocumentExtractor for PptExtractor {
     ) -> Result<InternalDocument> {
         let include_master_slides = config.content_filter.as_ref().is_some_and(|f| f.include_headers);
         let extract_images = config.needs_image_data();
+        // Recovering an embedded object only to refuse to descend into it would cost the
+        // zlib inflate for nothing, so the depth budget is checked before parsing rather
+        // than after -- the same budget `extractors::pptx` spends on `ppt/embeddings/`.
+        let max_embedded_object_bytes = (config.max_archive_depth > 0).then(|| {
+            let security_limits = config.security_limits.clone().unwrap_or_default();
+            config
+                .max_embedded_file_bytes
+                .unwrap_or(security_limits.max_archive_size as u64)
+        });
 
         let result = {
             #[cfg(feature = "tokio-runtime")]
@@ -194,12 +257,18 @@ impl InternalDocumentExtractor for PptExtractor {
                         &content_owned,
                         include_master_slides,
                         extract_images,
+                        max_embedded_object_bytes,
                     )
                 })
                 .await
                 .map_err(|e| crate::error::XbergError::parsing(format!("PPT extraction task failed: {e}")))?
             } else {
-                crate::extraction::ppt::extract_ppt_text_with_options(content, include_master_slides, extract_images)
+                crate::extraction::ppt::extract_ppt_text_with_options(
+                    content,
+                    include_master_slides,
+                    extract_images,
+                    max_embedded_object_bytes,
+                )
             }
 
             #[cfg(not(feature = "tokio-runtime"))]
@@ -207,7 +276,12 @@ impl InternalDocumentExtractor for PptExtractor {
                 if config.cancel_token.as_ref().map(|t| t.is_cancelled()).unwrap_or(false) {
                     return Err(crate::error::XbergError::Cancelled);
                 }
-                crate::extraction::ppt::extract_ppt_text_with_options(content, include_master_slides, extract_images)
+                crate::extraction::ppt::extract_ppt_text_with_options(
+                    content,
+                    include_master_slides,
+                    extract_images,
+                    max_embedded_object_bytes,
+                )
             }
         }?;
 
@@ -273,6 +347,15 @@ impl InternalDocumentExtractor for PptExtractor {
         let mut doc = Self::build_internal_document(&result.slides, &result.images);
         doc.mime_type = mime_type.to_string();
         doc.processing_warnings.extend(result.processing_warnings);
+
+        if !result.embedded_objects.is_empty() {
+            let (children, embed_warnings) = Self::extract_embedded_objects(&result.embedded_objects, config).await;
+            if !children.is_empty() {
+                doc.children = Some(children);
+            }
+            doc.processing_warnings.extend(embed_warnings);
+        }
+
         doc.metadata = Metadata {
             title: meta_title,
             subject: meta_subject,

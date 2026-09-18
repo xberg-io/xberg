@@ -256,11 +256,15 @@ pub(crate) async fn extract_ooxml_embedded_objects(
 /// present, so the caller can fall back to a "format identification not supported"
 /// warning instead of silently dropping the object.
 ///
+/// Also used by the legacy `.ppt` path (`extractors::ppt`), whose embedded objects arrive
+/// as compound files out of `ExOleObjStg` records rather than as ZIP members, but need
+/// exactly this identification once unwrapped (#1660).
+///
 /// Only compiled when the `cfb` dependency is guaranteed active (via `office`, `hwp`, or
 /// `email`); other feature combinations (e.g. `excel` alone, which also calls this
 /// module) keep the pre-existing warn-and-skip behavior.
 #[cfg(any(feature = "office", feature = "hwp", feature = "email"))]
-fn extract_ole_embedded_object(data: &[u8]) -> Option<(Vec<u8>, String)> {
+pub(crate) fn extract_ole_embedded_object(data: &[u8]) -> Option<(Vec<u8>, String)> {
     let mut compound_file = cfb::CompoundFile::open(Cursor::new(data)).ok()?;
 
     if compound_file.exists("Package") {
@@ -291,7 +295,7 @@ fn extract_ole_embedded_object(data: &[u8]) -> Option<(Vec<u8>, String)> {
 /// (e.g. `excel` without `office`/`hwp`/`email`): OLE objects are always reported as
 /// unidentifiable rather than attempting extraction.
 #[cfg(not(any(feature = "office", feature = "hwp", feature = "email")))]
-fn extract_ole_embedded_object(_data: &[u8]) -> Option<(Vec<u8>, String)> {
+pub(crate) fn extract_ole_embedded_object(_data: &[u8]) -> Option<(Vec<u8>, String)> {
     None
 }
 

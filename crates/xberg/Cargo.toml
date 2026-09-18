@@ -85,6 +85,11 @@ excel = ["dep:calamine", "dep:roxmltree", "dep:zip", "dep:quick-xml", "tokio-run
 excel-wasm = ["dep:calamine", "dep:roxmltree", "dep:zip"]
 office = [
     "dep:cfb",
+    # Legacy `.ppt` embedded OLE object storages are zlib streams
+    # (`ExOleObjStgCompressedAtom`, MS-PPT 2.10.35). No new code is compiled for it:
+    # `dep:zip` below already builds flate2 through its `deflate-flate2` feature, so
+    # this only makes the crate nameable from `extraction::ppt`. ~keep
+    "dep:flate2",
     "dep:roxmltree",
     "dep:zip",
     "dep:quick-xml",
@@ -1677,9 +1682,14 @@ optional = true
 [build-dependencies]
 
 [dev-dependencies]
+# Test-only: `issue_1660_ppt_embedded_ole_objects` assembles a legacy `.ppt` -- an OLE
+# container whose embedded object storage is a zlib stream -- so it needs the same two
+# crates the extractor reads one with. ~keep
+cfb = { workspace = true }
 criterion = { workspace = true }
 dotenvy = "0.15"
 filetime = "0.2"
+flate2 = { workspace = true }
 image = { workspace = true, default-features = false, features = ["png"] }
 # Test retrieval features prove runtime compilation stays offline under Cargo feature unification. ~keep
 jsonschema = { version = "0.56", default-features = false, features = ["resolve-file", "resolve-http", "tls-ring"] }

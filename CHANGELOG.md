@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **(ppt): legacy `.ppt` decks now surrender their embedded OLE objects.** A PowerPoint
+  97-2003 deck can carry a table as an embedded object, a Word document or an Excel sheet
+  inserted as an object, and that object's own bytes sit in the file inside an
+  `ExOleObjStg` record. The legacy extractor walked every external-object record as opaque
+  bytes, so a slide built around such a table came out with its title and no content.
+  Those objects are now recovered and extracted recursively, then attached to
+  `ExtractedDocument.children` as `embedded-object-1`, `-2` and so on, in the order the
+  deck's external-object list declares them. This is the contract `.pptx` already has for
+  the members of `ppt/embeddings/`, including the `max_embedded_file_bytes` size cap and
+  the `max_archive_depth` budget. Storages resolve through the deck's persist directory,
+  so a superseded revision left behind by an earlier save is not extracted alongside the
+  current one. (xberg-io/xberg#1660)
+
 ## [1.2.4] - 2026-09-18
 
 ### Added
