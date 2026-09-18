@@ -4271,17 +4271,6 @@
           },
           "type": "array"
         },
-        "tokio_util_features": {
-          "default": null,
-          "description": "Features for the auto-emitted `tokio-util` dependency that backs napi trait-bridge\ncancellation tokens. Defaults to `[\"rt\"]` because `tokio_util::sync::CancellationToken`\nis gated behind the `rt` feature in tokio-util 0.7+. Override when a consumer needs\nadditional tokio-util features (e.g. `[\"rt\", \"codec\"]`). ~keep",
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "array",
-            "null"
-          ]
-        },
         "type_prefix": {
           "default": null,
           "description": "Prefix for generated type names (e.g. \"Js\" produces `JsConversionOptions`).\nDefaults to `\"Js\"`.",
@@ -4879,7 +4868,7 @@
     },
     "PolyConfig": {
       "additionalProperties": false,
-      "description": "Repo-specific `poly.toml` overrides merged into the emitter's generated\noutput.\n\nDeclared under `[workspace.poly]` in `alef.toml`.  An empty (or absent)\n`[workspace.poly]` section leaves the generated output byte-identical to the\ndefault.\n\n```toml\n[workspace.poly]\nexclude = [\"vendor/generated/**\", \"third-party/**\"]\nfile-safety-exclude = [\"crates/*/src/lib.rs\"]\n\n[workspace.poly.typos.extend-words]\nflate = \"flate\"\n\n[workspace.poly.typos.extend-identifiers]\nPyMuPDF = \"PyMuPDF\"\n\n[workspace.poly.per-file-ignores]\n\"**/legacy_api.py\" = [\"ANN\", \"D103\"]\n\"**/compat.py\"     = [\"UP035\", \"F401\"]\n\n[workspace.poly.uncomment]\nenabled = true\npreserve-patterns = [\"SAFETY:\"]\n```",
+      "description": "Repo-specific `poly.toml` overrides merged into the emitter's generated\noutput.\n\nDeclared under `[workspace.poly]` in `alef.toml`.  An empty (or absent)\n`[workspace.poly]` section leaves the generated output byte-identical to the\ndefault.\n\n```toml\n[workspace.poly]\nexclude = [\"vendor/generated/**\", \"third-party/**\"]\nfile-safety-exclude = [\"crates/*/src/lib.rs\"]\n\n[workspace.poly.typos.extend-words]\nflate = \"flate\"\n\n[workspace.poly.typos.extend-identifiers]\nPyMuPDF = \"PyMuPDF\"\n\n[workspace.poly.per-file-ignores]\n\"**/legacy_api.py\" = [\"ANN\", \"D103\"]\n\"**/compat.py\"     = [\"UP035\", \"F401\"]\n\n[workspace.poly.uncomment]\nenabled = true\npreserve-patterns = [\"SAFETY:\"]\n\n[workspace.poly.shell-formatter]\nenabled = true\nindent-width = 2\n```",
       "properties": {
         "exclude": {
           "default": [],
@@ -4934,6 +4923,18 @@
           "default": {},
           "description": "Extra pyrefly type-checker error suppressions, emitted as additional\n`[[tool.pyrefly.sub-config]]` blocks in the generated `pyproject.toml`\n(alongside the always-emitted `api.py` wrapper sub-config).\n\nKeys are glob patterns (matched against file paths by pyrefly); values\nare the pyrefly error codes to disable for the matched files (e.g.\n`bad-argument-type`, `missing-import`). Use this for extension-generated\nPython modules whose runtime-reconciled pyo3 boundaries a static checker\ncannot follow — the same rationale as the built-in `api.py` sub-config.\n\nUses [`BTreeMap`] so entries are written in deterministic (alphabetical\nkey) order. An empty map emits no extra sub-config blocks.",
           "type": "object"
+        },
+        "shell-formatter": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ShellFormatterConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional shell formatter (`shfmt`) opt-in emitted as a `[fmt.shell.shfmt]`\ntable.\n\nAbsent (the default) emits NO `[fmt.shell.shfmt]` table, keeping alef's\npure-Rust-tooling policy intact and the output byte-identical to the\npre-feature default. When present, a `[fmt.shell.shfmt]` table is\nemitted with the configured `enabled` / `indent_width` values."
         },
         "typos": {
           "$ref": "#/$defs/TyposConfig",
@@ -6622,6 +6623,29 @@
       ],
       "type": "object"
     },
+    "ShellFormatterConfig": {
+      "additionalProperties": false,
+      "description": "Shell formatter (`shfmt`) opt-in emitted under `[fmt.shell.shfmt]`.\n\nDeclared under `[workspace.poly.shell-formatter]` in `alef.toml`. Absent\n(the default) emits NO `[fmt.shell.shfmt]` table, leaving the output\nbyte-identical to the pre-feature default and preserving alef's\npure-Rust-tooling policy (see `poly_toml_never_enables_system_native_formatters`).\nA consumer repo that needs shell scripts formatted opts in explicitly.\n\n```toml\n[workspace.poly.shell-formatter]\nenabled = true\nindent-width = 2\n```",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Whether the shfmt catalog tool runs at all.\n\nEmitted as `enabled` in the generated `[fmt.shell.shfmt]` table.",
+          "type": "boolean"
+        },
+        "indent-width": {
+          "default": null,
+          "description": "Indent width (in spaces) shfmt uses to reformat shell scripts.\n\nEmitted as `indent_width` in the generated `[fmt.shell.shfmt]` table\nwhen set. Absent leaves the key unset, so shfmt falls back to its own\ndefault (tabs).",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
     "SnippetCapabilities": {
       "additionalProperties": {
         "items": {
@@ -8000,6 +8024,7 @@
             "lint-workspace": null,
             "per-file-ignores": {},
             "pyrefly-sub-configs": {},
+            "shell-formatter": null,
             "typos": {
               "extend-identifiers": {},
               "extend-words": {}
@@ -8224,7 +8249,7 @@
       "type": "object"
     }
   },
-  "$id": "https://github.com/xberg-io/alef/releases/download/v0.89.0/alef.schema.json",
+  "$id": "https://github.com/xberg-io/alef/releases/download/v0.91.3/alef.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "JSON Schema for the JSON representation of alef.toml.",
@@ -8313,6 +8338,7 @@
           "lint-workspace": null,
           "per-file-ignores": {},
           "pyrefly-sub-configs": {},
+          "shell-formatter": null,
           "typos": {
             "extend-identifiers": {},
             "extend-words": {}
@@ -8343,6 +8369,6 @@
   ],
   "title": "Alef configuration",
   "type": "object",
-  "version": "0.89.0",
-  "x-alef-version": "0.89.0"
+  "version": "0.91.3",
+  "x-alef-version": "0.91.3"
 }

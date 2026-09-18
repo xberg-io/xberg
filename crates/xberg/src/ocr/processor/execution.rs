@@ -52,7 +52,10 @@ fn doc_orientation_detector() -> &'static crate::doc_orientation::DocOrientation
     &DETECTOR
 }
 
-use crate::table_core::{HocrWord, MIN_TABLE_CANDIDATE_WORDS, cluster_words_into_table_regions, detect_rows};
+use crate::table_core::{
+    HocrWord, MIN_TABLE_CANDIDATE_WORDS, cluster_words_into_table_regions, detect_rows, drop_leading_caption_row,
+    median_word_height, merge_disjoint_numeric_columns,
+};
 use crate::types::OcrElement;
 
 #[cfg(auto_rotate)]
@@ -2046,11 +2049,15 @@ pub(super) fn perform_ocr(
                 .take(200)
                 .collect();
 
-            let (mut table, column_positions) = reconstruct_table_with_columns(
+            let (mut table, mut column_positions) = reconstruct_table_with_columns(
                 &region_words,
                 config.table_column_threshold,
                 config.table_row_threshold_ratio,
             );
+            // A section caption sharing this region with the real header row (#1649) always sits
+            // in row 0, ahead of any right-aligned-amount column split, so drop it first. ~keep
+            drop_leading_caption_row(&mut table);
+            merge_disjoint_numeric_columns(&mut table, &mut column_positions, median_word_height(&region_words));
             let retry_region = if let Some((quantity_column, blank_row)) = quantity_retry_column_index(&table) {
                 let row_positions = detect_rows(&region_words, config.table_row_threshold_ratio);
                 if row_positions.len() == table.len() {

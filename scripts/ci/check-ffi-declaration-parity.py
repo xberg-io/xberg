@@ -101,6 +101,7 @@ KNOWN_BROKEN = {
     "java": {
         "xberg_registry_sample_bytes": _SAMPLE_BYTES,
         "xberg_last_error_code": _INT32_AS_LONG,
+        "xberg_ocr_backend_supports_language": _INT32_AS_LONG,
         "xberg_registry_is_empty": _INT32_AS_LONG,
         "xberg_verify_excerpt": _INT32_AS_LONG,
         **dict.fromkeys(_PLUGIN_REGISTRY_INT32, _INT32_AS_LONG),

@@ -34,10 +34,17 @@ dev = [
 bench-docling = ["docling-jobkit==3.5.0", "easyocr>=1.7.2"]
 bench-markitdown = ["markitdown[all]==0.1.7"]
 bench-mineru = ["mineru[pipeline]==3.4.5", "onnxruntime", "six"]
+# paddlepaddle==3.3.1 ships no manylinux aarch64 wheel for any CPython version (checked
+# against every cp39-cp313 build on PyPI), so it carries an explicit platform exclusion
+# below rather than leaving `tool.uv.environments` to reject the whole linux/aarch64 split
+# -- benchmarks.yaml runs `uv sync --frozen` for other groups (bench-docling and friends) on
+# ubuntu-24.04-arm, and those still need a resolvable lock on that platform. paddleocr
+# itself is a pure-Python wheel with no paddlepaddle in its own dependency metadata, so it
+# is left unrestricted. ~keep
 bench-paddleocr-python = [
   "numpy>=2.0",
   "paddleocr==3.7.0; python_version < '3.14'",
-  "paddlepaddle==3.3.1; python_version < '3.14'",
+  "paddlepaddle==3.3.1; python_version < '3.14' and (sys_platform != 'linux' or platform_machine != 'aarch64')",
   "pillow>=10.0.0",
   "pymupdf==1.28.2",
   "setuptools>=80.9; python_version < '3.14'",

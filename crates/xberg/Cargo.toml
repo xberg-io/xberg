@@ -1688,6 +1688,9 @@ qrcode = { version = "0.14", default-features = false, features = ["image"] }
 # static_engine unit tests, without a network fetch.
 safetensors = "0.8"
 serial_test = "3.5.0"
+# Test-only: pins a bundled fixture's bytes by SHA256 so a regression test provably
+# exercises the exact reported sample rather than a substitute. ~keep
+sha2 = { workspace = true }
 syn = { version = "3", features = ["full", "visit"] }
 tar = "^0.4"
 tempfile = { workspace = true }

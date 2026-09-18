@@ -702,7 +702,14 @@ fn post_process_table_inner(
             } else {
                 empty_count * 4 > data_row_count * 3
             };
-            if too_sparse {
+            // A column with its own non-empty header label (e.g. a bank statement's "DEPOSIT",
+            // populated on only a minority of transaction rows) is a legitimate, intentionally
+            // sparse column, not the noise this density gate targets -- mirrors
+            // `prune_spurious_interior_column`'s established rule elsewhere in this file
+            // (`header[column].trim().is_empty()` gates eligibility there too), rather than
+            // introducing a new signal (xberg-io/xberg#1649). ~keep
+            let column_has_own_header = processed[0].get(c).is_some_and(|cell| !cell.trim().is_empty());
+            if too_sparse && !column_has_own_header {
                 tracing::debug!(
                     target: "xberg::table_reconstruct",
                     reason = "column_sparsity",
@@ -917,7 +924,18 @@ fn post_process_table_inner(
                         .count();
                     let empty_ratio = empty_in_col as f64 / data_row_count as f64;
 
-                    if char_share < 0.15 && empty_ratio > 0.5 {
+                    // A column with its own non-empty header label (e.g. a bank statement's
+                    // "DEPOSIT", populated on only a minority of transaction rows) is a
+                    // legitimate, intentionally sparse column, not a stray annotation/footnote
+                    // fragment split from prose -- mirrors `prune_spurious_interior_column`'s
+                    // established rule elsewhere in this file (`header[column].trim().is_empty()`
+                    // gates eligibility there too), rather than introducing a new signal
+                    // (xberg-io/xberg#1649). ~keep
+                    let column_has_own_header = processed
+                        .first()
+                        .and_then(|header| header.get(c))
+                        .is_some_and(|cell| !cell.trim().is_empty());
+                    if char_share < 0.15 && empty_ratio > 0.5 && !column_has_own_header {
                         tracing::debug!(
                             target: "xberg::table_reconstruct",
                             reason = "content_asymmetry_sparse_column",
@@ -1096,6 +1114,34 @@ fn post_process_table_inner(
 }
 
 fn find_data_start(table: &[Vec<String>], layout_guided: bool) -> usize {
+    // A first row that is fully populated and holds no digit at all is unambiguously a text
+    // header label row (e.g. "DATE | DESCRIPTION | WITHDRAWAL | DEPOSIT | BALANCE") -- trust it
+    // outright rather than scanning forward for enough numeric cells to declare data started.
+    // Without this, a sparse first DATA row (e.g. a bank statement's opening-balance entry,
+    // which has neither a withdrawal nor a deposit, so only 2 of 5 cells are numeric) can fall
+    // short of `DEFAULT_MIN_DATA_ROW_DIGIT_CELLS` and get folded into a bogus multi-row header
+    // merge with the row after it (xberg-io/xberg#1649).
+    //
+    // Scoped to `!layout_guided`: a layout-guided (ML-confirmed) table already has the more
+    // deliberate `looks_like_multiline_numeric_header`/repeated-row-shape logic below to decide
+    // whether a digit-bearing second row is a units-annotation header continuation or real data,
+    // and this early return must not preempt that.
+    //
+    // Also gated on row 1 looking like data (holding at least one digit): a genuine two-row text
+    // header (e.g. "Region | Sales Amount | Growth Rate" over "Area Code | Dollars | Percent")
+    // also has a fully populated, digit-free first row, and without this guard the shortcut
+    // stops one row too early, folding the second header row into the data (xberg-io/xberg#1649
+    // review follow-up). ~keep
+    if !layout_guided
+        && let Some(first_row) = table.first()
+        && !first_row.is_empty()
+        && first_row.iter().all(|cell| !cell.trim().is_empty())
+        && digit_cell_count(first_row) == 0
+        && table.get(1).is_some_and(|row| digit_cell_count(row) > 0)
+    {
+        return 1;
+    }
+
     let first_numeric_row = table
         .iter()
         .position(|row| digit_cell_count(row) >= DEFAULT_MIN_DATA_ROW_DIGIT_CELLS)
@@ -4436,6 +4482,130 @@ mod tests {
         assert_eq!(
             processed[4],
             vec!["Afschrijving".to_string(), "-12".to_string(), "-9".to_string()]
+        );
+    }
+
+    /// Build the reported fixture's transaction table content directly (xberg-io/xberg#1649):
+    /// a header row followed by nine rows where WITHDRAWAL/DEPOSIT are mutually exclusive, so
+    /// each is empty on a majority of rows and DEPOSIT in particular carries little text overall.
+    fn bank_statement_transaction_table() -> Vec<Vec<String>> {
+        [
+            ["DATE", "DESCRIPTION", "WITHDRAWAL", "DEPOSIT", "BALANCE"],
+            ["2026-01-02", "Opening Balance", "", "", "$10,500.00"],
+            [
+                "2026-01-05",
+                "ACH Deposit - EMPLOYER INC",
+                "",
+                "$2,500.00",
+                "$13,000.00",
+            ],
+            ["2026-01-08", "Check #1042", "$1,250.00", "", "$11,750.00"],
+            [
+                "2026-01-12",
+                "Debit Card Purchase - GROCERY",
+                "$87.32",
+                "",
+                "$11,662.68",
+            ],
+            ["2026-01-15", "Wire Transfer (Outgoing)", "$3,000.00", "", "$8,662.68"],
+            ["2026-01-18", "ATM Withdrawal", "$500.00", "", "$8,162.68"],
+            ["2026-01-22", "ACH Deposit - CONSULTING", "", "$5,000.00", "$13,162.68"],
+            ["2026-01-25", "Monthly Service Fee", "$15.00", "", "$13,147.68"],
+            [
+                "2026-01-28",
+                "Debit Card Purchase - UTILITIES",
+                "$300.00",
+                "",
+                "$12,847.68",
+            ],
+        ]
+        .into_iter()
+        .map(|row| row.into_iter().map(str::to_string).collect())
+        .collect()
+    }
+
+    /// xberg-io/xberg#1649: a real transaction table's sparse but independently-headed DEPOSIT
+    /// column, and its sparse first data row (an opening-balance entry with neither a withdrawal
+    /// nor a deposit), must both survive `post_process_table` intact.
+    #[test]
+    fn issue_1649_sparse_named_deposit_column_and_sparse_first_row_survive_post_process() {
+        let table = bank_statement_transaction_table();
+
+        let processed = post_process_table(table, false, false)
+            .expect("a real financial table with a sparse, independently-headed column must be accepted");
+
+        assert_eq!(
+            processed.len(),
+            10,
+            "the header plus all nine transaction rows must survive"
+        );
+        assert_eq!(
+            processed[0],
+            vec!["DATE", "DESCRIPTION", "WITHDRAWAL", "DEPOSIT", "BALANCE"]
+        );
+        assert_eq!(
+            processed[1],
+            vec!["2026-01-02", "Opening Balance", "", "", "$10,500.00"],
+            "the sparse first data row must not be folded into a bogus multi-row header merge"
+        );
+        assert_eq!(
+            processed[2],
+            vec![
+                "2026-01-05",
+                "ACH Deposit - EMPLOYER INC",
+                "",
+                "$2,500.00",
+                "$13,000.00"
+            ]
+        );
+    }
+
+    /// Negative control for xberg-io/xberg#1649's `column_sparsity`/`content_asymmetry_sparse_column`
+    /// fix: a column that is just as sparse but carries no header label of its own is exactly the
+    /// noise those gates exist to catch, and must still be rejected.
+    #[test]
+    fn issue_1649_unnamed_sparse_column_is_still_rejected() {
+        let mut table = bank_statement_transaction_table();
+        table[0][3] = String::new();
+
+        assert!(
+            post_process_table(table, false, false).is_none(),
+            "an unnamed, mostly-empty column must still be treated as noise, not preserved"
+        );
+    }
+
+    /// Negative control for xberg-io/xberg#1649's `find_data_start` fix: when the first row is
+    /// NOT fully populated, the original numeric-density scan must still run unmodified.
+    #[test]
+    fn issue_1649_find_data_start_leaves_a_genuinely_incomplete_first_row_alone() {
+        let mut table = bank_statement_transaction_table();
+        table[0][4].clear();
+
+        assert_eq!(
+            find_data_start(&table, false),
+            2,
+            "a first row with an empty cell must not trigger the fully-populated-header shortcut"
+        );
+    }
+
+    /// Regression for the fully-populated-header shortcut over-firing on a genuine two-row text
+    /// header (`!layout_guided`, e.g. Tesseract/PaddleOCR): row 0 is fully populated and
+    /// digit-free, but row 1 is a non-numeric header continuation (units/labels), not data. The
+    /// shortcut must not stop at row 1 in that case -- it must fall through to the digit-density
+    /// scan and land on the first genuinely numeric row.
+    #[test]
+    fn issue_1649_two_row_text_header_is_not_truncated_by_the_header_shortcut() {
+        let table: Vec<Vec<String>> = vec![
+            vec!["Region".into(), "Sales Amount".into(), "Growth Rate".into()],
+            vec!["Area Code".into(), "Dollars".into(), "Percent".into()],
+            vec!["R1".into(), "120".into(), "5".into()],
+            vec!["R2".into(), "98".into(), "3".into()],
+        ];
+
+        assert_eq!(
+            find_data_start(&table, false),
+            2,
+            "a non-numeric second header row must not be mistaken for data"
         );
     }
 }

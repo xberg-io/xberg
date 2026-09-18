@@ -19,6 +19,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   successful streaming response keeps its own existing frame bounds), and defaults to `None`
   (unbounded), matching liter-llm. `Some(0)` is rejected by `LlmConfig::validate` rather than
   reaching liter-llm's own builder. (xberg-io/xberg-enterprise#1568, xberg-io/xberg-enterprise#1861)
+  
+### Fixed
+
+- **a table's multi-word cell no longer bleeds a trailing word into the next column, a
+  right-aligned amount column split by digit-width drift is folded back together, and a
+  legitimately sparse but independently-headed column (or a sparse first data row) no longer gets
+  the whole table rejected.** Reconstructing a table from word boxes decided each word's column
+  independently by nearest x-position, so a wide cell's own trailing word (e.g. a long
+  description's last word) could resolve to a neighboring column's anchor instead of its own
+  cell's. Column membership for a data row is now decided once per merged cell cluster and applied
+  to every word the cluster contains; a drift-split right-aligned numeric column (mutually
+  exclusive per row, no independent header of its own) is folded into one column; and a section
+  caption sharing a table region with its real header row is dropped. This cell-clustering and
+  column-assignment logic lives in the shared `table_core` module, so it also affects native-PDF
+  word-position table reconstruction, not just OCR. Separately, `pdf`'s shared table post-processor
+  no longer treats an independently-headed but infrequently-populated column (e.g. a bank
+  statement's `DEPOSIT`, populated on a minority of transaction rows) as noise, and no longer folds
+  a sparse first data row (one missing an optional numeric field) into a bogus multi-row header
+  merge with the row after it -- and that header-shortcut no longer stops one row early on a
+  genuine two-row text header, which also fully populates a digit-free first row. The punctuation
+  cell-merge gap this widens for a lone dash/colon glyph is now conditioned on the punctuation
+  genuinely bridging two neighboring words on both sides, so an isolated punctuation cell near a
+  real column boundary (a `-` placeholder, a `:`) no longer fuses two columns' content into one
+  cell. (GH#1649)
 
 ## [1.2.3] - 2026-09-16
 
