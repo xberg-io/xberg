@@ -233,7 +233,8 @@ pub(crate) fn extract_ppt_text_with_options(
     // stream order it always used. See [`live_slide_offsets`] for why a partial answer is
     // deliberately not produced.
     let current_user_stream = read_stream(&mut comp, "/Current User").unwrap_or_default();
-    let live_slides = live_slide_offsets(&ppt_stream, &current_user_stream);
+    let chain = persist_chain(&ppt_stream, &current_user_stream);
+    let live_slides = chain.as_ref().and_then(|chain| live_slide_offsets(&ppt_stream, chain));
     if live_slides.is_none() {
         tracing::debug!(
             target: "xberg::ppt",
@@ -315,14 +316,18 @@ struct LiveSlides {
     slide_ids: Vec<u32>,
 }
 
-/// Resolve the live slide containers, in presentation order, as byte offsets into the
-/// "PowerPoint Document" stream.
-///
-/// A `.ppt` stream is append-only across saves: editing a deck writes new copies of the
-/// objects that changed and leaves the old ones in place. Walking the stream and calling
-/// every `RT_SLIDE` container a slide therefore counts deleted and superseded revisions
-/// as slides, and numbers them by byte order rather than by the order they are presented
-/// in. The format states both answers explicitly and this reads them:
+/// One deck's resolved persist state: every persist id its saves name, and which
+/// `DocumentContainer` is live.
+struct PersistChain {
+    /// persist id -> stream offset, newest save wins.
+    entries: ahash::AHashMap<u32, usize>,
+    /// `UserEditAtom.docPersistIdRef` from the newest save -- the live
+    /// `DocumentContainer` (#1639).
+    document_id: u32,
+}
+
+/// Walk the `UserEditAtom` chain from the `Current User` stream and merge every save's
+/// `PersistDirectoryAtom`, newest first.
 ///
 /// ```text
 /// Current User stream
@@ -330,28 +335,22 @@ struct LiveSlides {
 ///                                            .offsetPersistDirectory ─▶ PersistDirectoryAtom (0x1772)
 ///                                            .offsetLastEdit         ─▶ the previous save's UserEditAtom
 ///                                            .docPersistIdRef        ─▶ the live DocumentContainer
-///
-/// DocumentContainer (0x03E8) > SlideListWithText (0x0FF0, recInstance 0)
-///   SlidePersistAtom (0x03F3) per slide, in presentation order,
-///   each naming the persist id of that slide's Slide container
 /// ```
 ///
-/// Persist directories are merged newest-first, so a later save's entry for an id wins
-/// and older revisions of the same object are never reachable. The slide list itself is
-/// read from the **live** `DocumentContainer` -- resolved the same way, through
-/// `docPersistIdRef` on the newest `UserEditAtom` -- not from the first `SlideListWithText`
-/// the stream happens to contain, which is the oldest save's (#1639).
+/// A `.ppt` stream is append-only across saves: editing a deck writes new copies of the
+/// objects that changed and leaves the old ones in place, so a byte offset alone cannot
+/// say whether what sits there is current. This directory is the file's own answer, and
+/// every reader of a persisted object goes through it -- slides (#1614, #1639) and
+/// embedded OLE object storages (#1660) alike.
 ///
 /// Returns `None` whenever the chain cannot be read in full -- absent `Current User`
-/// stream, unparseable atom, offset out of range, an unresolvable `DocumentContainer`, or a
-/// slide list naming an id no directory resolves. The caller then keeps stream order, which
-/// is what this extractor did unconditionally before. A partial answer would be worse than
-/// the old behaviour: it would drop real slides. See GH#1614. ~keep
-fn live_slide_offsets(ppt_stream: &[u8], current_user_stream: &[u8]) -> Option<LiveSlides> {
+/// stream, unparseable atom, or an offset out of range. Callers then keep whatever they
+/// did before the chain existed rather than trusting a partial directory, which would
+/// silently resolve some ids to a superseded save's copy. ~keep
+fn persist_chain(ppt_stream: &[u8], current_user_stream: &[u8]) -> Option<PersistChain> {
     let first_edit = read_u32_le(current_user_stream, CURRENT_USER_OFFSET_TO_CURRENT_EDIT)? as usize;
 
-    // persist id -> stream offset, newest save wins.
-    let mut persist: ahash::AHashMap<u32, usize> = ahash::AHashMap::new();
+    let mut entries: ahash::AHashMap<u32, usize> = ahash::AHashMap::new();
     let mut document_id: Option<u32> = None;
     let mut next_edit = Some(first_edit);
     let mut hops = 0usize;
@@ -373,7 +372,7 @@ fn live_slide_offsets(ppt_stream: &[u8], current_user_stream: &[u8]) -> Option<L
         // than an earlier save's (#1639). ~keep
         document_id.get_or_insert(read_u32_le(ppt_stream, content + 16)?);
 
-        merge_persist_directory(ppt_stream, offset_persist_directory, &mut persist)?;
+        merge_persist_directory(ppt_stream, offset_persist_directory, &mut entries)?;
 
         // `offsetLastEdit` is 0 at the first save. Anything that does not move BACKWARD is
         // a cycle or corruption, and following it would not terminate. ~keep
@@ -384,20 +383,53 @@ fn live_slide_offsets(ppt_stream: &[u8], current_user_stream: &[u8]) -> Option<L
         };
     }
 
-    let document_offset = *persist.get(&document_id?)?;
-    let document_header = ppt_stream.get(document_offset..document_offset.checked_add(8)?)?;
-    if u16::from_le_bytes([document_header[2], document_header[3]]) != RT_DOCUMENT {
+    Some(PersistChain {
+        entries,
+        document_id: document_id?,
+    })
+}
+
+/// The live `DocumentContainer`'s payload, with the stream offset that payload starts at
+/// so a position inside it can be turned back into an absolute one.
+///
+/// Resolved through `docPersistIdRef` rather than by taking the stream's first
+/// `RT_DOCUMENT`, which is the oldest save's (#1639).
+fn live_document_payload<'a>(ppt_stream: &'a [u8], chain: &PersistChain) -> Option<(usize, &'a [u8])> {
+    let document_offset = *chain.entries.get(&chain.document_id)?;
+    let header = ppt_stream.get(document_offset..document_offset.checked_add(8)?)?;
+    if u16::from_le_bytes([header[2], header[3]]) != RT_DOCUMENT {
         return None;
     }
-    let document_len = u32::from_le_bytes([
-        document_header[4],
-        document_header[5],
-        document_header[6],
-        document_header[7],
-    ]) as usize;
-    let document_content_start = document_offset.checked_add(8)?;
-    let document_content_end = document_content_start.checked_add(document_len)?;
-    let document_payload = ppt_stream.get(document_content_start..document_content_end)?;
+    let length = u32::from_le_bytes([header[4], header[5], header[6], header[7]]) as usize;
+    let start = document_offset.checked_add(8)?;
+    let end = start.checked_add(length)?;
+    Some((start, ppt_stream.get(start..end)?))
+}
+
+/// Resolve the live slide containers, in presentation order, as byte offsets into the
+/// "PowerPoint Document" stream.
+///
+/// Walking the stream and calling every `RT_SLIDE` container a slide counts deleted and
+/// superseded revisions as slides, and numbers them by byte order rather than by the
+/// order they are presented in. The file states the real order:
+///
+/// ```text
+/// DocumentContainer (0x03E8) > SlideListWithText (0x0FF0, recInstance 0)
+///   SlidePersistAtom (0x03F3) per slide, in presentation order,
+///   each naming the persist id of that slide's Slide container
+/// ```
+///
+/// The slide list is read from the **live** `DocumentContainer` (see
+/// [`live_document_payload`]), not from the first `SlideListWithText` the stream happens
+/// to contain, which is the oldest save's (#1639).
+///
+/// Returns `None` whenever the list cannot be read in full -- an unresolvable
+/// `DocumentContainer`, or a slide list naming an id no directory resolves. The caller
+/// then keeps stream order, which is what this extractor did unconditionally before. A
+/// partial answer would be worse than the old behaviour: it would drop real slides. See
+/// GH#1614. ~keep
+fn live_slide_offsets(ppt_stream: &[u8], chain: &PersistChain) -> Option<LiveSlides> {
+    let (document_content_start, document_payload) = live_document_payload(ppt_stream, chain)?;
 
     let (relative_outline_offset, entries) = slide_persist_ids_in_presentation_order(document_payload, 0)?;
     if entries.is_empty() {
@@ -408,7 +440,7 @@ fn live_slide_offsets(ppt_stream: &[u8], current_user_stream: &[u8]) -> Option<L
     let offsets = entries
         .iter()
         .map(|&(persist_id, _)| {
-            let offset = *persist.get(&persist_id)?;
+            let offset = *chain.entries.get(&persist_id)?;
             let header = ppt_stream.get(offset..offset.checked_add(8)?)?;
             (u16::from_le_bytes([header[2], header[3]]) == RT_SLIDE).then_some(offset)
         })
@@ -1429,6 +1461,12 @@ mod tests {
         assert_eq!(result.slide_count, 2, "simple.ppt has exactly two Slide containers");
     }
 
+    /// Resolve the live slides the way [`extract_ppt_text_with_options`] does: the persist
+    /// chain first, then the slide list the live `DocumentContainer` it names carries.
+    fn live_slides_from(ppt_stream: &[u8], current_user_stream: &[u8]) -> Option<LiveSlides> {
+        live_slide_offsets(ppt_stream, &persist_chain(ppt_stream, current_user_stream)?)
+    }
+
     /// Build one PowerPoint record header (8 bytes: recVerInstance, recType, recLen).
     fn record_header(rec_ver_instance: u16, rec_type: u16, rec_len: u32) -> Vec<u8> {
         let mut buf = Vec::with_capacity(8);
@@ -1568,7 +1606,7 @@ mod tests {
         data.extend_from_slice(&user_edit_atom(old_edit_offset, new_dir_offset, 20));
 
         let live =
-            live_slide_offsets(&data, &current_user_stream(new_edit_offset)).expect("the persist chain must resolve");
+            live_slides_from(&data, &current_user_stream(new_edit_offset)).expect("the persist chain must resolve");
         assert_eq!(
             live.offsets,
             vec![one_offset as usize, two_offset as usize],
@@ -1632,8 +1670,7 @@ mod tests {
         let edit_offset = data.len() as u32;
         data.extend_from_slice(&user_edit_atom(0, dir_offset, 20));
 
-        let live =
-            live_slide_offsets(&data, &current_user_stream(edit_offset)).expect("the persist chain must resolve");
+        let live = live_slides_from(&data, &current_user_stream(edit_offset)).expect("the persist chain must resolve");
         assert_eq!(live.offsets, vec![stream_b as usize, stream_a as usize]);
 
         let mut warnings = Vec::new();
@@ -1687,7 +1724,7 @@ mod tests {
         data.extend_from_slice(&user_edit_atom(old_edit_offset, new_dir_offset, 1));
 
         let live =
-            live_slide_offsets(&data, &current_user_stream(new_edit_offset)).expect("the persist chain must resolve");
+            live_slides_from(&data, &current_user_stream(new_edit_offset)).expect("the persist chain must resolve");
         assert_eq!(
             live.offsets,
             vec![slide_a_offset as usize, slide_b_offset as usize],
@@ -1741,7 +1778,7 @@ mod tests {
         data.extend_from_slice(&user_edit_atom(old_edit_offset, new_dir_offset, 2));
 
         let live =
-            live_slide_offsets(&data, &current_user_stream(new_edit_offset)).expect("the persist chain must resolve");
+            live_slides_from(&data, &current_user_stream(new_edit_offset)).expect("the persist chain must resolve");
 
         let mut warnings = Vec::new();
         let (slides, _, _) = extract_texts_from_records(&data, false, Some(&live), &mut warnings)
@@ -1767,11 +1804,11 @@ mod tests {
         data.extend_from_slice(&container(RT_SLIDE, &text_chars_atom("two")));
 
         assert!(
-            live_slide_offsets(&data, &[]).is_none(),
+            live_slides_from(&data, &[]).is_none(),
             "an empty Current User stream resolves nothing"
         );
         assert!(
-            live_slide_offsets(&data, &current_user_stream(9_999)).is_none(),
+            live_slides_from(&data, &current_user_stream(9_999)).is_none(),
             "an offsetToCurrentEdit past the end of the stream resolves nothing"
         );
 
@@ -2042,8 +2079,7 @@ mod tests {
         let edit_offset = data.len() as u32;
         data.extend_from_slice(&user_edit_atom(0, dir_offset, 99));
 
-        let live =
-            live_slide_offsets(&data, &current_user_stream(edit_offset)).expect("the persist chain must resolve");
+        let live = live_slides_from(&data, &current_user_stream(edit_offset)).expect("the persist chain must resolve");
 
         let mut warnings = Vec::new();
         let (slides, _loose, speaker_notes) = extract_texts_from_records(&data, false, Some(&live), &mut warnings)
