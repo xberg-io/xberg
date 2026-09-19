@@ -53,6 +53,19 @@ pub struct PdfMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scanned_pages: Option<Vec<u32>>,
 
+    /// Pages whose text was dominated by fabricated character mappings (1-indexed):
+    /// `MappingProvenance::Fallback`, a font whose glyph-to-Unicode mapping resolved to
+    /// a value the extractor chose rather than read from the file (issue #1254). This is
+    /// a fact about how the text was derived, independent of `scanned_pages`'s raster-based
+    /// scan detection, and independent of whether the resulting text happens to look
+    /// structurally like prose (issue #1667: a broken mapping that lands on ordinary
+    /// letters and punctuation passes every character-shape check but is still fabricated).
+    ///
+    /// `None` when `OcrQualityThresholds::enable_provenance_ocr_routing` is `false` or the
+    /// document could not be inspected; empty when no page qualifies.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fabricated_text_pages: Option<Vec<u32>>,
+
     /// Pages the `auto` layout strategy skipped (1-indexed).
     ///
     /// `None` unless layout detection ran with `LayoutStrategy::Auto`; empty

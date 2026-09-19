@@ -90,20 +90,30 @@ fn extract_pdf_specific_metadata(
 
     // A page whose text layer xberg_native_pdf could not read from the file (issue
     // #1254) has low image coverage and is never selected by `detect` above, so
-    // it is unioned in separately here. ~keep
+    // it is unioned in separately here. Kept separately in `fabricated_text_pages`
+    // too (not just merged into `scanned_pages`): `scanned_pages` also carries
+    // raster-detected scans, which the `Auto` OCR strategy deliberately leaves
+    // native when they carry a good invisible-text sidecar (see `OcrStrategy::Auto`'s
+    // doc comment), so `Auto` must not treat every `scanned_pages` entry as a
+    // failure. A fabricated mapping is not a raster judgment call, though: it is a
+    // fact about how the text was derived, so `Auto` consults this list on its own
+    // regardless of `ocr_strategy` (issue #1667). ~keep
+    let mut fabricated_text_pages: Option<Vec<u32>> = None;
     if ocr_quality_thresholds.enable_provenance_ocr_routing {
         let fabricated_pages = crate::pdf::scan_detect::fabricated_provenance_page_indices(
             &doc.doc,
             ocr_quality_thresholds.min_provenance_fallback_ratio,
             ocr_quality_thresholds.min_total_non_whitespace,
         );
+        let one_indexed: Vec<u32> = fabricated_pages.iter().map(|index| *index as u32 + 1).collect();
         if !fabricated_pages.is_empty() {
             let mut merged = scanned_pages.unwrap_or_default();
-            merged.extend(fabricated_pages.into_iter().map(|index| index as u32 + 1));
+            merged.extend(one_indexed.iter().copied());
             merged.sort_unstable();
             merged.dedup();
             scanned_pages = Some(merged);
         }
+        fabricated_text_pages = Some(one_indexed);
     }
 
     Ok(PdfMetadata {
@@ -115,6 +125,7 @@ fn extract_pdf_specific_metadata(
         page_count: Some(page_count as u32),
         scanned_confidence,
         scanned_pages,
+        fabricated_text_pages,
         // Filled by the extractor after the layout pass runs, not here:
         // metadata extraction never runs the layout gate itself. ~keep
         layout_gated_pages: None,

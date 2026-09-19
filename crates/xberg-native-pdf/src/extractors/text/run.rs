@@ -122,32 +122,35 @@ impl<'doc> TextExtractor<'doc> {
         // extract_chars already does (which reads `font.base_font`). Run AFTER
         // merging so span reconstruction still keys off the raw resource alias
         // exactly as before, and it has no effect on the assembled text/md/html
-        // output (font names are not emitted there) — only the API surface. ~keep
-        let resolved_fonts: Vec<Option<String>> = self
+        // output (font names are not emitted there) — only the API surface.
+        //
+        // The §9.10.2 mapping provenance (the tier the span's font offered, or
+        // `Fallback` when it carries no mapping resource — the text is then a
+        // fabricated glyph-index echo, not read from the file) is looked up in
+        // THIS SAME PASS, by the raw resource alias: `self.fonts` is keyed by
+        // that alias (`add_font`/`add_font_shared`), never by the resolved
+        // /BaseFont name. Looking it up after the rename below finds nothing
+        // for any font whose /BaseFont differs from its resource alias — which
+        // is effectively every real font — silently dropping the provenance
+        // fact issue #1254 exists to carry (issue #1667). `None` when the font
+        // is unresolvable. ~keep
+        let resolved: Vec<(Option<String>, Option<crate::fonts::MappingProvenance>)> = self
             .spans
             .iter()
             .map(|s| {
-                self.fonts
-                    .get(&s.font_name)
-                    .map(|f| f.base_font.clone())
-                    .filter(|b| !b.is_empty())
+                self.fonts.get(&s.font_name).map_or((None, None), |f| {
+                    (
+                        Some(f.base_font.clone()).filter(|b| !b.is_empty()),
+                        Some(f.best_mapping_provenance()),
+                    )
+                })
             })
             .collect();
-        for (span, resolved) in self.spans.iter_mut().zip(resolved_fonts) {
-            if let Some(base_font) = resolved {
+        for (span, (resolved_base_font, provenance)) in self.spans.iter_mut().zip(resolved) {
+            if let Some(base_font) = resolved_base_font {
                 span.font_name = base_font;
             }
-        }
-
-        // Attach the §9.10.2 mapping provenance now that each span's font name
-        // is finalized: the tier the span's font offered, or `Fallback` when it
-        // carries no mapping resource (the text is then a fabricated glyph-index
-        // echo, not read from the file). `None` when the font is unresolvable. ~keep
-        for span in self.spans.iter_mut() {
-            span.provenance = self
-                .fonts
-                .get(span.font_name.as_str())
-                .map(|f| f.best_mapping_provenance());
+            span.provenance = provenance;
         }
 
         Ok(std::mem::take(&mut self.spans))

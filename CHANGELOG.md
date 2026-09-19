@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **(pdf): the mixed native-and-OCR path no longer drops every native table on a page OCR never touched.** On a long document where only some pages needed OCR, the mixed path replaced the whole document's table list with just the OCR pages' tables whenever OCR found even one, silently dropping every native table on every other page. Only the tables of pages OCR itself produced a table for are now replaced; a page the mixed path never sent to OCR keeps its native tables. (GH#1670)
+- **(pdf): a page whose glyph mapping is fabricated is sent to OCR.** The extractor read each text run's mapping provenance after it had renamed the run's font to the resolved `/BaseFont`, but the provenance table is keyed by the raw resource alias. The lookup therefore missed for every font whose base name differs from its alias, and the fabricated text on such a page passed the OCR skip gate as if it were real. The lookup now runs in the same pass and uses the alias, and a page that carries fabricated mappings forces the OCR fallback. (GH#1667)
 
 ## [1.2.5] - 2026-09-18
 

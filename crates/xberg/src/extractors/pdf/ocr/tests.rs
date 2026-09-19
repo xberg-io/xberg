@@ -1097,6 +1097,100 @@ mod tests {
         assert!(decision.failing_pages.is_empty());
     }
 
+    // xberg#1667: `apply_fabricated_provenance_pages` is the union step that lets the
+    // default `Auto` OCR strategy see the same fabricated-mapping signal `ScannedPages`
+    // already reads from `PdfMetadata.scanned_pages` (issue #1254). These tests exercise it
+    // directly, without a character-statistic decision in play, so a text-shape regression in
+    // `NativeTextStats` cannot mask a routing regression here.
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn apply_fabricated_provenance_pages_is_a_no_op_when_the_list_is_empty() {
+        let mut decision = evaluate_native_text_for_ocr(
+            "Clean prose with plenty of ordinary alphanumeric words on this single page.",
+            Some(1),
+            &t(),
+        );
+        let before_fallback = decision.fallback;
+        let before_whole_doc = decision.whole_doc_failure;
+
+        apply_fabricated_provenance_pages(&mut decision, &[], true, Some(1));
+
+        assert_eq!(decision.fallback, before_fallback);
+        assert_eq!(decision.whole_doc_failure, before_whole_doc);
+        assert!(decision.failing_pages.is_empty());
+    }
+
+    /// The exact shape of issue #1667: text that passes every character-class check (so the
+    /// decision from `evaluate_native_text_for_ocr` alone is `fallback: false`) must still be
+    /// forced to OCR once a page is known to carry a fabricated mapping.
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn apply_fabricated_provenance_pages_forces_fallback_on_structurally_clean_text() {
+        let clean_text = "synthetic fabricated text used only to confirm that automatic \
+                           routing reaches the configured ocr backend correctly";
+        let mut decision = evaluate_native_text_for_ocr(clean_text, Some(1), &t());
+        assert!(
+            !decision.fallback,
+            "the fixture text must look clean to the character-class gate on its own: {:?}",
+            decision.stats
+        );
+
+        apply_fabricated_provenance_pages(&mut decision, &[1], true, Some(1));
+
+        assert!(
+            decision.fallback,
+            "a known-fabricated page must force OCR regardless of shape"
+        );
+        assert_eq!(decision.failing_pages, vec![1]);
+        assert!(
+            decision.whole_doc_failure,
+            "the only page in a 1-page document failing must be a whole-document failure"
+        );
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn apply_fabricated_provenance_pages_unions_with_existing_character_class_failures() {
+        let mut decision = OcrFallbackDecision {
+            stats: NativeTextStats::default(),
+            avg_non_whitespace: 0.0,
+            avg_alnum: 0.0,
+            fallback: true,
+            failing_pages: vec![2],
+            whole_doc_failure: false,
+        };
+
+        apply_fabricated_provenance_pages(&mut decision, &[1, 2], true, Some(3));
+
+        assert_eq!(
+            decision.failing_pages,
+            vec![1, 2],
+            "the union must be deduplicated and sorted, not merely appended"
+        );
+        assert!(
+            !decision.whole_doc_failure,
+            "2 of 3 pages failing is not a whole-document failure"
+        );
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn apply_fabricated_provenance_pages_without_boundaries_forces_whole_document() {
+        let mut decision = evaluate_native_text_for_ocr("Clean prose that looks fine on its own.", Some(1), &t());
+
+        apply_fabricated_provenance_pages(&mut decision, &[1], false, None);
+
+        assert!(decision.fallback);
+        assert!(
+            decision.whole_doc_failure,
+            "without boundaries there is no page subset to OCR, so the whole document must fall back"
+        );
+        assert!(
+            decision.failing_pages.is_empty(),
+            "failing_pages is meaningless without boundaries and must stay untouched"
+        );
+    }
+
     #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
     #[test]
     fn test_merge_empty_ocr_result_keeps_native_text() {

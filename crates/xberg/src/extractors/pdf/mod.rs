@@ -2093,11 +2093,29 @@ impl PdfExtractor {
             let default_ocr_config = crate::core::config::OcrConfig::default();
             let ocr_config = config.ocr.as_ref().unwrap_or(&default_ocr_config);
             let thresholds = ocr_config.effective_thresholds();
-            let decision = ocr::evaluate_per_page_ocr(
+            let mut decision = ocr::evaluate_per_page_ocr(
                 &native_text,
                 boundaries.as_deref(),
                 pdf_metadata.pdf_specific.page_count,
                 &thresholds,
+            );
+
+            // `NativeTextStats`' character-class checks cannot see a font whose mapping
+            // legitimately (per the §9.10.2 cascade) resolves to the wrong-but-ordinary
+            // letters and punctuation (issue #1667): the text is structurally clean. The
+            // provenance signal computed above (issue #1254) is a fact about how the text
+            // was derived, not a shape guess, and `ScannedPages` already routes it via
+            // `scanned_pages_to_ocr`; `Auto` must consult it too rather than silently
+            // discarding it. ~keep
+            ocr::apply_fabricated_provenance_pages(
+                &mut decision,
+                pdf_metadata
+                    .pdf_specific
+                    .fabricated_text_pages
+                    .as_deref()
+                    .unwrap_or(&[]),
+                boundaries.as_deref().is_some_and(|b| !b.is_empty()),
+                pdf_metadata.pdf_specific.page_count,
             );
 
             tracing::debug!(
@@ -3548,6 +3566,102 @@ mod tests {
         document
             .save_to(&mut bytes)
             .expect("all-scanned PDF fixture must serialize");
+        bytes
+    }
+
+    /// A single-page PDF whose only font is `Type0`/`Identity-H` with no `/ToUnicode` and no
+    /// `/CIDSystemInfo` on its descendant `CIDFontType2`, so xberg_native_pdf's §9.10.2 mapping
+    /// cascade has no route to Unicode and falls back to a CID-as-Unicode echo
+    /// (`MappingProvenance::Fallback`, issue #1254's signal, same font shape as that issue's own
+    /// reproducer). CIDs are chosen equal to the Unicode codepoints of `text` (big-endian, two
+    /// bytes each), so the echoed native text reads as ordinary ASCII -- structurally
+    /// indistinguishable from real prose by every character-class heuristic, which is the shape
+    /// of issue #1667's defect. No embedded font program: the mapping decision does not depend
+    /// on one.
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    fn identity_h_no_tounicode_pdf(text: &str) -> Vec<u8> {
+        use lopdf::content::{Content, Operation};
+        use lopdf::{Document, Object, Stream, dictionary};
+
+        let cid_bytes: Vec<u8> = text.chars().flat_map(|c| (c as u32 as u16).to_be_bytes()).collect();
+
+        let mut document = Document::with_version("1.5");
+        let pages_id = document.new_object_id();
+
+        let descriptor_id = document.add_object(dictionary! {
+            "Type" => "FontDescriptor",
+            "FontName" => "Synth+Fallback",
+            "Flags" => 4,
+            "FontBBox" => vec![0.into(), (-200).into(), 1000.into(), 900.into()],
+            "ItalicAngle" => 0,
+            "Ascent" => 800,
+            "Descent" => (-200),
+            "CapHeight" => 700,
+            "StemV" => 80,
+        });
+        let descendant_id = document.add_object(dictionary! {
+            "Type" => "Font",
+            "Subtype" => "CIDFontType2",
+            "BaseFont" => "Synth+Fallback",
+            "CIDSystemInfo" => dictionary! {
+                "Registry" => Object::string_literal("Adobe"),
+                "Ordering" => Object::string_literal("Identity"),
+                "Supplement" => 0,
+            },
+            "FontDescriptor" => descriptor_id,
+            "CIDToGIDMap" => "Identity",
+            "DW" => 600,
+        });
+        let font_id = document.add_object(dictionary! {
+            "Type" => "Font",
+            "Subtype" => "Type0",
+            "BaseFont" => "Synth+Fallback",
+            "Encoding" => "Identity-H",
+            "DescendantFonts" => vec![descendant_id.into()],
+            // Deliberately no /ToUnicode: severs every route to Unicode (issue #1254).
+        });
+
+        let content = Content {
+            operations: vec![
+                Operation::new("BT", vec![]),
+                Operation::new("Tf", vec!["F1".into(), 18.into()]),
+                Operation::new("Td", vec![72.into(), 720.into()]),
+                Operation::new("Tj", vec![Object::string_literal(cid_bytes)]),
+                Operation::new("ET", vec![]),
+            ],
+        };
+        let content_id = document.add_object(Stream::new(
+            dictionary! {},
+            content
+                .encode()
+                .expect("fabricated-provenance fixture content must encode"),
+        ));
+        let page_id = document.add_object(dictionary! {
+            "Type" => "Page",
+            "Parent" => pages_id,
+            "Contents" => content_id,
+            "Resources" => dictionary! { "Font" => dictionary! { "F1" => font_id } },
+            "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+        });
+
+        document.objects.insert(
+            pages_id,
+            Object::Dictionary(dictionary! {
+                "Type" => "Pages",
+                "Kids" => vec![page_id.into()],
+                "Count" => 1,
+            }),
+        );
+        let catalog_id = document.add_object(dictionary! {
+            "Type" => "Catalog",
+            "Pages" => pages_id,
+        });
+        document.trailer.set("Root", catalog_id);
+
+        let mut bytes = Vec::new();
+        document
+            .save_to(&mut bytes)
+            .expect("fabricated-provenance fixture must serialize");
         bytes
     }
 
@@ -6028,6 +6142,76 @@ mod tests {
         assert_eq!(ocr_chunks.len(), 1, "automatic chunks must not duplicate OCR text");
         assert_eq!(ocr_chunks[0].metadata.first_page, Some(2));
         assert_eq!(ocr_chunks[0].metadata.last_page, Some(2));
+    }
+
+    /// xberg#1667: a native text layer produced by a fabricated character mapping
+    /// (`MappingProvenance::Fallback`) reads as ordinary, structurally-clean ASCII prose, so
+    /// `NativeTextStats`' character-class checks pass it at `quality_score: 1.0` and OCR never
+    /// fires -- under the DEFAULT `OcrStrategy::Auto`, not the opt-in `ScannedPages` strategy the
+    /// existing scanned-page-routing tests use. The fix reads the fabricated-provenance signal
+    /// (already computed for issue #1254) from the `Auto` gate too, so this page must route to
+    /// OCR even though every character-shape heuristic would call it clean.
+    #[tokio::test]
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    #[serial]
+    async fn test_auto_strategy_routes_fabricated_provenance_page_to_ocr() {
+        use crate::core::config::{OcrConfig, PageConfig};
+
+        const OCR_TEXT: &str = "issue sixteen sixty seven automatic ocr replacement text";
+        let _backend = register_mock_ocr_backend("pdf-1667-auto-provenance-routing", OCR_TEXT);
+
+        // Echoes back as ordinary ASCII prose (CID == Unicode codepoint under the
+        // CID-as-Unicode fallback), well past every `OcrQualityThresholds` default: > 64
+        // non-whitespace chars, several words at or above the 4-char "meaningful" length, no
+        // fragmentation, no repeats. A clean-looking page, on paper.
+        const FABRICATED_NATIVE_TEXT: &str = "synthetic fabricated text used only to confirm that automatic routing reaches the configured ocr backend correctly";
+
+        let config = ExtractionConfig {
+            // `OcrStrategy::Auto` is `#[default]`; left unset deliberately, this is the path
+            // every caller who does not opt into `ScannedPages` takes.
+            ocr: Some(OcrConfig {
+                backend: "pdf-1667-auto-provenance-routing".to_string(),
+                language: vec!["eng".to_string()],
+                ..Default::default()
+            }),
+            pages: Some(PageConfig {
+                extract_pages: true,
+                ..Default::default()
+            }),
+            use_cache: false,
+            ..Default::default()
+        };
+
+        let internal = PdfExtractor::new()
+            .extract_content(
+                &identity_h_no_tounicode_pdf(FABRICATED_NATIVE_TEXT),
+                "application/pdf",
+                &config,
+            )
+            .await
+            .expect("fabricated-provenance PDF extraction should succeed");
+        let derived = crate::extraction::derive::derive_extraction_result(
+            internal,
+            false,
+            crate::core::config::OutputFormat::Plain,
+        );
+
+        assert!(
+            !derived.content.contains(FABRICATED_NATIVE_TEXT),
+            "the fabricated native text must not survive to the final content: {:?}",
+            derived.content
+        );
+        assert_eq!(
+            derived.content.matches(OCR_TEXT).count(),
+            1,
+            "Auto-routed OCR content must occur exactly once: {:?}",
+            derived.content
+        );
+        assert_eq!(
+            derived.extraction_method,
+            Some(ExtractionMethod::Ocr),
+            "Auto strategy must record extraction_method: ocr for a fabricated-provenance page"
+        );
     }
 
     #[tokio::test]

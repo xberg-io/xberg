@@ -1087,3 +1087,52 @@ pub(crate) fn evaluate_per_page_ocr(
     document_decision.failing_pages = failing_pages;
     document_decision
 }
+/// Union provenance-fabricated pages (issue #1254's signal) into a per-page OCR decision.
+///
+/// `NativeTextStats`' character-class checks cannot see this failure mode even in
+/// principle: a font whose `/Encoding` or `/ToUnicode` legitimately, from the §9.10.2
+/// mapping cascade's perspective, resolves glyphs to the wrong-but-ordinary letters and
+/// punctuation produces text that is structurally indistinguishable from real prose —
+/// same alphanumeric ratio, same word-length distribution, same fragmentation (issue
+/// #1667). `fabricated_pages` (1-indexed) is a fact about how the text was *derived*
+/// (`MappingProvenance::Fallback`), not a guess about its shape, so it is unioned in
+/// regardless of what the structural heuristics concluded.
+///
+/// The tree already routed this signal, just only under the opt-in
+/// `OcrStrategy::ScannedPages` (via `scanned_pages_to_ocr`, which already starts from
+/// `PdfMetadata.scanned_pages`); `OcrStrategy::Auto`, the default, never read it. This
+/// closes that gap for `Auto` without disturbing `ScannedPages`, whose own union already
+/// covers this list as a strict subset of the merged `scanned_pages` field.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) fn apply_fabricated_provenance_pages(
+    decision: &mut OcrFallbackDecision,
+    fabricated_pages: &[u32],
+    has_boundaries: bool,
+    total_pages: Option<u32>,
+) {
+    if fabricated_pages.is_empty() {
+        return;
+    }
+
+    decision.fallback = true;
+
+    if !has_boundaries {
+        // No boundaries to split mixed OCR by, so the whole document is the only
+        // unit the caller can act on -- matches the empty-native-text precedent above.
+        decision.whole_doc_failure = true;
+        return;
+    }
+
+    let mut pages = decision.failing_pages.clone();
+    pages.extend_from_slice(fabricated_pages);
+    pages.sort_unstable();
+    pages.dedup();
+
+    if let Some(total) = total_pages
+        && pages.len() as u32 >= total
+    {
+        decision.whole_doc_failure = true;
+    }
+
+    decision.failing_pages = pages;
+}
