@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **(pdf): the mixed native-and-OCR path no longer drops every native table on a page OCR never touched.** On a long document where only some pages needed OCR, the mixed path replaced the whole document's table list with just the OCR pages' tables whenever OCR found even one, silently dropping every native table on every other page. Only the tables of pages OCR itself produced a table for are now replaced; a page the mixed path never sent to OCR keeps its native tables. (GH#1670)
+- **(ocr): a low OCR confidence now lowers the reported quality score.** The quality score measured only how clean the text looked, so a page that OCR itself had little confidence in still scored as clean whenever the characters happened to be well formed. The score is now capped by the aggregate OCR confidence, once a result carries enough recognized words to judge it. A native, non-OCR extraction is unaffected. (GH#1669)
 
 ## [1.2.5] - 2026-09-18
 

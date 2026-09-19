@@ -250,6 +250,11 @@ pub struct ExtractedDocument {
     /// retained. This is not a completeness or recall score: clean text can score
     /// highly even when an extractor omitted or rejected other content. Inspect
     /// `processing_warnings` separately for known degraded or partial extraction.
+    ///
+    /// When the text came from OCR and the result carries enough recognized words to
+    /// judge, this score is additionally capped by the mean OCR recognition confidence.
+    /// Text that looks clean but that OCR itself had little confidence in therefore
+    /// cannot score high. A native, non-OCR extraction is not capped.
     /// Previously stored in `metadata.additional["quality_score"]`.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
