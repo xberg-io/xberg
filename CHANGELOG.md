@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **(pdf): the mixed native-and-OCR path no longer drops every native table on a page OCR never touched.** On a long document where only some pages needed OCR, the mixed path replaced the whole document's table list with just the OCR pages' tables whenever OCR found even one, silently dropping every native table on every other page. Only the tables of pages OCR itself produced a table for are now replaced; a page the mixed path never sent to OCR keeps its native tables. (GH#1670)
+- **(docx): a paragraph inherits the list numbering that its style carries.** A list whose paragraphs hold no direct numbering and take it from the paragraph style instead, which is the shape Word writes for its built-in list styles, came out as plain paragraphs with no list markers. The parser now resolves numbering through the style's `basedOn` chain. Direct paragraph numbering still takes precedence over the style. (GH#1663)
 
 ## [1.2.5] - 2026-09-18
 
