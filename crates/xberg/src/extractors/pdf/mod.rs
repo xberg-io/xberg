@@ -6662,6 +6662,49 @@ mod tests {
         );
     }
 
+    /// GH#1668 end to end: `include_document_structure` alone, with `output_format`
+    /// left at its `Plain` default and no hierarchy config, must trigger the
+    /// structured native pass. Before the fix, this config silently took the flat
+    /// path (`flat_pdf_document`, paragraph-only elements), so the structure tree
+    /// this flag asks for came back holding nothing but `paragraph` nodes even
+    /// though `embedded_images_tables.pdf` has a native table `counts.tables`
+    /// reports correctly either way.
+    #[tokio::test]
+    #[cfg(feature = "pdf")]
+    async fn test_include_document_structure_alone_triggers_the_structured_path() {
+        use crate::core::config::OutputFormat;
+
+        let extractor = PdfExtractor::new();
+        let pdf_path = pdf_test_document("embedded_images_tables.pdf");
+        assert!(
+            pdf_path.exists(),
+            "missing test fixture: {pdf_path:?} — add embedded_images_tables.pdf to test_documents/pdf/"
+        );
+        let content = std::fs::read(&pdf_path).expect("failed to read embedded_images_tables.pdf");
+
+        let config = crate::core::config::ExtractionConfig {
+            include_document_structure: true,
+            ..Default::default()
+        };
+
+        let result = extractor
+            .extract_content(&content, "application/pdf", &config)
+            .await
+            .expect("native extraction with include_document_structure should succeed");
+
+        let result = crate::extraction::derive::derive_extraction_result(result, true, OutputFormat::Plain);
+
+        let structure = result
+            .document
+            .as_ref()
+            .expect("include_document_structure=true must populate the document field");
+        assert!(
+            structure.node_types.iter().any(|kind| kind != "paragraph"),
+            "structure must hold a non-paragraph node kind on a document with a native table; got {:?}",
+            structure.node_types
+        );
+    }
+
     /// Regression for #1355: when `force_ocr` renders a page blank (as xberg_native_pdf does
     /// for a page whose only visible content is an image XObject it silently failed to
     /// decode) but the page actually carries image XObjects, OCR must be retried on the

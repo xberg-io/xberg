@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **(pdf): the mixed native-and-OCR path no longer drops every native table on a page OCR never touched.** On a long document where only some pages needed OCR, the mixed path replaced the whole document's table list with just the OCR pages' tables whenever OCR found even one, silently dropping every native table on every other page. Only the tables of pages OCR itself produced a table for are now replaced; a page the mixed path never sent to OCR keeps its native tables. (GH#1670)
+- **(pdf): `include_document_structure` alone now triggers the structured native extraction pass.** Previously the structured pass ran only for a Markdown/Djot/HTML/DocTags output format, an explicit hierarchy config, inline-image OCR, or a content filter -- never for `include_document_structure` itself. A caller who set only that flag, with output left at its `Plain` default, silently got a flat, paragraph-only document, so the structure tree it asked for came back holding nothing but `paragraph` nodes even though the extractor found headings, tables and page breaks. This configuration now renders its plain-text output from the structured document, so the rendered `content` changes with it: table rows render one per line, and headings and page footers reflow. A caller that sets only this flag and depends on the previous `Plain` text sees that text change. The table count is unaffected. (GH#1668)
 
 ## [1.2.5] - 2026-09-18
 

@@ -63,13 +63,24 @@ fn effective_layout_acceleration<'a>(
 /// (`core/pipeline/format.rs`'s `custom_fallback_to_plain`). `DocTags` is a real,
 /// always-registered built-in renderer that needs the same geometry and headings
 /// as Markdown/Djot/HTML, so it gets its own explicit arm instead.
+///
+/// `include_document_structure` triggers it directly (GH#1668): a caller who set
+/// only that flag, with `output_format` left at its `Plain` default, used to get
+/// `flat_pdf_document`'s paragraph-only elements. `include_document_structure`
+/// then dutifully built a structure tree from them, correctly, since the tree
+/// builder is not what was broken -- it had nothing but paragraphs to build
+/// from. `counts.tables` looked unaffected because it reads `doc.tables`
+/// directly, never the element tree, so the document looked like it knew about
+/// its own tables while the structure asking for them came back flat.
 fn needs_structured_extraction(
     hierarchy_enabled: bool,
+    include_document_structure: bool,
     output_format: &OutputFormat,
     ocr_inline_images: bool,
     content_filter_configured: bool,
 ) -> bool {
     hierarchy_enabled
+        || include_document_structure
         || matches!(
             output_format,
             OutputFormat::Markdown | OutputFormat::Djot | OutputFormat::Html | OutputFormat::DocTags
@@ -452,6 +463,7 @@ pub(crate) fn extract_all_from_native_document(
         .unwrap_or(false);
     let needs_structured = needs_structured_extraction(
         hierarchy_enabled,
+        config.include_document_structure,
         &config.output_format,
         ocr_inline_images,
         config.content_filter.is_some(),
@@ -1011,7 +1023,7 @@ mod tests {
     #[test]
     fn should_not_trigger_structured_extraction_for_unregistered_custom_format() {
         let output_format = OutputFormat::Custom("markdwon".to_string());
-        assert!(!needs_structured_extraction(false, &output_format, false, false));
+        assert!(!needs_structured_extraction(false, false, &output_format, false, false));
     }
 
     /// `DocTags` is a real, always-registered built-in renderer (see
@@ -1019,7 +1031,13 @@ mod tests {
     /// geometry/headings as Markdown, Djot, and HTML.
     #[test]
     fn should_trigger_structured_extraction_for_doctags_format() {
-        assert!(needs_structured_extraction(false, &OutputFormat::DocTags, false, false));
+        assert!(needs_structured_extraction(
+            false,
+            false,
+            &OutputFormat::DocTags,
+            false,
+            false
+        ));
     }
 
     /// The pre-existing markup formats must keep triggering the structured path.
@@ -1027,28 +1045,88 @@ mod tests {
     fn should_trigger_structured_extraction_for_markdown_djot_and_html() {
         assert!(needs_structured_extraction(
             false,
+            false,
             &OutputFormat::Markdown,
             false,
             false
         ));
-        assert!(needs_structured_extraction(false, &OutputFormat::Djot, false, false));
-        assert!(needs_structured_extraction(false, &OutputFormat::Html, false, false));
+        assert!(needs_structured_extraction(
+            false,
+            false,
+            &OutputFormat::Djot,
+            false,
+            false
+        ));
+        assert!(needs_structured_extraction(
+            false,
+            false,
+            &OutputFormat::Html,
+            false,
+            false
+        ));
     }
 
     /// `Plain` and `Json` must not trigger the structured path on their own.
     #[test]
     fn should_not_trigger_structured_extraction_for_plain_or_json() {
-        assert!(!needs_structured_extraction(false, &OutputFormat::Plain, false, false));
-        assert!(!needs_structured_extraction(false, &OutputFormat::Json, false, false));
+        assert!(!needs_structured_extraction(
+            false,
+            false,
+            &OutputFormat::Plain,
+            false,
+            false
+        ));
+        assert!(!needs_structured_extraction(
+            false,
+            false,
+            &OutputFormat::Json,
+            false,
+            false
+        ));
+    }
+
+    /// GH#1668: `include_document_structure` alone, with everything else left at
+    /// its default (`Plain` output, no hierarchy, no inline OCR, no content
+    /// filter), must trigger the structured path on its own. Before this fix a
+    /// caller who set only this flag silently got `flat_pdf_document`'s
+    /// paragraph-only elements, and the structure tree it asked for came back
+    /// holding nothing else.
+    #[test]
+    fn should_trigger_structured_extraction_for_include_document_structure_alone() {
+        assert!(needs_structured_extraction(
+            false,
+            true,
+            &OutputFormat::Plain,
+            false,
+            false
+        ));
     }
 
     /// Hierarchy, inline-image OCR, and explicit content filtering require the
     /// structured path regardless of output format.
     #[test]
     fn should_trigger_structured_extraction_when_structure_dependent_options_are_enabled() {
-        assert!(needs_structured_extraction(true, &OutputFormat::Plain, false, false));
-        assert!(needs_structured_extraction(false, &OutputFormat::Plain, true, false));
-        assert!(needs_structured_extraction(false, &OutputFormat::Plain, false, true));
+        assert!(needs_structured_extraction(
+            true,
+            false,
+            &OutputFormat::Plain,
+            false,
+            false
+        ));
+        assert!(needs_structured_extraction(
+            false,
+            false,
+            &OutputFormat::Plain,
+            true,
+            false
+        ));
+        assert!(needs_structured_extraction(
+            false,
+            false,
+            &OutputFormat::Plain,
+            false,
+            true
+        ));
     }
 
     #[cfg(feature = "layout-detection")]
