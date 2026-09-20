@@ -4103,6 +4103,90 @@ mod tests {
         );
     }
 
+    /// Table rows, not sentences: the line carries five alphabetic words but is over a third
+    /// ASCII digits, so the prose gate's digit-ratio bound rejects all of it. The mapping is
+    /// genuine and the text is correct; the document simply holds no prose for a language check
+    /// to read. This is the shape of an invoice, a form or an agenda packet -- exactly the
+    /// documents people scan (issue #1709). ~keep
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    fn no_prose_table_text() -> String {
+        (1..=25)
+            .map(|row| format!("Item {row:04} Qty 12 Unit 45.00 Tax 3.75 Total 48.75"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    /// Issue #1709: the language-plausibility check abstains on a page with too little prose to
+    /// judge, and an abstention is invisible. `implausible_text_pages: []` means both "every
+    /// page was checked and is fine" and "no page could be checked at all", so a caller holding
+    /// a document whose text layer decodes to the wrong letters cannot tell it from a clean one.
+    ///
+    /// The document here is legitimate and correctly mapped, so it must stay native and must
+    /// flag no page. What must change is that the caller can see the check did not run.
+    #[tokio::test]
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    #[serial]
+    async fn test_document_without_prose_reports_that_plausibility_was_not_evaluated() {
+        use crate::core::config::{OcrConfig, PageConfig};
+
+        const OCR_TEXT: &str = "mock ocr text that must never appear for a legitimate table";
+        let _backend = register_mock_ocr_backend("pdf-1709-no-prose-abstention", OCR_TEXT);
+        let table_text = no_prose_table_text();
+
+        let config = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                backend: "pdf-1709-no-prose-abstention".to_string(),
+                language: vec!["eng".to_string()],
+                ..Default::default()
+            }),
+            pages: Some(PageConfig {
+                extract_pages: true,
+                ..Default::default()
+            }),
+            use_cache: false,
+            ..Default::default()
+        };
+
+        let internal = PdfExtractor::new()
+            .extract_content(&shifted_to_unicode_pdf(&table_text, 0), "application/pdf", &config)
+            .await
+            .expect("table-only PDF extraction should succeed");
+        let derived = crate::extraction::derive::derive_extraction_result(
+            internal,
+            false,
+            crate::core::config::OutputFormat::Plain,
+        );
+
+        assert_eq!(
+            derived.extraction_method,
+            Some(ExtractionMethod::Native),
+            "a legitimate table document must stay native: {:?}",
+            derived.extraction_method
+        );
+        assert!(
+            !derived.content.contains(OCR_TEXT),
+            "a legitimate table document must not be routed to OCR: {:?}",
+            derived.content
+        );
+
+        let implausible_text_pages = derived.metadata.format.as_ref().and_then(|format| match format {
+            crate::types::FormatMetadata::Pdf(pdf) => pdf.implausible_text_pages.clone(),
+            _ => None,
+        });
+        assert_eq!(
+            implausible_text_pages,
+            Some(Vec::new()),
+            "no page of a legitimate table document may be flagged as implausible"
+        );
+
+        let warnings = &derived.processing_warnings;
+        assert!(
+            warnings.iter().any(|warning| warning.message.contains("1709")),
+            "a document the plausibility check could not judge on any page must say so, so that \
+             an empty implausible_text_pages is not read as a clean bill of health: {warnings:?}"
+        );
+    }
+
     /// xberg#1338's "explicit OCR config" rule stays intact for the plausibility signal too: a
     /// wrong-mapped page must not be silently, automatically OCR'd when the caller never
     /// configured `ocr`. The defect must instead be surfaced as a warning, and the page's
