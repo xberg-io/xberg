@@ -1263,7 +1263,7 @@ A page is treated as language/dictionary-implausible, and routed to OCR under `O
 - less than `min_reliable_language_chunk_ratio` (default `0.10`) of its prose chunks are classified as a reliable language; and
 - the mean detection confidence across those chunks is also low, so a genuinely legible page in a close language pair (e.g. Danish vs. Norwegian Bokmål) is not misclassified.
 
-A page the character-shape or undecodable-text-layer checks already route to OCR is not independently re-flagged by this signal. `PdfMetadata.implausible_text_pages` reports the 1-indexed pages this check flagged; it is `None` when `enable_plausibility_ocr_routing` is `false`.
+A page the character-shape or undecodable-text-layer checks already route to OCR is not independently re-flagged by this signal. `PdfMetadata.implausible_text_pages` reports the 1-indexed pages this check flagged; it is `None` when `enable_plausibility_ocr_routing` is `false`. If no page holds enough prose to judge, the check reaches no verdict and the list stays empty for that reason, not because the text layer is sound. Xberg then records a processing warning naming how many pages it examined, so an empty list is not mistaken for a clean result (issue #1709).
 
 Tune the ratio via `OcrQualityThresholds.min_reliable_language_chunk_ratio` on `OcrConfig.quality_thresholds`, or disable the check with `enable_plausibility_ocr_routing`:
 
