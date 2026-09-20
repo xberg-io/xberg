@@ -84,14 +84,19 @@ pub fn index_select_2d(t: &Tensor, index: &Tensor) -> Result<Tensor> {
         ));
     }
     let (ih, iw) = index.dims2()?;
-    let mut result = Vec::with_capacity(ih * iw);
-    for i in 0..ih {
-        for j in 0..iw {
-            let idx = (index.i((i, j))?.to_scalar::<u32>()? as usize).min(num - 1);
-            result.push(t.i(idx)?);
-        }
-    }
-    Tensor::stack(&result, 0)
+    // ~keep: one device-to-host transfer for the whole index grid, then one on-device gather.
+    // Reading the grid a scalar at a time stalled the SAM attention on ih * iw round trips per
+    // rel-pos lookup, per attention layer, per crop (GH#1714). to_vec2 returns logical row-major
+    // order for a strided layout as well as a contiguous one, so the flattened order still
+    // matches the [i][j] grid the scalar loop walked.
+    let rows: Vec<u32> = index
+        .to_vec2::<u32>()?
+        .into_iter()
+        .flatten()
+        .map(|idx| (idx as usize).min(num - 1) as u32)
+        .collect();
+    let flat = Tensor::from_vec(rows, (ih * iw,), t.device())?;
+    t.index_select(&flat, 0)
         .and_then(|r| r.reshape((ih, iw, dim)))
         .map_err(|e| CandleOcrError::InferenceFailed(format!("index_select_2d: {e}")))
 }
