@@ -20,7 +20,7 @@ mod rendering;
 mod scoring;
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-pub(crate) use plausibility::implausible_text_pages;
+pub(crate) use plausibility::scan_text_plausibility;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) use scoring::{OcrGateOutcome, apply_flagged_pages, evaluate_ocr_skip_gate, evaluate_per_page_ocr};
 

@@ -686,7 +686,7 @@ fn record_implausible_text_pages(
     let ocr_config = config.ocr.as_ref().unwrap_or(&default_ocr_config);
     let thresholds = ocr_config.effective_thresholds();
 
-    let implausible_pages = ocr::implausible_text_pages(
+    let scan = ocr::scan_text_plausibility(
         native_text,
         boundaries,
         pdf_metadata.pdf_specific.page_count,
@@ -695,8 +695,30 @@ fn record_implausible_text_pages(
 
     pdf_metadata.pdf_specific.implausible_text_pages = thresholds
         .enable_plausibility_ocr_routing
-        .then(|| implausible_pages.clone());
+        .then(|| scan.implausible.clone());
 
+    // An abstention is not a pass. Say so, or an empty `implausible_text_pages` reads as a
+    // clean bill of health on a document the check never got to look at (issue #1709). Forced
+    // OCR is the exception: it discards the native layer, so the caller never receives the text
+    // this notice is about and has already taken the action it would advise. ~keep
+    if !config.force_ocr && scan.judged == 0 && !scan.unjudged.is_empty() {
+        crate::core::diagnostics::push_warning_deduped(
+            warnings,
+            crate::types::ProcessingWarning {
+                source: std::borrow::Cow::Borrowed("ocr"),
+                message: std::borrow::Cow::Owned(format!(
+                    "No page of this document holds enough prose to read, so the language check \
+                     for a wrong glyph-to-Unicode mapping could not judge any of the {} page(s) \
+                     it examined (issue #1709). An empty `implausible_text_pages` reports here \
+                     that the check did not run, not that the text layer is correct. If the text \
+                     looks wrong, extract the document again with OCR forced.",
+                    scan.unjudged.len()
+                )),
+            },
+        );
+    }
+
+    let implausible_pages = scan.implausible;
     if implausible_pages.is_empty() {
         return;
     }
@@ -4184,6 +4206,61 @@ mod tests {
             warnings.iter().any(|warning| warning.message.contains("1709")),
             "a document the plausibility check could not judge on any page must say so, so that \
              an empty implausible_text_pages is not read as a clean bill of health: {warnings:?}"
+        );
+    }
+
+    /// Forced OCR discards the native text layer, so the caller never receives the text the
+    /// plausibility check abstained on. Reporting the abstention there would describe content
+    /// nobody got and would close by advising the very thing the caller already did.
+    #[tokio::test]
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    #[serial]
+    async fn test_forced_ocr_does_not_report_a_plausibility_abstention() {
+        use crate::core::config::{OcrConfig, PageConfig};
+
+        const OCR_TEXT: &str = "forced ocr replacement text for the table only fixture of issue \
+            one thousand seven hundred and nine with plenty of additional alphanumeric content \
+            so the native alnum retention guard keeps this replacement in place";
+        let _backend = register_mock_ocr_backend("pdf-1709-forced-ocr-abstention", OCR_TEXT);
+        let table_text = no_prose_table_text();
+
+        let config = ExtractionConfig {
+            force_ocr: true,
+            ocr: Some(OcrConfig {
+                backend: "pdf-1709-forced-ocr-abstention".to_string(),
+                language: vec!["eng".to_string()],
+                ..Default::default()
+            }),
+            pages: Some(PageConfig {
+                extract_pages: true,
+                ..Default::default()
+            }),
+            use_cache: false,
+            ..Default::default()
+        };
+
+        let internal = PdfExtractor::new()
+            .extract_content(&shifted_to_unicode_pdf(&table_text, 0), "application/pdf", &config)
+            .await
+            .expect("forced-OCR extraction of a table-only PDF should succeed");
+        let derived = crate::extraction::derive::derive_extraction_result(
+            internal,
+            false,
+            crate::core::config::OutputFormat::Plain,
+        );
+
+        assert_eq!(
+            derived.extraction_method,
+            Some(ExtractionMethod::Ocr),
+            "force_ocr must produce OCR text: {:?}",
+            derived.extraction_method
+        );
+
+        let warnings = &derived.processing_warnings;
+        assert!(
+            !warnings.iter().any(|warning| warning.message.contains("1709")),
+            "a caller who forced OCR must not be told the native layer could not be checked: \
+             {warnings:?}"
         );
     }
 

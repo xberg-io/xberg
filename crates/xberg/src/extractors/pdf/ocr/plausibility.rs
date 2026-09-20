@@ -166,72 +166,111 @@ pub(super) fn evaluate_text_plausibility(text: &str, thresholds: &OcrQualityThre
     }
 }
 
-/// Whether a single page (already sliced out of `native_text` by `boundary`) is implausible.
+/// One page's verdict, or `None` when the page never reached the plausibility check.
 ///
-/// Returns `false` for a page the character-shape gate already routes to OCR on its own
-/// (`evaluate_native_text_for_ocr(..).fallback`): the plausibility signal exists to catch what
-/// that gate cannot see, not to duplicate what it already catches.
-pub(super) fn page_is_implausible(
+/// `None` covers a boundary that does not slice `native_text` on a character boundary, and a
+/// page the character-shape gate already routes to OCR on its own
+/// (`evaluate_native_text_for_ocr(..).fallback`). The plausibility signal exists to catch what
+/// that gate cannot see, not to duplicate what it already catches, and a page that gate
+/// already routes cannot mislead the caller about its text.
+pub(super) fn page_verdict(
     native_text: &str,
     boundary: &PageBoundary,
     thresholds: &OcrQualityThresholds,
-) -> bool {
+) -> Option<PlausibilityVerdict> {
     if boundary.byte_start > boundary.byte_end
         || !native_text.is_char_boundary(boundary.byte_start)
         || !native_text.is_char_boundary(boundary.byte_end)
     {
-        return false;
+        return None;
     }
 
     let page_text = &native_text[boundary.byte_start..boundary.byte_end];
     if super::scoring::evaluate_native_text_for_ocr(page_text, Some(1), thresholds).fallback {
-        return false;
+        return None;
     }
 
-    evaluate_text_plausibility(page_text, thresholds) == PlausibilityVerdict::Implausible
+    Some(evaluate_text_plausibility(page_text, thresholds))
 }
 
-/// Whether the whole document (no page boundaries available) is implausible.
-pub(super) fn whole_document_is_implausible(native_text: &str, thresholds: &OcrQualityThresholds) -> bool {
+/// The whole document's verdict when no page boundaries are available. `None` means what it
+/// means in [`page_verdict`].
+pub(super) fn whole_document_verdict(
+    native_text: &str,
+    thresholds: &OcrQualityThresholds,
+) -> Option<PlausibilityVerdict> {
     if super::scoring::evaluate_native_text_for_ocr(native_text, Some(1), thresholds).fallback {
-        return false;
+        return None;
     }
 
-    evaluate_text_plausibility(native_text, thresholds) == PlausibilityVerdict::Implausible
+    Some(evaluate_text_plausibility(native_text, thresholds))
 }
 
-/// Pages (1-indexed) whose native text layer reads as no real detectable language, per
+/// What the language-plausibility check made of a document (issues #1696 and #1709).
+///
+/// `implausible` on its own cannot answer "was this document checked at all". It is empty both
+/// for a document whose every page read as a real language and for a document no page of which
+/// held enough prose to judge. `judged` separates those two, so an abstention is visible
+/// instead of looking like a clean bill of health.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub(crate) struct PlausibilityScan {
+    /// Pages (1-indexed) whose native text layer reads as no real detectable language.
+    pub implausible: Vec<u32>,
+    /// Pages (1-indexed) the check examined and could not judge: fewer than
+    /// [`PLAUSIBILITY_MIN_PROSE_CHUNKS`] chunks of prose to read.
+    pub unjudged: Vec<u32>,
+    /// How many pages the check judged, plausible or implausible together. Zero means the
+    /// check produced no verdict anywhere in the document.
+    pub judged: u32,
+}
+
+/// Scan a document for language/dictionary plausibility, page by page, per
 /// [`OcrQualityThresholds::enable_plausibility_ocr_routing`] and
 /// [`OcrQualityThresholds::min_reliable_language_chunk_ratio`] (issue #1696).
 ///
 /// Empty when routing is disabled. Without page boundaries there is no subset to attribute the
-/// signal to, so a whole-document verdict of `Implausible` flags every page from `1` to
-/// `page_count` (mirroring [`super::scoring::apply_flagged_pages`]'s no-boundaries behavior);
-/// `page_count` defaults to `1` when absent, matching the rest of this module's single-page
-/// fallback convention.
-pub(crate) fn implausible_text_pages(
+/// signal to, so the whole-document verdict applies to every page from `1` to `page_count`
+/// (mirroring [`super::scoring::apply_flagged_pages`]'s no-boundaries behavior); `page_count`
+/// defaults to `1` when absent, matching the rest of this module's single-page fallback
+/// convention.
+pub(crate) fn scan_text_plausibility(
     native_text: &str,
     boundaries: Option<&[PageBoundary]>,
     page_count: Option<u32>,
     thresholds: &OcrQualityThresholds,
-) -> Vec<u32> {
+) -> PlausibilityScan {
+    let mut scan = PlausibilityScan::default();
     if !thresholds.enable_plausibility_ocr_routing {
-        return Vec::new();
+        return scan;
     }
 
     match boundaries {
-        Some(bounds) if !bounds.is_empty() => bounds
-            .iter()
-            .filter(|boundary| page_is_implausible(native_text, boundary, thresholds))
-            .map(|boundary| boundary.page_number)
-            .collect(),
+        Some(bounds) if !bounds.is_empty() => {
+            for boundary in bounds {
+                match page_verdict(native_text, boundary, thresholds) {
+                    Some(PlausibilityVerdict::Implausible) => {
+                        scan.implausible.push(boundary.page_number);
+                        scan.judged += 1;
+                    }
+                    Some(PlausibilityVerdict::Plausible) => scan.judged += 1,
+                    Some(PlausibilityVerdict::NotEvaluated) => scan.unjudged.push(boundary.page_number),
+                    None => {}
+                }
+            }
+        }
         _ => {
-            if whole_document_is_implausible(native_text, thresholds) {
-                let pages = page_count.unwrap_or(1).max(1);
-                (1..=pages).collect()
-            } else {
-                Vec::new()
+            let pages = page_count.unwrap_or(1).max(1);
+            match whole_document_verdict(native_text, thresholds) {
+                Some(PlausibilityVerdict::Implausible) => {
+                    scan.implausible = (1..=pages).collect();
+                    scan.judged = pages;
+                }
+                Some(PlausibilityVerdict::Plausible) => scan.judged = pages,
+                Some(PlausibilityVerdict::NotEvaluated) => scan.unjudged = (1..=pages).collect(),
+                None => {}
             }
         }
     }
+
+    scan
 }
