@@ -355,8 +355,11 @@ pub struct ExtractionOverrides {
     #[arg(long, help = "Limit total threads for constrained environments")]
     pub max_threads: Option<usize>,
 
-    /// Cap concurrent Tesseract recognition sessions below the thread budget.
-    #[arg(long, help = "Limit concurrent OCR sessions on memory-constrained hosts")]
+    /// Set concurrent Tesseract recognition sessions directly. The value is applied as given and is not capped by the thread budget.
+    #[arg(
+        long,
+        help = "Set concurrent OCR sessions directly, instead of following the thread budget"
+    )]
     pub max_concurrent_ocr: Option<usize>,
 
     /// Extract pages as a separate array in results.

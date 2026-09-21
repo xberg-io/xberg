@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **(config): `ConcurrencyConfig::max_concurrent_ocr` and the `--max-concurrent-ocr` CLI flag cap concurrent Tesseract recognition sessions on their own.** Use it when the host has cores to spare but not the memory to run a recognition session on each of them. (GH#1727)
+- **(config): `ConcurrencyConfig::max_concurrent_ocr` and the `--max-concurrent-ocr` CLI flag set concurrent Tesseract recognition sessions on their own.** Use it when the host has cores to spare but not the memory to run a recognition session on each of them. The value is applied as given: neither the thread budget nor the host's free memory reduces it, since both of those bound only the automatic limit. `ConcurrencyConfig` is not `#[non_exhaustive]`, so the added field breaks any Rust caller that builds the struct by literal without `..Default::default()`; such a caller must add the field or the rest pattern. Callers on every other binding are unaffected. (GH#1727)
 
 ### Changed
 
