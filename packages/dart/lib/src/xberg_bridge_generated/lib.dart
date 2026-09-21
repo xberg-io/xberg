@@ -3702,7 +3702,10 @@ class CodeMetadata {
 /// Controls thread usage for constrained environments.
 ///
 /// Set `max_threads` to cap all internal thread pools (Rayon, ONNX Runtime
-/// intra-op) and batch concurrency to a single limit.
+/// intra-op), batch concurrency and Tesseract recognition to a single limit.
+/// Set `max_concurrent_ocr` to give recognition a tighter limit of its own,
+/// which is the knob to reach for when the host has cores to spare but not
+/// the memory to run a recognition session on each of them.
 ///
 /// # Default budget when `max_threads` is unset
 ///
@@ -3731,6 +3734,7 @@ class CodeMetadata {
 ///
 /// let config = ConcurrencyConfig {
 ///     max_threads: Some(2),
+///     max_concurrent_ocr: None,
 /// };
 /// ```
 class ConcurrencyConfig {
@@ -3745,17 +3749,27 @@ class ConcurrencyConfig {
   /// default will not scale past 8 on its own.
   final PlatformInt64? maxThreads;
 
-  const ConcurrencyConfig({this.maxThreads});
+  /// Maximum number of Tesseract recognition sessions that run at once.
+  ///
+  /// When `None`, recognition follows `max_threads`, reduced to the number
+  /// of sessions the host's free memory holds. Each session keeps its own
+  /// page image and recognition working set resident, so a host with many
+  /// cores and little memory needs this lower than the thread budget. Set
+  /// it to `4` to keep the fixed limit that releases up to 1.2.6 applied.
+  final PlatformInt64? maxConcurrentOcr;
+
+  const ConcurrencyConfig({this.maxThreads, this.maxConcurrentOcr});
 
   @override
-  int get hashCode => maxThreads.hashCode;
+  int get hashCode => maxThreads.hashCode ^ maxConcurrentOcr.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is ConcurrencyConfig &&
           runtimeType == other.runtimeType &&
-          maxThreads == other.maxThreads;
+          maxThreads == other.maxThreads &&
+          maxConcurrentOcr == other.maxConcurrentOcr;
 }
 
 @freezed

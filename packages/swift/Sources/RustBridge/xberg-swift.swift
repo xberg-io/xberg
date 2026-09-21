@@ -5318,8 +5318,8 @@ public class ConcurrencyConfig: ConcurrencyConfigRefMut {
     }
 }
 extension ConcurrencyConfig {
-    public convenience init(_ max_threads: Optional<UInt>) {
-        self.init(ptr: __swift_bridge__$ConcurrencyConfig$new(max_threads.intoFfiRepr()))
+    public convenience init(_ max_threads: Optional<UInt>, _ max_concurrent_ocr: Optional<UInt>) {
+        self.init(ptr: __swift_bridge__$ConcurrencyConfig$new(max_threads.intoFfiRepr(), max_concurrent_ocr.intoFfiRepr()))
     }
 }
 public class ConcurrencyConfigRefMut: ConcurrencyConfigRef {
@@ -5337,6 +5337,10 @@ public class ConcurrencyConfigRef {
 extension ConcurrencyConfigRef {
     public func maxThreads() -> Optional<UInt> {
         __swift_bridge__$ConcurrencyConfig$max_threads(ptr).intoSwiftRepr()
+    }
+
+    public func maxConcurrentOcr() -> Optional<UInt> {
+        __swift_bridge__$ConcurrencyConfig$max_concurrent_ocr(ptr).intoSwiftRepr()
     }
 }
 extension ConcurrencyConfig: Vectorizable {

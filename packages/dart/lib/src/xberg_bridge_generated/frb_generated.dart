@@ -18332,10 +18332,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ConcurrencyConfig dco_decode_concurrency_config(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 1)
-      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
     return ConcurrencyConfig(
       maxThreads: dco_decode_opt_box_autoadd_i_64(arr[0]),
+      maxConcurrentOcr: dco_decode_opt_box_autoadd_i_64(arr[1]),
     );
   }
 
@@ -26999,7 +27000,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_maxThreads = sse_decode_opt_box_autoadd_i_64(deserializer);
-    return ConcurrencyConfig(maxThreads: var_maxThreads);
+    var var_maxConcurrentOcr = sse_decode_opt_box_autoadd_i_64(deserializer);
+    return ConcurrencyConfig(
+      maxThreads: var_maxThreads,
+      maxConcurrentOcr: var_maxConcurrentOcr,
+    );
   }
 
   @protected
@@ -38548,6 +38553,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_opt_box_autoadd_i_64(self.maxThreads, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.maxConcurrentOcr, serializer);
   }
 
   @protected
