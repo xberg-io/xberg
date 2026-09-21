@@ -3450,21 +3450,21 @@ MemFree:         1000000 kB
 MemAvailable:       2048 kB
 Buffers:           50000 kB
 ";
-        assert_eq!(parse_meminfo_available(synthetic), 2048 * 1024);
+        assert_eq!(parse_meminfo_available(synthetic), Some(2048 * 1024));
     }
 
     #[cfg(all(feature = "ocr", target_os = "linux"))]
     #[test]
-    fn parse_meminfo_available_missing_field_returns_zero() {
+    fn parse_meminfo_available_missing_field_reads_as_unknown() {
         let synthetic = "MemTotal: 8000000 kB\nMemFree: 1000000 kB\n";
-        assert_eq!(parse_meminfo_available(synthetic), 0);
+        assert_eq!(parse_meminfo_available(synthetic), None);
     }
 
     #[cfg(all(feature = "ocr", target_os = "linux"))]
     #[test]
-    fn parse_meminfo_available_handles_unparseable_value_as_zero() {
+    fn parse_meminfo_available_handles_unparseable_value_as_unknown() {
         let synthetic = "MemAvailable: notanumber kB\n";
-        assert_eq!(parse_meminfo_available(synthetic), 0);
+        assert_eq!(parse_meminfo_available(synthetic), None);
     }
 
     #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
@@ -3637,8 +3637,8 @@ Buffers:           50000 kB
 
         // Two gibibytes free, a small document, and a 32-thread budget.
         const AVAILABLE: usize = 2 * 1024 * 1024 * 1024;
-        let wide = adapt_batch_size_to_memory_inner(32, 1024, letter_at_default_dpi, AVAILABLE);
-        let narrow = adapt_batch_size_to_memory_inner(32, 1024, letter_at_600_dpi, AVAILABLE);
+        let wide = adapt_batch_size_to_memory_inner(32, 1024, letter_at_default_dpi, Some(AVAILABLE));
+        let narrow = adapt_batch_size_to_memory_inner(32, 1024, letter_at_600_dpi, Some(AVAILABLE));
 
         assert_eq!(
             wide, 32,
@@ -3674,6 +3674,165 @@ Buffers:           50000 kB
         fn drop(&mut self) {
             TEST_AVAILABLE_MEMORY.store(0, std::sync::atomic::Ordering::SeqCst);
         }
+    }
+
+    /// #1724 review: the pipeline route's `include_page_rasters` branch validated the whole
+    /// batch against `max_content_size`, the accounting the single-backend path below stopped
+    /// doing. That limit bounds what one page costs to render and encode, so summing a batch
+    /// against it makes the ceiling a function of the thread budget. `images: Some(..)` renders
+    /// a Letter page at 300 DPI, which is 2550x3300: one such page fits the 100 MiB default and
+    /// two do not, so every thread budget of two or more failed the whole extraction with a
+    /// validation error instead of returning pages.
+    #[cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    #[serial_test::serial]
+    async fn mixed_ocr_pipeline_route_captures_rasters_for_a_batch_wider_than_one_page() {
+        use std::sync::Arc;
+
+        const BACKEND: &str = "mixed-ocr-raster-batch-probe-backend";
+        const PAGES: usize = 2;
+        const BUDGET: usize = 2;
+
+        struct NoOpPipelineBackend;
+
+        impl crate::plugins::Plugin for NoOpPipelineBackend {
+            fn name(&self) -> &str {
+                BACKEND
+            }
+
+            fn version(&self) -> String {
+                "1.0.0".to_string()
+            }
+
+            fn initialize(&self) -> crate::Result<()> {
+                Ok(())
+            }
+
+            fn shutdown(&self) -> crate::Result<()> {
+                Ok(())
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl crate::plugins::OcrBackend for NoOpPipelineBackend {
+            async fn process_image(
+                &self,
+                _image_bytes: &[u8],
+                _config: &crate::core::config::OcrConfig,
+            ) -> crate::Result<crate::types::ExtractedDocument> {
+                Ok(crate::types::ExtractedDocument {
+                    content: "recognised page text with enough real words on it to clear the noise gate".to_string(),
+                    ..Default::default()
+                })
+            }
+
+            fn supports_language(&self, _lang: &str) -> bool {
+                true
+            }
+
+            fn backend_type(&self) -> crate::plugins::OcrBackendType {
+                crate::plugins::OcrBackendType::Custom
+            }
+        }
+
+        crate::plugins::register_ocr_backend(Arc::new(NoOpPipelineBackend))
+            .expect("registering the raster-batch probe backend must succeed");
+        struct Unregister;
+        impl Drop for Unregister {
+            fn drop(&mut self) {
+                let _ = crate::plugins::unregister_ocr_backend(BACKEND);
+            }
+        }
+        let _unregister = Unregister;
+
+        // Far above the bound, so the batch width is the thread budget and this test asserts
+        // the validation rather than how much memory the machine running it has free.
+        let _memory = PinnedAvailableMemory::set(8 * 1024 * 1024 * 1024);
+
+        let pdf = build_minimal_multi_page_pdf_with_media_box(PAGES, 612, 792);
+        let ocr_pages: Vec<u32> = (1..=PAGES as u32).collect();
+        let config = ExtractionConfig {
+            ocr: Some(crate::core::config::OcrConfig {
+                backend: BACKEND.to_string(),
+                // One stage over a no-op backend, which is what puts this call on the
+                // pipeline route rather than the single-backend one.
+                pipeline: Some(crate::core::config::OcrPipelineConfig {
+                    stages: vec![crate::core::config::OcrPipelineStage {
+                        backend: BACKEND.to_string(),
+                        priority: 100,
+                        language: None,
+                        tesseract_config: None,
+                        paddle_ocr_config: None,
+                        vlm_config: None,
+                        backend_options: None,
+                    }],
+                    quality_thresholds: OcrQualityThresholds {
+                        pipeline_min_quality: 0.0,
+                        ..Default::default()
+                    },
+                }),
+                ..Default::default()
+            }),
+            images: Some(crate::core::config::ImageExtractionConfig {
+                include_page_rasters: true,
+                ..Default::default()
+            }),
+            concurrency: Some(crate::core::config::ConcurrencyConfig {
+                max_threads: Some(BUDGET),
+            }),
+            ..Default::default()
+        };
+
+        let rasters = extract_mixed_ocr_native("native", &[], &ocr_pages, &pdf, &config, None)
+            .await
+            .expect(
+                "a two-page raster batch must not be rejected wholesale against max_content_size; \
+                 a Validation error here means the batch is summed against that limit again",
+            )
+            .4
+            .expect("include_page_rasters must return the captured rasters");
+
+        assert_eq!(
+            rasters.len(),
+            PAGES,
+            "every page in the batch must be captured, got {} of {PAGES}",
+            rasters.len()
+        );
+    }
+
+    /// #1724 review: a memory reading of zero and a reading that failed are the same value here,
+    /// and the sizer turns zero into the full configured width. `memory.current` counts page
+    /// cache, so a container reporting no headroom is routine, and that host is exactly the one
+    /// handed the widest batch: one byte of headroom gives one page, no bytes gives eight.
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    #[test]
+    fn batch_width_treats_a_measured_zero_as_one_page() {
+        const PER_PAGE: usize = 21 * 1024 * 1024;
+
+        assert_eq!(
+            adapt_batch_size_to_memory_inner(8, 0, PER_PAGE, Some(0)),
+            1,
+            "a host with no headroom must get a one-page batch, not the full configured width"
+        );
+        assert_eq!(
+            adapt_batch_size_to_memory_inner(8, 0, PER_PAGE, Some(1)),
+            1,
+            "one byte of headroom must give the same one-page batch as none"
+        );
+    }
+
+    /// The other half of the same distinction: a reading that failed says nothing about the
+    /// host, so the configured width stands.
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    #[test]
+    fn batch_width_keeps_the_configured_width_when_free_memory_is_unknown() {
+        const PER_PAGE: usize = 21 * 1024 * 1024;
+
+        assert_eq!(
+            adapt_batch_size_to_memory_inner(8, 0, PER_PAGE, None),
+            8,
+            "an unreadable memory figure must leave the configured width alone"
+        );
     }
 
     /// #1666/#1716: the per-page OCR route must keep as many pages in flight as the thread
@@ -3751,6 +3910,13 @@ Buffers:           50000 kB
             peak: Arc::clone(&peak),
         }))
         .expect("registering the in-flight probe backend must succeed");
+        struct Unregister;
+        impl Drop for Unregister {
+            fn drop(&mut self) {
+                let _ = crate::plugins::unregister_ocr_backend(BACKEND);
+            }
+        }
+        let _unregister = Unregister;
 
         // Pin the free-memory figure the batch width is computed from. Letter pages cost about
         // 21 MB each here, and the route reserves the document plus 512 MB, so a runner with

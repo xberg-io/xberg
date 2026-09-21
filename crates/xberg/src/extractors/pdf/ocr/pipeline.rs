@@ -618,11 +618,15 @@ pub(crate) async fn extract_mixed_ocr_native(
             if capture_rasters {
                 let default_security_limits = crate::extractors::security::SecurityLimits::default();
                 let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
-                validate_png_encode_batch_peak(
-                    page_images.iter().map(|(_, image)| image.as_ref()),
-                    false,
-                    security_limits,
-                )?;
+                // One page at a time, as on the single-backend path below. `max_content_size`
+                // bounds what a single page costs to render and encode; summing a whole batch
+                // against it makes that ceiling a function of the thread budget, so a Letter
+                // page at the 300 DPI an `images` config implies rejects the whole batch, and
+                // every page in it, from a width of two upwards. The batch's own footprint is
+                // bounded by `batch_size` above, which free memory decides. ~keep
+                for (_, image) in &page_images {
+                    validate_png_encode_batch_peak(std::iter::once(image.as_ref()), false, security_limits)?;
+                }
                 for (page_idx, image) in &page_images {
                     let rgb = clone_rgb_for_png_encode(image, security_limits)?;
                     let (w, h) = rgb.dimensions();
@@ -2563,8 +2567,8 @@ pub(crate) fn build_page_raster_image(
 /// reads `/proc/meminfo` and the cgroup files, and on macOS it spawns a `sysctl` child process
 /// and waits for it. Doing that on a runtime worker stalls every other task sharing the thread,
 /// so the read goes to the blocking pool and the result is awaited. A read that cannot be
-/// joined reports zero, which is the same "could not tell" answer a failed query already gives
-/// and leaves the configured batch size alone.
+/// joined reports `None`, the same "could not tell" answer a failed query gives, which leaves
+/// the configured batch size alone.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) async fn adapt_batch_size_to_memory(
     configured: usize,
@@ -2580,19 +2584,22 @@ pub(super) async fn adapt_batch_size_to_memory(
 }
 
 /// Free memory, read without blocking the async executor.
+///
+/// `None` means the read could not tell. `Some(0)` means it did read the host and found no
+/// headroom, which is a different answer and sizes a different batch.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-async fn available_memory_off_executor() -> usize {
-    #[cfg(test)]
+async fn available_memory_off_executor() -> Option<usize> {
+    #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
     {
         let pinned = TEST_AVAILABLE_MEMORY.load(std::sync::atomic::Ordering::SeqCst);
         if pinned != 0 {
-            return pinned;
+            return Some(pinned);
         }
     }
 
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     {
-        tokio::task::spawn_blocking(get_available_memory).await.unwrap_or(0)
+        tokio::task::spawn_blocking(get_available_memory).await.ok().flatten()
     }
     #[cfg(not(all(feature = "tokio-runtime", not(target_arch = "wasm32"))))]
     {
@@ -2604,10 +2611,10 @@ async fn available_memory_off_executor() -> usize {
 /// pin the figure the batch width is computed from rather than asserting against whatever the
 /// machine running it happens to have free.
 ///
-/// Zero means "not set". A test that wants to exercise the zero answer calls
+/// Zero means "not set". A test that wants to exercise a measured zero calls
 /// [`adapt_batch_size_to_memory_inner`] directly. It is process-wide, so every test that sets it
 /// is `#[serial]`.
-#[cfg(test)]
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(super) static TEST_AVAILABLE_MEMORY: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 /// Pure core of [`adapt_batch_size_to_memory`], parameterized on free memory so a test can
@@ -2617,9 +2624,17 @@ pub(super) fn adapt_batch_size_to_memory_inner(
     configured: usize,
     document_size: usize,
     per_page_bytes: usize,
-    available_bytes: usize,
+    available_bytes: Option<usize>,
 ) -> usize {
-    if available_bytes == 0 || per_page_bytes == 0 {
+    // An unknown reading and a reading of zero are different answers. Unknown leaves the
+    // configured width alone, because nothing was measured to narrow it with. Zero was
+    // measured: the host has no headroom, so the batch carries one page. Spelling both as 0
+    // handed the widest batch to exactly the host with the least memory, and `memory.current`
+    // counts page cache, so a container reporting no headroom is routine. ~keep
+    let Some(available_bytes) = available_bytes else {
+        return configured;
+    };
+    if per_page_bytes == 0 {
         return configured;
     }
 
@@ -2693,15 +2708,18 @@ pub(super) fn estimate_png_encode_page_peak_bytes(width: u32, height: u32) -> cr
 }
 /// Query available system memory without external dependencies.
 ///
-/// On Linux (including Docker), reads `/proc/meminfo` for `MemAvailable`.
+/// On Linux (including Docker), reads `/proc/meminfo` for `MemAvailable`, capped by the
+/// cgroup's own headroom.
 /// On macOS, uses `sysctl hw.memsize` for total memory (conservative fallback).
-/// Returns 0 if the query fails, signaling the caller to use the default batch size.
+///
+/// `None` means the query could not tell, and the caller keeps its configured batch size.
+/// `Some(0)` is a real reading of a host with no headroom, and the caller narrows to one page.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-pub(super) fn get_available_memory() -> usize {
+pub(super) fn get_available_memory() -> Option<usize> {
     #[cfg(target_os = "linux")]
     {
-        let host = read_meminfo_available();
-        host.min(cgroup_headroom().unwrap_or(usize::MAX))
+        let host = read_meminfo_available()?;
+        Some(host.min(cgroup_headroom().unwrap_or(usize::MAX)))
     }
     #[cfg(target_os = "macos")]
     {
@@ -2710,17 +2728,19 @@ pub(super) fn get_available_memory() -> usize {
             && let Ok(s) = std::str::from_utf8(&output.stdout)
             && let Ok(total) = s.trim().parse::<usize>()
         {
-            return total / 2;
+            return Some(total / 2);
         }
-        0
+        None
     }
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
-        0
+        None
     }
 }
+/// `MemAvailable` in bytes, or `None` when the field is absent or unparseable. An absent
+/// field is "could not tell", which is not the same answer as a host with no memory free.
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), target_os = "linux"))]
-pub(super) fn parse_meminfo_available(contents: &str) -> usize {
+pub(super) fn parse_meminfo_available(contents: &str) -> Option<usize> {
     contents
         .lines()
         .find_map(|l| {
@@ -2732,11 +2752,10 @@ pub(super) fn parse_meminfo_available(contents: &str) -> usize {
                 .ok()
         })
         .map(|kb| kb * 1024)
-        .unwrap_or(0)
 }
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), target_os = "linux"))]
-pub(super) fn read_meminfo_available() -> usize {
-    parse_meminfo_available(&std::fs::read_to_string("/proc/meminfo").unwrap_or_default())
+pub(super) fn read_meminfo_available() -> Option<usize> {
+    parse_meminfo_available(&std::fs::read_to_string("/proc/meminfo").ok()?)
 }
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), target_os = "linux"))]
 pub(super) fn parse_cgroup_v2(max: &str, current: &str) -> Option<usize> {
