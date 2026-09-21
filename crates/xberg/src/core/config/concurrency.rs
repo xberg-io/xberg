@@ -379,7 +379,7 @@ fn resolve_recognition_concurrency_with_guard(
 /// backend and the handle pool behind it always see the same number however
 /// their construction is ordered. Before initialization it resolves to the
 /// automatic limit, matching `active_thread_budget`.
-#[cfg(sceptre_ocr)]
+#[cfg(any(feature = "ocr", feature = "ocr-wasm"))]
 pub(crate) fn recognition_concurrency() -> usize {
     *ACTIVE_OCR_CONCURRENCY.get_or_init(|| resolve_recognition_concurrency(None))
 }
