@@ -80,7 +80,8 @@ fn raw_pixels_to_png(
 ) -> Result<Bytes> {
     let dynamic = match *format {
         xberg_native_pdf::extractors::PixelFormat::Grayscale => {
-            let buf = image::GrayImage::from_raw(w, h, pixels.to_vec()).ok_or_else(|| {
+            let checked = exact_pixel_buffer(w, h, 1, pixels, "grayscale")?;
+            let buf = image::GrayImage::from_raw(w, h, checked).ok_or_else(|| {
                 PdfError::ExtractionFailed(format!(
                     "grayscale pixel buffer ({} bytes) does not fit {}×{} image",
                     pixels.len(),
@@ -91,7 +92,8 @@ fn raw_pixels_to_png(
             DynamicImage::ImageLuma8(buf)
         }
         xberg_native_pdf::extractors::PixelFormat::RGB => {
-            let buf = image::RgbImage::from_raw(w, h, pixels.to_vec()).ok_or_else(|| {
+            let checked = exact_pixel_buffer(w, h, 3, pixels, "RGB")?;
+            let buf = image::RgbImage::from_raw(w, h, checked).ok_or_else(|| {
                 PdfError::ExtractionFailed(format!(
                     "RGB pixel buffer ({} bytes) does not fit {}×{} image",
                     pixels.len(),
@@ -112,7 +114,8 @@ fn raw_pixels_to_png(
                 rgb.push(((1.0 - m) * (1.0 - k) * 255.0) as u8);
                 rgb.push(((1.0 - y) * (1.0 - k) * 255.0) as u8);
             }
-            let buf = image::RgbImage::from_raw(w, h, rgb)
+            let checked = exact_pixel_buffer(w, h, 3, &rgb, "CMYK→RGB")?;
+            let buf = image::RgbImage::from_raw(w, h, checked)
                 .ok_or_else(|| PdfError::ExtractionFailed(format!("CMYK→RGB buffer does not fit {}×{} image", w, h)))?;
             DynamicImage::ImageRgb8(buf)
         }
@@ -122,6 +125,35 @@ fn raw_pixels_to_png(
         .write_to(&mut Cursor::new(&mut png_bytes), ImageFormat::Png)
         .map_err(|e| PdfError::ExtractionFailed(format!("PNG re-encode of raw PDF image failed: {e}")))?;
     Ok(Bytes::from(png_bytes))
+}
+
+/// Return the pixel buffer only if it holds exactly `w × h × channels` bytes.
+///
+/// `ImageBuffer::from_raw` rejects a buffer that is too *small* and accepts one
+/// that is too *large*, keeping the extra bytes. A source decoder that pads each
+/// row to an alignment boundary produces exactly that: a buffer longer than the
+/// image needs. The mismatch then surfaces inside `DynamicImage::write_to`, where
+/// the `image` crate asserts on the exact size and panics rather than returning an
+/// error.
+///
+/// Checking the length here turns that panic into the same recoverable
+/// `ExtractionFailed` this function already returns for an undersized buffer.
+/// `to_png_bytes` in `xberg-native-pdf` carries the same guard for the same reason.
+fn exact_pixel_buffer(w: u32, h: u32, channels: usize, pixels: &[u8], kind: &str) -> Result<Vec<u8>> {
+    let expected = (w as usize)
+        .checked_mul(h as usize)
+        .and_then(|px| px.checked_mul(channels))
+        .ok_or_else(|| PdfError::ExtractionFailed(format!("{kind} image dimensions {w}×{h} overflow")))?;
+    if pixels.len() != expected {
+        return Err(PdfError::ExtractionFailed(format!(
+            "{kind} pixel buffer ({} bytes) does not match {}×{} image ({expected} bytes expected); \
+             the decoded row stride does not match width × {channels}",
+            pixels.len(),
+            w,
+            h
+        )));
+    }
+    Ok(pixels.to_vec())
 }
 
 /// Build the `ProcessingWarning` for an image that was dropped because its raw
@@ -500,6 +532,64 @@ mod tests {
         assert!(
             result.is_err(),
             "CMYK buffer whose length is not a multiple of 4 must return Err, not panic"
+        );
+    }
+
+    /// A decoded buffer that is row-padded carries extra bytes past
+    /// `width × channels` on every scanline, so it is *larger* than the image
+    /// needs. `ImageBuffer::from_raw` only rejects a buffer that is too small,
+    /// so an oversized one used to reach the PNG encoder, which asserts on the
+    /// exact size and panics.
+    ///
+    /// The property under test is the size mismatch itself. Any row-padded
+    /// buffer reproduces it, whatever document it came from.
+    #[test]
+    fn test_raw_pixels_to_png_row_padded_rgb_returns_error_not_panic() {
+        let (width, height) = (3u32, 2u32);
+        let mut pixels = Vec::new();
+        for _ in 0..height {
+            pixels.extend_from_slice(&[0xff; 9]);
+            pixels.push(0x00);
+        }
+        let result = raw_pixels_to_png(width, height, &xberg_native_pdf::extractors::PixelFormat::RGB, &pixels);
+        assert!(
+            result.is_err(),
+            "a row-padded RGB buffer must return Err, not panic in the PNG encoder"
+        );
+    }
+
+    #[test]
+    fn test_raw_pixels_to_png_row_padded_grayscale_returns_error_not_panic() {
+        let (width, height) = (3u32, 2u32);
+        let mut pixels = Vec::new();
+        for _ in 0..height {
+            pixels.extend_from_slice(&[0x80; 3]);
+            pixels.push(0x00);
+        }
+        let result =
+            raw_pixels_to_png(width, height, &xberg_native_pdf::extractors::PixelFormat::Grayscale, &pixels);
+        assert!(
+            result.is_err(),
+            "a row-padded grayscale buffer must return Err, not panic in the PNG encoder"
+        );
+    }
+
+    /// CMYK is four bytes per pixel and is converted to RGB before the image is
+    /// built, so the padding has to be added as whole pixels for the converted
+    /// buffer to come out row-padded.
+    #[test]
+    fn test_raw_pixels_to_png_row_padded_cmyk_returns_error_not_panic() {
+        let (width, height) = (3u32, 2u32);
+        let mut pixels = Vec::new();
+        for _ in 0..height {
+            for _ in 0..=width {
+                pixels.extend_from_slice(&[0x00, 0x00, 0x00, 0xff]);
+            }
+        }
+        let result = raw_pixels_to_png(width, height, &xberg_native_pdf::extractors::PixelFormat::CMYK, &pixels);
+        assert!(
+            result.is_err(),
+            "a row-padded CMYK buffer must return Err, not panic in the PNG encoder"
         );
     }
 
