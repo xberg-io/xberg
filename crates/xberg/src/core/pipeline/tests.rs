@@ -153,6 +153,18 @@ fn retry_while_registry_in_use<T>(mut mutation: impl FnMut() -> crate::Result<T>
     panic!("post-processor registry still in use by a concurrent extraction after retrying");
 }
 
+/// Run a lifecycle mutation whose *intended* outcome is an error, retrying only the busy-registry
+/// refusal so a concurrent extraction cannot satisfy an `is_err()` assertion for the wrong reason. ~keep
+#[cfg(feature = "summarization")]
+fn registry_mutation_outcome<T>(mut mutation: impl FnMut() -> crate::Result<T>) -> crate::Result<T> {
+    retry_while_registry_in_use(|| match mutation() {
+        Err(crate::XbergError::Other(message)) if message.contains("retry the lifecycle mutation") => {
+            Err(crate::XbergError::Other(message))
+        }
+        outcome => Ok(outcome),
+    })
+}
+
 /// Build an `InternalDocument` with a single paragraph element for pipeline tests.
 fn make_doc(content: &str, mime: &str) -> InternalDocument {
     let mut doc = InternalDocument::new("plain");
@@ -358,7 +370,7 @@ async fn test_pipeline_with_quality_processing() {
 #[cfg(all(feature = "quality", feature = "summarization"))]
 async fn builtin_processors_recover_after_public_registry_clear() {
     initialization::initialize_features();
-    crate::plugins::clear_post_processors().unwrap();
+    retry_while_registry_in_use(crate::plugins::clear_post_processors);
 
     let doc = make_doc(
         "The first paragraph explains the problem. The second paragraph provides enough text for a summary.",
@@ -374,7 +386,7 @@ async fn builtin_processors_recover_after_public_registry_clear() {
     assert!(processed.quality_score.is_some());
     assert!(processed.summary.is_some());
 
-    crate::plugins::unregister_post_processor("summarization").unwrap();
+    retry_while_registry_in_use(|| crate::plugins::unregister_post_processor("summarization"));
     let doc = make_doc(
         "The first paragraph explains the problem. The second paragraph provides enough text for a summary.",
         "text/plain",
@@ -551,7 +563,7 @@ fn processor_handoff_lease_rejects_shutdown_until_pipeline_finishes() {
     pipeline_resume_sender.send(()).unwrap();
     pipeline_thread.join().unwrap().unwrap();
     let concurrent_unregister = unregister_thread.join().unwrap();
-    crate::plugins::unregister_post_processor("handoff-race").unwrap();
+    retry_while_registry_in_use(|| crate::plugins::unregister_post_processor("handoff-race"));
 
     assert!(concurrent_unregister.is_err());
     assert!(shutdown.load(Ordering::SeqCst));
@@ -611,15 +623,16 @@ fn reentrant_lifecycle_mutation_returns_in_use_error_without_deadlock() {
 #[serial]
 #[cfg(feature = "summarization")]
 async fn failed_explicit_builtin_registration_preserves_suppression() {
-    crate::plugins::clear_post_processors().unwrap();
-    crate::plugins::unregister_post_processor("summarization").unwrap();
-    let registration =
+    retry_while_registry_in_use(crate::plugins::clear_post_processors);
+    retry_while_registry_in_use(|| crate::plugins::unregister_post_processor("summarization"));
+    let registration = registry_mutation_outcome(|| {
         crate::plugins::register_post_processor(std::sync::Arc::new(SummarizationLifecycleTestProcessor {
             priority: 90,
             fail_initialize: true,
             fail_shutdown: false,
             marker: None,
-        }));
+        }))
+    });
 
     let processed = run_pipeline(
         make_doc("Enough content exists to create a summary.", "text/plain"),
@@ -628,7 +641,8 @@ async fn failed_explicit_builtin_registration_preserves_suppression() {
     .await;
     restore_builtin_summarization();
 
-    assert!(registration.is_err());
+    let registration_error = registration.expect_err("initialize failure must reject the registration");
+    assert!(registration_error.to_string().contains("test initialization failure"));
     assert!(processed.unwrap().summary.is_none());
 }
 
@@ -636,22 +650,24 @@ async fn failed_explicit_builtin_registration_preserves_suppression() {
 #[serial]
 #[cfg(feature = "summarization")]
 async fn failed_builtin_replacement_triggers_automatic_recovery() {
-    crate::plugins::clear_post_processors().unwrap();
+    retry_while_registry_in_use(crate::plugins::clear_post_processors);
     initialization::initialize_processor_cache().unwrap();
-    crate::plugins::register_post_processor(std::sync::Arc::new(SummarizationLifecycleTestProcessor {
-        priority: 90,
-        fail_initialize: false,
-        fail_shutdown: true,
-        marker: None,
-    }))
-    .unwrap();
-    let replacement =
+    retry_while_registry_in_use(|| {
+        crate::plugins::register_post_processor(std::sync::Arc::new(SummarizationLifecycleTestProcessor {
+            priority: 90,
+            fail_initialize: false,
+            fail_shutdown: true,
+            marker: None,
+        }))
+    });
+    let replacement = registry_mutation_outcome(|| {
         crate::plugins::register_post_processor(std::sync::Arc::new(SummarizationLifecycleTestProcessor {
             priority: 91,
             fail_initialize: false,
             fail_shutdown: false,
             marker: None,
-        }));
+        }))
+    });
 
     let processed = run_pipeline(
         make_doc("Enough content exists to create a summary.", "text/plain"),
@@ -660,7 +676,8 @@ async fn failed_builtin_replacement_triggers_automatic_recovery() {
     .await;
     restore_builtin_summarization();
 
-    assert!(replacement.is_err());
+    let replacement_error = replacement.expect_err("shutdown failure must reject the replacement");
+    assert!(replacement_error.to_string().contains("test shutdown failure"));
     assert!(processed.unwrap().summary.is_some());
 }
 
@@ -675,8 +692,8 @@ async fn bootstrap_preserves_custom_processor_with_builtin_name() {
             fail_shutdown: false,
             marker: Some("custom-summarization"),
         });
-    crate::plugins::clear_post_processors().unwrap();
-    crate::plugins::register_post_processor(std::sync::Arc::clone(&custom)).unwrap();
+    retry_while_registry_in_use(crate::plugins::clear_post_processors);
+    retry_while_registry_in_use(|| crate::plugins::register_post_processor(std::sync::Arc::clone(&custom)));
 
     let processed = run_pipeline(make_doc("test", "text/plain"), &ExtractionConfig::default()).await;
     let registered = crate::plugins::registry::get_post_processor_registry()
@@ -701,7 +718,7 @@ async fn bootstrap_preserves_custom_processor_with_builtin_name() {
 fn concurrent_builtin_recovery_waits_for_complete_registration() {
     const CALLER_COUNT: usize = 8;
 
-    crate::plugins::clear_post_processors().unwrap();
+    retry_while_registry_in_use(crate::plugins::clear_post_processors);
     let barrier = std::sync::Arc::new(std::sync::Barrier::new(CALLER_COUNT));
     let callers = (0..CALLER_COUNT)
         .map(|_| {

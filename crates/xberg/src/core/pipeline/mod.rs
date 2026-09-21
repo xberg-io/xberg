@@ -498,11 +498,16 @@ pub async fn run_pipeline(mut doc: InternalDocument, config: &ExtractionConfig) 
     // GH#1662 reads embedded-image bytes so OCR has something to decode; rendering above
     // (inside `derive_extraction_result`) has already folded any resulting OCR text into
     // `content`. GH#1703: drop the bytes themselves now unless the caller actually wanted
-    // them (see `should_retain_images_after_ocr`). ~keep
-    let images_dropped_after_ocr = if should_retain_images_after_ocr(config) {
-        0
-    } else {
+    // them (see `should_retain_images_after_ocr`). Gated on `runs_ocr_on_embedded_images`:
+    // GH#1703 is about bytes GH#1662's OCR read gate pulled in, not about images a
+    // container populates for reasons that have nothing to do with OCR (markdown inline
+    // data-URI images, Jupyter output/attachment images, ODT/DOCX/PPTX embedded pictures
+    // read for their own sake). Dropping unconditionally here regressed all of those --
+    // `images` came back `None` even though no OCR ever ran. ~keep
+    let images_dropped_after_ocr = if config.runs_ocr_on_embedded_images() && !should_retain_images_after_ocr(config) {
         drop_ocr_only_images(&mut result)
+    } else {
+        0
     };
 
     // #286: record the text the preserved element tree stands for, so the divergence check

@@ -166,7 +166,7 @@ fn short_trailing_chunk_is_dropped_not_padded() {
 }
 
 #[test]
-fn implausible_text_pages_skips_a_page_the_character_shape_gate_already_flags() {
+fn scan_text_plausibility_skips_a_page_the_character_shape_gate_already_flags() {
     // Far below `OcrQualityThresholds::min_total_non_whitespace`'s default and structurally
     // garbled -- `evaluate_native_text_for_ocr` already flags this page on its own, so the
     // plausibility signal must not redundantly re-flag it.
@@ -177,7 +177,7 @@ fn implausible_text_pages_skips_a_page_the_character_shape_gate_already_flags() 
         byte_end: native_text.len(),
     }];
 
-    let pages = implausible_text_pages(native_text, Some(&boundaries), Some(1), &t());
+    let pages = scan_text_plausibility(native_text, Some(&boundaries), Some(1), &t()).implausible;
 
     assert!(
         pages.is_empty(),
@@ -186,9 +186,9 @@ fn implausible_text_pages_skips_a_page_the_character_shape_gate_already_flags() 
 }
 
 #[test]
-fn implausible_text_pages_without_boundaries_flags_every_page() {
+fn scan_text_plausibility_without_boundaries_flags_every_page() {
     let shifted = rot(ENGLISH_PROSE, 3);
-    let pages = implausible_text_pages(&shifted, None, Some(3), &t());
+    let pages = scan_text_plausibility(&shifted, None, Some(3), &t()).implausible;
     assert_eq!(
         pages,
         vec![1, 2, 3],
@@ -198,13 +198,13 @@ fn implausible_text_pages_without_boundaries_flags_every_page() {
 }
 
 #[test]
-fn implausible_text_pages_returns_empty_when_routing_disabled() {
+fn scan_text_plausibility_returns_empty_when_routing_disabled() {
     let shifted = rot(ENGLISH_PROSE, 3);
     let thresholds = OcrQualityThresholds {
         enable_plausibility_ocr_routing: false,
         ..t()
     };
-    let pages = implausible_text_pages(&shifted, None, Some(1), &thresholds);
+    let pages = scan_text_plausibility(&shifted, None, Some(1), &thresholds).implausible;
     assert!(
         pages.is_empty(),
         "disabled routing must return no pages regardless of content: {pages:?}"
@@ -212,7 +212,7 @@ fn implausible_text_pages_returns_empty_when_routing_disabled() {
 }
 
 #[test]
-fn implausible_text_pages_flags_only_the_implausible_page_in_a_multi_page_document() {
+fn scan_text_plausibility_flags_only_the_implausible_page_in_a_multi_page_document() {
     let plausible_page = ENGLISH_PROSE;
     let implausible_page = rot(ENGLISH_PROSE, 3);
     let native_text = format!("{plausible_page}{implausible_page}");
@@ -229,7 +229,100 @@ fn implausible_text_pages_flags_only_the_implausible_page_in_a_multi_page_docume
         },
     ];
 
-    let pages = implausible_text_pages(&native_text, Some(&boundaries), Some(2), &t());
+    let pages = scan_text_plausibility(&native_text, Some(&boundaries), Some(2), &t()).implausible;
 
     assert_eq!(pages, vec![2], "only the ROT-3-shifted page must be flagged: {pages:?}");
+}
+
+/// A page long enough to clear the character-shape gate that still holds no prose line: each
+/// row carries five alphabetic words but is over a third ASCII digits, so
+/// [`PROSE_LINE_MAX_DIGIT_RATIO`] rejects every one of them. `NUMERIC_TABLE_PAGE` above is the
+/// same shape but far too short to be examined at all. This is an invoice or an agenda packet,
+/// which is what issue #1709 was reported on. ~keep
+fn table_rows_page() -> String {
+    (1..=25)
+        .map(|row| format!("Item {row:04} Qty 12 Unit 45.00 Tax 3.75 Total 48.75"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn scan_text_plausibility_reports_a_prose_free_page_as_unjudged() {
+    let page = table_rows_page();
+    let boundaries = vec![PageBoundary {
+        page_number: 1,
+        byte_start: 0,
+        byte_end: page.len(),
+    }];
+
+    let scan = scan_text_plausibility(&page, Some(&boundaries), Some(1), &t());
+
+    assert_eq!(scan.judged, 0, "a page holding no prose line cannot be judged");
+    assert_eq!(
+        scan.unjudged,
+        vec![1],
+        "the page the check could not judge must be reported as such: {scan:?}"
+    );
+    assert!(
+        scan.implausible.is_empty(),
+        "abstaining is not flagging: {:?}",
+        scan.implausible
+    );
+}
+
+#[test]
+fn scan_text_plausibility_counts_a_clean_prose_page_as_judged() {
+    let boundaries = vec![PageBoundary {
+        page_number: 1,
+        byte_start: 0,
+        byte_end: ENGLISH_PROSE.len(),
+    }];
+
+    let scan = scan_text_plausibility(ENGLISH_PROSE, Some(&boundaries), Some(1), &t());
+
+    assert_eq!(scan.judged, 1, "real English prose must produce a verdict: {scan:?}");
+    assert!(
+        scan.unjudged.is_empty(),
+        "a page that was judged is not an abstention: {:?}",
+        scan.unjudged
+    );
+    assert!(
+        scan.implausible.is_empty(),
+        "real English prose must not be flagged: {:?}",
+        scan.implausible
+    );
+}
+
+/// The distinction the caller needs: one page was read and passed, the other could not be read
+/// at all, and `implausible` is empty either way.
+#[test]
+fn scan_text_plausibility_keeps_a_judged_page_apart_from_an_unjudged_one() {
+    let table = table_rows_page();
+    let native_text = format!("{ENGLISH_PROSE}\n{table}");
+    let boundaries = vec![
+        PageBoundary {
+            page_number: 1,
+            byte_start: 0,
+            byte_end: ENGLISH_PROSE.len(),
+        },
+        PageBoundary {
+            page_number: 2,
+            byte_start: ENGLISH_PROSE.len() + 1,
+            byte_end: native_text.len(),
+        },
+    ];
+
+    let scan = scan_text_plausibility(&native_text, Some(&boundaries), Some(2), &t());
+
+    assert_eq!(scan.judged, 1, "one of the two pages holds prose: {scan:?}");
+    assert_eq!(
+        scan.unjudged,
+        vec![2],
+        "the table page is the one the check could not judge: {scan:?}"
+    );
+    assert!(
+        scan.implausible.is_empty(),
+        "neither page is wrongly mapped: {:?}",
+        scan.implausible
+    );
 }

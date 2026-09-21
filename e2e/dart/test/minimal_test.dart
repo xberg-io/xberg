@@ -2,7 +2,7 @@ import 'package:test/test.dart';
 import 'dart:typed_data';
 import 'package:xberg/xberg.dart';
 import 'package:xberg/src/xberg_bridge_generated/frb_generated.dart'
-show RustLib;
+    show RustLib;
 
 void main() {
   setUpAll(() async {

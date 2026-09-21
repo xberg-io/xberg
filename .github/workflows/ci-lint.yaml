@@ -367,6 +367,13 @@ jobs:
           python-version: "3.11"
       - name: Install E2E formatter
         run: uv sync --locked --only-group dev --no-install-workspace
+      # `[crates.e2e.format] dart` runs `dart format` on e2e/dart during `alef e2e generate`,
+      # and alef 0.95.0 fails the run on a formatter exit code instead of deferring it, so
+      # this job needs the same SDK the dart e2e leg and the snippet gate below use. ~keep
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: "3.13"
       - name: Install alef CLI
         uses: xberg-io/actions/install-alef@v1
         # alef is a third-party tool. The job-wide `-D warnings` turns its own

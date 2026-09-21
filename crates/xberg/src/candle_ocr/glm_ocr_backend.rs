@@ -95,6 +95,23 @@ static LAYOUT_POOL: LazyLock<
     EngineCache<LayoutKey, Mutex<crate::layout::models::pp_doclayout_v3::PpDocLayoutV3Model>>,
 > = LazyLock::new(EngineCache::unbounded);
 
+/// Process-wide cache of the resolved, verified PP-DocLayout-V3 model path.
+///
+/// Resolving the model runs a SHA-256 over all 131,731,131 bytes of it. Paired
+/// mode resolves the model to feed [`LAYOUT_POOL`] its key, and paired mode runs
+/// once per page, so the hash was charged to every page of a document: a 22-page
+/// document hashed about 2.9 GB and a 731-page document about 96 GB. The path and
+/// its verdict are the same for every page, so both are computed once per process
+/// (GH#1718).
+///
+/// Keyed by the cache directory, so a process that changes where Hugging Face
+/// caches models resolves again. The verification itself is unchanged — only how
+/// often it runs.
+///
+/// Only available when `layout-detection` is enabled.
+#[cfg(feature = "layout-detection")]
+static LAYOUT_MODEL_PATH_POOL: LazyLock<EngineCache<PathBuf, PathBuf>> = LazyLock::new(EngineCache::unbounded);
+
 /// Get or build a cached value, delegating to [`EngineCache::get_or_try_init`].
 ///
 /// The cache stays locked for the whole call, so a second caller for the same
@@ -188,6 +205,27 @@ fn get_or_init_layout_model(
                 source: Some(Box::new(e)),
             })
             .map(Mutex::new)
+    })
+}
+
+/// Resolve and SHA-256 verify PP-DocLayout-V3, once per process per cache directory.
+///
+/// A failed resolve is not cached, so the next page retries rather than reusing a
+/// poisoned entry — see [`pool_get_or_init`].
+///
+/// Only available when `layout-detection` is enabled.
+#[cfg(feature = "layout-detection")]
+fn ensure_layout_model_path() -> crate::Result<Arc<PathBuf>> {
+    use crate::layout::LayoutModelManager;
+
+    pool_get_or_init(&LAYOUT_MODEL_PATH_POOL, hf_hub::resolve_cache_dir(), || {
+        tracing::info!("Resolving and verifying PP-DocLayout-V3 (cold start)");
+        LayoutModelManager::new(None)
+            .ensure_pp_doclayout_v3_model()
+            .map_err(|e| crate::XbergError::Ocr {
+                message: format!("GLM-OCR paired: layout model unavailable: {e}"),
+                source: Some(Box::new(e)),
+            })
     })
 }
 
@@ -576,7 +614,6 @@ async fn process_paired(
     Vec<crate::types::Formula>,
     Vec<crate::types::extraction::BoundingBox>,
 )> {
-    use crate::layout::LayoutModelManager;
     use crate::layout::models::LayoutModel;
 
     const CROP_PNG_ENCODE_BYTES_PER_PIXEL: u64 = 4;
@@ -591,18 +628,13 @@ async fn process_paired(
         let security_limits = crate::extractors::security::SecurityLimits::default();
         crate::layout::engine::validate_layout_batch_peak(&[&img], &security_limits)?;
 
-        let manager = LayoutModelManager::new(None);
-        let model_path = manager
-            .ensure_pp_doclayout_v3_model()
-            .map_err(|e| crate::XbergError::Ocr {
-                message: format!("GLM-OCR paired: layout model unavailable: {e}"),
+        let model_path = ensure_layout_model_path()?;
+
+        let layout_model =
+            get_or_init_layout_model(model_path.as_path(), device).map_err(|e| crate::XbergError::Ocr {
+                message: format!("GLM-OCR paired: layout detection init failed: {e}"),
                 source: Some(Box::new(e)),
             })?;
-
-        let layout_model = get_or_init_layout_model(&model_path, device).map_err(|e| crate::XbergError::Ocr {
-            message: format!("GLM-OCR paired: layout detection init failed: {e}"),
-            source: Some(Box::new(e)),
-        })?;
 
         let detections = layout_model.lock().detect(&img).map_err(|e| crate::XbergError::Ocr {
             message: format!("GLM-OCR paired: layout detection failed: {e}"),
@@ -763,6 +795,70 @@ async fn process_paired(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A key no other test in this process shares, so the process-wide pool cannot
+    /// leak a resolution between tests.
+    #[cfg(feature = "layout-detection")]
+    fn unique_cache_dir(tag: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("xberg-gh1718-{tag}-{:?}", std::thread::current().id()))
+    }
+
+    /// GH#1718: the layout model was resolved and SHA-256 verified once per page.
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn the_layout_model_is_resolved_once_for_every_page_of_a_document() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let cache_dir = unique_cache_dir("once");
+        let resolved = PathBuf::from("/models/pp_doclayout_v3.onnx");
+        let resolves = AtomicUsize::new(0);
+
+        // 22 pages: the document GH#1718 measured at about 2.9 GB of hashing.
+        for page in 0..22 {
+            let path = pool_get_or_init(&LAYOUT_MODEL_PATH_POOL, cache_dir.clone(), || {
+                resolves.fetch_add(1, Ordering::SeqCst);
+                Ok::<PathBuf, crate::XbergError>(resolved.clone())
+            })
+            .expect("the model path must resolve");
+            assert_eq!(*path, resolved, "page {page} must see the same model path");
+        }
+
+        assert_eq!(
+            resolves.load(Ordering::SeqCst),
+            1,
+            "the model must be resolved and verified once, not once per page"
+        );
+    }
+
+    /// A download or verification failure must not poison the pool for the rest of
+    /// the process; the next page retries.
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn a_failed_layout_model_resolution_is_not_cached() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let cache_dir = unique_cache_dir("retry");
+        let resolved = PathBuf::from("/models/pp_doclayout_v3.onnx");
+        let resolves = AtomicUsize::new(0);
+
+        let first = pool_get_or_init(&LAYOUT_MODEL_PATH_POOL, cache_dir.clone(), || {
+            resolves.fetch_add(1, Ordering::SeqCst);
+            Err::<PathBuf, crate::XbergError>(crate::XbergError::Ocr {
+                message: "layout model unavailable".to_string(),
+                source: None,
+            })
+        });
+        assert!(first.is_err(), "the first resolve must report the failure");
+
+        let second = pool_get_or_init(&LAYOUT_MODEL_PATH_POOL, cache_dir, || {
+            resolves.fetch_add(1, Ordering::SeqCst);
+            Ok::<PathBuf, crate::XbergError>(resolved.clone())
+        })
+        .expect("the retry must resolve");
+
+        assert_eq!(*second, resolved);
+        assert_eq!(resolves.load(Ordering::SeqCst), 2, "a failed resolve must be retried");
+    }
 
     #[test]
     fn test_glm_ocr_backend_creation() {

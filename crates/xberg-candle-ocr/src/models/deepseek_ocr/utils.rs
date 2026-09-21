@@ -84,14 +84,19 @@ pub fn index_select_2d(t: &Tensor, index: &Tensor) -> Result<Tensor> {
         ));
     }
     let (ih, iw) = index.dims2()?;
-    let mut result = Vec::with_capacity(ih * iw);
-    for i in 0..ih {
-        for j in 0..iw {
-            let idx = (index.i((i, j))?.to_scalar::<u32>()? as usize).min(num - 1);
-            result.push(t.i(idx)?);
-        }
-    }
-    Tensor::stack(&result, 0)
+    // ~keep: one device-to-host transfer for the whole index grid, then one on-device gather.
+    // Reading the grid a scalar at a time stalled the SAM attention on ih * iw round trips per
+    // rel-pos lookup, per attention layer, per crop (GH#1714). to_vec2 returns logical row-major
+    // order for a strided layout as well as a contiguous one, so the flattened order still
+    // matches the [i][j] grid the scalar loop walked.
+    let rows: Vec<u32> = index
+        .to_vec2::<u32>()?
+        .into_iter()
+        .flatten()
+        .map(|idx| (idx as usize).min(num - 1) as u32)
+        .collect();
+    let flat = Tensor::from_vec(rows, (ih * iw,), t.device())?;
+    t.index_select(&flat, 0)
         .and_then(|r| r.reshape((ih, iw, dim)))
         .map_err(|e| CandleOcrError::InferenceFailed(format!("index_select_2d: {e}")))
 }
@@ -208,13 +213,13 @@ pub fn topk(input: &Tensor, k: usize) -> Result<(Tensor, Tensor)> {
     let mut top_weights_vec = vec![vec![0.0f32; k]; batch_size];
     let mut top_indices_vec = vec![vec![0u32; k]; batch_size];
 
-    for b in 0..batch_size {
-        let row = flattened.i(b)?;
-        let mut items: Vec<(usize, f32)> = Vec::new();
-        for i in 0..num_items {
-            let val = row.i(i)?.to_scalar::<f32>()?;
-            items.push((i, val));
-        }
+    // ~keep: one device-to-host transfer for the whole score matrix. Reading it a scalar at a
+    // time stalled the decode loop on `num_items` round trips per row per MoE layer per token,
+    // which is what left the GPU idle for most of a page (GH#1711).
+    let scores = flattened.to_vec2::<f32>()?;
+
+    for (b, row) in scores.iter().enumerate().take(batch_size) {
+        let mut items: Vec<(usize, f32)> = row.iter().copied().enumerate().take(num_items).collect();
         items.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
         for (idx, (item_idx, val)) in items.iter().take(k).enumerate() {

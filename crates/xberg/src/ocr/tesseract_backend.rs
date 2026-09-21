@@ -811,6 +811,16 @@ mod tests {
 
         let previous = std::env::var("XBERG_CACHE_DIR").ok();
         unsafe { std::env::set_var("XBERG_CACHE_DIR", temp_dir.path()) };
+        // `resolve_tessdata_path` checks `TESSDATA_PREFIX` before `XBERG_CACHE_DIR` (by
+        // design -- an explicit TESSDATA_PREFIX is meant to win). CI's unit-test runner
+        // (scripts/lib/tessdata.sh::setup_tessdata) sets TESSDATA_PREFIX process-wide to
+        // the runner's real tessdata directory before `cargo test` starts, so without
+        // clearing it here the probe resolves THAT directory -- which already has every
+        // language this test requests -- instead of this fixture, and the marker is never
+        // found. Clear it for the duration of the test so XBERG_CACHE_DIR is actually
+        // reached, matching the resolver's documented precedence. ~keep
+        let previous_tessdata_prefix = std::env::var("TESSDATA_PREFIX").ok();
+        unsafe { std::env::remove_var("TESSDATA_PREFIX") };
 
         let backend = TesseractBackend::new();
         let languages = backend.supported_languages();
@@ -818,6 +828,10 @@ mod tests {
         match previous {
             Some(value) => unsafe { std::env::set_var("XBERG_CACHE_DIR", value) },
             None => unsafe { std::env::remove_var("XBERG_CACHE_DIR") },
+        }
+        match previous_tessdata_prefix {
+            Some(value) => unsafe { std::env::set_var("TESSDATA_PREFIX", value) },
+            None => unsafe { std::env::remove_var("TESSDATA_PREFIX") },
         }
 
         assert!(
@@ -886,6 +900,13 @@ mod tests {
 
         let previous = std::env::var("XBERG_CACHE_DIR").ok();
         unsafe { std::env::set_var("XBERG_CACHE_DIR", temp_dir.path()) };
+        // See the identical guard in the sibling `bundle-tessdata-eng` test above:
+        // `resolve_tessdata_path` checks `TESSDATA_PREFIX` before `XBERG_CACHE_DIR`, and
+        // CI's unit-test runner sets TESSDATA_PREFIX process-wide before `cargo test`
+        // starts, so this fixture is never reached unless the prefix is cleared here too.
+        // ~keep
+        let previous_tessdata_prefix = std::env::var("TESSDATA_PREFIX").ok();
+        unsafe { std::env::remove_var("TESSDATA_PREFIX") };
 
         let backend = TesseractBackend::new();
         let languages = backend.supported_languages();
@@ -893,6 +914,10 @@ mod tests {
         match previous {
             Some(value) => unsafe { std::env::set_var("XBERG_CACHE_DIR", value) },
             None => unsafe { std::env::remove_var("XBERG_CACHE_DIR") },
+        }
+        match previous_tessdata_prefix {
+            Some(value) => unsafe { std::env::set_var("TESSDATA_PREFIX", value) },
+            None => unsafe { std::env::remove_var("TESSDATA_PREFIX") },
         }
 
         assert!(

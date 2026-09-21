@@ -6,7 +6,7 @@
 # for. 0.83.0 additionally fixes the php/napi/pyo3 mirror defaults, the elixir bytes
 # hop and the typescript/wasm mock-url builder that this repo's e2e legs were red on.
 # ~keep
-alef_version = "0.94.0"
+alef_version = "0.95.0"
 languages = [
   "python",
   "node",
@@ -4332,10 +4332,6 @@ module = "Xberg"
 function = "ocr_backend_supports_language"
 module = "xberg"
 
-[crates.e2e.calls.ocr_backend_supports_language.overrides.kotlin_android]
-function = "supportsLanguage"
-class = "OcrBackendBridge"
-
 [crates.e2e.calls.ocr_backend_supports_language.overrides.c]
 # ~keep The C export returns the bool as i32 (1/0), not the char* every other simple-result
 # call returns, so the C e2e recipe cannot infer the binding type from result_is_simple alone.
@@ -5524,6 +5520,7 @@ CRAWLBERG_ALLOW_PRIVATE_NETWORK = "true"
 RUST_MIN_STACK = "16777216"
 
 [crates.e2e.format]
+dart = "cd {dir} && dart format ."
 python = "uv run --no-sync ruff check --fix {dir} && uv run --no-sync ruff format {dir}"
 go = "gofmt -w {dir}"
 rust = "(cd {dir} && cargo fmt --all)"

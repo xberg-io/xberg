@@ -23,7 +23,8 @@ echo "  CARGO_TERM_COLOR: ${CARGO_TERM_COLOR:-not set}"
 
 echo "Workspace information:"
 echo "  Repository: $REPO_ROOT"
-echo "  Excluded packages: xberg-e2e-generator, xberg-py, xberg-node, xberg-candle-ocr, xberg-gliner, xberg-cli, xberg-wasm, benchmark-harness"
+echo "  Excluded packages: xberg-e2e-generator, xberg-py, xberg-node, xberg-gliner, xberg-cli, xberg-wasm, benchmark-harness"
+echo "  Tested with curated (non --all-features) feature lists: xberg-candle-ocr, xberg-gliner, xberg-libheif"
 
 if [ ! -d "$TESSDATA_PREFIX" ]; then
   echo "WARNING: TESSDATA_PREFIX directory not found: $TESSDATA_PREFIX"
@@ -115,6 +116,15 @@ if ! {
 
   echo "=== cargo test --workspace (all features, excluding xberg) ==="
   extra_excludes=()
+  # xberg-candle-ocr: --all-features turns on cuda and metal together, and they are
+  # mutually platform-hostile -- metal pulls objc2-metal (Apple-only, fails on Linux
+  # with "objc2 only works on Apple platforms") and cuda pulls cudarc (needs nvcc,
+  # absent on macOS). It cannot be --all-features-built on any CI runner. Its
+  # model-specific code (gated behind per-model features, none on by default, so this
+  # exclude was previously hiding all of it) is tested separately below with an
+  # explicit feature list that leaves cuda/metal/mkl/accelerate off. Device-accelerated
+  # inference against real weights runs in the dedicated ci-gpu.yaml job
+  # (workflow_dispatch), not here. ~keep
   extra_excludes+=(--exclude xberg-candle-ocr)
   # xberg-gliner: its cuda/metal features cannot build on CI runners, so
   # --all-features is unusable; tested separately below with an explicit
@@ -171,6 +181,24 @@ if ! {
     --all-features \
     --all-targets \
     --verbose || exit
+
+  echo "=== cargo test -p xberg-candle-ocr (explicit features, no device accel) ==="
+  # Curated feature list, the same shape as the xberg-gliner leg below: every
+  # per-model feature (trocr, paddleocr-vl, glm-ocr, deepseek-ocr) but none of
+  # cuda/metal/mkl/accelerate, so the build stays CPU-only and portable across
+  # runners. --all-targets also compiles the crate's tests/*.rs integration
+  # files; every test in them is #[ignore]d behind a real model-weight download,
+  # so they add zero network calls here and only run with --ignored. Linux
+  # aarch64 drops the crate entirely: candle -> gemm-f16 needs the fullfp16
+  # target feature that runner's baseline lacks, same wall as xberg-gliner and
+  # the doctest step in ci-rust.yaml. ~keep
+  if [ "$(uname -s)" = "Linux" ] && [ "$(uname -m)" = "aarch64" ]; then
+    echo "Skipping xberg-candle-ocr tests on Linux aarch64 (gemm-f16 needs fullfp16)"
+  else
+    RUST_BACKTRACE=full cargo test --locked --no-fail-fast -p xberg-candle-ocr \
+      --features trocr,paddleocr-vl,glm-ocr,deepseek-ocr \
+      --all-targets --verbose || exit
+  fi
 
   echo "=== cargo test -p xberg-gliner (explicit features) ==="
   # cuda/metal cannot build on CPU-only runners, so xberg-gliner gets an

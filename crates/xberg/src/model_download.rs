@@ -2575,6 +2575,6 @@ mod vendored_manifest_registry_tests {
     #[test]
     fn registry_never_panics_even_when_empty() {
         let manifests = vendored_model_manifests();
-        assert!(manifests.len() <= 6, "registry declares more families than expected");
+        assert!(manifests.len() <= 7, "registry declares more families than expected");
     }
 }

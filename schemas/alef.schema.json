@@ -2466,6 +2466,13 @@
           "default": "test_documents",
           "description": "Repo-root-relative directory holding binary file fixtures referenced by\n`file_path` / `bytes` fixture args (default: \"test_documents\").\n\nBackends that emit chdir / setup hooks for file-based fixtures resolve\nthe relative path from the test-emission directory via\n[`E2eConfig::test_documents_relative_from`]. The default matches the\nsample_core convention; downstream crates whose fixtures don't reference\nfiles (e.g. sample-llm, which uses pure mock-server fixtures) can leave\nthe default in place — backends conditionally emit the setup only when\nfixtures actually need it.",
           "type": "string"
+        },
+        "timeout_seconds": {
+          "default": 1800,
+          "description": "Wall-clock timeout, in seconds, for a generated e2e test runner's whole test\ntask/process. Default: 1800 (30 minutes), the same convention\n`[setup.*].timeout_seconds`/`[build_commands.*].timeout_seconds` already use\nelsewhere in this schema.\n\nConsumed today by the kotlin_android Gradle emitter, which sets\n`timeout.set(Duration.ofSeconds(...))` on `tasks.withType<Test>` -- without it, a\nhung native call blocks the whole `gradle test` invocation with no attribution\nbeyond an eventual, much later CI-level kill.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
@@ -8257,7 +8264,7 @@
       "type": "object"
     }
   },
-  "$id": "https://github.com/xberg-io/alef/releases/download/v0.94.0/alef.schema.json",
+  "$id": "https://github.com/xberg-io/alef/releases/download/v0.95.0/alef.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "JSON Schema for the JSON representation of alef.toml.",
@@ -8377,6 +8384,6 @@
   ],
   "title": "Alef configuration",
   "type": "object",
-  "version": "0.94.0",
-  "x-alef-version": "0.94.0"
+  "version": "0.95.0",
+  "x-alef-version": "0.95.0"
 }
