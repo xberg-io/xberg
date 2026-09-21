@@ -9,30 +9,26 @@ use crate::error::{CandleOcrError, Result};
 /// Linear 1D interpolation along the last axis of a `(batch, channels, length)` tensor, with
 /// PyTorch's `align_corners=False` (half-pixel) sample placement — the mode the reference
 /// SAM `get_rel_pos` uses when it resizes the relative-position table to the tile size.
+///
+/// A thin adapter over candle's bilinear resize: it takes a rank-4 tensor, so the length axis is
+/// carried as the width of a one-row image.
 pub fn interpolate_linear_1d(input: &Tensor, target_size: usize, _align_corner: Option<bool>) -> Result<Tensor> {
     let src_size = input.dim(2)?;
     if src_size == target_size {
         return Ok(input.clone());
     }
-    let scale = src_size as f64 / target_size as f64;
-    let mut output = Vec::with_capacity(target_size);
-    for i in 0..target_size {
-        let src_i = ((i as f64 + HALF_PIXEL) * scale - HALF_PIXEL).max(0.0);
-        let src_i_floor = (src_i.floor() as usize).min(src_size - 1);
-        let src_i_ceil = (src_i_floor + 1).min(src_size - 1);
-        let weight = src_i - src_i_floor as f64;
-        // ~keep: `affine` scales every channel by the scalar; a `mul` against a `[1]` tensor is
-        // not a broadcast in candle and fails with "shape mismatch in mul, lhs: [1, 64], rhs: [1]"
-        // the first time a 640 px local crop resizes the 1024 px rel-pos table (GH#1701, #1702).
-        let val_floor = input.i((.., .., src_i_floor))?.affine(1.0 - weight, 0.0)?;
-        let val_ceil = input.i((.., .., src_i_ceil))?.affine(weight, 0.0)?;
-        output.push(val_floor.add(&val_ceil)?.unsqueeze(2)?);
-    }
-    Tensor::cat(&output, 2).map_err(|e| CandleOcrError::InferenceFailed(format!("cat failed: {e}")))
+    // ~keep: candle owns this. `upsample_bilinear2d` with `align_corners=false` is PyTorch's
+    // half-pixel sampling, and over a height of one it degenerates to `F.interpolate(mode=
+    // "linear")` exactly: the height weight is always 1.0 on row 0. Sampling the axis a position
+    // at a time in Rust cost `target_size` narrows, affines and a `cat` of `target_size` tensors,
+    // per resize, per attention layer, per crop, and it is the second defect this hand-rolled
+    // resize produced after the scalar-`mul` shape mismatch of GH#1701 and #1702 (GH#1719).
+    input
+        .unsqueeze(2)?
+        .upsample_bilinear2d(1, target_size, false)
+        .and_then(|resized| resized.squeeze(2))
+        .map_err(|e| CandleOcrError::InferenceFailed(format!("interpolate_linear_1d: {e}")))
 }
-
-/// Half-pixel offset of PyTorch's `align_corners=False` sample placement.
-const HALF_PIXEL: f64 = 0.5;
 
 /// Bicubic interpolation for spatial tensors.
 pub fn interpolate_bicubic(
@@ -176,28 +172,68 @@ pub fn attn_masked_fill(on_true: &Tensor, mask: &Tensor, on_false: f32) -> Resul
 /// `dst` arrives batched as `[1, seq, hidden]` from the language embeddings, so the
 /// batch dim is dropped for the row scatter and restored afterwards; `mask` is
 /// flattened to a rank-1 `[seq]`. Without this the sequence rows past the batch
-/// dimension are dropped and Tensor::stack sees mixed ranks.
+/// dimension are dropped and the row gather sees mixed ranks.
 pub fn masked_scatter_dim0(dst: &Tensor, src: &Tensor, mask: &Tensor) -> Result<Tensor> {
     let batched = dst.rank() == 3;
     let dst = if batched { dst.squeeze(0)? } else { dst.clone() };
-    let mut output_rows = Vec::new();
+    let dst_row_count = dst.dim(0)?;
+    let src_row_count = src.dim(0)?;
     let mask_vec = mask.flatten_all()?.to_vec1::<u32>()?;
-    let mut src_idx = 0;
+    // ~keep: the row schedule follows from the mask alone, and the mask already arrives in one
+    // transfer, so the schedule is built on the host and spent as two gathers and one select.
+    // Narrowing a row at a time and stacking the result cost one narrow per sequence position and
+    // a `stack` of thousands of tensors, once per page during prefill (GH#1719). A masked position
+    // past the end of `src`, and an unmasked position past the end of `dst`, still contribute no
+    // row at all, which is what the per-row loop did and what the shorter output records.
+    let mut src_positions: Vec<u32> = Vec::with_capacity(mask_vec.len());
+    let mut dst_positions: Vec<u32> = Vec::with_capacity(mask_vec.len());
+    let mut takes_src: Vec<u8> = Vec::with_capacity(mask_vec.len());
+    let mut next_src = 0u32;
     for (i, &m) in mask_vec.iter().enumerate() {
-        if m != 0 && src_idx < src.dim(0)? {
-            let src_row = src.i(src_idx)?;
-            output_rows.push(src_row);
-            src_idx += 1;
-        } else if m == 0 && i < dst.dim(0)? {
-            let dst_row = dst.i(i)?;
-            output_rows.push(dst_row);
+        if m != 0 && (next_src as usize) < src_row_count {
+            src_positions.push(next_src);
+            dst_positions.push(0);
+            takes_src.push(1);
+            next_src += 1;
+        } else if m == 0 && i < dst_row_count {
+            src_positions.push(0);
+            dst_positions.push(i as u32);
+            takes_src.push(0);
         }
     }
-    if output_rows.is_empty() {
-        return Ok(if batched { dst.unsqueeze(0)? } else { dst });
-    }
-    let out =
-        Tensor::stack(&output_rows, 0).map_err(|e| CandleOcrError::InferenceFailed(format!("stack failed: {e}")))?;
+    let out_row_count = takes_src.len();
+    let any_from_src = takes_src.contains(&1);
+    let any_from_dst = takes_src.contains(&0);
+    let dst = if dst.is_contiguous() { dst } else { dst.contiguous()? };
+    let src = if src.is_contiguous() {
+        src.clone()
+    } else {
+        src.contiguous()?
+    };
+    let from_src = if any_from_src {
+        let index = Tensor::from_vec(src_positions, (out_row_count,), src.device())?;
+        Some(src.index_select(&index, 0)?)
+    } else {
+        None
+    };
+    let from_dst = if any_from_dst {
+        let index = Tensor::from_vec(dst_positions, (out_row_count,), dst.device())?;
+        Some(dst.index_select(&index, 0)?)
+    } else {
+        None
+    };
+    let out = match (from_src, from_dst) {
+        (Some(from_src), Some(from_dst)) => {
+            let select = Tensor::from_vec(takes_src, (out_row_count, 1), dst.device())?
+                .broadcast_as(from_dst.shape())?
+                .contiguous()?;
+            select
+                .where_cond(&from_src, &from_dst)
+                .map_err(|e| CandleOcrError::InferenceFailed(format!("masked_scatter_dim0: {e}")))?
+        }
+        (Some(rows), None) | (None, Some(rows)) => rows,
+        (None, None) => return Ok(if batched { dst.unsqueeze(0)? } else { dst }),
+    };
     if batched { Ok(out.unsqueeze(0)?) } else { Ok(out) }
 }
 
@@ -269,6 +305,33 @@ mod tests {
 
         let values = resized.flatten_all().and_then(|t| t.to_vec1::<f32>()).expect("read");
         assert_eq!(values, vec![0.0, 0.25, 0.75, 1.25, 1.75, 2.25, 2.75, 3.0]);
+    }
+
+    /// `get_rel_pos` transposes the table before it resizes it, so the resize must read a strided
+    /// tensor as correctly as a packed one. The per-position narrow did; candle's resize reads
+    /// through the layout's strides, which this pins.
+    #[test]
+    fn interpolate_linear_1d_accepts_a_strided_input() {
+        let dev = Device::Cpu;
+        let strided = Tensor::new(&[[[0f32, 1.0], [2.0, 3.0], [4.0, 5.0], [6.0, 7.0]]], &dev)
+            .and_then(|t| t.transpose(1, 2))
+            .expect("strided input");
+        assert!(
+            !strided.is_contiguous(),
+            "input must be strided for this test to have power"
+        );
+
+        let resized = interpolate_linear_1d(&strided, 8, None).expect("interpolate");
+
+        assert_eq!(resized.dims(), &[1, 2, 8]);
+        let values = resized
+            .flatten_all()
+            .and_then(|t| t.to_vec1::<f32>())
+            .expect("read")
+            .into_iter()
+            .take(8)
+            .collect::<Vec<_>>();
+        assert_eq!(values, vec![0.0, 0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.0]);
     }
 
     #[test]
@@ -345,6 +408,41 @@ mod tests {
         assert_eq!(out.dims(), &[1, 4, 2]);
         let rows = out.reshape((4, 2)).and_then(|t| t.to_vec2::<f32>()).expect("read");
         assert_eq!(rows, vec![vec![0., 0.], vec![10., 10.], vec![20., 20.], vec![3., 3.]]);
+    }
+
+    /// A mask that sets more rows than `src` has, and reaches past the end of `dst`, drops the
+    /// positions it cannot fill. The gathers must reproduce that shorter output, not pad it.
+    #[test]
+    fn masked_scatter_dim0_drops_positions_neither_tensor_can_fill() {
+        let dev = Device::Cpu;
+        let dst = Tensor::new(&[[0f32, 0.], [1., 1.]], &dev).expect("dst");
+        let src = Tensor::new(&[[10f32, 10.]], &dev).expect("src");
+        let mask = Tensor::new(&[1u32, 0, 1, 0], &dev).expect("mask");
+
+        let out = masked_scatter_dim0(&dst, &src, &mask).expect("scatter");
+
+        assert_eq!(out.dims(), &[2, 2], "the two unfillable positions contribute no row");
+        let rows = out.to_vec2::<f32>().expect("read");
+        assert_eq!(rows, vec![vec![10., 10.], vec![1., 1.]]);
+    }
+
+    /// Every position is masked, so no row comes from `dst` at all and there is nothing to select
+    /// between. The result is the gathered `src` rows in mask order.
+    #[test]
+    fn masked_scatter_dim0_takes_every_row_from_src_when_the_mask_is_full() {
+        let dev = Device::Cpu;
+        let dst = Tensor::new(&[[[0f32, 0.], [1., 1.]]], &dev).expect("dst");
+        let src = Tensor::new(&[[10f32, 10.], [20., 20.]], &dev).expect("src");
+        let mask = Tensor::new(&[[1u32, 1]], &dev).expect("mask");
+
+        let out = masked_scatter_dim0(&dst, &src, &mask).expect("scatter");
+
+        assert_eq!(out.dims(), &[1, 2, 2]);
+        let rows = out
+            .reshape((2usize, 2usize))
+            .and_then(|t| t.to_vec2::<f32>())
+            .expect("read");
+        assert_eq!(rows, vec![vec![10., 10.], vec![20., 20.]]);
     }
 
     #[test]

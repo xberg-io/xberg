@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **(ocr): `candle-deepseek-ocr` reads device tensors back in one transfer instead of one element at a time.** The mixture-of-experts gate copied its score matrix per expert, per row, per layer, per generated token, and the SAM relative-position lookup read its index inside a nested loop per attention layer, per crop. Both are now a single bulk read. Measured on an A100 at BF16: 62.71 s to 8.09 s per page (7.8x), output byte-identical, peak memory unchanged. A 22-page scanned document that previously exceeded the 600 s extraction ceiling now completes in 322 s. (GH#1711, GH#1714)
+- **(ocr): `candle-deepseek-ocr` resizes the relative-position table and scatters the image embeddings as device operations instead of per-element loops.** The resize sampled its axis one position at a time and concatenated one tensor per output position, on every attention layer of every 640 px local crop; it is now candle's bilinear resize over a one-row image, which is the half-pixel sampling the reference implementation uses. The scatter gathered rows one at a time and stacked one tensor per sequence position, once per page; it is now two gathers and a select. Measured on an NVIDIA L4 at BF16 over a full Letter page, five repetitions: 47.610 s to 47.546 s per page, which sits inside the spread of the unchanged arm, so this is not a speedup on that workload. Both arms decode the same 2,052 characters. Peak GPU memory falls from 8,818 MiB to 8,722 MiB. (GH#1719)
 
 ### Fixed
 
