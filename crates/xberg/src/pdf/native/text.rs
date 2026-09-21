@@ -197,7 +197,7 @@ fn extract_one_page_text(
 /// extracted text. Measured on a 731-page document: ascending order reproduces the same
 /// bytes on every run, while parsing the same pages two at a time over one handle drops
 /// text and lands on a different result each run. Removing that order dependence is
-/// GH#1723; until it is gone this loop must stay in page order. ~keep
+/// GH#1725; until it is gone this loop must stay in page order. ~keep
 fn extract_all_page_texts(doc: &xberg_native_pdf::PdfDocument, margins: PageMarginFractions) -> Result<Vec<String>> {
     let page_count = doc
         .page_count()
@@ -4451,8 +4451,8 @@ mod tests {
     /// text in four columns and opens with a token unique to that page (`PAGEMARK0007`).
     ///
     /// The text is real content-stream operators, not an empty `/MediaBox`, so each page
-    /// costs real parsing, font-metric and span-assembly work -- which is what the
-    /// concurrency test needs before a work-stealing pool has a reason to steal.
+    /// costs real parsing, font-metric and span-assembly work, so the page-order test
+    /// exercises the same per-page path a real document does.
     fn build_paged_text_pdf(page_count: usize, rows: usize) -> Vec<u8> {
         let font_obj = 3 + 2 * page_count;
         let mut pdf = b"%PDF-1.4\n".to_vec();
