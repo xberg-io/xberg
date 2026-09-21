@@ -600,6 +600,66 @@ fn resolve_batch_input_config_installs_a_cancel_token_when_a_timeout_is_configur
     );
 }
 
+/// The per-input companion to `engine_batch_base_config_carries_the_configured_recognition_limit`.
+/// Both resolvers rewrite the concurrency block when the batch divides the thread
+/// budget, and `resolve_batch_input_config` is the one every batch item goes
+/// through, so a caller's `max_concurrent_ocr` has to survive the rewrite here
+/// too. Dropping it returns recognition to the automatic limit, which is the
+/// setting the caller reached for the field to escape.
+#[test]
+fn resolve_batch_input_config_carries_the_configured_recognition_limit() {
+    let base = Arc::new(ExtractionConfig {
+        concurrency: Some(crate::core::config::ConcurrencyConfig {
+            max_threads: Some(8),
+            max_concurrent_ocr: Some(3),
+        }),
+        ..Default::default()
+    });
+    let input = ExtractInput::from_bytes(b"hello".to_vec(), "text/plain", None);
+
+    let resolved = resolve_batch_input_config(&input, &base, 2);
+
+    let concurrency = resolved
+        .concurrency
+        .as_ref()
+        .expect("batch config keeps a concurrency block");
+    assert_eq!(concurrency.max_threads, Some(2), "the thread budget is the divided one");
+    assert_eq!(
+        concurrency.max_concurrent_ocr,
+        Some(3),
+        "the caller's recognition limit survives the budget rewrite"
+    );
+}
+
+/// An input that carries its own overrides takes the clone-and-merge path rather
+/// than the `Arc::clone` fast path, and the budget rewrite then runs on the merged
+/// config. `FileExtractionConfig` has no concurrency block of its own, so the
+/// base's recognition limit is the one that must come out the far side.
+#[test]
+fn resolve_batch_input_config_carries_the_recognition_limit_through_a_file_override() {
+    let base = Arc::new(ExtractionConfig {
+        concurrency: Some(crate::core::config::ConcurrencyConfig {
+            max_threads: Some(8),
+            max_concurrent_ocr: Some(3),
+        }),
+        ..Default::default()
+    });
+    let mut input = ExtractInput::from_bytes(b"hello".to_vec(), "text/plain", None);
+    input.config = Some(crate::core::config::FileExtractionConfig {
+        force_ocr: Some(true),
+        ..Default::default()
+    });
+
+    let resolved = resolve_batch_input_config(&input, &base, 2);
+
+    assert!(resolved.force_ocr, "the per-input override is applied");
+    assert_eq!(
+        resolved.concurrency.as_ref().and_then(|c| c.max_concurrent_ocr),
+        Some(3),
+        "the recognition limit survives the override merge and the budget rewrite"
+    );
+}
+
 #[test]
 fn engine_batch_execution_plan_clamps_explicit_zero_to_one() {
     let config = ExtractionConfig {
