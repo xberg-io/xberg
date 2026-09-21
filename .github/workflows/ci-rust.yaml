@@ -151,6 +151,20 @@ jobs:
         run: cargo clippy --locked -p xberg --no-default-features --features "formula-recognition,pdf" --all-targets -- -D warnings
         shell: bash
 
+      # `cargo clippy --workspace` above lints xberg-candle-ocr too, but only at its
+      # default (empty) feature set -- every per-model module (trocr, paddleocr-vl,
+      # glm-ocr, deepseek-ocr) is feature-gated and so invisible to that step. This
+      # cell lints the model code directly. It cannot use --all-features: cuda and
+      # metal are mutually platform-hostile (see the matching exclude in
+      # scripts/ci/rust/run-unit-tests.sh), so the feature list stays curated and
+      # leaves cuda/metal/mkl/accelerate off. Skipped on Linux aarch64: candle pulls
+      # gemm-f16, whose inline asm needs the fullfp16 target feature this runner's
+      # baseline lacks (matches the doctest and unit-test gating for this crate).
+      - name: Clippy candle-ocr model surface
+        if: matrix.os != 'ubuntu-24.04-arm'
+        run: cargo clippy --locked -p xberg-candle-ocr --features "trocr,paddleocr-vl,glm-ocr,deepseek-ocr" --all-targets -- -D warnings
+        shell: bash
+
       - name: Run tests
         # ~keep `task rust:test:ci` is gated on its exit code alone, which cannot distinguish a
         # real pass from a run that executed nothing: a feature-gating typo that drops an entire
