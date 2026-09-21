@@ -9,9 +9,10 @@ use serde::{Deserialize, Serialize};
 ///
 /// Set `max_threads` to cap all internal thread pools (Rayon, ONNX Runtime
 /// intra-op), batch concurrency and Tesseract recognition to a single limit.
-/// Set `max_concurrent_ocr` to give recognition a tighter limit of its own,
-/// which is the knob to reach for when the host has cores to spare but not
-/// the memory to run a recognition session on each of them.
+/// Set `max_concurrent_ocr` to give recognition a limit of its own, which is
+/// the knob to reach for when the host has cores to spare but not the memory
+/// to run a recognition session on each of them. It is applied as given and
+/// is not capped by `max_threads`.
 ///
 /// # Default budget when `max_threads` is unset
 ///
@@ -64,13 +65,18 @@ pub struct ConcurrencyConfig {
     /// page image and recognition working set resident, so a host with many
     /// cores and little memory needs this lower than the thread budget. Set
     /// it to `4` to keep the fixed limit that releases up to 1.2.6 applied.
+    ///
+    /// A value set here is applied as given: neither the thread budget nor
+    /// the memory reading reduces it. Both of those bound the automatic
+    /// limit, and a caller who names a number has already decided what the
+    /// host can carry.
     #[cfg_attr(feature = "alef-meta", alef(since = "1.2.7"))]
     pub max_concurrent_ocr: Option<usize>,
 }
 
 static POOL_INIT: Once = Once::new();
 static ACTIVE_THREAD_BUDGET: AtomicUsize = AtomicUsize::new(0);
-static ACTIVE_OCR_CONCURRENCY: OnceLock<usize> = OnceLock::new();
+static ACTIVE_RECOGNITION_CONCURRENCY: AtomicUsize = AtomicUsize::new(0);
 
 /// Ceiling applied to the auto-detected thread budget when `max_threads` is
 /// unset and no tighter resource limit (e.g. a cgroup CPU quota) is found.
@@ -189,7 +195,7 @@ fn quota_period_to_cores(quota: f64, period: f64) -> Option<usize> {
 /// small host; reserving too little costs the process.
 const TESSERACT_SESSION_MEMORY_BYTES: u64 = 512 * 1024 * 1024;
 
-/// Memory this process can grow into, resolved at most once.
+/// Memory this process can grow into, read afresh on every call.
 ///
 /// This is the one memory reader in the crate. The OCR batch sizer in
 /// `extractors::pdf::ocr::pipeline` reads it through `get_available_memory`
@@ -198,14 +204,19 @@ const TESSERACT_SESSION_MEMORY_BYTES: u64 = 512 * 1024 * 1024;
 /// cgroup limit without subtracting current usage, and reported nothing at all
 /// on macOS, so the memory bound was a no-op there. ~keep
 ///
+/// Deliberately uncached. The batch sizer asks once per document, and free
+/// memory moves between documents, so a cached reading would size every later
+/// document in a long-lived server process from whatever happened to be free
+/// during the first extraction. The recognition limit does latch, but it
+/// latches the resolved session count in [`init_thread_pools`], not this
+/// reading. ~keep
+///
 /// `None` means no limit was found: a Linux host whose `/proc` is not mounted, a
 /// macOS host whose `sysctl` fails, and every other platform. Callers then apply
 /// no memory bound, the same "no tighter limit was found" branch
 /// [`cgroup_cpu_quota_cores`] takes. It is not a reading of zero.
-static AVAILABLE_MEMORY_BYTES: OnceLock<Option<u64>> = OnceLock::new();
-
 pub(crate) fn available_memory_bytes() -> Option<u64> {
-    *AVAILABLE_MEMORY_BYTES.get_or_init(read_available_memory_bytes)
+    read_available_memory_bytes()
 }
 
 /// Take the lower of the cgroup headroom and the host's free memory.
@@ -333,10 +344,15 @@ fn warn_recognition_memory_clamp_once(already_warned: &AtomicBool, sessions: usi
 
 /// Resolve how many Tesseract recognition sessions may run at once.
 ///
-/// An explicit `max_concurrent_ocr` wins. Otherwise recognition follows the
-/// general thread budget, bounded by the number of sessions the available
-/// memory holds — see [`TESSERACT_SESSION_MEMORY_BYTES`] for the per-session
-/// cost this divides by.
+/// An explicit `max_concurrent_ocr` wins outright: it is floored at one and
+/// nothing else reduces it, the same way an explicit `max_threads` wins over
+/// [`DEFAULT_THREAD_CAP`] in the sibling resolver. Clamping it to the thread
+/// budget would put the caller back where this change found them, with a
+/// number they set and a limit that ignores it. ~keep
+///
+/// Otherwise recognition follows the general thread budget, bounded by the
+/// number of sessions the available memory holds — see
+/// [`TESSERACT_SESSION_MEMORY_BYTES`] for the per-session cost this divides by.
 ///
 /// Named for recognition rather than for OCR at large: `resolve_ocr_concurrency`
 /// was the VLM-concurrency function removed under GH#1465, and a doc comment in
@@ -375,13 +391,21 @@ fn resolve_recognition_concurrency_with_guard(
 
 /// Recognition sessions this process allows, fixed when the pools were initialized.
 ///
-/// Reading it latches the value, so the admission semaphore in the Tesseract
-/// backend and the handle pool behind it always see the same number however
-/// their construction is ordered. Before initialization it resolves to the
-/// automatic limit, matching `active_thread_budget`.
-#[cfg(any(feature = "ocr", feature = "ocr-wasm"))]
+/// [`init_thread_pools`] is the one writer, so the admission semaphore in the
+/// Tesseract backend and the handle pool behind it read a number no later
+/// extraction can move. Reading never writes: an accessor that latched on first
+/// read would install the automatic limit for whichever caller ran before
+/// initialization and leave the configured value unreachable, which is the same
+/// silently-ignored setting this change exists to remove. Before initialization
+/// it resolves to the automatic limit, exactly as `active_thread_budget` does,
+/// and the zero the static starts at is the "not initialized yet" sentinel
+/// rather than a session count. ~keep
+#[cfg(feature = "ocr")]
 pub(crate) fn recognition_concurrency() -> usize {
-    *ACTIVE_OCR_CONCURRENCY.get_or_init(|| resolve_recognition_concurrency(None))
+    match ACTIVE_RECOGNITION_CONCURRENCY.load(Ordering::Relaxed) {
+        0 => resolve_recognition_concurrency(None),
+        sessions => sessions,
+    }
 }
 
 /// Resolve the effective thread budget from config or auto-detection.
@@ -583,7 +607,7 @@ pub(crate) fn init_thread_pools(config: Option<&ConcurrencyConfig>) -> usize {
     let budget = resolve_thread_budget(config);
     POOL_INIT.call_once(|| {
         ACTIVE_THREAD_BUDGET.store(budget.max(1), Ordering::Relaxed);
-        let _ = ACTIVE_OCR_CONCURRENCY.set(resolve_recognition_concurrency(config));
+        ACTIVE_RECOGNITION_CONCURRENCY.store(resolve_recognition_concurrency(config).max(1), Ordering::Relaxed);
         #[cfg(not(target_arch = "wasm32"))]
         if let Err(_err) = rayon::ThreadPoolBuilder::new().num_threads(budget).build_global() {
             tracing::debug!(
@@ -1113,21 +1137,20 @@ mod tests {
     }
 
     /// The defect: recognition stayed four wide however many threads the host
-    /// was budgeted. This reads the real host, because the process-wide value
-    /// the limiters latch depends on which extraction initialized the pools
-    /// first, and in a test binary that is whichever test ran first. Hosts
-    /// budgeted four or fewer cannot show the difference.
+    /// was budgeted. Both the budget and the memory reading are injected, so the
+    /// assertion is about the resolver rather than about the runner. Reading the
+    /// real host instead failed on any machine with more than four cores and
+    /// under about 2.5 GiB free, and passed for the wrong reason on a runner
+    /// budgeted four or fewer.
     #[test]
     fn test_ocr_concurrency_is_not_pinned_to_four_on_a_many_core_host() {
-        let budget = resolve_thread_budget(None);
-        if budget <= 4 {
-            return;
+        for budget in [5, 32] {
+            let sessions = recognition_sessions(None, budget, Some(AMPLE_MEMORY));
+            assert!(
+                sessions > 4,
+                "recognition admits {sessions} sessions on a host budgeted {budget} threads"
+            );
         }
-        let sessions = resolve_recognition_concurrency(None);
-        assert!(
-            sessions > 4,
-            "recognition admits {sessions} sessions on a host budgeted {budget} threads"
-        );
     }
 
     #[cfg(target_os = "linux")]

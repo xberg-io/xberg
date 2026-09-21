@@ -11,15 +11,16 @@ use xberg_tesseract::TesseractAPI;
 /// Two limiters enforce it: the admission semaphore in
 /// [`crate::ocr::tesseract_backend::TesseractBackend`], which holds async callers
 /// back before they reach a blocking thread, and the capacity of the handle pool
-/// below. They read the number here rather than each deriving it, and the value
-/// is latched on first read, so no ordering between the two can give them
-/// different limits.
+/// below. They read the number here rather than each deriving it, and thread
+/// pool initialization fixes it before either can be built, so no ordering
+/// between the two can give them different limits.
 ///
 /// `ConcurrencyConfig::max_concurrent_ocr` sets it; see
 /// [`crate::core::config::concurrency::resolve_recognition_concurrency`] for the default.
 pub(crate) fn tesseract_api_capacity() -> usize {
-    // `recognition_concurrency` latches its own value, so a second cache here
-    // would only copy a number that can no longer change. ~keep
+    // No cache here. `recognition_concurrency` is already a single atomic load of
+    // a value only pool initialization writes, and a cache in front of it would
+    // pin whatever this module happened to read first. ~keep
     crate::core::config::concurrency::recognition_concurrency()
 }
 
