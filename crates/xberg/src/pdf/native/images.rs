@@ -321,7 +321,7 @@ pub(crate) fn extract_images_with_data(
 
     // Tagged-PDF `/Alt` text for `Figure` structure elements, keyed by 0-based page
     // index (issue #62). Empty for the (common) untagged-PDF case. It needs `&mut`, so
-    // it runs before the page pass reborrows the document as a shared reference.
+    // it runs before the page pass reborrows the document as a shared reference. ~keep
     let alt_text_by_page = super::hierarchy::extract_figure_alt_text_by_page(doc);
     let doc: &NativeDocument = doc;
 
@@ -329,7 +329,7 @@ pub(crate) fn extract_images_with_data(
 
     // The document-global `image_index` and the skipped-image warnings are assigned here,
     // in page order, so they do not depend on which thread ran which page. A skipped image
-    // takes the index it would have had without consuming it, as the sequential loop did.
+    // takes the index it would have had without consuming it, as the sequential loop did. ~keep
     let mut all_images = Vec::new();
     let mut warnings = Vec::new();
     let mut global_index = 0u32;
@@ -480,7 +480,7 @@ fn extract_page_images(
         outcomes.push(Ok(crate::types::ExtractedImage {
             data,
             format,
-            // Replaced with the document-global index by `extract_images_with_data`.
+            // Replaced with the document-global index by `extract_images_with_data`. ~keep
             image_index: 0,
             page_number: Some(page_number),
             width: Some(native_img.width()),
@@ -509,24 +509,36 @@ fn extract_page_images(
     outcomes
 }
 
-/// Test-only record of which OS threads ran a page's image extraction, so a test can assert
-/// that the pass dispatched across the pool rather than infer it from wall clock, which
-/// flakes under load. Mirrors `RENDER_CALL_THREAD_IDS` in `extractors/pdf/ocr/rendering.rs`.
+/// Test-only record of which threads ran a page's image extraction, so a test can assert that
+/// the pass dispatched across the pool rather than infer it from wall clock, which flakes
+/// under load. Mirrors `RENDER_CALL_THREAD_IDS` in `extractors/pdf/ocr/rendering.rs`.
+///
+/// It records the thread NAME rather than its id because the record is process-global while
+/// `#[serial_test::serial]` excludes only other `#[serial]` tests: any test running beside the
+/// guard that reaches this pass would otherwise add its own threads to the set and let a
+/// sequential regression read as a wide one. A guard names the threads of the pool it builds
+/// and counts only those, so the scope is a property of the pool rather than of which tests
+/// happen to run alongside. `core/config/concurrency.rs` records the same defect class
+/// against #215. ~keep
 #[cfg(test)]
-static PAGE_CALL_THREAD_IDS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<std::thread::ThreadId>>> =
+static PAGE_CALL_THREAD_NAMES: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
     std::sync::OnceLock::new();
 
 #[cfg(test)]
-fn page_call_thread_ids() -> &'static std::sync::Mutex<std::collections::HashSet<std::thread::ThreadId>> {
-    PAGE_CALL_THREAD_IDS.get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()))
+fn page_call_thread_names() -> &'static std::sync::Mutex<std::collections::HashSet<String>> {
+    PAGE_CALL_THREAD_NAMES.get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()))
 }
 
 #[cfg(test)]
 fn record_page_thread() {
-    page_call_thread_ids()
+    let current = std::thread::current();
+    let name = current.name().unwrap_or("<unnamed>");
+    let mut names = page_call_thread_names()
         .lock()
-        .expect("page-thread record must not be poisoned")
-        .insert(std::thread::current().id());
+        .expect("page-thread record must not be poisoned");
+    if !names.contains(name) {
+        names.insert(name.to_owned());
+    }
 }
 
 #[cfg(test)]

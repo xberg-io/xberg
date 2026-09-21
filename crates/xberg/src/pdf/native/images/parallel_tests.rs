@@ -3,7 +3,12 @@
 //! Lives beside `images.rs` rather than in its `tests` module so that file stays inside the
 //! project's file-length limit.
 
-use super::{extract_images_with_data, page_call_thread_ids};
+use super::{extract_images_with_data, page_call_thread_names};
+
+/// The thread-name prefix this file gives every pool it builds. `record_page_thread` stores
+/// the running thread's name, so a guard can count the threads of its own pool and ignore any
+/// other test that reaches the same pass while it runs. ~keep
+const POOL_PREFIX: &str = "xberg-image-pass-guard";
 
 /// A `page_count`-page PDF carrying one uncompressed RGB image XObject per page.
 ///
@@ -80,12 +85,28 @@ fn build_pdf_with_one_image_per_page(page_count: usize, side: u32) -> Vec<u8> {
     buf
 }
 
-/// Extract every image in `pdf` inside a pool of exactly `threads` threads.
-fn extract_in_pool(pdf: &[u8], threads: usize) -> Vec<crate::types::ExtractedImage> {
+/// The thread-name prefix `extract_in_pool` gives the pool it builds for `tag`.
+fn pool_thread_prefix(tag: &str) -> String {
+    format!("{POOL_PREFIX}-{tag}")
+}
+
+/// Extract every image in `pdf` inside a pool of exactly `threads` threads, whose threads are
+/// named after `POOL_PREFIX` and `tag` so a caller can tell them from every other thread.
+fn extract_in_pool(pdf: &[u8], threads: usize, tag: &str) -> Vec<crate::types::ExtractedImage> {
+    let prefix = pool_thread_prefix(tag);
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(threads)
+        .thread_name(move |index| format!("{prefix}-{index}"))
         .build()
         .expect("building a dedicated pool must succeed");
+    // Wake every worker before the pass runs. A pool built a moment ago has all its workers but
+    // the one that takes the job asleep, and rayon wakes a sleeper through a futex: the thread
+    // running `install` gets through the whole short range before any wake lands, so a genuinely
+    // parallel pass is observed on a single thread. Measured on a 32-core box, 2026-09-21: the
+    // guard below saw one thread in 30 runs of 30 without this line and four in 30 of 30 with it.
+    // `broadcast` returns only once every worker has run it, and it leaves the pool in the warm
+    // state a real extraction finds, because there the pool is process-wide and long-lived. ~keep
+    pool.broadcast(|_| ());
     pool.install(|| {
         let mut doc = crate::pdf::native::NativeDocument::open_bytes(pdf).expect("the fixture must open");
         let (images, warnings) = extract_images_with_data(&mut doc, None, None).expect("extraction must not error");
@@ -118,13 +139,14 @@ fn extract_in_pool(pdf: &[u8], threads: usize) -> Vec<crate::types::ExtractedIma
 fn image_pass_dispatches_pages_across_more_than_one_thread() {
     let page_count = 24;
     let pdf = build_pdf_with_one_image_per_page(page_count, 256);
+    let prefix = pool_thread_prefix("dispatch");
 
-    page_call_thread_ids()
+    page_call_thread_names()
         .lock()
         .expect("page-thread record must not be poisoned")
         .clear();
 
-    let images = extract_in_pool(&pdf, 4);
+    let images = extract_in_pool(&pdf, 4, "dispatch");
 
     assert_eq!(
         images.len(),
@@ -146,17 +168,22 @@ fn image_pass_dispatches_pages_across_more_than_one_thread() {
     }
 
     // Copied out before the assertion so a failure here reports rather than poisoning the
-    // shared record for the next test in the file.
-    let observed = page_call_thread_ids()
+    // shared record for the next test in the file. Only this pool's own threads count: the
+    // record is process-global and a test running beside this one can reach the same pass. ~keep
+    let recorded = page_call_thread_names()
         .lock()
         .expect("page-thread record must not be poisoned")
         .clone();
+    let observed: std::collections::BTreeSet<&String> =
+        recorded.iter().filter(|name| name.starts_with(&prefix)).collect();
     assert!(
         observed.len() > 1,
-        "expected the image pass to be observed on more than one OS thread (mechanism proof \
-         that pages dispatched in parallel), got {} distinct thread(s): {:?}",
+        "expected the image pass to be observed on more than one thread of the pool named \
+         {prefix} (mechanism proof that pages dispatched in parallel), got {} of the pool's \
+         threads: {:?}; every thread recorded in this process: {:?}",
         observed.len(),
-        observed
+        observed,
+        recorded
     );
 }
 
@@ -169,8 +196,8 @@ fn image_pass_output_is_identical_at_one_thread_and_four() {
     let page_count = 12;
     let pdf = build_pdf_with_one_image_per_page(page_count, 128);
 
-    let single = extract_in_pool(&pdf, 1);
-    let wide = extract_in_pool(&pdf, 4);
+    let single = extract_in_pool(&pdf, 1, "identical-one");
+    let wide = extract_in_pool(&pdf, 4, "identical-four");
 
     assert_eq!(single.len(), page_count, "the one-thread arm must extract every page");
     assert_eq!(
