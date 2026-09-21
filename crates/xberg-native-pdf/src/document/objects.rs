@@ -142,6 +142,16 @@ impl PdfDocument {
         Ok(())
     }
 
+    /// Up to `len` bytes of the document starting at `offset`, or `None` when
+    /// `offset` is past the end. Every read of the file body goes through an
+    /// absolute offset into the document's own bytes, so no two callers share a
+    /// cursor and no read depends on what another thread did first. ~keep
+    pub(super) fn bytes_at(&self, offset: u64, len: usize) -> Option<&[u8]> {
+        let start = usize::try_from(offset).ok()?;
+        let bytes = self.source_bytes.get(start..)?;
+        Some(&bytes[..len.min(bytes.len())])
+    }
+
     /// Scan the file to find an object by its header.
     ///
     /// This is a fallback method used when an object is not in the xref table
@@ -165,12 +175,7 @@ impl PdfDocument {
             obj_ref.generation
         );
 
-        let mut content = Vec::new();
-        {
-            let mut reader = self.reader.lock_or_recover();
-            reader.seek(SeekFrom::Start(0))?;
-            reader.read_to_end(&mut content)?;
-        }
+        let content: &[u8] = &self.source_bytes;
 
         let mut offsets = HashMap::new();
 
@@ -273,21 +278,8 @@ impl PdfDocument {
         // describes them.
         //
         // Only flip `objstm_recovery_done` after we finish the scan+parse
-        // pass; a transient seek/read failure should leave the flag unset
-        // so a later retry can still attempt recovery. ~keep
-        let file_bytes = {
-            let mut r = self.reader.lock_or_recover();
-            if r.seek(SeekFrom::Start(0)).is_err() {
-                return;
-            }
-            let mut buf = Vec::new();
-            if r.read_to_end(&mut buf).is_err() {
-                return;
-            }
-            buf
-        };
-
-        let candidates = find_objstm_candidates(&file_bytes);
+        // pass, so a later retry can still attempt recovery. ~keep
+        let candidates = find_objstm_candidates(&self.source_bytes);
 
         let mut objstms_found = 0usize;
         let mut recovered = 0usize;
@@ -424,25 +416,6 @@ impl PdfDocument {
         if let Some(cached) = cached_opt {
             return Ok(cached);
         }
-
-        // Cold path: serialize uncached loads across threads so a
-        // single logical load's many `reader` lock scopes are not
-        // interleaved by another thread's load on the shared `BufReader`.
-        // Acquire ONLY at the top-level entry (recursion depth 0); a
-        // recursive call from this same thread (nested-ref resolution)
-        // already holds the guard, so re-acquiring would self-deadlock —
-        // skip it. Held for the remainder of this top-level resolution. ~keep
-        let _load_guard = if RECURSION_DEPTH.with(|d| *d.borrow()) == 0 {
-            let guard = self.load_lock.lock_or_recover();
-            // Double-checked: another thread may have loaded and cached
-            // this object while we were blocked on the guard. ~keep
-            if let Some(cached) = self.object_cache.lock_or_recover().get(&obj_ref).cloned() {
-                return Ok(cached);
-            }
-            Some(guard)
-        } else {
-            None
-        };
 
         let entry = match self.xref.get(obj_ref.id) {
             Some(entry) => entry,
@@ -742,27 +715,9 @@ impl PdfDocument {
             return true;
         }
 
-        // Seek + read under a SINGLE lock guard. Splitting the seek
-        // the read across two `self.reader.lock_or_recover()` acquisitions
-        // is the Race A split-lock bug (same one already fixed in
-        // `load_uncompressed_object_impl`): a concurrent thread can
-        // re-seek the shared reader between our seek() and read(), so we
-        // read a garbage buffer for a different object. That surfaced as
-        // a spurious `[1000] invalid PDF structure or content stream`
-        // ParseError under concurrent `render_page_fit`. ~keep
-        let offset = entry.offset;
-        let mut buf = [0u8; 1024];
-        let n = {
-            let mut reader = self.reader.lock_or_recover();
-            if reader.seek(SeekFrom::Start(offset)).is_err() {
-                return true;
-            }
-            match reader.read(&mut buf) {
-                Ok(n) => n,
-                Err(_) => return true,
-            }
+        let Some(data) = self.bytes_at(entry.offset, 1024) else {
+            return true;
         };
-        let data = &buf[..n];
 
         if let Some(pos) = data.windows(8).position(|w| w == b"/Subtype") {
             let after = &data[pos + 8..];
@@ -866,10 +821,11 @@ impl PdfDocument {
         offset: u64,
         already_corrected: bool,
     ) -> Result<Object> {
-        // --- Phase 1: read the object header under a single lock guard ---
-        // Holding one guard for seek+read prevents the split-lock race (Race A)
-        // where a concurrent thread can re-seek the shared BufReader between our
-        // seek() and read_until() calls. ~keep
+        // The header and the body are read through ONE cursor, private to this
+        // call, over the document's own bytes. The body read continues from where
+        // the header read stopped, so the two must not be separable: a cursor any
+        // other reader can move between them reads the body of a different object.
+        // ~keep
         // Cap a single header-line read so a CR-terminated PDF (legal per ISO
         // 32000-1) whose next LF is far away — or absent for the rest of the
         // file — cannot make one `read_until` call allocate without limit
@@ -880,8 +836,9 @@ impl PdfDocument {
         // legitimate header line while still bounding the pathological case.
         // ~keep
         const MAX_HEADER_LINE_BYTES: u64 = 64 * 1024; // 64 KB safety limit per header line ~keep
+        let mut cursor = Cursor::new(self.source_bytes.as_slice());
         let (header_bytes, full_header) = {
-            let mut reader = self.reader.lock_or_recover();
+            let reader = &mut cursor;
             reader.seek(SeekFrom::Start(offset))?;
 
             let mut header_bytes = Vec::new();
@@ -929,7 +886,6 @@ impl PdfDocument {
                 full_header.push_str(&next_line);
                 lines_read += 1;
             }
-            // Reader guard drops here — before any recursive fallback calls. ~keep
             (header_bytes, full_header)
         };
 
@@ -1055,13 +1011,13 @@ impl PdfDocument {
             }
         }
 
-        // --- Phase 2: read body under a single lock guard (Race A) ---
+        // Body, read from the same cursor the header left positioned.
         // Use byte limit instead of line count — large uncompressed streams can have
         // hundreds of thousands of short lines (e.g., vector path drawing commands). ~keep
         const MAX_BYTES: usize = 100 * 1024 * 1024; // 100 MB safety limit ~keep
 
         {
-            let mut reader = self.reader.lock_or_recover();
+            let reader = &mut cursor;
             loop {
                 let mut chunk = Vec::new();
                 let bytes_read = reader.read_until(b'\n', &mut chunk)?;
@@ -1300,12 +1256,10 @@ impl PdfDocument {
         let search_distance = std::cmp::min(100, wrong_offset);
         let search_start = wrong_offset - search_distance;
 
-        let mut buffer = vec![0u8; search_distance as usize + 100];
-        let bytes_read = {
-            let mut reader = self.reader.lock_or_recover();
-            reader.seek(SeekFrom::Start(search_start))?;
-            reader.read(&mut buffer)?
-        };
+        let buffer = self
+            .bytes_at(search_start, search_distance as usize + 100)
+            .unwrap_or_default();
+        let bytes_read = buffer.len();
 
         if bytes_read == 0 {
             return Err(Error::ParseError {

@@ -534,27 +534,16 @@ impl FontHashTraversal {
 /// object cache is bounded at 64 MB (see `DEFAULT_OBJECT_CACHE_MAX_BYTES`)
 /// uses FIFO eviction to prevent unbounded heap growth when processing
 /// many pages sequentially.
+///
+/// # Thread Safety
+///
+/// All interior-mutable fields use `Mutex` / `AtomicUsize`, making
+/// `PdfDocument` both `Send` and `Sync`.
 pub struct PdfDocument {
-    /// PDF reader — file-backed on native, memory-backed on WASM.
-    ///
-    /// # Thread Safety
-    /// All interior-mutable fields use `Mutex` / `AtomicUsize`, making
-    /// `PdfDocument` both `Send` and `Sync`.
-    /// Wrapped in RefCell for interior mutability (seek/read require &mut).
-    reader: Mutex<PdfReader>,
-    /// Serializes concurrent *cold* (uncached) object loads on a shared
-    /// handle. A single logical load makes many separate `reader` lock
-    /// scopes (header, /Length resolution, stream bytes, nested refs);
-    /// without this, two threads cold-loading on one shared `PdfDocument`
-    /// (e.g. the C# binding's single native handle calling `render_page_fit`
-    /// from multiple threads) interleave those scopes on the shared
-    /// `BufReader` and read each other's bytes, surfacing as a spurious
-    /// `[1000] invalid PDF structure or content stream`. Acquired only at
-    /// the top-level entry of `load_object` (recursion depth 0) with a
-    /// double-checked cache, so warm cache hits stay fully parallel
-    /// same-thread recursion never re-acquires (no self-deadlock).
-    load_lock: Mutex<()>,
-    /// Raw bytes of the document (kept for duplication/editing)
+    /// Raw bytes of the document. Every read of the file body addresses this
+    /// by absolute offset (see `bytes_at`), so the document carries no shared
+    /// read cursor and a page read never depends on what another page read
+    /// first. ~keep
     pub source_bytes: Vec<u8>,
     /// PDF version (major, minor)
     version: (u8, u8),

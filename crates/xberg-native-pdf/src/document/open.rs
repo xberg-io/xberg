@@ -18,17 +18,13 @@ impl PdfDocument {
     /// Returns an error if the PDF data is invalid, unsupported, or cannot be parsed.
     #[tracing::instrument(name = "pdf.from_bytes", skip_all, fields(bytes = data.len()))]
     pub fn from_bytes(data: Vec<u8>) -> Result<Self> {
-        let source_bytes = data.clone();
-        let reader = PdfReader::Memory(BufReader::new(Cursor::new(data)));
-        let mut doc = match Self::open_from_reader(reader) {
-            Ok(document) => document,
+        match Self::open_from_bytes_inner(data) {
+            Ok(document) => Ok(document),
             Err(error) => {
                 trace_open_error(&error);
-                return Err(error);
+                Err(error)
             }
-        };
-        doc.source_bytes = source_bytes;
-        Ok(doc)
+        }
     }
 
     /// Deprecated alias for `from_bytes`.
@@ -81,7 +77,11 @@ impl PdfDocument {
         Self::from_bytes(data)
     }
 
-    fn open_from_reader(mut reader: PdfReader) -> Result<Self> {
+    /// Parse `data` into a document. The reader built here lives only for the
+    /// header, xref and trailer parse; the finished document keeps the bytes and
+    /// reads them by offset instead. ~keep
+    fn open_from_bytes_inner(data: Vec<u8>) -> Result<Self> {
+        let mut reader = PdfReader::Memory(BufReader::new(Cursor::new(data)));
         // Parse header with lenient mode by default (handle PDFs with binary prefixes) ~keep
         let (major, minor, header_offset) = parse_header(&mut reader, true)?;
         let version = (major, minor);
@@ -210,13 +210,16 @@ impl PdfDocument {
             None
         };
 
+        // The reader ends here: the document keeps the bytes and reads them by
+        // offset, so nothing downstream shares a cursor. ~keep
+        let PdfReader::Memory(buffered) = reader;
+        let source_bytes = buffered.into_inner().into_inner();
+
         // Note: Encryption initialization was originally lazy, but decode_stream_with_encryption
         // only has &self access which prevents initialization.
         // We now initialize eagerly to ensure the handler is ready when needed. ~keep
         let document = Self {
-            reader: Mutex::new(reader),
-            load_lock: Mutex::new(()),
-            source_bytes: Vec::new(),
+            source_bytes,
             version,
             xref,
             trailer,
