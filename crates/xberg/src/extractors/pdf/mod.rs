@@ -5568,15 +5568,35 @@ mod tests {
             .iter()
             .filter(|warning| warning.source == "ocr")
             .collect::<Vec<_>>();
+        // Two distinct OCR-source warnings belong here, not a duplicate: one reports that
+        // targeted OCR itself failed for page 2, the other that the language-plausibility
+        // check (issue #1709) could not judge that page's retained native text at all. Assert
+        // on each warning's content rather than a bare count, so a real regression in either
+        // one fails loudly instead of the count silently drifting to match.
+        let fallback_failure_warnings = warnings
+            .iter()
+            .filter(|warning| warning.message.contains(FAILURE))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            fallback_failure_warnings.len(),
+            1,
+            "expected exactly one OCR fallback-failure warning: {warnings:?}"
+        );
+
+        let plausibility_abstention_warnings = warnings
+            .iter()
+            .filter(|warning| warning.message.contains("could not judge"))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            plausibility_abstention_warnings.len(),
+            1,
+            "expected exactly one plausibility-check abstention warning: {warnings:?}"
+        );
+
         assert_eq!(
             warnings.len(),
-            1,
-            "expected exactly one OCR fallback warning: {warnings:?}"
-        );
-        assert!(
-            warnings[0].message.contains(FAILURE),
-            "warning must retain the backend failure context: {:?}",
-            warnings[0]
+            fallback_failure_warnings.len() + plausibility_abstention_warnings.len(),
+            "unexpected extra OCR-source warning(s): {warnings:?}"
         );
 
         let result = crate::extraction::derive::derive_extraction_result(
