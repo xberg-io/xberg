@@ -2971,6 +2971,134 @@ mod tests {
         );
     }
 
+    /// xberg#1731: the pre-rendered OCR route (the one layout detection feeds, `images` is
+    /// `Some`) charged the whole batch's render-and-encode peak against
+    /// `security_limits.max_content_size`, a ceiling that bounds ONE image. Batch width there
+    /// is the resolved thread budget, `min(cpu_cores, 8)`, with nothing that consults the
+    /// content limit, so the per-page allowance became a function of how many pages happened to
+    /// be batched together.
+    ///
+    /// One 1275x1650 page (US Letter at the default 150 dpi) costs, on the parallel encode path
+    /// this route uses, 6,311,250 source bytes plus 6,311,250 conversion bytes plus 8,677,144
+    /// output bytes: 21,299,644 in all. Eight of them
+    /// sum to 170,397,152 against the 104,857,600 limit set below, so on the base tree this call
+    /// returns `Err` naming `security_limits.max_content_size` and not one of the eight pages
+    /// reaches the backend. One layer up, `extractors::pdf`'s automatic OCR fallback degrades
+    /// that `Err` to the document's native text plus a warning, which is how the loss reads as a
+    /// successful extraction.
+    ///
+    /// The thread budget is pinned here rather than left to the host: on a box with four cores
+    /// or fewer the batch is four pages, 85,198,576 bytes, and the defect does not appear at all.
+    #[cfg(feature = "ocr")]
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn a_batch_wider_than_the_content_limit_still_ocrs_every_pre_rendered_page() {
+        use crate::core::config::{ConcurrencyConfig, OcrConfig};
+        use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
+        use crate::types::ExtractedDocument;
+        use std::sync::Arc;
+
+        const BACKEND_NAME: &str = "batch-wider-than-content-limit-test-backend";
+        const OCR_TEXT: &str = "recovered page text from the pre rendered batch";
+        const PAGE_COUNT: usize = 8;
+        const PAGE_WIDTH: u32 = 1_275;
+        const PAGE_HEIGHT: u32 = 1_650;
+
+        struct FixedTextBackend;
+
+        #[async_trait::async_trait]
+        impl OcrBackend for FixedTextBackend {
+            fn backend_type(&self) -> OcrBackendType {
+                OcrBackendType::Custom
+            }
+            fn supports_language(&self, _: &str) -> bool {
+                true
+            }
+            async fn process_image(&self, _: &[u8], _: &OcrConfig) -> crate::Result<ExtractedDocument> {
+                Ok(ExtractedDocument {
+                    content: OCR_TEXT.to_string(),
+                    ..Default::default()
+                })
+            }
+            fn supports_document_processing(&self) -> bool {
+                false
+            }
+        }
+
+        impl Plugin for FixedTextBackend {
+            fn name(&self) -> &str {
+                BACKEND_NAME
+            }
+            fn version(&self) -> String {
+                "1.0.0".to_string()
+            }
+            fn initialize(&self) -> crate::Result<()> {
+                Ok(())
+            }
+            fn shutdown(&self) -> crate::Result<()> {
+                Ok(())
+            }
+        }
+
+        crate::plugins::register_ocr_backend(Arc::new(FixedTextBackend)).unwrap();
+        struct Guard;
+        impl Drop for Guard {
+            fn drop(&mut self) {
+                let _ = crate::plugins::unregister_ocr_backend(BACKEND_NAME);
+            }
+        }
+        let _guard = Guard;
+
+        // Pages a layout pass has already rendered and handed on, which is what makes the
+        // whole-batch charge double-count: these rasters are live for the run either way.
+        let pages: Vec<image::DynamicImage> = (0..PAGE_COUNT)
+            .map(|_| image::DynamicImage::ImageRgb8(image::RgbImage::new(PAGE_WIDTH, PAGE_HEIGHT)))
+            .collect();
+
+        let config = ExtractionConfig {
+            use_cache: false,
+            concurrency: Some(ConcurrencyConfig {
+                max_threads: Some(PAGE_COUNT),
+            }),
+            security_limits: Some(crate::extractors::security::SecurityLimits {
+                max_content_size: 100 * 1024 * 1024,
+                ..Default::default()
+            }),
+            ocr: Some(OcrConfig {
+                backend: BACKEND_NAME.to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let (_, _, _, _, _, _, page_texts, _, _, _, _) = extract_with_ocr(
+            None,
+            Some(&pages),
+            #[cfg(feature = "layout-detection")]
+            None,
+            &config,
+            None,
+        )
+        .await
+        .expect(
+            "a batch wider than the per-image content limit must still OCR every page, not \
+             refuse the whole batch",
+        );
+
+        assert_eq!(
+            page_texts.len(),
+            PAGE_COUNT,
+            "every pre-rendered page must come back, got {page_texts:?}"
+        );
+        for (index, text) in page_texts.iter().enumerate() {
+            assert!(
+                text.contains(OCR_TEXT),
+                "page {} must carry its OCR text rather than nothing: {text:?}",
+                index + 1
+            );
+        }
+    }
+
     #[cfg(feature = "ocr")]
     #[test]
     fn should_filter_public_ocr_elements_by_effective_pdf_margins() {

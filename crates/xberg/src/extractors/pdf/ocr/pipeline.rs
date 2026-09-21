@@ -1543,10 +1543,17 @@ pub(super) async fn extract_with_ocr_for_page(
             let slice: Cow<'_, [image::DynamicImage]> = Cow::Borrowed(&imgs[batch_start..batch_end]);
             let default_security_limits = crate::extractors::security::SecurityLimits::default();
             let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
-            #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-            validate_png_encode_batch_peak(slice.iter(), true, security_limits)?;
-            #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
-            validate_png_encode_batch_peak(slice.iter(), false, security_limits)?;
+            // One page at a time. `max_content_size` bounds what a single page may cost to
+            // render and encode; summing a whole batch against it made that per-image ceiling a
+            // function of the thread budget. On the parallel encode path below, five US Letter
+            // pages at the default 150 dpi already cross the default limit, so an eight-page
+            // batch was refused whole and every page the caller had already rendered was
+            // dropped (#1731). Matches the per-page check the mixed native-and-OCR route runs
+            // at its own encode step. The batch's own footprint is bounded by `batch_size`,
+            // which the thread budget decides; `max_content_size` does not bound it. ~keep
+            for image in slice.iter() {
+                validate_png_encode_batch_peak(std::iter::once(image), false, security_limits)?;
+            }
             #[allow(clippy::type_complexity)]
             #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
             let encoded: crate::Result<Vec<(usize, Arc<Vec<u8>>, u32, u32)>> = slice
