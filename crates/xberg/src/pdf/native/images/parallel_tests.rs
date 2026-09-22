@@ -67,7 +67,7 @@ fn build_pdf_with_one_image_per_page(page_count: usize, side: u32) -> Vec<u8> {
             .as_bytes(),
         );
         // A per-page pattern that is neither uniform nor shared between pages: the PNG
-        // re-encode has real work to do and every page's bytes differ from its neighbours'.
+        // re-encode has real work to do and every page's bytes differ from its neighbours'. ~keep
         buf.extend((0..pixel_count).map(|byte_idx| ((page_idx * 37 + byte_idx * 11 + byte_idx / 97) % 251) as u8));
         buf.extend_from_slice(b"\nendstream\nendobj\n");
     }
