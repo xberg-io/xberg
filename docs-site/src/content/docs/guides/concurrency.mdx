@@ -7,7 +7,7 @@ import { Tabs, TabItem } from "@astrojs/starlight/components";
 import { Content as Snip_csharp_advanced_async_extraction } from "../../../snippets/csharp/advanced/async_extraction.md";
 import { Content as Snip_wasm_getting_started_async_extraction } from "../../../snippets/wasm/getting-started/async-extraction.md";
 
-Xberg derives one thread budget per process and shares it across every internal thread pool: the global Rayon pool, ONNX Runtime intra-op threads, and the batch worker count. This page explains how that budget is chosen, why it does not automatically scale past 8 threads, and when it will not help even after you raise it.
+Xberg derives one thread budget per process and shares it across every internal thread pool: the global Rayon pool, ONNX Runtime intra-op threads, the batch worker count, and the number of concurrent Tesseract recognition sessions. This page explains how that budget is chosen, why it does not automatically scale past 8 threads, and when it will not help even after you raise it.
 
 ## The default: `min(cpu_cores, 8)`
 
@@ -46,6 +46,7 @@ use xberg::core::config::ConcurrencyConfig;
 
 let config = ConcurrencyConfig {
     max_threads: Some(16),
+    max_concurrent_ocr: None,
 };
 ```
 
@@ -53,6 +54,47 @@ let config = ConcurrencyConfig {
 </Tabs>
 
 `max_threads` takes priority over both the host core count and any detected cgroup CPU quota.
+
+## Recognition sessions: `max_concurrent_ocr`
+
+Concurrent Tesseract recognition follows the thread budget, reduced to the number of sessions the host's free memory holds. Each session keeps its own page image and recognition working set resident, so a host with many cores and little memory runs fewer sessions than it has threads. A one-time `WARN`-level log fires when free memory, and not the thread budget, is what bounds recognition.
+
+`ConcurrencyConfig::max_concurrent_ocr` sets the session count on its own. Use it when the host has cores to spare but not the memory to run a recognition session on each of them. The value is applied as given: neither `max_threads` nor the free-memory reading reduces it.
+
+The first extraction in a process fixes the session count for the rest of that process. A later extraction that names a different `max_concurrent_ocr` keeps the first one and logs a one-time `WARN`. The admission semaphore and the Tesseract handle pool that enforce the limit are built once and the pool's capacity is fixed when it is constructed, so a later value could be reported but never applied. Set the value on the first extraction, or run one process per value.
+
+<Tabs syncKey="lang">
+<TabItem label="CLI">
+
+```bash title="Terminal"
+xberg batch scans/*.pdf --max-threads 32 --max-concurrent-ocr 8
+```
+
+</TabItem>
+<TabItem label="Config file">
+
+```toml title="xberg.toml"
+[concurrency]
+max_threads = 32
+max_concurrent_ocr = 8
+```
+
+</TabItem>
+<TabItem label="Rust">
+
+```rust
+use xberg::core::config::ConcurrencyConfig;
+
+let config = ConcurrencyConfig {
+    max_threads: Some(32),
+    max_concurrent_ocr: Some(8),
+};
+```
+
+</TabItem>
+</Tabs>
+
+Releases up to 1.2.6 fixed recognition at four sessions whatever the thread budget was. Set `max_concurrent_ocr` to `4` to keep that behaviour.
 
 ## Containers: cgroup v2 CPU quota is honoured
 
@@ -113,7 +155,7 @@ For a fixed list of documents, prefer `extract_batch`. It divides the budget bet
 
 ## See Also
 
-- [CLI Reference](/reference/cli/) - `--max-threads` and `--max-concurrent` flags
+- [CLI Reference](/reference/cli/) - `--max-threads`, `--max-concurrent` and `--max-concurrent-ocr` flags
 - [Configuration Reference](/reference/configuration/) - `ConcurrencyConfig` and `max_concurrent_extractions`
 - [Docker Deployment](/guides/docker/)
 - [Kubernetes Deployment](/guides/kubernetes/)

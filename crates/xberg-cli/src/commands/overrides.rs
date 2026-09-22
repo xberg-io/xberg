@@ -355,6 +355,14 @@ pub struct ExtractionOverrides {
     #[arg(long, help = "Limit total threads for constrained environments")]
     pub max_threads: Option<usize>,
 
+    /// Set concurrent Tesseract recognition sessions directly. The value is applied as given and is not capped by the
+    /// thread budget. The first extraction in a process fixes it for that process.
+    #[arg(
+        long,
+        help = "Set concurrent OCR sessions directly, instead of following the thread budget"
+    )]
+    pub max_concurrent_ocr: Option<usize>,
+
     /// Extract pages as a separate array in results.
     #[arg(long)]
     pub extract_pages: Option<bool>,
@@ -584,6 +592,9 @@ impl ExtractionOverrides {
         }
         if let Some(0) = self.max_threads {
             bail!("--max-threads must be at least 1");
+        }
+        if let Some(0) = self.max_concurrent_ocr {
+            bail!("--max-concurrent-ocr must be at least 1");
         }
 
         #[cfg(feature = "pdf-surface")]
@@ -1012,6 +1023,10 @@ impl ExtractionOverrides {
         if let Some(max_threads) = self.max_threads {
             let concurrency = config.concurrency.get_or_insert_with(Default::default);
             concurrency.max_threads = Some(max_threads);
+        }
+        if let Some(max_concurrent_ocr) = self.max_concurrent_ocr {
+            let concurrency = config.concurrency.get_or_insert_with(Default::default);
+            concurrency.max_concurrent_ocr = Some(max_concurrent_ocr);
         }
     }
 
@@ -2934,6 +2949,20 @@ mod tests {
     }
 
     #[test]
+    fn test_max_concurrent_ocr_applied() {
+        let mut config = ExtractionConfig::default();
+        let overrides = ExtractionOverrides {
+            max_threads: Some(16),
+            max_concurrent_ocr: Some(4),
+            ..default_overrides()
+        };
+        overrides.apply(&mut config);
+        let concurrency = config.concurrency.unwrap();
+        assert_eq!(concurrency.max_threads, Some(16));
+        assert_eq!(concurrency.max_concurrent_ocr, Some(4));
+    }
+
+    #[test]
     fn test_include_structure_applied() {
         let mut config = ExtractionConfig::default();
         assert!(!config.include_document_structure);
@@ -2974,6 +3003,16 @@ mod tests {
         };
         let err = overrides.validate().unwrap_err();
         assert!(err.to_string().contains("--max-threads must be at least 1"));
+    }
+
+    #[test]
+    fn test_validate_max_concurrent_ocr_zero() {
+        let overrides = ExtractionOverrides {
+            max_concurrent_ocr: Some(0),
+            ..default_overrides()
+        };
+        let err = overrides.validate().unwrap_err();
+        assert!(err.to_string().contains("--max-concurrent-ocr must be at least 1"));
     }
 
     #[cfg(feature = "ocr-surface")]

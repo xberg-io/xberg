@@ -410,7 +410,10 @@ mod tests {
                 }),
                 ..Default::default()
             }),
-            concurrency: Some(ConcurrencyConfig { max_threads: Some(2) }),
+            concurrency: Some(ConcurrencyConfig {
+                max_threads: Some(2),
+                max_concurrent_ocr: None,
+            }),
             ..Default::default()
         };
         let images = (0..6)

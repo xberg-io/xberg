@@ -3702,7 +3702,12 @@ class CodeMetadata {
 /// Controls thread usage for constrained environments.
 ///
 /// Set `max_threads` to cap all internal thread pools (Rayon, ONNX Runtime
-/// intra-op) and batch concurrency to a single limit.
+/// intra-op), batch concurrency and Tesseract recognition to a single limit.
+/// Set `max_concurrent_ocr` to give recognition a limit of its own, which is
+/// the knob to reach for when the host has cores to spare but not the memory
+/// to run a recognition session on each of them. It is applied as given and
+/// is not capped by `max_threads`. The first extraction in a process fixes
+/// it for that process — see the field's own documentation.
 ///
 /// # Default budget when `max_threads` is unset
 ///
@@ -3731,6 +3736,7 @@ class CodeMetadata {
 ///
 /// let config = ConcurrencyConfig {
 ///     max_threads: Some(2),
+///     max_concurrent_ocr: None,
 /// };
 /// ```
 class ConcurrencyConfig {
@@ -3745,17 +3751,41 @@ class ConcurrencyConfig {
   /// default will not scale past 8 on its own.
   final PlatformInt64? maxThreads;
 
-  const ConcurrencyConfig({this.maxThreads});
+  /// Maximum number of Tesseract recognition sessions that run at once.
+  ///
+  /// When `None`, recognition follows `max_threads`, reduced to the number
+  /// of sessions the host's free memory holds. Each session keeps its own
+  /// page image and recognition working set resident, so a host with many
+  /// cores and little memory needs this lower than the thread budget. Set
+  /// it to `4` to keep the fixed limit that releases up to 1.2.6 applied.
+  ///
+  /// A value set here is applied as given: neither the thread budget nor
+  /// the memory reading reduces it. Both of those bound the automatic
+  /// limit, and a caller who names a number has already decided what the
+  /// host can carry.
+  ///
+  /// The first extraction in a process fixes the limit for the rest of that
+  /// process, and a later extraction that names a different value keeps the
+  /// first one. The two limiters that enforce it — the admission semaphore
+  /// in the Tesseract backend and the handle pool behind it — are built once
+  /// inside a backend the plugin registry holds for the life of the process,
+  /// and the pool's capacity is fixed when it is constructed. A later value
+  /// could therefore be reported but never enforced. Set it on the first
+  /// extraction, or run one process per value.
+  final PlatformInt64? maxConcurrentOcr;
+
+  const ConcurrencyConfig({this.maxThreads, this.maxConcurrentOcr});
 
   @override
-  int get hashCode => maxThreads.hashCode;
+  int get hashCode => maxThreads.hashCode ^ maxConcurrentOcr.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is ConcurrencyConfig &&
           runtimeType == other.runtimeType &&
-          maxThreads == other.maxThreads;
+          maxThreads == other.maxThreads &&
+          maxConcurrentOcr == other.maxConcurrentOcr;
 }
 
 @freezed
@@ -16966,7 +16996,11 @@ class SecurityLimits {
   /// caught by `max_content_size` instead.
   final PlatformInt64 maxEntityLength;
 
-  /// Maximum string growth and decoded image allocation per document (100 MB)
+  /// Maximum string growth and decoded image allocation per operation (100 MB).
+  ///
+  /// Per-page passes such as layout detection charge each batch against this limit,
+  /// not the whole document; only `max_pages` bounds the rasters retained across a
+  /// document (GH#1721).
   final PlatformInt64 maxContentSize;
 
   /// Maximum iterations per operation

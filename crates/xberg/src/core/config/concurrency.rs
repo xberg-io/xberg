@@ -8,7 +8,12 @@ use serde::{Deserialize, Serialize};
 /// Controls thread usage for constrained environments.
 ///
 /// Set `max_threads` to cap all internal thread pools (Rayon, ONNX Runtime
-/// intra-op) and batch concurrency to a single limit.
+/// intra-op), batch concurrency and Tesseract recognition to a single limit.
+/// Set `max_concurrent_ocr` to give recognition a limit of its own, which is
+/// the knob to reach for when the host has cores to spare but not the memory
+/// to run a recognition session on each of them. It is applied as given and
+/// is not capped by `max_threads`. The first extraction in a process fixes
+/// it for that process — see the field's own documentation.
 ///
 /// # Default budget when `max_threads` is unset
 ///
@@ -37,6 +42,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// let config = ConcurrencyConfig {
 ///     max_threads: Some(2),
+///     max_concurrent_ocr: None,
 /// };
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -52,10 +58,34 @@ pub struct ConcurrencyConfig {
     /// set `max_threads` explicitly to use the additional cores — the
     /// default will not scale past 8 on its own.
     pub max_threads: Option<usize>,
+
+    /// Maximum number of Tesseract recognition sessions that run at once.
+    ///
+    /// When `None`, recognition follows `max_threads`, reduced to the number
+    /// of sessions the host's free memory holds. Each session keeps its own
+    /// page image and recognition working set resident, so a host with many
+    /// cores and little memory needs this lower than the thread budget. Set
+    /// it to `4` to keep the fixed limit that releases up to 1.2.6 applied.
+    ///
+    /// A value set here is applied as given: neither the thread budget nor
+    /// the memory reading reduces it. Both of those bound the automatic
+    /// limit, and a caller who names a number has already decided what the
+    /// host can carry.
+    ///
+    /// The first extraction in a process fixes the limit for the rest of that
+    /// process, and a later extraction that names a different value keeps the
+    /// first one. The two limiters that enforce it — the admission semaphore
+    /// in the Tesseract backend and the handle pool behind it — are built once
+    /// inside a backend the plugin registry holds for the life of the process,
+    /// and the pool's capacity is fixed when it is constructed. A later value
+    /// could therefore be reported but never enforced. Set it on the first
+    /// extraction, or run one process per value.
+    pub max_concurrent_ocr: Option<usize>,
 }
 
 static POOL_INIT: Once = Once::new();
 static ACTIVE_THREAD_BUDGET: AtomicUsize = AtomicUsize::new(0);
+static ACTIVE_RECOGNITION_CONCURRENCY: AtomicUsize = AtomicUsize::new(0);
 
 /// Ceiling applied to the auto-detected thread budget when `max_threads` is
 /// unset and no tighter resource limit (e.g. a cgroup CPU quota) is found.
@@ -161,6 +191,232 @@ fn quota_period_to_cores(quota: f64, period: f64) -> Option<usize> {
     Some((quota / period).ceil().max(1.0) as usize)
 }
 
+/// Resident working set to reserve for one concurrent recognition session.
+///
+/// A session owns a Tesseract API handle, the Leptonica image it recognises and
+/// the intermediate page data, so the cost is per session, not per document.
+/// Measured on an 84-page scanned PDF: 237 MiB peak RSS at one session, 441 MiB
+/// at four and 709 MiB at eight — 68 MiB for each session the run added.
+///
+/// The reservation is set well above that measurement because the working set
+/// scales with the page raster, and a large page at a high scan resolution costs
+/// several times a letter-sized one. Reserving too much costs throughput on a
+/// small host; reserving too little costs the process.
+const TESSERACT_SESSION_MEMORY_BYTES: u64 = 512 * 1024 * 1024;
+
+/// Memory this process can grow into, read afresh on every call.
+///
+/// This is the one memory reader in the crate. The OCR batch sizer in
+/// `extractors::pdf::ocr::pipeline` reads it through `get_available_memory`
+/// rather than keeping a second copy: two readers of the same three files drift,
+/// and the first draft of this one had already drifted twice — it compared the
+/// cgroup limit without subtracting current usage, and reported nothing at all
+/// on macOS, so the memory bound was a no-op there. ~keep
+///
+/// Deliberately uncached. The batch sizer asks once per document, and free
+/// memory moves between documents, so a cached reading would size every later
+/// document in a long-lived server process from whatever happened to be free
+/// during the first extraction. The recognition limit does latch, but it
+/// latches the resolved session count in [`init_thread_pools`], not this
+/// reading. ~keep
+///
+/// `None` means no limit was found: a Linux host whose `/proc` is not mounted, a
+/// macOS host whose `sysctl` fails, and every other platform. Callers then apply
+/// no memory bound, the same "no tighter limit was found" branch
+/// [`cgroup_cpu_quota_cores`] takes. It is not a reading of zero.
+pub(crate) fn available_memory_bytes() -> Option<u64> {
+    read_available_memory_bytes()
+}
+
+/// Take the lower of the cgroup headroom and the host's free memory.
+///
+/// A container can carry both: a 64 GiB host that is nearly full still refuses
+/// an allocation the 8 GiB cgroup limit would have allowed, and vice versa.
+#[cfg(target_os = "linux")]
+fn read_available_memory_bytes() -> Option<u64> {
+    let cgroup = cgroup_headroom_bytes();
+    let host = std::fs::read_to_string("/proc/meminfo")
+        .ok()
+        .and_then(|contents| parse_mem_available_bytes(&contents));
+    match (cgroup, host) {
+        (Some(cgroup), Some(host)) => Some(cgroup.min(host)),
+        (limit, None) | (None, limit) => limit,
+    }
+}
+
+/// What the cgroup will still hand out: its limit less what it already holds.
+///
+/// The limit alone is not headroom. A 8 GiB cgroup already using 6 GiB grants
+/// 2 GiB, and sizing a session count against the 8 gets the process killed.
+#[cfg(target_os = "linux")]
+fn cgroup_headroom_bytes() -> Option<u64> {
+    if let (Ok(max), Ok(current)) = (
+        std::fs::read_to_string("/sys/fs/cgroup/memory.max"),
+        std::fs::read_to_string("/sys/fs/cgroup/memory.current"),
+    ) && let Some(headroom) = parse_cgroup_headroom(&max, &current)
+    {
+        return Some(headroom);
+    }
+    let limit = std::fs::read_to_string("/sys/fs/cgroup/memory/memory.limit_in_bytes").ok()?;
+    let usage = std::fs::read_to_string("/sys/fs/cgroup/memory/memory.usage_in_bytes").ok()?;
+    parse_cgroup_headroom(&limit, &usage)
+}
+
+/// A cgroup memory limit at or above this is read as no limit at all.
+///
+/// cgroup v2 writes the literal `max` when no limit applies, but cgroup v1 has
+/// no such word and writes a near-`i64::MAX` byte count instead. No host holds
+/// four exbibytes of memory, so a number that large is the sentinel.
+#[cfg(target_os = "linux")]
+const CGROUP_MEMORY_UNLIMITED_FLOOR: u64 = 1 << 62;
+
+/// Read a cgroup limit and its current usage, and return the difference.
+///
+/// Both spellings of "no limit" — the v2 word `max` and v1's near-`i64::MAX`
+/// count — return `None`, so an unlimited cgroup leaves the host reading alone.
+#[cfg(target_os = "linux")]
+fn parse_cgroup_headroom(limit: &str, usage: &str) -> Option<u64> {
+    let limit = limit.trim();
+    if limit == "max" {
+        return None;
+    }
+    let limit: u64 = limit.parse().ok()?;
+    if limit == 0 || limit >= CGROUP_MEMORY_UNLIMITED_FLOOR {
+        return None;
+    }
+    let usage: u64 = usage.trim().parse().ok()?;
+    Some(limit.saturating_sub(usage))
+}
+
+/// Read `MemAvailable` out of `/proc/meminfo`, in bytes.
+///
+/// `MemAvailable` rather than `MemFree`: the kernel's own estimate of what a new
+/// allocation can take already excludes the reclaimable page cache, which on a
+/// busy extraction host is most of the memory `MemFree` reports as gone.
+#[cfg(target_os = "linux")]
+fn parse_mem_available_bytes(contents: &str) -> Option<u64> {
+    let value = contents
+        .lines()
+        .find_map(|line| line.strip_prefix("MemAvailable:"))?
+        .split_whitespace()
+        .next()?
+        .parse::<u64>()
+        .ok()?;
+    value.checked_mul(1024)
+}
+
+/// macOS publishes no per-process headroom, so take half of physical memory.
+///
+/// Half rather than all: `hw.memsize` is what the machine has, not what is free,
+/// and the previous reader in the OCR batch sizer has used this same halving
+/// since it was written. Keeping the figure identical means moving that caller
+/// onto this reader does not change what it decides on a Mac. ~keep
+#[cfg(target_os = "macos")]
+fn read_available_memory_bytes() -> Option<u64> {
+    let output = std::process::Command::new("sysctl")
+        .args(["-n", "hw.memsize"])
+        .output()
+        .ok()?;
+    let total: u64 = std::str::from_utf8(&output.stdout).ok()?.trim().parse().ok()?;
+    (total > 0).then_some(total / 2)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+fn read_available_memory_bytes() -> Option<u64> {
+    None
+}
+
+/// Guard for [`warn_recognition_memory_clamp_once`], as [`DEFAULT_CAP_WARNED`].
+static MEMORY_CLAMP_WARNED: AtomicBool = AtomicBool::new(false);
+
+/// Say so when memory, not the thread budget, is what bounds recognition.
+///
+/// The sibling `resolve_thread_budget` warns once when its own ceiling binds.
+/// Without this, a host budgeted 32 threads that runs 6 recognition sessions
+/// looks like the fixed-four defect all over again, and nothing in the log
+/// distinguishes "capped by memory" from "the budget was never applied".
+fn warn_recognition_memory_clamp_once(already_warned: &AtomicBool, sessions: usize, thread_budget: usize) {
+    if already_warned
+        .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+        .is_ok()
+    {
+        tracing::warn!(
+            sessions,
+            thread_budget,
+            session_reserve_mb = TESSERACT_SESSION_MEMORY_BYTES / (1024 * 1024),
+            "free memory holds fewer concurrent OCR recognition sessions than the thread budget, \
+             so recognition runs narrower than the configured budget; raise the memory available \
+             to the process or set max_concurrent_ocr explicitly to silence this"
+        );
+    }
+}
+
+/// Resolve how many Tesseract recognition sessions may run at once.
+///
+/// An explicit `max_concurrent_ocr` wins outright: it is floored at one and
+/// nothing else reduces it, the same way an explicit `max_threads` wins over
+/// [`DEFAULT_THREAD_CAP`] in the sibling resolver. Clamping it to the thread
+/// budget would put the caller back where this change found them, with a
+/// number they set and a limit that ignores it. ~keep
+///
+/// Otherwise recognition follows the general thread budget, bounded by the
+/// number of sessions the available memory holds — see
+/// [`TESSERACT_SESSION_MEMORY_BYTES`] for the per-session cost this divides by.
+///
+/// Named for recognition rather than for OCR at large: `resolve_ocr_concurrency`
+/// was the VLM-concurrency function removed under GH#1465, and a doc comment in
+/// `extraction::image_ocr` still describes that one by name. ~keep
+pub(crate) fn resolve_recognition_concurrency(config: Option<&ConcurrencyConfig>) -> usize {
+    resolve_recognition_concurrency_with_guard(
+        config,
+        resolve_thread_budget(config),
+        available_memory_bytes(),
+        &MEMORY_CLAMP_WARNED,
+    )
+}
+
+/// Pure core of [`resolve_recognition_concurrency`], parameterized on the thread
+/// budget, the available memory and the warning guard so tests cover every
+/// branch on any machine without touching the process-global guard.
+fn resolve_recognition_concurrency_with_guard(
+    config: Option<&ConcurrencyConfig>,
+    thread_budget: usize,
+    available_memory: Option<u64>,
+    already_warned: &AtomicBool,
+) -> usize {
+    if let Some(requested) = config.and_then(|c| c.max_concurrent_ocr) {
+        return requested.max(1);
+    }
+    let Some(bytes) = available_memory else {
+        return thread_budget.max(1);
+    };
+    let memory_bound = usize::try_from(bytes / TESSERACT_SESSION_MEMORY_BYTES).unwrap_or(usize::MAX);
+    let sessions = thread_budget.min(memory_bound).max(1);
+    if sessions < thread_budget {
+        warn_recognition_memory_clamp_once(already_warned, sessions, thread_budget);
+    }
+    sessions
+}
+
+/// Recognition sessions this process allows, fixed when the pools were initialized.
+///
+/// [`init_thread_pools`] is the one writer, so the admission semaphore in the
+/// Tesseract backend and the handle pool behind it read a number no later
+/// extraction can move. Reading never writes: an accessor that latched on first
+/// read would install the automatic limit for whichever caller ran before
+/// initialization and leave the configured value unreachable, which is the same
+/// silently-ignored setting this change exists to remove. Before initialization
+/// it resolves to the automatic limit, exactly as `active_thread_budget` does,
+/// and the zero the static starts at is the "not initialized yet" sentinel
+/// rather than a session count. ~keep
+#[cfg(feature = "ocr")]
+pub(crate) fn recognition_concurrency() -> usize {
+    match ACTIVE_RECOGNITION_CONCURRENCY.load(Ordering::Relaxed) {
+        0 => resolve_recognition_concurrency(None),
+        sessions => sessions,
+    }
+}
+
 /// Resolve the effective thread budget from config or auto-detection.
 ///
 /// User-set `max_threads` takes priority. Otherwise auto-detects from
@@ -174,7 +430,7 @@ fn quota_period_to_cores(quota: f64, period: f64) -> Option<usize> {
 /// use xberg::core::config::ConcurrencyConfig;
 /// use xberg::core::config::concurrency::resolve_thread_budget;
 ///
-/// let config = ConcurrencyConfig { max_threads: Some(4) };
+/// let config = ConcurrencyConfig { max_threads: Some(4), max_concurrent_ocr: None };
 /// assert_eq!(resolve_thread_budget(Some(&config)), 4);
 /// assert!(resolve_thread_budget(None) >= 1);
 /// ```
@@ -340,22 +596,96 @@ pub(crate) fn resolve_batch_concurrency(config: Option<&ConcurrencyConfig>, mode
     (cores / budget).max(1).min(budget)
 }
 
-/// Initialize the global Rayon thread pool with the given budget.
+/// Guard for [`warn_recognition_limit_latched_once`], as [`DEFAULT_CAP_WARNED`].
+static RECOGNITION_LATCH_WARNED: AtomicBool = AtomicBool::new(false);
+
+/// Say so when a later extraction names a recognition limit the process has
+/// already fixed.
 ///
-/// Safe to call multiple times — only the first call takes effect (subsequent
-/// calls are silently ignored).
+/// The limit cannot follow the second caller, for the reason given on
+/// [`ConcurrencyConfig::max_concurrent_ocr`]. Discarding the value in silence
+/// is the defect this change removes everywhere else, so the one case that
+/// survives says so in the log. ~keep
+fn warn_recognition_limit_latched_once(already_warned: &AtomicBool, requested: usize, active: usize) {
+    if already_warned
+        .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+        .is_ok()
+    {
+        tracing::warn!(
+            requested,
+            active,
+            "an earlier extraction in this process already fixed the concurrent OCR recognition \
+             limit, so this max_concurrent_ocr is not applied; set it on the first extraction, or \
+             run one process per value"
+        );
+    }
+}
+
+/// The process-wide limits [`init_thread_pools`] installs, and the guard for
+/// the warning a later extraction gets.
+///
+/// The cells are borrowed rather than read from the statics directly so a test
+/// can own a whole set. Asserting against the globals is not merely racy but
+/// unfixably so: whichever test in the binary runs an extraction first trips
+/// [`POOL_INIT`], and `#[serial]` cannot help because it only excludes other
+/// `#[serial]` tests. That is the constraint [`DEFAULT_CAP_WARNED`] already
+/// documents for its own guard. ~keep
+struct ActiveLimits<'a> {
+    once: &'a Once,
+    thread_budget: &'a AtomicUsize,
+    recognition: &'a AtomicUsize,
+    latch_warned: &'a AtomicBool,
+}
+
+impl ActiveLimits<'_> {
+    /// Store the resolved budgets, once, and report whether this call stored
+    /// them. A later call keeps the installed values and warns when it asked
+    /// for a different recognition limit.
+    fn install(&self, config: Option<&ConcurrencyConfig>, budget: usize) -> bool {
+        let mut installed = false;
+        self.once.call_once(|| {
+            installed = true;
+            self.thread_budget.store(budget.max(1), Ordering::Relaxed);
+            self.recognition
+                .store(resolve_recognition_concurrency(config).max(1), Ordering::Relaxed);
+        });
+        if !installed && let Some(requested) = config.and_then(|c| c.max_concurrent_ocr).map(|value| value.max(1)) {
+            let active = self.recognition.load(Ordering::Relaxed);
+            if requested != active {
+                warn_recognition_limit_latched_once(self.latch_warned, requested, active);
+            }
+        }
+        installed
+    }
+}
+
+/// Initialize the process-wide CPU pools from `config` and return the budget.
+///
+/// Sizes the global Rayon pool and fixes the recognition-session limit that
+/// [`recognition_concurrency`] reports. Safe to call multiple times — only the first
+/// call takes effect, so a later extraction with a different `max_threads` or
+/// `max_concurrent_ocr` reads back the values the first one installed. See
+/// [`ConcurrencyConfig::max_concurrent_ocr`] for why the recognition limit
+/// cannot follow a later extraction.
 ///
 /// # Example
 ///
 /// ```ignore
+/// use xberg::core::config::ConcurrencyConfig;
 /// use xberg::core::config::concurrency::init_thread_pools;
 ///
-/// init_thread_pools(4);
-/// init_thread_pools(2); // no-op: pool already initialized
+/// let config = ConcurrencyConfig { max_threads: Some(4), ..Default::default() };
+/// assert_eq!(init_thread_pools(Some(&config)), 4);
 /// ```
-pub(crate) fn init_thread_pools(budget: usize) {
-    POOL_INIT.call_once(|| {
-        ACTIVE_THREAD_BUDGET.store(budget.max(1), Ordering::Relaxed);
+pub(crate) fn init_thread_pools(config: Option<&ConcurrencyConfig>) -> usize {
+    let budget = resolve_thread_budget(config);
+    let limits = ActiveLimits {
+        once: &POOL_INIT,
+        thread_budget: &ACTIVE_THREAD_BUDGET,
+        recognition: &ACTIVE_RECOGNITION_CONCURRENCY,
+        latch_warned: &RECOGNITION_LATCH_WARNED,
+    };
+    if limits.install(config, budget) {
         #[cfg(not(target_arch = "wasm32"))]
         if let Err(_err) = rayon::ThreadPoolBuilder::new().num_threads(budget).build_global() {
             tracing::debug!(
@@ -364,9 +694,8 @@ pub(crate) fn init_thread_pools(budget: usize) {
                  (xberg thread budget not applied)"
             );
         }
-        #[cfg(target_arch = "wasm32")]
-        let _ = budget;
-    });
+    }
+    budget
 }
 
 /// Return the process thread budget selected when the shared pools were initialized.
@@ -379,18 +708,6 @@ pub(crate) fn active_thread_budget() -> usize {
         0 => resolve_thread_budget(None),
         budget => budget,
     }
-}
-
-/// Initialize process-wide CPU pools from the total batch budget.
-///
-/// Batch workers receive a divided per-document budget, but Rayon is global and
-/// immutable after first initialization. It must therefore be initialized before
-/// any worker observes its smaller share.
-#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-pub(crate) fn init_batch_thread_pool(config: Option<&ConcurrencyConfig>) -> usize {
-    let total_budget = resolve_thread_budget(config);
-    init_thread_pools(total_budget);
-    total_budget
 }
 
 #[cfg(test)]
@@ -409,7 +726,10 @@ mod tests {
             max_concurrency: Some(3),
             ..Default::default()
         };
-        let general = ConcurrencyConfig { max_threads: Some(12) };
+        let general = ConcurrencyConfig {
+            max_threads: Some(12),
+            max_concurrent_ocr: None,
+        };
 
         assert_eq!(resolve_llm_concurrency(&llm, Some(&general)), 3);
     }
@@ -418,7 +738,10 @@ mod tests {
     #[test]
     fn llm_concurrency_falls_back_to_general_thread_budget() {
         let llm = crate::core::config::LlmConfig::default();
-        let general = ConcurrencyConfig { max_threads: Some(5) };
+        let general = ConcurrencyConfig {
+            max_threads: Some(5),
+            max_concurrent_ocr: None,
+        };
 
         assert_eq!(resolve_llm_concurrency(&llm, Some(&general)), 5);
     }
@@ -476,14 +799,20 @@ mod tests {
 
     #[test]
     fn test_inner_explicit_max_threads_wins_over_host_cpus_and_quota() {
-        let config = ConcurrencyConfig { max_threads: Some(20) };
+        let config = ConcurrencyConfig {
+            max_threads: Some(20),
+            max_concurrent_ocr: None,
+        };
         assert_eq!(resolve_thread_budget_inner(Some(&config), 4, Some(2)), 20);
         assert_eq!(resolve_thread_budget_inner(Some(&config), 64, None), 20);
     }
 
     #[test]
     fn test_inner_explicit_max_threads_of_zero_clamps_to_one() {
-        let config = ConcurrencyConfig { max_threads: Some(0) };
+        let config = ConcurrencyConfig {
+            max_threads: Some(0),
+            max_concurrent_ocr: None,
+        };
         assert_eq!(resolve_thread_budget_inner(Some(&config), 16, None), 1);
     }
 
@@ -546,7 +875,10 @@ mod tests {
             .with(capture.clone());
 
         tracing::subscriber::with_default(subscriber, || {
-            let config = ConcurrencyConfig { max_threads: Some(4) };
+            let config = ConcurrencyConfig {
+                max_threads: Some(4),
+                max_concurrent_ocr: None,
+            };
             resolve_thread_budget_with_guard(Some(&config), 16, None, &already_warned)
         });
 
@@ -588,13 +920,19 @@ mod tests {
 
     #[test]
     fn test_resolve_thread_budget_with_config() {
-        let config = ConcurrencyConfig { max_threads: Some(4) };
+        let config = ConcurrencyConfig {
+            max_threads: Some(4),
+            max_concurrent_ocr: None,
+        };
         assert_eq!(resolve_thread_budget(Some(&config)), 4);
     }
 
     #[test]
     fn test_resolve_thread_budget_clamps_to_one() {
-        let config = ConcurrencyConfig { max_threads: Some(0) };
+        let config = ConcurrencyConfig {
+            max_threads: Some(0),
+            max_concurrent_ocr: None,
+        };
         assert_eq!(resolve_thread_budget(Some(&config)), 1);
     }
 
@@ -602,7 +940,10 @@ mod tests {
     /// against an injected core count for the same reason.
     #[test]
     fn test_resolve_thread_budget_no_max() {
-        let config = ConcurrencyConfig { max_threads: None };
+        let config = ConcurrencyConfig {
+            max_threads: None,
+            max_concurrent_ocr: None,
+        };
         assert_eq!(resolve_thread_budget_inner(Some(&config), 16, None), 8);
         let budget = resolve_thread_budget(Some(&config));
         assert!(budget >= 1, "the host always gets at least one thread");
@@ -627,6 +968,7 @@ mod tests {
         for budget in [1, 2, 4, 8] {
             let config = ConcurrencyConfig {
                 max_threads: Some(budget),
+                max_concurrent_ocr: None,
             };
             assert_eq!(
                 resolve_batch_execution_plan(Some(&config), LayoutBatchWorkload::All, 16, None),
@@ -644,6 +986,7 @@ mod tests {
         for (budget, workers, thread_budget) in [(1, 1, 1), (2, 2, 1), (4, 2, 2), (8, 2, 4)] {
             let config = ConcurrencyConfig {
                 max_threads: Some(budget),
+                max_concurrent_ocr: None,
             };
             assert_eq!(
                 resolve_batch_execution_plan(Some(&config), LayoutBatchWorkload::Mixed, 16, None),
@@ -655,7 +998,10 @@ mod tests {
     #[test]
     #[cfg(all(not(target_arch = "wasm32"), layout_detection))]
     fn test_layout_batch_plan_respects_input_and_explicit_limits() {
-        let config = ConcurrencyConfig { max_threads: Some(8) };
+        let config = ConcurrencyConfig {
+            max_threads: Some(8),
+            max_concurrent_ocr: None,
+        };
         assert_eq!(
             resolve_batch_execution_plan(Some(&config), LayoutBatchWorkload::All, 1, Some(8)),
             BatchExecutionPlan {
@@ -675,7 +1021,10 @@ mod tests {
     #[test]
     #[cfg(not(target_arch = "wasm32"))]
     fn test_non_layout_batch_plan_divides_budget_at_explicit_worker_limit() {
-        let config = ConcurrencyConfig { max_threads: Some(8) };
+        let config = ConcurrencyConfig {
+            max_threads: Some(8),
+            max_concurrent_ocr: None,
+        };
         let plan = resolve_batch_execution_plan(Some(&config), LayoutBatchWorkload::None, 16, Some(2));
         assert_eq!(plan.workers, 2);
         assert_eq!(plan.thread_budget, 4);
@@ -684,7 +1033,10 @@ mod tests {
     #[test]
     #[cfg(not(target_arch = "wasm32"))]
     fn test_non_layout_batch_plan_clamps_explicit_limit_to_total_budget() {
-        let config = ConcurrencyConfig { max_threads: Some(2) };
+        let config = ConcurrencyConfig {
+            max_threads: Some(2),
+            max_concurrent_ocr: None,
+        };
         let plan = resolve_batch_execution_plan(Some(&config), LayoutBatchWorkload::None, 8, Some(6));
         assert_eq!(plan.workers, 2);
         assert_eq!(plan.thread_budget, 1);
@@ -693,7 +1045,10 @@ mod tests {
     #[test]
     #[cfg(not(target_arch = "wasm32"))]
     fn test_non_layout_batch_plan_gives_single_input_full_inner_budget() {
-        let config = ConcurrencyConfig { max_threads: Some(8) };
+        let config = ConcurrencyConfig {
+            max_threads: Some(8),
+            max_concurrent_ocr: None,
+        };
         let plan = resolve_batch_execution_plan(Some(&config), LayoutBatchWorkload::None, 1, None);
         assert_eq!(plan.workers, 1);
         assert_eq!(plan.thread_budget, 8);
@@ -705,6 +1060,7 @@ mod tests {
         for total_budget in 1..=8 {
             let config = ConcurrencyConfig {
                 max_threads: Some(total_budget),
+                max_concurrent_ocr: None,
             };
             for input_count in 0..=12 {
                 for max_concurrent in [None, Some(0), Some(1), Some(3), Some(16)] {
@@ -731,17 +1087,300 @@ mod tests {
         }
     }
 
+    // -- Recognition concurrency -------------------------------------------
+    //
+    // Injected budget and memory for the same reason as the thread-budget
+    // pinning above: the real values move with the machine running the tests.
+
+    const GIB: u64 = 1024 * 1024 * 1024;
+
+    /// Memory for sixty-four sessions, so only the budget under test binds.
+    const AMPLE_MEMORY: u64 = 64 * TESSERACT_SESSION_MEMORY_BYTES;
+
+    /// Resolve against a warning guard this call owns, for the reason given on
+    /// [`warn_default_thread_cap_once`]: a process-global guard is tripped by
+    /// whichever test in the binary ran first.
+    fn recognition_sessions(
+        config: Option<&ConcurrencyConfig>,
+        thread_budget: usize,
+        available_memory: Option<u64>,
+    ) -> usize {
+        resolve_recognition_concurrency_with_guard(config, thread_budget, available_memory, &AtomicBool::new(false))
+    }
+
+    /// The clamp is reported, not silent. A budget of 32 that runs 6 sessions
+    /// otherwise looks exactly like the fixed-four defect this change removes.
     #[test]
-    fn test_init_thread_pools_idempotent() {
-        init_thread_pools(2);
-        init_thread_pools(4);
+    #[serial_test::serial]
+    fn test_recognition_memory_clamp_warning_fires_exactly_once() {
+        let already_warned = AtomicBool::new(false);
+        let capture = EventCapture::default();
+        let subscriber = tracing_subscriber::registry()
+            .with(EnvFilter::new("warn"))
+            .with(capture.clone());
+
+        tracing::subscriber::with_default(subscriber, || {
+            let six_sessions = Some(6 * TESSERACT_SESSION_MEMORY_BYTES);
+            for _ in 0..5 {
+                assert_eq!(
+                    resolve_recognition_concurrency_with_guard(None, 32, six_sessions, &already_warned),
+                    6
+                );
+            }
+        });
+
+        assert_eq!(
+            warn_event_count(&capture),
+            1,
+            "expected exactly one WARN event across repeated calls, got {:?}",
+            capture.levels.lock().unwrap()
+        );
+    }
+
+    /// A budget the memory can feed is not a clamp, and neither is an absent
+    /// reading, so both stay silent.
+    #[test]
+    #[serial_test::serial]
+    fn test_recognition_memory_clamp_warning_does_not_fire_when_memory_does_not_bind() {
+        let already_warned = AtomicBool::new(false);
+        let capture = EventCapture::default();
+        let subscriber = tracing_subscriber::registry()
+            .with(EnvFilter::new("warn"))
+            .with(capture.clone());
+
+        tracing::subscriber::with_default(subscriber, || {
+            resolve_recognition_concurrency_with_guard(None, 8, Some(AMPLE_MEMORY), &already_warned);
+            resolve_recognition_concurrency_with_guard(None, 8, None, &already_warned);
+            let config = ConcurrencyConfig {
+                max_threads: Some(32),
+                max_concurrent_ocr: Some(2),
+            };
+            resolve_recognition_concurrency_with_guard(Some(&config), 32, Some(GIB), &already_warned);
+        });
+
+        assert_eq!(warn_event_count(&capture), 0);
+    }
+
+    /// The historical four is gone: recognition follows the thread budget.
+    #[test]
+    fn test_ocr_concurrency_follows_the_thread_budget() {
+        assert_eq!(recognition_sessions(None, 8, Some(AMPLE_MEMORY)), 8);
+        assert_eq!(recognition_sessions(None, 32, Some(AMPLE_MEMORY)), 32);
+        assert_eq!(recognition_sessions(None, 2, Some(AMPLE_MEMORY)), 2);
     }
 
     #[test]
-    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-    fn test_batch_thread_pool_uses_total_configured_budget() {
-        let config = ConcurrencyConfig { max_threads: Some(7) };
-        assert_eq!(init_batch_thread_pool(Some(&config)), 7);
+    fn test_ocr_concurrency_takes_the_configured_limit_over_the_budget() {
+        let config = ConcurrencyConfig {
+            max_threads: Some(32),
+            max_concurrent_ocr: Some(4),
+        };
+        assert_eq!(recognition_sessions(Some(&config), 32, Some(AMPLE_MEMORY)), 4);
+        assert_eq!(recognition_sessions(Some(&config), 2, None), 4);
+    }
+
+    #[test]
+    fn test_ocr_concurrency_clamps_a_configured_zero_to_one() {
+        let config = ConcurrencyConfig {
+            max_threads: None,
+            max_concurrent_ocr: Some(0),
+        };
+        assert_eq!(recognition_sessions(Some(&config), 32, Some(AMPLE_MEMORY)), 1);
+    }
+
+    /// Cores the memory cannot feed are not sessions. Without this a container
+    /// with a wide CPU quota and a narrow memory limit is killed rather than
+    /// slowed.
+    #[test]
+    fn test_ocr_concurrency_never_exceeds_what_memory_holds() {
+        let session = TESSERACT_SESSION_MEMORY_BYTES;
+        assert_eq!(recognition_sessions(None, 32, Some(6 * session)), 6);
+        assert_eq!(recognition_sessions(None, 32, Some(session / 8)), 1);
+        assert_eq!(recognition_sessions(None, 4, Some(64 * session)), 4);
+    }
+
+    /// No reading is not a reading of zero: platforms that report no memory
+    /// limit keep the budget, the way a missing cgroup CPU quota does.
+    #[test]
+    fn test_ocr_concurrency_without_a_memory_reading_follows_the_budget() {
+        assert_eq!(recognition_sessions(None, 8, None), 8);
+    }
+
+    #[test]
+    fn test_ocr_concurrency_reads_the_real_host() {
+        assert!(
+            resolve_recognition_concurrency(None) >= 1,
+            "the host always gets one session"
+        );
+    }
+
+    /// The defect: recognition stayed four wide however many threads the host
+    /// was budgeted. Both the budget and the memory reading are injected, so the
+    /// assertion is about the resolver rather than about the runner. Reading the
+    /// real host instead failed on any machine with more than four cores and
+    /// under about 2.5 GiB free, and passed for the wrong reason on a runner
+    /// budgeted four or fewer.
+    #[test]
+    fn test_ocr_concurrency_is_not_pinned_to_four_on_a_many_core_host() {
+        for budget in [5, 32] {
+            let sessions = recognition_sessions(None, budget, Some(AMPLE_MEMORY));
+            assert!(
+                sessions > 4,
+                "recognition admits {sessions} sessions on a host budgeted {budget} threads"
+            );
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_cgroup_headroom_reads_both_unlimited_spellings_as_no_limit() {
+        assert_eq!(parse_cgroup_headroom("max\n", "1024\n"), None);
+        assert_eq!(parse_cgroup_headroom("9223372036854771712\n", "1024\n"), None);
+        assert_eq!(parse_cgroup_headroom("0\n", "1024\n"), None);
+    }
+
+    /// The limit is not the headroom. A cgroup already holding most of its
+    /// allowance grants what is left, not what it was given -- sizing sessions
+    /// against the limit is how the process gets killed rather than slowed.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_cgroup_headroom_subtracts_current_usage_from_the_limit() {
+        assert_eq!(parse_cgroup_headroom("2147483648\n", "0\n"), Some(2 * GIB));
+        assert_eq!(parse_cgroup_headroom("8589934592\n", "6442450944\n"), Some(2 * GIB));
+        assert_eq!(parse_cgroup_headroom("2147483648\n", "4294967296\n"), Some(0));
+        assert_eq!(parse_cgroup_headroom("2147483648\n", "not-a-number\n"), None);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_mem_available_is_read_in_kilobytes() {
+        let meminfo = "MemTotal:       65787528 kB\nMemFree:          262144 kB\nMemAvailable:    1048576 kB\n";
+        assert_eq!(parse_mem_available_bytes(meminfo), Some(GIB));
+        assert_eq!(parse_mem_available_bytes("MemTotal: 65787528 kB\n"), None);
+    }
+
+    /// The documented contract for a second extraction, and the line that
+    /// keeps it from being silent. The first extraction fixes the recognition
+    /// limit, because the limiters that enforce it are built once per process;
+    /// a later extraction that names a different value keeps the first one and
+    /// says so exactly once. The latch cells belong to this test, so the
+    /// assertion is about the installer rather than about whichever test in
+    /// the binary ran first.
+    ///
+    /// One test rather than two: `tracing` caches a callsite's interest the
+    /// first time it is reached, so a sibling test that reached this warning
+    /// outside a capturing subscriber left the event unrecorded here for the
+    /// rest of the process. Measured — it passed alone and under
+    /// `--test-threads=1`, and failed in parallel. ~keep
+    #[test]
+    #[serial_test::serial]
+    fn a_second_extraction_keeps_the_first_recognition_limit_and_says_so() {
+        let once = Once::new();
+        let thread_budget = AtomicUsize::new(0);
+        let recognition = AtomicUsize::new(0);
+        let latch_warned = AtomicBool::new(false);
+        let limits = ActiveLimits {
+            once: &once,
+            thread_budget: &thread_budget,
+            recognition: &recognition,
+            latch_warned: &latch_warned,
+        };
+        let first = ConcurrencyConfig {
+            max_threads: Some(8),
+            max_concurrent_ocr: Some(3),
+        };
+        let second = ConcurrencyConfig {
+            max_threads: Some(8),
+            max_concurrent_ocr: Some(16),
+        };
+        let capture = EventCapture::default();
+        let subscriber = tracing_subscriber::registry()
+            .with(EnvFilter::new("warn"))
+            .with(capture.clone());
+
+        tracing::subscriber::with_default(subscriber, || {
+            assert!(limits.install(Some(&first), 8), "the first call installs the limits");
+            assert_eq!(recognition.load(Ordering::Relaxed), 3);
+            assert_eq!(warn_event_count(&capture), 0, "the first extraction loses nothing");
+
+            for _ in 0..3 {
+                assert!(!limits.install(Some(&second), 8), "a later call installs nothing");
+            }
+            assert_eq!(
+                recognition.load(Ordering::Relaxed),
+                3,
+                "the second extraction's max_concurrent_ocr must not move the fixed limit"
+            );
+
+            limits.install(Some(&first), 8);
+        });
+
+        assert!(
+            latch_warned.load(Ordering::Relaxed),
+            "the discarded value must trip the warning guard"
+        );
+        assert_eq!(
+            warn_event_count(&capture),
+            1,
+            "expected exactly one WARN across repeated calls, got {:?}",
+            capture.levels.lock().unwrap()
+        );
+    }
+
+    /// The memory reader must stay uncached. A latch here sizes every later
+    /// document in a long-lived process from whatever was free during the
+    /// first extraction, which is the server regression this branch removed;
+    /// nothing else in the suite fails when it comes back. The reader's own
+    /// input is the host, so the instrument is the source rather than a
+    /// reading. ~keep
+    #[test]
+    fn the_available_memory_reader_carries_no_cache() {
+        const SOURCE: &str = include_str!("concurrency.rs");
+        const SIGNATURE: &str = "pub(crate) fn available_memory_bytes() -> Option<u64> {";
+
+        let body = SOURCE
+            .split_once(SIGNATURE)
+            .expect("the memory reader's signature moved; update this guard")
+            .1
+            .split_once("\n}")
+            .expect("the memory reader's body is unterminated")
+            .0;
+        assert!(
+            body.contains("read_available_memory_bytes"),
+            "positive control: the guard no longer reads the reader's body, it read {body:?}"
+        );
+        for latch in ["OnceLock", "OnceCell", "LazyLock", "Lazy", "get_or_init", "static"] {
+            assert!(
+                !body.contains(latch),
+                "available_memory_bytes caches its reading through `{latch}`; \
+                 the OCR batch sizer must read free memory afresh for every document"
+            );
+        }
+    }
+
+    /// Only the first call installs the pools, but every call reports the
+    /// budget its own config asks for.
+    #[test]
+    fn test_init_thread_pools_idempotent() {
+        let two = ConcurrencyConfig {
+            max_threads: Some(2),
+            max_concurrent_ocr: None,
+        };
+        let four = ConcurrencyConfig {
+            max_threads: Some(4),
+            max_concurrent_ocr: None,
+        };
+        assert_eq!(init_thread_pools(Some(&two)), 2);
+        assert_eq!(init_thread_pools(Some(&four)), 4);
+    }
+
+    #[test]
+    fn test_init_thread_pools_uses_total_configured_budget() {
+        let config = ConcurrencyConfig {
+            max_threads: Some(7),
+            max_concurrent_ocr: None,
+        };
+        assert_eq!(init_thread_pools(Some(&config)), 7);
     }
 
     #[test]

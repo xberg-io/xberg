@@ -6,9 +6,23 @@ use std::sync::{Arc, Condvar, Mutex};
 use crate::ocr::error::OcrError;
 use xberg_tesseract::TesseractAPI;
 
-/// Empirical sweet spot: four workers delivered 8.43 docs/s while eight
-/// regressed to 6.08 docs/s and raised peak RSS to 3.65 GB.
-pub(crate) const MAX_TESSERACT_APIS: usize = 4;
+/// Recognition sessions this process runs at once.
+///
+/// Two limiters enforce it: the admission semaphore in
+/// [`crate::ocr::tesseract_backend::TesseractBackend`], which holds async callers
+/// back before they reach a blocking thread, and the capacity of the handle pool
+/// below. They read the number here rather than each deriving it, and thread
+/// pool initialization fixes it before either can be built, so no ordering
+/// between the two can give them different limits.
+///
+/// `ConcurrencyConfig::max_concurrent_ocr` sets it; see
+/// [`crate::core::config::concurrency::resolve_recognition_concurrency`] for the default.
+pub(crate) fn tesseract_api_capacity() -> usize {
+    // No cache here. `recognition_concurrency` is already a single atomic load of
+    // a value only pool initialization writes, and a cache in front of it would
+    // pin whatever this module happened to read first. ~keep
+    crate::core::config::concurrency::recognition_concurrency()
+}
 
 #[derive(Clone, PartialEq, Eq)]
 struct ApiKey {
@@ -80,6 +94,11 @@ impl<K: PartialEq, V> ResourcePool<K, V> {
         }
         drop(state);
         self.available.notify_one();
+    }
+
+    #[cfg(test)]
+    fn capacity(&self) -> usize {
+        self.capacity
     }
 
     #[cfg(test)]
@@ -216,8 +235,13 @@ pub(super) struct TesseractApiPool {
 impl TesseractApiPool {
     pub(super) fn new() -> Arc<Self> {
         Arc::new(Self {
-            resources: ResourcePool::new(MAX_TESSERACT_APIS),
+            resources: ResourcePool::new(tesseract_api_capacity()),
         })
+    }
+
+    #[cfg(test)]
+    pub(super) fn capacity(&self) -> usize {
+        self.resources.capacity()
     }
 
     pub(super) fn checkout(

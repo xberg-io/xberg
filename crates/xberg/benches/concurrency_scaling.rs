@@ -145,6 +145,7 @@ fn extraction_config(max_threads: usize, layout_active: bool) -> ExtractionConfi
         disable_ocr: true,
         concurrency: Some(ConcurrencyConfig {
             max_threads: Some(max_threads),
+            max_concurrent_ocr: None,
         }),
         layout: layout_active.then(|| LayoutDetectionConfig {
             acceleration: Some(AccelerationConfig {

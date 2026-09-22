@@ -387,7 +387,10 @@ async fn extract_batch_concurrent(
         return Ok(output);
     }
 
-    crate::core::config::concurrency::init_batch_thread_pool(config.concurrency.as_ref());
+    // Batch workers each receive a divided per-document budget, but Rayon is global and
+    // immutable after first initialization, so the pools take the whole batch budget here
+    // rather than the smaller share the first worker to start would otherwise install.
+    crate::core::config::concurrency::init_thread_pools(config.concurrency.as_ref());
     let base_config = Arc::new(config.clone());
     let mut pending: VecDeque<PendingBatchItem> = VecDeque::with_capacity(input_count);
 
@@ -1086,8 +1089,13 @@ fn resolve_batch_input_config(
 
     let mut resolved = Arc::unwrap_or_clone(resolved);
     if needs_thread_budget {
+        // Only the thread budget is divided across batch workers. A caller's
+        // `max_concurrent_ocr` is a memory bound on the host, not a per-document
+        // share, so it survives the rewrite; rebuilding the struct from scratch
+        // silently dropped it. ~keep
         resolved.concurrency = Some(crate::core::config::ConcurrencyConfig {
             max_threads: Some(thread_budget),
+            ..resolved.concurrency.unwrap_or_default()
         });
     }
     resolved.ensure_cancel_token();
@@ -1101,8 +1109,10 @@ fn resolve_batch_base_config(base_config: &Arc<ExtractionConfig>, thread_budget:
     }
 
     let mut resolved = (**base_config).clone();
+    // As in `resolve_batch_input_config`: divide the thread budget, carry the rest. ~keep
     resolved.concurrency = Some(crate::core::config::ConcurrencyConfig {
         max_threads: Some(thread_budget),
+        ..resolved.concurrency.unwrap_or_default()
     });
     Arc::new(resolved)
 }
