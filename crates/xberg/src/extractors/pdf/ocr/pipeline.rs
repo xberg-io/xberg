@@ -247,32 +247,41 @@ pub(crate) async fn extract_mixed_ocr_native(
     }
 
     let configured_batch_size = crate::core::config::concurrency::resolve_thread_budget(config.concurrency.as_ref());
-    // The thread budget alone has no notion of `max_content_size`: a wider budget requests
-    // a wider render batch, and `validate_png_encode_batch_peak` below rejects the WHOLE
-    // batch once its estimated peak crosses that fixed byte ceiling, silently skipping every
-    // page in it rather than the extraction failing (issue #1665). Cap the batch by the same
-    // ceiling before rendering, using the first candidate page as this batch's representative
-    // size -- real documents are near-uniform in page size, and a wrong estimate only shifts
-    // the boundary, because `validate_png_encode_batch_peak` still checks the real peak
-    // afterward regardless of this estimate. ~keep
-    let default_security_limits_for_batch_sizing = crate::extractors::security::SecurityLimits::default();
-    let security_limits_for_batch_sizing = config
-        .security_limits
-        .as_ref()
-        .unwrap_or(&default_security_limits_for_batch_sizing);
+    // How many pages this route renders, encodes and recognises at once. `max_content_size`
+    // limits the text one extraction returns; it says nothing about the rasters a batch holds
+    // while it works. Sizing the batch from it pinned the width at four pages on an ordinary
+    // 150 DPI document, so no stage of this route could ever use more than four threads and
+    // the thread budget changed nothing (#1666, #1716).
+    //
+    // What a batch really costs is this document's own page cost times the batch width, so
+    // that product is what the width is bounded by, against the memory the host has free.
+    // Measuring the page rather than assuming a fixed per-page figure is what keeps the bound
+    // honest at a high render DPI, where one page costs an order of magnitude more than the
+    // assumption does. Each page's own peak is still checked against `max_content_size`, one
+    // page at a time, before that page is encoded. ~keep
     let batch_size = match page_indices.first() {
         Some(&first_page_idx) => {
             let (page_width_pt, page_height_pt) = page_dimensions_pt(&render_doc, first_page_idx);
-            adapt_batch_size_to_content_limit(
+            adapt_batch_size_to_memory(
                 configured_batch_size,
-                f64::from(page_width_pt),
-                f64::from(page_height_pt),
-                config.images.as_ref(),
-                security_limits_for_batch_sizing,
+                content.len(),
+                ocr_page_working_set_bytes(
+                    f64::from(page_width_pt),
+                    f64::from(page_height_pt),
+                    config.images.as_ref(),
+                ),
             )
+            .await
         }
         None => configured_batch_size,
     };
+    if batch_size < configured_batch_size {
+        tracing::info!(
+            configured = configured_batch_size,
+            adapted = batch_size,
+            "Reduced the per-page OCR batch to fit available memory"
+        );
+    }
 
     let capture_rasters = config.images.as_ref().is_some_and(|c| c.include_page_rasters);
     let ocr_config_owned = ensure_elements_enabled(&ocr_config_resolved);
@@ -609,11 +618,15 @@ pub(crate) async fn extract_mixed_ocr_native(
             if capture_rasters {
                 let default_security_limits = crate::extractors::security::SecurityLimits::default();
                 let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
-                validate_png_encode_batch_peak(
-                    page_images.iter().map(|(_, image)| image.as_ref()),
-                    false,
-                    security_limits,
-                )?;
+                // One page at a time, as on the single-backend path below. `max_content_size`
+                // bounds what a single page costs to render and encode; summing a whole batch
+                // against it makes that ceiling a function of the thread budget, so a Letter
+                // page at the 300 DPI an `images` config implies rejects the whole batch, and
+                // every page in it, from a width of two upwards. The batch's own footprint is
+                // bounded by `batch_size` above, which free memory decides. ~keep
+                for (_, image) in &page_images {
+                    validate_png_encode_batch_peak(std::iter::once(image.as_ref()), false, security_limits)?;
+                }
                 for (page_idx, image) in &page_images {
                     let rgb = clone_rgb_for_png_encode(image, security_limits)?;
                     let (w, h) = rgb.dimensions();
@@ -643,10 +656,14 @@ pub(crate) async fn extract_mixed_ocr_native(
         let batch_slice = &page_images;
         let default_security_limits = crate::extractors::security::SecurityLimits::default();
         let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
-        #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-        validate_png_encode_batch_peak(batch_slice.iter().map(|(_, image)| image), true, security_limits)?;
-        #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
-        validate_png_encode_batch_peak(batch_slice.iter().map(|(_, image)| image), false, security_limits)?;
+        // One page at a time. `max_content_size` bounds what a single page may cost to render
+        // and encode; summing a whole batch against it made that ceiling a function of the
+        // thread budget, so a wide batch rejected every page in it (#1665) and the narrow
+        // batch that hid the defect in #1666 was the workaround. The batch's own footprint is
+        // bounded by `batch_size` above, which free memory decides. ~keep
+        for (_, image) in batch_slice {
+            validate_png_encode_batch_peak(std::iter::once(image), false, security_limits)?;
+        }
 
         #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
         let encoded: crate::Result<Vec<EncodedPage>> = batch_slice
@@ -1405,7 +1422,12 @@ pub(super) async fn extract_with_ocr_for_page(
     let configured_batch_size = crate::core::config::concurrency::resolve_thread_budget(config.concurrency.as_ref());
 
     let batch_size = if images.is_none() {
-        adapt_batch_size_to_memory(configured_batch_size, content.map(|b| b.len()).unwrap_or(0))
+        adapt_batch_size_to_memory(
+            configured_batch_size,
+            content.map(|b| b.len()).unwrap_or(0),
+            UNMEASURED_OCR_PAGE_WORKING_SET_BYTES,
+        )
+        .await
     } else {
         configured_batch_size
     };
@@ -2537,33 +2559,130 @@ pub(crate) fn build_page_raster_image(
         data_base64: None,
     }
 }
-/// Shrink `configured` so the render batch's estimated PNG-encode-and-decode peak stays
-/// within `security_limits.max_content_size`, independent of the thread budget that
-/// produced `configured` (issue #1665).
+/// Adapt batch size to available system memory.
 ///
-/// This is a different ceiling from [`adapt_batch_size_to_memory`]'s: that one bounds the
-/// batch against the HOST's available RAM (a number `max_content_size` knows nothing
-/// about), so it does not shrink a batch that comfortably fits in a large machine's memory
-/// even when the SAME batch still trips the fixed, configured `max_content_size` byte
-/// limit that `validate_png_encode_batch_peak` checks after rendering. A wider thread
-/// budget requests a wider batch with no notion of that limit at all, so this must run
-/// regardless of how much memory is free.
+/// Estimates per-page memory cost based on typical page dimensions at 300 DPI
+/// and compares against available system memory. Returns a batch size that
+/// should keep peak memory within safe bounds.
 ///
-/// `page_width_pt`/`page_height_pt` are the batch's representative page (its `MediaBox`),
-/// used with the same effective render DPI `render_selected_pages_from_document` computes
-/// to estimate that one page's PNG-encode cost via [`estimate_png_encode_page_peak_bytes`],
-/// matching [`validate_png_encode_batch_peak`]'s own per-page accounting so the estimate
-/// and the later real check agree for a page of that size. A wrong estimate (a document
-/// whose pages vary widely in size) only shifts the batch boundary: the real peak is still
-/// checked, and still rejected if it is genuinely too large, by `validate_png_encode_batch_peak`
-/// afterward.
+/// Conservative estimate: each page in a batch needs approximately:
+/// - ~50MB for render + encode working set (RGB buffer briefly, then PNG)
+/// - ~100MB for OCR working set per concurrent page
+/// - Plus the document itself and base allocations
+///
+/// Both callers are `async fn`s on the OCR route, and reading free memory blocks: on Linux it
+/// reads `/proc/meminfo` and the cgroup files, and on macOS it spawns a `sysctl` child process
+/// and waits for it. Doing that on a runtime worker stalls every other task sharing the thread,
+/// so the read goes to the blocking pool and the result is awaited. A read that cannot be
+/// joined reports `None`, the same "could not tell" answer a failed query gives, which leaves
+/// the configured batch size alone.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-pub(super) fn adapt_batch_size_to_content_limit(
+pub(super) async fn adapt_batch_size_to_memory(
     configured: usize,
+    document_size: usize,
+    per_page_bytes: usize,
+) -> usize {
+    adapt_batch_size_to_memory_inner(
+        configured,
+        document_size,
+        per_page_bytes,
+        available_memory_off_executor().await,
+    )
+}
+
+/// Free memory, read without blocking the async executor.
+///
+/// `None` means the read could not tell. `Some(0)` means it did read the host and found no
+/// headroom, which is a different answer and sizes a different batch.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+async fn available_memory_off_executor() -> Option<usize> {
+    #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
+    {
+        let pinned = TEST_AVAILABLE_MEMORY.load(std::sync::atomic::Ordering::SeqCst);
+        if pinned != 0 {
+            return Some(pinned);
+        }
+    }
+
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    {
+        tokio::task::spawn_blocking(get_available_memory).await.ok().flatten()
+    }
+    #[cfg(not(all(feature = "tokio-runtime", not(target_arch = "wasm32"))))]
+    {
+        get_available_memory()
+    }
+}
+
+/// Free memory to report instead of reading the host, so a test that drives the whole route can
+/// pin the figure the batch width is computed from rather than asserting against whatever the
+/// machine running it happens to have free.
+///
+/// Zero means "not set". A test that wants to exercise a measured zero calls
+/// [`adapt_batch_size_to_memory_inner`] directly. It is process-wide, so every test that sets it
+/// is `#[serial]`.
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
+pub(super) static TEST_AVAILABLE_MEMORY: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Pure core of [`adapt_batch_size_to_memory`], parameterized on free memory so a test can
+/// exercise a constrained host whatever the machine running it reports.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(super) fn adapt_batch_size_to_memory_inner(
+    configured: usize,
+    document_size: usize,
+    per_page_bytes: usize,
+    available_bytes: Option<usize>,
+) -> usize {
+    // An unknown reading and a reading of zero are different answers. Unknown leaves the
+    // configured width alone, because nothing was measured to narrow it with. Zero was
+    // measured: the host has no headroom, so the batch carries one page. Spelling both as 0
+    // handed the widest batch to exactly the host with the least memory, and `memory.current`
+    // counts page cache, so a container reporting no headroom is routine. ~keep
+    let Some(available_bytes) = available_bytes else {
+        return configured;
+    };
+    if per_page_bytes == 0 {
+        return configured;
+    }
+
+    let reserved = document_size + 512 * 1024 * 1024;
+    let usable = available_bytes.saturating_sub(reserved);
+    let memory_limited_batch = (usable / per_page_bytes).max(1);
+    let result = configured.min(memory_limited_batch);
+
+    tracing::debug!(
+        available_mb = available_bytes / (1024 * 1024),
+        usable_mb = usable / (1024 * 1024),
+        document_mb = document_size / (1024 * 1024),
+        per_page_mb = per_page_bytes / (1024 * 1024),
+        memory_limited_batch,
+        configured,
+        result,
+        "OCR batch size adaptation"
+    );
+
+    result
+}
+
+/// What one page in flight costs when the caller does not yet know how big a page is.
+///
+/// The whole-document OCR route decides its batch width before it opens the document, so it
+/// has no page box to measure and falls back to this. Every caller that does know a page's
+/// size passes [`ocr_page_working_set_bytes`] instead: batch width is the only thing between
+/// a wide thread budget and the peak, so a figure that ignores page size and DPI
+/// under-reserves exactly on the documents where the peak matters.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(super) const UNMEASURED_OCR_PAGE_WORKING_SET_BYTES: usize = 150 * 1024 * 1024;
+
+/// One page's render-and-encode working set at the DPI this route renders it: the raster,
+/// the RGB clone the PNG encoder needs, and the PNG buffer, which is what a batch holds per
+/// page while it runs. Falls back to [`UNMEASURED_OCR_PAGE_WORKING_SET_BYTES`] when the
+/// dimensions overflow the estimate.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn ocr_page_working_set_bytes(
     page_width_pt: f64,
     page_height_pt: f64,
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
-    security_limits: &crate::extractors::security::SecurityLimits,
 ) -> usize {
     const PDF_POINTS_PER_INCH: f64 = 72.0;
 
@@ -2575,35 +2694,16 @@ pub(super) fn adapt_batch_size_to_content_limit(
         .round()
         .max(1.0) as u32;
 
-    let Ok(per_page_bytes) = estimate_png_encode_page_peak_bytes(width, height) else {
-        return configured;
-    };
-    if per_page_bytes == 0 {
-        return configured;
-    }
-
-    let content_limited_batch = ((security_limits.max_content_size as u64) / per_page_bytes).max(1) as usize;
-
-    let result = configured.min(content_limited_batch);
-
-    tracing::debug!(
-        render_dpi,
-        width,
-        height,
-        per_page_bytes,
-        content_limited_batch,
-        configured,
-        result,
-        "OCR batch size adapted to max_content_size"
-    );
-
-    result
+    estimate_png_encode_page_peak_bytes(width, height)
+        .ok()
+        .and_then(|bytes| usize::try_from(bytes).ok())
+        .filter(|bytes| *bytes > 0)
+        .unwrap_or(UNMEASURED_OCR_PAGE_WORKING_SET_BYTES)
 }
 
-/// One page's estimated PNG-encode-and-decode byte cost, matching
-/// `validate_png_encode_batch_peak`'s own accounting for the parallel encode path: the
-/// source raster, the RGB conversion buffer, and the PNG output buffer, each counted once
-/// per page in that path.
+/// One page's estimated render-and-encode byte cost, matching
+/// [`validate_png_encode_batch_peak`]'s own per-page accounting: the source raster, the RGB
+/// conversion buffer, and the PNG output buffer.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn estimate_png_encode_page_peak_bytes(width: u32, height: u32) -> crate::Result<u64> {
     let source = crate::extraction::image_decode::decoded_byte_count(width, height, 3)?;
@@ -2613,57 +2713,20 @@ pub(super) fn estimate_png_encode_page_peak_bytes(width: u32, height: u32) -> cr
         .ok_or_else(|| crate::extraction::image_decode::image_dimension_error(width, height, u64::MAX, u64::MAX))?;
     Ok(source + conversion + output)
 }
-
-/// Adapt batch size to available system memory.
-///
-/// Estimates per-page memory cost based on typical page dimensions at 300 DPI
-/// and compares against available system memory. Returns a batch size that
-/// should keep peak memory within safe bounds.
-///
-/// Conservative estimate: each page in a batch needs approximately:
-/// - ~50MB for render + encode working set (RGB buffer briefly, then PNG)
-/// - ~100MB for OCR working set per concurrent page
-/// - Plus the document itself and base allocations
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-pub(super) fn adapt_batch_size_to_memory(configured: usize, document_size: usize) -> usize {
-    let available_bytes = get_available_memory();
-
-    if available_bytes == 0 {
-        return configured;
-    }
-
-    let reserved = document_size + 512 * 1024 * 1024;
-    let usable = available_bytes.saturating_sub(reserved);
-
-    const PER_PAGE_ESTIMATE: usize = 150 * 1024 * 1024;
-
-    let memory_limited_batch = (usable / PER_PAGE_ESTIMATE).max(1);
-
-    let result = configured.min(memory_limited_batch);
-
-    tracing::debug!(
-        available_mb = available_bytes / (1024 * 1024),
-        usable_mb = usable / (1024 * 1024),
-        document_mb = document_size / (1024 * 1024),
-        memory_limited_batch,
-        configured,
-        result,
-        "OCR batch size adaptation"
-    );
-
-    result
-}
 /// Query available system memory without external dependencies.
 ///
-/// On Linux (including Docker), reads `/proc/meminfo` for `MemAvailable`.
+/// On Linux (including Docker), reads `/proc/meminfo` for `MemAvailable`, capped by the
+/// cgroup's own headroom.
 /// On macOS, uses `sysctl hw.memsize` for total memory (conservative fallback).
-/// Returns 0 if the query fails, signaling the caller to use the default batch size.
+///
+/// `None` means the query could not tell, and the caller keeps its configured batch size.
+/// `Some(0)` is a real reading of a host with no headroom, and the caller narrows to one page.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-pub(super) fn get_available_memory() -> usize {
+pub(super) fn get_available_memory() -> Option<usize> {
     #[cfg(target_os = "linux")]
     {
-        let host = read_meminfo_available();
-        host.min(cgroup_headroom().unwrap_or(usize::MAX))
+        let host = read_meminfo_available()?;
+        Some(host.min(cgroup_headroom().unwrap_or(usize::MAX)))
     }
     #[cfg(target_os = "macos")]
     {
@@ -2672,17 +2735,19 @@ pub(super) fn get_available_memory() -> usize {
             && let Ok(s) = std::str::from_utf8(&output.stdout)
             && let Ok(total) = s.trim().parse::<usize>()
         {
-            return total / 2;
+            return Some(total / 2);
         }
-        0
+        None
     }
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
-        0
+        None
     }
 }
+/// `MemAvailable` in bytes, or `None` when the field is absent or unparseable. An absent
+/// field is "could not tell", which is not the same answer as a host with no memory free.
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), target_os = "linux"))]
-pub(super) fn parse_meminfo_available(contents: &str) -> usize {
+pub(super) fn parse_meminfo_available(contents: &str) -> Option<usize> {
     contents
         .lines()
         .find_map(|l| {
@@ -2694,11 +2759,10 @@ pub(super) fn parse_meminfo_available(contents: &str) -> usize {
                 .ok()
         })
         .map(|kb| kb * 1024)
-        .unwrap_or(0)
 }
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), target_os = "linux"))]
-pub(super) fn read_meminfo_available() -> usize {
-    parse_meminfo_available(&std::fs::read_to_string("/proc/meminfo").unwrap_or_default())
+pub(super) fn read_meminfo_available() -> Option<usize> {
+    parse_meminfo_available(&std::fs::read_to_string("/proc/meminfo").ok()?)
 }
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), target_os = "linux"))]
 pub(super) fn parse_cgroup_v2(max: &str, current: &str) -> Option<usize> {
