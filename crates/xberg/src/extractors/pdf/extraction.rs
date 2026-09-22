@@ -889,7 +889,7 @@ fn apply_reordered_text_to_page_contents(
 /// Join per-page texts, recording each page's byte range in the combined
 /// string, faithful to how `extract_text_from_native_document` assembles it:
 /// a rendered page marker before each page when `insert_page_markers` is on,
-/// otherwise `"\n\n"` separators between pages. Markers and separators belong
+/// otherwise `PAGE_SEPARATOR` between pages. Markers and separators belong
 /// to no page.
 fn join_pages_with_boundaries(
     pages: &[String],
@@ -903,7 +903,7 @@ fn join_pages_with_boundaries(
             let marker = config.marker_format.replace("{page_num}", &(idx + 1).to_string());
             content.push_str(&marker);
         } else if idx > 0 {
-            content.push_str("\n\n");
+            content.push_str(crate::pdf::native::text::PAGE_SEPARATOR);
         }
         let byte_start = content.len();
         content.push_str(page_text);

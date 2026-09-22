@@ -3,6 +3,9 @@
 //! Extracts embedded images from PDF pages via xberg_native_pdf, including
 //! actual image data and metadata.
 
+#[cfg(test)]
+mod parallel_tests;
+
 use super::NativeDocument;
 use crate::cancellation::CancellationToken;
 use crate::pdf::error::{PdfError, Result};
@@ -80,7 +83,8 @@ fn raw_pixels_to_png(
 ) -> Result<Bytes> {
     let dynamic = match *format {
         xberg_native_pdf::extractors::PixelFormat::Grayscale => {
-            let buf = image::GrayImage::from_raw(w, h, pixels.to_vec()).ok_or_else(|| {
+            let checked = exact_pixel_buffer(w, h, 1, pixels, "grayscale")?;
+            let buf = image::GrayImage::from_raw(w, h, checked).ok_or_else(|| {
                 PdfError::ExtractionFailed(format!(
                     "grayscale pixel buffer ({} bytes) does not fit {}×{} image",
                     pixels.len(),
@@ -91,7 +95,8 @@ fn raw_pixels_to_png(
             DynamicImage::ImageLuma8(buf)
         }
         xberg_native_pdf::extractors::PixelFormat::RGB => {
-            let buf = image::RgbImage::from_raw(w, h, pixels.to_vec()).ok_or_else(|| {
+            let checked = exact_pixel_buffer(w, h, 3, pixels, "RGB")?;
+            let buf = image::RgbImage::from_raw(w, h, checked).ok_or_else(|| {
                 PdfError::ExtractionFailed(format!(
                     "RGB pixel buffer ({} bytes) does not fit {}×{} image",
                     pixels.len(),
@@ -112,7 +117,8 @@ fn raw_pixels_to_png(
                 rgb.push(((1.0 - m) * (1.0 - k) * 255.0) as u8);
                 rgb.push(((1.0 - y) * (1.0 - k) * 255.0) as u8);
             }
-            let buf = image::RgbImage::from_raw(w, h, rgb)
+            let checked = exact_pixel_buffer(w, h, 3, &rgb, "CMYK→RGB")?;
+            let buf = image::RgbImage::from_raw(w, h, checked)
                 .ok_or_else(|| PdfError::ExtractionFailed(format!("CMYK→RGB buffer does not fit {}×{} image", w, h)))?;
             DynamicImage::ImageRgb8(buf)
         }
@@ -122,6 +128,35 @@ fn raw_pixels_to_png(
         .write_to(&mut Cursor::new(&mut png_bytes), ImageFormat::Png)
         .map_err(|e| PdfError::ExtractionFailed(format!("PNG re-encode of raw PDF image failed: {e}")))?;
     Ok(Bytes::from(png_bytes))
+}
+
+/// Return the pixel buffer only if it holds exactly `w × h × channels` bytes.
+///
+/// `ImageBuffer::from_raw` rejects a buffer that is too *small* and accepts one
+/// that is too *large*, keeping the extra bytes. A source decoder that pads each
+/// row to an alignment boundary produces exactly that: a buffer longer than the
+/// image needs. The mismatch then surfaces inside `DynamicImage::write_to`, where
+/// the `image` crate asserts on the exact size and panics rather than returning an
+/// error.
+///
+/// Checking the length here turns that panic into the same recoverable
+/// `ExtractionFailed` this function already returns for an undersized buffer.
+/// `to_png_bytes` in `xberg-native-pdf` carries the same guard for the same reason.
+fn exact_pixel_buffer(w: u32, h: u32, channels: usize, pixels: &[u8], kind: &str) -> Result<Vec<u8>> {
+    let expected = (w as usize)
+        .checked_mul(h as usize)
+        .and_then(|px| px.checked_mul(channels))
+        .ok_or_else(|| PdfError::ExtractionFailed(format!("{kind} image dimensions {w}×{h} overflow")))?;
+    if pixels.len() != expected {
+        return Err(PdfError::ExtractionFailed(format!(
+            "{kind} pixel buffer ({} bytes) does not match {}×{} image ({expected} bytes expected); \
+             the decoded row stride does not match width × {channels}",
+            pixels.len(),
+            w,
+            h
+        )));
+    }
+    Ok(pixels.to_vec())
 }
 
 /// Build the `ProcessingWarning` for an image that was dropped because its raw
@@ -316,117 +351,226 @@ pub(crate) fn extract_images_with_data(
         .page_count()
         .map_err(|e| PdfError::MetadataExtractionFailed(format!("xberg_native_pdf: failed to get page count: {e}")))?;
 
+    // Tagged-PDF `/Alt` text for `Figure` structure elements, keyed by 0-based page
+    // index (issue #62). Empty for the (common) untagged-PDF case. It needs `&mut`, so
+    // it runs before the page pass reborrows the document as a shared reference. ~keep
+    let alt_text_by_page = super::hierarchy::extract_figure_alt_text_by_page(doc);
+    let doc: &NativeDocument = doc;
+
+    let per_page = extract_all_page_images(doc, page_count, max_images_per_page, &alt_text_by_page, cancel_token);
+
+    // The document-global `image_index` and the skipped-image warnings are assigned here,
+    // in page order, so they do not depend on which thread ran which page. A skipped image
+    // takes the index it would have had without consuming it, as the sequential loop did. ~keep
     let mut all_images = Vec::new();
     let mut warnings = Vec::new();
     let mut global_index = 0u32;
-
-    // Tagged-PDF `/Alt` text for `Figure` structure elements, keyed by 0-based page
-    // index (issue #62). Empty for the (common) untagged-PDF case.
-    let mut alt_text_by_page = super::hierarchy::extract_figure_alt_text_by_page(doc);
-
-    for page_idx in 0..page_count {
-        if cancel_token.is_some_and(|t| t.is_cancelled()) {
-            break;
-        }
-
-        let native_images = match max_images_per_page.map(|n| n as usize) {
-            Some(limit) => {
-                let handle_images = match extract_n_images_from_page_handles(doc, page_idx, limit) {
-                    Ok(images) => images,
-                    Err(error) => {
-                        tracing::debug!(
-                            page = page_idx,
-                            "capped image-handle extraction failed; falling back to eager extraction: {error}"
-                        );
-                        Vec::new()
-                    }
-                };
-                if !handle_images.is_empty() {
-                    handle_images
-                } else {
-                    match doc.doc.extract_images(page_idx) {
-                        Ok(imgs) => imgs.into_iter().take(limit).collect(),
-                        Err(e) => {
-                            tracing::debug!(
-                                page = page_idx,
-                                "xberg_native_pdf: failed to extract images (fallback): {e}"
-                            );
-                            continue;
-                        }
-                    }
+    for (page_idx, outcomes) in per_page.into_iter().enumerate() {
+        let page_number = (page_idx + 1) as u32;
+        for outcome in outcomes {
+            match outcome {
+                Ok(mut image) => {
+                    image.image_index = global_index;
+                    all_images.push(image);
+                    global_index += 1;
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        page = page_number,
+                        image_index = global_index,
+                        "skipping raw PDF image that could not be re-encoded: {error}"
+                    );
+                    warnings.push(unencodable_image_warning(global_index, page_number, &error));
                 }
             }
-            None => match doc.doc.extract_images(page_idx) {
-                Ok(imgs) => imgs,
-                Err(e) => {
-                    tracing::debug!(page = page_idx, "xberg_native_pdf: failed to extract images: {e}");
-                    continue;
-                }
-            },
-        };
-
-        let page_number = (page_idx + 1) as u32;
-        let page_alt_texts = alt_text_by_page.remove(&(page_idx as u32));
-        for (page_image_position, native_img) in native_images.iter().enumerate() {
-            let alt_text = page_alt_texts
-                .as_ref()
-                .and_then(|alts| alts.get(page_image_position))
-                .and_then(|alt| alt.clone());
-            let (data, format) = match native_img.data() {
-                xberg_native_pdf::extractors::ImageData::Jpeg(jpeg_bytes) => {
-                    let data_bytes = Bytes::copy_from_slice(jpeg_bytes);
-                    let actual_format = detect_image_format_from_bytes(data_bytes.as_ref());
-                    (data_bytes, Cow::Borrowed(actual_format))
-                }
-                xberg_native_pdf::extractors::ImageData::Raw { pixels, format } => {
-                    match raw_pixels_to_png(native_img.width(), native_img.height(), format, pixels) {
-                        Ok(bytes) => (bytes, Cow::Borrowed("png")),
-                        Err(e) => {
-                            tracing::warn!(
-                                page = page_number,
-                                image_index = global_index,
-                                "skipping raw PDF image that could not be re-encoded: {e}"
-                            );
-                            warnings.push(unencodable_image_warning(global_index, page_number, &e));
-                            continue;
-                        }
-                    }
-                }
-            };
-
-            let extracted_img = crate::types::ExtractedImage {
-                data,
-                format,
-                image_index: global_index,
-                page_number: Some(page_number),
-                width: Some(native_img.width()),
-                height: Some(native_img.height()),
-                colorspace: Some(format!("{:?}", native_img.color_space())),
-                bits_per_component: Some(native_img.bits_per_component() as u32),
-                is_mask: false,
-                description: alt_text,
-                ocr_result: None,
-                bounding_box: native_img.bbox().map(|r| crate::types::BoundingBox {
-                    x0: r.x as f64,
-                    y0: r.y as f64,
-                    x1: (r.x + r.width) as f64,
-                    y1: (r.y + r.height) as f64,
-                }),
-                source_path: None,
-                image_kind: None,
-                kind_confidence: None,
-                cluster_id: None,
-                caption: None,
-                qr_codes: None,
-                data_base64: None,
-            };
-
-            all_images.push(extracted_img);
-            global_index += 1;
         }
     }
 
     Ok((all_images, warnings))
+}
+
+/// One image's outcome on one page, in content-stream paint order: `Ok` is an image still
+/// waiting for its document-global index, `Err` is the re-encode failure that skipped it.
+type PageImageOutcome = std::result::Result<crate::types::ExtractedImage, PdfError>;
+
+/// Run [`extract_page_images`] over every page, in parallel across the thread budget.
+///
+/// Decoding a page's embedded images is CPU-bound and independent of every other page, and
+/// `xberg_native_pdf::PdfDocument` is documented `Send + Sync` with its interior mutability
+/// behind mutexes for exactly this reason. This pass used to be a plain `for page_idx in
+/// 0..page_count`, so configuring OCR -- which switches whole-document image extraction on
+/// through `ExtractionConfig::needs_image_data` -- added a single-threaded prologue that no
+/// thread budget could shorten (issue #1732). It is the same shape as the page-rendering
+/// pass in `extractors/pdf/ocr/rendering.rs` (issue #1666).
+///
+/// `into_par_iter()` over a range is an `IndexedParallelIterator`, so `collect()` returns
+/// the pages in index order and the caller's numbering is unchanged.
+fn extract_all_page_images(
+    doc: &NativeDocument,
+    page_count: usize,
+    max_images_per_page: Option<u32>,
+    alt_text_by_page: &std::collections::HashMap<u32, Vec<Option<String>>>,
+    cancel_token: Option<&CancellationToken>,
+) -> Vec<Vec<PageImageOutcome>> {
+    // rayon's work-stealing pool needs OS threads; wasm32 has none, so it falls back to a
+    // sequential iterator there, matching the gate on the paragraph pass in
+    // `pdf/structure/pipeline.rs`. ~keep
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use rayon::prelude::*;
+        (0..page_count)
+            .into_par_iter()
+            .map(|page_idx| extract_page_images(doc, page_idx, max_images_per_page, alt_text_by_page, cancel_token))
+            .collect()
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        (0..page_count)
+            .map(|page_idx| extract_page_images(doc, page_idx, max_images_per_page, alt_text_by_page, cancel_token))
+            .collect()
+    }
+}
+
+/// Decode one page's embedded images, in content-stream paint order.
+///
+/// Returns an empty vec when the page yields no images, when the page could not be read, or
+/// when `cancel_token` has already fired.
+fn extract_page_images(
+    doc: &NativeDocument,
+    page_idx: usize,
+    max_images_per_page: Option<u32>,
+    alt_text_by_page: &std::collections::HashMap<u32, Vec<Option<String>>>,
+    cancel_token: Option<&CancellationToken>,
+) -> Vec<PageImageOutcome> {
+    #[cfg(test)]
+    record_page_thread();
+
+    if cancel_token.is_some_and(|t| t.is_cancelled()) {
+        return Vec::new();
+    }
+
+    let native_images = match max_images_per_page.map(|n| n as usize) {
+        Some(limit) => {
+            let handle_images = match extract_n_images_from_page_handles(doc, page_idx, limit) {
+                Ok(images) => images,
+                Err(error) => {
+                    tracing::debug!(
+                        page = page_idx,
+                        "capped image-handle extraction failed; falling back to eager extraction: {error}"
+                    );
+                    Vec::new()
+                }
+            };
+            if !handle_images.is_empty() {
+                handle_images
+            } else {
+                match doc.doc.extract_images(page_idx) {
+                    Ok(imgs) => imgs.into_iter().take(limit).collect(),
+                    Err(e) => {
+                        tracing::debug!(
+                            page = page_idx,
+                            "xberg_native_pdf: failed to extract images (fallback): {e}"
+                        );
+                        return Vec::new();
+                    }
+                }
+            }
+        }
+        None => match doc.doc.extract_images(page_idx) {
+            Ok(imgs) => imgs,
+            Err(e) => {
+                tracing::debug!(page = page_idx, "xberg_native_pdf: failed to extract images: {e}");
+                return Vec::new();
+            }
+        },
+    };
+
+    let page_number = (page_idx + 1) as u32;
+    let page_alt_texts = alt_text_by_page.get(&(page_idx as u32));
+    let mut outcomes = Vec::with_capacity(native_images.len());
+    for (page_image_position, native_img) in native_images.iter().enumerate() {
+        let alt_text = page_alt_texts
+            .and_then(|alts| alts.get(page_image_position))
+            .and_then(|alt| alt.clone());
+        let (data, format) = match native_img.data() {
+            xberg_native_pdf::extractors::ImageData::Jpeg(jpeg_bytes) => {
+                let data_bytes = Bytes::copy_from_slice(jpeg_bytes);
+                let actual_format = detect_image_format_from_bytes(data_bytes.as_ref());
+                (data_bytes, Cow::Borrowed(actual_format))
+            }
+            xberg_native_pdf::extractors::ImageData::Raw { pixels, format } => {
+                match raw_pixels_to_png(native_img.width(), native_img.height(), format, pixels) {
+                    Ok(bytes) => (bytes, Cow::Borrowed("png")),
+                    Err(e) => {
+                        outcomes.push(Err(e));
+                        continue;
+                    }
+                }
+            }
+        };
+
+        outcomes.push(Ok(crate::types::ExtractedImage {
+            data,
+            format,
+            // Replaced with the document-global index by `extract_images_with_data`. ~keep
+            image_index: 0,
+            page_number: Some(page_number),
+            width: Some(native_img.width()),
+            height: Some(native_img.height()),
+            colorspace: Some(format!("{:?}", native_img.color_space())),
+            bits_per_component: Some(native_img.bits_per_component() as u32),
+            is_mask: false,
+            description: alt_text,
+            ocr_result: None,
+            bounding_box: native_img.bbox().map(|r| crate::types::BoundingBox {
+                x0: r.x as f64,
+                y0: r.y as f64,
+                x1: (r.x + r.width) as f64,
+                y1: (r.y + r.height) as f64,
+            }),
+            source_path: None,
+            image_kind: None,
+            kind_confidence: None,
+            cluster_id: None,
+            caption: None,
+            qr_codes: None,
+            data_base64: None,
+        }));
+    }
+
+    outcomes
+}
+
+/// Test-only record of which threads ran a page's image extraction, so a test can assert that
+/// the pass dispatched across the pool rather than infer it from wall clock, which flakes
+/// under load. Mirrors `RENDER_CALL_THREAD_IDS` in `extractors/pdf/ocr/rendering.rs`.
+///
+/// It records the thread NAME rather than its id because the record is process-global while
+/// `#[serial_test::serial]` excludes only other `#[serial]` tests: any test running beside the
+/// guard that reaches this pass would otherwise add its own threads to the set and let a
+/// sequential regression read as a wide one. A guard names the threads of the pool it builds
+/// and counts only those, so the scope is a property of the pool rather than of which tests
+/// happen to run alongside. `core/config/concurrency.rs` records the same defect class
+/// against #215. ~keep
+#[cfg(test)]
+static PAGE_CALL_THREAD_NAMES: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+    std::sync::OnceLock::new();
+
+#[cfg(test)]
+fn page_call_thread_names() -> &'static std::sync::Mutex<std::collections::HashSet<String>> {
+    PAGE_CALL_THREAD_NAMES.get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()))
+}
+
+#[cfg(test)]
+fn record_page_thread() {
+    let current = std::thread::current();
+    let name = current.name().unwrap_or("<unnamed>");
+    let mut names = page_call_thread_names()
+        .lock()
+        .expect("page-thread record must not be poisoned");
+    if !names.contains(name) {
+        names.insert(name.to_owned());
+    }
 }
 
 #[cfg(test)]
@@ -500,6 +644,68 @@ mod tests {
         assert!(
             result.is_err(),
             "CMYK buffer whose length is not a multiple of 4 must return Err, not panic"
+        );
+    }
+
+    /// A decoded buffer that is row-padded carries extra bytes past
+    /// `width × channels` on every scanline, so it is *larger* than the image
+    /// needs. `ImageBuffer::from_raw` only rejects a buffer that is too small,
+    /// so an oversized one used to reach the PNG encoder, which asserts on the
+    /// exact size and panics.
+    ///
+    /// The property under test is the size mismatch itself. Any row-padded
+    /// buffer reproduces it, whatever document it came from.
+    #[test]
+    fn test_raw_pixels_to_png_row_padded_rgb_returns_error_not_panic() {
+        let (width, height) = (3u32, 2u32);
+        let mut pixels = Vec::new();
+        for _ in 0..height {
+            pixels.extend_from_slice(&[0xff; 9]);
+            pixels.push(0x00);
+        }
+        let result = raw_pixels_to_png(width, height, &xberg_native_pdf::extractors::PixelFormat::RGB, &pixels);
+        assert!(
+            result.is_err(),
+            "a row-padded RGB buffer must return Err, not panic in the PNG encoder"
+        );
+    }
+
+    #[test]
+    fn test_raw_pixels_to_png_row_padded_grayscale_returns_error_not_panic() {
+        let (width, height) = (3u32, 2u32);
+        let mut pixels = Vec::new();
+        for _ in 0..height {
+            pixels.extend_from_slice(&[0x80; 3]);
+            pixels.push(0x00);
+        }
+        let result = raw_pixels_to_png(
+            width,
+            height,
+            &xberg_native_pdf::extractors::PixelFormat::Grayscale,
+            &pixels,
+        );
+        assert!(
+            result.is_err(),
+            "a row-padded grayscale buffer must return Err, not panic in the PNG encoder"
+        );
+    }
+
+    /// CMYK is four bytes per pixel and is converted to RGB before the image is
+    /// built, so the padding has to be added as whole pixels for the converted
+    /// buffer to come out row-padded.
+    #[test]
+    fn test_raw_pixels_to_png_row_padded_cmyk_returns_error_not_panic() {
+        let (width, height) = (3u32, 2u32);
+        let mut pixels = Vec::new();
+        for _ in 0..height {
+            for _ in 0..=width {
+                pixels.extend_from_slice(&[0x00, 0x00, 0x00, 0xff]);
+            }
+        }
+        let result = raw_pixels_to_png(width, height, &xberg_native_pdf::extractors::PixelFormat::CMYK, &pixels);
+        assert!(
+            result.is_err(),
+            "a row-padded CMYK buffer must return Err, not panic in the PNG encoder"
         );
     }
 

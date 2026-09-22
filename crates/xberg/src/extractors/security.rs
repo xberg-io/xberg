@@ -44,7 +44,11 @@ pub struct SecurityLimits {
     /// caught by `max_content_size` instead.
     pub max_entity_length: usize,
 
-    /// Maximum string growth and decoded image allocation per document (100 MB)
+    /// Maximum string growth and decoded image allocation per operation (100 MB).
+    ///
+    /// Per-page passes such as layout detection charge each batch against this limit,
+    /// not the whole document; only `max_pages` bounds the rasters retained across a
+    /// document (GH#1721).
     pub max_content_size: usize,
 
     /// Maximum iterations per operation
