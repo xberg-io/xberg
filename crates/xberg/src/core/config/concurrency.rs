@@ -70,7 +70,6 @@ pub struct ConcurrencyConfig {
     /// the memory reading reduces it. Both of those bound the automatic
     /// limit, and a caller who names a number has already decided what the
     /// host can carry.
-    #[cfg_attr(feature = "alef-meta", alef(since = "1.2.7"))]
     pub max_concurrent_ocr: Option<usize>,
 }
 
