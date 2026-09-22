@@ -422,9 +422,11 @@ typedef struct XBERGCodeMetadata XBERGCodeMetadata;
  *
  * Set `max_threads` to cap all internal thread pools (Rayon, ONNX Runtime
  * intra-op), batch concurrency and Tesseract recognition to a single limit.
- * Set `max_concurrent_ocr` to give recognition a tighter limit of its own,
- * which is the knob to reach for when the host has cores to spare but not
- * the memory to run a recognition session on each of them.
+ * Set `max_concurrent_ocr` to give recognition a limit of its own, which is
+ * the knob to reach for when the host has cores to spare but not the memory
+ * to run a recognition session on each of them. It is applied as given and
+ * is not capped by `max_threads`. The first extraction in a process fixes
+ * it for that process â see the field's own documentation.
  *
  * # Default budget when `max_threads` is unset
  *
