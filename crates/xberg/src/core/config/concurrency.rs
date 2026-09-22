@@ -318,7 +318,7 @@ fn read_available_memory_bytes() -> Option<u64> {
         .output()
         .ok()?;
     let total: u64 = std::str::from_utf8(&output.stdout).ok()?.trim().parse().ok()?;
-    (total > 0).then(|| total / 2)
+    (total > 0).then_some(total / 2)
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
