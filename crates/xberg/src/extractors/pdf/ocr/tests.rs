@@ -3055,10 +3055,16 @@ mod tests {
             .map(|_| image::DynamicImage::ImageRgb8(image::RgbImage::new(PAGE_WIDTH, PAGE_HEIGHT)))
             .collect();
 
+        // `..Default::default()` below is redundant while `ConcurrencyConfig` carries one
+        // field, and #1733 adds a second. Without it this literal stops compiling the moment
+        // that branch merges, and the merge is textually clean, so nothing warns. `allow` and
+        // not `expect`: the lint stops firing once the second field exists. ~keep
+        #[allow(clippy::needless_update)]
         let config = ExtractionConfig {
             use_cache: false,
             concurrency: Some(ConcurrencyConfig {
                 max_threads: Some(PAGE_COUNT),
+                ..Default::default()
             }),
             security_limits: Some(crate::extractors::security::SecurityLimits {
                 max_content_size: 100 * 1024 * 1024,
