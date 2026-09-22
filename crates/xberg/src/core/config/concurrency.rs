@@ -1327,6 +1327,37 @@ mod tests {
         );
     }
 
+    /// The memory reader must stay uncached. A latch here sizes every later
+    /// document in a long-lived process from whatever was free during the
+    /// first extraction, which is the server regression this branch removed;
+    /// nothing else in the suite fails when it comes back. The reader's own
+    /// input is the host, so the instrument is the source rather than a
+    /// reading. ~keep
+    #[test]
+    fn the_available_memory_reader_carries_no_cache() {
+        const SOURCE: &str = include_str!("concurrency.rs");
+        const SIGNATURE: &str = "pub(crate) fn available_memory_bytes() -> Option<u64> {";
+
+        let body = SOURCE
+            .split_once(SIGNATURE)
+            .expect("the memory reader's signature moved; update this guard")
+            .1
+            .split_once("\n}")
+            .expect("the memory reader's body is unterminated")
+            .0;
+        assert!(
+            body.contains("read_available_memory_bytes"),
+            "positive control: the guard no longer reads the reader's body, it read {body:?}"
+        );
+        for latch in ["OnceLock", "OnceCell", "LazyLock", "Lazy", "get_or_init", "static"] {
+            assert!(
+                !body.contains(latch),
+                "available_memory_bytes caches its reading through `{latch}`; \
+                 the OCR batch sizer must read free memory afresh for every document"
+            );
+        }
+    }
+
     /// Only the first call installs the pools, but every call reports the
     /// budget its own config asks for.
     #[test]
