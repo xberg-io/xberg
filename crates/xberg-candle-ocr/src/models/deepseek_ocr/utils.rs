@@ -453,4 +453,129 @@ mod tests {
         assert_eq!(indices.to_vec2::<u32>().expect("idx"), vec![vec![1, 2]]);
         assert_eq!(weights.to_vec2::<f32>().expect("w"), vec![vec![0.7, 0.2]]);
     }
+
+    /// The per-position sampler this crate shipped before GH#1719, kept as the reference the
+    /// candle-backed resize is measured against: `src = max((i + 0.5) * scale - 0.5, 0)`, floor
+    /// and ceil clamped to the table, and a linear blend in the tensor's own dtype.
+    fn reference_interpolate_linear_1d(input: &Tensor, target_size: usize) -> Tensor {
+        const HALF_PIXEL: f64 = 0.5;
+        let src_size = input.dim(2).expect("rank 3");
+        let scale = src_size as f64 / target_size as f64;
+        let mut output = Vec::with_capacity(target_size);
+        for i in 0..target_size {
+            let src_i = ((i as f64 + HALF_PIXEL) * scale - HALF_PIXEL).max(0.0);
+            let src_i_floor = (src_i.floor() as usize).min(src_size - 1);
+            let src_i_ceil = (src_i_floor + 1).min(src_size - 1);
+            let weight = src_i - src_i_floor as f64;
+            let val_floor = input.i((.., .., src_i_floor)).and_then(|t| t.affine(1.0 - weight, 0.0));
+            let val_ceil = input.i((.., .., src_i_ceil)).and_then(|t| t.affine(weight, 0.0));
+            let blended = val_floor
+                .and_then(|floor| floor.add(&val_ceil.expect("ceil")))
+                .and_then(|t| t.unsqueeze(2))
+                .expect("blend");
+            output.push(blended);
+        }
+        Tensor::cat(&output, 2).expect("cat")
+    }
+
+    /// Deterministic values in `[-1, 1]` so an absolute tolerance is meaningful.
+    fn pseudo_random_tensor(shape: (usize, usize, usize), seed: u64, dev: &Device) -> Tensor {
+        const LCG_MULTIPLIER: u64 = 6_364_136_223_846_793_005;
+        const LCG_INCREMENT: u64 = 1_442_695_040_888_963_407;
+        let count = shape.0 * shape.1 * shape.2;
+        let mut state = seed;
+        let values: Vec<f32> = (0..count)
+            .map(|_| {
+                state = state.wrapping_mul(LCG_MULTIPLIER).wrapping_add(LCG_INCREMENT);
+                ((state >> 40) as f32 / (1u64 << 24) as f32) * 2.0 - 1.0
+            })
+            .collect();
+        Tensor::from_vec(values, shape, dev).expect("tensor")
+    }
+
+    /// candle's resize accumulates in f64 and rounds once where the deleted loop blended in f32,
+    /// so the two agree to a few f32 ulps, not bit-for-bit. The cases are the real model shapes:
+    /// the (1, 64, 127) pretrained table onto a 640 px crop's 79 positions and back, the windowed
+    /// 27-position table, and the transposed (strided) layout `get_rel_pos` hands over.
+    #[test]
+    fn interpolate_linear_1d_matches_the_per_position_reference_within_tolerance() {
+        const TOLERANCE: f32 = 1e-6;
+        let dev = Device::Cpu;
+        let cases: [(usize, usize, usize, usize); 6] =
+            [(1, 64, 127, 79), (1, 64, 79, 127), (1, 64, 27, 127), (2, 3, 5, 12), (1, 64, 127, 2), (1, 1, 2, 9)];
+        for &(batch, channels, src_len, target) in &cases {
+            for strided in [false, true] {
+                let input = if strided {
+                    pseudo_random_tensor((batch, src_len, channels), 7, &dev)
+                        .transpose(1, 2)
+                        .expect("transpose")
+                } else {
+                    pseudo_random_tensor((batch, channels, src_len), 7, &dev)
+                };
+                if strided && channels > 1 {
+                    assert!(!input.is_contiguous(), "input must be strided for this case to have power");
+                }
+
+                let expected = reference_interpolate_linear_1d(&input, target);
+                let actual = interpolate_linear_1d(&input, target, None).expect("interpolate");
+
+                assert_eq!(actual.dims(), expected.dims(), "shape for {batch}x{channels}x{src_len}->{target}");
+                let expected = expected.flatten_all().and_then(|t| t.to_vec1::<f32>()).expect("read");
+                let actual = actual.flatten_all().and_then(|t| t.to_vec1::<f32>()).expect("read");
+                let worst = expected
+                    .iter()
+                    .zip(&actual)
+                    .map(|(e, a)| (e - a).abs())
+                    .fold(0f32, f32::max);
+                assert!(
+                    worst <= TOLERANCE,
+                    "{batch}x{channels}x{src_len}->{target} strided={strided}: worst |diff| {worst} > {TOLERANCE}"
+                );
+            }
+        }
+    }
+
+    /// The row-at-a-time scatter this crate shipped before GH#1719, kept as the reference: a set
+    /// mask position takes the next `src` row while any remain, a clear one takes its own `dst`
+    /// row while one exists, and every other position contributes nothing.
+    fn reference_masked_scatter_dim0(dst: &Tensor, src: &Tensor, mask: &[u32]) -> Tensor {
+        let mut output_rows = Vec::new();
+        let mut src_idx = 0;
+        for (i, &m) in mask.iter().enumerate() {
+            if m != 0 && src_idx < src.dim(0).expect("src rows") {
+                output_rows.push(src.i(src_idx).expect("src row"));
+                src_idx += 1;
+            } else if m == 0 && i < dst.dim(0).expect("dst rows") {
+                output_rows.push(dst.i(i).expect("dst row"));
+            }
+        }
+        Tensor::stack(&output_rows, 0).expect("stack")
+    }
+
+    /// The gathers select rows, they never blend them, so the result must be bit-identical to the
+    /// row-at-a-time reference on every mask shape prefill produces: image tokens in one block,
+    /// split across blocks, at the sequence's edges, and a mask longer than `src` can serve.
+    #[test]
+    fn masked_scatter_dim0_is_bit_identical_to_the_row_at_a_time_reference() {
+        let dev = Device::Cpu;
+        let hidden = 3;
+        let dst = pseudo_random_tensor((1, 9, hidden), 11, &dev);
+        let src = pseudo_random_tensor((1, 4, hidden), 13, &dev).squeeze(0).expect("src");
+        let masks: [Vec<u32>; 5] = [
+            vec![0, 1, 1, 1, 1, 0, 0, 0, 0],
+            vec![1, 1, 0, 0, 0, 0, 0, 1, 1],
+            vec![1, 1, 1, 1, 0, 0, 0, 0, 0],
+            vec![0, 0, 0, 0, 0, 1, 1, 1, 1],
+            vec![1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0],
+        ];
+        for mask in &masks {
+            let mask_tensor = Tensor::from_vec(mask.clone(), (1, mask.len()), &dev).expect("mask");
+            let expected = reference_masked_scatter_dim0(&dst.squeeze(0).expect("dst"), &src, mask);
+            let actual = masked_scatter_dim0(&dst, &src, &mask_tensor).expect("scatter");
+            assert_eq!(actual.dims(), &[1, expected.dim(0).expect("rows"), hidden], "shape for {mask:?}");
+            let expected = expected.to_vec2::<f32>().expect("read");
+            let actual = actual.squeeze(0).and_then(|t| t.to_vec2::<f32>()).expect("read");
+            assert_eq!(actual, expected, "rows for {mask:?}");
+        }
+    }
 }
