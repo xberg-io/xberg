@@ -12,7 +12,8 @@ use serde::{Deserialize, Serialize};
 /// Set `max_concurrent_ocr` to give recognition a limit of its own, which is
 /// the knob to reach for when the host has cores to spare but not the memory
 /// to run a recognition session on each of them. It is applied as given and
-/// is not capped by `max_threads`.
+/// is not capped by `max_threads`. The first extraction in a process fixes
+/// it for that process — see the field's own documentation.
 ///
 /// # Default budget when `max_threads` is unset
 ///
@@ -70,6 +71,15 @@ pub struct ConcurrencyConfig {
     /// the memory reading reduces it. Both of those bound the automatic
     /// limit, and a caller who names a number has already decided what the
     /// host can carry.
+    ///
+    /// The first extraction in a process fixes the limit for the rest of that
+    /// process, and a later extraction that names a different value keeps the
+    /// first one. The two limiters that enforce it — the admission semaphore
+    /// in the Tesseract backend and the handle pool behind it — are built once
+    /// inside a backend the plugin registry holds for the life of the process,
+    /// and the pool's capacity is fixed when it is constructed. A later value
+    /// could therefore be reported but never enforced. Set it on the first
+    /// extraction, or run one process per value.
     pub max_concurrent_ocr: Option<usize>,
 }
 
@@ -586,12 +596,77 @@ pub(crate) fn resolve_batch_concurrency(config: Option<&ConcurrencyConfig>, mode
     (cores / budget).max(1).min(budget)
 }
 
+/// Guard for [`warn_recognition_limit_latched_once`], as [`DEFAULT_CAP_WARNED`].
+static RECOGNITION_LATCH_WARNED: AtomicBool = AtomicBool::new(false);
+
+/// Say so when a later extraction names a recognition limit the process has
+/// already fixed.
+///
+/// The limit cannot follow the second caller, for the reason given on
+/// [`ConcurrencyConfig::max_concurrent_ocr`]. Discarding the value in silence
+/// is the defect this change removes everywhere else, so the one case that
+/// survives says so in the log. ~keep
+fn warn_recognition_limit_latched_once(already_warned: &AtomicBool, requested: usize, active: usize) {
+    if already_warned
+        .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+        .is_ok()
+    {
+        tracing::warn!(
+            requested,
+            active,
+            "an earlier extraction in this process already fixed the concurrent OCR recognition \
+             limit, so this max_concurrent_ocr is not applied; set it on the first extraction, or \
+             run one process per value"
+        );
+    }
+}
+
+/// The process-wide limits [`init_thread_pools`] installs, and the guard for
+/// the warning a later extraction gets.
+///
+/// The cells are borrowed rather than read from the statics directly so a test
+/// can own a whole set. Asserting against the globals is not merely racy but
+/// unfixably so: whichever test in the binary runs an extraction first trips
+/// [`POOL_INIT`], and `#[serial]` cannot help because it only excludes other
+/// `#[serial]` tests. That is the constraint [`DEFAULT_CAP_WARNED`] already
+/// documents for its own guard. ~keep
+struct ActiveLimits<'a> {
+    once: &'a Once,
+    thread_budget: &'a AtomicUsize,
+    recognition: &'a AtomicUsize,
+    latch_warned: &'a AtomicBool,
+}
+
+impl ActiveLimits<'_> {
+    /// Store the resolved budgets, once, and report whether this call stored
+    /// them. A later call keeps the installed values and warns when it asked
+    /// for a different recognition limit.
+    fn install(&self, config: Option<&ConcurrencyConfig>, budget: usize) -> bool {
+        let mut installed = false;
+        self.once.call_once(|| {
+            installed = true;
+            self.thread_budget.store(budget.max(1), Ordering::Relaxed);
+            self.recognition
+                .store(resolve_recognition_concurrency(config).max(1), Ordering::Relaxed);
+        });
+        if !installed && let Some(requested) = config.and_then(|c| c.max_concurrent_ocr).map(|value| value.max(1)) {
+            let active = self.recognition.load(Ordering::Relaxed);
+            if requested != active {
+                warn_recognition_limit_latched_once(self.latch_warned, requested, active);
+            }
+        }
+        installed
+    }
+}
+
 /// Initialize the process-wide CPU pools from `config` and return the budget.
 ///
 /// Sizes the global Rayon pool and fixes the recognition-session limit that
 /// [`recognition_concurrency`] reports. Safe to call multiple times — only the first
-/// call takes effect, so a later extraction with a different `max_threads`
-/// reads back the budget the first one installed.
+/// call takes effect, so a later extraction with a different `max_threads` or
+/// `max_concurrent_ocr` reads back the values the first one installed. See
+/// [`ConcurrencyConfig::max_concurrent_ocr`] for why the recognition limit
+/// cannot follow a later extraction.
 ///
 /// # Example
 ///
@@ -604,9 +679,13 @@ pub(crate) fn resolve_batch_concurrency(config: Option<&ConcurrencyConfig>, mode
 /// ```
 pub(crate) fn init_thread_pools(config: Option<&ConcurrencyConfig>) -> usize {
     let budget = resolve_thread_budget(config);
-    POOL_INIT.call_once(|| {
-        ACTIVE_THREAD_BUDGET.store(budget.max(1), Ordering::Relaxed);
-        ACTIVE_RECOGNITION_CONCURRENCY.store(resolve_recognition_concurrency(config).max(1), Ordering::Relaxed);
+    let limits = ActiveLimits {
+        once: &POOL_INIT,
+        thread_budget: &ACTIVE_THREAD_BUDGET,
+        recognition: &ACTIVE_RECOGNITION_CONCURRENCY,
+        latch_warned: &RECOGNITION_LATCH_WARNED,
+    };
+    if limits.install(config, budget) {
         #[cfg(not(target_arch = "wasm32"))]
         if let Err(_err) = rayon::ThreadPoolBuilder::new().num_threads(budget).build_global() {
             tracing::debug!(
@@ -615,7 +694,7 @@ pub(crate) fn init_thread_pools(config: Option<&ConcurrencyConfig>) -> usize {
                  (xberg thread budget not applied)"
             );
         }
-    });
+    }
     budget
 }
 
@@ -1178,6 +1257,74 @@ mod tests {
         let meminfo = "MemTotal:       65787528 kB\nMemFree:          262144 kB\nMemAvailable:    1048576 kB\n";
         assert_eq!(parse_mem_available_bytes(meminfo), Some(GIB));
         assert_eq!(parse_mem_available_bytes("MemTotal: 65787528 kB\n"), None);
+    }
+
+    /// The documented contract for a second extraction, and the line that
+    /// keeps it from being silent. The first extraction fixes the recognition
+    /// limit, because the limiters that enforce it are built once per process;
+    /// a later extraction that names a different value keeps the first one and
+    /// says so exactly once. The latch cells belong to this test, so the
+    /// assertion is about the installer rather than about whichever test in
+    /// the binary ran first.
+    ///
+    /// One test rather than two: `tracing` caches a callsite's interest the
+    /// first time it is reached, so a sibling test that reached this warning
+    /// outside a capturing subscriber left the event unrecorded here for the
+    /// rest of the process. Measured — it passed alone and under
+    /// `--test-threads=1`, and failed in parallel. ~keep
+    #[test]
+    #[serial_test::serial]
+    fn a_second_extraction_keeps_the_first_recognition_limit_and_says_so() {
+        let once = Once::new();
+        let thread_budget = AtomicUsize::new(0);
+        let recognition = AtomicUsize::new(0);
+        let latch_warned = AtomicBool::new(false);
+        let limits = ActiveLimits {
+            once: &once,
+            thread_budget: &thread_budget,
+            recognition: &recognition,
+            latch_warned: &latch_warned,
+        };
+        let first = ConcurrencyConfig {
+            max_threads: Some(8),
+            max_concurrent_ocr: Some(3),
+        };
+        let second = ConcurrencyConfig {
+            max_threads: Some(8),
+            max_concurrent_ocr: Some(16),
+        };
+        let capture = EventCapture::default();
+        let subscriber = tracing_subscriber::registry()
+            .with(EnvFilter::new("warn"))
+            .with(capture.clone());
+
+        tracing::subscriber::with_default(subscriber, || {
+            assert!(limits.install(Some(&first), 8), "the first call installs the limits");
+            assert_eq!(recognition.load(Ordering::Relaxed), 3);
+            assert_eq!(warn_event_count(&capture), 0, "the first extraction loses nothing");
+
+            for _ in 0..3 {
+                assert!(!limits.install(Some(&second), 8), "a later call installs nothing");
+            }
+            assert_eq!(
+                recognition.load(Ordering::Relaxed),
+                3,
+                "the second extraction's max_concurrent_ocr must not move the fixed limit"
+            );
+
+            limits.install(Some(&first), 8);
+        });
+
+        assert!(
+            latch_warned.load(Ordering::Relaxed),
+            "the discarded value must trip the warning guard"
+        );
+        assert_eq!(
+            warn_event_count(&capture),
+            1,
+            "expected exactly one WARN across repeated calls, got {:?}",
+            capture.levels.lock().unwrap()
+        );
     }
 
     /// Only the first call installs the pools, but every call reports the

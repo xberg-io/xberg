@@ -61,6 +61,8 @@ Concurrent Tesseract recognition follows the thread budget, reduced to the numbe
 
 `ConcurrencyConfig::max_concurrent_ocr` sets the session count on its own. Use it when the host has cores to spare but not the memory to run a recognition session on each of them. The value is applied as given: neither `max_threads` nor the free-memory reading reduces it.
 
+The first extraction in a process fixes the session count for the rest of that process. A later extraction that names a different `max_concurrent_ocr` keeps the first one and logs a one-time `WARN`. The admission semaphore and the Tesseract handle pool that enforce the limit are built once and the pool's capacity is fixed when it is constructed, so a later value could be reported but never applied. Set the value on the first extraction, or run one process per value.
+
 <Tabs syncKey="lang">
 <TabItem label="CLI">
 

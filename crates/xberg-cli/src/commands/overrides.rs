@@ -355,7 +355,8 @@ pub struct ExtractionOverrides {
     #[arg(long, help = "Limit total threads for constrained environments")]
     pub max_threads: Option<usize>,
 
-    /// Set concurrent Tesseract recognition sessions directly. The value is applied as given and is not capped by the thread budget.
+    /// Set concurrent Tesseract recognition sessions directly. The value is applied as given and is not capped by the
+    /// thread budget. The first extraction in a process fixes it for that process.
     #[arg(
         long,
         help = "Set concurrent OCR sessions directly, instead of following the thread budget"
