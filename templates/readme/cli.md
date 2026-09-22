@@ -392,6 +392,7 @@ xberg extract <PATH> [OPTIONS]
 | `--acceleration <PROVIDER>`            | ONNX execution provider: `auto`, `cpu`, `coreml`, `cuda`, `tensorrt`                                       |
 | `--max-concurrent <N>`                 | Max parallel extractions in batch mode                                                                     |
 | `--max-threads <N>`                    | Cap all internal thread pools                                                                              |
+| `--max-concurrent-ocr <N>`             | Set concurrent Tesseract recognition sessions, not capped by `--max-threads`; fixed on first use           |
 | `--extract-pages <true\|false>`        | Extract pages as separate array                                                                            |
 | `--page-markers <true\|false>`         | Insert page marker comments                                                                                |
 | `--extract-images <true\|false>`       | Enable image extraction                                                                                    |

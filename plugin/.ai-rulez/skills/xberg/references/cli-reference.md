@@ -68,6 +68,7 @@ xberg extract <path> [FLAGS]
 - `--msg-codepage <n>` — Windows codepage fallback for MSG files.
 - `--max-concurrent <n>` — Max parallel extractions in batch mode.
 - `--max-threads <n>` — Cap all internal thread pools.
+- `--max-concurrent-ocr <n>` — Set concurrent Tesseract recognition sessions, not capped by `--max-threads`.
 - `--cache-namespace <name>` — Cache namespace for tenant isolation.
 - `--cache-ttl-secs <n>` — Per-request cache TTL in seconds.
 

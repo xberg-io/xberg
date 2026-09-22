@@ -363,6 +363,14 @@ If none of the above applies and the host has more than 8 cores, a one-time `WAR
 max_threads = 32
 ```
 
+`ConcurrencyConfig.max_concurrent_ocr` limits concurrent Tesseract recognition sessions on its own. When it is unset, recognition follows the thread budget, reduced to the number of sessions the host's free memory holds. Set it when the host has cores to spare but not the memory to run a recognition session on each of them. The value is applied as given: neither `max_threads` nor the free-memory reading reduces it. The first extraction in a process fixes it for the rest of that process, and a later extraction that names a different value keeps the first one and logs a one-time `WARN`. See [Concurrency & Scaling](/guides/concurrency/#recognition-sessions-max_concurrent_ocr).
+
+```toml
+[concurrency]
+max_threads = 32
+max_concurrent_ocr = 8
+```
+
 ## All Configuration Categories
 
 - [ExtractionConfig](/reference/configuration/#extractionconfig) — top-level options
@@ -373,7 +381,7 @@ max_threads = 32
 - [ContentFilterConfig](/reference/configuration/#contentfilterconfig) — header/footer/watermark filtering
 - [PageConfig](/reference/configuration/#pageconfig) — page tracking and markers
 - [AccelerationConfig](/reference/configuration/#accelerationconfig) — ONNX Runtime execution provider
-- [ConcurrencyConfig](#concurrency-and-thread-limits) — thread pool caps (`max_threads`); not in the auto-generated reference below, see the section above
+- [ConcurrencyConfig](#concurrency-and-thread-limits) — thread pool caps (`max_threads`) and the recognition session limit (`max_concurrent_ocr`); not in the auto-generated reference below, see the section above
 
 ## Next Steps
 

@@ -5346,9 +5346,9 @@ mod tests {
     /// `force_ocr_pages` is the explicit-request route (`extract_mixed_ocr_native`), which
     /// keeps a real validation failure a hard error rather than a silent native-text fallback
     /// (see the `~keep` comment on its call site), so on the base tree this call returns `Err`.
-    /// After the fix the batch shrinks to 2 pages per sub-batch (2 x 20.3MB = 41MB, under the
-    /// limit), so every page still reaches OCR, just across two smaller batches, and the
-    /// thread budget stops being the reason OCR turns off.
+    /// The batch is no longer measured against that limit at all: each page's own peak is
+    /// checked on its own, and 20.3MB clears a 50MiB limit, so all four pages reach OCR in one
+    /// batch and the thread budget stops being the reason OCR turns off.
     #[cfg(all(feature = "pdf", feature = "ocr"))]
     #[tokio::test]
     #[serial]
@@ -5360,7 +5360,10 @@ mod tests {
         let _backend = register_mock_ocr_backend("pdf-1665-batch-peak-thread-budget", OCR_TEXT);
 
         let config = ExtractionConfig {
-            concurrency: Some(ConcurrencyConfig { max_threads: Some(4) }),
+            concurrency: Some(ConcurrencyConfig {
+                max_threads: Some(4),
+                max_concurrent_ocr: None,
+            }),
             force_ocr_pages: Some(vec![1, 2, 3, 4]),
             security_limits: Some(SecurityLimits {
                 max_content_size: 50 * 1024 * 1024,

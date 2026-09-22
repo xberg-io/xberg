@@ -12393,6 +12393,7 @@ const _: fn() = || {
     {
         let ConcurrencyConfig = None::<crate::ConcurrencyConfig>.unwrap();
         let _: Option<i64> = ConcurrencyConfig.max_threads;
+        let _: Option<i64> = ConcurrencyConfig.max_concurrent_ocr;
     }
     match None::<crate::ConfidenceSemantics>.unwrap() {
         crate::ConfidenceSemantics::Legibility { scale_max } => {
@@ -16751,8 +16752,10 @@ impl SseDecode for crate::ConcurrencyConfig {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_maxThreads = <Option<i64>>::sse_decode(deserializer);
+        let mut var_maxConcurrentOcr = <Option<i64>>::sse_decode(deserializer);
         return crate::ConcurrencyConfig {
             max_threads: var_maxThreads,
+            max_concurrent_ocr: var_maxConcurrentOcr,
         };
     }
 }
@@ -27564,7 +27567,11 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::CodeMetadata>> for crat
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::ConcurrencyConfig> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [self.0.max_threads.into_into_dart().into_dart()].into_dart()
+        [
+            self.0.max_threads.into_into_dart().into_dart(),
+            self.0.max_concurrent_ocr.into_into_dart().into_dart(),
+        ]
+        .into_dart()
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for FrbWrapper<crate::ConcurrencyConfig> {}
@@ -35037,6 +35044,7 @@ impl SseEncode for crate::ConcurrencyConfig {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Option<i64>>::sse_encode(self.max_threads, serializer);
+        <Option<i64>>::sse_encode(self.max_concurrent_ocr, serializer);
     }
 }
 

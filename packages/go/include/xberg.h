@@ -421,7 +421,12 @@ typedef struct XBERGCodeMetadata XBERGCodeMetadata;
  * Controls thread usage for constrained environments.
  *
  * Set `max_threads` to cap all internal thread pools (Rayon, ONNX Runtime
- * intra-op) and batch concurrency to a single limit.
+ * intra-op), batch concurrency and Tesseract recognition to a single limit.
+ * Set `max_concurrent_ocr` to give recognition a limit of its own, which is
+ * the knob to reach for when the host has cores to spare but not the memory
+ * to run a recognition session on each of them. It is applied as given and
+ * is not capped by `max_threads`. The first extraction in a process fixes
+ * it for that process â see the field's own documentation.
  *
  * # Default budget when `max_threads` is unset
  *
@@ -447,6 +452,7 @@ typedef struct XBERGCodeMetadata XBERGCodeMetadata;
  *
  * let config = ConcurrencyConfig {
  *     max_threads: Some(2),
+ *     max_concurrent_ocr: None,
  * };
  * \endcode
  */
@@ -6033,6 +6039,27 @@ uintptr_t xberg_concurrency_config_max_threads(XBERGAlefHandle handle);
  * Safety Pointer must be a valid handle returned by this library.
  */
 int32_t xberg_concurrency_config_has_max_threads(XBERGAlefHandle handle);
+
+/**
+ * Get the `max_concurrent_ocr` field from a `ConcurrencyConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uintptr_t xberg_concurrency_config_max_concurrent_ocr(XBERGAlefHandle handle);
+
+/**
+ * Report whether the `max_concurrent_ocr` field on a `ConcurrencyConfig` is
+ * `Some`.
+ *
+ * `xberg_concurrency_config_max_concurrent_ocr` cannot distinguish a `None`
+ * field from a legitimate zero-valued `Some` at the C ABI boundary -- there is
+ * no null representation for a numeric return, so both collapse to the same
+ * sentinel. Call this function first: `1` means the field getter's return value
+ * is meaningful, `0` means the field is absent and the getter's sentinel must
+ * be ignored, `-1` reports an invalid handle (see `xberg_last_error_code`). #
+ * Safety Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_concurrency_config_has_max_concurrent_ocr(XBERGAlefHandle handle);
 
 /**
  * Create a `ContentConfig` from a JSON string. Returns null on failure.

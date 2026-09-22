@@ -10,7 +10,7 @@ mod config;
 mod execution;
 pub(crate) mod validation;
 
-pub(crate) use api_pool::MAX_TESSERACT_APIS;
+pub(crate) use api_pool::tesseract_api_capacity;
 
 use crate::ocr::cache::OcrCache;
 use crate::ocr::error::OcrError;
@@ -35,6 +35,12 @@ impl OcrProcessor {
             cache,
             api_pool: api_pool::TesseractApiPool::new(),
         })
+    }
+
+    /// Recognition sessions the handle pool behind this processor allows.
+    #[cfg(test)]
+    pub(crate) fn api_pool_capacity(&self) -> usize {
+        self.api_pool.capacity()
     }
 
     pub(crate) fn process_image(
