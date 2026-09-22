@@ -4,10 +4,12 @@
 //! chunk in sequence, and converts pixel-space detections to PDF
 //! coordinate–space [`PageLayoutResult`] values.
 //!
-//! Chunked rendering+detection keeps peak memory proportional to
-//! `LAYOUT_BATCH_CHUNK_SIZE` images plus the accumulated output images,
-//! rather than requiring the whole document's rasterised frames and the full
-//! ONNX batch tensor to be live simultaneously.
+//! Chunked rendering+detection keeps the inference working set proportional to
+//! `LAYOUT_BATCH_CHUNK_SIZE` images plus the ONNX batch tensor, rather than
+//! requiring the whole document's rasterised frames to be live simultaneously.
+//! Each chunk is charged against `max_content_size` on its own: the rasters of
+//! earlier chunks are already-assembled output, so charging them too would turn
+//! a byte limit into a page limit (GH#1721).
 //!
 //! The resulting images, page metadata, layout hints, and raw detections feed
 //! both native markdown structure recovery and OCR layout assembly.
@@ -542,7 +544,6 @@ fn enters_inference_batch(page: &RenderedLayoutPage) -> bool {
 fn detect_layout_chunk(
     engine: &mut crate::layout::LayoutEngine,
     pages: &[RenderedLayoutPage],
-    retained_image_bytes: u64,
     security_limits: &crate::extractors::security::SecurityLimits,
 ) -> Result<Vec<Option<crate::layout::DetectionResult>>> {
     let rendered_positions: Vec<usize> = pages
@@ -560,17 +561,15 @@ fn detect_layout_chunk(
         .collect();
     let mut detections: Vec<Option<crate::layout::DetectionResult>> = (0..pages.len()).map(|_| None).collect();
     let (width, height) = all_chunk_images[0].dimensions();
+    // This chunk's own rasters only. The pages already assembled into the
+    // output are finished work, not part of the inference working set, so
+    // charging them here would make the budget a function of document length
+    // (GH#1721). Nothing caps the rasters this pass retains across a whole
+    // document by default: `max_content_size` bounds only the work in flight,
+    // and `max_pages`, which does bound the retained set, is `None` unless the
+    // caller sets it. ~keep
     let current_live_bytes =
-        pages
-            .iter()
-            .filter_map(|page| page.image.as_ref())
-            .try_fold(retained_image_bytes, |total, image| {
-                total
-                    .checked_add(u64::try_from(image.as_raw().len()).unwrap_or(u64::MAX))
-                    .ok_or_else(|| {
-                        crate::extraction::image_decode::image_dimension_error(width, height, u64::MAX, u64::MAX)
-                    })
-            })?;
+        crate::layout::engine::live_raster_bytes(pages.iter().filter_map(|page| page.image.as_ref()), width, height)?;
     let capacity = crate::layout::engine::layout_inference_batch_capacity(
         width,
         height,
@@ -773,19 +772,7 @@ fn run_layout_for_pdf_pages_with_security_limits(
             "layout runner: detecting chunk"
         );
 
-        let retained_image_bytes = all_images.iter().try_fold(0_u64, |total, image| {
-            total
-                .checked_add(u64::try_from(image.as_raw().len()).unwrap_or(u64::MAX))
-                .ok_or_else(|| {
-                    crate::extraction::image_decode::image_dimension_error(
-                        image.width(),
-                        image.height(),
-                        u64::MAX,
-                        u64::MAX,
-                    )
-                })
-        })?;
-        let detections = match detect_layout_chunk(&mut engine, &pages, retained_image_bytes, security_limits) {
+        let detections = match detect_layout_chunk(&mut engine, &pages, security_limits) {
             Ok(detections) => detections,
             Err(error) => {
                 crate::layout::return_engine(engine);
@@ -1687,6 +1674,108 @@ mod tests {
             "layout: 1 page(s) could not be prepared for layout analysis and were treated as empty: \
              page 2 failed to render: Invalid PDF: Page index 1 not found by scanning"
         );
+    }
+
+    /// A `page_count`-page PDF of blank US Letter pages. At the default 150 dpi
+    /// render resolution each page rasterises to 1275 × 1650 × 3 bytes, the page
+    /// size #1721's accumulation arithmetic is stated in.
+    fn blank_letter_pages_pdf(page_count: usize) -> Vec<u8> {
+        use lopdf::{Document, Object, Stream, dictionary};
+
+        let mut document = Document::with_version("1.5");
+        let pages_id = document.new_object_id();
+        let mut kids = Vec::with_capacity(page_count);
+        for _ in 0..page_count {
+            let content_id = document.add_object(Stream::new(dictionary! {}, Vec::new()));
+            let page_id = document.new_object_id();
+            document.objects.insert(
+                page_id,
+                Object::Dictionary(dictionary! {
+                    "Type" => "Page",
+                    "Parent" => pages_id,
+                    "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+                    "Resources" => dictionary! {},
+                    "Contents" => content_id,
+                }),
+            );
+            kids.push(Object::Reference(page_id));
+        }
+        document.objects.insert(
+            pages_id,
+            Object::Dictionary(dictionary! {
+                "Type" => "Pages",
+                "Kids" => kids,
+                "Count" => page_count as i64,
+            }),
+        );
+        let catalog_id = document.add_object(dictionary! {
+            "Type" => "Catalog",
+            "Pages" => pages_id,
+        });
+        document.trailer.set("Root", catalog_id);
+
+        let mut bytes = Vec::new();
+        document.save_to(&mut bytes).expect("fixture PDF must serialize");
+        bytes
+    }
+
+    /// Regression test for #1721.
+    ///
+    /// The inference budget is charged per chunk. Before this fix every raster
+    /// the pass had already assembled was charged as well, so the running total
+    /// crossed `max_content_size` partway through a long document, the whole
+    /// layout pass failed, and extraction finished with no layout hints and a
+    /// warning the caller could not tell from "the model found nothing".
+    ///
+    /// Thirteen Letter pages is the smallest fixture that crosses it at the
+    /// 100 MiB default: the second chunk charged the eight retained rasters
+    /// (50,490,000 B), its own five (31,556,250 B) and one model workspace
+    /// (24,576,000 B), for 106,622,250 B against 104,857,600 B. Twelve pages
+    /// stayed under, so a shorter fixture passes on the broken tree and proves
+    /// nothing.
+    #[test]
+    fn layout_completes_on_a_document_longer_than_the_retained_rasters_used_to_allow() {
+        use crate::core::config::layout::LayoutStrategy;
+
+        const PAGE_COUNT: usize = 13;
+        const LETTER_RASTER_AT_DEFAULT_DPI: (u32, u32) = (1_275, 1_650);
+        // The second chunk is what charges the first chunk's retained rasters, so a
+        // fixture at or below the chunk size cannot reach the defect at all.
+        const { assert!(PAGE_COUNT > super::LAYOUT_BATCH_CHUNK_SIZE) };
+
+        let bytes = blank_letter_pages_pdf(PAGE_COUNT);
+        let config = LayoutDetectionConfig {
+            strategy: LayoutStrategy::Always,
+            ..Default::default()
+        };
+
+        let (output, render_warning) =
+            super::run_layout_for_pdf_pages(&bytes, &config, 1, GatedPageHandling::SkipRender)
+                .expect("a thirteen-page document must complete the layout pass");
+
+        assert!(
+            render_warning.is_none(),
+            "every page of the fixture renders: {render_warning:?}"
+        );
+        let (images, _results, _hints, detections) = output
+            .data
+            .expect("layout data must survive a document longer than twelve pages");
+        assert_eq!(images.len(), PAGE_COUNT);
+        assert_eq!(detections.len(), PAGE_COUNT);
+        for (page_index, (image, detection)) in images.iter().zip(&detections).enumerate() {
+            assert_eq!(
+                image.dimensions(),
+                LETTER_RASTER_AT_DEFAULT_DPI,
+                "page {} must rasterise at the standard Letter size the budget arithmetic assumes",
+                page_index + 1
+            );
+            assert_eq!(
+                (detection.page_width, detection.page_height),
+                LETTER_RASTER_AT_DEFAULT_DPI,
+                "page {} must carry a detection result taken from its own raster, not a placeholder",
+                page_index + 1
+            );
+        }
     }
 
     /// #196's combination step: a CPU-retry recovery warning and a

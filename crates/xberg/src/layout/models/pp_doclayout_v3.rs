@@ -61,7 +61,7 @@ use crate::layout::types::{BBox, LayoutClass, LayoutDetection};
 const DEFAULT_THRESHOLD: f32 = 0.5;
 
 /// PP-DocLayout-V3 input resolution (800 × 800).
-const INPUT_SIZE: u32 = 800;
+pub(crate) const INPUT_SIZE: u32 = 800;
 
 /// Number of columns in `fetch_name_0` rows (empirically confirmed: 7).
 const DET_ROW_COLS: usize = 7;

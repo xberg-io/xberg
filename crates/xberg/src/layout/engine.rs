@@ -8,9 +8,37 @@ use std::time::Instant;
 
 use image::RgbImage;
 
+/// Square model input side the inference workspace estimate is sized from.
+///
+/// Every built-in backend must fit inside it, which
+/// `layout_peak_tests::workspace_side_covers_every_built_in_backend_input`
+/// checks against the backends themselves rather than against a copy of their
+/// numbers. `CustomModelVariant::Yolox` takes its input dimensions from the
+/// caller and is the one backend this ceiling cannot bound: a custom export
+/// wider than this under-counts its own workspace.
 const LAYOUT_MODEL_MAX_INPUT_SIDE: u32 = 1_280;
+
+/// Bytes per pixel of the NCHW `f32` tensor a preprocessor builds.
+///
+/// [`crate::layout::preprocessing::preprocess_rescale`] and `preprocess_letterbox`
+/// both return an `Array4<f32>` of shape `(1, 3, side, side)`: three channels of
+/// four bytes each.
 const LAYOUT_MODEL_FLOAT_RGB_BYTES_PER_PIXEL: u64 = 12;
+
+/// Bytes per pixel of the resized RGB8 image held live beside that tensor.
+///
+/// Both preprocessors resize into an `RgbImage` and read from it while they fill
+/// the tensor, so the two buffers peak together rather than in sequence.
 const LAYOUT_MODEL_RESIZED_RGB_BYTES_PER_PIXEL: u64 = 3;
+
+/// Model input side of the DocLayNet-trained YOLO export.
+#[cfg(feature = "layout-detection")]
+const YOLO_DOC_LAY_NET_INPUT_SIDE: u32 = 640;
+
+/// Model input side of the DocStructBench-trained DocLayout-YOLO export, the
+/// largest of any built-in backend.
+#[cfg(feature = "layout-detection")]
+const YOLO_DOC_STRUCT_BENCH_INPUT_SIDE: u32 = 1_024;
 
 use crate::layout::error::LayoutError;
 #[cfg(not(target_arch = "wasm32"))]
@@ -207,8 +235,8 @@ impl LayoutEngine {
                     CustomModelVariant::YoloDocLayNet => Box::new(YoloModel::from_file(
                         &path_str,
                         YoloVariant::DocLayNet,
-                        640,
-                        640,
+                        YOLO_DOC_LAY_NET_INPUT_SIDE,
+                        YOLO_DOC_LAY_NET_INPUT_SIDE,
                         "Custom-YOLO-DocLayNet",
                         accel,
                         thread_budget,
@@ -217,8 +245,8 @@ impl LayoutEngine {
                     CustomModelVariant::YoloDocStructBench => Box::new(YoloModel::from_file(
                         &path_str,
                         YoloVariant::DocStructBench,
-                        1024,
-                        1024,
+                        YOLO_DOC_STRUCT_BENCH_INPUT_SIDE,
+                        YOLO_DOC_STRUCT_BENCH_INPUT_SIDE,
                         "Custom-DocLayout-YOLO",
                         accel,
                         thread_budget,
@@ -491,18 +519,29 @@ pub(crate) fn layout_inference_batch_capacity(
     Ok(capacity.min(candidate_count).max(1))
 }
 
-pub(crate) fn validate_layout_batch_peak(
-    images: &[&RgbImage],
-    security_limits: &crate::extractors::security::SecurityLimits,
-) -> crate::Result<()> {
-    let (width, height) = images.first().map_or((1, 1), |image| image.dimensions());
-    let current = images.iter().try_fold(0_u64, |total, image| {
+/// Sum the decoded size of every raster in `images`, reporting an overflow as a dimension
+/// error against `width` and `height`. The layout runner's per-chunk accounting and
+/// `validate_layout_batch_peak` both call this, so the two agree on what counts as live. ~keep
+pub(crate) fn live_raster_bytes<'a>(
+    images: impl IntoIterator<Item = &'a RgbImage>,
+    width: u32,
+    height: u32,
+) -> crate::Result<u64> {
+    images.into_iter().try_fold(0_u64, |total, image| {
         let bytes = u64::try_from(image.as_raw().len())
             .map_err(|_| crate::extraction::image_decode::image_dimension_error(width, height, u64::MAX, u64::MAX))?;
         total
             .checked_add(bytes)
             .ok_or_else(|| crate::extraction::image_decode::image_dimension_error(width, height, u64::MAX, u64::MAX))
-    })?;
+    })
+}
+
+pub(crate) fn validate_layout_batch_peak(
+    images: &[&RgbImage],
+    security_limits: &crate::extractors::security::SecurityLimits,
+) -> crate::Result<()> {
+    let (width, height) = images.first().map_or((1, 1), |image| image.dimensions());
+    let current = live_raster_bytes(images.iter().copied(), width, height)?;
     validate_layout_inference_peak(width, height, current, images.len(), security_limits)
 }
 
@@ -527,6 +566,40 @@ mod layout_peak_tests {
         assert_eq!(capacity, 2);
         validate_layout_inference_peak(PAGE_WIDTH, PAGE_HEIGHT, current_live_bytes, capacity, &limits)
             .expect("the selected subbatch must fit default limits");
+    }
+
+    /// Ties the workspace estimate to the things it estimates, so the three
+    /// constants behind it can be checked rather than trusted: the side against
+    /// every built-in backend's own input resolution, and the two per-pixel
+    /// figures against the buffer types the preprocessors allocate.
+    #[test]
+    fn workspace_side_covers_every_built_in_backend_input() {
+        for (backend, input_side) in [
+            ("RT-DETR", crate::layout::models::rtdetr::INPUT_SIZE),
+            ("PP-DocLayout-V3", crate::layout::models::pp_doclayout_v3::INPUT_SIZE),
+            ("YOLO DocLayNet", YOLO_DOC_LAY_NET_INPUT_SIDE),
+            ("DocLayout-YOLO DocStructBench", YOLO_DOC_STRUCT_BENCH_INPUT_SIDE),
+        ] {
+            assert!(
+                input_side <= LAYOUT_MODEL_MAX_INPUT_SIDE,
+                "{backend} runs at {input_side} px, above the {LAYOUT_MODEL_MAX_INPUT_SIDE} px workspace estimate"
+            );
+        }
+
+        assert_eq!(
+            LAYOUT_MODEL_FLOAT_RGB_BYTES_PER_PIXEL,
+            3 * size_of::<f32>() as u64,
+            "the tensor is three f32 channels per pixel"
+        );
+        assert_eq!(
+            LAYOUT_MODEL_RESIZED_RGB_BYTES_PER_PIXEL,
+            u64::from(image::ColorType::Rgb8.bytes_per_pixel()),
+            "the resized buffer is an RgbImage"
+        );
+        assert_eq!(
+            layout_model_workspace_bytes().expect("workspace estimate must be representable"),
+            24_576_000
+        );
     }
 }
 
