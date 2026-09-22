@@ -168,48 +168,66 @@ pub(crate) fn extract_text_from_native_document(
     }
 }
 
-/// Fast path: extract text without page tracking.
+/// The blank line written between two pages when no page marker is configured.
 ///
-/// Iterates pages one-by-one, applies control-char fixes and optional HTML
-/// conversion, and builds a single concatenated string. Pre-allocates capacity
-/// after sampling the first 5 pages.
-fn extract_text_fast_path(doc: &mut NativeDocument, margins: PageMarginFractions) -> Result<PdfTextExtractionResult> {
+/// `extractors::pdf::extraction::join_pages_with_boundaries` re-joins the same pages after
+/// reading-order reordering and has to produce the same offsets, so it reads this rather
+/// than repeating the literal. ~keep
+pub(crate) const PAGE_SEPARATOR: &str = "\n\n";
+
+/// Extract and clean one page's text.
+fn extract_one_page_text(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_index: usize,
+    excluded_layers: &std::collections::HashSet<String>,
+    margins: PageMarginFractions,
+) -> Result<String> {
+    let page_text = extract_page_text_column_aware(doc, page_index, excluded_layers, margins)?;
+    Ok(apply_text_cleanup(&page_text).into_owned())
+}
+
+/// Extract every page's cleaned text, in page order.
+///
+/// Pages are read in ascending order and that order is load-bearing, not incidental. A
+/// page's text depends on which pages were read before it: the document handle shares
+/// resolved font sets and TrueType CMaps between pages through its own caches, and where
+/// two subsets of one base font disagree about a glyph id the first one loaded wins (see
+/// `share_truetype_cmaps` and the font caches in `xberg-native-pdf`'s `document::fonts`).
+/// Reading the pages in any other order, including concurrently, silently changes the
+/// extracted text. Measured on a 731-page document: ascending order reproduces the same
+/// bytes on every run, while parsing the same pages two at a time over one handle drops
+/// text and lands on a different result each run. Removing that order dependence is
+/// GH#1725; until it is gone this loop must stay in page order. ~keep
+fn extract_all_page_texts(doc: &xberg_native_pdf::PdfDocument, margins: PageMarginFractions) -> Result<Vec<String>> {
     let page_count = doc
-        .doc
         .page_count()
         .map_err(|e| PdfError::TextExtractionFailed(format!("Failed to get page count: {}", e)))?;
 
     // Issue #67: default-off optional-content (OCG/layer) groups per
     // `/OCProperties/D` (ISO 32000-1:2008 §8.11.4). Computed once per
     // document; empty for the common case of no `/OCProperties`.
-    let excluded_layers = xberg_native_pdf::optional_content::compute_default_off_ocgs(&doc.doc);
+    let excluded_layers = xberg_native_pdf::optional_content::compute_default_off_ocgs(doc);
 
-    let mut content = String::new();
-    let mut total_sample_size = 0usize;
-    let mut sample_count = 0;
+    (0..page_count)
+        .map(|page_idx| extract_one_page_text(doc, page_idx, &excluded_layers, margins))
+        .collect()
+}
 
-    for page_idx in 0..page_count {
-        let page_text = extract_page_text_column_aware(&mut doc.doc, page_idx, &excluded_layers, margins)?;
+/// Fast path: extract text without page tracking.
+///
+/// Extracts every page through [`extract_all_page_texts`], then concatenates the
+/// pages in order into a single string.
+fn extract_text_fast_path(doc: &NativeDocument, margins: PageMarginFractions) -> Result<PdfTextExtractionResult> {
+    let page_texts = extract_all_page_texts(&doc.doc, margins)?;
 
-        let page_size = page_text.len();
+    let separators = page_texts.len().saturating_sub(1) * PAGE_SEPARATOR.len();
+    let mut content = String::with_capacity(page_texts.iter().map(String::len).sum::<usize>() + separators);
 
+    for (page_idx, page_text) in page_texts.iter().enumerate() {
         if page_idx > 0 {
-            content.push_str("\n\n");
+            content.push_str(PAGE_SEPARATOR);
         }
-
-        let cleaned = apply_text_cleanup(&page_text);
-        content.push_str(&cleaned);
-
-        if page_idx < 5 {
-            total_sample_size += page_size;
-            sample_count += 1;
-        }
-
-        if page_idx == 4 && sample_count > 0 && page_count > 5 {
-            let avg_page_size = total_sample_size / sample_count;
-            let estimated_remaining = avg_page_size * (page_count - 5);
-            content.reserve(estimated_remaining + (estimated_remaining / 10));
-        }
+        content.push_str(page_text);
     }
 
     Ok((content, None, None))
@@ -221,19 +239,28 @@ fn extract_text_fast_path(doc: &mut NativeDocument, margins: PageMarginFractions
 /// offsets for each page, optionally collects per-page `PageContent`, and inserts
 /// page markers when configured.
 fn extract_text_with_tracking(
-    doc: &mut NativeDocument,
+    doc: &NativeDocument,
     config: &PageConfig,
     margins: PageMarginFractions,
 ) -> Result<PdfTextExtractionResult> {
-    let page_count = doc
-        .doc
-        .page_count()
-        .map_err(|e| PdfError::TextExtractionFailed(format!("Failed to get page count: {}", e)))?;
+    let page_texts = extract_all_page_texts(&doc.doc, margins)?;
+    let page_count = page_texts.len();
 
-    // Issue #67: see `extract_text_fast_path` for rationale.
-    let excluded_layers = xberg_native_pdf::optional_content::compute_default_off_ocgs(&doc.doc);
+    let markers: Vec<String> = if config.insert_page_markers {
+        (1..=page_count)
+            .map(|page_number| config.marker_format.replace("{page_num}", &page_number.to_string()))
+            .collect()
+    } else {
+        Vec::new()
+    };
 
-    let mut content = String::new();
+    let separators: usize = if config.insert_page_markers {
+        markers.iter().map(String::len).sum()
+    } else {
+        page_count.saturating_sub(1) * PAGE_SEPARATOR.len()
+    };
+
+    let mut content = String::with_capacity(page_texts.iter().map(String::len).sum::<usize>() + separators);
     let mut boundaries = Vec::with_capacity(page_count);
     let mut page_contents = if config.extract_pages {
         Some(Vec::with_capacity(page_count))
@@ -241,29 +268,14 @@ fn extract_text_with_tracking(
         None
     };
 
-    let mut total_sample_size = 0usize;
-    let mut sample_count = 0;
-
-    for page_idx in 0..page_count {
+    for (page_idx, cleaned) in page_texts.into_iter().enumerate() {
         let page_number = page_idx + 1;
 
-        let page_text = extract_page_text_column_aware(&mut doc.doc, page_idx, &excluded_layers, margins)?;
-
-        let page_size = page_text.len();
-
-        if page_idx < 5 {
-            total_sample_size += page_size;
-            sample_count += 1;
-        }
-
         if config.insert_page_markers {
-            let marker = config.marker_format.replace("{page_num}", &page_number.to_string());
-            content.push_str(&marker);
+            content.push_str(&markers[page_idx]);
         } else if page_idx > 0 {
-            content.push_str("\n\n");
+            content.push_str(PAGE_SEPARATOR);
         }
-
-        let cleaned = apply_text_cleanup(&page_text);
 
         let byte_start = content.len();
         content.push_str(&cleaned);
@@ -279,7 +291,7 @@ fn extract_text_with_tracking(
             let is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&cleaned));
             pages.push(PageContent {
                 page_number: page_number as u32,
-                content: cleaned.into_owned(),
+                content: cleaned,
                 tables: Vec::new(),
                 image_indices: Vec::new(),
                 image_preprocessing: None,
@@ -291,13 +303,6 @@ fn extract_text_with_tracking(
                 sheet_name: None,
                 ocr_confidence: None,
             });
-        }
-
-        if page_idx == 4 && page_count > 5 && sample_count > 0 {
-            let avg_page_size = total_sample_size / sample_count;
-            let estimated_remaining = avg_page_size * (page_count - 5);
-            let separator_overhead = (page_count - 5) * 3;
-            content.reserve(estimated_remaining + separator_overhead + (estimated_remaining / 10));
         }
     }
 
@@ -2029,7 +2034,7 @@ fn retain_spans_inside_page_margins(
 /// Applies sparse-column and glyph-fragmentation repairs before assembling the
 /// page text.
 fn extract_page_text_column_aware(
-    doc: &mut xberg_native_pdf::PdfDocument,
+    doc: &xberg_native_pdf::PdfDocument,
     page_index: usize,
     excluded_layers: &std::collections::HashSet<String>,
     margins: PageMarginFractions,
@@ -4440,5 +4445,178 @@ mod tests {
             reorder_band_columns(&spans, &band, SPLIT_X).is_none(),
             "only 5 of the left side's 7 spans carry ink; the density gate must still refuse the band"
         );
+    }
+
+    /// Build a `page_count`-page PDF where every page carries `rows` lines of Standard-14
+    /// text in four columns and opens with a token unique to that page (`PAGEMARK0007`).
+    ///
+    /// The text is real content-stream operators, not an empty `/MediaBox`, so each page
+    /// costs real parsing, font-metric and span-assembly work, so the page-order test
+    /// exercises the same per-page path a real document does.
+    fn build_paged_text_pdf(page_count: usize, rows: usize) -> Vec<u8> {
+        let font_obj = 3 + 2 * page_count;
+        let mut pdf = b"%PDF-1.4\n".to_vec();
+        let mut offsets: Vec<usize> = Vec::new();
+
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+
+        offsets.push(pdf.len());
+        let kids: String = (0..page_count).map(|i| format!("{} 0 R ", 3 + i)).collect();
+        pdf.extend_from_slice(
+            format!(
+                "2 0 obj\n<< /Type /Pages /Kids [{}] /Count {} >>\nendobj\n",
+                kids.trim_end(),
+                page_count
+            )
+            .as_bytes(),
+        );
+
+        for page in 0..page_count {
+            offsets.push(pdf.len());
+            pdf.extend_from_slice(
+                format!(
+                    "{} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] \
+                     /Contents {} 0 R /Resources << /Font << /F1 {} 0 R >> >> >>\nendobj\n",
+                    3 + page,
+                    3 + page_count + page,
+                    font_obj
+                )
+                .as_bytes(),
+            );
+        }
+
+        const COLUMN_X: [f32; 4] = [40.0, 180.0, 320.0, 460.0];
+        for page in 0..page_count {
+            let mut stream = String::new();
+            for row in 0..rows {
+                let y = 760.0 - (row as f32) * 14.0;
+                for (col, x) in COLUMN_X.iter().enumerate() {
+                    let text = if row == 0 && col == 0 {
+                        format!("PAGEMARK{:04}", page + 1)
+                    } else {
+                        format!("p{}r{}c{} lorem ipsum", page + 1, row, col)
+                    };
+                    stream.push_str(&format!("BT /F1 10 Tf {:.1} {:.1} Td ({}) Tj ET\n", x, y, text));
+                }
+            }
+            offsets.push(pdf.len());
+            pdf.extend_from_slice(
+                format!(
+                    "{} 0 obj\n<< /Length {} >>\nstream\n{}\nendstream\nendobj\n",
+                    3 + page_count + page,
+                    stream.len(),
+                    stream
+                )
+                .as_bytes(),
+            );
+        }
+
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(
+            format!(
+                "{} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica \
+                 /Encoding /WinAnsiEncoding >>\nendobj\n",
+                font_obj
+            )
+            .as_bytes(),
+        );
+
+        let xref_pos = pdf.len();
+        let total_objs = offsets.len() + 1;
+        pdf.extend_from_slice(format!("xref\n0 {}\n", total_objs).as_bytes());
+        pdf.extend_from_slice(b"0000000000 65535 f\r\n");
+        for &off in &offsets {
+            pdf.extend_from_slice(format!("{off:010} 00000 n\r\n").as_bytes());
+        }
+        pdf.extend_from_slice(
+            format!(
+                "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n",
+                total_objs, xref_pos
+            )
+            .as_bytes(),
+        );
+        pdf
+    }
+
+    /// The page number carried by every `PAGEMARK` token in `text`, in the order they appear.
+    fn pagemark_sequence(text: &str) -> Vec<usize> {
+        text.match_indices("PAGEMARK")
+            .filter_map(|(at, _)| text.get(at + "PAGEMARK".len()..at + "PAGEMARK".len() + 4))
+            .filter_map(|digits| digits.parse::<usize>().ok())
+            .collect()
+    }
+
+    /// #1723: both text paths must emit the pages in ascending order and unaltered. A test
+    /// that only counts pages passes on a shuffled document, so this pins the sequence and
+    /// the per-page bytes: the collected texts must equal a page-by-page run, the
+    /// concatenation must carry the page markers in ascending order, and each tracked page
+    /// boundary must slice out exactly its own page. Page order is what a reader of
+    /// `extract_all_page_texts` is most likely to trade away for speed, and the text it
+    /// feeds is the same text every downstream consumer indexes by offset.
+    #[test]
+    fn native_page_text_preserves_page_order_and_content() {
+        let page_count = 24;
+        let pdf = build_paged_text_pdf(page_count, 10);
+        let mut doc = NativeDocument::open_bytes(&pdf).expect("fixture must open");
+        let margins = PageMarginFractions::default();
+
+        let excluded_layers = xberg_native_pdf::optional_content::compute_default_off_ocgs(&doc.doc);
+        let sequential: Vec<String> = (0..page_count)
+            .map(|page_idx| {
+                extract_one_page_text(&doc.doc, page_idx, &excluded_layers, margins).expect("page must extract")
+            })
+            .collect();
+        assert!(
+            sequential.iter().all(|page| !page.trim().is_empty()),
+            "fixture pages must carry text, otherwise this test proves nothing"
+        );
+
+        let collected = extract_all_page_texts(&doc.doc, margins).expect("collecting every page must succeed");
+        assert_eq!(
+            collected, sequential,
+            "the collected page texts must match a page-by-page run, page for page"
+        );
+
+        let (content, _, _) =
+            extract_text_from_native_document(&mut doc, None, None, margins).expect("fast path must succeed");
+        // The separator is spelled out rather than read from `PAGE_SEPARATOR`: an assertion
+        // built from the same constant the code writes cannot fail when that constant
+        // changes, which is the one thing every consumer's byte offsets depend on. ~keep
+        assert_eq!(
+            content,
+            sequential.join("\n\n"),
+            "fast path must concatenate pages in order, separated by one blank line"
+        );
+        assert_eq!(
+            pagemark_sequence(&content),
+            (1..=page_count).collect::<Vec<_>>(),
+            "page markers must appear in ascending page order"
+        );
+
+        let page_config = PageConfig {
+            extract_pages: true,
+            ..PageConfig::default()
+        };
+        let (tracked, boundaries, pages) =
+            extract_text_from_native_document(&mut doc, Some(&page_config), None, margins)
+                .expect("tracking path must succeed");
+        let boundaries = boundaries.expect("tracking path must report boundaries");
+        let pages = pages.expect("tracking path must report page contents");
+        assert_eq!(boundaries.len(), page_count);
+        assert_eq!(pages.len(), page_count);
+
+        for (page_idx, boundary) in boundaries.iter().enumerate() {
+            assert_eq!(boundary.page_number, (page_idx + 1) as u32);
+            let slice = &tracked[boundary.byte_start..boundary.byte_end];
+            assert_eq!(
+                slice,
+                sequential[page_idx],
+                "boundary {} must slice out its own page",
+                page_idx + 1
+            );
+            assert_eq!(pages[page_idx].content, sequential[page_idx]);
+            assert_eq!(pages[page_idx].page_number, (page_idx + 1) as u32);
+        }
     }
 }

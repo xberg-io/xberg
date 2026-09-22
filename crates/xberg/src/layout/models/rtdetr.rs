@@ -16,7 +16,7 @@ use crate::layout::types::{BBox, LayoutClass, LayoutDetection};
 const DEFAULT_THRESHOLD: f32 = 0.3;
 
 /// RT-DETR input resolution.
-const INPUT_SIZE: u32 = 640;
+pub(crate) const INPUT_SIZE: u32 = 640;
 
 pub(crate) fn effective_acceleration(accel: Option<&AccelerationConfig>) -> Option<AccelerationConfig> {
     // The current RT-DETR export fails under CoreML; keep auto reliable while preserving explicit CoreML.

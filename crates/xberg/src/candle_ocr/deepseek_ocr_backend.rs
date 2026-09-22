@@ -51,6 +51,13 @@ fn requested_dtype(value: Option<CandleDeepseekOcrDtype>) -> Option<DType> {
     }
 }
 
+/// Engine pool key, unchanged from before GH#1722: keyed by the CONCRETE `dtype`, not the raw
+/// request. Keying on the raw request instead (an earlier version of this fix did that) made
+/// the key finer: a caller who leaves `dtype` unset and a caller who asks for the device's own
+/// default dtype explicitly (e.g. `"bf16"` on CUDA) stopped sharing one engine and each paid
+/// for a full cold start, a second multi-GB model resident for the life of the process since
+/// the pool never evicts. Resolving `dtype` before the key is built (see [`resolve_device_once`]
+/// below) avoids that split without touching this key at all.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct EnginePoolKey {
     preference: DevicePreference,
@@ -76,6 +83,55 @@ type PooledEngine = Arc<parking_lot::Mutex<DeepseekOCREngine>>;
 static ENGINE_POOL: LazyLock<EngineCache<EnginePoolKey, parking_lot::Mutex<DeepseekOCREngine>>> =
     LazyLock::new(EngineCache::unbounded);
 
+/// Resolved devices keyed by the preference that produced them.
+///
+/// This is the same [`EngineCache`] the engine pool above uses, at a different key and value.
+/// It is a separate instance rather than a second use of `ENGINE_POOL`: the device is resolved
+/// before the dtype is known, and folding it into the pool would re-split the pool key on dtype
+/// (see [`EnginePoolKey`]) and hold two identical engines resident.
+static DEVICE_CACHE: LazyLock<EngineCache<DevicePreference, Device>> = LazyLock::new(EngineCache::unbounded);
+
+/// Resolve `preference` to a [`Device`], memoized per preference for the life of the process.
+///
+/// `process_image` calls this on every page, but the underlying accelerator probe -- and the
+/// 'auto' fallback warning it can log -- only runs on the first call for a given preference
+/// instead of once per page (GH#1722): a 731-page document used to log 731 identical warnings.
+/// GLM-OCR, PaddleOCR-VL and TrOCR avoid the same problem by resolving inside their engine
+/// pool's cold start instead; DeepSeek-OCR cannot do that without re-splitting the engine pool
+/// key on dtype (see [`EnginePoolKey`]), so it memoizes the device directly instead.
+fn resolve_device_once(preference: DevicePreference) -> crate::Result<Device> {
+    resolve_device_in(&DEVICE_CACHE, preference, DevicePreference::select)
+}
+
+/// Resolve `preference` through `select` on the first call for that preference and reuse the
+/// device afterwards, in `cache`.
+///
+/// `cache` and `select` are parameters so a test can drive a fresh, non-shared cache with a
+/// counting stand-in: the real accelerator probe has no observable call count of its own, so
+/// that is the only way to pin "resolved once" rather than "resolved once, probably."
+///
+/// [`EngineCache::get_or_try_init`] keeps nothing when `init` returns `Err`, so a failed probe
+/// is retried on the next page rather than pinning the process to its first answer. An explicit
+/// `Cuda` preference whose init fails transiently therefore still recovers, which is what it did
+/// before this cache existed and what the peer backends do today. `Auto` is the exception, and
+/// deliberately so: its CPU fallback is a *success*, so it is cached like any other, and a host
+/// whose accelerator never appears probes once instead of once per page. That is the 731-line
+/// log this cache exists to remove.
+fn resolve_device_in(
+    cache: &EngineCache<DevicePreference, Device>,
+    preference: DevicePreference,
+    select: impl FnOnce(DevicePreference) -> xberg_candle_ocr::Result<Device>,
+) -> crate::Result<Device> {
+    cache
+        .get_or_try_init(preference, || {
+            select(preference).map_err(|e| crate::XbergError::Ocr {
+                message: format!("Failed to select compute device: {e}"),
+                source: Some(Box::new(e)),
+            })
+        })
+        .map(|device| (*device).clone())
+}
+
 fn get_or_init_engine(
     preference: DevicePreference,
     device: Device,
@@ -88,7 +144,7 @@ fn get_or_init_engine(
     ENGINE_POOL.get_or_try_init(key, || {
         tracing::info!(
             preference = ?preference,
-            dtype = ?dtype,
+            ?dtype,
             model_path = %model_path,
             "Initialising DeepSeek-OCR engine (cold start)"
         );
@@ -272,10 +328,7 @@ impl OcrBackend for DeepseekOcrBackend {
             };
             let model_path = model_path.to_string_lossy().into_owned();
 
-            let device = options.device.select().map_err(|e| crate::XbergError::Ocr {
-                message: format!("Failed to select compute device: {e}"),
-                source: Some(Box::new(e)),
-            })?;
+            let device = resolve_device_once(options.device)?;
             let dtype = options.dtype.unwrap_or_else(|| default_dtype_for(&device));
             let engine = get_or_init_engine(options.device, device, dtype, &model_path, options.version)?;
             let mut engine_guard = engine.lock();
@@ -567,6 +620,173 @@ mod tests {
         assert_eq!(
             pool.get(&EnginePoolKey::new(DevicePreference::Auto, DType::F32, "/models/v1", 1)),
             None
+        );
+    }
+
+    /// Exercises [`resolve_device_in`] -- the exact memoization `resolve_device_once` wraps
+    /// around the shared process-wide `DEVICE_CACHE` -- against a FRESH, non-shared cache
+    /// instance, with a counting stand-in in place of [`DevicePreference::select`]. Two things
+    /// forced that shape rather than calling `resolve_device_once` or `process_image` directly:
+    ///
+    /// - The real `DEVICE_CACHE` is a single process-wide static; Rust's test runner shares one
+    ///   process across every test in this binary, so a test against the shared instance would
+    ///   see whatever an earlier test (or a later one, run in a different order) already cached
+    ///   for the same preference, rather than a clean first call.
+    /// - `DevicePreference::select` has no observable call count of its own -- on a CPU-only
+    ///   build it is a cheap, deterministic match with no counter to read -- so "resolved once"
+    ///   can only be pinned by substituting a selector that counts, not by calling the real one
+    ///   and inspecting a side effect it does not have.
+    ///
+    /// This pins that `resolve_device_in` calls its `select` argument at most once across
+    /// repeated calls with the same preference. It does NOT exercise `process_image` or the
+    /// shared `resolve_device_once` wrapper end to end -- doing that would need a real model
+    /// download -- so it would not by itself catch a regression where a future change calls
+    /// `DevicePreference::select` directly again somewhere in `process_image`, bypassing
+    /// `resolve_device_once` entirely. What guards against that is `resolve_device_once` being
+    /// the only place in this file that calls `DevicePreference::select`.
+    #[test]
+    fn device_cache_resolves_each_preference_once_across_several_calls() {
+        let cache = EngineCache::unbounded();
+        let selects = std::sync::atomic::AtomicUsize::new(0);
+
+        for page in 0..5 {
+            let device = resolve_device_in(&cache, DevicePreference::Auto, |_preference| {
+                selects.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Ok(Device::Cpu)
+            });
+            assert!(device.is_ok(), "page {page}: {:?}", device.err());
+        }
+
+        assert_eq!(
+            selects.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "the selector must run once per preference, not once per call"
+        );
+    }
+
+    /// The four `DevicePreference` variants must land under four distinct cache keys: resolving
+    /// one preference must not short-circuit a later call for a different one.
+    #[test]
+    fn device_cache_keeps_each_preference_in_its_own_slot() {
+        let cache = EngineCache::unbounded();
+        let selects = std::sync::atomic::AtomicUsize::new(0);
+        let counting_select = |preference: DevicePreference| {
+            selects.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            match preference {
+                DevicePreference::Cpu | DevicePreference::Auto => Ok(Device::Cpu),
+                DevicePreference::Cuda | DevicePreference::Metal => Err(
+                    xberg_candle_ocr::CandleOcrError::UnsupportedConfig("no accelerator on this test host".into()),
+                ),
+            }
+        };
+
+        assert!(resolve_device_in(&cache, DevicePreference::Cpu, counting_select).is_ok());
+        assert!(resolve_device_in(&cache, DevicePreference::Auto, counting_select).is_ok());
+        assert!(resolve_device_in(&cache, DevicePreference::Cuda, counting_select).is_err());
+        assert!(resolve_device_in(&cache, DevicePreference::Metal, counting_select).is_err());
+
+        assert_eq!(
+            selects.load(std::sync::atomic::Ordering::SeqCst),
+            4,
+            "four distinct preferences must each resolve once, under their own key"
+        );
+    }
+
+    /// A failed probe must not be memoized. The peer backends reach the same cache through
+    /// [`EngineCache::get_or_try_init`], which keeps nothing when `init` fails (see
+    /// `get_or_try_init_keeps_nothing_when_init_fails`), and before this cache existed
+    /// DeepSeek-OCR re-selected on every page, so a transient accelerator failure healed by
+    /// itself. Caching the `Err` would have pinned the process to its first answer for good.
+    ///
+    /// The stand-in fails once and then succeeds, which is exactly the transient shape.
+    #[test]
+    fn a_failed_device_probe_is_retried_rather_than_cached() {
+        let cache = EngineCache::unbounded();
+        let selects = std::sync::atomic::AtomicUsize::new(0);
+        let select_device = |_preference: DevicePreference| -> xberg_candle_ocr::Result<Device> {
+            let attempt = selects.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if attempt == 0 {
+                return Err(xberg_candle_ocr::CandleOcrError::UnsupportedConfig(
+                    "accelerator busy on the first attempt".into(),
+                ));
+            }
+            Ok(Device::Cpu)
+        };
+
+        assert!(
+            resolve_device_in(&cache, DevicePreference::Cuda, select_device).is_err(),
+            "the first probe fails"
+        );
+        assert!(
+            resolve_device_in(&cache, DevicePreference::Cuda, select_device).is_ok(),
+            "a cached Err would make the second call fail too, pinning the process to the failure"
+        );
+        assert_eq!(
+            selects.load(std::sync::atomic::Ordering::SeqCst),
+            2,
+            "the failed probe must be retried, so the selector runs a second time"
+        );
+    }
+
+    /// The error a failed probe returns keeps the candle error as its `source`. The cache holds
+    /// the `XbergError` itself rather than a `String`, so nothing has to be stringified to make
+    /// it cacheable and the chain survives.
+    #[test]
+    fn a_failed_device_probe_keeps_the_underlying_error_as_its_source() {
+        let cache = EngineCache::unbounded();
+        let error = resolve_device_in(&cache, DevicePreference::Cuda, |_preference| {
+            Err(xberg_candle_ocr::CandleOcrError::UnsupportedConfig(
+                "no accelerator on this test host".into(),
+            ))
+        })
+        .expect_err("a failed probe must be an error");
+
+        match error {
+            crate::XbergError::Ocr { source, .. } => {
+                let source = source.expect("the candle error must survive as the source");
+                assert!(
+                    source.to_string().contains("no accelerator on this test host"),
+                    "the source must be the underlying error, got: {source}"
+                );
+            }
+            other => panic!("expected an Ocr error, got {other:?}"),
+        }
+    }
+
+    /// Deliberately unmemoized baseline for the RED half of the fix: identical to
+    /// `resolve_device_in` except it calls `select` on every call instead of caching it
+    /// after the first. Run only by the test below, never by production code, to show the same
+    /// assertion `device_cache_resolves_each_preference_once_across_several_calls` makes fails
+    /// without the cache -- i.e. that the assertion is capable of catching the bug the cache
+    /// fixes, not just of passing.
+    fn resolve_without_memoizing(
+        preference: DevicePreference,
+        select: impl Fn(DevicePreference) -> xberg_candle_ocr::Result<Device>,
+    ) -> crate::Result<Device> {
+        select(preference).map_err(|e| crate::XbergError::Ocr {
+            message: format!("Failed to select compute device: {e}"),
+            source: Some(Box::new(e)),
+        })
+    }
+
+    #[test]
+    fn unmemoized_resolution_would_fail_the_once_per_preference_assertion() {
+        let selects = std::sync::atomic::AtomicUsize::new(0);
+        let select_device = |_preference: DevicePreference| -> xberg_candle_ocr::Result<Device> {
+            selects.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(Device::Cpu)
+        };
+
+        for page in 0..5 {
+            let device = resolve_without_memoizing(DevicePreference::Auto, select_device);
+            assert!(device.is_ok(), "page {page}: {:?}", device.err());
+        }
+
+        assert_eq!(
+            selects.load(std::sync::atomic::Ordering::SeqCst),
+            5,
+            "the unmemoized baseline resolves once per call -- this is the GH#1722 bug shape, \
+             confirming the assertion above is not vacuously true"
         );
     }
 }
