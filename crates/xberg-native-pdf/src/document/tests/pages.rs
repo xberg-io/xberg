@@ -200,7 +200,7 @@ fn should_resolve_the_page_normally_when_the_chain_stays_under_the_depth_cap() {
     assert_eq!(doc.all_page_refs().unwrap().len(), 1);
 }
 
-fn build_page_inheritance_pdf() -> Vec<u8> {
+fn build_page_inheritance_pdf(intermediate_attrs: &str) -> Vec<u8> {
     let mut kids = String::new();
     let mut objects = Vec::new();
     objects.push((3, b"<< /Type /Pages /Parent 2 0 R /Count 65 /Kids [".to_vec()));
@@ -213,9 +213,9 @@ fn build_page_inheritance_pdf() -> Vec<u8> {
         };
         objects.push((id, format!("<< /Type /Page /Parent 3 0 R {attrs} >>").into_bytes()));
     }
-    objects[0].1.extend_from_slice(
-        format!("{kids}] /Resources 97 0 R /MediaBox [0 0 200 200] /CropBox 98 0 R /Rotate 99 0 R >>").as_bytes(),
-    );
+    objects[0]
+        .1
+        .extend_from_slice(format!("{kids}] {intermediate_attrs} >>").as_bytes());
     objects.push((69, b"<< /Type /Page /Parent 2 0 R >>".to_vec()));
     objects.extend([
         (80, b"<< /Marker 8 >>".to_vec()),
@@ -234,7 +234,11 @@ fn build_page_inheritance_pdf() -> Vec<u8> {
 fn assert_inherited_values(doc: &PdfDocument, index: usize, media: f32, crop: i64, rotation: i32, marker: i64) {
     let page = doc.get_page(index).unwrap();
     let dict = page.as_dict().unwrap();
-    assert_eq!(doc.get_page_media_box(index).unwrap(), (0.0, 0.0, media, media));
+    assert_eq!(
+        doc.get_page_media_box(index)
+            .unwrap_or_else(|error| panic!("page {index}: {error:?}; dictionary: {dict:?}")),
+        (0.0, 0.0, media, media)
+    );
     let crop_object = doc.resolve_obj_ref(dict.get("CropBox").unwrap());
     let crop_array = crop_object.as_array().unwrap();
     assert_eq!(crop_array[2].as_integer(), Some(crop));
@@ -248,8 +252,17 @@ fn assert_inherited_values(doc: &PdfDocument, index: usize, media: f32, crop: i6
 
 #[test]
 fn should_fall_back_from_dangling_inheritable_references_in_lazy_and_bulk_page_walks() {
-    let pdf = build_page_inheritance_pdf();
+    let pdf = build_page_inheritance_pdf("/Resources 97 0 R /MediaBox [0 0 200 200] /CropBox 98 0 R /Rotate 99 0 R");
     let lazy = PdfDocument::from_bytes(pdf.clone()).unwrap();
+    assert!(
+        lazy.get_page_ref(0).is_ok(),
+        "tree must be traversable: {:?}",
+        lazy.get_page_ref(0)
+    );
+    assert_eq!(
+        lazy.load_object(ObjectRef { id: 94, generation: 0 }).unwrap(),
+        Object::Null
+    );
     assert_inherited_values(&lazy, 0, 200.0, 90, 90, 1);
     assert_inherited_values(&lazy, 1, 300.0, 280, 270, 8);
     assert_inherited_values(&lazy, 65, 100.0, 90, 90, 1);
@@ -258,7 +271,41 @@ fn should_fall_back_from_dangling_inheritable_references_in_lazy_and_bulk_page_w
     for index in 0..=64 {
         bulk.get_page(index).unwrap();
     }
+    assert_eq!(
+        bulk.page_cache.lock_or_recover().len(),
+        66,
+        "bulk walk must cache every page"
+    );
     assert_inherited_values(&bulk, 0, 200.0, 90, 90, 1);
     assert_inherited_values(&bulk, 1, 300.0, 280, 270, 8);
     assert_inherited_values(&bulk, 65, 100.0, 90, 90, 1);
+}
+
+#[test]
+fn should_prefer_nearest_valid_ancestor_and_preserve_valid_indirect_leaf_values() {
+    let pdf = build_page_inheritance_pdf(
+        "/Resources << /Marker 2 >> /MediaBox [0 0 200 200] /CropBox [0 0 180 180] /Rotate 180",
+    );
+    for bulk_walk in [false, true] {
+        let doc = PdfDocument::from_bytes(pdf.clone()).unwrap();
+        if bulk_walk {
+            for index in 0..=64 {
+                doc.get_page(index).unwrap();
+            }
+            assert_eq!(
+                doc.page_cache.lock_or_recover().len(),
+                66,
+                "bulk walk must cache every page"
+            );
+        }
+        assert_inherited_values(&doc, 0, 200.0, 180, 180, 2);
+        assert_inherited_values(&doc, 1, 300.0, 280, 270, 8);
+        assert_inherited_values(&doc, 65, 100.0, 90, 90, 1);
+
+        let leaf = doc.get_page(1).unwrap();
+        let leaf = leaf.as_dict().unwrap();
+        for (attribute, object_id) in [("Resources", 80), ("MediaBox", 81), ("CropBox", 82), ("Rotate", 83)] {
+            assert_eq!(leaf.get(attribute).unwrap().as_reference().unwrap().id, object_id);
+        }
+    }
 }

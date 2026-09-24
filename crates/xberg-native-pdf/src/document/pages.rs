@@ -7,6 +7,14 @@
 use super::*;
 
 impl PdfDocument {
+    fn inheritable_value_is_resolvable(&self, value: &Object) -> bool {
+        let Some(reference) = value.as_reference() else {
+            return true;
+        };
+        // ~keep Free xref slots load as Null rather than Err; neither can supply an inherited value.
+        matches!(self.load_object(reference), Ok(resolved) if !matches!(resolved, Object::Null | Object::Reference(_)))
+    }
+
     /// Get the number of pages in the document.
     ///
     /// This function:
@@ -601,7 +609,9 @@ impl PdfDocument {
             "Page" => {
                 let mut page_dict = node_dict.clone();
                 for attr_name in &["Resources", "MediaBox", "CropBox", "Rotate"] {
-                    if !page_dict.contains_key(*attr_name)
+                    if !page_dict
+                        .get(*attr_name)
+                        .is_some_and(|value| self.inheritable_value_is_resolvable(value))
                         && let Some(inherited_value) = inherited.get(*attr_name)
                     {
                         tracing::debug!(target: LOG_TARGET, "Page {} inheriting {}: {:?}", *page_index, attr_name, inherited_value);
@@ -628,7 +638,10 @@ impl PdfDocument {
                 // insert() is correct here because we snapshot/restore `inherited` around
                 // the recursion, so this node's values apply only to its subtree. ~keep
                 for attr_name in &["Resources", "MediaBox", "CropBox", "Rotate"] {
-                    if let Some(attr_value) = node_dict.get(*attr_name) {
+                    if let Some(attr_value) = node_dict
+                        .get(*attr_name)
+                        .filter(|value| self.inheritable_value_is_resolvable(value))
+                    {
                         tracing::debug!(target: LOG_TARGET,
                             "Pages node at {:?} providing inheritable {}: {:?}",
                             node_ref,
@@ -875,7 +888,9 @@ impl PdfDocument {
                     let inheritable_attrs = ["Resources", "MediaBox", "CropBox", "Rotate"];
 
                     for attr_name in &inheritable_attrs {
-                        if !page_dict.contains_key(*attr_name)
+                        if !page_dict
+                            .get(*attr_name)
+                            .is_some_and(|value| self.inheritable_value_is_resolvable(value))
                             && let Some(inherited_value) = inherited.get(*attr_name)
                         {
                             tracing::debug!(target: LOG_TARGET,
@@ -900,12 +915,11 @@ impl PdfDocument {
                 let inheritable_attrs = ["Resources", "MediaBox", "CropBox", "Rotate"];
 
                 for attr_name in &inheritable_attrs {
-                    if let Some(attr_value) = node_dict.get(*attr_name) {
-                        // Only add if not already in inherited map (child values override parent)
-                        // ~keep
-                        inherited
-                            .entry(attr_name.to_string())
-                            .or_insert_with(|| attr_value.clone());
+                    if let Some(attr_value) = node_dict
+                        .get(*attr_name)
+                        .filter(|value| self.inheritable_value_is_resolvable(value))
+                    {
+                        inherited.insert(attr_name.to_string(), attr_value.clone());
                     }
                 }
 
@@ -927,11 +941,13 @@ impl PdfDocument {
                         .as_reference()
                         .ok_or_else(|| Error::InvalidPdf("Kid in /Kids array is not a reference".to_string()))?;
 
+                    // ~keep A failed child may alter inheritance while descending; isolate siblings.
+                    let mut child_inherited = inherited.clone();
                     match self.get_page_from_tree_inner(
                         kid_ref,
                         target_index,
                         current_index,
-                        inherited,
+                        &mut child_inherited,
                         visited,
                         depth + 1,
                     ) {
