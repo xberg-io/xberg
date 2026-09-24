@@ -3,8 +3,9 @@
 //! Verifies that embedded images in PDFs produce proper `![](image_N.fmt)`
 //! references instead of empty `![]()` placeholders.
 
+// `Runtime::new` needs tokio's `rt-multi-thread`, which bare `pdf` does not pull in. ~keep
+#![cfg(all(feature = "pdf", feature = "tokio-runtime"))]
 #![allow(clippy::print_stdout, clippy::print_stderr, clippy::dbg_macro)] // ~keep: test/bench binaries print by design; org logging policy exempts tests
-#![cfg(feature = "pdf")]
 
 use std::path::PathBuf;
 use xberg::core::config::{ExtractionConfig, OutputFormat};

@@ -559,8 +559,8 @@ jobs:
           cache-key-prefix: rust-feature-leg-${{ matrix.name }}
           use-sccache: "true"
 
-      - name: cargo check -p xberg --no-default-features --features ${{ matrix.name }}
-        run: cargo check --locked -p xberg --no-default-features --features "${{ matrix.features }}"
+      - name: cargo check -p xberg --no-default-features --features ${{ matrix.name }} --all-targets
+        run: cargo check --locked -p xberg --no-default-features --features "${{ matrix.features }}" --all-targets
         shell: bash
 
   # #741 continued: `wasm-target` is only ever compiled by publish.yaml's `wasm-bindings`
