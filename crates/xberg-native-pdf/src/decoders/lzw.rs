@@ -11,7 +11,7 @@
 //! - Clear code is 256, EOD code is 257
 //! - First available code is 258
 
-use crate::decoders::StreamDecoder;
+use crate::decoders::{StreamDecoder, check_output_limit};
 use crate::error::{Error, Result};
 
 /// LZWDecode filter implementation.
@@ -21,9 +21,13 @@ pub struct LzwDecoder;
 
 impl StreamDecoder for LzwDecoder {
     fn decode(&self, input: &[u8]) -> Result<Vec<u8>> {
-        match decode_lzw_weezl(input) {
-            Ok(data) => Ok(data),
-            Err(_) => decode_lzw_custom(input),
+        self.decode_bounded(input, usize::MAX)
+    }
+
+    fn decode_bounded(&self, input: &[u8], max_output: usize) -> Result<Vec<u8>> {
+        match decode_lzw_weezl(input, max_output)? {
+            Some(data) => Ok(data),
+            None => decode_lzw_custom(input, max_output),
         }
     }
 
@@ -33,25 +37,44 @@ impl StreamDecoder for LzwDecoder {
 }
 
 /// Decode using weezl crate (well-tested LZW implementation).
-fn decode_lzw_weezl(input: &[u8]) -> Result<Vec<u8>> {
-    use weezl::{BitOrder, decode::Decoder as WeezlDecoder};
+///
+/// Returns `Ok(None)` when weezl cannot decode the stream, so the caller falls back to
+/// the custom decoder. Crossing `max_output` is an error, not a reason to fall back.
+fn decode_lzw_weezl(input: &[u8], max_output: usize) -> Result<Option<Vec<u8>>> {
+    use weezl::{BitOrder, LzwError, LzwStatus, decode::Decoder as WeezlDecoder};
+
+    const CHUNK_SIZE: usize = 1 << 12;
 
     // PDF uses MSB bit order, 8-bit minimum code size ~keep
     let mut decoder = WeezlDecoder::new(BitOrder::Msb, 8);
+    let mut output = Vec::new();
+    let mut remaining = input;
 
-    match decoder.decode(input) {
-        Ok(output) => Ok(output),
-        Err(e) => {
-            tracing::warn!(filter = "LZWDecode", error = ?e, "weezl decode failed, falling back to custom decoder");
-            Err(Error::Decode(format!("LZWDecode error: {:?}", e)))
+    let error = loop {
+        let filled = output.len();
+        output.resize(filled + CHUNK_SIZE, 0);
+        let result = decoder.decode_bytes(remaining, &mut output[filled..]);
+        output.truncate(filled + result.consumed_out);
+        remaining = &remaining[result.consumed_in..];
+        check_output_limit("LZWDecode", output.len(), max_output)?;
+
+        match result.status {
+            Ok(LzwStatus::Ok) => {}
+            Ok(LzwStatus::Done) => return Ok(Some(output)),
+            // Input ran out before the end code, which `Decoder::decode` also rejects ~keep
+            Ok(LzwStatus::NoProgress) => break LzwError::InvalidCode,
+            Err(e) => break e,
         }
-    }
+    };
+
+    tracing::warn!(filter = "LZWDecode", error = ?error, "weezl decode failed, falling back to custom decoder");
+    Ok(None)
 }
 
 /// Custom LZW decoder for PDF (handles edge cases).
 ///
 /// This implementation follows the PDF spec exactly, including EarlyChange behavior.
-fn decode_lzw_custom(input: &[u8]) -> Result<Vec<u8>> {
+fn decode_lzw_custom(input: &[u8], max_output: usize) -> Result<Vec<u8>> {
     const CLEAR_CODE: u16 = 256;
     const EOD_CODE: u16 = 257;
     const FIRST_CODE: u16 = 258;
@@ -111,6 +134,7 @@ fn decode_lzw_custom(input: &[u8]) -> Result<Vec<u8>> {
             )));
         };
 
+        check_output_limit("LZWDecode", output.len() + string.len(), max_output)?;
         output.extend_from_slice(&string);
 
         if let Some(prev) = prev_code
@@ -248,5 +272,33 @@ mod tests {
     fn test_lzw_decoder_name() {
         let decoder = LzwDecoder;
         assert_eq!(decoder.name(), "LZWDecode");
+    }
+
+    #[test]
+    fn should_accept_output_exactly_at_the_limit() {
+        let original = vec![b'A'; 10_000];
+        let compressed = LzwEncoder::new(BitOrder::Msb, 8).encode(&original).unwrap();
+
+        let decoded = LzwDecoder.decode_bounded(&compressed, original.len()).unwrap();
+        assert_eq!(decoded, original);
+    }
+
+    #[test]
+    fn should_reject_output_past_the_limit() {
+        let original = vec![b'A'; 10_000];
+        let compressed = LzwEncoder::new(BitOrder::Msb, 8).encode(&original).unwrap();
+
+        let error = LzwDecoder.decode_bounded(&compressed, original.len() - 1).unwrap_err();
+        assert!(error.to_string().contains("exceeds limit 9999 bytes"), "got: {error}");
+    }
+
+    #[test]
+    fn should_bound_the_fallback_decoder_too() {
+        let original = vec![b'A'; 10_000];
+        let compressed = LzwEncoder::new(BitOrder::Msb, 8).encode(&original).unwrap();
+
+        assert_eq!(decode_lzw_custom(&compressed, original.len()).unwrap(), original);
+        let error = decode_lzw_custom(&compressed, 1_000).unwrap_err();
+        assert!(error.to_string().contains("exceeds limit 1000 bytes"), "got: {error}");
     }
 }

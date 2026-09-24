@@ -5,7 +5,7 @@
 //! - Length byte 128: No-op (EOD marker)
 //! - Length byte 129-255: Repeat next byte 257-N times
 
-use crate::decoders::StreamDecoder;
+use crate::decoders::{StreamDecoder, check_output_limit};
 use crate::error::{Error, Result};
 
 /// RunLengthDecode filter implementation.
@@ -15,6 +15,10 @@ pub struct RunLengthDecoder;
 
 impl StreamDecoder for RunLengthDecoder {
     fn decode(&self, input: &[u8]) -> Result<Vec<u8>> {
+        self.decode_bounded(input, usize::MAX)
+    }
+
+    fn decode_bounded(&self, input: &[u8], max_output: usize) -> Result<Vec<u8>> {
         let mut output = Vec::new();
         let mut i = 0;
 
@@ -34,6 +38,7 @@ impl StreamDecoder for RunLengthDecoder {
                         )));
                     }
 
+                    check_output_limit(self.name(), output.len() + count, max_output)?;
                     output.extend_from_slice(&input[i..i + count]);
                     i += count;
                 }
@@ -50,6 +55,7 @@ impl StreamDecoder for RunLengthDecoder {
 
                     let byte = input[i];
                     i += 1;
+                    check_output_limit(self.name(), output.len() + count, max_output)?;
                     output.resize(output.len() + count, byte);
                 }
             }
@@ -154,5 +160,40 @@ mod tests {
     fn test_runlength_decoder_name() {
         let decoder = RunLengthDecoder;
         assert_eq!(decoder.name(), "RunLengthDecode");
+    }
+
+    #[test]
+    fn should_accept_output_exactly_at_the_limit() {
+        let output = RunLengthDecoder.decode_bounded(&[129, b'A'], 128).unwrap();
+        assert_eq!(output.len(), 128);
+    }
+
+    #[test]
+    fn should_reject_a_run_or_literal_that_crosses_the_limit() {
+        let run = RunLengthDecoder.decode_bounded(&[129, b'A'], 127);
+        assert!(run.unwrap_err().to_string().contains("exceeds limit 127 bytes"));
+
+        let mut literal = vec![127];
+        literal.extend_from_slice(&[b'A'; 128]);
+        let literal = RunLengthDecoder.decode_bounded(&literal, 127);
+        assert!(literal.unwrap_err().to_string().contains("exceeds limit 127 bytes"));
+    }
+
+    /// GH#1764. The truncated literal at the end would fail the decode on its own, so
+    /// reporting the limit instead proves decoding stopped before reaching it.
+    #[test]
+    fn should_stop_at_the_limit_before_decoding_the_rest_of_the_stream() {
+        let mut input = [129, b'A'].repeat(4);
+        input.extend_from_slice(&[4, b'x']);
+
+        let error = RunLengthDecoder.decode_bounded(&input, 256).unwrap_err().to_string();
+        assert!(error.contains("exceeds limit 256 bytes"), "got: {error}");
+        assert!(
+            RunLengthDecoder
+                .decode(&input)
+                .unwrap_err()
+                .to_string()
+                .contains("not enough data")
+        );
     }
 }

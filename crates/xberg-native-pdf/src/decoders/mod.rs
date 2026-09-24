@@ -68,11 +68,9 @@ const DEFAULT_MAX_DECOMPRESSION_RATIO: u32 = 100;
 /// for flate. It cannot fire on a pure RunLength stream at all: the densest encoding
 /// that filter permits is a `[129, byte]` pair — 2 input bytes for 128 output bytes —
 /// so 64:1 is the most it can achieve and it never reaches the threshold. This
-/// absolute cap is therefore RunLength's only guard, and it is applied post-hoc:
-/// `decoder.decode()` builds its entire output before the check runs, so the cap
-/// rejects an allocation that already happened rather than bounding it, and raising
-/// the number raises that transient peak with it. Bounding those decoders mid-decode
-/// needs `StreamDecoder::decode` to carry the limit — tracked in GH#1764. ~keep
+/// absolute cap is therefore RunLength's only guard. The pipeline passes it to
+/// `StreamDecoder::decode_bounded`, which RunLength and LZW override to stop as soon
+/// as their output crosses it, rather than building the whole output first (GH#1764). ~keep
 pub(crate) fn default_max_decompressed_size() -> usize {
     usize::try_from(flate::effective_limit()).unwrap_or(usize::MAX)
 }
@@ -118,8 +116,28 @@ pub trait StreamDecoder {
     /// The decoded data or an error if decoding fails.
     fn decode(&self, input: &[u8]) -> Result<Vec<u8>>;
 
+    /// Decode the input data, failing if the output would exceed `max_output` bytes.
+    ///
+    /// The default decodes in full and then checks, so the allocation has already
+    /// happened when it rejects. Decoders whose output is not bounded by their input
+    /// override it to stop as soon as the limit is crossed.
+    fn decode_bounded(&self, input: &[u8], max_output: usize) -> Result<Vec<u8>> {
+        let output = self.decode(input)?;
+        check_output_limit(self.name(), output.len(), max_output)?;
+        Ok(output)
+    }
+
     /// Get the name of this decoder (e.g., "FlateDecode").
     fn name(&self) -> &str;
+}
+
+pub(crate) fn check_output_limit(filter: &str, output_len: usize, max_output: usize) -> Result<()> {
+    if output_len > max_output {
+        return Err(Error::Decode(format!(
+            "Decompression bomb detected: {filter} output exceeds limit {max_output} bytes"
+        )));
+    }
+    Ok(())
 }
 
 /// Normalize a PDF filter name, handling spec abbreviations and case variations.
@@ -257,6 +275,7 @@ fn decode_stream_with_options_and_expected_size(
     let max_size = options
         .map(|o| o.max_decompressed_size)
         .unwrap_or_else(default_max_decompressed_size);
+    let output_limit = if max_size > 0 { max_size } else { usize::MAX };
 
     let compressed_size = data.len();
     let mut current = data.to_vec();
@@ -264,7 +283,7 @@ fn decode_stream_with_options_and_expected_size(
     for (filter_index, filter_name) in filters.iter().enumerate() {
         let decoder = create_decoder(filter_name)?;
 
-        current = decoder.decode(&current)?;
+        current = decoder.decode_bounded(&current, output_limit)?;
 
         // SECURITY: Check decompression ratio after each filter. Image callers may
         // provide the exact byte count implied by Width x Height x components x bpc
@@ -579,5 +598,38 @@ mod tests {
         let decoded = decode_stream_with_options(&compressed, &filters, None, None)
             .expect("a large, low-ratio stream inside the flate ceiling must not be read as a bomb");
         assert_eq!(decoded.len(), DECOMPRESSED_LEN);
+    }
+
+    /// GH#1764. 64:1 is under the ratio threshold, so the only thing that can reject
+    /// this stream is the size cap, and the message names the decoder that enforced it.
+    #[test]
+    fn should_pass_the_size_cap_into_the_decoder() {
+        let data = [129, b'A'].repeat(16);
+        let filters = vec!["RunLengthDecode".to_string()];
+        let options = ParserOptions {
+            max_decompressed_size: 1_000,
+            ..ParserOptions::default()
+        };
+
+        let error = decode_stream_with_options(&data, &filters, None, Some(&options)).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("RunLengthDecode output exceeds limit 1000 bytes"),
+            "got: {error}"
+        );
+    }
+
+    #[test]
+    fn should_treat_a_zero_size_cap_as_no_limit() {
+        let data = [129, b'A'].repeat(16);
+        let filters = vec!["RunLengthDecode".to_string()];
+        let options = ParserOptions {
+            max_decompressed_size: 0,
+            ..ParserOptions::default()
+        };
+
+        let decoded = decode_stream_with_options(&data, &filters, None, Some(&options)).unwrap();
+        assert_eq!(decoded.len(), 16 * 128);
     }
 }
