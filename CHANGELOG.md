@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **(pdf): page attributes now inherit past dangling references.** A missing indirect `/MediaBox`, `/CropBox`,
+  `/Resources`, or `/Rotate` entry on a page or intermediate page-tree node no longer masks a valid ancestor
+  value. Lazy and bulk page walks agree on the nearest valid ancestor and keep sibling inheritance separate.
+  (GH#1775)
+
 ## [1.2.9] - 2026-09-24
 
 ### Added
