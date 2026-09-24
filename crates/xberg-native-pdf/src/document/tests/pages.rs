@@ -199,3 +199,66 @@ fn should_resolve_the_page_normally_when_the_chain_stays_under_the_depth_cap() {
     assert_eq!(doc.get_page_ref(0).unwrap().id, (2 + levels) as u32);
     assert_eq!(doc.all_page_refs().unwrap().len(), 1);
 }
+
+fn build_page_inheritance_pdf() -> Vec<u8> {
+    let mut kids = String::new();
+    let mut objects = Vec::new();
+    objects.push((3, b"<< /Type /Pages /Parent 2 0 R /Count 65 /Kids [".to_vec()));
+    for id in 4..=68 {
+        kids.push_str(&format!("{id} 0 R "));
+        let attrs = match id {
+            4 => "/Resources 93 0 R /MediaBox 94 0 R /CropBox 95 0 R /Rotate 96 0 R",
+            5 => "/Resources 80 0 R /MediaBox 81 0 R /CropBox 82 0 R /Rotate 83 0 R",
+            _ => "",
+        };
+        objects.push((id, format!("<< /Type /Page /Parent 3 0 R {attrs} >>").into_bytes()));
+    }
+    objects[0].1.extend_from_slice(
+        format!("{kids}] /Resources 97 0 R /MediaBox [0 0 200 200] /CropBox 98 0 R /Rotate 99 0 R >>").as_bytes(),
+    );
+    objects.push((69, b"<< /Type /Page /Parent 2 0 R >>".to_vec()));
+    objects.extend([
+        (80, b"<< /Marker 8 >>".to_vec()),
+        (81, b"[0 0 300 300]".to_vec()),
+        (82, b"[0 0 280 280]".to_vec()),
+        (83, b"270".to_vec()),
+    ]);
+    let refs: Vec<_> = objects.iter().map(|(id, body)| (*id, body.as_slice())).collect();
+    build_catalog_test_pdf(
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R 69 0 R] /Count 66 /Resources << /Marker 1 >> /MediaBox [0 0 100 100] /CropBox [0 0 90 90] /Rotate 90 >>",
+        &refs,
+    )
+}
+
+fn assert_inherited_values(doc: &PdfDocument, index: usize, media: f32, crop: i64, rotation: i32, marker: i64) {
+    let page = doc.get_page(index).unwrap();
+    let dict = page.as_dict().unwrap();
+    assert_eq!(doc.get_page_media_box(index).unwrap(), (0.0, 0.0, media, media));
+    let crop_object = doc.resolve_obj_ref(dict.get("CropBox").unwrap());
+    let crop_array = crop_object.as_array().unwrap();
+    assert_eq!(crop_array[2].as_integer(), Some(crop));
+    assert_eq!(doc.get_page_rotation(index).unwrap(), rotation);
+    let resources = doc.resolve_obj_ref(dict.get("Resources").unwrap());
+    assert_eq!(
+        resources.as_dict().unwrap().get("Marker").unwrap().as_integer(),
+        Some(marker)
+    );
+}
+
+#[test]
+fn should_fall_back_from_dangling_inheritable_references_in_lazy_and_bulk_page_walks() {
+    let pdf = build_page_inheritance_pdf();
+    let lazy = PdfDocument::from_bytes(pdf.clone()).unwrap();
+    assert_inherited_values(&lazy, 0, 200.0, 90, 90, 1);
+    assert_inherited_values(&lazy, 1, 300.0, 280, 270, 8);
+    assert_inherited_values(&lazy, 65, 100.0, 90, 90, 1);
+
+    let bulk = PdfDocument::from_bytes(pdf).unwrap();
+    for index in 0..=64 {
+        bulk.get_page(index).unwrap();
+    }
+    assert_inherited_values(&bulk, 0, 200.0, 90, 90, 1);
+    assert_inherited_values(&bulk, 1, 300.0, 280, 270, 8);
+    assert_inherited_values(&bulk, 65, 100.0, 90, 90, 1);
+}
