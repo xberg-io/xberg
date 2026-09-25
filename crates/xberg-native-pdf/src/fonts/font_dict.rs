@@ -1507,17 +1507,17 @@ impl FontInfo {
             // GH #1631: when `/Encoding` is a genuine CMap stream, attempt
             // to parse its real charcode→CID data (`begincidrange`/
             // `begincidchar`/`begincodespacerange`) rather than relying on
-            // `/CMapName` heuristics alone. `decode_stream_data` fails
-            // (harmlessly) for a non-stream encoding object (a `/Name` or a
-            // plain `/Differences` dictionary), which is not a CID CMap in
-            // the first place. A stream that decodes but carries no
-            // recognisable CID data (e.g. bare `usecmap`) also stays
-            // `None` — `parse_cid_cmap` reports that as an empty map, and
-            // an empty map is treated identically to "no embedded map" by
-            // every caller. ~keep
-            embedded_cid_map = resolved_enc_obj
-                .decode_stream_data()
-                .ok()
+            // `/CMapName` heuristics alone. Only a stream can be a CMap: a
+            // `/Name` or a `/Differences` dictionary is skipped, because
+            // `decode_stream_data` reads a dictionary as an empty stream and
+            // logs a warning about a valid construct (GH#1795). A stream that
+            // decodes but carries no recognisable CID data (e.g. bare
+            // `usecmap`) also stays `None` — `parse_cid_cmap` reports that as
+            // an empty map, and an empty map is treated identically to "no
+            // embedded map" by every caller. ~keep
+            embedded_cid_map = matches!(resolved_enc_obj, Object::Stream { .. })
+                .then(|| resolved_enc_obj.decode_stream_data().ok())
+                .flatten()
                 .and_then(|bytes| super::cid_cmap::parse_cid_cmap(&bytes).ok())
                 .filter(|cid_map| !cid_map.is_empty())
                 .map(Arc::new);
@@ -2326,16 +2326,17 @@ impl FontInfo {
             .and_then(|n| n.as_name())
             .map(|s| s.to_string());
 
-        // Try to decode the CMap stream and scan for /WMode. We swallow
-        // decode errors here — if the stream cannot be decoded, the existing
-        // `parse_encoding` path will eventually log it; for wmode detection
-        // we silently fall back to the name-based signal. ~keep
-        let stream_wmode = match enc_obj.decode_stream_data() {
-            Ok(bytes) => {
+        // Try to decode the CMap stream and scan for /WMode. Only a stream
+        // is decoded: a `/Differences` dictionary is not a CMap (GH#1795).
+        // We swallow decode errors here — if the stream cannot be decoded,
+        // the existing `parse_encoding` path will eventually log it; for
+        // wmode detection we silently fall back to the name-based signal. ~keep
+        let stream_wmode = match enc_obj {
+            Object::Stream { .. } => enc_obj.decode_stream_data().ok().and_then(|bytes| {
                 let content = String::from_utf8_lossy(&bytes);
                 crate::fonts::cmap::parse_wmode_directive_public(&content)
-            }
-            Err(_) => None,
+            }),
+            _ => None,
         };
         let _ = doc;
 

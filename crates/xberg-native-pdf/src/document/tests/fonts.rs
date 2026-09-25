@@ -809,3 +809,95 @@ fn donated_truetype_cmap_is_reused_not_recomputed_per_page() {
          {PAGES} times"
     );
 }
+
+/// A one-page PDF with one line of Helvetica text whose `/Encoding` is a `/Differences`
+/// dictionary, written inline in the font or as its own indirect object.
+fn build_differences_encoding_pdf(indirect: bool) -> Vec<u8> {
+    let encoding_dict = "<< /Type /Encoding /BaseEncoding /WinAnsiEncoding /Differences [65 /A] >>";
+    let encoding = if indirect { "6 0 R" } else { encoding_dict };
+    let content = b"BT /F1 12 Tf 72 700 Td (A plain line of text.) Tj ET";
+    let mut pdf = b"%PDF-1.4\n".to_vec();
+    let mut offsets: Vec<usize> = Vec::new();
+
+    offsets.push(pdf.len());
+    pdf.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+    offsets.push(pdf.len());
+    pdf.extend_from_slice(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+    offsets.push(pdf.len());
+    pdf.extend_from_slice(
+        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] \
+          /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>\nendobj\n",
+    );
+    offsets.push(pdf.len());
+    pdf.extend_from_slice(format!("4 0 obj\n<< /Length {} >>\nstream\n", content.len()).as_bytes());
+    pdf.extend_from_slice(content);
+    pdf.extend_from_slice(b"\nendstream\nendobj\n");
+    offsets.push(pdf.len());
+    pdf.extend_from_slice(
+        format!("5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding {encoding} >>\nendobj\n")
+            .as_bytes(),
+    );
+    offsets.push(pdf.len());
+    pdf.extend_from_slice(format!("6 0 obj\n{encoding_dict}\nendobj\n").as_bytes());
+
+    let xref = pdf.len();
+    pdf.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", offsets.len() + 1).as_bytes());
+    for offset in &offsets {
+        pdf.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+    }
+    pdf.extend_from_slice(
+        format!(
+            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n",
+            offsets.len() + 1
+        )
+        .as_bytes(),
+    );
+    pdf
+}
+
+fn stream_expected_warnings(events: &[CapturedEvent]) -> usize {
+    events
+        .iter()
+        .filter(|event| {
+            event
+                .fields
+                .get("message")
+                .is_some_and(|message| message.contains("dictionary used where stream expected"))
+        })
+        .count()
+}
+
+/// GH#1795: a `/Differences` encoding dictionary is a valid `/Encoding`, not a stream
+/// written as a dictionary, so loading the font logs nothing and the text is intact.
+#[test]
+fn should_load_a_differences_encoding_dictionary_without_a_stream_warning() {
+    for indirect in [false, true] {
+        let doc = PdfDocument::from_bytes(build_differences_encoding_pdf(indirect)).unwrap();
+        let (text, events) = capture_events(|| doc.extract_text(0));
+        let text = text.unwrap_or_else(|e| panic!("indirect={indirect}: extract text: {e}"));
+
+        assert!(
+            text.contains("A plain line of text."),
+            "indirect={indirect}: text must be intact, got {text:?}"
+        );
+        assert_eq!(
+            stream_expected_warnings(&events),
+            0,
+            "indirect={indirect}: a /Differences dictionary must not log a stream warning"
+        );
+    }
+}
+
+/// The control for the test above: the capture does see this warning when a plain
+/// dictionary really is decoded as a stream, so its zero is not vacuous.
+#[test]
+fn should_capture_the_stream_warning_when_a_dictionary_is_decoded_as_a_stream() {
+    let dictionary = Object::Dictionary(std::collections::HashMap::new());
+    let (decoded, events) = capture_events(|| dictionary.decode_stream_data());
+
+    assert_eq!(
+        decoded.expect("a dictionary decodes as an empty stream"),
+        Vec::<u8>::new()
+    );
+    assert_eq!(stream_expected_warnings(&events), 1);
+}

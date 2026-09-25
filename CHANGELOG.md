@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/Resources`, or `/Rotate` entry on a page or intermediate page-tree node no longer masks a valid ancestor
   value. Lazy and bulk page walks agree on the nearest valid ancestor and keep sibling inheritance separate.
   (GH#1775)
+- **(pdf): a font whose `/Encoding` is a `/Differences` dictionary no longer logs "dictionary used where stream expected".** The font loader read the `/Encoding` object as a stream to look for an embedded CMap and a `/WMode` entry. A dictionary read that way logs a warning, so every such font, which is a valid construct, logged it on each load. The loader now reads `/Encoding` as a CMap only when it is a stream. Text extraction is unchanged. (GH#1795)
 
 ## [1.2.9] - 2026-09-24
 
