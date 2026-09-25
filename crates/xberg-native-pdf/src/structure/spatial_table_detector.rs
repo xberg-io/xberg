@@ -3857,6 +3857,98 @@ fn x_coherent_rule_families<'a>(wide: &[&'a Edge]) -> Vec<Vec<&'a Edge>> {
     families.into_iter().map(|(_root, f)| f).collect()
 }
 
+/// Spans of one rule-bounded band that pass the containment and
+/// letter-spacing guards, or `None` when the band cannot hold a table.
+fn rule_band_spans(
+    spans: &[TextSpan],
+    y_top: f32,
+    y_bot: f32,
+    x_overlap_start: f32,
+    x_overlap_end: f32,
+) -> Option<Vec<TextSpan>> {
+    let pad = 2.0;
+    let mut region_spans: Vec<TextSpan> = Vec::new();
+    let mut outside_width = 0.0f32;
+    let mut inside_width = 0.0f32;
+    for s in spans {
+        let cy = s.bbox.center().y;
+        if cy > y_top + pad || cy < y_bot - pad {
+            continue;
+        }
+        let cx = s.bbox.center().x;
+        if cx >= x_overlap_start - pad && cx <= x_overlap_end + pad {
+            inside_width += s.bbox.width.max(0.0);
+            region_spans.push(s.clone());
+        } else {
+            outside_width += s.bbox.width.max(0.0);
+        }
+    }
+
+    if region_spans.is_empty() {
+        return None;
+    }
+
+    // A pair of rules bounds a table only if the band's text is
+    // horizontally CONTAINED by the rules: a table's boundary
+    // rules span the rows they rule, while a fraction bar floats
+    // inside surrounding math that continues to its left and
+    // right (relation symbols, equation numbers). X-range-coherent
+    // vinculums from an aligned multi-step derivation pass the
+    // family check above, but the text spilling past the bars
+    // gives them away — when a third of the band's text mass lies
+    // outside the rules, they don't bound anything. (Division-free
+    // so a band of zero-width spans compares 0 > 0 instead of
+    // taking a NaN branch.) ~keep
+    if outside_width > (outside_width + inside_width) * 0.3 {
+        return None;
+    }
+
+    // Letter-spaced monospace guard: framed code and console
+    // listings (zines, technical reports) draw each glyph on a
+    // terminal-font grid, so the band's "words" are mostly single
+    // characters whose aligned x positions look exactly like
+    // column boundaries — identifiers shatter into single letters
+    // (`s e g f a u l t`), addresses into single digits
+    // (`0 0 : 1 4`). A real table's cells are words and numbers:
+    // one-third single LETTERS or one-half single characters of
+    // any kind is spread-out text, not a grid. (The digit
+    // threshold is the looser of the two so genuine single-digit
+    // table columns, which sit among multi-char label cells, stay
+    // under it.) ~keep
+    let word_count = region_spans.len();
+    let mut single_any = 0usize;
+    let mut single_alpha = 0usize;
+    for rs in &region_spans {
+        let mut chars = rs.text.trim().chars();
+        if let (Some(c), None) = (chars.next(), chars.next()) {
+            single_any += 1;
+            if c.is_alphabetic() {
+                single_alpha += 1;
+            }
+        }
+    }
+    if word_count > 0 && (single_alpha * 3 >= word_count || single_any * 2 >= word_count) {
+        return None;
+    }
+
+    Some(region_spans)
+}
+
+fn detect_rule_run(spans: &[TextSpan], run: Option<(f32, f32, f32, f32)>, config: &TableDetectionConfig) -> Vec<Table> {
+    run.and_then(|(top, bot, x0, x1)| rule_band_spans(spans, top, bot, x0, x1))
+        .map(|region| detect_tables_from_spans(&region, config))
+        .unwrap_or_default()
+}
+
+fn is_single_text_line(spans: &[TextSpan]) -> bool {
+    let line_h = spans.iter().map(|s| s.bbox.height).fold(0.0f32, f32::max);
+    let (lo, hi) = spans.iter().fold((f32::MAX, f32::MIN), |(lo, hi), s| {
+        let cy = s.bbox.center().y;
+        (lo.min(cy), hi.max(cy))
+    });
+    hi - lo <= line_h * 0.5
+}
+
 /// Detect tables in regions bounded by horizontal rules (H-lines) when no vertical
 /// lines are present.  Groups H-edges by Y-position to find horizontal table
 /// boundaries, then runs text-edge detection on the spans within each bounded
@@ -3909,85 +4001,45 @@ fn detect_tables_from_horizontal_rules(
             (min_x, max_x)
         };
 
+        // A band holding one text line is too short for a table on its own:
+        // a booktabs header above the midrule, or a table ruled under every
+        // row. Consecutive one-line bands join the band below them. ~keep
+        let mut run: Option<(f32, f32, f32, f32)> = None;
         for pair in y_coords.windows(2) {
             let y_top = pair[0];
             let y_bot = pair[1];
             let (x1_start, x1_end) = x_range_for_y(y_top);
             let (x2_start, x2_end) = x_range_for_y(y_bot);
-            let x_overlap_start = x1_start.max(x2_start);
-            let x_overlap_end = x1_end.min(x2_end);
-            if x_overlap_end - x_overlap_start < MIN_RULE_WIDTH {
+            let x_start = x1_start.max(x2_start);
+            let x_end = x1_end.min(x2_end);
+            if x_end - x_start < MIN_RULE_WIDTH {
+                tables.append(&mut detect_rule_run(spans, run.take(), config));
                 continue;
             }
-
-            let pad = 2.0;
-            let mut region_spans: Vec<TextSpan> = Vec::new();
-            let mut outside_width = 0.0f32;
-            let mut inside_width = 0.0f32;
-            for s in spans {
-                let cy = s.bbox.center().y;
-                if cy > y_top + pad || cy < y_bot - pad {
-                    continue;
-                }
-                let cx = s.bbox.center().x;
-                if cx >= x_overlap_start - pad && cx <= x_overlap_end + pad {
-                    inside_width += s.bbox.width.max(0.0);
-                    region_spans.push(s.clone());
-                } else {
-                    outside_width += s.bbox.width.max(0.0);
-                }
-            }
-
-            if region_spans.is_empty() {
+            let Some(band) = rule_band_spans(spans, y_top, y_bot, x_start, x_end) else {
+                tables.append(&mut detect_rule_run(spans, run.take(), config));
+                continue;
+            };
+            let joined = match run.take() {
+                Some((top, _, x0, x1)) => (top, y_bot, x0.min(x_start), x1.max(x_end)),
+                None => (y_top, y_bot, x_start, x_end),
+            };
+            if is_single_text_line(&band) {
+                run = Some(joined);
                 continue;
             }
-
-            // A pair of rules bounds a table only if the band's text is
-            // horizontally CONTAINED by the rules: a table's boundary
-            // rules span the rows they rule, while a fraction bar floats
-            // inside surrounding math that continues to its left and
-            // right (relation symbols, equation numbers). X-range-coherent
-            // vinculums from an aligned multi-step derivation pass the
-            // family check above, but the text spilling past the bars
-            // gives them away — when a third of the band's text mass lies
-            // outside the rules, they don't bound anything. (Division-free
-            // so a band of zero-width spans compares 0 > 0 instead of
-            // taking a NaN branch.) ~keep
-            if outside_width > (outside_width + inside_width) * 0.3 {
-                continue;
+            let mut detected = detect_rule_run(spans, Some(joined), config);
+            if detected.is_empty() && joined.0 != y_top {
+                tables.append(&mut detect_rule_run(
+                    spans,
+                    Some((joined.0, y_top, joined.2, joined.3)),
+                    config,
+                ));
+                detected = detect_tables_from_spans(&band, config);
             }
-
-            // Letter-spaced monospace guard: framed code and console
-            // listings (zines, technical reports) draw each glyph on a
-            // terminal-font grid, so the band's "words" are mostly single
-            // characters whose aligned x positions look exactly like
-            // column boundaries — identifiers shatter into single letters
-            // (`s e g f a u l t`), addresses into single digits
-            // (`0 0 : 1 4`). A real table's cells are words and numbers:
-            // one-third single LETTERS or one-half single characters of
-            // any kind is spread-out text, not a grid. (The digit
-            // threshold is the looser of the two so genuine single-digit
-            // table columns, which sit among multi-char label cells, stay
-            // under it.) ~keep
-            let word_count = region_spans.len();
-            let mut single_any = 0usize;
-            let mut single_alpha = 0usize;
-            for rs in &region_spans {
-                let mut chars = rs.text.trim().chars();
-                if let (Some(c), None) = (chars.next(), chars.next()) {
-                    single_any += 1;
-                    if c.is_alphabetic() {
-                        single_alpha += 1;
-                    }
-                }
-            }
-            if word_count > 0 && (single_alpha * 3 >= word_count || single_any * 2 >= word_count) {
-                continue;
-            }
-
-            let mut detected = detect_tables_from_spans(&region_spans, config);
             tables.append(&mut detected);
         }
+        tables.append(&mut detect_rule_run(spans, run, config));
     }
 
     // Two families can bracket the same text — a dash-bordered decorative
@@ -4027,6 +4079,65 @@ fn detect_tables_from_horizontal_rules(
     tables
 }
 
+/// H-rule bounded detection: horizontal lines bound the table regions and
+/// text edges define the columns. Pages with vertical ruling are left to the
+/// grid detectors.
+fn tables_from_horizontal_rules(
+    spans: &[TextSpan],
+    lines: &[crate::elements::PathContent],
+    config: &TableDetectionConfig,
+) -> Vec<Table> {
+    let (mut h_edges, _) = extract_edges(lines);
+    if h_edges.is_empty() || has_vertical_ruling_evidence(lines, &h_edges) {
+        return Vec::new();
+    }
+    snap_and_merge(&mut h_edges);
+    let mut tables = detect_tables_from_horizontal_rules(spans, &h_edges, config);
+    // A logical table ruled between row *bands* (a rule under the
+    // header, or between groups of rows) is emitted here as one
+    // fragment per band. Merge vertically-adjacent same-column
+    // fragments BEFORE the min-row filter so a table cut into e.g. a
+    // [3, 2] pair rejoins into [5] instead of losing its short band to
+    // the guard below. Bands sit ~one inter-row pitch apart (the rule
+    // stroke + leading), so scale the vertical tolerance to the
+    // fragments' median row height rather than the abutting-fragment
+    // default. Safety rests on the unchanged column gating in
+    // `can_merge_tables` (equal col_count + matched X-start/width): a
+    // lone spurious 2-row prose strip has no same-column neighbour, so
+    // it stays short and is still dropped — the guard's intent holds. ~keep
+    let row_h = median_fragment_row_height(&tables);
+    let y_tol = (row_h * 1.5).max(3.0);
+    tables = consolidate_adjacent_table_fragments_with_tol(tables, 2.0, y_tol);
+    // H-rule bounded detection lacks vertical-line evidence —
+    // columns come from text-edge clustering alone (same shape as
+    // the text-only fallback in `detect_tables_with_lines`).  Two-row results are
+    // virtually always prose that happens to live between
+    // decorative rules (annotation underlines, page borders);
+    // require three rows of evidence before promoting. ~keep
+    tables.retain(|t| t.rows.len() >= 3);
+    tables
+}
+
+/// Runs H-rule detection on the rules no found table covers, so a rules-only
+/// table survives beside a gridded one on the same page.
+fn tables_from_leftover_rules(
+    spans: &[TextSpan],
+    lines: &[crate::elements::PathContent],
+    found: &[Table],
+    config: &TableDetectionConfig,
+) -> Vec<Table> {
+    let claimed: Option<Vec<crate::geometry::Rect>> = found.iter().map(|t| t.bbox).collect();
+    let Some(claimed) = claimed.filter(|c| !c.is_empty()) else {
+        return Vec::new();
+    };
+    let free = |r: &crate::geometry::Rect| !claimed.iter().any(|c| c.intersects(r));
+    let free_lines: Vec<_> = lines.iter().filter(|p| free(&p.rendered_bbox())).cloned().collect();
+    tables_from_horizontal_rules(spans, &free_lines, config)
+        .into_iter()
+        .filter(|t| is_valid_table(t) && t.bbox.as_ref().is_some_and(&free))
+        .collect()
+}
+
 /// Detect tables using vector lines and text spans (main entry point for hybrid detection).
 pub fn detect_tables_with_lines(
     spans: &[TextSpan],
@@ -4041,16 +4152,16 @@ pub fn detect_tables_with_lines(
             return detect_tables_from_spans_column_aware(spans, config);
         }
         (TableStrategy::Lines, TableStrategy::Lines) => {
-            let tables = detect_tables_from_intersections(spans, lines, config);
-            if !tables.is_empty() {
-                return tables.into_iter().filter(is_valid_table).collect();
+            let mut tables = detect_tables_from_intersections(spans, lines, config);
+            if tables.is_empty() {
+                for cluster in group_lines_into_clusters(lines, config) {
+                    tables.append(&mut detect_tables_in_cluster(spans, lines, &cluster, config));
+                }
             }
-            let clusters = group_lines_into_clusters(lines, config);
-            let mut tables = Vec::new();
-            for cluster in clusters {
-                tables.append(&mut detect_tables_in_cluster(spans, lines, &cluster, config));
-            }
-            return tables.into_iter().filter(is_valid_table).collect();
+            let mut tables: Vec<Table> = tables.into_iter().filter(is_valid_table).collect();
+            let leftover = tables_from_leftover_rules(spans, lines, &tables, config);
+            tables.extend(leftover);
+            return tables;
         }
         _ => {}
     }
@@ -4066,33 +4177,7 @@ pub fn detect_tables_with_lines(
     // When intersection and cluster pipelines found nothing, try H-rule bounded detection:
     // use horizontal lines as table region boundaries with text-edge column detection. ~keep
     if final_tables.is_empty() {
-        let (mut h_edges, _) = extract_edges(lines);
-        if !h_edges.is_empty() && !has_vertical_ruling_evidence(lines, &h_edges) {
-            snap_and_merge(&mut h_edges);
-            final_tables = detect_tables_from_horizontal_rules(spans, &h_edges, config);
-            // A logical table ruled between row *bands* (a rule under the
-            // header, or between groups of rows) is emitted here as one
-            // fragment per band. Merge vertically-adjacent same-column
-            // fragments BEFORE the min-row filter so a table cut into e.g. a
-            // [3, 2] pair rejoins into [5] instead of losing its short band to
-            // the guard below. Bands sit ~one inter-row pitch apart (the rule
-            // stroke + leading), so scale the vertical tolerance to the
-            // fragments' median row height rather than the abutting-fragment
-            // default. Safety rests on the unchanged column gating in
-            // `can_merge_tables` (equal col_count + matched X-start/width): a
-            // lone spurious 2-row prose strip has no same-column neighbour, so
-            // it stays short and is still dropped — the guard's intent holds. ~keep
-            let row_h = median_fragment_row_height(&final_tables);
-            let y_tol = (row_h * 1.5).max(3.0);
-            final_tables = consolidate_adjacent_table_fragments_with_tol(final_tables, 2.0, y_tol);
-            // H-rule bounded detection lacks vertical-line evidence —
-            // columns come from text-edge clustering alone (same shape as
-            // the text-only fallback below).  Two-row results are
-            // virtually always prose that happens to live between
-            // decorative rules (annotation underlines, page borders);
-            // require three rows of evidence before promoting. ~keep
-            final_tables.retain(|t| t.rows.len() >= 3);
-        }
+        final_tables = tables_from_horizontal_rules(spans, lines, config);
     }
     // Filter out invalid line-based tables BEFORE overlap checking so that
     // spurious line-based tables don't shadow valid text-based ones. ~keep
@@ -7903,6 +7988,112 @@ mod tests {
             table.rows.len() >= 3,
             "Expected at least 3 rows, got {}",
             table.rows.len()
+        );
+    }
+
+    fn ruled_rows(rows: &[[&str; 3]], top: f32) -> Vec<TextSpan> {
+        rows.iter()
+            .enumerate()
+            .flat_map(|(i, row)| {
+                let y = top - 12.0 - i as f32 * 15.0;
+                row.iter()
+                    .zip([60.0, 180.0, 280.0])
+                    .map(move |(text, x)| create_test_span(text, x, y, 40.0, 10.0))
+            })
+            .collect()
+    }
+
+    #[test]
+    fn strict_lines_keep_a_rules_only_table_beside_a_grid() {
+        let grid = [
+            ["Item", "Qty", "Price"],
+            ["Bolt", "40", "0.10"],
+            ["Nut", "40", "0.05"],
+            ["Washer", "80", "0.02"],
+        ];
+        let ruled = [
+            ["Region", "Sales", "Growth"],
+            ["Northland", "120", "3.1"],
+            ["Eastmark", "95", "2.4"],
+            ["Southvale", "88", "1.9"],
+        ];
+        let mut lines: Vec<_> = (0..=4)
+            .map(|i| make_h_line(50.0, 750.0 - i as f32 * 15.0, 300.0))
+            .collect();
+        lines.extend([50.0, 150.0, 250.0, 350.0].map(|x| make_v_line(x, 690.0, 60.0)));
+        lines.extend([600.0, 585.0, 540.0].map(|y| make_h_line(50.0, y, 300.0)));
+        let mut spans = ruled_rows(&grid, 750.0);
+        spans.extend(ruled_rows(&ruled, 600.0));
+
+        let tables = detect_tables_with_lines(&spans, &lines, &TableDetectionConfig::strict());
+
+        let booktabs = tables
+            .iter()
+            .find(|t| t.rows.iter().any(|r| r.cells.iter().any(|c| c.text == "Southvale")))
+            .expect("rules-only table beside the grid");
+        assert_eq!(tables.len(), 2);
+        assert_eq!(booktabs.rows.len(), 4, "header above the midrule stays in the table");
+        assert_eq!(booktabs.rows[0].cells[0].text, "Region");
+    }
+
+    #[test]
+    fn h_rules_under_every_row_form_one_table() {
+        let rows = [
+            ["Code", "Name", "Rate"],
+            ["A1", "Alpha", "1.5"],
+            ["B2", "Beta", "2.5"],
+            ["C3", "Gamma", "3.5"],
+        ];
+        let lines: Vec<_> = (0..=4)
+            .map(|i| make_h_line(50.0, 600.0 - i as f32 * 15.0, 300.0))
+            .collect();
+        let spans = ruled_rows(&rows, 600.0);
+
+        let tables = detect_tables_with_lines(&spans, &lines, &TableDetectionConfig::default());
+
+        assert_eq!(tables.len(), 1);
+        assert_eq!(tables[0].rows.len(), 4);
+    }
+
+    #[test]
+    fn joined_header_band_keeps_the_body_columns_past_its_rule() {
+        let lines = vec![
+            make_h_line(50.0, 600.0, 300.0),
+            make_h_line(60.0, 585.0, 300.0),
+            make_h_line(70.0, 540.0, 300.0),
+        ];
+        let mut spans: Vec<_> = ["Code", "Name", "Rate"]
+            .iter()
+            .zip([80.0, 180.0, 280.0])
+            .map(|(t, x)| create_test_span(t, x, 589.0, 40.0, 10.0))
+            .collect();
+        for (i, row) in [
+            ["A1", "Alpha", "1.5", "x"],
+            ["B2", "Beta", "2.5", "y"],
+            ["C3", "Gamma", "3.5", "z"],
+        ]
+        .iter()
+        .enumerate()
+        {
+            let y = 574.0 - i as f32 * 12.0;
+            spans.extend(
+                row.iter()
+                    .zip([80.0, 180.0, 280.0, 345.0])
+                    .map(|(t, x)| create_test_span(t, x, y, 20.0, 10.0)),
+            );
+        }
+
+        let tables = detect_tables_with_lines(&spans, &lines, &TableDetectionConfig::default());
+
+        let cells: Vec<&str> = tables
+            .iter()
+            .flat_map(|t| &t.rows)
+            .flat_map(|r| &r.cells)
+            .map(|c| c.text.as_str())
+            .collect();
+        assert!(
+            cells.contains(&"z"),
+            "body column past the header rule stays in the table: {cells:?}"
         );
     }
 
