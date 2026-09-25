@@ -688,6 +688,9 @@ fn post_process_table_inner(
         return None;
     }
 
+    if !layout_guided {
+        fold_label_tail_columns(&mut processed, column_positions.as_deref_mut());
+    }
     prune_spurious_interior_column(&mut processed, layout_guided, column_positions);
 
     let data_row_count = processed.len() - 1;
@@ -710,10 +713,17 @@ fn post_process_table_inner(
             // introducing a new signal (xberg-io/xberg#1649). ~keep
             let column_has_own_header = processed[0].get(c).is_some_and(|cell| !cell.trim().is_empty());
             if too_sparse && !column_has_own_header {
+                let filled: Vec<&str> = processed[1..]
+                    .iter()
+                    .filter_map(|row| row.get(c).map(|cell| cell.trim()))
+                    .filter(|cell| !cell.is_empty())
+                    .take(4)
+                    .collect();
                 tracing::debug!(
                     target: "xberg::table_reconstruct",
                     reason = "column_sparsity",
                     col = c,
+                    filled = %filled.join(" | "),
                     empty_count,
                     data_row_count,
                     empty_ratio = empty_count as f64 / data_row_count as f64,
@@ -1207,6 +1217,64 @@ fn row_shapes_match(left: &[String], right: &[String]) -> bool {
     }
     occupied_union > 0
         && occupied_intersection.saturating_mul(100) >= occupied_union.saturating_mul(ROW_SHAPE_MIN_OVERLAP_PERCENT)
+}
+
+/// Fold a column that is the tail of a split multi-word label back into the label.
+///
+/// OCR word grouping merges a row's words into one cell only across gaps under
+/// `table_core::CELL_MERGE_GAP_HEIGHT_RATIO`, so a label such as "CLOSING STOCK BALANCE" can
+/// leave its last word in a column of its own, populated in one or two rows and headed by
+/// nothing. The column-sparsity gate then rejected the whole table (xberg-io/xberg#1797). A
+/// header-less column that is empty in more than three data rows of four and holds no value
+/// cell is such a tail, never a value column: it joins its left neighbour, words in reading
+/// order, and the sparsity gate judges the columns that remain. A value cell is one
+/// `is_numeric_value_cell` accepts with at least two digits: under the sparse-text
+/// segmentation mode the same column also catches recognition fragments (`=`, `rl`, `|`, a
+/// lone `4`), and a lone digit is such a fragment, not an amount. Column 0 has no left
+/// neighbour and is never folded, which keeps the numbered-list gate below
+/// (xberg-io/xberg#1570) untouched. Not applied to layout-guided tables, whose grid an ML
+/// detector confirmed. ~keep
+fn fold_label_tail_columns(table: &mut [Vec<String>], mut column_positions: Option<&mut Vec<u32>>) {
+    let data_row_count = table.len().saturating_sub(1);
+    if data_row_count == 0 {
+        return;
+    }
+    let mut col = 1;
+    while col < table[0].len() {
+        let header_empty = table[0][col].trim().is_empty();
+        let filled: Vec<&str> = table[1..]
+            .iter()
+            .filter_map(|row| row.get(col).map(|cell| cell.trim()))
+            .filter(|cell| !cell.is_empty())
+            .collect();
+        let empty_count = data_row_count - filled.len();
+        let sparse = empty_count * 4 > data_row_count * 3;
+        let no_value_cell = !filled.is_empty()
+            && filled
+                .iter()
+                .all(|cell| !(is_numeric_value_cell(cell) && cell.chars().filter(char::is_ascii_digit).count() >= 2));
+        if header_empty && sparse && no_value_cell {
+            for row in table.iter_mut() {
+                if col >= row.len() {
+                    continue;
+                }
+                let text = row.remove(col).trim().to_string();
+                if text.is_empty() {
+                    continue;
+                }
+                let left = &mut row[col - 1];
+                if left.trim().is_empty() {
+                    *left = text;
+                } else {
+                    left.push(' ');
+                    left.push_str(&text);
+                }
+            }
+            drop_column_position(column_positions.as_deref_mut(), col);
+        } else {
+            col += 1;
+        }
+    }
 }
 
 /// Remove one empty-header interior track that only catches a stray word in a
@@ -2492,6 +2560,77 @@ mod tests {
         ];
         let result = post_process_table(table, false, false);
         assert!(result.is_some(), "Real table should be accepted");
+    }
+
+    /// #1797: the grid OCR word grouping builds for a table whose row labels span several
+    /// words. The tail of one label sits in a header-less column of its own, filled in one data
+    /// row of twenty. That column is the label's second half, not a column, and it must not
+    /// reject the whole table.
+    fn table_grid_with_a_split_label() -> Vec<Vec<String>> {
+        let header: Vec<String> = ["", "", "Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"]
+            .into_iter()
+            .map(String::from)
+            .collect();
+        let mut table = vec![header];
+        for row in 0..20 {
+            let label = if row == 19 { "CLOSING STOCK" } else { "ITEM" };
+            let tail = if row == 19 { "BALANCE" } else { "" };
+            let mut cells = vec![format!("{label} {row}"), tail.to_string()];
+            cells.extend((1..=6).map(|year| format!("{},{:03}", row + 1, year * 100)));
+            table.push(cells);
+        }
+        table
+    }
+
+    #[test]
+    fn ocr_table_keeps_a_label_tail_that_landed_in_its_own_column() {
+        let processed = post_process_table(table_grid_with_a_split_label(), false, false)
+            .expect("a table with one split label must be accepted");
+
+        assert_eq!(
+            processed[0].len(),
+            7,
+            "the label tail column folds into the label column"
+        );
+        assert_eq!(processed[20][0], "CLOSING STOCK 19 BALANCE");
+        assert_eq!(
+            processed[20][1..],
+            ["20,100", "20,200", "20,300", "20,400", "20,500", "20,600"]
+        );
+        assert_eq!(processed[1][0], "ITEM 0");
+        assert!(is_well_formed_table(&processed));
+    }
+
+    /// Under the sparse-text segmentation mode the tail column also catches recognition
+    /// fragments: `=`, `rl` and a lone `4` beside the label tail (4 filled cells of 20). None
+    /// is a value, so the column still folds and the table is kept.
+    #[test]
+    fn ocr_table_keeps_a_label_tail_column_that_also_holds_recognition_fragments() {
+        let mut table = table_grid_with_a_split_label();
+        table[3][1] = "=".to_string();
+        table[7][1] = "rl".to_string();
+        table[16][1] = "4".to_string();
+
+        let processed =
+            post_process_table(table, false, false).expect("fragments beside a label tail must not reject the table");
+
+        assert_eq!(processed[0].len(), 7);
+        assert_eq!(processed[20][0], "CLOSING STOCK 19 BALANCE");
+        assert_eq!(processed[16][0], "ITEM 15 4");
+        assert!(is_well_formed_table(&processed));
+    }
+
+    /// The control: a header-less column that is just as sparse but carries a number is not a
+    /// label tail, and the sparsity gate still rejects the grid as before.
+    #[test]
+    fn ocr_table_still_rejects_a_sparse_numeric_column() {
+        let mut table = table_grid_with_a_split_label();
+        table[20][1] = "1,200".to_string();
+
+        assert!(
+            post_process_table(table, false, false).is_none(),
+            "a sparse column holding a number is not folded and keeps rejecting the grid"
+        );
     }
 
     #[test]
