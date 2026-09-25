@@ -650,6 +650,15 @@ pub(super) fn fallback_render_document<'a>(
     })
     .as_ref()
 }
+/// Render every page in `page_range` for the force_ocr route, in parallel across the
+/// configured threads, as encoded pages.
+///
+/// The same per-page body and the same dispatch as `render_selected_pages_from_document`
+/// (the force_ocr_pages route). This function used to be a plain sequential loop, so the
+/// force_ocr route rendered each batch on one thread and then OCR'd it on all of them; on a
+/// 40-page scan at `max_threads` 8 that was 17.9 s against the sibling route's 9.5 s, and 16
+/// threads bought nothing (#1796, the same defect #1666 fixed for the sibling). `Range` is an
+/// `IndexedParallelIterator`, so `collect()` keeps page order.
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) fn render_full_pdf_ocr_batch(
     doc: &xberg_native_pdf::PdfDocument,
@@ -658,30 +667,20 @@ pub(super) fn render_full_pdf_ocr_batch(
     security_limits: &crate::extractors::security::SecurityLimits,
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
 ) -> crate::Result<Vec<EncodedPage>> {
-    let mut encoded = Vec::with_capacity(page_range.len());
-    for page_idx in page_range {
-        let (page_width_pt, page_height_pt) = crate::pdf::render::get_page_dimensions_pt(doc, page_idx);
-        let render_dpi = crate::image::dpi::effective_pdf_render_dpi(
-            images_config,
-            f64::from(page_width_pt),
-            f64::from(page_height_pt),
-        );
-        let rendered = crate::pdf::render::render_page_with_safeguards(doc, page_idx, render_dpi.max(1) as u32)
-            .map_err(|e| crate::XbergError::Parsing {
-                message: format!("Failed to render page {} for OCR: {:?}", page_idx, e),
-                source: None,
-            })?;
-        let rotation = page_rotations.get(page_idx).copied().unwrap_or(0);
-        let (data, width, height) = crate::pdf::render::normalize_rendered_page_for_ocr_with_security_limits(
-            rendered.data,
-            rendered.width,
-            rendered.height,
-            rotation,
-            security_limits,
-        )?;
-        encoded.push((page_idx, std::sync::Arc::new(data), width, height));
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    {
+        use rayon::prelude::*;
+        page_range
+            .into_par_iter()
+            .map(|idx| render_one_page_encoded(doc, page_rotations, idx, security_limits, images_config))
+            .collect()
     }
-    Ok(encoded)
+    #[cfg(any(not(feature = "tokio-runtime"), target_arch = "wasm32"))]
+    {
+        page_range
+            .map(|idx| render_one_page_encoded(doc, page_rotations, idx, security_limits, images_config))
+            .collect()
+    }
 }
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) fn valid_page_indices(page_indices: &[usize], page_count: usize) -> Vec<usize> {
@@ -741,14 +740,18 @@ fn record_render_thread() {
         .unwrap()
         .insert(name);
 }
+/// Render one page and normalize it to the MediaBox-oriented PNG the OCR backends consume.
+///
+/// The one per-page render body: both OCR routes call it, so the render dpi, the rotation
+/// normalization and the security limits cannot drift between them again.
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-fn render_one_selected_page(
+fn render_one_page_encoded(
     doc: &xberg_native_pdf::PdfDocument,
     page_rotations: &[u32],
     idx: usize,
     security_limits: &crate::extractors::security::SecurityLimits,
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
-) -> crate::Result<(usize, image::DynamicImage)> {
+) -> crate::Result<EncodedPage> {
     #[cfg(test)]
     record_render_thread();
     let (page_width_pt, page_height_pt) = crate::pdf::render::get_page_dimensions_pt(doc, idx);
@@ -762,13 +765,25 @@ fn render_one_selected_page(
             }
         })?;
     let rotation = page_rotations.get(idx).copied().unwrap_or(0);
-    let (data, _, _) = crate::pdf::render::normalize_rendered_page_for_ocr_with_security_limits(
+    let (data, width, height) = crate::pdf::render::normalize_rendered_page_for_ocr_with_security_limits(
         rendered.data,
         rendered.width,
         rendered.height,
         rotation,
         security_limits,
     )?;
+    Ok((idx, std::sync::Arc::new(data), width, height))
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn render_one_selected_page(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_rotations: &[u32],
+    idx: usize,
+    security_limits: &crate::extractors::security::SecurityLimits,
+    images_config: Option<&crate::core::config::ImageExtractionConfig>,
+) -> crate::Result<(usize, image::DynamicImage)> {
+    let (_, data, _, _) = render_one_page_encoded(doc, page_rotations, idx, security_limits, images_config)?;
     let img = crate::extraction::image_decode::decode_standard_image_with_security_limits(&data, security_limits)
         .map_err(|e| crate::XbergError::Parsing {
             message: format!("Failed to decode rendered page {}: {}", idx + 1, e),

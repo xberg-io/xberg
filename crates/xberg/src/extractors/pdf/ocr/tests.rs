@@ -3702,6 +3702,57 @@ mod tests {
         );
     }
 
+    /// #1796: the force_ocr route's batch renderer must dispatch across the pool the same way
+    /// the force_ocr_pages route's does. Same mechanism proof as the guard above: rendered on
+    /// more than one of this pool's own named threads, independent of timing. Before the fix
+    /// the batch was a plain sequential loop, so it never left the calling thread.
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    #[test]
+    #[serial_test::serial]
+    fn full_pdf_batch_render_dispatches_across_more_than_one_thread() {
+        clear_render_call_thread_ids();
+
+        let page_count = 20;
+        let pdf = build_minimal_multi_page_pdf(page_count);
+        let (doc, _, page_rotations) = open_pdf_for_full_ocr(&pdf).expect("the fixture must open");
+
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(4)
+            .thread_name(|index| format!("{RENDER_POOL_PREFIX}-{index}"))
+            .build()
+            .expect("building a dedicated 4-thread pool must succeed");
+        pool.broadcast(|_| ());
+        let result = pool.install(|| {
+            render_full_pdf_ocr_batch(
+                &doc,
+                &page_rotations,
+                0..page_count,
+                &crate::extractors::security::SecurityLimits::default(),
+                None,
+            )
+        });
+        let batch = result.expect("rendering the fixture must succeed");
+        assert_eq!(batch.len(), page_count, "every page of the batch must come back");
+        assert!(
+            batch.iter().enumerate().all(|(offset, (idx, _, _, _))| *idx == offset),
+            "the batch must keep page order"
+        );
+
+        let recorded = RENDER_CALL_THREAD_NAMES.get().unwrap().lock().unwrap().clone();
+        let observed: std::collections::BTreeSet<&String> = recorded
+            .iter()
+            .filter(|name| name.starts_with(RENDER_POOL_PREFIX))
+            .collect();
+        assert!(
+            observed.len() > 1,
+            "expected the force_ocr batch to render on more than one of this pool's own named \
+             threads, got {} of the pool's threads: {:?}; every thread recorded: {:?}",
+            observed.len(),
+            observed,
+            recorded
+        );
+    }
+
     /// #1747 control: an extraction running on a *different*, unnamed pool in the same
     /// process must not be able to satisfy the scoped guard above. Recording every thread
     /// unscoped would let this foreign pool's activity paper over a sequential regression
