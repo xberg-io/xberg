@@ -1,5 +1,7 @@
 use super::super::*;
+use super::common::*;
 use super::pdf_fixtures::*;
+use tracing::Level;
 
 #[test]
 fn test_page_inherits_mediabox() {
@@ -308,4 +310,126 @@ fn should_prefer_nearest_valid_ancestor_and_preserve_valid_indirect_leaf_values(
             assert_eq!(leaf.get(attribute).unwrap().as_reference().unwrap().id, object_id);
         }
     }
+}
+
+/// A one-level page tree: the root `/Pages` node holds `page_count` `/Page` leaves, each
+/// with its own one-line content stream. With `bad_kid`, the root's first kid points at
+/// an integer object instead of a node.
+fn build_flat_page_tree_pdf(page_count: usize, bad_kid: bool) -> Vec<u8> {
+    let mut pdf = b"%PDF-1.4\n".to_vec();
+    let mut offsets: Vec<usize> = Vec::new();
+    let first_page_id = 4;
+    let mut kids: Vec<String> = (0..page_count)
+        .map(|index| format!("{} 0 R", first_page_id + 2 * index))
+        .collect();
+    if bad_kid {
+        kids.insert(0, "3 0 R".to_string());
+    }
+
+    offsets.push(pdf.len());
+    pdf.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+    offsets.push(pdf.len());
+    pdf.extend_from_slice(
+        format!(
+            "2 0 obj\n<< /Type /Pages /Kids [{}] /Count {page_count} /MediaBox [0 0 612 792] >>\nendobj\n",
+            kids.join(" ")
+        )
+        .as_bytes(),
+    );
+    offsets.push(pdf.len());
+    pdf.extend_from_slice(b"3 0 obj\n42\nendobj\n");
+    for index in 0..page_count {
+        let page_id = first_page_id + 2 * index;
+        let content = format!("BT /F1 12 Tf 72 700 Td (Page {}) Tj ET", index + 1);
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(
+            format!(
+                "{page_id} 0 obj\n<< /Type /Page /Parent 2 0 R /Contents {} 0 R /Resources << >> >>\nendobj\n",
+                page_id + 1
+            )
+            .as_bytes(),
+        );
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(format!("{} 0 obj\n<< /Length {} >>\nstream\n", page_id + 1, content.len()).as_bytes());
+        pdf.extend_from_slice(content.as_bytes());
+        pdf.extend_from_slice(b"\nendstream\nendobj\n");
+    }
+
+    let xref = pdf.len();
+    pdf.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", offsets.len() + 1).as_bytes());
+    for offset in &offsets {
+        pdf.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+    }
+    pdf.extend_from_slice(
+        format!(
+            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n",
+            offsets.len() + 1
+        )
+        .as_bytes(),
+    );
+    pdf
+}
+
+/// Page-tree WARN events a closure logs while it walks to pages.
+fn page_tree_walk_warnings<T>(walk: impl FnOnce() -> T) -> (T, usize) {
+    let (result, events) = capture_events(walk);
+    let warnings = events
+        .iter()
+        .filter(|event| {
+            event.level == Level::WARN
+                && event
+                    .fields
+                    .get("message")
+                    .is_some_and(|message| message.contains("error walking to page in tree"))
+        })
+        .count();
+    (result, warnings)
+}
+
+/// GH#1798: walking past a page that is not the target is not an error. A valid
+/// ten-page tree resolves every page, by object and by reference, with no page-tree
+/// warning.
+#[test]
+fn should_resolve_every_page_of_a_valid_tree_without_a_page_tree_warning() {
+    let page_count = 10;
+    let doc = PdfDocument::from_bytes(build_flat_page_tree_pdf(page_count, false)).unwrap();
+
+    let (resolved, warnings) = page_tree_walk_warnings(|| {
+        (0..page_count)
+            .map(|index| {
+                let page = doc.get_page(index).expect("every page resolves");
+                let contents = page.as_dict().and_then(|dict| dict.get("Contents")).cloned();
+                let page_ref = doc.get_page_ref(index).expect("every page reference resolves");
+                (contents, page_ref.id)
+            })
+            .collect::<Vec<_>>()
+    });
+
+    assert_eq!(warnings, 0, "a valid page tree must log no page-tree warning");
+    for (index, (contents, page_ref_id)) in resolved.into_iter().enumerate() {
+        let page_id = 4 + 2 * index as u32;
+        assert_eq!(page_ref_id, page_id, "page {index} resolves to its own object");
+        assert_eq!(
+            contents,
+            Some(Object::Reference(ObjectRef::new(page_id + 1, 0))),
+            "page {index} is its own page dictionary"
+        );
+    }
+}
+
+/// The control for the test above: a kid that is not a page-tree node is a real
+/// fault, and the walk still logs it and still reaches the pages after it.
+#[test]
+fn should_still_warn_about_a_kid_that_is_not_a_page_tree_node() {
+    let doc = PdfDocument::from_bytes(build_flat_page_tree_pdf(3, true)).unwrap();
+
+    let (page, warnings) = page_tree_walk_warnings(|| doc.get_page(2));
+
+    assert_eq!(warnings, 1, "the bad kid must be logged exactly once");
+    let contents = page
+        .expect("the pages after the bad kid still resolve")
+        .as_dict()
+        .and_then(|dict| dict.get("Contents"))
+        .cloned();
+    assert_eq!(contents, Some(Object::Reference(ObjectRef::new(9, 0))));
 }

@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/Resources`, or `/Rotate` entry on a page or intermediate page-tree node no longer masks a valid ancestor
   value. Lazy and bulk page walks agree on the nearest valid ancestor and keep sibling inheritance separate.
   (GH#1775)
+- **(pdf): a valid multi-page PDF no longer logs "error walking to page in tree".** To find a page, the page-tree walk treated every page and subtree it passed as an error, and the handler added for GH#1755 logged each one at WARN. A flat tree logged n(n-1)/2 warnings for its first 64 pages, up to 2,016, which buried the real page-tree faults that use the same message. Passing a page is no longer an error, so the warning now appears only for a real fault, such as a kid that is not a page-tree node. (GH#1798)
 
 ## [1.2.9] - 2026-09-24
 

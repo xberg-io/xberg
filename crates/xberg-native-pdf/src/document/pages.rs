@@ -811,9 +811,13 @@ impl PdfDocument {
         current_index: &mut usize,
         inherited: &mut HashMap<String, Object>,
     ) -> Result<Object> {
-        self.get_page_from_tree_inner(node_ref, target_index, current_index, inherited, &mut HashSet::new(), 0)
+        self.get_page_from_tree_inner(node_ref, target_index, current_index, inherited, &mut HashSet::new(), 0)?
+            .ok_or_else(|| Error::InvalidPdf(format!("Page index {} not found in tree", target_index)))
     }
 
+    /// `Ok(None)` means the target page is not in this subtree, which is the normal
+    /// result for every node the walk passes. `Err` is kept for real faults, so the
+    /// `Pages` arm logs only those (GH#1798). ~keep
     fn get_page_from_tree_inner(
         &self,
         node_ref: ObjectRef,
@@ -822,7 +826,7 @@ impl PdfDocument {
         inherited: &mut HashMap<String, Object>,
         visited: &mut HashSet<ObjectRef>,
         depth: u32,
-    ) -> Result<Object> {
+    ) -> Result<Option<Object>> {
         if depth >= MAX_PAGE_TREE_DEPTH {
             tracing::warn!(target: LOG_TARGET,
                 object_id = node_ref.id,
@@ -862,10 +866,7 @@ impl PdfDocument {
                     let count = count as usize;
                     if *current_index + count <= target_index {
                         *current_index += count;
-                        return Err(Error::InvalidPdf(format!(
-                            "Page index {} not found in tree",
-                            target_index
-                        )));
+                        return Ok(None);
                     }
                 }
             }
@@ -902,13 +903,10 @@ impl PdfDocument {
                         }
                     }
 
-                    Ok(Object::Dictionary(page_dict))
+                    Ok(Some(Object::Dictionary(page_dict)))
                 } else {
                     *current_index += 1;
-                    Err(Error::InvalidPdf(format!(
-                        "Page index {} not found in tree",
-                        target_index
-                    )))
+                    Ok(None)
                 }
             }
             "Pages" => {
@@ -951,7 +949,8 @@ impl PdfDocument {
                         visited,
                         depth + 1,
                     ) {
-                        Ok(page) => return Ok(page),
+                        Ok(Some(page)) => return Ok(Some(page)),
+                        Ok(None) => continue,
                         Err(Error::CircularReference(obj_ref)) => {
                             tracing::warn!(target: LOG_TARGET, "Circular reference in page tree at object {}, skipping", obj_ref);
                             continue;
@@ -972,7 +971,7 @@ impl PdfDocument {
                     }
                 }
 
-                Err(Error::InvalidPdf(format!("Page index {} not found", target_index)))
+                Ok(None)
             }
             _ => Err(Error::InvalidPdf(format!("Unknown page tree node type: {}", node_type))),
         }
@@ -994,10 +993,12 @@ impl PdfDocument {
             .as_reference()
             .ok_or_else(|| Error::InvalidPdf("/Pages is not a reference".to_string()))?;
 
-        self.get_page_ref_recursive(pages_ref, page_index, &mut 0, &mut HashSet::new(), 0)
+        self.get_page_ref_recursive(pages_ref, page_index, &mut 0, &mut HashSet::new(), 0)?
+            .ok_or_else(|| Error::InvalidPdf(format!("Page {} not found", page_index)))
     }
 
-    /// Recursively find page reference in the page tree.
+    /// Recursively find page reference in the page tree. `Ok(None)` means the target
+    /// is not in this subtree, as in [`Self::get_page_from_tree_inner`].
     pub(crate) fn get_page_ref_recursive(
         &self,
         node_ref: ObjectRef,
@@ -1005,7 +1006,7 @@ impl PdfDocument {
         current_index: &mut usize,
         visited: &mut HashSet<ObjectRef>,
         depth: u32,
-    ) -> Result<ObjectRef> {
+    ) -> Result<Option<ObjectRef>> {
         if depth >= MAX_PAGE_TREE_DEPTH {
             tracing::warn!(target: LOG_TARGET,
                 object_id = node_ref.id,
@@ -1041,10 +1042,10 @@ impl PdfDocument {
         match node_type {
             "Page" => {
                 if *current_index == target_index {
-                    Ok(node_ref)
+                    Ok(Some(node_ref))
                 } else {
                     *current_index += 1;
-                    Err(Error::InvalidPdf(format!("Page {} not found", target_index)))
+                    Ok(None)
                 }
             }
             "Pages" => {
@@ -1056,13 +1057,13 @@ impl PdfDocument {
                 for kid_obj in kids {
                     if let Some(kid_ref) = kid_obj.as_reference() {
                         match self.get_page_ref_recursive(kid_ref, target_index, current_index, visited, depth + 1) {
-                            Ok(page_ref) => return Ok(page_ref),
-                            Err(_) => continue,
+                            Ok(Some(page_ref)) => return Ok(Some(page_ref)),
+                            Ok(None) | Err(_) => continue,
                         }
                     }
                 }
 
-                Err(Error::InvalidPdf(format!("Page {} not found", target_index)))
+                Ok(None)
             }
             _ => Err(Error::InvalidPdf(format!("Unknown node type: {}", node_type))),
         }
