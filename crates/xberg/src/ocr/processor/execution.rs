@@ -2200,6 +2200,10 @@ pub(super) fn perform_ocr(
 
     drop(api);
 
+    if config.numeric_repair {
+        repair_numbers_in_result(&mut content, &mut tables, ocr_elements.as_mut(), hocr_document.as_mut());
+    }
+
     Ok(OcrExtractionResult {
         content,
         mime_type,
@@ -2208,6 +2212,38 @@ pub(super) fn perform_ocr(
         ocr_elements,
         internal_document: hocr_document,
     })
+}
+
+/// Apply `numeric_repair` to every text the result carries: the content, each table cell
+/// (and the table's markdown, rebuilt from the cells), each word element and each hOCR
+/// element, so the routes that assemble page text from any of them agree (#1789).
+fn repair_numbers_in_result(
+    content: &mut String,
+    tables: &mut [OcrTable],
+    ocr_elements: Option<&mut Vec<OcrElement>>,
+    internal_document: Option<&mut InternalDocument>,
+) {
+    use crate::ocr::numeric_repair::repair_numeric_tokens;
+
+    *content = repair_numeric_tokens(content);
+    for table in tables.iter_mut() {
+        for row in &mut table.cells {
+            for cell in row.iter_mut() {
+                *cell = repair_numeric_tokens(cell);
+            }
+        }
+        table.markdown = table_to_markdown(&table.cells);
+    }
+    if let Some(elements) = ocr_elements {
+        for element in elements.iter_mut() {
+            element.text = repair_numeric_tokens(&element.text);
+        }
+    }
+    if let Some(document) = internal_document {
+        for element in &mut document.elements {
+            element.text = repair_numeric_tokens(&element.text);
+        }
+    }
 }
 
 /// Process an image file and return OCR results.
@@ -4540,6 +4576,37 @@ mod tests {
     #[test]
     fn test_should_invert_for_polarity_force_false_still_auto_detects() {
         assert!(should_invert_for_polarity(10.0, 0.5, false));
+    }
+
+    /// #1789: the repair reaches the content, the cells (and the markdown built from them)
+    /// and the elements, so every consumer of the result sees the same numbers.
+    #[test]
+    fn repair_numbers_in_result_rewrites_every_text_the_result_carries() {
+        let mut content = "APPLES 1172 7.812".to_string();
+        let mut tables = vec![OcrTable {
+            cells: vec![vec!["APPLES".to_string(), "1172".to_string(), "7.812".to_string()]],
+            markdown: String::new(),
+            page_number: 1,
+            bounding_box: None,
+        }];
+        let mut elements = vec![OcrElement {
+            text: "2 2,411".to_string(),
+            ..OcrElement::default()
+        }];
+        let mut document = InternalDocument::default();
+        document.elements.push(crate::types::internal::InternalElement::text(
+            ElementKind::Paragraph,
+            "48210",
+            0,
+        ));
+
+        repair_numbers_in_result(&mut content, &mut tables, Some(&mut elements), Some(&mut document));
+
+        assert_eq!(content, "APPLES 1,172 7,812");
+        assert_eq!(tables[0].cells[0], ["APPLES", "1,172", "7,812"]);
+        assert!(tables[0].markdown.contains("1,172") && tables[0].markdown.contains("7,812"));
+        assert_eq!(elements[0].text, "22,411");
+        assert_eq!(document.elements[0].text, "48,210");
     }
 
     #[test]

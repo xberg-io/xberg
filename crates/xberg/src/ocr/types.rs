@@ -128,6 +128,9 @@ pub struct TesseractConfig {
     pub textord_space_size_is_variable: bool,
     /// Use adaptive thresholding (`true`) instead of Otsu (`false`).
     pub thresholding_method: bool,
+    /// Repair thousands separators, decimal points and split digits in number-shaped tokens
+    /// of the recognized output (`ocr::numeric_repair`).
+    pub numeric_repair: bool,
 
     /// Enable automatic page rotation based on orientation detection.
     ///
@@ -253,6 +256,7 @@ impl Default for TesseractConfig {
             tessedit_use_primary_params_model: true,
             textord_space_size_is_variable: true,
             thresholding_method: false,
+            numeric_repair: false,
             auto_rotate: false,
             tessdata_path: None,
             source_dpi: None,
@@ -313,6 +317,7 @@ impl From<&crate::types::TesseractConfig> for TesseractConfig {
             tessedit_use_primary_params_model: config.tessedit_use_primary_params_model,
             textord_space_size_is_variable: config.textord_space_size_is_variable,
             thresholding_method: config.thresholding_method,
+            numeric_repair: config.numeric_repair,
             auto_rotate: config.preprocessing.as_ref().map(|p| p.auto_rotate).unwrap_or(false),
             tessdata_path: None,
             // The public config is a user-supplied document-wide setting and cannot know the
@@ -606,6 +611,7 @@ mod tests {
             tessedit_use_primary_params_model: false,
             textord_space_size_is_variable: false,
             thresholding_method: true,
+            numeric_repair: true,
         };
 
         let internal_config: TesseractConfig = (&public_config).into();
@@ -631,5 +637,6 @@ mod tests {
         assert!(!internal_config.tessedit_use_primary_params_model);
         assert!(!internal_config.textord_space_size_is_variable);
         assert!(internal_config.thresholding_method);
+        assert!(internal_config.numeric_repair);
     }
 }

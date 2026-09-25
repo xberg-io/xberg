@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **(ocr): `tesseract_config.numeric_repair` repairs number-shaped OCR tokens.** On a scanned table of amounts Tesseract drops thousands separators (`1172` for `1,172`), reads a comma as a period (`7.812` for `7,812`) and splits a number at a gap (`2 2,411` for `22,411`); the digits are right and the value is not. With the option on, a bare integer of 4 to 9 digits gets separators unless it follows `FY`, runs into `-` or `/` or is followed by `%`; a period before exactly three digits becomes a comma; and a split leading digit rejoins its number. The repair is applied to the text, the table cells and the word elements, and it is part of the OCR cache key. Off by default, because a four-digit number in prose is often a year. (GH#1789)
+
 ### Fixed
 
 - **(pdf): a document whose cross-reference stream is truncated no longer returns mostly empty pages.** When the final `/XRef` stream fails to decode, the parser rebuilds the table by scanning the file for literal `N G obj` headers. That scan cannot see an object packed inside an `/ObjStm` container, which in an incrementally updated PDF routinely includes every page's font dictionary. The reference then resolved to null -- legitimate per PDF 32000-1 7.3.10 for a deleted object, and therefore silent -- so pages extracted no text while the document reported success. Two reported files returned 86 of 88 and 22 of 24 pages empty; both now recover every page. The object-stream sweep that already existed for the analogous mis-flagged-free case now also runs once when the xref came from reconstruction. A reference still unresolvable after that sweep raises an `XrefRecovery` warning, which is deliberately not raised for an ordinary null resolution. (GH#1774)

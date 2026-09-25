@@ -58,6 +58,7 @@ fn hash_config_for_schema(config: &TesseractConfig, resolved_tessdata_path: &str
         }
     }
     hasher.update(&[config.enable_table_detection as u8]);
+    hasher.update(&[config.numeric_repair as u8]);
     hasher.update(&config.table_min_confidence.to_bits().to_le_bytes());
     hasher.update(&config.table_column_threshold.to_le_bytes());
     hasher.update(&config.table_row_threshold_ratio.to_bits().to_le_bytes());
@@ -370,6 +371,21 @@ mod tests {
         let hash2 = hash_config(&config2, TEST_TESSDATA_PATH);
 
         assert_ne!(hash1, hash2);
+    }
+
+    /// #1789: the repair rewrites the cached content, so it is part of the cache key.
+    #[test]
+    fn test_hash_config_numeric_repair_flag() {
+        let mut config1 = create_test_config();
+        config1.numeric_repair = false;
+
+        let mut config2 = create_test_config();
+        config2.numeric_repair = true;
+
+        assert_ne!(
+            hash_config(&config1, TEST_TESSDATA_PATH),
+            hash_config(&config2, TEST_TESSDATA_PATH)
+        );
     }
 
     #[test]

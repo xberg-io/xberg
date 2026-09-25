@@ -536,6 +536,15 @@ pub struct TesseractConfig {
 
     /// Use adaptive thresholding method
     pub thresholding_method: bool,
+
+    /// Repair number-shaped OCR tokens: a bare integer of 4 to 9 digits gets thousands
+    /// separators (`1172` to `1,172`, unless it follows `FY`, runs into `-` or `/`, or is
+    /// followed by `%`), a period before exactly three digits becomes a comma (`7.812` to
+    /// `7,812`), and a lone digit split off a `d,ddd` number rejoins it (`2 2,411` to
+    /// `22,411`). Applied to the recognized text, the table cells and the word elements. Off
+    /// by default: in prose a four-digit number is often a year or an identifier, so turn it
+    /// on for tables of amounts.
+    pub numeric_repair: bool,
 }
 
 impl Default for TesseractConfig {
@@ -564,6 +573,7 @@ impl Default for TesseractConfig {
             tessedit_use_primary_params_model: true,
             textord_space_size_is_variable: true,
             thresholding_method: false,
+            numeric_repair: false,
         }
     }
 }
