@@ -15,8 +15,10 @@ use crate::content::parse_content_stream;
 use crate::error::Result;
 use crate::extract_log_debug;
 use crate::fonts::FontInfo;
+#[cfg(test)]
+use crate::fonts::unicode_decode::fallback_char_to_unicode;
 use crate::fonts::unicode_decode::{
-    DecodePolicy, TextCharIter, decode_text_to_unicode, fallback_char_to_unicode, strip_subset_prefix,
+    DecodePolicy, TextCharIter, decode_text_to_unicode, fallback_extraction_char_to_unicode, strip_subset_prefix,
 };
 use crate::geometry::Rect;
 use crate::layout::{Color, FontWeight, TextChar, TextSpan};
@@ -2009,7 +2011,7 @@ impl TjBuffer {
                         Self::push_filtered_unicode(&mut self.unicode, &s);
                     }
                 } else {
-                    let fb = fallback_char_to_unicode(byte as u32);
+                    let fb = fallback_extraction_char_to_unicode(font, byte as u32);
                     if fb != "\u{FFFD}" || preserve_unmapped_glyphs() {
                         Self::push_filtered_unicode(&mut self.unicode, &fb);
                     }

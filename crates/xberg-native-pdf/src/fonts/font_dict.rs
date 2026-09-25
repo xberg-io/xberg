@@ -834,7 +834,7 @@ impl FontInfo {
             None
         };
 
-        let (encoding_wmode, encoding, diff_multi_char_map, diff_glyph_names, embedded_cid_map) =
+        let (encoding_wmode, mut encoding, diff_multi_char_map, diff_glyph_names, embedded_cid_map) =
             Self::resolve_encoding_fields(
                 font_dict,
                 doc,
@@ -843,6 +843,9 @@ impl FontInfo {
                 font_program_enc_cache,
                 subtype == "Type3",
             )?;
+        if subtype == "Type3" {
+            Self::map_blank_type3_charprocs(font_dict, doc, &diff_glyph_names, &mut encoding);
+        }
 
         // Parse ToUnicode CMap if present (Phase 5.1: Lazy Loading)
         // The CMap stream is stored raw and parsed only on first character lookup ~keep
@@ -1454,6 +1457,73 @@ impl FontInfo {
             descent_value,
             has_font_program,
         )
+    }
+
+    /// Only a procedure containing d0 or d1 and no other operators is known
+    /// blank; a path without a paint command is not sufficient evidence. ~keep
+    fn is_blank_type3_charproc(doc: &PdfDocument, object: &Object) -> bool {
+        let decoded = if let Some(reference) = object.as_reference() {
+            doc.load_object(reference)
+                .inspect_err(|error| crate::error::trace_recovery("load_type3_charproc", error))
+                .ok()
+                .and_then(|stream| {
+                    doc.decode_stream_with_encryption(&stream, reference)
+                        .inspect_err(|error| crate::error::trace_recovery("decode_type3_charproc", error))
+                        .ok()
+                })
+        } else {
+            object
+                .decode_stream_data()
+                .inspect_err(|error| crate::error::trace_recovery("decode_type3_charproc", error))
+                .ok()
+        };
+        let Some(decoded) = decoded else {
+            return false;
+        };
+        let Ok(operators) = crate::content::parse_content_stream(&decoded)
+            .inspect_err(|error| crate::error::trace_recovery("parse_type3_charproc", error))
+        else {
+            return false;
+        };
+        matches!(
+            operators.as_slice(),
+            [crate::content::Operator::Other { name, .. }] if name == "d0" || name == "d1"
+        )
+    }
+
+    fn map_blank_type3_charprocs(
+        font_dict: &HashMap<String, Object>,
+        doc: &PdfDocument,
+        glyph_names: &HashMap<u8, String>,
+        encoding: &mut Encoding,
+    ) {
+        let Encoding::Custom(map) = encoding else {
+            return;
+        };
+        let Some(charprocs_obj) = font_dict.get("CharProcs") else {
+            return;
+        };
+        let resolved = charprocs_obj.as_reference().and_then(|reference| {
+            doc.load_object(reference)
+                .inspect_err(|error| crate::error::trace_recovery("load_type3_charprocs", error))
+                .ok()
+        });
+        let Some(charprocs) = resolved.as_ref().unwrap_or(charprocs_obj).as_dict() else {
+            return;
+        };
+        for (&code, name) in glyph_names {
+            if map.contains_key(&code) {
+                continue;
+            }
+            let Some(procedure) = charprocs.get(name) else {
+                continue;
+            };
+            if Self::is_blank_type3_charproc(doc, procedure) {
+                // A d0/d1-only procedure advances but paints no glyph; it is
+                // whitespace, not fabricated visible text. GH#1782. ~keep
+                map.insert(code, ' ');
+            }
+        }
     }
 
     /// Resolves the encoding-related fields used by [`Self::from_dict`]: the writing
@@ -8676,6 +8746,56 @@ mod tests {
             ]);
         });
         assert_eq!(f.best_mapping_provenance(), crate::fonts::MappingProvenance::Fallback);
+    }
+
+    #[test]
+    fn type3_d1_only_procedure_maps_to_space_but_painted_procedure_does_not() {
+        let doc = minimal_pdf_doc();
+        let stream = |data: &'static [u8]| Object::Stream {
+            dict: HashMap::new(),
+            data: bytes::Bytes::from_static(data),
+        };
+        let font_dict = HashMap::from([(
+            "CharProcs".to_string(),
+            Object::Dictionary(HashMap::from([
+                ("g02".to_string(), stream(b"27.78 0 0 -80 27.78 20 d1")),
+                ("g03".to_string(), stream(b"33.3 0 0 -80 33.3 20 d1 0 0 10 10 re f")),
+            ])),
+        )]);
+        let glyph_names = HashMap::from([(2, "g02".to_string()), (3, "g03".to_string())]);
+        let mut encoding = Encoding::Custom(HashMap::new());
+
+        FontInfo::map_blank_type3_charprocs(&font_dict, &doc, &glyph_names, &mut encoding);
+
+        let Encoding::Custom(map) = encoding else {
+            panic!("Type 3 mapping must remain custom");
+        };
+        assert_eq!(map.get(&2), Some(&' '));
+        assert_eq!(map.get(&3), None);
+    }
+
+    #[test]
+    fn unmapped_type3_codes_get_extraction_markers_but_not_render_markers() {
+        use crate::fonts::unicode_decode::{DecodePolicy, decode_text_to_unicode};
+
+        let font = make_font(|font| {
+            font.subtype = "Type3".to_string();
+            font.encoding = Encoding::Custom(HashMap::new());
+            font.to_unicode = None;
+            font.diff_glyph_names = HashMap::from([(2, "g02".to_string()), (3, "g03".to_string())]);
+        });
+        let extraction = DecodePolicy {
+            preserve_unmapped: false,
+            decompose_ligatures: false,
+            question_mark_for_invalid: true,
+        };
+        let rendering = DecodePolicy {
+            question_mark_for_invalid: false,
+            ..extraction
+        };
+
+        assert_eq!(decode_text_to_unicode(&[2, 3], Some(&font), extraction, None), "??");
+        assert_eq!(decode_text_to_unicode(&[2, 3], Some(&font), rendering, None), "");
     }
 
     // Negative control: a Type 3 font whose /Differences glyph names ARE

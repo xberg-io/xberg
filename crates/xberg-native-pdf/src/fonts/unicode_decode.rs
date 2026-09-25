@@ -16,8 +16,8 @@
 
 use std::collections::HashMap;
 
-use crate::fonts::FontInfo;
 use crate::fonts::truetype_cmap::TrueTypeCMap;
+use crate::fonts::{FontInfo, MappingProvenance};
 
 /// Per-surface decoding policy — the only intended differences between the
 /// extraction and rendering paths.
@@ -145,6 +145,16 @@ pub(crate) fn fallback_char_to_unicode(char_code: u32) -> String {
         tracing::trace!("Character code 0x{:04X} is not a valid Unicode code point", char_code);
         "?".to_string()
     }
+}
+
+/// Keep one visible placeholder per unmapped Type 3 glyph in extracted text.
+/// The raw procedure code is not Unicode, and control-valued codes would
+/// otherwise disappear before the fabricated-text gate can count them. ~keep
+pub(crate) fn fallback_extraction_char_to_unicode(font: &FontInfo, char_code: u32) -> String {
+    if font.subtype == "Type3" && font.best_mapping_provenance() == MappingProvenance::Fallback {
+        return "?".to_string();
+    }
+    fallback_char_to_unicode(char_code)
 }
 
 /// Typographic punctuation fallbacks (dashes, quotes, bullet, ellipsis,
@@ -537,7 +547,11 @@ fn resolve_char(font: &FontInfo, code: u32, policy: DecodePolicy) -> String {
     if char::from_u32(code).is_none() && !policy.question_mark_for_invalid {
         return "\u{FFFD}".to_string();
     }
-    fallback_char_to_unicode(code)
+    if policy.question_mark_for_invalid {
+        fallback_extraction_char_to_unicode(font, code)
+    } else {
+        fallback_char_to_unicode(code)
+    }
 }
 
 pub(crate) fn decode_text_to_unicode(

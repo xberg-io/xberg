@@ -243,10 +243,14 @@ impl<'doc> TextExtractor<'doc> {
         let Some(font) = font_name.and_then(|name| self.fonts.get(name)) else {
             return String::new();
         };
+        let unmapped_type3 =
+            font.subtype == "Type3" && font.best_mapping_provenance() == crate::fonts::MappingProvenance::Fallback;
         let mut text = String::new();
         for char_info in cluster {
             if let Some(decoded) = font.char_to_unicode(char_info.code) {
                 text.push_str(&decoded);
+            } else if unmapped_type3 {
+                text.push('?');
             }
         }
         text

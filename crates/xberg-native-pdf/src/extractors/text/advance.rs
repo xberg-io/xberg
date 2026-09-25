@@ -211,7 +211,7 @@ impl<'doc> TextExtractor<'doc> {
                                 }
                             }
                         } else {
-                            let fb = fallback_char_to_unicode(byte as u32);
+                            let fb = fallback_extraction_char_to_unicode(font, byte as u32);
                             if fb != "\u{FFFD}" || preserve_unmapped_glyphs() {
                                 for ch in fb.chars() {
                                     if ch >= '\x20' || ch == '\t' || ch == '\n' || ch == '\r' {
@@ -424,7 +424,7 @@ impl<'doc> TextExtractor<'doc> {
                             }
                         }
                     } else {
-                        let fb = fallback_char_to_unicode(byte as u32);
+                        let fb = fallback_extraction_char_to_unicode(font, byte as u32);
                         if fb != "\u{FFFD}" || preserve_unmapped_glyphs() {
                             for ch in fb.chars() {
                                 if ch >= '\x20' || ch == '\t' || ch == '\n' || ch == '\r' {
@@ -876,7 +876,7 @@ impl<'doc> TextExtractor<'doc> {
 
             let unicode_string = if let Some(font) = font {
                 font.char_to_unicode(char_code as u32)
-                    .unwrap_or_else(|| fallback_char_to_unicode(char_code as u32))
+                    .unwrap_or_else(|| fallback_extraction_char_to_unicode(font, char_code as u32))
             } else if char_code < 256 && (char_code as u8).is_ascii() {
                 (char_code as u8 as char).to_string()
             } else {
