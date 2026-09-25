@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/Resources`, or `/Rotate` entry on a page or intermediate page-tree node no longer masks a valid ancestor
   value. Lazy and bulk page walks agree on the nearest valid ancestor and keep sibling inheritance separate.
   (GH#1775)
+- **(pdf): a JPEG 2000 image without a `/ColorSpace` entry is now rendered and extracted.** ISO 32000-1 lets a `JPXDecode` image omit `/ColorSpace` because the JPEG 2000 stream carries its own colour space, but the image decoder rejected every such image. The page renderer then left the image's region blank, so OCR of the page, including `force_ocr` and `force_ocr_pages`, read nothing from it. The colour space now comes from the decoded stream: one component is grey, three are RGB and four are CMYK. (GH#1781)
 
 ## [1.2.9] - 2026-09-24
 

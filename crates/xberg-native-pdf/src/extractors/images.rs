@@ -1217,6 +1217,7 @@ struct ImageXObjectMetadata {
     height: u32,
     bits_per_component: u8,
     color_space: ColorSpace,
+    color_space_in_stream: bool,
     resolved_color_space: crate::object::Object,
     indexed_resolution: Option<IndexedResolution>,
     direct_icc_profile: Option<std::sync::Arc<crate::color::IccProfile>>,
@@ -1246,10 +1247,23 @@ fn resolve_image_xobject_metadata(
         is_image_mask,
     } = resolve_image_dimensions(doc, dict)?;
 
-    let default_mask_color_space = Object::Name("DeviceGray".to_string());
+    let ImageFilterInfo {
+        is_jbig2,
+        is_jpx,
+        is_jpeg_only,
+        is_jpeg_chain,
+        is_ccitt,
+        ccitt_params,
+    } = resolve_image_filter_info(dict, width, height);
+
+    // ISO 32000-1 §8.9.5 Table 89: a JPXDecode image may omit /ColorSpace,
+    // because the JPEG 2000 stream carries its own. Grey stands in until the
+    // decoded component count names the real space. ~keep
+    let color_space_in_stream = is_jpx && !is_image_mask && !dict.contains_key("ColorSpace");
+    let default_gray_color_space = Object::Name("DeviceGray".to_string());
     let color_space_obj = match dict.get("ColorSpace") {
         Some(color_space) => color_space,
-        None if is_image_mask => &default_mask_color_space,
+        None if is_image_mask || color_space_in_stream => &default_gray_color_space,
         None => return Err(Error::Image("Image missing /ColorSpace".to_string())),
     };
 
@@ -1268,20 +1282,12 @@ fn resolve_image_xobject_metadata(
         .map(crate::color::RenderingIntent::from_pdf_name)
         .unwrap_or_default();
 
-    let ImageFilterInfo {
-        is_jbig2,
-        is_jpx,
-        is_jpeg_only,
-        is_jpeg_chain,
-        is_ccitt,
-        ccitt_params,
-    } = resolve_image_filter_info(dict, width, height);
-
     Ok(ImageXObjectMetadata {
         width,
         height,
         bits_per_component,
         color_space,
+        color_space_in_stream,
         resolved_color_space,
         indexed_resolution,
         direct_icc_profile,
@@ -1322,7 +1328,8 @@ pub fn extract_image_from_xobject(
         width,
         height,
         bits_per_component,
-        color_space,
+        mut color_space,
+        color_space_in_stream,
         resolved_color_space,
         indexed_resolution,
         direct_icc_profile,
@@ -1351,7 +1358,15 @@ pub fn extract_image_from_xobject(
     let data = if is_jbig2 {
         decode_jbig2_image(xobject, obj_ref, dict, doc, width, height)?
     } else if is_jpx {
-        decode_jpx_image(xobject, obj_ref, doc, &color_space)?
+        let decoded = decode_jpx_image(xobject, obj_ref, doc, &color_space)?;
+        if color_space_in_stream && let ImageData::Raw { format, .. } = &decoded {
+            color_space = match format {
+                PixelFormat::Grayscale => ColorSpace::DeviceGray,
+                PixelFormat::RGB => ColorSpace::DeviceRGB,
+                PixelFormat::CMYK => ColorSpace::DeviceCMYK,
+            };
+        }
+        decoded
     } else if is_jpeg_only || is_jpeg_chain {
         let decoded = if let (Some(d), Some(ref_id)) = (doc.as_ref(), obj_ref) {
             d.decode_stream_with_encryption(xobject, ref_id)?
