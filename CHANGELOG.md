@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/Resources`, or `/Rotate` entry on a page or intermediate page-tree node no longer masks a valid ancestor
   value. Lazy and bulk page walks agree on the nearest valid ancestor and keep sibling inheritance separate.
   (GH#1775)
+- **(pdf): a render warning says glyph ink is missing only when a glyph was not painted.** Every warning the PDF engine logged during a page render reached `processing_warnings` as "could not paint one or more glyphs ... the glyph ink is missing", including font-load notes that drop nothing, such as the Type 3 glyph-name fallback. A warning is now worded by what the engine was doing when it logged it: a dropped glyph or a font that could not be found or loaded for rendering keeps the glyph-ink wording, an unrenderable image keeps its image wording, and any other warning reads "Page N rendering logged a warning and continued" with its own cause. (GH#1794)
 
 ## [1.2.9] - 2026-09-24
 
