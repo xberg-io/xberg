@@ -126,8 +126,8 @@ pub struct TesseractConfig {
     pub tessedit_use_primary_params_model: bool,
     /// Tesseract `textord_space_size_is_variable` variable.
     pub textord_space_size_is_variable: bool,
-    /// Use adaptive thresholding (`true`) instead of Otsu (`false`).
-    pub thresholding_method: bool,
+    /// Tesseract `thresholding_method` variable, by name; see [`ThresholdingMethod`].
+    pub thresholding_method: String,
 
     /// Enable automatic page rotation based on orientation detection.
     ///
@@ -252,12 +252,48 @@ impl Default for TesseractConfig {
             tessedit_char_blacklist: String::new(),
             tessedit_use_primary_params_model: true,
             textord_space_size_is_variable: true,
-            thresholding_method: false,
+            thresholding_method: "otsu".to_string(),
             auto_rotate: false,
             tessdata_path: None,
             source_dpi: None,
             page_number: default_page_number(),
             security_limits: None,
+        }
+    }
+}
+
+/// Tesseract's `thresholding_method` parameter (xberg-io/xberg#1784).
+///
+/// The engine reads the variable as an integer: 0 Otsu, 1 LeptonicaOtsu, 2 Sauvola. A value
+/// that does not parse leaves it at 0, and `SetVariable` still reports success for any known
+/// variable name, so the value has to be checked here, before the engine sees it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ThresholdingMethod {
+    Otsu,
+    LeptonicaOtsu,
+    Sauvola,
+}
+
+impl ThresholdingMethod {
+    /// The accepted names, in the order the engine numbers them.
+    pub(crate) const NAMES: [&'static str; 3] = ["otsu", "leptonica_otsu", "sauvola"];
+
+    /// The method for a config value, or `None` for a name the engine has no number for.
+    pub(crate) fn parse(name: &str) -> Option<Self> {
+        match name.trim().to_ascii_lowercase().as_str() {
+            "otsu" => Some(Self::Otsu),
+            "leptonica_otsu" => Some(Self::LeptonicaOtsu),
+            "sauvola" => Some(Self::Sauvola),
+            _ => None,
+        }
+    }
+
+    /// The integer Tesseract parses for this method, as the string `SetVariable` takes.
+    pub(crate) fn tesseract_value(self) -> &'static str {
+        match self {
+            Self::Otsu => "0",
+            Self::LeptonicaOtsu => "1",
+            Self::Sauvola => "2",
         }
     }
 }
@@ -269,6 +305,13 @@ impl TesseractConfig {
             return Err(format!(
                 "Invalid output_format: '{}'. Must be one of: text, markdown, hocr, tsv",
                 self.output_format
+            ));
+        }
+        if ThresholdingMethod::parse(&self.thresholding_method).is_none() {
+            return Err(format!(
+                "Invalid thresholding_method: '{}'. Must be one of: {}",
+                self.thresholding_method,
+                ThresholdingMethod::NAMES.join(", ")
             ));
         }
         if let Some(preprocessing) = &self.preprocessing {
@@ -312,7 +355,7 @@ impl From<&crate::types::TesseractConfig> for TesseractConfig {
             tessedit_char_blacklist: config.tessedit_char_blacklist.clone(),
             tessedit_use_primary_params_model: config.tessedit_use_primary_params_model,
             textord_space_size_is_variable: config.textord_space_size_is_variable,
-            thresholding_method: config.thresholding_method,
+            thresholding_method: config.thresholding_method.clone(),
             auto_rotate: config.preprocessing.as_ref().map(|p| p.auto_rotate).unwrap_or(false),
             tessdata_path: None,
             // The public config is a user-supplied document-wide setting and cannot know the
@@ -605,7 +648,7 @@ mod tests {
             tessedit_char_blacklist: "!@#$".to_string(),
             tessedit_use_primary_params_model: false,
             textord_space_size_is_variable: false,
-            thresholding_method: true,
+            thresholding_method: "sauvola".to_string(),
         };
 
         let internal_config: TesseractConfig = (&public_config).into();
@@ -630,6 +673,49 @@ mod tests {
         assert_eq!(internal_config.tessedit_char_blacklist, "!@#$");
         assert!(!internal_config.tessedit_use_primary_params_model);
         assert!(!internal_config.textord_space_size_is_variable);
-        assert!(internal_config.thresholding_method);
+        assert_eq!(internal_config.thresholding_method, "sauvola");
+    }
+
+    /// #1784: every name the engine numbers parses to its number; anything else, including the
+    /// old boolean spelling, is rejected by `validate` before the engine could read it as 0.
+    #[test]
+    fn thresholding_method_names_map_to_the_engine_numbers_and_others_are_rejected() {
+        assert_eq!(
+            ThresholdingMethod::parse("otsu").map(ThresholdingMethod::tesseract_value),
+            Some("0")
+        );
+        assert_eq!(
+            ThresholdingMethod::parse("Leptonica_Otsu").map(ThresholdingMethod::tesseract_value),
+            Some("1")
+        );
+        assert_eq!(
+            ThresholdingMethod::parse("sauvola").map(ThresholdingMethod::tesseract_value),
+            Some("2")
+        );
+        assert_eq!(ThresholdingMethod::parse("true"), None);
+        assert_eq!(ThresholdingMethod::parse("adaptive"), None);
+        assert_eq!(ThresholdingMethod::parse("1"), None);
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn validate_rejects_a_thresholding_method_the_engine_cannot_use() {
+        let config = TesseractConfig {
+            thresholding_method: "true".to_string(),
+            ..Default::default()
+        };
+        let error = config.validate().unwrap_err();
+        assert!(
+            error.contains("thresholding_method") && error.contains("sauvola"),
+            "{error}"
+        );
+        assert!(
+            TesseractConfig {
+                thresholding_method: "leptonica_otsu".to_string(),
+                ..Default::default()
+            }
+            .validate()
+            .is_ok()
+        );
     }
 }

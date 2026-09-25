@@ -24545,7 +24545,7 @@ xberg_tesseract_config_textord_space_size_is_variable(XBERGAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t xberg_tesseract_config_thresholding_method(XBERGAlefHandle handle);
+char *xberg_tesseract_config_thresholding_method(XBERGAlefHandle handle);
 
 /**
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.

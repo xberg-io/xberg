@@ -24173,7 +24173,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       tesseditCharBlacklist: dco_decode_String(arr[17]),
       tesseditUsePrimaryParamsModel: dco_decode_bool(arr[18]),
       textordSpaceSizeIsVariable: dco_decode_bool(arr[19]),
-      thresholdingMethod: dco_decode_bool(arr[20]),
+      thresholdingMethod: dco_decode_String(arr[20]),
     );
   }
 
@@ -35276,7 +35276,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_tesseditCharBlacklist = sse_decode_String(deserializer);
     var var_tesseditUsePrimaryParamsModel = sse_decode_bool(deserializer);
     var var_textordSpaceSizeIsVariable = sse_decode_bool(deserializer);
-    var var_thresholdingMethod = sse_decode_bool(deserializer);
+    var var_thresholdingMethod = sse_decode_String(deserializer);
     return TesseractConfig(
       language: var_language,
       psm: var_psm,
@@ -45322,7 +45322,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.tesseditCharBlacklist, serializer);
     sse_encode_bool(self.tesseditUsePrimaryParamsModel, serializer);
     sse_encode_bool(self.textordSpaceSizeIsVariable, serializer);
-    sse_encode_bool(self.thresholdingMethod, serializer);
+    sse_encode_String(self.thresholdingMethod, serializer);
   }
 
   @protected

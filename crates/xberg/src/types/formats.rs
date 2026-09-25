@@ -534,8 +534,15 @@ pub struct TesseractConfig {
     /// Variable-width space detection
     pub textord_space_size_is_variable: bool,
 
-    /// Use adaptive thresholding method
-    pub thresholding_method: bool,
+    /// Tesseract's own thresholding method: `"otsu"` (global Otsu, the engine default),
+    /// `"leptonica_otsu"` (Leptonica's tiled Otsu) or `"sauvola"` (Leptonica's Sauvola local
+    /// threshold). On a page whose table rows carry a grey fill each method reads a different
+    /// set of rows, so no single method is best for every page. Any other value is rejected
+    /// before the engine runs. It decides anything only when the image reaches Tesseract in
+    /// grey, so set `preprocessing.binarization_method` to `"none"` (with `deskew` off):
+    /// the default preprocessing binarizes the page with Otsu first, and a binarized page
+    /// gives every method the same result.
+    pub thresholding_method: String,
 }
 
 impl Default for TesseractConfig {
@@ -563,7 +570,7 @@ impl Default for TesseractConfig {
             tessedit_char_blacklist: String::new(),
             tessedit_use_primary_params_model: true,
             textord_space_size_is_variable: true,
-            thresholding_method: false,
+            thresholding_method: "otsu".to_string(),
         }
     }
 }

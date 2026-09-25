@@ -14658,7 +14658,7 @@ const _: fn() = || {
         let _: String = TesseractConfig.tessedit_char_blacklist;
         let _: bool = TesseractConfig.tessedit_use_primary_params_model;
         let _: bool = TesseractConfig.textord_space_size_is_variable;
-        let _: bool = TesseractConfig.thresholding_method;
+        let _: String = TesseractConfig.thresholding_method;
     }
     {
         let TextAnnotation = None::<crate::TextAnnotation>.unwrap();
@@ -25215,7 +25215,7 @@ impl SseDecode for crate::TesseractConfig {
         let mut var_tesseditCharBlacklist = <String>::sse_decode(deserializer);
         let mut var_tesseditUsePrimaryParamsModel = <bool>::sse_decode(deserializer);
         let mut var_textordSpaceSizeIsVariable = <bool>::sse_decode(deserializer);
-        let mut var_thresholdingMethod = <bool>::sse_decode(deserializer);
+        let mut var_thresholdingMethod = <String>::sse_decode(deserializer);
         return crate::TesseractConfig {
             language: var_language,
             psm: var_psm,
@@ -41759,7 +41759,7 @@ impl SseEncode for crate::TesseractConfig {
         <String>::sse_encode(self.tessedit_char_blacklist, serializer);
         <bool>::sse_encode(self.tessedit_use_primary_params_model, serializer);
         <bool>::sse_encode(self.textord_space_size_is_variable, serializer);
-        <bool>::sse_encode(self.thresholding_method, serializer);
+        <String>::sse_encode(self.thresholding_method, serializer);
     }
 }
 

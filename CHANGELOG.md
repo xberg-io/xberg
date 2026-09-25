@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **(ocr): `tesseract_config.thresholding_method` is a string and reaches Tesseract.** It was a boolean sent to Tesseract's integer parameter as the string `true`, which the engine's integer parser left at 0 while `SetVariable` reported success, so the setting never changed anything and the LeptonicaOtsu and Sauvola methods could not be selected. The field is now `"otsu"` (the default, and what every configuration effectively ran), `"leptonica_otsu"` or `"sauvola"`; any other value, including the old `true` and `false`, is rejected before the engine runs. The method decides anything only when the page reaches Tesseract in grey, so pair it with `preprocessing.binarization_method: "none"`: the default preprocessing binarizes the page with Otsu first. On a scanned table page with grey-filled rows the three methods then read different rows, so the choice is the caller's. (GH#1784)
+
 ### Fixed
 
 - **(pdf): a document whose cross-reference stream is truncated no longer returns mostly empty pages.** When the final `/XRef` stream fails to decode, the parser rebuilds the table by scanning the file for literal `N G obj` headers. That scan cannot see an object packed inside an `/ObjStm` container, which in an incrementally updated PDF routinely includes every page's font dictionary. The reference then resolved to null -- legitimate per PDF 32000-1 7.3.10 for a deleted object, and therefore silent -- so pages extracted no text while the document reported success. Two reported files returned 86 of 88 and 22 of 24 pages empty; both now recover every page. The object-stream sweep that already existed for the analogous mis-flagged-free case now also runs once when the xref came from reconstruction. A reference still unresolvable after that sweep raises an `XrefRecovery` warning, which is deliberately not raised for an ordinary null resolution. (GH#1774)

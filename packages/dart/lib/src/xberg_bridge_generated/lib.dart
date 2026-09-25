@@ -18193,7 +18193,7 @@ class TesseractConfig {
   final bool textordSpaceSizeIsVariable;
 
   /// Use adaptive thresholding method
-  final bool thresholdingMethod;
+  final String thresholdingMethod;
 
   const TesseractConfig({
     required this.language,

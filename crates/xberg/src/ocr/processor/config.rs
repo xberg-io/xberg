@@ -171,7 +171,18 @@ fn tesseract_variable_set(config: &TesseractConfig) -> Vec<(&'static str, String
             "textord_space_size_is_variable",
             config.textord_space_size_is_variable.to_string(),
         ),
-        ("thresholding_method", config.thresholding_method.to_string()),
+        // Sent as the integer the engine parses (0 Otsu, 1 LeptonicaOtsu, 2 Sauvola). The old
+        // boolean reached the engine as the string `true`, which its integer parser left at 0,
+        // and `SetVariable` reported success anyway, so the setting never did anything (#1784).
+        // A name `validate` has not accepted cannot reach the engine; it stays the raw string
+        // here so the cache key still tells the values apart. ~keep
+        (
+            "thresholding_method",
+            crate::ocr::types::ThresholdingMethod::parse(&config.thresholding_method).map_or_else(
+                || config.thresholding_method.clone(),
+                |method| method.tesseract_value().to_string(),
+            ),
+        ),
         // Tesseract emits `x_fsize`/`x_font`/`x_bold`/`x_italic` on `ocrx_word` spans only when
         // this variable is on, and it defaults to off. Without it the hOCR parser never sees a
         // font size, so every OCR paragraph falls back to a single constant and heading
@@ -370,6 +381,39 @@ mod tests {
         let hash2 = hash_config(&config2, TEST_TESSDATA_PATH);
 
         assert_ne!(hash1, hash2);
+    }
+
+    /// #1784: the engine receives the method's number, not its name and not a boolean.
+    #[test]
+    fn tesseract_variable_set_sends_the_thresholding_method_number() {
+        let value_for = |name: &str| {
+            let config = TesseractConfig {
+                thresholding_method: name.to_string(),
+                ..TesseractConfig::default()
+            };
+            tesseract_variable_set(&config)
+                .into_iter()
+                .find(|(variable, _)| *variable == "thresholding_method")
+                .map(|(_, value)| value)
+                .expect("the variable is always sent")
+        };
+        assert_eq!(value_for("otsu"), "0");
+        assert_eq!(value_for("leptonica_otsu"), "1");
+        assert_eq!(value_for("sauvola"), "2");
+    }
+
+    /// The three methods produce three cache keys.
+    #[test]
+    fn test_hash_config_thresholding_method() {
+        let hash_for = |name: &str| {
+            let config = TesseractConfig {
+                thresholding_method: name.to_string(),
+                ..create_test_config()
+            };
+            hash_config(&config, TEST_TESSDATA_PATH)
+        };
+        assert_ne!(hash_for("otsu"), hash_for("leptonica_otsu"));
+        assert_ne!(hash_for("otsu"), hash_for("sauvola"));
     }
 
     #[test]
@@ -578,7 +622,7 @@ mod tests {
             ),
             (
                 "thresholding_method",
-                Box::new(|c: &mut TesseractConfig| c.thresholding_method = !c.thresholding_method),
+                Box::new(|c: &mut TesseractConfig| c.thresholding_method = "sauvola".to_string()),
             ),
         ]
     }

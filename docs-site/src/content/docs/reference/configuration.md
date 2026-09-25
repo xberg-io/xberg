@@ -1471,7 +1471,7 @@ PDF-embedded OCR (which can reach the internal `Default` directly when no
 | `tessedit_char_blacklist` | `str` | `""` | Blacklist of forbidden characters (empty = none forbidden) |
 | `tessedit_use_primary_params_model` | `bool` | `True` | Use primary language params model |
 | `textord_space_size_is_variable` | `bool` | `True` | Variable-width space detection |
-| `thresholding_method` | `bool` | `False` | Use adaptive thresholding method |
+| `thresholding_method` | `str` | `"otsu"` | Tesseract's own thresholding method: "otsu" (global Otsu, the engine default), "leptonica_otsu" (Leptonica's tiled Otsu) or "sauvola" (Leptonica's Sauvola local threshold). Any other value is rejected before the engine runs. It decides anything only when the image reaches Tesseract in grey: set `preprocessing.binarization_method` to `"none"` (with `deskew` off), because the default preprocessing binarizes the page with Otsu first. |
 
 ---
 

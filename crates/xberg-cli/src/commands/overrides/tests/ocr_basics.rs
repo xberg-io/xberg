@@ -375,7 +375,7 @@ fn test_ocr_no_cache_changes_only_use_cache_when_tesseract_config_already_set() 
         tessedit_char_blacklist: "@#".to_string(),
         tessedit_use_primary_params_model: false,
         textord_space_size_is_variable: false,
-        thresholding_method: true,
+        thresholding_method: "sauvola".to_string(),
     };
     let mut config = ExtractionConfig {
         ocr: Some(OcrConfig {
