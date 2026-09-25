@@ -1224,8 +1224,10 @@ fn apply_default_tesseract_psm(config: &mut crate::core::config::OcrConfig, psm:
     }
 }
 
+/// Also applied by the PDF OCR routes to a page that is one full-page raster, so a scanned
+/// page and the same page OCR'd as an image use the same segmentation mode (#1786).
 #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
-fn apply_default_whole_image_tesseract_psm(config: &mut crate::core::config::OcrConfig) {
+pub(crate) fn apply_default_whole_image_tesseract_psm(config: &mut crate::core::config::OcrConfig) {
     let psm = if has_vertical_tesseract_language(config) {
         VERTICAL_BLOCK_TESSERACT_PSM
     } else {

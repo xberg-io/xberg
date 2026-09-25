@@ -988,6 +988,82 @@ pub(crate) fn build_minimal_pdf_with_mediabox(w: f32, h: f32) -> Vec<u8> {
     buf
 }
 
+/// Build a single-page PDF whose page is `page_pt` (width, height) points, painted with one
+/// unfiltered 8-bit grayscale image of `image_px` (width, height) pixels, scaled to cover
+/// `coverage` of the page area (centred), plus `text_lines` lines of native Helvetica text
+/// of about 25 glyphs each. `coverage = 1.0` is a scan: the raster's density is
+/// `image width / (page width / 72)` dots per inch. With few text lines an inset raster is a
+/// scan with a stamp; with many it is a figure on a text page.
+#[cfg(all(test, feature = "pdf"))]
+pub(crate) fn build_full_page_raster_pdf(
+    page_pt: (f32, f32),
+    image_px: (u32, u32),
+    coverage: f32,
+    text_lines: usize,
+) -> Vec<u8> {
+    let (page_w, page_h) = page_pt;
+    let (image_w, image_h) = image_px;
+    let pixels = vec![0x40u8; (image_w * image_h) as usize];
+    let scale = coverage.sqrt();
+    let (w, h) = (page_w * scale, page_h * scale);
+    let (x, y) = ((page_w - w) / 2.0, (page_h - h) / 2.0);
+    let mut content = format!("q {w} 0 0 {h} {x} {y} cm /Im0 Do Q\n");
+    for line in 0..text_lines {
+        let baseline = page_h - 12.0 - line as f32 * 3.0;
+        content.push_str(&format!(
+            "BT /F1 4 Tf 2 {baseline} Td (Line {line} of the native text.) Tj ET\n"
+        ));
+    }
+
+    let mut buf = Vec::<u8>::new();
+    buf.extend_from_slice(b"%PDF-1.4\n");
+    let mut offsets = Vec::new();
+
+    offsets.push(buf.len());
+    buf.extend_from_slice(b"1 0 obj\n<</Type /Catalog /Pages 2 0 R>>\nendobj\n");
+    offsets.push(buf.len());
+    buf.extend_from_slice(b"2 0 obj\n<</Type /Pages /Kids [3 0 R] /Count 1>>\nendobj\n");
+    offsets.push(buf.len());
+    buf.extend_from_slice(
+        format!(
+            "3 0 obj\n<</Type /Page /MediaBox [0 0 {page_w} {page_h}] /Parent 2 0 R \
+             /Contents 4 0 R /Resources <</XObject <</Im0 5 0 R>> \
+             /Font <</F1 <</Type /Font /Subtype /Type1 /BaseFont /Helvetica>> >> >> >>\nendobj\n"
+        )
+        .as_bytes(),
+    );
+    offsets.push(buf.len());
+    buf.extend_from_slice(
+        format!(
+            "4 0 obj\n<</Length {}>>\nstream\n{content}\nendstream\nendobj\n",
+            content.len()
+        )
+        .as_bytes(),
+    );
+    offsets.push(buf.len());
+    buf.extend_from_slice(
+        format!(
+            "5 0 obj\n<</Type /XObject /Subtype /Image /Width {image_w} /Height {image_h} \
+             /ColorSpace /DeviceGray /BitsPerComponent 8 /Length {}>>\nstream\n",
+            pixels.len()
+        )
+        .as_bytes(),
+    );
+    buf.extend_from_slice(&pixels);
+    buf.extend_from_slice(b"\nendstream\nendobj\n");
+
+    let xref_offset = buf.len();
+    let total_objs = offsets.len() + 1;
+    buf.extend_from_slice(format!("xref\n0 {total_objs}\n").as_bytes());
+    buf.extend_from_slice(b"0000000000 65535 f \n");
+    for offset in &offsets {
+        buf.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+    }
+    buf.extend_from_slice(format!("trailer\n<</Size {total_objs} /Root 1 0 R>>\n").as_bytes());
+    buf.extend_from_slice(format!("startxref\n{xref_offset}\n%%EOF\n").as_bytes());
+    buf
+}
+
 /// Build a single-page PDF embedding a synthetic Type 1C (CFF) font whose
 /// dot-bearing glyphs carry the deprecated `dotsection` operator, mirroring
 /// Adobe's Type 1 to Type 2 converter output that surfaced the bug. The font

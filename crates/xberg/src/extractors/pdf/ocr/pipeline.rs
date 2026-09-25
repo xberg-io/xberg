@@ -720,9 +720,15 @@ pub(crate) async fn extract_mixed_ocr_native(
                 // Derived from the MediaBox-oriented raster, before `upright_raster_for_backend`
                 // may swap its axes.
                 let source_dpi = rendered_page_source_dpi(&render_doc, *page_idx, *width);
-                let config_clone =
-                    ocr_config_with_page_rotation_hint(&ocr_config_owned, page_rotation_degrees, source_dpi)
-                        .into_owned();
+                let whole_page_raster =
+                    crate::pdf::scan_detect::full_page_raster_density(&render_doc, *page_idx).is_some();
+                let config_clone = ocr_config_with_page_rotation_hint(
+                    &ocr_config_owned,
+                    page_rotation_degrees,
+                    source_dpi,
+                    whole_page_raster,
+                )
+                .into_owned();
                 let (upright_data, upright_width, upright_height, correction_degrees) = upright_raster_for_backend(
                     data,
                     *width,
@@ -838,8 +844,14 @@ pub(crate) async fn extract_mixed_ocr_native(
                 }
                 let page_rotation_degrees = page_rotations.get(*page_idx).copied().unwrap_or(0);
                 let source_dpi = rendered_page_source_dpi(&render_doc, *page_idx, *width);
-                let config_for_page =
-                    ocr_config_with_page_rotation_hint(&ocr_config_owned, page_rotation_degrees, source_dpi);
+                let whole_page_raster =
+                    crate::pdf::scan_detect::full_page_raster_density(&render_doc, *page_idx).is_some();
+                let config_for_page = ocr_config_with_page_rotation_hint(
+                    &ocr_config_owned,
+                    page_rotation_degrees,
+                    source_dpi,
+                    whole_page_raster,
+                );
                 let (upright_data, upright_width, upright_height, correction_degrees) = upright_raster_for_backend(
                     data,
                     *width,
@@ -1711,9 +1723,19 @@ pub(super) async fn extract_with_ocr_for_page(
                     });
                 #[cfg(not(feature = "pdf"))]
                 let source_dpi: Option<f64> = None;
-                let config_clone =
-                    ocr_config_with_page_rotation_hint(&ocr_config_owned, page_rotation_degrees, source_dpi)
-                        .into_owned();
+                #[cfg(feature = "pdf")]
+                let whole_page_raster = lazy_pdf_render_state.as_ref().is_some_and(|(doc, _, _)| {
+                    crate::pdf::scan_detect::full_page_raster_density(doc, *page_idx).is_some()
+                });
+                #[cfg(not(feature = "pdf"))]
+                let whole_page_raster = false;
+                let config_clone = ocr_config_with_page_rotation_hint(
+                    &ocr_config_owned,
+                    page_rotation_degrees,
+                    source_dpi,
+                    whole_page_raster,
+                )
+                .into_owned();
                 // No PDF `/Rotate` is ever known without the `pdf` feature (`page_rotation_degrees`
                 // is always `0` above in that build), so there is nothing to correct upright.
                 #[cfg(feature = "pdf")]
@@ -1791,8 +1813,18 @@ pub(super) async fn extract_with_ocr_for_page(
                     });
                 #[cfg(not(feature = "pdf"))]
                 let source_dpi: Option<f64> = None;
-                let config_for_page =
-                    ocr_config_with_page_rotation_hint(&ocr_config_owned, page_rotation_degrees, source_dpi);
+                #[cfg(feature = "pdf")]
+                let whole_page_raster = lazy_pdf_render_state.as_ref().is_some_and(|(doc, _, _)| {
+                    crate::pdf::scan_detect::full_page_raster_density(doc, *page_idx).is_some()
+                });
+                #[cfg(not(feature = "pdf"))]
+                let whole_page_raster = false;
+                let config_for_page = ocr_config_with_page_rotation_hint(
+                    &ocr_config_owned,
+                    page_rotation_degrees,
+                    source_dpi,
+                    whole_page_raster,
+                );
                 #[cfg(feature = "pdf")]
                 let (upright_data, upright_width, upright_height, correction_degrees) = upright_raster_for_backend(
                     image_data,
@@ -3746,20 +3778,34 @@ pub(super) fn retain_ocr_formulas_for_accepted_pages(
 /// Both hints are per page, not per document: the config is cloned for each page, so mixed page
 /// sizes and per-page DPI reductions each report their own value.
 ///
-/// A no-op when there is nothing to say (`page_rotation_degrees == 0` and no known DPI) so such
-/// pages never pay a config clone. Backends that don't recognise either key ignore it, per
-/// `OcrConfig.backend_options`'s documented contract.
+/// When `whole_page_raster` is set (the page is one full-page image, a scan) and the caller
+/// chose no Tesseract `psm`, the page gets the segmentation mode standalone image OCR uses
+/// (`extractors::image::apply_default_whole_image_tesseract_psm`). The engine default,
+/// automatic layout, loses table values on a scanned table page that the sparse-text mode
+/// reads, and a scanned page OCR'd as an image already got that mode (#1786). A page that is
+/// not a scan keeps the engine default, so forced OCR of a vector page is unchanged.
+///
+/// A no-op when there is nothing to say (`page_rotation_degrees == 0`, no known DPI and no
+/// whole-page PSM to apply) so such pages never pay a config clone. Backends that don't
+/// recognise either key ignore it, per `OcrConfig.backend_options`'s documented contract.
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) fn ocr_config_with_page_rotation_hint(
     config: &crate::core::config::ocr::OcrConfig,
     page_rotation_degrees: u32,
     source_dpi: Option<f64>,
+    whole_page_raster: bool,
 ) -> Cow<'_, crate::core::config::ocr::OcrConfig> {
     let source_dpi = source_dpi.and_then(serde_json::Number::from_f64);
-    if page_rotation_degrees == 0 && source_dpi.is_none() {
+    let apply_whole_image_psm = whole_page_raster
+        && config.backend == "tesseract"
+        && config.tesseract_config.as_ref().and_then(|c| c.psm).is_none();
+    if page_rotation_degrees == 0 && source_dpi.is_none() && !apply_whole_image_psm {
         return Cow::Borrowed(config);
     }
     let mut config = config.clone();
+    if apply_whole_image_psm {
+        crate::extractors::image::apply_default_whole_image_tesseract_psm(&mut config);
+    }
     let mut opts = config.backend_options.take().unwrap_or_else(|| serde_json::json!({}));
     if !opts.is_object() {
         opts = serde_json::json!({});

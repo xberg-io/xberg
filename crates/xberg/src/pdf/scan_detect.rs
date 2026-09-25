@@ -108,11 +108,58 @@ pub(crate) fn score_page(signals: &PageScanSignals) -> f32 {
     score.clamp(0.0, 1.0)
 }
 
+/// Points per inch in PDF user space.
+const POINTS_PER_INCH: f64 = 72.0;
+
 /// Fraction of the page covered by raster images, without decoding pixel data.
 ///
 /// Overlapping images are summed, not unioned, so this is an upper bound: it may
 /// over-select a page for inspection, never under-select one.
 fn image_coverage(doc: &PdfDocument, page_index: usize) -> Option<f32> {
+    page_raster_geometry(doc, page_index).map(|(coverage, _)| coverage)
+}
+
+/// Below this raster coverage a page is never a scan for OCR, whatever its text layer holds.
+const OCR_SCAN_COVERAGE_MIN: f32 = 0.25;
+
+/// A scan's own text layer is furniture: a page number, a running header, a stamp. A page
+/// with more glyphs than this beside a raster is a text page with a figure. A nine-word
+/// stamp is about sixty glyphs; a page of prose is thousands.
+const OCR_SCAN_MAX_GLYPHS: usize = 400;
+
+/// The density, in dots per inch, of a page that is a scan: one raster with at most a stamp
+/// of native text beside it.
+///
+/// A page whose rasters cover at least [`IMAGE_COVERAGE_MIN`] of it is a scan whatever its
+/// text layer. A scanned sheet is often painted inset, with margins around it, so a page whose
+/// raster covers at least [`OCR_SCAN_COVERAGE_MIN`] is a scan too when its text layer has no
+/// more than [`OCR_SCAN_MAX_GLYPHS`] glyphs. `None` otherwise, and for a page with no image.
+/// The density is that of the largest image on the page, its pixel count over the area it is
+/// painted into, so a 1650 x 2160 px image painted over a Letter page reports about 196 dpi
+/// whatever the page's render resolution is (#1786). The glyph count comes from the same
+/// content-stream classification scan detection uses; no pixel data is decoded.
+pub(crate) fn full_page_raster_density(doc: &PdfDocument, page_index: usize) -> Option<f64> {
+    let (coverage, density) = page_raster_geometry(doc, page_index)?;
+    if coverage >= IMAGE_COVERAGE_MIN {
+        return density;
+    }
+    if coverage < OCR_SCAN_COVERAGE_MIN {
+        return None;
+    }
+    // Detection is advisory: a page that panics must not abort the extraction. ~keep
+    let classified = super::native::guard_native_panic(
+        || doc.classify_page(page_index).map_err(|error| error.to_string()),
+        |message| message,
+    )
+    .ok()?;
+    (classified.signals.text_glyph_count <= OCR_SCAN_MAX_GLYPHS)
+        .then_some(density)
+        .flatten()
+}
+
+/// Raster coverage of the page and the density of its largest image, from one pass over
+/// the page's image handles.
+fn page_raster_geometry(doc: &PdfDocument, page_index: usize) -> Option<(f32, Option<f64>)> {
     let (x0, y0, x1, y1) = doc.get_page_media_box(page_index).ok()?;
     let page_area = ((x1 - x0) * (y1 - y0)).abs();
     if page_area <= f32::EPSILON {
@@ -123,17 +170,26 @@ fn image_coverage(doc: &PdfDocument, page_index: usize) -> Option<f32> {
     let (bottom, top) = (y0.min(y1), y0.max(y1));
 
     let handles = doc.page_image_handles(page_index).ok()?;
-    let covered: f32 = handles
-        .iter()
-        .map(|handle| {
-            let bbox = &handle.bbox;
-            let width = (bbox.x + bbox.width).min(right) - bbox.x.max(left);
-            let height = (bbox.y + bbox.height).min(top) - bbox.y.max(bottom);
-            width.max(0.0) * height.max(0.0)
-        })
-        .sum();
+    let mut covered = 0.0f32;
+    let mut largest: Option<(f32, f64)> = None;
+    for handle in &handles {
+        let bbox = &handle.bbox;
+        let width = ((bbox.x + bbox.width).min(right) - bbox.x.max(left)).max(0.0);
+        let height = ((bbox.y + bbox.height).min(top) - bbox.y.max(bottom)).max(0.0);
+        let visible = width * height;
+        covered += visible;
 
-    Some((covered / page_area).clamp(0.0, 1.0))
+        let painted = f64::from(bbox.width.abs()) * f64::from(bbox.height.abs());
+        if painted > 0.0 && largest.is_none_or(|(area, _)| visible > area) {
+            let pixels = f64::from(handle.width) * f64::from(handle.height);
+            largest = Some((visible, (pixels / painted).sqrt() * POINTS_PER_INCH));
+        }
+    }
+
+    Some((
+        (covered / page_area).clamp(0.0, 1.0),
+        largest.map(|(_, density)| density),
+    ))
 }
 
 /// Signals for one page, or `None` when it yields no evidence.
@@ -326,6 +382,71 @@ pub(crate) fn fabricated_provenance_page_indices_from_counts(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #1786: a page that is one full-page raster reports that raster's own density (400 px
+    /// over 100 pt is 288 dpi); the same raster covering a quarter of the page is a figure and
+    /// reports none; a page without images reports none.
+    #[test]
+    fn full_page_raster_density_reads_the_scan_density_and_ignores_figures() {
+        let scan = PdfDocument::from_bytes(crate::pdf::render::build_full_page_raster_pdf(
+            (100.0, 100.0),
+            (400, 400),
+            1.0,
+            0,
+        ))
+        .unwrap();
+        let density = full_page_raster_density(&scan, 0).expect("a full-page raster has a density");
+        assert!(
+            (density - 288.0).abs() < 0.5,
+            "400 px over 100 pt is 288 dpi, got {density}"
+        );
+
+        let inset = PdfDocument::from_bytes(crate::pdf::render::build_full_page_raster_pdf(
+            (100.0, 100.0),
+            (400, 400),
+            0.64,
+            1,
+        ))
+        .unwrap();
+        let density = full_page_raster_density(&inset, 0).expect("an inset scan with a stamp has a density");
+        assert!(
+            (density - 360.0).abs() < 0.5,
+            "400 px painted over 80 pt is 360 dpi, got {density}"
+        );
+
+        let figure = PdfDocument::from_bytes(crate::pdf::render::build_full_page_raster_pdf(
+            (100.0, 100.0),
+            (400, 400),
+            0.64,
+            20,
+        ))
+        .unwrap();
+        assert_eq!(
+            full_page_raster_density(&figure, 0),
+            None,
+            "the same raster beside twenty lines of text is a figure on a text page"
+        );
+
+        let small = PdfDocument::from_bytes(crate::pdf::render::build_full_page_raster_pdf(
+            (100.0, 100.0),
+            (400, 400),
+            0.16,
+            0,
+        ))
+        .unwrap();
+        assert_eq!(
+            full_page_raster_density(&small, 0),
+            None,
+            "a raster under a quarter of the page is never a scan"
+        );
+
+        let blank = PdfDocument::from_bytes(crate::pdf::render::build_minimal_pdf_with_mediabox(100.0, 100.0)).unwrap();
+        assert_eq!(
+            full_page_raster_density(&blank, 0),
+            None,
+            "a page without images has no raster density"
+        );
+    }
 
     /// Both page passes go through [`map_pages`], so the order guarantee is pinned on it
     /// directly. A pass that only counted pages would still be green on a shuffled result,

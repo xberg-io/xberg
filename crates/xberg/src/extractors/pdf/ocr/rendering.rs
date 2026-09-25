@@ -338,6 +338,105 @@ mod render_dpi_tests {
         assert_eq!(*height, 1650, "11in at 150 DPI is 1650px tall");
     }
 
+    /// #1786: a page that is one full-page raster (a scan) renders at the raster's own density,
+    /// not at the 150 default that downsamples it before the OCR preprocessor upscales it again.
+    /// A 400 px raster painted over a 100 pt page is 288 dpi, so the page renders 400 px wide.
+    #[test]
+    fn render_full_pdf_ocr_batch_renders_a_full_page_raster_at_its_own_density() {
+        let pdf = crate::pdf::render::build_full_page_raster_pdf((100.0, 100.0), (400, 400), 1.0, 0);
+        let (doc, _page_count, page_rotations) = open_pdf_for_full_ocr(&pdf).unwrap();
+
+        let batch = render_full_pdf_ocr_batch(
+            &doc,
+            &page_rotations,
+            0..1,
+            &crate::extractors::security::SecurityLimits::default(),
+            None,
+        )
+        .expect("a full-page raster must render");
+
+        let (_, _, width, height) = &batch[0];
+        assert_eq!(
+            *width, 400,
+            "a 288 dpi scan of a 100 pt page renders 400 px wide, not 208"
+        );
+        assert_eq!(*height, 400);
+    }
+
+    /// The control for the test above: the same raster covering a quarter of a page that
+    /// carries 20 lines of native text is a figure on a text page, and the page keeps the 150
+    /// dpi default (100 pt at 150 dpi is 208.3 px, which the renderer rounds up to 209).
+    #[test]
+    fn render_full_pdf_ocr_batch_keeps_the_default_dpi_for_a_page_with_a_figure() {
+        let pdf = crate::pdf::render::build_full_page_raster_pdf((100.0, 100.0), (400, 400), 0.25, 20);
+        let (doc, _page_count, page_rotations) = open_pdf_for_full_ocr(&pdf).unwrap();
+
+        let batch = render_full_pdf_ocr_batch(
+            &doc,
+            &page_rotations,
+            0..1,
+            &crate::extractors::security::SecurityLimits::default(),
+            None,
+        )
+        .expect("a figure page must render");
+
+        let (_, _, width, _) = &batch[0];
+        assert_eq!(
+            *width, 209,
+            "a figure covering a quarter of the page must not change the render dpi"
+        );
+    }
+
+    /// The ceiling holds on a real page size: a Letter page carrying a 600 dpi scan renders at
+    /// `SCAN_PAGE_MAX_RENDER_DPI` (2550 x 3300 px) and stays inside the default security limits
+    /// through the raster normalization step, which is the claim the ceiling's comment makes.
+    #[test]
+    fn render_full_pdf_ocr_batch_caps_a_letter_scan_at_the_ceiling_within_default_limits() {
+        let pdf = crate::pdf::render::build_full_page_raster_pdf((612.0, 792.0), (5100, 6600), 1.0, 0);
+        let (doc, _page_count, page_rotations) = open_pdf_for_full_ocr(&pdf).unwrap();
+
+        let batch = render_full_pdf_ocr_batch(
+            &doc,
+            &page_rotations,
+            0..1,
+            &crate::extractors::security::SecurityLimits::default(),
+            None,
+        )
+        .expect("a Letter scan at the ceiling must render inside the default limits");
+
+        let (_, _, width, height) = &batch[0];
+        assert_eq!((*width, *height), (2550, 3300), "8.5 x 11 in at the 300 dpi ceiling");
+    }
+
+    /// #1577 still holds on a scan: a configured `target_dpi` decides, not the raster's density.
+    #[test]
+    fn render_full_pdf_ocr_batch_lets_a_configured_dpi_win_over_the_raster_density() {
+        let pdf = crate::pdf::render::build_full_page_raster_pdf((100.0, 100.0), (400, 400), 1.0, 0);
+        let (doc, _page_count, page_rotations) = open_pdf_for_full_ocr(&pdf).unwrap();
+        let images_config = crate::core::config::ImageExtractionConfig {
+            target_dpi: 72,
+            auto_adjust_dpi: false,
+            min_dpi: 72,
+            max_dpi: 600,
+            ..Default::default()
+        };
+
+        let batch = render_full_pdf_ocr_batch(
+            &doc,
+            &page_rotations,
+            0..1,
+            &crate::extractors::security::SecurityLimits::default(),
+            Some(&images_config),
+        )
+        .expect("a full-page raster must render");
+
+        let (_, _, width, _) = &batch[0];
+        assert_eq!(
+            *width, 100,
+            "100 pt at the configured 72 dpi is 100 px, whatever the raster's density"
+        );
+    }
+
     /// The exact #1577 repro: `target_dpi=600` on the `ImageExtractionConfig` must actually
     /// change the rendered pixel dimensions, not be silently ignored. Before the fix, this
     /// page rendered identically regardless of `images_config`.
@@ -650,6 +749,27 @@ pub(super) fn fallback_render_document<'a>(
     })
     .as_ref()
 }
+/// The DPI to render `page_idx` at for OCR.
+///
+/// A caller's `images` config decides as before (#1577). Without one, a page that is a single
+/// full-page raster renders at that raster's own density, bounded by
+/// `crate::image::dpi::scan_page_render_dpi`, instead of the 150 default: a 196 dpi scan
+/// rendered at 150 and then upscaled to 300 by the OCR preprocessor lost table values that
+/// OCR of the same page as an image read (#1786). Every other page keeps the default.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn ocr_page_render_dpi(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_idx: usize,
+    images_config: Option<&crate::core::config::ImageExtractionConfig>,
+) -> i32 {
+    if images_config.is_none()
+        && let Some(density) = crate::pdf::scan_detect::full_page_raster_density(doc, page_idx)
+    {
+        return crate::image::dpi::scan_page_render_dpi(density);
+    }
+    let (page_width_pt, page_height_pt) = crate::pdf::render::get_page_dimensions_pt(doc, page_idx);
+    crate::image::dpi::effective_pdf_render_dpi(images_config, f64::from(page_width_pt), f64::from(page_height_pt))
+}
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) fn render_full_pdf_ocr_batch(
     doc: &xberg_native_pdf::PdfDocument,
@@ -660,12 +780,7 @@ pub(super) fn render_full_pdf_ocr_batch(
 ) -> crate::Result<Vec<EncodedPage>> {
     let mut encoded = Vec::with_capacity(page_range.len());
     for page_idx in page_range {
-        let (page_width_pt, page_height_pt) = crate::pdf::render::get_page_dimensions_pt(doc, page_idx);
-        let render_dpi = crate::image::dpi::effective_pdf_render_dpi(
-            images_config,
-            f64::from(page_width_pt),
-            f64::from(page_height_pt),
-        );
+        let render_dpi = ocr_page_render_dpi(doc, page_idx, images_config);
         let rendered = crate::pdf::render::render_page_with_safeguards(doc, page_idx, render_dpi.max(1) as u32)
             .map_err(|e| crate::XbergError::Parsing {
                 message: format!("Failed to render page {} for OCR: {:?}", page_idx, e),
@@ -751,9 +866,7 @@ fn render_one_selected_page(
 ) -> crate::Result<(usize, image::DynamicImage)> {
     #[cfg(test)]
     record_render_thread();
-    let (page_width_pt, page_height_pt) = crate::pdf::render::get_page_dimensions_pt(doc, idx);
-    let render_dpi =
-        crate::image::dpi::effective_pdf_render_dpi(images_config, f64::from(page_width_pt), f64::from(page_height_pt));
+    let render_dpi = ocr_page_render_dpi(doc, idx, images_config);
     let rendered =
         crate::pdf::render::render_page_with_safeguards(doc, idx, render_dpi.max(1) as u32).map_err(|e| {
             crate::XbergError::Parsing {

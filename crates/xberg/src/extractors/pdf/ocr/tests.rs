@@ -6975,7 +6975,7 @@ Name: ___
         const RENDER_DPI: f64 = 150.0;
         let config = crate::core::config::ocr::OcrConfig::default();
 
-        let hinted = ocr_config_with_page_rotation_hint(&config, 0, Some(RENDER_DPI));
+        let hinted = ocr_config_with_page_rotation_hint(&config, 0, Some(RENDER_DPI), false);
 
         let options = hinted
             .backend_options
@@ -7003,7 +7003,7 @@ Name: ___
         const REDUCED_RENDER_DPI: f64 = 96.0;
         let config = crate::core::config::ocr::OcrConfig::default();
 
-        let hinted = ocr_config_with_page_rotation_hint(&config, 270, Some(REDUCED_RENDER_DPI));
+        let hinted = ocr_config_with_page_rotation_hint(&config, 270, Some(REDUCED_RENDER_DPI), false);
 
         let options = hinted.backend_options.as_ref().expect("both hints must be carried");
         assert_eq!(
@@ -7028,9 +7028,70 @@ Name: ___
     fn should_borrow_config_when_no_page_hint_applies() {
         let config = crate::core::config::ocr::OcrConfig::default();
 
-        let hinted = ocr_config_with_page_rotation_hint(&config, 0, None);
+        let hinted = ocr_config_with_page_rotation_hint(&config, 0, None, false);
 
         assert!(matches!(hinted, Cow::Borrowed(_)), "no hints must mean no config clone");
+    }
+
+    /// #1786: a page that is one full-page raster gets the whole-image segmentation mode the
+    /// standalone image route applies (sparse text, PSM 11; wasm32 uses 6, so this runs off
+    /// wasm32 only), when the caller set none.
+    #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+    #[test]
+    fn should_apply_the_whole_image_psm_to_a_scan_page_when_the_caller_set_none() {
+        let config = crate::core::config::ocr::OcrConfig::default();
+
+        let hinted = ocr_config_with_page_rotation_hint(&config, 0, None, true);
+
+        let psm = hinted.tesseract_config.as_ref().and_then(|c| c.psm);
+        assert_eq!(
+            psm,
+            Some(11),
+            "a scan page must use the sparse-text mode image OCR uses"
+        );
+    }
+
+    /// The caller's own `psm` always wins, and a page that is not a scan keeps the engine default
+    /// (no `tesseract_config` materialised at all).
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn should_keep_an_explicit_psm_and_leave_a_vector_page_on_the_engine_default() {
+        let explicit = crate::core::config::ocr::OcrConfig {
+            tesseract_config: Some(crate::types::TesseractConfig {
+                psm: Some(6),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let hinted = ocr_config_with_page_rotation_hint(&explicit, 0, None, true);
+        assert_eq!(hinted.tesseract_config.as_ref().and_then(|c| c.psm), Some(6));
+        assert!(
+            matches!(hinted, Cow::Borrowed(_)),
+            "an explicit psm leaves nothing to apply"
+        );
+
+        let config = crate::core::config::ocr::OcrConfig::default();
+        let hinted = ocr_config_with_page_rotation_hint(&config, 0, None, false);
+        assert!(
+            hinted.tesseract_config.is_none(),
+            "a page that is not a scan keeps the engine default"
+        );
+        assert!(matches!(hinted, Cow::Borrowed(_)));
+    }
+
+    /// The PSM default is a Tesseract setting; another backend's config is not touched.
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn should_not_materialise_a_tesseract_config_for_another_backend_on_a_scan_page() {
+        let config = crate::core::config::ocr::OcrConfig {
+            backend: "paddleocr".to_string(),
+            ..Default::default()
+        };
+
+        let hinted = ocr_config_with_page_rotation_hint(&config, 0, None, true);
+
+        assert!(hinted.tesseract_config.is_none());
+        assert!(matches!(hinted, Cow::Borrowed(_)));
     }
 
     /// The derivation itself, at the call site's own boundary: a Letter page rendered at the 150

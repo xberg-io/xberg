@@ -375,6 +375,10 @@ pub struct OcrTableBoundingBox {
 #[serde(default, deny_unknown_fields)]
 pub struct ImagePreprocessingConfig {
     /// Target DPI for the image (300 is standard, 600 for small text).
+    ///
+    /// The image handed to OCR is resampled to this density. It does not change the
+    /// resolution a PDF page is rendered at before OCR; `images.target_dpi` on the
+    /// extraction config does that.
     pub target_dpi: i32,
 
     /// Auto-detect and correct image rotation.
