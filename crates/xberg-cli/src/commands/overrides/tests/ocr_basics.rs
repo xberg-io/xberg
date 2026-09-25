@@ -360,6 +360,7 @@ fn test_ocr_no_cache_changes_only_use_cache_when_tesseract_config_already_set() 
             contrast_enhance: true,
             binarization_method: "sauvola".to_string(),
             invert_colors: true,
+            normalize_shaded_rows: true,
         }),
         enable_table_detection: false,
         table_min_confidence: 0.75,

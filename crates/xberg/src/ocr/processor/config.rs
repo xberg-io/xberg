@@ -50,6 +50,7 @@ fn hash_config_for_schema(config: &TesseractConfig, resolved_tessdata_path: &str
                 preprocessing.denoise as u8,
                 preprocessing.contrast_enhance as u8,
                 preprocessing.invert_colors as u8,
+                preprocessing.normalize_shaded_rows as u8,
             ]);
             hash_bytes(&mut hasher, preprocessing.binarization_method.as_bytes());
         }
@@ -370,6 +371,24 @@ mod tests {
         let hash2 = hash_config(&config2, TEST_TESSDATA_PATH);
 
         assert_ne!(hash1, hash2);
+    }
+
+    /// #1785: the option changes the raster Tesseract sees, so it must change the cache key.
+    #[test]
+    fn test_hash_config_normalize_shaded_rows_flag() {
+        let mut config1 = create_test_config();
+        config1.preprocessing = Some(crate::types::ImagePreprocessingConfig::default());
+
+        let mut config2 = create_test_config();
+        config2.preprocessing = Some(crate::types::ImagePreprocessingConfig {
+            normalize_shaded_rows: true,
+            ..Default::default()
+        });
+
+        assert_ne!(
+            hash_config(&config1, TEST_TESSDATA_PATH),
+            hash_config(&config2, TEST_TESSDATA_PATH)
+        );
     }
 
     #[test]

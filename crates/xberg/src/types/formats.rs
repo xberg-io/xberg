@@ -396,6 +396,14 @@ pub struct ImagePreprocessingConfig {
 
     /// Invert colors (white text on black → black on white).
     pub invert_colors: bool,
+
+    /// Flatten shaded table rows before recognition. A row drawn as dark text on a light
+    /// grey band, or as white text on a grey or dark band, is stretched to dark text on
+    /// white, band by band, so it survives the page-wide threshold that otherwise drops the
+    /// whole row. Rows outside such bands are not changed. Off by default: measured on
+    /// table pages with shaded subtotal and total rows, where it recovers those rows; on
+    /// other pages it can move a few percent of the words either way.
+    pub normalize_shaded_rows: bool,
 }
 
 impl Default for ImagePreprocessingConfig {
@@ -408,6 +416,7 @@ impl Default for ImagePreprocessingConfig {
             contrast_enhance: false,
             binarization_method: "otsu".to_string(),
             invert_colors: false,
+            normalize_shaded_rows: false,
         }
     }
 }

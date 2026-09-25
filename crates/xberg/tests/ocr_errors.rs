@@ -655,6 +655,7 @@ fn test_ocr_with_preprocessing_extreme_dpi() {
                     contrast_enhance: false,
                     binarization_method: "otsu".to_string(),
                     invert_colors: false,
+                    normalize_shaded_rows: false,
                 }),
                 ..Default::default()
             }),
@@ -701,6 +702,7 @@ fn test_ocr_with_invalid_binarization_method() {
                     contrast_enhance: false,
                     binarization_method: "invalid_method_xyz".to_string(),
                     invert_colors: false,
+                    normalize_shaded_rows: false,
                 }),
                 ..Default::default()
             }),

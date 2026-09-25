@@ -1049,6 +1049,34 @@ fn prepare_preprocessed_ocr_image(
     ci_debug_enabled: bool,
     known_source_dpi: Option<f64>,
 ) -> PreparedOcrImage {
+    let mut prepared = prepare_resampled_ocr_image(
+        rgb_data,
+        width,
+        height,
+        preprocessing,
+        images_config,
+        ci_debug_enabled,
+        known_source_dpi,
+    );
+    // After the resize and before the page-wide Pix pipeline: the bands are found at the
+    // resolution Tesseract will read, and the page-wide threshold then sees dark text on
+    // white in every row (#1785).
+    if preprocessing.normalize_shaded_rows {
+        prepared.data =
+            crate::ocr::shaded_rows::flatten_shaded_rows_rgb(&prepared.data, prepared.width, prepared.height);
+    }
+    prepared
+}
+
+fn prepare_resampled_ocr_image(
+    rgb_data: Vec<u8>,
+    width: u32,
+    height: u32,
+    preprocessing: &crate::types::ImagePreprocessingConfig,
+    images_config: Option<&crate::core::config::ImageExtractionConfig>,
+    ci_debug_enabled: bool,
+    known_source_dpi: Option<f64>,
+) -> PreparedOcrImage {
     // `target_dpi` always comes from the (Tesseract-specific) `preprocessing` config, which
     // takes precedence when explicitly set. The dimension/auto-adjust limits have no home in
     // `ImagePreprocessingConfig`, so they come from the real `ImageExtractionConfig` when the
@@ -3630,6 +3658,7 @@ mod tests {
             contrast_enhance: false,
             binarization_method: "otsu".to_string(),
             invert_colors: false,
+            normalize_shaded_rows: false,
         }
     }
 
@@ -4540,6 +4569,73 @@ mod tests {
     #[test]
     fn test_should_invert_for_polarity_force_false_still_auto_detects() {
         assert!(should_invert_for_polarity(10.0, 0.5, false));
+    }
+
+    /// #1785: with `normalize_shaded_rows` on, a light grey band with dark glyphs reaches the
+    /// Pix pipeline as dark glyphs on white; off, the band is exactly what the resize produced.
+    #[test]
+    fn prepare_ocr_image_flattens_shaded_rows_only_when_asked() {
+        const WIDTH: u32 = 300;
+        const HEIGHT: u32 = 120;
+        let mut gray = vec![255u8; (WIDTH * HEIGHT) as usize];
+        for y in 40..80 {
+            for x in 0..WIDTH as usize {
+                gray[y * WIDTH as usize + x] = 168;
+            }
+            if (54..66).contains(&y) {
+                for x in (60..240).step_by(30) {
+                    for xx in x..x + 10 {
+                        gray[y * WIDTH as usize + xx] = 30;
+                    }
+                }
+            }
+        }
+        let rgb: Vec<u8> = gray.iter().flat_map(|&v| [v, v, v]).collect();
+        let prepare = |normalize: bool| {
+            let preprocessing = crate::types::ImagePreprocessingConfig {
+                target_dpi: 300,
+                normalize_shaded_rows: normalize,
+                ..Default::default()
+            };
+            prepare_ocr_image(
+                rgb.clone(),
+                WIDTH,
+                HEIGHT,
+                Some(&preprocessing),
+                None,
+                false,
+                Some(300.0),
+            )
+        };
+
+        let off = prepare(false);
+        assert_eq!(
+            (off.width, off.height),
+            (WIDTH, HEIGHT),
+            "300 dpi in, 300 dpi target: no resize"
+        );
+        assert_eq!(off.data, rgb, "off: the raster is untouched");
+
+        let on = prepare(true);
+        assert_eq!((on.width, on.height), (WIDTH, HEIGHT));
+        let band_median = {
+            let mut values: Vec<u8> = (40..80)
+                .flat_map(|y| (0..WIDTH as usize).map(move |x| (y * WIDTH as usize + x) * 3))
+                .map(|offset| on.data[offset])
+                .collect();
+            values.sort_unstable();
+            values[values.len() / 2]
+        };
+        assert!(
+            band_median >= 250,
+            "on: the band's fill is paper, got median {band_median}"
+        );
+        assert!(on.data[(60 * WIDTH as usize + 62) * 3] <= 5, "on: a glyph pixel is ink");
+        assert_eq!(
+            &on.data[..3 * 30 * WIDTH as usize],
+            &rgb[..3 * 30 * WIDTH as usize],
+            "on: rows above the band unchanged"
+        );
     }
 
     #[test]

@@ -67,6 +67,8 @@ pub(crate) mod preprocessing;
 /// High-level Tesseract OCR processor with caching and table reconstruction.
 pub mod processor;
 #[cfg(feature = "ocr")]
+pub(crate) mod shaded_rows;
+#[cfg(feature = "ocr")]
 /// TSV and hOCR table reconstruction utilities.
 pub mod table;
 #[cfg(feature = "ocr")]

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **(ocr): `tesseract_config.preprocessing.normalize_shaded_rows` flattens shaded table rows before recognition.** Financial statements mark subtotal and total rows with a fill, and Tesseract's page-wide threshold dropped such a row whole, label and values. With the option on, each band whose fill lies between paper and ink is stretched to dark text on white after its own polarity is decided, and rows outside such bands are not touched. On a synthetic table page the light-fill rows go from 0 to 18 of 18 values read; on a scanned copy of it from 0 to 16. Off by default: on pages without such rows it can move a few percent of the words either way, so turn it on for scanned tables. (GH#1785)
+
 ### Fixed
 
 - **(pdf): a document whose cross-reference stream is truncated no longer returns mostly empty pages.** When the final `/XRef` stream fails to decode, the parser rebuilds the table by scanning the file for literal `N G obj` headers. That scan cannot see an object packed inside an `/ObjStm` container, which in an incrementally updated PDF routinely includes every page's font dictionary. The reference then resolved to null -- legitimate per PDF 32000-1 7.3.10 for a deleted object, and therefore silent -- so pages extracted no text while the document reported success. Two reported files returned 86 of 88 and 22 of 24 pages empty; both now recover every page. The object-stream sweep that already existed for the analogous mis-flagged-free case now also runs once when the xref came from reconstruction. A reference still unresolvable after that sweep raises an `XrefRecovery` warning, which is deliberately not raised for an ordinary null resolution. (GH#1774)
