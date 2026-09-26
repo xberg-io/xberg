@@ -668,3 +668,89 @@ fn cmyk_jpeg_app14_inversion_round_trips_to_correct_plate() {
          inversion; got M={magenta_v} Y={yellow_v} K={black_v}"
     );
 }
+
+/// A four-component JPEG 2000 image on a `/DeviceCMYK` XObject paints the process plates.
+///
+/// The module used to document a JPX skip path ("no pure-Rust JP2 decoder is bundled") guarded by
+/// a predicate that returned `false` unconditionally, so the branch was unreachable and the
+/// statement false: `hayro-jpeg2000` is a non-optional dependency and a JPX image is decoded and
+/// routed by its colour space like any other. This pins that, so the claim cannot come back
+/// undetected. See GH#1855.
+///
+/// The fixture is a 16x16 lossless codestream with one channel saturated per quadrant, so each
+/// plate is checked at a sample point no other channel can reach. It is a bare codestream rather
+/// than a JP2 container because a four-component JP2 has no enumerated colour-space value to
+/// declare, and the PDF's `/ColorSpace` is what decides routing regardless. Built with
+/// `opj_compress -i quad.raw -o out.j2k -F 16,16,4,8,u -r 1 -n 3`; note that OpenJPEG's raw
+/// reader is **component-planar**, so interleaved input silently produces a valid codestream of
+/// the wrong image -- and it round-trips through `opj_decompress` byte-identical either way,
+/// because the writer shares the convention.
+const CMYK_QUADRANTS_J2K: &[u8] = include_bytes!("fixtures/jpx/gh1855_cmyk_quadrants.j2k");
+
+fn build_pdf_with_jpx_cmyk_image(codestream: &[u8], width: u32, height: u32) -> Vec<u8> {
+    let content = b"q\n50 0 0 50 25 25 cm\n/Im1 Do\nQ\n";
+    let mut buf = Vec::new();
+    let mut offsets = Vec::new();
+    buf.extend_from_slice(b"%PDF-1.5\n");
+
+    offsets.push(buf.len());
+    buf.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+    offsets.push(buf.len());
+    buf.extend_from_slice(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+    offsets.push(buf.len());
+    buf.extend_from_slice(
+        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] \
+           /Contents 4 0 R /Resources << /XObject << /Im1 5 0 R >> >> >>\nendobj\n",
+    );
+    offsets.push(buf.len());
+    let hdr = format!("4 0 obj\n<< /Length {} >>\nstream\n", content.len());
+    buf.extend_from_slice(hdr.as_bytes());
+    buf.extend_from_slice(content);
+    buf.extend_from_slice(b"\nendstream\nendobj\n");
+    offsets.push(buf.len());
+    let img_hdr = format!(
+        "5 0 obj\n<< /Type /XObject /Subtype /Image /Width {w} /Height {h} \
+         /ColorSpace /DeviceCMYK /BitsPerComponent 8 /Filter /JPXDecode /Length {len} >>\nstream\n",
+        w = width,
+        h = height,
+        len = codestream.len()
+    );
+    buf.extend_from_slice(img_hdr.as_bytes());
+    buf.extend_from_slice(codestream);
+    buf.extend_from_slice(b"\nendstream\nendobj\n");
+    finalize_pdf(buf, offsets)
+}
+
+#[test]
+fn jpx_cmyk_image_routes_channels_to_process_plates() {
+    let doc = PdfDocument::from_bytes(build_pdf_with_jpx_cmyk_image(CMYK_QUADRANTS_J2K, 16, 16)).expect("parse");
+    let plates = render_separations(&doc, 0, 72).expect("render");
+
+    let quadrant_samples = [
+        ("Cyan", 35u32, 35u32),
+        ("Magenta", 60, 35),
+        ("Yellow", 35, 60),
+        ("Black", 60, 60),
+    ];
+    for (ink, x, y) in quadrant_samples {
+        let value = sample(plate(&plates, ink), x, y);
+        assert!(
+            value > 200,
+            "the {ink} quadrant of a JPXDecode DeviceCMYK image must reach the {ink} plate; \
+             got {value} at ({x}, {y})"
+        );
+        for (other, _, _) in quadrant_samples.iter().filter(|(other, _, _)| *other != ink) {
+            let bleed = sample(plate(&plates, other), x, y);
+            assert!(
+                bleed < 50,
+                "the {ink} quadrant must leave the {other} plate near zero; got {bleed}"
+            );
+        }
+    }
+
+    assert_eq!(
+        sample(plate(&plates, "Cyan"), 5, 5),
+        0,
+        "plates stay untouched outside the image bbox"
+    );
+}
