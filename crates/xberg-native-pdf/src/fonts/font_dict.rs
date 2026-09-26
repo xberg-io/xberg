@@ -9419,6 +9419,40 @@ mod tests {
         assert_eq!(wmode_from_predefined_cmap_name("Volt"), 0);
     }
 
+    /// GH#1827: an embedded CID CMap stream can declare its own writing mode
+    /// with a `/WMode 1 def` directive even when its `/CMapName` is a
+    /// horizontal predefined name. `resolve_encoding_writing_mode` must read
+    /// the directive from the stream rather than trust the name alone. ~keep
+    #[test]
+    fn resolve_encoding_writing_mode_reads_wmode_from_embedded_cmap_stream() {
+        let doc = minimal_pdf_doc();
+        let dict = HashMap::from([("CMapName".to_string(), Object::Name("Identity-H".to_string()))]);
+        let enc_obj = Object::Stream {
+            dict,
+            data: bytes::Bytes::from_static(b"/WMode 1 def"),
+        };
+
+        let (name, wmode) = FontInfo::resolve_encoding_writing_mode(&enc_obj, &doc);
+
+        assert_eq!(name.as_deref(), Some("Identity-H"));
+        assert_eq!(wmode, 1);
+    }
+
+    /// Control for the test above: the same `/CMapName` given as a plain
+    /// dictionary, not a stream, never attempts to decode a CMap and falls
+    /// back to the name-based signal alone (0 for a horizontal name).
+    #[test]
+    fn resolve_encoding_writing_mode_dictionary_encoding_gives_zero() {
+        let doc = minimal_pdf_doc();
+        let dict = HashMap::from([("CMapName".to_string(), Object::Name("Identity-H".to_string()))]);
+        let enc_obj = Object::Dictionary(dict);
+
+        let (name, wmode) = FontInfo::resolve_encoding_writing_mode(&enc_obj, &doc);
+
+        assert_eq!(name.as_deref(), Some("Identity-H"));
+        assert_eq!(wmode, 0);
+    }
+
     /// `FontInfo::get_vertical_metrics` returns per-CID metrics when
     /// available, falls back to `/DW2` defaults otherwise. This is the
     /// accessor the rasterizer and extractor call on the hot path of every
