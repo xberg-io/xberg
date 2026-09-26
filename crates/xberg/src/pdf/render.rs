@@ -1644,6 +1644,36 @@ mod tests {
         );
     }
 
+    /// An `operation` recorded as a Display value (`operation = %value`) reaches the
+    /// visitor through `record_debug`, not `record_str`, and must classify the same way.
+    #[test]
+    fn a_display_valued_operation_is_classified_like_a_string_one() {
+        assert!(
+            install_pdf_render_diagnostics(),
+            "no other component should own the tracing dispatcher in this test binary"
+        );
+        let _ = take_xberg_native_pdf_render_warnings();
+
+        let operation = "render_glyph";
+        let result = render_page_capturing_glyph_drops(0, || {
+            tracing::warn!(
+                target: "xberg_native_pdf::fonts",
+                operation = %operation,
+                "glyph rendering omitted content"
+            );
+            blank_render()
+        });
+        assert!(result.is_ok(), "capturing a warning must not change the render outcome");
+
+        let warnings = take_xberg_native_pdf_render_warnings();
+        assert_eq!(warnings.len(), 1, "the warning is reported; got: {warnings:?}");
+        assert!(
+            warnings[0].message.contains("glyph ink is missing"),
+            "a dropped glyph is missing ink, got: {}",
+            warnings[0].message
+        );
+    }
+
     /// The engine end to end: a page set in a Type 3 font logs the glyph-name fallback
     /// while loading the font, and every glyph still renders, so no warning may say the
     /// ink is missing.
