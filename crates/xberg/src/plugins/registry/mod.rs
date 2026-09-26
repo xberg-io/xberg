@@ -117,7 +117,10 @@ pub fn get_ocr_backend_registry() -> Arc<RwLock<OcrBackendRegistry>> {
 /// Lives here rather than in `extractors/pdf` because the PDF page routes and the
 /// container embedded-image route (`extraction::image_ocr`) must answer this one
 /// question the same way. ~keep
-#[cfg(feature = "ocr-pipeline")]
+#[cfg(all(
+    feature = "ocr-pipeline",
+    any(feature = "pdf", all(feature = "ocr", feature = "tokio-runtime"))
+))]
 pub(crate) fn automatic_ocr_backend_is_registered() -> bool {
     let ocr_config = crate::core::config::OcrConfig::default();
     if ocr_config.pipeline.is_some() {
