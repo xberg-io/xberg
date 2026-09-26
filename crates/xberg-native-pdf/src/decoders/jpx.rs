@@ -65,12 +65,26 @@ pub fn decode_jpx(bytes: &[u8]) -> Result<JpxImage> {
     }
     let num_components = comps.len();
 
+    // ~keep An alpha channel is a component like any other in the codestream, so counting
+    // components raw reports a colour space the image does not have: RGBA reads as four
+    // components and was mapped to DeviceCMYK, and grey-with-alpha reads as two and was
+    // rejected outright, dropping the image (GH#1850). `Image::has_alpha` is the codestream's
+    // own answer, so no channel-count guessing is needed. The alpha is dropped rather than
+    // returned as a soft mask: the caller maps `colour_components` straight onto a
+    // `PixelFormat`, and carrying transparency through to an `/SMask` is a separate feature.
+    let has_alpha = image.has_alpha() && num_components > 1;
+    let colour_components = if has_alpha { num_components - 1 } else { num_components };
+
     // Fast path: every component is full-resolution (the common case) → use the
     // decoder's own interleave. ~keep
     if comps.iter().all(|c| c.samples().len() == npix) {
+        let mut samples = decoded.data_u8();
+        if has_alpha {
+            samples = drop_last_channel(&samples, num_components);
+        }
         return Ok(JpxImage {
-            samples: decoded.data_u8(),
-            num_components: num_components as u8,
+            samples,
+            num_components: colour_components as u8,
         });
     }
 
@@ -105,16 +119,29 @@ pub fn decode_jpx(bytes: &[u8]) -> Result<JpxImage> {
         planes.push(plane);
     }
 
-    let mut samples = vec![0u8; npix * num_components];
-    for (ci, plane) in planes.iter().enumerate() {
+    // The alpha plane, when present, is the last one and is simply not interleaved. ~keep
+    let mut samples = vec![0u8; npix * colour_components];
+    for (ci, plane) in planes.iter().take(colour_components).enumerate() {
         for (i, &px) in plane.iter().enumerate() {
-            samples[i * num_components + ci] = px;
+            samples[i * colour_components + ci] = px;
         }
     }
     Ok(JpxImage {
         samples,
-        num_components: num_components as u8,
+        num_components: colour_components as u8,
     })
+}
+
+/// Drop the last channel of a component-interleaved buffer, narrowing it from `stride`
+/// channels per pixel to `stride - 1`.
+fn drop_last_channel(samples: &[u8], stride: usize) -> Vec<u8> {
+    debug_assert!(stride > 1, "narrowing a single-channel buffer would leave nothing");
+    let kept = stride - 1;
+    let mut out = Vec::with_capacity(samples.len() / stride * kept);
+    for pixel in samples.chunks_exact(stride) {
+        out.extend_from_slice(&pixel[..kept]);
+    }
+    out
 }
 
 /// Nearest-neighbour upsample of an `sw×sh` f32 sample plane to `fw×fh` u8.
@@ -136,6 +163,56 @@ mod tests {
 
     /// Grayscale JP2 codestream from the minimal repro (816x1056 DeviceGray).
     const SAMPLE_JP2: &[u8] = include_bytes!("../../tests/fixtures/jpx/sample_gray.jp2");
+
+    /// GH#1850 fixtures, 16x16 lossless, generated with Pillow's OpenJPEG encoder. The left
+    /// half is opaque `(200, 100, 50)` and the right half is `(10, 220, 90)` at alpha 128, so a
+    /// test can tell a dropped alpha channel from a shifted one. ~keep
+    const RGBA_JP2: &[u8] = include_bytes!("../../tests/fixtures/jpx/gh1850_rgba.jp2");
+    /// The same image as a bare codestream (no JP2 container), which reaches a different
+    /// header path in the decoder.
+    const RGBA_J2K: &[u8] = include_bytes!("../../tests/fixtures/jpx/gh1850_rgba.j2k");
+    /// Greyscale plus alpha: two components, which the unfixed decoder rejected outright.
+    const GREY_ALPHA_JP2: &[u8] = include_bytes!("../../tests/fixtures/jpx/gh1850_grey_alpha.jp2");
+
+    /// GH#1850: an alpha channel is a component like any other in the codestream, so counting
+    /// components raw described a colour space the image does not have. Four components were
+    /// mapped to DeviceCMYK by the caller, and two were rejected outright, dropping the image.
+    #[test]
+    fn rgba_codestream_reports_three_colour_components() {
+        for (label, bytes) in [("jp2", RGBA_JP2), ("j2k", RGBA_J2K)] {
+            let img = decode_jpx(bytes).unwrap_or_else(|e| panic!("{label} must decode: {e:?}"));
+            assert_eq!(
+                img.num_components, 3,
+                "{label}: the alpha channel must not be counted as a colour component"
+            );
+            assert_eq!(
+                img.samples.len(),
+                16 * 16 * 3,
+                "{label}: samples must be RGB-interleaved"
+            );
+            // Pixel (0,0) is the opaque half; alpha must be gone, not shifted into a channel.
+            assert_eq!(&img.samples[..3], &[200, 100, 50], "{label}: first pixel must stay RGB");
+        }
+    }
+
+    /// The two-component case the decoder rejected, so the image never reached the page at all.
+    #[test]
+    fn grey_plus_alpha_codestream_decodes_as_single_channel_grey() {
+        let img = decode_jpx(GREY_ALPHA_JP2).expect("grey+alpha must decode rather than be dropped");
+        assert_eq!(img.num_components, 1, "alpha must not be counted as a colour component");
+        assert_eq!(img.samples.len(), 16 * 16, "samples must be one channel per pixel");
+        assert_eq!(img.samples[0], 180, "the left half's grey value must survive");
+    }
+
+    /// The narrowing helper on its own, so a failure above points at the decoder rather than
+    /// at the interleave arithmetic.
+    #[test]
+    fn drop_last_channel_narrows_each_pixel() {
+        let rgba = [1u8, 2, 3, 4, 11, 12, 13, 14];
+        assert_eq!(super::drop_last_channel(&rgba, 4), vec![1, 2, 3, 11, 12, 13]);
+        let la = [7u8, 255, 9, 128];
+        assert_eq!(super::drop_last_channel(&la, 2), vec![7, 9]);
+    }
 
     /// WS1.7: nearest-neighbour upsample of a 2×2 subsampled plane to 4×4 —
     /// each source sample fills its 2×2 output block.
