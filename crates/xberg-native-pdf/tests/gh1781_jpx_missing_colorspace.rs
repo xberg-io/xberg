@@ -3,9 +3,8 @@
 //! allows both to be omitted because the JPEG 2000 codestream carries its
 //! own colour space and bit depth.
 //!
-//! Gated on the `jpeg2000` feature (OpenJPEG via `jpeg2k`), matching
-//! `test_jpx_decode.rs`. Without it, JPX is unsupported by design and this
-//! test is skipped.
+//! Always runs, matching `test_jpx_decode.rs`: JPEG 2000 support is
+//! unconditional, decoded by the non-optional `hayro-jpeg2000` dependency.
 
 use xberg_native_pdf::document::PdfDocument;
 

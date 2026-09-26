@@ -1,8 +1,8 @@
 //! JPEG 2000 (`/JPXDecode`) extraction test.
 //!
-//! Gated on the `jpeg2000` feature (OpenJPEG via `jpeg2k`). Without it, JPX is
-//! unsupported by design and this test is skipped. (Unit coverage of the decoder
-//! itself lives in `src/decoders/jpx.rs`.)
+//! Always runs: JPEG 2000 support is unconditional, decoded by the non-optional
+//! `hayro-jpeg2000` dependency. (Unit coverage of the decoder itself lives in
+//! `src/decoders/jpx.rs`.)
 
 use xberg_native_pdf::document::PdfDocument;
 
