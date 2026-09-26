@@ -428,13 +428,19 @@ pub fn take_xberg_native_pdf_render_warnings() -> Vec<ProcessingWarning> {
 ///
 /// Deduped on arrival, matching the per-thread drain's own behaviour: the same engine
 /// diagnostic raised on several pages is one warning to the caller. ~keep
-/// Render `page_indices` across the rayon pool, keeping each page's render warnings.
+/// Render `page_indices` across the rayon pool, keeping each page's render warnings **in page
+/// order**.
 ///
 /// The per-page drain has to happen on the worker that rendered, because
 /// [`ENGINE_PENDING_WARNINGS`] is thread-local; the collected set is then deposited into the
 /// calling thread's buffer, where the extractor's own drain finds it. Lives here rather than at
 /// the two call sites so the thread-affinity rule is stated once, next to the buffer it is about
-/// (xberg-io/xberg#1847). ~keep
+/// (xberg-io/xberg#1847).
+///
+/// Each page's warnings ride back with that page's result rather than going into one shared list
+/// as workers finish, because a shared list holds them in completion order and makes the caller's
+/// `processing_warnings` vary run to run on identical input (xberg-io/xberg#1851). rayon's
+/// indexed `collect` preserves `page_indices`' order, so merging afterwards needs no sort. ~keep
 #[cfg(all(
     feature = "pdf",
     any(feature = "ocr", feature = "ocr-pipeline"),
@@ -447,22 +453,19 @@ pub(crate) fn par_render_pages_collecting_warnings<T: Send>(
 ) -> crate::Result<Vec<T>> {
     use rayon::prelude::*;
 
-    let collected: std::sync::Mutex<Vec<ProcessingWarning>> = std::sync::Mutex::default();
-    let rendered: crate::Result<Vec<T>> = page_indices
+    let rendered: Vec<(T, Vec<ProcessingWarning>)> = page_indices
         .into_par_iter()
-        .map(|page_index| {
-            let page = render(page_index);
-            let warnings = take_xberg_native_pdf_render_warnings();
-            if !warnings.is_empty()
-                && let Ok(mut collected) = collected.lock()
-            {
-                collected.extend(warnings);
-            }
-            page
-        })
-        .collect();
-    absorb_render_warnings(collected.into_inner().unwrap_or_default());
-    rendered
+        .map(|page_index| render(page_index).map(|page| (page, take_xberg_native_pdf_render_warnings())))
+        .collect::<crate::Result<Vec<_>>>()?;
+
+    let mut pages = Vec::with_capacity(rendered.len());
+    let mut warnings = Vec::new();
+    for (page, page_warnings) in rendered {
+        pages.push(page);
+        warnings.extend(page_warnings);
+    }
+    absorb_render_warnings(warnings);
+    Ok(pages)
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
