@@ -76,9 +76,18 @@ pub(super) fn validate_language_and_traineddata(language: &str, tessdata_path: &
 /// `Ok(String)` with the path to a valid tessdata directory containing all
 /// requested languages, or `Err(OcrError)` if resolution fails.
 pub(crate) fn resolve_tessdata_path(languages: &[String], override_path: Option<&Path>) -> Result<String, OcrError> {
-    for dir in tessdata_search_dirs(override_path) {
-        if all_languages_exist(&dir, languages)? {
-            return Ok(dir);
+    resolve_tessdata_path_in(&tessdata_search_dirs(override_path), languages)
+}
+
+/// [`resolve_tessdata_path`] over an already-computed search chain.
+///
+/// Splitting the chain out lets a caller that already resolved one reuse it,
+/// and lets tests exercise the resolution without mutating `TESSDATA_PREFIX` or
+/// `XBERG_CACHE_DIR` process-wide while parallel tests read them (GH#1846).
+pub(crate) fn resolve_tessdata_path_in(search_dirs: &[String], languages: &[String]) -> Result<String, OcrError> {
+    for dir in search_dirs {
+        if all_languages_exist(dir, languages)? {
+            return Ok(dir.clone());
         }
     }
 
@@ -114,6 +123,25 @@ pub(crate) fn resolve_tessdata_path(languages: &[String], override_path: Option<
 /// Shared by [`resolve_tessdata_path`] and doctor's check-only probe so both
 /// report on the same search chain.
 pub(crate) fn tessdata_search_dirs(override_path: Option<&Path>) -> Vec<String> {
+    tessdata_search_dirs_from(
+        override_path,
+        env::var("TESSDATA_PREFIX").ok().as_deref(),
+        env::var("XBERG_CACHE_DIR").ok().as_deref(),
+        &crate::cache_dir::resolve_cache_base(),
+    )
+}
+
+/// [`tessdata_search_dirs`] with the environment supplied by the caller.
+///
+/// The environment read lives in the wrapper above and nowhere else, so the
+/// order can be tested without `set_var`/`remove_var` racing the parallel tests
+/// that read the same variables (GH#1846).
+pub(crate) fn tessdata_search_dirs_from(
+    override_path: Option<&Path>,
+    tessdata_prefix: Option<&str>,
+    xberg_cache_dir: Option<&str>,
+    cache_base: &Path,
+) -> Vec<String> {
     let mut dirs = Vec::new();
 
     if let Some(path) = override_path
@@ -123,22 +151,15 @@ pub(crate) fn tessdata_search_dirs(override_path: Option<&Path>) -> Vec<String> 
         dirs.push(path_str.to_string());
     }
 
-    if let Ok(path) = env::var("TESSDATA_PREFIX")
-        && !path.is_empty()
-    {
-        dirs.push(path);
+    if let Some(path) = tessdata_prefix.filter(|path| !path.is_empty()) {
+        dirs.push(path.to_string());
     }
 
-    if let Ok(cache_dir) = env::var("XBERG_CACHE_DIR") {
+    if let Some(cache_dir) = xberg_cache_dir {
         dirs.push(PathBuf::from(cache_dir).join("tessdata").to_string_lossy().into_owned());
     }
 
-    dirs.push(
-        crate::cache_dir::resolve_cache_base()
-            .join("tessdata")
-            .to_string_lossy()
-            .into_owned(),
-    );
+    dirs.push(cache_base.join("tessdata").to_string_lossy().into_owned());
 
     for path in SYSTEM_TESSDATA_PATHS {
         dirs.push((*path).to_string());
@@ -471,5 +492,54 @@ mod tests {
         let input = "Hello\x7FWorld";
         let output = strip_control_characters(input);
         assert_eq!(output, "HelloWorld");
+    }
+    #[test]
+    fn tessdata_search_order_puts_the_config_override_ahead_of_the_environment() {
+        let dirs = tessdata_search_dirs_from(
+            Some(Path::new("/from/config")),
+            Some("/from/prefix"),
+            Some("/from/cache-override"),
+            Path::new("/from/cache-base"),
+        );
+
+        assert_eq!(
+            &dirs[..4],
+            &[
+                "/from/config".to_string(),
+                "/from/prefix".to_string(),
+                PathBuf::from("/from/cache-override")
+                    .join("tessdata")
+                    .to_string_lossy()
+                    .into_owned(),
+                PathBuf::from("/from/cache-base")
+                    .join("tessdata")
+                    .to_string_lossy()
+                    .into_owned(),
+            ],
+            "the documented precedence is override, TESSDATA_PREFIX, XBERG_CACHE_DIR/tessdata, \
+             cache base; got: {dirs:?}"
+        );
+        assert_eq!(
+            dirs.len(),
+            4 + SYSTEM_TESSDATA_PATHS.len(),
+            "the system fallbacks must follow, and nothing else may be appended"
+        );
+    }
+
+    #[test]
+    fn tessdata_search_order_skips_an_empty_override_and_an_empty_prefix() {
+        let dirs = tessdata_search_dirs_from(Some(Path::new("")), Some(""), None, Path::new("/from/cache-base"));
+
+        let cache_base_tessdata = PathBuf::from("/from/cache-base")
+            .join("tessdata")
+            .to_string_lossy()
+            .into_owned();
+        assert_eq!(
+            dirs.first(),
+            Some(&cache_base_tessdata),
+            "an empty override path and an empty TESSDATA_PREFIX are absent, not empty entries; \
+             got: {dirs:?}"
+        );
+        assert_eq!(dirs.len(), 1 + SYSTEM_TESSDATA_PATHS.len());
     }
 }

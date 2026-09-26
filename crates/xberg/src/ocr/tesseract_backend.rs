@@ -181,31 +181,7 @@ impl TesseractBackend {
     ///
     /// Returns a vector of available language codes, or an error if querying fails.
     fn query_available_languages(&self) -> Result<Vec<String>> {
-        // An empty datapath here used to hand libtesseract its own compiled-in default,
-        // which appends an extra `tessdata` directory level that the real OCR job's
-        // resolver (`resolve_tessdata_path`) never adds. That mismatch made this probe
-        // fail and log a misleading "couldn't load any languages" error on a layout where
-        // every real job already succeeds. Resolving through the same function the job
-        // uses keeps the two in agreement. See GH#1671.
-        let tessdata_path = crate::ocr::processor::validation::resolve_tessdata_path(&["eng".to_string()], None)
-            .map_err(|e| crate::XbergError::Ocr {
-                message: format!("Failed to resolve tessdata path for language query: {}", e),
-                source: Some(Box::new(e)),
-            })?;
-
-        let api = xberg_tesseract::TesseractAPI::new().map_err(|e| crate::XbergError::Ocr {
-            message: format!("Failed to allocate Tesseract engine: {}", e),
-            source: Some(Box::new(e)),
-        })?;
-        api.init(&tessdata_path, "eng").map_err(|e| crate::XbergError::Ocr {
-            message: format!("Failed to initialize Tesseract for language query: {}", e),
-            source: Some(Box::new(e)),
-        })?;
-
-        api.get_available_languages().map_err(|e| crate::XbergError::Ocr {
-            message: format!("Failed to query available Tesseract languages: {}", e),
-            source: Some(Box::new(e)),
-        })
+        query_available_languages_in(&crate::ocr::processor::validation::tessdata_search_dirs(None))
     }
 
     /// Fallback list of supported languages (hardcoded list).
@@ -788,6 +764,39 @@ fn compact_cjk_horizontal_spacing(text: &str) -> String {
     output
 }
 
+/// Ask a freshly initialized Tesseract engine which languages the resolved
+/// tessdata directory holds.
+///
+/// Takes the search chain rather than reading the environment so the resolution
+/// can be exercised without process-wide `set_var` (GH#1846).
+fn query_available_languages_in(search_dirs: &[String]) -> Result<Vec<String>> {
+    // An empty datapath here used to hand libtesseract its own compiled-in default,
+    // which appends an extra `tessdata` directory level that the real OCR job's
+    // resolver (`resolve_tessdata_path`) never adds. That mismatch made this probe
+    // fail and log a misleading "couldn't load any languages" error on a layout where
+    // every real job already succeeds. Resolving through the same function the job
+    // uses keeps the two in agreement. See GH#1671.
+    let tessdata_path = crate::ocr::processor::validation::resolve_tessdata_path_in(search_dirs, &["eng".to_string()])
+        .map_err(|e| crate::XbergError::Ocr {
+            message: format!("Failed to resolve tessdata path for language query: {}", e),
+            source: Some(Box::new(e)),
+        })?;
+
+    let api = xberg_tesseract::TesseractAPI::new().map_err(|e| crate::XbergError::Ocr {
+        message: format!("Failed to allocate Tesseract engine: {}", e),
+        source: Some(Box::new(e)),
+    })?;
+    api.init(&tessdata_path, "eng").map_err(|e| crate::XbergError::Ocr {
+        message: format!("Failed to initialize Tesseract for language query: {}", e),
+        source: Some(Box::new(e)),
+    })?;
+
+    api.get_available_languages().map_err(|e| crate::XbergError::Ocr {
+        message: format!("Failed to query available Tesseract languages: {}", e),
+        source: Some(Box::new(e)),
+    })
+}
+
 fn is_compact_cjk_char(character: char) -> bool {
     matches!(
         character as u32,
@@ -797,10 +806,8 @@ fn is_compact_cjk_char(character: char) -> bool {
 }
 
 #[cfg(test)]
-#[allow(unsafe_code)]
 mod tests {
     use super::*;
-    use serial_test::serial;
 
     // Needs real, loadable eng.traineddata with no network fetch to distinguish a
     // resolved-directory probe from a silent fallback; `bundle-tessdata-eng` is the
@@ -809,7 +816,6 @@ mod tests {
     // need this feature; it is only how this test gets deterministic fixture bytes.
     #[cfg(feature = "bundle-tessdata-eng")]
     #[test]
-    #[serial]
     fn query_available_languages_resolves_the_same_tessdata_directory_the_real_job_uses() {
         let temp_dir = tempfile::tempdir().expect("must create a temp dir for the fixture");
         let tessdata_dir = temp_dir.path().join("tessdata");
@@ -824,30 +830,13 @@ mod tests {
         std::fs::write(tessdata_dir.join("zzz_probe_marker.traineddata"), b"not-a-real-model")
             .expect("must write the marker file");
 
-        let previous = std::env::var("XBERG_CACHE_DIR").ok();
-        unsafe { std::env::set_var("XBERG_CACHE_DIR", temp_dir.path()) };
-        // `resolve_tessdata_path` checks `TESSDATA_PREFIX` before `XBERG_CACHE_DIR` (by
-        // design -- an explicit TESSDATA_PREFIX is meant to win). CI's unit-test runner
-        // (scripts/lib/tessdata.sh::setup_tessdata) sets TESSDATA_PREFIX process-wide to
-        // the runner's real tessdata directory before `cargo test` starts, so without
-        // clearing it here the probe resolves THAT directory -- which already has every
-        // language this test requests -- instead of this fixture, and the marker is never
-        // found. Clear it for the duration of the test so XBERG_CACHE_DIR is actually
-        // reached, matching the resolver's documented precedence. ~keep
-        let previous_tessdata_prefix = std::env::var("TESSDATA_PREFIX").ok();
-        unsafe { std::env::remove_var("TESSDATA_PREFIX") };
-
-        let backend = TesseractBackend::new();
-        let languages = backend.supported_languages();
-
-        match previous {
-            Some(value) => unsafe { std::env::set_var("XBERG_CACHE_DIR", value) },
-            None => unsafe { std::env::remove_var("XBERG_CACHE_DIR") },
-        }
-        match previous_tessdata_prefix {
-            Some(value) => unsafe { std::env::set_var("TESSDATA_PREFIX", value) },
-            None => unsafe { std::env::remove_var("TESSDATA_PREFIX") },
-        }
+        // Hand the probe the fixture directly instead of pointing `XBERG_CACHE_DIR` at it:
+        // CI's unit-test runner sets `TESSDATA_PREFIX` process-wide before `cargo test`
+        // starts, which outranks `XBERG_CACHE_DIR` in the resolver, and clearing it here
+        // raced every parallel test that reads either variable. See GH#1846; the search
+        // order itself is covered by `tessdata_search_dirs_from` below. ~keep
+        let languages = query_available_languages_in(&[tessdata_dir.to_string_lossy().into_owned()])
+            .expect("the probe must initialize Tesseract against the fixture tessdata directory");
 
         assert!(
             languages.iter().any(|lang| lang == "zzz_probe_marker"),
@@ -892,7 +881,6 @@ mod tests {
     // sourcing real `eng.traineddata` bytes the way described above instead of through the
     // bundled feature, so it runs and protects the shipping path. See GH#1671.
     #[test]
-    #[serial]
     fn query_available_languages_resolves_the_same_tessdata_directory_the_real_job_uses_under_pdf_ocr() {
         let Some(eng_bytes) = real_eng_traineddata_bytes_from_sibling_build_dir() else {
             eprintln!(
@@ -913,27 +901,13 @@ mod tests {
         std::fs::write(tessdata_dir.join("zzz_probe_marker.traineddata"), b"not-a-real-model")
             .expect("must write the marker file");
 
-        let previous = std::env::var("XBERG_CACHE_DIR").ok();
-        unsafe { std::env::set_var("XBERG_CACHE_DIR", temp_dir.path()) };
-        // See the identical guard in the sibling `bundle-tessdata-eng` test above:
-        // `resolve_tessdata_path` checks `TESSDATA_PREFIX` before `XBERG_CACHE_DIR`, and
-        // CI's unit-test runner sets TESSDATA_PREFIX process-wide before `cargo test`
-        // starts, so this fixture is never reached unless the prefix is cleared here too.
-        // ~keep
-        let previous_tessdata_prefix = std::env::var("TESSDATA_PREFIX").ok();
-        unsafe { std::env::remove_var("TESSDATA_PREFIX") };
-
-        let backend = TesseractBackend::new();
-        let languages = backend.supported_languages();
-
-        match previous {
-            Some(value) => unsafe { std::env::set_var("XBERG_CACHE_DIR", value) },
-            None => unsafe { std::env::remove_var("XBERG_CACHE_DIR") },
-        }
-        match previous_tessdata_prefix {
-            Some(value) => unsafe { std::env::set_var("TESSDATA_PREFIX", value) },
-            None => unsafe { std::env::remove_var("TESSDATA_PREFIX") },
-        }
+        // Hand the probe the fixture directly instead of pointing `XBERG_CACHE_DIR` at it:
+        // CI's unit-test runner sets `TESSDATA_PREFIX` process-wide before `cargo test`
+        // starts, which outranks `XBERG_CACHE_DIR` in the resolver, and clearing it here
+        // raced every parallel test that reads either variable. See GH#1846; the search
+        // order itself is covered by `tessdata_search_dirs_from` below. ~keep
+        let languages = query_available_languages_in(&[tessdata_dir.to_string_lossy().into_owned()])
+            .expect("the probe must initialize Tesseract against the fixture tessdata directory");
 
         assert!(
             languages.iter().any(|lang| lang == "zzz_probe_marker"),
