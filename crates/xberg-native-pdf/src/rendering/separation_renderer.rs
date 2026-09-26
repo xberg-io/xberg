@@ -45,8 +45,12 @@
 //!   RGB/Gray have no declared ink-coverage intent in the subtractive
 //!   output model, so they neither paint nor knock out plates. Matches
 //!   `tint_for_ink`'s vector handling.
-//! - **JPX (JPEG 2000) image XObjects**: logged and skipped. No pure-
-//!   Rust JP2 decoder is bundled.
+//! - **JPX (JPEG 2000) image XObjects**: decoded like any other image and
+//!   routed by the colour space that comes out of them. `hayro-jpeg2000`
+//!   is a non-optional dependency, so the filter itself never decides
+//!   anything here; a four-component JPX on a `/DeviceCMYK` image paints
+//!   the process plates, and a three-component one is skipped for the same
+//!   no-ink-intent reason any RGB image is.
 //! - **Indexed images** (`[/Indexed …]`): expanded to RGB upstream and
 //!   therefore skipped by separation routing for now. Indexed CMYK
 //!   palettes would need a separate `expand_indexed_to_cmyk` path.
@@ -2666,13 +2670,6 @@ fn blit_image_plane_to_plate(
     dst.draw_pixmap(0, 0, src.as_ref(), &paint, image_transform, clip);
 }
 
-/// Returns true if the image XObject's `/Filter` chain contains a filter we
-/// can't decode. `/JPXDecode` (JPEG 2000) is always decodable, so there is
-/// currently no filter this rejects.
-fn image_has_unsupported_filter(_image_dict: &HashMap<String, Object>) -> bool {
-    false
-}
-
 /// Paint an image XObject into the separation plates.
 ///
 /// Per ISO 32000-1 §11.7.4 image samples are routed channel-by-channel to
@@ -2685,7 +2682,6 @@ fn image_has_unsupported_filter(_image_dict: &HashMap<String, Object>) -> bool {
 /// - DeviceN images → per-channel routing by colorant name
 /// - Image masks (`/ImageMask true`) → paint the current fill colour through
 ///   the 1-bit stencil (delegates to `tint_for_ink` for spot/process logic)
-/// - JPX-filtered images logged and skipped (no decoder bundled)
 ///
 /// Out of scope, dropped silently for now: RGB/Gray images, indexed images,
 /// inline images. See module-level Limitations.
@@ -2735,16 +2731,6 @@ fn paint_image_to_plates(
         );
     }
 
-    // §D3: JPX images get a debug log and are dropped — no pure-Rust JP2
-    // decoder is bundled. ~keep
-    if image_has_unsupported_filter(dict) {
-        tracing::warn!(
-            "Skipping image XObject '{name}' on separation plates: \
-             unsupported filter (JPXDecode — JPEG 2000 decoder not bundled)"
-        );
-        return Ok(());
-    }
-
     // Resolve the image's declared colour space, honouring DefaultCMYK etc. ~keep
     let resolved_space = resolve_image_color_space(dict, color_spaces, resources, ctx.doc);
 
@@ -2784,8 +2770,7 @@ fn paint_image_to_plates(
     // §8.9.5: BitsPerComponent ∈ {1, 2, 4, 8, 16}. Channel extraction below
     // assumes 8 bits per sample (one byte per channel per pixel) and would
     // mis-read packed sub-byte or 16-bit streams. Until the routing path
-    // supports full BPC expansion, skip with a log entry — matching the
-    // JPX carve-out. ~keep
+    // supports full BPC expansion, skip with a log entry. ~keep
     let bpc = pdf_image.bits_per_component();
     if bpc != 8 {
         tracing::warn!(
