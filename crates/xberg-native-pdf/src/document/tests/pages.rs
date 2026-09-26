@@ -398,7 +398,14 @@ fn should_resolve_every_page_of_a_valid_tree_without_a_page_tree_warning() {
         (0..page_count)
             .map(|index| {
                 let page = doc.get_page(index).expect("every page resolves");
-                let contents = page.as_dict().and_then(|dict| dict.get("Contents")).cloned();
+                let page_dict = page.as_dict().expect("a page is a dictionary");
+                // Only the tree walk merges the root's /MediaBox in; the scanning
+                // fallback returns the bare page, so this pins the walk itself. ~keep
+                assert!(
+                    page_dict.contains_key("MediaBox"),
+                    "page {index} must be found by the tree walk, not by the scanning fallback"
+                );
+                let contents = page_dict.get("Contents").cloned();
                 let page_ref = doc.get_page_ref(index).expect("every page reference resolves");
                 (contents, page_ref.id)
             })
