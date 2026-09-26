@@ -468,8 +468,17 @@ pub(crate) fn par_render_pages_collecting_warnings<T: Send>(
     Ok(pages)
 }
 
-#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-pub(crate) fn absorb_render_warnings(warnings: Vec<ProcessingWarning>) {
+// ~keep The cfg is the caller's, not a looser one: this has one call site,
+// `par_render_pages_collecting_warnings` above, and a helper gated wider than the union of
+// its call sites is dead code on whichever leg falls in the gap -- here `wasm-target`, which
+// no local gate builds (GH#1861).
+#[cfg(all(
+    feature = "pdf",
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+fn absorb_render_warnings(warnings: Vec<ProcessingWarning>) {
     if warnings.is_empty() {
         return;
     }
