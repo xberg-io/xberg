@@ -94,6 +94,29 @@ fn build_multipage_pdf_with_malformed_font_resource() -> Vec<u8> {
     pdf
 }
 
+/// Forced OCR with a multi-page thread budget. `pages` selects the `force_ocr_pages` route
+/// instead of the whole-document one; both go through the same parallel render helper.
+///
+/// `max_threads` is set explicitly rather than left to the host's core count, because the batch
+/// size is the resolved thread count -- on a single-core runner the batch would not split and
+/// every assertion here would hold for the wrong reason.
+fn force_ocr_config(pages: Option<Vec<u32>>) -> ExtractionConfig {
+    ExtractionConfig {
+        ocr: Some(OcrConfig {
+            backend: "tesseract".to_string(),
+            language: vec!["eng".to_string()],
+            ..Default::default()
+        }),
+        force_ocr: pages.is_none(),
+        force_ocr_pages: pages,
+        concurrency: Some(ConcurrencyConfig {
+            max_threads: Some(PAGE_COUNT),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
+}
+
 /// A multi-page `force_ocr` extraction must still surface the engine's render warnings.
 ///
 /// Fails on the unfixed code with an empty `pdf-render` set: every page renders on a rayon
@@ -109,19 +132,7 @@ async fn parallel_force_ocr_render_keeps_every_page_warning() {
 
     let pdf = build_multipage_pdf_with_malformed_font_resource();
 
-    let config = ExtractionConfig {
-        ocr: Some(OcrConfig {
-            backend: "tesseract".to_string(),
-            language: vec!["eng".to_string()],
-            ..Default::default()
-        }),
-        force_ocr: true,
-        concurrency: Some(ConcurrencyConfig {
-            max_threads: Some(PAGE_COUNT),
-            ..Default::default()
-        }),
-        ..Default::default()
-    };
+    let config = force_ocr_config(None);
 
     let doc = extract_bytes_document(&pdf, "application/pdf", &config)
         .await
@@ -144,5 +155,71 @@ async fn parallel_force_ocr_render_keeps_every_page_warning() {
             .iter()
             .any(|warning| warning.message.contains("rendering text with fallback font data")),
         "the warning must carry the engine's own sanitized message, got: {render_warnings:?}"
+    );
+}
+
+/// The page numbers named by `pdf-render` warnings, in the order the document reports them.
+fn warned_page_numbers(doc: &xberg::types::ExtractedDocument) -> Vec<usize> {
+    doc.processing_warnings
+        .iter()
+        .filter(|warning| warning.source == "pdf-render")
+        .filter_map(|warning| {
+            let rest = warning.message.strip_prefix("Page ")?;
+            let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+            digits.parse().ok()
+        })
+        .collect()
+}
+
+/// GH#1851: the warnings must arrive in page order, not in whatever order the rayon workers
+/// happened to finish, so the same input reports the same `processing_warnings` every run.
+///
+/// Repeated, because a completion-order bug is a race: one pass can agree with page order by
+/// luck. Five passes over four pages is not a proof, but it is enough that the old shared-list
+/// version failed here in practice while a single pass often did not.
+#[tokio::test]
+async fn parallel_render_warnings_arrive_in_page_order() {
+    assert!(
+        install_pdf_render_diagnostics(),
+        "no other component should own the tracing dispatcher in this test binary"
+    );
+
+    let pdf = build_multipage_pdf_with_malformed_font_resource();
+    let config = force_ocr_config(None);
+
+    for pass in 0..5 {
+        let doc = extract_bytes_document(&pdf, "application/pdf", &config)
+            .await
+            .expect("extraction must succeed");
+        let pages = warned_page_numbers(&doc);
+        assert_eq!(
+            pages,
+            (1..=PAGE_COUNT).collect::<Vec<_>>(),
+            "pass {pass}: render warnings must be reported in page order, got {pages:?} from {:?}",
+            doc.processing_warnings
+        );
+    }
+}
+
+/// GH#1851: `force_ocr_pages` goes through the same parallel render helper and had no coverage
+/// at all. A single page index would render on the calling thread and pass regardless, so this
+/// selects two.
+#[tokio::test]
+async fn force_ocr_pages_render_keeps_every_page_warning() {
+    assert!(
+        install_pdf_render_diagnostics(),
+        "no other component should own the tracing dispatcher in this test binary"
+    );
+
+    let pdf = build_multipage_pdf_with_malformed_font_resource();
+    let doc = extract_bytes_document(&pdf, "application/pdf", &force_ocr_config(Some(vec![2, 3])))
+        .await
+        .expect("extraction must succeed");
+
+    assert_eq!(
+        warned_page_numbers(&doc),
+        vec![2, 3],
+        "only the selected pages must warn, and in page order; got {:?}",
+        doc.processing_warnings
     );
 }
