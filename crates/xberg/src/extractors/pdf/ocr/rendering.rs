@@ -703,10 +703,6 @@ pub(super) fn valid_page_indices(page_indices: &[usize], page_count: usize) -> V
         })
         .collect()
 }
-/// Render one page: the per-page body `render_selected_pages_from_document` runs, either in
-/// parallel across the thread pool or sequentially on `wasm32` (which has no OS threads for
-/// rayon's work-stealing pool to use).
-///
 /// #1690/#1747: `RENDER_CALL_THREAD_NAMES` below is test-only instrumentation (compiled
 /// under `cfg(test)` plus the gates of its only users, so it never reaches a release build
 /// and is never dead under a feature leg that lacks those users) that lets a test observe
@@ -743,7 +739,9 @@ fn record_render_thread() {
 /// Render one page and normalize it to the MediaBox-oriented PNG the OCR backends consume.
 ///
 /// The one per-page render body: both OCR routes call it, so the render dpi, the rotation
-/// normalization and the security limits cannot drift between them again.
+/// normalization and the security limits cannot drift between them again. The routes run it
+/// in parallel across the thread pool, or sequentially on `wasm32` (which has no OS threads
+/// for rayon's work-stealing pool to use).
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 fn render_one_page_encoded(
     doc: &xberg_native_pdf::PdfDocument,
