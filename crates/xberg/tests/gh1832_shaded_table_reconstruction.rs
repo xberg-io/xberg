@@ -216,23 +216,46 @@ fn the_scanned_table_is_not_discarded_over_a_phantom_column() {
 ///
 /// The floor is deliberately well under the measured value so ordinary OCR jitter does not fail
 /// the build; what it pins is the order of magnitude, against the 0 this fixture produced when
-/// no table was built at all. Measured at the time of writing: 36 at PSM 11, 18 at PSM 3.
+/// no table was built at all. Measured: 102 at PSM 11 and 98 at PSM 3, from 36 and 18 before the
+/// split-header column was folded away (GH#1832). Every one of the 36 remaining misses is a row
+/// whose *label* OCR mangled (`[TOTAL GOODS`, `EE NET CHANGE (DEFICIT)`), so the harness cannot
+/// match the row at all -- no correctly-labelled row has a value in the wrong cell.
 #[test]
 fn enough_ground_truth_values_land_in_the_right_cell() {
     let table = first_table(11, false).expect("PSM 11 must produce a table");
     let (correct, misses) = correct_values_in_place(&table);
     assert!(
-        correct >= 25,
-        "only {correct} of {} ground-truth values landed in the right cell (floor 25);          first misses: {:?}",
+        correct >= 80,
+        "only {correct} of {} ground-truth values landed in the right cell (floor 80);          first misses: {:?}",
         GROUND_TRUTH.len() * 6,
         misses.iter().take(8).collect::<Vec<_>>()
     );
 }
 
-/// Measurement harness for the rest of the cluster -- GH#1832 (a two-word header splits into two
-/// columns), GH#1833 (values glue across the shading's underscore marks) and GH#1834 (a label's
-/// tail becomes its own row). None of those is fixed; this prints the full grid and the per-cell
-/// misses at four configurations so a change to them can be scored against ground truth.
+/// GH#1832 specifically: each "Year N" header must be one column, not two.
+///
+/// This is the defect the value count above is dominated by rather than a separate symptom. OCR
+/// splits the header across two x-tracks, each mints a column, and the right-hand one holds a
+/// header fragment and no data -- so every value in the table sits one or more places left of the
+/// column it belongs to while the OCR itself read it correctly.
+#[test]
+fn each_year_header_occupies_exactly_one_column() {
+    for psm in [3, 11] {
+        let table = first_table(psm, false).unwrap_or_else(|| panic!("PSM {psm} must produce a table"));
+        let header = table.cells.first().expect("the table must have a header row");
+        let years: Vec<&str> = header.iter().skip(1).take(6).map(String::as_str).collect();
+        assert_eq!(
+            years,
+            ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"],
+            "PSM {psm}: the six year headers must each occupy one column; whole header: {header:?}"
+        );
+    }
+}
+
+/// Measurement harness for the rest of the cluster -- GH#1833 (values glue across the shading's
+/// underscore marks) and GH#1834 (a label's tail becomes its own row); GH#1832's split header is
+/// fixed and gated above. This prints the full grid and the per-cell misses at four
+/// configurations so a change to the remaining two can be scored against ground truth.
 /// Ignored because it is a report, not a gate.
 #[test]
 #[ignore = "measurement report for GH#1832/1833/1834; run with --ignored --nocapture"]

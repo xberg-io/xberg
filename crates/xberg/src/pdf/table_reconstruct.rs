@@ -667,7 +667,7 @@ fn post_process_table_inner(
         let data_empty = empty_count == data_row_count;
         // ~keep A header-less column this sparse is what the `column_sparsity` gate below
         // rejects the whole table on, so fold it into its neighbour instead of losing the table
-        // (see `fold_sparse_headerless_column`). Guarded on an empty header for the same reason
+        // (see `fold_column_into_neighbour`). Guarded on an empty header for the same reason
         // that gate is: a column with its own label is a legitimately sparse column, not noise.
         let sparse_and_headerless = !data_empty
             && header_text.is_empty()
@@ -677,11 +677,13 @@ fn post_process_table_inner(
             } else {
                 column_is_sparse_for_ocr(empty_count, data_row_count)
             };
+        let header_fragment = !data_empty
+            && column_is_a_header_fragment(&header_text, col, processed[0].len(), empty_count, data_row_count);
 
         if data_empty {
             merge_header_only_column(&mut processed, col, header_text, column_positions.as_deref_mut());
-        } else if sparse_and_headerless {
-            fold_sparse_headerless_column(&mut processed, col, column_positions.as_deref_mut());
+        } else if sparse_and_headerless || header_fragment {
+            fold_column_into_neighbour(&mut processed, col, column_positions.as_deref_mut());
         } else {
             col += 1;
         }
@@ -2235,23 +2237,59 @@ fn looks_like_declaration_head(head: &str) -> bool {
     identifiers >= 2
 }
 
-/// Fold a header-less, overwhelmingly-empty column into its neighbour, carrying every cell's
-/// text rather than dropping it.
+/// One in ten data rows: the largest share of a column's rows that may carry text before the
+/// column is read as a real, if sparse, column rather than a split header. GH#1649's
+/// legitimately sparse DEPOSIT column carries two of nine rows (22%) and must stay a column of
+/// its own, so the bar sits well below that rather than next to it. ~keep
+const MAX_HEADER_FRAGMENT_SUPPORT_DENOMINATOR: usize = 10;
+
+/// Below this many data rows a one-in-ten share is a single cell, which is too weak a signal to
+/// restructure a small table on. ~keep
+const MIN_HEADER_FRAGMENT_DATA_ROWS: usize = 8;
+
+/// Whether a column's header is the tail of its neighbour's rather than a label of its own.
+///
+/// OCR splits a two-word column header ("Year 1") across two x-tracks when the intra-header gap
+/// reaches the cell-merge threshold, and each track mints a column. The right-hand one holds a
+/// header fragment and no data, which [`merge_header_only_column`] folds away -- but only while
+/// its data cells are *entirely* empty. A single stray glyph from a shaded row is enough to defeat
+/// that, and then the fragment column survives and shifts every value in the table one place
+/// (xberg-io/xberg#1832: measured 20 of 138 values in the right cell on
+/// `shaded_table_scan.pdf` with three such columns present, where the OCR itself read almost every
+/// value correctly).
+///
+/// Unlike its header-less sibling this is a real behaviour change for a table that passes today,
+/// since the `column_sparsity` gate deliberately exempts a column with its own label. The
+/// separation from a legitimately sparse labelled column is therefore by degree, and kept wide:
+/// see [`MAX_HEADER_FRAGMENT_SUPPORT_DENOMINATOR`]. Column 0 is never a fragment -- it is the row
+/// label. ~keep
+fn column_is_a_header_fragment(
+    header_text: &str,
+    col: usize,
+    column_count: usize,
+    empty_count: usize,
+    data_row_count: usize,
+) -> bool {
+    !header_text.is_empty()
+        && col > 0
+        && column_count > 2
+        && data_row_count >= MIN_HEADER_FRAGMENT_DATA_ROWS
+        && (data_row_count - empty_count) * MAX_HEADER_FRAGMENT_SUPPORT_DENOMINATOR <= data_row_count
+}
+
+/// Fold an overwhelmingly-empty column into its neighbour, carrying every cell's text -- header
+/// included -- rather than dropping it.
 ///
 /// The sibling [`merge_header_only_column`] already removes a column whose data cells are
-/// *entirely* empty. A column that is merely almost empty had no such path and instead reached
-/// the `column_sparsity` gate, which rejects the **whole table** over it. On a scanned page that
-/// is a routine outcome: a misread shaded row contributes two or three stray glyphs (`_`, `a`,
-/// `(DEFICIT)`) at x-positions that mint a phantom column, and three stray cells out of
-/// twenty-two rows were enough to discard an otherwise well-formed 23x7 grid entirely
-/// (xberg-io/xberg#1797, xberg-io/xberg#1832).
+/// *entirely* empty. A column that is merely almost empty had no such path. Two different
+/// callers need one, and both arise from the same thing: on a scanned page a misread shaded row
+/// contributes two or three stray glyphs (`_`, `a`, `(DEFICIT)`) at x-positions that mint a
+/// phantom column (xberg-io/xberg#1797, xberg-io/xberg#1832).
 ///
-/// This is a rescue path, never a behaviour change for a table that already passes: the caller
-/// only reaches it for a column the sparsity gate is about to reject on, and a table containing
-/// such a column returns `None` today. Folding left (right, at column 0) preserves the text --
-/// which is also usually where it belongs, since a phantom column is carved out of its
-/// neighbour's content in the first place. ~keep
-fn fold_sparse_headerless_column(table: &mut [Vec<String>], col: usize, column_positions: Option<&mut Vec<u32>>) {
+/// Folding left (right, at column 0) preserves the text -- which is also usually where it
+/// belongs, since a phantom column is carved out of its neighbour's content in the first
+/// place. ~keep
+fn fold_column_into_neighbour(table: &mut [Vec<String>], col: usize, column_positions: Option<&mut Vec<u32>>) {
     if table.is_empty() || table[0].len() < 2 {
         return;
     }
