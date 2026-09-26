@@ -2706,8 +2706,8 @@ fn pack_image_mask_rows(pixels: &[u8], width: u32, height: u32) -> Result<Vec<u8
 /// Decode a JPEG 2000 (`/JPXDecode`) image stream into raw interleaved samples.
 ///
 /// `JpxDecoder` is a pass-through, so `decode_stream_*` yields the raw JPEG 2000
-/// codestream, which OpenJPEG (`decoders::jpx::decode_jpx`) decodes to 8-bit
-/// component-interleaved samples.
+/// codestream, which `hayro-jpeg2000` (`decoders::jpx::decode_jpx`) decodes to
+/// 8-bit component-interleaved samples.
 fn decode_jpx_image(
     xobject: &crate::object::Object,
     obj_ref: Option<ObjectRef>,
