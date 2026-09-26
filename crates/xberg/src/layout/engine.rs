@@ -420,6 +420,12 @@ fn validate_layout_peak(
 /// Builds the [`LayoutModel`] for a [`ModelBackend::Custom`] path, dispatching on
 /// [`CustomModelVariant`]. Split out of [`LayoutEngine::from_config_with_thread_budget`]
 /// so that method stays a single per-backend match.
+///
+/// Carries that method's `wasm32` gate: every variant loads its model from a filesystem
+/// path, which `wasm32` has none of -- `RtDetrModel::from_file` does not exist there at all.
+/// A helper whose `cfg` is wider than the union of its call sites' is dead code on some leg,
+/// and here it was a compile error on the one leg no local gate builds. ~keep
+#[cfg(not(target_arch = "wasm32"))]
 fn model_from_custom_variant(
     path: &std::path::Path,
     variant: &CustomModelVariant,
