@@ -997,24 +997,25 @@ mod tests {
 
     #[test]
     fn iterator_word_to_element_forwards_underline_font_id_crown_indent_and_language() {
-        let mut word = xberg_tesseract::WordData::default();
-        word.text = "Word".to_string();
-        word.left = 10;
-        word.top = 20;
-        word.right = 60;
-        word.bottom = 40;
-        word.confidence = 91.0;
-        word.font_attrs = Some(xberg_tesseract::FontAttributes {
-            is_bold: false,
-            is_italic: false,
-            is_underlined: true,
-            is_monospace: false,
-            is_serif: false,
-            is_smallcaps: false,
-            pointsize: 12,
-            font_id: 7,
-        });
-        word.language = Some("deu".to_string());
+        let word = xberg_tesseract::WordData {
+            text: "Word".to_string(),
+            left: 10,
+            top: 20,
+            right: 60,
+            bottom: 40,
+            confidence: 91.0,
+            font_attrs: Some(xberg_tesseract::FontAttributes {
+                is_bold: false,
+                is_italic: false,
+                is_underlined: true,
+                is_monospace: false,
+                is_serif: false,
+                is_smallcaps: false,
+                pointsize: 12,
+                font_id: 7,
+            }),
+            language: Some("deu".to_string()),
+        };
         let para = xberg_tesseract::ParaInfo {
             justification: xberg_tesseract::TessParagraphJustification::JUSTIFICATION_LEFT,
             is_list_item: false,
@@ -1046,23 +1047,25 @@ mod tests {
 
     #[test]
     fn iterator_word_to_element_omits_first_line_indent_and_font_id_when_zero_or_negative() {
-        let mut word = xberg_tesseract::WordData::default();
-        word.text = "Word".to_string();
-        word.left = 10;
-        word.top = 20;
-        word.right = 60;
-        word.bottom = 40;
-        word.confidence = 91.0;
-        word.font_attrs = Some(xberg_tesseract::FontAttributes {
-            is_bold: false,
-            is_italic: false,
-            is_underlined: false,
-            is_monospace: false,
-            is_serif: false,
-            is_smallcaps: false,
-            pointsize: 12,
-            font_id: -1,
-        });
+        let word = xberg_tesseract::WordData {
+            text: "Word".to_string(),
+            left: 10,
+            top: 20,
+            right: 60,
+            bottom: 40,
+            confidence: 91.0,
+            font_attrs: Some(xberg_tesseract::FontAttributes {
+                is_bold: false,
+                is_italic: false,
+                is_underlined: false,
+                is_monospace: false,
+                is_serif: false,
+                is_smallcaps: false,
+                pointsize: 12,
+                font_id: -1,
+            }),
+            ..Default::default()
+        };
         let para = xberg_tesseract::ParaInfo {
             justification: xberg_tesseract::TessParagraphJustification::JUSTIFICATION_UNKNOWN,
             is_list_item: false,

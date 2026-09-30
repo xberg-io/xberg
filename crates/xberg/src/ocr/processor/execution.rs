@@ -2702,12 +2702,13 @@ mod tests {
     }
 
     fn confidence_word(text: &str, confidence: f32) -> xberg_tesseract::WordData {
-        let mut word = xberg_tesseract::WordData::default();
-        word.text = text.to_string();
-        word.right = 10;
-        word.bottom = 10;
-        word.confidence = confidence;
-        word
+        xberg_tesseract::WordData {
+            text: text.to_string(),
+            right: 10,
+            bottom: 10,
+            confidence,
+            ..Default::default()
+        }
     }
 
     #[test]
@@ -2992,10 +2993,11 @@ mod tests {
     }
 
     fn dict_word(text: &str) -> xberg_tesseract::WordData {
-        let mut word = xberg_tesseract::WordData::default();
-        word.text = text.to_string();
-        word.confidence = 95.0;
-        word
+        xberg_tesseract::WordData {
+            text: text.to_string(),
+            confidence: 95.0,
+            ..Default::default()
+        }
     }
 
     /// A page dominated by non-dictionary "words" (the LAAALDLI-style noise a scanned
