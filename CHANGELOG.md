@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **(ocr): a table that PaddleOCR detects in an image no longer repeats its text in the content.** With `enable_table_detection` on, the content listed each recognised line of the table as its own paragraph and then the same text again as the table rows. PaddleOCR now removes the lines that a detected table carries, with the same rule the Tesseract backend uses. A table that lost words from its region keeps those lines, so no text is lost. A scanned PDF page that is only a table no longer shows the table text a second time on the `force_ocr` route. A prose image that table detection turns into a table now shows its text once, as that table. (GH#1973)
+
 ## [1.3.0] - 2026-09-28
 
 ### Added
