@@ -419,6 +419,15 @@ pub(crate) fn median_of(mut values: Vec<u32>) -> u32 {
     values.get(values.len() / 2).copied().unwrap_or(0)
 }
 
+fn median_row_position(group: &[f64]) -> Option<u32> {
+    if group.is_empty() {
+        return None;
+    }
+    let mut sorted = group.to_vec();
+    sorted.sort_by(|a, b| a.total_cmp(b));
+    Some(sorted[sorted.len() / 2] as u32)
+}
+
 /// Detect row positions from word y-coordinates.
 ///
 /// Groups representative-height words by their vertical center position and returns the median
@@ -466,12 +475,14 @@ pub(crate) fn detect_rows(words: &[HocrWord], row_threshold_ratio: f64) -> Vec<u
     let half_height = median_height / 2;
     for word in tall_words {
         let bottom = word.top.saturating_add(word.height);
-        let overlaps_seeded_row = position_groups.iter().filter_map(|group| group.first()).any(|row_y| {
-            let row_y = *row_y as u32;
-            let band_top = row_y.saturating_sub(half_height);
-            let band_bottom = row_y.saturating_add(half_height);
-            bottom.min(band_bottom).saturating_sub(word.top.max(band_top)) > 0
-        });
+        let overlaps_seeded_row = position_groups
+            .iter()
+            .filter_map(|group| median_row_position(group))
+            .any(|row_y| {
+                let band_top = row_y.saturating_sub(half_height);
+                let band_bottom = row_y.saturating_add(half_height);
+                bottom.min(band_bottom).saturating_sub(word.top.max(band_top)) > 0
+            });
         if !overlaps_seeded_row {
             position_groups.push(vec![word.y_center()]);
         }
@@ -479,13 +490,7 @@ pub(crate) fn detect_rows(words: &[HocrWord], row_threshold_ratio: f64) -> Vec<u
 
     let mut rows: Vec<u32> = position_groups
         .iter()
-        .filter(|group| !group.is_empty())
-        .map(|group| {
-            let mut sorted = group.clone();
-            sorted.sort_by(|a, b| a.total_cmp(b));
-            let mid = sorted.len() / 2;
-            sorted[mid] as u32
-        })
+        .filter_map(|group| median_row_position(group))
         .collect();
 
     rows.sort_unstable();
@@ -1700,6 +1705,19 @@ mod tests {
 
         let rows = detect_rows(&words, 0.5);
         assert_eq!(rows.len(), 2);
+    }
+
+    #[test]
+    fn detect_rows_checks_tall_overlap_against_the_order_independent_row_median() {
+        let low_center = word("low", 0, 388, 20, 24);
+        let median_a = word("median-a", 30, 399, 20, 24);
+        let median_b = word("median-b", 60, 399, 20, 24);
+        let tall = word("tall", 90, 413, 20, 50);
+        let low_first = vec![low_center.clone(), median_a.clone(), median_b.clone(), tall.clone()];
+        let median_first = vec![median_a, low_center, median_b, tall];
+
+        assert_eq!(detect_rows(&low_first, 0.5), vec![411]);
+        assert_eq!(detect_rows(&median_first, 0.5), vec![411]);
     }
 
     fn table_with_tall_words(tall_top: u32, tall_height: u32, tall_words_first: bool) -> Vec<HocrWord> {
