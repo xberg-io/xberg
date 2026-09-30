@@ -16,7 +16,7 @@ Choose the format that matches your downstream processing. See the [Configuratio
 
 ## Available Formats
 
-- **Content Format** — `output_format` controls the `content` field: Plain, Markdown, Djot, HTML, JSON, [DocTags](/guides/doctags-output/), or a registered custom renderer such as [DOT](/guides/diagram-dot-output/) or [DOCX](/guides/docx-output/)
+- **Content Format** — `output_format` controls the `content` field: Plain, Markdown, Djot, HTML, JSON, [DocTags](/guides/doctags-output/), or a registered custom renderer such as [DOT](/guides/diagram-dot-output/), [DOCX](/guides/docx-output/) or [PDF](/guides/pdf-output/)
 - **Unified (default)** — Plain text/Markdown, for LLM prompts and full-text search
 - **Element-Based** — Flat array of typed elements with metadata, for RAG chunking and semantic search
 - **Document Structure** — Hierarchical tree with explicit parent-child references, for knowledge graphs and structured apps
@@ -109,6 +109,7 @@ forcing a non-`Plain` output.
 | `DocTags`         | Docling DocTags tag-stream format (tables as OTSL). See [DocTags Output](/guides/doctags-output/) |
 | `dot`             | Graphviz DOT for a diagram recovered from a vector SVG or PDF source; empty string when no diagram was recovered. See [Diagram DOT Output](/guides/diagram-dot-output/) |
 | `docx`            | A Word file, base64-encoded in `content`. See [DOCX Output](/guides/docx-output/) |
+| `pdf`             | A PDF file, base64-encoded in `content`. See [PDF Output](/guides/pdf-output/) |
 | `Custom(name)`    | Output from a renderer registered in the `RendererRegistry` (e.g. `latex`) |
 
 ```python

@@ -245,7 +245,7 @@ impl RedactionPass<'_> {
     /// Rewrite every text surface of `doc`, recursing into embedded
     /// sub-documents up to [`MAX_NESTED_DOCUMENT_DEPTH`].
     fn redact_document(&mut self, doc: &mut ExtractedDocument, depth: usize) {
-        // A nested result that its own pipeline already packaged (DOCX) holds base64 in
+        // A nested result that its own pipeline already packaged (DOCX, PDF) holds base64 in
         // `content`. That pipeline ran with the same redaction config and redacted the
         // text before packaging it; masking a stretch of the encoding would corrupt it.
         let packaged = depth > 0

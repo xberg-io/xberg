@@ -54,6 +54,8 @@ const LIST_ITEM_SOURCE_LABEL_ATTRIBUTE: &str = "list_marker";
 /// unusable from a bare `pdf` build.
 const MEASURED_FONT_SIZE_ATTRIBUTE: &str = "xberg:internal:font-size-pt";
 
+pub(crate) const NATIVE_TABLE_GRID_ATTRIBUTE: &str = "xberg:internal:native-table-grid";
+
 #[cfg_attr(alef, alef(skip))]
 /// Deterministic element identifier, generated via blake3 hashing.
 ///
@@ -802,7 +804,9 @@ impl InternalElement {
 /// Attribute keys that are internal plumbing and must never reach the public
 /// `DocumentNode::attributes` surface.
 fn is_internal_only_attribute(key: &str) -> bool {
-    key == SUPPRESS_IMAGE_OCR_RENDER_ATTRIBUTE || key == MEASURED_FONT_SIZE_ATTRIBUTE
+    key == SUPPRESS_IMAGE_OCR_RENDER_ATTRIBUTE
+        || key == MEASURED_FONT_SIZE_ATTRIBUTE
+        || key == NATIVE_TABLE_GRID_ATTRIBUTE
 }
 
 /// [`InternalElement::list_item_source_label`], for renderers that flatten an

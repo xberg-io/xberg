@@ -128,26 +128,39 @@ impl InternalRenderer for DotRenderer {
     }
 }
 
-// ~keep Liveness is configuration-dependent: `DocxRenderer` needs `office` and the
-// redaction engine's nested-document check needs `redaction`, so `-D dead-code` fires on a
-// leg without them. A hand-kept union-of-consumers `cfg` is what drifted and failed the
-// 1.3.0 publish (GH#1951).
+// ~keep Liveness is configuration-dependent: `DocxRenderer` needs `office`, `PdfRenderer`
+// needs `pdf`, and the redaction engine's nested-document check needs `redaction`, so
+// `-D dead-code` fires on a leg without them. A hand-kept union-of-consumers `cfg` is what
+// drifted and failed the 1.3.0 publish (GH#1951).
 /// Name of the built-in DOCX renderer, reached through `OutputFormat::Custom`.
 #[allow(dead_code)]
 pub(crate) const DOCX_RENDERER_NAME: &str = "docx";
+
+/// Name of the built-in PDF renderer, reached through `OutputFormat::Custom`.
+#[allow(dead_code)]
+pub(crate) const PDF_RENDERER_NAME: &str = "pdf";
 
 /// How the base64 encoding of a zip archive begins: its first local file header, `PK\x03\x04`.
 #[allow(dead_code)]
 const BASE64_ZIP_PREFIX: &str = "UEsDB";
 
-/// Whether a finished document's `content` is a base64-encoded DOCX package rather than
-/// text that can still be rewritten.
+/// How the base64 encoding of a PDF file begins: its `%PDF-` header.
+#[allow(dead_code)]
+const BASE64_PDF_PREFIX: &str = "JVBERi0";
+
+/// Whether a finished document's `content` is a base64-encoded binary document (DOCX or
+/// PDF) rather than text that can still be rewritten.
 ///
 /// Both the recorded format and the bytes have to agree, so text that merely claims the
 /// format is still treated as text.
 #[allow(dead_code)]
 pub(crate) fn holds_encoded_package(output_format: Option<&str>, content: &str) -> bool {
-    output_format == Some(DOCX_RENDERER_NAME) && content.starts_with(BASE64_ZIP_PREFIX)
+    let prefix = match output_format {
+        Some(DOCX_RENDERER_NAME) => BASE64_ZIP_PREFIX,
+        Some(PDF_RENDERER_NAME) => BASE64_PDF_PREFIX,
+        _ => return false,
+    };
+    content.starts_with(prefix)
 }
 
 /// Whether the built-in renderer `name` builds its output from the Markdown rendering.
@@ -156,7 +169,7 @@ pub(crate) fn holds_encoded_package(output_format: Option<&str>, content: &str) 
 /// recover them for these too, or the output carries none.
 #[allow(dead_code)]
 pub(crate) fn renders_from_markdown(name: &str) -> bool {
-    cfg!(feature = "office") && name == DOCX_RENDERER_NAME
+    (cfg!(feature = "office") && name == DOCX_RENDERER_NAME) || (cfg!(feature = "pdf") && name == PDF_RENDERER_NAME)
 }
 
 /// Built-in DOCX renderer.
@@ -183,6 +196,33 @@ impl InternalRenderer for DocxRenderer {
         use base64::Engine as _;
         let package = crate::rendering::render_docx(&rendered)?;
         Ok(base64::engine::general_purpose::STANDARD.encode(package))
+    }
+}
+
+/// Built-in PDF renderer.
+///
+/// Renders Markdown, which the redaction processor rewrites like any other text output,
+/// then lays it out in [`InternalRenderer::finish`] as a base64-encoded PDF file.
+#[cfg(feature = "pdf")]
+struct PdfRenderer;
+
+#[cfg(feature = "pdf")]
+impl Plugin for PdfRenderer {
+    fn name(&self) -> &str {
+        PDF_RENDERER_NAME
+    }
+}
+
+#[cfg(feature = "pdf")]
+impl InternalRenderer for PdfRenderer {
+    fn render(&self, doc: &InternalDocument) -> Result<String> {
+        Ok(crate::rendering::render_markdown(doc))
+    }
+
+    fn finish(&self, rendered: String) -> Result<String> {
+        use base64::Engine as _;
+        let document = crate::rendering::render_pdf(&rendered)?;
+        Ok(base64::engine::general_purpose::STANDARD.encode(document))
     }
 }
 
@@ -216,6 +256,8 @@ const BUILTIN_RENDERER_NAMES: &[&str] = &[
     "dot",
     #[cfg(feature = "office")]
     DOCX_RENDERER_NAME,
+    #[cfg(feature = "pdf")]
+    PDF_RENDERER_NAME,
     "plain",
 ];
 
@@ -235,7 +277,7 @@ const BUILTIN_RENDERER_NAMES: &[&str] = &[
 ///
 /// let registry = RendererRegistry::new();
 /// let available = registry.list();
-/// // Built-in renderers: "markdown", "html", "djot", "doctags", "dot", "docx", "plain"
+/// // Built-in renderers: "markdown", "html", "djot", "doctags", "dot", "docx", "pdf", "plain"
 /// ```
 #[cfg_attr(alef, alef(skip))]
 pub struct RendererRegistry {
@@ -252,6 +294,7 @@ impl RendererRegistry {
     /// - `doctags` — Docling DocTags (tables as OTSL)
     /// - `dot` — Graphviz DOT (diagrams recovered from vector sources)
     /// - `docx` — Office Open XML, base64-encoded (with the `office` feature)
+    /// - `pdf` — PDF, base64-encoded (with the `pdf` feature)
     /// - `plain` — Plain text (no formatting)
     pub fn new() -> Self {
         let mut registry = Self {
@@ -291,6 +334,11 @@ impl RendererRegistry {
         self.renderers.insert(
             DOCX_RENDERER_NAME.to_string(),
             RegisteredRenderer::internal(Arc::new(DocxRenderer)),
+        );
+        #[cfg(feature = "pdf")]
+        self.renderers.insert(
+            PDF_RENDERER_NAME.to_string(),
+            RegisteredRenderer::internal(Arc::new(PdfRenderer)),
         );
         self.renderers.insert(
             "plain".to_string(),
@@ -681,9 +729,30 @@ mod tests {
         assert_eq!(registry.finish("unregistered", "text".to_string()).unwrap(), "text");
     }
 
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn test_renderer_registry_builtin_pdf_finishes_into_a_base64_document() {
+        let registry = RendererRegistry::new();
+        let rendered = registry.render("pdf", &InternalDocument::new("text/plain")).unwrap();
+        let finished = registry.finish("pdf", rendered).unwrap();
+
+        use base64::Engine as _;
+        let document = base64::engine::general_purpose::STANDARD.decode(&finished).unwrap();
+        assert!(document.starts_with(b"%PDF-"), "not a PDF file");
+        assert!(holds_encoded_package(Some("pdf"), &finished));
+    }
+
     #[test]
     fn test_text_that_only_claims_the_docx_format_is_not_an_encoded_package() {
         assert!(!holds_encoded_package(Some("docx"), "Jane Doe signed off."));
         assert!(!holds_encoded_package(Some("markdown"), "UEsDBBQAAAAIAAAAIQ"));
+    }
+
+    #[test]
+    fn test_text_that_only_claims_the_pdf_format_is_not_an_encoded_package() {
+        assert!(!holds_encoded_package(Some("pdf"), "Jane Doe signed off."));
+        assert!(!holds_encoded_package(Some("pdf"), "UEsDBBQAAAAIAAAAIQ"));
+        assert!(!holds_encoded_package(Some("docx"), "JVBERi0xLjcKJcK1wrY"));
+        assert!(holds_encoded_package(Some("pdf"), "JVBERi0xLjcKJcK1wrY"));
     }
 }

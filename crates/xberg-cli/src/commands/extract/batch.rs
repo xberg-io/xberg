@@ -52,7 +52,7 @@ pub fn batch_command(
         }
         WireFormat::Text => {
             let inputs = build_batch_inputs(&uris, file_configs_map.as_ref())?;
-            refuse_docx_text_output(&config, &inputs)?;
+            refuse_binary_text_output(&config, &inputs)?;
             let output = run_batch_sync(inputs, &config)?;
             let dir = output_dir.as_deref().unwrap_or(Path::new("."));
             let mut diagnostics = std::io::stderr().lock();
@@ -102,22 +102,20 @@ pub fn batch_command(
     Ok(())
 }
 
-/// The batch text output joins documents under headers, which a binary DOCX cannot be.
-fn refuse_docx_text_output(config: &ExtractionConfig, inputs: &[ExtractInput]) -> Result<()> {
-    let per_file_docx = inputs.iter().any(|input| {
-        input
-            .config
-            .as_ref()
-            .and_then(|config| config.output_format.as_ref())
-            .is_some_and(
-                |format| matches!(format, xberg::OutputFormat::Custom(name) if name == super::DOCX_CONTENT_FORMAT),
-            )
+/// The batch text output joins documents under headers, which a binary document cannot be.
+fn refuse_binary_text_output<'a>(config: &'a ExtractionConfig, inputs: &'a [ExtractInput]) -> Result<()> {
+    let per_file_binary_format = inputs.iter().find_map(|input| {
+        let xberg::OutputFormat::Custom(name) = input.config.as_ref()?.output_format.as_ref()? else {
+            return None;
+        };
+        (name == super::DOCX_CONTENT_FORMAT || name == super::PDF_CONTENT_FORMAT).then_some(name.as_str())
     });
-    if super::requests_docx(config) || per_file_docx {
+    if let Some(binary_format) = super::requested_binary_format(config).or(per_file_binary_format) {
         anyhow::bail!(
-            "--content-format docx produces one binary document per file, which the text \
+            "--content-format {binary_format} produces one binary document per file, which the text \
              output cannot hold; use --format json, where each result's `content` is the \
-             base64-encoded DOCX"
+             base64-encoded {}",
+            binary_format.to_uppercase()
         );
     }
     Ok(())
@@ -146,8 +144,23 @@ mod binary_output_tests {
             ..Default::default()
         }];
 
-        let error = refuse_docx_text_output(&ExtractionConfig::default(), &inputs)
+        let error = refuse_binary_text_output(&ExtractionConfig::default(), &inputs)
             .expect_err("a per-file DOCX result cannot be joined into text output");
+        assert!(error.to_string().contains("--format json"), "{error}");
+    }
+
+    #[test]
+    fn batch_text_output_rejects_a_per_file_pdf_override() {
+        let inputs = vec![ExtractInput {
+            config: Some(FileExtractionConfig {
+                output_format: Some(OutputFormat::Custom(super::super::PDF_CONTENT_FORMAT.to_string())),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }];
+
+        let error = refuse_binary_text_output(&ExtractionConfig::default(), &inputs)
+            .expect_err("a per-file PDF result cannot be joined into text output");
         assert!(error.to_string().contains("--format json"), "{error}");
     }
 }

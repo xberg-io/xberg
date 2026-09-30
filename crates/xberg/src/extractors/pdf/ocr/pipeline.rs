@@ -13,7 +13,7 @@ use super::document::resolved_ocr_layout_dimensions;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 use super::document::{
     accepted_ocr_page_replacements, apply_ocr_page_replacements, apply_ocr_text_list_fallback,
-    fill_unstructured_ocr_pages, heuristically_restructured_ocr_pages,
+    fill_unstructured_ocr_pages, heuristically_restructured_ocr_pages, ocr_pages_with_tables,
 };
 // Read only by the two OCR-paragraph assembly blocks below -- one gated on
 // `layout-detection` *with* `ocr`/`ocr-wasm`, the other on `not(layout-detection)`. With
@@ -295,6 +295,10 @@ enum AllPagesFailedPolicy {
     feature = "pdf",
     feature = "layout-detection"
 ))]
+// ~keep `Prepared` is only constructed by the paddle-OCR-gated whole-document route, so the
+// variant is dead on a `layout-detection + ocr-pipeline` leg without `paddle_ocr`; a
+// union-of-consumers `cfg` here is what drifted and failed the 1.3.0 publish (GH#1951).
+#[allow(dead_code)]
 enum MixedLayoutInputs {
     Resolve,
     Prepared(Option<PreparedLayoutInputs>),
@@ -325,6 +329,9 @@ struct MixedOcrPageSelection<'a> {
 }
 
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+// ~keep Test-support wrapper: only the `feature = "ocr"` test module calls it, so it is dead
+// on an `ocr-pipeline`-only test leg. See the GH#1951 rationale on `MixedLayoutInputs`.
+#[allow(dead_code)]
 pub(crate) async fn extract_mixed_ocr_native(
     native_text: &str,
     boundaries: &[crate::types::PageBoundary],
@@ -1750,6 +1757,9 @@ pub(crate) async fn extract_full_document_ocr_pipeline_per_page(
 /// per-page auto-detection when `content` is available and index-aligned to `images`, or no
 /// rotation correction at all otherwise.
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
+// ~keep Test-only entry point; only the `feature = "ocr"` test modules call it, so it is dead
+// on an `ocr-pipeline`-only test leg. See the GH#1951 rationale on `MixedLayoutInputs`.
+#[allow(dead_code)]
 pub(crate) async fn extract_with_ocr(
     content: Option<&[u8]>,
     images: Option<&[image::DynamicImage]>,
@@ -3296,12 +3306,18 @@ pub(super) async fn extract_with_ocr_for_page(
         page_index_offset,
     );
 
-    fill_unstructured_ocr_pages(&mut all_page_paragraphs, &page_texts);
+    let pages_with_tables = ocr_pages_with_tables(&collected_tables, all_page_paragraphs.len(), page_index_offset);
+    fill_unstructured_ocr_pages(&mut all_page_paragraphs, &page_texts, &pages_with_tables);
 
     let (ocr_doc, raw_page_paragraphs) = {
         let has_structured = all_page_paragraphs
             .iter()
-            .any(|paragraphs| paragraphs.as_ref().is_some_and(|paragraphs| !paragraphs.is_empty()));
+            .zip(&pages_with_tables)
+            .any(|(paragraphs, has_tables)| {
+                paragraphs
+                    .as_ref()
+                    .is_some_and(|paragraphs| !paragraphs.is_empty() || *has_tables)
+            });
         if has_structured {
             let pages: Vec<Vec<crate::pdf::structure::types::PdfParagraph>> = all_page_paragraphs
                 .into_iter()

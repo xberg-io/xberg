@@ -14,6 +14,7 @@ use comrak::{Arena, parse_document};
 use zip::CompressionMethod;
 use zip::write::SimpleFileOptions;
 
+use super::common::external_link_target;
 use super::markdown::comrak_options;
 use crate::{Result, XbergError};
 
@@ -630,14 +631,6 @@ impl BodyWriter {
         xml.push_str("</w:numbering>");
         xml
     }
-}
-
-/// The relationship target for a link Word can open, in the URL parser's percent-encoded
-/// form. Fragment and relative links have no target outside the document, so their text
-/// is kept and the link is dropped.
-fn external_link_target(url: &str) -> Option<String> {
-    let parsed = url::Url::parse(url).ok()?;
-    matches!(parsed.scheme(), "http" | "https" | "mailto" | "ftp").then(|| parsed.into())
 }
 
 /// Escape `text` for XML character data or an attribute value, dropping the control

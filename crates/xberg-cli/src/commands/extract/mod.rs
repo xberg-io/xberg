@@ -53,9 +53,17 @@ use timing::build_stage_timings;
 /// `content` is a base64-encoded `.docx` package.
 pub(crate) const DOCX_CONTENT_FORMAT: &str = "docx";
 
-/// Whether `config` asks for DOCX, which produces one binary document rather than text.
-pub(crate) fn requests_docx(config: &ExtractionConfig) -> bool {
-    matches!(&config.output_format, OutputFormat::Custom(name) if name == DOCX_CONTENT_FORMAT)
+/// The library's PDF renderer name, and the `metadata.output_format` of a result whose
+/// `content` is a base64-encoded PDF file.
+pub(crate) const PDF_CONTENT_FORMAT: &str = "pdf";
+
+/// The binary document format `config` asks for, if any. Each produces one binary
+/// document rather than text.
+pub(crate) fn requested_binary_format(config: &ExtractionConfig) -> Option<&str> {
+    match &config.output_format {
+        OutputFormat::Custom(name) if name == DOCX_CONTENT_FORMAT || name == PDF_CONTENT_FORMAT => Some(name),
+        _ => None,
+    }
 }
 
 /// Input source for single-document extraction.
@@ -87,7 +95,7 @@ pub fn extract_command(
 ) -> Result<()> {
     let emit_stage_timing = stage_timing_requested();
 
-    refuse_docx_to_terminal(&config, &format)?;
+    refuse_binary_output_to_terminal(&config, &format)?;
 
     let t0 = Instant::now();
     let result = extract_input_sync(input, mime_type.as_deref(), &config)?;
@@ -102,8 +110,8 @@ pub fn extract_command(
                 let dir = output_dir.as_deref().unwrap_or(Path::new("."));
                 write_extracted_images(images, dir)?;
             }
-            let written = if requests_docx(&config) {
-                write_docx_package(&result)
+            let written = if let Some(binary_format) = requested_binary_format(&config) {
+                write_binary_document(&result, binary_format)
             } else {
                 print!("{}", result.content);
                 Ok(())
@@ -155,37 +163,43 @@ pub fn extract_command(
     Ok(())
 }
 
-/// Refuse DOCX output to a terminal before extracting anything, since it is binary.
-fn refuse_docx_to_terminal(config: &ExtractionConfig, format: &WireFormat) -> Result<()> {
-    if requests_docx(config) && matches!(format, WireFormat::Text) && std::io::stdout().is_terminal() {
+/// Refuse binary output to a terminal before extracting anything.
+fn refuse_binary_output_to_terminal(config: &ExtractionConfig, format: &WireFormat) -> Result<()> {
+    if let Some(binary_format) = requested_binary_format(config)
+        && matches!(format, WireFormat::Text)
+        && std::io::stdout().is_terminal()
+    {
         anyhow::bail!(
-            "--content-format docx writes a binary document to stdout; redirect it to a file (for example \
-             `> output.docx`), or use --format json to receive it base64-encoded in `content`"
+            "--content-format {binary_format} writes a binary document to stdout; redirect it to a file (for \
+             example `> output.{binary_format}`), or use --format json to receive it base64-encoded in `content`"
         );
     }
     Ok(())
 }
 
-/// Write the `.docx` package a DOCX extraction carries base64-encoded in `content`.
+/// Write the document a DOCX or PDF extraction carries base64-encoded in `content`.
 ///
 /// Fails rather than writing text when the library fell back to plain text (for example
-/// when it was built without the `office` feature), since the caller is redirecting
-/// stdout into a `.docx` file.
-fn write_docx_package(result: &ExtractedDocument) -> Result<()> {
-    if result.metadata.output_format.as_deref() != Some(DOCX_CONTENT_FORMAT) {
+/// when it was built without the feature that renders `binary_format`), since the caller
+/// is redirecting stdout into a binary file.
+fn write_binary_document(result: &ExtractedDocument, binary_format: &str) -> Result<()> {
+    let label = binary_format.to_uppercase();
+    if result.metadata.output_format.as_deref() != Some(binary_format) {
         anyhow::bail!(
-            "DOCX output was requested but the extraction produced {} text instead; see the warnings above",
+            "{label} output was requested but the extraction produced {} text instead; see the warnings above",
             result.metadata.output_format.as_deref().unwrap_or("plain")
         );
     }
-    let package = base64::engine::general_purpose::STANDARD
+    let document = base64::engine::general_purpose::STANDARD
         .decode(&result.content)
-        .context("DOCX output was not valid base64")?;
+        .with_context(|| format!("{label} output was not valid base64"))?;
     let mut stdout = std::io::stdout().lock();
     stdout
-        .write_all(&package)
-        .context("Failed to write the DOCX document to stdout")?;
-    stdout.flush().context("Failed to write the DOCX document to stdout")
+        .write_all(&document)
+        .with_context(|| format!("Failed to write the {label} document to stdout"))?;
+    stdout
+        .flush()
+        .with_context(|| format!("Failed to write the {label} document to stdout"))
 }
 
 fn extract_input_sync(

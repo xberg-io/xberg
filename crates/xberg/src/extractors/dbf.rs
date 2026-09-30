@@ -136,12 +136,33 @@ fn parse_dbf_with_memo(content: &[u8], memo: &[u8]) -> Result<DbfParsed> {
     parse_dbf_records(reader)
 }
 
+/// One record's values in field-declaration order.
+///
+/// `dbase::Record` keys values by field name in a `HashMap`: iterating it does
+/// not follow the header order, and two fields sharing a name collapse into one.
+struct OrderedRecord(Vec<dbase::FieldValue>);
+
+impl dbase::ReadableRecord for OrderedRecord {
+    fn read_using<Source, MemoSource>(
+        field_iterator: &mut dbase::FieldIterator<Source, MemoSource>,
+    ) -> std::result::Result<Self, dbase::FieldError>
+    where
+        Source: Read + Seek,
+        MemoSource: Read + Seek,
+    {
+        field_iterator
+            .map(|field| field.map(|named| named.value))
+            .collect::<std::result::Result<_, _>>()
+            .map(Self)
+    }
+}
+
 /// Shared record-reading logic for both the memo-less and memo-aware readers.
 fn parse_dbf_records<T: Read + Seek>(mut reader: dbase::Reader<T>) -> Result<DbfParsed> {
     let field_names: Vec<String> = reader.fields().iter().map(|f| f.name().to_string()).collect();
 
     let records = reader
-        .iter_records()
+        .iter_records_as::<OrderedRecord>()
         .collect::<std::result::Result<Vec<_>, _>>()
         .map_err(|e| crate::XbergError::parsing(format!("Failed to read dBASE records: {e}")))?;
 
@@ -151,9 +172,9 @@ fn parse_dbf_records<T: Read + Seek>(mut reader: dbase::Reader<T>) -> Result<Dbf
     let mut rows: Vec<Vec<String>> = Vec::with_capacity(records.len());
     let mut first_row = true;
 
-    for record in records {
+    for OrderedRecord(values) in records {
         let mut row = Vec::with_capacity(field_names.len());
-        for (col_idx, (_, v)) in record.into_iter().enumerate() {
+        for (col_idx, v) in values.into_iter().enumerate() {
             if first_row && col_idx < field_types.len() {
                 field_types[col_idx] = field_type_name(&v).to_string();
             }
@@ -316,8 +337,61 @@ mod tests {
         dbase::dbase_record! {
             pub struct MemoIndexRecord { pub notes: String }
         }
+
+        dbase::dbase_record! {
+            pub struct StationRecord {
+                pub name: String,
+                pub riders: f64,
+                pub open: bool,
+                pub opened: dbase::Date,
+            }
+        }
+
+        dbase::dbase_record! {
+            pub struct TwoCodesRecord { pub first: String, pub second: String }
+        }
     }
-    use dbase_records::{DateTimeRecord, MemoIndexRecord};
+    use dbase_records::{DateTimeRecord, MemoIndexRecord, StationRecord, TwoCodesRecord};
+
+    const STATION_COUNT: u32 = 20;
+
+    fn write_dbf<R: dbase::WritableRecord>(table_info: dbase::TableInfo, records: &[R]) -> Vec<u8> {
+        let mut cursor = Cursor::new(Vec::<u8>::new());
+        {
+            let mut file = dbase::File::create_new(&mut cursor, table_info).unwrap();
+            file.append_records(records).unwrap();
+        }
+        cursor.into_inner()
+    }
+
+    /// Four fields of four different types, so a row read in any order other
+    /// than the declared one is visible both in the cells and in the types.
+    fn stations_dbf() -> Vec<u8> {
+        let table_info = dbase::TableWriterBuilder::new()
+            .add_character_field("NAME".try_into().unwrap(), 20)
+            .add_numeric_field("RIDERS".try_into().unwrap(), 10, 0)
+            .add_logical_field("OPEN".try_into().unwrap())
+            .add_date_field("OPENED".try_into().unwrap())
+            .build_table_info();
+        let records: Vec<StationRecord> = (1..=STATION_COUNT)
+            .map(|i| StationRecord {
+                name: format!("station-{i}"),
+                riders: f64::from(i * 100),
+                open: i.is_multiple_of(2),
+                opened: dbase::Date::new(i, 1, 2024).unwrap(),
+            })
+            .collect();
+        write_dbf(table_info, &records)
+    }
+
+    fn expected_station_row(i: u32) -> Vec<String> {
+        vec![
+            format!("station-{i}"),
+            (i * 100).to_string(),
+            i.is_multiple_of(2).to_string(),
+            format!("2024-01-{i:02}"),
+        ]
+    }
 
     /// Regression for #108: a `DateTime` field previously fell through to the
     /// catch-all `_ => String::new()` arm in `field_value_to_string` and
@@ -410,6 +484,81 @@ mod tests {
         let (dbf_bytes, _dbt_bytes) = dbf_with_memo_fixture(b"unreachable");
 
         assert!(parse_dbf(&dbf_bytes).is_err());
+    }
+
+    /// Regression for #1968: `dbase::Record` stores a row in a freshly seeded
+    /// `HashMap`, so walking it yielded each row's values in a different order
+    /// from the header.
+    #[test]
+    fn should_keep_every_row_in_field_declaration_order() {
+        let parsed = parse_dbf(&stations_dbf()).unwrap();
+
+        assert_eq!(parsed.field_names, vec!["NAME", "RIDERS", "OPEN", "OPENED"]);
+        let expected_rows: Vec<Vec<String>> = (1..=STATION_COUNT).map(expected_station_row).collect();
+        assert_eq!(parsed.rows, expected_rows);
+    }
+
+    #[test]
+    fn should_report_field_types_in_field_declaration_order() {
+        let parsed = parse_dbf(&stations_dbf()).unwrap();
+
+        assert_eq!(parsed.field_types, vec!["Character", "Numeric", "Logical", "Date"]);
+    }
+
+    /// Regression for #1968: neither the dBASE format nor the `dbase` reader
+    /// rejects repeated field names, and a name-keyed record kept only one of
+    /// the two values.
+    #[test]
+    fn should_keep_both_values_of_fields_sharing_a_name() {
+        let table_info = dbase::TableWriterBuilder::new()
+            .add_character_field("CODE".try_into().unwrap(), 10)
+            .add_character_field("CODE".try_into().unwrap(), 10)
+            .build_table_info();
+        let dbf_bytes = write_dbf(
+            table_info,
+            &[TwoCodesRecord {
+                first: "first".to_string(),
+                second: "second".to_string(),
+            }],
+        );
+
+        let parsed = parse_dbf(&dbf_bytes).unwrap();
+
+        assert_eq!(parsed.field_names, vec!["CODE", "CODE"]);
+        assert_eq!(parsed.rows, vec![vec!["first".to_string(), "second".to_string()]]);
+    }
+
+    #[cfg(feature = "tokio-runtime")]
+    #[tokio::test]
+    async fn should_align_extracted_cells_and_field_metadata_with_the_header() {
+        let extractor = DbfExtractor::new();
+        let doc = extractor
+            .extract_content(&stations_dbf(), "application/x-dbf", &ExtractionConfig::default())
+            .await
+            .unwrap();
+
+        let cells = &doc.tables[0].cells;
+        assert_eq!(cells[0], vec!["NAME", "RIDERS", "OPEN", "OPENED"]);
+        let expected_rows: Vec<Vec<String>> = (1..=STATION_COUNT).map(expected_station_row).collect();
+        assert_eq!(cells[1..], expected_rows[..]);
+
+        let Some(FormatMetadata::Dbf(metadata)) = &doc.metadata.format else {
+            panic!("expected dBASE metadata, got {:?}", doc.metadata.format);
+        };
+        let fields: Vec<(&str, &str)> = metadata
+            .fields
+            .iter()
+            .map(|field| (field.name.as_str(), field.field_type.as_str()))
+            .collect();
+        assert_eq!(
+            fields,
+            vec![
+                ("NAME", "Character"),
+                ("RIDERS", "Numeric"),
+                ("OPEN", "Logical"),
+                ("OPENED", "Date"),
+            ]
+        );
     }
 
     #[cfg(feature = "tokio-runtime")]

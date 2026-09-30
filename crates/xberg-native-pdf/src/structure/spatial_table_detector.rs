@@ -4487,7 +4487,10 @@ fn extract_cell_text(cell_span_indices: &[usize], spans: &[TextSpan]) -> String 
         return String::new();
     }
     if span_entries.len() == 1 {
-        return span_entries.remove(0).2;
+        // Trim the same source-space prefix the multi-span path trims (GH#1948):
+        // a single-word cell has no preceding word, so any leading space is an
+        // edge artifact, not a word separator.
+        return span_entries.remove(0).2.trim().to_string();
     }
     span_entries.sort_by(|a, b| crate::utils::safe_float_cmp(b.0, a.0));
 
@@ -4519,7 +4522,12 @@ fn extract_cell_text(cell_span_indices: &[usize], spans: &[TextSpan]) -> String 
                 }
                 out.push_str(text);
             }
-            out
+            // A word can carry a leading space from `extract_table_word_spans`,
+            // which re-emits the source space between two words whose boxes abut
+            // (GH#1948). When such a word opens a cell or a wrapped line, that
+            // space is at an edge, not between two words; drop it here. Cell text
+            // never has meaningful leading/trailing whitespace. ~keep
+            out.trim().to_string()
         })
         .collect::<Vec<_>>()
         .join("\n")
@@ -9079,6 +9087,29 @@ mod tests {
         let prev = ts("Quarter ", 100.0, 200.0, 35.0, 10.0);
         let curr = ts("Total", 140.0, 200.0, 25.0, 10.0);
         assert_eq!(cell_span_separator(&prev, &curr), "");
+    }
+
+    /// GH#1948: the table word source marks a word that its source span
+    /// separated with a whitespace by prefixing the word's text with a space.
+    /// When the two words' boxes abut (a tight face draws the space glyph over
+    /// its neighbours), the separator must not add a *second* space, and the
+    /// one carried in the text must survive.
+    #[test]
+    fn cell_text_keeps_a_source_space_between_abutting_words() {
+        let spans = vec![
+            ts("corrispettivi", 100.0, 200.0, 37.7, 7.83),
+            ts(" superiori", 137.0, 200.0, 27.6, 7.83),
+        ];
+        assert_eq!(extract_cell_text(&[0, 1], &spans), "corrispettivi superiori");
+    }
+
+    /// A word that opens a cell can carry the same source-space prefix, but a
+    /// cell's first word has no preceding word to separate from; the leading
+    /// space must not leak into the cell text (GH#1948).
+    #[test]
+    fn cell_text_trims_a_source_space_prefix_at_the_cell_start() {
+        let spans = vec![ts(" 400", 100.0, 200.0, 20.0, 7.83)];
+        assert_eq!(extract_cell_text(&[0], &spans), "400");
     }
 
     /// Reproduces xberg-io/xberg#1555: a drawn row band whose baselines are

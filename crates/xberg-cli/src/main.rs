@@ -694,6 +694,8 @@ enum ContentOutputFormatArg {
     DocTags,
     /// Office Open XML document, written to stdout as binary
     Docx,
+    /// PDF document, written to stdout as binary
+    Pdf,
 }
 
 impl From<ContentOutputFormatArg> for ContentOutputFormat {
@@ -707,6 +709,9 @@ impl From<ContentOutputFormatArg> for ContentOutputFormat {
             ContentOutputFormatArg::DocTags => ContentOutputFormat::DocTags,
             ContentOutputFormatArg::Docx => {
                 ContentOutputFormat::Custom(commands::extract::DOCX_CONTENT_FORMAT.to_string())
+            }
+            ContentOutputFormatArg::Pdf => {
+                ContentOutputFormat::Custom(commands::extract::PDF_CONTENT_FORMAT.to_string())
             }
         }
     }
