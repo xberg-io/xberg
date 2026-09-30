@@ -457,6 +457,26 @@ fn median(samples: &[f64]) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::future::Future;
+
+    const IN_PROCESS_EXTRACTION_TEST_STACK_BYTES: usize = 4 * 1024 * 1024;
+
+    fn run_in_process_extraction_test(test: impl Future<Output = ()> + Send + 'static) {
+        // Full extraction futures overflow libtest's 2 MiB worker stack in debug builds; the benchmark CLI runs on
+        // the process main thread with a larger stack, so keep this accommodation at the test boundary. ~keep
+        let handle = std::thread::Builder::new()
+            .name("batch-diagnostic-extraction-test".to_string())
+            .stack_size(IN_PROCESS_EXTRACTION_TEST_STACK_BYTES)
+            .spawn(move || {
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(test);
+            })
+            .unwrap();
+        handle.join().unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+    }
 
     #[test]
     fn expanded_inputs_cycles_deterministically() {
@@ -730,54 +750,58 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn diagnostic_uses_equivalent_public_extraction_paths() {
-        let dir = tempfile::tempdir().unwrap();
-        let input = dir.path().join("input.txt");
-        std::fs::write(&input, "fast deterministic batch diagnostic").unwrap();
-        let report = run_batch_diagnostic(&BatchDiagnosticConfig {
-            inputs: vec![input],
-            batch_size: 2,
-            warmup_iterations: 1,
-            iterations: 1,
-            extraction_config_json: None,
-            max_threads: Some(2),
-            max_concurrent_extractions: Some(2),
-        })
-        .await
-        .unwrap();
+    #[test]
+    fn diagnostic_uses_equivalent_public_extraction_paths() {
+        run_in_process_extraction_test(async {
+            let dir = tempfile::tempdir().unwrap();
+            let input = dir.path().join("input.txt");
+            std::fs::write(&input, "fast deterministic batch diagnostic").unwrap();
+            let report = run_batch_diagnostic(&BatchDiagnosticConfig {
+                inputs: vec![input],
+                batch_size: 2,
+                warmup_iterations: 1,
+                iterations: 1,
+                extraction_config_json: None,
+                max_threads: Some(2),
+                max_concurrent_extractions: Some(2),
+            })
+            .await
+            .unwrap();
 
-        assert_eq!(report.batch_size, 2);
-        assert!(report.outputs_match);
-        assert!(report.sequential_median_ms > 0.0);
-        assert!(report.batch_median_ms > 0.0);
+            assert_eq!(report.batch_size, 2);
+            assert!(report.outputs_match);
+            assert!(report.sequential_median_ms > 0.0);
+            assert!(report.batch_median_ms > 0.0);
+        });
     }
 
-    #[tokio::test]
-    async fn isolated_lane_reports_only_requested_path() {
-        let dir = tempfile::tempdir().unwrap();
-        let input = dir.path().join("input.txt");
-        std::fs::write(&input, "isolated batch diagnostic").unwrap();
-        let config = BatchDiagnosticConfig {
-            inputs: vec![input],
-            batch_size: 2,
-            warmup_iterations: 0,
-            iterations: 2,
-            extraction_config_json: None,
-            max_threads: Some(2),
-            max_concurrent_extractions: Some(2),
-        };
+    #[test]
+    fn isolated_lane_reports_only_requested_path() {
+        run_in_process_extraction_test(async {
+            let dir = tempfile::tempdir().unwrap();
+            let input = dir.path().join("input.txt");
+            std::fs::write(&input, "isolated batch diagnostic").unwrap();
+            let config = BatchDiagnosticConfig {
+                inputs: vec![input],
+                batch_size: 2,
+                warmup_iterations: 0,
+                iterations: 2,
+                extraction_config_json: None,
+                max_threads: Some(2),
+                max_concurrent_extractions: Some(2),
+            };
 
-        for (lane, expected_name) in [
-            (BatchDiagnosticLane::Sequential, "sequential"),
-            (BatchDiagnosticLane::Batch, "batch"),
-        ] {
-            let report = run_batch_lane_diagnostic(&config, lane).await.unwrap();
-            assert_eq!(report.lane, expected_name);
-            assert_eq!(report.batch_size, 2);
-            assert_eq!(report.samples_ms.len(), 2);
-            assert!(report.median_ms > 0.0);
-            assert!(report.documents_per_second > 0.0);
-        }
+            for (lane, expected_name) in [
+                (BatchDiagnosticLane::Sequential, "sequential"),
+                (BatchDiagnosticLane::Batch, "batch"),
+            ] {
+                let report = run_batch_lane_diagnostic(&config, lane).await.unwrap();
+                assert_eq!(report.lane, expected_name);
+                assert_eq!(report.batch_size, 2);
+                assert_eq!(report.samples_ms.len(), 2);
+                assert!(report.median_ms > 0.0);
+                assert!(report.documents_per_second > 0.0);
+            }
+        });
     }
 }
