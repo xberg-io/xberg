@@ -157,3 +157,68 @@ fn should_reject_xls_stream_larger_than_security_limit_before_parsing() {
         "the error must report the declared stream size and configured limit: {file_error}"
     );
 }
+
+#[test]
+fn should_reject_xls_stream_larger_than_physical_container_before_parsing() {
+    let bytes = xls_with_oversized_declared_workbook_stream(64 * 1024);
+
+    let error = read_excel_bytes(&bytes, ".xls", &SecurityLimits::default())
+        .expect_err("a declared stream larger than its physical container must be rejected");
+    assert_eq!(
+        error.to_string(),
+        format!(
+            "Validation error: XLS stream declares 65536 bytes, which exceeds the {}-byte container",
+            bytes.len()
+        )
+    );
+}
+
+fn forge_zip_uncompressed_sizes(mut bytes: Vec<u8>, declared_size: u32) -> Vec<u8> {
+    let mut offset = 0;
+    let mut patched_entries = 0;
+    while offset + 46 <= bytes.len() {
+        if bytes[offset..].starts_with(b"PK\x01\x02") {
+            bytes[offset + 24..offset + 28].copy_from_slice(&declared_size.to_le_bytes());
+            let name_length = u16::from_le_bytes([bytes[offset + 28], bytes[offset + 29]]) as usize;
+            let extra_length = u16::from_le_bytes([bytes[offset + 30], bytes[offset + 31]]) as usize;
+            let comment_length = u16::from_le_bytes([bytes[offset + 32], bytes[offset + 33]]) as usize;
+            offset += 46 + name_length + extra_length + comment_length;
+            patched_entries += 1;
+        } else {
+            offset += 1;
+        }
+    }
+    assert!(patched_entries > 1, "fixture must contain multiple ZIP entries");
+    bytes
+}
+
+#[test]
+fn should_reject_actual_zip_contents_larger_than_aggregate_limit_during_rewrite() {
+    let entry = vec![b'x'; 700];
+    let worksheet = br#"<?xml version="1.0" encoding="UTF-8"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <dimension ref="1:1"/>
+  <sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Value</t></is></c></row></sheetData>
+</worksheet>"#;
+    let bytes = make_xlsx(
+        r#"<sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets>"#,
+        WORKSHEET_REL,
+        &[
+            ("xl/worksheets/sheet1.xml", worksheet.to_vec()),
+            ("xl/media/filler-1.bin", entry.clone()),
+            ("xl/media/filler-2.bin", entry),
+        ],
+    );
+    let bytes = forge_zip_uncompressed_sizes(bytes, 1);
+    let limits = SecurityLimits {
+        max_archive_size: 1024,
+        ..Default::default()
+    };
+
+    let error = read_excel_bytes(&bytes, ".xlsx", &limits)
+        .expect_err("retained actual ZIP contents must not exceed the aggregate archive limit");
+    assert!(
+        error.to_string().contains("Spreadsheet ZIP actual contents total") && error.to_string().contains("1024"),
+        "the actual-byte gate must identify the aggregate archive limit: {error}"
+    );
+}

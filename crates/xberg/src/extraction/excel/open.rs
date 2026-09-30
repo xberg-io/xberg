@@ -158,6 +158,7 @@ fn rewrite_spreadsheet_zip(
     let mut archive = zip::ZipArchive::new(Cursor::new(data))
         .map_err(|error| XbergError::parsing(format!("Invalid spreadsheet ZIP: {error}")))?;
     let mut entries = Vec::with_capacity(archive.len());
+    let mut actual_contents_size = 0usize;
     let mut changed = false;
     for index in 0..archive.len() {
         let mut entry = archive
@@ -169,6 +170,16 @@ fn rewrite_spreadsheet_zip(
             continue;
         }
         let contents = read_zip_member_bounded(&mut entry, limits.max_archive_size, &name)?;
+        actual_contents_size = actual_contents_size
+            .checked_add(contents.len())
+            .ok_or_else(|| XbergError::validation("Spreadsheet ZIP aggregate size overflow".to_owned()))?;
+        if actual_contents_size > limits.max_archive_size {
+            return Err(XbergError::validation(format!(
+                "Spreadsheet ZIP actual contents total {actual_contents_size} bytes, which exceeds the configured \
+                 aggregate limit of {} bytes (SecurityLimits::max_archive_size)",
+                limits.max_archive_size
+            )));
+        }
         let (contents, entry_changed) = transform(&name, &contents)?;
         changed |= entry_changed;
         entries.push((name, Some(contents)));
