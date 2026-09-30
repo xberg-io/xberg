@@ -3134,7 +3134,7 @@ mod tests {
     /// under them: `Period 1` to `Period 4` over seven-character amounts (`112,345`), two-character
     /// amounts and nil dashes. Each label starts more than the threshold left of the long amounts,
     /// so it forms a header-only track, and the long amounts' left edges sit nearer that track than
-    /// the short amounts'.
+    /// the short amounts'. ~keep
     #[cfg(feature = "pdf")]
     fn wide_label_table_words() -> Vec<crate::table_core::HocrWord> {
         const CHAR_WIDTH: u32 = 15;
@@ -3178,7 +3178,7 @@ mod tests {
     /// column's long amounts followed its left edge, the short amounts were left in a headerless
     /// track that failed the sparse-column check, and the whole table was dropped.
     ///
-    /// TEST HONESTY: without the fix the grid has 9 columns for 5 on the page and is rejected.
+    /// TEST HONESTY: without the fix the grid has 9 columns for 5 on the page and is rejected. ~keep
     #[cfg(feature = "pdf")]
     #[test]
     fn a_header_label_wider_than_its_amounts_keeps_the_table() {

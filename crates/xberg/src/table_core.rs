@@ -125,11 +125,11 @@ pub(crate) struct ColumnTrack {
     /// Whether the column holds a token below the header band. A track without one is a header
     /// label on its own: it folds into the value column whose right edge it shares, whatever its
     /// label reads, unless that column has a label of its own in the same row. See
-    /// [`fold_right_aligned_tracks`].
+    /// [`fold_right_aligned_tracks`]. ~keep
     has_data: bool,
     /// The header-band rows in which the column holds a token, of every track it was folded from.
     /// Two labels in one row are two columns, so a header-only track never folds into a column
-    /// that holds a label in the same row.
+    /// that holds a label in the same row. ~keep
     label_rows: Vec<usize>,
     /// The median left edge of each track this column was folded from, one entry when it was not
     /// folded at all.
@@ -442,7 +442,6 @@ fn share_a_number_row(left: &ColumnTrack, right: &ColumnTrack) -> bool {
     left.number_rows.iter().any(|row| right.number_rows.contains(row))
 }
 
-/// Whether `left` and `right` both hold a header-band token in some row.
 fn share_a_label_row(left: &ColumnTrack, right: &ColumnTrack) -> bool {
     left.label_rows.iter().any(|row| right.label_rows.contains(row))
 }
@@ -3500,7 +3499,7 @@ mod tests {
     /// long amounts, whose left edges sit nearer the label's than the short amount's, follow it.
     ///
     /// TEST HONESTY: without the fix the grid has three value columns for one: the label over the
-    /// long amounts, and `5` in a column of its own, `["B", "", "5"]`.
+    /// long amounts, and `5` in a column of its own, `["B", "", "5"]`. ~keep
     #[test]
     fn a_text_header_label_on_its_own_track_folds_with_its_amount_column() {
         let words = vec![
@@ -3529,7 +3528,7 @@ mod tests {
 
     /// Control: a header-only track folds only with a value column whose right edge it shares. A
     /// label whose right edge is its own, here over a column with no data at all, keeps its
-    /// column, with or without the fold of a wider label.
+    /// column, with or without the fold of a wider label. ~keep
     #[test]
     fn a_header_label_with_its_own_right_edge_keeps_its_column() {
         let words = vec![
@@ -3561,7 +3560,7 @@ mod tests {
     /// space, so the two labels stay two cell tokens.
     ///
     /// TEST HONESTY: when the fold ignores the value column's own label, each pair shares one
-    /// cell, `Notes Qty` and `Amount Note`, and the empty column is gone.
+    /// cell, `Notes Qty` and `Amount Note`, and the empty column is gone. ~keep
     #[test]
     fn a_header_only_label_beside_a_labelled_value_column_keeps_its_column() {
         let notes_left_of_quantities = vec![
@@ -3601,7 +3600,7 @@ mod tests {
     /// between the two labels is wider than a word space, so they stay two cell tokens.
     ///
     /// TEST HONESTY: when the folded column forgets the label it took in, `Note` folds into it as
-    /// well and the header reads `Period 1 Note`.
+    /// well and the header reads `Period 1 Note`. ~keep
     #[test]
     fn a_folded_label_keeps_a_neighbouring_label_in_its_own_column() {
         let words = vec![
@@ -3635,7 +3634,7 @@ mod tests {
     /// amounts' left edge, where the OCR blank-quantity retry crops.
     ///
     /// TEST HONESTY: when the folded column forgets that it holds data, the second fold reads it
-    /// as a header-only track and moves the column to the short amounts' left edge, 485.
+    /// as a header-only track and moves the column to the short amounts' left edge, 485. ~keep
     #[test]
     fn a_folded_label_column_keeps_the_position_of_its_long_amounts() {
         let words = vec![
