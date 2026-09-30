@@ -245,9 +245,15 @@ impl RedactionPass<'_> {
     /// Rewrite every text surface of `doc`, recursing into embedded
     /// sub-documents up to [`MAX_NESTED_DOCUMENT_DEPTH`].
     fn redact_document(&mut self, doc: &mut ExtractedDocument, depth: usize) {
-        let content = std::mem::take(&mut doc.content);
-        doc.content = self.redact(&content);
-        drop(content);
+        // A nested result that its own pipeline already packaged (DOCX) holds base64 in
+        // `content`. That pipeline ran with the same redaction config and redacted the
+        // text before packaging it; masking a stretch of the encoding would corrupt it.
+        let packaged = depth > 0
+            && crate::plugins::registry::holds_encoded_package(doc.metadata.output_format.as_deref(), &doc.content);
+        if !packaged {
+            let content = std::mem::take(&mut doc.content);
+            doc.content = self.redact(&content);
+        }
 
         if let Some(formatted) = doc.formatted_content.take() {
             doc.formatted_content = Some(self.redact(&formatted));

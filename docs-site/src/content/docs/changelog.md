@@ -11,9 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **(rendering): `output_format = "docx"` returns the document as a Word file.** `content` holds the `.docx` package base64-encoded and `metadata.output_format` reads `"docx"`; the CLI's `--content-format docx` writes the file itself to stdout. The package is built from the Markdown rendering after every post-processor has run, so redaction removes a term from the Word file exactly as it does from Markdown output. Headings, paragraphs, emphasis, links, nested lists, tables and code blocks carry over; images are not embedded, and chunks describe the Markdown the file was built from. Requires the `office` feature. (GH#1942)
+
 ### Fixed
 
 - **(ocr): a scanned table is no longer dropped when OCR reads one junk cell in a split amount column, or when its header band spans several rows.** On a scan, one right-aligned amount column splits into two adjacent columns by digit width. The fold that rejoins them ran only when every token below the first row read as a value, so one misread letter, one rule mark, or the labels of a second header row kept the column split. The leftover column then failed the sparse-column check and the whole table was lost. The fold now reads the header as the band of rows above the first row with a number, and folds a column whose values outnumber its other tokens. A text column never folds, whatever numbers it holds, and two columns that each hold a number in the same row never fold. (GH#1952)
+- **(ocr): a scanned table whose amount column splits into two tracks is no longer dropped when OCR reads the page's rules as cells.** On a scan, one right-aligned amount column can split into two adjacent columns by digit width. The merge that rejoins them refused whenever a track held a mark read from a rule or a shaded band (`-`, a dash run, `:`, `~`), so the leftover track failed the sparse-column check and the whole table was lost. A cell with no letter or digit now counts as empty when the merge compares the two tracks, such a mark in the header band is no longer a column label, and the merged cell keeps the real amount. A sign, currency sign or bracket in front of an amount still keeps the two tracks apart, so it is never dropped. (GH#1949)
 - **(ocr): a scanned page whose text layer has no usable character map keeps the scan's segmentation mode.** Automatic OCR routing gave Tesseract block mode (PSM 6) to every page whose text layer has no usable character map, including a scan that carries such a layer over its image. On a scanned table, block mode loses the table reconstruction, so the values leave their rows. Block mode now applies only to a page without a scan raster: a page whose images cover a quarter of it or more keeps the mode a scan gets. A page of unmapped vector text still gets block mode, and an explicit caller setting still wins. (GH#1946)
 
 ## [1.3.0] - 2026-09-28
