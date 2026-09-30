@@ -7953,6 +7953,33 @@ Name: ___
         assert!(hinted.tesseract_config.is_none());
     }
 
+    /// Block mode goes to a page that automatic routing listed only when the page carries no
+    /// scan raster: a listed inset scan keeps the scan's segmentation mode, a listed page without
+    /// a raster takes block mode, an unlisted page never does, and with no document at hand the
+    /// list decides.
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn single_block_for_ocr_page_skips_a_listed_page_that_carries_a_scan() {
+        let listed = std::collections::HashSet::from([1]);
+        let decide = |pdf: Option<&[u8]>, page_number: usize| {
+            let mut fallback_pdf_state = None;
+            single_block_for_ocr_page(Some(&listed), page_number, None, &mut fallback_pdf_state, pdf, 0)
+        };
+        let inset_scan = crate::pdf::render::build_full_page_raster_pdf((100.0, 100.0), (400, 400), 0.64, 0);
+        let no_raster = crate::pdf::render::build_minimal_pdf_with_mediabox(100.0, 100.0);
+
+        assert!(
+            !decide(Some(&inset_scan), 1),
+            "a listed page that carries a scan keeps the scan's segmentation mode"
+        );
+        assert!(
+            decide(Some(&no_raster), 1),
+            "a listed page without a scan raster takes block mode"
+        );
+        assert!(!decide(Some(&no_raster), 2), "an unlisted page never takes block mode");
+        assert!(decide(None, 1), "with no document at hand, the list decides");
+    }
+
     #[cfg(all(feature = "pdf", feature = "ocr"))]
     #[tokio::test]
     #[serial_test::serial]
