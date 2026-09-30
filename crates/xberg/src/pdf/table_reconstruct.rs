@@ -679,26 +679,42 @@ fn post_process_table_inner(
         // A header-less value column beside a value column that the `content_asymmetry_sparse_column`
         // gate would reject the table on is folded as well when the pair is row-disjoint: that is
         // the shape of an amount column OCR split by digit width (see
-        // `column_is_a_sparse_fragment_for_ocr`). A value column beside a label column, or one that
-        // overlaps another value column, is not a fragment and keeps that gate's rejection.
-        let drift_split_value_column = !layout_guided
-            && col > 0
+        // `column_is_a_sparse_fragment_for_ocr`). The matching value track may be on either side;
+        // the GH#1832 schedule places the sparse track between its label and its dense value track.
+        // Overlapping value columns are not fragments and keep that gate's rejection.
+        let drift_fragment = !layout_guided
             && column_is_a_sparse_fragment_for_ocr(
                 data_char_counts[col],
                 total_data_chars,
                 empty_count,
                 data_row_count,
-            )
-            && columns_are_row_disjoint(&processed, col - 1, col)
-            && column_reads_as_values(&processed, col)
-            && column_reads_as_values(&processed, col - 1);
+            );
+        let drift_split_target = drift_fragment
+            .then(|| {
+                let left = col.checked_sub(1).filter(|&neighbour| {
+                    columns_are_row_disjoint(&processed, neighbour, col)
+                        && column_reads_as_values(&processed, neighbour)
+                });
+                let right = (col + 1 < processed[0].len()).then_some(col + 1).filter(|&neighbour| {
+                    columns_are_row_disjoint(&processed, col, neighbour)
+                        && column_reads_as_values(&processed, neighbour)
+                });
+                left.or(right)
+            })
+            .flatten()
+            .filter(|_| column_reads_as_values(&processed, col));
+        let split_title_value_track = !header_text.is_empty()
+            && col > 0
+            && drift_split_target.is_some_and(|target| target > col)
+            && !processed[0][col - 1].trim().is_empty()
+            && drift_split_target.is_some_and(|target| !processed[0][target].trim().is_empty());
         let sparse_and_headerless = !data_empty
             && header_text.is_empty()
             && processed[0].len() > 2
             && if layout_guided {
                 empty_count * 20 > data_row_count * 19
             } else {
-                column_is_sparse_for_ocr(empty_count, data_row_count) || drift_split_value_column
+                column_is_sparse_for_ocr(empty_count, data_row_count) || drift_split_target.is_some()
             };
         let header_fragment = !data_empty
             && column_is_a_header_fragment(&header_text, col, processed[0].len(), empty_count, data_row_count);
@@ -706,12 +722,22 @@ fn post_process_table_inner(
         if data_empty {
             merge_header_only_column(&mut processed, col, header_text, column_positions.as_deref_mut());
             total_data_chars -= data_char_counts.remove(col);
-        } else if sparse_and_headerless || header_fragment {
-            let target_before_fold = if col > 0 { col - 1 } else { 1 };
+        } else if sparse_and_headerless || header_fragment || split_title_value_track {
+            let target_before_fold = drift_split_target.unwrap_or(if col > 0 { col - 1 } else { 1 });
             let previous_target_chars = data_char_counts[target_before_fold];
             let moved_chars = data_char_counts[col];
-            fold_column_into_neighbour(&mut processed, col, column_positions.as_deref_mut());
-            let target_after_fold = if col > 0 { col - 1 } else { 0 };
+            fold_column_into_neighbour(
+                &mut processed,
+                col,
+                Some(target_before_fold),
+                split_title_value_track.then_some(col - 1),
+                column_positions.as_deref_mut(),
+            );
+            let target_after_fold = if target_before_fold > col {
+                target_before_fold - 1
+            } else {
+                target_before_fold
+            };
             data_char_counts.remove(col);
             let merged_chars = column_data_char_count(&processed, target_after_fold);
             data_char_counts[target_after_fold] = merged_chars;
@@ -1222,6 +1248,17 @@ fn find_data_start(table: &[Vec<String>], layout_guided: bool) -> usize {
         .iter()
         .position(|row| digit_cell_count(row) >= DEFAULT_MIN_DATA_ROW_DIGIT_CELLS)
         .unwrap_or(0);
+    if !layout_guided
+        && first_numeric_row > 0
+        && table
+            .get(first_numeric_row)
+            .is_some_and(|row| row_reads_as_year_header(row))
+        && table
+            .get(first_numeric_row + 1)
+            .is_some_and(|row| digit_cell_count(row) >= DEFAULT_MIN_DATA_ROW_DIGIT_CELLS)
+    {
+        return first_numeric_row + 1;
+    }
     let column_count = table.first().map_or(0, Vec::len);
     if !layout_guided || column_count < LARGE_TABLE_MIN_COLUMNS || table.len() < REPEATED_DATA_ROW_COUNT {
         return first_numeric_row;
@@ -1269,6 +1306,22 @@ fn digit_cell_count(row: &[String]) -> usize {
     row.iter()
         .filter(|cell| cell.chars().any(|character| character.is_ascii_digit()))
         .count()
+}
+
+/// A numbered year header is digit-bearing but still belongs above the first numeric data row.
+/// Recognizing the complete row avoids treating `Year 1` through `Year 6` as data when a title
+/// precedes it, while a mixed data row cannot satisfy the all-cells condition. ~keep
+fn row_reads_as_year_header(row: &[String]) -> bool {
+    let populated: Vec<&str> = row
+        .iter()
+        .map(|cell| cell.trim())
+        .filter(|cell| !cell.is_empty())
+        .collect();
+    populated.len() >= 2
+        && populated.iter().all(|cell| {
+            cell.strip_prefix("Year ")
+                .is_some_and(|number| !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit()))
+        })
 }
 
 fn row_shapes_match(left: &[String], right: &[String]) -> bool {
@@ -2502,12 +2555,26 @@ fn column_is_a_header_fragment(
 /// Folding left (right, at column 0) preserves the text -- which is also usually where it
 /// belongs, since a phantom column is carved out of its neighbour's content in the first
 /// place. ~keep
-fn fold_column_into_neighbour(table: &mut [Vec<String>], col: usize, column_positions: Option<&mut Vec<u32>>) {
+fn fold_column_into_neighbour(
+    table: &mut [Vec<String>],
+    col: usize,
+    target: Option<usize>,
+    header_target: Option<usize>,
+    column_positions: Option<&mut Vec<u32>>,
+) {
     if table.is_empty() || table[0].len() < 2 {
         return;
     }
-    let target = if col > 0 { col - 1 } else { 1 };
-    for row in table.iter_mut() {
+    let target = target.unwrap_or(if col > 0 { col - 1 } else { 1 });
+    if target == col || target >= table[0].len() {
+        return;
+    }
+    for (row_index, row) in table.iter_mut().enumerate() {
+        let target = if row_index == 0 {
+            header_target.unwrap_or(target)
+        } else {
+            target
+        };
         let Some(moved) = row.get(col).map(|cell| cell.trim().to_string()) else {
             continue;
         };
@@ -2567,7 +2634,7 @@ fn fold_coincident_fragment_columns_left(table: &mut [Vec<String>], mut column_p
         let predominantly_closing = !populated.is_empty() && closing_fragments * 4 >= populated.len() * 3;
 
         if header_empty && ((sparse && tucked_left) || predominantly_closing) {
-            fold_column_into_neighbour(table, column, column_positions.as_deref_mut());
+            fold_column_into_neighbour(table, column, None, None, column_positions.as_deref_mut());
         } else {
             column += 1;
         }
@@ -5423,6 +5490,56 @@ mod tests {
         .map(|row| row.map(str::to_string).to_vec())
         .to_vec();
         assert_eq!(processed, expected);
+    }
+
+    /// A digit-width split can put the sparse track immediately before the headed amount track.
+    /// The label column on its left is not a valid destination; the row-disjoint value column on
+    /// its right is. This is the column order in the shaded schedule from GH#1832. ~keep
+    #[test]
+    fn a_sparse_drift_column_is_folded_into_its_right_value_neighbour() {
+        let mut table = value_table_with_a_drift_split_column();
+        for row in &mut table {
+            row.swap(3, 4);
+        }
+
+        let processed = post_process_table(table, false, false)
+            .expect("a left-hand drift track must fold into the headed value column on its right");
+
+        assert_eq!(processed[0], ["Item", "Year 1", "Year 2", "Year 3", "Year 4", "Year 5"]);
+        assert_eq!(processed[3][3], "314");
+        assert_eq!(processed[6][3], "335");
+        assert_eq!(processed[9][3], "356");
+        assert_eq!(processed[12][3], "377");
+    }
+
+    /// A title continuation can occupy the sparse value track before a numbered-period header.
+    /// Its header text belongs left with the title, while its row-disjoint amounts belong right
+    /// under the first period. This is the complete header shape from GH#1832. ~keep
+    #[test]
+    fn a_title_fragment_and_its_sparse_values_fold_in_opposite_directions() {
+        let mut table = vec![
+            vec!["Summary".into(), "in thousands".into(), String::new(), String::new()],
+            vec![String::new(), String::new(), "Year 1".into(), "Year 2".into()],
+        ];
+        for row in 0..12u32 {
+            let (short, year_1) = if row % 3 == 2 {
+                ((300 + row).to_string(), String::new())
+            } else {
+                (String::new(), format!("{},000", 40 + row))
+            };
+            table.push(vec![
+                format!("Item {}", row + 1),
+                short,
+                year_1,
+                format!("{},000", 60 + row),
+            ]);
+        }
+
+        let processed =
+            post_process_table(table, false, false).expect("the split title/value track must not reject the table");
+
+        assert_eq!(processed[0], ["Summary in thousands", "Year 1", "Year 2"]);
+        assert_eq!(processed[3], ["Item 3", "302", "62,000"]);
     }
 
     /// A sparse unnamed value column is not a digit-width split when its values coexist with the
