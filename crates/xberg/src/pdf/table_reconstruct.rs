@@ -2194,7 +2194,6 @@ fn is_numeric_value_cell(cell: &str) -> bool {
     digit_count.saturating_mul(2) >= alphanumeric_count
 }
 
-/// Whether a two-column grid has recurring text labels paired with numeric values.
 fn is_label_value_table(grid: &[Vec<String>]) -> bool {
     if grid.first().map(Vec::len) != Some(2) || grid.len() < 4 {
         return false;

@@ -46,7 +46,7 @@
 #[cfg(feature = "ocr")]
 /// Persistent file-backed cache for OCR results keyed by image hash and config.
 pub mod cache;
-#[cfg(any(feature = "ocr", paddle_ocr))]
+#[cfg(any(feature = "ocr", feature = "ocr-wasm", paddle_ocr))]
 /// Type conversions between internal OCR types and public API types.
 pub mod conversion;
 /// OCR error types.

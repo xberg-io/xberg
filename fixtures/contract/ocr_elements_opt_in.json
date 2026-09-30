@@ -1,0 +1,63 @@
+{
+  "id": "ocr_elements_opt_in",
+  "category": "contract",
+  "description": "Returns OCR elements with coordinates when element_config.include_elements is set",
+  "docs": {
+    "topic": "ocr",
+    "title": "Get OCR text with coordinates",
+    "description": "Opt in to OCR elements to get each word's text, bounding box and confidence",
+    "presentation": {
+      "operations": [
+        {
+          "op": "show",
+          "path": "results[0].ocr_elements"
+        }
+      ]
+    },
+    "side_effects": "server"
+  },
+  "tags": [
+    "contract",
+    "config",
+    "ocr"
+  ],
+  "call": "extract",
+  "input": {
+    "mock_responses": [
+      {
+        "path": "/images/test_hello_world.png",
+        "status_code": 200,
+        "headers": {
+          "content-type": "image/png"
+        },
+        "body_file": "../test_documents/images/test_hello_world.png"
+      }
+    ],
+    "extract_input": {
+      "kind": "uri",
+      "uri": "$mock_url/images/test_hello_world.png",
+      "mime_type": "image/png"
+    }
+  },
+  "assertions": [
+    {
+      "type": "count_min",
+      "field": "results[0].ocr_elements",
+      "value": 1
+    }
+  ],
+  "config": {
+    "force_ocr": true,
+    "ocr": {
+      "enabled": true,
+      "backend": "tesseract",
+      "language": [
+        "eng"
+      ],
+      "element_config": {
+        "include_elements": true,
+        "min_level": "word"
+      }
+    }
+  }
+}
