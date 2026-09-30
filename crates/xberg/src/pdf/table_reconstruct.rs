@@ -935,12 +935,16 @@ fn post_process_table_inner(
         let total_chars_asym: usize = col_char_counts.iter().sum();
 
         if total_chars_asym > 0 {
-            let max_col_share = col_char_counts
+            let (dominant_column, dominant_char_count) = col_char_counts
                 .iter()
-                .map(|&cc| cc as f64 / total_chars_asym as f64)
-                .fold(0.0_f64, f64::max);
+                .copied()
+                .enumerate()
+                .max_by_key(|&(_, count)| count)
+                .unwrap_or((0, 0));
+            let max_col_share = dominant_char_count as f64 / total_chars_asym as f64;
             let dominant_threshold = if layout_guided { 0.92 } else { 0.85 };
-            if max_col_share > dominant_threshold {
+            let label_value_table = dominant_column == 0 && is_label_value_table(&processed);
+            if max_col_share > dominant_threshold && !label_value_table {
                 tracing::debug!(
                     target: "xberg::table_reconstruct",
                     reason = "content_asymmetry_dominant_column",
@@ -2190,6 +2194,32 @@ fn is_numeric_value_cell(cell: &str) -> bool {
     digit_count.saturating_mul(2) >= alphanumeric_count
 }
 
+fn is_label_value_table(grid: &[Vec<String>]) -> bool {
+    if grid.first().map(Vec::len) != Some(2) || grid.len() < 4 {
+        return false;
+    }
+
+    let mut paired_rows = 0usize;
+    let mut numeric_values = 0usize;
+    for row in grid.iter().skip(1) {
+        let Some(label) = row.first().map(|cell| cell.trim()).filter(|cell| !cell.is_empty()) else {
+            continue;
+        };
+        let Some(value) = row.get(1).map(|cell| cell.trim()).filter(|cell| !cell.is_empty()) else {
+            continue;
+        };
+        if !label.chars().any(char::is_alphabetic) {
+            continue;
+        }
+        paired_rows += 1;
+        if is_numeric_value_cell(value) {
+            numeric_values += 1;
+        }
+    }
+
+    paired_rows >= 3 && numeric_values.saturating_mul(100) >= paired_rows.saturating_mul(60)
+}
+
 /// Minimum fraction of non-empty table cells that must contain curly braces
 /// (`{` or `}`) for the region to be classified as a code listing rather than
 /// a table. At 0.20, one brace-containing cell per five non-empty cells is
@@ -3340,6 +3370,56 @@ mod tests {
             result.is_none(),
             "Layout-guided should reject tables with >92% text in one column"
         );
+    }
+
+    #[test]
+    fn issue_1970_accepts_label_value_table_with_dominant_label_column() {
+        let table = vec![
+            vec!["Nutrient".into(), "Value".into(), String::new()],
+            vec!["Calories from saturated fat".into(), "186".into(), "6/44".into()],
+            vec!["Total carbohydrate per serving".into(), "31g".into(), String::new()],
+            vec!["Dietary fibre per serving".into(), "2g".into(), String::new()],
+            vec!["Total sugars per serving".into(), "8g".into(), String::new()],
+            vec!["Includes added sugars".into(), "4g".into(), String::new()],
+            vec!["Protein per serving".into(), "6g".into(), String::new()],
+            vec!["Vitamin D per serving".into(), "2mcg".into(), String::new()],
+            vec!["Calcium per serving".into(), "260mg".into(), String::new()],
+            vec!["Iron per serving".into(), "8mg".into(), String::new()],
+        ];
+
+        let processed = post_process_table(table, false, false).expect("label/value table must be retained");
+
+        assert_eq!(processed.len(), 10);
+        assert_eq!(processed[0].len(), 2);
+        assert!(processed[1][1].contains("186"));
+        assert!(processed[1][1].contains("6/44"));
+    }
+
+    #[test]
+    fn issue_1970_rejects_dominant_first_column_without_numeric_values() {
+        let table = vec![
+            vec!["Label".into(), "Value".into()],
+            vec![
+                "Extended shipping and handling description field".into(),
+                "pending".into(),
+            ],
+            vec!["Extended customer service description field".into(), "unknown".into()],
+            vec!["Extended fulfillment status description field".into(), "missing".into()],
+        ];
+
+        assert!(post_process_table(table, true, false).is_none());
+    }
+
+    #[test]
+    fn issue_1970_rejects_label_value_shape_dominated_by_value_column() {
+        let table = vec![
+            vec!["Label".into(), "Value".into()],
+            vec!["A".into(), "1234567890123456789012345678901234567890".into()],
+            vec!["B".into(), "2345678901234567890123456789012345678901".into()],
+            vec!["C".into(), "3456789012345678901234567890123456789012".into()],
+        ];
+
+        assert!(post_process_table(table, true, false).is_none());
     }
 
     #[test]

@@ -425,6 +425,7 @@ struct BuiltOcrTables {
     table_count: u32,
     table_rows: Option<u32>,
     table_cols: Option<u32>,
+    rejected_candidates: u32,
 }
 
 impl PaddleOcrBackend {
@@ -1232,6 +1233,7 @@ impl PaddleOcrBackend {
         let mut table_count = 0u32;
         let mut table_rows: Option<u32> = None;
         let mut table_cols: Option<u32> = None;
+        let mut rejected_candidates = 0u32;
 
         for region_words in crate::table_core::cluster_words_into_table_regions(words) {
             if region_words.len() < crate::table_core::MIN_TABLE_CANDIDATE_WORDS {
@@ -1275,6 +1277,7 @@ impl PaddleOcrBackend {
             #[cfg(not(feature = "pdf"))]
             let cleaned = Some(cells);
             let Some(cells) = cleaned else {
+                rejected_candidates += 1;
                 continue;
             };
 
@@ -1310,7 +1313,17 @@ impl PaddleOcrBackend {
             table_count,
             table_rows,
             table_cols,
+            rejected_candidates,
         }
+    }
+
+    fn table_rejection_warning(count: u32) -> Option<crate::types::ProcessingWarning> {
+        (count > 0).then(|| crate::types::ProcessingWarning {
+            source: Cow::Borrowed("paddle-ocr-table-detection"),
+            message: Cow::Owned(format!(
+                "PaddleOCR rejected {count} table candidate region(s) during structural validation"
+            )),
+        })
     }
 
     /// The page document `process_image` returns: one `OcrText` element per recognised line, less the
@@ -1413,7 +1426,7 @@ impl OcrBackend for PaddleOcrBackend {
         let security_limits = Self::resolve_security_limits(config);
 
         let languages = config.effective_languages();
-        let (paddle_lang, language_warnings) = super::select_paddle_language(&languages);
+        let (paddle_lang, mut processing_warnings) = super::select_paddle_language(&languages);
 
         let mut rotation_outcome = None;
         let ocr_image_bytes: Cow<'_, [u8]> = if config.auto_rotate {
@@ -1524,6 +1537,9 @@ impl OcrBackend for PaddleOcrBackend {
             table_count = built.table_count;
             table_rows = built.table_rows;
             table_cols = built.table_cols;
+            if let Some(warning) = Self::table_rejection_warning(built.rejected_candidates) {
+                processing_warnings.push(warning);
+            }
         }
 
         let ocr_doc = Self::build_ocr_document(&line_elements, &tables);
@@ -1565,7 +1581,7 @@ impl OcrBackend for PaddleOcrBackend {
             detected_languages: Some(languages),
             ocr_elements: ocr_elements_opt,
             ocr_internal_document: Some(ocr_doc),
-            processing_warnings: language_warnings,
+            processing_warnings,
             ..Default::default()
         })
     }
@@ -2779,6 +2795,18 @@ mod tests {
                 y1: 535.0,
             }),
             "bounding_box must be derived from the region's word extents, not left None"
+        );
+    }
+
+    #[test]
+    fn table_rejection_warning_reports_structurally_rejected_candidates() {
+        assert!(PaddleOcrBackend::table_rejection_warning(0).is_none());
+
+        let warning = PaddleOcrBackend::table_rejection_warning(2).expect("rejected candidates must be reported");
+        assert_eq!(warning.source, "paddle-ocr-table-detection");
+        assert_eq!(
+            warning.message,
+            "PaddleOCR rejected 2 table candidate region(s) during structural validation"
         );
     }
 
