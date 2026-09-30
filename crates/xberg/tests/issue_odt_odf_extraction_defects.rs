@@ -16,6 +16,7 @@
 #![cfg(feature = "office")]
 
 use std::io::{Cursor, Write};
+use xberg::SecurityLimits;
 use xberg::core::config::ExtractionConfig;
 use xberg::types::document_structure::{AnnotationKind, NodeContent};
 use xberg::types::uri::UriKind;
@@ -73,6 +74,25 @@ fn odt_bytes_without_content_xml() -> Vec<u8> {
         let stored = FileOptions::<()>::default().compression_method(zip::CompressionMethod::Stored);
         zip.start_file("mimetype", stored).expect("write mimetype");
         zip.write_all(ODT_MIME.as_bytes()).expect("write mimetype body");
+        zip.finish().expect("finish zip");
+    }
+    cursor.into_inner()
+}
+
+fn encrypted_odt_bytes(manifest: &str) -> Vec<u8> {
+    let mut cursor = Cursor::new(Vec::new());
+    {
+        let mut zip = ZipWriter::new(&mut cursor);
+        let stored = FileOptions::<()>::default().compression_method(zip::CompressionMethod::Stored);
+        zip.start_file("mimetype", stored).expect("write mimetype");
+        zip.write_all(ODT_MIME.as_bytes()).expect("write mimetype body");
+
+        let deflated = FileOptions::<()>::default().compression_method(zip::CompressionMethod::Deflated);
+        zip.start_file("META-INF/manifest.xml", deflated)
+            .expect("write manifest");
+        zip.write_all(manifest.as_bytes()).expect("write manifest body");
+        zip.start_file("content.xml", deflated).expect("write content.xml");
+        zip.write_all(&[0xff, 0xfe, 0xfd]).expect("write encrypted content");
         zip.finish().expect("finish zip");
     }
     cursor.into_inner()
@@ -262,6 +282,208 @@ async fn should_extract_page_anchored_frame_not_wrapped_in_a_paragraph_issue_100
         has_frame_image,
         "a draw:frame anchored to the page (not inside a text:p) must not be dropped; nodes: {:?}",
         structure.nodes
+    );
+}
+
+#[tokio::test]
+async fn should_extract_text_box_inside_page_anchored_frame_issue_2006() {
+    let body = r#"<draw:frame draw:name="Text Box" text:anchor-type="page">
+        <draw:text-box>
+            <text:p>Text stored outside the normal paragraph flow.</text:p>
+            <text:p>Second framed paragraph.</text:p>
+        </draw:text-box>
+    </draw:frame>"#;
+
+    let bytes = odt_bytes("", body);
+    let result = extract_bytes_document(&bytes, ODT_MIME, &ExtractionConfig::default())
+        .await
+        .expect("extraction should succeed");
+
+    assert_eq!(
+        result.content.trim(),
+        "Text stored outside the normal paragraph flow.\n\nSecond framed paragraph."
+    );
+}
+
+#[tokio::test]
+async fn should_reject_nested_text_boxes_beyond_configured_depth() {
+    let body = r#"<draw:frame><draw:text-box>
+        <draw:frame><draw:text-box><text:p>Too deep.</text:p></draw:text-box></draw:frame>
+    </draw:text-box></draw:frame>"#;
+    let bytes = odt_bytes("", body);
+    let config = ExtractionConfig {
+        security_limits: Some(SecurityLimits {
+            max_nesting_depth: 1,
+            max_xml_depth: 1,
+            ..SecurityLimits::default()
+        }),
+        ..ExtractionConfig::default()
+    };
+
+    let err = extract_bytes_document(&bytes, ODT_MIME, &config)
+        .await
+        .expect_err("nested text boxes must respect the configured depth limit");
+
+    assert!(
+        err.to_string().contains("Nesting too deep: 2 levels (max: 1)"),
+        "the recursive frame traversal should consume the shared depth budget: {err}"
+    );
+}
+
+#[tokio::test]
+async fn should_allow_nested_lists_at_configured_depth() {
+    let body = r#"<text:list><text:list-item><text:p>Level zero.</text:p>
+        <text:list><text:list-item><text:p>Level one.</text:p>
+            <text:list><text:list-item><text:p>Level two.</text:p></text:list-item></text:list>
+        </text:list-item></text:list>
+        <text:list><text:list-item><text:p>Sibling one.</text:p>
+            <text:list><text:list-item><text:p>Sibling two.</text:p></text:list-item></text:list>
+        </text:list-item></text:list>
+    </text:list-item></text:list>"#;
+    let bytes = odt_bytes("", body);
+    let config = ExtractionConfig {
+        security_limits: Some(SecurityLimits {
+            max_nesting_depth: 2,
+            max_xml_depth: 2,
+            ..SecurityLimits::default()
+        }),
+        ..ExtractionConfig::default()
+    };
+
+    let result = extract_bytes_document(&bytes, ODT_MIME, &config)
+        .await
+        .expect("nested lists at the configured depth limit should succeed");
+
+    assert!(result.content.contains("Level two."));
+    assert!(result.content.contains("Sibling two."));
+}
+
+#[tokio::test]
+async fn should_reject_nested_lists_beyond_configured_depth() {
+    let body = r#"<text:list><text:list-item><text:p>Level zero.</text:p>
+        <text:list><text:list-item><text:p>Level one.</text:p>
+            <text:list><text:list-item><text:p>Too deep.</text:p></text:list-item></text:list>
+        </text:list-item></text:list>
+    </text:list-item></text:list>"#;
+    let bytes = odt_bytes("", body);
+    let config = ExtractionConfig {
+        security_limits: Some(SecurityLimits {
+            max_nesting_depth: 1,
+            max_xml_depth: 1,
+            ..SecurityLimits::default()
+        }),
+        ..ExtractionConfig::default()
+    };
+
+    let err = extract_bytes_document(&bytes, ODT_MIME, &config)
+        .await
+        .expect_err("nested lists beyond the configured depth limit should fail");
+
+    assert!(err.to_string().contains("Nesting too deep: 2 levels (max: 1)"));
+}
+
+#[tokio::test]
+async fn should_allow_nested_inline_wrappers_at_configured_depth() {
+    let body = concat!(
+        r#"<text:p><text:a xlink:href="https://example.com"><text:span>"#,
+        r#"<text:ruby><text:ruby-base>At limit.</text:ruby-base></text:ruby>"#,
+        r#"</text:span></text:a> / <text:a xlink:href="https://example.org"><text:span>"#,
+        r#"<text:ruby><text:ruby-base>Sibling.</text:ruby-base></text:ruby>"#,
+        r#"</text:span></text:a></text:p>"#
+    );
+    let bytes = odt_bytes("", body);
+    let config = ExtractionConfig {
+        security_limits: Some(SecurityLimits {
+            max_nesting_depth: 3,
+            max_xml_depth: 3,
+            ..SecurityLimits::default()
+        }),
+        ..ExtractionConfig::default()
+    };
+
+    let result = extract_bytes_document(&bytes, ODT_MIME, &config)
+        .await
+        .expect("inline wrappers at the configured depth limit should succeed");
+
+    assert_eq!(result.content.trim(), "At limit. / Sibling.");
+}
+
+#[tokio::test]
+async fn should_reject_nested_inline_wrappers_beyond_configured_depth() {
+    let body = concat!(
+        r#"<text:p><text:a xlink:href="https://example.com"><text:span>"#,
+        r#"<text:ruby><text:ruby-base>Too deep.</text:ruby-base></text:ruby>"#,
+        r#"</text:span></text:a></text:p>"#
+    );
+    let bytes = odt_bytes("", body);
+    let config = ExtractionConfig {
+        security_limits: Some(SecurityLimits {
+            max_nesting_depth: 2,
+            max_xml_depth: 2,
+            ..SecurityLimits::default()
+        }),
+        ..ExtractionConfig::default()
+    };
+
+    let err = extract_bytes_document(&bytes, ODT_MIME, &config)
+        .await
+        .expect_err("inline wrappers beyond the configured depth limit should fail");
+
+    assert!(err.to_string().contains("Nesting too deep: 3 levels (max: 2)"));
+}
+
+#[tokio::test]
+async fn should_report_encrypted_content_without_decoding_ciphertext_issue_2004() {
+    let manifest = r#"<?xml version="1.0" encoding="UTF-8"?>
+<manifest:manifest
+    xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0">
+  <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml">
+    <manifest:encryption-data manifest:checksum-type="SHA1/1K" manifest:checksum="AA=="/>
+  </manifest:file-entry>
+</manifest:manifest>"#;
+    let err = extract_bytes_document(&encrypted_odt_bytes(manifest), ODT_MIME, &ExtractionConfig::default())
+        .await
+        .expect_err("encrypted ODT extraction should fail");
+    let message = err.to_string();
+
+    assert!(
+        message.contains("content.xml is encrypted"),
+        "error should identify encryption: {message}"
+    );
+    assert!(
+        !message.contains("password"),
+        "error must not assume how the content was encrypted: {message}"
+    );
+    assert!(
+        !message.contains("UTF-8"),
+        "error should not misreport ciphertext as invalid UTF-8: {message}"
+    );
+}
+
+#[tokio::test]
+async fn should_not_call_public_key_encryption_password_protection_issue_2004() {
+    let manifest = r#"<?xml version="1.0" encoding="UTF-8"?>
+<manifest:manifest
+    xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0">
+  <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml">
+    <manifest:encryption-data>
+      <manifest:algorithm manifest:algorithm-name="http://www.w3.org/2001/04/xmlenc#aes256-cbc"/>
+      <manifest:key-derivation manifest:key-derivation-name="PGP"/>
+    </manifest:encryption-data>
+  </manifest:file-entry>
+</manifest:manifest>"#;
+    let err = extract_bytes_document(&encrypted_odt_bytes(manifest), ODT_MIME, &ExtractionConfig::default())
+        .await
+        .expect_err("public-key encrypted ODT extraction should fail");
+    let message = err.to_string();
+
+    assert!(
+        message.contains("content.xml is encrypted"),
+        "error should identify encryption: {message}"
+    );
+    assert!(
+        !message.contains("password"),
+        "PGP encryption is not password protection: {message}"
     );
 }
 
