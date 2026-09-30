@@ -419,11 +419,22 @@ pub(crate) fn median_of(mut values: Vec<u32>) -> u32 {
     values.get(values.len() / 2).copied().unwrap_or(0)
 }
 
+fn median_row_position(group: &[f64]) -> Option<u32> {
+    if group.is_empty() {
+        return None;
+    }
+    let mut sorted = group.to_vec();
+    sorted.sort_by(|a, b| a.total_cmp(b));
+    Some(sorted[sorted.len() / 2] as u32)
+}
+
 /// Detect row positions from word y-coordinates.
 ///
-/// Groups words by their vertical center position and returns the median
-/// y-position for each detected row. The `row_threshold_ratio` is multiplied
-/// by the median word height to determine the grouping threshold.
+/// Groups representative-height words by their vertical center position and returns the median
+/// y-position for each detected row. A taller word seeds a row only when its box does not overlap
+/// an existing row band, so a standalone tall heading remains a row while an outlier in a normal
+/// row cannot split it. The `row_threshold_ratio` is multiplied by the median word height to
+/// determine the grouping threshold.
 pub(crate) fn detect_rows(words: &[HocrWord], row_threshold_ratio: f64) -> Vec<u32> {
     if words.is_empty() {
         return Vec::new();
@@ -431,10 +442,18 @@ pub(crate) fn detect_rows(words: &[HocrWord], row_threshold_ratio: f64) -> Vec<u
 
     let median_height = median_word_height(words);
     let row_threshold = (median_height as f64 * row_threshold_ratio) as u32;
+    let maximum_seed_height = median_height.saturating_add(median_height / 2);
+    let (seed_words, tall_words): (Vec<&HocrWord>, Vec<&HocrWord>) =
+        words.iter().partition(|word| word.height <= maximum_seed_height);
+    let (seed_words, tall_words) = if seed_words.is_empty() {
+        (words.iter().collect(), Vec::new())
+    } else {
+        (seed_words, tall_words)
+    };
 
     let mut position_groups: Vec<Vec<f64>> = Vec::new();
 
-    for word in words {
+    for word in seed_words {
         let y_center = word.y_center();
 
         let mut found_group = false;
@@ -453,15 +472,25 @@ pub(crate) fn detect_rows(words: &[HocrWord], row_threshold_ratio: f64) -> Vec<u
         }
     }
 
+    let half_height = median_height / 2;
+    for word in tall_words {
+        let bottom = word.top.saturating_add(word.height);
+        let overlaps_seeded_row = position_groups
+            .iter()
+            .filter_map(|group| median_row_position(group))
+            .any(|row_y| {
+                let band_top = row_y.saturating_sub(half_height);
+                let band_bottom = row_y.saturating_add(half_height);
+                bottom.min(band_bottom).saturating_sub(word.top.max(band_top)) > 0
+            });
+        if !overlaps_seeded_row {
+            position_groups.push(vec![word.y_center()]);
+        }
+    }
+
     let mut rows: Vec<u32> = position_groups
         .iter()
-        .filter(|group| !group.is_empty())
-        .map(|group| {
-            let mut sorted = group.clone();
-            sorted.sort_by(|a, b| a.total_cmp(b));
-            let mid = sorted.len() / 2;
-            sorted[mid] as u32
-        })
+        .filter_map(|group| median_row_position(group))
         .collect();
 
     rows.sort_unstable();
@@ -477,6 +506,24 @@ pub(crate) fn find_row_index(row_positions: &[u32], word: &HocrWord) -> Option<u
         .enumerate()
         .min_by_key(|&(_, row_y)| row_y.abs_diff(y_center))
         .map(|(idx, _)| idx)
+}
+
+/// Find the row whose median-height band overlaps `word` most, breaking ties by centre distance.
+fn find_row_index_by_overlap(row_positions: &[u32], word: &HocrWord, median_height: u32) -> Option<usize> {
+    let half_height = median_height / 2;
+    let word_bottom = word.top.saturating_add(word.height);
+    let word_center = word.y_center() as u32;
+
+    row_positions
+        .iter()
+        .enumerate()
+        .min_by_key(|&(_, row_y)| {
+            let band_top = row_y.saturating_sub(half_height);
+            let band_bottom = row_y.saturating_add(half_height);
+            let overlap = word_bottom.min(band_bottom).saturating_sub(word.top.max(band_top));
+            (std::cmp::Reverse(overlap), row_y.abs_diff(word_center))
+        })
+        .map(|(index, _)| index)
 }
 
 /// Find which column a word belongs to, by the nearest left edge of the tracks it was folded from
@@ -598,11 +645,12 @@ fn group_words_into_cell_tokens<'a>(
         return words.iter().map(|word| (word.clone(), vec![word])).collect();
     }
 
-    let merge_gap = median_word_height(words) as f64 * CELL_MERGE_GAP_HEIGHT_RATIO;
+    let median_height = median_word_height(words);
+    let merge_gap = median_height as f64 * CELL_MERGE_GAP_HEIGHT_RATIO;
 
     let mut rows: Vec<Vec<&HocrWord>> = vec![Vec::new(); row_positions.len()];
     for word in words {
-        if let Some(row_index) = find_row_index(row_positions, word) {
+        if let Some(row_index) = find_row_index_by_overlap(row_positions, word, median_height) {
             rows[row_index].push(word);
         }
     }
@@ -742,6 +790,7 @@ pub(crate) fn reconstruct_table_with_columns(
     }
 
     let row_positions = detect_rows(words, row_threshold_ratio);
+    let median_height = median_word_height(words);
     let groups = group_words_into_cell_tokens(words, &row_positions);
     let cell_tokens: Vec<HocrWord> = groups.iter().map(|(token, _)| token.clone()).collect();
     let columns = detect_columns(&cell_tokens, &row_positions, column_threshold);
@@ -750,7 +799,7 @@ pub(crate) fn reconstruct_table_with_columns(
         return (Vec::new(), Vec::new());
     }
 
-    let mut result = assign_grouped_words_to_cells(&groups, &row_positions, &columns);
+    let mut result = assign_grouped_words_to_cells(&groups, &row_positions, median_height, &columns);
     let mut col_positions: Vec<u32> = columns.iter().map(|column| column.left).collect();
     merge_header_fragments_by_geometry(&mut result, &mut col_positions);
 
@@ -994,15 +1043,16 @@ fn assign_words_to_cells(words: &[HocrWord], row_positions: &[u32], col_position
 fn assign_grouped_words_to_cells<'a>(
     groups: &[(HocrWord, Vec<&'a HocrWord>)],
     row_positions: &[u32],
+    median_height: u32,
     columns: &[ColumnTrack],
 ) -> Vec<Vec<String>> {
     let num_rows = row_positions.len();
     let num_cols = columns.len();
     let mut table: Vec<Vec<Vec<&'a HocrWord>>> = vec![vec![vec![]; num_cols]; num_rows];
-    let data_supported = columns_with_data_support(groups, row_positions, columns);
+    let data_supported = columns_with_data_support(groups, row_positions, median_height, columns);
 
     for (token, members) in groups {
-        let Some(row) = find_row_index(row_positions, token) else {
+        let Some(row) = find_row_index_by_overlap(row_positions, token, median_height) else {
             continue;
         };
         if row >= num_rows {
@@ -1034,11 +1084,12 @@ fn assign_grouped_words_to_cells<'a>(
 fn columns_with_data_support(
     groups: &[(HocrWord, Vec<&HocrWord>)],
     row_positions: &[u32],
+    median_height: u32,
     columns: &[ColumnTrack],
 ) -> Vec<bool> {
     let mut supported = vec![false; columns.len()];
     for (token, _) in groups {
-        if find_row_index(row_positions, token) != Some(0)
+        if find_row_index_by_overlap(row_positions, token, median_height) != Some(0)
             && let Some(column) = find_column_index(columns, token)
         {
             supported[column] = true;
@@ -1654,6 +1705,84 @@ mod tests {
 
         let rows = detect_rows(&words, 0.5);
         assert_eq!(rows.len(), 2);
+    }
+
+    #[test]
+    fn detect_rows_checks_tall_overlap_against_the_order_independent_row_median() {
+        let low_center = word("low", 0, 388, 20, 24);
+        let median_a = word("median-a", 30, 399, 20, 24);
+        let median_b = word("median-b", 60, 399, 20, 24);
+        let tall = word("tall", 90, 413, 20, 50);
+        let low_first = vec![low_center.clone(), median_a.clone(), median_b.clone(), tall.clone()];
+        let median_first = vec![median_a, low_center, median_b, tall];
+
+        assert_eq!(detect_rows(&low_first, 0.5), vec![411]);
+        assert_eq!(detect_rows(&median_first, 0.5), vec![411]);
+    }
+
+    fn table_with_tall_words(tall_top: u32, tall_height: u32, tall_words_first: bool) -> Vec<HocrWord> {
+        let mut words = Vec::new();
+        let mut tall_words = Vec::new();
+
+        for row in 0..12 {
+            let top = row * 40;
+            words.push(word(&format!("Item {row}"), 0, top, 50, 24));
+            for column in 1..=6 {
+                let amount = word(&format!("{}00", row * 10 + column), column * 100, top, 40, 24);
+                if row == 10 && column >= 5 {
+                    tall_words.push(word(&amount.text, amount.left, tall_top, amount.width, tall_height));
+                } else {
+                    words.push(amount);
+                }
+            }
+        }
+
+        if tall_words_first {
+            tall_words.extend(words);
+            tall_words
+        } else {
+            words.extend(tall_words);
+            words
+        }
+    }
+
+    #[test]
+    fn reconstruct_table_keeps_downward_tall_words_in_their_row() {
+        let words = table_with_tall_words(400, 50, false);
+
+        let table = reconstruct_table(&words, 20, 0.5);
+
+        assert_eq!(table.len(), 12);
+        assert_eq!(table[10][5], "10500");
+        assert_eq!(table[10][6], "10600");
+    }
+
+    #[test]
+    fn reconstruct_table_keeps_upward_tall_word_in_its_row_when_seen_first() {
+        let words = table_with_tall_words(370, 54, true);
+
+        let table = reconstruct_table(&words, 20, 0.5);
+
+        assert_eq!(table.len(), 12);
+        assert_eq!(table[10][5], "10500");
+        assert_eq!(table[10][6], "10600");
+    }
+
+    #[test]
+    fn reconstruct_table_keeps_a_standalone_tall_header_row() {
+        let words = vec![
+            word("Heading", 0, 0, 50, 50),
+            word("Total", 100, 0, 40, 50),
+            word("First", 0, 100, 50, 24),
+            word("100", 100, 100, 40, 24),
+            word("Second", 0, 140, 50, 24),
+            word("200", 100, 140, 40, 24),
+        ];
+
+        let table = reconstruct_table(&words, 20, 0.5);
+
+        assert_eq!(table.len(), 3);
+        assert_eq!(table[0], ["Heading", "Total"]);
     }
 
     #[test]
