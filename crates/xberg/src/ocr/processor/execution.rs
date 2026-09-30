@@ -3335,6 +3335,18 @@ mod tests {
     }
 
     #[test]
+    fn cluster_words_into_table_regions_does_not_merge_a_distant_small_fragment() {
+        let mut words = table_grid_words(0, 0, 2, 3);
+        words.extend(table_grid_words(0, 10_000, 1, 2));
+
+        let regions = cluster_words_into_table_regions(&words);
+
+        assert_eq!(regions.len(), 2, "distance must bound aligned-fragment merging");
+        assert_eq!(regions[0].len(), 6);
+        assert_eq!(regions[1].len(), 2);
+    }
+
+    #[test]
     fn cluster_words_into_table_regions_keeps_one_table_as_a_single_region() {
         let words = table_grid_words(0, 0, 4, 3);
 

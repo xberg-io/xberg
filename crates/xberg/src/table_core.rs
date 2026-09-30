@@ -1053,6 +1053,9 @@ pub(crate) const TABLE_REGION_GAP_HEIGHT_MULTIPLIER: u32 = 3;
 #[cfg(any(feature = "ocr", paddle_ocr))]
 pub(crate) const MIN_TABLE_CANDIDATE_WORDS: usize = 6;
 
+#[cfg(any(feature = "ocr", paddle_ocr))]
+const MAX_ALIGNED_FRAGMENT_GAP_HEIGHT_MULTIPLIER: u32 = 12;
+
 /// Split table-candidate words into vertically separated regions.
 ///
 /// Tesseract's TSV output has no notion of "this is a separate table from
@@ -1140,6 +1143,7 @@ fn merge_small_aligned_regions(regions: &mut Vec<Vec<usize>>, words: &[HocrWord]
         if region.len() < MIN_TABLE_CANDIDATE_WORDS
             && let Some(previous) = merged.last_mut()
             && columns_align(previous, &region, words, tolerance)
+            && regions_are_nearby(previous, &region, words, tolerance)
         {
             previous.extend(region);
             continue;
@@ -1151,6 +1155,7 @@ fn merge_small_aligned_regions(regions: &mut Vec<Vec<usize>>, words: &[HocrWord]
     while index + 1 < merged.len() {
         if merged[index].len() < MIN_TABLE_CANDIDATE_WORDS
             && columns_align(&merged[index + 1], &merged[index], words, tolerance)
+            && regions_are_nearby(&merged[index + 1], &merged[index], words, tolerance)
         {
             let fragment = merged.remove(index);
             merged[index].extend(fragment);
@@ -1159,6 +1164,26 @@ fn merge_small_aligned_regions(regions: &mut Vec<Vec<usize>>, words: &[HocrWord]
         index += 1;
     }
     *regions = merged;
+}
+
+#[cfg(any(feature = "ocr", paddle_ocr))]
+fn regions_are_nearby(first: &[usize], second: &[usize], words: &[HocrWord], tolerance: u32) -> bool {
+    let first_top = first.iter().map(|&index| words[index].top).min().unwrap_or(0);
+    let first_bottom = first
+        .iter()
+        .map(|&index| words[index].top.saturating_add(words[index].height))
+        .max()
+        .unwrap_or(0);
+    let second_top = second.iter().map(|&index| words[index].top).min().unwrap_or(0);
+    let second_bottom = second
+        .iter()
+        .map(|&index| words[index].top.saturating_add(words[index].height))
+        .max()
+        .unwrap_or(0);
+    let gap = first_top
+        .saturating_sub(second_bottom)
+        .max(second_top.saturating_sub(first_bottom));
+    gap <= tolerance.saturating_mul(MAX_ALIGNED_FRAGMENT_GAP_HEIGHT_MULTIPLIER)
 }
 
 /// Whether at least two distinct columns of `fragment` line up with a column of `anchor`, within
