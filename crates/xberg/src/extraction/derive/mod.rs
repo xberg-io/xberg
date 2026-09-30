@@ -457,7 +457,7 @@ fn element_to_node_content(
             key: elem.anchor.clone().unwrap_or_default(),
             text: std::mem::take(&mut elem.text),
         },
-        ElementKind::Table { table_index } => table_node_content(table_index, tables),
+        ElementKind::Table { table_index } => table_node_content(elem, table_index, tables),
         ElementKind::Image { image_index } => image_node_content(elem, image_index, images),
         ElementKind::PageBreak => NodeContent::PageBreak,
         ElementKind::Slide { number } => NodeContent::Slide {
@@ -500,9 +500,20 @@ fn element_to_node_content(
     }
 }
 
-fn table_node_content(table_index: u32, tables: &[Table]) -> NodeContent {
+fn table_node_content(elem: &mut InternalElement, table_index: u32, tables: &[Table]) -> NodeContent {
+    let native_grid = elem
+        .attributes
+        .as_mut()
+        .and_then(|attributes| attributes.remove(crate::types::internal::NATIVE_TABLE_GRID_ATTRIBUTE))
+        .and_then(|encoded| match serde_json::from_str::<TableGrid>(&encoded) {
+            Ok(grid) => Some(grid),
+            Err(error) => {
+                tracing::warn!(table_index, %error, "discarding invalid internal native table grid");
+                None
+            }
+        });
     let grid = if let Some(table) = tables.get(table_index as usize) {
-        table_to_grid(table)
+        table_to_grid(table, native_grid.as_ref())
     } else {
         TableGrid {
             rows: 0,
@@ -561,7 +572,27 @@ fn raw_block_node_content(elem: &mut InternalElement) -> NodeContent {
 }
 
 /// Convert an internal `Table` to a `TableGrid`.
-fn table_to_grid(table: &Table) -> TableGrid {
+pub(crate) fn native_grid_matches_table(table: &Table, grid: &TableGrid) -> bool {
+    // ~keep: Later table repair may replace the dense cells. Only reuse native geometry
+    // while its dimensions and text still describe that same table.
+    grid.rows as usize == table.cells.len()
+        && table.cells.iter().all(|row| row.len() == grid.cols as usize)
+        && grid.cells.iter().all(|cell| {
+            table
+                .cells
+                .get(cell.row as usize)
+                .and_then(|row| row.get(cell.col as usize))
+                == Some(&cell.content)
+        })
+        && grid.cells.iter().filter(|cell| !cell.content.is_empty()).count()
+            == table.cells.iter().flatten().filter(|cell| !cell.is_empty()).count()
+}
+
+fn table_to_grid(table: &Table, native_grid: Option<&TableGrid>) -> TableGrid {
+    if let Some(grid) = native_grid.filter(|grid| native_grid_matches_table(table, grid)) {
+        return grid.clone();
+    }
+
     let rows = table.cells.len() as u32;
     let cols = table.cells.iter().map(|r| r.len()).max().unwrap_or(0) as u32;
 
