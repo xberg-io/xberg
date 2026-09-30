@@ -538,6 +538,7 @@ fn should_preserve_pathological_sparse_xlsx_output_after_reopening_reader() {
 }
 
 mod revisions;
+mod spreadsheet_compatibility;
 
 /// Build a minimal in-memory `.xlsx` zip from a caller-supplied `<workbook>`
 /// inner body (the `<sheets>`/`<definedNames>` elements) and workbook-rels
