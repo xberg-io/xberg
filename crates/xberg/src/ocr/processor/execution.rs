@@ -1610,8 +1610,8 @@ fn extract_elements_via_iterator(
         }
     };
 
-    let word_extraction = match result_iter.extract_all_words() {
-        Ok(w) => w,
+    let (word_extraction, line_starts) = match result_iter.extract_all_words_with_line_starts() {
+        Ok(words) => words,
         Err(e) => {
             tracing::warn!(error = %e, "Tesseract result iterator failed; falling back to TSV-based OCR element extraction");
             return Ok(empty());
@@ -1635,8 +1635,8 @@ fn extract_elements_via_iterator(
     let mut non_text_block_word_count = 0usize;
     let mut line_index = 0usize;
 
-    for word in &word_extraction.words {
-        line_index += usize::from(word.starts_line);
+    for (word, &starts_line) in word_extraction.words.iter().zip(&line_starts) {
+        line_index += usize::from(starts_line);
         if (word.confidence as f64) < min_confidence {
             continue;
         }

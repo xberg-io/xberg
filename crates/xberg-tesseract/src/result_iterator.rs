@@ -20,7 +20,6 @@ pub struct FontAttributes {
 
 /// Complete word data extracted in a single mutex lock.
 #[derive(Debug, Clone, Default)]
-#[non_exhaustive]
 pub struct WordData {
     pub text: String,
     pub left: i32,
@@ -33,10 +32,6 @@ pub struct WordData {
     /// `TessResultIteratorWordRecognitionLanguage`. `None` when Tesseract could
     /// not report a language for this word.
     pub language: Option<String>,
-    /// Whether this word begins a Tesseract text line (`RIL_TEXTLINE`). In
-    /// [`ResultIterator::extract_all_words`], a line whose first word could not be
-    /// extracted is begun by its next extracted word instead.
-    pub starts_line: bool,
 }
 
 /// A recognised word with the text and box of each of its symbols, from
@@ -366,9 +361,19 @@ impl ResultIterator {
     /// Returns a [`WordExtractionOutcome`], or an error if the mutex cannot be
     /// acquired or an unrecoverable iterator error occurs.
     pub fn extract_all_words(&self) -> Result<WordExtractionOutcome> {
+        self.extract_all_words_with_line_starts().map(|(outcome, _)| outcome)
+    }
+
+    /// Extracts all word data and a parallel flag for each word that begins a text line.
+    ///
+    /// The returned flags have exactly the same length and order as `outcome.words`. If the
+    /// first word in a line cannot be extracted, the next successfully extracted word begins
+    /// that line instead.
+    pub fn extract_all_words_with_line_starts(&self) -> Result<(WordExtractionOutcome, Vec<bool>)> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
         let raw = *handle;
         let mut words = Vec::new();
+        let mut line_starts = Vec::new();
         let mut skipped = 0usize;
 
         unsafe { TessPageIteratorBegin(raw) };
@@ -377,10 +382,16 @@ impl ResultIterator {
         loop {
             let word = carry_line_start(
                 extract_word_data_unlocked(raw),
-                || at_text_line_start_unlocked(raw),
+                at_text_line_start_unlocked(raw),
                 &mut pending_line_start,
             );
-            record_word_extraction_result(word, &mut words, &mut skipped)?;
+            match word {
+                Ok((word, starts_line)) => {
+                    record_word_extraction_result(Ok(word), &mut words, &mut skipped)?;
+                    line_starts.push(starts_line);
+                }
+                Err(error) => record_word_extraction_result(Err(error), &mut words, &mut skipped)?,
+            }
 
             let has_next = unsafe { TessResultIteratorNext(raw, TessPageIteratorLevel::RIL_WORD as c_int) != 0 };
             if !has_next {
@@ -388,7 +399,7 @@ impl ResultIterator {
             }
         }
 
-        Ok(WordExtractionOutcome { words, skipped })
+        Ok((WordExtractionOutcome { words, skipped }, line_starts))
     }
 
     /// Extracts the current word's data in a single mutex lock.
@@ -459,20 +470,19 @@ fn record_word_extraction_result(
 }
 
 /// Moves a text-line start off a word that failed to extract onto the next word that does, so a
-/// failed first word does not merge its line into the previous one. `at_line_start` is asked only
-/// for a failed word.
+/// failed first word does not merge its line into the previous one.
 fn carry_line_start(
     word: Result<WordData>,
-    at_line_start: impl FnOnce() -> bool,
+    at_line_start: bool,
     pending_line_start: &mut bool,
-) -> Result<WordData> {
+) -> Result<(WordData, bool)> {
     match word {
-        Ok(mut word) => {
-            word.starts_line |= std::mem::take(pending_line_start);
-            Ok(word)
+        Ok(word) => {
+            let pending_line_start = std::mem::take(pending_line_start);
+            Ok((word, at_line_start || pending_line_start))
         }
         Err(error) => {
-            *pending_line_start |= at_line_start();
+            *pending_line_start |= at_line_start;
             Err(error)
         }
     }
@@ -500,7 +510,6 @@ fn extract_word_data_unlocked(raw: *mut c_void) -> Result<WordData> {
         confidence,
         font_attrs,
         language,
-        starts_line: at_text_line_start_unlocked(raw),
     })
 }
 
@@ -689,22 +698,20 @@ mod tests {
     }
 
     /// Runs `carry_line_start` over `(extracted, at_line_start)` attempts in iterator order and
-    /// returns each extracted word's `starts_line`, plus the flag left pending at the end.
+    /// returns each extracted word's line-start flag, plus the flag left pending at the end.
     fn carried_line_starts(attempts: &[(bool, bool)]) -> (Vec<bool>, bool) {
         let mut pending_line_start = false;
         let starts = attempts
             .iter()
             .filter_map(|&(extracted, at_line_start)| {
                 let word = if extracted {
-                    let mut word = sample_word("w");
-                    word.starts_line = at_line_start;
-                    Ok(word)
+                    Ok(sample_word("w"))
                 } else {
                     Err(TesseractError::NullPointerError)
                 };
-                carry_line_start(word, || at_line_start, &mut pending_line_start).ok()
+                carry_line_start(word, at_line_start, &mut pending_line_start).ok()
             })
-            .map(|word| word.starts_line)
+            .map(|(_, starts_line)| starts_line)
             .collect();
         (starts, pending_line_start)
     }
