@@ -509,6 +509,65 @@ pub(crate) fn iterator_word_to_element(
     element
 }
 
+/// One line element per Tesseract text line, followed by the words themselves.
+///
+/// `words` is in reading order and pairs each word with the key of its text line, so a line is a
+/// run of equal keys. Tesseract reports no text or confidence for a line, so the line joins its
+/// words' text, spans the union of their boxes and takes their word-count-weighted mean
+/// confidence. ~keep
+#[cfg(feature = "ocr")]
+pub(crate) fn tesseract_elements_with_lines<K: PartialEq>(words: Vec<(K, OcrElement)>) -> Vec<OcrElement> {
+    let mut elements = words
+        .chunk_by(|(left, _), (right, _)| left == right)
+        .map(tesseract_line_element)
+        .collect::<Vec<_>>();
+    elements.extend(words.into_iter().map(|(_, word)| word));
+    elements
+}
+
+#[cfg(feature = "ocr")]
+fn tesseract_line_element<K>(words: &[(K, OcrElement)]) -> OcrElement {
+    let (mut left, mut top, mut right, mut bottom) = (u32::MAX, u32::MAX, 0u32, 0u32);
+    let (mut weighted_recognition, mut word_count) = (0.0, 0usize);
+    for (_, word) in words {
+        let (word_left, word_top, width, height) = word.geometry.to_aabb();
+        left = left.min(word_left);
+        top = top.min(word_top);
+        right = right.max(word_left.saturating_add(width));
+        bottom = bottom.max(word_top.saturating_add(height));
+        let count = word.text.split_whitespace().count();
+        weighted_recognition += word.confidence.recognition * count as f64;
+        word_count += count;
+    }
+    let text = words
+        .iter()
+        .map(|(_, word)| word.text.trim())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let geometry = OcrBoundingGeometry::Rectangle {
+        left,
+        top,
+        width: right.saturating_sub(left),
+        height: bottom.saturating_sub(top),
+    };
+    let confidence = OcrConfidence {
+        detection: None,
+        recognition: if word_count == 0 {
+            0.0
+        } else {
+            weighted_recognition / word_count as f64
+        },
+    };
+    let first = &words[0].1;
+    let mut line = OcrElement::new(text, geometry, confidence)
+        .with_level(OcrElementLevel::Line)
+        .with_page_number(first.page_number);
+    if let Some(backend) = first.backend_metadata.get("backend") {
+        line = line.with_metadata("backend", backend.clone());
+    }
+    line
+}
+
 /// Convert an OcrElement to an HocrWord for table reconstruction.
 ///
 /// This enables reuse of the existing table detection algorithms from
@@ -878,27 +937,84 @@ mod tests {
         );
     }
 
+    fn line_keyed_word(line: usize, text: &str, left: u32, top: u32, recognition: f64) -> (usize, OcrElement) {
+        let geometry = OcrBoundingGeometry::Rectangle {
+            left,
+            top,
+            width: 20,
+            height: 10,
+        };
+        let confidence = OcrConfidence {
+            detection: None,
+            recognition,
+        };
+        let word = OcrElement::new(text.to_string(), geometry, confidence)
+            .with_level(OcrElementLevel::Word)
+            .with_page_number(3)
+            .with_metadata("backend", serde_json::json!("tesseract-iterator"));
+        (line, word)
+    }
+
+    #[test]
+    fn tesseract_elements_with_lines_adds_one_line_per_text_line() {
+        let elements = tesseract_elements_with_lines(vec![
+            line_keyed_word(1, "Total", 10, 5, 0.9),
+            line_keyed_word(1, "due", 40, 7, 0.6),
+            line_keyed_word(2, "42", 10, 30, 0.8),
+        ]);
+
+        let (lines, words) = elements.split_at(2);
+        assert_eq!(
+            lines.iter().map(|line| line.text.as_str()).collect::<Vec<_>>(),
+            ["Total due", "42"]
+        );
+        assert!(
+            lines
+                .iter()
+                .all(|line| line.level == OcrElementLevel::Line && line.page_number == 3)
+        );
+        assert_eq!(
+            lines[0].geometry,
+            OcrBoundingGeometry::Rectangle {
+                left: 10,
+                top: 5,
+                width: 50,
+                height: 12,
+            }
+        );
+        assert!((lines[0].confidence.recognition - 0.75).abs() < 1e-9);
+        assert_eq!(lines[0].confidence.detection, None);
+        assert_eq!(
+            lines[0].backend_metadata.get("backend"),
+            Some(&serde_json::json!("tesseract-iterator"))
+        );
+        assert_eq!(
+            words.iter().map(|word| word.text.as_str()).collect::<Vec<_>>(),
+            ["Total", "due", "42"]
+        );
+        assert!(words.iter().all(|word| word.level == OcrElementLevel::Word));
+    }
+
     #[test]
     fn iterator_word_to_element_forwards_underline_font_id_crown_indent_and_language() {
-        let word = xberg_tesseract::WordData {
-            text: "Word".to_string(),
-            left: 10,
-            top: 20,
-            right: 60,
-            bottom: 40,
-            confidence: 91.0,
-            font_attrs: Some(xberg_tesseract::FontAttributes {
-                is_bold: false,
-                is_italic: false,
-                is_underlined: true,
-                is_monospace: false,
-                is_serif: false,
-                is_smallcaps: false,
-                pointsize: 12,
-                font_id: 7,
-            }),
-            language: Some("deu".to_string()),
-        };
+        let mut word = xberg_tesseract::WordData::default();
+        word.text = "Word".to_string();
+        word.left = 10;
+        word.top = 20;
+        word.right = 60;
+        word.bottom = 40;
+        word.confidence = 91.0;
+        word.font_attrs = Some(xberg_tesseract::FontAttributes {
+            is_bold: false,
+            is_italic: false,
+            is_underlined: true,
+            is_monospace: false,
+            is_serif: false,
+            is_smallcaps: false,
+            pointsize: 12,
+            font_id: 7,
+        });
+        word.language = Some("deu".to_string());
         let para = xberg_tesseract::ParaInfo {
             justification: xberg_tesseract::TessParagraphJustification::JUSTIFICATION_LEFT,
             is_list_item: false,
@@ -930,25 +1046,23 @@ mod tests {
 
     #[test]
     fn iterator_word_to_element_omits_first_line_indent_and_font_id_when_zero_or_negative() {
-        let word = xberg_tesseract::WordData {
-            text: "Word".to_string(),
-            left: 10,
-            top: 20,
-            right: 60,
-            bottom: 40,
-            confidence: 91.0,
-            font_attrs: Some(xberg_tesseract::FontAttributes {
-                is_bold: false,
-                is_italic: false,
-                is_underlined: false,
-                is_monospace: false,
-                is_serif: false,
-                is_smallcaps: false,
-                pointsize: 12,
-                font_id: -1,
-            }),
-            language: None,
-        };
+        let mut word = xberg_tesseract::WordData::default();
+        word.text = "Word".to_string();
+        word.left = 10;
+        word.top = 20;
+        word.right = 60;
+        word.bottom = 40;
+        word.confidence = 91.0;
+        word.font_attrs = Some(xberg_tesseract::FontAttributes {
+            is_bold: false,
+            is_italic: false,
+            is_underlined: false,
+            is_monospace: false,
+            is_serif: false,
+            is_smallcaps: false,
+            pointsize: 12,
+            font_id: -1,
+        });
         let para = xberg_tesseract::ParaInfo {
             justification: xberg_tesseract::TessParagraphJustification::JUSTIFICATION_UNKNOWN,
             is_list_item: false,

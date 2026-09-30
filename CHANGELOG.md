@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **(tesseract): `WordData::starts_line` reports whether a word begins a Tesseract text line.** `ResultIterator::extract_all_words` moves the flag to the next word it extracts when a line's first word fails to extract. (GH#1978)
+
+### Changed
+
+- **(tesseract): `WordData` is `#[non_exhaustive]` and derives `Default`.** Code outside the crate builds it from `WordData::default()` and sets fields, instead of a struct literal, which no longer compiles. (GH#1978)
+- **(ocr): Tesseract returns line elements next to its word elements.** Each line holds its words' text in reading order, the union of their boxes and their word-count-weighted mean confidence. A caller who requests `min_level: "word"` now gets the lines first, then the words, so element positions and the ids from `build_hierarchy` shift. With `layout` configured, image OCR text is now assembled from these lines, so it reads in the source's word order instead of a per-word position sort. (GH#1978)
+
+### Fixed
+
+- **(ocr): Tesseract returns OCR elements when `include_elements` is set without a `min_level`.** The default level is `line`, and Tesseract produced only words, so images and PDFs returned no elements at all. (GH#1978)
+- **(heuristics): the OCR confidence aggregate and the quality-score evidence floor count each recognized word once.** When a result carries words and the lines that hold them, as PaddleOCR and Tesseract results do at `min_level: "word"`, only the finest level is folded. Previously every word counted twice, so ten words reached the 20-word floor of the quality-score cap. (GH#1978)
+
 ## [1.3.0] - 2026-09-28
 
 ### Added

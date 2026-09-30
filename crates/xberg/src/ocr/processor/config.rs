@@ -7,7 +7,7 @@ use crate::ocr::error::OcrError;
 use crate::ocr::types::TesseractConfig;
 use xberg_tesseract::TesseractAPI;
 
-const TESSERACT_RESULT_SCHEMA_VERSION: u8 = 12;
+const TESSERACT_RESULT_SCHEMA_VERSION: u8 = 13;
 
 /// Compute a deterministic hash of the OCR configuration.
 ///
@@ -418,11 +418,10 @@ mod tests {
 
         // ~keep This pins the CURRENT version, and the number is meant to move: every bump has to
         // come here and be justified, which is what stops a change to the cached computation from
-        // silently reusing entries computed the old way. Last moved to 12 by GH#1894, where a
-        // known-scan page takes the default preprocessing an identical image and config would
-        // otherwise have skipped -- the same image and config, a different result.
+        // silently reusing entries computed the old way. Last moved to 13 when Tesseract results
+        // gained line elements, which a cached word-only element list lacks.
         assert_eq!(
-            TESSERACT_RESULT_SCHEMA_VERSION, 12,
+            TESSERACT_RESULT_SCHEMA_VERSION, 13,
             "a bump must be deliberate: state here which change made an old entry wrong"
         );
         assert_ne!(
