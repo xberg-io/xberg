@@ -466,7 +466,7 @@ fn push_mapped_layout_text(
         }
         LayoutClass::ListItem => {
             if let Some((source_label, content)) = split_leading_numbered_list_marker(text) {
-                let index = builder.push_list_item(content, false, vec![], None, None);
+                let index = builder.push_list_item(content, true, vec![], None, None);
                 builder.set_list_item_source_label(index, source_label);
             } else {
                 builder.push_list_item(text, false, vec![], None, None);
@@ -2673,8 +2673,13 @@ mod tests {
             "1. Template for day 1",
         ));
 
+        let document = builder.build();
+        assert!(matches!(
+            document.elements[0].kind,
+            crate::types::internal::ElementKind::ListItem { ordered: true }
+        ));
         assert_eq!(
-            crate::rendering::render_markdown(&builder.build()),
+            crate::rendering::render_markdown(&document),
             "- 1\\. Template for day 1\n"
         );
     }
