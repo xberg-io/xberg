@@ -1053,6 +1053,9 @@ pub(crate) const TABLE_REGION_GAP_HEIGHT_MULTIPLIER: u32 = 3;
 #[cfg(any(feature = "ocr", paddle_ocr))]
 pub(crate) const MIN_TABLE_CANDIDATE_WORDS: usize = 6;
 
+#[cfg(any(feature = "ocr", paddle_ocr))]
+const MAX_ALIGNED_FRAGMENT_GAP_HEIGHT_MULTIPLIER: u32 = 12;
+
 /// Split table-candidate words into vertically separated regions.
 ///
 /// Tesseract's TSV output has no notion of "this is a separate table from
@@ -1120,7 +1123,93 @@ pub(crate) fn cluster_word_indices_into_table_regions(words: &[HocrWord]) -> Vec
         regions.push(current_region);
     }
 
+    merge_small_aligned_regions(&mut regions, words, avg_height);
     regions
+}
+
+/// Attach a region smaller than [`MIN_TABLE_CANDIDATE_WORDS`] to an adjacent region it is
+/// column-aligned with.
+///
+/// A table whose rows are spaced widely enough to exceed the region gap threshold splits into one
+/// region per row. A one-row region holds fewer than the minimum words, so the table branch drops
+/// it entirely and the row's values are lost (xberg-io/xberg#1957: an invoice's trailing line
+/// items). A region below the minimum is not a table on its own, and a genuinely separate table is
+/// at least that size, so attaching the fragment to a column-aligned neighbour preserves its
+/// content without folding two real tables together.
+#[cfg(any(feature = "ocr", paddle_ocr))]
+fn merge_small_aligned_regions(regions: &mut Vec<Vec<usize>>, words: &[HocrWord], tolerance: u32) {
+    let mut merged: Vec<Vec<usize>> = Vec::with_capacity(regions.len());
+    for region in regions.drain(..) {
+        if region.len() < MIN_TABLE_CANDIDATE_WORDS
+            && let Some(previous) = merged.last_mut()
+            && columns_align(previous, &region, words, tolerance)
+            && regions_are_nearby(previous, &region, words, tolerance)
+        {
+            previous.extend(region);
+            continue;
+        }
+        merged.push(region);
+    }
+    // A small leading fragment has no region above it; attach it downward instead.
+    let mut index = 0;
+    while index + 1 < merged.len() {
+        if merged[index].len() < MIN_TABLE_CANDIDATE_WORDS
+            && columns_align(&merged[index + 1], &merged[index], words, tolerance)
+            && regions_are_nearby(&merged[index + 1], &merged[index], words, tolerance)
+        {
+            let fragment = merged.remove(index);
+            merged[index].extend(fragment);
+            continue;
+        }
+        index += 1;
+    }
+    *regions = merged;
+}
+
+#[cfg(any(feature = "ocr", paddle_ocr))]
+fn regions_are_nearby(first: &[usize], second: &[usize], words: &[HocrWord], tolerance: u32) -> bool {
+    let first_top = first.iter().map(|&index| words[index].top).min().unwrap_or(0);
+    let first_bottom = first
+        .iter()
+        .map(|&index| words[index].top.saturating_add(words[index].height))
+        .max()
+        .unwrap_or(0);
+    let second_top = second.iter().map(|&index| words[index].top).min().unwrap_or(0);
+    let second_bottom = second
+        .iter()
+        .map(|&index| words[index].top.saturating_add(words[index].height))
+        .max()
+        .unwrap_or(0);
+    let gap = first_top
+        .saturating_sub(second_bottom)
+        .max(second_top.saturating_sub(first_bottom));
+    gap <= tolerance.saturating_mul(MAX_ALIGNED_FRAGMENT_GAP_HEIGHT_MULTIPLIER)
+}
+
+/// Whether at least two distinct columns of `fragment` line up with a column of `anchor`, within
+/// `tolerance` points. A scan's column jitter is a fraction of a word's height, so callers pass
+/// the region's average word height.
+#[cfg(any(feature = "ocr", paddle_ocr))]
+fn columns_align(anchor: &[usize], fragment: &[usize], words: &[HocrWord], tolerance: u32) -> bool {
+    let mut matched = 0usize;
+    let mut seen: Vec<u32> = Vec::new();
+    for &fragment_index in fragment {
+        let left = words[fragment_index].left;
+        if seen.iter().any(|&seen_left| seen_left.abs_diff(left) <= tolerance) {
+            continue;
+        }
+        seen.push(left);
+        if anchor
+            .iter()
+            .any(|&anchor_index| words[anchor_index].left.abs_diff(left) <= tolerance)
+        {
+            matched += 1;
+            if matched >= 2 {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// Multiple of the region's median word height used as the maximum gap for merging two
@@ -1153,22 +1242,47 @@ fn looks_like_amount(cell: &str) -> bool {
             .all(|ch| ch.is_ascii_digit() || "$,.-()%€£¥+".contains(ch))
 }
 
-/// Whether columns `left` and `right` of `table` (row 0 is the header, excluded from this
-/// check) are mutually exclusive -- no data row has both populated -- and every populated data
-/// cell in either column looks like a number/currency amount. Both conditions must hold for
-/// [`merge_disjoint_numeric_columns`] to treat the pair as one logical column split in two.
+/// Whether `cell` carries no letter and no digit: empty, or only marks such as `-`, a dash run,
+/// `:`, `_`, `|` or `.`. On a scan these are what OCR reads from rules and shaded bands, so the
+/// drift-split merge counts such a cell as empty rather than as a value of its own.
 #[cfg(feature = "ocr")]
-fn columns_are_disjoint_and_numeric(table: &[Vec<String>], left: usize, right: usize) -> bool {
+fn has_no_alphanumeric(cell: &str) -> bool {
+    !cell.chars().any(char::is_alphanumeric)
+}
+
+/// Count of header rows above the data: row 0, plus every following row up to the first row that
+/// holds an amount in any column. A scanned header band can leave a stray glyph in a row of its
+/// own under the header text, and that row is part of the header, not data.
+#[cfg(feature = "ocr")]
+fn leading_header_row_count(table: &[Vec<String>]) -> usize {
+    table
+        .iter()
+        .position(|row| row.iter().any(|cell| looks_like_amount(cell)))
+        .unwrap_or(table.len())
+        .max(1)
+}
+
+/// Whether columns `left` and `right` of `table` (the first `header_rows` rows are the header,
+/// excluded from this check) are mutually exclusive -- no data row has both populated -- and
+/// every populated data cell in either column looks like a number/currency amount. Both
+/// conditions must hold for [`merge_disjoint_numeric_columns`] to treat the pair as one logical
+/// column split in two. A cell with no letter or digit counts as empty here (see
+/// [`has_no_alphanumeric`]), except a lone cell symbol in front of a value in the right track: a
+/// `-`, `$` or `(` that OCR split off the front of that value is part of it
+/// ([`is_lone_cell_symbol`]), and merging would drop it.
+#[cfg(feature = "ocr")]
+fn columns_are_disjoint_and_numeric(table: &[Vec<String>], header_rows: usize, left: usize, right: usize) -> bool {
     let mut any_data = false;
-    for row in table.iter().skip(1) {
+    for row in table.iter().skip(header_rows) {
         let (Some(left_cell), Some(right_cell)) = (row.get(left), row.get(right)) else {
             return false;
         };
-        let left_empty = left_cell.trim().is_empty();
-        let right_empty = right_cell.trim().is_empty();
+        let left_empty = has_no_alphanumeric(left_cell);
+        let right_empty = has_no_alphanumeric(right_cell);
         match (left_empty, right_empty) {
             (true, true) => {}
             (false, false) => return false,
+            (true, false) if is_lone_cell_symbol(left_cell.trim()) => return false,
             (false, true) => {
                 if !looks_like_amount(left_cell) {
                     return false;
@@ -1186,8 +1300,9 @@ fn columns_are_disjoint_and_numeric(table: &[Vec<String>], left: usize, right: u
     any_data
 }
 
-/// Whether at most one of columns `left`/`right` carries its own (non-empty) header label in
-/// `table`'s row 0.
+/// Whether at most one of columns `left`/`right` carries its own header label in the first
+/// `header_rows` rows of `table`. A header cell with no letter or digit (see
+/// [`has_no_alphanumeric`]) is not a label.
 ///
 /// A drift-split numeric column (this function's target) has its header text in only one of the
 /// split pieces -- the other piece's header cell is empty, because the source document had one
@@ -1198,43 +1313,50 @@ fn columns_are_disjoint_and_numeric(table: &[Vec<String>], left: usize, right: u
 /// not a drift artifact, and this guard keeps it untouched regardless of the gap/exclusivity
 /// checks. ~keep
 #[cfg(feature = "ocr")]
-fn at_most_one_column_has_its_own_header(table: &[Vec<String>], left: usize, right: usize) -> bool {
-    let Some(header) = table.first() else {
-        return true;
+fn at_most_one_column_has_its_own_header(table: &[Vec<String>], header_rows: usize, left: usize, right: usize) -> bool {
+    let header = &table[..header_rows.min(table.len())];
+    let labeled = |column: usize| {
+        header
+            .iter()
+            .any(|row| row.get(column).is_some_and(|cell| !has_no_alphanumeric(cell)))
     };
-    let left_labeled = header.get(left).is_some_and(|cell| !cell.trim().is_empty());
-    let right_labeled = header.get(right).is_some_and(|cell| !cell.trim().is_empty());
-    !(left_labeled && right_labeled)
+    !(labeled(left) && labeled(right))
 }
 
-/// Fold column `right` into column `left` in place: the header row's non-empty fragments join
-/// with a space (order preserved), and each data row keeps whichever of the two cells is
-/// non-empty (both are never non-empty at once -- callers only reach here after
-/// [`columns_are_disjoint_and_numeric`] confirms that). Column `right` is then dropped from
-/// every row.
+/// Fold column `right` into column `left` in place, then drop column `right` from every row.
+///
+/// When only one of a row's two cells carries a letter or digit, that cell wins and the other
+/// (empty, or a rule mark such as `-` or `:`) is dropped. Callers only reach here after
+/// [`columns_are_disjoint_and_numeric`] and [`at_most_one_column_has_its_own_header`] confirm
+/// that no row, header included, has a value on both sides. When neither cell has a letter or
+/// digit, their non-empty text joins with a space (order preserved), so a lone `-` nil marker
+/// survives.
 #[cfg(feature = "ocr")]
 fn merge_column_into(table: &mut [Vec<String>], left: usize, right: usize) {
     for row in table.iter_mut() {
-        let right_cell = row[right].trim().to_string();
-        if !right_cell.is_empty() {
-            let left_cell = row[left].trim();
-            row[left] = if left_cell.is_empty() {
-                right_cell
-            } else {
-                format!("{left_cell} {right_cell}")
-            };
-        }
-        row.remove(right);
+        let right_cell = row.remove(right);
+        let right_cell = right_cell.trim();
+        let left_cell = row[left].trim();
+        row[left] = match (has_no_alphanumeric(left_cell), has_no_alphanumeric(right_cell)) {
+            (false, true) => left_cell.to_string(),
+            (true, false) => right_cell.to_string(),
+            _ => [left_cell, right_cell]
+                .into_iter()
+                .filter(|cell| !cell.is_empty())
+                .collect::<Vec<_>>()
+                .join(" "),
+        };
     }
 }
 
-/// Count of non-empty data cells (row 0, the header, excluded) in `column`.
+/// Count of data cells (the first `header_rows` rows excluded) in `column` that hold a letter or
+/// digit.
 #[cfg(feature = "ocr")]
-fn data_support_count(table: &[Vec<String>], column: usize) -> usize {
+fn data_support_count(table: &[Vec<String>], header_rows: usize, column: usize) -> usize {
     table
         .iter()
-        .skip(1)
-        .filter(|row| !row[column].trim().is_empty())
+        .skip(header_rows)
+        .filter(|row| !has_no_alphanumeric(&row[column]))
         .count()
 }
 
@@ -1263,14 +1385,15 @@ pub(crate) fn merge_disjoint_numeric_columns(
         return;
     }
     let max_gap = median_height as f64 * DISJOINT_NUMERIC_COLUMN_MERGE_HEIGHT_MULTIPLIER;
+    let header_rows = leading_header_row_count(table);
     let mut column = 0;
     while column + 1 < column_positions.len() {
         let gap = column_positions[column + 1].abs_diff(column_positions[column]) as f64;
         if gap <= max_gap
-            && at_most_one_column_has_its_own_header(table, column, column + 1)
-            && columns_are_disjoint_and_numeric(table, column, column + 1)
+            && at_most_one_column_has_its_own_header(table, header_rows, column, column + 1)
+            && columns_are_disjoint_and_numeric(table, header_rows, column, column + 1)
         {
-            if data_support_count(table, column + 1) > data_support_count(table, column) {
+            if data_support_count(table, header_rows, column + 1) > data_support_count(table, header_rows, column) {
                 column_positions[column] = column_positions[column + 1];
             }
             merge_column_into(table, column, column + 1);
@@ -2320,6 +2443,204 @@ mod tests {
 
         assert_eq!(table.len(), 2, "a two-row table has no caption to drop");
         assert_eq!(table[0][0], "ACCOUNT TYPE");
+    }
+
+    #[cfg(feature = "ocr")]
+    fn grid(rows: &[&[&str]]) -> Vec<Vec<String>> {
+        rows.iter()
+            .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+            .collect()
+    }
+
+    /// A right-aligned amount column that drift split into two tracks, where OCR also read the
+    /// page's rules as cells of their own (`-`, a dash run, `:`) in the right track. A cell with
+    /// no letter or digit is not a value, so the pair still merges: the real amount wins where a
+    /// row has both, and a lone mark survives where it is the row's only content.
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn split_amount_column_with_rule_marks_is_merged() {
+        let mut table = grid(&[
+            &["Item", "Column A", "Column B", ""],
+            &["Item 1", "1,250", "", "310"],
+            &["Item 2", "", "87", "-"],
+            &["Item 3", "940", "", "——————"],
+            &["Item 4", "", "4,020", ""],
+            &["Item 5", "", "", ":"],
+        ]);
+        let mut positions = vec![100_u32, 400, 700, 740];
+
+        merge_disjoint_numeric_columns(&mut table, &mut positions, 25);
+
+        assert_eq!(positions.len(), 3, "the split amount column must fold into one column");
+        assert_eq!(
+            table,
+            grid(&[
+                &["Item", "Column A", "Column B"],
+                &["Item 1", "1,250", "310"],
+                &["Item 2", "", "87"],
+                &["Item 3", "940", "——————"],
+                &["Item 4", "", "4,020"],
+                &["Item 5", "", ":"],
+            ])
+        );
+    }
+
+    /// The header band above a scanned table can hold rule marks (`~`) and a stray glyph on a row
+    /// of its own. A mark with no letter or digit is not a column label, and the stray row sits
+    /// above the first amount, so it is header, not data: the split amount column still merges.
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn rule_marks_in_the_header_band_do_not_block_a_split_column_merge() {
+        let mut table = grid(&[
+            &["Item", "Column B", "~"],
+            &["", "a", ""],
+            &["Item 1", "1,250", ""],
+            &["Item 2", "", "87"],
+        ]);
+        let mut positions = vec![100_u32, 700, 740];
+
+        merge_disjoint_numeric_columns(&mut table, &mut positions, 25);
+
+        assert_eq!(positions.len(), 2, "the split amount column must fold into one column");
+        assert_eq!(table[0], vec!["Item".to_string(), "Column B".to_string()]);
+        assert_eq!(table[2], vec!["Item 1".to_string(), "1,250".to_string()]);
+        assert_eq!(table[3], vec!["Item 2".to_string(), "87".to_string()]);
+    }
+
+    /// Negative control: a data cell with letters in it is still not an amount, so two close
+    /// tracks where one holds words stay separate.
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn a_word_cell_in_a_data_row_still_blocks_a_split_column_merge() {
+        let mut table = grid(&[
+            &["Item", "Column B", ""],
+            &["Item 1", "1,250", ""],
+            &["Item 2", "", "see note"],
+        ]);
+        let mut positions = vec![100_u32, 700, 740];
+
+        merge_disjoint_numeric_columns(&mut table, &mut positions, 25);
+
+        assert_eq!(positions.len(), 3, "a track holding words must not be merged");
+    }
+
+    /// A sign, currency sign or bracket that OCR split off the front of a short amount lands in the
+    /// left track, in front of the amount in the right track. It is part of the value, so the pair
+    /// stays apart rather than merge and drop it.
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn a_symbol_in_front_of_a_value_blocks_a_split_column_merge() {
+        for symbol in ["-", "$", "("] {
+            let mut table = grid(&[
+                &["Item", "Column B", ""],
+                &["Item 1", "1,250", ""],
+                &["Item 2", symbol, "87"],
+                &["Item 3", "", "56"],
+            ]);
+            let mut positions = vec![100_u32, 700, 740];
+
+            merge_disjoint_numeric_columns(&mut table, &mut positions, 25);
+
+            assert_eq!(
+                positions.len(),
+                3,
+                "a {symbol:?} in front of a value must not be merged away"
+            );
+            assert_eq!(
+                table[2],
+                vec!["Item 2".to_string(), symbol.to_string(), "87".to_string()]
+            );
+        }
+    }
+
+    /// Rule marks do not count as support: the merged column keeps the position of the track that
+    /// holds more values, not the one that holds more marks.
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn rule_marks_do_not_decide_the_position_of_a_merged_column() {
+        let mut table = grid(&[
+            &["Item", "Column B", ""],
+            &["Item 1", "1,250", "-"],
+            &["Item 2", "940", "——"],
+            &["Item 3", "", "87"],
+        ]);
+        let mut positions = vec![100_u32, 700, 740];
+
+        merge_disjoint_numeric_columns(&mut table, &mut positions, 25);
+
+        assert_eq!(positions, vec![100, 700]);
+    }
+
+    /// A header row that holds a number of its own (a year in the first column) is still the
+    /// header: the header band is never shorter than row 0.
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn a_header_row_holding_a_number_is_still_the_header() {
+        let mut table = grid(&[
+            &["2024", "Column B", ""],
+            &["Item 1", "1,250", ""],
+            &["Item 2", "", "87"],
+        ]);
+        let mut positions = vec![100_u32, 700, 740];
+
+        merge_disjoint_numeric_columns(&mut table, &mut positions, 25);
+
+        assert_eq!(positions.len(), 2, "the split amount column must fold into one column");
+        assert_eq!(table[0], vec!["2024".to_string(), "Column B".to_string()]);
+    }
+
+    /// A number-only row under the header ends the header band, as before: its value is data, and
+    /// it folds into the merged column instead of labelling the right track.
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn a_number_only_row_under_the_header_is_data() {
+        let mut table = grid(&[
+            &["Item", "Column B", ""],
+            &["", "", "2024"],
+            &["Item 1", "1,250", ""],
+            &["Item 2", "", "87"],
+        ]);
+        let mut positions = vec![100_u32, 700, 740];
+
+        merge_disjoint_numeric_columns(&mut table, &mut positions, 25);
+
+        assert_eq!(positions.len(), 2, "the split amount column must fold into one column");
+        assert_eq!(table[1], vec![String::new(), "2024".to_string()]);
+    }
+
+    /// End to end through the OCR table cleanup: without the merge, the right track of the split
+    /// column is a headerless, mostly empty column and the sparse-column gate drops the whole
+    /// table.
+    #[cfg(all(feature = "ocr", feature = "pdf"))]
+    #[test]
+    fn table_with_a_split_amount_column_and_rule_marks_is_kept() {
+        let mut table = grid(&[
+            &["Item", "Column A", "Column B", "Column C", ""],
+            &["Item 1", "2,110", "3,040", "1,250", ""],
+            &["Item 2", "2,380", "3,150", "", "87"],
+            &["Item 3", "2,470", "3,260", "940", "——"],
+            &["Item 4", "2,560", "3,370", "4,020", ""],
+            &["Item 5", "2,650", "3,480", "", "56"],
+            &["Item 6", "2,740", "3,590", "1,330", ""],
+            &["Item 7", "2,830", "3,600", "", "72"],
+            &["Item 8", "2,920", "3,710", "2,480", ""],
+            &["Item 9", "3,010", "3,820", "1,960", ""],
+            &["Item 10", "3,100", "3,930", "3,570", ""],
+        ]);
+        let mut positions = vec![100_u32, 400, 700, 1000, 1040];
+
+        merge_disjoint_numeric_columns(&mut table, &mut positions, 25);
+        let kept = crate::pdf::table_reconstruct::post_process_table(table, false, false)
+            .expect("the table must survive the OCR table cleanup");
+
+        assert_eq!(kept[0].len(), 4, "the split column must come back as one column");
+        let column_c: Vec<&str> = kept[1..].iter().map(|row| row[3].as_str()).collect();
+        assert_eq!(
+            column_c,
+            [
+                "1,250", "87", "940", "4,020", "56", "1,330", "72", "2,480", "1,960", "3,570"
+            ]
+        );
     }
 
     /// xberg-io/xberg#1649: a lone punctuation glyph (e.g. the dash in a date range) must merge

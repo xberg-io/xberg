@@ -348,6 +348,8 @@ async fn run_captioning_prepass(
 /// 3. Quality Processing - Token reduction, NFC normalization, output-format application
 /// 4. Validators - Run validation hooks on the processed result (can fail fast)
 /// 5. Chunking (final) - Text splitting if enabled
+/// 6. Encoded output - A binary format such as DOCX packages the finished rendering,
+///    leaving base64 in `content`; its chunks describe the Markdown it was built from
 ///
 /// Chunking runs **twice** when Middle/Late post-processors are active: once right
 /// after Early post-processors (so a chunk-aware post-processor sees non-empty
@@ -694,6 +696,8 @@ async fn run_pipeline_impl(
         result.extraction_confidence = Some(score_confidence(signals, ConfidenceWeights::default()));
     }
 
+    format::finish_output_format(&mut result, &config.output_format)?;
+
     Ok(result)
 }
 
@@ -718,7 +722,8 @@ async fn run_pipeline_impl(
 /// It handles:
 /// - Language detection (if enabled)
 /// - Quality processing (token reduction, NFC normalization, output-format application)
-/// - Chunking (if enabled) — runs last, after the content-mutating steps above (#213)
+/// - Chunking (if enabled) — runs after the content-mutating steps above (#213)
+/// - Encoded output (DOCX), packaged last from the finished rendering
 ///
 /// It does NOT handle:
 /// - Async post-processors
@@ -864,6 +869,8 @@ pub fn run_pipeline_sync(mut doc: InternalDocument, config: &ExtractionConfig) -
         let signals = ConfidenceSignals::from_extraction_result(&result, schema_compliance, text_coverage);
         result.extraction_confidence = Some(score_confidence(signals, ConfidenceWeights::default()));
     }
+
+    format::finish_output_format(&mut result, &config.output_format)?;
 
     Ok(result)
 }

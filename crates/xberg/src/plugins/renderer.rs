@@ -57,6 +57,14 @@ pub trait Renderer: Plugin {
 pub(crate) trait InternalRenderer: Plugin {
     /// Render the pipeline representation to the output format.
     fn render(&self, doc: &InternalDocument) -> Result<String>;
+
+    /// Turn what [`render`](Self::render) produced into the final output.
+    ///
+    /// The pipeline calls this after every post-processor has run. A binary format
+    /// renders text there that redaction can still rewrite, and encodes it here.
+    fn finish(&self, rendered: String) -> Result<String> {
+        Ok(rendered)
+    }
 }
 
 impl<T> Renderer for T
@@ -70,7 +78,7 @@ where
         // `internal_document` when the caller supplied one; otherwise fall back to the
         // `Renderer` default of returning the already-rendered text verbatim. ~keep
         match result.internal_document.as_ref() {
-            Some(doc) => InternalRenderer::render(self, doc),
+            Some(doc) => self.finish(InternalRenderer::render(self, doc)?),
             None => Ok(result.content.clone()),
         }
     }
