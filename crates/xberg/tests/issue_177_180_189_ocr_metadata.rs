@@ -227,10 +227,14 @@ fn word_language_is_forwarded_per_ocr_element() {
         extract_uri_document_blocking(&file_path, None, &config).expect("should extract test_hello_world.png with OCR");
     let captured_paragraph_skip_events = capture.events.lock().unwrap().clone();
 
-    let elements = result.ocr_elements.expect("OCR should produce word-level elements");
-    assert_eq!(elements.len(), 2, "expected exactly the two words 'Hello' and 'World'");
+    let elements = result.ocr_elements.expect("OCR should produce public elements");
+    let words: Vec<_> = elements
+        .iter()
+        .filter(|element| element.level == xberg::OcrElementLevel::Word)
+        .collect();
+    assert_eq!(words.len(), 2, "expected exactly the two words 'Hello' and 'World'");
 
-    for element in &elements {
+    for element in &words {
         if let Some(word_language) = element.backend_metadata.get("word_language") {
             assert_eq!(
                 word_language,
@@ -314,7 +318,7 @@ fn word_language_is_forwarded_per_ocr_element() {
         }
     }
 
-    let texts: Vec<&str> = elements.iter().map(|e| e.text.as_str()).collect();
+    let texts: Vec<&str> = words.iter().map(|element| element.text.as_str()).collect();
     assert_eq!(texts, vec!["Hello", "World"]);
 }
 
@@ -473,9 +477,13 @@ fn should_retain_and_tag_words_when_parent_block_is_a_graphic_region() {
 
     let elements = result
         .ocr_elements
-        .expect("OCR should produce word-level elements for the composed page");
+        .expect("OCR should produce public elements for the composed page");
+    let words: Vec<_> = elements
+        .iter()
+        .filter(|element| element.level == xberg::OcrElementLevel::Word)
+        .collect();
 
-    let texts: Vec<&str> = elements.iter().map(|e| e.text.as_str()).collect();
+    let texts: Vec<&str> = words.iter().map(|e| e.text.as_str()).collect();
     assert_eq!(
         texts,
         vec!["Hello", "World"],
@@ -483,7 +491,7 @@ fn should_retain_and_tag_words_when_parent_block_is_a_graphic_region() {
          min_confidence=0.0 is now admitting hallucinated words over the graphic"
     );
 
-    for element in &elements {
+    for element in words {
         assert_eq!(
             element.backend_metadata.get("block_type"),
             Some(&serde_json::json!("PT_FLOWING_IMAGE")),
@@ -526,15 +534,19 @@ fn should_omit_non_text_block_word_count_when_every_word_is_in_a_text_block() {
 
     let elements = result
         .ocr_elements
-        .expect("OCR should produce word-level elements for the composed page");
-    let texts: Vec<&str> = elements.iter().map(|e| e.text.as_str()).collect();
+        .expect("OCR should produce public elements for the composed page");
+    let words: Vec<_> = elements
+        .iter()
+        .filter(|element| element.level == xberg::OcrElementLevel::Word)
+        .collect();
+    let texts: Vec<&str> = words.iter().map(|e| e.text.as_str()).collect();
     assert_eq!(
         texts,
         vec!["Hello", "World"],
         "the control page must yield the same two words as the graphic page"
     );
 
-    for element in &elements {
+    for element in words {
         assert_eq!(
             element.backend_metadata.get("block_type"),
             Some(&serde_json::json!("PT_FLOWING_TEXT")),
