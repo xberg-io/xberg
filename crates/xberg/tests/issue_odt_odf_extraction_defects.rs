@@ -331,6 +331,108 @@ async fn should_reject_nested_text_boxes_beyond_configured_depth() {
 }
 
 #[tokio::test]
+async fn should_allow_nested_lists_at_configured_depth() {
+    let body = r#"<text:list><text:list-item><text:p>Level zero.</text:p>
+        <text:list><text:list-item><text:p>Level one.</text:p>
+            <text:list><text:list-item><text:p>Level two.</text:p></text:list-item></text:list>
+        </text:list-item></text:list>
+        <text:list><text:list-item><text:p>Sibling one.</text:p>
+            <text:list><text:list-item><text:p>Sibling two.</text:p></text:list-item></text:list>
+        </text:list-item></text:list>
+    </text:list-item></text:list>"#;
+    let bytes = odt_bytes("", body);
+    let config = ExtractionConfig {
+        security_limits: Some(SecurityLimits {
+            max_nesting_depth: 2,
+            max_xml_depth: 2,
+            ..SecurityLimits::default()
+        }),
+        ..ExtractionConfig::default()
+    };
+
+    let result = extract_bytes_document(&bytes, ODT_MIME, &config)
+        .await
+        .expect("nested lists at the configured depth limit should succeed");
+
+    assert!(result.content.contains("Level two."));
+    assert!(result.content.contains("Sibling two."));
+}
+
+#[tokio::test]
+async fn should_reject_nested_lists_beyond_configured_depth() {
+    let body = r#"<text:list><text:list-item><text:p>Level zero.</text:p>
+        <text:list><text:list-item><text:p>Level one.</text:p>
+            <text:list><text:list-item><text:p>Too deep.</text:p></text:list-item></text:list>
+        </text:list-item></text:list>
+    </text:list-item></text:list>"#;
+    let bytes = odt_bytes("", body);
+    let config = ExtractionConfig {
+        security_limits: Some(SecurityLimits {
+            max_nesting_depth: 1,
+            max_xml_depth: 1,
+            ..SecurityLimits::default()
+        }),
+        ..ExtractionConfig::default()
+    };
+
+    let err = extract_bytes_document(&bytes, ODT_MIME, &config)
+        .await
+        .expect_err("nested lists beyond the configured depth limit should fail");
+
+    assert!(err.to_string().contains("Nesting too deep: 2 levels (max: 1)"));
+}
+
+#[tokio::test]
+async fn should_allow_nested_inline_wrappers_at_configured_depth() {
+    let body = concat!(
+        r#"<text:p><text:a xlink:href="https://example.com"><text:span>"#,
+        r#"<text:ruby><text:ruby-base>At limit.</text:ruby-base></text:ruby>"#,
+        r#"</text:span></text:a> / <text:a xlink:href="https://example.org"><text:span>"#,
+        r#"<text:ruby><text:ruby-base>Sibling.</text:ruby-base></text:ruby>"#,
+        r#"</text:span></text:a></text:p>"#
+    );
+    let bytes = odt_bytes("", body);
+    let config = ExtractionConfig {
+        security_limits: Some(SecurityLimits {
+            max_nesting_depth: 3,
+            max_xml_depth: 3,
+            ..SecurityLimits::default()
+        }),
+        ..ExtractionConfig::default()
+    };
+
+    let result = extract_bytes_document(&bytes, ODT_MIME, &config)
+        .await
+        .expect("inline wrappers at the configured depth limit should succeed");
+
+    assert_eq!(result.content.trim(), "At limit. / Sibling.");
+}
+
+#[tokio::test]
+async fn should_reject_nested_inline_wrappers_beyond_configured_depth() {
+    let body = concat!(
+        r#"<text:p><text:a xlink:href="https://example.com"><text:span>"#,
+        r#"<text:ruby><text:ruby-base>Too deep.</text:ruby-base></text:ruby>"#,
+        r#"</text:span></text:a></text:p>"#
+    );
+    let bytes = odt_bytes("", body);
+    let config = ExtractionConfig {
+        security_limits: Some(SecurityLimits {
+            max_nesting_depth: 2,
+            max_xml_depth: 2,
+            ..SecurityLimits::default()
+        }),
+        ..ExtractionConfig::default()
+    };
+
+    let err = extract_bytes_document(&bytes, ODT_MIME, &config)
+        .await
+        .expect_err("inline wrappers beyond the configured depth limit should fail");
+
+    assert!(err.to_string().contains("Nesting too deep: 3 levels (max: 2)"));
+}
+
+#[tokio::test]
 async fn should_report_encrypted_content_without_decoding_ciphertext_issue_2004() {
     let manifest = r#"<?xml version="1.0" encoding="UTF-8"?>
 <manifest:manifest

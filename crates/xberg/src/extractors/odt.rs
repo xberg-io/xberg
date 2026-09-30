@@ -814,7 +814,7 @@ pub(crate) fn build_internal_elements(
             }
             "change-end" => {}
             "h" => {
-                let (text, _annotations, uris) = collect_odt_annotations(node, style_map);
+                let (text, _annotations, uris) = collect_odt_annotations(node, style_map, budget)?;
                 for uri in uris {
                     builder.push_uri(uri);
                 }
@@ -942,7 +942,7 @@ pub(crate) fn build_internal_elements(
                     builder.set_layer(def_idx, ContentLayer::Footnote);
                 }
 
-                let (mut text, annotations, uris) = collect_odt_annotations(node, style_map);
+                let (mut text, annotations, uris) = collect_odt_annotations(node, style_map, budget)?;
                 for uri in uris {
                     builder.push_uri(uri);
                 }
@@ -950,7 +950,7 @@ pub(crate) fn build_internal_elements(
                 for frame in node.children().filter(|n| n.tag_name().name() == "frame") {
                     for text_box in frame.children().filter(|n| n.tag_name().name() == "text-box") {
                         for nested_p in text_box.children().filter(|n| n.tag_name().name() == "p") {
-                            let (caption, _, caption_uris) = collect_odt_annotations(nested_p, style_map);
+                            let (caption, _, caption_uris) = collect_odt_annotations(nested_p, style_map, budget)?;
                             for uri in caption_uris {
                                 builder.push_uri(uri);
                             }
@@ -996,7 +996,7 @@ pub(crate) fn build_internal_elements(
                 }
             }
             "list" => {
-                build_internal_list(node, builder, list_style_map, image_data, formula_data);
+                build_internal_list(node, builder, list_style_map, image_data, formula_data, budget)?;
             }
             "section" => {
                 build_nested_internal_elements(
@@ -1050,21 +1050,30 @@ fn build_nested_internal_elements(
     change_map: &AHashMap<String, OdtChangeRegion>,
     revisions: &mut Vec<DocumentRevision>,
 ) -> crate::error::Result<()> {
+    with_nested_budget(budget, |budget| {
+        build_internal_elements(
+            parent,
+            builder,
+            style_map,
+            list_style_map,
+            image_data,
+            formula_data,
+            budget,
+            change_map,
+            revisions,
+        )
+    })
+}
+
+fn with_nested_budget<T>(
+    budget: &mut SecurityBudget,
+    nested: impl FnOnce(&mut SecurityBudget) -> crate::error::Result<T>,
+) -> crate::error::Result<T> {
     if let Err(error) = budget.enter() {
         budget.leave();
         return Err(error.into());
     }
-    let result = build_internal_elements(
-        parent,
-        builder,
-        style_map,
-        list_style_map,
-        image_data,
-        formula_data,
-        budget,
-        change_map,
-        revisions,
-    );
+    let result = nested(budget);
     budget.leave();
     result
 }
@@ -1082,7 +1091,8 @@ fn build_internal_list(
     list_style_map: &AHashMap<String, bool>,
     image_data: &AHashMap<String, (Vec<u8>, String)>,
     formula_data: &AHashMap<String, String>,
-) {
+    budget: &mut SecurityBudget,
+) -> crate::error::Result<()> {
     let ordered = list_node
         .attribute(("urn:oasis:names:tc:opendocument:xmlns:text:1.0", "style-name"))
         .or_else(|| list_node.attribute("text:style-name"))
@@ -1113,7 +1123,9 @@ fn build_internal_list(
                         }
                     }
                     "list" => {
-                        build_internal_list(child, builder, list_style_map, image_data, formula_data);
+                        with_nested_budget(budget, |budget| {
+                            build_internal_list(child, builder, list_style_map, image_data, formula_data, budget)
+                        })?;
                     }
                     _ => {}
                 }
@@ -1121,6 +1133,7 @@ fn build_internal_list(
         }
     }
     builder.end_list();
+    Ok(())
 }
 
 /// Extract headers and footers from styles.xml for InternalDocumentBuilder.
@@ -1190,12 +1203,13 @@ fn extract_odt_internal_headers_footers(
 fn collect_odt_annotations(
     node: roxmltree::Node,
     style_map: &AHashMap<String, OdtStyleProps>,
-) -> (String, Vec<crate::types::TextAnnotation>, Vec<ExtractedUri>) {
+    budget: &mut SecurityBudget,
+) -> crate::error::Result<(String, Vec<crate::types::TextAnnotation>, Vec<ExtractedUri>)> {
     let mut text = String::new();
     let mut annotations = Vec::new();
     let mut uris = Vec::new();
 
-    collect_inline_run(node, style_map, &mut text, &mut annotations, &mut uris);
+    collect_inline_run(node, style_map, &mut text, &mut annotations, &mut uris, budget)?;
 
     if text.is_empty()
         && let Some(t) = node.text()
@@ -1203,7 +1217,7 @@ fn collect_odt_annotations(
         text = t.to_string();
     }
 
-    (text, annotations, uris)
+    Ok((text, annotations, uris))
 }
 
 /// Recursively walk the inline children of a paragraph/heading/span/anchor
@@ -1220,7 +1234,8 @@ fn collect_inline_run(
     text: &mut String,
     annotations: &mut Vec<crate::types::TextAnnotation>,
     uris: &mut Vec<ExtractedUri>,
-) {
+    budget: &mut SecurityBudget,
+) -> crate::error::Result<()> {
     use crate::types::builder;
     use crate::types::document_structure::{AnnotationKind, TextAnnotation};
 
@@ -1228,7 +1243,9 @@ fn collect_inline_run(
         match child.tag_name().name() {
             "span" => {
                 let start = text.len() as u32;
-                collect_inline_run(child, style_map, text, annotations, uris);
+                with_nested_budget(budget, |budget| {
+                    collect_inline_run(child, style_map, text, annotations, uris, budget)
+                })?;
                 let end = text.len() as u32;
                 if end == start {
                     continue;
@@ -1295,7 +1312,9 @@ fn collect_inline_run(
             }
             "a" => {
                 let start = text.len() as u32;
-                collect_inline_run(child, style_map, text, annotations, uris);
+                with_nested_budget(budget, |budget| {
+                    collect_inline_run(child, style_map, text, annotations, uris, budget)
+                })?;
                 let end = text.len() as u32;
                 if end == start {
                     continue;
@@ -1329,11 +1348,14 @@ fn collect_inline_run(
                 } else {
                     // Unknown wrapper element (e.g. `text:ruby`,
                     // `text:meta`): recurse rather than drop its subtree.
-                    collect_inline_run(child, style_map, text, annotations, uris);
+                    with_nested_budget(budget, |budget| {
+                        collect_inline_run(child, style_map, text, annotations, uris, budget)
+                    })?;
                 }
             }
         }
     }
+    Ok(())
 }
 
 /// ODF pagination field elements whose cached display text must not be emitted
