@@ -15,7 +15,7 @@ use crate::extraction::image::resolve_known_source_dpi;
 use crate::extractors::security::SecurityLimits;
 use crate::image::normalize_image_dpi_owned;
 use crate::ocr::cache::OcrCache;
-use crate::ocr::conversion::{TsvRow, iterator_word_to_element, tsv_row_to_element};
+use crate::ocr::conversion::{TsvRow, iterator_word_to_element, tesseract_elements_with_lines, tsv_row_to_element};
 use crate::ocr::error::OcrError;
 use crate::ocr::hocr_parser::{
     DictionaryLineFilter, RetainedWordConfidenceStats, parse_hocr_to_internal_document_with_page_offset_and_stats,
@@ -138,9 +138,10 @@ fn rotate_rgb_image_data(data: &[u8], width: u32, height: u32, degrees: i32) -> 
 ///
 /// # Returns
 ///
-/// Vector of OcrElements for word-level and line-level entries
+/// One line element per text line, then the word elements. Tesseract's own line rows carry no
+/// text or confidence, so each line is built from its words.
 fn parse_tsv_to_elements(tsv_data: &str, min_confidence: f64, page_number: u32) -> Vec<OcrElement> {
-    let mut elements = Vec::new();
+    let mut words = Vec::new();
 
     for line in tsv_data.lines().skip(1) {
         let fields: Vec<&str> = line.split('\t').collect();
@@ -165,7 +166,7 @@ fn parse_tsv_to_elements(tsv_data: &str, min_confidence: f64, page_number: u32) 
             continue;
         }
 
-        if level != 4 && level != 5 {
+        if level != 5 {
             continue;
         }
 
@@ -186,10 +187,10 @@ fn parse_tsv_to_elements(tsv_data: &str, min_confidence: f64, page_number: u32) 
 
         let mut element = tsv_row_to_element(&tsv_row);
         element.page_number = page_number;
-        elements.push(element);
+        words.push(((page_num, block_num, par_num, line_num), element));
     }
 
-    elements
+    tesseract_elements_with_lines(words)
 }
 
 /// CI debug logging utility.
@@ -1504,8 +1505,8 @@ fn extract_elements_via_iterator(
         }
     };
 
-    let word_extraction = match result_iter.extract_all_words() {
-        Ok(w) => w,
+    let (word_extraction, line_starts) = match result_iter.extract_all_words_with_line_starts() {
+        Ok(words) => words,
         Err(e) => {
             tracing::warn!(error = %e, "Tesseract result iterator failed; falling back to TSV-based OCR element extraction");
             return Ok(empty());
@@ -1525,10 +1526,12 @@ fn extract_elements_via_iterator(
     let retained_text_confidence_stats =
         retained_text.map(|content| retained_text_word_confidence_stats(content, &word_extraction.words));
 
-    let mut elements = Vec::new();
+    let mut words = Vec::new();
     let mut non_text_block_word_count = 0usize;
+    let mut line_index = 0usize;
 
-    for word in &word_extraction.words {
+    for (word, &starts_line) in word_extraction.words.iter().zip(&line_starts) {
+        line_index += usize::from(starts_line);
         if (word.confidence as f64) < min_confidence {
             continue;
         }
@@ -1557,11 +1560,11 @@ fn extract_elements_via_iterator(
             .find(|p| point_in_bbox(cx, cy, p.left, p.top, p.right, p.bottom));
 
         let element = iterator_word_to_element(word, block_type, para_info, page_number);
-        elements.push(element);
+        words.push((line_index, element));
     }
 
     Ok(IteratorExtractionResult {
-        elements,
+        elements: tesseract_elements_with_lines(words),
         retained_text_confidence_stats,
         skipped_words: word_extraction.skipped,
         non_text_block_word_count,
@@ -2665,16 +2668,46 @@ mod tests {
         assert_eq!(recovered.text, "555");
     }
 
+    #[test]
+    fn parse_tsv_to_elements_yields_lines_at_the_default_element_level() {
+        let tsv = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n\
+                   1\t1\t0\t0\t0\t0\t0\t0\t200\t100\t-1\t\n\
+                   2\t1\t1\t0\t0\t0\t10\t5\t60\t35\t-1\t\n\
+                   3\t1\t1\t1\t0\t0\t10\t5\t60\t35\t-1\t\n\
+                   4\t1\t1\t1\t1\t0\t10\t5\t60\t12\t-1\t\n\
+                   5\t1\t1\t1\t1\t1\t10\t5\t20\t10\t90\tTotal\n\
+                   5\t1\t1\t1\t1\t2\t40\t7\t30\t10\t60\tdue\n\
+                   4\t1\t1\t1\t2\t0\t10\t30\t20\t10\t-1\t\n\
+                   5\t1\t1\t1\t2\t1\t10\t30\t20\t10\t80\t42\n";
+        let default_level = crate::types::OcrElementConfig {
+            include_elements: true,
+            ..Default::default()
+        };
+
+        let elements = parse_tsv_to_elements(tsv, 0.0, 4);
+        let selected = default_level.select_elements(&elements);
+
+        assert_eq!(
+            selected.iter().map(|element| element.text.as_str()).collect::<Vec<_>>(),
+            ["Total due", "42"]
+        );
+        assert!(selected.iter().all(|element| element.page_number == 4));
+        assert_eq!(
+            elements
+                .iter()
+                .filter(|element| element.level == crate::types::OcrElementLevel::Word)
+                .count(),
+            3
+        );
+    }
+
     fn confidence_word(text: &str, confidence: f32) -> xberg_tesseract::WordData {
         xberg_tesseract::WordData {
             text: text.to_string(),
-            left: 0,
-            top: 0,
             right: 10,
             bottom: 10,
             confidence,
-            font_attrs: None,
-            language: None,
+            ..Default::default()
         }
     }
 
@@ -2962,13 +2995,8 @@ mod tests {
     fn dict_word(text: &str) -> xberg_tesseract::WordData {
         xberg_tesseract::WordData {
             text: text.to_string(),
-            left: 0,
-            top: 0,
-            right: 0,
-            bottom: 0,
             confidence: 95.0,
-            font_attrs: None,
-            language: None,
+            ..Default::default()
         }
     }
 

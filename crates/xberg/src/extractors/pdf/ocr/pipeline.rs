@@ -295,6 +295,10 @@ enum AllPagesFailedPolicy {
     feature = "pdf",
     feature = "layout-detection"
 ))]
+// ~keep `Prepared` is only constructed by the paddle-OCR-gated whole-document route, so the
+// variant is dead on a `layout-detection + ocr-pipeline` leg without `paddle_ocr`; a
+// union-of-consumers `cfg` here is what drifted and failed the 1.3.0 publish (GH#1951).
+#[allow(dead_code)]
 enum MixedLayoutInputs {
     Resolve,
     Prepared(Option<PreparedLayoutInputs>),
@@ -325,6 +329,9 @@ struct MixedOcrPageSelection<'a> {
 }
 
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+// ~keep Test-support wrapper: only the `feature = "ocr"` test module calls it, so it is dead
+// on an `ocr-pipeline`-only test leg. See the GH#1951 rationale on `MixedLayoutInputs`.
+#[allow(dead_code)]
 pub(crate) async fn extract_mixed_ocr_native(
     native_text: &str,
     boundaries: &[crate::types::PageBoundary],
@@ -1750,6 +1757,9 @@ pub(crate) async fn extract_full_document_ocr_pipeline_per_page(
 /// per-page auto-detection when `content` is available and index-aligned to `images`, or no
 /// rotation correction at all otherwise.
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
+// ~keep Test-only entry point; only the `feature = "ocr"` test modules call it, so it is dead
+// on an `ocr-pipeline`-only test leg. See the GH#1951 rationale on `MixedLayoutInputs`.
+#[allow(dead_code)]
 pub(crate) async fn extract_with_ocr(
     content: Option<&[u8]>,
     images: Option<&[image::DynamicImage]>,

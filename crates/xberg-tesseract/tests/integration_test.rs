@@ -4,7 +4,23 @@
 
 #![allow(clippy::print_stdout, clippy::print_stderr, clippy::dbg_macro)] // ~keep: test/bench binaries print by design; org logging policy exempts tests
 use std::path::{Path, PathBuf};
-use xberg_tesseract::TesseractAPI;
+use xberg_tesseract::{TesseractAPI, WordData};
+
+#[test]
+fn word_data_remains_constructible_with_the_original_public_fields() {
+    let word = WordData {
+        text: "hello".to_string(),
+        left: 1,
+        top: 2,
+        right: 3,
+        bottom: 4,
+        confidence: 95.0,
+        font_attrs: None,
+        language: Some("eng".to_string()),
+    };
+
+    assert_eq!(word.text, "hello");
+}
 
 fn get_default_tessdata_dir() -> PathBuf {
     if cfg!(target_os = "macos") {

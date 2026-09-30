@@ -308,6 +308,44 @@ mod tests {
         assert_eq!(result.quality_score, Some(0.4));
     }
 
+    /// Ten recognized words reported both as words and as the lines holding them stay ten words,
+    /// below the evidence floor.
+    #[tokio::test]
+    async fn words_repeated_by_their_lines_do_not_reach_the_evidence_floor() {
+        let processor = QualityProcessor;
+        let config = ExtractionConfig {
+            enable_quality_processing: true,
+            ..Default::default()
+        };
+        let mut elements = vec![
+            OcrElement {
+                level: crate::types::OcrElementLevel::Line,
+                ..ocrd_element(0.4, 5)
+            };
+            2
+        ];
+        elements.extend(vec![
+            OcrElement {
+                level: crate::types::OcrElementLevel::Word,
+                ..ocrd_element(0.4, 1)
+            };
+            10
+        ]);
+        let mut result = ExtractedDocument {
+            content: "The retained paragraph reads as clean, readable prose with complete \
+                      sentences and conventional punctuation throughout the page."
+                .to_string(),
+            mime_type: Cow::Borrowed("application/pdf"),
+            ocr_elements: Some(elements),
+            pages: None,
+            ..Default::default()
+        };
+
+        processor.process(&mut result, &config).await.unwrap();
+
+        assert_eq!(result.quality_score, Some(1.0));
+    }
+
     /// #1694: the aggregate and the quality-score cap deliberately disagree about how many
     /// recognized words are enough evidence. `ocr_aggregate`'s own floor is "more than zero
     /// words", so a 19-word page still reports a real aggregate; the cap's floor is
