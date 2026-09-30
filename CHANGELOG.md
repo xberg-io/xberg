@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **(ocr): a scanned page whose text layer has no usable character map keeps the scan's segmentation mode.** Automatic OCR routing gave Tesseract block mode (PSM 6) to every page whose text layer has no usable character map, including a scan that carries such a layer over its image. On a scanned table, block mode loses the table reconstruction, so the values leave their rows. Block mode now applies only to a page without a scan raster: a page whose images cover a quarter of it or more keeps the mode a scan gets. A page of unmapped vector text still gets block mode, and an explicit caller setting still wins. (GH#1946)
+
 ## [1.3.0] - 2026-09-28
 
 ### Added
