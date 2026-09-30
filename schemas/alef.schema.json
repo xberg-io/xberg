@@ -7321,7 +7321,7 @@
         "bind_via": {
           "$ref": "#/$defs/BridgeBinding",
           "default": "function_param",
-          "description": "How the bridge attaches to the public API.\n\n- `\"function_param\"` (default): the bridge object arrives as a function argument\n  at the position of any `param_name`-matching parameter. This is the legacy mode.\n- `\"options_field\"`: the bridge object lives as a field on a configured options\n  struct that itself arrives as a function argument. Backends emit a host-language\n  field on that struct instead of a separate function parameter; the bridge object\n  is attached to `options.<field>` before the underlying core call."
+          "description": "How the bridge attaches to the public API.\n\n- `\"function_param\"` (default): the bridge object arrives as a function argument\n  at the position of any `param_name`-matching parameter. This is the legacy mode.\n- `\"options_field\"`: the bridge object lives as a field on a configured options\n  struct that itself arrives as a function argument. Backends emit a host-language\n  field on that struct instead of a separate function parameter; the bridge object\n  is attached to `options.<field>` before the underlying core call.\n\nIn both modes the host value must be an **object that provides the trait's methods by\nname**. A bare callable (a Python `lambda`, a JS arrow function, a Ruby `proc`) is not\naccepted: the bridge dispatches `obj.<method>(...)`, never `obj(...)`. Passing one is\nrejected with an error naming the methods the object has to define — a method with a\nRust default would otherwise be skipped silently and the listener would simply never\nfire."
         },
         "clear_fn": {
           "default": null,
@@ -7339,9 +7339,17 @@
             "null"
           ]
         },
+        "exclude_functions": {
+          "default": [],
+          "description": "Free functions that should NOT gain this bridge's extra argument.\n\nEvery generated function that takes the bridge's owning type picks up the bridge\nkeyword by default. List a function's Rust name here to leave it alone — a synchronous\ndiagnostic entry point, say, where a listener has no meaning. Mirrors the\n`exclude_functions` key each `[crates.<lang>]` table already accepts, and is honoured\nidentically by the Rust wrapper, the host-language facade and the type stub.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "exclude_languages": {
           "default": [],
-          "description": "Language backends that should NOT generate this trait bridge.\nUse backend names as they appear in `Backend::name()`, e.g. `[\"elixir\", \"wasm\"]`.\nWhen a backend's name is listed here, the bridge struct and all related code are\nomitted from that backend's output.",
+          "description": "Language backends that should NOT generate this trait bridge.\n\nA target answers to its language name and, where they differ, to its backend's own\nname: `[\"python\"]` and `[\"pyo3\"]` are the same exclusion, as are `node`/`napi`,\n`ruby`/`magnus`, `elixir`/`rustler`, `r`/`extendr` and `c`/`ffi`. When a target is\nlisted here, the bridge struct and everything that references it — the wrapper\nfunctions, the options setter, the registration surface — are omitted from that\ntarget's output. An entry that names neither a language nor a backend is rejected at\nconfig resolution rather than silently excluding nothing.",
           "items": {
             "type": "string"
           },
@@ -8315,7 +8323,7 @@
       "type": "object"
     }
   },
-  "$id": "https://github.com/xberg-io/alef/releases/download/v0.102.0/alef.schema.json",
+  "$id": "https://github.com/xberg-io/alef/releases/download/v0.103.1/alef.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "JSON Schema for the JSON representation of alef.toml.",
@@ -8435,6 +8443,6 @@
   ],
   "title": "Alef configuration",
   "type": "object",
-  "version": "0.102.0",
-  "x-alef-version": "0.102.0"
+  "version": "0.103.1",
+  "x-alef-version": "0.103.1"
 }
