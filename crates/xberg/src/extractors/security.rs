@@ -13,7 +13,8 @@
     feature = "hwpx",
     feature = "iwork",
     feature = "office",
-    feature = "excel"
+    feature = "excel",
+    feature = "excel-wasm"
 ))]
 use std::io::{Read, Seek};
 
@@ -303,7 +304,8 @@ pub(crate) fn enforce_page_count(count: usize, max_pages: Option<usize>) -> Resu
     feature = "hwpx",
     feature = "iwork",
     feature = "office",
-    feature = "excel"
+    feature = "excel",
+    feature = "excel-wasm"
 ))]
 #[cfg_attr(alef, alef(skip))]
 pub struct ZipBombValidator {
@@ -315,7 +317,8 @@ pub struct ZipBombValidator {
     feature = "hwpx",
     feature = "iwork",
     feature = "office",
-    feature = "excel"
+    feature = "excel",
+    feature = "excel-wasm"
 ))]
 impl ZipBombValidator {
     /// Smallest uncompressed member size the per-member ratio cap applies to.

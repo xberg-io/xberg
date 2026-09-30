@@ -81,8 +81,8 @@ pdf-pdfium = ["dep:pdfium-render", "tokio-runtime"]
 # `zip` and `quick-xml` are not optional extras here: an .xlsx *is* a zip, and the
 # parts calamine does not model — revision headers, cell comments — are read out of
 # it directly. Without them a bare `--features excel` build did not compile at all.
-excel = ["dep:calamine", "dep:roxmltree", "dep:zip", "dep:quick-xml", "tokio-runtime"]
-excel-wasm = ["dep:calamine", "dep:roxmltree", "dep:zip"]
+excel = ["dep:calamine", "dep:cfb", "dep:roxmltree", "dep:zip", "dep:quick-xml", "tokio-runtime"]
+excel-wasm = ["dep:calamine", "dep:cfb", "dep:roxmltree", "dep:zip", "dep:quick-xml"]
 office = [
     "dep:cfb",
     "dep:flate2",
