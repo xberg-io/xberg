@@ -3397,6 +3397,33 @@ mod tests {
     }
 
     #[test]
+    fn issue_1970_rejects_dominant_first_column_without_numeric_values() {
+        let table = vec![
+            vec!["Label".into(), "Value".into()],
+            vec![
+                "Extended shipping and handling description field".into(),
+                "pending".into(),
+            ],
+            vec!["Extended customer service description field".into(), "unknown".into()],
+            vec!["Extended fulfillment status description field".into(), "missing".into()],
+        ];
+
+        assert!(post_process_table(table, true, false).is_none());
+    }
+
+    #[test]
+    fn issue_1970_rejects_label_value_shape_dominated_by_value_column() {
+        let table = vec![
+            vec!["Label".into(), "Value".into()],
+            vec!["A".into(), "1234567890123456789012345678901234567890".into()],
+            vec!["B".into(), "2345678901234567890123456789012345678901".into()],
+            vec!["C".into(), "3456789012345678901234567890123456789012".into()],
+        ];
+
+        assert!(post_process_table(table, true, false).is_none());
+    }
+
+    #[test]
     fn test_layout_guided_single_word_prose_rejected() {
         let table = vec![
             vec!["A".into(), "B".into(), "C".into(), "D".into(), "E".into(), "F".into()],
