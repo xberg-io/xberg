@@ -871,10 +871,45 @@ pub(super) fn whole_page_raster_for_ocr_page(
     content: Option<&[u8]>,
     page_idx: usize,
 ) -> bool {
+    ocr_page_document(lazy_pdf_render_state, fallback_pdf_state, content)
+        .is_some_and(|doc| crate::pdf::scan_detect::full_page_raster_density(doc, page_idx).is_some())
+}
+
+/// Whether `page_idx` takes Tesseract block mode: automatic routing listed its one-indexed
+/// `page_number` in `single_block_pages`, and the page carries no raster large enough to be a
+/// scan ([`crate::pdf::scan_detect::carries_scan_raster`]), read from the same document
+/// [`whole_page_raster_for_ocr_page`] reads. With no document at hand, the list decides.
+///
+/// Automatic routing asks for block mode on a page whose text layer has no usable character
+/// map, because such a page is vector text that block mode keeps on its rows (#1896). A scan
+/// with an unmapped text layer is still a scan: block mode loses the table reconstruction the
+/// scan's own segmentation mode gives it, so such a page keeps that mode.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn single_block_for_ocr_page(
+    single_block_pages: Option<&std::collections::HashSet<u32>>,
+    page_number: usize,
+    lazy_pdf_render_state: Option<&(xberg_native_pdf::PdfDocument, usize, Vec<u32>)>,
+    fallback_pdf_state: &mut Option<Option<xberg_native_pdf::PdfDocument>>,
+    content: Option<&[u8]>,
+    page_idx: usize,
+) -> bool {
+    let listed = single_block_pages.is_some_and(|pages| u32::try_from(page_number).is_ok_and(|n| pages.contains(&n)));
+    listed
+        && !ocr_page_document(lazy_pdf_render_state, fallback_pdf_state, content)
+            .is_some_and(|doc| crate::pdf::scan_detect::carries_scan_raster(doc, page_idx))
+}
+
+/// The document the page-classification helpers above read: the render state when it is open,
+/// else the lazily opened fallback handle.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn ocr_page_document<'a>(
+    lazy_pdf_render_state: Option<&'a (xberg_native_pdf::PdfDocument, usize, Vec<u32>)>,
+    fallback_pdf_state: &'a mut Option<Option<xberg_native_pdf::PdfDocument>>,
+    content: Option<&[u8]>,
+) -> Option<&'a xberg_native_pdf::PdfDocument> {
     match lazy_pdf_render_state {
-        Some((doc, _, _)) => crate::pdf::scan_detect::full_page_raster_density(doc, page_idx).is_some(),
-        None => fallback_render_document(fallback_pdf_state, content)
-            .is_some_and(|doc| crate::pdf::scan_detect::full_page_raster_density(doc, page_idx).is_some()),
+        Some((doc, _, _)) => Some(doc),
+        None => fallback_render_document(fallback_pdf_state, content),
     }
 }
 /// The DPI to render `page_idx` at for OCR.

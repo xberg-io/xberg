@@ -193,7 +193,7 @@ fn single_table_image_reports_consistent_table_metadata() {
 /// Coverage of the forwarding itself is NOT lost by that relaxation, which is
 /// what makes it safe rather than a vacuous test: `ocr/conversion.rs`'s
 /// `iterator_word_to_element_forwards_underline_font_id_crown_indent_and_language`
-/// builds a `WordData { language: Some("deu"), .. }` directly and asserts the
+/// builds a `WordData` with `language: Some("deu")` directly and asserts the
 /// resulting `word_language` metadata equals `"deu"`, with no Tesseract call
 /// and so no platform dependence. If the forwarding in
 /// `iterator_word_to_element` ever breaks, that unit test fails on every

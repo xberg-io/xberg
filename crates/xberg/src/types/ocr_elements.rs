@@ -138,6 +138,7 @@ impl OcrBoundingGeometry {
     /// Tuple of `(left, top, width, height)` in pixels.
     #[cfg(any(
         paddle_ocr,
+        feature = "ocr",
         all(
             feature = "layout-detection",
             feature = "pdf",
@@ -499,8 +500,8 @@ impl OcrElementConfig {
     }
 }
 
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn element_level_rank(level: OcrElementLevel) -> u8 {
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "heuristics"))]
+pub(crate) fn element_level_rank(level: OcrElementLevel) -> u8 {
     match level {
         OcrElementLevel::Word => 0,
         OcrElementLevel::Line => 1,
