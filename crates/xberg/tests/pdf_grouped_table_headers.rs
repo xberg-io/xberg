@@ -3,7 +3,7 @@
 
 mod helpers;
 use helpers::extract_bytes_document_blocking;
-use xberg::{ExtractionConfig, PdfConfig};
+use xberg::{ExtractionConfig, NodeContent, PdfConfig};
 
 fn table_pdf(padding: Option<f32>, filled_rules: bool, heading_offset: u32) -> Vec<u8> {
     let mut content = String::new();
@@ -73,6 +73,7 @@ fn grouped_headers_survive_with_and_without_inset_backgrounds() {
             for filled_rules in [false, true] {
                 let config = ExtractionConfig {
                     disable_ocr: true,
+                    include_document_structure: true,
                     use_cache: false,
                     enable_quality_processing: false,
                     pdf_options: Some(PdfConfig {
@@ -95,7 +96,39 @@ fn grouped_headers_survive_with_and_without_inset_backgrounds() {
                 );
                 let cells = &result.tables[0].cells;
                 assert_eq!(cells.len(), 4, "{cells:?}");
-                assert_eq!(cells[0], ["First", "Second", "Third"], "{cells:?}");
+                assert_eq!(cells[0], ["First", "", "Second", "", "Third", ""], "{cells:?}");
+                let grid = result
+                    .document
+                    .as_ref()
+                    .unwrap()
+                    .nodes
+                    .iter()
+                    .find_map(|node| {
+                        if let NodeContent::Table { grid } = &node.content {
+                            Some(grid)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap();
+                assert_eq!(grid.cols, 6);
+                let headers: Vec<_> = grid
+                    .cells
+                    .iter()
+                    .filter(|c| c.row == 0)
+                    .map(|c| (c.content.as_str(), c.col, c.col_span))
+                    .collect();
+                assert_eq!(headers, [("First", 0, 2), ("Second", 2, 2), ("Third", 4, 2)]);
+                assert_eq!(
+                    result.tables[0].markdown,
+                    concat!(
+                        "| First |  | Second |  | Third |  |\n",
+                        "| --- | --- | --- | --- | --- | --- |\n",
+                        "| R645C0 | R645C1 | R645C2 | R645C3 | R645C4 | R645C5 |\n",
+                        "| R625C0 | R625C1 | R625C2 | R625C3 | R625C4 | R625C5 |\n",
+                        "| R605C0 | R605C1 | R605C2 | R605C3 | R605C4 | R605C5 |\n",
+                    )
+                );
                 for (row, y) in [645, 625, 605].into_iter().enumerate() {
                     let expected: Vec<_> = (0..6).map(|column| format!("R{y}C{column}")).collect();
                     assert_eq!(cells[row + 1], expected, "{cells:?}");

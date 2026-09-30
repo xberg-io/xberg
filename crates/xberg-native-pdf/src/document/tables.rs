@@ -6,6 +6,18 @@
 
 use super::*;
 
+/// Gap, in em, within which two source-adjacent word fragments are re-glued into
+/// one table word. One em rather than the original half em: a font can kern the
+/// two halves of one word apart by more than a normal inter-word space, while a
+/// genuine column jump is many ems wide. See `extract_table_word_spans`. ~keep
+const TABLE_WORD_FUSE_EM: f32 = 1.0;
+
+fn preserve_source_space(text: &mut String, preceded_by_space: bool) {
+    if preceded_by_space {
+        text.insert(0, ' ');
+    }
+}
+
 impl PdfDocument {
     /// Promote labels in rowspan-sparse columns so they sort at the top
     /// of their data-row block instead of landing mid-group.
@@ -406,28 +418,38 @@ impl PdfDocument {
     /// surface as spaces inside a table cell. Re-glue the fragments the
     /// merger marked as boundary-free before handing spans to the detector.
     fn extract_table_word_spans(&self, page_index: usize) -> Result<Vec<crate::layout::TextSpan>> {
-        let (words, continues_prev) = self.extract_words_inner(page_index, None, None, true)?;
+        let (words, continues_prev, space_before) = self.extract_words_inner(page_index, None, None, true)?;
         let mut fused: Vec<crate::layout::Word> = Vec::with_capacity(words.len());
-        for (word, continues) in words.into_iter().zip(continues_prev) {
-            // Half-em BAND, tested on the absolute gap. Source adjacency says
-            // the producer drew these glyphs consecutively; it does not say
-            // they are typographically adjacent, so geometry still has a veto,
-            // and it needs both bounds:
-            //   above  — the merger also concatenates runs across a column
-            //            jump when neither side carries a space glyph, and
-            //            honouring that here would dissolve the grid;
+        for ((word, continues), preceded_by_space) in words.into_iter().zip(continues_prev).zip(space_before) {
+            let mut word = word;
+            // The cell assembler re-decides joins from bbox gaps alone, and on a
+            // tight face the space's glyphs abut or overlap their neighbours, so
+            // that gap reads as zero or negative and the two words fuse
+            // (GH#1948: `corrispettivisuperiori`). Carry the source space in the
+            // word's own text so `cell_span_separator` emits it. Use the exact
+            // source-character marker: a non-continuation can instead mean that
+            // clustering visited glyphs out of source order or skipped a
+            // non-whitespace glyph. ~keep
+            preserve_source_space(&mut word.text, preceded_by_space);
+            // Source adjacency says the producer drew these glyphs consecutively;
+            // it does not say they are typographically adjacent, so geometry still
+            // has a veto on both bounds:
+            //   above  — the merger also concatenates runs across a column jump
+            //            when neither side carries a space glyph, and honouring
+            //            that here would dissolve the grid;
             //   below  — a large NEGATIVE gap is the signature of a backtrack
-            //            (displayed-math denominators) or a line-wrap reset,
-            //            the two cases the word merge loop guards with
+            //            (displayed-math denominators) or a line-wrap reset, the
+            //            two cases the word merge loop guards with
             //            `gap < -font_size` and `delta_x < -5 * font_size`.
-            //            A one-sided upper bound admits every one of them.
-            // A sub-em kerned seam — the case this whole path exists for — is
-            // ~0.2 em, comfortably inside the band from either side. ~keep
+            // The band is one em, not the original half em: a font can kern two
+            // halves of one word apart by more than a normal space (GH#1948:
+            // `d’impresa` seams at 0.68 em), and a genuine column jump is many
+            // ems wide. ~keep
             match fused.last_mut() {
                 Some(prev)
                     if continues
                         && (word.bbox.x - (prev.bbox.x + prev.bbox.width)).abs()
-                            < prev.avg_font_size.max(word.avg_font_size).max(1.0) * 0.5 =>
+                            < prev.avg_font_size.max(word.avg_font_size).max(1.0) * TABLE_WORD_FUSE_EM =>
                 {
                     prev.absorb(word)
                 }
@@ -909,5 +931,28 @@ impl PdfDocument {
         }
 
         tables
+    }
+}
+
+#[cfg(test)]
+mod source_space_tests {
+    use super::preserve_source_space;
+
+    #[test]
+    fn non_contiguous_source_glyphs_without_whitespace_do_not_gain_a_space() {
+        let mut text = "fragment".to_string();
+
+        preserve_source_space(&mut text, false);
+
+        assert_eq!(text, "fragment");
+    }
+
+    #[test]
+    fn source_whitespace_is_preserved_when_geometry_cannot_show_it() {
+        let mut text = "fragment".to_string();
+
+        preserve_source_space(&mut text, true);
+
+        assert_eq!(text, " fragment");
     }
 }

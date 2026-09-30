@@ -42,7 +42,7 @@ println!("{}", result.content);
 
 `output_format="dot"` **replaces** `result.content` with the DOT text — it does not append to or accompany the normal extracted content. If no diagram is recovered from the source, `content` is the **empty string**, not an error and not the document's ordinary text. A caller relying on `content` for anything other than the recovered diagram must check `output_format` first.
 
-The CLI's `--content-format` flag does not currently expose registry renderers such as `dot` (it accepts `plain`, `markdown`, `djot`, `html`, `json`, `doctags`); use a language binding or the Rust API for DOT output today.
+The CLI's `--content-format` flag does not currently expose registry renderers such as `dot` (it accepts `plain`, `markdown`, `djot`, `html`, `json`, `doctags`, `docx`); use a language binding or the Rust API for DOT output today.
 
 ## What Gets Recovered
 

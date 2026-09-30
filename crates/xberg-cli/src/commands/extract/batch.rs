@@ -51,7 +51,9 @@ pub fn batch_command(
             fail_batch_errors(&envelope.errors)?;
         }
         WireFormat::Text => {
-            let output = run_batch_sync(&uris, file_configs_map.as_ref(), &config)?;
+            let inputs = build_batch_inputs(&uris, file_configs_map.as_ref())?;
+            refuse_binary_text_output(&config, &inputs)?;
+            let output = run_batch_sync(inputs, &config)?;
             let dir = output_dir.as_deref().unwrap_or(Path::new("."));
             let mut diagnostics = std::io::stderr().lock();
             for (i, result) in output.results.iter().enumerate() {
@@ -100,17 +102,67 @@ pub fn batch_command(
     Ok(())
 }
 
+/// The batch text output joins documents under headers, which a binary document cannot be.
+fn refuse_binary_text_output<'a>(config: &'a ExtractionConfig, inputs: &'a [ExtractInput]) -> Result<()> {
+    let per_file_binary_format = inputs.iter().find_map(|input| {
+        let xberg::OutputFormat::Custom(name) = input.config.as_ref()?.output_format.as_ref()? else {
+            return None;
+        };
+        (name == super::DOCX_CONTENT_FORMAT || name == super::PDF_CONTENT_FORMAT).then_some(name.as_str())
+    });
+    if let Some(binary_format) = super::requested_binary_format(config).or(per_file_binary_format) {
+        anyhow::bail!(
+            "--content-format {binary_format} produces one binary document per file, which the text \
+             output cannot hold; use --format json, where each result's `content` is the \
+             base64-encoded {}",
+            binary_format.to_uppercase()
+        );
+    }
+    Ok(())
+}
+
 /// Run batch extraction using the synchronous batch API for non-JSON output paths.
-fn run_batch_sync(
-    uris: &[String],
-    file_configs_map: Option<&std::collections::HashMap<String, serde_json::Value>>,
-    config: &ExtractionConfig,
-) -> Result<ExtractionResult> {
-    let inputs = build_batch_inputs(uris, file_configs_map)?;
+fn run_batch_sync(inputs: Vec<ExtractInput>, config: &ExtractionConfig) -> Result<ExtractionResult> {
     let input_count = inputs.len();
     // Describe the attempted operation only; the returned `ExtractionResult` retains every
     // per-input failure with its original source and index. ~keep
     block_on_extract_batch(inputs, config).with_context(|| format!("Failed to batch extract {input_count} inputs"))
+}
+
+#[cfg(test)]
+mod binary_output_tests {
+    use super::*;
+    use xberg::{FileExtractionConfig, OutputFormat};
+
+    #[test]
+    fn batch_text_output_rejects_a_per_file_docx_override() {
+        let inputs = vec![ExtractInput {
+            config: Some(FileExtractionConfig {
+                output_format: Some(OutputFormat::Custom(super::super::DOCX_CONTENT_FORMAT.to_string())),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }];
+
+        let error = refuse_binary_text_output(&ExtractionConfig::default(), &inputs)
+            .expect_err("a per-file DOCX result cannot be joined into text output");
+        assert!(error.to_string().contains("--format json"), "{error}");
+    }
+
+    #[test]
+    fn batch_text_output_rejects_a_per_file_pdf_override() {
+        let inputs = vec![ExtractInput {
+            config: Some(FileExtractionConfig {
+                output_format: Some(OutputFormat::Custom(super::super::PDF_CONTENT_FORMAT.to_string())),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }];
+
+        let error = refuse_binary_text_output(&ExtractionConfig::default(), &inputs)
+            .expect_err("a per-file PDF result cannot be joined into text output");
+        assert!(error.to_string().contains("--format json"), "{error}");
+    }
 }
 
 /// Return one timing per input, keyed by the core engine's `source_index` metadata.

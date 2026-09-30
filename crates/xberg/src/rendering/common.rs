@@ -594,5 +594,16 @@ pub(crate) fn escape_html_text(input: &str) -> Cow<'_, str> {
     Cow::Owned(out)
 }
 
+// ~keep Read only by the DOCX and PDF writers, which need `office` and `pdf`; a
+// hand-kept union-of-consumers `cfg` is what drifted and failed the 1.3.0 publish (GH#1951).
+/// The target of a link a reader can open outside the document, in the URL parser's
+/// percent-encoded form. Fragment and relative links have no such target, so a binary
+/// format keeps their text and drops the link.
+#[allow(dead_code)]
+pub(crate) fn external_link_target(url: &str) -> Option<String> {
+    let parsed = url::Url::parse(url).ok()?;
+    matches!(parsed.scheme(), "http" | "https" | "mailto" | "ftp").then(|| parsed.into())
+}
+
 #[cfg(test)]
 mod tests;

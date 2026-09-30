@@ -13,7 +13,7 @@ use super::document::resolved_ocr_layout_dimensions;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 use super::document::{
     accepted_ocr_page_replacements, apply_ocr_page_replacements, apply_ocr_text_list_fallback,
-    fill_unstructured_ocr_pages, heuristically_restructured_ocr_pages,
+    fill_unstructured_ocr_pages, heuristically_restructured_ocr_pages, ocr_pages_with_tables,
 };
 // Read only by the two OCR-paragraph assembly blocks below -- one gated on
 // `layout-detection` *with* `ocr`/`ocr-wasm`, the other on `not(layout-detection)`. With
@@ -61,7 +61,7 @@ use super::rendering::{
     clone_rgb_for_png_encode, fallback_render_document, open_pdf_for_full_ocr, open_pdf_for_page_ocr,
     page_dimensions_pt, page_needs_xobject_fallback, pre_rendered_page_geometry, pre_rendered_page_source_dpi,
     recover_page_text_from_image_xobjects, render_full_pdf_ocr_batch, render_selected_pages_from_document,
-    share_rendered_page_images, valid_page_indices, validate_png_encode_pages_individually,
+    share_rendered_page_images, single_block_for_ocr_page, valid_page_indices, validate_png_encode_pages_individually,
     whole_page_raster_for_ocr_page,
 };
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -295,6 +295,10 @@ enum AllPagesFailedPolicy {
     feature = "pdf",
     feature = "layout-detection"
 ))]
+// ~keep `Prepared` is only constructed by the paddle-OCR-gated whole-document route, so the
+// variant is dead on a `layout-detection + ocr-pipeline` leg without `paddle_ocr`; a
+// union-of-consumers `cfg` here is what drifted and failed the 1.3.0 publish (GH#1951).
+#[allow(dead_code)]
 enum MixedLayoutInputs {
     Resolve,
     Prepared(Option<PreparedLayoutInputs>),
@@ -325,6 +329,9 @@ struct MixedOcrPageSelection<'a> {
 }
 
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+// ~keep Test-support wrapper: only the `feature = "ocr"` test module calls it, so it is dead
+// on an `ocr-pipeline`-only test leg. See the GH#1951 rationale on `MixedLayoutInputs`.
+#[allow(dead_code)]
 pub(crate) async fn extract_mixed_ocr_native(
     native_text: &str,
     boundaries: &[crate::types::PageBoundary],
@@ -398,13 +405,6 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             }
         })
         .collect();
-    let single_block_pages = std::sync::Arc::new(
-        pages
-            .single_block
-            .iter()
-            .copied()
-            .collect::<std::collections::HashSet<u32>>(),
-    );
 
     if ocr_set.is_empty() {
         return Ok((
@@ -425,6 +425,17 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let (render_doc, page_count, page_rotations) = open_pdf_for_page_ocr(content)?;
     // Shared with each spawned pipeline task below, whose embedded-image retry reads it (#1912).
     let render_doc = std::sync::Arc::new(render_doc);
+    // A listed page that carries a scan keeps the scan's segmentation mode; see
+    // `single_block_for_ocr_page`.
+    let single_block_pages = std::sync::Arc::new(
+        pages
+            .single_block
+            .iter()
+            .copied()
+            .filter(|page| ocr_set.contains(page))
+            .filter(|&page| !crate::pdf::scan_detect::carries_scan_raster(&render_doc, (page - 1) as usize))
+            .collect::<std::collections::HashSet<u32>>(),
+    );
     page_indices = valid_page_indices(&page_indices, page_count);
     if page_indices.is_empty() {
         return Ok((
@@ -1746,6 +1757,9 @@ pub(crate) async fn extract_full_document_ocr_pipeline_per_page(
 /// per-page auto-detection when `content` is available and index-aligned to `images`, or no
 /// rotation correction at all otherwise.
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
+// ~keep Test-only entry point; only the `feature = "ocr"` test modules call it, so it is dead
+// on an `ocr-pipeline`-only test leg. See the GH#1951 rationale on `MixedLayoutInputs`.
+#[allow(dead_code)]
 pub(crate) async fn extract_with_ocr(
     content: Option<&[u8]>,
     images: Option<&[image::DynamicImage]>,
@@ -2475,16 +2489,25 @@ pub(super) async fn extract_with_ocr_for_page(
                     );
                 #[cfg(not(feature = "pdf"))]
                 let whole_page_raster = false;
+                #[cfg(feature = "pdf")]
+                let prefer_single_block = single_block_for_ocr_page(
+                    page_ocr_hints
+                        .as_ref()
+                        .and_then(|hints| hints.single_block_pages.as_deref()),
+                    page_index_offset + *page_idx + 1,
+                    lazy_pdf_render_state.as_ref(),
+                    &mut fallback_pdf_state,
+                    content,
+                    *page_idx,
+                );
+                #[cfg(not(feature = "pdf"))]
+                let prefer_single_block = false;
                 let config_clone = ocr_config_with_page_rotation_hint(
                     &ocr_config_owned,
                     page_rotation_degrees,
                     source_dpi,
                     whole_page_raster,
-                    page_ocr_hints.as_ref().is_some_and(|hints| {
-                        hints.single_block_pages.as_ref().is_some_and(|pages| {
-                            pages.contains(&u32::try_from(page_index_offset + *page_idx + 1).unwrap_or(u32::MAX))
-                        })
-                    }),
+                    prefer_single_block,
                 )
                 .into_owned();
                 // No PDF `/Rotate` is ever known without the `pdf` feature (`page_rotation_degrees`
@@ -2588,16 +2611,25 @@ pub(super) async fn extract_with_ocr_for_page(
                     );
                 #[cfg(not(feature = "pdf"))]
                 let whole_page_raster = false;
+                #[cfg(feature = "pdf")]
+                let prefer_single_block = single_block_for_ocr_page(
+                    page_ocr_hints
+                        .as_ref()
+                        .and_then(|hints| hints.single_block_pages.as_deref()),
+                    page_index_offset + *page_idx + 1,
+                    lazy_pdf_render_state.as_ref(),
+                    &mut fallback_pdf_state,
+                    content,
+                    *page_idx,
+                );
+                #[cfg(not(feature = "pdf"))]
+                let prefer_single_block = false;
                 let config_for_page = ocr_config_with_page_rotation_hint(
                     &ocr_config_owned,
                     page_rotation_degrees,
                     source_dpi,
                     whole_page_raster,
-                    page_ocr_hints.as_ref().is_some_and(|hints| {
-                        hints.single_block_pages.as_ref().is_some_and(|pages| {
-                            pages.contains(&u32::try_from(page_index_offset + *page_idx + 1).unwrap_or(u32::MAX))
-                        })
-                    }),
+                    prefer_single_block,
                 );
                 #[cfg(feature = "pdf")]
                 let (upright_data, upright_width, upright_height, correction_degrees) = upright_raster_for_backend(
@@ -3274,12 +3306,18 @@ pub(super) async fn extract_with_ocr_for_page(
         page_index_offset,
     );
 
-    fill_unstructured_ocr_pages(&mut all_page_paragraphs, &page_texts);
+    let pages_with_tables = ocr_pages_with_tables(&collected_tables, all_page_paragraphs.len(), page_index_offset);
+    fill_unstructured_ocr_pages(&mut all_page_paragraphs, &page_texts, &pages_with_tables);
 
     let (ocr_doc, raw_page_paragraphs) = {
         let has_structured = all_page_paragraphs
             .iter()
-            .any(|paragraphs| paragraphs.as_ref().is_some_and(|paragraphs| !paragraphs.is_empty()));
+            .zip(&pages_with_tables)
+            .any(|(paragraphs, has_tables)| {
+                paragraphs
+                    .as_ref()
+                    .is_some_and(|paragraphs| !paragraphs.is_empty() || *has_tables)
+            });
         if has_structured {
             let pages: Vec<Vec<crate::pdf::structure::types::PdfParagraph>> = all_page_paragraphs
                 .into_iter()

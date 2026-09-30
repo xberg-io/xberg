@@ -515,3 +515,21 @@ fn test_list_container() {
 
     assert_eq!(ds.nodes[roots[0].0.0 as usize].children.len(), 2);
 }
+
+#[test]
+fn native_table_geometry_is_discarded_after_cells_change() {
+    let mut table = crate::types::Table {
+        cells: vec![vec!["Group".into(), "".into()]],
+        ..Default::default()
+    };
+    let mut grid = super::table_to_grid(&table, None);
+    grid.cells.truncate(1);
+    grid.cells[0].col_span = 2;
+    assert_eq!(super::table_to_grid(&table, Some(&grid)).cells[0].col_span, 2);
+    table.cells[0][1] = "Separate cell".into();
+    assert_eq!(super::table_to_grid(&table, Some(&grid)).cells[0].col_span, 1);
+    table.cells[0][1].clear();
+    table.cells[0][0] = "Edited".into();
+    assert_eq!(super::table_to_grid(&table, Some(&grid)).cells[0].content, "Edited");
+    assert_eq!(super::table_to_grid(&table, Some(&grid)).cells[0].col_span, 1);
+}
