@@ -637,8 +637,6 @@ fn read_xlsb_bytes(
     Ok((result, warnings))
 }
 
-/// Read `.ods` bytes. `read_excel_file` has no direct counterpart — an on-disk `.ods` falls
-/// through to `open_workbook_auto`, which dispatches to the same `calamine::Ods` reader.
 fn read_ods_bytes(
     data: &[u8],
     office_metadata: Option<HashMap<String, String>>,
