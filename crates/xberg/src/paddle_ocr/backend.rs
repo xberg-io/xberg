@@ -35,7 +35,7 @@ fn paddle_accel_builder_fn(
 use crate::Result;
 use crate::core::config::OcrConfig;
 use crate::ocr::conversion::{detailed_text_block_to_elements, elements_to_hocr_words};
-use crate::ocr::table::drop_elements_claimed_by_tables;
+use crate::ocr::table::drop_document_elements_claimed_by_tables;
 use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
 use crate::table_core::{reconstruct_table, table_to_markdown};
 #[cfg(test)]
@@ -1371,7 +1371,7 @@ impl PaddleOcrBackend {
         let claiming_tables = tables
             .iter()
             .filter_map(|table| Some((table.bounding_box?, table.cells.as_slice())));
-        doc.elements = drop_elements_claimed_by_tables(std::mem::take(&mut doc.elements), claiming_tables);
+        drop_document_elements_claimed_by_tables(&mut doc, claiming_tables);
         doc
     }
 

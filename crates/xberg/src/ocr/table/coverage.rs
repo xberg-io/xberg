@@ -2,7 +2,7 @@
 //! every OCR backend that returns both.
 
 use crate::types::extraction::BoundingBox;
-use crate::types::internal::InternalElement;
+use crate::types::internal::{InternalDocument, InternalElement};
 
 /// Word-count shortfall a markdown table rebuild is allowed relative to the content it would
 /// replace before the rebuild is rejected as content loss (GH#1599). Zero: table syntax (`|`,
@@ -67,6 +67,18 @@ pub(crate) fn drop_elements_claimed_by_tables<'a>(
                 .any(|table_bbox| element_center_within_table(element, table_bbox))
         })
         .collect()
+}
+
+/// [`drop_elements_claimed_by_tables`] over a page document, recording in
+/// `ocr_text_claimed_by_tables` whether it removed every text element of the page.
+pub(crate) fn drop_document_elements_claimed_by_tables<'a>(
+    document: &mut InternalDocument,
+    tables: impl IntoIterator<Item = (BoundingBox, &'a [Vec<String>])>,
+) {
+    let element_count = document.elements.len();
+    document.elements = drop_elements_claimed_by_tables(std::mem::take(&mut document.elements), tables);
+    document.ocr_text_claimed_by_tables = document.elements.len() < element_count
+        && document.elements.iter().all(|element| element.text.trim().is_empty());
 }
 
 /// Whether `element`'s bbox centre lies inside `table_bbox`.
@@ -242,6 +254,46 @@ mod tests {
             1,
             "an element with no bbox cannot be tested against a table and must survive"
         );
+    }
+
+    #[test]
+    fn drop_document_elements_claimed_by_tables_records_a_page_the_tables_emptied() {
+        let mut document = InternalDocument::new("pdf");
+        document.elements = vec![paragraph_with_bbox("Apple 50 10 00", 10.0, 10.0, 90.0, 30.0)];
+        let cells = cells_of("Apple 50 10 00");
+
+        drop_document_elements_claimed_by_tables(&mut document, [(bbox(0.0, 0.0, 100.0, 100.0), cells.as_slice())]);
+
+        assert!(document.elements.is_empty());
+        assert!(document.ocr_text_claimed_by_tables);
+    }
+
+    #[test]
+    fn drop_document_elements_claimed_by_tables_does_not_record_a_page_that_was_already_empty() {
+        let mut document = InternalDocument::new("pdf");
+        let cells = cells_of("TICKET CP 2 60,000");
+
+        drop_document_elements_claimed_by_tables(&mut document, [(bbox(0.0, 0.0, 100.0, 100.0), cells.as_slice())]);
+
+        assert!(
+            !document.ocr_text_claimed_by_tables,
+            "a blank pass has no text for the tables to claim"
+        );
+    }
+
+    #[test]
+    fn drop_document_elements_claimed_by_tables_does_not_record_a_page_that_keeps_text() {
+        let mut document = InternalDocument::new("pdf");
+        document.elements = vec![
+            paragraph_with_bbox("Vehicle Maintenance Guide", 10.0, 0.0, 90.0, 15.0),
+            paragraph_with_bbox("Apple 50 10 00", 10.0, 50.0, 90.0, 70.0),
+        ];
+        let cells = cells_of("Apple 50 10 00");
+
+        drop_document_elements_claimed_by_tables(&mut document, [(bbox(0.0, 40.0, 100.0, 140.0), cells.as_slice())]);
+
+        assert_eq!(document.elements.len(), 1);
+        assert!(!document.ocr_text_claimed_by_tables);
     }
 
     #[test]

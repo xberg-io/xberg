@@ -675,6 +675,95 @@ async fn test_paddle_ocr_full_page_table_not_duplicated_in_pdf_content() {
     }
 }
 
+/// A blank page whose text is recovered from its embedded images keeps that text when the retry
+/// also finds a table, and prints the table once (#2014). The fixture draws `simple_table.png` and
+/// `cord_receipt_01.jpg` from `test_documents/images` under a zero-area clip, so the page renders
+/// blank and only the embedded-image retry reads it. `Banana` appears only in the table.
+#[cfg(feature = "pdf")]
+#[tokio::test]
+#[ignore = "requires ONNX Runtime and downloaded models"]
+async fn test_paddle_ocr_keeps_embedded_image_retry_text_beside_its_table() {
+    use xberg::core::config::OutputFormat;
+
+    let pdf_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ocr/clipped_table_and_receipt.pdf");
+
+    for output_format in [OutputFormat::Plain, OutputFormat::Markdown] {
+        let config = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                backend: "paddle-ocr".to_string(),
+                language: vec!["en".to_string()],
+                paddle_ocr_config: Some(serde_json::json!({"enable_table_detection": true})),
+                ..Default::default()
+            }),
+            force_ocr: true,
+            output_format,
+            use_cache: false,
+            ..Default::default()
+        };
+
+        let result = extract_uri_document(&pdf_path, None, &config)
+            .await
+            .expect("OCR extraction must succeed");
+
+        assert!(!result.tables.is_empty(), "the retry must find the table");
+        assert_eq!(
+            result.content.matches("Banana").count(),
+            1,
+            "the retry's table must appear in the content exactly once: {}",
+            result.content
+        );
+        assert!(
+            result.content.contains("CIMB NIAGA"),
+            "the receipt text recovered by the retry must stay in the content: {}",
+            result.content
+        );
+    }
+}
+
+/// A blank page whose only embedded image is a table keeps that table, printed once, when the
+/// table holds every line the retry recovered (#2014). The fixture draws `simple_table.png` from
+/// `test_documents/images` under a zero-area clip, so only the embedded-image retry reads it.
+#[cfg(feature = "pdf")]
+#[tokio::test]
+#[ignore = "requires ONNX Runtime and downloaded models"]
+async fn test_paddle_ocr_keeps_an_embedded_image_retry_table_that_holds_all_of_its_text() {
+    use xberg::core::config::OutputFormat;
+
+    let pdf_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ocr/clipped_table.pdf");
+
+    for output_format in [OutputFormat::Plain, OutputFormat::Markdown] {
+        let config = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                backend: "paddle-ocr".to_string(),
+                language: vec!["en".to_string()],
+                paddle_ocr_config: Some(serde_json::json!({"enable_table_detection": true})),
+                ..Default::default()
+            }),
+            force_ocr: true,
+            output_format,
+            use_cache: false,
+            ..Default::default()
+        };
+
+        let result = extract_uri_document(&pdf_path, None, &config)
+            .await
+            .expect("OCR extraction must succeed");
+
+        assert_eq!(
+            result.tables.len(),
+            1,
+            "the retry's table must be kept: {}",
+            result.content
+        );
+        assert_eq!(
+            result.content.matches("Banana").count(),
+            1,
+            "the retry's table must appear in the content exactly once: {}",
+            result.content
+        );
+    }
+}
+
 /// Compute Text F1 score: token-level precision/recall between predicted and reference text.
 fn compute_tf1(predicted: &str, reference: &str) -> f64 {
     let pred_tokens: Vec<&str> = predicted.split_whitespace().collect();

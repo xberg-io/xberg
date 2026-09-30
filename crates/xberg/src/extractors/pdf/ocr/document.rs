@@ -1928,38 +1928,21 @@ pub(super) fn apply_ocr_text_list_fallback(paragraphs: &mut [crate::pdf::structu
         }
     }
 }
-/// Which pages of an OCR batch carry a collected table, by batch-local page index.
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-pub(super) fn ocr_pages_with_tables(
-    tables: &[crate::types::Table],
-    page_count: usize,
-    page_index_offset: usize,
-) -> Vec<bool> {
-    let mut pages = vec![false; page_count];
-    for table in tables {
-        if let Some(local_index) = (table.page_number as usize).checked_sub(page_index_offset + 1)
-            && let Some(page) = pages.get_mut(local_index)
-        {
-            *page = true;
-        }
-    }
-    pages
-}
-
 /// Rebuild paragraphs from the flat OCR text for each page that has none.
 ///
-/// A page whose backend document exists but is empty while the page carries a table is not
-/// refilled: the backend emptied it because the tables claimed every line (#1571), and the flat
-/// text still holds those lines, so a refill would print the table a second time ahead of it.
-/// The standalone-image route has the same guard. ~keep
+/// A page whose text the backend found entirely claimed by detected tables (#1571) is not
+/// refilled: its flat text holds only lines the tables already carry, so a refill would print the
+/// table a second time ahead of it. Keyed to that backend report rather than to the presence of a
+/// table, because an embedded-image retry can add tables and text to a page whose own pass was
+/// blank. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn fill_unstructured_ocr_pages(
     page_paragraphs: &mut [Option<Vec<crate::pdf::structure::types::PdfParagraph>>],
     page_texts: &[String],
-    pages_with_tables: &[bool],
+    pages_text_claimed_by_tables: &[bool],
 ) {
     for (page_index, paragraphs) in page_paragraphs.iter_mut().enumerate() {
-        let claimed_by_tables = paragraphs.is_some() && pages_with_tables.get(page_index).copied().unwrap_or(false);
+        let claimed_by_tables = pages_text_claimed_by_tables.get(page_index).copied().unwrap_or(false);
         if paragraphs.as_ref().is_none_or(Vec::is_empty) && !claimed_by_tables {
             let fallback = crate::pdf::structure::adapters::ocr_text_to_paragraphs(&page_texts[page_index]);
             if !fallback.is_empty() {

@@ -26,7 +26,7 @@ use crate::ocr::preprocessing::should_invert_for_polarity;
 #[cfg(feature = "pdf")]
 use crate::ocr::table::post_process_table;
 use crate::ocr::table::{
-    TableWords, drop_elements_claimed_by_tables, extract_table_words_from_tsv, extract_words_from_tsv,
+    TableWords, drop_document_elements_claimed_by_tables, extract_table_words_from_tsv, extract_words_from_tsv,
     reconstruct_table_with_columns, shading_mark_keep_mask, should_adopt_table_rebuild, table_to_markdown,
 };
 #[cfg(test)]
@@ -775,16 +775,13 @@ fn flatten_hocr_elements_to_text(elements: &[crate::types::internal::InternalEle
         .join("\n\n")
 }
 
-/// Tesseract's call into [`drop_elements_claimed_by_tables`] (#1571). `hocr_document` is parsed from the raw
+/// Tesseract's call into [`drop_document_elements_claimed_by_tables`] (#1571). `hocr_document` is parsed from the raw
 /// hOCR before table detection runs, and `build_content_with_inline_tables` repairs only the `content`
 /// string (and is skipped for Plain/Djot output), so the element tree needs this regardless of
 /// `output_format`. ~keep
-fn filter_elements_covered_by_tables(
-    elements: Vec<crate::types::internal::InternalElement>,
-    tables: &[OcrTable],
-) -> Vec<crate::types::internal::InternalElement> {
-    drop_elements_claimed_by_tables(
-        elements,
+fn filter_elements_covered_by_tables(document: &mut InternalDocument, tables: &[OcrTable]) {
+    drop_document_elements_claimed_by_tables(
+        document,
         tables.iter().filter_map(|table| {
             let bbox = table.bounding_box.as_ref()?;
             let bbox = crate::types::extraction::BoundingBox {
@@ -2298,7 +2295,7 @@ pub(super) fn perform_ocr(
     }
 
     if let Some(document) = hocr_document.as_mut() {
-        document.elements = filter_elements_covered_by_tables(std::mem::take(&mut document.elements), &tables);
+        filter_elements_covered_by_tables(document, &tables);
     }
 
     let is_markdown_output = extraction_config
@@ -3689,20 +3686,25 @@ mod tests {
         // Precision guard (#1571): a paragraph that merely overlaps a table's bbox edge,
         // with its centre outside the bbox, must survive -- the word-centre rule must not
         // over-delete prose that sits next to (not inside) a table.
-        let elements = vec![
+        let mut document = InternalDocument::new("pdf");
+        document.elements = vec![
             paragraph_with_bbox("Vehicle Maintenance Guide", 10.0, 0.0, 90.0, 15.0),
             paragraph_with_bbox("Apple 50 10 00", 10.0, 50.0, 90.0, 70.0),
         ];
         let tables = vec![table_at_with_cells(0, 40, 100, 140, cells_of("Apple 50 10 00"))];
 
-        let filtered = filter_elements_covered_by_tables(elements, &tables);
+        filter_elements_covered_by_tables(&mut document, &tables);
 
         assert_eq!(
-            filtered.len(),
+            document.elements.len(),
             1,
             "only the paragraph centred inside the table bbox should be dropped"
         );
-        assert_eq!(filtered[0].text, "Vehicle Maintenance Guide");
+        assert_eq!(document.elements[0].text, "Vehicle Maintenance Guide");
+        assert!(
+            !document.ocr_text_claimed_by_tables,
+            "the page keeps text outside the table"
+        );
     }
 
     #[test]

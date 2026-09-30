@@ -654,6 +654,9 @@ pub(super) fn page_needs_xobject_fallback(
 pub(super) struct XObjectRecoveryOutcome {
     /// Concatenated OCR text of every embedded image that yielded any; empty when none did.
     pub(super) text: String,
+    /// `text` without the lines the recovered tables carry, which the page prints from those
+    /// tables instead (#2014). The same as `text` when no image yielded a table.
+    pub(super) text_outside_tables: String,
     /// How many image XObjects were handed to the backend.
     pub(super) attempted: usize,
     /// The recovered images themselves, provenance-tagged for the output's `images` array.
@@ -678,6 +681,7 @@ pub(super) async fn recover_image_xobjects(
 ) -> crate::Result<XObjectRecoveryOutcome> {
     let mut outcome = XObjectRecoveryOutcome {
         text: String::new(),
+        text_outside_tables: String::new(),
         attempted: fallback_images.len(),
         images: Vec::with_capacity(fallback_images.len()),
         llm_usage: Vec::new(),
@@ -764,14 +768,12 @@ pub(super) async fn collect_xobject_recovery_result(
             return Ok(());
         }
     };
-    if !result.content.trim().is_empty() {
-        let separator_len = usize::from(!outcome.text.is_empty()) * 2;
-        budget.account_text(separator_len.saturating_add(result.content.len()))?;
-        if separator_len != 0 {
-            outcome.text.push_str("\n\n");
-        }
-        outcome.text.push_str(&result.content);
-    }
+    append_xobject_text(&mut outcome.text, &result.content, budget)?;
+    append_xobject_text(
+        &mut outcome.text_outside_tables,
+        &xobject_text_outside_tables(&result),
+        budget,
+    )?;
     account_xobject_structured_output(&result, outcome.image_preprocessing.is_none(), budget)?;
     outcome.llm_usage.extend(result.llm_usage.unwrap_or_default());
     if outcome.image_preprocessing.is_none() {
@@ -787,6 +789,69 @@ pub(super) async fn collect_xobject_recovery_result(
         formula
     }));
     Ok(())
+}
+/// Append one embedded image's text to a page's retry text, a blank line apart.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn append_xobject_text(
+    page_text: &mut String,
+    image_text: &str,
+    budget: &mut crate::extractors::security::SecurityBudget,
+) -> crate::Result<()> {
+    if image_text.trim().is_empty() {
+        return Ok(());
+    }
+    let separator_len = usize::from(!page_text.is_empty()) * 2;
+    budget.account_text(separator_len.saturating_add(image_text.len()))?;
+    if separator_len != 0 {
+        page_text.push_str("\n\n");
+    }
+    page_text.push_str(image_text);
+    Ok(())
+}
+/// One embedded image's text without the lines its tables carry (#2014).
+///
+/// A backend that detects tables returns its page document with the lines those tables carry
+/// already removed by the shared table-coverage filter, which compares line and table boxes in
+/// the one pixel space the backend recognised them in (#1571). `content` keeps those lines,
+/// because the standalone-image route prints no separate table. The PDF page prints the retry's
+/// tables itself, so its paragraphs come from this text; built from `content`, they would print
+/// each table twice. ~keep
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn xobject_text_outside_tables(result: &crate::types::ExtractedDocument) -> std::borrow::Cow<'_, str> {
+    #[cfg(any(feature = "ocr", feature = "ocr-wasm"))]
+    if !result.tables.is_empty()
+        && let Some(document) = result.ocr_internal_document.as_ref()
+    {
+        return std::borrow::Cow::Owned(ocr_document_text(document));
+    }
+    std::borrow::Cow::Borrowed(&result.content)
+}
+/// The text elements of an OCR page document as flat text: lines of one block on consecutive
+/// lines, blocks apart by a blank line, the grouping the PDF paragraph builder merges on.
+#[cfg(all(any(feature = "ocr", feature = "ocr-wasm"), feature = "pdf"))]
+fn ocr_document_text(document: &crate::types::internal::InternalDocument) -> String {
+    let mut text = String::new();
+    let mut previous_block: Option<&str> = None;
+    for element in &document.elements {
+        if matches!(element.kind, crate::types::internal::ElementKind::PageBreak) || element.text.trim().is_empty() {
+            continue;
+        }
+        let block = element
+            .attributes
+            .as_ref()
+            .and_then(|attributes| attributes.get(crate::ocr::hocr_parser::HOCR_BLOCK_ID_ATTRIBUTE))
+            .map(String::as_str);
+        if !text.is_empty() {
+            text.push_str(if block.is_some() && block == previous_block {
+                "\n"
+            } else {
+                "\n\n"
+            });
+        }
+        text.push_str(&element.text);
+        previous_block = block;
+    }
+    text
 }
 /// OCR a page's embedded image XObjects directly, bypassing the whole-page rasterizer.
 ///
@@ -1146,4 +1211,76 @@ pub(super) fn share_rendered_page_images(
         .into_iter()
         .map(|(page_idx, image)| (page_idx, std::sync::Arc::new(image)))
         .collect()
+}
+#[cfg(all(test, feature = "ocr", feature = "pdf"))]
+mod xobject_text_tests {
+    use super::*;
+    use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+    use crate::types::ocr_elements::OcrElementLevel;
+
+    fn line(text: &str, block: &str) -> InternalElement {
+        let mut element = InternalElement::text(
+            ElementKind::OcrText {
+                level: OcrElementLevel::Line,
+            },
+            text,
+            0,
+        );
+        element.attributes = Some(
+            [(
+                crate::ocr::hocr_parser::HOCR_BLOCK_ID_ATTRIBUTE.to_string(),
+                block.to_string(),
+            )]
+            .into_iter()
+            .collect(),
+        );
+        element
+    }
+
+    fn image_result(
+        content: &str,
+        elements: Vec<InternalElement>,
+        table_count: usize,
+    ) -> crate::types::ExtractedDocument {
+        let mut document = InternalDocument::new("pdf");
+        document.elements = elements;
+        crate::types::ExtractedDocument {
+            content: content.to_string(),
+            tables: vec![crate::types::Table::default(); table_count],
+            ocr_internal_document: Some(document),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn an_image_without_tables_adds_its_content_unchanged() {
+        let result = image_result("TOTAL 60,000", vec![line("filtered away", "block_1")], 0);
+
+        assert_eq!(xobject_text_outside_tables(&result), "TOTAL 60,000");
+    }
+
+    #[test]
+    fn an_image_whose_tables_carry_all_of_its_lines_adds_no_text() {
+        let result = image_result("Product Price\nBanana 20", Vec::new(), 1);
+
+        assert_eq!(xobject_text_outside_tables(&result), "");
+    }
+
+    #[test]
+    fn an_image_with_tables_adds_only_the_lines_its_tables_left() {
+        let result = image_result(
+            "Receipt\nSubtotal 60,000\nProduct Price\nBanana 20\nThank you",
+            vec![
+                line("Receipt", "block_1"),
+                line("Subtotal 60,000", "block_1"),
+                line("Thank you", "block_3"),
+            ],
+            1,
+        );
+
+        assert_eq!(
+            xobject_text_outside_tables(&result),
+            "Receipt\nSubtotal 60,000\n\nThank you"
+        );
+    }
 }

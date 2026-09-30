@@ -208,3 +208,89 @@ fn test_ocr_table_text_not_duplicated_in_content() {
         );
     }
 }
+
+/// A blank PDF page whose text is recovered from its embedded images keeps that text when the
+/// retry also finds a table (#1571), and prints the table once (#2014). The fixture draws
+/// `simple_table.png` and `cord_receipt_01.jpg` from `test_documents/images` under a zero-area
+/// clip, so the page renders blank and only the embedded-image retry reads it. `Banana` appears
+/// only in the table.
+#[cfg(feature = "pdf")]
+#[test]
+fn test_ocr_embedded_image_retry_text_survives_a_retry_table() {
+    let file_path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ocr/clipped_table_and_receipt.pdf");
+    let config = ExtractionConfig {
+        ocr: Some(OcrConfig {
+            backend: "tesseract".to_string(),
+            language: vec!["eng".to_string()],
+            tesseract_config: Some(TesseractConfig {
+                enable_table_detection: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        force_ocr: true,
+        use_cache: false,
+        ..Default::default()
+    };
+
+    let result = extract_uri_document_blocking(&file_path, None, &config).expect("OCR extraction must succeed");
+
+    assert!(!result.tables.is_empty(), "the retry must find the table");
+    assert_eq!(
+        result.content.matches("Banana").count(),
+        1,
+        "the retry's table must appear in the content exactly once: {}",
+        result.content
+    );
+    assert!(
+        result.content.contains("Subtotal"),
+        "the receipt text recovered by the retry must stay in the content: {}",
+        result.content
+    );
+}
+
+/// A blank PDF page whose only embedded image is a table keeps that table, printed once, when
+/// the table holds every line the retry recovered (#2014). With PaddleOCR compiled in, the default
+/// Tesseract setup runs as a pipeline that falls back to PaddleOCR when a page scores as empty, so
+/// the recovered table text must count as page text. The fixture draws `simple_table.png` from
+/// `test_documents/images` under a zero-area clip, so only the embedded-image retry reads it.
+#[cfg(feature = "pdf")]
+#[test]
+fn test_ocr_embedded_image_retry_keeps_a_table_that_holds_all_of_its_text() {
+    use xberg::core::config::OutputFormat;
+
+    let file_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ocr/clipped_table.pdf");
+    for output_format in [OutputFormat::Plain, OutputFormat::Markdown] {
+        let config = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                backend: "tesseract".to_string(),
+                language: vec!["eng".to_string()],
+                tesseract_config: Some(TesseractConfig {
+                    enable_table_detection: true,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            force_ocr: true,
+            output_format,
+            use_cache: false,
+            ..Default::default()
+        };
+
+        let result = extract_uri_document_blocking(&file_path, None, &config).expect("OCR extraction must succeed");
+
+        assert_eq!(
+            result.tables.len(),
+            1,
+            "the retry's table must be kept: {}",
+            result.content
+        );
+        assert_eq!(
+            result.content.matches("Banana").count(),
+            1,
+            "the retry's table must appear in the content exactly once: {}",
+            result.content
+        );
+    }
+}

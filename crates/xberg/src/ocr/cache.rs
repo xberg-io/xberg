@@ -27,6 +27,9 @@ struct CachedOcrResult {
     /// The `#[serde(skip)]` structured document, carried out of band.
     #[serde(default)]
     internal_document: Option<InternalDocument>,
+    /// The document field of the same name, which its own `Serialize` impl skips.
+    #[serde(default)]
+    ocr_text_claimed_by_tables: bool,
 }
 
 /// Borrowing counterpart of [`CachedOcrResult`] used on the write path.
@@ -39,6 +42,7 @@ struct CachedOcrResult {
 struct CachedOcrResultRef<'a> {
     result: &'a OcrExtractionResult,
     internal_document: &'a Option<InternalDocument>,
+    ocr_text_claimed_by_tables: bool,
 }
 
 impl CachedOcrResult {
@@ -46,6 +50,9 @@ impl CachedOcrResult {
     fn into_result(self) -> OcrExtractionResult {
         let mut result = self.result;
         result.internal_document = self.internal_document;
+        if let Some(document) = result.internal_document.as_mut() {
+            document.ocr_text_claimed_by_tables = self.ocr_text_claimed_by_tables;
+        }
         result
     }
 }
@@ -141,6 +148,10 @@ impl OcrCache {
         let envelope = CachedOcrResultRef {
             result,
             internal_document: &result.internal_document,
+            ocr_text_claimed_by_tables: result
+                .internal_document
+                .as_ref()
+                .is_some_and(|document| document.ocr_text_claimed_by_tables),
         };
         let serialized = rmp_serde::to_vec_named(&envelope).map_err(|e| {
             tracing::warn!(
@@ -825,6 +836,31 @@ mod tests {
             .expect("the structured document must survive the cache round-trip");
         assert_eq!(document.source_format, "hocr");
         assert_eq!(document.mime_type, "text/plain");
+    }
+
+    #[test]
+    fn cached_result_should_preserve_that_tables_claimed_the_page_text() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let cache = OcrCache::new(Some(temp_dir.path().to_path_buf())).unwrap();
+        let mut original = result_with_internal_document();
+        if let Some(document) = original.internal_document.as_mut() {
+            document.ocr_text_claimed_by_tables = true;
+        }
+        cache
+            .set_cached_result("img", "tesseract", "eng", None, &original)
+            .unwrap();
+
+        let cached = cache
+            .get_cached_result("img", "tesseract", "eng", None)
+            .unwrap()
+            .expect("the entry must be a hit");
+
+        assert!(
+            cached
+                .internal_document
+                .is_some_and(|document| document.ocr_text_claimed_by_tables),
+            "a cache hit must not let the PDF route refill a page its tables emptied"
+        );
     }
 
     #[test]

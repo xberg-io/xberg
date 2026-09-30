@@ -421,6 +421,13 @@ pub struct InternalDocument {
     #[serde(skip)]
     #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
     pub ocr_coordinate_frame: Option<OcrPageCoordinateFrame>,
+
+    /// Set by an OCR backend when detected tables claimed every text element of this page
+    /// (#1571), so the page text holds only lines the tables already carry. Never crosses the
+    /// plugin-bridge JSON wire format.
+    #[serde(skip)]
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    pub ocr_text_claimed_by_tables: bool,
 }
 
 impl From<crate::types::extraction::ExtractedDocument> for InternalDocument {
@@ -509,6 +516,8 @@ impl InternalDocument {
             recorded_formulas: Vec::new(),
             #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
             ocr_coordinate_frame: None,
+            #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+            ocr_text_claimed_by_tables: false,
         }
     }
 

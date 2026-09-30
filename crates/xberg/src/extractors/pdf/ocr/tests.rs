@@ -1652,34 +1652,24 @@ mod tests {
     }
 
     #[test]
-    fn test_empty_structured_page_with_tables_is_not_refilled_from_flat_ocr_text() {
-        let mut pages = vec![Some(Vec::new()), None];
-        let page_texts = vec!["APPLES 48,210 49,850".to_string(), "Unstructured page".to_string()];
+    fn test_page_text_claimed_by_tables_is_not_refilled_from_flat_ocr_text() {
+        let mut pages = vec![Some(Vec::new()), Some(Vec::new())];
+        let page_texts = vec!["APPLES 48,210 49,850".to_string(), "TICKET CP 2 60,000".to_string()];
 
-        fill_unstructured_ocr_pages(&mut pages, &page_texts, &[true, true]);
+        fill_unstructured_ocr_pages(&mut pages, &page_texts, &[true, false]);
 
         assert!(
             pages[0].as_ref().is_some_and(Vec::is_empty),
-            "the table already carries this text: {:?}",
+            "the tables already carry this text: {:?}",
             pages[0]
         );
+        let recovered = pages[1].as_ref().expect("recovered page must be represented");
         assert_eq!(
-            pages[1].as_ref().map(Vec::len),
-            Some(1),
-            "a page with no backend document keeps its text"
+            recovered.len(),
+            1,
+            "a blank pass whose text came from the image retry keeps it"
         );
-    }
-
-    #[test]
-    fn test_ocr_pages_with_tables_maps_document_pages_to_batch_indices() {
-        let table_on = |page_number| crate::types::Table {
-            page_number,
-            ..Default::default()
-        };
-
-        let pages = ocr_pages_with_tables(&[table_on(4), table_on(6), table_on(9)], 3, 3);
-
-        assert_eq!(pages, [true, false, true]);
+        assert_eq!(recovered[0].text, "TICKET CP 2 60,000");
     }
 
     #[test]
