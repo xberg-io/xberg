@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(config): project-local YAML and JSON configuration files are now auto-discovered.** `ExtractionConfig::discover()` probes `xberg.toml`, `xberg.yaml`, `xberg.yml`, and `xberg.json` in that order in the current directory and each parent before falling back to the user config directory. (GH#2017)
 - **(ocr): the automatic PaddleOCR fallback keeps the default Tesseract table-detection intent.** When the caller leaves PaddleOCR unconfigured, the synthesized fallback now enables its table reconstruction whenever Tesseract table detection is enabled, so a fallback page no longer silently flattens a detected table. Explicit Tesseract opt-outs and explicit PaddleOCR settings remain unchanged. (GH#2018)
 - **(ocr): scanned tables keep sparse amount columns split by digit-width drift.** Table post-processing no longer rejects an unnamed, half-empty value track or folds it into a label when the matching numeric track is on its right. It now folds row-disjoint values into the numeric neighbour on either side, recognizes numbered year rows as headers, and keeps a title fragment with the title while moving values under the correct year. (GH#1832, GH#2019)
 - **(cache): structured extraction results now produce cache hits.** Extraction cache entries use named MessagePack fields so tables and document nodes round-trip correctly. Unreadable legacy entries are reported and safely replaced after re-extraction. (GH#1990)
