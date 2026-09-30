@@ -480,7 +480,7 @@ mod tests {
     /// label word sits on. The stretched box covers both row bands in full and its centre is nearer
     /// the next row, so row geometry alone puts the word in the next row: only the text line keeps
     /// it with its label. The first row's values arrive fused across an underscore mark, so the
-    /// words after it only keep their own lines if each piece of a split word keeps its line.
+    /// words after it only keep their own lines if each piece of a split word keeps its line. ~keep
     fn stretched_label_table(tail_line: &str) -> Vec<Vec<String>> {
         let tsv = format!(
             "{TSV_HEADER}\
@@ -513,7 +513,7 @@ mod tests {
     }
 
     /// The negative twin: the same boxes on two text lines. The stretched word keeps its own box
-    /// and goes to the next row, so the line is what joins it with its label.
+    /// and goes to the next row, so the line is what joins it with its label. ~keep
     #[test]
     fn a_stretched_word_on_a_tesseract_line_of_its_own_goes_to_the_next_row() {
         let table = stretched_label_table("1\t10\t1\t1");
