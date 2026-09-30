@@ -265,6 +265,8 @@ jobs:
           rmdir .polyrepo-siblings
       - name: Install Task
         uses: xberg-io/actions/install-task@v1
+      - name: Verify Poly formatter scopes
+        run: task poly:verify:tool-scopes
       # install-alef reads alef.toml's [workspace] alef_version and installs that
       # exact pinned build, so this job doesn't go red every time alef cuts a
       # release -- same hermeticity guarantee install-task gives the Task binary. ~keep

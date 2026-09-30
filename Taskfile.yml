@@ -365,6 +365,11 @@ tasks:
     cmds:
       - alef verify --exit-code
 
+  poly:verify:tool-scopes:
+    desc: "Check external Poly formatters are restricted to their intended languages"
+    cmds:
+      - python3 scripts/ci/check-poly-tool-scopes.py
+
   alef:build:
     desc: "Build all language bindings"
     cmds:
