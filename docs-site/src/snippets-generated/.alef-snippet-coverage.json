@@ -55,6 +55,7 @@
     "c/format_specific/format_xlsx.md",
     "c/language-detection/language_detection_config.md",
     "c/language-detection/language_detection_multilingual.md",
+    "c/ocr/ocr_elements_opt_in.md",
     "c/ocr/ocr_force_all_pages.md",
     "c/ocr/ocr_multi_language.md",
     "c/ocr/ocr_paddle_backend.md",
@@ -154,6 +155,7 @@
     "csharp/format_specific/format_xlsx.md",
     "csharp/language-detection/language_detection_config.md",
     "csharp/language-detection/language_detection_multilingual.md",
+    "csharp/ocr/ocr_elements_opt_in.md",
     "csharp/ocr/ocr_force_all_pages.md",
     "csharp/ocr/ocr_multi_language.md",
     "csharp/ocr/ocr_paddle_backend.md",
@@ -253,6 +255,7 @@
     "dart/format_specific/format_xlsx.md",
     "dart/language-detection/language_detection_config.md",
     "dart/language-detection/language_detection_multilingual.md",
+    "dart/ocr/ocr_elements_opt_in.md",
     "dart/ocr/ocr_force_all_pages.md",
     "dart/ocr/ocr_multi_language.md",
     "dart/ocr/ocr_paddle_backend.md",
@@ -352,6 +355,7 @@
     "elixir/format_specific/format_xlsx.md",
     "elixir/language-detection/language_detection_config.md",
     "elixir/language-detection/language_detection_multilingual.md",
+    "elixir/ocr/ocr_elements_opt_in.md",
     "elixir/ocr/ocr_force_all_pages.md",
     "elixir/ocr/ocr_multi_language.md",
     "elixir/ocr/ocr_paddle_backend.md",
@@ -451,6 +455,7 @@
     "go/format_specific/format_xlsx.md",
     "go/language-detection/language_detection_config.md",
     "go/language-detection/language_detection_multilingual.md",
+    "go/ocr/ocr_elements_opt_in.md",
     "go/ocr/ocr_force_all_pages.md",
     "go/ocr/ocr_multi_language.md",
     "go/ocr/ocr_paddle_backend.md",
@@ -550,6 +555,7 @@
     "java/format_specific/format_xlsx.md",
     "java/language-detection/language_detection_config.md",
     "java/language-detection/language_detection_multilingual.md",
+    "java/ocr/ocr_elements_opt_in.md",
     "java/ocr/ocr_force_all_pages.md",
     "java/ocr/ocr_multi_language.md",
     "java/ocr/ocr_paddle_backend.md",
@@ -649,6 +655,7 @@
     "kotlin-android/format_specific/format_xlsx.md",
     "kotlin-android/language-detection/language_detection_config.md",
     "kotlin-android/language-detection/language_detection_multilingual.md",
+    "kotlin-android/ocr/ocr_elements_opt_in.md",
     "kotlin-android/ocr/ocr_force_all_pages.md",
     "kotlin-android/ocr/ocr_multi_language.md",
     "kotlin-android/ocr/ocr_paddle_backend.md",
@@ -748,6 +755,7 @@
     "php/format_specific/format_xlsx.md",
     "php/language-detection/language_detection_config.md",
     "php/language-detection/language_detection_multilingual.md",
+    "php/ocr/ocr_elements_opt_in.md",
     "php/ocr/ocr_force_all_pages.md",
     "php/ocr/ocr_multi_language.md",
     "php/ocr/ocr_paddle_backend.md",
@@ -847,6 +855,7 @@
     "python/format_specific/format_xlsx.md",
     "python/language-detection/language_detection_config.md",
     "python/language-detection/language_detection_multilingual.md",
+    "python/ocr/ocr_elements_opt_in.md",
     "python/ocr/ocr_force_all_pages.md",
     "python/ocr/ocr_multi_language.md",
     "python/ocr/ocr_paddle_backend.md",
@@ -946,6 +955,7 @@
     "ruby/format_specific/format_xlsx.md",
     "ruby/language-detection/language_detection_config.md",
     "ruby/language-detection/language_detection_multilingual.md",
+    "ruby/ocr/ocr_elements_opt_in.md",
     "ruby/ocr/ocr_force_all_pages.md",
     "ruby/ocr/ocr_multi_language.md",
     "ruby/ocr/ocr_paddle_backend.md",
@@ -1045,6 +1055,7 @@
     "rust/format_specific/format_xlsx.md",
     "rust/language-detection/language_detection_config.md",
     "rust/language-detection/language_detection_multilingual.md",
+    "rust/ocr/ocr_elements_opt_in.md",
     "rust/ocr/ocr_force_all_pages.md",
     "rust/ocr/ocr_multi_language.md",
     "rust/ocr/ocr_paddle_backend.md",
@@ -1156,6 +1167,7 @@
     "swift/format_specific/format_xlsx.md",
     "swift/language-detection/language_detection_config.md",
     "swift/language-detection/language_detection_multilingual.md",
+    "swift/ocr/ocr_elements_opt_in.md",
     "swift/ocr/ocr_force_all_pages.md",
     "swift/ocr/ocr_multi_language.md",
     "swift/ocr/ocr_paddle_backend.md",
@@ -1255,6 +1267,7 @@
     "typescript/format_specific/format_xlsx.md",
     "typescript/language-detection/language_detection_config.md",
     "typescript/language-detection/language_detection_multilingual.md",
+    "typescript/ocr/ocr_elements_opt_in.md",
     "typescript/ocr/ocr_force_all_pages.md",
     "typescript/ocr/ocr_multi_language.md",
     "typescript/ocr/ocr_paddle_backend.md",
@@ -1354,6 +1367,7 @@
     "wasm/format_specific/format_xlsx.md",
     "wasm/language-detection/language_detection_config.md",
     "wasm/language-detection/language_detection_multilingual.md",
+    "wasm/ocr/ocr_elements_opt_in.md",
     "wasm/ocr/ocr_force_all_pages.md",
     "wasm/ocr/ocr_multi_language.md",
     "wasm/ocr/ocr_paddle_backend.md",
@@ -1453,6 +1467,7 @@
     "zig/format_specific/format_xlsx.md",
     "zig/language-detection/language_detection_config.md",
     "zig/language-detection/language_detection_multilingual.md",
+    "zig/ocr/ocr_elements_opt_in.md",
     "zig/ocr/ocr_force_all_pages.md",
     "zig/ocr/ocr_multi_language.md",
     "zig/ocr/ocr_paddle_backend.md",
@@ -2142,6 +2157,18 @@
         "language": "c"
       },
       "path": "c/language-detection/language_detection_multilingual.md",
+      "language": "c",
+      "target": "c",
+      "session": "c",
+      "requires": [],
+      "side_effect": "server"
+    },
+    {
+      "key": {
+        "fixture_id": "ocr_elements_opt_in",
+        "language": "c"
+      },
+      "path": "c/ocr/ocr_elements_opt_in.md",
       "language": "c",
       "target": "c",
       "session": "c",
@@ -3338,6 +3365,18 @@
     },
     {
       "key": {
+        "fixture_id": "ocr_elements_opt_in",
+        "language": "csharp"
+      },
+      "path": "csharp/ocr/ocr_elements_opt_in.md",
+      "language": "csharp",
+      "target": "csharp",
+      "session": "csharp",
+      "requires": [],
+      "side_effect": "server"
+    },
+    {
+      "key": {
         "fixture_id": "ocr_force_all_pages",
         "language": "csharp"
       },
@@ -4518,6 +4557,18 @@
         "language": "dart"
       },
       "path": "dart/language-detection/language_detection_multilingual.md",
+      "language": "dart",
+      "target": "dart",
+      "session": "dart",
+      "requires": [],
+      "side_effect": "server"
+    },
+    {
+      "key": {
+        "fixture_id": "ocr_elements_opt_in",
+        "language": "dart"
+      },
+      "path": "dart/ocr/ocr_elements_opt_in.md",
       "language": "dart",
       "target": "dart",
       "session": "dart",
@@ -5714,6 +5765,18 @@
     },
     {
       "key": {
+        "fixture_id": "ocr_elements_opt_in",
+        "language": "elixir"
+      },
+      "path": "elixir/ocr/ocr_elements_opt_in.md",
+      "language": "elixir",
+      "target": "elixir",
+      "session": "elixir",
+      "requires": [],
+      "side_effect": "server"
+    },
+    {
+      "key": {
         "fixture_id": "ocr_force_all_pages",
         "language": "elixir"
       },
@@ -6894,6 +6957,18 @@
         "language": "go"
       },
       "path": "go/language-detection/language_detection_multilingual.md",
+      "language": "go",
+      "target": "go",
+      "session": "go",
+      "requires": [],
+      "side_effect": "server"
+    },
+    {
+      "key": {
+        "fixture_id": "ocr_elements_opt_in",
+        "language": "go"
+      },
+      "path": "go/ocr/ocr_elements_opt_in.md",
       "language": "go",
       "target": "go",
       "session": "go",
@@ -8090,6 +8165,18 @@
     },
     {
       "key": {
+        "fixture_id": "ocr_elements_opt_in",
+        "language": "java"
+      },
+      "path": "java/ocr/ocr_elements_opt_in.md",
+      "language": "java",
+      "target": "java",
+      "session": "java",
+      "requires": [],
+      "side_effect": "server"
+    },
+    {
+      "key": {
         "fixture_id": "ocr_force_all_pages",
         "language": "java"
       },
@@ -9270,6 +9357,18 @@
         "language": "kotlin_android"
       },
       "path": "kotlin-android/language-detection/language_detection_multilingual.md",
+      "language": "kotlin",
+      "target": "kotlin_android",
+      "session": "kotlin_android",
+      "requires": [],
+      "side_effect": "server"
+    },
+    {
+      "key": {
+        "fixture_id": "ocr_elements_opt_in",
+        "language": "kotlin_android"
+      },
+      "path": "kotlin-android/ocr/ocr_elements_opt_in.md",
       "language": "kotlin",
       "target": "kotlin_android",
       "session": "kotlin_android",
@@ -10466,6 +10565,18 @@
     },
     {
       "key": {
+        "fixture_id": "ocr_elements_opt_in",
+        "language": "php"
+      },
+      "path": "php/ocr/ocr_elements_opt_in.md",
+      "language": "php",
+      "target": "php",
+      "session": "php",
+      "requires": [],
+      "side_effect": "server"
+    },
+    {
+      "key": {
         "fixture_id": "ocr_force_all_pages",
         "language": "php"
       },
@@ -11654,6 +11765,18 @@
     },
     {
       "key": {
+        "fixture_id": "ocr_elements_opt_in",
+        "language": "python"
+      },
+      "path": "python/ocr/ocr_elements_opt_in.md",
+      "language": "python",
+      "target": "python",
+      "session": "python",
+      "requires": [],
+      "side_effect": "server"
+    },
+    {
+      "key": {
         "fixture_id": "ocr_force_all_pages",
         "language": "python"
       },
@@ -12834,6 +12957,18 @@
         "language": "ruby"
       },
       "path": "ruby/language-detection/language_detection_multilingual.md",
+      "language": "ruby",
+      "target": "ruby",
+      "session": "ruby",
+      "requires": [],
+      "side_effect": "server"
+    },
+    {
+      "key": {
+        "fixture_id": "ocr_elements_opt_in",
+        "language": "ruby"
+      },
+      "path": "ruby/ocr/ocr_elements_opt_in.md",
       "language": "ruby",
       "target": "ruby",
       "session": "ruby",
@@ -14181,6 +14316,21 @@
         "language": "rust"
       },
       "path": "rust/language-detection/language_detection_multilingual.md",
+      "language": "rust",
+      "target": "rust",
+      "session": "rust",
+      "requires": [
+        "crate:serde_json",
+        "crate:tokio"
+      ],
+      "side_effect": "server"
+    },
+    {
+      "key": {
+        "fixture_id": "ocr_elements_opt_in",
+        "language": "rust"
+      },
+      "path": "rust/ocr/ocr_elements_opt_in.md",
       "language": "rust",
       "target": "rust",
       "session": "rust",
@@ -15584,6 +15734,18 @@
     },
     {
       "key": {
+        "fixture_id": "ocr_elements_opt_in",
+        "language": "swift"
+      },
+      "path": "swift/ocr/ocr_elements_opt_in.md",
+      "language": "swift",
+      "target": "swift",
+      "session": "swift",
+      "requires": [],
+      "side_effect": "server"
+    },
+    {
+      "key": {
         "fixture_id": "ocr_force_all_pages",
         "language": "swift"
       },
@@ -16764,6 +16926,18 @@
         "language": "node"
       },
       "path": "typescript/language-detection/language_detection_multilingual.md",
+      "language": "typescript",
+      "target": "node",
+      "session": "node",
+      "requires": [],
+      "side_effect": "server"
+    },
+    {
+      "key": {
+        "fixture_id": "ocr_elements_opt_in",
+        "language": "node"
+      },
+      "path": "typescript/ocr/ocr_elements_opt_in.md",
       "language": "typescript",
       "target": "node",
       "session": "node",
@@ -17960,6 +18134,18 @@
     },
     {
       "key": {
+        "fixture_id": "ocr_elements_opt_in",
+        "language": "wasm"
+      },
+      "path": "wasm/ocr/ocr_elements_opt_in.md",
+      "language": "typescript",
+      "target": "wasm",
+      "session": "wasm",
+      "requires": [],
+      "side_effect": "server"
+    },
+    {
+      "key": {
         "fixture_id": "ocr_force_all_pages",
         "language": "wasm"
       },
@@ -19140,6 +19326,18 @@
         "language": "zig"
       },
       "path": "zig/language-detection/language_detection_multilingual.md",
+      "language": "zig",
+      "target": "zig",
+      "session": "zig",
+      "requires": [],
+      "side_effect": "server"
+    },
+    {
+      "key": {
+        "fixture_id": "ocr_elements_opt_in",
+        "language": "zig"
+      },
+      "path": "zig/ocr/ocr_elements_opt_in.md",
       "language": "zig",
       "target": "zig",
       "session": "zig",
@@ -23470,6 +23668,66 @@
     },
     {
       "fixture_id": "ocr_dpi_config",
+      "language": "zig"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "c"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "csharp"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "dart"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "elixir"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "go"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "java"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "kotlin_android"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "node"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "php"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "python"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "ruby"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "rust"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "swift"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "wasm"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
       "language": "zig"
     },
     {
@@ -29460,6 +29718,66 @@
     },
     {
       "fixture_id": "ocr_dpi_config",
+      "language": "zig"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "c"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "csharp"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "dart"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "elixir"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "go"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "java"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "kotlin_android"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "node"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "php"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "python"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "ruby"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "rust"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "swift"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
+      "language": "wasm"
+    },
+    {
+      "fixture_id": "ocr_elements_opt_in",
       "language": "zig"
     },
     {

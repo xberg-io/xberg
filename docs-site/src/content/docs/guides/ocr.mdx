@@ -1448,6 +1448,8 @@ model = "openai/gpt-4o-mini"
 
 ### OCR Elements and Word-Level Bounding Boxes
 
+OCR elements are opt-in. Unless `include_elements` is `true`, `ocr_elements` is not set, even when OCR ran and `content` holds the text. For word elements, also set `min_level` to `word`. In Node and TypeScript, set `ocr.elementConfig.includeElements` and `ocr.elementConfig.minLevel`, and read `results[0].ocrElements`.
+
 Set `element_config` (`OcrElementConfig`) on `OcrConfig` to emit structured OCR elements with spatial and confidence data. When `include_elements` is `true`, the result's `ocr_elements` field is populated with `OcrElement` entries — each carries `text`, `geometry` (a `rectangle` with `left`/`top`/`width`/`height` in pixels, or a 4-point `quadrilateral` for rotated text), `confidence` (`detection` and `recognition`, 0.0-1.0), `level`, optional `rotation`, and a 1-indexed `page_number`.
 
 - `include_elements` — populate `ocr_elements`. Defaults to `false`.

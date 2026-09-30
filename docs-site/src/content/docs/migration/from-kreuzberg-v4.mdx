@@ -3,6 +3,8 @@ title: Migrating from Kreuzberg v4
 description: How Xberg v1 relates to Kreuzberg v4 and how to stay on the v4 LTS line.
 ---
 
+import ApiSnippetGroup from "../../../components/ApiSnippetGroup.astro";
+
 Xberg is the direct continuation of **Kreuzberg**. The Rust core and extraction API share the same
 lineage, but Xberg restarted package versioning at **v1** under the new name. The Kreuzberg **v4**
 line continues as a long-term-support release.
@@ -93,5 +95,18 @@ Downloaded models and the extraction cache move from the `kreuzberg` path segmen
 The Python/torch **EasyOCR** backend from Kreuzberg is removed. Xberg 1.1 adds **Sceptre**, a Rust
 implementation of the same CRAFT and Gen2 CRNN architecture, not a drop-in EasyOCR API replacement. You can also use **Tesseract**,
 **PaddleOCR**, the pure-Rust **Candle** backend, or a **VLM** backend.
+
+### OCR elements are opt-in
+
+Kreuzberg v4 returned `ocr_elements` for OCR'd images without any setting. Xberg returns them only
+when you ask for them. To get back the word elements v4 returned, set `include_elements` to `true`
+and `min_level` to `word` in the OCR element configuration, and read `ocr_elements` from the first
+result. With the default `min_level`, `line`, word elements are left out, and Tesseract returns no
+elements at all. The WebAssembly build does not return OCR elements.
+
+<ApiSnippetGroup topic="ocr/ocr_elements_opt_in" />
+
+See [OCR elements and word-level bounding boxes](/guides/ocr/#ocr-elements-and-word-level-bounding-boxes)
+for every element field and filter.
 
 See the [installation guide](/getting-started/installation/) for the current package names.
