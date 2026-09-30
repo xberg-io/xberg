@@ -138,6 +138,7 @@ impl OcrBoundingGeometry {
     /// Tuple of `(left, top, width, height)` in pixels.
     #[cfg(any(
         paddle_ocr,
+        feature = "ocr",
         all(
             feature = "layout-detection",
             feature = "pdf",
@@ -216,7 +217,7 @@ impl OcrConfidence {
     /// Create confidence from Tesseract's single confidence value.
     ///
     /// Tesseract provides confidence as 0-100, which we normalize to 0.0-1.0.
-    #[cfg(feature = "ocr")]
+    #[cfg(any(feature = "ocr", feature = "ocr-wasm"))]
     pub(crate) fn from_tesseract(confidence: f64) -> Self {
         Self {
             detection: None,
@@ -381,7 +382,7 @@ fn default_page_number() -> u32 {
     1
 }
 
-#[cfg(feature = "ocr")]
+#[cfg(any(feature = "ocr", feature = "ocr-wasm"))]
 impl OcrElement {
     /// Create a new OCR element with minimal required fields.
     pub(crate) fn new(text: impl Into<String>, geometry: OcrBoundingGeometry, confidence: OcrConfidence) -> Self {
@@ -499,8 +500,8 @@ impl OcrElementConfig {
     }
 }
 
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn element_level_rank(level: OcrElementLevel) -> u8 {
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "heuristics"))]
+pub(crate) fn element_level_rank(level: OcrElementLevel) -> u8 {
     match level {
         OcrElementLevel::Word => 0,
         OcrElementLevel::Line => 1,

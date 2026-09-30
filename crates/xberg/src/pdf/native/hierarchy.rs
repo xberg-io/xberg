@@ -48,6 +48,7 @@ struct SideSupport {
 struct ScriptAttachment {
     script_index: usize,
     insertion_index: usize,
+    separate_numeric_note: bool,
 }
 
 fn is_usable_span(span: &xberg_native_pdf::layout::TextSpan) -> bool {
@@ -331,6 +332,7 @@ fn apply_xy_cut_if_column_aware(
 }
 
 fn rejoin_inline_scripts(spans: Vec<xberg_native_pdf::layout::TextSpan>) -> Vec<xberg_native_pdf::layout::TextSpan> {
+    let notes = super::text::numeric_notes(&spans);
     let mut by_base: HashMap<usize, Vec<ScriptAttachment>> = HashMap::new();
     let mut attached = vec![false; spans.len()];
     for script_index in 0..spans.len() {
@@ -344,6 +346,12 @@ fn rejoin_inline_scripts(spans: Vec<xberg_native_pdf::layout::TextSpan>) -> Vec<
         by_base.entry(base_index).or_default().push(ScriptAttachment {
             script_index,
             insertion_index,
+            separate_numeric_note: super::text::needs_numeric_script_boundary(
+                &spans[base_index],
+                &spans[script_index],
+                &notes,
+                spans.get(script_index + 1),
+            ),
         });
     }
 
@@ -540,7 +548,15 @@ fn emit_base_with_scripts(
         let fragment = (script.insertion_index > range_start)
             .then(|| split_span(base, range_start, script.insertion_index))
             .flatten();
-        let normalized = normalize_script_span(&spans[script.script_index], base);
+        let mut normalized = normalize_script_span(&spans[script.script_index], base);
+        // Structure assembly rejoins scripts before paragraph spacing sees them.
+        // Carry the plain-text path's confirmed footnote boundary through that join;
+        // normalizing the script first would discard its original font/rise evidence. ~keep
+        if script.separate_numeric_note {
+            normalized.text.insert(0, ' ');
+            normalized.char_x_offsets.clear();
+            normalized.char_widths.clear();
+        }
         if script.insertion_index == char_count {
             if let Some(mut fragment) = fragment {
                 append_span_text(&mut fragment, &normalized);

@@ -55,7 +55,15 @@ const WHISPER_N_FRAMES: usize = 3_000;
 const WHISPER_N_FFT: usize = 400;
 /// Whisper STFT hop length.
 const WHISPER_HOP_LENGTH: usize = 160;
-/// Maximum number of output tokens produced per chunk (Whisper canonical).
+/// Whisper decoder context length — the maximum number of tokens the decoder
+/// can attend over, **including** the prompt.
+///
+/// Whisper's `n_text_ctx` / `max_target_positions` is 448 for every published
+/// export, and the decoder's position-embedding table has exactly that many
+/// rows. Feeding a token at index ≥ 448 therefore slices an empty position
+/// range, whose empty sequence then fails the self-attention `Reshape`
+/// (GH#1944). The generated-token budget is this value minus the prompt
+/// length, not this value on its own. ~keep
 const WHISPER_MAX_TOKENS: usize = 448;
 /// Milliseconds represented by one increment of a Whisper timestamp token ID.
 ///
@@ -63,6 +71,12 @@ const WHISPER_MAX_TOKENS: usize = 448;
 /// `<|0.00|>`; each successive ID represents 20 ms later, up to `<|30.00|>`
 /// (1501 tokens spanning the 30 s chunk window).
 const WHISPER_TIMESTAMP_TICK_MS: u32 = 20;
+
+/// Number of tokens the greedy loop may generate for a prompt of `prompt_len`
+/// tokens, so that prompt + generated never exceeds the decoder context.
+fn decoder_token_budget(prompt_len: usize) -> usize {
+    WHISPER_MAX_TOKENS.saturating_sub(prompt_len)
+}
 
 /// Errors that can occur during Whisper inference.
 #[derive(Debug, Error)]
@@ -89,6 +103,34 @@ pub enum TranscriptionError {
     /// The mel spectrogram computation failed.
     #[error("mel spectrogram error: {0}")]
     MelSpec(String),
+}
+
+/// A transcribed segment: `(start_ms, end_ms, text)`.
+type Segment = (u32, u32, String);
+
+/// Outcome of walking the recording in 30-second windows with per-window error
+/// isolation: `(segments, warnings, first_error, any_success)`.
+type ChunkIsolationOutcome = (
+    Vec<Segment>,
+    Vec<TranscriptionWindowWarning>,
+    Option<TranscriptionError>,
+    bool,
+);
+
+/// A non-fatal failure while transcribing one 30-second window.
+///
+/// A window that the decoder cannot process is skipped rather than aborting
+/// the whole recording (GH#1944); the remaining windows still produce text.
+/// Callers surface these as document-level `ProcessingWarning`s.
+#[derive(Debug, Clone)]
+#[cfg_attr(alef, alef(skip))]
+pub(crate) struct TranscriptionWindowWarning {
+    /// Offset of the failed window from the start of the audio, in milliseconds.
+    pub start_ms: u32,
+    /// End offset of the failed window, in milliseconds.
+    pub end_ms: u32,
+    /// The decoder error for this window.
+    pub message: String,
 }
 
 /// Token IDs for the four-token Whisper decode prompt.
@@ -416,42 +458,40 @@ impl WhisperEngine {
         language: Option<&str>,
         timestamps: bool,
     ) -> Result<Vec<(u32, u32, String)>, TranscriptionError> {
+        let (segments, _warnings) = self.transcribe_segments_with_warnings(pcm, language, timestamps)?;
+        Ok(segments)
+    }
+
+    /// Like [`WhisperEngine::transcribe_segments`], but also returns a warning
+    /// for every 30-second window the decoder could not process.
+    ///
+    /// A single undecodable window must not discard the whole recording
+    /// (GH#1944): its error is collected as a warning and the remaining windows
+    /// still contribute text. An error is returned only when *every* window
+    /// failed, so a systemic failure is never silently rendered as an empty
+    /// transcript.
+    pub(crate) fn transcribe_segments_with_warnings(
+        &self,
+        pcm: &PcmAudio,
+        language: Option<&str>,
+        timestamps: bool,
+    ) -> Result<(Vec<Segment>, Vec<TranscriptionWindowWarning>), TranscriptionError> {
         if pcm.samples.is_empty() {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), Vec::new()));
         }
 
         let lang = language.unwrap_or("en");
         let ms_per_sample = 1000_f64 / pcm.sample_rate_hz.max(1) as f64;
 
-        let mut segments: Vec<(u32, u32, String)> = Vec::new();
-        let mut offset = 0_usize;
+        let (segments, warnings, first_error, any_success) =
+            transcribe_chunks_with_isolation(&pcm.samples, ms_per_sample, |chunk, duration| {
+                self.transcribe_chunk(chunk, lang, timestamps, duration)
+            });
 
-        loop {
-            let remaining = pcm.samples.len() - offset;
-            if remaining == 0 {
-                break;
-            }
-
-            let chunk_end = (offset + WHISPER_CHUNK_SAMPLES).min(pcm.samples.len());
-            let chunk = &pcm.samples[offset..chunk_end];
-            let chunk_offset_ms = (offset as f64 * ms_per_sample) as u32;
-            let chunk_duration_ms = ((chunk_end - offset) as f64 * ms_per_sample) as u32;
-
-            let chunk_segments = self.transcribe_chunk(chunk, lang, timestamps, chunk_duration_ms)?;
-            for (start_ms, end_ms, text) in chunk_segments {
-                if text.is_empty() {
-                    continue;
-                }
-                segments.push((chunk_offset_ms + start_ms, chunk_offset_ms + end_ms, text));
-            }
-
-            offset += WHISPER_CHUNK_SAMPLES;
-            if offset >= pcm.samples.len() {
-                break;
-            }
+        if !any_success && let Some(error) = first_error {
+            return Err(error);
         }
-
-        Ok(segments)
+        Ok((segments, warnings))
     }
 
     /// Transcribe a single chunk of PCM (at most 30 seconds of audio).
@@ -661,6 +701,16 @@ impl WhisperEngine {
             .unwrap_or_else(|| "logits".to_string());
 
         let prompt_len = prompt.len();
+        // The position-embedding table has WHISPER_MAX_TOKENS rows (0..448); a
+        // token fed at index ≥ that is out of range, slices an empty position
+        // range, and crashes the self-attention Reshape (GH#1944). Reserve the
+        // prompt's positions from the context budget so the loop can never feed
+        // a token past the table. `max_new_tokens` is the total number of tokens
+        // generated for this window, step 0's token included. ~keep
+        let max_new_tokens = decoder_token_budget(prompt_len);
+        if max_new_tokens == 0 {
+            return Ok(Vec::new());
+        }
         let input_ids_0 =
             Array2::from_shape_vec((1, prompt_len), prompt).map_err(|e| TranscriptionError::Shape(e.to_string()))?;
         let ids_value_0: Value = Value::from_array(input_ids_0)?.into();
@@ -713,7 +763,7 @@ impl WhisperEngine {
 
         let dwp_wants_enc_hs = dwp_input_names.iter().any(|n| n.contains("encoder_hidden_states"));
 
-        for _ in 1..WHISPER_MAX_TOKENS {
+        for _ in 1..max_new_tokens {
             let last_token = *generated.last().expect("generated is non-empty; qed");
 
             let last_id_arr = Array2::from_shape_vec((1, 1), vec![last_token as i64])
@@ -773,6 +823,69 @@ impl WhisperEngine {
 
         Ok(generated)
     }
+}
+
+/// Walk the recording in 30-second windows, calling `transcribe_chunk` for
+/// each, and isolate per-window failures.
+///
+/// Returns `(segments, warnings, first_error, any_success)`. A failing window
+/// contributes a warning and is skipped; its error is retained only so the
+/// caller can fail the whole call when *every* window failed (a systemic
+/// failure) rather than returning an empty transcript. Extracted from
+/// [`WhisperEngine::transcribe_segments_with_warnings`] so the isolation
+/// behaviour is unit-testable with an injected failing transcriber.
+fn transcribe_chunks_with_isolation<F>(
+    samples: &[f32],
+    ms_per_sample: f64,
+    mut transcribe_chunk: F,
+) -> ChunkIsolationOutcome
+where
+    F: FnMut(&[f32], u32) -> Result<Vec<Segment>, TranscriptionError>,
+{
+    let mut segments: Vec<Segment> = Vec::new();
+    let mut warnings: Vec<TranscriptionWindowWarning> = Vec::new();
+    let mut first_error: Option<TranscriptionError> = None;
+    let mut any_success = false;
+    let mut offset = 0_usize;
+
+    while offset < samples.len() {
+        let chunk_end = (offset + WHISPER_CHUNK_SAMPLES).min(samples.len());
+        let chunk = &samples[offset..chunk_end];
+        let chunk_offset_ms = (offset as f64 * ms_per_sample) as u32;
+        let chunk_duration_ms = ((chunk_end - offset) as f64 * ms_per_sample) as u32;
+
+        match transcribe_chunk(chunk, chunk_duration_ms) {
+            Ok(chunk_segments) => {
+                any_success = true;
+                for (start_ms, end_ms, text) in chunk_segments {
+                    if text.is_empty() {
+                        continue;
+                    }
+                    segments.push((chunk_offset_ms + start_ms, chunk_offset_ms + end_ms, text));
+                }
+            }
+            Err(error) => {
+                tracing::warn!(
+                    window_start_ms = chunk_offset_ms,
+                    window_end_ms = chunk_offset_ms + chunk_duration_ms,
+                    error = %error,
+                    "Whisper could not decode a 30-second window; skipping it and continuing",
+                );
+                warnings.push(TranscriptionWindowWarning {
+                    start_ms: chunk_offset_ms,
+                    end_ms: chunk_offset_ms + chunk_duration_ms,
+                    message: error.to_string(),
+                });
+                if first_error.is_none() {
+                    first_error = Some(error);
+                }
+            }
+        }
+
+        offset += WHISPER_CHUNK_SAMPLES;
+    }
+
+    (segments, warnings, first_error, any_success)
 }
 
 /// Extract the token with the highest logit from the last position of a
@@ -867,5 +980,65 @@ mod tests {
             st.language_ids.contains_key("en"),
             "English language token must be present"
         );
+    }
+
+    /// The decoder's position-embedding table has [`WHISPER_MAX_TOKENS`] rows,
+    /// so the prompt must be subtracted from the budget. Regression for
+    /// GH#1944: an unsubtracted budget let a repetition loop feed a token at
+    /// position 448, slicing an empty position range and crashing Reshape.
+    #[test]
+    fn decoder_token_budget_reserves_prompt_positions() {
+        assert_eq!(decoder_token_budget(4), WHISPER_MAX_TOKENS - 4);
+        assert_eq!(decoder_token_budget(WHISPER_MAX_TOKENS), 0);
+        assert!(decoder_token_budget(WHISPER_MAX_TOKENS + 1) == 0, "never underflows");
+        assert!(4 + decoder_token_budget(4) <= WHISPER_MAX_TOKENS);
+    }
+
+    /// One undecodable window must not discard the others (GH#1944).
+    #[test]
+    fn a_failing_window_is_skipped_and_the_rest_are_kept() {
+        let samples = vec![0.0_f32; WHISPER_CHUNK_SAMPLES * 2 + 1];
+        let ms_per_sample = 1000.0 / 16_000.0;
+        let mut calls = 0usize;
+
+        let (segments, warnings, first_error, any_success) =
+            transcribe_chunks_with_isolation(&samples, ms_per_sample, |_chunk, _duration| {
+                let index = calls;
+                calls += 1;
+                if index == 1 {
+                    Err(TranscriptionError::Shape("decoder rejected window 1".into()))
+                } else {
+                    Ok(vec![(0, 30_000, format!("chunk-{index}"))])
+                }
+            });
+
+        assert!(any_success, "chunks 0 and 2 succeeded");
+        assert_eq!(calls, 3, "expected three 30-second windows");
+        assert_eq!(warnings.len(), 1, "exactly the middle window must warn");
+        assert_eq!(warnings[0].start_ms, 30_000);
+        assert_eq!(warnings[0].end_ms, 60_000);
+        assert!(warnings[0].message.contains("window 1"));
+        assert!(first_error.is_some());
+        let texts: Vec<&str> = segments.iter().map(|(_, _, text)| text.as_str()).collect();
+        assert_eq!(texts, vec!["chunk-0", "chunk-2"]);
+        assert_eq!(segments[1].0, 60_000, "third chunk keeps its absolute offset");
+    }
+
+    /// A systemic decoder failure must still surface as an error rather than an
+    /// empty transcript.
+    #[test]
+    fn every_window_failing_reports_the_first_error() {
+        let samples = vec![0.0_f32; WHISPER_CHUNK_SAMPLES + 1];
+        let ms_per_sample = 1000.0 / 16_000.0;
+
+        let (segments, warnings, first_error, any_success) =
+            transcribe_chunks_with_isolation(&samples, ms_per_sample, |_chunk, _duration| {
+                Err(TranscriptionError::Shape("boom".into()))
+            });
+
+        assert!(!any_success, "no window succeeded");
+        assert!(segments.is_empty(), "no partial text to return");
+        assert_eq!(warnings.len(), 2, "both windows must warn");
+        assert!(first_error.is_some(), "the caller must be able to fail the whole call");
     }
 }

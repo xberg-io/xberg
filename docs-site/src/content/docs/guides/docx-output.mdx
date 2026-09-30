@@ -1,0 +1,81 @@
+---
+title: "DOCX Output"
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+`output_format="docx"` returns the extracted document as a Word file. The `.docx` package is built from the document's Markdown rendering after every post-processor has run, so it holds the same content Markdown output would, including any [redaction](/guides/redaction/).
+
+## Quick Start
+
+<Tabs syncKey="lang">
+<TabItem label="Python">
+
+```python title="docx_output.py"
+import base64
+
+from xberg import ExtractInput, ExtractionConfig, extract
+
+config = ExtractionConfig(output_format="docx")
+output = await extract(ExtractInput(kind="uri", uri="report.pdf"), config=config)
+result = output.results[0]
+if result.metadata.output_format == "docx":
+    with open("report.docx", "wb") as f:
+        f.write(base64.b64decode(result.content))
+```
+
+</TabItem>
+<TabItem label="Rust">
+
+```rust title="docx_output.rs"
+use base64::Engine as _;
+use xberg::{extract, ExtractInput, ExtractionConfig, OutputFormat};
+
+let config = ExtractionConfig {
+    // "docx" is reached through the renderer registry via `OutputFormat::Custom`.
+    output_format: OutputFormat::Custom("docx".to_string()),
+    ..Default::default()
+};
+let output = extract(ExtractInput::from_uri("report.pdf"), &config).await?;
+let result = &output.results[0];
+if result.metadata.output_format.as_deref() == Some("docx") {
+    let package = base64::engine::general_purpose::STANDARD.decode(&result.content)?;
+    std::fs::write("report.docx", package)?;
+}
+```
+
+</TabItem>
+<TabItem label="CLI">
+
+```bash
+xberg extract report.pdf --content-format docx > report.docx
+```
+
+</TabItem>
+</Tabs>
+
+`content` holds the package **base64-encoded**, because `content` is a string in every binding. `metadata.output_format` reads `"docx"` when it does. The CLI decodes it and writes the file itself to stdout, and refuses to write it to a terminal.
+
+Check `metadata.output_format` before decoding. When a post-processor rewrites the document text without updating its rendering, the pipeline discards that rendering and returns the post-processed plain text instead, with an `output_format` processing warning, exactly as it does for Markdown or HTML. `metadata.output_format` then reads `"plain"`, and the CLI exits with an error rather than writing text into a `.docx` file.
+
+## What Carries Over
+
+The package is built from the Markdown rendering, so it holds what Markdown can express:
+
+- headings, as Word's `Heading 1` to `Heading 6` styles,
+- paragraphs, with bold, italic, strikethrough, underline, highlight, superscript, subscript and inline code,
+- links to `http`, `https`, `mailto` and `ftp` targets (a link to a fragment or a relative path keeps its text and drops the link),
+- bulleted and numbered lists, nested up to Word's nine levels, with their start numbers,
+- tables, with the header row repeated on each page,
+- code blocks, block quotes and definition lists, as styled and indented paragraphs,
+- footnotes, as superscript markers with the note text in a paragraph (not as Word footnotes).
+
+Images are **not** embedded; an image's alt text is kept as text. Layout from the source document (page size, columns, fonts, positions) is not reproduced, and no document properties such as title or author are written.
+
+## Redaction
+
+With `redaction` configured, the redaction post-processor rewrites the Markdown rendering like any other text output, and the package is assembled only afterwards, so a redacted term appears in none of its parts. Each archive member or email attachment runs its own extraction with the same configuration, and its `content` is its own base64-encoded `.docx`.
+
+## Chunking
+
+Chunking runs before the package is built. `chunks` and their byte offsets therefore describe the Markdown the Word file was built from, not the base64 text in `content`.

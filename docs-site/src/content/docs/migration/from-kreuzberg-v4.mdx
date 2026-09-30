@@ -101,8 +101,8 @@ implementation of the same CRAFT and Gen2 CRNN architecture, not a drop-in EasyO
 Kreuzberg v4 returned `ocr_elements` for OCR'd images without any setting. Xberg returns them only
 when you ask for them. To get back the word elements v4 returned, set `include_elements` to `true`
 and `min_level` to `word` in the OCR element configuration, and read `ocr_elements` from the first
-result. With the default `min_level`, `line`, word elements are left out, and Tesseract returns no
-elements at all. The WebAssembly build does not return OCR elements.
+result. With the default `min_level`, `line`, Tesseract returns line elements but leaves out word
+elements; set `min_level` to `word` when you need each word's coordinates.
 
 <ApiSnippetGroup topic="ocr/ocr_elements_opt_in" />
 

@@ -230,6 +230,14 @@ pub(crate) fn full_page_raster_density(doc: &PdfDocument, page_index: usize) -> 
         .flatten()
 }
 
+/// Whether the page's rasters cover at least [`OCR_SCAN_COVERAGE_MIN`] of it, the least a scan
+/// covers, inset or whole-page. The text layer is not consulted: a page that carries a scan is
+/// a scan to the OCR engine whatever text is drawn over it. No pixel data is decoded.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) fn carries_scan_raster(doc: &PdfDocument, page_index: usize) -> bool {
+    image_coverage(doc, page_index).is_some_and(|coverage| coverage >= OCR_SCAN_COVERAGE_MIN)
+}
+
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]
 fn readable_glyph_count(spans: &[TextSpan]) -> usize {
     spans

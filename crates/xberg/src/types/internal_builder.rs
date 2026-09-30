@@ -529,10 +529,6 @@ impl InternalDocumentBuilder {
     /// document whose clauses are cross-referenced by their printed label.
     /// An empty label is ignored.
     ///
-    /// `pdf`-gated to match `InternalElement::set_list_item_source_label`, which it wraps:
-    /// the sole caller is the PDF structure assembly, and an ungated wrapper failed to
-    /// compile under a bare `ocr-pipeline` build.
-    #[cfg(feature = "pdf")]
     pub fn set_list_item_source_label(&mut self, index: u32, label: impl Into<String>) {
         if let Some(elem) = self.doc.elements.get_mut(index as usize) {
             elem.set_list_item_source_label(label);

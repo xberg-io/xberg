@@ -2513,11 +2513,38 @@ fn build_cells_from_intersections(pts: &[Intersection], h_edges: &[Edge], v_edge
                 let side_closes = |x: f32, nyi: usize| -> bool {
                     v_edge_spans(x, ys[yi], ys[nyi]) || band_is_ruled(xs[xi], xs[nxi], ys[yi], ys[nyi])
                 };
-                let next_yi = ((yi + 1)..ny).find(|&nyi| has(xi, nyi) && side_closes(xs[xi], nyi));
+                // A neighbouring row separator may end at just one side of a
+                // spanning cell. Find a closing boundary on both sides rather
+                // than abandoning the cell at that one-sided crossing. ~keep
+                let mut next_yi = None;
+                for (candidate_y, nyi) in ((yi + 1)..ny)
+                    .filter(|&nyi| has(xi, nyi) && side_closes(xs[xi], nyi))
+                    .enumerate()
+                {
+                    if has(nxi, nyi)
+                        && side_closes(xs[nxi], nyi)
+                        && (candidate_y == 0
+                            || (v_edge_spans(xs[xi], ys[yi], ys[nyi])
+                                && v_edge_spans(xs[nxi], ys[yi], ys[nyi])
+                                && h_edge_across(ys[yi], xs[xi], xs[nxi]).is_some()
+                                && h_edge_across(ys[nyi], xs[xi], xs[nxi]).is_some()))
+                    {
+                        next_yi = Some(nyi);
+                        break;
+                    }
+                    // Only skip crossings from a neighbouring cell. A rule
+                    // entering this cell is a real internal boundary, even if
+                    // it cannot close at the chosen right edge. ~keep
+                    if h_edges.iter().any(|edge| {
+                        (edge.coord - ys[nyi]).abs() <= SNAP_TOL
+                            && edge.end > xs[xi] + SNAP_TOL
+                            && edge.start < xs[nxi] - SNAP_TOL
+                    }) {
+                        break;
+                    }
+                }
 
                 if let Some(nyi) = next_yi
-                    && has(nxi, nyi)
-                    && side_closes(xs[nxi], nyi)
                     && (candidate == 0
                         || (v_edge_spans(xs[xi], ys[yi], ys[nyi])
                             && v_edge_spans(xs[nxi], ys[yi], ys[nyi])
@@ -4487,7 +4514,10 @@ fn extract_cell_text(cell_span_indices: &[usize], spans: &[TextSpan]) -> String 
         return String::new();
     }
     if span_entries.len() == 1 {
-        return span_entries.remove(0).2;
+        // Trim the same source-space prefix the multi-span path trims (GH#1948):
+        // a single-word cell has no preceding word, so any leading space is an
+        // edge artifact, not a word separator.
+        return span_entries.remove(0).2.trim().to_string();
     }
     span_entries.sort_by(|a, b| crate::utils::safe_float_cmp(b.0, a.0));
 
@@ -4519,7 +4549,12 @@ fn extract_cell_text(cell_span_indices: &[usize], spans: &[TextSpan]) -> String 
                 }
                 out.push_str(text);
             }
-            out
+            // A word can carry a leading space from `extract_table_word_spans`,
+            // which re-emits the source space between two words whose boxes abut
+            // (GH#1948). When such a word opens a cell or a wrapped line, that
+            // space is at an edge, not between two words; drop it here. Cell text
+            // never has meaningful leading/trailing whitespace. ~keep
+            out.trim().to_string()
         })
         .collect::<Vec<_>>()
         .join("\n")
@@ -4858,6 +4893,143 @@ mod tests {
     use super::*;
     use crate::geometry::Rect;
     use crate::layout::text_block::{Color, FontWeight};
+
+    #[test]
+    fn row_spanning_cell_ignores_a_neighbours_one_sided_crossing() {
+        // Left-hand description is split at y=20; its rule stops at x=40.
+        // The alignment cell to its right is a single box from y=0 to y=40. ~keep
+        let horizontal = vec![
+            Edge {
+                coord: 0.,
+                start: 0.,
+                end: 80.,
+            },
+            Edge {
+                coord: 20.,
+                start: 0.,
+                end: 40.,
+            },
+            Edge {
+                coord: 40.,
+                start: 0.,
+                end: 80.,
+            },
+        ];
+        let vertical = vec![
+            Edge {
+                coord: 0.,
+                start: 0.,
+                end: 40.,
+            },
+            Edge {
+                coord: 40.,
+                start: 0.,
+                end: 40.,
+            },
+            Edge {
+                coord: 80.,
+                start: 0.,
+                end: 40.,
+            },
+        ];
+        let points = find_intersections(&horizontal, &vertical);
+        let cells = build_cells_from_intersections(&points, &horizontal, &vertical);
+        assert!(
+            cells
+                .iter()
+                .any(|c| c.x1 == 40. && c.x2 == 80. && c.y1 == 0. && c.y2 == 40.),
+            "{cells:?}"
+        );
+        assert_eq!(cells.len(), 3);
+    }
+
+    #[test]
+    fn later_closing_corners_do_not_bridge_separate_boxes() {
+        let horizontal = vec![
+            Edge {
+                coord: 0.,
+                start: 0.,
+                end: 20.,
+            },
+            Edge {
+                coord: 10.,
+                start: 0.,
+                end: 20.,
+            },
+            Edge {
+                coord: 40.,
+                start: 0.,
+                end: 20.,
+            },
+            Edge {
+                coord: 0.,
+                start: 40.,
+                end: 60.,
+            },
+            Edge {
+                coord: 40.,
+                start: 40.,
+                end: 60.,
+            },
+        ];
+        let vertical: Vec<_> = [0., 20., 40., 60.]
+            .into_iter()
+            .map(|coord| Edge {
+                coord,
+                start: 0.,
+                end: 40.,
+            })
+            .collect();
+        let points = find_intersections(&horizontal, &vertical);
+        let cells = build_cells_from_intersections(&points, &horizontal, &vertical);
+        assert!(
+            !cells
+                .iter()
+                .any(|cell| cell.x1 == 20. && cell.x2 == 40. && cell.y1 == 0.),
+            "{cells:?}"
+        );
+    }
+
+    #[test]
+    fn cell_search_does_not_skip_a_rule_entering_its_interior() {
+        let horizontal = vec![
+            Edge {
+                coord: 0.,
+                start: 0.,
+                end: 80.,
+            },
+            Edge {
+                coord: 20.,
+                start: 0.,
+                end: 30.,
+            },
+            Edge {
+                coord: 40.,
+                start: 0.,
+                end: 80.,
+            },
+        ];
+        let vertical = vec![
+            Edge {
+                coord: 0.,
+                start: 0.,
+                end: 40.,
+            },
+            Edge {
+                coord: 80.,
+                start: 0.,
+                end: 40.,
+            },
+        ];
+        let points = find_intersections(&horizontal, &vertical);
+        let cells = build_cells_from_intersections(&points, &horizontal, &vertical);
+        assert!(
+            !cells
+                .iter()
+                .any(|cell| cell.x1 == 0. && cell.y1 == 0. && cell.x2 == 80. && cell.y2 == 40.),
+            "{cells:?}"
+        );
+    }
 
     #[test]
     fn farther_corners_without_a_divider_ending_below_are_not_header_cells() {
@@ -9079,6 +9251,29 @@ mod tests {
         let prev = ts("Quarter ", 100.0, 200.0, 35.0, 10.0);
         let curr = ts("Total", 140.0, 200.0, 25.0, 10.0);
         assert_eq!(cell_span_separator(&prev, &curr), "");
+    }
+
+    /// GH#1948: the table word source marks a word that its source span
+    /// separated with a whitespace by prefixing the word's text with a space.
+    /// When the two words' boxes abut (a tight face draws the space glyph over
+    /// its neighbours), the separator must not add a *second* space, and the
+    /// one carried in the text must survive.
+    #[test]
+    fn cell_text_keeps_a_source_space_between_abutting_words() {
+        let spans = vec![
+            ts("corrispettivi", 100.0, 200.0, 37.7, 7.83),
+            ts(" superiori", 137.0, 200.0, 27.6, 7.83),
+        ];
+        assert_eq!(extract_cell_text(&[0, 1], &spans), "corrispettivi superiori");
+    }
+
+    /// A word that opens a cell can carry the same source-space prefix, but a
+    /// cell's first word has no preceding word to separate from; the leading
+    /// space must not leak into the cell text (GH#1948).
+    #[test]
+    fn cell_text_trims_a_source_space_prefix_at_the_cell_start() {
+        let spans = vec![ts(" 400", 100.0, 200.0, 20.0, 7.83)];
+        assert_eq!(extract_cell_text(&[0], &spans), "400");
     }
 
     /// Reproduces xberg-io/xberg#1555: a drawn row band whose baselines are

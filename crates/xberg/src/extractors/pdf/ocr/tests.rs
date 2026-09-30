@@ -1644,11 +1644,42 @@ mod tests {
         let mut pages = vec![Some(Vec::new())];
         let page_texts = vec!["Recovered embedded image text".to_string()];
 
-        fill_unstructured_ocr_pages(&mut pages, &page_texts);
+        fill_unstructured_ocr_pages(&mut pages, &page_texts, &[false]);
 
         let paragraphs = pages[0].as_ref().expect("recovered page must be represented");
         assert_eq!(paragraphs.len(), 1);
         assert_eq!(paragraphs[0].text, "Recovered embedded image text");
+    }
+
+    #[test]
+    fn test_empty_structured_page_with_tables_is_not_refilled_from_flat_ocr_text() {
+        let mut pages = vec![Some(Vec::new()), None];
+        let page_texts = vec!["APPLES 48,210 49,850".to_string(), "Unstructured page".to_string()];
+
+        fill_unstructured_ocr_pages(&mut pages, &page_texts, &[true, true]);
+
+        assert!(
+            pages[0].as_ref().is_some_and(Vec::is_empty),
+            "the table already carries this text: {:?}",
+            pages[0]
+        );
+        assert_eq!(
+            pages[1].as_ref().map(Vec::len),
+            Some(1),
+            "a page with no backend document keeps its text"
+        );
+    }
+
+    #[test]
+    fn test_ocr_pages_with_tables_maps_document_pages_to_batch_indices() {
+        let table_on = |page_number| crate::types::Table {
+            page_number,
+            ..Default::default()
+        };
+
+        let pages = ocr_pages_with_tables(&[table_on(4), table_on(6), table_on(9)], 3, 3);
+
+        assert_eq!(pages, [true, false, true]);
     }
 
     #[test]
@@ -7951,6 +7982,33 @@ Name: ___
         };
         let hinted = ocr_config_with_page_rotation_hint(&other_backend, 0, None, false, true);
         assert!(hinted.tesseract_config.is_none());
+    }
+
+    /// Block mode goes to a page that automatic routing listed only when the page carries no
+    /// scan raster: a listed inset scan keeps the scan's segmentation mode, a listed page without
+    /// a raster takes block mode, an unlisted page never does, and with no document at hand the
+    /// list decides.
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn single_block_for_ocr_page_skips_a_listed_page_that_carries_a_scan() {
+        let listed = std::collections::HashSet::from([1]);
+        let decide = |pdf: Option<&[u8]>, page_number: usize| {
+            let mut fallback_pdf_state = None;
+            single_block_for_ocr_page(Some(&listed), page_number, None, &mut fallback_pdf_state, pdf, 0)
+        };
+        let inset_scan = crate::pdf::render::build_full_page_raster_pdf((100.0, 100.0), (400, 400), 0.64, 0);
+        let no_raster = crate::pdf::render::build_minimal_pdf_with_mediabox(100.0, 100.0);
+
+        assert!(
+            !decide(Some(&inset_scan), 1),
+            "a listed page that carries a scan keeps the scan's segmentation mode"
+        );
+        assert!(
+            decide(Some(&no_raster), 1),
+            "a listed page without a scan raster takes block mode"
+        );
+        assert!(!decide(Some(&no_raster), 2), "an unlisted page never takes block mode");
+        assert!(decide(None, 1), "with no document at hand, the list decides");
     }
 
     #[cfg(all(feature = "pdf", feature = "ocr"))]

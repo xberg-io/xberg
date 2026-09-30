@@ -16,14 +16,14 @@
 use crate::Result;
 use crate::core::config::OcrConfig;
 use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
-use crate::types::{ExtractedDocument, FormatMetadata, Metadata, OcrMetadata};
+use crate::types::{ExtractedDocument, FormatMetadata, Metadata, OcrElement, OcrMetadata};
 use async_trait::async_trait;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::path::Path;
 use std::sync::Mutex;
-use xberg_tesseract::{Pix, TessMonitor, TessPageSegMode, TesseractAPI};
+use xberg_tesseract::{Pix, TessMonitor, TessPageSegMode, TesseractAPI, WordData};
 
 /// Default OCR engine mode: LSTM only (mode 1). Matches the `OEM_LSTM_ONLY`
 /// constant from Tesseract's `tesseract/publictypes.h`. LSTM is the only
@@ -149,7 +149,12 @@ impl OcrBackend for TesseractWasmBackend {
         let tessdata = self.resolve_tessdata(&language, config)?;
         let pix = prepare_ocr_pix(image_bytes, config)?;
         let psm_mode = resolve_psm(config);
-        let text = run_tesseract_recognition(&tessdata, &language, psm_mode, &pix)?;
+        let include_elements = config
+            .element_config
+            .as_ref()
+            .is_some_and(|options| options.include_elements);
+        let recognition = run_tesseract_recognition(&tessdata, &language, psm_mode, &pix, include_elements)?;
+        let ocr_elements = select_output_ocr_elements(recognition.words, config);
 
         let metadata = Metadata {
             format: Some(FormatMetadata::Ocr(OcrMetadata {
@@ -164,9 +169,10 @@ impl OcrBackend for TesseractWasmBackend {
         };
 
         Ok(ExtractedDocument {
-            content: text,
+            content: recognition.text,
             mime_type: Cow::Borrowed("text/plain"),
             metadata,
+            ocr_elements,
             ..Default::default()
         })
     }
@@ -264,10 +270,19 @@ fn prepare_ocr_pix(image_bytes: &[u8], config: &OcrConfig) -> Result<Pix> {
     }
 }
 
-/// Runs a full Tesseract recognition pass (API init, PSM, image, deadline-bounded
-/// recognize, text read) and returns the recognized UTF-8 text. Split out of
-/// [`TesseractWasmBackend::process_image`] purely to shorten that method.
-fn run_tesseract_recognition(tessdata: &[u8], language: &str, psm_mode: TessPageSegMode, pix: &Pix) -> Result<String> {
+struct WasmRecognition {
+    text: String,
+    words: Option<Vec<WordData>>,
+}
+
+/// Runs recognition and optionally reads the recognized words and their geometry. ~keep
+fn run_tesseract_recognition(
+    tessdata: &[u8],
+    language: &str,
+    psm_mode: TessPageSegMode,
+    pix: &Pix,
+    include_elements: bool,
+) -> Result<WasmRecognition> {
     let api = TesseractAPI::new().map_err(|e| crate::XbergError::Ocr {
         message: format!("Failed to create Tesseract API handle: {e}"),
         source: Some(Box::new(e)),
@@ -301,10 +316,39 @@ fn run_tesseract_recognition(tessdata: &[u8], language: &str, psm_mode: TessPage
             message: format!("Tesseract recognition failed or exceeded its deadline: {e}"),
             source: Some(Box::new(e)),
         })?;
-    api.get_utf8_text().map_err(|e| crate::XbergError::Ocr {
+    let text = api.get_utf8_text().map_err(|e| crate::XbergError::Ocr {
         message: format!("Failed to read Tesseract text output: {e}"),
         source: Some(Box::new(e)),
-    })
+    })?;
+    let words = include_elements
+        .then(|| {
+            api.get_iterator()
+                .and_then(|iterator| iterator.extract_all_words())
+                .map(|outcome| {
+                    if outcome.skipped > 0 {
+                        tracing::warn!(skipped = outcome.skipped, "WASM Tesseract skipped malformed OCR words");
+                    }
+                    outcome.words
+                })
+        })
+        .transpose()
+        .map_err(|e| crate::XbergError::Ocr {
+            message: format!("Failed to read Tesseract word elements: {e}"),
+            source: Some(Box::new(e)),
+        })?;
+
+    Ok(WasmRecognition { text, words })
+}
+
+fn select_output_ocr_elements(words: Option<Vec<WordData>>, config: &OcrConfig) -> Option<Vec<OcrElement>> {
+    let options = config.element_config.as_ref()?;
+    let elements = words
+        .unwrap_or_default()
+        .iter()
+        .map(|word| crate::ocr::conversion::iterator_word_to_element(word, None, None, 1))
+        .collect::<Vec<_>>();
+    let selected = options.select_elements(&elements);
+    (!selected.is_empty()).then_some(selected)
 }
 
 fn wasm_ocr_decode_limits() -> image::Limits {
@@ -355,6 +399,7 @@ fn wasm_ocr_image_error(error: image::ImageError) -> crate::XbergError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::{OcrBoundingGeometry, OcrElementConfig, OcrElementLevel};
 
     /// This is a native-compilable test of the PSM-selection logic only.
     /// `TesseractWasmBackend::process_image` itself drives the WASI-compiled
@@ -469,5 +514,50 @@ mod tests {
         };
 
         assert_eq!(resolve_psm(&config), DEFAULT_WASM_PSM);
+    }
+
+    #[test]
+    fn should_return_selected_word_elements_with_geometry_and_confidence() {
+        let config = OcrConfig {
+            element_config: Some(OcrElementConfig {
+                include_elements: true,
+                min_level: OcrElementLevel::Word,
+                min_confidence: 0.8,
+                build_hierarchy: false,
+            }),
+            ..Default::default()
+        };
+        let words = vec![
+            WordData {
+                text: "Hello".to_string(),
+                left: 12,
+                top: 8,
+                right: 42,
+                bottom: 24,
+                confidence: 95.0,
+                ..Default::default()
+            },
+            WordData {
+                text: "noise".to_string(),
+                confidence: 40.0,
+                ..Default::default()
+            },
+        ];
+
+        let elements = select_output_ocr_elements(Some(words), &config).expect("word element");
+
+        assert_eq!(elements.len(), 1);
+        assert_eq!(elements[0].text, "Hello");
+        assert_eq!(elements[0].level, OcrElementLevel::Word);
+        assert_eq!(elements[0].confidence.recognition, 0.95);
+        assert_eq!(
+            elements[0].geometry,
+            OcrBoundingGeometry::Rectangle {
+                left: 12,
+                top: 8,
+                width: 30,
+                height: 16,
+            }
+        );
     }
 }

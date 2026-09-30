@@ -115,8 +115,8 @@ pub(crate) struct ColumnTrack {
     left: u32,
     /// Median right edge of the column's tokens (the rightmost once folded).
     right: u32,
-    /// Whether every one of the column's data tokens is a value ([`is_cell_value_text`]), which is
-    /// what makes it eligible to fold into an adjacent value column. Header-row tokens are not
+    /// Whether the column's data tokens are values ([`is_cell_value_text`]) by majority, which is
+    /// what makes it eligible to fold into an adjacent value column. Header-band tokens are not
     /// read: a column's header label is text by nature. See [`column_track`].
     right_aligned: bool,
     /// The median left edge of each track this column was folded from, one entry when it was not
@@ -133,6 +133,10 @@ pub(crate) struct ColumnTrack {
     /// 24. Keeping each track's own left edge leaves membership exactly as it was before the
     /// fold. ~keep
     lefts: Vec<u32>,
+    /// The rows in which the column holds a number ([`text_is_value`]), of every track it was
+    /// folded from. Two numbers in one row are two cells, so two tracks that both hold a number
+    /// in the same row never fold.
+    number_rows: Vec<usize>,
 }
 
 impl ColumnTrack {
@@ -144,6 +148,7 @@ impl ColumnTrack {
             right: left,
             right_aligned: false,
             lefts: vec![left],
+            number_rows: Vec::new(),
         }
     }
 
@@ -162,20 +167,22 @@ impl ColumnTrack {
 /// against and the median left edge callers report as its position.
 ///
 /// Groups words by left edge within `column_threshold`, splits a group that holds two columns
-/// (see [`split_row_sharing_groups`]), then folds adjacent all-value columns whose right edges
+/// (see [`split_row_sharing_groups`]), then folds adjacent value columns whose right edges
 /// coincide within the same threshold (see [`fold_right_aligned_tracks`]). `row_positions` are the
-/// rows the words were grouped into; row 0 is the header row.
+/// rows the words were grouped into; the header band at the top is read as
+/// [`header_band_row_count`] defines it.
 pub(crate) fn detect_columns(words: &[HocrWord], row_positions: &[u32], column_threshold: u32) -> Vec<ColumnTrack> {
     if words.is_empty() {
         return Vec::new();
     }
 
+    let header_rows = header_band_row_count(words, row_positions);
     let groups = cluster_by_edge(words, column_threshold, |word| word.left);
     let groups = split_row_sharing_groups(groups, row_positions, column_threshold);
 
     let mut columns: Vec<ColumnTrack> = groups
         .iter()
-        .map(|group| column_track(group.as_slice(), row_positions))
+        .map(|group| column_track(group.as_slice(), row_positions, header_rows))
         .collect();
     columns.sort_by_key(|column| column.left);
     fold_right_aligned_tracks(&mut columns, column_threshold);
@@ -247,21 +254,49 @@ fn split_row_sharing_groups<'a>(
     split
 }
 
+/// Count of rows in the header band at the top of the region: row 0, plus every following row up
+/// to the first row that holds a number ([`text_is_value`]).
+///
+/// A scanned header band spans two or three rows: a title row, the column labels, a units line.
+/// Reading only row 0 as the header made the labels of every further header row count as data
+/// tokens, so a value column under a two-row header never read as values and never folded
+/// (xberg-io/xberg#1952). A row with a number in any column is table content, and the band ends
+/// there. A region with no number has no value column to fold, and its header is row 0.
+///
+/// Only the fold test reads the band. The right-edge split ([`split_by_right_edge`]) keeps row 0
+/// as its header: when the first number sits far down a text table, the band holds most of the
+/// table's rows, and a split that did not read them would leave two close text columns in one
+/// cell. ~keep
+fn header_band_row_count(words: &[HocrWord], row_positions: &[u32]) -> usize {
+    number_rows(words, row_positions)
+        .first()
+        .map_or(1, |&first_value_row| first_value_row.max(1))
+}
+
+/// Split `group` into its header-band tokens (the first `header_rows` rows) and its data tokens.
+fn split_header_band<'a>(
+    group: &[&'a HocrWord],
+    row_positions: &[u32],
+    header_rows: usize,
+) -> (Vec<&'a HocrWord>, Vec<&'a HocrWord>) {
+    group
+        .iter()
+        .copied()
+        .partition(|word| find_row_index(row_positions, word).is_some_and(|row| row < header_rows))
+}
+
 /// Re-group `group` by right edge, or `None` unless that gives exactly two independently
 /// supported parts with at most one token from each row.
 ///
-/// Only data tokens are re-grouped by right edge. A header label is written from the left edge of
-/// its column whatever the alignment of the values under it, so its right edge says nothing about
-/// its column: it joins the part whose median left edge is nearest its own. ~keep
+/// Only data tokens, below row 0, are re-grouped by right edge. A header label is written from the
+/// left edge of its column whatever the alignment of the values under it, so its right edge says
+/// nothing about its column: it joins the part whose median left edge is nearest its own. ~keep
 fn split_by_right_edge<'a>(
     group: &[&'a HocrWord],
     row_positions: &[u32],
     column_threshold: u32,
 ) -> Option<Vec<Vec<&'a HocrWord>>> {
-    let (header, data): (Vec<&HocrWord>, Vec<&HocrWord>) = group
-        .iter()
-        .copied()
-        .partition(|word| find_row_index(row_positions, word) == Some(0));
+    let (header, data) = split_header_band(group, row_positions, 1);
     let mut parts = cluster_by_edge(data, column_threshold, right_edge);
     if parts.len() != 2 {
         return None;
@@ -280,16 +315,20 @@ fn split_by_right_edge<'a>(
     (!parts.iter().any(|part| shares_a_row(part, row_positions))).then_some(parts)
 }
 
-/// Whether `group` reads as values: its tokens below the header row when it has any, else its
-/// header tokens. Row 0 is not read when data rows are present: a column's header label is text by
-/// nature. A header-only group reads as values only when its label is one, such as a year.
-fn reads_as_values(group: &[&HocrWord], row_positions: &[u32]) -> bool {
-    let (header, data): (Vec<&HocrWord>, Vec<&HocrWord>) = group
-        .iter()
-        .copied()
-        .partition(|word| find_row_index(row_positions, word) == Some(0));
+/// Whether `group` reads as values: its tokens below the header band when it has any, else its
+/// header tokens. The band is not read when data rows are present: a column's header label is
+/// text by nature. A header-only group reads as values only when its label is one, such as a year.
+///
+/// The tokens read are values when the values outnumber the other tokens. A column is the kind of
+/// cell most of its cells are: on a scan, a value column carries the odd token OCR read from a
+/// rule mark or misread as a letter, and one such token must not make the whole column text
+/// (xberg-io/xberg#1952). A text column has text in most of its cells and never reads as values,
+/// whatever numbers it holds. ~keep
+fn reads_as_values(group: &[&HocrWord], row_positions: &[u32], header_rows: usize) -> bool {
+    let (header, data) = split_header_band(group, row_positions, header_rows);
     let tokens = if data.is_empty() { header } else { data };
-    !tokens.is_empty() && tokens.iter().all(|word| is_cell_value_text(&word.text))
+    let values = tokens.iter().filter(|word| is_cell_value_text(&word.text)).count();
+    values > tokens.len() - values
 }
 
 /// The column one group of tokens forms.
@@ -298,14 +337,27 @@ fn reads_as_values(group: &[&HocrWord], row_positions: &[u32]) -> bool {
 /// labels, so it joins one of their left-edge groups, and reading its text as well would stop that
 /// group from folding with the rest of its column. A group with no data token is a header-only
 /// track: it folds only when its label is a value, such as a year (xberg-io/xberg#1909). ~keep
-fn column_track(group: &[&HocrWord], row_positions: &[u32]) -> ColumnTrack {
+fn column_track(group: &[&HocrWord], row_positions: &[u32], header_rows: usize) -> ColumnTrack {
     let left = median_of(group.iter().map(|word| word.left).collect());
     ColumnTrack {
         left,
         right: median_of(group.iter().map(|word| right_edge(word)).collect()),
-        right_aligned: reads_as_values(group, row_positions),
+        right_aligned: reads_as_values(group, row_positions, header_rows),
         lefts: vec![left],
+        number_rows: number_rows(group.iter().copied(), row_positions),
     }
+}
+
+/// The rows in which `words` hold a number ([`text_is_value`]), sorted and without repeats.
+fn number_rows<'a>(words: impl IntoIterator<Item = &'a HocrWord>, row_positions: &[u32]) -> Vec<usize> {
+    let mut rows: Vec<usize> = words
+        .into_iter()
+        .filter(|word| text_is_value(word.text.trim()))
+        .filter_map(|word| find_row_index(row_positions, word))
+        .collect();
+    rows.sort_unstable();
+    rows.dedup();
+    rows
 }
 
 /// Fold adjacent columns that are one right-aligned value column split by digit-count drift
@@ -318,26 +370,36 @@ fn column_track(group: &[&HocrWord], row_positions: &[u32]) -> ColumnTrack {
 /// content: a dropped nil-dash column, a sparse row's interior cells, a value in the label cell.
 ///
 /// Raising `column_threshold` is not the alternative — it merges genuinely narrow neighbouring
-/// columns (the GH#1649 `DEPOSIT` case). Both sides must hold only values in their data rows, so a
-/// text column and a column with any label below the header are never folded. A header-only track
-/// with a text label never folds either, which keeps it for the header-fragment merge; a header
-/// word clustered with data values does not stop them folding (see [`column_track`]). ~keep
+/// columns (the GH#1649 `DEPOSIT` case). Both sides must read as values in their data rows (see
+/// [`reads_as_values`]), so a text column is never folded. A header-only track with a text label
+/// never folds either, which keeps it for the header-fragment merge; a header word clustered with
+/// data values does not stop them folding (see [`column_track`]). Two tracks that each hold a
+/// number in one row are two columns, such as a code column next to a quantity column, and never
+/// fold (see [`ColumnTrack::number_rows`]). A rule mark or nil dash beside a value does not count:
+/// it holds no digit. ~keep
 fn fold_right_aligned_tracks(columns: &mut Vec<ColumnTrack>, column_threshold: u32) {
     let mut index = 0;
     while index + 1 < columns.len() {
         let foldable = columns[index].right_aligned
             && columns[index + 1].right_aligned
-            && columns[index].right.abs_diff(columns[index + 1].right) <= column_threshold;
+            && columns[index].right.abs_diff(columns[index + 1].right) <= column_threshold
+            && !share_a_number_row(&columns[index], &columns[index + 1]);
         if foldable {
             let next = columns.remove(index + 1);
             let current = &mut columns[index];
             current.left = current.left.min(next.left);
             current.right = current.right.max(next.right);
             current.lefts.extend(next.lefts);
+            current.number_rows.extend(next.number_rows);
         } else {
             index += 1;
         }
     }
+}
+
+/// Whether `left` and `right` both hold a number in some row.
+fn share_a_number_row(left: &ColumnTrack, right: &ColumnTrack) -> bool {
+    left.number_rows.iter().any(|row| right.number_rows.contains(row))
 }
 
 /// Compute the median word height. Returns 0 for an empty slice.
@@ -357,11 +419,22 @@ pub(crate) fn median_of(mut values: Vec<u32>) -> u32 {
     values.get(values.len() / 2).copied().unwrap_or(0)
 }
 
+fn median_row_position(group: &[f64]) -> Option<u32> {
+    if group.is_empty() {
+        return None;
+    }
+    let mut sorted = group.to_vec();
+    sorted.sort_by(|a, b| a.total_cmp(b));
+    Some(sorted[sorted.len() / 2] as u32)
+}
+
 /// Detect row positions from word y-coordinates.
 ///
-/// Groups words by their vertical center position and returns the median
-/// y-position for each detected row. The `row_threshold_ratio` is multiplied
-/// by the median word height to determine the grouping threshold.
+/// Groups representative-height words by their vertical center position and returns the median
+/// y-position for each detected row. A taller word seeds a row only when its box does not overlap
+/// an existing row band, so a standalone tall heading remains a row while an outlier in a normal
+/// row cannot split it. The `row_threshold_ratio` is multiplied by the median word height to
+/// determine the grouping threshold.
 pub(crate) fn detect_rows(words: &[HocrWord], row_threshold_ratio: f64) -> Vec<u32> {
     if words.is_empty() {
         return Vec::new();
@@ -369,10 +442,18 @@ pub(crate) fn detect_rows(words: &[HocrWord], row_threshold_ratio: f64) -> Vec<u
 
     let median_height = median_word_height(words);
     let row_threshold = (median_height as f64 * row_threshold_ratio) as u32;
+    let maximum_seed_height = median_height.saturating_add(median_height / 2);
+    let (seed_words, tall_words): (Vec<&HocrWord>, Vec<&HocrWord>) =
+        words.iter().partition(|word| word.height <= maximum_seed_height);
+    let (seed_words, tall_words) = if seed_words.is_empty() {
+        (words.iter().collect(), Vec::new())
+    } else {
+        (seed_words, tall_words)
+    };
 
     let mut position_groups: Vec<Vec<f64>> = Vec::new();
 
-    for word in words {
+    for word in seed_words {
         let y_center = word.y_center();
 
         let mut found_group = false;
@@ -391,15 +472,25 @@ pub(crate) fn detect_rows(words: &[HocrWord], row_threshold_ratio: f64) -> Vec<u
         }
     }
 
+    let half_height = median_height / 2;
+    for word in tall_words {
+        let bottom = word.top.saturating_add(word.height);
+        let overlaps_seeded_row = position_groups
+            .iter()
+            .filter_map(|group| median_row_position(group))
+            .any(|row_y| {
+                let band_top = row_y.saturating_sub(half_height);
+                let band_bottom = row_y.saturating_add(half_height);
+                bottom.min(band_bottom).saturating_sub(word.top.max(band_top)) > 0
+            });
+        if !overlaps_seeded_row {
+            position_groups.push(vec![word.y_center()]);
+        }
+    }
+
     let mut rows: Vec<u32> = position_groups
         .iter()
-        .filter(|group| !group.is_empty())
-        .map(|group| {
-            let mut sorted = group.clone();
-            sorted.sort_by(|a, b| a.total_cmp(b));
-            let mid = sorted.len() / 2;
-            sorted[mid] as u32
-        })
+        .filter_map(|group| median_row_position(group))
         .collect();
 
     rows.sort_unstable();
@@ -415,6 +506,24 @@ pub(crate) fn find_row_index(row_positions: &[u32], word: &HocrWord) -> Option<u
         .enumerate()
         .min_by_key(|&(_, row_y)| row_y.abs_diff(y_center))
         .map(|(idx, _)| idx)
+}
+
+/// Find the row whose median-height band overlaps `word` most, breaking ties by centre distance.
+fn find_row_index_by_overlap(row_positions: &[u32], word: &HocrWord, median_height: u32) -> Option<usize> {
+    let half_height = median_height / 2;
+    let word_bottom = word.top.saturating_add(word.height);
+    let word_center = word.y_center() as u32;
+
+    row_positions
+        .iter()
+        .enumerate()
+        .min_by_key(|&(_, row_y)| {
+            let band_top = row_y.saturating_sub(half_height);
+            let band_bottom = row_y.saturating_add(half_height);
+            let overlap = word_bottom.min(band_bottom).saturating_sub(word.top.max(band_top));
+            (std::cmp::Reverse(overlap), row_y.abs_diff(word_center))
+        })
+        .map(|(index, _)| index)
 }
 
 /// Find which column a word belongs to, by the nearest left edge of the tracks it was folded from
@@ -536,11 +645,12 @@ fn group_words_into_cell_tokens<'a>(
         return words.iter().map(|word| (word.clone(), vec![word])).collect();
     }
 
-    let merge_gap = median_word_height(words) as f64 * CELL_MERGE_GAP_HEIGHT_RATIO;
+    let median_height = median_word_height(words);
+    let merge_gap = median_height as f64 * CELL_MERGE_GAP_HEIGHT_RATIO;
 
     let mut rows: Vec<Vec<&HocrWord>> = vec![Vec::new(); row_positions.len()];
     for word in words {
-        if let Some(row_index) = find_row_index(row_positions, word) {
+        if let Some(row_index) = find_row_index_by_overlap(row_positions, word, median_height) {
             rows[row_index].push(word);
         }
     }
@@ -680,6 +790,7 @@ pub(crate) fn reconstruct_table_with_columns(
     }
 
     let row_positions = detect_rows(words, row_threshold_ratio);
+    let median_height = median_word_height(words);
     let groups = group_words_into_cell_tokens(words, &row_positions);
     let cell_tokens: Vec<HocrWord> = groups.iter().map(|(token, _)| token.clone()).collect();
     let columns = detect_columns(&cell_tokens, &row_positions, column_threshold);
@@ -688,7 +799,7 @@ pub(crate) fn reconstruct_table_with_columns(
         return (Vec::new(), Vec::new());
     }
 
-    let mut result = assign_grouped_words_to_cells(&groups, &row_positions, &columns);
+    let mut result = assign_grouped_words_to_cells(&groups, &row_positions, median_height, &columns);
     let mut col_positions: Vec<u32> = columns.iter().map(|column| column.left).collect();
     merge_header_fragments_by_geometry(&mut result, &mut col_positions);
 
@@ -932,15 +1043,16 @@ fn assign_words_to_cells(words: &[HocrWord], row_positions: &[u32], col_position
 fn assign_grouped_words_to_cells<'a>(
     groups: &[(HocrWord, Vec<&'a HocrWord>)],
     row_positions: &[u32],
+    median_height: u32,
     columns: &[ColumnTrack],
 ) -> Vec<Vec<String>> {
     let num_rows = row_positions.len();
     let num_cols = columns.len();
     let mut table: Vec<Vec<Vec<&'a HocrWord>>> = vec![vec![vec![]; num_cols]; num_rows];
-    let data_supported = columns_with_data_support(groups, row_positions, columns);
+    let data_supported = columns_with_data_support(groups, row_positions, median_height, columns);
 
     for (token, members) in groups {
-        let Some(row) = find_row_index(row_positions, token) else {
+        let Some(row) = find_row_index_by_overlap(row_positions, token, median_height) else {
             continue;
         };
         if row >= num_rows {
@@ -972,11 +1084,12 @@ fn assign_grouped_words_to_cells<'a>(
 fn columns_with_data_support(
     groups: &[(HocrWord, Vec<&HocrWord>)],
     row_positions: &[u32],
+    median_height: u32,
     columns: &[ColumnTrack],
 ) -> Vec<bool> {
     let mut supported = vec![false; columns.len()];
     for (token, _) in groups {
-        if find_row_index(row_positions, token) != Some(0)
+        if find_row_index_by_overlap(row_positions, token, median_height) != Some(0)
             && let Some(column) = find_column_index(columns, token)
         {
             supported[column] = true;
@@ -1053,6 +1166,9 @@ pub(crate) const TABLE_REGION_GAP_HEIGHT_MULTIPLIER: u32 = 3;
 #[cfg(any(feature = "ocr", paddle_ocr))]
 pub(crate) const MIN_TABLE_CANDIDATE_WORDS: usize = 6;
 
+#[cfg(any(feature = "ocr", paddle_ocr))]
+const MAX_ALIGNED_FRAGMENT_GAP_HEIGHT_MULTIPLIER: u32 = 12;
+
 /// Split table-candidate words into vertically separated regions.
 ///
 /// Tesseract's TSV output has no notion of "this is a separate table from
@@ -1120,7 +1236,93 @@ pub(crate) fn cluster_word_indices_into_table_regions(words: &[HocrWord]) -> Vec
         regions.push(current_region);
     }
 
+    merge_small_aligned_regions(&mut regions, words, avg_height);
     regions
+}
+
+/// Attach a region smaller than [`MIN_TABLE_CANDIDATE_WORDS`] to an adjacent region it is
+/// column-aligned with.
+///
+/// A table whose rows are spaced widely enough to exceed the region gap threshold splits into one
+/// region per row. A one-row region holds fewer than the minimum words, so the table branch drops
+/// it entirely and the row's values are lost (xberg-io/xberg#1957: an invoice's trailing line
+/// items). A region below the minimum is not a table on its own, and a genuinely separate table is
+/// at least that size, so attaching the fragment to a column-aligned neighbour preserves its
+/// content without folding two real tables together.
+#[cfg(any(feature = "ocr", paddle_ocr))]
+fn merge_small_aligned_regions(regions: &mut Vec<Vec<usize>>, words: &[HocrWord], tolerance: u32) {
+    let mut merged: Vec<Vec<usize>> = Vec::with_capacity(regions.len());
+    for region in regions.drain(..) {
+        if region.len() < MIN_TABLE_CANDIDATE_WORDS
+            && let Some(previous) = merged.last_mut()
+            && columns_align(previous, &region, words, tolerance)
+            && regions_are_nearby(previous, &region, words, tolerance)
+        {
+            previous.extend(region);
+            continue;
+        }
+        merged.push(region);
+    }
+    // A small leading fragment has no region above it; attach it downward instead.
+    let mut index = 0;
+    while index + 1 < merged.len() {
+        if merged[index].len() < MIN_TABLE_CANDIDATE_WORDS
+            && columns_align(&merged[index + 1], &merged[index], words, tolerance)
+            && regions_are_nearby(&merged[index + 1], &merged[index], words, tolerance)
+        {
+            let fragment = merged.remove(index);
+            merged[index].extend(fragment);
+            continue;
+        }
+        index += 1;
+    }
+    *regions = merged;
+}
+
+#[cfg(any(feature = "ocr", paddle_ocr))]
+fn regions_are_nearby(first: &[usize], second: &[usize], words: &[HocrWord], tolerance: u32) -> bool {
+    let first_top = first.iter().map(|&index| words[index].top).min().unwrap_or(0);
+    let first_bottom = first
+        .iter()
+        .map(|&index| words[index].top.saturating_add(words[index].height))
+        .max()
+        .unwrap_or(0);
+    let second_top = second.iter().map(|&index| words[index].top).min().unwrap_or(0);
+    let second_bottom = second
+        .iter()
+        .map(|&index| words[index].top.saturating_add(words[index].height))
+        .max()
+        .unwrap_or(0);
+    let gap = first_top
+        .saturating_sub(second_bottom)
+        .max(second_top.saturating_sub(first_bottom));
+    gap <= tolerance.saturating_mul(MAX_ALIGNED_FRAGMENT_GAP_HEIGHT_MULTIPLIER)
+}
+
+/// Whether at least two distinct columns of `fragment` line up with a column of `anchor`, within
+/// `tolerance` points. A scan's column jitter is a fraction of a word's height, so callers pass
+/// the region's average word height.
+#[cfg(any(feature = "ocr", paddle_ocr))]
+fn columns_align(anchor: &[usize], fragment: &[usize], words: &[HocrWord], tolerance: u32) -> bool {
+    let mut matched = 0usize;
+    let mut seen: Vec<u32> = Vec::new();
+    for &fragment_index in fragment {
+        let left = words[fragment_index].left;
+        if seen.iter().any(|&seen_left| seen_left.abs_diff(left) <= tolerance) {
+            continue;
+        }
+        seen.push(left);
+        if anchor
+            .iter()
+            .any(|&anchor_index| words[anchor_index].left.abs_diff(left) <= tolerance)
+        {
+            matched += 1;
+            if matched >= 2 {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// Multiple of the region's median word height used as the maximum gap for merging two
@@ -1153,22 +1355,47 @@ fn looks_like_amount(cell: &str) -> bool {
             .all(|ch| ch.is_ascii_digit() || "$,.-()%€£¥+".contains(ch))
 }
 
-/// Whether columns `left` and `right` of `table` (row 0 is the header, excluded from this
-/// check) are mutually exclusive -- no data row has both populated -- and every populated data
-/// cell in either column looks like a number/currency amount. Both conditions must hold for
-/// [`merge_disjoint_numeric_columns`] to treat the pair as one logical column split in two.
+/// Whether `cell` carries no letter and no digit: empty, or only marks such as `-`, a dash run,
+/// `:`, `_`, `|` or `.`. On a scan these are what OCR reads from rules and shaded bands, so the
+/// drift-split merge counts such a cell as empty rather than as a value of its own.
 #[cfg(feature = "ocr")]
-fn columns_are_disjoint_and_numeric(table: &[Vec<String>], left: usize, right: usize) -> bool {
+fn has_no_alphanumeric(cell: &str) -> bool {
+    !cell.chars().any(char::is_alphanumeric)
+}
+
+/// Count of header rows above the data: row 0, plus every following row up to the first row that
+/// holds an amount in any column. A scanned header band can leave a stray glyph in a row of its
+/// own under the header text, and that row is part of the header, not data.
+#[cfg(feature = "ocr")]
+fn leading_header_row_count(table: &[Vec<String>]) -> usize {
+    table
+        .iter()
+        .position(|row| row.iter().any(|cell| looks_like_amount(cell)))
+        .unwrap_or(table.len())
+        .max(1)
+}
+
+/// Whether columns `left` and `right` of `table` (the first `header_rows` rows are the header,
+/// excluded from this check) are mutually exclusive -- no data row has both populated -- and
+/// every populated data cell in either column looks like a number/currency amount. Both
+/// conditions must hold for [`merge_disjoint_numeric_columns`] to treat the pair as one logical
+/// column split in two. A cell with no letter or digit counts as empty here (see
+/// [`has_no_alphanumeric`]), except a lone cell symbol in front of a value in the right track: a
+/// `-`, `$` or `(` that OCR split off the front of that value is part of it
+/// ([`is_lone_cell_symbol`]), and merging would drop it.
+#[cfg(feature = "ocr")]
+fn columns_are_disjoint_and_numeric(table: &[Vec<String>], header_rows: usize, left: usize, right: usize) -> bool {
     let mut any_data = false;
-    for row in table.iter().skip(1) {
+    for row in table.iter().skip(header_rows) {
         let (Some(left_cell), Some(right_cell)) = (row.get(left), row.get(right)) else {
             return false;
         };
-        let left_empty = left_cell.trim().is_empty();
-        let right_empty = right_cell.trim().is_empty();
+        let left_empty = has_no_alphanumeric(left_cell);
+        let right_empty = has_no_alphanumeric(right_cell);
         match (left_empty, right_empty) {
             (true, true) => {}
             (false, false) => return false,
+            (true, false) if is_lone_cell_symbol(left_cell.trim()) => return false,
             (false, true) => {
                 if !looks_like_amount(left_cell) {
                     return false;
@@ -1186,8 +1413,9 @@ fn columns_are_disjoint_and_numeric(table: &[Vec<String>], left: usize, right: u
     any_data
 }
 
-/// Whether at most one of columns `left`/`right` carries its own (non-empty) header label in
-/// `table`'s row 0.
+/// Whether at most one of columns `left`/`right` carries its own header label in the first
+/// `header_rows` rows of `table`. A header cell with no letter or digit (see
+/// [`has_no_alphanumeric`]) is not a label.
 ///
 /// A drift-split numeric column (this function's target) has its header text in only one of the
 /// split pieces -- the other piece's header cell is empty, because the source document had one
@@ -1198,43 +1426,50 @@ fn columns_are_disjoint_and_numeric(table: &[Vec<String>], left: usize, right: u
 /// not a drift artifact, and this guard keeps it untouched regardless of the gap/exclusivity
 /// checks. ~keep
 #[cfg(feature = "ocr")]
-fn at_most_one_column_has_its_own_header(table: &[Vec<String>], left: usize, right: usize) -> bool {
-    let Some(header) = table.first() else {
-        return true;
+fn at_most_one_column_has_its_own_header(table: &[Vec<String>], header_rows: usize, left: usize, right: usize) -> bool {
+    let header = &table[..header_rows.min(table.len())];
+    let labeled = |column: usize| {
+        header
+            .iter()
+            .any(|row| row.get(column).is_some_and(|cell| !has_no_alphanumeric(cell)))
     };
-    let left_labeled = header.get(left).is_some_and(|cell| !cell.trim().is_empty());
-    let right_labeled = header.get(right).is_some_and(|cell| !cell.trim().is_empty());
-    !(left_labeled && right_labeled)
+    !(labeled(left) && labeled(right))
 }
 
-/// Fold column `right` into column `left` in place: the header row's non-empty fragments join
-/// with a space (order preserved), and each data row keeps whichever of the two cells is
-/// non-empty (both are never non-empty at once -- callers only reach here after
-/// [`columns_are_disjoint_and_numeric`] confirms that). Column `right` is then dropped from
-/// every row.
+/// Fold column `right` into column `left` in place, then drop column `right` from every row.
+///
+/// When only one of a row's two cells carries a letter or digit, that cell wins and the other
+/// (empty, or a rule mark such as `-` or `:`) is dropped. Callers only reach here after
+/// [`columns_are_disjoint_and_numeric`] and [`at_most_one_column_has_its_own_header`] confirm
+/// that no row, header included, has a value on both sides. When neither cell has a letter or
+/// digit, their non-empty text joins with a space (order preserved), so a lone `-` nil marker
+/// survives.
 #[cfg(feature = "ocr")]
 fn merge_column_into(table: &mut [Vec<String>], left: usize, right: usize) {
     for row in table.iter_mut() {
-        let right_cell = row[right].trim().to_string();
-        if !right_cell.is_empty() {
-            let left_cell = row[left].trim();
-            row[left] = if left_cell.is_empty() {
-                right_cell
-            } else {
-                format!("{left_cell} {right_cell}")
-            };
-        }
-        row.remove(right);
+        let right_cell = row.remove(right);
+        let right_cell = right_cell.trim();
+        let left_cell = row[left].trim();
+        row[left] = match (has_no_alphanumeric(left_cell), has_no_alphanumeric(right_cell)) {
+            (false, true) => left_cell.to_string(),
+            (true, false) => right_cell.to_string(),
+            _ => [left_cell, right_cell]
+                .into_iter()
+                .filter(|cell| !cell.is_empty())
+                .collect::<Vec<_>>()
+                .join(" "),
+        };
     }
 }
 
-/// Count of non-empty data cells (row 0, the header, excluded) in `column`.
+/// Count of data cells (the first `header_rows` rows excluded) in `column` that hold a letter or
+/// digit.
 #[cfg(feature = "ocr")]
-fn data_support_count(table: &[Vec<String>], column: usize) -> usize {
+fn data_support_count(table: &[Vec<String>], header_rows: usize, column: usize) -> usize {
     table
         .iter()
-        .skip(1)
-        .filter(|row| !row[column].trim().is_empty())
+        .skip(header_rows)
+        .filter(|row| !has_no_alphanumeric(&row[column]))
         .count()
 }
 
@@ -1263,14 +1498,15 @@ pub(crate) fn merge_disjoint_numeric_columns(
         return;
     }
     let max_gap = median_height as f64 * DISJOINT_NUMERIC_COLUMN_MERGE_HEIGHT_MULTIPLIER;
+    let header_rows = leading_header_row_count(table);
     let mut column = 0;
     while column + 1 < column_positions.len() {
         let gap = column_positions[column + 1].abs_diff(column_positions[column]) as f64;
         if gap <= max_gap
-            && at_most_one_column_has_its_own_header(table, column, column + 1)
-            && columns_are_disjoint_and_numeric(table, column, column + 1)
+            && at_most_one_column_has_its_own_header(table, header_rows, column, column + 1)
+            && columns_are_disjoint_and_numeric(table, header_rows, column, column + 1)
         {
-            if data_support_count(table, column + 1) > data_support_count(table, column) {
+            if data_support_count(table, header_rows, column + 1) > data_support_count(table, header_rows, column) {
                 column_positions[column] = column_positions[column + 1];
             }
             merge_column_into(table, column, column + 1);
@@ -1469,6 +1705,84 @@ mod tests {
 
         let rows = detect_rows(&words, 0.5);
         assert_eq!(rows.len(), 2);
+    }
+
+    #[test]
+    fn detect_rows_checks_tall_overlap_against_the_order_independent_row_median() {
+        let low_center = word("low", 0, 388, 20, 24);
+        let median_a = word("median-a", 30, 399, 20, 24);
+        let median_b = word("median-b", 60, 399, 20, 24);
+        let tall = word("tall", 90, 413, 20, 50);
+        let low_first = vec![low_center.clone(), median_a.clone(), median_b.clone(), tall.clone()];
+        let median_first = vec![median_a, low_center, median_b, tall];
+
+        assert_eq!(detect_rows(&low_first, 0.5), vec![411]);
+        assert_eq!(detect_rows(&median_first, 0.5), vec![411]);
+    }
+
+    fn table_with_tall_words(tall_top: u32, tall_height: u32, tall_words_first: bool) -> Vec<HocrWord> {
+        let mut words = Vec::new();
+        let mut tall_words = Vec::new();
+
+        for row in 0..12 {
+            let top = row * 40;
+            words.push(word(&format!("Item {row}"), 0, top, 50, 24));
+            for column in 1..=6 {
+                let amount = word(&format!("{}00", row * 10 + column), column * 100, top, 40, 24);
+                if row == 10 && column >= 5 {
+                    tall_words.push(word(&amount.text, amount.left, tall_top, amount.width, tall_height));
+                } else {
+                    words.push(amount);
+                }
+            }
+        }
+
+        if tall_words_first {
+            tall_words.extend(words);
+            tall_words
+        } else {
+            words.extend(tall_words);
+            words
+        }
+    }
+
+    #[test]
+    fn reconstruct_table_keeps_downward_tall_words_in_their_row() {
+        let words = table_with_tall_words(400, 50, false);
+
+        let table = reconstruct_table(&words, 20, 0.5);
+
+        assert_eq!(table.len(), 12);
+        assert_eq!(table[10][5], "10500");
+        assert_eq!(table[10][6], "10600");
+    }
+
+    #[test]
+    fn reconstruct_table_keeps_upward_tall_word_in_its_row_when_seen_first() {
+        let words = table_with_tall_words(370, 54, true);
+
+        let table = reconstruct_table(&words, 20, 0.5);
+
+        assert_eq!(table.len(), 12);
+        assert_eq!(table[10][5], "10500");
+        assert_eq!(table[10][6], "10600");
+    }
+
+    #[test]
+    fn reconstruct_table_keeps_a_standalone_tall_header_row() {
+        let words = vec![
+            word("Heading", 0, 0, 50, 50),
+            word("Total", 100, 0, 40, 50),
+            word("First", 0, 100, 50, 24),
+            word("100", 100, 100, 40, 24),
+            word("Second", 0, 140, 50, 24),
+            word("200", 100, 140, 40, 24),
+        ];
+
+        let table = reconstruct_table(&words, 20, 0.5);
+
+        assert_eq!(table.len(), 3);
+        assert_eq!(table[0], ["Heading", "Total"]);
     }
 
     #[test]
@@ -2322,6 +2636,204 @@ mod tests {
         assert_eq!(table[0][0], "ACCOUNT TYPE");
     }
 
+    #[cfg(feature = "ocr")]
+    fn grid(rows: &[&[&str]]) -> Vec<Vec<String>> {
+        rows.iter()
+            .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+            .collect()
+    }
+
+    /// A right-aligned amount column that drift split into two tracks, where OCR also read the
+    /// page's rules as cells of their own (`-`, a dash run, `:`) in the right track. A cell with
+    /// no letter or digit is not a value, so the pair still merges: the real amount wins where a
+    /// row has both, and a lone mark survives where it is the row's only content.
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn split_amount_column_with_rule_marks_is_merged() {
+        let mut table = grid(&[
+            &["Item", "Column A", "Column B", ""],
+            &["Item 1", "1,250", "", "310"],
+            &["Item 2", "", "87", "-"],
+            &["Item 3", "940", "", "——————"],
+            &["Item 4", "", "4,020", ""],
+            &["Item 5", "", "", ":"],
+        ]);
+        let mut positions = vec![100_u32, 400, 700, 740];
+
+        merge_disjoint_numeric_columns(&mut table, &mut positions, 25);
+
+        assert_eq!(positions.len(), 3, "the split amount column must fold into one column");
+        assert_eq!(
+            table,
+            grid(&[
+                &["Item", "Column A", "Column B"],
+                &["Item 1", "1,250", "310"],
+                &["Item 2", "", "87"],
+                &["Item 3", "940", "——————"],
+                &["Item 4", "", "4,020"],
+                &["Item 5", "", ":"],
+            ])
+        );
+    }
+
+    /// The header band above a scanned table can hold rule marks (`~`) and a stray glyph on a row
+    /// of its own. A mark with no letter or digit is not a column label, and the stray row sits
+    /// above the first amount, so it is header, not data: the split amount column still merges.
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn rule_marks_in_the_header_band_do_not_block_a_split_column_merge() {
+        let mut table = grid(&[
+            &["Item", "Column B", "~"],
+            &["", "a", ""],
+            &["Item 1", "1,250", ""],
+            &["Item 2", "", "87"],
+        ]);
+        let mut positions = vec![100_u32, 700, 740];
+
+        merge_disjoint_numeric_columns(&mut table, &mut positions, 25);
+
+        assert_eq!(positions.len(), 2, "the split amount column must fold into one column");
+        assert_eq!(table[0], vec!["Item".to_string(), "Column B".to_string()]);
+        assert_eq!(table[2], vec!["Item 1".to_string(), "1,250".to_string()]);
+        assert_eq!(table[3], vec!["Item 2".to_string(), "87".to_string()]);
+    }
+
+    /// Negative control: a data cell with letters in it is still not an amount, so two close
+    /// tracks where one holds words stay separate.
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn a_word_cell_in_a_data_row_still_blocks_a_split_column_merge() {
+        let mut table = grid(&[
+            &["Item", "Column B", ""],
+            &["Item 1", "1,250", ""],
+            &["Item 2", "", "see note"],
+        ]);
+        let mut positions = vec![100_u32, 700, 740];
+
+        merge_disjoint_numeric_columns(&mut table, &mut positions, 25);
+
+        assert_eq!(positions.len(), 3, "a track holding words must not be merged");
+    }
+
+    /// A sign, currency sign or bracket that OCR split off the front of a short amount lands in the
+    /// left track, in front of the amount in the right track. It is part of the value, so the pair
+    /// stays apart rather than merge and drop it.
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn a_symbol_in_front_of_a_value_blocks_a_split_column_merge() {
+        for symbol in ["-", "$", "("] {
+            let mut table = grid(&[
+                &["Item", "Column B", ""],
+                &["Item 1", "1,250", ""],
+                &["Item 2", symbol, "87"],
+                &["Item 3", "", "56"],
+            ]);
+            let mut positions = vec![100_u32, 700, 740];
+
+            merge_disjoint_numeric_columns(&mut table, &mut positions, 25);
+
+            assert_eq!(
+                positions.len(),
+                3,
+                "a {symbol:?} in front of a value must not be merged away"
+            );
+            assert_eq!(
+                table[2],
+                vec!["Item 2".to_string(), symbol.to_string(), "87".to_string()]
+            );
+        }
+    }
+
+    /// Rule marks do not count as support: the merged column keeps the position of the track that
+    /// holds more values, not the one that holds more marks.
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn rule_marks_do_not_decide_the_position_of_a_merged_column() {
+        let mut table = grid(&[
+            &["Item", "Column B", ""],
+            &["Item 1", "1,250", "-"],
+            &["Item 2", "940", "——"],
+            &["Item 3", "", "87"],
+        ]);
+        let mut positions = vec![100_u32, 700, 740];
+
+        merge_disjoint_numeric_columns(&mut table, &mut positions, 25);
+
+        assert_eq!(positions, vec![100, 700]);
+    }
+
+    /// A header row that holds a number of its own (a year in the first column) is still the
+    /// header: the header band is never shorter than row 0.
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn a_header_row_holding_a_number_is_still_the_header() {
+        let mut table = grid(&[
+            &["2024", "Column B", ""],
+            &["Item 1", "1,250", ""],
+            &["Item 2", "", "87"],
+        ]);
+        let mut positions = vec![100_u32, 700, 740];
+
+        merge_disjoint_numeric_columns(&mut table, &mut positions, 25);
+
+        assert_eq!(positions.len(), 2, "the split amount column must fold into one column");
+        assert_eq!(table[0], vec!["2024".to_string(), "Column B".to_string()]);
+    }
+
+    /// A number-only row under the header ends the header band, as before: its value is data, and
+    /// it folds into the merged column instead of labelling the right track.
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn a_number_only_row_under_the_header_is_data() {
+        let mut table = grid(&[
+            &["Item", "Column B", ""],
+            &["", "", "2024"],
+            &["Item 1", "1,250", ""],
+            &["Item 2", "", "87"],
+        ]);
+        let mut positions = vec![100_u32, 700, 740];
+
+        merge_disjoint_numeric_columns(&mut table, &mut positions, 25);
+
+        assert_eq!(positions.len(), 2, "the split amount column must fold into one column");
+        assert_eq!(table[1], vec![String::new(), "2024".to_string()]);
+    }
+
+    /// End to end through the OCR table cleanup: without the merge, the right track of the split
+    /// column is a headerless, mostly empty column and the sparse-column gate drops the whole
+    /// table.
+    #[cfg(all(feature = "ocr", feature = "pdf"))]
+    #[test]
+    fn table_with_a_split_amount_column_and_rule_marks_is_kept() {
+        let mut table = grid(&[
+            &["Item", "Column A", "Column B", "Column C", ""],
+            &["Item 1", "2,110", "3,040", "1,250", ""],
+            &["Item 2", "2,380", "3,150", "", "87"],
+            &["Item 3", "2,470", "3,260", "940", "——"],
+            &["Item 4", "2,560", "3,370", "4,020", ""],
+            &["Item 5", "2,650", "3,480", "", "56"],
+            &["Item 6", "2,740", "3,590", "1,330", ""],
+            &["Item 7", "2,830", "3,600", "", "72"],
+            &["Item 8", "2,920", "3,710", "2,480", ""],
+            &["Item 9", "3,010", "3,820", "1,960", ""],
+            &["Item 10", "3,100", "3,930", "3,570", ""],
+        ]);
+        let mut positions = vec![100_u32, 400, 700, 1000, 1040];
+
+        merge_disjoint_numeric_columns(&mut table, &mut positions, 25);
+        let kept = crate::pdf::table_reconstruct::post_process_table(table, false, false)
+            .expect("the table must survive the OCR table cleanup");
+
+        assert_eq!(kept[0].len(), 4, "the split column must come back as one column");
+        let column_c: Vec<&str> = kept[1..].iter().map(|row| row[3].as_str()).collect();
+        assert_eq!(
+            column_c,
+            [
+                "1,250", "87", "940", "4,020", "56", "1,330", "72", "2,480", "1,960", "3,570"
+            ]
+        );
+    }
+
     /// xberg-io/xberg#1649: a lone punctuation glyph (e.g. the dash in a date range) must merge
     /// into its neighboring cell even when its gap is slightly wider than the normal cell-merge
     /// threshold, so it does not mint a spurious extra column.
@@ -2464,6 +2976,288 @@ mod tests {
             ]
         );
         assert_eq!(column_positions, vec![0, 60]);
+    }
+
+    /// xberg-io/xberg#1952: on a scan, one token of a value column is junk -- here the nil dash of
+    /// `Delta` read as the letter `a` -- and one junk token must not make the whole track text.
+    /// `73`, `a` and `8` share a right edge with `1,234,567`, and values outnumber the junk, so the
+    /// column still folds into one.
+    ///
+    /// TEST HONESTY: when every data token has to be a value, this is a 3-column grid with
+    /// `["Gamma", "1,234,567", ""]` and `["Delta", "", "a"]`.
+    #[test]
+    fn issue_1952_a_junk_token_does_not_stop_a_value_column_folding() {
+        let words = vec![
+            word("Alpha", 0, 0, 100, 30),
+            word("5", 480, 0, 20, 30),
+            word("Beta", 0, 60, 100, 30),
+            word("73", 460, 60, 40, 30),
+            word("Gamma", 0, 120, 100, 30),
+            word("1,234,567", 340, 120, 160, 30),
+            word("Delta", 0, 180, 100, 30),
+            word("a", 485, 180, 15, 30),
+            word("Epsilon", 0, 240, 100, 30),
+            word("8", 480, 240, 20, 30),
+        ];
+
+        let (table, column_positions) = reconstruct_table_with_columns(&words, 50, 0.5);
+
+        assert_eq!(
+            table,
+            vec![
+                vec!["Alpha".to_string(), "5".to_string()],
+                vec!["Beta".to_string(), "73".to_string()],
+                vec!["Gamma".to_string(), "1,234,567".to_string()],
+                vec!["Delta".to_string(), "a".to_string()],
+                vec!["Epsilon".to_string(), "8".to_string()],
+            ]
+        );
+        assert_eq!(column_positions, vec![0, 340]);
+    }
+
+    /// xberg-io/xberg#1952: a scanned header band spans several rows -- a label, a period, a unit.
+    /// Only row 0 was read as the header, so `Year 1` and `(net)` counted as data tokens of the
+    /// short track, and with two values against two labels the track never read as values. The
+    /// band ends at the first row with a number, so the labels are header and the column folds.
+    ///
+    /// TEST HONESTY: with row 0 alone as the header, this is a 3-column grid with
+    /// `["B", "12,345,678", ""]` in a column of its own.
+    #[test]
+    fn issue_1952_a_multi_row_header_band_does_not_stop_a_value_column_folding() {
+        let words = vec![
+            word("Item", 0, 0, 60, 20),
+            word("Total", 250, 0, 60, 20),
+            word("Year 1", 255, 60, 55, 20),
+            word("(net)", 265, 120, 45, 20),
+            word("A", 0, 180, 60, 20),
+            word("846", 265, 180, 45, 20),
+            word("B", 0, 240, 60, 20),
+            word("12,345,678", 140, 240, 170, 20),
+            word("C", 0, 300, 60, 20),
+            word("5", 295, 300, 15, 20),
+        ];
+
+        let table = reconstruct_table(&words, 50, 0.5);
+
+        assert_eq!(
+            table,
+            vec![
+                vec!["Item".to_string(), "Total".to_string()],
+                vec!["".to_string(), "Year 1".to_string()],
+                vec!["".to_string(), "(net)".to_string()],
+                vec!["A".to_string(), "846".to_string()],
+                vec!["B".to_string(), "12,345,678".to_string()],
+                vec!["C".to_string(), "5".to_string()],
+            ]
+        );
+    }
+
+    /// Precision guard for the fold (xberg-io/xberg#1952): a track whose data tokens are mostly
+    /// text is a text column, whatever its right edge. `note` and `abc` outnumber `5`, so the
+    /// track stays apart from the amount `1,234,567` that shares its right edge.
+    #[test]
+    fn a_text_column_with_a_coinciding_right_edge_is_not_folded() {
+        let words = vec![
+            word("Item", 0, 0, 60, 20),
+            word("Total", 440, 0, 60, 20),
+            word("A", 0, 60, 60, 20),
+            word("5", 480, 60, 20, 20),
+            word("B", 0, 120, 60, 20),
+            word("note", 440, 120, 60, 20),
+            word("C", 0, 180, 60, 20),
+            word("abc", 455, 180, 45, 20),
+            word("D", 0, 240, 60, 20),
+            word("1,234,567", 340, 240, 160, 20),
+        ];
+
+        let table = reconstruct_table(&words, 50, 0.5);
+
+        assert_eq!(
+            table,
+            vec![
+                vec!["Item".to_string(), "".to_string(), "Total".to_string()],
+                vec!["A".to_string(), "".to_string(), "5".to_string()],
+                vec!["B".to_string(), "".to_string(), "note".to_string()],
+                vec!["C".to_string(), "".to_string(), "abc".to_string()],
+                vec!["D".to_string(), "1,234,567".to_string(), "".to_string()],
+            ]
+        );
+    }
+
+    /// Precision guard for the fold (xberg-io/xberg#1952): a track with as many junk tokens as
+    /// values has no majority of values, so it stays apart from the amount that shares its right
+    /// edge. `5` and `7` tie with `x` and `b`.
+    #[test]
+    fn a_track_with_as_many_junk_tokens_as_values_is_not_folded() {
+        let words = vec![
+            word("Item", 0, 0, 60, 20),
+            word("Total", 250, 0, 60, 20),
+            word("A", 0, 60, 60, 20),
+            word("5", 295, 60, 15, 20),
+            word("B", 0, 120, 60, 20),
+            word("x", 297, 120, 13, 20),
+            word("C", 0, 180, 60, 20),
+            word("12,345,678", 140, 180, 170, 20),
+            word("D", 0, 240, 60, 20),
+            word("7", 295, 240, 15, 20),
+            word("E", 0, 300, 60, 20),
+            word("b", 297, 300, 13, 20),
+        ];
+
+        let table = reconstruct_table(&words, 50, 0.5);
+
+        assert_eq!(
+            table,
+            vec![
+                vec!["Item".to_string(), "".to_string(), "Total".to_string()],
+                vec!["A".to_string(), "".to_string(), "5".to_string()],
+                vec!["B".to_string(), "".to_string(), "x".to_string()],
+                vec!["C".to_string(), "12,345,678".to_string(), "".to_string()],
+                vec!["D".to_string(), "".to_string(), "7".to_string()],
+                vec!["E".to_string(), "".to_string(), "b".to_string()],
+            ]
+        );
+    }
+
+    /// xberg-io/xberg#1952: a number in row 0, such as a year, ends the header band there, but
+    /// row 0 stays the header. The label `Total` is not read as a data token of its track, so the
+    /// track (`5` alone) reads as values and folds with `12,345,678`.
+    ///
+    /// TEST HONESTY: when row 0 counts as data, `Total` ties with `5` and the grid has 3 columns.
+    #[test]
+    fn a_number_in_row_zero_keeps_row_zero_as_the_header() {
+        let words = vec![
+            word("2024", 0, 0, 60, 20),
+            word("Total", 250, 0, 60, 20),
+            word("A", 0, 60, 60, 20),
+            word("12,345,678", 140, 60, 170, 20),
+            word("B", 0, 120, 60, 20),
+            word("5", 295, 120, 15, 20),
+        ];
+
+        let table = reconstruct_table(&words, 50, 0.5);
+
+        assert_eq!(
+            table,
+            vec![
+                vec!["2024".to_string(), "Total".to_string()],
+                vec!["A".to_string(), "12,345,678".to_string()],
+                vec!["B".to_string(), "5".to_string()],
+            ]
+        );
+    }
+
+    /// The right-edge split (xberg-io/xberg#1909) reads every row below row 0, whatever the fold's
+    /// header band. The only number in this text table sits in its last row, so the band holds
+    /// rows 0 to 3; the split must still see them and keep `N` and `Code` apart.
+    ///
+    /// TEST HONESTY: when the split skips the band, the group has one data token, it does not
+    /// split, and the rows read `["N Code", "Qty"]`, `["Al ABCDEFG", ""]`.
+    #[test]
+    fn two_close_text_columns_split_when_the_first_number_sits_far_down() {
+        let words = vec![
+            word("N", 0, 0, 15, 20),
+            word("Code", 45, 0, 60, 20),
+            word("Qty", 400, 0, 40, 20),
+            word("Al", 0, 60, 15, 20),
+            word("ABCDEFG", 45, 60, 105, 20),
+            word("Bo", 0, 120, 15, 20),
+            word("HIJKLMN", 45, 120, 105, 20),
+            word("Cy", 0, 180, 15, 20),
+            word("OPQRSTU", 45, 180, 105, 20),
+            word("VWXYZAB", 45, 240, 105, 20),
+            word("7", 425, 240, 15, 20),
+        ];
+
+        let table = reconstruct_table(&words, 50, 0.5);
+
+        assert_eq!(
+            table,
+            vec![
+                vec!["N".to_string(), "Code".to_string(), "Qty".to_string()],
+                vec!["Al".to_string(), "ABCDEFG".to_string(), "".to_string()],
+                vec!["Bo".to_string(), "HIJKLMN".to_string(), "".to_string()],
+                vec!["Cy".to_string(), "OPQRSTU".to_string(), "".to_string()],
+                vec!["".to_string(), "VWXYZAB".to_string(), "7".to_string()],
+            ]
+        );
+    }
+
+    /// A column folded from two tracks holds the numbers of both. `7` and `9` fold with
+    /// `12,345,678`, and the quantities `5` and `3` share their rows, so the quantity column stays
+    /// apart even though it shares no row with `12,345,678`.
+    ///
+    /// TEST HONESTY: when the folded column keeps the rows of its first track only, rows 1 and 3
+    /// read `["A", "7 5"]` and `["C", "9 3"]`.
+    #[test]
+    fn a_quantity_column_does_not_fold_into_an_amount_column_folded_from_two_tracks() {
+        let words = vec![
+            word("Item", 0, 0, 60, 20),
+            word("Total", 250, 0, 60, 20),
+            word("A", 0, 60, 60, 20),
+            word("7", 295, 60, 15, 20),
+            word("5", 350, 60, 8, 20),
+            word("B", 0, 120, 60, 20),
+            word("12,345,678", 140, 120, 170, 20),
+            word("C", 0, 180, 60, 20),
+            word("9", 295, 180, 15, 20),
+            word("3", 350, 180, 8, 20),
+        ];
+
+        let table = reconstruct_table(&words, 50, 0.5);
+
+        assert_eq!(
+            table,
+            vec![
+                vec!["Item".to_string(), "Total".to_string(), "".to_string()],
+                vec!["A".to_string(), "7".to_string(), "5".to_string()],
+                vec!["B".to_string(), "12,345,678".to_string(), "".to_string()],
+                vec!["C".to_string(), "9".to_string(), "3".to_string()],
+            ]
+        );
+    }
+
+    /// Two numbers in one row are two cells: a code column whose right edge lies within the
+    /// threshold of the quantity column beside it never folds into it, whether its codes are all
+    /// numbers or mostly numbers.
+    ///
+    /// TEST HONESTY: without the number-row check, each row reads `["A", "1010 5"]`: the code and
+    /// the quantity share one cell.
+    #[test]
+    fn a_code_column_does_not_fold_into_the_quantity_column_beside_it() {
+        for third_code in ["1030", "10A5"] {
+            let words = vec![
+                word("Item", 0, 0, 60, 20),
+                word("Code", 300, 0, 40, 20),
+                word("Qty", 360, 0, 25, 20),
+                word("A", 0, 60, 60, 20),
+                word("1010", 300, 60, 40, 20),
+                word("5", 370, 60, 15, 20),
+                word("B", 0, 120, 60, 20),
+                word("1020", 300, 120, 40, 20),
+                word("7", 370, 120, 15, 20),
+                word("C", 0, 180, 60, 20),
+                word(third_code, 300, 180, 40, 20),
+                word("3", 370, 180, 15, 20),
+                word("D", 0, 240, 60, 20),
+                word("1040", 300, 240, 40, 20),
+                word("9", 370, 240, 15, 20),
+            ];
+
+            let table = reconstruct_table(&words, 50, 0.5);
+
+            assert_eq!(
+                table,
+                vec![
+                    vec!["Item".to_string(), "Code".to_string(), "Qty".to_string()],
+                    vec!["A".to_string(), "1010".to_string(), "5".to_string()],
+                    vec!["B".to_string(), "1020".to_string(), "7".to_string()],
+                    vec!["C".to_string(), third_code.to_string(), "3".to_string()],
+                    vec!["D".to_string(), "1040".to_string(), "9".to_string()],
+                ],
+                "third code {third_code}"
+            );
+        }
     }
 
     /// xberg-io/xberg#1909: a one-digit amount of one column starts within the threshold of an

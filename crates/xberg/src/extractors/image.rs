@@ -415,6 +415,23 @@ fn source_image_is_proven_single_frame(content: &[u8], mime_type: &str) -> bool 
 }
 
 #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
+fn split_leading_numbered_list_marker(text: &str) -> Option<(&str, &str)> {
+    let digits_end = text.find(|character: char| !character.is_ascii_digit())?;
+    if digits_end == 0 {
+        return None;
+    }
+    let suffix = &text[digits_end..];
+    let delimiter = suffix
+        .chars()
+        .next()
+        .filter(|character| matches!(character, '.' | ')'))?;
+    let marker_end = digits_end + delimiter.len_utf8();
+    let remainder = &text[marker_end..];
+    let content = remainder.trim_start();
+    (content.len() < remainder.len() && !content.is_empty()).then_some((&text[..marker_end], content))
+}
+
+#[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
 fn push_mapped_layout_text(
     builder: &mut InternalDocumentBuilder,
     formulas: &mut Vec<crate::types::Formula>,
@@ -447,7 +464,15 @@ fn push_mapped_layout_text(
             });
             builder.push_element(InternalElement::text(ElementKind::Formula, text, 0));
         }
-        LayoutClass::ListItem | LayoutClass::CheckboxSelected | LayoutClass::CheckboxUnselected => {
+        LayoutClass::ListItem => {
+            if let Some((source_label, content)) = split_leading_numbered_list_marker(text) {
+                let index = builder.push_list_item(content, true, vec![], None, None);
+                builder.set_list_item_source_label(index, source_label);
+            } else {
+                builder.push_list_item(text, false, vec![], None, None);
+            }
+        }
+        LayoutClass::CheckboxSelected | LayoutClass::CheckboxUnselected => {
             builder.push_list_item(text, false, vec![], None, None);
         }
         LayoutClass::PageHeader | LayoutClass::PageFooter | LayoutClass::Picture | LayoutClass::Chart => return false,
@@ -2624,6 +2649,40 @@ impl InternalDocumentExtractor for ImageExtractor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
+    #[test]
+    fn image_layout_preserves_an_ordered_list_item_source_number() {
+        let detection = crate::layout::LayoutDetection::new(
+            crate::layout::LayoutClass::ListItem,
+            0.9,
+            crate::layout::BBox {
+                x1: 0.0,
+                y1: 0.0,
+                x2: 100.0,
+                y2: 20.0,
+            },
+        );
+        let mut builder = InternalDocumentBuilder::new("image/png");
+        let mut formulas = Vec::new();
+
+        assert!(push_mapped_layout_text(
+            &mut builder,
+            &mut formulas,
+            &detection,
+            "1. Template for day 1",
+        ));
+
+        let document = builder.build();
+        assert!(matches!(
+            document.elements[0].kind,
+            crate::types::internal::ElementKind::ListItem { ordered: true }
+        ));
+        assert_eq!(
+            crate::rendering::render_markdown(&document),
+            "- 1\\. Template for day 1\n"
+        );
+    }
 
     #[tokio::test]
     async fn rejects_declared_image_dimensions_over_configured_security_budget() {

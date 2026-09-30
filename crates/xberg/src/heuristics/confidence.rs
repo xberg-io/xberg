@@ -11,7 +11,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::types::extraction::ExtractedDocument;
-use crate::types::ocr_elements::OcrElement;
+use crate::types::ocr_elements::{OcrElement, element_level_rank};
 use crate::types::page::PageContent;
 
 /// Schema-validation outcome surfaced as one of three buckets.
@@ -119,11 +119,22 @@ impl ConfidenceSignals {
     /// `text::quality_processor` can apply its own evidence floor to the same fold instead of
     /// recomputing it (issue #1694); [`Self::ocr_aggregate_from_elements`] is the `f32`,
     /// floor-free wrapper `ocr_aggregate` itself uses. `None` when no element carries a word.
+    ///
+    /// Only the finest element level that carries a word is folded: a backend that reports words
+    /// together with the lines holding them would otherwise count every word twice.
     pub(crate) fn ocr_confidence_from_elements(elements: &[OcrElement]) -> Option<(f64, u64)> {
-        Self::word_count_weighted_mean(elements.iter().map(|element| {
-            let word_count = element.text.split_whitespace().count() as u64;
-            (element.confidence.recognition, word_count)
-        }))
+        let word_count = |element: &OcrElement| element.text.split_whitespace().count() as u64;
+        let finest_rank = elements
+            .iter()
+            .filter(|element| word_count(element) > 0)
+            .map(|element| element_level_rank(element.level))
+            .min()?;
+        Self::word_count_weighted_mean(
+            elements
+                .iter()
+                .filter(|element| element_level_rank(element.level) == finest_rank)
+                .map(|element| (element.confidence.recognition, word_count(element))),
+        )
     }
 
     /// Word-count-weighted mean OCR recognition confidence from a slice of `PageContent`, paired
@@ -861,5 +872,61 @@ mod tests {
             signals.ocr_aggregate.is_none(),
             "an uncalibrated backend's None score must not be treated as zero confidence"
         );
+    }
+
+    fn leveled_element(recognition: f64, text: &str, level: crate::types::OcrElementLevel) -> OcrElement {
+        OcrElement {
+            level,
+            ..make_ocr_element_with_text(recognition, text)
+        }
+    }
+
+    /// Tesseract reports each line before its words, the line holding the words' mean.
+    #[test]
+    fn ocr_confidence_from_elements_counts_tesseract_words_once() {
+        use crate::types::OcrElementLevel::{Line, Word};
+        let elements = [
+            leveled_element(0.75, "Total due", Line),
+            leveled_element(0.8, "42", Line),
+            leveled_element(0.9, "Total", Word),
+            leveled_element(0.6, "due", Word),
+            leveled_element(0.8, "42", Word),
+        ];
+
+        let (mean, total_words) = ConfidenceSignals::ocr_confidence_from_elements(&elements).unwrap();
+
+        assert_eq!(total_words, 3);
+        assert!((mean - 2.3 / 3.0).abs() < 1e-9);
+    }
+
+    /// PaddleOCR scores a line separately from the words it splits the line into.
+    #[test]
+    fn ocr_confidence_from_elements_folds_paddle_words_not_their_lines() {
+        use crate::types::OcrElementLevel::{Line, Word};
+        let elements = [
+            leveled_element(0.2, "Total due", Line),
+            leveled_element(0.9, "Total", Word),
+            leveled_element(0.7, "due", Word),
+        ];
+
+        let (mean, total_words) = ConfidenceSignals::ocr_confidence_from_elements(&elements).unwrap();
+
+        assert_eq!(total_words, 2);
+        assert!((mean - 0.8).abs() < 1e-9);
+    }
+
+    #[test]
+    fn ocr_confidence_from_elements_folds_lines_when_no_word_is_present() {
+        use crate::types::OcrElementLevel::{Block, Line};
+        let elements = [
+            leveled_element(0.9, "Total due 42", Block),
+            leveled_element(0.6, "Total due", Line),
+            leveled_element(0.3, "42", Line),
+        ];
+
+        let (mean, total_words) = ConfidenceSignals::ocr_confidence_from_elements(&elements).unwrap();
+
+        assert_eq!(total_words, 3);
+        assert!((mean - 0.5).abs() < 1e-9);
     }
 }

@@ -20,6 +20,10 @@ pub use ocr::OcrBackendRegistry;
 pub(crate) use ocr::{builtin_ocr_backend_names, canonical_ocr_backend_name};
 pub use processor::PostProcessorRegistry;
 pub use renderer::RendererRegistry;
+// ~keep Read only by the redaction engine and the PDF extractor; see
+// `renderer::DOCX_RENDERER_NAME` (GH#1951).
+#[allow(unused_imports)]
+pub(crate) use renderer::{holds_encoded_package, renders_from_markdown};
 pub use reranker::RerankerBackendRegistry;
 pub use tokenizer::TokenizerBackendRegistry;
 pub use validator::ValidatorRegistry;

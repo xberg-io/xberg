@@ -15,7 +15,7 @@ use crate::extraction::image::resolve_known_source_dpi;
 use crate::extractors::security::SecurityLimits;
 use crate::image::normalize_image_dpi_owned;
 use crate::ocr::cache::OcrCache;
-use crate::ocr::conversion::{TsvRow, iterator_word_to_element, tsv_row_to_element};
+use crate::ocr::conversion::{TsvRow, iterator_word_to_element, tesseract_elements_with_lines, tsv_row_to_element};
 use crate::ocr::error::OcrError;
 use crate::ocr::hocr_parser::{
     DictionaryLineFilter, RetainedWordConfidenceStats, parse_hocr_to_internal_document_with_page_offset_and_stats,
@@ -26,8 +26,8 @@ use crate::ocr::preprocessing::should_invert_for_polarity;
 #[cfg(feature = "pdf")]
 use crate::ocr::table::post_process_table;
 use crate::ocr::table::{
-    TableWords, extract_table_words_from_tsv, extract_words_from_tsv, reconstruct_table_with_columns,
-    shading_mark_keep_mask, table_to_markdown,
+    TableWords, drop_elements_claimed_by_tables, extract_table_words_from_tsv, extract_words_from_tsv,
+    reconstruct_table_with_columns, shading_mark_keep_mask, should_adopt_table_rebuild, table_to_markdown,
 };
 #[cfg(test)]
 use crate::ocr::types::BatchItemResult;
@@ -138,9 +138,10 @@ fn rotate_rgb_image_data(data: &[u8], width: u32, height: u32, degrees: i32) -> 
 ///
 /// # Returns
 ///
-/// Vector of OcrElements for word-level and line-level entries
+/// One line element per text line, then the word elements. Tesseract's own line rows carry no
+/// text or confidence, so each line is built from its words.
 fn parse_tsv_to_elements(tsv_data: &str, min_confidence: f64, page_number: u32) -> Vec<OcrElement> {
-    let mut elements = Vec::new();
+    let mut words = Vec::new();
 
     for line in tsv_data.lines().skip(1) {
         let fields: Vec<&str> = line.split('\t').collect();
@@ -165,7 +166,7 @@ fn parse_tsv_to_elements(tsv_data: &str, min_confidence: f64, page_number: u32) 
             continue;
         }
 
-        if level != 4 && level != 5 {
+        if level != 5 {
             continue;
         }
 
@@ -186,10 +187,10 @@ fn parse_tsv_to_elements(tsv_data: &str, min_confidence: f64, page_number: u32) 
 
         let mut element = tsv_row_to_element(&tsv_row);
         element.page_number = page_number;
-        elements.push(element);
+        words.push(((page_num, block_num, par_num, line_num), element));
     }
 
-    elements
+    tesseract_elements_with_lines(words)
 }
 
 /// CI debug logging utility.
@@ -209,27 +210,6 @@ where
         .unwrap_or(0.0);
 
     tracing::debug!(stage, timestamp = format!("{timestamp:.3}"), "{}", details());
-}
-
-/// Word-count shortfall a markdown table rebuild is allowed relative to the content it would
-/// replace before the rebuild is rejected as content loss (GH#1599). Zero: table syntax (`|`,
-/// `---`) itself adds whitespace-separated tokens, so a rebuild that faithfully reformats
-/// existing prose into a table is never word-count-negative -- only a rebuild that actually
-/// dropped page content comes in under the original count.
-const TABLE_REBUILD_MIN_WORD_RETENTION: usize = 0;
-
-/// Whether a markdown table rebuild should replace `original_content`.
-///
-/// `build_content_with_inline_tables` reconstructs page content from a crude y-position
-/// clustering heuristic that is far less robust than the hOCR-derived content it replaces.
-/// Non-emptiness alone (the previous guard) cannot distinguish a legitimate rebuild from one
-/// that silently dropped most of the page -- see GH#1599, where OCR markdown output lost a
-/// large amount of content that plain output retained. Comparing absolute word counts catches
-/// that: a rebuild is adopted only when it does not lose material.
-fn should_adopt_table_rebuild(original_content: &str, rebuilt_content: &str) -> bool {
-    let original_word_count = original_content.split_whitespace().count();
-    let rebuilt_word_count = rebuilt_content.split_whitespace().count();
-    rebuilt_word_count + TABLE_REBUILD_MIN_WORD_RETENTION >= original_word_count
 }
 
 const MIN_QUANTITY_COLUMN_SUPPORT: usize = 2;
@@ -795,111 +775,27 @@ fn flatten_hocr_elements_to_text(elements: &[crate::types::internal::InternalEle
         .join("\n\n")
 }
 
-/// Drop hOCR paragraph elements whose text was already claimed by a detected table (#1571).
-///
-/// `hocr_document` is parsed straight from the raw hOCR before table detection runs, so
-/// nothing ever removes a table's words from it once `tables` is computed: every consumer
-/// built from `internal_document` (the PDF mixed/OCR-only routes and the standalone image
-/// route) receives the table's text twice, once as ordinary paragraphs and once as the
-/// `OcrTable`. `build_content_with_inline_tables` already solves this for the rendered
-/// `content` string using a word-centre-in-bbox test; apply the same test here at the
-/// paragraph level, using the paragraph's own bbox centre, so `internal_document` agrees
-/// with `content` regardless of `output_format` (the string rebuild above is skipped for
-/// Plain/Djot output, but the duplication it was masking is not). ~keep
-///
-/// A table only claims its region when it kept the region's words — see
-/// [`table_retains_region_words`] (xberg-io/xberg#1884).
+/// Tesseract's call into [`drop_elements_claimed_by_tables`] (#1571). `hocr_document` is parsed from the raw
+/// hOCR before table detection runs, and `build_content_with_inline_tables` repairs only the `content`
+/// string (and is skipped for Plain/Djot output), so the element tree needs this regardless of
+/// `output_format`. ~keep
 fn filter_elements_covered_by_tables(
     elements: Vec<crate::types::internal::InternalElement>,
     tables: &[OcrTable],
 ) -> Vec<crate::types::internal::InternalElement> {
-    let mut claiming_bboxes: Vec<&OcrTableBoundingBox> = Vec::new();
-    for table in tables {
-        let Some(bbox) = table.bounding_box.as_ref() else {
-            continue;
-        };
-        if table_retains_region_words(&elements, bbox, &table.cells) {
-            claiming_bboxes.push(bbox);
-        } else {
-            tracing::warn!(
-                target: "xberg::ocr::tables",
-                left = bbox.left,
-                top = bbox.top,
-                right = bbox.right,
-                bottom = bbox.bottom,
-                table_rows = table.cells.len(),
-                "reconstructed table dropped words from its region; keeping the region's lines in the page document"
-            );
-        }
-    }
-    if claiming_bboxes.is_empty() {
-        return elements;
-    }
-
-    elements
-        .into_iter()
-        .filter(|element| {
-            !claiming_bboxes
-                .iter()
-                .any(|table_bbox| element_center_within_table(element, table_bbox))
-        })
-        .collect()
-}
-
-/// Whether `element`'s bbox centre lies inside `table_bbox`.
-///
-/// Shared by [`filter_elements_covered_by_tables`] and [`table_retains_region_words`] so a table is
-/// judged for word retention against exactly the elements it would remove — two copies of this test
-/// could disagree and make the retention check answer about a different set of lines than the filter
-/// then deletes. An element with no geometry is not covered by any table. ~keep
-fn element_center_within_table(
-    element: &crate::types::internal::InternalElement,
-    table_bbox: &OcrTableBoundingBox,
-) -> bool {
-    let Some(bbox) = element.bbox.as_ref() else {
-        return false;
-    };
-    let center_x = (bbox.x0 + bbox.x1) / 2.0;
-    let center_y = (bbox.y0 + bbox.y1) / 2.0;
-    center_x >= table_bbox.left as f64
-        && center_x <= table_bbox.right as f64
-        && center_y >= table_bbox.top as f64
-        && center_y <= table_bbox.bottom as f64
-}
-
-/// Whether `cells` still carries the words of the elements `table_bbox` covers
-/// (xberg-io/xberg#1884).
-///
-/// Reconstruction can lose a region's words outright: a wrapped label splits across two rows, a
-/// value glues onto its label, the interior cells of a sparse row vanish (`73 | | | |` for a line
-/// that read `73 4 4 4 4 -`). Removing the region's lines on the strength of a table that no longer
-/// carries them deletes those words from the page entirely — they are in neither the paragraphs nor
-/// the table. When this returns false the lines stay and the table is still emitted in `tables`, so
-/// the structured form is never lost either; the cost is the #1571 duplication for that one region,
-/// which is strictly better than losing content.
-///
-/// Judged by [`should_adopt_table_rebuild`], the same absolute word-count rule the standalone-image
-/// rebuild uses (GH#1599), and against the table's non-empty cell tokens rather than its markdown,
-/// whose `|`/`---` syntax would pad the count. ~keep
-fn table_retains_region_words(
-    elements: &[crate::types::internal::InternalElement],
-    table_bbox: &OcrTableBoundingBox,
-    cells: &[Vec<String>],
-) -> bool {
-    let region_text = elements
-        .iter()
-        .filter(|element| element_center_within_table(element, table_bbox))
-        .map(|element| element.text.as_str())
-        .collect::<Vec<_>>()
-        .join(" ");
-    let cell_text = cells
-        .iter()
-        .flatten()
-        .map(|cell| cell.trim())
-        .filter(|cell| !cell.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ");
-    should_adopt_table_rebuild(&region_text, &cell_text)
+    drop_elements_claimed_by_tables(
+        elements,
+        tables.iter().filter_map(|table| {
+            let bbox = table.bounding_box.as_ref()?;
+            let bbox = crate::types::extraction::BoundingBox {
+                x0: bbox.left as f64,
+                y0: bbox.top as f64,
+                x1: bbox.right as f64,
+                y1: bbox.bottom as f64,
+            };
+            Some((bbox, table.cells.as_slice()))
+        }),
+    )
 }
 
 /// Minimum confidence for accepting orientation detection results.
@@ -1609,8 +1505,8 @@ fn extract_elements_via_iterator(
         }
     };
 
-    let word_extraction = match result_iter.extract_all_words() {
-        Ok(w) => w,
+    let (word_extraction, line_starts) = match result_iter.extract_all_words_with_line_starts() {
+        Ok(words) => words,
         Err(e) => {
             tracing::warn!(error = %e, "Tesseract result iterator failed; falling back to TSV-based OCR element extraction");
             return Ok(empty());
@@ -1630,10 +1526,12 @@ fn extract_elements_via_iterator(
     let retained_text_confidence_stats =
         retained_text.map(|content| retained_text_word_confidence_stats(content, &word_extraction.words));
 
-    let mut elements = Vec::new();
+    let mut words = Vec::new();
     let mut non_text_block_word_count = 0usize;
+    let mut line_index = 0usize;
 
-    for word in &word_extraction.words {
+    for (word, &starts_line) in word_extraction.words.iter().zip(&line_starts) {
+        line_index += usize::from(starts_line);
         if (word.confidence as f64) < min_confidence {
             continue;
         }
@@ -1662,11 +1560,11 @@ fn extract_elements_via_iterator(
             .find(|p| point_in_bbox(cx, cy, p.left, p.top, p.right, p.bottom));
 
         let element = iterator_word_to_element(word, block_type, para_info, page_number);
-        elements.push(element);
+        words.push((line_index, element));
     }
 
     Ok(IteratorExtractionResult {
-        elements,
+        elements: tesseract_elements_with_lines(words),
         retained_text_confidence_stats,
         skipped_words: word_extraction.skipped,
         non_text_block_word_count,
@@ -2770,40 +2668,47 @@ mod tests {
         assert_eq!(recovered.text, "555");
     }
 
+    #[test]
+    fn parse_tsv_to_elements_yields_lines_at_the_default_element_level() {
+        let tsv = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n\
+                   1\t1\t0\t0\t0\t0\t0\t0\t200\t100\t-1\t\n\
+                   2\t1\t1\t0\t0\t0\t10\t5\t60\t35\t-1\t\n\
+                   3\t1\t1\t1\t0\t0\t10\t5\t60\t35\t-1\t\n\
+                   4\t1\t1\t1\t1\t0\t10\t5\t60\t12\t-1\t\n\
+                   5\t1\t1\t1\t1\t1\t10\t5\t20\t10\t90\tTotal\n\
+                   5\t1\t1\t1\t1\t2\t40\t7\t30\t10\t60\tdue\n\
+                   4\t1\t1\t1\t2\t0\t10\t30\t20\t10\t-1\t\n\
+                   5\t1\t1\t1\t2\t1\t10\t30\t20\t10\t80\t42\n";
+        let default_level = crate::types::OcrElementConfig {
+            include_elements: true,
+            ..Default::default()
+        };
+
+        let elements = parse_tsv_to_elements(tsv, 0.0, 4);
+        let selected = default_level.select_elements(&elements);
+
+        assert_eq!(
+            selected.iter().map(|element| element.text.as_str()).collect::<Vec<_>>(),
+            ["Total due", "42"]
+        );
+        assert!(selected.iter().all(|element| element.page_number == 4));
+        assert_eq!(
+            elements
+                .iter()
+                .filter(|element| element.level == crate::types::OcrElementLevel::Word)
+                .count(),
+            3
+        );
+    }
+
     fn confidence_word(text: &str, confidence: f32) -> xberg_tesseract::WordData {
         xberg_tesseract::WordData {
             text: text.to_string(),
-            left: 0,
-            top: 0,
             right: 10,
             bottom: 10,
             confidence,
-            font_attrs: None,
-            language: None,
+            ..Default::default()
         }
-    }
-
-    #[test]
-    fn should_reject_table_rebuild_that_drops_words_relative_to_original() {
-        let original = "Site inspections this quarter covered fourteen locations across \
-            the northern basin and several access roads remain washed out following spring runoff";
-        let rebuilt = "| Site | inspections |";
-
-        assert!(
-            !should_adopt_table_rebuild(original, rebuilt),
-            "a rebuild with far fewer words than the original must not replace it"
-        );
-    }
-
-    #[test]
-    fn should_adopt_table_rebuild_that_retains_or_exceeds_original_word_count() {
-        let original = "Name Age\nAlice 30\nBob 40";
-        let rebuilt = "| Name | Age |\n| --- | --- |\n| Alice | 30 |\n| Bob | 40 |";
-
-        assert!(
-            should_adopt_table_rebuild(original, rebuilt),
-            "a rebuild that faithfully reformats the same content into a table must still be adopted"
-        );
     }
 
     #[test]
@@ -3090,13 +2995,8 @@ mod tests {
     fn dict_word(text: &str) -> xberg_tesseract::WordData {
         xberg_tesseract::WordData {
             text: text.to_string(),
-            left: 0,
-            top: 0,
-            right: 0,
-            bottom: 0,
             confidence: 95.0,
-            font_attrs: None,
-            language: None,
+            ..Default::default()
         }
     }
 
@@ -3180,6 +3080,111 @@ mod tests {
             width,
             height,
             confidence: 95.0,
+        }
+    }
+
+    /// An invented scanned table: a label column and four right-aligned amount columns. Each
+    /// amount column holds long values (`12,345`), short values (`85`) and nil dashes, so its
+    /// tokens' left edges fall into two groups by digit width, and the drift fold has to join
+    /// them back into one column. `junk` replaces the nil dash of `Item 6` in `Column A` with an
+    /// OCR misread that holds a letter. `second_header_row` adds a `Year N` label under each column
+    /// header, as a two-row scanned header band has.
+    #[cfg(feature = "pdf")]
+    fn split_amount_table_words(junk: Option<&str>, second_header_row: bool) -> Vec<crate::table_core::HocrWord> {
+        const CHAR_WIDTH: u32 = 15;
+        const HEIGHT: u32 = 25;
+        const RIGHT_EDGES: [u32; 4] = [700, 920, 1140, 1360];
+        let first_data_row = if second_header_row { 2 } else { 1 };
+        let row_top = |row: u32| 200 + row * 45;
+        let right_aligned = |right: u32, row: u32, text: &str| {
+            let width = CHAR_WIDTH * text.chars().count() as u32;
+            word_at(right - width, row_top(row), width, HEIGHT, text)
+        };
+        let mut words = vec![word_at(100, row_top(0), 60, HEIGHT, "Item")];
+        for (column, right) in ["A", "B", "C", "D"].into_iter().zip(RIGHT_EDGES) {
+            words.push(word_at(right - 115, row_top(0), 90, HEIGHT, "Column"));
+            words.push(right_aligned(right, 0, column));
+            if second_header_row {
+                words.push(word_at(right - 90, row_top(1), 60, HEIGHT, "Year"));
+                words.push(right_aligned(right, 1, &(right / 220 - 2).to_string()));
+            }
+        }
+        let long = [
+            "12,345", "20,118", "31,902", "47,260", "58,431", "63,077", "71,594", "86,213",
+        ];
+        for row in 1..=12u32 {
+            let top = row + first_data_row - 1;
+            words.push(word_at(100, row_top(top), 60, HEIGHT, "Item"));
+            words.push(word_at(170, row_top(top), CHAR_WIDTH * 2, HEIGHT, &row.to_string()));
+            for (column, right) in RIGHT_EDGES.into_iter().enumerate() {
+                let text = match row {
+                    3 => "85".to_string(),
+                    9 => "40".to_string(),
+                    6 if column == 0 => junk.unwrap_or("-").to_string(),
+                    6 | 12 => "-".to_string(),
+                    _ => long[(row as usize + column) % long.len()].to_string(),
+                };
+                words.push(right_aligned(right, top, &text));
+            }
+        }
+        words
+    }
+
+    /// The OCR table route on `words`: the region's cleaned grid, then the table cleanup that
+    /// keeps or rejects it.
+    #[cfg(feature = "pdf")]
+    fn ocr_route_table(words: &[crate::table_core::HocrWord]) -> (Vec<Vec<String>>, Option<Vec<Vec<String>>>) {
+        let (grid, _) = reconstruct_cleaned_table(words, &TesseractConfig::default());
+        let kept = post_process_table(grid.clone(), false, false);
+        (grid, kept)
+    }
+
+    /// xberg-io/xberg#1952: one OCR junk cell with a letter stopped the right-aligned fold, the
+    /// split amount track failed the sparse-column check, and the whole table was dropped.
+    ///
+    /// TEST HONESTY: without the fix the grid has 6 columns for 5 on the page, `Column A` split in
+    /// two with `["Item 6", "", "a", "-", "-", "-"]`, and the table is rejected.
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn issue_1952_split_amount_column_with_one_junk_cell_keeps_the_table() {
+        let (clean_grid, clean) = ocr_route_table(&split_amount_table_words(None, false));
+        assert_eq!(
+            clean_grid[0].len(),
+            5,
+            "control: the fold joins every amount column: {clean_grid:?}"
+        );
+        assert!(clean.is_some(), "control: the clean table is kept: {clean_grid:?}");
+
+        let (grid, kept) = ocr_route_table(&split_amount_table_words(Some("a"), false));
+        assert_table_kept_with_every_value(&grid, kept);
+    }
+
+    /// xberg-io/xberg#1952: the labels of a second header row counted as data tokens, so no
+    /// amount column read as values, none folded, and the table was dropped.
+    ///
+    /// TEST HONESTY: without the fix the grid has 9 columns for 5 on the page and is rejected.
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn issue_1952_split_amount_column_under_a_two_row_header_keeps_the_table() {
+        let (grid, kept) = ocr_route_table(&split_amount_table_words(None, true));
+        assert_table_kept_with_every_value(&grid, kept);
+    }
+
+    #[cfg(feature = "pdf")]
+    fn assert_table_kept_with_every_value(grid: &[Vec<String>], kept: Option<Vec<Vec<String>>>) {
+        let kept = kept.unwrap_or_else(|| {
+            panic!(
+                "the table is dropped; its grid has {} columns for 5 on the page: {grid:?}",
+                grid[0].len()
+            )
+        });
+        for value in [
+            "12,345", "20,118", "31,902", "47,260", "58,431", "63,077", "71,594", "86,213", "85", "40",
+        ] {
+            assert!(
+                kept.iter().flatten().any(|cell| cell.contains(value)),
+                "value {value} is lost: {kept:?}"
+            );
         }
     }
 
@@ -3335,6 +3340,18 @@ mod tests {
     }
 
     #[test]
+    fn cluster_words_into_table_regions_does_not_merge_a_distant_small_fragment() {
+        let mut words = table_grid_words(0, 0, 2, 3);
+        words.extend(table_grid_words(0, 10_000, 1, 2));
+
+        let regions = cluster_words_into_table_regions(&words);
+
+        assert_eq!(regions.len(), 2, "distance must bound aligned-fragment merging");
+        assert_eq!(regions[0].len(), 6);
+        assert_eq!(regions[1].len(), 2);
+    }
+
+    #[test]
     fn cluster_words_into_table_regions_keeps_one_table_as_a_single_region() {
         let words = table_grid_words(0, 0, 4, 3);
 
@@ -3351,6 +3368,67 @@ mod tests {
     #[test]
     fn cluster_words_into_table_regions_empty_input_yields_no_regions() {
         assert!(cluster_words_into_table_regions(&[]).is_empty());
+    }
+
+    /// A four-column invoice whose rows are spaced widely enough to exceed the region gap
+    /// threshold: the header forms one region and every line item becomes a one-row region of
+    /// four words, below `MIN_TABLE_CANDIDATE_WORDS`, which the table branch then drops. After
+    /// GH#1957 the aligned fragments attach to the header region instead of being discarded.
+    fn widely_spaced_invoice_words() -> Vec<crate::table_core::HocrWord> {
+        let columns = [100_u32, 500, 800, 1100];
+        let mut words = Vec::new();
+        for (text, column) in ["DESCRIPTION", "QTY", "UNIT", "LINE"].into_iter().zip(columns) {
+            words.push(word_at(column, 100, 80, 30, text));
+        }
+        for (row, item) in ["Widget", "Gadget", "Doohickey"].into_iter().enumerate() {
+            let top = 300 + row as u32 * 300;
+            words.push(word_at(columns[0], top, 80, 30, item));
+            words.push(word_at(columns[1], top, 40, 30, "10"));
+            words.push(word_at(columns[2], top, 60, 30, "5.00"));
+            words.push(word_at(columns[3], top, 80, 30, "50.00"));
+        }
+        words
+    }
+
+    #[test]
+    fn cluster_words_into_table_regions_keeps_wide_aligned_rows_with_their_table() {
+        let words = widely_spaced_invoice_words();
+
+        let regions = cluster_words_into_table_regions(&words);
+
+        assert_eq!(
+            regions.len(),
+            1,
+            "the aligned line items must not become separate, dropped regions: {:?}",
+            regions.iter().map(|region| region.len()).collect::<Vec<_>>()
+        );
+        assert_eq!(regions[0].len(), words.len());
+    }
+
+    /// GH#1957 end to end through the region the table branch reconstructs: the widely spaced
+    /// invoice keeps its header and all three line items instead of only the header.
+    #[test]
+    fn widely_spaced_invoice_reconstructs_every_line_item() {
+        let words = widely_spaced_invoice_words();
+        let region = crate::table_core::cluster_words_into_table_regions(&words)
+            .into_iter()
+            .next()
+            .expect("one region");
+
+        let (table, _columns) = reconstruct_cleaned_table(&region, &TesseractConfig::default());
+
+        assert_eq!(table.len(), 4, "header plus three line items: {table:?}");
+        for item in ["Widget", "Gadget", "Doohickey"] {
+            assert!(
+                table.iter().flatten().any(|cell| cell.contains(item)),
+                "{item} was lost: {table:?}"
+            );
+        }
+        assert_eq!(
+            table.iter().flatten().filter(|cell| cell.as_str() == "10").count(),
+            3,
+            "every line item's quantity must survive: {table:?}"
+        );
     }
 
     const TSV_HEADER: &str =
@@ -3507,10 +3585,6 @@ mod tests {
         elem
     }
 
-    fn table_at(left: u32, top: u32, right: u32, bottom: u32) -> OcrTable {
-        table_at_with_cells(left, top, right, bottom, vec![vec!["cell".to_string()]])
-    }
-
     /// A table at a bbox whose cells are given explicitly, because `filter_elements_covered_by_tables`
     /// now decides per table whether its cells kept the covered lines' words (#1884), so the cells are
     /// part of every case's input and not incidental filler. ~keep
@@ -3534,22 +3608,6 @@ mod tests {
     }
 
     #[test]
-    fn filter_elements_covered_by_tables_drops_paragraph_inside_table_bbox() {
-        // A paragraph whose bbox is fully inside (so its centre is inside) a detected
-        // table's bbox must be removed -- this is the #1571 duplication itself: the
-        // paragraph's words are also the table's cells.
-        let elements = vec![paragraph_with_bbox("Apple 50 10 00", 10.0, 10.0, 90.0, 30.0)];
-        let tables = vec![table_at_with_cells(0, 0, 100, 100, cells_of("Apple 50 10 00"))];
-
-        let filtered = filter_elements_covered_by_tables(elements, &tables);
-
-        assert!(
-            filtered.is_empty(),
-            "paragraph centred inside the table bbox must be dropped"
-        );
-    }
-
-    #[test]
     fn filter_elements_covered_by_tables_keeps_paragraph_adjacent_to_table() {
         // Precision guard (#1571): a paragraph that merely overlaps a table's bbox edge,
         // with its centre outside the bbox, must survive -- the word-centre rule must not
@@ -3568,74 +3626,6 @@ mod tests {
             "only the paragraph centred inside the table bbox should be dropped"
         );
         assert_eq!(filtered[0].text, "Vehicle Maintenance Guide");
-    }
-
-    #[test]
-    fn filter_elements_covered_by_tables_keeps_lines_whose_words_the_table_dropped() {
-        // xberg-io/xberg#1884: reconstruction lost the interior cells of a sparse row -- the line
-        // read "73 4 4 4 4 -" and the table carries only "73". Removing the line would delete those
-        // five words from the page: they are in neither the paragraphs nor the table.
-        let elements = vec![paragraph_with_bbox("73 4 4 4 4 -", 10.0, 10.0, 90.0, 30.0)];
-        let sparse_row = vec![vec![
-            "73".to_string(),
-            String::new(),
-            String::new(),
-            String::new(),
-            String::new(),
-        ]];
-        let tables = vec![table_at_with_cells(0, 0, 100, 100, sparse_row)];
-
-        let filtered = filter_elements_covered_by_tables(elements, &tables);
-
-        assert_eq!(
-            filtered.len(),
-            1,
-            "a table that dropped the region's words must not claim it"
-        );
-        assert_eq!(filtered[0].text, "73 4 4 4 4 -");
-    }
-
-    #[test]
-    fn filter_elements_covered_by_tables_claims_only_the_tables_that_retained_their_words() {
-        // The decision is per table, not per page (#1884): a faithful table still removes its own
-        // region's duplicate lines even when another table on the same page lost words.
-        let elements = vec![
-            paragraph_with_bbox("Apple 50 10 00", 10.0, 10.0, 90.0, 30.0),
-            paragraph_with_bbox("Pear 61 11 01", 10.0, 210.0, 90.0, 230.0),
-        ];
-        let tables = vec![
-            table_at_with_cells(0, 0, 100, 100, cells_of("Apple 50 10 00")),
-            table_at_with_cells(0, 200, 100, 300, cells_of("Pear")),
-        ];
-
-        let filtered = filter_elements_covered_by_tables(elements, &tables);
-
-        assert_eq!(filtered.len(), 1, "{filtered:?}");
-        assert_eq!(filtered[0].text, "Pear 61 11 01");
-    }
-
-    #[test]
-    fn filter_elements_covered_by_tables_is_noop_without_tables() {
-        let elements = vec![paragraph_with_bbox("Apple 50 10 00", 10.0, 10.0, 90.0, 30.0)];
-
-        let filtered = filter_elements_covered_by_tables(elements, &[]);
-
-        assert_eq!(filtered.len(), 1, "no tables detected means nothing should be filtered");
-    }
-
-    #[test]
-    fn filter_elements_covered_by_tables_keeps_elements_without_bbox() {
-        let mut elem = crate::types::internal::InternalElement::text(ElementKind::Paragraph, "no geometry", 0);
-        elem.bbox = None;
-        let tables = vec![table_at(0, 0, 100, 100)];
-
-        let filtered = filter_elements_covered_by_tables(vec![elem], &tables);
-
-        assert_eq!(
-            filtered.len(),
-            1,
-            "an element with no bbox cannot be tested against a table and must survive"
-        );
     }
 
     #[test]

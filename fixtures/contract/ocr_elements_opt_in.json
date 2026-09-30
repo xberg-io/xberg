@@ -46,12 +46,6 @@
       "value": 1
     }
   ],
-  "skip": {
-    "languages": [
-      "wasm"
-    ],
-    "reason": "The WASM Tesseract backend returns text only, without OCR elements"
-  },
   "config": {
     "force_ocr": true,
     "ocr": {
