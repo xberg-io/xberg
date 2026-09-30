@@ -277,6 +277,14 @@ jobs:
       # Generated Markdown and Rust bindings are committed after the same Poly formatting
       # pass used by `task alef:generate`. Alef verifies the formatted render when Poly is
       # available; without it this job compared raw backend output and reported false drift. ~keep
+      # Poly's Java formatter runs on the configured JDK. Ubuntu's default JRE is 17, while
+      # generated Java is formatted with the repository's Java 25 toolchain; keep verification
+      # on that same toolchain so eight wrapped declarations do not oscillate in CI. ~keep
+      - name: Setup Java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6
+        with:
+          distribution: temurin
+          java-version: "25"
       - name: Install poly
         uses: Goldziher/poly@27da2cd18de12af901865b3096ad795302f60bc5
       # `alef verify` (aliased as `task alef:verify`) is a purpose-built freshness
