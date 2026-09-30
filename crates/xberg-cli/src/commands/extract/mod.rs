@@ -11,10 +11,11 @@
 //! - `batch` - the batch extraction command and its result aggregation
 
 use anyhow::{Context, Result};
-use std::io::Read;
+use base64::Engine as _;
+use std::io::{IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, ExtractionErrorItem, ExtractionResult};
+use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, ExtractionErrorItem, ExtractionResult, OutputFormat};
 
 use crate::{
     WireFormat,
@@ -48,6 +49,15 @@ use images::write_extracted_images;
 use runtime::block_on_extract;
 use timing::build_stage_timings;
 
+/// The library's DOCX renderer name, and the `metadata.output_format` of a result whose
+/// `content` is a base64-encoded `.docx` package.
+pub(crate) const DOCX_CONTENT_FORMAT: &str = "docx";
+
+/// Whether `config` asks for DOCX, which produces one binary document rather than text.
+pub(crate) fn requests_docx(config: &ExtractionConfig) -> bool {
+    matches!(&config.output_format, OutputFormat::Custom(name) if name == DOCX_CONTENT_FORMAT)
+}
+
 /// Input source for single-document extraction.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExtractInputSource {
@@ -77,6 +87,8 @@ pub fn extract_command(
 ) -> Result<()> {
     let emit_stage_timing = stage_timing_requested();
 
+    refuse_docx_to_terminal(&config, &format)?;
+
     let t0 = Instant::now();
     let result = extract_input_sync(input, mime_type.as_deref(), &config)?;
     let elapsed = t0.elapsed();
@@ -90,12 +102,18 @@ pub fn extract_command(
                 let dir = output_dir.as_deref().unwrap_or(Path::new("."));
                 write_extracted_images(images, dir)?;
             }
-            print!("{}", result.content);
+            let written = if requests_docx(&config) {
+                write_docx_package(&result)
+            } else {
+                print!("{}", result.content);
+                Ok(())
+            };
             // `stdout` stays exactly the extracted content so it remains pipeable; everything
             // else the extraction produced — warnings included — goes to `stderr`.
             let mut diagnostics = std::io::stderr().lock();
             write_text_envelope(&result, extraction_time_ms, &mut diagnostics)
                 .context("Failed to write the extraction envelope summary")?;
+            written?;
         }
         WireFormat::Json => {
             // `getrusage` reports the peak for the process's whole lifetime, so the exact sample
@@ -135,6 +153,39 @@ pub fn extract_command(
     }
 
     Ok(())
+}
+
+/// Refuse DOCX output to a terminal before extracting anything, since it is binary.
+fn refuse_docx_to_terminal(config: &ExtractionConfig, format: &WireFormat) -> Result<()> {
+    if requests_docx(config) && matches!(format, WireFormat::Text) && std::io::stdout().is_terminal() {
+        anyhow::bail!(
+            "--content-format docx writes a binary document to stdout; redirect it to a file (for example \
+             `> output.docx`), or use --format json to receive it base64-encoded in `content`"
+        );
+    }
+    Ok(())
+}
+
+/// Write the `.docx` package a DOCX extraction carries base64-encoded in `content`.
+///
+/// Fails rather than writing text when the library fell back to plain text (for example
+/// when it was built without the `office` feature), since the caller is redirecting
+/// stdout into a `.docx` file.
+fn write_docx_package(result: &ExtractedDocument) -> Result<()> {
+    if result.metadata.output_format.as_deref() != Some(DOCX_CONTENT_FORMAT) {
+        anyhow::bail!(
+            "DOCX output was requested but the extraction produced {} text instead; see the warnings above",
+            result.metadata.output_format.as_deref().unwrap_or("plain")
+        );
+    }
+    let package = base64::engine::general_purpose::STANDARD
+        .decode(&result.content)
+        .context("DOCX output was not valid base64")?;
+    let mut stdout = std::io::stdout().lock();
+    stdout
+        .write_all(&package)
+        .context("Failed to write the DOCX document to stdout")?;
+    stdout.flush().context("Failed to write the DOCX document to stdout")
 }
 
 fn extract_input_sync(

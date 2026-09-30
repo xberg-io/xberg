@@ -124,6 +124,7 @@ export default defineConfig({
                     label: "Diagram DOT Output",
                     slug: "guides/diagram-dot-output",
                   },
+                  { label: "DOCX Output", slug: "guides/docx-output" },
                 ],
               },
               {

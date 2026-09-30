@@ -9,6 +9,7 @@
 //! pre-rendered content into the `content` field after post-processors have
 //! operated on the plain-text version.
 
+use crate::Result;
 use crate::core::config::OutputFormat;
 use crate::types::ExtractedDocument;
 #[cfg(test)]
@@ -60,6 +61,28 @@ pub fn apply_output_format(result: ExtractedDocument, output_format: OutputForma
         result.content = formatted;
     }
     result
+}
+
+/// Hand the rendering in `content` to its renderer's finishing step.
+///
+/// Runs after every other pipeline step. A binary format such as DOCX renders Markdown,
+/// so the post-processors rewrite it as text, and only becomes bytes (base64 in
+/// `content`) here. A `Custom` format that fell back to plain text is left alone, since
+/// `apply_output_format` then records `"plain"` rather than the requested name.
+pub(crate) fn finish_output_format(result: &mut ExtractedDocument, output_format: &OutputFormat) -> Result<()> {
+    let OutputFormat::Custom(name) = output_format else {
+        return Ok(());
+    };
+    if result.metadata.output_format.as_deref() != Some(name.as_str()) {
+        return Ok(());
+    }
+
+    crate::plugins::ensure_renderers_initialized();
+    let registry = crate::plugins::registry::get_renderer_registry();
+    let registry = registry.read();
+    let rendered = std::mem::take(&mut result.content);
+    result.content = registry.finish(name, rendered)?;
+    Ok(())
 }
 
 #[cfg(test)]

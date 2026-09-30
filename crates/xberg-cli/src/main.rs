@@ -692,6 +692,8 @@ enum ContentOutputFormatArg {
     Json,
     /// Docling DocTags tag-stream format (tables as OTSL)
     DocTags,
+    /// Office Open XML document, written to stdout as binary
+    Docx,
 }
 
 impl From<ContentOutputFormatArg> for ContentOutputFormat {
@@ -703,6 +705,9 @@ impl From<ContentOutputFormatArg> for ContentOutputFormat {
             ContentOutputFormatArg::Html => ContentOutputFormat::Html,
             ContentOutputFormatArg::Json => ContentOutputFormat::Json,
             ContentOutputFormatArg::DocTags => ContentOutputFormat::DocTags,
+            ContentOutputFormatArg::Docx => {
+                ContentOutputFormat::Custom(commands::extract::DOCX_CONTENT_FORMAT.to_string())
+            }
         }
     }
 }

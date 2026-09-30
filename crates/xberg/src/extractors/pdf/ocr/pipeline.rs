@@ -61,7 +61,7 @@ use super::rendering::{
     clone_rgb_for_png_encode, fallback_render_document, open_pdf_for_full_ocr, open_pdf_for_page_ocr,
     page_dimensions_pt, page_needs_xobject_fallback, pre_rendered_page_geometry, pre_rendered_page_source_dpi,
     recover_page_text_from_image_xobjects, render_full_pdf_ocr_batch, render_selected_pages_from_document,
-    share_rendered_page_images, valid_page_indices, validate_png_encode_pages_individually,
+    share_rendered_page_images, single_block_for_ocr_page, valid_page_indices, validate_png_encode_pages_individually,
     whole_page_raster_for_ocr_page,
 };
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -398,13 +398,6 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             }
         })
         .collect();
-    let single_block_pages = std::sync::Arc::new(
-        pages
-            .single_block
-            .iter()
-            .copied()
-            .collect::<std::collections::HashSet<u32>>(),
-    );
 
     if ocr_set.is_empty() {
         return Ok((
@@ -425,6 +418,17 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let (render_doc, page_count, page_rotations) = open_pdf_for_page_ocr(content)?;
     // Shared with each spawned pipeline task below, whose embedded-image retry reads it (#1912).
     let render_doc = std::sync::Arc::new(render_doc);
+    // A listed page that carries a scan keeps the scan's segmentation mode; see
+    // `single_block_for_ocr_page`.
+    let single_block_pages = std::sync::Arc::new(
+        pages
+            .single_block
+            .iter()
+            .copied()
+            .filter(|page| ocr_set.contains(page))
+            .filter(|&page| !crate::pdf::scan_detect::carries_scan_raster(&render_doc, (page - 1) as usize))
+            .collect::<std::collections::HashSet<u32>>(),
+    );
     page_indices = valid_page_indices(&page_indices, page_count);
     if page_indices.is_empty() {
         return Ok((
@@ -2475,16 +2479,25 @@ pub(super) async fn extract_with_ocr_for_page(
                     );
                 #[cfg(not(feature = "pdf"))]
                 let whole_page_raster = false;
+                #[cfg(feature = "pdf")]
+                let prefer_single_block = single_block_for_ocr_page(
+                    page_ocr_hints
+                        .as_ref()
+                        .and_then(|hints| hints.single_block_pages.as_deref()),
+                    page_index_offset + *page_idx + 1,
+                    lazy_pdf_render_state.as_ref(),
+                    &mut fallback_pdf_state,
+                    content,
+                    *page_idx,
+                );
+                #[cfg(not(feature = "pdf"))]
+                let prefer_single_block = false;
                 let config_clone = ocr_config_with_page_rotation_hint(
                     &ocr_config_owned,
                     page_rotation_degrees,
                     source_dpi,
                     whole_page_raster,
-                    page_ocr_hints.as_ref().is_some_and(|hints| {
-                        hints.single_block_pages.as_ref().is_some_and(|pages| {
-                            pages.contains(&u32::try_from(page_index_offset + *page_idx + 1).unwrap_or(u32::MAX))
-                        })
-                    }),
+                    prefer_single_block,
                 )
                 .into_owned();
                 // No PDF `/Rotate` is ever known without the `pdf` feature (`page_rotation_degrees`
@@ -2588,16 +2601,25 @@ pub(super) async fn extract_with_ocr_for_page(
                     );
                 #[cfg(not(feature = "pdf"))]
                 let whole_page_raster = false;
+                #[cfg(feature = "pdf")]
+                let prefer_single_block = single_block_for_ocr_page(
+                    page_ocr_hints
+                        .as_ref()
+                        .and_then(|hints| hints.single_block_pages.as_deref()),
+                    page_index_offset + *page_idx + 1,
+                    lazy_pdf_render_state.as_ref(),
+                    &mut fallback_pdf_state,
+                    content,
+                    *page_idx,
+                );
+                #[cfg(not(feature = "pdf"))]
+                let prefer_single_block = false;
                 let config_for_page = ocr_config_with_page_rotation_hint(
                     &ocr_config_owned,
                     page_rotation_degrees,
                     source_dpi,
                     whole_page_raster,
-                    page_ocr_hints.as_ref().is_some_and(|hints| {
-                        hints.single_block_pages.as_ref().is_some_and(|pages| {
-                            pages.contains(&u32::try_from(page_index_offset + *page_idx + 1).unwrap_or(u32::MAX))
-                        })
-                    }),
+                    prefer_single_block,
                 );
                 #[cfg(feature = "pdf")]
                 let (upright_data, upright_width, upright_height, correction_degrees) = upright_raster_for_backend(

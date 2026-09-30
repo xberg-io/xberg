@@ -62,7 +62,8 @@ fn effective_layout_acceleration<'a>(
 /// and fall back to plain text during derivation
 /// (`core/pipeline/format.rs`'s `custom_fallback_to_plain`). `DocTags` is a real,
 /// always-registered built-in renderer that needs the same geometry and headings
-/// as Markdown/Djot/HTML, so it gets its own explicit arm instead.
+/// as Markdown/Djot/HTML, so it gets its own explicit arm instead. So does a
+/// built-in binary format such as DOCX, which is built from the Markdown rendering.
 ///
 /// `include_document_structure` triggers it directly (GH#1668): a caller who set
 /// only that flag, with `output_format` left at its `Plain` default, used to get
@@ -85,6 +86,7 @@ fn needs_structured_extraction(
             output_format,
             OutputFormat::Markdown | OutputFormat::Djot | OutputFormat::Html | OutputFormat::DocTags
         )
+        || matches!(output_format, OutputFormat::Custom(name) if crate::plugins::registry::renders_from_markdown(name))
         || ocr_inline_images
         || content_filter_configured
 }
@@ -1199,6 +1201,15 @@ mod tests {
             false,
             false
         ));
+    }
+
+    /// DOCX is built from the Markdown rendering, so without the structured path
+    /// a PDF converted to it has no headings or tables.
+    #[cfg(feature = "office")]
+    #[test]
+    fn should_trigger_structured_extraction_for_docx_format() {
+        let output_format = OutputFormat::Custom("docx".to_string());
+        assert!(needs_structured_extraction(false, false, &output_format, false, false));
     }
 
     /// The pre-existing markup formats must keep triggering the structured path.

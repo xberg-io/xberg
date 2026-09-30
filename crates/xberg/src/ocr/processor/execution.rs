@@ -3207,6 +3207,18 @@ mod tests {
     }
 
     #[test]
+    fn cluster_words_into_table_regions_does_not_merge_a_distant_small_fragment() {
+        let mut words = table_grid_words(0, 0, 2, 3);
+        words.extend(table_grid_words(0, 10_000, 1, 2));
+
+        let regions = cluster_words_into_table_regions(&words);
+
+        assert_eq!(regions.len(), 2, "distance must bound aligned-fragment merging");
+        assert_eq!(regions[0].len(), 6);
+        assert_eq!(regions[1].len(), 2);
+    }
+
+    #[test]
     fn cluster_words_into_table_regions_keeps_one_table_as_a_single_region() {
         let words = table_grid_words(0, 0, 4, 3);
 
@@ -3223,6 +3235,67 @@ mod tests {
     #[test]
     fn cluster_words_into_table_regions_empty_input_yields_no_regions() {
         assert!(cluster_words_into_table_regions(&[]).is_empty());
+    }
+
+    /// A four-column invoice whose rows are spaced widely enough to exceed the region gap
+    /// threshold: the header forms one region and every line item becomes a one-row region of
+    /// four words, below `MIN_TABLE_CANDIDATE_WORDS`, which the table branch then drops. After
+    /// GH#1957 the aligned fragments attach to the header region instead of being discarded.
+    fn widely_spaced_invoice_words() -> Vec<crate::table_core::HocrWord> {
+        let columns = [100_u32, 500, 800, 1100];
+        let mut words = Vec::new();
+        for (text, column) in ["DESCRIPTION", "QTY", "UNIT", "LINE"].into_iter().zip(columns) {
+            words.push(word_at(column, 100, 80, 30, text));
+        }
+        for (row, item) in ["Widget", "Gadget", "Doohickey"].into_iter().enumerate() {
+            let top = 300 + row as u32 * 300;
+            words.push(word_at(columns[0], top, 80, 30, item));
+            words.push(word_at(columns[1], top, 40, 30, "10"));
+            words.push(word_at(columns[2], top, 60, 30, "5.00"));
+            words.push(word_at(columns[3], top, 80, 30, "50.00"));
+        }
+        words
+    }
+
+    #[test]
+    fn cluster_words_into_table_regions_keeps_wide_aligned_rows_with_their_table() {
+        let words = widely_spaced_invoice_words();
+
+        let regions = cluster_words_into_table_regions(&words);
+
+        assert_eq!(
+            regions.len(),
+            1,
+            "the aligned line items must not become separate, dropped regions: {:?}",
+            regions.iter().map(|region| region.len()).collect::<Vec<_>>()
+        );
+        assert_eq!(regions[0].len(), words.len());
+    }
+
+    /// GH#1957 end to end through the region the table branch reconstructs: the widely spaced
+    /// invoice keeps its header and all three line items instead of only the header.
+    #[test]
+    fn widely_spaced_invoice_reconstructs_every_line_item() {
+        let words = widely_spaced_invoice_words();
+        let region = crate::table_core::cluster_words_into_table_regions(&words)
+            .into_iter()
+            .next()
+            .expect("one region");
+
+        let (table, _columns) = reconstruct_cleaned_table(&region, &TesseractConfig::default());
+
+        assert_eq!(table.len(), 4, "header plus three line items: {table:?}");
+        for item in ["Widget", "Gadget", "Doohickey"] {
+            assert!(
+                table.iter().flatten().any(|cell| cell.contains(item)),
+                "{item} was lost: {table:?}"
+            );
+        }
+        assert_eq!(
+            table.iter().flatten().filter(|cell| cell.as_str() == "10").count(),
+            3,
+            "every line item's quantity must survive: {table:?}"
+        );
     }
 
     const TSV_HEADER: &str =
