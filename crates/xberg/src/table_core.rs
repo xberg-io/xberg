@@ -419,7 +419,7 @@ fn fold_right_aligned_tracks(columns: &mut Vec<ColumnTrack>, column_threshold: u
             let next = columns.remove(index + 1);
             let current = &mut columns[index];
             // The folded column is the kind of the track that holds its data, and sits where that
-            // data sits (see [`ColumnTrack::left`]).
+            // data sits (see [`ColumnTrack::left`]). ~keep
             (current.left, current.right_aligned) = match (current.has_data, next.has_data) {
                 (true, true) => (current.left.min(next.left), current.right_aligned),
                 (true, false) => (current.left, current.right_aligned),
