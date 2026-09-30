@@ -301,21 +301,56 @@ pub(in crate::core::extractor) async fn extract_file_with_extractor(
 
     if let Some(cache) = get_extraction_cache()
         && let Ok(Some(data)) = cache.get(&cache_key, path.to_str(), namespace, config.cache_ttl_secs)
-        && let Ok(result) = rmp_serde::from_slice::<ExtractedDocument>(&data)
     {
-        tracing::debug!(cache_key = %cache_key, "Extraction cache hit");
-        return Ok(result);
+        match deserialize_extraction_cache_entry(&data) {
+            Ok(result) => {
+                tracing::debug!(cache_key = %cache_key, "Extraction cache hit");
+                return Ok(result);
+            }
+            Err(error) => {
+                tracing::warn!(
+                    { crate::telemetry::conventions::OPERATION } =
+                        crate::telemetry::conventions::operations::CACHE_LOOKUP,
+                    { crate::telemetry::conventions::CACHE_KEY } = cache_key.as_str(),
+                    error = %error,
+                    "Failed to decode extraction cache entry; re-extracting and replacing it"
+                );
+            }
+        }
     }
 
     let result = Box::pin(extract_file_uncached(path, mime_type, config)).await?;
 
-    if let Some(cache) = get_extraction_cache()
-        && let Ok(data) = rmp_serde::to_vec(&result)
-    {
-        let _ = cache.set(&cache_key, data, path.to_str(), namespace, config.cache_ttl_secs);
+    if let Some(cache) = get_extraction_cache() {
+        match serialize_extraction_cache_entry(&result) {
+            Ok(data) => {
+                let _ = cache.set(&cache_key, data, path.to_str(), namespace, config.cache_ttl_secs);
+            }
+            Err(error) => {
+                tracing::warn!(
+                    { crate::telemetry::conventions::OPERATION } =
+                        crate::telemetry::conventions::operations::CACHE_WRITE,
+                    { crate::telemetry::conventions::CACHE_KEY } = cache_key.as_str(),
+                    error = %error,
+                    "Failed to encode extraction cache entry; the result will not be cached"
+                );
+            }
+        }
     }
 
     Ok(result)
+}
+
+fn serialize_extraction_cache_entry(
+    result: &ExtractedDocument,
+) -> std::result::Result<Vec<u8>, rmp_serde::encode::Error> {
+    // Named fields preserve internally tagged document nodes. The format-agnostic decoder also accepts any
+    // legacy compact payload whose schema remains deserializable. ~keep
+    rmp_serde::to_vec_named(result)
+}
+
+fn deserialize_extraction_cache_entry(data: &[u8]) -> std::result::Result<ExtractedDocument, rmp_serde::decode::Error> {
+    rmp_serde::from_slice(data)
 }
 
 /// Whether an extractor failure is eligible for the extractor fallback chain (#217).
@@ -440,7 +475,121 @@ pub(crate) async fn extract_with_candidates(
 #[cfg(all(test, feature = "tokio-runtime", not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
+    use crate::cache::GenericCache;
+    use crate::types::{ContentLayer, DocumentNode, DocumentStructure, GridCell, NodeContent, Table, TableGrid};
+    use std::borrow::Cow;
     use tempfile::tempdir;
+
+    fn structured_table_document() -> ExtractedDocument {
+        let grid = TableGrid {
+            rows: 2,
+            cols: 2,
+            cells: vec![GridCell {
+                content: "Name".to_string(),
+                row: 0,
+                col: 0,
+                row_span: 1,
+                col_span: 1,
+                is_header: true,
+                bbox: None,
+                heading_level: None,
+                style_name: None,
+            }],
+        };
+
+        ExtractedDocument {
+            content: "| Name | Age |\n| --- | --- |\n| Ada | 36 |".to_string(),
+            mime_type: Cow::Borrowed("application/pdf"),
+            tables: vec![Table {
+                cells: vec![vec!["Name".to_string(), "Age".to_string()]],
+                markdown: "| Name | Age |".to_string(),
+                page_number: 1,
+                ..Default::default()
+            }],
+            document: Some(DocumentStructure {
+                nodes: vec![DocumentNode {
+                    id: "table-0".to_string(),
+                    content: NodeContent::Table { grid },
+                    parent: None,
+                    children: Vec::new(),
+                    content_layer: ContentLayer::Body,
+                    page: Some(1),
+                    page_end: None,
+                    bbox: None,
+                    annotations: Vec::new(),
+                    attributes: None,
+                }],
+                source_format: Some("pdf".to_string()),
+                relationships: Vec::new(),
+                node_types: vec!["table".to_string()],
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn should_read_structured_table_document_from_written_extraction_cache_entry() {
+        let directory = tempdir().unwrap();
+        let cache = GenericCache::new(
+            "extraction-regression".to_string(),
+            Some(directory.path().to_string_lossy().into_owned()),
+            1.0,
+            10.0,
+            0.0,
+        )
+        .unwrap();
+        let expected = structured_table_document();
+        let encoded = serialize_extraction_cache_entry(&expected).unwrap();
+        cache.set_default("structured-table", encoded, None).unwrap();
+
+        let stored = cache
+            .get_default("structured-table", None)
+            .unwrap()
+            .expect("the disk-backed cache entry should exist");
+        let actual = deserialize_extraction_cache_entry(&stored)
+            .expect("a written structured extraction result should be a cache hit");
+
+        assert_eq!(actual.content, expected.content);
+        assert_eq!(actual.document, expected.document);
+        assert_eq!(actual.tables[0].cells, expected.tables[0].cells);
+    }
+
+    #[test]
+    fn should_reject_compact_entry_and_read_named_replacement() {
+        let directory = tempdir().unwrap();
+        let cache = GenericCache::new(
+            "extraction-migration".to_string(),
+            Some(directory.path().to_string_lossy().into_owned()),
+            1.0,
+            10.0,
+            0.0,
+        )
+        .unwrap();
+        let expected = ExtractedDocument {
+            content: "legacy compact entry".to_string(),
+            mime_type: Cow::Borrowed("text/plain"),
+            ..Default::default()
+        };
+        cache
+            .set_default("legacy-compact", rmp_serde::to_vec(&expected).unwrap(), None)
+            .unwrap();
+
+        let legacy = cache.get_default("legacy-compact", None).unwrap().unwrap();
+        assert!(deserialize_extraction_cache_entry(&legacy).is_err());
+
+        cache
+            .set_default(
+                "legacy-compact",
+                serialize_extraction_cache_entry(&expected).unwrap(),
+                None,
+            )
+            .unwrap();
+        let replacement = cache.get_default("legacy-compact", None).unwrap().unwrap();
+        let actual = deserialize_extraction_cache_entry(&replacement).unwrap();
+
+        assert_eq!(actual.content, expected.content);
+        assert_eq!(actual.mime_type, expected.mime_type);
+    }
 
     #[tokio::test]
     async fn should_reject_non_regular_file_before_extraction() {

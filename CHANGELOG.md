@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(cache): structured extraction results now produce cache hits.** Extraction cache entries use named MessagePack fields so tables and document nodes round-trip correctly. Unreadable legacy entries are reported and safely replaced after re-extraction. (GH#1990)
 - **(mime): large CSS and TOML files with array-like prefixes are no longer mistaken for JSON.** Valid JSON arrays and objects larger than the 4 KiB sniffing window remain detected as JSON. (GH#1982)
 - **(ocr): label-and-value tables no longer disappear when labels contain most of the text.** A two-column grid whose first column contains recurring labels and whose second column is mostly numeric values now bypasses the prose-oriented dominant-column rejection. PaddleOCR also reports structurally rejected table candidates in `processing_warnings` instead of leaving only a debug trace. (GH#1970)
 - **(wasm): Tesseract OCR returns word elements when `element_config.include_elements` is enabled.** The WebAssembly backend now includes each word's bounding box and recognition confidence, applies the configured level and confidence filters, and leaves element extraction disabled unless requested. (GH#1974)
