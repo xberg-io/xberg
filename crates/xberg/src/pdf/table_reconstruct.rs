@@ -4924,7 +4924,7 @@ mod tests {
 
         let list_region = regions
             .into_iter()
-            .find(|region| region.len() >= crate::table_core::MIN_TABLE_CANDIDATE_WORDS)
+            .find(|region| region.first().is_some_and(|word| word.text == "1."))
             .expect("the numbered list must cluster into its own table-candidate region");
         assert_eq!(
             list_region.len(),
