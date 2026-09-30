@@ -133,16 +133,19 @@ mod tests {
         std::fs::create_dir_all(&nested).unwrap();
 
         for (basename, contents) in [
-            ("xberg.toml", ""),
-            ("xberg.yaml", "{}\n"),
-            ("xberg.yml", "{}\n"),
-            ("xberg.json", "{}\n"),
+            ("xberg.toml", "include_document_structure = true\n"),
+            ("xberg.yaml", "include_document_structure: true\n"),
+            ("xberg.yml", "include_document_structure: true\n"),
+            ("xberg.json", "{\"include_document_structure\":true}\n"),
         ] {
             let path = root.path().join(basename);
             std::fs::write(&path, contents).unwrap();
+            let discovered = ExtractionConfig::find_config_in_ancestors(&nested)
+                .unwrap()
+                .unwrap_or_else(|| panic!("{basename} must be discovered in a project ancestor"));
             assert!(
-                ExtractionConfig::find_config_in_ancestors(&nested).unwrap().is_some(),
-                "{basename} must be discovered in a project ancestor"
+                discovered.include_document_structure,
+                "{basename} must be parsed rather than replaced with the default config"
             );
             std::fs::remove_file(path).unwrap();
         }

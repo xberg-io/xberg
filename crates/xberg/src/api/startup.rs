@@ -53,7 +53,7 @@ async fn shutdown_signal() {
 
 /// Start the API server with config file discovery.
 ///
-/// Searches for xberg.toml/yaml/json in current and parent directories.
+/// Searches for xberg.toml/yaml/yml/json in current and parent directories.
 /// If no config file is found, uses default configuration.
 ///
 /// # Arguments

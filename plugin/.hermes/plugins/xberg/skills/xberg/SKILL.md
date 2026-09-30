@@ -15,8 +15,8 @@ metadata:
 
 <!--
 AI-RULEZ :: GENERATED FILE — DO NOT EDIT
-Content-Hash: blake3:a350cdaa08f8e82becd82ed51d10fc81771a4cf74c1b619e65b424101f0a612c
-Source-Hash: blake3:c4a88d666902477ec013cc1f990f5678bb309ab3daeb18375f59c31549d99f9f
+Content-Hash: blake3:8d1ddd2c0fd7b6e9473737826178427138c3fac45cedd5b6c3d0b8a243739deb
+Source-Hash: blake3:c245951312ccf9794e0e243b81d9bf9db0982bd1b699fb47bfa7593bbbc1f7e3
 Schema-Version: v1
 -->
 
@@ -211,7 +211,7 @@ passwords = ["secret123"]
 ```
 
 ```bash
-# CLI: auto-discovers xberg.toml in current/parent directories
+# CLI: auto-discovers xberg.toml/yaml/yml/json in current/parent directories
 xberg extract doc.pdf
 # or explicit:
 xberg extract doc.pdf --config xberg.toml

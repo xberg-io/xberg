@@ -23,7 +23,7 @@
 //!
 //! The CLI supports configuration files in TOML, YAML, or JSON formats:
 //! - Explicit: `--config path/to/config.toml`
-//! - Auto-discovery: Searches for `xberg.{toml,yaml,json}` in current and parent directories
+//! - Auto-discovery: Searches for `xberg.{toml,yaml,yml,json}` in current and parent directories
 //! - Inline JSON: `--config-json '{"ocr": {"backend": "tesseract"}}'`
 //! - Command-line flags override config file settings
 //!
@@ -150,7 +150,7 @@ enum Commands {
         #[cfg_attr(not(feature = "url-surface"), arg(long, conflicts_with = "uri"))]
         stdin: bool,
 
-        /// Path to config file (TOML, YAML, or JSON). If not specified, searches for xberg.toml/yaml/json in current and parent directories.
+        /// Path to config file (TOML, YAML, or JSON). If not specified, searches for xberg.toml/yaml/yml/json in current and parent directories.
         #[arg(short, long)]
         config: Option<PathBuf>,
 
@@ -208,7 +208,7 @@ enum Commands {
         #[arg(long, value_enum)]
         input_format: Option<BatchInputFormat>,
 
-        /// Path to config file (TOML, YAML, or JSON). If not specified, searches for xberg.toml/yaml/json in current and parent directories.
+        /// Path to config file (TOML, YAML, or JSON). If not specified, searches for xberg.toml/yaml/yml/json in current and parent directories.
         #[arg(short, long)]
         config: Option<PathBuf>,
 
@@ -294,7 +294,7 @@ enum Commands {
 
     /// Probe configured backends and report what will actually execute on this host
     Doctor {
-        /// Path to config file (TOML, YAML, or JSON). If not specified, searches for xberg.toml/yaml/json in current and parent directories.
+        /// Path to config file (TOML, YAML, or JSON). If not specified, searches for xberg.toml/yaml/yml/json in current and parent directories.
         #[arg(short, long)]
         config: Option<PathBuf>,
 
@@ -330,7 +330,7 @@ enum Commands {
         #[arg(short, long)]
         port: Option<u16>,
 
-        /// Path to config file (TOML, YAML, or JSON). If not specified, searches for xberg.toml/yaml/json in current and parent directories.
+        /// Path to config file (TOML, YAML, or JSON). If not specified, searches for xberg.toml/yaml/yml/json in current and parent directories.
         #[arg(short, long)]
         config: Option<PathBuf>,
     },
@@ -338,7 +338,7 @@ enum Commands {
     /// Start the MCP (Model Context Protocol) server
     #[cfg(feature = "mcp")]
     Mcp {
-        /// Path to config file (TOML, YAML, or JSON). If not specified, searches for xberg.toml/yaml/json in current and parent directories.
+        /// Path to config file (TOML, YAML, or JSON). If not specified, searches for xberg.toml/yaml/yml/json in current and parent directories.
         #[arg(short, long)]
         config: Option<PathBuf>,
 

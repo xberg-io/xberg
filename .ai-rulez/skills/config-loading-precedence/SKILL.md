@@ -1,6 +1,6 @@
 ---
 name: config-loading-precedence
-description: How Xberg resolves configuration — CLI-mode and server/MCP-mode precedence orders, config file auto-discovery (xberg.toml walk-up, then the user config dir), field-level inline JSON merge (merge_json_into_config), the ExtractionOverrides CLI layer, and the two mechanisms that make a config change silently do nothing. Load when adding a config flag or env var, changing config precedence, or debugging why a setting is or isn't taking effect.
+description: How Xberg resolves configuration — CLI-mode and server/MCP-mode precedence orders, project config walk-up, user config fallback, field-level inline JSON merge (merge_json_into_config), the ExtractionOverrides CLI layer, and the two mechanisms that make a config change silently do nothing. Load when adding a config flag or env var, changing config precedence, or debugging why a setting is or isn't taking effect.
 ---
 
 # Configuration Loading & Precedence
@@ -10,7 +10,7 @@ description: How Xberg resolves configuration — CLI-mode and server/MCP-mode p
 1. Individual CLI flags (`--ocr`, `--output-format`, `--chunk`)
 2. Inline JSON config (`--config-json` or `--config-json-base64`)
 3. Config file (`--config path.toml`)
-4. Auto-discovered config (`xberg.toml` in cwd/parents, then the user config dir)
+4. Auto-discovered config (`xberg.{toml,yaml,yml,json}` in cwd/parents, then the user config dir)
 5. Default values
 
 ## Server/MCP Mode Precedence
@@ -22,15 +22,14 @@ description: How Xberg resolves configuration — CLI-mode and server/MCP-mode p
 
 ## Config File Discovery
 
-`ExtractionConfig::discover()` (`core/config/extraction/loaders.rs`) does two different things:
+`ExtractionConfig::discover()` (`core/config/extraction/loaders.rs`) uses the same deterministic
+format precedence at every level:
 
-1. Walks the current directory and its parents looking for **`xberg.toml` only** — no
-   `.yaml`/`.yml`/`.json` at this stage. First hit wins.
+1. Walks the current directory and its parents, probing `xberg.toml`, `xberg.yaml`,
+   `xberg.yml`, then `xberg.json` in each directory. The first hit wins.
 2. If that finds nothing, falls back to the per-user global config directory
    (`dirs::config_dir()/xberg`) and probes four basenames in a fixed order:
    `xberg.toml`, `xberg.yaml`, `xberg.yml`, `xberg.json`.
-
-So a project-local `xberg.yaml` is **not** auto-discovered — pass it with `--config`.
 
 ## Inline JSON Config
 
@@ -91,6 +90,6 @@ against the serde **wire** names (`ChunkingConfig` declares `max_characters` but
 
 1. CLI flags always win over config file
 2. JSON merge is field-level, not whole-object
-3. Auto-discovery walks parents for `xberg.toml` only; other extensions need `--config`
+3. Auto-discovery probes TOML, YAML, YML, then JSON in each directory before walking to its parent
 4. `--config-json-base64` for shell-safe JSON passing
 5. Server config uses `[server]` section + extraction config

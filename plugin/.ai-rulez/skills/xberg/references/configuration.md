@@ -16,7 +16,7 @@ All formats deserialize into the same `ExtractionConfig` schema. The schema uses
 
 ## Auto-Discovery
 
-`ExtractionConfig::discover()` searches for `xberg.toml` in the current working directory and then each parent directory up the tree, loading the first match. Explicit loads via `ExtractionConfig::from_file(path)` accept `.toml`, `.yaml`/`.yml`, and `.json` (format chosen by extension).
+`ExtractionConfig::discover()` searches the current working directory and then each parent directory, probing `xberg.toml`, `xberg.yaml`, `xberg.yml`, and `xberg.json` in that order at every level. Explicit loads via `ExtractionConfig::from_file(path)` accept the same extensions.
 
 ## Loading Configuration
 
@@ -27,10 +27,10 @@ Config-file loading and auto-discovery live in the Rust core and the CLI. The la
 ```rust
 use xberg::core::config::ExtractionConfig;
 
-// Explicit path (.toml / .yaml / .json by extension)
+// Explicit path (.toml / .yaml / .yml / .json by extension)
 let config = ExtractionConfig::from_file("xberg.toml")?;
 
-// Auto-discover xberg.toml up the directory tree
+// Auto-discover xberg.toml/yaml/yml/json up the directory tree
 let config = ExtractionConfig::discover()?; // -> Option<ExtractionConfig>
 ```
 
@@ -40,7 +40,7 @@ let config = ExtractionConfig::discover()?; // -> Option<ExtractionConfig>
 # Explicit configuration file
 xberg extract --config xberg.toml document.pdf
 
-# Auto-discovery (searches cwd and parents for xberg.toml)
+# Auto-discovery (searches cwd and parents for xberg.toml/yaml/yml/json)
 xberg extract document.pdf
 
 # Inline JSON (field-level merge over the discovered/loaded config)
@@ -494,7 +494,7 @@ For the CLI, sources are merged in priority order (highest to lowest):
 1. **Individual CLI flags** (e.g. `--ocr`, `--output-format`)
 2. **Inline JSON config** (`--config-json` / `--config-json-base64`) — field-level merge
 3. **Configuration file** (`--config path`)
-4. **Auto-discovered config** (`xberg.toml` in cwd/parents)
+4. **Auto-discovered config** (`xberg.{toml,yaml,yml,json}` in cwd/parents)
 5. **Defaults**
 
 Environment variable overrides (`apply_env_overrides`) are applied on top of the loaded config.

@@ -26,6 +26,6 @@
     "README.md"
   ],
   "dependencies": {
-    "@opencode-ai/plugin": "^1.17.8"
+    "@opencode/plugin": "^2.0.20"
   }
 }
