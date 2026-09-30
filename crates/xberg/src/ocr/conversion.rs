@@ -420,7 +420,7 @@ pub(crate) fn tsv_row_to_element(row: &TsvRow) -> OcrElement {
 /// # Returns
 ///
 /// An `OcrElement` at `Word` level with all available font and layout metadata.
-#[cfg(feature = "ocr")]
+#[cfg(any(feature = "ocr", feature = "ocr-wasm"))]
 pub(crate) fn iterator_word_to_element(
     word: &xberg_tesseract::WordData,
     block_type: Option<xberg_tesseract::TessPolyBlockType>,
