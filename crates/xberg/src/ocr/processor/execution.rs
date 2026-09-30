@@ -3130,6 +3130,83 @@ mod tests {
         words
     }
 
+    /// An invented scanned table whose header labels read as text and are wider than the amounts
+    /// under them: `Period 1` to `Period 4` over seven-character amounts (`112,345`), two-character
+    /// amounts and nil dashes. Each label starts more than the threshold left of the long amounts,
+    /// so it forms a header-only track, and the long amounts' left edges sit nearer that track than
+    /// the short amounts'.
+    #[cfg(feature = "pdf")]
+    fn wide_label_table_words() -> Vec<crate::table_core::HocrWord> {
+        const CHAR_WIDTH: u32 = 15;
+        const HEIGHT: u32 = 25;
+        const RIGHT_EDGES: [u32; 4] = [700, 920, 1140, 1360];
+        let row_top = |row: u32| 200 + row * 45;
+        let right_aligned = |right: u32, row: u32, text: &str| {
+            let width = CHAR_WIDTH * text.chars().count() as u32;
+            word_at(right - width, row_top(row), width, HEIGHT, text)
+        };
+        let mut words = vec![word_at(100, row_top(0), 60, HEIGHT, "Item")];
+        for (period, right) in RIGHT_EDGES.into_iter().enumerate() {
+            words.push(word_at(
+                right - 165,
+                row_top(0),
+                165,
+                HEIGHT,
+                &format!("Period {}", period + 1),
+            ));
+        }
+        let long = [
+            "112,345", "120,118", "131,902", "147,260", "158,431", "163,077", "171,594", "186,213",
+        ];
+        for row in 1..=12u32 {
+            words.push(word_at(100, row_top(row), 60, HEIGHT, "Item"));
+            words.push(word_at(170, row_top(row), CHAR_WIDTH * 2, HEIGHT, &row.to_string()));
+            for (column, right) in RIGHT_EDGES.into_iter().enumerate() {
+                let text = match row {
+                    3 => "85".to_string(),
+                    9 => "40".to_string(),
+                    6 | 12 => "-".to_string(),
+                    _ => long[(row as usize + column) % long.len()].to_string(),
+                };
+                words.push(right_aligned(right, row, &text));
+            }
+        }
+        words
+    }
+
+    /// A header label wider than its amounts formed a header-only track that never folded, the
+    /// column's long amounts followed its left edge, the short amounts were left in a headerless
+    /// track that failed the sparse-column check, and the whole table was dropped.
+    ///
+    /// TEST HONESTY: without the fix the grid has 9 columns for 5 on the page and is rejected.
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn a_header_label_wider_than_its_amounts_keeps_the_table() {
+        let (grid, kept) = ocr_route_table(&wide_label_table_words());
+        let kept = kept.unwrap_or_else(|| {
+            panic!(
+                "the table is dropped; its grid has {} columns for 5 on the page: {grid:?}",
+                grid[0].len()
+            )
+        });
+        assert_eq!(grid[0].len(), 5, "one column per label: {grid:?}");
+        for value in [
+            "112,345", "120,118", "131,902", "147,260", "158,431", "163,077", "171,594", "186,213", "85", "40",
+        ] {
+            assert!(
+                kept.iter().flatten().any(|cell| cell.contains(value)),
+                "value {value} is lost: {kept:?}"
+            );
+        }
+        for period in ["Period 1", "Period 2", "Period 3", "Period 4"] {
+            assert!(
+                kept[0].iter().any(|cell| cell == period),
+                "header {period} is not in the header row: {:?}",
+                kept[0]
+            );
+        }
+    }
+
     /// The OCR table route on `words`: the region's cleaned grid, then the table cleanup that
     /// keeps or rejects it.
     #[cfg(feature = "pdf")]

@@ -106,7 +106,10 @@ pub(crate) fn is_cell_value_text(text: &str) -> bool {
 /// decided against.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ColumnTrack {
-    /// Median left edge of the column's tokens, and the leftmost of them once tracks are folded.
+    /// Median left edge of the column's tokens, and the leftmost of them once tracks are folded. A
+    /// header-only track folded in does not move it: the position is where the data sits, not
+    /// where the header text lands, and downstream geometry (the OCR blank-quantity retry's crop
+    /// bounds) reads it as the data column's left edge.
     ///
     /// This, and only this, is what [`reconstruct_table_with_columns`] reports: every downstream
     /// consumer of a column position — the OCR blank-quantity retry's crop bounds, the native-PDF
@@ -119,6 +122,15 @@ pub(crate) struct ColumnTrack {
     /// what makes it eligible to fold into an adjacent value column. Header-band tokens are not
     /// read: a column's header label is text by nature. See [`column_track`].
     right_aligned: bool,
+    /// Whether the column holds a token below the header band. A track without one is a header
+    /// label on its own: it folds into the value column whose right edge it shares, whatever its
+    /// label reads, unless that column has a label of its own in the same row. See
+    /// [`fold_right_aligned_tracks`].
+    has_data: bool,
+    /// The header-band rows in which the column holds a token, of every track it was folded from.
+    /// Two labels in one row are two columns, so a header-only track never folds into a column
+    /// that holds a label in the same row.
+    label_rows: Vec<usize>,
     /// The median left edge of each track this column was folded from, one entry when it was not
     /// folded at all.
     ///
@@ -147,6 +159,8 @@ impl ColumnTrack {
             left,
             right: left,
             right_aligned: false,
+            has_data: true,
+            label_rows: Vec::new(),
             lefts: vec![left],
             number_rows: Vec::new(),
         }
@@ -336,13 +350,20 @@ fn reads_as_values(group: &[&HocrWord], row_positions: &[u32], header_rows: usiz
 /// The fold test reads the data tokens only. A header label sits on the left edge of the values it
 /// labels, so it joins one of their left-edge groups, and reading its text as well would stop that
 /// group from folding with the rest of its column. A group with no data token is a header-only
-/// track: it folds only when its label is a value, such as a year (xberg-io/xberg#1909). ~keep
+/// track (`has_data` false): a label wider than the values under it starts more than the threshold
+/// left of them and forms one (xberg-io/xberg#1909). ~keep
 fn column_track(group: &[&HocrWord], row_positions: &[u32], header_rows: usize) -> ColumnTrack {
     let left = median_of(group.iter().map(|word| word.left).collect());
+    let (header, data) = split_header_band(group, row_positions, header_rows);
     ColumnTrack {
         left,
         right: median_of(group.iter().map(|word| right_edge(word)).collect()),
         right_aligned: reads_as_values(group, row_positions, header_rows),
+        has_data: !data.is_empty(),
+        label_rows: header
+            .iter()
+            .filter_map(|word| find_row_index(row_positions, word))
+            .collect(),
         lefts: vec![left],
         number_rows: number_rows(group.iter().copied(), row_positions),
     }
@@ -371,24 +392,43 @@ fn number_rows<'a>(words: impl IntoIterator<Item = &'a HocrWord>, row_positions:
 ///
 /// Raising `column_threshold` is not the alternative — it merges genuinely narrow neighbouring
 /// columns (the GH#1649 `DEPOSIT` case). Both sides must read as values in their data rows (see
-/// [`reads_as_values`]), so a text column is never folded. A header-only track with a text label
-/// never folds either, which keeps it for the header-fragment merge; a header word clustered with
-/// data values does not stop them folding (see [`column_track`]). Two tracks that each hold a
-/// number in one row are two columns, such as a code column next to a quantity column, and never
-/// fold (see [`ColumnTrack::number_rows`]). A rule mark or nil dash beside a value does not count:
-/// it holds no digit. ~keep
+/// [`reads_as_values`]), so a text column is never folded. A header-only track folds into a value
+/// column whose right edge it shares whatever its label reads: a right-aligned label ends where
+/// the values it labels end. Without that, a label wider than its values, such as a period written
+/// as letters and digits, keeps a column of its own, and the column's long amounts, whose left
+/// edges sit nearer the label's, follow it out of their column (xberg-io/xberg#1909). It does not
+/// fold into a value column that has a label of its own in the same row: two labels side by side
+/// head two columns, such as an empty note column beside a quantity column, and folding them
+/// would put both labels in one cell (see [`ColumnTrack::label_rows`]). A header word clustered
+/// with data values does not stop them folding either (see [`column_track`]). Two tracks that
+/// each hold a number in one row are two columns, such as a code column next to a quantity
+/// column, and never fold (see [`ColumnTrack::number_rows`]). A rule mark or nil dash beside a
+/// value does not count: it holds no digit. ~keep
 fn fold_right_aligned_tracks(columns: &mut Vec<ColumnTrack>, column_threshold: u32) {
     let mut index = 0;
     while index + 1 < columns.len() {
-        let foldable = columns[index].right_aligned
-            && columns[index + 1].right_aligned
-            && columns[index].right.abs_diff(columns[index + 1].right) <= column_threshold
-            && !share_a_number_row(&columns[index], &columns[index + 1]);
+        let (current, next) = (&columns[index], &columns[index + 1]);
+        let values_meet = current.right_aligned && next.right_aligned;
+        let label_meets_values = ((!current.has_data && next.right_aligned)
+            || (current.right_aligned && !next.has_data))
+            && !share_a_label_row(current, next);
+        let foldable = (values_meet || label_meets_values)
+            && current.right.abs_diff(next.right) <= column_threshold
+            && !share_a_number_row(current, next);
         if foldable {
             let next = columns.remove(index + 1);
             let current = &mut columns[index];
-            current.left = current.left.min(next.left);
+            // The folded column is the kind of the track that holds its data, and sits where that
+            // data sits (see [`ColumnTrack::left`]).
+            (current.left, current.right_aligned) = match (current.has_data, next.has_data) {
+                (true, true) => (current.left.min(next.left), current.right_aligned),
+                (true, false) => (current.left, current.right_aligned),
+                (false, true) => (next.left, next.right_aligned),
+                (false, false) => (current.left.min(next.left), current.right_aligned || next.right_aligned),
+            };
             current.right = current.right.max(next.right);
+            current.has_data |= next.has_data;
+            current.label_rows.extend(next.label_rows);
             current.lefts.extend(next.lefts);
             current.number_rows.extend(next.number_rows);
         } else {
@@ -400,6 +440,11 @@ fn fold_right_aligned_tracks(columns: &mut Vec<ColumnTrack>, column_threshold: u
 /// Whether `left` and `right` both hold a number in some row.
 fn share_a_number_row(left: &ColumnTrack, right: &ColumnTrack) -> bool {
     left.number_rows.iter().any(|row| right.number_rows.contains(row))
+}
+
+/// Whether `left` and `right` both hold a header-band token in some row.
+fn share_a_label_row(left: &ColumnTrack, right: &ColumnTrack) -> bool {
+    left.label_rows.iter().any(|row| right.label_rows.contains(row))
 }
 
 /// Compute the median word height. Returns 0 for an empty slice.
@@ -3446,6 +3491,168 @@ mod tests {
                 vec!["C".to_string(), "5".to_string(), "17,382,649".to_string()],
             ]
         );
+    }
+
+    /// A header label that reads as text, such as a period written as letters and digits, is often
+    /// wider than the amounts under it: it starts more than the threshold left of every amount and
+    /// forms a header-only track. Its right edge is the column's right edge, so it folds with the
+    /// column whatever its text reads. Without that, the label keeps a column of its own, and the
+    /// long amounts, whose left edges sit nearer the label's than the short amount's, follow it.
+    ///
+    /// TEST HONESTY: without the fix the grid has three value columns for one: the label over the
+    /// long amounts, and `5` in a column of its own, `["B", "", "5"]`.
+    #[test]
+    fn a_text_header_label_on_its_own_track_folds_with_its_amount_column() {
+        let words = vec![
+            word("Item", 0, 0, 60, 20),
+            word("Period 1", 400, 0, 100, 20),
+            word("A", 0, 60, 60, 20),
+            word("12,345,678", 330, 60, 170, 20),
+            word("B", 0, 120, 60, 20),
+            word("5", 485, 120, 15, 20),
+            word("C", 0, 180, 60, 20),
+            word("40,218,965", 330, 180, 170, 20),
+        ];
+
+        let table = reconstruct_table(&words, 50, 0.5);
+
+        assert_eq!(
+            table,
+            vec![
+                vec!["Item".to_string(), "Period 1".to_string()],
+                vec!["A".to_string(), "12,345,678".to_string()],
+                vec!["B".to_string(), "5".to_string()],
+                vec!["C".to_string(), "40,218,965".to_string()],
+            ]
+        );
+    }
+
+    /// Control: a header-only track folds only with a value column whose right edge it shares. A
+    /// label whose right edge is its own, here over a column with no data at all, keeps its
+    /// column, with or without the fold of a wider label.
+    #[test]
+    fn a_header_label_with_its_own_right_edge_keeps_its_column() {
+        let words = vec![
+            word("Item", 0, 0, 60, 20),
+            word("Note", 250, 0, 60, 20),
+            word("Amt", 455, 0, 45, 20),
+            word("A", 0, 60, 60, 20),
+            word("12,345,678", 330, 60, 170, 20),
+            word("B", 0, 120, 60, 20),
+            word("5", 485, 120, 15, 20),
+        ];
+
+        let table = reconstruct_table(&words, 50, 0.5);
+
+        assert_eq!(
+            table,
+            vec![
+                vec!["Item".to_string(), "Note".to_string(), "Amt".to_string()],
+                vec!["A".to_string(), String::new(), "12,345,678".to_string()],
+                vec!["B".to_string(), String::new(), "5".to_string()],
+            ]
+        );
+    }
+
+    /// A header-only track whose right edge meets a value column's still heads a column of its own
+    /// when that value column has a label in the same row: two labels side by side are two
+    /// columns. Here an empty `Notes` column ends just left of a narrow `Qty` column, and an empty
+    /// `Note` column starts just right of a wide `Amount` column. Each gap is wider than a word
+    /// space, so the two labels stay two cell tokens.
+    ///
+    /// TEST HONESTY: when the fold ignores the value column's own label, each pair shares one
+    /// cell, `Notes Qty` and `Amount Note`, and the empty column is gone.
+    #[test]
+    fn a_header_only_label_beside_a_labelled_value_column_keeps_its_column() {
+        let notes_left_of_quantities = vec![
+            word("Item", 0, 0, 60, 20),
+            word("Notes", 370, 0, 80, 20),
+            word("Qty", 470, 0, 30, 20),
+            word("A", 0, 60, 60, 20),
+            word("5", 485, 60, 15, 20),
+            word("B", 0, 120, 60, 20),
+            word("7", 485, 120, 15, 20),
+            word("C", 0, 180, 60, 20),
+            word("12", 470, 180, 30, 20),
+        ];
+        let note_right_of_amounts = vec![
+            word("Item", 0, 0, 60, 20),
+            word("Amount", 380, 0, 120, 20),
+            word("Note", 520, 0, 30, 20),
+            word("A", 0, 60, 60, 20),
+            word("12,345", 400, 60, 100, 20),
+            word("B", 0, 120, 60, 20),
+            word("40,218", 400, 120, 100, 20),
+        ];
+
+        assert_eq!(
+            reconstruct_table(&notes_left_of_quantities, 50, 0.5)[0],
+            vec!["Item", "Notes", "Qty"]
+        );
+        assert_eq!(
+            reconstruct_table(&note_right_of_amounts, 50, 0.5)[0],
+            vec!["Item", "Amount", "Note"]
+        );
+    }
+
+    /// A header-only track that has folded into its value column still counts as that column's
+    /// label. A second header-only label to its right, in the same row, keeps a column of its own:
+    /// `Period 1` folds with the amounts it ends with, and `Note` stays a column beside it. The gap
+    /// between the two labels is wider than a word space, so they stay two cell tokens.
+    ///
+    /// TEST HONESTY: when the folded column forgets the label it took in, `Note` folds into it as
+    /// well and the header reads `Period 1 Note`.
+    #[test]
+    fn a_folded_label_keeps_a_neighbouring_label_in_its_own_column() {
+        let words = vec![
+            word("Item", 0, 0, 60, 20),
+            word("Period 1", 400, 0, 100, 20),
+            word("Note", 520, 0, 30, 20),
+            word("A", 0, 60, 60, 20),
+            word("12,345,678", 330, 60, 170, 20),
+            word("B", 0, 120, 60, 20),
+            word("1,234", 425, 120, 75, 20),
+            word("C", 0, 180, 60, 20),
+            word("40,218,965", 330, 180, 170, 20),
+        ];
+
+        let table = reconstruct_table(&words, 50, 0.5);
+
+        assert_eq!(
+            table,
+            vec![
+                vec!["Item".to_string(), "Period 1".to_string(), "Note".to_string()],
+                vec!["A".to_string(), "12,345,678".to_string(), String::new()],
+                vec!["B".to_string(), "1,234".to_string(), String::new()],
+                vec!["C".to_string(), "40,218,965".to_string(), String::new()],
+            ]
+        );
+    }
+
+    /// The position a folded column reports is the left edge of its data, whatever folds after the
+    /// header-only label. Here a label starts left of the long amounts it heads, folds with them,
+    /// and the short amounts then fold in by their right edge: the column stays at the long
+    /// amounts' left edge, where the OCR blank-quantity retry crops.
+    ///
+    /// TEST HONESTY: when the folded column forgets that it holds data, the second fold reads it
+    /// as a header-only track and moves the column to the short amounts' left edge, 485.
+    #[test]
+    fn a_folded_label_column_keeps_the_position_of_its_long_amounts() {
+        let words = vec![
+            word("Item", 0, 0, 60, 20),
+            word("Period 1", 270, 0, 230, 20),
+            word("A", 0, 60, 60, 20),
+            word("12,345,678", 330, 60, 170, 20),
+            word("B", 0, 120, 60, 20),
+            word("5", 485, 120, 15, 20),
+            word("C", 0, 180, 60, 20),
+            word("40,218,965", 330, 180, 170, 20),
+        ];
+
+        let (table, positions) = reconstruct_table_with_columns(&words, 50, 0.5);
+
+        assert_eq!(table[0], vec!["Item".to_string(), "Period 1".to_string()]);
+        assert_eq!(positions, vec![0, 330]);
     }
 
     /// xberg-io/xberg#1909: a header label that reads as a value, such as a year, can start more
