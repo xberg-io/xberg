@@ -287,6 +287,38 @@ jobs:
         with:
           distribution: temurin
           java-version: "25"
+      # Poly delegates Java formatting to the executables on PATH. Pin the same formatter chain
+      # used for the committed Alef output; google-java-format alone is insufficient because Poly
+      # 0.28.0 still applies the enabled clang-format catalog tool to Java despite its `files` glob.
+      # LLVM 18 and 23 disagree on eight generated declarations. ~keep
+      - name: Install Java formatter chain
+        env:
+          GOOGLE_JAVA_FORMAT_VERSION: "1.36.1"
+          GOOGLE_JAVA_FORMAT_SHA256: "25b400f003089d23cc5320cdaf1a16cabee19b8aa3434d0ff021b3d9f42154b4"
+          CLANG_FORMAT_VERSION: "23.1.1"
+        run: |
+          set -euo pipefail
+          install_dir="$RUNNER_TEMP/google-java-format"
+          mkdir -p "$install_dir/bin"
+          jar="$install_dir/google-java-format-${GOOGLE_JAVA_FORMAT_VERSION}-all-deps.jar"
+          curl --fail --location --silent --show-error \
+            "https://github.com/google/google-java-format/releases/download/v${GOOGLE_JAVA_FORMAT_VERSION}/google-java-format-${GOOGLE_JAVA_FORMAT_VERSION}-all-deps.jar" \
+            --output "$jar"
+          echo "${GOOGLE_JAVA_FORMAT_SHA256}  ${jar}" | sha256sum --check --strict
+          printf '#!/usr/bin/env bash\nexec java -jar %q "$@"\n' "$jar" >"$install_dir/bin/google-java-format"
+          chmod +x "$install_dir/bin/google-java-format"
+          echo "$install_dir/bin" >>"$GITHUB_PATH"
+          "$install_dir/bin/google-java-format" --version
+          clang_venv="$RUNNER_TEMP/clang-format"
+          python3 -m venv "$clang_venv"
+          "$clang_venv/bin/pip" install \
+            --disable-pip-version-check \
+            --no-cache-dir \
+            --no-deps \
+            --only-binary=:all: \
+            "clang-format==${CLANG_FORMAT_VERSION}"
+          echo "$clang_venv/bin" >>"$GITHUB_PATH"
+          "$clang_venv/bin/clang-format" --version
       - name: Install poly
         uses: Goldziher/poly@27da2cd18de12af901865b3096ad795302f60bc5
       # `alef verify` (aliased as `task alef:verify`) is a purpose-built freshness
