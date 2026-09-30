@@ -1290,7 +1290,7 @@ fn detect_mime_type_from_file_content(
             .metadata()
             .ok()
             .is_some_and(|metadata| metadata.len() > bytes_read as u64);
-    let json_candidate = header_may_start_json(file, header, content_continues);
+    let json_candidate = bounded_content_may_be_json(file, header, content_continues);
     let mut from_magic = match detect_mime_type_from_bytes_with_inspection(header, package_inspection) {
         Ok(detected) => detected,
         Err(_) if json_candidate => JSON_MIME_TYPE.to_string(),
@@ -1322,26 +1322,30 @@ fn detect_mime_type_from_file_content(
     Some(from_magic)
 }
 
-fn header_may_start_json(file: &mut std::fs::File, header: &[u8], content_continues: bool) -> bool {
-    if let Some(byte) = header
-        .iter()
-        .copied()
-        .find(|byte| !matches!(byte, b' ' | b'\n' | b'\r' | b'\t'))
-    {
-        return content_continues && matches!(byte, b'{' | b'[');
-    }
-    if !content_continues {
-        return false;
+fn bounded_content_may_be_json(file: &mut std::fs::File, header: &[u8], content_continues: bool) -> bool {
+    let mut probe = Vec::with_capacity(MIME_SNIFF_LENGTH * 2);
+    probe.extend_from_slice(header);
+    if content_continues {
+        let mut continuation = [0_u8; MIME_SNIFF_LENGTH];
+        let bytes_read = file.read(&mut continuation).unwrap_or_default();
+        probe.extend_from_slice(&continuation[..bytes_read]);
+        let _ = file.seek(SeekFrom::Start(header.len() as u64));
     }
 
-    let mut continuation = [0_u8; MIME_SNIFF_LENGTH];
-    let bytes_read = file.read(&mut continuation).unwrap_or_default();
-    let _ = file.seek(SeekFrom::Start(header.len() as u64));
-    continuation[..bytes_read]
+    if !probe
         .iter()
         .copied()
         .find(|byte| !matches!(byte, b' ' | b'\n' | b'\r' | b'\t'))
         .is_some_and(|byte| matches!(byte, b'{' | b'['))
+    {
+        return false;
+    }
+
+    let mut deserializer = serde_json::Deserializer::from_slice(&probe);
+    match serde::de::IgnoredAny::deserialize(&mut deserializer) {
+        Ok(_) => deserializer.end().is_ok(),
+        Err(error) => error.is_eof() && content_continues,
+    }
 }
 
 /// Generic XML signatures cannot distinguish specialized XML vocabularies.
@@ -3016,6 +3020,7 @@ mod tests {
         let split_multibyte = format!("{}{}é\"}}", prefix, "x".repeat(MIME_SNIFF_LENGTH - prefix.len() - 1));
         let cases = [
             format!(r#"{{"payload":"{}"}}"#, "x".repeat(MIME_SNIFF_LENGTH)),
+            format!(r#"["{}"]"#, "x".repeat(MIME_SNIFF_LENGTH * 2)),
             format!("{}{{\"payload\":true}}", " ".repeat(MIME_SNIFF_LENGTH + 1)),
             split_multibyte,
         ];
@@ -3029,6 +3034,32 @@ mod tests {
                 assert_eq!(
                     detected, JSON_MIME_TYPE,
                     "unexpected MIME for case {index} with {policy:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn content_detection_does_not_treat_large_array_like_text_as_json() {
+        use crate::core::config::MimeDetectionPolicy;
+
+        let dir = tempdir().unwrap();
+        let cases = [
+            ("styles.css", "[slot='header'] .logo { margin: 0; }\n".repeat(130)),
+            ("settings.toml", "[database]\nserver = 'localhost'\n".repeat(150)),
+        ];
+
+        for (filename, content) in cases {
+            assert!(content.len() > MIME_SNIFF_LENGTH);
+            let path = dir.path().join(filename);
+            std::fs::write(&path, content).unwrap();
+
+            for policy in [MimeDetectionPolicy::PreferContent, MimeDetectionPolicy::ContentOnly] {
+                let mut file = File::open(&path).unwrap();
+                let detected = detect_or_validate_file(&path, &mut file, None, policy).unwrap();
+                assert_ne!(
+                    detected, JSON_MIME_TYPE,
+                    "unexpected JSON MIME for {filename} with {policy:?}"
                 );
             }
         }
