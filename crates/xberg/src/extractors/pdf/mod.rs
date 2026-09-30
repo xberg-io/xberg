@@ -7565,6 +7565,109 @@ mod tests {
         );
     }
 
+    /// `identity_h_mapping_pdf`'s unmapped text drawn invisibly over an inset scan: a text
+    /// raster covering half the page, like a scanned sheet painted with margins, under an
+    /// unreadable text layer.
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    fn inset_scan_with_unmapped_text_layer_pdf(text: &str) -> Vec<u8> {
+        use lopdf::{Document, Object, Stream, dictionary};
+
+        let mut document =
+            Document::load_mem(&identity_h_mapping_pdf(text, false)).expect("fabricated-provenance fixture must load");
+        let page_id = *document.get_pages().get(&1).expect("fixture has one page");
+        let scan = image::load_from_memory(include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/ocr/lone_quantity_invoice.png"
+        )))
+        .expect("scan fixture must decode")
+        .resize(1275, 1650, image::imageops::FilterType::Triangle)
+        .to_luma8();
+        let (width, height) = scan.dimensions();
+        let image_id = document.add_object(Stream::new(
+            dictionary! {
+                "Type" => "XObject",
+                "Subtype" => "Image",
+                "Width" => width,
+                "Height" => height,
+                "ColorSpace" => "DeviceGray",
+                "BitsPerComponent" => 8,
+            },
+            scan.into_raw(),
+        ));
+
+        // 432 x 559 pt on a Letter page is half its area: an inset scan, not a figure.
+        let mut content = b"q 432 0 0 559 90 116 cm /Scan Do Q\n3 Tr\n".to_vec();
+        content.extend(document.get_page_content(page_id));
+        document
+            .change_page_content(page_id, content)
+            .expect("replace fixture page content");
+        document
+            .get_object_mut(page_id)
+            .and_then(Object::as_dict_mut)
+            .expect("page dictionary")
+            .get_mut(b"Resources")
+            .and_then(Object::as_dict_mut)
+            .expect("page resources")
+            .set("XObject", dictionary! { "Scan" => image_id });
+
+        let mut bytes = Vec::new();
+        document.save_to(&mut bytes).expect("fixture PDF must serialize");
+        bytes
+    }
+
+    /// Block mode is for a page whose unmapped text is what OCR reads. A scan whose text layer
+    /// is unmapped is still a scan, and keeps the segmentation mode a scan gets: block mode
+    /// loses the table reconstruction on a scanned table.
+    #[tokio::test]
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    #[serial]
+    async fn scanned_page_with_unmapped_text_layer_keeps_the_scan_segmentation_mode() {
+        use crate::core::config::{OcrConfig, PageConfig};
+
+        const FABRICATED_NATIVE_TEXT: &str = "synthetic fabricated text layer drawn invisibly over an inset scan so the page is routed by its unmapped characters";
+        let config = ExtractionConfig {
+            ocr: Some(OcrConfig::default()),
+            pages: Some(PageConfig {
+                extract_pages: true,
+                ..Default::default()
+            }),
+            use_cache: false,
+            ..Default::default()
+        };
+
+        let internal = PdfExtractor::new()
+            .extract_content(
+                &inset_scan_with_unmapped_text_layer_pdf(FABRICATED_NATIVE_TEXT),
+                "application/pdf",
+                &config,
+            )
+            .await
+            .expect("inset scan with an unmapped text layer should extract");
+        let fabricated_text_pages = internal.metadata.format.as_ref().and_then(|format| match format {
+            crate::types::FormatMetadata::Pdf(pdf) => pdf.fabricated_text_pages.clone(),
+            _ => None,
+        });
+        assert_eq!(
+            fabricated_text_pages,
+            Some(vec![1]),
+            "the fixture must be routed by its unmapped text layer"
+        );
+        let entries = internal
+            .metadata
+            .additional
+            .get(crate::ocr_metadata_keys::OCR_PAGE_SEGMENTATION_MODES_METADATA_KEY)
+            .and_then(serde_json::Value::as_array)
+            .expect("the OCR'd page must record its effective segmentation mode");
+
+        assert_eq!(entries.len(), 1, "one OCR'd page: {entries:?}");
+        assert_eq!(entries[0]["page_number"], serde_json::json!(1));
+        assert_ne!(
+            entries[0]["psm"],
+            serde_json::json!(6),
+            "a scan must not take block mode because its text layer is unmapped"
+        );
+    }
+
     #[tokio::test]
     #[cfg(all(feature = "pdf", feature = "ocr"))]
     #[serial]
