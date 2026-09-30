@@ -860,3 +860,37 @@ fn inset_raster_with_more_than_four_hundred_mapped_artifact_glyphs_is_a_figure()
         "visible mapped artifact text still makes an inset raster a figure"
     );
 }
+
+/// A page carries a scan when its rasters cover at least a quarter of it, whatever its text
+/// layer: a whole-page raster, an inset one, one covering exactly a quarter, and an inset one
+/// under twenty lines of mapped text all do; a raster under a quarter of the page and a page without images do not.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn carries_scan_raster_reads_raster_coverage_only() {
+    let page = |coverage: f32, text_lines: usize| {
+        PdfDocument::from_bytes(crate::pdf::render::build_full_page_raster_pdf(
+            (100.0, 100.0),
+            (400, 400),
+            coverage,
+            text_lines,
+        ))
+        .unwrap()
+    };
+    assert!(carries_scan_raster(&page(1.0, 0), 0), "a whole-page raster is a scan");
+    assert!(carries_scan_raster(&page(0.64, 0), 0), "an inset raster is a scan");
+    assert!(
+        carries_scan_raster(&page(0.25, 0), 0),
+        "a raster covering exactly a quarter of the page is a scan"
+    );
+    assert!(
+        carries_scan_raster(&page(0.64, 20), 0),
+        "the text layer does not decide whether the page carries a scan"
+    );
+    assert!(
+        !carries_scan_raster(&page(0.16, 0), 0),
+        "a raster under a quarter of the page is not a scan"
+    );
+
+    let blank = PdfDocument::from_bytes(crate::pdf::render::build_minimal_pdf_with_mediabox(100.0, 100.0)).unwrap();
+    assert!(!carries_scan_raster(&blank, 0), "a page without images carries no scan");
+}
