@@ -1307,6 +1307,12 @@ impl OcrConfig {
                 return None;
             }
 
+            let paddle_ocr_config = self.paddle_ocr_config.clone().or_else(|| {
+                self.tesseract_config
+                    .as_ref()
+                    .is_none_or(|config| config.enable_table_detection)
+                    .then(|| serde_json::json!({ "enable_table_detection": true }))
+            });
             let stages = vec![
                 OcrPipelineStage {
                     backend: self.backend.clone(),
@@ -1326,7 +1332,7 @@ impl OcrConfig {
                     priority: 50,
                     language: None,
                     tesseract_config: None,
-                    paddle_ocr_config: self.paddle_ocr_config.clone(),
+                    paddle_ocr_config,
                     vlm_config: None,
                     backend_options: None,
                 },
@@ -1832,6 +1838,54 @@ mod tests {
         {
             assert!(result.is_none());
         }
+    }
+
+    #[cfg(all(feature = "ocr", paddle_ocr, feature = "pdf"))]
+    #[test]
+    fn should_enable_tables_for_synthesized_paddle_fallback_when_tesseract_tables_are_enabled() {
+        let pipeline = OcrConfig::default()
+            .effective_pipeline()
+            .expect("paddle-ocr feature must produce a pipeline");
+
+        assert_eq!(
+            pipeline.stages[1].paddle_ocr_config,
+            Some(serde_json::json!({"enable_table_detection": true}))
+        );
+    }
+
+    #[cfg(all(feature = "ocr", paddle_ocr, feature = "pdf"))]
+    #[test]
+    fn should_leave_synthesized_paddle_tables_disabled_when_tesseract_tables_are_disabled() {
+        let config = OcrConfig {
+            tesseract_config: Some(crate::types::TesseractConfig {
+                enable_table_detection: false,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let pipeline = config
+            .effective_pipeline()
+            .expect("paddle-ocr feature must produce a pipeline");
+
+        assert_eq!(pipeline.stages[1].paddle_ocr_config, None);
+    }
+
+    #[cfg(all(feature = "ocr", paddle_ocr, feature = "pdf"))]
+    #[test]
+    fn should_preserve_explicit_paddle_table_setting_in_synthesized_fallback() {
+        let paddle_ocr_config = serde_json::json!({
+            "enable_table_detection": false,
+            "model_tier": "server"
+        });
+        let config = OcrConfig {
+            paddle_ocr_config: Some(paddle_ocr_config.clone()),
+            ..Default::default()
+        };
+        let pipeline = config
+            .effective_pipeline()
+            .expect("paddle-ocr feature must produce a pipeline");
+
+        assert_eq!(pipeline.stages[1].paddle_ocr_config, Some(paddle_ocr_config));
     }
 
     #[cfg(all(feature = "ocr", feature = "pdf"))]
