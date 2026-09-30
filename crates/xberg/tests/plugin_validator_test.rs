@@ -235,6 +235,13 @@ impl Validator for TrackingValidator {
     }
 }
 
+fn uncached_config() -> ExtractionConfig {
+    ExtractionConfig {
+        use_cache: false,
+        ..Default::default()
+    }
+}
+
 #[test]
 #[serial]
 fn test_register_custom_validator() {
@@ -297,7 +304,7 @@ fn test_validator_called_during_extraction() {
             .expect("Operation failed");
     }
 
-    let config = ExtractionConfig::default();
+    let config = uncached_config();
     let result = extract_uri_document_blocking(test_file, None, &config);
 
     assert!(result.is_ok(), "Extraction failed: {:?}", result.err());
@@ -336,7 +343,7 @@ fn test_validator_can_reject_invalid_input() {
         reg.register(validator as Arc<dyn Validator>).expect("Operation failed");
     }
 
-    let config = ExtractionConfig::default();
+    let config = uncached_config();
     let result = extract_uri_document_blocking(test_file, None, &config);
 
     assert!(result.is_err(), "Expected validation to fail");
@@ -376,7 +383,7 @@ fn test_validator_can_pass_valid_input() {
         reg.register(validator as Arc<dyn Validator>).expect("Operation failed");
     }
 
-    let config = ExtractionConfig::default();
+    let config = uncached_config();
     let result = extract_uri_document_blocking(test_file, None, &config);
 
     assert!(result.is_ok(), "Validation should have passed: {:?}", result.err());
@@ -408,7 +415,7 @@ fn test_validator_receives_correct_parameters() {
         reg.register(validator as Arc<dyn Validator>).expect("Operation failed");
     }
 
-    let config = ExtractionConfig::default();
+    let config = uncached_config();
     let result = extract_uri_document_blocking(test_file, None, &config);
 
     assert!(result.is_ok(), "Validation failed: {:?}", result.err());
@@ -443,7 +450,7 @@ fn test_validator_rejects_wrong_mime_type() {
         reg.register(validator as Arc<dyn Validator>).expect("Operation failed");
     }
 
-    let config = ExtractionConfig::default();
+    let config = uncached_config();
     let result = extract_uri_document_blocking(test_file, None, &config);
 
     assert!(result.is_err(), "Expected MIME type validation to fail");
@@ -494,7 +501,7 @@ fn test_unregister_validator() {
     assert!(!list.contains(&"unregister-test".to_string()));
 
     let test_file = "../../test_documents/text/fake_text.txt";
-    let config = ExtractionConfig::default();
+    let config = uncached_config();
     let result = extract_uri_document_blocking(test_file, None, &config);
 
     assert!(
@@ -547,7 +554,7 @@ fn test_clear_all_validators() {
     assert!(list.is_empty(), "Registry was not cleared");
 
     let test_file = "../../test_documents/text/fake_text.txt";
-    let config = ExtractionConfig::default();
+    let config = uncached_config();
     let result = extract_uri_document_blocking(test_file, None, &config);
 
     assert!(result.is_ok(), "Extraction should succeed after clearing validators");
@@ -657,7 +664,7 @@ fn test_multiple_validators_execution() {
             .expect("Operation failed");
     }
 
-    let config = ExtractionConfig::default();
+    let config = uncached_config();
     let result = extract_uri_document_blocking(test_file, None, &config);
 
     assert!(result.is_ok(), "Both validators should pass");
@@ -698,7 +705,7 @@ fn test_validator_priority_execution_order() {
             .expect("Operation failed");
     }
 
-    let config = ExtractionConfig::default();
+    let config = uncached_config();
     let result = extract_uri_document_blocking(test_file, None, &config);
 
     assert!(result.is_err(), "Expected high-priority validator to fail");
@@ -736,7 +743,7 @@ fn test_validator_always_fails() {
         reg.register(validator as Arc<dyn Validator>).expect("Operation failed");
     }
 
-    let config = ExtractionConfig::default();
+    let config = uncached_config();
     let result = extract_uri_document_blocking(test_file, None, &config);
 
     assert!(result.is_err(), "Validator should always fail");
@@ -780,7 +787,7 @@ fn test_validator_registration_order_preserved_for_same_priority() {
             .expect("Operation failed");
     }
 
-    let config = ExtractionConfig::default();
+    let config = uncached_config();
     let result = extract_uri_document_blocking(test_file, None, &config);
 
     assert!(result.is_err(), "Expected first validator to fail");
