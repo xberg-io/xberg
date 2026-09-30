@@ -1235,7 +1235,7 @@ impl PdfDocument {
         word_gap_threshold: Option<f32>,
         profile: Option<crate::config::ExtractionProfile>,
         include_artifacts: bool,
-    ) -> Result<(Vec<crate::layout::Word>, Vec<bool>)> {
+    ) -> Result<(Vec<crate::layout::Word>, Vec<bool>, Vec<bool>)> {
         use crate::layout::{AdaptiveLayoutParams, DocumentProperties, Word, clustering};
 
         // Span source. The default (no profile) flows through the canonical
@@ -1274,7 +1274,7 @@ impl PdfDocument {
             }
         };
         if spans.is_empty() {
-            return Ok((Vec::new(), Vec::new()));
+            return Ok((Vec::new(), Vec::new(), Vec::new()));
         }
 
         let media_box = self.get_page_media_box(page_index).unwrap_or((0.0, 0.0, 612.0, 792.0));
@@ -1291,7 +1291,7 @@ impl PdfDocument {
             span_char_ranges.push(start..all_chars.len());
         }
         if all_chars.is_empty() {
-            return Ok((Vec::new(), Vec::new()));
+            return Ok((Vec::new(), Vec::new(), Vec::new()));
         }
         let props = DocumentProperties::analyze(&all_chars, page_bbox).map_err(Error::LayoutAnalysis)?;
         let mut params = AdaptiveLayoutParams::from_properties(&props);
@@ -1326,6 +1326,15 @@ impl PdfDocument {
         // must not re-decide a join the merger already made from per-glyph
         // advance evidence. ~keep
         let mut continues_prev: Vec<bool> = Vec::new();
+        // space_before[i]: word i's first glyph is immediately preceded in the
+        // source span by a whitespace character. This is the producer's own word
+        // boundary, and it outranks the geometric merge below: a space whose
+        // glyphs happen to abut or overlap their neighbours (a tight Times face at
+        // 7.83 pt in GH#1948) has a gap of zero or less, which the merge would
+        // otherwise read as "one word" and fuse. Kept parallel to `words`,
+        // surviving the merge loop, and consumed by the table path, which must
+        // re-emit the source space even when the two words' boxes touch. ~keep
+        let mut space_before: Vec<bool> = Vec::new();
         for (span_idx, span) in spans.iter().enumerate() {
             let span_chars = &all_chars[span_char_ranges[span_idx].clone()];
             if span_chars.is_empty() {
@@ -1348,6 +1357,16 @@ impl PdfDocument {
             // follows the first's highest — a dropped whitespace char (or a
             // glyph of another word) in between would occupy that index. ~keep
             let mut word_src_ranges: Vec<(usize, usize)> = Vec::new();
+            // Whether a word's first glyph is preceded by source whitespace; see
+            // `space_before`. Read from the span's own character stream so the
+            // marker reflects source order even when the clustering below visited
+            // the glyphs in a different (x-sorted) order. ~keep
+            let preceded_by_space = |lo: usize| {
+                lo > 0 && {
+                    let prev = span_chars[lo - 1].char;
+                    prev.is_whitespace() || prev == '\n' || prev == '\r'
+                }
+            };
             for cluster_indices in clusters {
                 let mut current_word_chars = Vec::new();
                 let mut src_lo = usize::MAX;
@@ -1360,6 +1379,7 @@ impl PdfDocument {
                             word.sequence = span.sequence;
                             words.push(word);
                             continues_prev.push(false);
+                            space_before.push(preceded_by_space(src_lo));
                             word_src_ranges.push((src_lo, src_hi));
                             src_lo = usize::MAX;
                             src_hi = 0;
@@ -1375,6 +1395,7 @@ impl PdfDocument {
                     word.sequence = span.sequence;
                     words.push(word);
                     continues_prev.push(false);
+                    space_before.push(preceded_by_space(src_lo));
                     word_src_ranges.push((src_lo, src_hi));
                 }
             }
@@ -1444,12 +1465,16 @@ impl PdfDocument {
         // incrementally instead. ~keep
         let mut merged_rtl: Vec<bool> = Vec::with_capacity(words.len());
         let mut merged_continues: Vec<bool> = Vec::with_capacity(words.len());
+        let mut merged_space_before: Vec<bool> = Vec::with_capacity(words.len());
         let mut prev_rotated = false;
-        for (idx, (word, word_continues)) in words.into_iter().zip(continues_prev).enumerate() {
+        for (idx, ((word, word_continues), word_space_before)) in
+            words.into_iter().zip(continues_prev).zip(space_before).enumerate()
+        {
             let cur_rotated = rotated_word_indices.contains(&idx);
             let word_rtl = crate::text::bidi::looks_rtl(&word.text);
             if !cur_rotated
                 && !prev_rotated
+                && !word_space_before
                 && !split_boundary_word_indices.contains(&idx)
                 && let Some(prev) = merged.last_mut()
             {
@@ -1487,10 +1512,11 @@ impl PdfDocument {
             merged.push(word);
             merged_rtl.push(word_rtl);
             merged_continues.push(word_continues);
+            merged_space_before.push(word_space_before);
             prev_rotated = cur_rotated;
         }
 
-        Ok((merged, merged_continues))
+        Ok((merged, merged_continues, merged_space_before))
     }
 
     /// Extract text lines from a page.
