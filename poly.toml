@@ -1153,7 +1153,7 @@ root = "packages/elixir"
 "crates/xberg-paddle-ocr/src/ocr_lite.rs" = ["too-many-parameters"]
 "crates/xberg/src/late_interaction/mod.rs" = ["too-many-parameters"]
 "crates/xberg/src/sparse_embeddings/mod.rs" = ["too-many-parameters"]
-"crates/xberg/src/transcription/engine.rs" = ["function-too-long"]
+"crates/xberg/src/transcription/engine.rs" = ["file-too-long", "function-too-long"]
 "crates/xberg/src/types/document_structure/tests.rs" = ["function-too-long"]
 "crates/xberg/src/types/internal/tests.rs" = ["function-too-long"]
 

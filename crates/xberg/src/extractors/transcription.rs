@@ -13,7 +13,7 @@ use std::sync::{Arc, LazyLock, Mutex};
 use crate::core::config::ExtractionConfig;
 use crate::plugins::{InternalDocumentExtractor, Plugin};
 use crate::transcription::decode::{PcmAudio, decode_audio_to_pcm};
-use crate::transcription::engine::WhisperEngine;
+use crate::transcription::engine::{TranscriptionWindowWarning, WhisperEngine};
 use crate::transcription::model::{WhisperModelPaths, ensure_whisper_model};
 use crate::transcription::tags::AudioTags;
 use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
@@ -60,6 +60,22 @@ fn push_transcript_elements(doc: &mut InternalDocument, segments: &[(u32, u32, S
         .join(" ");
     if !joined.is_empty() {
         doc.push_element(InternalElement::text(ElementKind::Paragraph, &joined, 0));
+    }
+}
+
+/// Surface each skipped 30-second window as a document-level warning, so a
+/// caller sees that part of the recording could not be transcribed instead of
+/// silently receiving a shortened transcript (GH#1944).
+fn push_transcription_warnings(doc: &mut InternalDocument, warnings: &[TranscriptionWindowWarning]) {
+    for warning in warnings {
+        doc.processing_warnings.push(crate::types::ProcessingWarning {
+            source: "transcription".into(),
+            message: format!(
+                "Whisper could not decode the {}..{} ms window; it was skipped and its text is missing: {}",
+                warning.start_ms, warning.end_ms, warning.message
+            )
+            .into(),
+        });
     }
 }
 
@@ -206,12 +222,13 @@ async fn run_transcription_pipeline(
     let timestamps = tcfg.timestamps;
     let engine_for_task = Arc::clone(&engine);
 
-    let segments = transcribe_holding_permit(TRANSCRIPTION_SEMAPHORE.clone(), move || {
-        engine_for_task.transcribe_segments(&pcm_clone, lang_clone.as_deref(), timestamps)
+    let (segments, warnings) = transcribe_holding_permit(TRANSCRIPTION_SEMAPHORE.clone(), move || {
+        engine_for_task.transcribe_segments_with_warnings(&pcm_clone, lang_clone.as_deref(), timestamps)
     })
     .await?;
 
     let mut doc = build_audio_document(tags, &pcm, mime_type);
+    push_transcription_warnings(&mut doc, &warnings);
     push_transcript_elements(&mut doc, &segments, tcfg.timestamps);
     Ok(doc)
 }
@@ -341,11 +358,12 @@ impl TranscriptionExtractor {
 
         let engine = get_or_build_engine(&paths)?;
 
-        let segments = engine
-            .transcribe_segments(&pcm, tcfg.language.as_deref(), tcfg.timestamps)
+        let (segments, warnings) = engine
+            .transcribe_segments_with_warnings(&pcm, tcfg.language.as_deref(), tcfg.timestamps)
             .map_err(|e| XbergError::transcription(format!("whisper inference failed: {e}")))?;
 
         let mut doc = build_audio_document(tags, &pcm, mime_type);
+        push_transcription_warnings(&mut doc, &warnings);
         push_transcript_elements(&mut doc, &segments, tcfg.timestamps);
         Ok(doc)
     }
