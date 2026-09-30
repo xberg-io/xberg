@@ -274,13 +274,16 @@ jobs:
         # lint warnings into build errors, which has no bearing on this repo. ~keep
         env:
           RUSTFLAGS: ""
+      # Generated Markdown and Rust bindings are committed after the same Poly formatting
+      # pass used by `task alef:generate`. Alef verifies the formatted render when Poly is
+      # available; without it this job compared raw backend output and reported false drift. ~keep
+      - name: Install poly
+        uses: Goldziher/poly@27da2cd18de12af901865b3096ad795302f60bc5
       # `alef verify` (aliased as `task alef:verify`) is a purpose-built freshness
       # check: it recomputes each generated file's expected hash from the current
-      # Rust source and compares it to what's committed, without writing any files
-      # or running poly's post-generation formatters. That sidesteps the
-      # git-diff-after-regen trap the e2e freshness check uses (`task e2e:verify`),
-      # where formatter-only reflow of freshly generated output would show up as a
-      # spurious diff. Never run `alef all --clean` here -- `alef generate --lang X`
+      # Rust source, applies the configured formatter to the in-memory render, and
+      # compares it to what's committed without writing files. Never run
+      # `alef all --clean` here -- `alef generate --lang X`
       # deletes every other language's output, and even the safe `alef all` variant
       # means a full 15-language regen (minutes, not the sub-second cost of verify).
       # Blocking as of the b1c7c2a328 regen, which cleared the crates/xberg-node
