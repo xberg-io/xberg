@@ -1235,7 +1235,7 @@ impl PdfDocument {
         word_gap_threshold: Option<f32>,
         profile: Option<crate::config::ExtractionProfile>,
         include_artifacts: bool,
-    ) -> Result<(Vec<crate::layout::Word>, Vec<bool>)> {
+    ) -> Result<(Vec<crate::layout::Word>, Vec<bool>, Vec<bool>)> {
         use crate::layout::{AdaptiveLayoutParams, DocumentProperties, Word, clustering};
 
         // Span source. The default (no profile) flows through the canonical
@@ -1274,7 +1274,7 @@ impl PdfDocument {
             }
         };
         if spans.is_empty() {
-            return Ok((Vec::new(), Vec::new()));
+            return Ok((Vec::new(), Vec::new(), Vec::new()));
         }
 
         let media_box = self.get_page_media_box(page_index).unwrap_or((0.0, 0.0, 612.0, 792.0));
@@ -1291,7 +1291,7 @@ impl PdfDocument {
             span_char_ranges.push(start..all_chars.len());
         }
         if all_chars.is_empty() {
-            return Ok((Vec::new(), Vec::new()));
+            return Ok((Vec::new(), Vec::new(), Vec::new()));
         }
         let props = DocumentProperties::analyze(&all_chars, page_bbox).map_err(Error::LayoutAnalysis)?;
         let mut params = AdaptiveLayoutParams::from_properties(&props);
@@ -1465,13 +1465,16 @@ impl PdfDocument {
         // incrementally instead. ~keep
         let mut merged_rtl: Vec<bool> = Vec::with_capacity(words.len());
         let mut merged_continues: Vec<bool> = Vec::with_capacity(words.len());
+        let mut merged_space_before: Vec<bool> = Vec::with_capacity(words.len());
         let mut prev_rotated = false;
-        for (idx, (word, word_continues)) in words.into_iter().zip(continues_prev).enumerate() {
+        for (idx, ((word, word_continues), word_space_before)) in
+            words.into_iter().zip(continues_prev).zip(space_before).enumerate()
+        {
             let cur_rotated = rotated_word_indices.contains(&idx);
             let word_rtl = crate::text::bidi::looks_rtl(&word.text);
             if !cur_rotated
                 && !prev_rotated
-                && !space_before[idx]
+                && !word_space_before
                 && !split_boundary_word_indices.contains(&idx)
                 && let Some(prev) = merged.last_mut()
             {
@@ -1509,10 +1512,11 @@ impl PdfDocument {
             merged.push(word);
             merged_rtl.push(word_rtl);
             merged_continues.push(word_continues);
+            merged_space_before.push(word_space_before);
             prev_rotated = cur_rotated;
         }
 
-        Ok((merged, merged_continues))
+        Ok((merged, merged_continues, merged_space_before))
     }
 
     /// Extract text lines from a page.

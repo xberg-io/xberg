@@ -12,6 +12,12 @@ use super::*;
 /// genuine column jump is many ems wide. See `extract_table_word_spans`. ~keep
 const TABLE_WORD_FUSE_EM: f32 = 1.0;
 
+fn preserve_source_space(text: &mut String, preceded_by_space: bool) {
+    if preceded_by_space {
+        text.insert(0, ' ');
+    }
+}
+
 impl PdfDocument {
     /// Promote labels in rowspan-sparse columns so they sort at the top
     /// of their data-row block instead of landing mid-group.
@@ -412,22 +418,19 @@ impl PdfDocument {
     /// surface as spaces inside a table cell. Re-glue the fragments the
     /// merger marked as boundary-free before handing spans to the detector.
     fn extract_table_word_spans(&self, page_index: usize) -> Result<Vec<crate::layout::TextSpan>> {
-        let (words, continues_prev) = self.extract_words_inner(page_index, None, None, true)?;
+        let (words, continues_prev, space_before) = self.extract_words_inner(page_index, None, None, true)?;
         let mut fused: Vec<crate::layout::Word> = Vec::with_capacity(words.len());
-        let mut prev_sequence: Option<usize> = None;
-        for (word, continues) in words.into_iter().zip(continues_prev) {
+        for ((word, continues), preceded_by_space) in words.into_iter().zip(continues_prev).zip(space_before) {
             let mut word = word;
-            let sequence = word.sequence;
-            // A word that is not a source-continuation of the previous word, yet
-            // shares its source span, was separated from it by a whitespace char.
             // The cell assembler re-decides joins from bbox gaps alone, and on a
             // tight face the space's glyphs abut or overlap their neighbours, so
             // that gap reads as zero or negative and the two words fuse
             // (GH#1948: `corrispettivisuperiori`). Carry the source space in the
-            // word's own text so `cell_span_separator` emits it. ~keep
-            if !continues && prev_sequence == Some(sequence) {
-                word.text.insert(0, ' ');
-            }
+            // word's own text so `cell_span_separator` emits it. Use the exact
+            // source-character marker: a non-continuation can instead mean that
+            // clustering visited glyphs out of source order or skipped a
+            // non-whitespace glyph. ~keep
+            preserve_source_space(&mut word.text, preceded_by_space);
             // Source adjacency says the producer drew these glyphs consecutively;
             // it does not say they are typographically adjacent, so geometry still
             // has a veto on both bounds:
@@ -452,7 +455,6 @@ impl PdfDocument {
                 }
                 _ => fused.push(word),
             }
-            prev_sequence = Some(sequence);
         }
         Ok(fused
             .into_iter()
@@ -929,5 +931,28 @@ impl PdfDocument {
         }
 
         tables
+    }
+}
+
+#[cfg(test)]
+mod source_space_tests {
+    use super::preserve_source_space;
+
+    #[test]
+    fn non_contiguous_source_glyphs_without_whitespace_do_not_gain_a_space() {
+        let mut text = "fragment".to_string();
+
+        preserve_source_space(&mut text, false);
+
+        assert_eq!(text, "fragment");
+    }
+
+    #[test]
+    fn source_whitespace_is_preserved_when_geometry_cannot_show_it() {
+        let mut text = "fragment".to_string();
+
+        preserve_source_space(&mut text, true);
+
+        assert_eq!(text, " fragment");
     }
 }
