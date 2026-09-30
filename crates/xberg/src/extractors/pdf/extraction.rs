@@ -43,6 +43,39 @@ pub(crate) struct AnnotationFallbackTarget<'a> {
     pub(crate) page_config: Option<&'a crate::core::config::PageConfig>,
 }
 
+type TableExtractionResult = (
+    Vec<Table>,
+    Vec<Option<crate::types::TableGrid>>,
+    Option<crate::pdf::native::table::ExtractedHierarchySegments>,
+    Vec<crate::types::ProcessingWarning>,
+);
+
+fn attach_native_table_grids(
+    document: &mut crate::types::internal::InternalDocument,
+    tables: &[Table],
+    grids: &[Option<crate::types::TableGrid>],
+) -> Result<()> {
+    for element in &mut document.elements {
+        let crate::types::internal::ElementKind::Table { table_index } = element.kind else {
+            continue;
+        };
+        let index = table_index as usize;
+        let Some((table, grid)) = tables.get(index).zip(grids.get(index).and_then(Option::as_ref)) else {
+            continue;
+        };
+        if !crate::extraction::derive::native_grid_matches_table(table, grid) {
+            continue;
+        }
+        let encoded = serde_json::to_string(grid)
+            .map_err(|error| crate::XbergError::parsing(format!("Failed to retain native table geometry: {error}")))?;
+        element
+            .attributes
+            .get_or_insert_with(Default::default)
+            .insert(crate::types::internal::NATIVE_TABLE_GRID_ATTRIBUTE.to_string(), encoded);
+    }
+    Ok(())
+}
+
 #[cfg(feature = "layout-detection")]
 fn effective_layout_acceleration<'a>(
     config: &'a ExtractionConfig,
@@ -506,28 +539,29 @@ pub(crate) fn extract_all_from_native_document(
         .pdf_options
         .as_ref()
         .is_some_and(|o| o.allow_single_column_tables);
-    let (tables, mut extracted_hierarchy_segments, table_warnings) = if extract_tables_flag {
+    let (tables, native_table_grids, mut extracted_hierarchy_segments, table_warnings) = if extract_tables_flag {
         crate::pdf::native::guard_native_panic(
-            || -> Result<(
-                Vec<Table>,
-                Option<crate::pdf::native::table::ExtractedHierarchySegments>,
-                Vec<crate::types::ProcessingWarning>,
-            )> {
+            || -> Result<TableExtractionResult> {
                 let mut warnings = Vec::new();
-                let (mut combined, native_warnings) =
+                let (mut extracted_tables, native_warnings) =
                     crate::pdf::native::table::extract_tables_native(&mut doc).unwrap_or_else(|e| {
                         tracing::warn!("xberg_native_pdf native table extraction failed, skipping tables: {e}");
                         (Vec::new(), vec![table_stage_failure_warning("native", &e)])
                     });
                 warnings.extend(native_warnings);
-                let native_pages: std::collections::HashSet<u32> = combined.iter().map(|t| t.page_number).collect();
+                let native_pages: std::collections::HashSet<u32> =
+                    extracted_tables.iter().map(|entry| entry.table.page_number).collect();
                 let (bordered, bordered_warnings) =
                     crate::pdf::native::table::extract_tables_bordered(&mut doc, &native_pages).unwrap_or_else(|e| {
                         tracing::warn!("xberg_native_pdf bordered table extraction failed, skipping tables: {e}");
                         (Vec::new(), vec![table_stage_failure_warning("bordered", &e)])
                     });
-                combined.extend(bordered);
+                extracted_tables.extend(bordered);
                 warnings.extend(bordered_warnings);
+                let (mut combined, mut native_grids): (Vec<_>, Vec<_>) = extracted_tables
+                    .into_iter()
+                    .map(|entry| (entry.table, entry.grid))
+                    .unzip();
                 let covered_pages: std::collections::HashSet<u32> = combined.iter().map(|t| t.page_number).collect();
                 let hierarchy_segments = match crate::pdf::native::table::extract_tables_heuristic(
                     &mut doc,
@@ -535,6 +569,7 @@ pub(crate) fn extract_all_from_native_document(
                     &covered_pages,
                 ) {
                     Ok(extraction) => {
+                        native_grids.resize_with(combined.len() + extraction.tables.len(), || None);
                         combined.extend(extraction.tables);
                         retain_hierarchy_segments.then_some(extraction.hierarchy_segments)
                     }
@@ -552,7 +587,7 @@ pub(crate) fn extract_all_from_native_document(
                 if repaired_tables > 0 {
                     tracing::debug!(repaired_tables, "repaired collapsed PDF table columns");
                 }
-                Ok((combined, hierarchy_segments, warnings))
+                Ok((combined, native_grids, hierarchy_segments, warnings))
             },
             |panic| crate::error::XbergError::Parsing {
                 message: format!("xberg_native_pdf panicked during table extraction: {panic}"),
@@ -561,10 +596,15 @@ pub(crate) fn extract_all_from_native_document(
         )
         .unwrap_or_else(|e| {
             tracing::warn!("xberg_native_pdf table extraction panicked, skipping tables: {e}");
-            (Vec::new(), None, vec![table_stage_failure_warning("whole-document", &e)])
+            (
+                Vec::new(),
+                Vec::new(),
+                None,
+                vec![table_stage_failure_warning("whole-document", &e)],
+            )
         })
     } else {
-        (Vec::new(), None, Vec::new())
+        (Vec::new(), Vec::new(), None, Vec::new())
     };
     extraction_warnings.extend(table_warnings);
 
@@ -762,6 +802,7 @@ pub(crate) fn extract_all_from_native_document(
             },
         ) {
             Ok(mut structured_doc) if !structured_doc.elements.is_empty() => {
+                attach_native_table_grids(&mut structured_doc, &tables, &native_table_grids)?;
                 tracing::debug!(
                     elements = structured_doc.elements.len(),
                     has_headings = structured_doc
