@@ -3083,6 +3083,111 @@ mod tests {
         }
     }
 
+    /// An invented scanned table: a label column and four right-aligned amount columns. Each
+    /// amount column holds long values (`12,345`), short values (`85`) and nil dashes, so its
+    /// tokens' left edges fall into two groups by digit width, and the drift fold has to join
+    /// them back into one column. `junk` replaces the nil dash of `Item 6` in `Column A` with an
+    /// OCR misread that holds a letter. `second_header_row` adds a `Year N` label under each column
+    /// header, as a two-row scanned header band has.
+    #[cfg(feature = "pdf")]
+    fn split_amount_table_words(junk: Option<&str>, second_header_row: bool) -> Vec<crate::table_core::HocrWord> {
+        const CHAR_WIDTH: u32 = 15;
+        const HEIGHT: u32 = 25;
+        const RIGHT_EDGES: [u32; 4] = [700, 920, 1140, 1360];
+        let first_data_row = if second_header_row { 2 } else { 1 };
+        let row_top = |row: u32| 200 + row * 45;
+        let right_aligned = |right: u32, row: u32, text: &str| {
+            let width = CHAR_WIDTH * text.chars().count() as u32;
+            word_at(right - width, row_top(row), width, HEIGHT, text)
+        };
+        let mut words = vec![word_at(100, row_top(0), 60, HEIGHT, "Item")];
+        for (column, right) in ["A", "B", "C", "D"].into_iter().zip(RIGHT_EDGES) {
+            words.push(word_at(right - 115, row_top(0), 90, HEIGHT, "Column"));
+            words.push(right_aligned(right, 0, column));
+            if second_header_row {
+                words.push(word_at(right - 90, row_top(1), 60, HEIGHT, "Year"));
+                words.push(right_aligned(right, 1, &(right / 220 - 2).to_string()));
+            }
+        }
+        let long = [
+            "12,345", "20,118", "31,902", "47,260", "58,431", "63,077", "71,594", "86,213",
+        ];
+        for row in 1..=12u32 {
+            let top = row + first_data_row - 1;
+            words.push(word_at(100, row_top(top), 60, HEIGHT, "Item"));
+            words.push(word_at(170, row_top(top), CHAR_WIDTH * 2, HEIGHT, &row.to_string()));
+            for (column, right) in RIGHT_EDGES.into_iter().enumerate() {
+                let text = match row {
+                    3 => "85".to_string(),
+                    9 => "40".to_string(),
+                    6 if column == 0 => junk.unwrap_or("-").to_string(),
+                    6 | 12 => "-".to_string(),
+                    _ => long[(row as usize + column) % long.len()].to_string(),
+                };
+                words.push(right_aligned(right, top, &text));
+            }
+        }
+        words
+    }
+
+    /// The OCR table route on `words`: the region's cleaned grid, then the table cleanup that
+    /// keeps or rejects it.
+    #[cfg(feature = "pdf")]
+    fn ocr_route_table(words: &[crate::table_core::HocrWord]) -> (Vec<Vec<String>>, Option<Vec<Vec<String>>>) {
+        let (grid, _) = reconstruct_cleaned_table(words, &TesseractConfig::default());
+        let kept = post_process_table(grid.clone(), false, false);
+        (grid, kept)
+    }
+
+    /// xberg-io/xberg#1952: one OCR junk cell with a letter stopped the right-aligned fold, the
+    /// split amount track failed the sparse-column check, and the whole table was dropped.
+    ///
+    /// TEST HONESTY: without the fix the grid has 6 columns for 5 on the page, `Column A` split in
+    /// two with `["Item 6", "", "a", "-", "-", "-"]`, and the table is rejected.
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn issue_1952_split_amount_column_with_one_junk_cell_keeps_the_table() {
+        let (clean_grid, clean) = ocr_route_table(&split_amount_table_words(None, false));
+        assert_eq!(
+            clean_grid[0].len(),
+            5,
+            "control: the fold joins every amount column: {clean_grid:?}"
+        );
+        assert!(clean.is_some(), "control: the clean table is kept: {clean_grid:?}");
+
+        let (grid, kept) = ocr_route_table(&split_amount_table_words(Some("a"), false));
+        assert_table_kept_with_every_value(&grid, kept);
+    }
+
+    /// xberg-io/xberg#1952: the labels of a second header row counted as data tokens, so no
+    /// amount column read as values, none folded, and the table was dropped.
+    ///
+    /// TEST HONESTY: without the fix the grid has 9 columns for 5 on the page and is rejected.
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn issue_1952_split_amount_column_under_a_two_row_header_keeps_the_table() {
+        let (grid, kept) = ocr_route_table(&split_amount_table_words(None, true));
+        assert_table_kept_with_every_value(&grid, kept);
+    }
+
+    #[cfg(feature = "pdf")]
+    fn assert_table_kept_with_every_value(grid: &[Vec<String>], kept: Option<Vec<Vec<String>>>) {
+        let kept = kept.unwrap_or_else(|| {
+            panic!(
+                "the table is dropped; its grid has {} columns for 5 on the page: {grid:?}",
+                grid[0].len()
+            )
+        });
+        for value in [
+            "12,345", "20,118", "31,902", "47,260", "58,431", "63,077", "71,594", "86,213", "85", "40",
+        ] {
+            assert!(
+                kept.iter().flatten().any(|cell| cell.contains(value)),
+                "value {value} is lost: {kept:?}"
+            );
+        }
+    }
+
     /// Builds a grid of `rows * cols` words starting at `(left, top)`, each
     /// cell `40x20` pixels, simulating one table's worth of OCR words.
     fn table_grid_words(left: u32, top: u32, rows: u32, cols: u32) -> Vec<crate::table_core::HocrWord> {

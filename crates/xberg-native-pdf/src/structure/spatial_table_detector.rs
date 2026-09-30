@@ -2515,7 +2515,7 @@ fn build_cells_from_intersections(pts: &[Intersection], h_edges: &[Edge], v_edge
                 };
                 // A neighbouring row separator may end at just one side of a
                 // spanning cell. Find a closing boundary on both sides rather
-                // than abandoning the cell at that one-sided crossing.
+                // than abandoning the cell at that one-sided crossing. ~keep
                 let mut next_yi = None;
                 for (candidate_y, nyi) in ((yi + 1)..ny)
                     .filter(|&nyi| has(xi, nyi) && side_closes(xs[xi], nyi))
@@ -2534,7 +2534,7 @@ fn build_cells_from_intersections(pts: &[Intersection], h_edges: &[Edge], v_edge
                     }
                     // Only skip crossings from a neighbouring cell. A rule
                     // entering this cell is a real internal boundary, even if
-                    // it cannot close at the chosen right edge.
+                    // it cannot close at the chosen right edge. ~keep
                     if h_edges.iter().any(|edge| {
                         (edge.coord - ys[nyi]).abs() <= SNAP_TOL
                             && edge.end > xs[xi] + SNAP_TOL
@@ -4897,7 +4897,7 @@ mod tests {
     #[test]
     fn row_spanning_cell_ignores_a_neighbours_one_sided_crossing() {
         // Left-hand description is split at y=20; its rule stops at x=40.
-        // The alignment cell to its right is a single box from y=0 to y=40.
+        // The alignment cell to its right is a single box from y=0 to y=40. ~keep
         let horizontal = vec![
             Edge {
                 coord: 0.,
