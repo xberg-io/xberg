@@ -16,6 +16,7 @@
 #![cfg(feature = "office")]
 
 use std::io::{Cursor, Write};
+use xberg::SecurityLimits;
 use xberg::core::config::ExtractionConfig;
 use xberg::types::document_structure::{AnnotationKind, NodeContent};
 use xberg::types::uri::UriKind;
@@ -73,6 +74,25 @@ fn odt_bytes_without_content_xml() -> Vec<u8> {
         let stored = FileOptions::<()>::default().compression_method(zip::CompressionMethod::Stored);
         zip.start_file("mimetype", stored).expect("write mimetype");
         zip.write_all(ODT_MIME.as_bytes()).expect("write mimetype body");
+        zip.finish().expect("finish zip");
+    }
+    cursor.into_inner()
+}
+
+fn encrypted_odt_bytes(manifest: &str) -> Vec<u8> {
+    let mut cursor = Cursor::new(Vec::new());
+    {
+        let mut zip = ZipWriter::new(&mut cursor);
+        let stored = FileOptions::<()>::default().compression_method(zip::CompressionMethod::Stored);
+        zip.start_file("mimetype", stored).expect("write mimetype");
+        zip.write_all(ODT_MIME.as_bytes()).expect("write mimetype body");
+
+        let deflated = FileOptions::<()>::default().compression_method(zip::CompressionMethod::Deflated);
+        zip.start_file("META-INF/manifest.xml", deflated)
+            .expect("write manifest");
+        zip.write_all(manifest.as_bytes()).expect("write manifest body");
+        zip.start_file("content.xml", deflated).expect("write content.xml");
+        zip.write_all(&[0xff, 0xfe, 0xfd]).expect("write encrypted content");
         zip.finish().expect("finish zip");
     }
     cursor.into_inner()
@@ -286,7 +306,32 @@ async fn should_extract_text_box_inside_page_anchored_frame_issue_2006() {
 }
 
 #[tokio::test]
-async fn should_report_encrypted_content_as_password_protected_issue_2004() {
+async fn should_reject_nested_text_boxes_beyond_configured_depth() {
+    let body = r#"<draw:frame><draw:text-box>
+        <draw:frame><draw:text-box><text:p>Too deep.</text:p></draw:text-box></draw:frame>
+    </draw:text-box></draw:frame>"#;
+    let bytes = odt_bytes("", body);
+    let config = ExtractionConfig {
+        security_limits: Some(SecurityLimits {
+            max_nesting_depth: 1,
+            max_xml_depth: 1,
+            ..SecurityLimits::default()
+        }),
+        ..ExtractionConfig::default()
+    };
+
+    let err = extract_bytes_document(&bytes, ODT_MIME, &config)
+        .await
+        .expect_err("nested text boxes must respect the configured depth limit");
+
+    assert!(
+        err.to_string().contains("Nesting too deep: 2 levels (max: 1)"),
+        "the recursive frame traversal should consume the shared depth budget: {err}"
+    );
+}
+
+#[tokio::test]
+async fn should_report_encrypted_content_without_decoding_ciphertext_issue_2004() {
     let manifest = r#"<?xml version="1.0" encoding="UTF-8"?>
 <manifest:manifest
     xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0">
@@ -294,39 +339,49 @@ async fn should_report_encrypted_content_as_password_protected_issue_2004() {
     <manifest:encryption-data manifest:checksum-type="SHA1/1K" manifest:checksum="AA=="/>
   </manifest:file-entry>
 </manifest:manifest>"#;
-
-    let mut cursor = Cursor::new(Vec::new());
-    {
-        let mut zip = ZipWriter::new(&mut cursor);
-        let stored = FileOptions::<()>::default().compression_method(zip::CompressionMethod::Stored);
-        zip.start_file("mimetype", stored).expect("write mimetype");
-        zip.write_all(ODT_MIME.as_bytes()).expect("write mimetype body");
-
-        let deflated = FileOptions::<()>::default().compression_method(zip::CompressionMethod::Deflated);
-        zip.start_file("META-INF/manifest.xml", deflated)
-            .expect("write manifest");
-        zip.write_all(manifest.as_bytes()).expect("write manifest body");
-        zip.start_file("content.xml", deflated).expect("write content.xml");
-        zip.write_all(&[0xff, 0xfe, 0xfd]).expect("write encrypted content");
-        zip.finish().expect("finish zip");
-    }
-
-    let err = extract_bytes_document(&cursor.into_inner(), ODT_MIME, &ExtractionConfig::default())
+    let err = extract_bytes_document(&encrypted_odt_bytes(manifest), ODT_MIME, &ExtractionConfig::default())
         .await
-        .expect_err("password-protected ODT extraction should fail");
+        .expect_err("encrypted ODT extraction should fail");
     let message = err.to_string();
 
     assert!(
-        message.contains("password-protected"),
-        "error should identify password protection: {message}"
+        message.contains("content.xml is encrypted"),
+        "error should identify encryption: {message}"
     );
     assert!(
-        message.contains("encrypted"),
-        "error should identify encryption: {message}"
+        !message.contains("password"),
+        "error must not assume how the content was encrypted: {message}"
     );
     assert!(
         !message.contains("UTF-8"),
         "error should not misreport ciphertext as invalid UTF-8: {message}"
+    );
+}
+
+#[tokio::test]
+async fn should_not_call_public_key_encryption_password_protection_issue_2004() {
+    let manifest = r#"<?xml version="1.0" encoding="UTF-8"?>
+<manifest:manifest
+    xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0">
+  <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml">
+    <manifest:encryption-data>
+      <manifest:algorithm manifest:algorithm-name="http://www.w3.org/2001/04/xmlenc#aes256-cbc"/>
+      <manifest:key-derivation manifest:key-derivation-name="PGP"/>
+    </manifest:encryption-data>
+  </manifest:file-entry>
+</manifest:manifest>"#;
+    let err = extract_bytes_document(&encrypted_odt_bytes(manifest), ODT_MIME, &ExtractionConfig::default())
+        .await
+        .expect_err("public-key encrypted ODT extraction should fail");
+    let message = err.to_string();
+
+    assert!(
+        message.contains("content.xml is encrypted"),
+        "error should identify encryption: {message}"
+    );
+    assert!(
+        !message.contains("password"),
+        "PGP encryption is not password protection: {message}"
     );
 }
 

@@ -729,7 +729,7 @@ fn ensure_content_is_not_encrypted(archive: &mut zip::ZipArchive<Cursor<Vec<u8>>
 
     if encrypted {
         return Err(crate::error::XbergError::parsing(
-            "ODT is password-protected and its content.xml member is encrypted; encrypted OpenDocument Text files are not supported",
+            "ODT content.xml is encrypted; encrypted OpenDocument Text files are not supported",
         ));
     }
 
@@ -836,7 +836,7 @@ pub(crate) fn build_internal_elements(
                 // (#100). It was previously invisible to this walker entirely.
                 handle_odt_frame(node, image_data, formula_data, builder);
                 for text_box in node.children().filter(|child| child.tag_name().name() == "text-box") {
-                    build_internal_elements(
+                    build_nested_internal_elements(
                         text_box,
                         builder,
                         style_map,
@@ -999,7 +999,7 @@ pub(crate) fn build_internal_elements(
                 build_internal_list(node, builder, list_style_map, image_data, formula_data);
             }
             "section" => {
-                build_internal_elements(
+                build_nested_internal_elements(
                     node,
                     builder,
                     style_map,
@@ -1019,7 +1019,7 @@ pub(crate) fn build_internal_elements(
             "table-of-content" | "illustration-index" | "table-index" | "object-index" | "user-index"
             | "alphabetical-index" | "bibliography" => {
                 if let Some(index_body) = node.children().find(|n| n.tag_name().name() == "index-body") {
-                    build_internal_elements(
+                    build_nested_internal_elements(
                         index_body,
                         builder,
                         style_map,
@@ -1036,6 +1036,37 @@ pub(crate) fn build_internal_elements(
         }
     }
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_nested_internal_elements(
+    parent: roxmltree::Node,
+    builder: &mut InternalDocumentBuilder,
+    style_map: &AHashMap<String, OdtStyleProps>,
+    list_style_map: &AHashMap<String, bool>,
+    image_data: &AHashMap<String, (Vec<u8>, String)>,
+    formula_data: &AHashMap<String, String>,
+    budget: &mut SecurityBudget,
+    change_map: &AHashMap<String, OdtChangeRegion>,
+    revisions: &mut Vec<DocumentRevision>,
+) -> crate::error::Result<()> {
+    if let Err(error) = budget.enter() {
+        budget.leave();
+        return Err(error.into());
+    }
+    let result = build_internal_elements(
+        parent,
+        builder,
+        style_map,
+        list_style_map,
+        image_data,
+        formula_data,
+        budget,
+        change_map,
+        revisions,
+    );
+    budget.leave();
+    result
 }
 
 /// Build list structure from an ODT `text:list` element for InternalDocumentBuilder.
