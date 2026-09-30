@@ -476,15 +476,17 @@ mod tests {
     }
 
     /// A three-row table whose middle label is two words. The first label word's box is stretched
-    /// down over the next row, as shading does, and `tail_line` sets the text line the second
-    /// label word sits on. The first row's values arrive fused across an underscore mark, so the
+    /// down over the whole next row, as shading does, and `tail_line` sets the text line the second
+    /// label word sits on. The stretched box covers both row bands in full and its centre is nearer
+    /// the next row, so row geometry alone puts the word in the next row: only the text line keeps
+    /// it with its label. The first row's values arrive fused across an underscore mark, so the
     /// words after it only keep their own lines if each piece of a split word keeps its line.
     fn stretched_label_table(tail_line: &str) -> Vec<Vec<String>> {
         let tsv = format!(
             "{TSV_HEADER}\
 5\t1\t1\t1\t1\t1\t100\t100\t90\t26\t90\tAlpha\n\
 5\t1\t2\t1\t1\t1\t600\t100\t300\t26\t90\t10__20\n\
-5\t1\t4\t1\t1\t1\t100\t150\t100\t62\t90\tBravo\n\
+5\t1\t4\t1\t1\t1\t100\t150\t100\t110\t90\tBravo\n\
 5\t{tail_line}\t2\t210\t150\t80\t26\t90\tTail\n\
 5\t1\t5\t1\t1\t1\t600\t150\t60\t26\t90\t30\n\
 5\t1\t6\t1\t1\t1\t800\t150\t60\t26\t90\t40\n\
@@ -510,20 +512,20 @@ mod tests {
         );
     }
 
-    /// The negative twin: the same boxes on two text lines keep the split, so the line is what
-    /// joins them.
+    /// The negative twin: the same boxes on two text lines. The stretched word keeps its own box
+    /// and goes to the next row, so the line is what joins it with its label.
     #[test]
-    fn words_on_different_tesseract_lines_keep_their_own_boxes() {
+    fn a_stretched_word_on_a_tesseract_line_of_its_own_goes_to_the_next_row() {
         let table = stretched_label_table("1\t10\t1\t1");
         let row_of = |text: &str| {
             table
                 .iter()
                 .position(|row| row.iter().any(|cell| cell.split_whitespace().any(|word| word == text)))
         };
-        assert_ne!(
+        assert_eq!(
             row_of("Bravo"),
-            row_of("Tail"),
-            "the stretched word on a line of its own stays apart: {table:?}"
+            row_of("Charlie"),
+            "the stretched word on a line of its own goes to the row its box is nearer: {table:?}"
         );
         assert_eq!(
             row_of("Tail"),
