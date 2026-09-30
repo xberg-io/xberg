@@ -613,6 +613,7 @@ fn build_internal_document(
     archive: &mut zip::ZipArchive<Cursor<Vec<u8>>>,
     budget: &mut SecurityBudget,
 ) -> crate::error::Result<InternalDocument> {
+    ensure_content_is_not_encrypted(archive)?;
     let image_data = pre_extract_images(archive)?;
     let formula_data = pre_extract_formulas(archive, budget)?;
 
@@ -695,6 +696,44 @@ fn build_internal_document(
     internal_doc.revisions = if tracked_changes_present { Some(revisions) } else { None };
 
     Ok(internal_doc)
+}
+
+fn ensure_content_is_not_encrypted(archive: &mut zip::ZipArchive<Cursor<Vec<u8>>>) -> crate::error::Result<()> {
+    use std::io::Read;
+
+    let Ok(file) = archive.by_name("META-INF/manifest.xml") else {
+        return Ok(());
+    };
+    let mut manifest_xml = String::new();
+    if file
+        .take(MAX_ODT_MEMBER_SIZE)
+        .read_to_string(&mut manifest_xml)
+        .is_err()
+    {
+        return Ok(());
+    }
+    let Ok(manifest) = Document::parse(&manifest_xml) else {
+        return Ok(());
+    };
+
+    let encrypted = manifest.descendants().any(|entry| {
+        entry.tag_name().name() == "file-entry"
+            && entry
+                .attribute(("urn:oasis:names:tc:opendocument:xmlns:manifest:1.0", "full-path"))
+                .or_else(|| entry.attribute("manifest:full-path"))
+                .is_some_and(|path| path.trim_start_matches('/') == "content.xml")
+            && entry
+                .descendants()
+                .any(|child| child.tag_name().name() == "encryption-data")
+    });
+
+    if encrypted {
+        return Err(crate::error::XbergError::parsing(
+            "ODT is password-protected and its content.xml member is encrypted; encrypted OpenDocument Text files are not supported",
+        ));
+    }
+
+    Ok(())
 }
 
 /// Recursively walk ODT XML elements and populate the `InternalDocumentBuilder`.
@@ -796,6 +835,19 @@ pub(crate) fn build_internal_elements(
                 // than wrapped in a `text:p` — commonly `text:anchor-type="page"`
                 // (#100). It was previously invisible to this walker entirely.
                 handle_odt_frame(node, image_data, formula_data, builder);
+                for text_box in node.children().filter(|child| child.tag_name().name() == "text-box") {
+                    build_internal_elements(
+                        text_box,
+                        builder,
+                        style_map,
+                        list_style_map,
+                        image_data,
+                        formula_data,
+                        budget,
+                        change_map,
+                        revisions,
+                    )?;
+                }
             }
             "p" => {
                 let mut footnote_markers: Vec<(String, String)> = Vec::new();

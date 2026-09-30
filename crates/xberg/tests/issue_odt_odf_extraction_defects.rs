@@ -266,6 +266,71 @@ async fn should_extract_page_anchored_frame_not_wrapped_in_a_paragraph_issue_100
 }
 
 #[tokio::test]
+async fn should_extract_text_box_inside_page_anchored_frame_issue_2006() {
+    let body = r#"<draw:frame draw:name="Text Box" text:anchor-type="page">
+        <draw:text-box>
+            <text:p>Text stored outside the normal paragraph flow.</text:p>
+            <text:p>Second framed paragraph.</text:p>
+        </draw:text-box>
+    </draw:frame>"#;
+
+    let bytes = odt_bytes("", body);
+    let result = extract_bytes_document(&bytes, ODT_MIME, &ExtractionConfig::default())
+        .await
+        .expect("extraction should succeed");
+
+    assert_eq!(
+        result.content.trim(),
+        "Text stored outside the normal paragraph flow.\n\nSecond framed paragraph."
+    );
+}
+
+#[tokio::test]
+async fn should_report_encrypted_content_as_password_protected_issue_2004() {
+    let manifest = r#"<?xml version="1.0" encoding="UTF-8"?>
+<manifest:manifest
+    xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0">
+  <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml">
+    <manifest:encryption-data manifest:checksum-type="SHA1/1K" manifest:checksum="AA=="/>
+  </manifest:file-entry>
+</manifest:manifest>"#;
+
+    let mut cursor = Cursor::new(Vec::new());
+    {
+        let mut zip = ZipWriter::new(&mut cursor);
+        let stored = FileOptions::<()>::default().compression_method(zip::CompressionMethod::Stored);
+        zip.start_file("mimetype", stored).expect("write mimetype");
+        zip.write_all(ODT_MIME.as_bytes()).expect("write mimetype body");
+
+        let deflated = FileOptions::<()>::default().compression_method(zip::CompressionMethod::Deflated);
+        zip.start_file("META-INF/manifest.xml", deflated)
+            .expect("write manifest");
+        zip.write_all(manifest.as_bytes()).expect("write manifest body");
+        zip.start_file("content.xml", deflated).expect("write content.xml");
+        zip.write_all(&[0xff, 0xfe, 0xfd]).expect("write encrypted content");
+        zip.finish().expect("finish zip");
+    }
+
+    let err = extract_bytes_document(&cursor.into_inner(), ODT_MIME, &ExtractionConfig::default())
+        .await
+        .expect_err("password-protected ODT extraction should fail");
+    let message = err.to_string();
+
+    assert!(
+        message.contains("password-protected"),
+        "error should identify password protection: {message}"
+    );
+    assert!(
+        message.contains("encrypted"),
+        "error should identify encryption: {message}"
+    );
+    assert!(
+        !message.contains("UTF-8"),
+        "error should not misreport ciphertext as invalid UTF-8: {message}"
+    );
+}
+
+#[tokio::test]
 async fn should_mark_numbered_list_ordered_and_bulleted_list_unordered_issue_104() {
     let styles = r#"<text:list-style style:name="L1">
         <text:list-level-style-number text:level="1"/>
