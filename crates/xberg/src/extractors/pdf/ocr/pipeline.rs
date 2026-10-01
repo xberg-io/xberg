@@ -1395,7 +1395,13 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 if should_adopt_xobject_retry_text(page_text, &text) {
                     // The render's paragraphs, confidence and word count describe the blank
                     // render, not the recovered text.
-                    ocr_page_paragraphs.remove(&page_number);
+                    let recovered_paragraphs =
+                        crate::pdf::structure::adapters::ocr_text_to_paragraphs(&text_outside_tables);
+                    if recovered_paragraphs.is_empty() {
+                        ocr_page_paragraphs.remove(&page_number);
+                    } else {
+                        ocr_page_paragraphs.insert(page_number, recovered_paragraphs);
+                    }
                     page_mean_confidence.remove(&page_number);
                     page_word_count.remove(&page_number);
                     page_dictionary_invalid_word_ratio.remove(&page_number);

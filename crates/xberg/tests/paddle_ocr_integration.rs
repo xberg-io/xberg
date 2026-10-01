@@ -736,6 +736,55 @@ async fn test_paddle_ocr_keeps_embedded_image_retry_text_beside_its_table() {
     }
 }
 
+/// The mixed route must preserve prose recovered by the embedded-image retry when the same
+/// retry also contributes a table (#2021). ~keep
+#[cfg(feature = "pdf")]
+#[tokio::test]
+#[ignore = "requires ONNX Runtime and downloaded models"]
+async fn test_paddle_ocr_mixed_route_keeps_embedded_image_retry_text_beside_its_table() {
+    use xberg::core::config::OutputFormat;
+
+    let pdf_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ocr/clipped_table_and_receipt.pdf");
+    let config = ExtractionConfig {
+        ocr: Some(OcrConfig {
+            backend: "paddle-ocr".to_string(),
+            language: vec!["en".to_string()],
+            paddle_ocr_config: Some(serde_json::json!({"enable_table_detection": true})),
+            ..Default::default()
+        }),
+        force_ocr_pages: Some(vec![1]),
+        output_format: OutputFormat::Markdown,
+        use_cache: false,
+        ..Default::default()
+    };
+
+    let result = extract_uri_document(&pdf_path, None, &config)
+        .await
+        .expect("OCR extraction must succeed");
+
+    assert_eq!(result.tables.len(), 1, "the retry must find exactly one table");
+    assert_eq!(
+        result.content.matches("CIMB NIAGA").count(),
+        1,
+        "the recovered prose must remain beside the table: {}",
+        result.content
+    );
+    assert_eq!(
+        result.content.matches("Banana").count(),
+        1,
+        "the retry's table must appear exactly once: {}",
+        result.content
+    );
+    let pages = result.pages.as_ref().expect("mixed PDF extraction must expose pages");
+    assert_eq!(pages.len(), 1);
+    assert_eq!(
+        pages[0].content.matches("CIMB NIAGA").count(),
+        1,
+        "the recovered prose must remain in pages[].content: {}",
+        pages[0].content
+    );
+}
+
 /// A blank page whose only embedded image is a table keeps that table, printed once, when the
 /// table holds every line the retry recovered (#2014). The fixture draws corpus object
 /// `5883a36a12` under a zero-area clip, so only the embedded-image retry reads it. ~keep
