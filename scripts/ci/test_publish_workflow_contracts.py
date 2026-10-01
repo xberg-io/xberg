@@ -341,6 +341,18 @@ def test_glibc_native_closures_are_strictly_verified() -> None:
         assert vendor < verify, f"{job} verifies before vendoring its closure"
 
 
+def test_cli_release_enables_metal_only_for_macos_arm64() -> None:
+    block = job_block(WORKFLOW.read_text(), "cli-binaries")
+    macos_arm64 = re.search(
+        r"os: macos-15,\s+target: aarch64-apple-darwin,\s+"
+        r'extra_cargo_args: "([^"]+)"',
+        block,
+    )
+    assert macos_arm64 is not None
+    assert "candle-metal" in macos_arm64.group(1).split(",")
+    assert block.count("candle-metal") == 1
+
+
 def test_publish_contracts_run_in_ci() -> None:
     assert "python3 scripts/ci/test_publish_workflow_contracts.py" in CI_WORKFLOW.read_text()
 
@@ -354,4 +366,5 @@ if __name__ == "__main__":
     test_swift_dry_run_checks_run_artifact_without_release_mutation()
     test_glibc_ffi_jobs_build_lzma_statically()
     test_glibc_native_closures_are_strictly_verified()
+    test_cli_release_enables_metal_only_for_macos_arm64()
     test_publish_contracts_run_in_ci()
