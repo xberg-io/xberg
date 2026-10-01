@@ -34,7 +34,7 @@ impl PostProcessorRegistry {
     /// Increments once per successful `register` and once per successful
     /// `remove` (including the removals `shutdown_all` performs). A cached
     /// snapshot is stale whenever this value has moved past the generation
-    /// recorded when the snapshot was taken.
+    /// recorded when the snapshot was taken. ~keep
     pub(crate) fn generation(&self) -> u64 {
         self.generation
     }
