@@ -790,7 +790,6 @@ pub(super) async fn collect_xobject_recovery_result(
     }));
     Ok(())
 }
-/// Append one embedded image's text to a page's retry text, a blank line apart.
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 fn append_xobject_text(
     page_text: &mut String,
@@ -827,7 +826,7 @@ fn xobject_text_outside_tables(result: &crate::types::ExtractedDocument) -> std:
     std::borrow::Cow::Borrowed(&result.content)
 }
 /// The text elements of an OCR page document as flat text: lines of one block on consecutive
-/// lines, blocks apart by a blank line, the grouping the PDF paragraph builder merges on.
+/// lines, blocks apart by a blank line, the grouping the PDF paragraph builder merges on. ~keep
 #[cfg(all(any(feature = "ocr", feature = "ocr-wasm"), feature = "pdf"))]
 fn ocr_document_text(document: &crate::types::internal::InternalDocument) -> String {
     let mut text = String::new();

@@ -70,7 +70,7 @@ pub(crate) fn drop_elements_claimed_by_tables<'a>(
 }
 
 /// [`drop_elements_claimed_by_tables`] over a page document, recording in
-/// `ocr_text_claimed_by_tables` whether it removed every text element of the page.
+/// `ocr_text_claimed_by_tables` whether it removed every text element of the page. ~keep
 pub(crate) fn drop_document_elements_claimed_by_tables<'a>(
     document: &mut InternalDocument,
     tables: impl IntoIterator<Item = (BoundingBox, &'a [Vec<String>])>,

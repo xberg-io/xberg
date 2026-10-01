@@ -210,56 +210,160 @@ fn test_ocr_table_text_not_duplicated_in_content() {
 }
 
 /// A blank PDF page whose text is recovered from its embedded images keeps that text when the
-/// retry also finds a table (#1571), and prints the table once (#2014). The fixture draws
-/// `simple_table.png` and `cord_receipt_01.jpg` from `test_documents/images` under a zero-area
-/// clip, so the page renders blank and only the embedded-image retry reads it. `Banana` appears
-/// only in the table.
+/// retry also finds a table (#1571), and prints the table once (#2014). The fixture draws corpus
+/// objects `5883a36a12` and `0c1a8b71c1` under a zero-area clip, so the page renders blank and
+/// only the embedded-image retry reads it. `Banana` appears only in the table. ~keep
 #[cfg(feature = "pdf")]
 #[test]
 fn test_ocr_embedded_image_retry_text_survives_a_retry_table() {
+    use xberg::core::config::OutputFormat;
+
+    const EXPECTED_PLAIN: &str = r#"wee oe aoa
+
+301016
+
+Ko] te
+
+10.000
+
+0.002
+
+~
+
+TOTAL IS
+
+bd dv
+
+rAX
+
+455
+
+Subtotal
+
+0, 0u0u
+
+(atv
+
+re
+
+00
+
+60.000
+
+TOTAL
+
+0.000
+
+Cee wwe we ee me wane e
+
+enerqnco mech)
+
+Product Price Quantity Total
+Apple 00 10 00
+Banana 20 15 00
+Orange 00 8 00
+Total   00"#;
+    const EXPECTED_MARKDOWN: &str = r#"wee oe aoa
+
+301016
+
+Ko] te
+
+10.000
+
+0.002
+
+\~
+
+TOTAL IS
+
+bd dv
+
+rAX
+
+455
+
+Subtotal
+
+0, 0u0u
+
+(atv
+
+re
+
+00
+
+60.000
+
+TOTAL
+
+0.000
+
+Cee wwe we ee me wane e
+
+enerqnco mech)
+
+| Product | Price | Quantity | Total |
+| --- | --- | --- | --- |
+| Apple | 00 | 10 | 00 |
+| Banana | 20 | 15 | 00 |
+| Orange | 00 | 8 | 00 |
+| Total |  |  | 00 |
+"#;
     let file_path =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ocr/clipped_table_and_receipt.pdf");
-    let config = ExtractionConfig {
-        ocr: Some(OcrConfig {
-            backend: "tesseract".to_string(),
-            language: vec!["eng".to_string()],
-            tesseract_config: Some(TesseractConfig {
-                enable_table_detection: true,
+    for output_format in [OutputFormat::Plain, OutputFormat::Markdown] {
+        let config = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                backend: "tesseract".to_string(),
+                language: vec!["eng".to_string()],
+                tesseract_config: Some(TesseractConfig {
+                    enable_table_detection: true,
+                    use_cache: false,
+                    ..Default::default()
+                }),
                 ..Default::default()
             }),
+            force_ocr: true,
+            output_format: output_format.clone(),
+            use_cache: false,
             ..Default::default()
-        }),
-        force_ocr: true,
-        use_cache: false,
-        ..Default::default()
-    };
+        };
 
-    let result = extract_uri_document_blocking(&file_path, None, &config).expect("OCR extraction must succeed");
+        let result = extract_uri_document_blocking(&file_path, None, &config).expect("OCR extraction must succeed");
 
-    assert!(!result.tables.is_empty(), "the retry must find the table");
-    assert_eq!(
-        result.content.matches("Banana").count(),
-        1,
-        "the retry's table must appear in the content exactly once: {}",
-        result.content
-    );
-    assert!(
-        result.content.contains("Subtotal"),
-        "the receipt text recovered by the retry must stay in the content: {}",
-        result.content
-    );
+        assert_eq!(result.tables.len(), 1, "the retry must find exactly one table");
+        let expected = match output_format {
+            OutputFormat::Plain => EXPECTED_PLAIN,
+            OutputFormat::Markdown => EXPECTED_MARKDOWN,
+            _ => unreachable!("the regression covers only Plain and Markdown"),
+        };
+        assert_eq!(result.content, expected);
+    }
 }
 
 /// A blank PDF page whose only embedded image is a table keeps that table, printed once, when
 /// the table holds every line the retry recovered (#2014). With PaddleOCR compiled in, the default
 /// Tesseract setup runs as a pipeline that falls back to PaddleOCR when a page scores as empty, so
-/// the recovered table text must count as page text. The fixture draws `simple_table.png` from
-/// `test_documents/images` under a zero-area clip, so only the embedded-image retry reads it.
+/// the recovered table text must count as page text. The fixture draws corpus object `5883a36a12`
+/// under a zero-area clip, so only the embedded-image retry reads it. ~keep
 #[cfg(feature = "pdf")]
 #[test]
 fn test_ocr_embedded_image_retry_keeps_a_table_that_holds_all_of_its_text() {
     use xberg::core::config::OutputFormat;
 
+    const EXPECTED_PLAIN: &str = r#"Product Price Quantity Total
+Apple 00 10 00
+Banana 20 15 00
+Orange 00 8 00
+Total   00"#;
+    const EXPECTED_MARKDOWN: &str = r#"| Product | Price | Quantity | Total |
+| --- | --- | --- | --- |
+| Apple | 00 | 10 | 00 |
+| Banana | 20 | 15 | 00 |
+| Orange | 00 | 8 | 00 |
+| Total |  |  | 00 |
+"#;
     let file_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ocr/clipped_table.pdf");
     for output_format in [OutputFormat::Plain, OutputFormat::Markdown] {
         let config = ExtractionConfig {
@@ -268,29 +372,25 @@ fn test_ocr_embedded_image_retry_keeps_a_table_that_holds_all_of_its_text() {
                 language: vec!["eng".to_string()],
                 tesseract_config: Some(TesseractConfig {
                     enable_table_detection: true,
+                    use_cache: false,
                     ..Default::default()
                 }),
                 ..Default::default()
             }),
             force_ocr: true,
-            output_format,
+            output_format: output_format.clone(),
             use_cache: false,
             ..Default::default()
         };
 
         let result = extract_uri_document_blocking(&file_path, None, &config).expect("OCR extraction must succeed");
 
-        assert_eq!(
-            result.tables.len(),
-            1,
-            "the retry's table must be kept: {}",
-            result.content
-        );
-        assert_eq!(
-            result.content.matches("Banana").count(),
-            1,
-            "the retry's table must appear in the content exactly once: {}",
-            result.content
-        );
+        assert_eq!(result.tables.len(), 1, "the retry must keep exactly one table");
+        let expected = match output_format {
+            OutputFormat::Plain => EXPECTED_PLAIN,
+            OutputFormat::Markdown => EXPECTED_MARKDOWN,
+            _ => unreachable!("the regression covers only Plain and Markdown"),
+        };
+        assert_eq!(result.content, expected);
     }
 }

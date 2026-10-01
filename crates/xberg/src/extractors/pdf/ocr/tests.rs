@@ -10422,6 +10422,102 @@ Name: ___
         );
     }
 
+    /// A table is recovered content even when it has no prose outside the table. The failed
+    /// page-raster pass must not make the all-pages-failed guard discard that structured retry
+    /// payload. ~keep
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn should_recover_table_only_xobject_when_the_backend_errors_on_the_page_raster() {
+        use crate::core::config::OcrConfig;
+        use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
+        use crate::types::{ExtractedDocument, Table};
+        use std::sync::Arc;
+
+        const BACKEND_NAME: &str = "page-raster-error-table-only-fallback-test-backend";
+
+        struct FailOnPageRasterTableOnlyBackend;
+
+        #[async_trait::async_trait]
+        impl OcrBackend for FailOnPageRasterTableOnlyBackend {
+            fn backend_type(&self) -> OcrBackendType {
+                OcrBackendType::Custom
+            }
+            fn supports_language(&self, _: &str) -> bool {
+                true
+            }
+            async fn process_image(&self, data: &[u8], _: &OcrConfig) -> crate::Result<ExtractedDocument> {
+                if is_embedded_jpeg(data) {
+                    Ok(ExtractedDocument {
+                        tables: vec![Table {
+                            cells: vec![vec!["Item".to_string(), "Amount".to_string()]],
+                            markdown: "| Item | Amount |\n| --- | --- |\n".to_string(),
+                            ..Default::default()
+                        }],
+                        ..Default::default()
+                    })
+                } else {
+                    Err(crate::XbergError::Plugin {
+                        message: VLM_NO_CONTENT_ERROR.to_string(),
+                        plugin_name: "ocr".to_string(),
+                    })
+                }
+            }
+            fn supports_document_processing(&self) -> bool {
+                false
+            }
+        }
+
+        impl Plugin for FailOnPageRasterTableOnlyBackend {
+            fn name(&self) -> &str {
+                BACKEND_NAME
+            }
+            fn version(&self) -> String {
+                "1.0.0".to_string()
+            }
+            fn initialize(&self) -> crate::Result<()> {
+                Ok(())
+            }
+            fn shutdown(&self) -> crate::Result<()> {
+                Ok(())
+            }
+        }
+
+        crate::plugins::register_ocr_backend(Arc::new(FailOnPageRasterTableOnlyBackend)).unwrap();
+
+        let pdf_bytes = single_xobject_fixture_bytes();
+        let config = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                backend: BACKEND_NAME.to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let result = extract_with_ocr(
+            Some(&pdf_bytes),
+            None,
+            #[cfg(feature = "layout-detection")]
+            None,
+            &config,
+            None,
+        )
+        .await;
+
+        crate::plugins::unregister_ocr_backend(BACKEND_NAME).unwrap();
+
+        let (text, _, tables, _, document, _, _, _, _, _, _) =
+            result.expect("a recovered table must prevent an all-pages-failed error");
+        assert!(text.is_empty(), "the backend returned no prose outside the table");
+        assert_eq!(tables.len(), 1, "the recovered table must survive");
+        assert_eq!(tables[0].cells, [["Item", "Amount"]]);
+        assert_eq!(
+            document.expect("the structured retry page must survive").tables.len(),
+            1,
+            "the recovered table must count as structured page content"
+        );
+    }
+
     /// #1673: when the embedded-image retry runs and the backend returns successfully but
     /// with empty content -- the shape every candle VLM backend takes when it silently
     /// produces nothing (`tracing::warn!("... output is empty")` and returns `Ok`, not an
