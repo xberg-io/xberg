@@ -177,13 +177,6 @@ fn clear_processor_registry_and_cache() {
     let _ = clear_processor_cache();
 }
 
-fn uncached_config() -> ExtractionConfig {
-    ExtractionConfig {
-        use_cache: false,
-        ..Default::default()
-    }
-}
-
 #[serial]
 #[test]
 fn test_register_custom_postprocessor() {
@@ -239,7 +232,7 @@ fn test_postprocessor_called_during_extraction() {
             .expect("Operation failed");
     }
 
-    let config = uncached_config();
+    let config = ExtractionConfig::default();
     let result = extract_uri_document_blocking(test_file, None, &config);
 
     assert!(result.is_ok(), "Extraction failed: {:?}", result.err());
@@ -280,7 +273,7 @@ fn test_postprocessor_modifies_content() {
             .expect("Operation failed");
     }
 
-    let config = uncached_config();
+    let config = ExtractionConfig::default();
     let result = extract_uri_document_blocking(test_file, None, &config);
 
     assert!(result.is_ok());
@@ -319,7 +312,7 @@ fn test_postprocessor_adds_metadata() {
         "Processor was not initialized"
     );
 
-    let config = uncached_config();
+    let config = ExtractionConfig::default();
     let result = extract_uri_document_blocking(test_file, None, &config);
 
     assert!(result.is_ok());
@@ -387,7 +380,7 @@ fn test_unregister_postprocessor() {
     assert!(!list.contains(&"unregister-test".to_string()));
 
     let test_file = "../../test_documents/text/fake_text.txt";
-    let config = uncached_config();
+    let config = ExtractionConfig::default();
     let result = extract_uri_document_blocking(test_file, None, &config);
 
     assert!(result.is_ok());
@@ -467,7 +460,7 @@ fn test_postprocessor_error_handling() {
             .expect("Operation failed");
     }
 
-    let config = uncached_config();
+    let config = ExtractionConfig::default();
     let result = extract_uri_document_blocking(test_file, None, &config);
 
     // NOTE: Plugin errors now bubble up and fail the extraction (design change)
@@ -556,7 +549,7 @@ fn test_multiple_postprocessors_execution_order() {
             .expect("Operation failed");
     }
 
-    let config = uncached_config();
+    let config = ExtractionConfig::default();
     let result = extract_uri_document_blocking(test_file, None, &config);
 
     assert!(result.is_ok());
@@ -592,7 +585,7 @@ fn test_postprocessor_preserves_mime_type() {
             .expect("Operation failed");
     }
 
-    let config = uncached_config();
+    let config = ExtractionConfig::default();
     let result = extract_uri_document_blocking(test_file, None, &config);
 
     assert!(result.is_ok());

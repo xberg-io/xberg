@@ -12,6 +12,7 @@ use std::sync::Arc;
 #[cfg_attr(alef, alef(skip))]
 pub struct ValidatorRegistry {
     validators: BTreeMap<i32, IndexMap<String, Arc<dyn Validator>>>,
+    generation: u64,
 }
 
 impl ValidatorRegistry {
@@ -19,7 +20,12 @@ impl ValidatorRegistry {
     pub fn new() -> Self {
         Self {
             validators: BTreeMap::new(),
+            generation: 0,
         }
+    }
+
+    pub(crate) fn generation(&self) -> u64 {
+        self.generation
     }
 
     /// Register a validator.
@@ -56,6 +62,7 @@ impl ValidatorRegistry {
             .entry(priority)
             .or_default()
             .insert(name.clone(), validator);
+        self.generation = self.generation.wrapping_add(1);
         tracing::debug!("Registered validator '{}' with priority {}", name, priority);
 
         Ok(())
@@ -109,6 +116,7 @@ impl ValidatorRegistry {
         }
 
         if let Some(validator) = validator_to_shutdown {
+            self.generation = self.generation.wrapping_add(1);
             if let Err(e) = validator.shutdown() {
                 tracing::warn!(
                     "Failed to shutdown validator '{}': {}. \
@@ -456,5 +464,24 @@ mod tests {
 
         registry.register(validator).unwrap();
         assert_eq!(registry.get_all().len(), 1);
+    }
+
+    #[test]
+    fn validator_registry_generation_advances_on_structural_changes() {
+        let mut registry = ValidatorRegistry::new();
+        assert_eq!(registry.generation(), 0);
+
+        let validator = Arc::new(MockValidator {
+            name: "generation-validator".to_string(),
+            priority: 50,
+        });
+        registry.register(validator).unwrap();
+        assert_eq!(registry.generation(), 1);
+
+        registry.remove("generation-validator").unwrap();
+        assert_eq!(registry.generation(), 2);
+
+        registry.remove("does-not-exist").unwrap();
+        assert_eq!(registry.generation(), 2);
     }
 }

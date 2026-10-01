@@ -497,12 +497,20 @@ fn try_get_processor_snapshot(require_complete_registration: bool) -> Option<Pro
     }
     #[cfg(test)]
     run_before_processor_snapshot_hook();
+    let registry_generation = crate::plugins::registry::get_post_processor_registry()
+        .read()
+        .generation();
     let lease = ProcessorSnapshotLease::acquire(&ACTIVE_PROCESSOR_SNAPSHOTS);
-    let stages = PROCESSOR_CACHE
-        .try_read()?
-        .as_ref()
-        .and_then(|cache| (cache.registration_epoch == registration_epoch).then(|| cached_processor_stages(cache)))?;
-    if BUILTIN_REGISTRATION_EPOCH.load(Ordering::SeqCst) != registration_epoch {
+    let stages = PROCESSOR_CACHE.try_read()?.as_ref().and_then(|cache| {
+        (cache.registration_epoch == registration_epoch && cache.generation == registry_generation)
+            .then(|| cached_processor_stages(cache))
+    })?;
+    if BUILTIN_REGISTRATION_EPOCH.load(Ordering::SeqCst) != registration_epoch
+        || crate::plugins::registry::get_post_processor_registry()
+            .read()
+            .generation()
+            != registry_generation
+    {
         return None;
     }
     #[cfg(test)]
