@@ -1,7 +1,7 @@
 <!--
 AI-RULEZ :: GENERATED FILE — DO NOT EDIT
-Content-Hash: blake3:99ab411a7fc9e14c081bf954bb1699cfde1fe7a0c6f1356323628c09936a5103
-Source-Hash: blake3:c4a88d666902477ec013cc1f990f5678bb309ab3daeb18375f59c31549d99f9f
+Content-Hash: blake3:a8f2b7b96ef3d33120ab21586c9f7db80c4d17eba727757ff0e94cee6e7d28c0
+Source-Hash: blake3:c245951312ccf9794e0e243b81d9bf9db0982bd1b699fb47bfa7593bbbc1f7e3
 Schema-Version: v1
 -->
 
@@ -23,7 +23,7 @@ All formats deserialize into the same `ExtractionConfig` schema. The schema uses
 
 ## Auto-Discovery
 
-`ExtractionConfig::discover()` searches for `xberg.toml` in the current working directory and then each parent directory up the tree, loading the first match. Explicit loads via `ExtractionConfig::from_file(path)` accept `.toml`, `.yaml`/`.yml`, and `.json` (format chosen by extension).
+`ExtractionConfig::discover()` searches the current working directory and then each parent directory, probing `xberg.toml`, `xberg.yaml`, `xberg.yml`, and `xberg.json` in that order at every level. Explicit loads via `ExtractionConfig::from_file(path)` accept the same extensions.
 
 ## Loading Configuration
 
@@ -34,10 +34,10 @@ Config-file loading and auto-discovery live in the Rust core and the CLI. The la
 ```rust
 use xberg::core::config::ExtractionConfig;
 
-// Explicit path (.toml / .yaml / .json by extension)
+// Explicit path (.toml / .yaml / .yml / .json by extension)
 let config = ExtractionConfig::from_file("xberg.toml")?;
 
-// Auto-discover xberg.toml up the directory tree
+// Auto-discover xberg.toml/yaml/yml/json up the directory tree
 let config = ExtractionConfig::discover()?; // -> Option<ExtractionConfig>
 ```
 
@@ -47,7 +47,7 @@ let config = ExtractionConfig::discover()?; // -> Option<ExtractionConfig>
 # Explicit configuration file
 xberg extract --config xberg.toml document.pdf
 
-# Auto-discovery (searches cwd and parents for xberg.toml)
+# Auto-discovery (searches cwd and parents for xberg.toml/yaml/yml/json)
 xberg extract document.pdf
 
 # Inline JSON (field-level merge over the discovered/loaded config)
@@ -501,7 +501,7 @@ For the CLI, sources are merged in priority order (highest to lowest):
 1. **Individual CLI flags** (e.g. `--ocr`, `--output-format`)
 2. **Inline JSON config** (`--config-json` / `--config-json-base64`) — field-level merge
 3. **Configuration file** (`--config path`)
-4. **Auto-discovered config** (`xberg.toml` in cwd/parents)
+4. **Auto-discovered config** (`xberg.{toml,yaml,yml,json}` in cwd/parents)
 5. **Defaults**
 
 Environment variable overrides (`apply_env_overrides`) are applied on top of the loaded config.

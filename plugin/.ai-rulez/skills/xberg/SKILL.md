@@ -204,7 +204,7 @@ passwords = ["secret123"]
 ```
 
 ```bash
-# CLI: auto-discovers xberg.toml in current/parent directories
+# CLI: auto-discovers xberg.toml/yaml/yml/json in current/parent directories
 xberg extract doc.pdf
 # or explicit:
 xberg extract doc.pdf --config xberg.toml

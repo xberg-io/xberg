@@ -131,7 +131,7 @@ ocr:
 
 ### Automatic Discovery
 
-When no `--config` path is supplied, Xberg walks up from the current working directory looking for `xberg.toml` and uses the first match. If no project-local file is found, it falls back to a per-user global config at `xberg/xberg.{toml,yaml,yml,json}` in the platform config directory — `$XDG_CONFIG_HOME` (or `~/.config`) on Linux, `~/Library/Application Support` on macOS, and `%APPDATA%` on Windows. In the project walk, YAML and JSON files are supported only when passed explicitly via `--config`. If nothing is found, defaults are used.
+When no `--config` path is supplied, Xberg walks up from the current working directory and probes `xberg.toml`, `xberg.yaml`, `xberg.yml`, then `xberg.json` in each directory. The nearest directory wins, with that format order breaking ties. If no project-local file is found, it applies the same order in the per-user `xberg` config directory — `$XDG_CONFIG_HOME` (or `~/.config`) on Linux, `~/Library/Application Support` on macOS, and `%APPDATA%` on Windows. If nothing is found, defaults are used.
 
 <Tabs syncKey="lang">
 <TabItem label="Python">

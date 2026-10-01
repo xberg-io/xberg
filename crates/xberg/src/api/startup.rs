@@ -53,7 +53,7 @@ async fn shutdown_signal() {
 
 /// Start the API server with config file discovery.
 ///
-/// Searches for xberg.toml/yaml/json in current and parent directories.
+/// Searches for xberg.toml/yaml/yml/json in current and parent directories.
 /// If no config file is found, uses default configuration.
 ///
 /// # Arguments
@@ -298,7 +298,7 @@ pub async fn serve_with_server_config(extraction_config: ExtractionConfig, serve
 ///
 /// Defaults: host = "127.0.0.1", port = 8000
 ///
-/// Uses config file discovery (searches current/parent directories for xberg.toml/yaml/json).
+/// Uses config file discovery (searches current/parent directories for xberg.toml/yaml/yml/json).
 /// Validates plugins at startup to help diagnose configuration issues.
 #[cfg_attr(alef, alef(skip))]
 pub async fn serve_default() -> Result<()> {

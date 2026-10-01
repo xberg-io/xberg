@@ -75,25 +75,15 @@ impl ExtractionConfig {
 
     /// Discover configuration file.
     ///
-    /// Searches for `xberg.toml` in the current directory and its parents. If no
-    /// project-local config is found, falls back to a per-user global config in
+    /// Searches for `xberg.{toml,yaml,yml,json}` in the current directory and its
+    /// parents. If no project-local config is found, falls back to a per-user global config in
     /// the platform config directory: `xberg/xberg.{toml,yaml,yml,json}` under
     /// `dirs::config_dir()` — i.e. `$XDG_CONFIG_HOME` (or `~/.config`) on Linux,
     /// `~/Library/Application Support` on macOS, `%APPDATA%` on Windows.
     pub fn discover() -> Result<Option<Self>> {
-        let mut current = std::env::current_dir().map_err(crate::XbergError::from)?;
-
-        loop {
-            let xberg_toml = current.join("xberg.toml");
-            if xberg_toml.exists() {
-                return Ok(Some(Self::from_toml_file(xberg_toml)?));
-            }
-
-            if let Some(parent) = current.parent() {
-                current = parent.to_path_buf();
-            } else {
-                break;
-            }
+        let current = std::env::current_dir().map_err(crate::XbergError::from)?;
+        if let Some(config) = Self::find_config_in_ancestors(&current)? {
+            return Ok(Some(config));
         }
 
         if let Some(config_dir) = dirs::config_dir()
@@ -102,6 +92,15 @@ impl ExtractionConfig {
             return Ok(Some(config));
         }
 
+        Ok(None)
+    }
+
+    fn find_config_in_ancestors(start: &Path) -> Result<Option<Self>> {
+        for directory in start.ancestors() {
+            if let Some(config) = Self::find_config_in_dir(directory)? {
+                return Ok(Some(config));
+            }
+        }
         Ok(None)
     }
 
@@ -126,6 +125,46 @@ impl ExtractionConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn find_config_in_ancestors_loads_each_supported_format() {
+        let root = tempfile::tempdir().unwrap();
+        let nested = root.path().join("project/src");
+        std::fs::create_dir_all(&nested).unwrap();
+
+        for (basename, contents) in [
+            ("xberg.toml", "include_document_structure = true\n"),
+            ("xberg.yaml", "include_document_structure: true\n"),
+            ("xberg.yml", "include_document_structure: true\n"),
+            ("xberg.json", "{\"include_document_structure\":true}\n"),
+        ] {
+            let path = root.path().join(basename);
+            std::fs::write(&path, contents).unwrap();
+            let discovered = ExtractionConfig::find_config_in_ancestors(&nested)
+                .unwrap()
+                .unwrap_or_else(|| panic!("{basename} must be discovered in a project ancestor"));
+            assert!(
+                discovered.include_document_structure,
+                "{basename} must be parsed rather than replaced with the default config"
+            );
+            std::fs::remove_file(path).unwrap();
+        }
+    }
+
+    #[test]
+    fn find_config_in_ancestors_prefers_nearest_directory() {
+        let root = tempfile::tempdir().unwrap();
+        let project = root.path().join("project");
+        let nested = project.join("src");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(root.path().join("xberg.toml"), "not valid toml = [").unwrap();
+        std::fs::write(project.join("xberg.json"), "{}").unwrap();
+
+        assert!(
+            ExtractionConfig::find_config_in_ancestors(&nested).unwrap().is_some(),
+            "the nearest ancestor config must win before a higher TOML config"
+        );
+    }
 
     #[test]
     fn find_config_in_dir_returns_none_when_absent() {

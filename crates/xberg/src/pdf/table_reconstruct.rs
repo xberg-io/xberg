@@ -728,8 +728,12 @@ fn post_process_table_inner(
             })
             .flatten()
             .filter(|_| column_reads_as_values(&processed, col));
-        let split_title_value_track =
-            split_title_value_columns[col] && drift_split_target.is_some_and(|target| target == col + 1);
+        // ~keep The title column is the left neighbour, so it exists only when one does. Earlier
+        // folds shift a flagged column left, and it can reach column 0 with its flag still set.
+        let split_title_column = col
+            .checked_sub(1)
+            .filter(|_| split_title_value_columns[col] && drift_split_target == Some(col + 1));
+        let split_title_value_track = split_title_column.is_some();
         let sparse_and_headerless = !data_empty
             && header_text.is_empty()
             && processed[0].len() > 2
@@ -753,7 +757,7 @@ fn post_process_table_inner(
                 &mut processed,
                 col,
                 Some(target_before_fold),
-                split_title_value_track.then_some(col - 1),
+                split_title_column,
                 column_positions.as_deref_mut(),
             );
             let target_after_fold = if target_before_fold > col {
@@ -5534,6 +5538,68 @@ mod tests {
         assert_eq!(processed[6][3], "335");
         assert_eq!(processed[9][3], "356");
         assert_eq!(processed[12][3], "377");
+    }
+
+    /// A header-less, nearly empty first column folds into the column on its right. Nothing is
+    /// left of column 0, so the fold must not look for a title column there. ~keep
+    #[test]
+    fn a_sparse_headerless_first_column_folds_right() {
+        let mut table = vec![vec![String::new(), "Name".into(), "Price".into(), "Cost".into()]];
+        for row in 0..12u32 {
+            table.push(vec![
+                if row == 5 { "a".into() } else { String::new() },
+                format!("Item {}", row + 1),
+                format!("{}.50", 10 + row),
+                format!("{}.25", 20 + row),
+            ]);
+        }
+
+        let processed = post_process_table(table, false, false).expect("the stray first column folds away");
+
+        assert_eq!(processed[0], ["Name", "Price", "Cost"]);
+        assert_eq!(processed[6][0], "Item 6 a");
+    }
+
+    /// A title cell with no data under it merges into the next column. That moves the split
+    /// title/value track to column 0, where no title column is left of it. The track then keeps
+    /// its header and its values in place. ~keep
+    #[test]
+    fn a_split_title_value_track_moved_to_the_first_column_keeps_its_header() {
+        let mut table = vec![
+            vec![
+                "Summary".into(),
+                "in thousands".into(),
+                String::new(),
+                String::new(),
+                String::new(),
+            ],
+            vec![
+                String::new(),
+                String::new(),
+                "Year 1".into(),
+                "Year 2".into(),
+                "Year 3".into(),
+            ],
+        ];
+        for row in 0..12u32 {
+            let (short, year_1) = if row % 3 == 2 {
+                ((300 + row).to_string(), String::new())
+            } else {
+                (String::new(), format!("{},000", 40 + row))
+            };
+            table.push(vec![
+                String::new(),
+                short,
+                year_1,
+                format!("{},000", 60 + row),
+                format!("{},000", 80 + row),
+            ]);
+        }
+
+        let processed = post_process_table(table, false, false).expect("the table survives the fold");
+
+        assert_eq!(processed[0], ["Summary in thousands", "Year 1", "Year 2", "Year 3"]);
+        assert_eq!(processed[3], ["302", "", "62,000", "82,000"]);
     }
 
     /// A title continuation can occupy the sparse value track before a numbered-period header.

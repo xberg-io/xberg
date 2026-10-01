@@ -361,6 +361,5 @@ testResults.xml
 
 # BEGIN ai-rulez (DO NOT EDIT - managed by ai-rulez)
 .ai-rulez/.generated-manifest.json
-.opencode/agents/
-.opencode/skills/
+.opencode/
 # END ai-rulez
