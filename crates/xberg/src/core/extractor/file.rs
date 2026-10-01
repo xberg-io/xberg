@@ -325,10 +325,14 @@ pub(in crate::core::extractor) async fn extract_file_with_extractor(
         }
     }
 
+    let lifecycle_generations_before = lifecycle_registry_generations();
     let result = Box::pin(extract_file_uncached(path, mime_type, config)).await?;
+    let lifecycle_generations_after = lifecycle_registry_generations();
 
-    if let Some(cache) = get_extraction_cache() {
-        match serialize_extraction_cache_entry(&result) {
+    if lifecycle_generations_before == lifecycle_generations_after
+        && let Some(cache) = get_extraction_cache()
+    {
+        match serialize_extraction_cache_entry(&result, lifecycle_generations_after) {
             Ok(data) => {
                 let _ = cache.set(&cache_key, data, path.to_str(), namespace, config.cache_ttl_secs);
             }
@@ -371,10 +375,10 @@ fn lifecycle_registry_generations() -> (u64, u64) {
 
 fn serialize_extraction_cache_entry(
     result: &ExtractedDocument,
+    (post_processor_generation, validator_generation): (u64, u64),
 ) -> std::result::Result<Vec<u8>, rmp_serde::encode::Error> {
     // Named fields preserve internally tagged document nodes and keep the lifecycle generations alongside
     // the result. Schema-version changes make earlier bare payloads unreachable. ~keep
-    let (post_processor_generation, validator_generation) = lifecycle_registry_generations();
     rmp_serde::to_vec_named(&ExtractionCacheEntryRef {
         result,
         post_processor_generation,
@@ -574,7 +578,7 @@ mod tests {
         )
         .unwrap();
         let expected = structured_table_document();
-        let encoded = serialize_extraction_cache_entry(&expected).unwrap();
+        let encoded = serialize_extraction_cache_entry(&expected, lifecycle_registry_generations()).unwrap();
         cache.set_default("structured-table", encoded, None).unwrap();
 
         let stored = cache
@@ -615,7 +619,7 @@ mod tests {
         cache
             .set_default(
                 "legacy-compact",
-                serialize_extraction_cache_entry(&expected).unwrap(),
+                serialize_extraction_cache_entry(&expected, lifecycle_registry_generations()).unwrap(),
                 None,
             )
             .unwrap();

@@ -5,7 +5,7 @@ use helpers::extract_uri_document_blocking;
 use serial_test::serial;
 use std::borrow::Cow;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use xberg::Result;
 use xberg::core::config::{ExtractInput, ExtractionConfig};
 use xberg::core::pipeline::clear_processor_cache;
@@ -55,6 +55,40 @@ struct AppendingProcessor {
     name: &'static str,
     marker: &'static str,
     calls: Arc<AtomicUsize>,
+}
+
+struct RegisteringProcessor {
+    calls: Arc<AtomicUsize>,
+    late_calls: Arc<AtomicUsize>,
+    registered: AtomicBool,
+}
+
+impl Plugin for RegisteringProcessor {
+    fn name(&self) -> &str {
+        INITIAL_PROCESSOR_NAME
+    }
+}
+
+#[async_trait]
+impl PostProcessor for RegisteringProcessor {
+    async fn process(&self, result: &mut ExtractedDocument, _config: &ExtractionConfig) -> Result<()> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        result.content.push_str(INITIAL_MARKER);
+        if !self.registered.swap(true, Ordering::SeqCst) {
+            get_post_processor_registry()
+                .write()
+                .register(Arc::new(AppendingProcessor {
+                    name: PROCESSOR_NAME,
+                    marker: MARKER,
+                    calls: Arc::clone(&self.late_calls),
+                }))?;
+        }
+        Ok(())
+    }
+
+    fn processing_stage(&self) -> ProcessingStage {
+        ProcessingStage::Late
+    }
 }
 
 impl Plugin for AppendingProcessor {
@@ -115,14 +149,32 @@ struct LifecycleHarness {
 impl LifecycleHarness {
     fn new() -> Self {
         let harness = Self::with_fixture();
+        harness.register_extractor();
+        harness.register_initial(INITIAL_MARKER);
+        harness
+    }
+
+    fn with_registration_during_processing() -> Self {
+        let harness = Self::with_fixture();
+        harness.register_extractor();
+        get_post_processor_registry()
+            .write()
+            .register(Arc::new(RegisteringProcessor {
+                calls: Arc::clone(&harness.initial_processor_calls),
+                late_calls: Arc::clone(&harness.late_processor_calls),
+                registered: AtomicBool::new(false),
+            }))
+            .unwrap();
+        harness
+    }
+
+    fn register_extractor(&self) {
         get_document_extractor_registry()
             .write()
             .register(Arc::new(CountingExtractor {
-                calls: Arc::clone(&harness.extractor_calls),
+                calls: Arc::clone(&self.extractor_calls),
             }))
             .unwrap();
-        harness.register_initial(INITIAL_MARKER);
-        harness
     }
 
     fn with_fixture() -> Self {
@@ -267,4 +319,26 @@ fn same_name_hook_replacements_invalidate_and_refresh_the_cache() {
     assert_eq!(harness.extractor_calls.load(Ordering::SeqCst), 2);
     assert_eq!(harness.replacement_processor_calls.load(Ordering::SeqCst), 1);
     assert_eq!(harness.replacement_validator_calls.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+#[serial]
+fn registration_during_processing_cannot_stamp_an_incomplete_cache_entry() {
+    let harness = LifecycleHarness::with_registration_during_processing();
+
+    assert_eq!(harness.extract().content, format!("cached content{INITIAL_MARKER}"));
+    assert_eq!(harness.late_processor_calls.load(Ordering::SeqCst), 0);
+
+    assert_eq!(
+        harness.extract().content,
+        format!("cached content{INITIAL_MARKER}{MARKER}")
+    );
+    assert_eq!(harness.extractor_calls.load(Ordering::SeqCst), 2);
+    assert_eq!(harness.initial_processor_calls.load(Ordering::SeqCst), 2);
+    assert_eq!(harness.late_processor_calls.load(Ordering::SeqCst), 1);
+
+    harness.extract();
+    assert_eq!(harness.extractor_calls.load(Ordering::SeqCst), 2);
+    assert_eq!(harness.initial_processor_calls.load(Ordering::SeqCst), 2);
+    assert_eq!(harness.late_processor_calls.load(Ordering::SeqCst), 1);
 }
