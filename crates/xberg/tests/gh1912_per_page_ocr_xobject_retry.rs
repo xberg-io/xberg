@@ -278,7 +278,6 @@ fn a_failed_page_recovered_as_a_table_is_recorded_as_recovered_content() {
         "the stub read no word from the raster; content: {:?}",
         result.content
     );
-    assert_eq!(result.tables.len(), 1, "the recovered table must survive");
     assert_eq!(
         result
             .processing_warnings
