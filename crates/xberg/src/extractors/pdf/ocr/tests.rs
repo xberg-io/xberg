@@ -10918,9 +10918,15 @@ Name: ___
         let (_, _, _, _, doc, _, page_texts, _, _, _, _) =
             result.expect("one failed page must not fail a document whose other pages were read");
         assert_eq!(page_texts.len(), 3);
-        assert!(page_texts[0].contains("read without a problem"), "page 1: {page_texts:?}");
+        assert!(
+            page_texts[0].contains("read without a problem"),
+            "page 1: {page_texts:?}"
+        );
         assert!(page_texts[1].trim().is_empty(), "page 2: {page_texts:?}");
-        assert!(page_texts[2].contains("read without a problem"), "page 3: {page_texts:?}");
+        assert!(
+            page_texts[2].contains("read without a problem"),
+            "page 3: {page_texts:?}"
+        );
 
         let doc = doc.expect("the failure warning needs an internal document");
         assert_eq!(

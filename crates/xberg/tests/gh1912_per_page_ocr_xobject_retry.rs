@@ -85,11 +85,13 @@ impl OcrBackend for StubBackend {
             let mut recovered = ExtractedDocument::default();
             match self.raster {
                 RasterOutcome::Word => recovered.content = RECOVERED_WORD.to_string(),
-                RasterOutcome::TableOnly => recovered.tables = vec![xberg::types::Table {
-                    cells: vec![vec!["Item".to_string(), "Amount".to_string()]],
-                    markdown: "| Item | Amount |\n| --- | --- |\n".to_string(),
-                    ..Default::default()
-                }],
+                RasterOutcome::TableOnly => {
+                    recovered.tables = vec![xberg::types::Table {
+                        cells: vec![vec!["Item".to_string(), "Amount".to_string()]],
+                        markdown: "| Item | Amount |\n| --- | --- |\n".to_string(),
+                        ..Default::default()
+                    }]
+                }
             }
             return Ok(recovered);
         }
@@ -247,7 +249,6 @@ fn a_blank_page_is_retried_on_its_embedded_image_with_a_pipeline() {
     assert_recovered(&result, RETRY_WARNING);
     assert_eq!(result.ocr_page_failures, vec![], "a blank page is not a failed page");
 }
-
 
 #[test]
 #[serial_test::serial]

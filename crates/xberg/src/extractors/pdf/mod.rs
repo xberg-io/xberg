@@ -7506,8 +7506,11 @@ mod tests {
             .extract_content(&mixed_native_and_scanned_pdf(), "application/pdf", &config)
             .await
             .expect("a failed automatic OCR run must keep the native text");
-        let result =
-            crate::extraction::derive::derive_extraction_result(internal, false, crate::core::config::OutputFormat::Plain);
+        let result = crate::extraction::derive::derive_extraction_result(
+            internal,
+            false,
+            crate::core::config::OutputFormat::Plain,
+        );
 
         assert!(
             result.content.contains(NATIVE_TEXT),
@@ -7522,7 +7525,12 @@ mod tests {
                     .message
                     .starts_with("Automatic OCR of detected scanned pages [2] failed (")
             })
-            .unwrap_or_else(|| panic!("the route-level warning must be present: {:?}", result.processing_warnings));
+            .unwrap_or_else(|| {
+                panic!(
+                    "the route-level warning must be present: {:?}",
+                    result.processing_warnings
+                )
+            });
         assert_eq!(
             result.ocr_page_failures.len(),
             1,
@@ -7555,7 +7563,10 @@ mod tests {
         const FAILURE: &str = "invented backend failure";
         let _backend = register_failing_ocr_backend(BACKEND_NAME, FAILURE);
 
-        for ocr_strategy in [OcrStrategy::ScannedPages { min_confidence: 0.7 }, OcrStrategy::default()] {
+        for ocr_strategy in [
+            OcrStrategy::ScannedPages { min_confidence: 0.7 },
+            OcrStrategy::default(),
+        ] {
             let config = ExtractionConfig {
                 ocr_strategy: ocr_strategy.clone(),
                 use_cache: false,
@@ -7583,7 +7594,10 @@ mod tests {
             );
             let failure = &result.ocr_page_failures[0];
             assert_eq!(failure.page, 2, "{ocr_strategy:?}");
-            assert!(!failure.recovered, "{ocr_strategy:?}: the scanned page has no native text");
+            assert!(
+                !failure.recovered,
+                "{ocr_strategy:?}: the scanned page has no native text"
+            );
             assert!(failure.error.contains(FAILURE), "{ocr_strategy:?}: {failure:?}");
             let expected_warning = format!(
                 "OCR of page 2 failed ({}); the page's native text was kept.",
@@ -7621,8 +7635,11 @@ mod tests {
             .extract_content(&mixed_native_and_scanned_pdf(), "application/pdf", &config)
             .await
             .expect("a failed targeted OCR fallback must keep the native text");
-        let result =
-            crate::extraction::derive::derive_extraction_result(internal, false, crate::core::config::OutputFormat::Plain);
+        let result = crate::extraction::derive::derive_extraction_result(
+            internal,
+            false,
+            crate::core::config::OutputFormat::Plain,
+        );
 
         assert!(
             result.content.contains(NATIVE_TEXT),
@@ -7633,7 +7650,12 @@ mod tests {
             .processing_warnings
             .iter()
             .find(|warning| warning.message.starts_with("Targeted OCR fallback failed ("))
-            .unwrap_or_else(|| panic!("the route-level warning must be present: {:?}", result.processing_warnings));
+            .unwrap_or_else(|| {
+                panic!(
+                    "the route-level warning must be present: {:?}",
+                    result.processing_warnings
+                )
+            });
         assert_eq!(
             result.ocr_page_failures.len(),
             1,

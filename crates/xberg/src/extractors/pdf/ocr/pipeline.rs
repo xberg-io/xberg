@@ -252,8 +252,12 @@ pub(super) enum OcrPageFailureOutcome {
     // ~keep Only the mixed route keeps native text, and that route needs `pdf`. Without the
     // gate the variant is never constructed on an `ocr`-only leg and fails `-D warnings`.
     #[cfg(feature = "pdf")]
-    NativeTextKept { native_text_present: bool },
-    RecoveredFromXObjects { text_recovered: bool },
+    NativeTextKept {
+        native_text_present: bool,
+    },
+    RecoveredFromXObjects {
+        text_recovered: bool,
+    },
     XObjectRetryEmpty,
     Unrecovered,
 }
@@ -1842,19 +1846,19 @@ pub(crate) async fn extract_full_document_ocr_pipeline_per_page(
         warnings,
         ocr_page_failures,
     ) = Box::pin(extract_mixed_ocr_native_with_layout_inputs(
-            &seed_text,
-            &boundaries,
-            MixedOcrPageSelection {
-                ocr: &page_numbers,
-                single_block: &single_block_pages,
-            },
-            content,
-            config,
-            AllPagesFailedPolicy::ReturnError,
-            #[cfg(feature = "layout-detection")]
-            MixedLayoutInputs::Prepared(prepared_layout_inputs),
-        ))
-        .await?;
+        &seed_text,
+        &boundaries,
+        MixedOcrPageSelection {
+            ocr: &page_numbers,
+            single_block: &single_block_pages,
+        },
+        content,
+        config,
+        AllPagesFailedPolicy::ReturnError,
+        #[cfg(feature = "layout-detection")]
+        MixedLayoutInputs::Prepared(prepared_layout_inputs),
+    ))
+    .await?;
     if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
         return Err(crate::XbergError::Cancelled);
     }
