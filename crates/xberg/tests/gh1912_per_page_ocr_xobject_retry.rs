@@ -51,8 +51,16 @@ fn png_size(bytes: &[u8]) -> Option<(u32, u32)> {
     Some((width, height))
 }
 
+/// What the stub reads from the embedded raster.
+#[derive(Clone, Copy)]
+enum RasterOutcome {
+    Word,
+    TableOnly,
+}
+
 struct StubBackend {
     render: RenderOutcome,
+    raster: RasterOutcome,
 }
 
 impl Plugin for StubBackend {
@@ -75,7 +83,14 @@ impl OcrBackend for StubBackend {
     async fn process_image(&self, image_bytes: &[u8], _config: &OcrConfig) -> xberg::Result<ExtractedDocument> {
         if png_size(image_bytes) == Some((RASTER_WIDTH_PX, RASTER_HEIGHT_PX)) {
             let mut recovered = ExtractedDocument::default();
-            recovered.content = RECOVERED_WORD.to_string();
+            match self.raster {
+                RasterOutcome::Word => recovered.content = RECOVERED_WORD.to_string(),
+                RasterOutcome::TableOnly => recovered.tables = vec![xberg::types::Table {
+                    cells: vec![vec!["Item".to_string(), "Amount".to_string()]],
+                    markdown: "| Item | Amount |\n| --- | --- |\n".to_string(),
+                    ..Default::default()
+                }],
+            }
             return Ok(recovered);
         }
         match self.render {
@@ -177,11 +192,16 @@ fn per_page_config(with_pipeline: bool) -> ExtractionConfig {
     }
 }
 
-/// Extract the fixture with the stub backend.
+/// Extract the fixture with a stub backend that reads the word from the embedded raster.
 fn extract(render: RenderOutcome, config: &ExtractionConfig) -> ExtractedDocument {
+    extract_with(render, RasterOutcome::Word, config)
+}
+
+/// Extract the fixture with the stub backend.
+fn extract_with(render: RenderOutcome, raster: RasterOutcome, config: &ExtractionConfig) -> ExtractedDocument {
     let pdf = pdf_with_image_on_page_two();
     let _ = unregister_ocr_backend("tesseract");
-    register_ocr_backend(Arc::new(StubBackend { render })).expect("the stub backend registers");
+    register_ocr_backend(Arc::new(StubBackend { render, raster })).expect("the stub backend registers");
     let result = extract_bytes_document_blocking(&pdf, "application/pdf", config);
     unregister_ocr_backend("tesseract").expect("the stub backend unregisters");
     result.expect("the retry must recover the page, so extraction must not error")
@@ -245,11 +265,38 @@ fn a_failed_page_is_retried_on_its_embedded_image_with_a_pipeline() {
     assert_eq!(result.ocr_page_failures, recovered_page_two());
 }
 
-/// The whole-document route (`force_ocr`) reports both failed pages: page 1 has nothing to fall
-/// back on, and page 2 is recovered from its embedded image.
+/// A failed page whose embedded image gives a table and no text is recovered content: the
+/// warning says "content", and the record still reports the page as recovered.
 #[test]
 #[serial_test::serial]
-fn a_whole_document_run_records_the_recovered_page_and_the_lost_page() {
+fn a_failed_page_recovered_as_a_table_is_recorded_as_recovered_content() {
+    let result = extract_with(RenderOutcome::Fails, RasterOutcome::TableOnly, &per_page_config(false));
+
+    assert!(
+        !result.content.contains(RECOVERED_WORD),
+        "the stub read no word from the raster; content: {:?}",
+        result.content
+    );
+    assert_eq!(result.tables.len(), 1, "the recovered table must survive");
+    assert_eq!(
+        result
+            .processing_warnings
+            .iter()
+            .filter(|warning| warning.message
+                == "OCR of page 2 failed (OCR error: stub render failure); its content was recovered from the page's \
+                    embedded image XObjects instead.")
+            .count(),
+        1,
+        "warnings: {:?}",
+        result.processing_warnings
+    );
+    assert_eq!(result.ocr_page_failures, recovered_page_two());
+}
+
+/// The whole-document route (`force_ocr`) carries the record of the recovered page too.
+#[test]
+#[serial_test::serial]
+fn a_whole_document_run_records_the_recovered_page() {
     let config = ExtractionConfig {
         ocr: Some(OcrConfig {
             backend: "tesseract".to_string(),
@@ -262,21 +309,5 @@ fn a_whole_document_run_records_the_recovered_page_and_the_lost_page() {
     };
     let result = extract(RenderOutcome::Fails, &config);
     assert_recovered(&result, FAILED_AND_RECOVERED_WARNING);
-
-    let mut failures = result.ocr_page_failures.clone();
-    failures.sort_by_key(|failure| failure.page);
-    assert_eq!(
-        failures
-            .iter()
-            .map(|failure| (failure.page, failure.recovered))
-            .collect::<Vec<_>>(),
-        vec![(1, false), (2, true)],
-        "records: {failures:?}"
-    );
-    for failure in &failures {
-        assert!(
-            failure.error.contains("stub render failure"),
-            "the record carries the backend error: {failure:?}"
-        );
-    }
+    assert_eq!(result.ocr_page_failures, recovered_page_two());
 }
