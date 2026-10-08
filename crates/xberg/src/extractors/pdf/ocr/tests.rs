@@ -3934,6 +3934,13 @@ mod tests {
             "the pipeline route records page 2 as kept"
         );
         assert!(
+            pipeline_result.9[0]
+                .error
+                .contains("OCR error: mock backend failure for square page"),
+            "the record carries the backend error: {:?}",
+            pipeline_result.9
+        );
+        assert!(
             pipeline_result.8.iter().any(|warning| warning.message
                 == format!(
                     "OCR of page 2 failed ({}); the page's native text was kept.",

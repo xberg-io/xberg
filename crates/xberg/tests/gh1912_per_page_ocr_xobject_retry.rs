@@ -228,27 +228,13 @@ fn a_blank_page_is_retried_on_its_embedded_image_with_a_pipeline() {
     assert_eq!(result.ocr_page_failures, vec![], "a blank page is not a failed page");
 }
 
-#[test]
-#[serial_test::serial]
-fn a_failed_page_recovered_from_its_embedded_image_is_recorded_without_a_pipeline() {
-    let result = extract(RenderOutcome::Fails, &per_page_config(false));
-    assert_recovered(&result, FAILED_AND_RECOVERED_WARNING);
-    assert_eq!(result.ocr_page_failures, recovered_page_two());
-}
-
-#[test]
-#[serial_test::serial]
-fn a_failed_page_recovered_from_its_embedded_image_is_recorded_with_a_pipeline() {
-    let result = extract(RenderOutcome::Fails, &per_page_config(true));
-    assert_recovered(&result, FAILED_AND_RECOVERED_WARNING);
-    assert_eq!(result.ocr_page_failures, recovered_page_two());
-}
 
 #[test]
 #[serial_test::serial]
 fn a_failed_page_is_retried_on_its_embedded_image_without_a_pipeline() {
     let result = extract(RenderOutcome::Fails, &per_page_config(false));
     assert_recovered(&result, FAILED_AND_RECOVERED_WARNING);
+    assert_eq!(result.ocr_page_failures, recovered_page_two());
 }
 
 #[test]
@@ -256,4 +242,41 @@ fn a_failed_page_is_retried_on_its_embedded_image_without_a_pipeline() {
 fn a_failed_page_is_retried_on_its_embedded_image_with_a_pipeline() {
     let result = extract(RenderOutcome::Fails, &per_page_config(true));
     assert_recovered(&result, FAILED_AND_RECOVERED_WARNING);
+    assert_eq!(result.ocr_page_failures, recovered_page_two());
+}
+
+/// The whole-document route (`force_ocr`) reports both failed pages: page 1 has nothing to fall
+/// back on, and page 2 is recovered from its embedded image.
+#[test]
+#[serial_test::serial]
+fn a_whole_document_run_records_the_recovered_page_and_the_lost_page() {
+    let config = ExtractionConfig {
+        ocr: Some(OcrConfig {
+            backend: "tesseract".to_string(),
+            ..Default::default()
+        }),
+        force_ocr: true,
+        ocr_embedded_images: Some(false),
+        use_cache: false,
+        ..Default::default()
+    };
+    let result = extract(RenderOutcome::Fails, &config);
+    assert_recovered(&result, FAILED_AND_RECOVERED_WARNING);
+
+    let mut failures = result.ocr_page_failures.clone();
+    failures.sort_by_key(|failure| failure.page);
+    assert_eq!(
+        failures
+            .iter()
+            .map(|failure| (failure.page, failure.recovered))
+            .collect::<Vec<_>>(),
+        vec![(1, false), (2, true)],
+        "records: {failures:?}"
+    );
+    for failure in &failures {
+        assert!(
+            failure.error.contains("stub render failure"),
+            "the record carries the backend error: {failure:?}"
+        );
+    }
 }
