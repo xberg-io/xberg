@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **(ocr): failed OCR pages are reported as structured data.** `ExtractedDocument` has a new `ocr_page_failures` list.
+  Each `OcrPageFailure` gives the 1-based `page`, the backend `error` text, and `recovered`, which is `true` when the
+  page still has content from native text or from its embedded images. Every `OCR of page N failed` entry in
+  `processing_warnings` has a matching record, for every PDF OCR route and backend, and those entries keep their
+  wording. (GH#2062)
+
 ## [1.3.7] - 2026-10-08
 
 ### Fixed
