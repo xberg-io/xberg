@@ -674,3 +674,38 @@ fn page_content_json_format_pages_stay_raw() {
         pages[0].content,
     );
 }
+
+#[test]
+fn derive_moves_ocr_page_failures_to_the_result() {
+    let failures = vec![crate::types::OcrPageFailure {
+        page: 2,
+        error: "backend refused the page".to_string(),
+        recovered: true,
+    }];
+    let mut doc = make_doc("pdf");
+    doc.push_element(InternalElement::text(ElementKind::Paragraph, "Hello world.", 0));
+    doc.ocr_page_failures = failures.clone();
+
+    let result = derive_extraction_result(doc, false, crate::core::config::OutputFormat::Plain);
+    assert_eq!(result.content, "Hello world.");
+    assert_eq!(result.ocr_page_failures, failures);
+}
+
+#[test]
+fn internal_document_round_trip_keeps_ocr_page_failures() {
+    let failures = vec![crate::types::OcrPageFailure {
+        page: 4,
+        error: "backend timed out".to_string(),
+        recovered: false,
+    }];
+    let result = ExtractedDocument {
+        content: "Hello world.".to_string(),
+        mime_type: Cow::Borrowed("application/pdf"),
+        ocr_page_failures: failures.clone(),
+        ..Default::default()
+    };
+
+    let doc = crate::types::internal::InternalDocument::from(result);
+    assert_eq!(doc.pre_rendered_content.as_deref(), Some("Hello world."));
+    assert_eq!(doc.ocr_page_failures, failures);
+}

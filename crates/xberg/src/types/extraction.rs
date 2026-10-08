@@ -108,6 +108,21 @@ pub struct LanguageConfidence {
     pub reliable: bool,
 }
 
+/// A page whose OCR failed while extraction of the document continued.
+///
+/// Each record matches one page-failure entry in `ExtractedDocument::processing_warnings`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "alef-meta", alef(since = "1.3.8"))]
+pub struct OcrPageFailure {
+    /// Page number, starting at 1.
+    pub page: u32,
+    /// Error text that the OCR backend returned for the page.
+    pub error: String,
+    /// `true` when the page still has content from another route (native text or embedded images).
+    pub recovered: bool,
+}
+
 /// Document extracted by the core extraction pipeline.
 ///
 /// `extract` and `extract_batch` return an `ExtractionResult` envelope whose
@@ -425,6 +440,13 @@ pub struct ExtractedDocument {
     /// enabled (default) and the document is a fillable form. Empty otherwise.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub form_fields: Vec<super::form_field::PdfFormField>,
+
+    /// Pages whose OCR failed while extraction continued, in the order the failures were reported.
+    ///
+    /// Empty when no page failed and for inputs that have no page-level OCR.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    #[cfg_attr(feature = "alef-meta", alef(since = "1.3.8"))]
+    pub ocr_page_failures: Vec<OcrPageFailure>,
 
     /// Pre-rendered content in the requested output format.
     ///
@@ -1091,6 +1113,58 @@ mod tests {
             result.form_fields.is_empty(),
             "omitted form_fields must default to empty vec"
         );
+    }
+
+    #[test]
+    fn extraction_result_ocr_page_failures_are_omitted_when_empty_and_round_trip_when_present() {
+        let json = r#"{
+            "content": "hello",
+            "mime_type": "text/plain",
+            "metadata": {},
+            "tables": []
+        }"#;
+        let omitted: ExtractedDocument = serde_json::from_str(json).unwrap();
+        assert!(
+            omitted.ocr_page_failures.is_empty(),
+            "omitted ocr_page_failures must default to empty vec"
+        );
+        let serialized_empty = serde_json::to_value(&omitted).unwrap();
+        assert!(
+            serialized_empty.get("content").is_some(),
+            "the serialized result must carry its other fields"
+        );
+        assert!(
+            serialized_empty.get("ocr_page_failures").is_none(),
+            "empty ocr_page_failures must not be serialized"
+        );
+
+        let failures = vec![
+            OcrPageFailure {
+                page: 2,
+                error: "backend refused the page".to_string(),
+                recovered: true,
+            },
+            OcrPageFailure {
+                page: 5,
+                error: "backend timed out".to_string(),
+                recovered: false,
+            },
+        ];
+        let result = ExtractedDocument {
+            content: "hello".to_string(),
+            ocr_page_failures: failures.clone(),
+            ..Default::default()
+        };
+        let serialized = serde_json::to_value(&result).unwrap();
+        assert_eq!(
+            serialized["ocr_page_failures"],
+            serde_json::json!([
+                {"page": 2, "error": "backend refused the page", "recovered": true},
+                {"page": 5, "error": "backend timed out", "recovered": false}
+            ])
+        );
+        let round_tripped: ExtractedDocument = serde_json::from_value(serialized).unwrap();
+        assert_eq!(round_tripped.ocr_page_failures, failures);
     }
 
     #[test]

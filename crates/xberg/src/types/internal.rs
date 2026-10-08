@@ -356,6 +356,12 @@ pub struct InternalDocument {
     /// `derive_extraction_result` transfers this directly to `ExtractedDocument.form_fields`.
     pub form_fields: Vec<crate::types::PdfFormField>,
 
+    /// Pages whose OCR failed while extraction continued.
+    ///
+    /// Set by the PDF OCR routes beside the matching entries in `processing_warnings`.
+    /// `derive_extraction_result` transfers this directly to `ExtractedDocument.ocr_page_failures`.
+    pub ocr_page_failures: Vec<crate::types::OcrPageFailure>,
+
     /// Mathematical formulas recognized during layout-guided OCR.
     ///
     /// Set by the OCR pipeline (per-page formulas, renumbered to document pages).
@@ -464,6 +470,7 @@ impl From<crate::types::extraction::ExtractedDocument> for InternalDocument {
         doc.prebuilt_ocr_elements = result.ocr_elements;
         doc.revisions = result.revisions;
         doc.form_fields = result.form_fields;
+        doc.ocr_page_failures = result.ocr_page_failures;
         doc.formulas = result.formulas;
         doc.pre_rendered_content = if result.content.is_empty() {
             None
@@ -512,6 +519,7 @@ impl InternalDocument {
             page_marker_format: None,
             table_anchors: false,
             form_fields: Vec::new(),
+            ocr_page_failures: Vec::new(),
             formulas: Vec::new(),
             recorded_formulas: Vec::new(),
             #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]

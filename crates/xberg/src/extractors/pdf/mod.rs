@@ -2067,6 +2067,8 @@ impl PdfExtractor {
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         let mut ocr_fallback_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+        let mut ocr_page_failures: Vec<crate::types::OcrPageFailure> = Vec::new();
+        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         #[allow(unused_assignments)]
         let mut ocr_layout_gate_audit: OcrLayoutGateDecisions = (None, None);
 
@@ -2159,6 +2161,7 @@ impl PdfExtractor {
                             mixed_preprocessing,
                             mixed_ocr_confidence,
                             mixed_warnings,
+                            mixed_page_failures,
                         ) = ocr::extract_mixed_ocr_native_with_single_block_pages(
                             &native_text,
                             bounds,
@@ -2180,6 +2183,7 @@ impl PdfExtractor {
                         ocr_preprocessing_by_page.extend(mixed_preprocessing);
                         ocr_confidence_by_page.extend(mixed_ocr_confidence);
                         ocr_fallback_warnings.extend(mixed_warnings);
+                        ocr_page_failures.extend(mixed_page_failures);
                         (mixed, extraction_method)
                     } else {
                         tracing::warn!("force_ocr_pages set but no page boundaries available; using native text");
@@ -2235,6 +2239,7 @@ impl PdfExtractor {
                         mixed_preprocessing,
                         mixed_ocr_confidence,
                         mixed_warnings,
+                        mixed_page_failures,
                     )) => {
                         // `Mixed` must mean "OCR contributed text", not "OCR was attempted". When
                         // every candidate page was rejected (blank render, failed decode, empty
@@ -2260,6 +2265,7 @@ impl PdfExtractor {
                         ocr_preprocessing_by_page.extend(mixed_preprocessing);
                         ocr_confidence_by_page.extend(mixed_ocr_confidence);
                         ocr_fallback_warnings.extend(mixed_warnings);
+                        ocr_page_failures.extend(mixed_page_failures);
                         if ocr_contributed {
                             (mixed, mixed_method)
                         } else {
@@ -2275,6 +2281,12 @@ impl PdfExtractor {
                         if failed_ocr_fallback_is_total_loss(&native_text) {
                             return Err(e);
                         }
+                        ocr_page_failures.extend(ocr::route_level_ocr_page_failures(
+                            &scanned_pages,
+                            &e,
+                            &native_text,
+                            bounds,
+                        ));
                         ocr_fallback_warnings.push(crate::types::ProcessingWarning {
                             source: std::borrow::Cow::Borrowed("ocr"),
                             message: std::borrow::Cow::Owned(format!(
@@ -2499,6 +2511,7 @@ impl PdfExtractor {
                                 mixed_preprocessing,
                                 mixed_ocr_confidence,
                                 mixed_warnings,
+                                mixed_page_failures,
                             )) => {
                                 let extraction_method = extraction_method_after_mixed_ocr(&results_map);
                                 ocr_llm_usage = mixed_llm_usage;
@@ -2511,6 +2524,7 @@ impl PdfExtractor {
                                 ocr_preprocessing_by_page.extend(mixed_preprocessing);
                                 ocr_confidence_by_page.extend(mixed_ocr_confidence);
                                 ocr_fallback_warnings.extend(mixed_warnings);
+                                ocr_page_failures.extend(mixed_page_failures);
                                 (mixed, extraction_method)
                             }
                             Err(e) => {
@@ -2522,6 +2536,12 @@ impl PdfExtractor {
                                 if failed_ocr_fallback_is_total_loss(&native_text) {
                                     return Err(e);
                                 }
+                                ocr_page_failures.extend(ocr::route_level_ocr_page_failures(
+                                    &pages,
+                                    &e,
+                                    &native_text,
+                                    bounds,
+                                ));
                                 ocr_fallback_warnings.push(crate::types::ProcessingWarning {
                                     source: std::borrow::Cow::Borrowed("ocr"),
                                     message: std::borrow::Cow::Owned(format!(
@@ -2748,6 +2768,8 @@ impl PdfExtractor {
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         doc.processing_warnings.append(&mut ocr_fallback_warnings);
+        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+        doc.ocr_page_failures.append(&mut ocr_page_failures);
 
         doc.processing_warnings.append(&mut pdf_extraction_warnings);
 
@@ -7459,6 +7481,120 @@ mod tests {
         assert_eq!(ocr_chunks.len(), 1, "automatic chunks must not duplicate OCR text");
         assert_eq!(ocr_chunks[0].metadata.first_page, Some(2));
         assert_eq!(ocr_chunks[0].metadata.last_page, Some(2));
+    }
+
+    /// GH#2062: when the automatic OCR of the detected scanned pages fails as a whole, each
+    /// selected page gets a record beside the route-level warning.
+    #[tokio::test]
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    #[serial]
+    async fn route_level_failure_records_each_scanned_page() {
+        use crate::core::config::{OcrConfig, OcrStrategy};
+
+        const NATIVE_TEXT: &str = "Issue 1281 native text remains on page one";
+        let config = ExtractionConfig {
+            ocr_strategy: OcrStrategy::ScannedPages { min_confidence: 0.7 },
+            use_cache: false,
+            ocr: Some(OcrConfig {
+                backend: "pdf-2062-backend-that-is-not-registered".to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let internal = PdfExtractor::new()
+            .extract_content(&mixed_native_and_scanned_pdf(), "application/pdf", &config)
+            .await
+            .expect("a failed automatic OCR run must keep the native text");
+        let result =
+            crate::extraction::derive::derive_extraction_result(internal, false, crate::core::config::OutputFormat::Plain);
+
+        assert!(
+            result.content.contains(NATIVE_TEXT),
+            "the native page must survive: {:?}",
+            result.content
+        );
+        let route_warning = result
+            .processing_warnings
+            .iter()
+            .find(|warning| {
+                warning
+                    .message
+                    .starts_with("Automatic OCR of detected scanned pages [2] failed (")
+            })
+            .unwrap_or_else(|| panic!("the route-level warning must be present: {:?}", result.processing_warnings));
+        assert_eq!(
+            result.ocr_page_failures.len(),
+            1,
+            "only the scanned page is recorded: {:?}",
+            result.ocr_page_failures
+        );
+        let failure = &result.ocr_page_failures[0];
+        assert_eq!(failure.page, 2);
+        assert!(!failure.recovered, "the scanned page has no native text to keep");
+        assert_eq!(
+            route_warning.message,
+            format!(
+                "Automatic OCR of detected scanned pages [2] failed ({}); those pages retain their native text, \
+                 which may be empty or incomplete.",
+                failure.error
+            ),
+            "the record carries the same error as the warning"
+        );
+    }
+
+    /// GH#2062: the same record for the targeted fallback of the default `Auto` strategy.
+    #[tokio::test]
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    #[serial]
+    async fn targeted_fallback_failure_records_each_selected_page() {
+        use crate::core::config::OcrConfig;
+
+        const NATIVE_TEXT: &str = "Issue 1281 native text remains on page one";
+        let config = ExtractionConfig {
+            use_cache: false,
+            ocr: Some(OcrConfig {
+                backend: "pdf-2062-backend-that-is-not-registered".to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let internal = PdfExtractor::new()
+            .extract_content(&mixed_native_and_scanned_pdf(), "application/pdf", &config)
+            .await
+            .expect("a failed targeted OCR fallback must keep the native text");
+        let result =
+            crate::extraction::derive::derive_extraction_result(internal, false, crate::core::config::OutputFormat::Plain);
+
+        assert!(
+            result.content.contains(NATIVE_TEXT),
+            "the native page must survive: {:?}",
+            result.content
+        );
+        let route_warning = result
+            .processing_warnings
+            .iter()
+            .find(|warning| warning.message.starts_with("Targeted OCR fallback failed ("))
+            .unwrap_or_else(|| panic!("the route-level warning must be present: {:?}", result.processing_warnings));
+        assert_eq!(
+            result.ocr_page_failures.len(),
+            1,
+            "only the selected page is recorded: {:?}",
+            result.ocr_page_failures
+        );
+        let failure = &result.ocr_page_failures[0];
+        assert_eq!(failure.page, 2);
+        assert!(!failure.recovered, "the selected page has no native text to keep");
+        assert_eq!(
+            route_warning.message,
+            format!(
+                "Targeted OCR fallback failed ({}) for pages [2]; those pages retain native text that was below the \
+                 OCR-trigger quality threshold and may be empty or incomplete.",
+                failure.error
+            ),
+            "the record carries the same error as the warning"
+        );
     }
 
     /// xberg#1667: a native text layer produced by a fabricated character mapping

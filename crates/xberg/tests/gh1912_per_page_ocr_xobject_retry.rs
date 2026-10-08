@@ -18,6 +18,7 @@ use async_trait::async_trait;
 use helpers::extract_bytes_document_blocking;
 use std::sync::Arc;
 use xberg::ExtractedDocument;
+use xberg::OcrPageFailure;
 use xberg::core::config::{ExtractionConfig, OcrConfig, OcrPipelineConfig, OcrPipelineStage};
 use xberg::plugins::{OcrBackend, OcrBackendType, Plugin, register_ocr_backend, unregister_ocr_backend};
 
@@ -202,11 +203,21 @@ fn assert_recovered(result: &ExtractedDocument, expected_warning: &str) {
     );
 }
 
+/// The one record a failed and recovered page 2 gives.
+fn recovered_page_two() -> Vec<OcrPageFailure> {
+    vec![OcrPageFailure {
+        page: 2,
+        error: "OCR error: stub render failure".to_string(),
+        recovered: true,
+    }]
+}
+
 #[test]
 #[serial_test::serial]
 fn a_blank_page_is_retried_on_its_embedded_image_without_a_pipeline() {
     let result = extract(RenderOutcome::Blank, &per_page_config(false));
     assert_recovered(&result, RETRY_WARNING);
+    assert_eq!(result.ocr_page_failures, vec![], "a blank page is not a failed page");
 }
 
 #[test]
@@ -214,6 +225,23 @@ fn a_blank_page_is_retried_on_its_embedded_image_without_a_pipeline() {
 fn a_blank_page_is_retried_on_its_embedded_image_with_a_pipeline() {
     let result = extract(RenderOutcome::Blank, &per_page_config(true));
     assert_recovered(&result, RETRY_WARNING);
+    assert_eq!(result.ocr_page_failures, vec![], "a blank page is not a failed page");
+}
+
+#[test]
+#[serial_test::serial]
+fn a_failed_page_recovered_from_its_embedded_image_is_recorded_without_a_pipeline() {
+    let result = extract(RenderOutcome::Fails, &per_page_config(false));
+    assert_recovered(&result, FAILED_AND_RECOVERED_WARNING);
+    assert_eq!(result.ocr_page_failures, recovered_page_two());
+}
+
+#[test]
+#[serial_test::serial]
+fn a_failed_page_recovered_from_its_embedded_image_is_recorded_with_a_pipeline() {
+    let result = extract(RenderOutcome::Fails, &per_page_config(true));
+    assert_recovered(&result, FAILED_AND_RECOVERED_WARNING);
+    assert_eq!(result.ocr_page_failures, recovered_page_two());
 }
 
 #[test]

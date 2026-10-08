@@ -3667,6 +3667,107 @@ mod tests {
         buf
     }
 
+    /// GH#2062: the four page-failure messages are public text that callers match on, so each
+    /// is pinned here as a literal beside the record the same call returns.
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    #[test]
+    fn builder_keeps_each_warning_wording_and_pairs_it_with_a_record() {
+        use crate::types::OcrPageFailure;
+
+        let cases = [
+            (
+                OcrPageFailureOutcome::NativeTextKept {
+                    native_text_present: true,
+                },
+                "OCR of page 7 failed (backend refused); the page's native text was kept.",
+                true,
+            ),
+            (
+                OcrPageFailureOutcome::NativeTextKept {
+                    native_text_present: false,
+                },
+                "OCR of page 7 failed (backend refused); the page's native text was kept.",
+                false,
+            ),
+            (
+                OcrPageFailureOutcome::RecoveredFromXObjects { text_recovered: true },
+                "OCR of page 7 failed (backend refused); its text was recovered from the page's embedded image \
+                 XObjects instead.",
+                true,
+            ),
+            (
+                OcrPageFailureOutcome::RecoveredFromXObjects { text_recovered: false },
+                "OCR of page 7 failed (backend refused); its content was recovered from the page's embedded image \
+                 XObjects instead.",
+                true,
+            ),
+            (
+                OcrPageFailureOutcome::XObjectRetryEmpty,
+                "OCR of page 7 failed (backend refused); the retry on the page's embedded image XObjects also \
+                 returned no text.",
+                false,
+            ),
+            (
+                OcrPageFailureOutcome::Unrecovered,
+                "OCR of page 7 failed and could not be recovered: backend refused",
+                false,
+            ),
+        ];
+        for (outcome, message, recovered) in cases {
+            let (warning, failure) = ocr_page_failure(7, "backend refused", outcome);
+            assert_eq!(warning.source, "ocr", "{outcome:?}");
+            assert_eq!(warning.message, message, "{outcome:?}");
+            assert_eq!(
+                failure,
+                OcrPageFailure {
+                    page: 7,
+                    error: "backend refused".to_string(),
+                    recovered,
+                },
+                "{outcome:?}"
+            );
+        }
+    }
+
+    /// GH#2062: a route-level failure gives one record for each page it was asked to read, and
+    /// `recovered` follows the native text of that page.
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    #[test]
+    fn route_level_failure_reports_recovered_from_the_native_text_of_each_page() {
+        use crate::types::{OcrPageFailure, PageBoundary};
+
+        let native_text = "kept text\n \n";
+        let boundaries = [
+            PageBoundary {
+                byte_start: 0,
+                byte_end: 9,
+                page_number: 1,
+            },
+            PageBoundary {
+                byte_start: 10,
+                byte_end: 11,
+                page_number: 2,
+            },
+        ];
+        let error = crate::XbergError::Ocr {
+            message: "backend is absent".to_string(),
+            source: None,
+        };
+
+        let failures = route_level_ocr_page_failures(&[1, 2, 3], &error, native_text, &boundaries);
+
+        let record = |page: u32, recovered: bool| OcrPageFailure {
+            page,
+            error: "OCR error: backend is absent".to_string(),
+            recovered,
+        };
+        assert_eq!(
+            failures,
+            vec![record(1, true), record(2, false), record(3, false)],
+            "page 1 has text, page 2 is whitespace, page 3 has no boundary"
+        );
+    }
+
     #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
     #[tokio::test]
     #[serial_test::serial]
@@ -3771,6 +3872,18 @@ mod tests {
                 .count(),
             1
         );
+        let page_two_kept = |error: &str| {
+            vec![crate::types::OcrPageFailure {
+                page: 2,
+                error: error.to_string(),
+                recovered: true,
+            }]
+        };
+        assert_eq!(
+            result.9,
+            page_two_kept("OCR error: mock backend failure for square page"),
+            "the single-backend route records the failed page and no successful page"
+        );
 
         let pipeline_config = ExtractionConfig {
             force_ocr_pages: Some(vec![1, 2, 3]),
@@ -3808,6 +3921,49 @@ mod tests {
                 .filter(|warning| warning.message.contains("OCR of page 2 failed"))
                 .count(),
             1
+        );
+        assert_eq!(
+            pipeline_result.9.len(),
+            1,
+            "the pipeline route records the failed page and no successful page: {:?}",
+            pipeline_result.9
+        );
+        assert_eq!(
+            pipeline_result.9,
+            page_two_kept(&pipeline_result.9[0].error),
+            "the pipeline route records page 2 as kept"
+        );
+        assert!(
+            pipeline_result.8.iter().any(|warning| warning.message
+                == format!(
+                    "OCR of page 2 failed ({}); the page's native text was kept.",
+                    pipeline_result.9[0].error
+                )),
+            "the record carries the same error as its warning: {:?}",
+            pipeline_result.8
+        );
+
+        // ~keep Same wording, different record: page 2 has no native text here, so nothing was kept.
+        let mut empty_page_two = boundaries.clone();
+        empty_page_two[1].byte_end = empty_page_two[1].byte_start;
+        let empty_native = extract_mixed_ocr_native(&native_text, &empty_page_two, &[1, 2, 3], &pdf, &config, None)
+            .await
+            .expect("an empty native page must not change the outcome of the other pages");
+        assert_eq!(
+            empty_native.9,
+            vec![crate::types::OcrPageFailure {
+                page: 2,
+                error: "OCR error: mock backend failure for square page".to_string(),
+                recovered: false,
+            }],
+            "a failed page with no native text is not recovered"
+        );
+        assert!(
+            empty_native.8.iter().any(|warning| warning.message
+                == "OCR of page 2 failed (OCR error: mock backend failure for square page); the page's native text \
+                    was kept."),
+            "the warning wording does not depend on the native text: {:?}",
+            empty_native.8
         );
 
         let square_pdf = build_minimal_pdf_with_media_boxes(&[(504, 504), (504, 504)]);
@@ -3859,6 +4015,15 @@ mod tests {
         .expect("an automatic per-page route must preserve native text when every OCR page fails");
         assert_eq!(automatic_result.0, square_native);
         assert_eq!(automatic_result.8.len(), 2);
+        assert_eq!(
+            automatic_result
+                .9
+                .iter()
+                .map(|failure| (failure.page, failure.recovered))
+                .collect::<Vec<_>>(),
+            vec![(1, true), (2, true)],
+            "every failed page is recorded when all of them fail"
+        );
 
         crate::plugins::unregister_ocr_backend(BACKEND_NAME).unwrap();
     }
@@ -10419,9 +10584,17 @@ Name: ___
             "the failed page's text must come from its embedded image XObject"
         );
 
-        let warnings = doc
-            .expect("the fallback and failure warnings must produce an internal document")
-            .processing_warnings;
+        let doc = doc.expect("the fallback and failure warnings must produce an internal document");
+        assert_eq!(
+            doc.ocr_page_failures,
+            vec![crate::types::OcrPageFailure {
+                page: 1,
+                error: format!("Plugin error in 'ocr': {VLM_NO_CONTENT_ERROR}"),
+                recovered: true,
+            }],
+            "the recovered page is recorded as recovered"
+        );
+        let warnings = doc.processing_warnings;
         assert!(
             warnings
                 .iter()
@@ -10525,10 +10698,27 @@ Name: ___
         assert!(text.is_empty(), "the backend returned no prose outside the table");
         assert_eq!(tables.len(), 1, "the recovered table must survive");
         assert_eq!(tables[0].cells, [["Item", "Amount"]]);
+        let document = document.expect("the structured retry page must survive");
         assert_eq!(
-            document.expect("the structured retry page must survive").tables.len(),
+            document.tables.len(),
             1,
             "the recovered table must count as structured page content"
+        );
+        assert_eq!(
+            document
+                .ocr_page_failures
+                .iter()
+                .map(|failure| (failure.page, failure.recovered))
+                .collect::<Vec<_>>(),
+            vec![(1, true)],
+            "a page recovered as a table is recorded as recovered"
+        );
+        assert!(
+            document.processing_warnings.iter().any(|warning| warning
+                .message
+                .contains("its content was recovered from the page's embedded image XObjects instead.")),
+            "the warning names content, not text: {:?}",
+            document.processing_warnings
         );
     }
 
@@ -10629,6 +10819,121 @@ Name: ___
             error.contains("retry") && error.contains("no text"),
             "the error must name the embedded-image retry's own empty outcome, not just repeat \
              the first failure as though the retry were never attempted; got: {error}"
+        );
+    }
+
+    /// GH#2062: on the whole-document route a page with no embedded image to retry stays
+    /// failed. It gets the "could not be recovered" warning and a record, and the pages that
+    /// succeeded get neither.
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn whole_document_route_records_an_unrecovered_page() {
+        use crate::core::config::OcrConfig;
+        use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
+        use crate::types::ExtractedDocument;
+        use std::sync::Arc;
+
+        const BACKEND_NAME: &str = "whole-document-unrecovered-page-test-backend";
+        const PAGE_TEXT: &str = "This page was read without a problem, and its text is long enough that the page is \
+            never taken for a blank one. This page was read without a problem, and its text is long enough that the \
+            page is never taken for a blank one. This page was read without a problem.";
+
+        struct FailSquarePageBackend;
+
+        #[async_trait::async_trait]
+        impl OcrBackend for FailSquarePageBackend {
+            fn backend_type(&self) -> OcrBackendType {
+                OcrBackendType::Custom
+            }
+            fn supports_language(&self, _: &str) -> bool {
+                true
+            }
+            async fn process_image(&self, data: &[u8], _: &OcrConfig) -> crate::Result<ExtractedDocument> {
+                let image = image::load_from_memory(data).map_err(|error| crate::XbergError::Ocr {
+                    message: format!("test backend could not decode page: {error}"),
+                    source: None,
+                })?;
+                if image.width() == image.height() {
+                    return Err(crate::XbergError::Ocr {
+                        message: "square page refused".to_string(),
+                        source: None,
+                    });
+                }
+                Ok(ExtractedDocument {
+                    content: PAGE_TEXT.to_string(),
+                    ..Default::default()
+                })
+            }
+            fn supports_document_processing(&self) -> bool {
+                false
+            }
+        }
+
+        impl Plugin for FailSquarePageBackend {
+            fn name(&self) -> &str {
+                BACKEND_NAME
+            }
+            fn version(&self) -> String {
+                "1.0.0".to_string()
+            }
+            fn initialize(&self) -> crate::Result<()> {
+                Ok(())
+            }
+            fn shutdown(&self) -> crate::Result<()> {
+                Ok(())
+            }
+        }
+
+        crate::plugins::register_ocr_backend(Arc::new(FailSquarePageBackend)).unwrap();
+
+        let pdf = build_minimal_pdf_with_media_boxes(&[(612, 792), (504, 504), (612, 792)]);
+        let config = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                backend: BACKEND_NAME.to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let result = extract_with_ocr(
+            Some(&pdf),
+            None,
+            #[cfg(feature = "layout-detection")]
+            None,
+            &config,
+            None,
+        )
+        .await;
+
+        crate::plugins::unregister_ocr_backend(BACKEND_NAME).unwrap();
+
+        let (_, _, _, _, doc, _, page_texts, _, _, _, _) =
+            result.expect("one failed page must not fail a document whose other pages were read");
+        assert_eq!(page_texts.len(), 3);
+        assert!(page_texts[0].contains("read without a problem"), "page 1: {page_texts:?}");
+        assert!(page_texts[1].trim().is_empty(), "page 2: {page_texts:?}");
+        assert!(page_texts[2].contains("read without a problem"), "page 3: {page_texts:?}");
+
+        let doc = doc.expect("the failure warning needs an internal document");
+        assert_eq!(
+            doc.ocr_page_failures,
+            vec![crate::types::OcrPageFailure {
+                page: 2,
+                error: "OCR error: square page refused".to_string(),
+                recovered: false,
+            }],
+            "only the failed page is recorded"
+        );
+        assert_eq!(
+            doc.processing_warnings
+                .iter()
+                .filter(|warning| warning.message
+                    == "OCR of page 2 failed and could not be recovered: OCR error: square page refused")
+                .count(),
+            1,
+            "the warning keeps its wording: {:?}",
+            doc.processing_warnings
         );
     }
 
@@ -10737,9 +11042,17 @@ Name: ___
             "the successful page's text must survive into the document; got: {text}"
         );
 
-        let warnings = doc
-            .expect("a per-page failure warning needs an internal document")
-            .processing_warnings;
+        let doc = doc.expect("a per-page failure warning needs an internal document");
+        assert_eq!(
+            doc.ocr_page_failures,
+            vec![crate::types::OcrPageFailure {
+                page: 1,
+                error: format!("Plugin error in 'ocr': {VLM_NO_CONTENT_ERROR}"),
+                recovered: false,
+            }],
+            "the page whose retry returned nothing is recorded as not recovered, and page 2 is not recorded"
+        );
+        let warnings = doc.processing_warnings;
         assert!(
             warnings.iter().any(|w| w.message.contains("OCR of page 1 failed")
                 && w.message

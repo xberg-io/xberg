@@ -245,22 +245,128 @@ fn repair_numeric_tokens_in_table(table: &mut crate::types::Table) {
     }
 }
 
-#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-fn push_mixed_ocr_page_failure_warning(
-    warnings: &mut Vec<crate::types::ProcessingWarning>,
-    page_idx: usize,
-    error: &crate::XbergError,
-) {
-    crate::core::diagnostics::push_warning_deduped(
-        warnings,
+/// How a page ended after its OCR failed.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum OcrPageFailureOutcome {
+    // ~keep Only the mixed route keeps native text, and that route needs `pdf`. Without the
+    // gate the variant is never constructed on an `ocr`-only leg and fails `-D warnings`.
+    #[cfg(feature = "pdf")]
+    NativeTextKept { native_text_present: bool },
+    RecoveredFromXObjects { text_recovered: bool },
+    XObjectRetryEmpty,
+    Unrecovered,
+}
+
+/// Build the warning and the structured record for one page whose OCR failed.
+///
+/// ~keep Both values come from the same `page`, `error` and `outcome`, so the record never
+/// depends on the wording of the warning. `NativeTextKept` reports `recovered` from the page's
+/// native text, which can be empty while the wording stays the same (GH#2062).
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(super) fn ocr_page_failure(
+    page: u32,
+    error: &str,
+    outcome: OcrPageFailureOutcome,
+) -> (crate::types::ProcessingWarning, crate::types::OcrPageFailure) {
+    let (message, recovered) = match outcome {
+        #[cfg(feature = "pdf")]
+        OcrPageFailureOutcome::NativeTextKept { native_text_present } => (
+            format!("OCR of page {page} failed ({error}); the page's native text was kept."),
+            native_text_present,
+        ),
+        OcrPageFailureOutcome::RecoveredFromXObjects { text_recovered } => {
+            let recovered_kind = if text_recovered { "text" } else { "content" };
+            (
+                format!(
+                    "OCR of page {page} failed ({error}); its {recovered_kind} was recovered from the page's \
+                     embedded image XObjects instead."
+                ),
+                true,
+            )
+        }
+        OcrPageFailureOutcome::XObjectRetryEmpty => (
+            format!(
+                "OCR of page {page} failed ({error}); the retry on the page's embedded image \
+                 XObjects also returned no text."
+            ),
+            false,
+        ),
+        OcrPageFailureOutcome::Unrecovered => (
+            format!("OCR of page {page} failed and could not be recovered: {error}"),
+            false,
+        ),
+    };
+    (
         crate::types::ProcessingWarning {
             source: std::borrow::Cow::Borrowed("ocr"),
-            message: std::borrow::Cow::Owned(format!(
-                "OCR of page {} failed ({error}); the page's native text was kept.",
-                page_idx + 1
-            )),
+            message: std::borrow::Cow::Owned(message),
         },
-    );
+        crate::types::OcrPageFailure {
+            page,
+            error: error.to_string(),
+            recovered,
+        },
+    )
+}
+
+/// Whether the native text layer holds text for `page_number`.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn native_page_text_present(native_text: &str, boundaries: &[crate::types::PageBoundary], page_number: u32) -> bool {
+    boundaries
+        .iter()
+        .find(|boundary| boundary.page_number == page_number)
+        .and_then(|boundary| native_text.get(boundary.byte_start..boundary.byte_end))
+        .is_some_and(|page_text| !page_text.trim().is_empty())
+}
+
+/// Records for a route-level OCR failure: one for each page the route was asked to read.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(crate) fn route_level_ocr_page_failures(
+    pages: &[u32],
+    error: &crate::XbergError,
+    native_text: &str,
+    boundaries: &[crate::types::PageBoundary],
+) -> Vec<crate::types::OcrPageFailure> {
+    let error = error.to_string();
+    pages
+        .iter()
+        .map(|&page| crate::types::OcrPageFailure {
+            page,
+            error: error.clone(),
+            recovered: native_page_text_present(native_text, boundaries, page),
+        })
+        .collect()
+}
+
+/// The mixed route's page-failure records and the native text that decides `recovered`.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+struct MixedOcrPageFailures<'a> {
+    native_text: &'a str,
+    boundaries: &'a [crate::types::PageBoundary],
+    failures: Vec<crate::types::OcrPageFailure>,
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+impl MixedOcrPageFailures<'_> {
+    /// Report a page whose OCR failed and whose native text stays in the output.
+    fn push_native_text_kept(
+        &mut self,
+        warnings: &mut Vec<crate::types::ProcessingWarning>,
+        page_idx: usize,
+        error: &crate::XbergError,
+    ) {
+        let page = (page_idx + 1) as u32;
+        let (warning, failure) = ocr_page_failure(
+            page,
+            &error.to_string(),
+            OcrPageFailureOutcome::NativeTextKept {
+                native_text_present: native_page_text_present(self.native_text, self.boundaries, page),
+            },
+        );
+        crate::core::diagnostics::push_warning_deduped(warnings, warning);
+        self.failures.push(failure);
+    }
 }
 
 /// Build mixed text from native extraction and per-page OCR results.
@@ -281,6 +387,7 @@ type MixedOcrResult = crate::Result<(
     ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata>,
     ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
     Vec<crate::types::ProcessingWarning>,
+    Vec<crate::types::OcrPageFailure>,
 )>;
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
@@ -417,6 +524,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             ahash::AHashMap::new(),
             ahash::AHashMap::new(),
             Vec::new(),
+            Vec::new(),
         ));
     }
 
@@ -447,6 +555,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             Vec::new(),
             ahash::AHashMap::new(),
             ahash::AHashMap::new(),
+            Vec::new(),
             Vec::new(),
         ));
     }
@@ -673,6 +782,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let mut accumulated_llm_usage: Vec<crate::types::LlmUsage> = Vec::new();
     let mut accumulated_formulas: Vec<crate::types::Formula> = Vec::new();
     let mut accumulated_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
+    let mut page_failures = MixedOcrPageFailures {
+        native_text,
+        boundaries,
+        failures: Vec::new(),
+    };
     let mut failed_page_errors: ahash::AHashMap<usize, crate::XbergError> = ahash::AHashMap::new();
     #[cfg(feature = "layout-detection")]
     {
@@ -726,7 +840,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             config.images.as_ref(),
         );
         for (page_idx, error) in render_failures {
-            push_mixed_ocr_page_failure_warning(&mut accumulated_warnings, page_idx, &error);
+            page_failures.push_native_text_kept(&mut accumulated_warnings, page_idx, &error);
             failed_page_errors.insert(page_idx, error);
         }
 
@@ -823,7 +937,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         Ok(result) => result,
                         Err(error @ crate::XbergError::Cancelled) => return Err(error),
                         Err(error) => {
-                            push_mixed_ocr_page_failure_warning(&mut accumulated_warnings, page_idx, &error);
+                            page_failures.push_native_text_kept(&mut accumulated_warnings, page_idx, &error);
                             failed_page_errors.insert(page_idx, error);
                             continue;
                         }
@@ -893,6 +1007,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             &mut accumulated_warnings,
                             std::mem::take(&mut d.processing_warnings),
                         );
+                        page_failures.failures.append(&mut d.ocr_page_failures);
                         structured_ocr_pages.insert(page_number, d);
                     }
                     ocr_results.insert(page_number, page_text);
@@ -943,7 +1058,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         Ok(result) => result,
                         Err(error @ crate::XbergError::Cancelled) => return Err(error),
                         Err(error) => {
-                            push_mixed_ocr_page_failure_warning(&mut accumulated_warnings, *page_idx, &error);
+                            page_failures.push_native_text_kept(&mut accumulated_warnings, *page_idx, &error);
                             failed_page_errors.insert(*page_idx, error);
                             continue;
                         }
@@ -996,6 +1111,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             &mut accumulated_warnings,
                             std::mem::take(&mut d.processing_warnings),
                         );
+                        page_failures.failures.append(&mut d.ocr_page_failures);
                         structured_ocr_pages.insert(page_number, d);
                     }
                     ocr_results.insert(page_number, page_text);
@@ -1436,25 +1552,21 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             }
             if let Some(error) = failure {
                 if !recovered {
-                    push_mixed_ocr_page_failure_warning(&mut accumulated_warnings, *page_idx, &error);
+                    page_failures.push_native_text_kept(&mut accumulated_warnings, *page_idx, &error);
                     failed_page_errors.insert(*page_idx, error);
                     continue;
                 }
-                let recovered_kind = if ocr_results
-                    .get(&page_number)
-                    .is_some_and(|text| !text.trim().is_empty())
-                {
-                    "text"
-                } else {
-                    "content"
-                };
-                accumulated_warnings.push(crate::types::ProcessingWarning {
-                    source: std::borrow::Cow::Borrowed("ocr"),
-                    message: std::borrow::Cow::Owned(format!(
-                        "OCR of page {page_number} failed ({error}); its {recovered_kind} was recovered from the page's \
-                         embedded image XObjects instead."
-                    )),
-                });
+                let (warning, page_failure) = ocr_page_failure(
+                    page_number,
+                    &error.to_string(),
+                    OcrPageFailureOutcome::RecoveredFromXObjects {
+                        text_recovered: ocr_results
+                            .get(&page_number)
+                            .is_some_and(|text| !text.trim().is_empty()),
+                    },
+                );
+                accumulated_warnings.push(warning);
+                page_failures.failures.push(page_failure);
             }
         }
 
@@ -1661,6 +1773,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         preprocessing_by_page,
         ocr_confidence_by_page,
         accumulated_warnings,
+        page_failures.failures,
     ))
 }
 
@@ -1717,8 +1830,18 @@ pub(crate) async fn extract_full_document_ocr_pipeline_per_page(
         .unwrap_or_default();
     single_block_pages.sort_unstable();
     let (seed_text, boundaries) = full_document_page_seed(page_count, config);
-    let (text, accepted_pages, structured_pages, llm_usage, rasters, formulas, preprocessing, ocr_confidence, warnings) =
-        Box::pin(extract_mixed_ocr_native_with_layout_inputs(
+    let (
+        text,
+        accepted_pages,
+        structured_pages,
+        llm_usage,
+        rasters,
+        formulas,
+        preprocessing,
+        ocr_confidence,
+        warnings,
+        ocr_page_failures,
+    ) = Box::pin(extract_mixed_ocr_native_with_layout_inputs(
             &seed_text,
             &boundaries,
             MixedOcrPageSelection {
@@ -1742,6 +1865,7 @@ pub(crate) async fn extract_full_document_ocr_pipeline_per_page(
         .collect();
     let mut document = crate::types::internal::InternalDocument::new("pdf");
     document.processing_warnings = warnings;
+    document.ocr_page_failures = ocr_page_failures;
     merge_structured_ocr_pages_into_internal_document(&mut document, &accepted_pages, &structured_pages);
     let tables = document.tables.clone();
     let ocr_elements = document.prebuilt_ocr_elements.clone().unwrap_or_default();
@@ -2312,6 +2436,7 @@ pub(super) async fn extract_with_ocr_for_page(
     // recovered still returns an error.
     let mut page_backend_errors: Vec<(usize, String)> = Vec::new();
     let mut page_failure_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
+    let mut page_failure_records: Vec<crate::types::OcrPageFailure> = Vec::new();
     // #1673: page numbers (1-based) whose embedded-image retry ran (attempted at least one
     // image) but the backend returned successfully with empty content on every one of them --
     // the shape every candle VLM backend takes when it silently produces nothing
@@ -2930,32 +3055,18 @@ pub(super) async fn extract_with_ocr_for_page(
                 if !recovered && xobject_retry_ran_empty {
                     pages_with_empty_xobject_retry.push(document_page_number);
                 }
-                page_failure_warnings.push(crate::types::ProcessingWarning {
-                    source: std::borrow::Cow::Borrowed("ocr"),
-                    message: std::borrow::Cow::Owned(if recovered {
-                        let recovered_kind = if ocr_result.content.trim().is_empty() {
-                            "content"
-                        } else {
-                            "text"
-                        };
-                        format!(
-                            "OCR of page {} failed ({error}); its {recovered_kind} was recovered from the page's \
-                             embedded image XObjects instead.",
-                            document_page_number
-                        )
-                    } else if xobject_retry_ran_empty {
-                        format!(
-                            "OCR of page {} failed ({error}); the retry on the page's embedded image \
-                             XObjects also returned no text.",
-                            document_page_number
-                        )
-                    } else {
-                        format!(
-                            "OCR of page {} failed and could not be recovered: {error}",
-                            document_page_number
-                        )
-                    }),
-                });
+                let outcome = if recovered {
+                    OcrPageFailureOutcome::RecoveredFromXObjects {
+                        text_recovered: !ocr_result.content.trim().is_empty(),
+                    }
+                } else if xobject_retry_ran_empty {
+                    OcrPageFailureOutcome::XObjectRetryEmpty
+                } else {
+                    OcrPageFailureOutcome::Unrecovered
+                };
+                let (warning, page_failure) = ocr_page_failure(document_page_number, &error, outcome);
+                page_failure_warnings.push(warning);
+                page_failure_records.push(page_failure);
                 page_backend_errors.push((page_idx, error));
             }
 
@@ -3489,6 +3600,11 @@ pub(super) async fn extract_with_ocr_for_page(
         warnings.extend(margin_filter_warnings);
         warnings.extend(backend_page_warnings);
         let mut ocr_doc = attach_ocr_fallback_warnings(ocr_doc, &result, warnings);
+        // ~keep A record always has its warning in `warnings`, so the call above has built the
+        // document when there is a record to carry.
+        if let Some(doc) = ocr_doc.as_mut() {
+            doc.ocr_page_failures = page_failure_records;
+        }
         // #1575: only merged when a document already exists (or the warnings step above just
         // built one from `text`) -- forcing an empty document into existence here for the sole
         // purpose of carrying metadata would replace `select_pdf_document`'s `flat_pdf_document`
@@ -3512,6 +3628,7 @@ pub(super) async fn extract_with_ocr_for_page(
     let _ = (
         recognition_noise_warnings,
         page_failure_warnings,
+        page_failure_records,
         backend_page_warnings,
         backend_additional_metadata,
         page_segmentation_modes,

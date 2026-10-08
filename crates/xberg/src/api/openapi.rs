@@ -95,6 +95,7 @@ use utoipa::OpenApi;
             crate::types::extraction::LanguageConfidence,
             crate::types::extraction::ExtractionMethod,
             crate::types::extraction::LlmUsage,
+            crate::types::extraction::OcrPageFailure,
             crate::types::extraction::ProcessingWarning,
             crate::types::djot::DjotImage,
             crate::types::djot::DjotLink,

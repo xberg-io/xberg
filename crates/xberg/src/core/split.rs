@@ -209,7 +209,7 @@ fn auto_ranges(_doc: &ExtractedDocument, _total_pages: u32) -> Result<Vec<RangeI
 ///
 /// - **Page-attributed collections** (`tables`, `images`, `annotations`, `formulas`,
 ///   `ocr_elements`, `page_classifications`, `chunks`, `elements`, `uris`,
-///   `form_fields`) are filtered to the items whose page falls in `range`, mirroring
+///   `form_fields`, `ocr_page_failures`) are filtered to the items whose page falls in `range`, mirroring
 ///   the pre-existing `tables`/`images` behaviour. Items whose page attribution is
 ///   optional and unset (e.g. a `form_field` with `page: None`) cannot be excluded
 ///   safely, so they are included in *every* segment rather than dropped.
@@ -333,6 +333,7 @@ fn sub_document_for_range(
             .map(|items| filter_by_page(items, start, end, |item| item.page_number)),
         formulas: filter_by_optional_page(&source.formulas, start, end, |formula| formula.page),
         form_fields: filter_by_optional_page(&source.form_fields, start, end, |field| field.page),
+        ocr_page_failures: filter_by_page(&source.ocr_page_failures, start, end, |failure| failure.page),
         chunks: source
             .chunks
             .as_ref()
@@ -775,6 +776,7 @@ mod enrichment_preservation_tests {
     /// - tables: 1, 6            - images: 2, 4          - annotations: 1, 4
     /// - formulas: 2, 6          - ocr_elements: 3, 6    - classifications: 2, 4
     /// - uris: 1, 6, none        - form_fields: 3, none  - elements: 1, 4, none
+    /// - ocr_page_failures: 3, 6
     /// - chunks: 1-2, 3-4, 5-6, and one with no page attribution
     ///
     /// Page 5 deliberately carries no page-attributed enrichment at all.
@@ -911,6 +913,7 @@ mod enrichment_preservation_tests {
             }),
             formulas: vec![formula("e=mc^2", 2), formula("a+b", 6)],
             form_fields: vec![form_field("f3", Some(3)), form_field("fnone", None)],
+            ocr_page_failures: vec![ocr_page_failure(3, true), ocr_page_failure(6, false)],
             ..Default::default()
         }
     }
@@ -948,6 +951,14 @@ mod enrichment_preservation_tests {
             .iter()
             .map(|item| item.text.as_str())
             .collect()
+    }
+
+    fn ocr_page_failure(page: u32, recovered: bool) -> crate::types::OcrPageFailure {
+        crate::types::OcrPageFailure {
+            page,
+            error: format!("backend failed on page {page}"),
+            recovered,
+        }
     }
 
     fn form_field_names(document: &ExtractedDocument) -> Vec<&str> {
@@ -1266,6 +1277,10 @@ mod enrichment_preservation_tests {
         assert_eq!(form_field_names(&segments[0].document), vec!["fnone"]);
         assert_eq!(form_field_names(&segments[1].document), vec!["f3", "fnone"]);
         assert_eq!(form_field_names(&segments[2].document), vec!["fnone"]);
+
+        assert_eq!(segments[0].document.ocr_page_failures, vec![]);
+        assert_eq!(segments[1].document.ocr_page_failures, vec![ocr_page_failure(3, true)]);
+        assert_eq!(segments[2].document.ocr_page_failures, vec![ocr_page_failure(6, false)]);
 
         for (index, split) in segments.iter().enumerate() {
             assert!(
