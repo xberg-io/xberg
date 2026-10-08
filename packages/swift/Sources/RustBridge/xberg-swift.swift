@@ -1136,6 +1136,9 @@ public func ocrElementFromJson<GenericIntoRustString: IntoRustString>(_ json: Ge
 public func ocrElementConfigFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> OcrElementConfig {
     try { let val = __swift_bridge__$ocr_element_config_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return OcrElementConfig(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
+public func ocrPageFailureFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> OcrPageFailure {
+    try { let val = __swift_bridge__$ocr_page_failure_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return OcrPageFailure(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
+}
 public func ocrPipelineConfigFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> OcrPipelineConfig {
     try { let val = __swift_bridge__$ocr_pipeline_config_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return OcrPipelineConfig(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
@@ -2125,6 +2128,9 @@ public func __alef_phantom_vec_ocr_extraction_result() -> RustVec<OcrExtractionR
 }
 public func __alef_phantom_vec_ocr_metadata() -> RustVec<OcrMetadata> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_ocr_metadata())
+}
+public func __alef_phantom_vec_ocr_page_failure() -> RustVec<OcrPageFailure> {
+    RustVec(ptr: __swift_bridge__$__alef_phantom_vec_ocr_page_failure())
 }
 public func __alef_phantom_vec_ocr_pipeline_config() -> RustVec<OcrPipelineConfig> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_ocr_pipeline_config())
@@ -10930,6 +10936,10 @@ extension ExtractedDocumentRef {
     public func formFields() -> RustVec<PdfFormField> {
         RustVec(ptr: __swift_bridge__$ExtractedDocument$form_fields(ptr))
     }
+
+    public func ocrPageFailures() -> RustVec<OcrPageFailure> {
+        RustVec(ptr: __swift_bridge__$ExtractedDocument$ocr_page_failures(ptr))
+    }
 }
 extension ExtractedDocument: Vectorizable {
     public static func vecOfSelfNew() -> UnsafeMutableRawPointer {
@@ -18634,6 +18644,99 @@ extension OcrMetadata: Vectorizable {
 
     public static func vecOfSelfLen(vecPtr: UnsafeMutableRawPointer) -> UInt {
         __swift_bridge__$Vec_OcrMetadata$len(vecPtr)
+    }
+}
+
+
+public class OcrPageFailure: OcrPageFailureRefMut {
+    public var isOwned: Bool = true
+
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+
+    deinit {
+        if isOwned {
+            __swift_bridge__$OcrPageFailure$_free(ptr)
+        }
+    }
+}
+extension OcrPageFailure {
+    public convenience init<GenericIntoRustString: IntoRustString>(_ page: UInt32, _ error: GenericIntoRustString, _ recovered: Bool) {
+        self.init(ptr: __swift_bridge__$OcrPageFailure$new(page, { let rustString = error.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), recovered))
+    }
+}
+public class OcrPageFailureRefMut: OcrPageFailureRef {
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+}
+public class OcrPageFailureRef {
+    public var ptr: UnsafeMutableRawPointer
+
+    public init(ptr: UnsafeMutableRawPointer) {
+        self.ptr = ptr
+    }
+}
+extension OcrPageFailureRef {
+    public func page() -> UInt32 {
+        __swift_bridge__$OcrPageFailure$page(ptr)
+    }
+
+    public func error() -> RustString {
+        RustString(ptr: __swift_bridge__$OcrPageFailure$error(ptr))
+    }
+
+    public func recovered() -> Bool {
+        __swift_bridge__$OcrPageFailure$recovered(ptr)
+    }
+}
+extension OcrPageFailure: Vectorizable {
+    public static func vecOfSelfNew() -> UnsafeMutableRawPointer {
+        __swift_bridge__$Vec_OcrPageFailure$new()
+    }
+
+    public static func vecOfSelfFree(vecPtr: UnsafeMutableRawPointer) {
+        __swift_bridge__$Vec_OcrPageFailure$drop(vecPtr)
+    }
+
+    public static func vecOfSelfPush(vecPtr: UnsafeMutableRawPointer, value: OcrPageFailure) {
+        __swift_bridge__$Vec_OcrPageFailure$push(vecPtr, {value.isOwned = false; return value.ptr;}())
+    }
+
+    public static func vecOfSelfPop(vecPtr: UnsafeMutableRawPointer) -> Optional<Self> {
+        let pointer = __swift_bridge__$Vec_OcrPageFailure$pop(vecPtr)
+        if pointer == nil {
+            return nil
+        } else {
+            return (OcrPageFailure(ptr: pointer!) as! Self)
+        }
+    }
+
+    public static func vecOfSelfGet(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<OcrPageFailureRef> {
+        let pointer = __swift_bridge__$Vec_OcrPageFailure$get(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return OcrPageFailureRef(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfGetMut(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<OcrPageFailureRefMut> {
+        let pointer = __swift_bridge__$Vec_OcrPageFailure$get_mut(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return OcrPageFailureRefMut(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfAsPtr(vecPtr: UnsafeMutableRawPointer) -> UnsafePointer<OcrPageFailureRef> {
+        UnsafePointer<OcrPageFailureRef>(OpaquePointer(__swift_bridge__$Vec_OcrPageFailure$as_ptr(vecPtr)))
+    }
+
+    public static func vecOfSelfLen(vecPtr: UnsafeMutableRawPointer) -> UInt {
+        __swift_bridge__$Vec_OcrPageFailure$len(vecPtr)
     }
 }
 

@@ -1754,6 +1754,13 @@ typedef struct XBERGOcrExtractionResult XBERGOcrExtractionResult;
  */
 typedef struct XBERGOcrMetadata XBERGOcrMetadata;
 /**
+ * A page whose OCR failed while extraction of the document continued.
+ *
+ * Each record matches one page-failure entry in
+ * `ExtractedDocument::processing_warnings`.
+ */
+typedef struct XBERGOcrPageFailure XBERGOcrPageFailure;
+/**
  * Multi-backend OCR pipeline with quality-based fallback.
  *
  * Backends are tried in priority order (highest first). After each backend
@@ -11360,6 +11367,15 @@ char *xberg_extracted_document_formulas(XBERGAlefHandle handle);
 char *xberg_extracted_document_form_fields(XBERGAlefHandle handle);
 
 /**
+ * Get the `ocr_page_failures` field from a `ExtractedDocument`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_extracted_document_ocr_page_failures(XBERGAlefHandle handle);
+
+/**
  * Create a `ExtractedImage` from a JSON string. Returns null on failure.
  * # Safety
  * JSON string must be valid UTF-8 and null-terminated.
@@ -18567,6 +18583,52 @@ uint32_t xberg_ocr_metadata_table_cols(XBERGAlefHandle handle);
  * Safety Pointer must be a valid handle returned by this library.
  */
 int32_t xberg_ocr_metadata_has_table_cols(XBERGAlefHandle handle);
+
+/**
+ * Create a `OcrPageFailure` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_ocr_page_failure_free`.
+ */
+XBERGAlefHandle xberg_ocr_page_failure_from_json(const char *json);
+
+/**
+ * Serialize a `OcrPageFailure` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_ocr_page_failure_to_json(XBERGAlefHandle handle);
+
+/**
+ * Free a `OcrPageFailure` handle.
+ * # Safety
+ * Handle must have been returned by this library, or be zero.
+ */
+void xberg_ocr_page_failure_free(XBERGAlefHandle handle);
+
+/**
+ * Get the `page` field from a `OcrPageFailure`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uint32_t xberg_ocr_page_failure_page(XBERGAlefHandle handle);
+
+/**
+ * Get the `error` field from a `OcrPageFailure`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_ocr_page_failure_error(XBERGAlefHandle handle);
+
+/**
+ * Get the `recovered` field from a `OcrPageFailure`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_ocr_page_failure_recovered(XBERGAlefHandle handle);
 
 /**
  * Create a `OcrPipelineConfig` from a JSON string. Returns null on failure.
