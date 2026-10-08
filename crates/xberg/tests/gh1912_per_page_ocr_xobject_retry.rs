@@ -59,13 +59,14 @@ enum RasterOutcome {
 }
 
 struct StubBackend {
+    name: &'static str,
     render: RenderOutcome,
     raster: RasterOutcome,
 }
 
 impl Plugin for StubBackend {
     fn name(&self) -> &str {
-        "tesseract"
+        self.name
     }
     fn version(&self) -> String {
         "1.0.0".to_string()
@@ -196,16 +197,21 @@ fn per_page_config(with_pipeline: bool) -> ExtractionConfig {
 
 /// Extract the fixture with a stub backend that reads the word from the embedded raster.
 fn extract(render: RenderOutcome, config: &ExtractionConfig) -> ExtractedDocument {
-    extract_with(render, RasterOutcome::Word, config)
+    extract_with("tesseract", render, RasterOutcome::Word, config)
 }
 
-/// Extract the fixture with the stub backend.
-fn extract_with(render: RenderOutcome, raster: RasterOutcome, config: &ExtractionConfig) -> ExtractedDocument {
+/// Extract the fixture with the stub backend registered as `name`.
+fn extract_with(
+    name: &'static str,
+    render: RenderOutcome,
+    raster: RasterOutcome,
+    config: &ExtractionConfig,
+) -> ExtractedDocument {
     let pdf = pdf_with_image_on_page_two();
-    let _ = unregister_ocr_backend("tesseract");
-    register_ocr_backend(Arc::new(StubBackend { render, raster })).expect("the stub backend registers");
+    let _ = unregister_ocr_backend(name);
+    register_ocr_backend(Arc::new(StubBackend { name, render, raster })).expect("the stub backend registers");
     let result = extract_bytes_document_blocking(&pdf, "application/pdf", config);
-    unregister_ocr_backend("tesseract").expect("the stub backend unregisters");
+    unregister_ocr_backend(name).expect("the stub backend unregisters");
     result.expect("the retry must recover the page, so extraction must not error")
 }
 
@@ -271,12 +277,65 @@ fn a_failed_page_is_retried_on_its_embedded_image_with_a_pipeline() {
 #[test]
 #[serial_test::serial]
 fn a_failed_page_recovered_as_a_table_is_recorded_as_recovered_content() {
-    let result = extract_with(RenderOutcome::Fails, RasterOutcome::TableOnly, &per_page_config(false));
+    let result = extract_with(
+        "tesseract",
+        RenderOutcome::Fails,
+        RasterOutcome::TableOnly,
+        &per_page_config(false),
+    );
 
     assert!(
         !result.content.contains(RECOVERED_WORD),
         "the stub read no word from the raster; content: {:?}",
         result.content
+    );
+    assert_eq!(
+        result
+            .processing_warnings
+            .iter()
+            .filter(|warning| warning.message
+                == "OCR of page 2 failed (OCR error: stub render failure); its content was recovered from the page's \
+                    embedded image XObjects instead.")
+            .count(),
+        1,
+        "warnings: {:?}",
+        result.processing_warnings
+    );
+    assert_eq!(result.ocr_page_failures, recovered_page_two());
+}
+
+/// A backend with any other name than `tesseract` gets no synthesized pipeline, so the per-page
+/// route calls it directly. These two tests are the only ones that reach that branch with a
+/// failed and recovered page.
+const DIRECT_BACKEND: &str = "gh2062-direct-backend";
+
+fn direct_backend_config() -> ExtractionConfig {
+    let mut config = per_page_config(false);
+    config.ocr.as_mut().expect("the config has an OCR block").backend = DIRECT_BACKEND.to_string();
+    config
+}
+
+#[test]
+#[serial_test::serial]
+fn a_directly_called_backend_records_the_page_recovered_as_text() {
+    let result = extract_with(
+        DIRECT_BACKEND,
+        RenderOutcome::Fails,
+        RasterOutcome::Word,
+        &direct_backend_config(),
+    );
+    assert_recovered(&result, FAILED_AND_RECOVERED_WARNING);
+    assert_eq!(result.ocr_page_failures, recovered_page_two());
+}
+
+#[test]
+#[serial_test::serial]
+fn a_directly_called_backend_records_the_page_recovered_as_a_table() {
+    let result = extract_with(
+        DIRECT_BACKEND,
+        RenderOutcome::Fails,
+        RasterOutcome::TableOnly,
+        &direct_backend_config(),
     );
     assert_eq!(
         result
