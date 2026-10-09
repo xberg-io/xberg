@@ -911,8 +911,7 @@ pub fn derive_extraction_result(
 
     let images = if doc.images.is_empty() { None } else { Some(doc.images) };
 
-    let mut metadata = doc.metadata;
-    crate::types::extraction::set_ocr_page_failures_metadata(&mut metadata, std::mem::take(&mut doc.ocr_page_failures));
+    let metadata = doc.metadata;
 
     let extraction_method = metadata
         .additional
@@ -942,6 +941,7 @@ pub fn derive_extraction_result(
         llm_usage: std::mem::take(&mut doc.llm_usage),
         revisions: std::mem::take(&mut doc.revisions),
         form_fields: std::mem::take(&mut doc.form_fields),
+        ocr_page_failures: Some(std::mem::take(&mut doc.ocr_page_failures)).filter(|failures| !failures.is_empty()),
         formulas,
         #[cfg(feature = "tree-sitter")]
         code_intelligence,

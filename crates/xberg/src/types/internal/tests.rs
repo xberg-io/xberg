@@ -262,18 +262,19 @@ fn should_preserve_ocr_page_failures_across_public_internal_conversion() {
         error: "backend timed out".to_string(),
         recovered: false,
     };
-    let mut public = crate::types::ExtractedDocument {
+    let public = crate::types::ExtractedDocument {
         content: "partial text".to_string(),
         mime_type: "application/pdf".into(),
+        ocr_page_failures: Some(vec![expected.clone()]),
         ..Default::default()
     };
-    crate::types::extraction::set_ocr_page_failures_metadata(&mut public.metadata, vec![expected.clone()]);
 
     let internal = InternalDocument::from(public);
     assert_eq!(internal.ocr_page_failures, vec![expected.clone()]);
 
     let round_tripped = crate::types::ExtractedDocument::from(internal);
-    assert_eq!(round_tripped.ocr_page_failures().unwrap(), vec![expected]);
+    assert!(!round_tripped.metadata.additional.contains_key("ocr_page_failures"));
+    assert_eq!(round_tripped.ocr_page_failures, Some(vec![expected]));
 }
 
 #[test]

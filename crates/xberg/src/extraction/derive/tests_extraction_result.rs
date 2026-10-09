@@ -16,7 +16,17 @@ fn test_derive_extraction_result_basic() {
 }
 
 #[test]
-fn should_publish_ocr_page_failures_as_typed_metadata() {
+fn should_publish_no_ocr_page_failures_as_none_and_never_serialize_an_empty_list() {
+    let result = derive_extraction_result(make_doc("pdf"), false, crate::core::config::OutputFormat::Plain);
+
+    assert_eq!(result.ocr_page_failures, None);
+    let serialized = serde_json::to_value(&result).unwrap();
+    assert!(serialized.get("content").is_some());
+    assert_eq!(serialized.get("ocr_page_failures"), None);
+}
+
+#[test]
+fn should_publish_ocr_page_failures_in_the_typed_field_only() {
     let mut document = make_doc("pdf");
     let expected = vec![crate::types::OcrPageFailure {
         page: 2,
@@ -27,15 +37,8 @@ fn should_publish_ocr_page_failures_as_typed_metadata() {
 
     let result = derive_extraction_result(document, false, crate::core::config::OutputFormat::Plain);
 
-    assert_eq!(result.ocr_page_failures().unwrap(), expected);
-    assert_eq!(
-        result.metadata.additional["ocr_page_failures"],
-        serde_json::json!([{
-            "page": 2,
-            "error": "backend timed out",
-            "recovered": false,
-        }])
-    );
+    assert_eq!(result.ocr_page_failures, Some(expected));
+    assert!(!result.metadata.additional.contains_key("ocr_page_failures"));
 }
 
 /// `OutputFormat::DocTags` must produce the same output as the always-registered

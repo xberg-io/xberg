@@ -270,15 +270,29 @@ fn push_mixed_ocr_page_failure_warning(
             }),
         },
     );
-    let page = (page_idx + 1) as u32;
-    if let Some(existing) = failures.iter_mut().find(|failure| failure.page == page) {
-        existing.recovered |= recovered;
-    } else {
-        failures.push(crate::types::OcrPageFailure {
-            page,
+    merge_ocr_page_failures(
+        failures,
+        vec![crate::types::OcrPageFailure {
+            page: (page_idx + 1) as u32,
             error: error.to_string(),
             recovered,
-        });
+        }],
+    );
+}
+
+/// Add `incoming` records to `failures`. A page that already has a record keeps its first
+/// error and is recovered when any of its records is.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn merge_ocr_page_failures(
+    failures: &mut Vec<crate::types::OcrPageFailure>,
+    incoming: Vec<crate::types::OcrPageFailure>,
+) {
+    for failure in incoming {
+        if let Some(existing) = failures.iter_mut().find(|existing| existing.page == failure.page) {
+            existing.recovered |= failure.recovered;
+        } else {
+            failures.push(failure);
+        }
     }
 }
 
@@ -293,6 +307,31 @@ fn mixed_native_page_has_content(
         .find(|boundary| boundary.page_number == (page_idx + 1) as u32)
         .and_then(|boundary| native_text.get(boundary.byte_start..boundary.byte_end))
         .is_some_and(|text| !text.trim().is_empty())
+}
+
+/// Records for an OCR run that failed as a whole: one for each page the run was asked to read.
+///
+/// `recovered` is true for a page that has native text.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(crate) fn route_level_ocr_page_failures(
+    pages: &[u32],
+    error: &crate::XbergError,
+    native_text: &str,
+    boundaries: &[crate::types::PageBoundary],
+) -> Vec<crate::types::OcrPageFailure> {
+    let error = error.to_string();
+    let mut failures: Vec<crate::types::OcrPageFailure> = Vec::with_capacity(pages.len());
+    for &page in pages {
+        if page == 0 || failures.iter().any(|failure| failure.page == page) {
+            continue;
+        }
+        failures.push(crate::types::OcrPageFailure {
+            page,
+            error: error.clone(),
+            recovered: mixed_native_page_has_content(native_text, boundaries, (page - 1) as usize),
+        });
+    }
+    failures
 }
 
 /// Build mixed text from native extraction and per-page OCR results.
@@ -943,6 +982,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             &mut accumulated_warnings,
                             std::mem::take(&mut d.processing_warnings),
                         );
+                        merge_ocr_page_failures(&mut page_failures, std::mem::take(&mut d.ocr_page_failures));
                         structured_ocr_pages.insert(page_number, d);
                     }
                     ocr_results.insert(page_number, page_text);
@@ -1053,6 +1093,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             &mut accumulated_warnings,
                             std::mem::take(&mut d.processing_warnings),
                         );
+                        merge_ocr_page_failures(&mut page_failures, std::mem::take(&mut d.ocr_page_failures));
                         structured_ocr_pages.insert(page_number, d);
                     }
                     ocr_results.insert(page_number, page_text);
@@ -1551,15 +1592,14 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                          embedded image XObjects instead."
                     )),
                 });
-                if let Some(existing) = page_failures.iter_mut().find(|failure| failure.page == page_number) {
-                    existing.recovered = true;
-                } else {
-                    page_failures.push(crate::types::OcrPageFailure {
+                merge_ocr_page_failures(
+                    &mut page_failures,
+                    vec![crate::types::OcrPageFailure {
                         page: page_number,
                         error: error.to_string(),
                         recovered: true,
-                    });
-                }
+                    }],
+                );
             }
         }
 

@@ -15,9 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): pre-extracted spans can use canonical page reading order.** `order_page_spans` applies tagged structure,
   article-thread, and geometric ordering without parsing page content a second time, including for layer-filtered text.
-- **(ocr): failed PDF OCR pages are reported as structured metadata.** `metadata.additional["ocr_page_failures"]`
-  includes each failed page, its error, and whether native text or embedded-image content was retained; Rust callers
-  can read the typed records through `ExtractedDocument::ocr_page_failures`, while the warning channel remains available.
+- **(ocr): failed PDF OCR pages are reported as a typed list in every binding.** `ExtractedDocument` has a new
+  `ocr_page_failures` field. It is absent (`None`) when no page failed. Each `OcrPageFailure` gives the 1-based `page`,
+  the backend `error` text, and `recovered`, which is `true` when the page still has content from native text or from
+  its embedded images. When an automatic OCR run of selected pages fails as a whole, each selected page has a record.
+  The records were a JSON array under `metadata.additional["ocr_page_failures"]`; that key is no longer set. The
+  warnings do not change. (GH#2064)
 
 ### Changed
 

@@ -272,11 +272,6 @@ fn sub_document_for_range(
     if let Some(page_structure) = metadata.pages.as_mut() {
         page_structure.total_count = pages.len() as u32;
     }
-    let ocr_page_failures = source.ocr_page_failures().unwrap_or_default();
-    crate::types::extraction::set_ocr_page_failures_metadata(
-        &mut metadata,
-        filter_by_page(&ocr_page_failures, start, end, |failure| failure.page),
-    );
 
     let counts = DocumentCounts {
         pages: pages.len(),
@@ -338,6 +333,11 @@ fn sub_document_for_range(
             .map(|items| filter_by_page(items, start, end, |item| item.page_number)),
         formulas: filter_by_optional_page(&source.formulas, start, end, |formula| formula.page),
         form_fields: filter_by_optional_page(&source.form_fields, start, end, |field| field.page),
+        ocr_page_failures: source
+            .ocr_page_failures
+            .as_ref()
+            .map(|items| filter_by_page(items, start, end, |failure| failure.page))
+            .filter(|items| !items.is_empty()),
         chunks: source
             .chunks
             .as_ref()
@@ -784,7 +784,7 @@ mod enrichment_preservation_tests {
     ///
     /// Page 5 deliberately carries no page-attributed enrichment at all.
     fn enriched_doc() -> ExtractedDocument {
-        let mut document = ExtractedDocument {
+        ExtractedDocument {
             content: "whole document".to_string(),
             mime_type: "application/pdf".into(),
             metadata: Metadata {
@@ -916,11 +916,7 @@ mod enrichment_preservation_tests {
             }),
             formulas: vec![formula("e=mc^2", 2), formula("a+b", 6)],
             form_fields: vec![form_field("f3", Some(3)), form_field("fnone", None)],
-            ..Default::default()
-        };
-        crate::types::extraction::set_ocr_page_failures_metadata(
-            &mut document.metadata,
-            vec![
+            ocr_page_failures: Some(vec![
                 OcrPageFailure {
                     page: 2,
                     error: "backend timed out".to_string(),
@@ -931,9 +927,9 @@ mod enrichment_preservation_tests {
                     error: "recognition failed".to_string(),
                     recovered: false,
                 },
-            ],
-        );
-        document
+            ]),
+            ..Default::default()
+        }
     }
 
     /// Split [`enriched_doc`] into the three segments 1..=2, 3..=4, 5..=6.
@@ -1458,7 +1454,7 @@ mod enrichment_preservation_tests {
         assert_eq!(out.structured_output, Some(serde_json::json!({ "invoice_total": 42 })));
         assert_eq!(out.children.as_ref().expect("children").len(), 1);
         assert_eq!(out.processing_warnings.len(), 2);
-        assert_eq!(out.ocr_page_failures().unwrap().len(), 2);
+        assert_eq!(out.ocr_page_failures.as_ref().expect("ocr page failures").len(), 2);
         #[cfg(any(feature = "keywords-yake", feature = "keywords-rake"))]
         assert_eq!(out.extracted_keywords.as_ref().expect("keywords").len(), 1);
     }
@@ -1504,14 +1500,18 @@ mod enrichment_preservation_tests {
         assert_eq!(out.quality_score, Some(0.75));
         assert_eq!(out.summary.as_ref().expect("summary").text, "a summary");
         assert_eq!(out.processing_warnings.len(), 2);
+        assert!(!out.metadata.additional.contains_key("ocr_page_failures"));
         assert_eq!(
-            out.ocr_page_failures().unwrap(),
-            vec![OcrPageFailure {
+            out.ocr_page_failures,
+            Some(vec![OcrPageFailure {
                 page: 5,
                 error: "recognition failed".to_string(),
                 recovered: false,
-            }]
+            }])
         );
+        // Pages 3 and 4 have no failed page: the segment has `None`, not an empty list.
+        let without_failures = segment(&source, 3..=4, false);
+        assert_eq!(without_failures.document.ocr_page_failures, None);
         assert_eq!(out.entities, None);
         assert!(out.llm_usage.is_none());
     }

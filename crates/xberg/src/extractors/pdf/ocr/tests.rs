@@ -11987,4 +11987,73 @@ Name: ___
             "processing warnings must also still be carried forward"
         );
     }
+
+    /// GH#2064: a route-level failure gives one record for each page it was asked to read, and
+    /// `recovered` follows the native text of that page.
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    #[test]
+    fn route_level_failure_reports_recovered_from_the_native_text_of_each_page() {
+        use crate::types::{OcrPageFailure, PageBoundary};
+
+        let native_text = "kept text\n \n";
+        let boundaries = [
+            PageBoundary {
+                byte_start: 0,
+                byte_end: 9,
+                page_number: 1,
+            },
+            PageBoundary {
+                byte_start: 10,
+                byte_end: 11,
+                page_number: 2,
+            },
+        ];
+        let error = crate::XbergError::Ocr {
+            message: "backend is absent".to_string(),
+            source: None,
+        };
+
+        let failures = route_level_ocr_page_failures(&[1, 2, 3, 2], &error, native_text, &boundaries);
+
+        let record = |page: u32, recovered: bool| OcrPageFailure {
+            page,
+            error: "OCR error: backend is absent".to_string(),
+            recovered,
+        };
+        assert_eq!(
+            failures,
+            vec![record(1, true), record(2, false), record(3, false)],
+            "page 1 has text, page 2 is whitespace, page 3 has no boundary, the repeat of page 2 adds nothing"
+        );
+    }
+
+    /// Repeated failures on one page make one record: the first error stays, and the page is
+    /// recovered when any of its failures was.
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    #[test]
+    fn repeated_failures_on_one_page_merge_into_one_record() {
+        use crate::types::OcrPageFailure;
+
+        let record = |page: u32, error: &str, recovered: bool| OcrPageFailure {
+            page,
+            error: error.to_string(),
+            recovered,
+        };
+        let mut failures = vec![record(2, "first error", false)];
+
+        merge_ocr_page_failures(
+            &mut failures,
+            vec![
+                record(2, "second error", true),
+                record(4, "other page", false),
+                record(2, "third error", false),
+            ],
+        );
+
+        assert_eq!(
+            failures,
+            vec![record(2, "first error", true), record(4, "other page", false)],
+            "page 2 keeps one record with its first error and is recovered; page 4 is added"
+        );
+    }
 }
