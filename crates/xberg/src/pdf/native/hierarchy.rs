@@ -707,6 +707,7 @@ fn extract_segments_from_page_inner(
             page_text_data.page_height,
             page_index,
         );
+        xberg_native_pdf::document::reorder_ltr_key_value_rows(&mut page_text_data.spans);
     }
     let spans = rejoin_inline_scripts(page_text_data.spans);
 

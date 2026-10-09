@@ -436,6 +436,10 @@ impl PdfDocument {
             }
         }
 
+        if reading_order == ReadingOrder::ColumnAware {
+            reorder_ltr_key_value_rows(&mut spans);
+        }
+
         let erase = self.erase_regions.lock_or_recover().get(&page_index).cloned();
         if let Some(regions) = erase {
             spans.retain(|span| !regions.iter().any(|r| r.intersects(&span.bbox)));

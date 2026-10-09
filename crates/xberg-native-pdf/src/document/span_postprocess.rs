@@ -428,6 +428,8 @@ impl PdfDocument {
             Self::reorder_rowspan_labels(&mut spans);
         }
 
+        reorder_ltr_key_value_rows(&mut spans);
+
         // Per-span rotation firewall. Runs drawn with a rotated text matrix
         // (the vertical `arXiv:…` margin stamp, figure/axis labels, rotated
         // table headers, transit-poster route names) break the axis-aligned

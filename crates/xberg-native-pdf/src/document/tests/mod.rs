@@ -17,6 +17,7 @@ mod core;
 mod extract_api;
 mod fonts;
 mod images;
+mod key_value_rows;
 mod objects;
 mod open;
 mod pages;
