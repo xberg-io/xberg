@@ -1761,10 +1761,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest, platform: linux-x86_64, target: x86_64-unknown-linux-gnu }
-          - { os: ubuntu-24.04-arm, platform: linux-aarch64, target: aarch64-unknown-linux-gnu }
-          - { os: macos-15, platform: macos-arm64, target: aarch64-apple-darwin }
-          - { os: windows-latest, platform: windows-x86_64, target: x86_64-pc-windows-msvc }
+          - { os: ubuntu-latest, platform: linux-x86_64, target: x86_64-unknown-linux-gnu, musl: false }
+          - { os: ubuntu-24.04-arm, platform: linux-aarch64, target: aarch64-unknown-linux-gnu, musl: false }
+          - { os: macos-15, platform: macos-arm64, target: aarch64-apple-darwin, musl: false }
+          - { os: macos-15-intel, platform: macos-x86_64, target: x86_64-apple-darwin, musl: false }
+          - { os: windows-latest, platform: windows-x86_64, target: x86_64-pc-windows-msvc, musl: false }
+          - { os: ubuntu-latest, platform: linux-x86_64-musl, target: x86_64-unknown-linux-musl, musl: true }
+          - { os: ubuntu-24.04-arm, platform: linux-aarch64-musl, target: aarch64-unknown-linux-musl, musl: true }
     steps:
       - uses: actions/checkout@v7
         with:
@@ -1772,11 +1775,16 @@ jobs:
           fetch-depth: 0
 
           submodules: false
+      - name: Install Task
+        uses: xberg-io/actions/install-task@9ed0576675002330bb3d5446ac603b70a6f096ee
+
       - uses: xberg-io/actions/setup-rust@v1
+        if: ${{ !matrix.musl }}
         with:
           target: ${{ matrix.target }}
 
       - name: Install system dependencies
+        if: ${{ !matrix.musl }}
         uses: ./.github/actions/install-system-deps
 
       - name: Setup ONNX Runtime
@@ -1800,15 +1808,20 @@ jobs:
         shell: bash
         run: echo "LZMA_API_STATIC=1" >> "$GITHUB_ENV"
 
-      - uses: xberg-io/actions/build-go-ffi@v1
-        with:
-          target: ${{ matrix.target }}
-          crate-name: xberg-ffi
-          lib-name: xberg_ffi
-          header-path: crates/xberg-ffi/include/xberg.h
-          archive-name: xberg-go-${{ matrix.platform }}.tar.gz
-          output-dir: dist/go-ffi
-          glibc-version: ${{ env.GLIBC_FLOOR }}
+      - name: Install alef CLI
+        if: ${{ !matrix.musl }}
+        uses: xberg-io/actions/install-alef@9ed0576675002330bb3d5446ac603b70a6f096ee
+
+      - name: Package versioned Go archive with static-link metadata
+        if: ${{ !matrix.musl }}
+        shell: bash
+        run: task go:publish:package TARGET=${{ matrix.target }} VERSION=${{ needs.prepare.outputs.version }}
+
+      - name: Build and package musl Go archive
+        if: ${{ matrix.musl }}
+        shell: bash
+        run: task go:publish:package:musl TARGET=${{ matrix.target }} PLATFORM=${{ matrix.platform }} VERSION=${{ needs.prepare.outputs.version }}
+
       - name: Ship + verify ONNX Runtime (glibc Linux)
         if: contains(matrix.target, '-linux-gnu')
         shell: bash

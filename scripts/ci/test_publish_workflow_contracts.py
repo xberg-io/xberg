@@ -10,6 +10,9 @@ import textwrap
 from pathlib import Path
 
 WORKFLOW = Path(__file__).parents[2] / ".github" / "workflows" / "publish.yaml"
+GO_SETUP = Path(__file__).parents[2] / "packages" / "go" / "cmd" / "setup" / "main.go"
+GO_RELEASE_SCRIPT = Path(__file__).parent / "package-go-release.sh"
+GO_MUSL_RELEASE_SCRIPT = Path(__file__).parent / "package-go-musl-release.sh"
 DOCKER_WORKFLOW = Path(__file__).parents[2] / ".github" / "workflows" / "publish-docker.yaml"
 PUBDEV_WORKFLOW = Path(__file__).parents[2] / ".github" / "workflows" / "publish-pubdev.yaml"
 CI_WORKFLOW = Path(__file__).parents[2] / ".github" / "workflows" / "ci-lint.yaml"
@@ -315,7 +318,7 @@ def test_swift_dry_run_checks_run_artifact_without_release_mutation() -> None:
 
 def test_glibc_ffi_jobs_build_lzma_statically() -> None:
     jobs_and_actions = {
-        "go-ffi-libraries": "xberg-io/actions/build-go-ffi@v1",
+        "go-ffi-libraries": "task go:publish:package",
         "c-ffi-libraries": "xberg-io/actions/build-rust-ffi@v1",
         "java-natives": "xberg-io/actions/build-java-natives@v1",
         "csharp-natives": "xberg-io/actions/build-csharp-natives@v1",
@@ -334,6 +337,43 @@ def test_glibc_ffi_jobs_build_lzma_statically() -> None:
         assert setup < build, f"{job} configures static liblzma after its build"
         setup_block = block[block.rfind("\n      - ", 0, setup) : setup]
         assert "contains(matrix.target, '-linux-gnu')" in setup_block, job
+
+
+def test_go_release_matrix_covers_every_generated_setup_platform() -> None:
+    block = job_block(WORKFLOW.read_text(), "go-ffi-libraries")
+    expected = {
+        ("linux-x86_64", "x86_64-unknown-linux-gnu", "false"),
+        ("linux-aarch64", "aarch64-unknown-linux-gnu", "false"),
+        ("linux-x86_64-musl", "x86_64-unknown-linux-musl", "true"),
+        ("linux-aarch64-musl", "aarch64-unknown-linux-musl", "true"),
+        ("macos-arm64", "aarch64-apple-darwin", "false"),
+        ("macos-x86_64", "x86_64-apple-darwin", "false"),
+        ("windows-x86_64", "x86_64-pc-windows-msvc", "false"),
+    }
+    actual = set(re.findall(r"platform: ([^, }]+), target: ([^, }]+), musl: (true|false)", block))
+
+    assert actual == expected
+    setup = GO_SETUP.read_text()
+    assert 'fmt.Sprintf("%s-go-v%s-%s.tar.gz", assetPrefix, version, platform)' in setup
+    assert 'return base + "-musl", nil' in setup
+
+
+def test_go_release_packaging_matches_static_and_musl_setup_contracts() -> None:
+    block = job_block(WORKFLOW.read_text(), "go-ffi-libraries")
+    assert "task go:publish:package TARGET=${{ matrix.target }}" in block
+    assert "task go:publish:package:musl TARGET=${{ matrix.target }}" in block
+    assert "archive-name: xberg-go-${{ matrix.platform }}.tar.gz" not in block
+
+    release_script = GO_RELEASE_SCRIPT.read_text()
+    assert "xberg-go-v$VERSION-$PLATFORM.tar.gz" in release_script
+    assert 'cargo zigbuild --locked -p xberg-ffi --release --target "$TARGET.$GLIBC_FLOOR"' in release_script
+    assert "alef publish build --lang go --target" in release_script
+    assert "native-static-libs.txt" in release_script
+    assert 'grep -q "/lib/$STATIC_NAME$"' in release_script
+
+    musl_script = GO_MUSL_RELEASE_SCRIPT.read_text()
+    assert "xberg-go-v$VERSION-$PLATFORM.tar.gz" in musl_script
+    assert 'grep -q "/lib/libxberg_ffi.so$"' in musl_script
 
 
 def test_glibc_native_closures_are_strictly_verified() -> None:
@@ -462,6 +502,8 @@ if __name__ == "__main__":
     test_homebrew_push_aborts_rebase_conflict_without_force()
     test_swift_dry_run_checks_run_artifact_without_release_mutation()
     test_glibc_ffi_jobs_build_lzma_statically()
+    test_go_release_matrix_covers_every_generated_setup_platform()
+    test_go_release_packaging_matches_static_and_musl_setup_contracts()
     test_glibc_native_closures_are_strictly_verified()
     test_php_linux_artifacts_are_floor_built_and_verified()
     test_php_linux_abi_gate_accepts_debian_12_compatible_symbols()

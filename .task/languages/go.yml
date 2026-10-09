@@ -18,3 +18,21 @@ tasks:
           command -v go >/dev/null 2>&1 || { echo "Go not found, skipping Go upgrade"; exit 0; }
           cd packages/go && go get -u ./... && go mod tidy
         ignore_error: false
+
+  publish:package:
+    desc: "Package a versioned Go FFI release archive with static-link metadata"
+    requires:
+      vars: [TARGET, VERSION]
+    vars:
+      OUTPUT_DIR: '{{.OUTPUT_DIR | default "dist/go-ffi"}}'
+    cmds:
+      - bash scripts/ci/package-go-release.sh "{{.TARGET}}" "{{.VERSION}}" "{{.OUTPUT_DIR}}"
+
+  publish:package:musl:
+    desc: "Build and package a versioned dynamic Go FFI archive for musl"
+    requires:
+      vars: [TARGET, PLATFORM, VERSION]
+    vars:
+      OUTPUT_DIR: '{{.OUTPUT_DIR | default "dist/go-ffi"}}'
+    cmds:
+      - bash scripts/ci/package-go-musl-release.sh "{{.TARGET}}" "{{.PLATFORM}}" "{{.VERSION}}" "{{.OUTPUT_DIR}}"

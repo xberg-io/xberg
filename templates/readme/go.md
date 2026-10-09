@@ -11,29 +11,33 @@ High-performance document intelligence for Go backed by the Rust core that power
 
 - **Go module over the Rust core** — context-aware extraction with Go structs and errors.
 - **Structured results** — text, tables, images, metadata, language detection, chunks, and warnings.
-- **Static-link workflow** — build against `xberg-ffi` and ship a self-contained Go binary.
+- **Managed native setup** — download the matching checksummed release archive and generate a version-checked cgo shim.
+- **Dynamic and static Xberg linking** — dynamic by default, with an explicit static-archive mode on glibc Linux, macOS, and Windows x86_64.
 - **Cross-binding parity** — output matches the Python, Node.js, Ruby, Java, .NET, PHP, Elixir, Dart, Swift, Zig, WASM, and C FFI packages.
 
 ## Install
 
-Xberg Go binaries are **statically linked** — once built, they are self-contained and require no runtime library dependencies. Only the static library is needed at build time.
+The Go module uses cgo and needs a platform-specific `xberg-ffi` release archive. The generated setup command downloads the archive, verifies its SHA-256 sidecar, and writes a machine-local link shim into your application package.
 
 ### Quick Start (Monorepo Development)
 
 For development in the Xberg monorepo:
 
 ```bash
-# Build the static FFI library
+# Build the FFI library
 cargo build -p xberg-ffi --release
 
+# Stage it in the platform-specific path used by the Go package.
+./scripts/stage_go_native_local.sh
+
 # Verify the package builds and passes its tests. cgo links against the
-# static library from target/release/libxberg_ffi.a automatically.
+# native library staged under packages/go/.lib automatically.
 cd packages/go
 go build ./...
 go test ./...
 ```
 
-`packages/go` is a library (`package xberg`), so `go build` produces no executable here. Build a binary from your own `package main` that imports it — the resulting binary is self-contained and has no runtime dependency on Xberg libraries.
+`packages/go` is a library (`package xberg`), so `go build` produces no executable here. Build a binary from your own `package main` that imports it.
 
 ### Using Go Modules
 
@@ -51,24 +55,52 @@ go get {{ package_name }}@v{{ version }}
 > Always target the `/packages/go` subdirectory as shown above; the bare-root path resolves
 > against a stale Go module-proxy cache entry and fails.
 
-You'll need to provide the static library at build time. See [Building with Static Libraries](#building-with-static-libraries) below.
+Run setup from the package that imports Xberg, then build normally:
+
+```bash
+go run {{ package_name }}/cmd/setup
+go build
+```
+
+Re-run setup after upgrading the Go module. The generated shim carries a version sentinel, so a stale native library fails at compile time instead of loading against a mismatched API.
+
+### Supported pre-built platforms
+
+| Platform | Default dynamic mode | `-link static` |
+| --- | --- | --- |
+| Linux x86_64 (glibc) | Yes | Yes |
+| Linux ARM64 (glibc) | Yes | Yes |
+| Linux x86_64 (musl/Alpine) | Yes | No |
+| Linux ARM64 (musl/Alpine) | Yes | No |
+| macOS ARM64 | Yes | Yes |
+| macOS x86_64 | Yes | Yes |
+| Windows x86_64 (MSVC) | Yes | Yes |
+
+Linux libc is detected automatically. Use `-platform linux-x86_64-musl` or `-platform linux-aarch64-musl` only when detection is unavailable in a minimal container.
 
 ### Building with Static Libraries
 
-When building outside the Xberg monorepo, you need to provide the static library (`.a` file on Unix, `.lib` on Windows).
+Static mode selects the explicit Rust static archive (`.a` on Unix, `.lib` on Windows) and the archive's recorded native linker flags:
+
+```bash
+go run {{ package_name }}/cmd/setup -link static
+go build
+```
+
+This statically links the Xberg Rust archive. It does not guarantee a fully static executable: system libraries and native dependencies such as ONNX Runtime may remain dynamic. Musl release archives currently support dynamic mode only.
 
 #### Option 1: Download Pre-built Static Library
 
 Download the static library for your platform from [GitHub Releases](https://github.com/xberg-io/xberg/releases):
 
 ```bash
-# Example: Linux x86_64
-curl -LO https://github.com/xberg-io/xberg/releases/download/v{{ version }}/go-ffi-linux-x86_64.tar.gz
-tar -xzf go-ffi-linux-x86_64.tar.gz
+# Example: Linux x86_64 (glibc)
+curl -LO https://github.com/xberg-io/xberg/releases/download/v{{ version }}/xberg-go-v{{ version }}-linux-x86_64.tar.gz
+tar -xzf xberg-go-v{{ version }}-linux-x86_64.tar.gz
 
 # Copy to a permanent location
 mkdir -p ~/xberg/lib
-cp xberg-ffi/lib/libxberg_ffi.a ~/xberg/lib/
+cp xberg-go-v{{ version }}-linux-x86_64/lib/libxberg_ffi.a ~/xberg/lib/
 ```
 
 Then build with `CGO_LDFLAGS`:
@@ -122,7 +154,7 @@ scoop install onnxruntime
 # OR download from https://github.com/microsoft/onnxruntime/releases
 ```
 
-The resulting binary will have ONNX Runtime statically linked or dynamically linked depending on how the FFI library was built. Check the build configuration.
+ONNX Runtime may remain a runtime dependency even when the Xberg static archive is selected. Check the release archive's `native-static-libs.txt` and the resulting executable's dynamic dependencies for your platform.
 
 **Note:** Windows MinGW builds do not support embeddings (ONNX Runtime requires MSVC). Use Windows MSVC for embeddings support.
 
@@ -158,14 +190,13 @@ func main() {
 Build and run:
 
 ```bash
-# Build (make sure you have the static library available - see Install)
-CGO_LDFLAGS="-L$HOME/xberg/lib -lxberg_ffi" go build
+# Run setup once in this package, then build.
+go run {{ package_name }}/cmd/setup
+go build
 
-# Run - no library paths needed!
+# Run. Dynamic mode uses the rpath written by setup.
 ./myapp
 ```
-
-The binary is self-contained and can be distributed without any Xberg library dependencies.
 
 ## Examples
 
@@ -261,8 +292,8 @@ func init() {
 
 | Issue                                                                          | Fix                                                                                                                                                                                                                 |
 | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ld returned 1 exit status` or `undefined reference to 'html_to_markdown_...'` | The static library wasn't found. Make sure `CGO_LDFLAGS` points to the directory containing `libxberg_ffi.a`: `CGO_LDFLAGS="-L/path/to/lib -lxberg_ffi" go build`                                           |
-| `cannot find -lxberg_ffi`                                                  | The static library file is missing or in the wrong location. Download it from [GitHub Releases](https://github.com/xberg-io/xberg/releases) or build it yourself: `cargo build -p xberg-ffi --release` |
+| `ld returned 1 exit status` or `cannot find -lxberg_ffi`                  | Run `go run {{ package_name }}/cmd/setup` from the package you are building. Re-run it after every Xberg module upgrade. |
+| `native library missing after download/verification` with `-link static`  | Static mode is available for glibc Linux, macOS, and Windows x86_64 release archives. Use dynamic mode on musl, or build `xberg-ffi` from source. |
 | `undefined: xberg.Extract`                                                  | Regenerate the binding or update to Xberg v1; extraction is exposed as `Extract(ExtractInput, ExtractionConfig)`.                                                                                           |
 | `Missing dependency: tesseract`                                                | Install the OCR backend and ensure it is on `PATH`. Errors bubble up as typed Xberg errors.                                                                                                               |
 | `undefined: C.customValidator` during build                                    | Export the callback with `//export` in a `*_cgo.go` file before using it in `Register*` helpers.                                                                                                                    |
