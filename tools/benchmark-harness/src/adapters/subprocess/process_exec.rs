@@ -113,13 +113,14 @@ impl SubprocessAdapter {
         }
     }
 
-    /// Compute the final resource-usage stats for a measured command, and — when a target
-    /// process existed but RSS monitoring never captured a sample — synthesize a "not
+    /// Compute the final resource-usage stats for a measured command, and — when a successful
+    /// target process existed but RSS monitoring never captured a sample — synthesize a "not
     /// measurable on this platform" error rather than silently reporting zero usage. ~keep
     pub(super) async fn finalize_measured_resources(
         monitor: Option<ResourceMonitor>,
         child_pid: Option<u32>,
         error: Option<Error>,
+        command_succeeded: bool,
         operation: &str,
     ) -> (ResourceStats, Option<Error>) {
         let resource_stats = if let Some(monitor) = monitor {
@@ -130,7 +131,7 @@ impl SubprocessAdapter {
         } else {
             ResourceStats::default()
         };
-        let error = if child_pid.is_some() && resource_stats.sample_count == 0 && error.is_none() {
+        let error = if command_succeeded && child_pid.is_some() && resource_stats.sample_count == 0 && error.is_none() {
             Some(Error::Benchmark(format!(
                 "{operation} completed before RSS monitoring captured a target sample; result is not measurable on this platform"
             )))
@@ -204,7 +205,9 @@ impl SubprocessAdapter {
                 }
             }
         };
-        let (resource_stats, error) = Self::finalize_measured_resources(monitor, child_pid, error, operation).await;
+        let command_succeeded = output.as_ref().is_some_and(|output| output.status.success());
+        let (resource_stats, error) =
+            Self::finalize_measured_resources(monitor, child_pid, error, command_succeeded, operation).await;
         Ok(MeasuredCommandOutcome {
             output,
             duration,
