@@ -121,14 +121,6 @@ fn push_piece_overrun_warning(
     crate::core::diagnostics::push_warning(warnings, DOC_WARNING_SOURCE, message);
 }
 
-/// Decode up to `char_count` characters for one piece-table piece, mirroring
-/// the compressed (CP1252, 1 byte/char) vs. uncompressed (UTF-16LE, 2
-/// bytes/char) layouts used by the legacy `.doc` piece table, plus the
-/// CJK-heuristic fallback for uncompressed pieces that decode as mostly CJK
-/// ideographs (a strong signal the piece is actually CP1252, not UTF-16).
-///
-/// Returns fewer than `char_count` characters -- and records a warning via
-/// [`push_piece_overrun_warning`] -- when the piece's declared FC/length
 /// A decoded piece: its characters, plus for each character the byte offset
 /// (`FC`) in the WordDocument stream it was read from.
 ///
@@ -199,7 +191,7 @@ fn decode_piece_chars(
         } else {
             end
         };
-        let piece: DecodedPiece = if byte_offset >= available_end {
+        if byte_offset >= available_end {
             DecodedPiece::default()
         } else {
             let mut chars = Vec::new();
@@ -211,18 +203,7 @@ fn decode_piece_chars(
                 }
             }
             DecodedPiece { chars, fc_ends }
-        };
-
-        let suspicious = piece
-            .chars
-            .iter()
-            .filter(|c| (0x4E00..=0x9FFF).contains(&(**c as u32)))
-            .count();
-        if piece.len() > 4 && suspicious > piece.len() / 4 {
-            let cp1252_end = (byte_offset + char_count).min(word_doc.len());
-            return decode_cp1252(byte_offset, cp1252_end);
         }
-        piece
     }
 }
 

@@ -504,6 +504,46 @@ fn fc_clx_is_read_at_ms_doc_pair_33_not_the_obsolete_pair_66() {
     );
 }
 
+/// Build a `.doc` whose body is `text` in one uncompressed (UTF-16LE) piece.
+fn build_utf16_doc(text: &str) -> Vec<u8> {
+    const TEXT_OFFSET: usize = 900;
+    let units: Vec<u16> = text.encode_utf16().collect();
+
+    let mut word_doc = build_fib(TEXT_OFFSET + units.len() * 2, units.len() as u32, 0, 0, 0);
+    for (i, unit) in units.iter().enumerate() {
+        write_u16(&mut word_doc, TEXT_OFFSET + i * 2, *unit);
+    }
+    let plc_pcd = build_plc_pcd(&[TestPiece {
+        cp_start: 0,
+        cp_end: units.len() as u32,
+        fc_raw: TEXT_OFFSET as u32,
+    }]);
+    let table_stream = build_table_stream(&mut word_doc, &plc_pcd);
+    build_doc_ole(&word_doc, &table_stream)
+}
+
+/// #2073: an uncompressed piece in which over a quarter of the characters were
+/// CJK ideographs was re-decoded as cp1252, so Chinese came out as mojibake.
+#[test]
+fn should_keep_chinese_text_in_an_uncompressed_piece() {
+    const TEXT: &str = "居中的大标题";
+
+    let result = extract_doc_text(&build_utf16_doc(TEXT)).expect("DOC extraction should succeed");
+
+    assert_eq!(result.content, TEXT);
+}
+
+/// #2073: the cp1252 re-decode read one byte per CP, half of a UTF-16 piece, so
+/// mostly Latin text with one Chinese sentence (28% ideographs) was cut off.
+#[test]
+fn should_keep_a_mixed_latin_and_chinese_piece_whole() {
+    const TEXT: &str = "Det här är svensk text. 这是一个中文句子用于测试混合语言。 Sista meningen.";
+
+    let result = extract_doc_text(&build_utf16_doc(TEXT)).expect("DOC extraction should succeed");
+
+    assert_eq!(result.content, TEXT);
+}
+
 // --- Synthetic `.doc` with header/footer, footnote and comment stories (#2054) ---
 //
 // For what a real file cannot show: absent or malformed story tables, and
