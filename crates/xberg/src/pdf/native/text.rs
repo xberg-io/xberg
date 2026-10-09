@@ -1699,10 +1699,15 @@ fn redirect_split_out_of_content(
             .map(|(left, right)| (left + right) / 2.0)
             .filter(|candidate| (candidate - split_x).abs() <= max_redirect_distance)
     };
+    // A single crossing heading admits this search, so the split may already be the gutter.
+    // Only a corridor with a column's worth of rows on each side may replace it. ~keep
     let whitespace_corridors: Vec<(f32, f32)> =
         page_whitespace_corridors(spans, search_lines, furniture_width, min_gutter)
             .into_iter()
-            .filter(qualifies)
+            .filter(|corridor| {
+                both_sides_fill_column_rows(spans, search_lines, furniture_width, (corridor.0 + corridor.1) / 2.0)
+                    && qualifies(corridor)
+            })
             .collect();
     if let Some(candidate) = widest_within_reach(whitespace_corridors) {
         return candidate;
@@ -1784,6 +1789,27 @@ fn both_sides_are_columns(
         return false;
     }
     cross_gutter_row_pairing_fraction(spans, &indices, x) <= MAX_CROSS_GUTTER_ROW_PAIRING_FRACTION
+}
+
+/// True if both sides of `x` carry ink on `MIN_DENSE_COLUMN_SPANS_PER_SIDE` non-furniture
+/// lines. A lone header label or page number is one line however many spans it is written in.
+fn both_sides_fill_column_rows(
+    spans: &[xberg_native_pdf::layout::TextSpan],
+    lines: &[SpanLine],
+    furniture_width: f32,
+    x: f32,
+) -> bool {
+    let rows_on_side = |left_side: bool| {
+        lines
+            .iter()
+            .filter(|&line| !line_has_width_furniture(spans, line, furniture_width))
+            .filter(|line| {
+                line.iter()
+                    .any(|&index| span_has_ink(&spans[index]) && (spans[index].bbox.x < x) == left_side)
+            })
+            .count()
+    };
+    rows_on_side(true) >= MIN_DENSE_COLUMN_SPANS_PER_SIDE && rows_on_side(false) >= MIN_DENSE_COLUMN_SPANS_PER_SIDE
 }
 
 /// True if one of the line's inked spans is written across `x`.
@@ -7273,6 +7299,156 @@ mod tests {
             (redirected - 139.0).abs() < 1.0,
             "expected the 18pt true gutter (mid 139), got {redirected} -- \
              the 40pt table cell gap (mid 85) must not win merely for being wider"
+        );
+    }
+
+    const LANDSCAPE_PAGE_WIDTH: f32 = 1368.0;
+
+    /// A 1368pt landscape page: two 13pt prose columns at x 29.9 and 319.3 (gutter
+    /// 292.5..319.3, under this page's `min_gutter`), a 55pt title set across the gutter,
+    /// a lone header label at x 651 (optionally written as six spans), optionally a page
+    /// number at x 1331, and small labels under the left column. The only whitespace
+    /// corridors run beside the header label.
+    fn landscape_title_over_gutter_spans(with_page_number: bool, label_in_six_spans: bool) -> Vec<TextSpan> {
+        let top = 792.0;
+        let mut spans = vec![
+            span_with_width("4", 21.6, top - 768.5, 13.6, 20.0, 20.0),
+            span_with_width("Carpenters", 651.0, top - 43.7, 78.0, 13.0, 13.0),
+            span_with_width("25", 1331.4, top - 48.7, 16.2, 13.0, 13.0),
+            span_with_width("Silver Morning", 29.9, top - 311.8, 381.4, 55.0, 55.0),
+            span_with_width("Storytelling", 29.6, top - 619.8, 123.1, 14.0, 14.0),
+            span_with_width("Painter", 139.2, top - 648.9, 45.4, 11.0, 11.0),
+            span_with_width("Window", 126.4, top - 678.6, 44.7, 11.0, 11.0),
+        ];
+        if !with_page_number {
+            spans.retain(|span| span.text != "25");
+        }
+        if label_in_six_spans {
+            spans.retain(|span| span.text != "Carpenters");
+            for (i, piece) in ["Ca", "rp", "en", "te", "r", "s"].into_iter().enumerate() {
+                spans.push(span_with_width(
+                    piece,
+                    651.0 + i as f32 * 13.0,
+                    top - 43.7,
+                    13.0,
+                    13.0,
+                    13.0,
+                ));
+            }
+        }
+        let left_widths = [
+            262.6, 250.4, 251.6, 219.8, 228.1, 251.5, 233.9, 229.4, 251.1, 243.9, 240.1, 135.4,
+        ];
+        let left_text = [
+            "Loud ocean warm mountain the city film and",
+            "careful, weather quiet season an picture",
+            "road festival in dark table hand kitchen",
+            "rain on wild. Beautiful at a mountain",
+            "storytelling calm blue for market gold",
+            "sculpture to orchard note station crew. Year",
+            "lantern morning of festival page harbor,",
+            "shoreline beautiful painter loud warm",
+            "mountain sculpture. Bright a copper was",
+            "storytelling city film road dark are river",
+            "by a storytelling hand careful light",
+            "shoreline it beautiful.",
+        ];
+        for (row, (text, width)) in left_text.into_iter().zip(left_widths).enumerate() {
+            let y = top - (355.3 + row as f32 * 17.0);
+            spans.push(span_with_width(text, 29.9, y, width, 13.0, 13.0));
+        }
+        let right_rows = [0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13];
+        let right_widths = [
+            247.7, 281.8, 258.8, 246.5, 252.2, 274.5, 233.0, 106.5, 275.7, 248.8, 239.8, 218.6, 106.8,
+        ];
+        let right_text = [
+            "Brand weather remarkable can rhythm say",
+            "festival mountain, new industrial storytelling",
+            "rain we wild go studio cabin calm blue north",
+            "old picture. Up festival Bread Canvas so",
+            "One Sculpture gold be, Kitchen carpenters",
+            "garden mountain do shoreline as two remarkable",
+            "orchard festival note industrial red",
+            "mountain crew sun.",
+            "Carpenters sea station year metal page loud",
+            "warm city film grain lantern morning painter",
+            "a festival map or chalk careful, paper",
+            "mountain weather, key store fog no a",
+            "storytelling ocean.",
+        ];
+        for ((row, text), width) in right_rows.into_iter().zip(right_text).zip(right_widths) {
+            let y = top - (355.3 + row as f32 * 17.0);
+            spans.push(span_with_width(text, 319.3, y, width, 13.0, 13.0));
+        }
+        spans
+    }
+
+    /// The title crossing the gutter sends the split to the corridor search. The corridor
+    /// between the right column and the header label reads as a column boundary page-wide,
+    /// but only one row sits right of it. The split must stay in the gutter and the columns
+    /// must come out left then right. Without the page number that corridor is also the
+    /// widest one in reach. Writing the label as six spans must not turn it into a column.
+    #[test]
+    fn split_crossed_by_a_title_is_not_redirected_beside_a_lone_header_label() {
+        for with_page_number in [true, false] {
+            for label_in_six_spans in [false, true] {
+                assert_title_page_keeps_its_gutter(landscape_title_over_gutter_spans(
+                    with_page_number,
+                    label_in_six_spans,
+                ));
+            }
+        }
+    }
+
+    /// A single-column page whose split landed inside the body: every body line crosses it,
+    /// so the widened search runs, and the only corridor is the margin beside the running
+    /// header. That move stands even though the margin side holds one row, because leaving
+    /// the split inside the body reorders the page against a split that is not a gutter.
+    #[test]
+    fn split_inside_a_single_column_still_moves_to_the_margin_beside_a_running_header() {
+        let page_width = 666.0;
+        let mut spans = vec![
+            span_with_width("78", 70.6, 840.0, 10.0, 9.0, 9.0),
+            span_with_width("UE 8. Circulation - Métabolismes", 86.0, 840.0, 188.5, 9.0, 9.0),
+        ];
+        for row in 0..14 {
+            let y = 800.0 - row as f32 * 14.0;
+            spans.push(span_with_width(
+                "Traitement nécessaire pour prévenir la fonte musculaire et la lithiase",
+                148.6,
+                y,
+                360.0,
+                10.0,
+                10.0,
+            ));
+        }
+        let lines = corridor_fixture_lines(&spans);
+        let furniture_width = page_width * FULL_WIDTH_FURNITURE_FRACTION;
+        let split_x = 230.0;
+        assert!(lines_crossing(&spans, &lines, furniture_width, split_x) >= MIN_DENSE_COLUMN_SPLIT_LINES);
+        let redirected = redirect_split_out_of_content(&spans, &lines, page_width, split_x);
+        assert!(
+            redirected < 148.6,
+            "the split must leave the body for the margin, got {redirected}"
+        );
+    }
+
+    fn assert_title_page_keeps_its_gutter(mut spans: Vec<TextSpan>) {
+        let lines = corridor_fixture_lines(&spans);
+        let detected = detect_split_x(&spans, &lines, LANDSCAPE_PAGE_WIDTH).expect("a split is detected");
+        assert!(
+            (292.5..319.3).contains(&detected),
+            "the fixture must put the split in the gutter, got {detected}"
+        );
+        let redirected = redirect_split_out_of_content(&spans, &lines, LANDSCAPE_PAGE_WIDTH, detected);
+        assert_eq!(redirected, detected, "a corridor beside a lone label is not a gutter");
+
+        assert!(reorder_dense_two_column_page(&mut spans, LANDSCAPE_PAGE_WIDTH));
+        let order: Vec<&str> = spans.iter().map(|span| span.text.as_str()).collect();
+        let position = |text: &str| order.iter().position(|&candidate| candidate == text).unwrap();
+        assert!(
+            position("shoreline it beautiful.") < position("Brand weather remarkable can rhythm say"),
+            "the left column must be read whole before the right one: {order:?}"
         );
     }
 }

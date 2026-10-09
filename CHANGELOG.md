@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **(pdf): a title set across a two-column page's gutter no longer moves the column split beside a lone label.** The
+  whitespace-corridor search accepted the gap between a column and a lone header label or page number as a gutter, so
+  the two columns were read line by line. That search now needs text on at least six rows on each side of a corridor,
+  however many spans a label is written in.
+
 ## [1.3.7] - 2026-10-09
 
 ### Added
