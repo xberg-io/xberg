@@ -268,6 +268,19 @@ pub struct PageContent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "api", schema(nullable = false))]
     pub ocr_confidence: Option<PageOcrConfidence>,
+
+    /// Text layer of this page, kept when OCR output replaced it in `content`.
+    ///
+    /// Set only when `PageConfig::keep_native_content` is on, an OCR route replaced this page's `content`, and the
+    /// text layer is not blank and differs from the OCR text. `None` on every other page. PDF only.
+    ///
+    /// Redaction applies the same passes to it as to `content`, and removes it (`None`) when a redaction source
+    /// cannot be applied to it: a finding given as offsets into `content`, an entity detection that fails, or a
+    /// kept text layer in an embedded document while entity detection is on.
+    /// NFC normalisation rewrites it with the rest of the page. Translation does not change it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "alef-meta", alef(since = "1.3.8"))]
+    pub native_content: Option<String>,
 }
 
 /// Aggregate OCR legibility score for a page, reported by the backend that produced its text.
@@ -618,6 +631,7 @@ mod binding_value_serde_tests {
             section_name: None,
             sheet_name: None,
             ocr_confidence: None,
+            native_content: None,
         }
     }
 
@@ -665,5 +679,41 @@ mod binding_value_serde_tests {
             value["ocr_confidence"],
             json!({"score": 0.87, "word_count": 42, "backend": "tesseract"})
         );
+    }
+
+    #[test]
+    fn native_content_is_omitted_when_absent_and_round_trips_when_present() {
+        let absent = serde_json::to_value(page_content_without_ocr_confidence()).expect("the page serializes");
+        assert_eq!(absent["content"], json!("hello"));
+        assert!(
+            absent
+                .as_object()
+                .expect("the page serializes as an object")
+                .get("native_content")
+                .is_none(),
+            "an absent native_content must not be serialized: {absent}"
+        );
+
+        let mut page = page_content_without_ocr_confidence();
+        page.native_content = Some("Ref KX-204".to_string());
+        let present = serde_json::to_value(&page).expect("the page serializes");
+        assert_eq!(present["native_content"], json!("Ref KX-204"));
+
+        let round_tripped: PageContent = serde_json::from_value(present).expect("the page deserializes");
+        assert_eq!(round_tripped.native_content.as_deref(), Some("Ref KX-204"));
+        assert_eq!(round_tripped.content, "hello");
+    }
+
+    #[test]
+    fn a_page_written_without_native_content_reads_as_none() {
+        let older = json!({
+            "page_number": 1,
+            "content": "hello",
+        });
+
+        let page: PageContent = serde_json::from_value(older).expect("a page without the key deserializes");
+
+        assert_eq!(page.native_content, None);
+        assert_eq!(page.content, "hello");
     }
 }

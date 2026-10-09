@@ -189,6 +189,16 @@ pub(super) fn compile_external_findings(
 pub(super) struct CompiledConfiguredFindings {
     pub(super) terms: Vec<(PiiCategory, regex::Regex)>,
     pub(super) count: usize,
+    /// At least one finding gives a span of the content and no text.
+    pub(super) has_offsets: bool,
+}
+
+/// Whether a finding gives a span of the content and no text.
+///
+/// The literal of such a finding is cut from the content, so the finding cannot be evaluated on a
+/// text that the content does not hold.
+pub(super) fn any_offset_finding(findings: &[ExternalRedactionFinding]) -> bool {
+    findings.iter().any(|finding| finding.text.is_none())
 }
 
 pub(super) fn compile_configured_findings(
@@ -248,6 +258,7 @@ fn compile_configured_with_loaded(
     }
     let mut findings = config.findings.clone();
     findings.extend(loaded);
+    let has_offsets = any_offset_finding(&findings);
     let terms = compile_findings(
         content,
         &findings,
@@ -262,7 +273,11 @@ fn compile_configured_with_loaded(
             }
         },
     )?;
-    Ok(CompiledConfiguredFindings { terms, count: total })
+    Ok(CompiledConfiguredFindings {
+        terms,
+        count: total,
+        has_offsets,
+    })
 }
 
 fn compile_findings<F>(

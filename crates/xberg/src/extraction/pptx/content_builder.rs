@@ -88,6 +88,7 @@ impl ContentBuilder {
                 section_name,
                 sheet_name: None,
                 ocr_confidence: None,
+                native_content: None,
             });
         }
     }

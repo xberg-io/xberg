@@ -1238,6 +1238,7 @@ impl InternalDocumentExtractor for DocxExtractor {
                         section_name: None,
                         sheet_name: None,
                         ocr_confidence: None,
+                        native_content: None,
                     });
                 }
                 Some(pages)
@@ -1255,6 +1256,7 @@ impl InternalDocumentExtractor for DocxExtractor {
                     section_name: None,
                     sheet_name: None,
                     ocr_confidence: None,
+                    native_content: None,
                 }])
             }
         };

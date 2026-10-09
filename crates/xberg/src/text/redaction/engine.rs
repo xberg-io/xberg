@@ -9,10 +9,22 @@
 //! A single `RedactionPass` carries the whole matcher set — pattern engine,
 //! user-supplied terms and patterns, *and* the terms derived from NER
 //! detections — and every text-bearing field is rewritten through it. The NER
-//! backend only ever sees [`ExtractedDocument::content`], so its byte spans are
-//! meaningless for a table cell or a metadata value; the detected mentions are
+//! backend reads [`ExtractedDocument::content`] and each kept text layer, so its
+//! byte spans are meaningless for a table cell or a metadata value; the detected mentions are
 //! therefore also compiled into literal matchers that run against every field
 //! and every occurrence (xberg-io/xberg#200, #202, #203).
+//!
+//! # Kept text layer
+//!
+//! `PageContent::native_content` holds the characters where the text layer of a
+//! page and its OCR text differ, so a detection over `content` says nothing
+//! about it. A pass returns a kept text layer only when every redaction source
+//! of the pass was evaluated on that text: entity detection runs on each kept
+//! text layer of the document's own pages, and its mentions join the matcher
+//! set. A source that cannot be evaluated on the kept text (a finding given as
+//! offsets into `content`, a caller-supplied entity stream, a failed detection,
+//! a kept text layer in an embedded document) removes the kept text layer, and
+//! the pass adds one processing warning.
 //!
 //! # Audit trail
 //!
@@ -37,7 +49,9 @@ use crate::types::revisions::{DiffLine, RevisionAnchor};
 
 #[cfg(feature = "tokio-runtime")]
 use super::external::compile_configured_findings_async;
-use super::external::{ExternalRedactionRequest, compile_configured_findings, compile_external_findings};
+use super::external::{
+    ExternalRedactionRequest, any_offset_finding, compile_configured_findings, compile_external_findings,
+};
 use super::patterns::{PatternMatch, scan_text};
 use super::strategy::{TokenCounter, apply_strategy};
 
@@ -115,6 +129,7 @@ pub(crate) async fn redact_external_with_findings(
             terms: &external_terms,
             count: findings.len(),
             limit: Some(effective_limit),
+            has_offsets: any_offset_finding(&findings),
         },
         true,
         &default_limits,
@@ -154,6 +169,7 @@ pub(crate) async fn redact_with_external_findings(
             terms: &external_terms,
             count: request.findings.len(),
             limit: Some(request.max_findings as usize),
+            has_offsets: any_offset_finding(&request.findings),
         },
         request.include_configured_sources,
         limits,
@@ -193,6 +209,11 @@ pub async fn redact_capturing_rehydration_map(
 /// own model — pass it here and skip the second inference pass. Entities of a
 /// category the pattern engine already covers (email, phone, URL) are ignored:
 /// the regex engine is the more reliable detector for those.
+///
+/// The entity stream covers `content` only, and this function runs no
+/// detection. It therefore removes every kept text layer
+/// (`PageContent::native_content`) and adds one processing warning. [`redact`]
+/// runs the detection on each kept text layer and returns it redacted.
 #[cfg_attr(alef, alef(skip))]
 pub fn redact_with_entities(
     result: &mut ExtractedDocument,
@@ -201,7 +222,15 @@ pub fn redact_with_entities(
 ) -> Result<()> {
     config.validate()?;
     let configured = compile_configured_findings(&result.content, config, &SecurityLimits::default())?;
-    redact_pass(result, config, entities, &configured.terms, true);
+    redact_pass(
+        result,
+        config,
+        entities,
+        &configured.terms,
+        true,
+        KeptTextRule::WITHHOLD,
+        0,
+    );
     Ok(())
 }
 
@@ -212,6 +241,8 @@ struct CompiledExternalFindings<'a> {
     terms: &'a [(PiiCategory, regex::Regex)],
     count: usize,
     limit: Option<usize>,
+    /// At least one finding gives a span of the content and no text.
+    has_offsets: bool,
 }
 
 async fn redact_counted(
@@ -236,18 +267,27 @@ async fn redact_counted(
             "RedactionConfig: {total_findings} findings exceed the effective redaction finding limit ({limit})"
         )));
     }
+    let has_offsets = configured.has_offsets || external.has_offsets;
     let mut all_external_terms = configured.terms;
     all_external_terms.extend_from_slice(external.terms);
 
     #[cfg(feature = "ner")]
-    let entities: Vec<Entity> = match (include_configured_sources, &config.ner) {
+    let (entities, kept_text, withheld_kept_text) = match (include_configured_sources, &config.ner) {
         (true, Some(ner_config)) => {
-            collect_ner_entities(&result.content, ner_config, &active_categories(config)).await?
+            let active = active_categories(config);
+            let mut entities = collect_ner_entities(&result.content, ner_config, &active).await?;
+            if has_offsets {
+                (entities, KeptTextRule::WITHHOLD, 0)
+            } else {
+                let withheld = collect_kept_text_entities(result, ner_config, &active, &mut entities).await;
+                (entities, KeptTextRule::REDACT_OWN, withheld)
+            }
         }
-        _ => Vec::new(),
+        _ => (Vec::new(), KeptTextRule::for_offsets(has_offsets), 0),
     };
     #[cfg(not(feature = "ner"))]
-    let entities: Vec<Entity> = Vec::new();
+    let (entities, kept_text, withheld_kept_text): (Vec<Entity>, KeptTextRule, usize) =
+        (Vec::new(), KeptTextRule::for_offsets(has_offsets), 0);
 
     Ok(redact_pass(
         result,
@@ -255,6 +295,8 @@ async fn redact_counted(
         &entities,
         &all_external_terms,
         include_configured_sources,
+        kept_text,
+        withheld_kept_text,
     ))
 }
 
@@ -265,6 +307,8 @@ fn redact_pass(
     entities: &[Entity],
     external_terms: &[(PiiCategory, regex::Regex)],
     include_configured_sources: bool,
+    kept_text: KeptTextRule,
+    withheld_kept_text: usize,
 ) -> TokenCounter {
     let active = if include_configured_sources {
         active_categories(config)
@@ -290,11 +334,23 @@ fn redact_pass(
         ner_terms: &ner_terms,
         external_terms,
         include_configured_sources,
+        kept_text,
+        withheld_kept_text,
         counter: TokenCounter::new(),
         findings: Vec::new(),
     };
 
     pass.redact_document(result, 0);
+
+    if pass.withheld_kept_text > 0 {
+        result.processing_warnings.push(crate::core::diagnostics::warning(
+            "redaction",
+            format!(
+                "Redaction withheld {} kept text layer(s): a redaction source could not be applied to that text.",
+                pass.withheld_kept_text
+            ),
+        ));
+    }
 
     let findings = std::mem::take(&mut pass.findings);
     let total_redacted = findings.len() as u32;
@@ -304,6 +360,49 @@ fn redact_pass(
     });
 
     pass.counter
+}
+
+/// Which kept text layers (`PageContent::native_content`) a pass removes instead of rewriting.
+///
+/// A pass returns a kept text layer only when every redaction source of the pass was evaluated on
+/// that text. Unknown is not "no findings".
+#[derive(Clone, Copy)]
+struct KeptTextRule {
+    /// Remove the kept text layers of the document's own pages.
+    withhold_own: bool,
+    /// Remove the kept text layers of embedded documents (archive members, image OCR results).
+    withhold_embedded: bool,
+}
+
+impl KeptTextRule {
+    /// Every source of the pass scans each field: patterns, custom terms, findings given as text.
+    const REDACT: Self = Self {
+        withhold_own: false,
+        withhold_embedded: false,
+    };
+    /// A source refers to positions in `content`, or to a detection that did not read the kept text.
+    const WITHHOLD: Self = Self {
+        withhold_own: true,
+        withhold_embedded: true,
+    };
+    /// Entity detection ran on the kept text layers of the document's own pages only.
+    #[cfg(feature = "ner")]
+    const REDACT_OWN: Self = Self {
+        withhold_own: false,
+        withhold_embedded: true,
+    };
+
+    fn for_offsets(has_offsets: bool) -> Self {
+        if has_offsets { Self::WITHHOLD } else { Self::REDACT }
+    }
+
+    fn withholds(self, depth: usize) -> bool {
+        if depth == 0 {
+            self.withhold_own
+        } else {
+            self.withhold_embedded
+        }
+    }
 }
 
 /// One document-wide redaction pass.
@@ -319,6 +418,9 @@ struct RedactionPass<'a> {
     ner_terms: &'a [(PiiCategory, regex::Regex)],
     external_terms: &'a [(PiiCategory, regex::Regex)],
     include_configured_sources: bool,
+    kept_text: KeptTextRule,
+    /// Count of the kept text layers that the pass, or the detection before it, removed.
+    withheld_kept_text: usize,
     counter: TokenCounter,
     findings: Vec<RedactionFinding>,
 }
@@ -509,7 +611,7 @@ impl RedactionPass<'_> {
     /// added there it must be added here too.
     fn redact_secondary_text_fields(&mut self, doc: &mut ExtractedDocument, depth: usize) {
         self.redact_tables(doc);
-        self.redact_pages(doc);
+        self.redact_pages(doc, depth);
         self.redact_elements(doc);
         self.redact_djot(doc);
         self.redact_document_structure(doc);
@@ -546,12 +648,23 @@ impl RedactionPass<'_> {
     }
 
     /// Rewrite per-page text, slide/sheet names, hierarchy blocks, and page tables.
-    fn redact_pages(&mut self, doc: &mut ExtractedDocument) {
+    ///
+    /// The kept text layer of a page is rewritten, or removed when [`KeptTextRule`] says that a
+    /// source of this pass was not evaluated on it.
+    fn redact_pages(&mut self, doc: &mut ExtractedDocument, depth: usize) {
         let Some(pages) = doc.pages.as_mut() else {
             return;
         };
+        let withhold_kept_text = self.kept_text.withholds(depth);
         for page in pages.iter_mut() {
             self.redact_in_place(&mut page.content);
+            if withhold_kept_text {
+                if page.native_content.take().is_some() {
+                    self.withheld_kept_text += 1;
+                }
+            } else {
+                self.redact_optional(&mut page.native_content);
+            }
             self.redact_optional(&mut page.speaker_notes);
             self.redact_optional(&mut page.section_name);
             self.redact_optional(&mut page.sheet_name);
@@ -1250,6 +1363,37 @@ async fn collect_ner_entities(
         .await
 }
 
+/// Run entity detection on the kept text layer of each of the document's own pages, and add the
+/// mentions to `entities`.
+///
+/// A kept text layer whose detection fails is removed: the pass cannot know its entities. Returns
+/// the count of the removed kept text layers.
+#[cfg(feature = "ner")]
+async fn collect_kept_text_entities(
+    result: &mut ExtractedDocument,
+    ner_config: &crate::core::config::ner::NerConfig,
+    active: &HashSet<PiiCategory>,
+    entities: &mut Vec<Entity>,
+) -> usize {
+    let Some(pages) = result.pages.as_mut() else {
+        return 0;
+    };
+    let mut withheld = 0;
+    for page in pages.iter_mut() {
+        let Some(kept_text) = page.native_content.as_deref() else {
+            continue;
+        };
+        match collect_ner_entities(kept_text, ner_config, active).await {
+            Ok(found) => entities.extend(found),
+            Err(_) => {
+                page.native_content = None;
+                withheld += 1;
+            }
+        }
+    }
+    withheld
+}
+
 #[cfg(feature = "ner")]
 fn make_ner_backend(
     config: &crate::core::config::ner::NerConfig,
@@ -1419,6 +1563,343 @@ mod tests {
         );
     }
 
+    /// The spelling of a name in the OCR text, and its spelling in the text layer of the same page.
+    const OCR_NAME: &str = "Zamak Quorlim";
+    const LAYER_NAME: &str = "Zarnak Quorlim";
+
+    /// A document with one page. `content` is the OCR text of the page, and `kept_text` is the
+    /// text layer that the OCR text replaced.
+    fn document_with_kept_text(content: &str, kept_text: &str) -> ExtractedDocument {
+        ExtractedDocument {
+            content: content.to_string(),
+            pages: Some(vec![crate::types::PageContent {
+                page_number: 1,
+                content: content.to_string(),
+                tables: Vec::new(),
+                image_indices: Vec::new(),
+                image_preprocessing: None,
+                hierarchy: None,
+                is_blank: None,
+                layout_regions: None,
+                speaker_notes: None,
+                section_name: None,
+                sheet_name: None,
+                ocr_confidence: None,
+                native_content: Some(kept_text.to_string()),
+            }]),
+            ..Default::default()
+        }
+    }
+
+    /// The kept text layer of the one page of `doc`.
+    fn kept_text(doc: &ExtractedDocument) -> Option<&str> {
+        let page = &doc.pages.as_ref().expect("the page is kept")[0];
+        page.native_content.as_deref()
+    }
+
+    /// The count of the warnings that redaction added to `doc`.
+    fn redaction_warnings(doc: &ExtractedDocument) -> usize {
+        doc.processing_warnings
+            .iter()
+            .filter(|warning| warning.source == "redaction")
+            .count()
+    }
+
+    /// A redaction config whose entity backend is a local loopback HTTP stub. The stub answers a
+    /// request with the reply of the first needle that the request body holds, and with an empty
+    /// entity list when the body holds no needle.
+    #[cfg(all(feature = "api", feature = "ner-llm"))]
+    async fn stub_entity_redaction_config(replies: &'static [(&'static str, &'static str)]) -> RedactionConfig {
+        let app = axum::Router::new().fallback(axum::routing::post(move |body: String| async move {
+            let reply = replies
+                .iter()
+                .find(|entry| body.contains(entry.0))
+                .map_or(r#"{"entities":[]}"#, |entry| entry.1);
+            axum::response::Json(serde_json::json!({
+                "id": "test",
+                "object": "chat.completion",
+                "created": 0,
+                "model": "test",
+                "choices": [{
+                    "index": 0,
+                    "message": { "role": "assistant", "content": reply },
+                    "finish_reason": "stop"
+                }]
+            }))
+        }));
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        RedactionConfig {
+            ner: Some(crate::core::config::ner::NerConfig {
+                backend: crate::core::config::ner::NerBackendKind::Llm,
+                llm: Some(crate::core::config::llm::LlmConfig {
+                    model: "openai/gpt-4o-mini".to_string(),
+                    api_key: Some("test-key".to_string()),
+                    base_url: Some(format!("http://{addr}/v1/")),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    /// The reply of the entity stub that reports `OCR_NAME` as a person.
+    #[cfg(all(feature = "api", feature = "ner-llm"))]
+    const OCR_NAME_REPLY: &str = r#"{"entities":[{"text":"Zamak Quorlim","category":"person"}]}"#;
+
+    /// The reply of the entity stub that reports `LAYER_NAME` as a person.
+    #[cfg(all(feature = "api", feature = "ner-llm"))]
+    const LAYER_NAME_REPLY: &str = r#"{"entities":[{"text":"Zarnak Quorlim","category":"person"}]}"#;
+
+    #[tokio::test]
+    async fn redaction_rewrites_the_kept_text_layer() {
+        let email = "alice@example.com";
+        let mut doc = document_with_kept_text(
+            &format!("OCR reading of {email}."),
+            &format!("Text layer with {email}."),
+        );
+
+        redact(&mut doc, &RedactionConfig::default())
+            .await
+            .expect("redaction must succeed");
+
+        let native_content = kept_text(&doc).expect("the kept text layer stays present");
+        assert!(
+            native_content.starts_with("Text layer with ") && !native_content.contains(email),
+            "the kept text layer must be redacted in place: {native_content:?}"
+        );
+        let page = &doc.pages.as_ref().expect("the page is kept")[0];
+        assert!(
+            page.content.starts_with("OCR reading of ") && !page.content.contains(email),
+            "the page content must be redacted too: {:?}",
+            page.content
+        );
+        assert_eq!(redaction_warnings(&doc), 0, "pattern redaction withholds nothing");
+    }
+
+    /// The entity backend reads the OCR text and the kept text layer in separate requests. The
+    /// name in the kept text layer has a spelling that the OCR text does not hold.
+    #[cfg(all(feature = "api", feature = "ner-llm"))]
+    #[tokio::test]
+    async fn an_entity_spelled_only_in_the_kept_text_layer_is_redacted_there() {
+        let config = stub_entity_redaction_config(&[(LAYER_NAME, LAYER_NAME_REPLY), (OCR_NAME, OCR_NAME_REPLY)]).await;
+        let mut doc = document_with_kept_text(
+            &format!("Report signed by {OCR_NAME} today"),
+            &format!("Report signed by {LAYER_NAME} today"),
+        );
+
+        redact(&mut doc, &config).await.expect("redaction must succeed");
+
+        let native_content = kept_text(&doc).expect("the kept text layer stays present");
+        assert!(
+            !native_content.contains(LAYER_NAME),
+            "the name must not stay in the kept text layer: {native_content:?}"
+        );
+        assert!(
+            native_content.starts_with("Report signed by ") && native_content.ends_with(" today"),
+            "the text around the name must stay: {native_content:?}"
+        );
+        assert!(
+            !doc.content.contains(OCR_NAME),
+            "the content must be redacted too: {:?}",
+            doc.content
+        );
+        assert_eq!(redaction_warnings(&doc), 0, "nothing is withheld");
+    }
+
+    /// The entity backend answers the request for the kept text layer with a reply that is not
+    /// JSON, so the detection for that text fails.
+    #[cfg(all(feature = "api", feature = "ner-llm"))]
+    #[tokio::test]
+    async fn a_kept_text_layer_whose_entity_detection_fails_is_withheld() {
+        let config = stub_entity_redaction_config(&[(LAYER_NAME, "not json")]).await;
+        let mut doc = document_with_kept_text(
+            &format!("Report signed by {OCR_NAME} today"),
+            &format!("Report signed by {LAYER_NAME} today"),
+        );
+
+        redact(&mut doc, &config).await.expect("redaction must succeed");
+
+        assert_eq!(kept_text(&doc), None, "an unknown result is not an empty one");
+        assert!(
+            doc.content.starts_with("Report signed by "),
+            "the content stays: {:?}",
+            doc.content
+        );
+        assert_eq!(redaction_warnings(&doc), 1);
+    }
+
+    /// With entity detection on, the pass does not run the detection on the kept text layer of an
+    /// archive member, so it must not return that text.
+    #[cfg(all(feature = "api", feature = "ner-llm"))]
+    #[tokio::test]
+    async fn entity_redaction_withholds_the_kept_text_layer_of_an_embedded_document() {
+        let config = stub_entity_redaction_config(&[]).await;
+        let mut doc = ExtractedDocument {
+            content: "Archive with one member".to_string(),
+            children: Some(vec![crate::types::ArchiveEntry {
+                path: "member.pdf".to_string(),
+                mime_type: "application/pdf".to_string(),
+                result: Box::new(document_with_kept_text("OCR reading", "Text layer")),
+            }]),
+            ..Default::default()
+        };
+
+        redact(&mut doc, &config).await.expect("redaction must succeed");
+
+        let member = &doc.children.as_ref().expect("the member is kept")[0].result;
+        assert_eq!(kept_text(member), None);
+        assert_eq!(member.content, "OCR reading");
+        assert_eq!(redaction_warnings(&doc), 1);
+    }
+
+    /// The document of the offset tests: the OCR text and the text layer spell the name differently.
+    fn signed_report() -> ExtractedDocument {
+        document_with_kept_text(
+            &format!("Report signed by {OCR_NAME} today"),
+            &format!("Report signed by {LAYER_NAME} today"),
+        )
+    }
+
+    /// A finding that gives the offsets of `OCR_NAME` in the content of `signed_report`.
+    fn offset_finding_of_the_ocr_name() -> ExternalRedactionFinding {
+        let start = "Report signed by ".len() as u32;
+        ExternalRedactionFinding {
+            label: "PERSON".to_string(),
+            start: Some(start),
+            end: Some(start + OCR_NAME.len() as u32),
+            ..Default::default()
+        }
+    }
+
+    /// The kept text layer is absent, the name is not in `content`, and redaction added one warning.
+    fn assert_kept_text_withheld(doc: &ExtractedDocument) {
+        assert_eq!(kept_text(doc), None, "the kept text layer must be absent");
+        assert!(
+            doc.content.starts_with("Report signed by ") && !doc.content.contains(OCR_NAME),
+            "the content must be redacted: {:?}",
+            doc.content
+        );
+        assert_eq!(redaction_warnings(doc), 1);
+    }
+
+    /// A finding given as offsets names a stretch of `content`. The pass cannot evaluate it on the
+    /// kept text layer, which holds another spelling.
+    #[tokio::test]
+    async fn a_finding_given_as_offsets_withholds_the_kept_text_layer() {
+        let mut doc = signed_report();
+        let config = RedactionConfig {
+            findings: vec![offset_finding_of_the_ocr_name()],
+            ..Default::default()
+        };
+
+        redact(&mut doc, &config).await.expect("redaction must succeed");
+
+        assert_kept_text_withheld(&doc);
+    }
+
+    /// The offset finding comes in the JSON payload of `redact_external`, the route of the bindings.
+    #[tokio::test]
+    async fn an_offset_finding_in_an_external_redaction_withholds_the_kept_text_layer() {
+        let findings = serde_json::to_string(&[offset_finding_of_the_ocr_name()]).expect("the finding serializes");
+
+        let doc = redact_external(signed_report(), RedactionConfig::default(), &findings, None, None)
+            .await
+            .expect("redaction must succeed");
+
+        assert_kept_text_withheld(&doc);
+    }
+
+    /// The offset finding comes with an extraction request, the route of the redaction post-processor.
+    #[cfg(feature = "tokio-runtime")]
+    #[tokio::test]
+    async fn an_offset_finding_in_an_extraction_request_withholds_the_kept_text_layer() {
+        let mut doc = signed_report();
+        let config = RedactionConfig::default();
+        let limits = SecurityLimits::default();
+        let request = ExternalRedactionRequest::new(
+            vec![offset_finding_of_the_ocr_name()],
+            RedactionOffsetEncoding::UnicodeCodePoints,
+            10,
+            true,
+        );
+
+        redact_with_external_findings(&mut doc, &config, &request, &limits)
+            .await
+            .expect("redaction must succeed");
+
+        assert_kept_text_withheld(&doc);
+    }
+
+    /// Entity detection could read the kept text layer, but the offset finding cannot be evaluated
+    /// on it, so the pass must not return the kept text with the entity terms only.
+    #[cfg(all(feature = "api", feature = "ner-llm"))]
+    #[tokio::test]
+    async fn an_offset_finding_with_entity_detection_on_withholds_the_kept_text_layer() {
+        let mut doc = signed_report();
+        let stub = stub_entity_redaction_config(&[(LAYER_NAME, LAYER_NAME_REPLY), (OCR_NAME, OCR_NAME_REPLY)]).await;
+        let config = RedactionConfig {
+            findings: vec![offset_finding_of_the_ocr_name()],
+            ..stub
+        };
+
+        redact(&mut doc, &config).await.expect("redaction must succeed");
+
+        assert_kept_text_withheld(&doc);
+    }
+
+    /// A finding given as text is a literal that the pass looks for in every field.
+    #[tokio::test]
+    async fn a_finding_given_as_text_is_applied_to_the_kept_text_layer() {
+        let mut doc = document_with_kept_text(
+            &format!("Report signed by {OCR_NAME} today"),
+            &format!("Report signed by {LAYER_NAME} today"),
+        );
+        let config = RedactionConfig {
+            findings: vec![ExternalRedactionFinding {
+                label: "PERSON".to_string(),
+                text: Some(LAYER_NAME.to_string()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        redact(&mut doc, &config).await.expect("redaction must succeed");
+
+        let native_content = kept_text(&doc).expect("the kept text layer stays present");
+        assert!(
+            native_content.starts_with("Report signed by ") && !native_content.contains(LAYER_NAME),
+            "the kept text layer must be redacted in place: {native_content:?}"
+        );
+        assert_eq!(redaction_warnings(&doc), 0, "nothing is withheld");
+    }
+
+    /// A caller-supplied entity stream covers `content` only, and the function runs no detection.
+    #[test]
+    fn redaction_with_a_caller_entity_stream_withholds_the_kept_text_layer() {
+        let mut doc = document_with_kept_text(
+            &format!("Report signed by {OCR_NAME} today"),
+            &format!("Report signed by {LAYER_NAME} today"),
+        );
+        let entities = vec![entity(EntityCategory::Person, OCR_NAME, 17, 30)];
+
+        redact_with_entities(&mut doc, &RedactionConfig::default(), &entities).expect("redaction must succeed");
+
+        assert_eq!(kept_text(&doc), None, "the kept text layer must be absent");
+        assert!(
+            !doc.content.contains(OCR_NAME),
+            "the content must be redacted: {:?}",
+            doc.content
+        );
+        assert_eq!(redaction_warnings(&doc), 1);
+    }
+
     /// Regression for xberg-io/xberg#1223: redaction must mask PII on every
     /// structured surface, not just `content`.
     #[tokio::test]
@@ -1455,6 +1936,7 @@ mod tests {
                 section_name: None,
                 sheet_name: None,
                 ocr_confidence: None,
+                native_content: None,
             }]),
             uris: Some(vec![ExtractedUri {
                 url: format!("mailto:{email}"),

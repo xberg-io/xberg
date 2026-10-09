@@ -675,6 +675,7 @@ fn finish_cached_layout_document(
         section_name: None,
         sheet_name: None,
         ocr_confidence: None,
+        native_content: None,
         image_preprocessing: whole_image_doc.metadata.image_preprocessing.clone(),
     }]);
     ImageExtractor::mark_ocr_extraction(&mut assembled);
@@ -3039,6 +3040,7 @@ impl ImageExtractor {
                         section_name: None,
                         sheet_name: None,
                         ocr_confidence: whole_image_ocr_confidence,
+                        native_content: None,
                     }]);
                 }
             }
@@ -3070,6 +3072,7 @@ impl ImageExtractor {
                     section_name: None,
                     sheet_name: None,
                     ocr_confidence: None,
+                    native_content: None,
                 }]);
             }
             Ok(doc)
@@ -3177,6 +3180,7 @@ impl ImageExtractor {
                 // ~keep The lone image was handed to the runner as page 0, so the winning
                 // stage keys its summary at page 1 -- the same page this builds (#1568).
                 ocr_confidence: pipeline_ocr_confidence.remove(&1),
+                native_content: None,
             }]);
         }
 
@@ -5700,6 +5704,7 @@ mod tests {
             section_name: None,
             sheet_name: None,
             ocr_confidence: None,
+            native_content: None,
         }]);
         doc.metadata.additional.insert(
             std::borrow::Cow::Borrowed(crate::ocr_metadata_keys::OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY),

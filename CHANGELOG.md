@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **(pdf, ocr): a PDF page whose content OCR replaces can keep its text layer.** `PageConfig` has a new
+  `keep_native_content` setting, off by default. When it is on, a page whose `content` is replaced by OCR text has its
+  text layer in the new `native_content` field of the page. The field is absent (`None`) when the setting is off, when
+  the page was not sent to OCR, and when the text layer is blank or equal to the OCR text. Redaction applies the same
+  passes to the kept text as to the page content, and withholds the kept text when a redaction source cannot be applied
+  to it. With entity detection on, redaction makes one more detection request for each page that has a kept text. The
+  kept text is normalised with the page and is not translated. The setting needs `extract_pages = true`. The default
+  output does not change. (GH#2069)
+
 ### Fixed
 
 - **(pdf): a title set across a two-column page's gutter no longer moves the column split beside a lone label.** The

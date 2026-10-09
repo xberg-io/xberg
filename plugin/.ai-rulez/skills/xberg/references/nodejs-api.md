@@ -238,6 +238,7 @@ interface PageConfig {
   extractPages?: boolean;
   insertPageMarkers?: boolean;
   markerFormat?: string; // contains {page_num}
+  keepNativeContent?: boolean; // PDF text layer that OCR replaces, in PageContent.nativeContent; needs extractPages
 }
 ```
 

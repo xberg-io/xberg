@@ -37,6 +37,9 @@
 //! corrupting an identity field. Format-specific metadata (email addresses,
 //! archive file paths, spreadsheet sheet identifiers under
 //! `Metadata::format`) is likewise left alone as it is not narrative text.
+//! `PageContent::native_content` is the text layer that OCR output replaced:
+//! the caller keeps it to have the exact characters of the source, so a
+//! translated copy has no use.
 
 use crate::core::config::TranslationConfig;
 use crate::types::{DocumentStructure, Element, ExtractedDocument, LlmUsage, Metadata, PageContent, Table};

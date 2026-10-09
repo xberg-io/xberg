@@ -135,6 +135,7 @@ fn test_markers_and_extract_pages_together() {
             insert_page_markers: true,
             extract_pages: true,
             marker_format: "--- PAGE {page_num} ---".to_string(),
+            keep_native_content: false,
         }),
         ..Default::default()
     };

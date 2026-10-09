@@ -470,6 +470,7 @@ mod tests {
             section_name: None,
             sheet_name: None,
             ocr_confidence: None,
+            native_content: None,
         }
     }
 
@@ -537,6 +538,20 @@ mod tests {
         assert_eq!(out.counts.tables, 1);
         assert_eq!(out.counts.images, 1);
         assert_eq!(out.metadata.pages.as_ref().unwrap().total_count, 3);
+    }
+
+    #[test]
+    fn a_segment_carries_the_kept_text_layer_of_its_pages() {
+        let mut doc = sample_doc();
+        doc.pages.as_mut().expect("the sample has pages")[1].native_content = Some("Ref KX-204".to_string());
+
+        let segment = sub_document_for_range(&doc, &(1..=3), true, &[]);
+
+        let pages = segment.document.pages.as_ref().expect("the segment has pages");
+        assert_eq!(pages[1].page_number, 2);
+        assert_eq!(pages[1].native_content.as_deref(), Some("Ref KX-204"));
+        assert_eq!(pages[0].native_content, None);
+        assert_eq!(pages[0].content, "page 1 text");
     }
 
     #[test]
@@ -643,6 +658,7 @@ mod enrichment_preservation_tests {
             section_name: None,
             sheet_name: None,
             ocr_confidence: None,
+            native_content: None,
         }
     }
 

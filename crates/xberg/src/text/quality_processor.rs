@@ -192,6 +192,7 @@ mod tests {
                 word_count,
                 backend: "tesseract".to_string(),
             }),
+            native_content: None,
         }
     }
 

@@ -573,6 +573,7 @@ mod tests {
             section_name: None,
             sheet_name: None,
             ocr_confidence: None,
+            native_content: None,
         }
     }
 
@@ -705,6 +706,7 @@ mod tests {
                 section_name: None,
                 sheet_name: None,
                 ocr_confidence: None,
+                native_content: None,
             }]),
             ..Default::default()
         };
@@ -891,6 +893,7 @@ mod tests {
                 section_name: None,
                 sheet_name: None,
                 ocr_confidence: None,
+                native_content: None,
             }]),
             ..Default::default()
         };
@@ -958,6 +961,7 @@ mod tests {
                 section_name: None,
                 sheet_name: None,
                 ocr_confidence: None,
+                native_content: None,
             }]),
             ..Default::default()
         };

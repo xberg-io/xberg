@@ -1720,6 +1720,40 @@ fn attach_pdf_ocr_confidence(
     }
 }
 
+/// Replace a page's `content` with OCR text and recompute `is_blank` from it.
+///
+/// With `keep_native_content`, the text layer that `content` held moves to `native_content`
+/// when it is not blank and differs from the OCR text. The same rule applies on every OCR route.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn replace_page_content_with_ocr_text(page: &mut crate::types::PageContent, ocr_text: &str, keep_native_content: bool) {
+    let ocr_content = crate::pdf::text::fix_pdf_control_chars(ocr_text).into_owned();
+    let native = std::mem::replace(&mut page.content, ocr_content);
+    let keep = keep_native_content && !native.trim().is_empty() && native != page.content;
+    page.native_content = keep.then_some(native);
+    page.is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&page.content));
+}
+
+/// Write the OCR text of each page into the page that has the same position.
+///
+/// One OCR text for a document of several pages is the text of the whole document: it goes to
+/// the first page, and the content of every later page is replaced with empty text.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn replace_pages_with_ocr_page_texts(
+    pages: &mut [crate::types::PageContent],
+    ocr_page_texts: &[String],
+    keep_native_content: bool,
+) {
+    for (page, text) in pages.iter_mut().zip(ocr_page_texts) {
+        replace_page_content_with_ocr_text(page, text, keep_native_content);
+    }
+
+    if ocr_page_texts.len() == 1 {
+        for page in pages.iter_mut().skip(1) {
+            replace_page_content_with_ocr_text(page, "", keep_native_content);
+        }
+    }
+}
+
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn automatic_unmapped_text_hints(metadata: &crate::pdf::metadata::PdfExtractionMetadata) -> Option<ocr::PageOcrHints> {
     let pages = metadata.pdf_specific.fabricated_text_pages.as_ref()?;
@@ -2603,22 +2637,11 @@ impl PdfExtractor {
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         {
+            let keep_native_content = config.pages.as_ref().is_some_and(|pages| pages.keep_native_content);
+
             if let Some(pts) = ocr_page_texts.as_ref() {
                 if let Some(ref mut pages) = page_contents {
-                    let pts_len = pts.len();
-                    let pages_len = pages.len();
-
-                    for (page, text) in pages.iter_mut().zip(pts.iter()) {
-                        page.content = crate::pdf::text::fix_pdf_control_chars(text).into_owned();
-                        page.is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&page.content));
-                    }
-
-                    if pts_len == 1 && pages_len > 1 {
-                        for p in pages.iter_mut().skip(1) {
-                            p.content.clear();
-                            p.is_blank = Some(true);
-                        }
-                    }
+                    replace_pages_with_ocr_page_texts(pages, pts, keep_native_content);
                 } else {
                     page_contents = Some(
                         pts.iter()
@@ -2639,6 +2662,7 @@ impl PdfExtractor {
                                     section_name: None,
                                     sheet_name: None,
                                     ocr_confidence: None,
+                                    native_content: None,
                                 }
                             })
                             .collect(),
@@ -2651,8 +2675,7 @@ impl PdfExtractor {
             {
                 for page in pages.iter_mut() {
                     if let Some(ocr_text) = results_map.get(&page.page_number) {
-                        page.content = crate::pdf::text::fix_pdf_control_chars(ocr_text).into_owned();
-                        page.is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&page.content));
+                        replace_page_content_with_ocr_text(page, ocr_text, keep_native_content);
                     }
                 }
             }
@@ -6402,6 +6425,7 @@ mod tests {
                 extract_pages: true,
                 insert_page_markers: false,
                 marker_format: "<!-- PAGE {page_num} -->".to_string(),
+                keep_native_content: false,
             }),
             ..Default::default()
         };
@@ -6518,6 +6542,7 @@ mod tests {
                 extract_pages: true,
                 insert_page_markers: true,
                 marker_format: "\n\n<!-- PAGE {page_num} -->\n\n".to_string(),
+                keep_native_content: false,
             }),
             ..Default::default()
         };
@@ -8111,7 +8136,6 @@ mod tests {
 
         let vlm_text = "whole-doc VLM summary".to_string();
         let pts = vec![vlm_text.clone()];
-        let pts_len = pts.len();
 
         let mut pages: Vec<PageContent> = (1u32..=3u32)
             .map(|n| PageContent {
@@ -8127,20 +8151,11 @@ mod tests {
                 section_name: None,
                 sheet_name: None,
                 ocr_confidence: None,
+                native_content: None,
             })
             .collect();
-        let pages_len = pages.len();
 
-        for (page, text) in pages.iter_mut().zip(pts) {
-            page.content = crate::pdf::text::fix_pdf_control_chars(&text).into_owned();
-            page.is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&page.content));
-        }
-        if pts_len == 1 && pages_len > 1 {
-            for p in pages.iter_mut().skip(1) {
-                p.content.clear();
-                p.is_blank = Some(true);
-            }
-        }
+        replace_pages_with_ocr_page_texts(&mut pages, &pts, false);
 
         assert_eq!(pages[0].content, vlm_text, "page 1 should carry the VLM text");
         assert!(pages[1].content.is_empty(), "page 2 must be cleared by VLM guard");
@@ -8154,6 +8169,98 @@ mod tests {
         assert_eq!(pages[2].is_blank, Some(true), "page 3 was cleared so must be blank");
     }
 
+    #[cfg(feature = "ocr")]
+    fn text_layer_page(page_number: u32, content: &str) -> crate::types::PageContent {
+        crate::types::PageContent {
+            page_number,
+            content: content.to_string(),
+            tables: Vec::new(),
+            image_indices: Vec::new(),
+            image_preprocessing: None,
+            hierarchy: None,
+            is_blank: None,
+            layout_regions: None,
+            speaker_notes: None,
+            section_name: None,
+            sheet_name: None,
+            ocr_confidence: None,
+            native_content: None,
+        }
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn ocr_text_replaces_the_text_layer_and_keeps_it_only_when_asked() {
+        let mut kept = text_layer_page(1, "Ref KX-204");
+        replace_page_content_with_ocr_text(&mut kept, "Ref KX-2O4", true);
+        assert_eq!(kept.content, "Ref KX-2O4");
+        assert_eq!(kept.native_content.as_deref(), Some("Ref KX-204"));
+        assert_eq!(kept.is_blank, Some(false));
+
+        let mut dropped = text_layer_page(1, "Ref KX-204");
+        replace_page_content_with_ocr_text(&mut dropped, "Ref KX-2O4", false);
+        assert_eq!(dropped.content, "Ref KX-2O4");
+        assert_eq!(dropped.native_content, None);
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn ocr_text_equal_to_the_text_layer_is_not_stored_twice() {
+        let mut same = text_layer_page(1, "Ref KX-204");
+        replace_page_content_with_ocr_text(&mut same, "Ref KX-204", true);
+        assert_eq!(same.content, "Ref KX-204");
+        assert_eq!(same.native_content, None);
+
+        let mut different = text_layer_page(1, "Ref KX-204");
+        replace_page_content_with_ocr_text(&mut different, "Ref KX-204 ", true);
+        assert_eq!(different.native_content.as_deref(), Some("Ref KX-204"));
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn a_blank_text_layer_is_not_kept() {
+        for blank in ["", " \n\t "] {
+            let mut page = text_layer_page(1, blank);
+            replace_page_content_with_ocr_text(&mut page, "scanned words", true);
+            assert_eq!(page.content, "scanned words");
+            assert_eq!(page.native_content, None, "text layer {blank:?}");
+        }
+
+        let mut one_character = text_layer_page(1, "7");
+        replace_page_content_with_ocr_text(&mut one_character, "scanned words", true);
+        assert_eq!(one_character.native_content.as_deref(), Some("7"));
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn pages_cleared_by_a_single_ocr_text_keep_their_text_layer() {
+        let pts = vec!["whole document text".to_string()];
+        let mut pages: Vec<_> = (1u32..=3u32)
+            .map(|n| text_layer_page(n, &format!("native page {n}")))
+            .collect();
+
+        replace_pages_with_ocr_page_texts(&mut pages, &pts, true);
+
+        assert_eq!(pages[0].content, "whole document text");
+        assert_eq!(pages[0].native_content.as_deref(), Some("native page 1"));
+        for (page, native) in pages
+            .iter()
+            .zip(["native page 1", "native page 2", "native page 3"])
+            .skip(1)
+        {
+            assert!(page.content.is_empty(), "page {} must be cleared", page.page_number);
+            assert_eq!(page.is_blank, Some(true));
+            assert_eq!(page.native_content.as_deref(), Some(native));
+        }
+
+        let mut not_kept: Vec<_> = (1u32..=2u32)
+            .map(|n| text_layer_page(n, &format!("native page {n}")))
+            .collect();
+        replace_pages_with_ocr_page_texts(&mut not_kept, &pts, false);
+        assert!(not_kept[1].content.is_empty());
+        assert_eq!(not_kept[1].native_content, None);
+    }
+
     /// Regression for #1095: when OCR texts are written into existing PageContent entries,
     /// is_blank must be recalculated from the new content, not left stale from native extraction.
     ///
@@ -8161,11 +8268,9 @@ mod tests {
     #[cfg(feature = "ocr")]
     #[test]
     fn test_ocr_page_texts_update_is_blank_on_existing_pages() {
-        use crate::extraction::blank_detection::is_page_text_blank;
         use crate::types::PageContent;
 
         let pts = vec!["page one content".to_string(), "page two content".to_string()];
-        let pts_len = pts.len();
 
         let mut pages: Vec<PageContent> = (1u32..=2u32)
             .map(|n| PageContent {
@@ -8181,20 +8286,11 @@ mod tests {
                 section_name: None,
                 sheet_name: None,
                 ocr_confidence: None,
+                native_content: None,
             })
             .collect();
-        let pages_len = pages.len();
 
-        for (page, text) in pages.iter_mut().zip(pts) {
-            page.content = crate::pdf::text::fix_pdf_control_chars(&text).into_owned();
-            page.is_blank = Some(is_page_text_blank(&page.content));
-        }
-        if pts_len == 1 && pages_len > 1 {
-            for p in pages.iter_mut().skip(1) {
-                p.content.clear();
-                p.is_blank = Some(true);
-            }
-        }
+        replace_pages_with_ocr_page_texts(&mut pages, &pts, false);
 
         assert_eq!(
             pages[0].is_blank,
@@ -8237,6 +8333,7 @@ mod tests {
                     section_name: None,
                     sheet_name: None,
                     ocr_confidence: None,
+                    native_content: None,
                 }
             })
             .collect();
@@ -9539,6 +9636,7 @@ BT /F1 12 Tf 30 30 Td (Beta) Tj ET
                 section_name: None,
                 sheet_name: None,
                 ocr_confidence: None,
+                native_content: None,
             },
             crate::types::PageContent {
                 page_number: 2,
@@ -9553,6 +9651,7 @@ BT /F1 12 Tf 30 30 Td (Beta) Tj ET
                 section_name: None,
                 sheet_name: None,
                 ocr_confidence: None,
+                native_content: None,
             },
         ]);
         let by_page = ahash::AHashMap::from([(1, preprocessing(150, 150)), (2, preprocessing(300, 300))]);

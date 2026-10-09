@@ -1919,6 +1919,42 @@ async fn test_nfc_normalization_applies_to_page_content() {
 
 #[tokio::test]
 #[serial]
+#[cfg(feature = "quality")]
+async fn nfc_normalization_applies_to_the_kept_text_layer() {
+    let mut doc = InternalDocument::new("plain");
+    doc.mime_type = "text/plain".to_string();
+    doc.push_element(InternalElement::text(ElementKind::Paragraph, "resume", 0));
+    doc.prebuilt_pages = Some(vec![crate::types::PageContent {
+        page_number: 1,
+        content: "re\u{0301}sume\u{0301}".to_string(),
+        tables: Vec::new(),
+        image_indices: Vec::new(),
+        image_preprocessing: None,
+        hierarchy: None,
+        is_blank: None,
+        layout_regions: None,
+        speaker_notes: None,
+        section_name: None,
+        sheet_name: None,
+        ocr_confidence: None,
+        native_content: Some("cafe\u{0301}".to_string()),
+    }]);
+    let config = ExtractionConfig {
+        postprocessor: Some(crate::core::config::PostProcessorConfig {
+            enabled: false,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    let processed = run_pipeline(doc, &config).await.unwrap();
+    let pages = processed.pages.unwrap();
+    assert_eq!(pages[0].native_content.as_deref(), Some("caf\u{00e9}"));
+    assert_eq!(pages[0].content, "r\u{00e9}sum\u{00e9}");
+}
+
+#[tokio::test]
+#[serial]
 async fn test_run_pipeline_applies_output_format_last() {
     let doc = make_doc("test", "text/plain");
 
@@ -2528,6 +2564,7 @@ mod document_counts {
             section_name: None,
             sheet_name: None,
             ocr_confidence: None,
+            native_content: None,
         }
     }
 

@@ -27,6 +27,29 @@ pub struct PageConfig {
     /// Default: "\n\n<!-- PAGE {page_num} -->\n\n"
     #[serde(default = "default_page_marker_format")]
     pub marker_format: String,
+
+    /// Keep the text layer of a PDF page whose `content` OCR output replaces, for a caller that needs the exact
+    /// characters of a short born-digital page. The text layer is returned in `PageContent::native_content`.
+    /// Needs `extract_pages`.
+    #[serde(default)]
+    #[cfg_attr(feature = "alef-meta", alef(since = "1.3.8"))]
+    pub keep_native_content: bool,
+}
+
+impl PageConfig {
+    /// Validate the settings that depend on each other.
+    ///
+    /// # Errors
+    ///
+    /// Returns `XbergError::Validation` when `keep_native_content` is on and `extract_pages` is off.
+    pub(crate) fn validate(&self) -> crate::Result<()> {
+        if self.keep_native_content && !self.extract_pages {
+            return Err(crate::XbergError::validation(
+                "`pages.keep_native_content` needs `pages.extract_pages = true`. The kept text is returned on `pages[]`.",
+            ));
+        }
+        Ok(())
+    }
 }
 
 impl Default for PageConfig {
@@ -35,6 +58,7 @@ impl Default for PageConfig {
             extract_pages: false,
             insert_page_markers: false,
             marker_format: "\n\n<!-- PAGE {page_num} -->\n\n".to_string(),
+            keep_native_content: false,
         }
     }
 }
@@ -66,5 +90,42 @@ mod tests {
         assert!(!config.extract_pages);
         assert!(!config.insert_page_markers);
         assert_eq!(config.marker_format, "\n\n<!-- PAGE {page_num} -->\n\n");
+    }
+
+    #[test]
+    fn keep_native_content_without_extract_pages_is_rejected() {
+        let rejected = PageConfig {
+            keep_native_content: true,
+            ..Default::default()
+        };
+        let error = rejected
+            .validate()
+            .expect_err("the kept text has no page to be returned on");
+        assert!(matches!(error, crate::XbergError::Validation { .. }), "got: {error:?}");
+        assert!(
+            error.to_string().contains("`pages.extract_pages = true`"),
+            "the error must name the setting to change; got: {error}"
+        );
+
+        let accepted = PageConfig {
+            extract_pages: true,
+            keep_native_content: true,
+            ..Default::default()
+        };
+        accepted.validate().expect("both settings on is a valid config");
+        PageConfig::default().validate().expect("the default config is valid");
+    }
+
+    #[test]
+    fn keep_native_content_is_read_from_its_key_and_is_off_without_it() {
+        let with_key: PageConfig = serde_json::from_str(r#"{"extract_pages": true, "keep_native_content": true}"#)
+            .expect("a config with the key parses");
+        assert!(with_key.keep_native_content);
+        assert_ne!(with_key.keep_native_content, PageConfig::default().keep_native_content);
+
+        let without_key: PageConfig =
+            serde_json::from_str(r#"{"extract_pages": true}"#).expect("a config without the key parses");
+        assert!(without_key.extract_pages);
+        assert!(!without_key.keep_native_content);
     }
 }

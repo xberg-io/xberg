@@ -632,6 +632,60 @@ mod tests {
         assert_eq!(actual.result.mime_type, expected.mime_type);
     }
 
+    #[test]
+    fn a_cached_result_returns_the_kept_text_layer() {
+        let page = |page_number: u32, native_content: Option<&str>| crate::types::PageContent {
+            page_number,
+            content: format!("page {page_number} text"),
+            tables: Vec::new(),
+            image_indices: Vec::new(),
+            image_preprocessing: None,
+            hierarchy: None,
+            is_blank: None,
+            layout_regions: None,
+            speaker_notes: None,
+            section_name: None,
+            sheet_name: None,
+            ocr_confidence: None,
+            native_content: native_content.map(str::to_string),
+        };
+        let expected = ExtractedDocument {
+            content: "page 1 text\n\npage 2 text".to_string(),
+            mime_type: Cow::Borrowed("application/pdf"),
+            pages: Some(vec![page(1, Some("Ref KX-204")), page(2, None)]),
+            ..Default::default()
+        };
+
+        let encoded = serialize_extraction_cache_entry(&expected, lifecycle_registry_generations()).unwrap();
+        let actual = deserialize_extraction_cache_entry(&encoded).expect("the written entry reads back");
+
+        let pages = actual.result.pages.expect("the cached result has pages");
+        assert_eq!(pages[0].native_content.as_deref(), Some("Ref KX-204"));
+        assert_eq!(pages[1].native_content, None);
+        assert_eq!(pages[1].content, "page 2 text");
+    }
+
+    #[test]
+    fn keep_native_content_changes_the_cache_key() {
+        let pages = |keep_native_content: bool| ExtractionConfig {
+            pages: Some(crate::core::config::PageConfig {
+                extract_pages: true,
+                keep_native_content,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let off = hash_extraction_config(&pages(false), "application/pdf");
+        let on = hash_extraction_config(&pages(true), "application/pdf");
+
+        assert_ne!(
+            off, on,
+            "a result with the kept text must not be served for a config without it"
+        );
+        assert_eq!(off, hash_extraction_config(&pages(false), "application/pdf"));
+    }
+
     #[tokio::test]
     async fn should_reject_non_regular_file_before_extraction() {
         let directory = tempdir().unwrap();

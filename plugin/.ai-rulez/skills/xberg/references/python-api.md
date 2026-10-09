@@ -352,6 +352,7 @@ ExtractionConfig(
 | `extract_pages`       | bool | False                                  | Extract pages into `ExtractedDocument.pages`. |
 | `insert_page_markers` | bool | False                                  | Insert page markers into content.            |
 | `marker_format`       | str  | `"\n\n<!-- PAGE {page_num} -->\n\n"`   | Marker template containing `{page_num}`.     |
+| `keep_native_content` | bool | False                                  | Keep the text layer of a PDF page that OCR replaces, in `PageContent.native_content`. Needs `extract_pages`. |
 
 ### PostProcessorConfig
 
