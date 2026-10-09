@@ -1,6 +1,6 @@
 {
   "schema_version": "v1",
-  "source_hash": "blake3:4fe0d36f1a27b5607297a6d73b66eb41eb2264ca9a2c91ab638ab27a12ebb2cd",
+  "source_hash": "blake3:00687e5cd15e06bd1ca6498eac6d10c303cabe5b3bf640d4f27fbdc13f83b686",
   "outputs": {
     ".claude-plugin/plugin.json": {
       "content_hash": "blake3:cff7525ae5ff5d1191055c07e559760d422ce8d83535e740f74f184fc92f6683"
@@ -42,13 +42,13 @@
       "content_hash": "blake3:a8f2b7b96ef3d33120ab21586c9f7db80c4d17eba727757ff0e94cee6e7d28c0"
     },
     ".cursor-plugin/skills/xberg/references/nodejs-api.md": {
-      "content_hash": "blake3:5dd1dce4a7814ed37c2ea273dda3dd60d7caa18b08b0aff933ce3a8f7717d1a6"
+      "content_hash": "blake3:dd4a4c1e2da988d136802794fd0df2c0c103174f6964fb48cb0c9b32cdb9cb6d"
     },
     ".cursor-plugin/skills/xberg/references/other-bindings.md": {
       "content_hash": "blake3:dacb4d7def21681b8b237603d2c7b89beaf18b8ee4110175b6ea5593022f3229"
     },
     ".cursor-plugin/skills/xberg/references/python-api.md": {
-      "content_hash": "blake3:c551708aa62f1b25b1cea8041e8aab5b3101a1622317b7239d3de04d8a375754"
+      "content_hash": "blake3:a8443b5877e61142c796ab65b09bb57a40c89445581e5741270805789ae9d673"
     },
     ".cursor-plugin/skills/xberg/references/rust-api.md": {
       "content_hash": "blake3:a6ececeeda3031d9d84eb780fcb5ecb41b3f4297fa1e6b86f492e0d755b084a9"
@@ -102,13 +102,13 @@
       "content_hash": "blake3:a8f2b7b96ef3d33120ab21586c9f7db80c4d17eba727757ff0e94cee6e7d28c0"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg/references/nodejs-api.md": {
-      "content_hash": "blake3:5dd1dce4a7814ed37c2ea273dda3dd60d7caa18b08b0aff933ce3a8f7717d1a6"
+      "content_hash": "blake3:dd4a4c1e2da988d136802794fd0df2c0c103174f6964fb48cb0c9b32cdb9cb6d"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg/references/other-bindings.md": {
       "content_hash": "blake3:dacb4d7def21681b8b237603d2c7b89beaf18b8ee4110175b6ea5593022f3229"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg/references/python-api.md": {
-      "content_hash": "blake3:c551708aa62f1b25b1cea8041e8aab5b3101a1622317b7239d3de04d8a375754"
+      "content_hash": "blake3:a8443b5877e61142c796ab65b09bb57a40c89445581e5741270805789ae9d673"
     },
     ".hermes/package/src/xberg_hermes_plugin/skills/xberg/references/rust-api.md": {
       "content_hash": "blake3:a6ececeeda3031d9d84eb780fcb5ecb41b3f4297fa1e6b86f492e0d755b084a9"
@@ -156,13 +156,13 @@
       "content_hash": "blake3:a8f2b7b96ef3d33120ab21586c9f7db80c4d17eba727757ff0e94cee6e7d28c0"
     },
     ".hermes/plugins/xberg/skills/xberg/references/nodejs-api.md": {
-      "content_hash": "blake3:5dd1dce4a7814ed37c2ea273dda3dd60d7caa18b08b0aff933ce3a8f7717d1a6"
+      "content_hash": "blake3:dd4a4c1e2da988d136802794fd0df2c0c103174f6964fb48cb0c9b32cdb9cb6d"
     },
     ".hermes/plugins/xberg/skills/xberg/references/other-bindings.md": {
       "content_hash": "blake3:dacb4d7def21681b8b237603d2c7b89beaf18b8ee4110175b6ea5593022f3229"
     },
     ".hermes/plugins/xberg/skills/xberg/references/python-api.md": {
-      "content_hash": "blake3:c551708aa62f1b25b1cea8041e8aab5b3101a1622317b7239d3de04d8a375754"
+      "content_hash": "blake3:a8443b5877e61142c796ab65b09bb57a40c89445581e5741270805789ae9d673"
     },
     ".hermes/plugins/xberg/skills/xberg/references/rust-api.md": {
       "content_hash": "blake3:a6ececeeda3031d9d84eb780fcb5ecb41b3f4297fa1e6b86f492e0d755b084a9"
@@ -222,13 +222,13 @@
       "content_hash": "blake3:a8f2b7b96ef3d33120ab21586c9f7db80c4d17eba727757ff0e94cee6e7d28c0"
     },
     "skills/xberg/references/nodejs-api.md": {
-      "content_hash": "blake3:5dd1dce4a7814ed37c2ea273dda3dd60d7caa18b08b0aff933ce3a8f7717d1a6"
+      "content_hash": "blake3:dd4a4c1e2da988d136802794fd0df2c0c103174f6964fb48cb0c9b32cdb9cb6d"
     },
     "skills/xberg/references/other-bindings.md": {
       "content_hash": "blake3:dacb4d7def21681b8b237603d2c7b89beaf18b8ee4110175b6ea5593022f3229"
     },
     "skills/xberg/references/python-api.md": {
-      "content_hash": "blake3:c551708aa62f1b25b1cea8041e8aab5b3101a1622317b7239d3de04d8a375754"
+      "content_hash": "blake3:a8443b5877e61142c796ab65b09bb57a40c89445581e5741270805789ae9d673"
     },
     "skills/xberg/references/rust-api.md": {
       "content_hash": "blake3:a6ececeeda3031d9d84eb780fcb5ecb41b3f4297fa1e6b86f492e0d755b084a9"

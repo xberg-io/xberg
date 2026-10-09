@@ -19797,6 +19797,13 @@ int32_t xberg_page_config_insert_page_markers(XBERGAlefHandle handle);
 char *xberg_page_config_marker_format(XBERGAlefHandle handle);
 
 /**
+ * Get the `keep_native_content` field from a `PageConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_page_config_keep_native_content(XBERGAlefHandle handle);
+
+/**
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
@@ -19941,6 +19948,15 @@ char *xberg_page_content_sheet_name(XBERGAlefHandle handle);
  * Pointer must be a valid handle returned by this library.
  */
 XBERGAlefHandle xberg_page_content_ocr_confidence(XBERGAlefHandle handle);
+
+/**
+ * Get the `native_content` field from a `PageContent`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_page_content_native_content(XBERGAlefHandle handle);
 
 /**
  * Create a `PageDimensions` from a JSON string. Returns null on failure.

@@ -14404,6 +14404,7 @@ const _: fn() = || {
         let _: bool = PageConfig.extract_pages;
         let _: bool = PageConfig.insert_page_markers;
         let _: String = PageConfig.marker_format;
+        let _: bool = PageConfig.keep_native_content;
     }
     {
         let PageContent = None::<crate::PageContent>.unwrap();
@@ -14419,6 +14420,7 @@ const _: fn() = || {
         let _: Option<String> = PageContent.section_name;
         let _: Option<String> = PageContent.sheet_name;
         let _: Option<crate::PageOcrConfidence> = PageContent.ocr_confidence;
+        let _: Option<String> = PageContent.native_content;
     }
     {
         let PageDimensions = None::<crate::PageDimensions>.unwrap();
@@ -24101,10 +24103,12 @@ impl SseDecode for crate::PageConfig {
         let mut var_extractPages = <bool>::sse_decode(deserializer);
         let mut var_insertPageMarkers = <bool>::sse_decode(deserializer);
         let mut var_markerFormat = <String>::sse_decode(deserializer);
+        let mut var_keepNativeContent = <bool>::sse_decode(deserializer);
         return crate::PageConfig {
             extract_pages: var_extractPages,
             insert_page_markers: var_insertPageMarkers,
             marker_format: var_markerFormat,
+            keep_native_content: var_keepNativeContent,
         };
     }
 }
@@ -24124,6 +24128,7 @@ impl SseDecode for crate::PageContent {
         let mut var_sectionName = <Option<String>>::sse_decode(deserializer);
         let mut var_sheetName = <Option<String>>::sse_decode(deserializer);
         let mut var_ocrConfidence = <Option<crate::PageOcrConfidence>>::sse_decode(deserializer);
+        let mut var_nativeContent = <Option<String>>::sse_decode(deserializer);
         return crate::PageContent {
             page_number: var_pageNumber,
             content: var_content,
@@ -24137,6 +24142,7 @@ impl SseDecode for crate::PageContent {
             section_name: var_sectionName,
             sheet_name: var_sheetName,
             ocr_confidence: var_ocrConfidence,
+            native_content: var_nativeContent,
         };
     }
 }
@@ -32299,6 +32305,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::PageConfig> {
             self.0.extract_pages.into_into_dart().into_dart(),
             self.0.insert_page_markers.into_into_dart().into_dart(),
             self.0.marker_format.into_into_dart().into_dart(),
+            self.0.keep_native_content.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -32325,6 +32332,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::PageContent> {
             self.0.section_name.into_into_dart().into_dart(),
             self.0.sheet_name.into_into_dart().into_dart(),
             self.0.ocr_confidence.into_into_dart().into_dart(),
+            self.0.native_content.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -41261,6 +41269,7 @@ impl SseEncode for crate::PageConfig {
         <bool>::sse_encode(self.extract_pages, serializer);
         <bool>::sse_encode(self.insert_page_markers, serializer);
         <String>::sse_encode(self.marker_format, serializer);
+        <bool>::sse_encode(self.keep_native_content, serializer);
     }
 }
 
@@ -41279,6 +41288,7 @@ impl SseEncode for crate::PageContent {
         <Option<String>>::sse_encode(self.section_name, serializer);
         <Option<String>>::sse_encode(self.sheet_name, serializer);
         <Option<crate::PageOcrConfidence>>::sse_encode(self.ocr_confidence, serializer);
+        <Option<String>>::sse_encode(self.native_content, serializer);
     }
 }
 

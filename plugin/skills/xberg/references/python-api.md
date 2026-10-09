@@ -1,7 +1,7 @@
 <!--
 AI-RULEZ :: GENERATED FILE — DO NOT EDIT
-Content-Hash: blake3:c551708aa62f1b25b1cea8041e8aab5b3101a1622317b7239d3de04d8a375754
-Source-Hash: blake3:4fe0d36f1a27b5607297a6d73b66eb41eb2264ca9a2c91ab638ab27a12ebb2cd
+Content-Hash: blake3:a8443b5877e61142c796ab65b09bb57a40c89445581e5741270805789ae9d673
+Source-Hash: blake3:00687e5cd15e06bd1ca6498eac6d10c303cabe5b3bf640d4f27fbdc13f83b686
 Schema-Version: v1
 -->
 
@@ -359,6 +359,7 @@ ExtractionConfig(
 | `extract_pages`       | bool | False                                  | Extract pages into `ExtractedDocument.pages`. |
 | `insert_page_markers` | bool | False                                  | Insert page markers into content.            |
 | `marker_format`       | str  | `"\n\n<!-- PAGE {page_num} -->\n\n"`   | Marker template containing `{page_num}`.     |
+| `keep_native_content` | bool | False                                  | Keep the text layer of a PDF page that OCR replaces, in `PageContent.native_content`. Needs `extract_pages`. |
 
 ### PostProcessorConfig
 

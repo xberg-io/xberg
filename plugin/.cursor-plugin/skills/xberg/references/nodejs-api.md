@@ -1,7 +1,7 @@
 <!--
 AI-RULEZ :: GENERATED FILE — DO NOT EDIT
-Content-Hash: blake3:5dd1dce4a7814ed37c2ea273dda3dd60d7caa18b08b0aff933ce3a8f7717d1a6
-Source-Hash: blake3:4fe0d36f1a27b5607297a6d73b66eb41eb2264ca9a2c91ab638ab27a12ebb2cd
+Content-Hash: blake3:dd4a4c1e2da988d136802794fd0df2c0c103174f6964fb48cb0c9b32cdb9cb6d
+Source-Hash: blake3:00687e5cd15e06bd1ca6498eac6d10c303cabe5b3bf640d4f27fbdc13f83b686
 Schema-Version: v1
 -->
 
@@ -245,6 +245,7 @@ interface PageConfig {
   extractPages?: boolean;
   insertPageMarkers?: boolean;
   markerFormat?: string; // contains {page_num}
+  keepNativeContent?: boolean; // PDF text layer that OCR replaces, in PageContent.nativeContent; needs extractPages
 }
 ```
 

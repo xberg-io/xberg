@@ -14792,17 +14792,24 @@ class PageConfig {
   /// Default: "\n\n<!-- PAGE {page_num} -->\n\n"
   final String markerFormat;
 
+  /// Keep the text layer of a PDF page whose `content` OCR output replaces, for a caller that needs the exact
+  /// characters of a short born-digital page. The text layer is returned in `PageContent::native_content`.
+  /// Needs `extract_pages`.
+  final bool keepNativeContent;
+
   const PageConfig({
     required this.extractPages,
     required this.insertPageMarkers,
     required this.markerFormat,
+    required this.keepNativeContent,
   });
 
   @override
   int get hashCode =>
       extractPages.hashCode ^
       insertPageMarkers.hashCode ^
-      markerFormat.hashCode;
+      markerFormat.hashCode ^
+      keepNativeContent.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -14811,7 +14818,8 @@ class PageConfig {
           runtimeType == other.runtimeType &&
           extractPages == other.extractPages &&
           insertPageMarkers == other.insertPageMarkers &&
-          markerFormat == other.markerFormat;
+          markerFormat == other.markerFormat &&
+          keepNativeContent == other.keepNativeContent;
 }
 
 /// Content for a single page/slide.
@@ -14891,6 +14899,17 @@ class PageContent {
   /// Aggregate OCR confidence for this page. `None` when the page was not OCR'd.
   final PageOcrConfidence? ocrConfidence;
 
+  /// Text layer of this page, kept when OCR output replaced it in `content`.
+  ///
+  /// Set only when `PageConfig::keep_native_content` is on, an OCR route replaced this page's `content`, and the
+  /// text layer is not blank and differs from the OCR text. `None` on every other page. PDF only.
+  ///
+  /// Redaction applies the same passes to it as to `content`, and removes it (`None`) when a redaction source
+  /// cannot be applied to it: a finding given as offsets into `content`, an entity detection that fails, or a
+  /// kept text layer in an embedded document while entity detection is on.
+  /// NFC normalisation rewrites it with the rest of the page. Translation does not change it.
+  final String? nativeContent;
+
   const PageContent({
     required this.pageNumber,
     required this.content,
@@ -14904,6 +14923,7 @@ class PageContent {
     this.sectionName,
     this.sheetName,
     this.ocrConfidence,
+    this.nativeContent,
   });
 
   @override
@@ -14919,7 +14939,8 @@ class PageContent {
       speakerNotes.hashCode ^
       sectionName.hashCode ^
       sheetName.hashCode ^
-      ocrConfidence.hashCode;
+      ocrConfidence.hashCode ^
+      nativeContent.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -14937,7 +14958,8 @@ class PageContent {
           speakerNotes == other.speakerNotes &&
           sectionName == other.sectionName &&
           sheetName == other.sheetName &&
-          ocrConfidence == other.ocrConfidence;
+          ocrConfidence == other.ocrConfidence &&
+          nativeContent == other.nativeContent;
 }
 
 /// Metadata for individual page/slide/sheet.

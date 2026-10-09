@@ -23531,12 +23531,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PageConfig dco_decode_page_config(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return PageConfig(
       extractPages: dco_decode_bool(arr[0]),
       insertPageMarkers: dco_decode_bool(arr[1]),
       markerFormat: dco_decode_String(arr[2]),
+      keepNativeContent: dco_decode_bool(arr[3]),
     );
   }
 
@@ -23544,8 +23545,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PageContent dco_decode_page_content(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 12)
-      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
     return PageContent(
       pageNumber: dco_decode_i_64(arr[0]),
       content: dco_decode_String(arr[1]),
@@ -23560,6 +23561,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       sectionName: dco_decode_opt_String(arr[9]),
       sheetName: dco_decode_opt_String(arr[10]),
       ocrConfidence: dco_decode_opt_box_autoadd_page_ocr_confidence(arr[11]),
+      nativeContent: dco_decode_opt_String(arr[12]),
     );
   }
 
@@ -34616,10 +34618,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_extractPages = sse_decode_bool(deserializer);
     var var_insertPageMarkers = sse_decode_bool(deserializer);
     var var_markerFormat = sse_decode_String(deserializer);
+    var var_keepNativeContent = sse_decode_bool(deserializer);
     return PageConfig(
       extractPages: var_extractPages,
       insertPageMarkers: var_insertPageMarkers,
       markerFormat: var_markerFormat,
+      keepNativeContent: var_keepNativeContent,
     );
   }
 
@@ -34641,6 +34645,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_ocrConfidence = sse_decode_opt_box_autoadd_page_ocr_confidence(
       deserializer,
     );
+    var var_nativeContent = sse_decode_opt_String(deserializer);
     return PageContent(
       pageNumber: var_pageNumber,
       content: var_content,
@@ -34654,6 +34659,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       sectionName: var_sectionName,
       sheetName: var_sheetName,
       ocrConfidence: var_ocrConfidence,
+      nativeContent: var_nativeContent,
     );
   }
 
@@ -45173,6 +45179,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.extractPages, serializer);
     sse_encode_bool(self.insertPageMarkers, serializer);
     sse_encode_String(self.markerFormat, serializer);
+    sse_encode_bool(self.keepNativeContent, serializer);
   }
 
   @protected
@@ -45196,6 +45203,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       self.ocrConfidence,
       serializer,
     );
+    sse_encode_opt_String(self.nativeContent, serializer);
   }
 
   @protected
