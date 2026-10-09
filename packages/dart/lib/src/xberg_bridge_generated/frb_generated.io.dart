@@ -1775,6 +1775,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<OcrElement> dco_decode_list_ocr_element(dynamic raw);
 
   @protected
+  List<OcrPageFailure> dco_decode_list_ocr_page_failure(dynamic raw);
+
+  @protected
   List<OcrPipelineStage> dco_decode_list_ocr_pipeline_stage(dynamic raw);
 
   @protected
@@ -1992,6 +1995,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   OcrMetadata dco_decode_ocr_metadata(dynamic raw);
+
+  @protected
+  OcrPageFailure dco_decode_ocr_page_failure(dynamic raw);
 
   @protected
   OcrPipelineConfig dco_decode_ocr_pipeline_config(dynamic raw);
@@ -2473,6 +2479,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<OcrElement>? dco_decode_opt_list_ocr_element(dynamic raw);
+
+  @protected
+  List<OcrPageFailure>? dco_decode_opt_list_ocr_page_failure(dynamic raw);
 
   @protected
   List<PageBoundary>? dco_decode_opt_list_page_boundary(dynamic raw);
@@ -4793,6 +4802,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<OcrElement> sse_decode_list_ocr_element(SseDeserializer deserializer);
 
   @protected
+  List<OcrPageFailure> sse_decode_list_ocr_page_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<OcrPipelineStage> sse_decode_list_ocr_pipeline_stage(
     SseDeserializer deserializer,
   );
@@ -5064,6 +5078,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   OcrMetadata sse_decode_ocr_metadata(SseDeserializer deserializer);
+
+  @protected
+  OcrPageFailure sse_decode_ocr_page_failure(SseDeserializer deserializer);
 
   @protected
   OcrPipelineConfig sse_decode_ocr_pipeline_config(
@@ -5717,6 +5734,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<OcrElement>? sse_decode_opt_list_ocr_element(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<OcrPageFailure>? sse_decode_opt_list_ocr_page_failure(
     SseDeserializer deserializer,
   );
 
@@ -8781,6 +8803,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_ocr_page_failure(
+    List<OcrPageFailure> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_ocr_pipeline_stage(
     List<OcrPipelineStage> self,
     SseSerializer serializer,
@@ -9130,6 +9158,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_ocr_metadata(OcrMetadata self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ocr_page_failure(
+    OcrPageFailure self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_ocr_pipeline_config(
@@ -9914,6 +9948,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_list_ocr_element(
     List<OcrElement>? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_list_ocr_page_failure(
+    List<OcrPageFailure>? self,
     SseSerializer serializer,
   );
 
