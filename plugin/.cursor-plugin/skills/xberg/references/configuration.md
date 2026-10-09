@@ -1,7 +1,7 @@
 <!--
 AI-RULEZ :: GENERATED FILE — DO NOT EDIT
-Content-Hash: blake3:a8f2b7b96ef3d33120ab21586c9f7db80c4d17eba727757ff0e94cee6e7d28c0
-Source-Hash: blake3:4fe0d36f1a27b5607297a6d73b66eb41eb2264ca9a2c91ab638ab27a12ebb2cd
+Content-Hash: blake3:b24c8c7e94863ebd2853d8dca141256b8d40fa7d34f12d78a99b25f4ff0a416a
+Source-Hash: blake3:ade700cafdf20ab06d566cb7734d2ebfb5e505542535bc9864133d2e5364b40e
 Schema-Version: v1
 -->
 
@@ -252,7 +252,7 @@ inject_placeholders = true
 | `include_page_rasters`| boolean        | `false`    | Capture full-page renders as `PageRaster` images (PDF + OCR) |
 | `run_ocr_on_images`   | boolean        | `true`     | OCR extracted images and include the text in content   |
 | `ocr_text_only`       | boolean        | `false`    | Render image OCR as plain text without the markdown placeholder |
-| `append_ocr_text`     | boolean        | `false`    | Append OCR text after the image placeholder            |
+| `append_ocr_text`     | boolean        | `true`     | Append OCR text after the image placeholder in Markdown and HTML output |
 | `output_format`       | string/table   | `"native"` | Re-encode format: `native`, `png`, `jpeg`, `webp` (tagged by `type`) |
 | `include_data_base64` | boolean        | `false`    | Populate `ExtractedImage.data_base64`                  |
 
