@@ -402,6 +402,7 @@ mod byte_entry_tests {
 #[cfg(all(test, inference_ort))]
 mod tests {
     use super::*;
+    use crate::core::config::acceleration::ExecutionProviderType;
     use crate::inference::ort_backend::OrtBackend;
 
     /// The two PP-LCNet CNN classifiers migrated onto the seam in Phase 1. Both are
@@ -544,7 +545,11 @@ mod tests {
                 .unwrap()
         };
 
-        let ort = OrtBackend::new().load(&path, None).unwrap();
+        let cpu = AccelerationConfig {
+            provider: ExecutionProviderType::Cpu,
+            ..Default::default()
+        };
+        let ort = OrtBackend::new().load(&path, Some(&cpu)).unwrap();
         let tract = TractBackend::new().load(&path, None).unwrap();
         let ort_out = run(ort.as_ref());
         let tract_out = run(tract.as_ref());
