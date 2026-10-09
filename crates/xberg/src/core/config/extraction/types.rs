@@ -490,9 +490,12 @@ pub struct ImageExtractionConfig {
     #[serde(default)]
     pub ocr_text_only: bool,
 
-    /// When `true` and `ocr_text_only` is `false`, append the OCR text after
-    /// the image placeholder in the rendered output.
-    #[serde(default)]
+    /// Append the OCR text of an image after its placeholder in Markdown and HTML output.
+    ///
+    /// When `true` (default), the text that `run_ocr_on_images` recognizes follows the
+    /// placeholder of the image. Set to `false` to show the placeholder alone. Has no
+    /// effect when `ocr_text_only` is `true`.
+    #[serde(default = "default_true")]
     pub append_ocr_text: bool,
 
     /// Target format for re-encoding extracted images.
@@ -570,7 +573,7 @@ impl Default for ImageExtractionConfig {
             include_page_rasters: false,
             run_ocr_on_images: true,
             ocr_text_only: false,
-            append_ocr_text: false,
+            append_ocr_text: true,
             output_format: ImageOutputFormat::Native,
             #[cfg(feature = "svg")]
             svg: SvgOptions::default(),

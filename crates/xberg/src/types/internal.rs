@@ -28,6 +28,10 @@ use crate::types::ExtractedImage;
 
 const SUPPRESS_IMAGE_OCR_RENDER_ATTRIBUTE: &str = "xberg:internal:suppress-image-ocr-render";
 
+/// Attribute key of an anchor for the OCR text of a picture; the value is the index of the
+/// picture in `InternalDocument::images`.
+const IMAGE_OCR_TEXT_ANCHOR_ATTRIBUTE: &str = "xberg:internal:image-ocr-text-anchor";
+
 /// Attribute key carrying a `ListItem` element's literal source marker text
 /// (e.g. `"B."`, `"(a)"`, `"iv."`), when the extractor recovered one.
 ///
@@ -725,9 +729,9 @@ impl InternalElement {
     /// Mark an image element so whole-page OCR can replace its nested OCR text
     /// without removing the image placeholder or mutating the public image data.
     ///
-    /// Only called by the PDF OCR merge planner (`extractors::pdf::ocr`); dead in
-    /// builds that enable `ocr`/`ocr-pipeline` without `pdf`. ~keep
-    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    /// Called by the PDF OCR merge planner (`extractors::pdf::ocr`) and by the image
+    /// extractor, whose OCR text is the text of the one picture it returns. ~keep
+    #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
     pub(crate) fn suppress_image_ocr_rendering(&mut self) {
         self.attributes
             .get_or_insert_with(AHashMap::new)
@@ -740,6 +744,32 @@ impl InternalElement {
             .attributes
             .as_ref()
             .is_some_and(|attributes| attributes.contains_key(SUPPRESS_IMAGE_OCR_RENDER_ATTRIBUTE))
+    }
+
+    /// An anchor for the OCR text of the picture `image_index`, where no placeholder is wanted.
+    ///
+    /// It is an empty paragraph, so it renders as nothing until the pipeline gives it the
+    /// text of the picture, or removes it when the picture gave none. An image element in
+    /// its place would render as a placeholder wherever the pipeline did not run. ~keep
+    #[cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+    pub(crate) fn image_ocr_text_anchor(image_index: u32, page: Option<u32>) -> Self {
+        let mut anchor = Self::text(ElementKind::Paragraph, "", 0);
+        anchor.page = page;
+        anchor.attributes = Some(AHashMap::from_iter([(
+            IMAGE_OCR_TEXT_ANCHOR_ATTRIBUTE.to_string(),
+            image_index.to_string(),
+        )]));
+        anchor
+    }
+
+    /// The picture this element is the OCR text anchor of, if it is one.
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+    pub(crate) fn image_ocr_text_anchor_index(&self) -> Option<u32> {
+        self.attributes
+            .as_ref()?
+            .get(IMAGE_OCR_TEXT_ANCHOR_ATTRIBUTE)?
+            .parse()
+            .ok()
     }
 
     /// Attach a `ListItem` element's literal source marker text (e.g. `"B."`,
@@ -815,6 +845,7 @@ impl InternalElement {
 /// `DocumentNode::attributes` surface.
 fn is_internal_only_attribute(key: &str) -> bool {
     key == SUPPRESS_IMAGE_OCR_RENDER_ATTRIBUTE
+        || key == IMAGE_OCR_TEXT_ANCHOR_ATTRIBUTE
         || key == MEASURED_FONT_SIZE_ATTRIBUTE
         || key == NATIVE_TABLE_GRID_ATTRIBUTE
 }

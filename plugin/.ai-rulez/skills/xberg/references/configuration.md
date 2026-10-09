@@ -245,7 +245,7 @@ inject_placeholders = true
 | `include_page_rasters`| boolean        | `false`    | Capture full-page renders as `PageRaster` images (PDF + OCR) |
 | `run_ocr_on_images`   | boolean        | `true`     | OCR extracted images and include the text in content   |
 | `ocr_text_only`       | boolean        | `false`    | Render image OCR as plain text without the markdown placeholder |
-| `append_ocr_text`     | boolean        | `false`    | Append OCR text after the image placeholder            |
+| `append_ocr_text`     | boolean        | `true`     | Append OCR text after the image placeholder in Markdown and HTML output |
 | `output_format`       | string/table   | `"native"` | Re-encode format: `native`, `png`, `jpeg`, `webp` (tagged by `type`) |
 | `include_data_base64` | boolean        | `false`    | Populate `ExtractedImage.data_base64`                  |
 

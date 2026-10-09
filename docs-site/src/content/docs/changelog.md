@@ -11,12 +11,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **(ocr): the OCR text of a picture follows its placeholder in Markdown and HTML output by default.**
+  `images.append_ocr_text` now defaults to `true`, and a missing `images` block reads the same way. When OCR runs on
+  the embedded pictures of a PDF, DOCX, PPTX or RTF document, Markdown and HTML output show the recognized text after
+  the placeholder of each picture. For an HTML or EPUB source, HTML output shows the text and Markdown output still
+  shows the placeholder alone. Before, the default settings showed the placeholder alone. The content of each page in
+  `pages` shows the text the same way as `content`; before, it showed the placeholder alone, also with
+  `append_ocr_text` or `ocr_text_only` set. Set `append_ocr_text` to `false` to get the placeholder alone. In the Go
+  binding the field `AppendOcrText` is now `*bool`; Go code that sets it must pass a pointer. (GH#2068)
+
 ### Fixed
 
 - **(pdf): a title set across a two-column page's gutter no longer moves the column split beside a lone label.** The
   whitespace-corridor search accepted the gap between a column and a lone header label or page number as a gutter, so
   the two columns were read line by line. That search now needs text on at least six rows on each side of a corridor,
   however many spans a label is written in.
+- **(pdf): text recognized in a picture on a page with a text layer is kept.** Text recognized in a picture on a PDF
+  page that also has a text layer is now part of `content` and of that page's content, with or without an `images`
+  block. Before, OCR ran on the picture and the words were dropped unless an `images` block was set, and never reached
+  the page content. The plain page content of a DOCX page gains the words of its picture in the same way; they were
+  in `content` and not in the content of the page. A PDF page that is read by page OCR holds the words of its picture
+  one time, in the text of the page: the picture does not add them again in any output format, and with an `images`
+  block `content` no longer has them twice. With `ocr_text_only`, the placeholder of that picture stays. (GH#2068)
+- **(ocr): a picture with an inline placeholder and an image entry gives its OCR text one time.** With
+  `append_ocr_text` or `ocr_text_only`, a document whose picture has both an inline `![alt](url)` placeholder and an
+  extracted image, such as an HTML page with a data-URI picture, had the recognized text twice. An inline placeholder
+  now takes the text of a picture only when no other part of the output shows that picture. With `ocr_text_only`,
+  plain and HTML output of such an HTML source keep the inline placeholder and hold the text one time. (GH#2068)
+- **(ocr): OCR text added after an inline picture placeholder reaches the content of its page.** The text added
+  after an inline `![alt](url)` placeholder had no page and no nesting level, so it was in `content` and not in the
+  content of the page that holds the placeholder. It now has the page and the level of the placeholder, in every
+  output format, and `ocr_text_only` puts the text in place of the placeholder in the page content too. (GH#2068)
+- **(ocr): an image file with an `images` block gives its OCR text one time.** The recognized text of an image file
+  was in plain and Djot output twice: one time as the text of the document and one time for the picture entry. The
+  picture entry no longer adds it in any output format, and `images[0].ocr_result` still holds it. With
+  `ocr_text_only`, the placeholder of the picture stays. (GH#2068)
 
 ## [1.3.7] - 2026-10-09
 

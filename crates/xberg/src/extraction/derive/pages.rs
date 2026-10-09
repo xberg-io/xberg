@@ -226,6 +226,9 @@ fn render_sub_page(
     sub_doc.elements = elements;
     sub_doc.tables = sub_tables;
     sub_doc.images = sub_images;
+    // A page shows the OCR text of a picture the same way the document does. ~keep
+    sub_doc.ocr_text_only = doc.ocr_text_only;
+    sub_doc.append_ocr_text = doc.append_ocr_text;
 
     let rendered = renderer(&sub_doc);
     if !rendered.is_empty() {

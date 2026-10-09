@@ -2768,6 +2768,13 @@ impl ImageExtractor {
     }
 
     fn mark_ocr_extraction(doc: &mut InternalDocument) {
+        // The document text is the OCR text of the image itself. The image element must not
+        // add the same text a second time when the pipeline reads the image again. ~keep
+        for element in &mut doc.elements {
+            if matches!(element.kind, crate::types::internal::ElementKind::Image { .. }) {
+                element.suppress_image_ocr_rendering();
+            }
+        }
         doc.metadata.ocr_used = true;
         doc.metadata.additional.insert(
             std::borrow::Cow::Borrowed("extraction_method"),
@@ -4504,6 +4511,39 @@ mod tests {
         not(target_arch = "wasm32"),
         any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
     ))]
+    /// The text of an image file is the OCR text of its one picture. When the pipeline reads
+    /// that picture again, no renderer adds the text a second time.
+    #[test]
+    fn an_image_file_gives_its_ocr_text_one_time_in_every_output() {
+        const WORDS: &str = "CRATE 17 KEEP DRY";
+        let picture = crate::types::ExtractedImage {
+            ocr_result: Some(Box::new(crate::types::ExtractedDocument {
+                content: WORDS.to_string(),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        for ocr_text_only in [false, true] {
+            let mut doc = build_image_internal_document(Some(WORDS), Some(picture.clone()));
+            ImageExtractor::mark_ocr_extraction(&mut doc);
+            doc.append_ocr_text = true;
+            doc.ocr_text_only = ocr_text_only;
+
+            for (format, rendered) in [
+                ("plain", crate::rendering::render_plain(&doc)),
+                ("markdown", crate::rendering::render_markdown(&doc)),
+                ("djot", crate::rendering::render_djot(&doc)),
+                ("html", crate::rendering::render_html(&doc)),
+            ] {
+                assert_eq!(
+                    rendered.matches(WORDS).count(),
+                    1,
+                    "{format}, ocr_text_only={ocr_text_only}: {rendered:?}"
+                );
+            }
+        }
+    }
+
     mod sparse_image_ocr_fallback_tests {
         use super::*;
 

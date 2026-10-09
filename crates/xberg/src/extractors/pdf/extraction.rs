@@ -163,6 +163,34 @@ fn only_reason_images_were_requested_is_ocr(config: &ExtractionConfig, ocr_inlin
         && !html_reads_image_data
 }
 
+/// What an image element of a PDF document stands for.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum ImageAnchor {
+    /// The document gets no image elements.
+    None,
+    /// The placeholder of the picture, with its OCR text where a renderer adds it.
+    Placeholder,
+    /// The OCR text of the picture only: an anchor that renders as nothing by itself.
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+    OcrTextOnly,
+}
+
+/// The one answer to "does this PDF document get image elements, and for what".
+///
+/// A picture that is sent to OCR needs an element whether or not the caller wants a
+/// placeholder: the element is the only anchor for the recognized text (GH#2068). Both
+/// sites that make image elements call this; neither derives it again. ~keep
+pub(super) fn image_anchor(config: &ExtractionConfig) -> ImageAnchor {
+    if config.images.as_ref().is_some_and(|images| images.inject_placeholders) {
+        return ImageAnchor::Placeholder;
+    }
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+    if config.runs_ocr_on_embedded_images() {
+        return ImageAnchor::OcrTextOnly;
+    }
+    ImageAnchor::None
+}
+
 /// Report a table-extraction failure that took out a whole detector pass, not just one page.
 ///
 /// The per-page warnings in `pdf::native::table` cannot cover these: a stage that fails or
@@ -760,8 +788,8 @@ pub(crate) fn extract_all_from_native_document(
             "native structure: extracted segments for heading detection"
         );
 
-        let inject_placeholders =
-            images_extraction_enabled && config.images.as_ref().map(|c| c.inject_placeholders).unwrap_or(false);
+        let image_anchor = image_anchor(config);
+        let inject_placeholders = images_extraction_enabled && image_anchor != ImageAnchor::None;
 
         match crate::pdf::structure::extract_document_structure_from_segments(
             all_page_segments,
@@ -803,6 +831,17 @@ pub(crate) fn extract_all_from_native_document(
         ) {
             Ok(mut structured_doc) if !structured_doc.elements.is_empty() => {
                 attach_native_table_grids(&mut structured_doc, &tables, &native_table_grids)?;
+                #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+                if image_anchor == ImageAnchor::OcrTextOnly {
+                    for element in &mut structured_doc.elements {
+                        if let crate::types::internal::ElementKind::Image { image_index } = element.kind {
+                            *element = crate::types::internal::InternalElement::image_ocr_text_anchor(
+                                image_index,
+                                element.page,
+                            );
+                        }
+                    }
+                }
                 tracing::debug!(
                     elements = structured_doc.elements.len(),
                     has_headings = structured_doc

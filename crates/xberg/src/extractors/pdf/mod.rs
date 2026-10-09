@@ -2897,13 +2897,34 @@ impl PdfExtractor {
 
         if let Some(imgs) = images {
             // The OCR path has its own guarded injection block below (see the `#[cfg(feature = "ocr")]`
-            let inject_placeholders = config.images.as_ref().is_some_and(|c| c.inject_placeholders);
-            let document_has_image_elements = doc
-                .elements
-                .iter()
-                .any(|element| matches!(element.kind, ElementKind::Image { .. }));
-            if !document_has_image_elements && inject_placeholders {
+            let image_anchor = extraction::image_anchor(config);
+            let document_has_image_elements = doc.elements.iter().any(|element| {
+                #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+                if element.image_ocr_text_anchor_index().is_some() {
+                    return true;
+                }
+                matches!(element.kind, ElementKind::Image { .. })
+            });
+            if !document_has_image_elements && image_anchor != extraction::ImageAnchor::None {
                 for (idx, img) in imgs.iter().enumerate() {
+                    // Page OCR already read the picture as part of the page, so the picture's
+                    // own OCR text is not rendered there: no anchor, and a placeholder without
+                    // the text. The OCR merge of a structured document does the same for the
+                    // pages it replaces. ~keep
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+                    let page_text_is_from_ocr = extraction_method == ExtractionMethod::Ocr
+                        || img.page_number.is_some_and(|page| {
+                            ocr_results_map
+                                .as_ref()
+                                .is_some_and(|results| results.contains_key(&page))
+                        });
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+                    if image_anchor == extraction::ImageAnchor::OcrTextOnly {
+                        if !page_text_is_from_ocr {
+                            doc.push_element(InternalElement::image_ocr_text_anchor(idx as u32, img.page_number));
+                        }
+                        continue;
+                    }
                     let mut elem = InternalElement::text(
                         ElementKind::Image {
                             image_index: idx as u32,
@@ -2912,6 +2933,10 @@ impl PdfExtractor {
                         0,
                     );
                     elem.page = img.page_number;
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+                    if page_text_is_from_ocr {
+                        elem.suppress_image_ocr_rendering();
+                    }
                     doc.push_element(elem);
                 }
             }

@@ -64,6 +64,22 @@ fn public_attributes_hide_internal_image_ocr_suppression() {
     assert!(!element.should_render_image_ocr());
 }
 
+#[cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+#[test]
+fn an_image_ocr_text_anchor_is_an_empty_paragraph_with_a_hidden_attribute() {
+    let anchor = InternalElement::image_ocr_text_anchor(3, Some(2));
+
+    assert_eq!(anchor.kind, ElementKind::Paragraph);
+    assert_eq!(anchor.text, "");
+    assert_eq!(anchor.page, Some(2));
+    assert_eq!(anchor.image_ocr_text_anchor_index(), Some(3));
+    assert!(anchor.public_attributes().is_none());
+    assert_eq!(
+        InternalElement::text(ElementKind::Paragraph, "", 0).image_ocr_text_anchor_index(),
+        None
+    );
+}
+
 /// #### FAILS against unfixed code
 /// `set_list_item_source_label`/`list_item_source_label` do not exist yet
 /// on unfixed `InternalElement` -- this test does not compile without the
