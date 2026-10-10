@@ -684,6 +684,13 @@ impl FrameworkAdapter for NativeAdapter {
         config.cancel_token = Some(cancel_token.clone());
         let inputs = build_batch_inputs(file_paths, force_ocr, ocr_languages, &config)?;
 
+        if timeout.is_zero() {
+            cancel_token.cancel();
+            return Err(Error::Timeout(
+                "Batch extraction exceeded 0ns; retained Engine is no longer reusable".to_string(),
+            ));
+        }
+
         let total_file_size: u64 = file_paths
             .iter()
             .filter_map(|path| std::fs::metadata(path).ok())
