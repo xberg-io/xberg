@@ -1890,29 +1890,47 @@ jobs:
         shell: bash
         run: echo "LZMA_API_STATIC=1" >> "$GITHUB_ENV"
 
-      - uses: xberg-io/actions/build-rust-ffi@v1
+      - id: build_ffi
+        uses: xberg-io/actions/build-rust-ffi@v1
         with:
           crate-name: xberg-ffi
           target: ${{ matrix.target }}
           glibc-version: ${{ contains(matrix.target, '-linux-gnu') && env.GLIBC_FLOOR || '' }}
+          require-static: "true"
 
       - name: Stage C FFI distribution
-        # Inline: bundle library + header + LICENSE into a single tarball
         env:
+          FFI_NATIVE_STATIC_LIBS: ${{ steps.build_ffi.outputs.native-static-libs-path }}
+          FFI_SHARED_LIBRARY: ${{ steps.build_ffi.outputs.shared-library-path }}
+          FFI_STATIC_LIBRARY: ${{ steps.build_ffi.outputs.static-library-path }}
           TARGET: ${{ matrix.target }}
           PLATFORM: ${{ matrix.platform }}
         shell: bash
         run: |
+          set -euo pipefail
           STAGE="xberg-ffi-${PLATFORM}"
           mkdir -p "$STAGE/lib" "$STAGE/include"
-          find "target/${TARGET}/release" -maxdepth 1 -type f \
-            \( -name 'libxberg_ffi.*' -o -name 'xberg_ffi.dll' \) \
-            -exec cp {} "$STAGE/lib/" \;
+          [ -n "$FFI_SHARED_LIBRARY" ] && [ -f "$FFI_SHARED_LIBRARY" ] || {
+            echo "::error::shared FFI library output is missing"
+            exit 1
+          }
+          [ -n "$FFI_STATIC_LIBRARY" ] && [ -f "$FFI_STATIC_LIBRARY" ] || {
+            echo "::error::static FFI library output is missing"
+            exit 1
+          }
+          cp "$FFI_SHARED_LIBRARY" "$FFI_STATIC_LIBRARY" "$STAGE/lib/"
+          if [ -n "$FFI_NATIVE_STATIC_LIBS" ]; then
+            [ -f "$FFI_NATIVE_STATIC_LIBS" ] || {
+              echo "::error::native static-link metadata output does not exist"
+              exit 1
+            }
+            cp "$FFI_NATIVE_STATIC_LIBS" "$STAGE/lib/native-static-libs.txt"
+          elif [[ "$TARGET" != *-linux-gnu ]]; then
+            echo "::error::native static-link metadata is missing"
+            exit 1
+          fi
           cp crates/xberg-ffi/include/xberg.h "$STAGE/include/"
-          # This step's contract (see the comment above) is "library + header +
-          # LICENSE", and the sibling CLI staging steps copy LICENSE unsuppressed.
-          # A published C FFI tarball missing its LICENSE is a distribution defect,
-          # so name what is missing rather than discarding the error.
+          # A published C FFI tarball missing its LICENSE is a distribution defect. ~keep
           [ -f LICENSE ] || {
             echo "::error::LICENSE is missing from the checkout — refusing to stage a C FFI tarball without it"
             exit 1
