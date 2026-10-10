@@ -3315,3 +3315,82 @@ mod embedded_image_ocr_text_fold_tests {
         );
     }
 }
+
+/// `image_ocr_positions` for a document from the image extractor: the picture is the file
+/// itself, and the extractor has already read it with OCR.
+#[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+mod image_file_ocr_eligibility_tests {
+    use super::image_ocr_positions;
+    use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+    use crate::types::{ExtractedImage, Table};
+
+    /// A document from `source_format` with these paragraphs, one image element and its picture.
+    fn document(source_format: &str, paragraphs: &[&str]) -> InternalDocument {
+        let mut document = InternalDocument::new(source_format);
+        for text in paragraphs {
+            document.push_element(InternalElement::text(ElementKind::Paragraph, *text, 0));
+        }
+        document.push_element(InternalElement::text(ElementKind::Image { image_index: 0 }, "", 0));
+        document.images = vec![ExtractedImage::default()];
+        document
+    }
+
+    fn with_table(mut document: InternalDocument, rows: &[&[&str]]) -> InternalDocument {
+        let table_index = document.push_table(Table {
+            cells: rows
+                .iter()
+                .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+                .collect(),
+            ..Default::default()
+        });
+        document.push_element(InternalElement::text(ElementKind::Table { table_index }, "", 0));
+        document
+    }
+
+    #[test]
+    fn an_image_file_with_text_sends_no_picture_to_image_ocr() {
+        assert!(image_ocr_positions(&document("image", &["CRATE 17 KEEP DRY"])).is_empty());
+    }
+
+    #[test]
+    fn an_image_file_with_a_table_and_no_text_sends_no_picture_to_image_ocr() {
+        let table_only = with_table(document("image", &[]), &[&["Item", "Bay"], &["PALLET", "NORTH"]]);
+
+        assert!(image_ocr_positions(&table_only).is_empty());
+    }
+
+    #[test]
+    fn an_image_file_with_no_text_and_no_table_keeps_its_picture_eligible() {
+        assert_eq!(image_ocr_positions(&document("image", &[])), vec![0]);
+        assert_eq!(image_ocr_positions(&document("image", &[" \n"])), vec![0]);
+        assert_eq!(
+            image_ocr_positions(&with_table(document("image", &[]), &[&["", " "]])),
+            vec![0]
+        );
+    }
+
+    /// The text of an image element describes the picture. It is not a read of the file.
+    #[test]
+    fn an_image_file_with_text_on_its_image_element_alone_keeps_its_picture_eligible() {
+        let mut described = InternalDocument::new("image");
+        described.push_element(InternalElement::text(
+            ElementKind::Image { image_index: 0 },
+            "CRATE 17 KEEP DRY",
+            0,
+        ));
+        described.images = vec![ExtractedImage::default()];
+
+        assert_eq!(image_ocr_positions(&described), vec![0]);
+        assert!(image_ocr_positions(&document("image", &["CRATE 17 KEEP DRY"])).is_empty());
+    }
+
+    /// A picture inside another kind of document is not the document, whatever text it has.
+    #[test]
+    fn a_picture_inside_another_document_with_text_stays_eligible() {
+        assert_eq!(image_ocr_positions(&document("docx", &["CRATE 17 KEEP DRY"])), vec![0]);
+        assert_eq!(
+            image_ocr_positions(&with_table(document("docx", &[]), &[&["PALLET", "NORTH"]])),
+            vec![0]
+        );
+    }
+}
