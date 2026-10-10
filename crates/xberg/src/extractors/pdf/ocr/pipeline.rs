@@ -280,9 +280,46 @@ fn push_mixed_ocr_page_failure_warning(
     );
 }
 
+/// An OCR run that failed, with the record of each page it failed on.
+///
+/// The list is empty when the run failed before it read a page.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[derive(Debug)]
+pub(crate) struct FailedOcrRun {
+    pub(crate) error: crate::XbergError,
+    pub(crate) page_failures: Vec<crate::types::OcrPageFailure>,
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) type OcrRunResult<T> = Result<T, FailedOcrRun>;
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+impl From<crate::XbergError> for FailedOcrRun {
+    fn from(error: crate::XbergError) -> Self {
+        Self {
+            error,
+            page_failures: Vec::new(),
+        }
+    }
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+impl From<FailedOcrRun> for crate::XbergError {
+    fn from(run: FailedOcrRun) -> Self {
+        run.error
+    }
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+impl std::fmt::Display for FailedOcrRun {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.error.fmt(formatter)
+    }
+}
+
 /// Add `incoming` records to `failures`. A page that already has a record keeps its first
 /// error and is recovered when any of its records is.
-#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn merge_ocr_page_failures(
     failures: &mut Vec<crate::types::OcrPageFailure>,
     incoming: Vec<crate::types::OcrPageFailure>,
@@ -334,6 +371,30 @@ pub(crate) fn route_level_ocr_page_failures(
     failures
 }
 
+/// Records for an OCR run of the whole document that failed.
+///
+/// The run's own records are used when it has them. A run without records gives one record for
+/// each page. `recovered` is true for a page that has native text.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(crate) fn failed_run_page_failures(
+    run: &FailedOcrRun,
+    page_count: u32,
+    native_text: &str,
+    boundaries: &[crate::types::PageBoundary],
+) -> Vec<crate::types::OcrPageFailure> {
+    if run.page_failures.is_empty() {
+        let pages: Vec<u32> = (1..=page_count).collect();
+        return route_level_ocr_page_failures(&pages, &run.error, native_text, boundaries);
+    }
+    let mut failures = run.page_failures.clone();
+    for failure in &mut failures {
+        failure.recovered |=
+            mixed_native_page_has_content(native_text, boundaries, failure.page.saturating_sub(1) as usize);
+    }
+    failures.sort_by_key(|failure| failure.page);
+    failures
+}
+
 /// Build mixed text from native extraction and per-page OCR results.
 ///
 /// For each page boundary, if the page is in `ocr_page_numbers` (1-indexed),
@@ -342,7 +403,7 @@ pub(crate) fn route_level_ocr_page_failures(
 /// Page numbers must be >= 1 (invalid values are filtered out with a warning).
 /// An `ocr` config is recommended but not required; defaults are used if absent.
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-type MixedOcrResult = crate::Result<(
+type MixedOcrOutput = (
     String,
     ahash::AHashMap<u32, String>,
     ahash::AHashMap<u32, crate::types::internal::InternalDocument>,
@@ -353,7 +414,10 @@ type MixedOcrResult = crate::Result<(
     ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
     Vec<crate::types::ProcessingWarning>,
     Vec<crate::types::OcrPageFailure>,
-)>;
+);
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+type MixedOcrResult = crate::Result<MixedOcrOutput>;
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -452,6 +516,7 @@ pub(crate) async fn extract_mixed_ocr_native_with_single_block_pages(
         MixedLayoutInputs::Resolve,
     )
     .await
+    .map_err(crate::XbergError::from)
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
@@ -463,7 +528,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     config: &ExtractionConfig,
     all_pages_failed_policy: AllPagesFailedPolicy,
     #[cfg(feature = "layout-detection")] layout_inputs: MixedLayoutInputs,
-) -> MixedOcrResult {
+) -> OcrRunResult<MixedOcrOutput> {
     let ocr_set: std::collections::HashSet<u32> = pages
         .ocr
         .iter()
@@ -873,7 +938,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         detection_for_mixed_route_page(layout_detections_for_mixed, *page_idx).cloned();
                     join_set.spawn(crate::engine::seams::inherit_progress(async move {
                         if config_clone.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
-                            return (idx, Err(crate::XbergError::Cancelled));
+                            return (idx, Err(crate::XbergError::Cancelled.into()));
                         }
                         #[cfg(feature = "layout-detection")]
                         let page_detection_slice = page_detection.as_ref().map(std::slice::from_ref);
@@ -901,9 +966,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         message: format!("OCR pipeline task panicked: {}", e),
                         plugin_name: "ocr".to_string(),
                     })?;
-                    let result = match result {
+                    let result = match result.map_err(crate::XbergError::from) {
                         Ok(result) => result,
-                        Err(error @ crate::XbergError::Cancelled) => return Err(error),
+                        Err(error @ crate::XbergError::Cancelled) => return Err(error.into()),
                         Err(error) => {
                             let recovered = mixed_native_page_has_content(native_text, boundaries, page_idx);
                             push_mixed_ocr_page_failure_warning(
@@ -1029,9 +1094,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         Some(render_doc.as_ref()),
                     ))
                     .await;
-                    let result = match result {
+                    let result = match result.map_err(crate::XbergError::from) {
                         Ok(result) => result,
-                        Err(error @ crate::XbergError::Cancelled) => return Err(error),
+                        Err(error @ crate::XbergError::Cancelled) => return Err(error.into()),
                         Err(error) => {
                             let recovered = mixed_native_page_has_content(native_text, boundaries, *page_idx);
                             push_mixed_ocr_page_failure_warning(
@@ -1271,7 +1336,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 crate::engine::seams::emit_ocr_page(page_idx + 1, page_rotations.len(), backend.name());
                 let mut extraction_result = match result {
                     Ok(extraction_result) => extraction_result,
-                    Err(error @ crate::XbergError::Cancelled) => return Err(error),
+                    Err(error @ crate::XbergError::Cancelled) => return Err(error.into()),
                     Err(error) => {
                         failed_pages.insert(page_idx, error);
                         continue;
@@ -1411,7 +1476,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 crate::engine::seams::emit_ocr_page(*page_idx + 1, page_rotations.len(), backend.name());
                 let mut extraction_result = match result {
                     Ok(extraction_result) => extraction_result,
-                    Err(error @ crate::XbergError::Cancelled) => return Err(error),
+                    Err(error @ crate::XbergError::Cancelled) => return Err(error.into()),
                     Err(error) => {
                         failed_pages.insert(*page_idx, error);
                         continue;
@@ -1617,16 +1682,14 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             .iter()
             .all(|page_idx| failed_page_errors.contains_key(page_idx))
     {
-        if let Some(error) = page_indices
+        let error = page_indices
             .iter()
             .find_map(|page_idx| failed_page_errors.remove(page_idx))
-        {
-            return Err(error);
-        }
-        return Err(crate::XbergError::Ocr {
-            message: "OCR failed for every requested page".to_string(),
-            source: None,
-        });
+            .unwrap_or_else(|| crate::XbergError::Ocr {
+                message: "OCR failed for every requested page".to_string(),
+                source: None,
+            });
+        return Err(FailedOcrRun { error, page_failures });
     }
 
     // Pipeline stages already assess their output in `extract_with_ocr_for_page` using the
@@ -1841,7 +1904,7 @@ pub(crate) async fn extract_full_document_ocr_pipeline_per_page(
         Vec<image::DynamicImage>,
         Vec<crate::layout::DetectionResult>,
     )>,
-) -> crate::Result<(
+) -> OcrRunResult<(
     String,
     Vec<crate::types::Table>,
     Vec<crate::types::OcrElement>,
@@ -1854,7 +1917,7 @@ pub(crate) async fn extract_full_document_ocr_pipeline_per_page(
     ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
 )> {
     if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
-        return Err(crate::XbergError::Cancelled);
+        return Err(crate::XbergError::Cancelled.into());
     }
     let (_, page_count, _) = open_pdf_for_page_ocr(content)?;
     let page_numbers = (1..=page_count as u32).collect::<Vec<_>>();
@@ -1890,7 +1953,7 @@ pub(crate) async fn extract_full_document_ocr_pipeline_per_page(
     ))
     .await?;
     if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
-        return Err(crate::XbergError::Cancelled);
+        return Err(crate::XbergError::Cancelled.into());
     }
 
     let page_texts = page_numbers
@@ -1976,6 +2039,7 @@ pub(crate) async fn extract_with_ocr(
         None,
     )
     .await
+    .map_err(crate::XbergError::from)
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -1986,7 +2050,7 @@ pub(crate) async fn extract_with_ocr_with_page_hints(
     config: &ExtractionConfig,
     path: Option<&std::path::Path>,
     page_ocr_hints: Option<PageOcrHints>,
-) -> crate::Result<(
+) -> OcrRunResult<(
     String,
     Option<f64>,
     Vec<crate::types::Table>,
@@ -2143,7 +2207,7 @@ pub(super) async fn extract_with_ocr_for_page(
     page_ocr_hints: Option<PageOcrHints>,
     page_index_offset: usize,
     xobject_document: Option<&xberg_native_pdf::PdfDocument>,
-) -> crate::Result<(
+) -> OcrRunResult<(
     String,
     Option<f64>,
     Vec<crate::types::Table>,
@@ -3496,7 +3560,7 @@ pub(super) async fn extract_with_ocr_for_page(
     // a wholesale backend failure. Surface the cancellation itself so a caller can tell a
     // cancelled extraction apart from a genuinely broken OCR backend. ~keep
     if config.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
-        return Err(crate::XbergError::Cancelled);
+        return Err(crate::XbergError::Cancelled.into());
     }
 
     // Degrading a per-page failure to a warning must not turn a wholesale OCR failure into a
@@ -3520,9 +3584,12 @@ pub(super) async fn extract_with_ocr_for_page(
                 pages_with_empty_xobject_retry.len()
             )
         };
-        return Err(crate::XbergError::Plugin {
-            message,
-            plugin_name: "ocr".to_string(),
+        return Err(FailedOcrRun {
+            error: crate::XbergError::Plugin {
+                message,
+                plugin_name: "ocr".to_string(),
+            },
+            page_failures,
         });
     }
 
@@ -4112,6 +4179,22 @@ pub(super) fn should_replace_best_effort_result(
         }
     }
 }
+/// A document that holds `text` as paragraphs, for a pipeline result that has no document.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn ocr_pipeline_text_document(text: &str) -> crate::types::internal::InternalDocument {
+    let mut doc = crate::types::internal::InternalDocument::new("pdf");
+    // Backend text verbatim (see `flat_ocr_page_document`): normalize before splitting.
+    let text = crate::extraction::transform::normalize_line_endings(text);
+    for paragraph in text.split("\n\n").map(str::trim).filter(|text| !text.is_empty()) {
+        doc.push_element(crate::types::internal::InternalElement::text(
+            crate::types::internal::ElementKind::Paragraph,
+            paragraph,
+            0,
+        ));
+    }
+    doc
+}
+
 /// Attach skipped and failed stage diagnostics to the result that survives the pipeline.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn attach_ocr_pipeline_stage_warnings(
@@ -4124,19 +4207,7 @@ pub(super) fn attach_ocr_pipeline_stage_warnings(
         return doc;
     }
 
-    let retained_doc = doc.get_or_insert_with(|| {
-        let mut doc = crate::types::internal::InternalDocument::new("pdf");
-        // Backend text verbatim (see `flat_ocr_page_document`): normalize before splitting.
-        let text = crate::extraction::transform::normalize_line_endings(text);
-        for paragraph in text.split("\n\n").map(str::trim).filter(|text| !text.is_empty()) {
-            doc.push_element(crate::types::internal::InternalElement::text(
-                crate::types::internal::ElementKind::Paragraph,
-                paragraph,
-                0,
-            ));
-        }
-        doc
-    });
+    let retained_doc = doc.get_or_insert_with(|| ocr_pipeline_text_document(text));
 
     for backend in unavailable_backends {
         retained_doc.processing_warnings.push(crate::types::ProcessingWarning {
@@ -4395,7 +4466,7 @@ pub(crate) async fn run_ocr_pipeline(
     pipeline: &crate::core::config::OcrPipelineConfig,
     path: Option<&std::path::Path>,
     page_ocr_hints: Option<PageOcrHints>,
-) -> crate::Result<(
+) -> OcrRunResult<(
     String,
     Vec<crate::types::Table>,
     Vec<crate::types::OcrElement>,
@@ -4486,7 +4557,48 @@ pub(super) async fn run_ocr_pipeline_for_page(
     page_ocr_hints: Option<PageOcrHints>,
     page_index_offset: usize,
     xobject_document: Option<&xberg_native_pdf::PdfDocument>,
-) -> crate::Result<(
+) -> OcrRunResult<OcrPipelineOutput> {
+    let mut stage_page_failures: Vec<crate::types::OcrPageFailure> = Vec::new();
+    let result = Box::pin(run_ocr_pipeline_stages(
+        content,
+        images,
+        #[cfg(feature = "layout-detection")]
+        layout_detections,
+        config,
+        pipeline,
+        path,
+        page_rotation_degrees,
+        skip_document_global_heuristic,
+        points_per_pixel_override,
+        page_ocr_hints,
+        page_index_offset,
+        xobject_document,
+        &mut stage_page_failures,
+    ))
+    .await;
+    match result {
+        Ok(mut output) => {
+            output.3 = attach_unread_page_failures(
+                output.3.take(),
+                &output.0,
+                &output.5,
+                page_index_offset,
+                stage_page_failures,
+            );
+            Ok(output)
+        }
+        Err(mut failed_run) => {
+            merge_ocr_page_failures(&mut failed_run.page_failures, stage_page_failures);
+            Err(failed_run)
+        }
+    }
+}
+
+/// What a pipeline run returns: the text, the tables, the OCR elements, the document, the LLM
+/// usage, the text of each page, the page rasters, the formulas, the bare paragraphs of each
+/// page, the preprocessing metadata and the OCR confidence of each page.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+type OcrPipelineOutput = (
     String,
     Vec<crate::types::Table>,
     Vec<crate::types::OcrElement>,
@@ -4498,7 +4610,65 @@ pub(super) async fn run_ocr_pipeline_for_page(
     Vec<Vec<crate::pdf::structure::types::PdfParagraph>>,
     ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata>,
     ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
-)> {
+);
+
+/// Add to `doc` the records that the stages of a pipeline run made for the pages the run
+/// returns without text.
+///
+/// A page that the returned stage read gets no record from another stage. A record that is
+/// kept is not recovered: the output of the stage that made it is not in the result.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(super) fn attach_unread_page_failures(
+    mut doc: Option<crate::types::internal::InternalDocument>,
+    text: &str,
+    page_texts: &[String],
+    page_index_offset: usize,
+    stage_page_failures: Vec<crate::types::OcrPageFailure>,
+) -> Option<crate::types::internal::InternalDocument> {
+    let unread: Vec<crate::types::OcrPageFailure> = stage_page_failures
+        .into_iter()
+        .filter(|failure| {
+            let page_text = (failure.page as usize)
+                .checked_sub(page_index_offset + 1)
+                .and_then(|local_index| page_texts.get(local_index));
+            match page_text {
+                Some(page_text) => page_text.trim().is_empty(),
+                None => text.trim().is_empty(),
+            }
+        })
+        .map(|failure| crate::types::OcrPageFailure {
+            recovered: false,
+            ..failure
+        })
+        .collect();
+    if unread.is_empty() {
+        return doc;
+    }
+    let retained_doc = doc.get_or_insert_with(|| ocr_pipeline_text_document(text));
+    merge_ocr_page_failures(&mut retained_doc.ocr_page_failures, unread);
+    retained_doc.ocr_page_failures.sort_by_key(|failure| failure.page);
+    doc
+}
+
+/// The stages of [`run_ocr_pipeline_for_page`]. Each stage adds its page records to
+/// `stage_page_failures`: a stage that failed, and a stage whose result is not returned.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[allow(clippy::too_many_arguments)]
+async fn run_ocr_pipeline_stages(
+    content: Option<&[u8]>,
+    images: Option<&[image::DynamicImage]>,
+    #[cfg(feature = "layout-detection")] layout_detections: Option<&[crate::layout::DetectionResult]>,
+    config: &ExtractionConfig,
+    pipeline: &crate::core::config::OcrPipelineConfig,
+    path: Option<&std::path::Path>,
+    page_rotation_degrees: u32,
+    skip_document_global_heuristic: bool,
+    points_per_pixel_override: Option<f32>,
+    page_ocr_hints: Option<PageOcrHints>,
+    page_index_offset: usize,
+    xobject_document: Option<&xberg_native_pdf::PdfDocument>,
+    stage_page_failures: &mut Vec<crate::types::OcrPageFailure>,
+) -> OcrRunResult<OcrPipelineOutput> {
     use crate::plugins::registry::get_ocr_backend_registry;
 
     // Re-seed the built-in backends before deciding which pipeline stages are available. A
@@ -4540,7 +4710,8 @@ pub(super) async fn run_ocr_pipeline_for_page(
                 requested_backends.join(", ")
             ),
             source: None,
-        });
+        }
+        .into());
     }
 
     #[allow(clippy::type_complexity)]
@@ -4656,6 +4827,9 @@ pub(super) async fn run_ocr_pipeline_for_page(
                 }
 
                 accumulated_usage.extend(stage_llm_usage);
+                if let Some(stage_doc) = stage_doc.as_ref() {
+                    merge_ocr_page_failures(stage_page_failures, stage_doc.ocr_page_failures.clone());
+                }
 
                 if score >= pipeline.quality_thresholds.pipeline_min_quality {
                     // ~keep Attach prior-stage diagnostics before this accepted-stage early
@@ -4716,13 +4890,14 @@ pub(super) async fn run_ocr_pipeline_for_page(
                     ));
                 }
             }
-            Err(e) => {
+            Err(failed_stage) => {
                 tracing::warn!(
                     backend = %stage.backend,
-                    error = %e,
+                    error = %failed_stage.error,
                     "Pipeline: backend failed, trying next"
                 );
-                stage_failures.push((stage.backend.clone(), e.to_string()));
+                stage_failures.push((stage.backend.clone(), failed_stage.error.to_string()));
+                merge_ocr_page_failures(stage_page_failures, failed_stage.page_failures);
             }
         }
     }
@@ -4839,7 +5014,8 @@ pub(super) async fn run_ocr_pipeline_for_page(
             Err(crate::XbergError::Parsing {
                 message: format!("All OCR pipeline backends failed{detail}"),
                 source: None,
-            })
+            }
+            .into())
         }
     }
 }

@@ -64,6 +64,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `append_ocr_text` or `ocr_text_only`, a document whose picture has both an inline `![alt](url)` placeholder and an
   extracted image, such as an HTML page with a data-URI picture, had the recognized text twice. An inline placeholder
   now takes the text of a picture only when no other part of the output shows that picture. (GH#2068)
+- **(pdf, ocr): a failed OCR fallback for a whole PDF now reports its pages in `ocr_page_failures`.** When the OCR
+  run of a whole document failed and the native text was kept, the result had a warning and no record. A page that
+  failed in one OCR pipeline stage and got no text from a later stage had no record either. Each such page now has a
+  record. A page that has native text is reported with `recovered: true`. (GH#2083)
 
 ## [1.3.7] - 2026-10-09
 
