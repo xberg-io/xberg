@@ -39,6 +39,7 @@ pub(super) fn build_pages(doc: &InternalDocument) -> Option<Vec<PageContent>> {
                 if elem.kind.is_container_start() || elem.kind.is_container_end() {
                     continue;
                 }
+                let mut picture_ocr_text = None;
                 match elem.kind {
                     ElementKind::Table { table_index } => {
                         if let Some(arc_table) = arc_tables.get(table_index as usize) {
@@ -47,14 +48,21 @@ pub(super) fn build_pages(doc: &InternalDocument) -> Option<Vec<PageContent>> {
                     }
                     ElementKind::Image { image_index } if (image_index as usize) < doc.images.len() => {
                         image_indices.push(image_index);
+                        // `render_plain` writes the OCR text of a picture after the picture, so
+                        // the page content has it too: `pages[n].content` and `result.content`
+                        // then agree for `OutputFormat::Plain`. An image element of a PDF
+                        // document can hold that text as its own text already. ~keep
+                        picture_ocr_text = crate::rendering::common::image_ocr_text(doc, elem, image_index)
+                            .filter(|ocr_text| *ocr_text != elem.text);
                     }
                     _ => {}
                 }
-                if !elem.text.is_empty() {
+                let own_text = Some(elem.text.as_str()).filter(|text| !text.is_empty());
+                for block in [own_text, picture_ocr_text].into_iter().flatten() {
                     if !content.is_empty() {
                         content.push_str("\n\n");
                     }
-                    content.push_str(&elem.text);
+                    content.push_str(block);
                 }
             }
 
