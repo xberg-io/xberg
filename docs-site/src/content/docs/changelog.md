@@ -32,6 +32,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   picture, for every format that has pictures (PDF, DOCX, PPTX, HTML, EPUB and others). Plain and Djot output already
   held the text. Before, Markdown output with the default settings showed the placeholder alone. Set `append_ocr_text`
   to `false` to get the placeholder alone. (GH#2068)
+- **(ocr): the returned image of an image file has no `ocr_result` when the file has OCR text.** When the OCR read
+  of an image file such as a PNG gives text or a table, and an `images` block returns the file as an image,
+  `images[].ocr_result` of that image is now absent. The OCR text of the picture is the content of the document:
+  `content`, `tables` and `ocr_elements`. Before, `ocr_result` held a second OCR read of the same picture, made with
+  other settings. Text that only the second read found is no longer in `content` or anywhere in the result. The image
+  data, its format and its kind do not change. (GH#2068)
 
 ### Fixed
 
@@ -64,6 +70,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `append_ocr_text` or `ocr_text_only`, a document whose picture has both an inline `![alt](url)` placeholder and an
   extracted image, such as an HTML page with a data-URI picture, had the recognized text twice. An inline placeholder
   now takes the text of a picture only when no other part of the output shows that picture. (GH#2068)
+- **(ocr): an image file is read by OCR one time, and its text is in `content` one time.** With an `images` block
+  that extracts images, an image file such as a PNG was read by OCR twice and the recognized text was in `content`
+  twice: in plain, Markdown, Djot and HTML output with the default settings and with `ocr_text_only`, and in plain and
+  Djot output with `append_ocr_text` set to `false`. When the OCR read of the file gives text or a table, the returned
+  image is not sent to OCR again, and the text is in `content` one time in every output format. With `ocr_text_only`,
+  the placeholder of the image stays. An image file whose OCR read gives no text and no table is still read by image
+  OCR, as before. (GH#2068)
 
 ## [1.3.7] - 2026-10-09
 

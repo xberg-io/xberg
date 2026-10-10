@@ -76,11 +76,40 @@ enum ProcessorSource {
 
 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
 fn image_ocr_positions(doc: &InternalDocument) -> Vec<usize> {
+    if image_file_text_is_already_extracted(doc) {
+        return Vec::new();
+    }
     doc.images
         .iter()
         .enumerate()
         .filter_map(|(position, image)| (!should_skip_pdf_image_ocr(doc, image)).then_some(position))
         .collect()
+}
+
+/// Whether the OCR read of an image file already gave the document text or a table.
+///
+/// The picture of an image file is the document, not a picture inside it: the image extractor
+/// read it with OCR, and that read is the text and the tables of the document. Image OCR would
+/// read the same picture again with other settings and show its words a second time. A file
+/// whose read gave no text and no table stays eligible, so image OCR can still find its
+/// words. The text of an image element describes the picture and is not a read of it, so it
+/// does not count. ~keep
+#[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+fn image_file_text_is_already_extracted(doc: &InternalDocument) -> bool {
+    use crate::types::internal::ElementKind;
+
+    if doc.source_format != "image" {
+        return false;
+    }
+    let has_text = doc
+        .elements
+        .iter()
+        .any(|element| !matches!(element.kind, ElementKind::Image { .. }) && !element.text.trim().is_empty());
+    let has_table = doc
+        .tables
+        .iter()
+        .any(|table| table.cells.iter().flatten().any(|cell| !cell.trim().is_empty()));
+    has_text || has_table
 }
 
 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
