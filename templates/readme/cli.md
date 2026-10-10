@@ -219,6 +219,9 @@ xberg cache warm --all-embeddings
 
 # Show model manifest (paths, checksums, sizes)
 xberg cache manifest
+
+# Seed the complete PaddleOCR and Sceptre catalog for offline use
+xberg cache seed-classic-ocr --cache-dir /opt/xberg/ocr-models --format json
 ```
 
 ### Shell Completions
@@ -575,6 +578,20 @@ xberg cache manifest [--format <FORMAT>]
 
 - `--format <FORMAT>`: Output format (`text`, `json`, or `toon`), default: `json`
 
+#### seed-classic-ocr
+
+Download and SHA-256 verify the complete pinned PaddleOCR and Sceptre model catalog. The deterministic manifest on
+stdout is suitable for container build stages and offline deployment audits.
+
+```bash
+xberg cache seed-classic-ocr --cache-dir <DIR> [--format <FORMAT>]
+```
+
+**Options:**
+
+- `--cache-dir <DIR>`: Required, non-empty dedicated Hugging Face cache root to populate
+- `--format <FORMAT>`: Output format (`text`, `json`, or `toon`), default: `json`
+
 **Examples:**
 
 ```bash
@@ -595,6 +612,9 @@ xberg cache warm --embedding-model fast
 
 # Get model manifest as JSON
 xberg cache manifest
+
+# Seed every classic OCR model into a dedicated image layer
+xberg cache seed-classic-ocr --cache-dir /opt/xberg/ocr-models --format json
 ```
 
 ### tree-sitter (requires `tree-sitter` feature)

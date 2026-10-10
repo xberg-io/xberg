@@ -4754,6 +4754,11 @@
     "PhpConfig": {
       "additionalProperties": false,
       "properties": {
+        "allow_service_handler_callbacks": {
+          "default": false,
+          "description": "Acknowledge that generated service handler bridges retain request-scoped Zend\ncallables behind `Send + Sync` Rust trait objects.\n\nalef refuses to generate PHP service handler registrations by default: the bridge\nkeeps a request-owned `ZendCallable` reachable from a `Send + Sync` trait object, so a\ncallback (or the final reference release) can run on a non-PHP thread or after the\noriginating request ended. Set this to `true` only when the consumer guarantees that\nevery registered callback is dispatched and dropped on the originating PHP thread for\nas long as the request is alive. ~keep",
+          "type": "boolean"
+        },
         "cargo_crate_name": {
           "default": null,
           "description": "Cargo crate name for the PHP binding (e.g. `\"parser-core-core-php\"`).\nUsed to derive the shared library filename in the e2e test runner.\nWhen absent, the lib name is derived from `extension_name` by appending `_php`.",
@@ -8358,7 +8363,7 @@
       "type": "object"
     }
   },
-  "$id": "https://github.com/xberg-io/alef/releases/download/v0.107.5/alef.schema.json",
+  "$id": "https://github.com/xberg-io/alef/releases/download/v0.107.11/alef.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "JSON Schema for the JSON representation of alef.toml.",
@@ -8478,6 +8483,6 @@
   ],
   "title": "Alef configuration",
   "type": "object",
-  "version": "0.107.5",
-  "x-alef-version": "0.107.5"
+  "version": "0.107.11",
+  "x-alef-version": "0.107.11"
 }

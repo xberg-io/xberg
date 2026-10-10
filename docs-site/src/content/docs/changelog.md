@@ -11,12 +11,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **(pdf, ocr): a PDF page whose content OCR replaces can keep its text layer.** `PageConfig` has a new
+  `keep_native_content` setting, off by default. When enabled, replaced pages retain their original text layer in the
+  new `native_content` page field. The setting requires `extract_pages = true`; default output is unchanged. (GH#2069)
+- **(ocr): classic OCR models can use a dedicated deployment cache.** `XBERG_OCR_MODEL_CACHE_DIR`
+  supplies the default for PaddleOCR and Sceptre without redirecting other model families, while an explicit
+  request cache remains authoritative. `xberg cache seed-classic-ocr` provisions the complete verified catalog
+  and emits a deterministic machine-readable manifest for offline container builds. (GH#2072)
+- **(go): native setup supports static linking and musl assets.** The regenerated Go setup helper accepts
+  explicit link and platform selection, auto-detects musl Linux hosts, and consumes the release's static linker
+  metadata when static linking is requested.
+
 ### Fixed
 
 - **(pdf): a title set across a two-column page's gutter no longer moves the column split beside a lone label.** The
   whitespace-corridor search accepted the gap between a column and a lone header label or page number as a gutter, so
   the two columns were read line by line. That search now needs text on at least six rows on each side of a corridor,
   however many spans a label is written in.
+- **(benchmarks): failed batch processes keep their real exit diagnostics.** When a subprocess exits before RSS
+  sampling begins, the harness now reports its exit status and stderr instead of replacing the failure with a
+  synthetic "not measurable" resource error.
+- **(pdf): borderless key-value headers keep labels before wrapped values.** Native PDF extraction now preserves
+  row pairing when vertically centered labels sit beside multiline values instead of emitting the first value line
+  before its label. (GH#2079)
+- **(doc): Chinese and Japanese text in Word 97-2003 documents is no longer garbled.** UTF-16 CJK text is no longer
+  decoded a second time as cp1252, which previously produced mojibake and could truncate mixed Latin/CJK documents.
+  (GH#2073)
 
 ## [1.3.7] - 2026-10-09
 

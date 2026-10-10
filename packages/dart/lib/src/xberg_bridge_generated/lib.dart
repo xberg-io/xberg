@@ -4,6 +4,7 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import 'frb_generated.dart';
+
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'lib.freezed.dart';
@@ -10411,8 +10412,11 @@ class ImageExtractionConfig {
   /// is also `true`.
   final bool ocrTextOnly;
 
-  /// When `true` and `ocr_text_only` is `false`, append the OCR text after
-  /// the image placeholder in the rendered output.
+  /// Append the OCR text of an image after its placeholder in Markdown and HTML output.
+  ///
+  /// When `true` (default), the text that `run_ocr_on_images` recognizes follows the
+  /// placeholder. Set to `false` to show the placeholder alone. Plain and Djot output
+  /// hold the text with either value. Has no effect when `ocr_text_only` is `true`.
   final bool appendOcrText;
 
   /// Target format for re-encoding extracted images.
@@ -14473,8 +14477,8 @@ class PaddleOcrConfig {
 
   /// Optional Hugging Face Hub cache root for model files.
   ///
-  /// When unset, the standard `HF_HUB_CACHE`, legacy
-  /// `HUGGINGFACE_HUB_CACHE`, and `HF_HOME` conventions are used.
+  /// When unset, `XBERG_OCR_MODEL_CACHE_DIR` is used when non-empty, followed by the standard
+  /// `HF_HUB_CACHE`, legacy `HUGGINGFACE_HUB_CACHE`, and `HF_HOME` conventions.
   final String? cacheDir;
 
   /// Enable angle classification for rotated text (default: false).
@@ -14792,17 +14796,24 @@ class PageConfig {
   /// Default: "\n\n<!-- PAGE {page_num} -->\n\n"
   final String markerFormat;
 
+  /// Keep the text layer of a PDF page whose `content` OCR output replaces, for a caller that needs the exact
+  /// characters of a short born-digital page. The text layer is returned in `PageContent::native_content`.
+  /// Needs `extract_pages`.
+  final bool keepNativeContent;
+
   const PageConfig({
     required this.extractPages,
     required this.insertPageMarkers,
     required this.markerFormat,
+    required this.keepNativeContent,
   });
 
   @override
   int get hashCode =>
       extractPages.hashCode ^
       insertPageMarkers.hashCode ^
-      markerFormat.hashCode;
+      markerFormat.hashCode ^
+      keepNativeContent.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -14811,7 +14822,8 @@ class PageConfig {
           runtimeType == other.runtimeType &&
           extractPages == other.extractPages &&
           insertPageMarkers == other.insertPageMarkers &&
-          markerFormat == other.markerFormat;
+          markerFormat == other.markerFormat &&
+          keepNativeContent == other.keepNativeContent;
 }
 
 /// Content for a single page/slide.
@@ -14891,6 +14903,12 @@ class PageContent {
   /// Aggregate OCR confidence for this page. `None` when the page was not OCR'd.
   final PageOcrConfidence? ocrConfidence;
 
+  /// Text layer of this page, kept when OCR output replaced it in `content`.
+  ///
+  /// Set only when `PageConfig::keep_native_content` is on, an OCR route replaced this page's `content`, and the
+  /// text layer is not blank and differs from the OCR text. `None` on every other page. PDF only.
+  final String? nativeContent;
+
   const PageContent({
     required this.pageNumber,
     required this.content,
@@ -14904,6 +14922,7 @@ class PageContent {
     this.sectionName,
     this.sheetName,
     this.ocrConfidence,
+    this.nativeContent,
   });
 
   @override
@@ -14919,7 +14938,8 @@ class PageContent {
       speakerNotes.hashCode ^
       sectionName.hashCode ^
       sheetName.hashCode ^
-      ocrConfidence.hashCode;
+      ocrConfidence.hashCode ^
+      nativeContent.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -14937,7 +14957,8 @@ class PageContent {
           speakerNotes == other.speakerNotes &&
           sectionName == other.sectionName &&
           sheetName == other.sheetName &&
-          ocrConfidence == other.ocrConfidence;
+          ocrConfidence == other.ocrConfidence &&
+          nativeContent == other.nativeContent;
 }
 
 /// Metadata for individual page/slide/sheet.

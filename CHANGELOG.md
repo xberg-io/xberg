@@ -9,12 +9,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **(pdf, ocr): a PDF page whose content OCR replaces can keep its text layer.** `PageConfig` has a new
+  `keep_native_content` setting, off by default. When enabled, replaced pages retain their original text layer in the
+  new `native_content` page field. The setting requires `extract_pages = true`; default output is unchanged. (GH#2069)
+- **(ocr): classic OCR models can use a dedicated deployment cache.** `XBERG_OCR_MODEL_CACHE_DIR`
+  supplies the default for PaddleOCR and Sceptre without redirecting other model families, while an explicit
+  request cache remains authoritative. `xberg cache seed-classic-ocr` provisions the complete verified catalog
+  and emits a deterministic machine-readable manifest for offline container builds. (GH#2072)
+- **(go): native setup supports static linking and musl assets.** The regenerated Go setup helper accepts
+  explicit link and platform selection, auto-detects musl Linux hosts, and consumes the release's static linker
+  metadata when static linking is requested.
+
+### Changed
+
+- **(ocr): the OCR text of a picture follows its placeholder in Markdown and HTML output by default.**
+  `images.append_ocr_text` now defaults to `true`, and a missing `images` block reads the same way. When OCR runs on
+  the embedded pictures of a document, Markdown and HTML output show the recognized text after the placeholder of each
+  picture, for every format that has pictures (PDF, DOCX, PPTX, HTML, EPUB and others). Plain and Djot output already
+  held the text. Before, Markdown output with the default settings showed the placeholder alone. Set `append_ocr_text`
+  to `false` to get the placeholder alone. (GH#2068)
+
 ### Fixed
 
 - **(pdf): a title set across a two-column page's gutter no longer moves the column split beside a lone label.** The
   whitespace-corridor search accepted the gap between a column and a lone header label or page number as a gutter, so
   the two columns were read line by line. That search now needs text on at least six rows on each side of a corridor,
   however many spans a label is written in.
+- **(api, pdf): extraction timeouts now stop the underlying PDF work.** Async jobs signal their cancellation token
+  when the deadline expires, while native and Pdfium page loops cooperatively stop instead of continuing to consume
+  CPU after the caller has received a timeout. Native PDF parsing also runs off the async runtime so synchronous API
+  deadlines remain responsive on large documents. (GH#2080)
+- **(benchmarks): failed batch processes keep their real exit diagnostics.** When a subprocess exits before RSS
+  sampling begins, the harness now reports its exit status and stderr instead of replacing the failure with a
+  synthetic "not measurable" resource error.
+- **(pdf): borderless key-value headers keep labels before wrapped values.** Native PDF extraction now preserves
+  row pairing when vertically centered labels sit beside multiline values instead of emitting the first value line
+  before its label. Native-PDF consumers can opt into the same repair for pre-extracted spans with
+  `document::reorder_ltr_key_value_rows`. (GH#2079)
+- **(doc): Chinese and Japanese text in Word 97-2003 documents is no longer garbled.** UTF-16 CJK text is no longer
+  decoded a second time as cp1252, which previously produced mojibake and could truncate mixed Latin/CJK documents.
+  (GH#2073)
+- **(pdf): text recognized in a picture on a page with a text layer is kept.** Text recognized in a picture on a PDF
+  page that also has a text layer is now part of `content` and of that page's content, with or without an `images`
+  block. Before, OCR ran on the picture and the words were dropped unless an `images` block was set, and never reached
+  the page content. The plain page content of a DOCX page gains the words of its picture in the same way; they were
+  in `content` and not in the content of the page. A PDF page that is read by page OCR holds the words of its picture
+  one time, in the text of the page: the picture does not add them again in any output format, and with an `images`
+  block `content` no longer has them twice. With `ocr_text_only`, the placeholder of that picture stays. (GH#2068)
+- **(ocr): a picture with an inline placeholder and an image entry gives its OCR text one time.** With
+  `append_ocr_text` or `ocr_text_only`, a document whose picture has both an inline `![alt](url)` placeholder and an
+  extracted image, such as an HTML page with a data-URI picture, had the recognized text twice. An inline placeholder
+  now takes the text of a picture only when no other part of the output shows that picture. (GH#2068)
 
 ## [1.3.7] - 2026-10-09
 

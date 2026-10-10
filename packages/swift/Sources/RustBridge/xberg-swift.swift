@@ -20099,8 +20099,8 @@ public class PageConfig: PageConfigRefMut {
     }
 }
 extension PageConfig {
-    public convenience init<GenericIntoRustString: IntoRustString>(_ extract_pages: Bool, _ insert_page_markers: Bool, _ marker_format: GenericIntoRustString) {
-        self.init(ptr: __swift_bridge__$PageConfig$new(extract_pages, insert_page_markers, { let rustString = marker_format.intoRustString(); rustString.isOwned = false; return rustString.ptr }()))
+    public convenience init<GenericIntoRustString: IntoRustString>(_ extract_pages: Bool, _ insert_page_markers: Bool, _ marker_format: GenericIntoRustString, _ keep_native_content: Bool) {
+        self.init(ptr: __swift_bridge__$PageConfig$new(extract_pages, insert_page_markers, { let rustString = marker_format.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), keep_native_content))
     }
 }
 public class PageConfigRefMut: PageConfigRef {
@@ -20126,6 +20126,10 @@ extension PageConfigRef {
 
     public func markerFormat() -> RustString {
         RustString(ptr: __swift_bridge__$PageConfig$marker_format(ptr))
+    }
+
+    public func keepNativeContent() -> Bool {
+        __swift_bridge__$PageConfig$keep_native_content(ptr)
     }
 }
 extension PageConfig: Vectorizable {
@@ -20250,6 +20254,10 @@ extension PageContentRef {
 
     public func ocrConfidence() -> Optional<PageOcrConfidence> {
         { let val = __swift_bridge__$PageContent$ocr_confidence(ptr); if val != nil { return PageOcrConfidence(ptr: val!) } else { return nil } }()
+    }
+
+    public func nativeContent() -> Optional<RustString> {
+        { let val = __swift_bridge__$PageContent$native_content(ptr); if val != nil { return RustString(ptr: val!) } else { return nil } }()
     }
 }
 extension PageContent: Vectorizable {
