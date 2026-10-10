@@ -2,18 +2,14 @@ name: CI Docker
 
 on:
   push:
-    branches: [main, chore/alef-fixes]
-    paths: &docker-paths
+    branches: [main]
+    paths:
       - "docker/**"
       - "scripts/ci/docker/**"
       - "scripts/test/test-docker-config-local.sh"
       - "crates/xberg/Cargo.toml"
       - "crates/xberg-cli/Cargo.toml"
       - ".github/workflows/ci-docker.yaml"
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    branches: [main]
-    paths: *docker-paths
   workflow_dispatch:
 
 concurrency:

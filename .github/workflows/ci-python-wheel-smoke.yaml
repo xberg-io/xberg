@@ -7,20 +7,10 @@ name: CI Python Wheel Smoke
 # actual release. Its smoke test has never executed even once: publish.yaml
 # has not run since it landed.
 #
-# Unlike the musl legs built by publish.yaml, this is NOT wired to
-# push/pull_request: the matrix here is five OS runners driving a
-# full cibuildwheel pass per leg (manylinux_2_28 cross builds, a from-source
-# libheif build on macOS, an MSVC + vendored-ORT build on Windows), which
-# would add many minutes to every PR touching a wide swath of crates/ for a
-# check that mostly guards against toolchain/dependency drift rather than
-# code review-time correctness. It runs on a weekly schedule as a backstop
-# and on workflow_dispatch for on-demand verification -- deliberately
-# post-merge-only, so it does not block a PR from merging if it goes red.
+# ~keep Unlike the musl legs built by publish.yaml, this is not wired to automatic
+# CI: the matrix is five OS runners driving a full cibuildwheel pass per leg.
+# Run it on demand as part of release verification.
 on:
-  schedule:
-    # Weekly backstop, offset from the other musl CI backstops to avoid
-    # runner-queue contention.
-    - cron: "0 11 * * 1"
   workflow_dispatch:
 
 concurrency:

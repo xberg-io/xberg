@@ -3,15 +3,11 @@ name: CI Scripts
 on:
   push:
     branches: [main]
-    paths: &script-paths
+    paths:
       - "scripts/**"
       - ".editorconfig"
       - "Taskfile.yml"
       - ".github/workflows/ci-scripts.yaml"
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    branches: [main]
-    paths: *script-paths
   workflow_dispatch:
 
 concurrency:

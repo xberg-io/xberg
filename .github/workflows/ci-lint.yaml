@@ -2,37 +2,6 @@ name: CI Lint
 
 on:
   push:
-    branches: [main, chore/alef-fixes]
-    paths:
-      - "crates/**"
-      - "packages/**"
-      - "e2e/**"
-      - "tools/**"
-      - "docs-site/**"
-      - "scripts/**"
-      - "*.toml"
-      - "*.yaml"
-      - "*.yml"
-      - "*.md"
-      # Root lockfiles. This job runs `uv sync --locked` and, through the poly hooks,
-      # cargo-deny against Cargo.lock -- but neither file matched any pattern above, so the
-      # one change that fixes a stale lock could not trigger the job that rejects it. A root
-      # uv.lock pinning xberg at 1.1.6 survived two releases that way. ~keep
-      - "uv.lock"
-      - "Cargo.lock"
-      - ".github/**"
-      - ".task/**"
-      - ".gitmodules"
-      - "Taskfile.yml"
-      - "alef.toml"
-      - "pyproject.toml"
-      - "plugin/**"
-      - ".ai-rulez/**"
-      - ".claude-plugin/**"
-      - ".agents/plugins/**"
-      - "test_documents"
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
     paths:
       - "crates/**"

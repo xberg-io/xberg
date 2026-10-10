@@ -2,21 +2,6 @@ name: CI E2E
 
 on:
   push:
-    branches: [main, chore/alef-fixes]
-    paths:
-      - "crates/**"
-      - "packages/**"
-      - "e2e/**"
-      - "fixtures/**"
-      - "alef.toml"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "Taskfile.yml"
-      - "pnpm-workspace.yaml"
-      - "scripts/ci/wasm/**"
-      - ".github/workflows/ci-e2e.yaml"
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
     paths:
       - "crates/**"

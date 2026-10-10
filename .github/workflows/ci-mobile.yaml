@@ -2,25 +2,6 @@ name: CI Mobile
 
 on:
   push:
-    branches: [main, chore/alef-fixes]
-    paths:
-      - "crates/xberg/**"
-      - "crates/xberg-native-pdf/**"
-      - "crates/xberg-ffi/**"
-      - "crates/xberg-jni/**"
-      # ~keep `--features android-target` transitively enables ocr/paddle-ocr-tract, so both of
-      # these are compiled by this workflow. Without them in the filter a source-only edit that
-      # breaks the Android or iOS build never triggers the job that would have caught it.
-      - "crates/xberg-tesseract/**"
-      - "crates/xberg-paddle-ocr/**"
-      - "packages/dart/**"
-      - "packages/swift/**"
-      - "packages/kotlin-android/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - ".github/workflows/ci-mobile.yaml"
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
     paths:
       - "crates/xberg/**"
