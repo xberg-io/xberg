@@ -16,7 +16,7 @@ Legend: ✅ prebuilt shipped · ❌ not shipped · — not applicable
 | **Elixir** (Hex) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Node** (npm) | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ ¹ | ✅ |
 | **Python** (PyPI) | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ |
-| **Go** (module + C FFI) | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ |
+| **Go** (module + C FFI) ¹⁰ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **PHP** (Composer / PIE) ² | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ |
 | **Dart** (pub.dev) ³ | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ |
 | **C FFI** (GitHub release) | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ |
@@ -87,12 +87,15 @@ Legend: ✅ prebuilt shipped · ❌ not shipped · — not applicable
    `detectOrientation` functions, the model stays resident across calls, so the weights are parsed
    once. Inference is synchronous CPU work on a single-threaded target — run it in a Web Worker if
    main-thread responsiveness matters.
+10. **Go musl** archives ship the dynamic `xberg-ffi` library and its vendored native-library closure.
+    The generated setup command detects Alpine/musl automatically. Its `-link static` mode is available
+    on glibc Linux, macOS, and Windows x64, but not on musl.
 
 ## Cross-cutting gaps
 
-- **musl (Alpine / static Linux):** shipped only by **CLI, Java, C#, Elixir, Node**. Python, Ruby, Go,
-  PHP, Dart, C FFI, and Zig ship glibc-only Linux — musl consumers must build from source.
+- **musl (Alpine):** shipped by **CLI, Java, C#, Elixir, Node, and Go**. Go's musl archive is
+  dynamic-only (see note 10). Python, Ruby, PHP, Dart, C FFI, and Zig ship glibc-only Linux.
 - **Windows:** every desktop binding ships Windows x64 **except Ruby** (no RubyGems Windows native) and
   the Apple/mobile/wasm bindings (n/a).
 - **Intel Mac (macOS x64):** shipped by most bindings; **not** by Node (see gap ¹) or Swift.
-- **Linux arm64 musl** exists only where full musl is listed (CLI/Java/C#/Elixir/Node).
+- **Linux arm64 musl** exists only where full musl is listed (CLI/Java/C#/Elixir/Node/Go).
