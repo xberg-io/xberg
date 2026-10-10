@@ -573,7 +573,10 @@ pub(crate) const PAGE_ROTATION_DEGREES_BACKEND_OPTION: &str = "page_rotation_deg
 #[allow(dead_code)]
 pub(crate) const KNOWN_FULL_PAGE_SCAN_BACKEND_OPTION: &str = "known_full_page_scan";
 
-#[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline",))]
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
+))]
 pub(crate) fn is_strong_rtl_tesseract_language(language: &str) -> bool {
     language.split('+').any(|language| {
         matches!(

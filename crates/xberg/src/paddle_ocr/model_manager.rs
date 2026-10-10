@@ -339,6 +339,7 @@ pub struct ModelManifestEntry {
 }
 
 #[cfg(paddle_ocr)]
+#[cfg_attr(not(any(sceptre_ocr, test)), allow(dead_code))]
 /// Internal stable coordinates for one Paddle artifact in the classic OCR catalog.
 pub(crate) struct PaddleCatalogEntry {
     /// Logical model identifier shared by companion artifacts.
@@ -582,6 +583,7 @@ impl ModelManager {
 
     /// Resolve one catalog entry through the same pinned, checksum-verifying path
     /// used by runtime model initialization.
+    #[cfg_attr(not(sceptre_ocr), allow(dead_code))]
     pub(crate) fn resolve_manifest_entry(&self, entry: &ModelManifestEntry) -> Result<PathBuf, XbergError> {
         self.hf_download(&entry.relative_path, &entry.sha256)
     }

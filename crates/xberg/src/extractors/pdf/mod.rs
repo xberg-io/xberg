@@ -2091,8 +2091,10 @@ impl PdfExtractor {
         let diagrams = native_output.diagrams;
         #[cfg(feature = "layout-detection")]
         let mut markdown_layout_images = native_output.layout_images;
-        #[cfg(feature = "layout-detection")]
+        #[cfg(all(feature = "layout-detection", feature = "liter-llm"))]
         let markdown_layout_hints = native_output.layout_hints;
+        #[cfg(all(feature = "layout-detection", not(feature = "liter-llm")))]
+        let _markdown_layout_hints = native_output.layout_hints;
         #[cfg(feature = "layout-detection")]
         let mut markdown_layout_acceleration_override = native_output.layout_acceleration_override;
 

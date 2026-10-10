@@ -61,7 +61,15 @@ const RTL_SPARSE_IMAGE_OCR_FALLBACK_PSM: i32 = 6;
     any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
 ))]
 const RTL_IDENTIFIER_RECOVERY_MAX_CROPS: usize = 6;
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
+))]
 const RTL_IDENTIFIER_RECOVERY_MIN_CONFIDENCE: f64 = 0.25;
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
+))]
 const RTL_IDENTIFIER_RECOVERY_MAX_CROP_PIXELS: u64 = 500_000;
 
 #[cfg(all(
