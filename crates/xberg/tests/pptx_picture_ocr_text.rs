@@ -23,6 +23,8 @@ const POWERPOINT_MIME_TYPE: &str = "application/vnd.openxmlformats-officedocumen
 const PICTURE_WORDS: &str = "Crate 17 holds forty blue lanterns";
 const FIRST_TITLE: &str = "Stock list";
 const SECOND_TITLE: &str = "Bay plan";
+/// Text that an author typed on a slide. It has the form of a Markdown image reference.
+const AUTHORED_IMAGE_REFERENCE: &str = "![label](label.png)";
 
 struct SlideSpec {
     title: &'static str,
@@ -432,6 +434,23 @@ fn a_picture_with_no_recognized_text_leaves_plain_content_unchanged() {
     assert!(run.document.content.contains(FIRST_TITLE), "{:?}", run.document.content);
     assert_eq!(run.document.content, without_picture_ocr.document.content);
     assert_eq!(run.slide_content(1), without_picture_ocr.slide_content(1));
+}
+
+#[test]
+fn authored_image_reference_text_does_not_repeat_the_picture_words() {
+    let slides = [SlideSpec {
+        title: FIRST_TITLE,
+        text_boxes: &[AUTHORED_IMAGE_REFERENCE],
+        picture: true,
+    }];
+
+    let run = extract("pptx-picture-authored-reference", &deck(&slides), PICTURE_WORDS, |_| {});
+    let content = &run.document.content;
+
+    assert_eq!(run.ocr_calls, 1);
+    assert!(content.contains(AUTHORED_IMAGE_REFERENCE), "{content:?}");
+    assert_eq!(words_in(content), 1, "{content:?}");
+    assert_eq!(words_in(run.slide_content(1)), 1, "{:?}", run.slide_content(1));
 }
 
 #[test]
