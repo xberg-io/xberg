@@ -533,3 +533,94 @@ fn native_table_geometry_is_discarded_after_cells_change() {
     assert_eq!(super::table_to_grid(&table, Some(&grid)).cells[0].content, "Edited");
     assert_eq!(super::table_to_grid(&table, Some(&grid)).cells[0].col_span, 1);
 }
+
+/// The words that OCR read from the picture of the page-building tests below.
+const PICTURE_WORDS: &str = "Crate 17 holds forty blue lanterns";
+
+/// A document with no prebuilt pages: page 1 has a paragraph, then a picture whose image
+/// element has the text `element_text` and whose OCR text is `ocr_text`.
+fn page_with_a_picture(element_text: &str, ocr_text: &str) -> InternalDocument {
+    let mut doc = make_doc("ppt");
+    doc.push_element(InternalElement::text(ElementKind::Paragraph, "Stock list", 0).with_page(1));
+    doc.images.push(crate::types::ExtractedImage {
+        ocr_result: Some(Box::new(crate::types::ExtractedDocument {
+            content: ocr_text.to_string(),
+            ..Default::default()
+        })),
+        ..Default::default()
+    });
+    doc.push_element(InternalElement::text(ElementKind::Image { image_index: 0 }, element_text, 0).with_page(1));
+    doc
+}
+
+fn only_page(doc: &InternalDocument) -> crate::types::page::PageContent {
+    let mut pages = build_pages(doc).expect("the elements have a page");
+    assert_eq!(pages.len(), 1);
+    pages.remove(0)
+}
+
+#[test]
+fn build_pages_adds_the_ocr_text_of_a_page_tagged_picture() {
+    let page = only_page(&page_with_a_picture("", PICTURE_WORDS));
+
+    assert_eq!(page.content, format!("Stock list\n\n{PICTURE_WORDS}"));
+    assert_eq!(page.image_indices, vec![0]);
+}
+
+#[test]
+fn build_pages_gives_a_page_with_only_a_picture_the_ocr_text() {
+    let mut doc = page_with_a_picture("", PICTURE_WORDS);
+    doc.elements.remove(0);
+
+    assert_eq!(only_page(&doc).content, PICTURE_WORDS);
+}
+
+#[test]
+fn build_pages_puts_the_ocr_text_after_the_text_of_the_picture_element() {
+    let page = only_page(&page_with_a_picture("A label on a crate", PICTURE_WORDS));
+
+    assert_eq!(
+        page.content,
+        format!("Stock list\n\nA label on a crate\n\n{PICTURE_WORDS}")
+    );
+}
+
+#[test]
+fn build_pages_adds_the_ocr_text_one_time_when_the_picture_element_holds_it() {
+    let page = only_page(&page_with_a_picture(PICTURE_WORDS, PICTURE_WORDS));
+
+    assert_eq!(page.content, format!("Stock list\n\n{PICTURE_WORDS}"));
+}
+
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+#[test]
+fn build_pages_skips_the_ocr_text_of_a_picture_that_page_ocr_replaced() {
+    let shown = page_with_a_picture("", PICTURE_WORDS);
+    let mut replaced = page_with_a_picture("", PICTURE_WORDS);
+    replaced.elements[1].suppress_image_ocr_rendering();
+
+    assert_eq!(only_page(&shown).content.matches(PICTURE_WORDS).count(), 1);
+    let page = only_page(&replaced);
+    assert_eq!(page.content, "Stock list");
+    assert_eq!(page.image_indices, vec![0]);
+}
+
+#[test]
+fn build_pages_adds_no_separator_for_a_picture_without_text() {
+    let page = only_page(&page_with_a_picture("", ""));
+
+    assert_eq!(page.content, "Stock list");
+    assert_eq!(page.image_indices, vec![0]);
+}
+
+#[test]
+fn plain_content_and_plain_page_content_have_the_ocr_text_of_a_picture_once() {
+    let doc = page_with_a_picture("", PICTURE_WORDS);
+
+    let result = derive_extraction_result(doc, false, crate::core::config::OutputFormat::Plain);
+
+    assert_eq!(result.content.matches(PICTURE_WORDS).count(), 1, "{:?}", result.content);
+    let pages = result.pages.expect("the elements have a page");
+    assert_eq!(pages.len(), 1);
+    assert_eq!(pages[0].content.matches(PICTURE_WORDS).count(), 1, "{:?}", pages[0].content);
+}
