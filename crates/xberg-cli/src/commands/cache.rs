@@ -18,6 +18,47 @@ use xberg::cache;
 
 use crate::{WireFormat, style};
 
+#[cfg(all(feature = "paddle-ocr", feature = "sceptre-ocr"))]
+pub fn parse_nonempty_cache_dir(value: &str) -> std::result::Result<PathBuf, String> {
+    let path = PathBuf::from(value);
+    if path.as_os_str().is_empty() {
+        return Err("classic OCR cache directory must not be empty".to_string());
+    }
+    Ok(path)
+}
+
+/// Seed the complete bounded PaddleOCR and Sceptre model catalog.
+#[cfg(all(feature = "paddle-ocr", feature = "sceptre-ocr"))]
+#[expect(
+    clippy::print_stdout,
+    reason = "classic OCR seed manifest is the command's stdout result output"
+)]
+pub fn seed_classic_ocr_command(cache_dir: PathBuf, format: WireFormat) -> Result<()> {
+    let manifest = xberg::classic_ocr_cache::seed_classic_ocr_cache(cache_dir)
+        .context("Failed to seed the classic OCR model cache")?;
+    match format {
+        WireFormat::Text => {
+            println!("{}", style::header("Classic OCR model cache seeded"));
+            println!("{} {}", style::label("Directory:"), manifest.cache_dir.display());
+            println!("{} {}", style::label("Catalog IDs:"), manifest.catalog_count);
+            println!("{} {}", style::label("Artifacts:"), manifest.artifact_count);
+            println!("{} {}", style::label("Bytes:"), manifest.total_size_bytes);
+            for model in &manifest.models {
+                println!("{} {}@{}:{}", model.backend, model.repo, model.revision, model.file);
+            }
+        }
+        WireFormat::Json => println!(
+            "{}",
+            serde_json::to_string_pretty(&manifest).context("Failed to serialize classic OCR seed manifest to JSON")?
+        ),
+        WireFormat::Toon => println!(
+            "{}",
+            serde_toon::to_string(&manifest).context("Failed to serialize classic OCR seed manifest to TOON")?
+        ),
+    }
+    Ok(())
+}
+
 #[cfg(any(
     feature = "paddle-ocr",
     feature = "layout-detection",
@@ -783,4 +824,23 @@ fn resolve_cache_base(cache_dir: Option<PathBuf>) -> PathBuf {
     std::env::current_dir()
         .unwrap_or_else(|_| PathBuf::from("."))
         .join(".xberg")
+}
+
+#[cfg(all(test, feature = "paddle-ocr", feature = "sceptre-ocr"))]
+mod classic_ocr_seed_tests {
+    use super::*;
+
+    #[test]
+    fn should_reject_an_empty_classic_ocr_cache_path() {
+        let error = parse_nonempty_cache_dir("").expect_err("empty path must fail");
+        assert_eq!(error, "classic OCR cache directory must not be empty");
+    }
+
+    #[test]
+    fn should_preserve_a_nonempty_classic_ocr_cache_path() {
+        assert_eq!(
+            parse_nonempty_cache_dir("/opt/xberg/ocr").unwrap(),
+            PathBuf::from("/opt/xberg/ocr")
+        );
+    }
 }

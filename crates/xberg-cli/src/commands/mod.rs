@@ -29,6 +29,8 @@ pub mod server;
 #[cfg(feature = "tree-sitter")]
 pub mod tree_sitter;
 
+#[cfg(all(feature = "paddle-ocr", feature = "sceptre-ocr"))]
+pub use cache::seed_classic_ocr_command;
 #[cfg(any(
     feature = "embeddings",
     feature = "layout-detection",

@@ -217,6 +217,10 @@ pub(crate) mod inference;
 
 pub mod paddle_ocr;
 
+#[cfg(all(paddle_ocr, sceptre_ocr, not(target_arch = "wasm32")))]
+#[cfg_attr(alef, alef(skip))]
+pub mod classic_ocr_cache;
+
 #[cfg(all(sceptre_ocr, not(target_arch = "wasm32")))]
 pub mod sceptre_ocr;
 

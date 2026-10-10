@@ -116,6 +116,18 @@ tasks:
     cmds:
       - task: rust:test
 
+  test:classic-ocr-cache:
+    desc: "Seed and verify the complete classic OCR cache in offline inference"
+    deps:
+      - rust:cli:build
+    cmds:
+      - python3 scripts/classic_ocr_cache_acceptance.py {{.CLI_ARGS}}
+
+  test:classic-ocr-cache:harness:
+    desc: "Run fast contract tests for the classic OCR cache acceptance harness"
+    cmds:
+      - uv run --frozen --only-dev python -m pytest -q scripts/test_classic_ocr_cache_acceptance.py
+
   test:all:
     desc: "Run all test suites (Rust core + bindings)"
     cmds:

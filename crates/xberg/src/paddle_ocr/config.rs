@@ -43,8 +43,8 @@ pub struct PaddleOcrConfig {
 
     /// Optional Hugging Face Hub cache root for model files.
     ///
-    /// When unset, the standard `HF_HUB_CACHE`, legacy
-    /// `HUGGINGFACE_HUB_CACHE`, and `HF_HOME` conventions are used.
+    /// When unset, `XBERG_OCR_MODEL_CACHE_DIR` is used when non-empty, followed by the standard
+    /// `HF_HUB_CACHE`, legacy `HUGGINGFACE_HUB_CACHE`, and `HF_HOME` conventions.
     pub cache_dir: Option<PathBuf>,
 
     /// Enable angle classification for rotated text (default: false).
@@ -237,8 +237,8 @@ impl PaddleOcrConfig {
     }
 
     /// Resolves the Hugging Face Hub cache directory, using an explicit
-    /// `cache_dir` when supplied and the standard Hugging Face environment
-    /// conventions otherwise.
+    /// `cache_dir` when supplied, `XBERG_OCR_MODEL_CACHE_DIR` when non-empty, and the standard
+    /// Hugging Face environment conventions otherwise.
     ///
     /// # Returns
     ///
@@ -259,6 +259,20 @@ impl PaddleOcrConfig {
             return path.clone();
         }
 
+        if let Ok(Some(path)) = crate::cache_dir::ocr_model_cache_override(None) {
+            return path;
+        }
+
+        Self::default_cache_dir()
+    }
+
+    #[cfg(paddle_ocr)]
+    pub(crate) fn checked_cache_dir(&self) -> crate::Result<PathBuf> {
+        Ok(crate::cache_dir::ocr_model_cache_override(self.cache_dir.as_deref())?
+            .unwrap_or_else(Self::default_cache_dir))
+    }
+
+    fn default_cache_dir() -> PathBuf {
         // `PaddleOcrConfig` compiles in every build because `OcrConfig` holds it, but `hf_hub`
         // is linked only with the PaddleOCR engine and never on wasm32, so builds without the
         // engine fall back to the shared cache-dir resolver. ~keep

@@ -337,6 +337,19 @@ pub struct ModelManifestEntry {
     /// HuggingFace source URL for downloading.
     pub source_url: String,
 }
+
+#[cfg(paddle_ocr)]
+/// Internal stable coordinates for one Paddle artifact in the classic OCR catalog.
+pub(crate) struct PaddleCatalogEntry {
+    /// Logical model identifier shared by companion artifacts.
+    pub(crate) catalog_id: String,
+    /// Pipeline role: detector, classifier, or recognizer.
+    pub(crate) role: String,
+    /// Artifact kind: model or dictionary.
+    pub(crate) artifact_kind: String,
+    /// Existing public download manifest entry.
+    pub(crate) manifest: ModelManifestEntry,
+}
 #[cfg_attr(alef, alef(skip))]
 /// Statistics about the PaddleOCR model cache.
 #[cfg(paddle_ocr)]
@@ -416,12 +429,23 @@ fn artifact_size(remote_filename: &str) -> u64 {
 }
 
 #[cfg(paddle_ocr)]
-fn manifest_entry(remote_filename: String, sha256: &str) -> ModelManifestEntry {
-    ModelManifestEntry {
-        size_bytes: artifact_size(&remote_filename),
-        source_url: format!("https://huggingface.co/{HF_REPO_ID}/resolve/{HF_REPO_REVISION}/{remote_filename}"),
-        relative_path: remote_filename,
-        sha256: sha256.to_string(),
+fn catalog_entry(
+    catalog_id: String,
+    role: &str,
+    artifact_kind: &str,
+    remote_filename: String,
+    sha256: &str,
+) -> PaddleCatalogEntry {
+    PaddleCatalogEntry {
+        catalog_id,
+        role: role.to_string(),
+        artifact_kind: artifact_kind.to_string(),
+        manifest: ModelManifestEntry {
+            size_bytes: artifact_size(&remote_filename),
+            source_url: format!("https://huggingface.co/{HF_REPO_ID}/resolve/{HF_REPO_REVISION}/{remote_filename}"),
+            relative_path: remote_filename,
+            sha256: sha256.to_string(),
+        },
     }
 }
 
@@ -554,6 +578,12 @@ impl ModelManager {
     /// The immutable Hub revision the runtime pins its model set to.
     pub(crate) fn pinned_revision() -> &'static str {
         HF_REPO_REVISION
+    }
+
+    /// Resolve one catalog entry through the same pinned, checksum-verifying path
+    /// used by runtime model initialization.
+    pub(crate) fn resolve_manifest_entry(&self, entry: &ModelManifestEntry) -> Result<PathBuf, XbergError> {
+        self.hf_download(&entry.relative_path, &entry.sha256)
     }
 
     /// Cache status of every artifact a run with the given version, script
@@ -697,36 +727,100 @@ impl ModelManager {
     /// Entries are the exact pinned Hub artifacts used by the runtime. Paths are
     /// repository-relative paths within the immutable Hugging Face snapshot.
     pub fn manifest() -> Vec<ModelManifestEntry> {
+        Self::classic_ocr_catalog()
+            .into_iter()
+            .map(|entry| entry.manifest)
+            .collect()
+    }
+
+    /// Returns canonical classic-OCR metadata without changing the public manifest shape.
+    pub(crate) fn classic_ocr_catalog() -> Vec<PaddleCatalogEntry> {
         let mut entries = Vec::new();
 
         for det in V2_DET_MODELS {
-            entries.push(manifest_entry(det.remote_filename.to_string(), det.sha256_checksum));
+            entries.push(catalog_entry(
+                format!("paddle-v2-det-{}", det.tier),
+                "detector",
+                "model",
+                det.remote_filename.to_string(),
+                det.sha256_checksum,
+            ));
         }
-        for model in [&V2_CLS_MODEL, &V2_DOC_ORI_MODEL] {
-            entries.push(manifest_entry(model.remote_filename.to_string(), model.sha256_checksum));
-        }
+        entries.push(catalog_entry(
+            "paddle-v2-cls-textline-orientation".to_string(),
+            "classifier",
+            "model",
+            V2_CLS_MODEL.remote_filename.to_string(),
+            V2_CLS_MODEL.sha256_checksum,
+        ));
+        entries.push(catalog_entry(
+            "paddle-v2-cls-document-orientation".to_string(),
+            "classifier",
+            "model",
+            V2_DOC_ORI_MODEL.remote_filename.to_string(),
+            V2_DOC_ORI_MODEL.sha256_checksum,
+        ));
         for rec in V2_REC_MODELS {
-            entries.push(manifest_entry(rec.remote_model.to_string(), rec.model_sha256));
-            entries.push(manifest_entry(rec.remote_dict.to_string(), rec.dict_sha256));
+            let catalog_id = format!("paddle-v2-rec-{}", rec.model_key);
+            entries.push(catalog_entry(
+                catalog_id.clone(),
+                "recognizer",
+                "model",
+                rec.remote_model.to_string(),
+                rec.model_sha256,
+            ));
+            entries.push(catalog_entry(
+                catalog_id,
+                "recognizer",
+                "dictionary",
+                rec.remote_dict.to_string(),
+                rec.dict_sha256,
+            ));
         }
 
         for rec in REC_MODELS {
-            entries.push(manifest_entry(
+            let catalog_id = format!("paddle-v5-rec-{}", rec.script_family);
+            entries.push(catalog_entry(
+                catalog_id.clone(),
+                "recognizer",
+                "model",
                 format!("rec/{}/model.onnx", rec.script_family),
                 rec.model_sha256,
             ));
-            entries.push(manifest_entry(
+            entries.push(catalog_entry(
+                catalog_id,
+                "recognizer",
+                "dictionary",
                 format!("rec/{}/dict.txt", rec.script_family),
                 rec.dict_sha256,
             ));
         }
 
         for det in V6_DET_MODELS {
-            entries.push(manifest_entry(det.remote_filename.to_string(), det.sha256_checksum));
+            entries.push(catalog_entry(
+                format!("paddle-v6-det-{}", det.tier),
+                "detector",
+                "model",
+                det.remote_filename.to_string(),
+                det.sha256_checksum,
+            ));
         }
         for rec in V6_REC_MODELS {
-            entries.push(manifest_entry(rec.remote_model.to_string(), rec.model_sha256));
-            entries.push(manifest_entry(rec.remote_dict.to_string(), rec.dict_sha256));
+            let catalog_id = format!("paddle-v6-rec-{}", rec.tier);
+            entries.push(catalog_entry(
+                catalog_id.clone(),
+                "recognizer",
+                "model",
+                rec.remote_model.to_string(),
+                rec.model_sha256,
+            ));
+            entries.push(catalog_entry(
+                catalog_id,
+                "recognizer",
+                "dictionary",
+                rec.remote_dict.to_string(),
+                rec.dict_sha256,
+            ));
         }
 
         entries
@@ -1123,6 +1217,75 @@ mod tests {
             assert!(paths.contains(&model_path.as_str()), "Missing model for {family}");
             assert!(paths.contains(&dict_path.as_str()), "Missing dict for {family}");
         }
+    }
+
+    #[test]
+    fn manifest_has_the_exact_stable_catalog_and_artifact_census() {
+        use std::collections::{BTreeMap, BTreeSet};
+
+        let entries = ModelManager::classic_ocr_catalog();
+        let expected_ids = BTreeSet::from([
+            "paddle-v2-cls-document-orientation",
+            "paddle-v2-cls-textline-orientation",
+            "paddle-v2-det-mobile",
+            "paddle-v2-det-server",
+            "paddle-v2-rec-en_mobile",
+            "paddle-v2-rec-unified_mobile",
+            "paddle-v2-rec-unified_server",
+            "paddle-v5-rec-arabic",
+            "paddle-v5-rec-devanagari",
+            "paddle-v5-rec-eslav",
+            "paddle-v5-rec-greek",
+            "paddle-v5-rec-korean",
+            "paddle-v5-rec-latin",
+            "paddle-v5-rec-tamil",
+            "paddle-v5-rec-telugu",
+            "paddle-v5-rec-thai",
+            "paddle-v6-det-medium",
+            "paddle-v6-det-small",
+            "paddle-v6-det-tiny",
+            "paddle-v6-rec-medium",
+            "paddle-v6-rec-small",
+            "paddle-v6-rec-tiny",
+        ]);
+        let actual_ids: BTreeSet<_> = entries.iter().map(|entry| entry.catalog_id.as_str()).collect();
+        assert_eq!(actual_ids, expected_ids);
+
+        let mut artifacts_by_id: BTreeMap<&str, (&str, BTreeSet<&str>)> = BTreeMap::new();
+        for entry in &entries {
+            let grouped = artifacts_by_id
+                .entry(&entry.catalog_id)
+                .or_insert((&entry.role, BTreeSet::new()));
+            assert_eq!(grouped.0, entry.role.as_str());
+            assert!(grouped.1.insert(&entry.artifact_kind));
+        }
+        assert_eq!(artifacts_by_id.len(), 22);
+        assert_eq!(
+            artifacts_by_id.values().filter(|(role, _)| *role == "detector").count(),
+            5
+        );
+        assert_eq!(
+            artifacts_by_id
+                .values()
+                .filter(|(role, _)| *role == "classifier")
+                .count(),
+            2
+        );
+        assert_eq!(
+            artifacts_by_id
+                .values()
+                .filter(|(role, _)| *role == "recognizer")
+                .count(),
+            15
+        );
+        for (role, artifact_kinds) in artifacts_by_id.values() {
+            if *role == "recognizer" {
+                assert_eq!(artifact_kinds, &BTreeSet::from(["dictionary", "model"]));
+            } else {
+                assert_eq!(artifact_kinds, &BTreeSet::from(["model"]));
+            }
+        }
+        assert_eq!(entries.len(), 37);
     }
 
     #[test]

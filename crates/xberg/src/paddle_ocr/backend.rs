@@ -12,8 +12,9 @@ use async_trait::async_trait;
 use std::borrow::Cow;
 #[cfg(feature = "paddle-ocr-ort")]
 use std::cell::RefCell;
+use std::collections::VecDeque;
 use std::panic::catch_unwind;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 // Acceleration/execution-provider hook is ORT-only: the tract backend is CPU-only and
@@ -52,6 +53,132 @@ use xberg_paddle_ocr::PaddleOcrEngine;
 
 type InitCell<T> = Arc<once_cell::sync::OnceCell<T>>;
 type InitPool<T> = Mutex<AHashMap<String, InitCell<T>>>;
+const MODEL_CONTEXT_CAPACITY: usize = 4;
+const DOCUMENT_ORIENTATION_CACHE_CAPACITY: usize = 4;
+
+struct BoundedInitPoolState<T> {
+    entries: AHashMap<String, InitCell<T>>,
+    recency: VecDeque<String>,
+}
+
+struct BoundedInitPool<T> {
+    state: Mutex<BoundedInitPoolState<T>>,
+    capacity: usize,
+}
+
+impl<T> BoundedInitPool<T> {
+    fn new(capacity: usize) -> Self {
+        Self {
+            state: Mutex::new(BoundedInitPoolState {
+                entries: AHashMap::with_capacity(capacity),
+                recency: VecDeque::with_capacity(capacity),
+            }),
+            capacity,
+        }
+    }
+
+    fn cell(&self, key: &str) -> std::result::Result<Option<InitCell<T>>, String> {
+        let mut state = self.state.lock().map_err(|error| error.to_string())?;
+        if let Some(cell) = state.entries.get(key).cloned() {
+            state.recency.retain(|cached_key| cached_key != key);
+            state.recency.push_back(key.to_string());
+            return Ok(Some(cell));
+        }
+
+        if state.entries.len() == self.capacity {
+            let evicted = state.recency.iter().find_map(|cached_key| {
+                state
+                    .entries
+                    .get(cached_key)
+                    .filter(|cell| Arc::strong_count(cell) == 1)
+                    .map(|_| cached_key.clone())
+            });
+            let Some(evicted) = evicted else {
+                return Ok(None);
+            };
+            state.recency.retain(|cached_key| cached_key != &evicted);
+            state.entries.remove(&evicted);
+        }
+
+        let cell = Arc::new(once_cell::sync::OnceCell::new());
+        state.entries.insert(key.to_string(), Arc::clone(&cell));
+        state.recency.push_back(key.to_string());
+        Ok(Some(cell))
+    }
+
+    #[cfg(test)]
+    fn len(&self) -> std::result::Result<usize, String> {
+        self.state
+            .lock()
+            .map(|state| state.entries.len())
+            .map_err(|error| error.to_string())
+    }
+}
+
+struct PaddleModelContext {
+    cache_dir: PathBuf,
+    model_manager: ModelManager,
+    shared_paths: InitPool<SharedModelPaths>,
+    engine_pool: InitPool<Arc<PaddleOcrEngine>>,
+    doc_ori_detectors: BoundedInitPool<crate::doc_orientation::DocOrientationDetector>,
+}
+
+struct PaddleOcrExecution {
+    context: Arc<PaddleModelContext>,
+    config: Arc<PaddleOcrConfig>,
+    acceleration: Option<crate::core::config::acceleration::AccelerationConfig>,
+}
+
+impl PaddleModelContext {
+    fn new(cache_dir: PathBuf) -> Self {
+        Self {
+            model_manager: ModelManager::new(cache_dir.clone()),
+            cache_dir,
+            shared_paths: Mutex::new(AHashMap::new()),
+            engine_pool: Mutex::new(AHashMap::new()),
+            doc_ori_detectors: BoundedInitPool::new(DOCUMENT_ORIENTATION_CACHE_CAPACITY),
+        }
+    }
+}
+
+struct PaddleModelContextCache {
+    entries: AHashMap<PathBuf, Arc<PaddleModelContext>>,
+    recency: VecDeque<PathBuf>,
+}
+
+impl PaddleModelContextCache {
+    fn new() -> Self {
+        Self {
+            entries: AHashMap::with_capacity(MODEL_CONTEXT_CAPACITY),
+            recency: VecDeque::with_capacity(MODEL_CONTEXT_CAPACITY),
+        }
+    }
+
+    fn context(&mut self, cache_dir: &Path) -> Option<Arc<PaddleModelContext>> {
+        if let Some(context) = self.entries.get(cache_dir).cloned() {
+            self.recency.retain(|path| path != cache_dir);
+            self.recency.push_back(cache_dir.to_path_buf());
+            return Some(context);
+        }
+
+        if self.entries.len() == MODEL_CONTEXT_CAPACITY {
+            let evicted = self.recency.iter().find_map(|path| {
+                self.entries
+                    .get(path)
+                    .filter(|context| Arc::strong_count(context) == 1)
+                    .map(|_| path.clone())
+            })?;
+            self.recency.retain(|path| path != &evicted);
+            self.entries.remove(&evicted);
+        }
+
+        let cache_dir = cache_dir.to_path_buf();
+        let context = Arc::new(PaddleModelContext::new(cache_dir.clone()));
+        self.entries.insert(cache_dir.clone(), Arc::clone(&context));
+        self.recency.push_back(cache_dir);
+        Some(context)
+    }
+}
 
 #[cfg(feature = "paddle-ocr-ort")]
 struct PaddleAccelerationGuard {
@@ -86,6 +213,19 @@ fn init_cell_for_key<T>(pool: &InitPool<T>, key: &str) -> std::result::Result<In
     Ok(cell)
 }
 
+async fn run_orientation_blocking<T, F>(operation: F) -> Result<T>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T> + Send + 'static,
+{
+    tokio::task::spawn_blocking(operation)
+        .await
+        .map_err(|error| crate::XbergError::Plugin {
+            message: format!("PaddleOCR document orientation task panicked: {error}"),
+            plugin_name: "paddle-ocr".to_string(),
+        })?
+}
+
 fn engine_pool_key(
     version: &str,
     tier: &str,
@@ -93,16 +233,8 @@ fn engine_pool_key(
     accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
     backend: PaddleInferenceBackend,
 ) -> String {
-    use crate::core::config::acceleration::ExecutionProviderType;
-
-    let accel_key = match accel.map(|config| (&config.provider, config.device_id)) {
-        Some((ExecutionProviderType::Cuda, device_id)) => format!("cuda:{device_id}"),
-        Some((ExecutionProviderType::TensorRt, device_id)) => format!("tensorrt:{device_id}"),
-        Some((ExecutionProviderType::CoreMl, _)) => "coreml".to_string(),
-        Some((ExecutionProviderType::Auto, _)) => "auto".to_string(),
-        Some((ExecutionProviderType::Cpu, _)) | None => "cpu".to_string(),
-    };
-    // A build can compile both `paddle-ocr-ort` and `paddle-ocr-tract` together (native
+    let accel_key = acceleration_pool_key(accel);
+    // ~keep A build can compile both `paddle-ocr-ort` and `paddle-ocr-tract` together (native
     // parity benchmarks); fold the resolved backend into the key so the pool never hands
     // back an engine constructed on the other engine.
     let backend_key = match backend {
@@ -110,6 +242,18 @@ fn engine_pool_key(
         PaddleInferenceBackend::Tract => "tract",
     };
     format!("{version}/{tier}/{model_key}/{accel_key}/{backend_key}")
+}
+
+fn acceleration_pool_key(accel: Option<&crate::core::config::acceleration::AccelerationConfig>) -> String {
+    use crate::core::config::acceleration::ExecutionProviderType;
+
+    match accel.map(|config| (&config.provider, config.device_id)) {
+        Some((ExecutionProviderType::Cuda, device_id)) => format!("cuda:{device_id}"),
+        Some((ExecutionProviderType::TensorRt, device_id)) => format!("tensorrt:{device_id}"),
+        Some((ExecutionProviderType::CoreMl, _)) => "coreml".to_string(),
+        Some((ExecutionProviderType::Auto, _)) => "auto".to_string(),
+        Some((ExecutionProviderType::Cpu, _)) | None => "cpu".to_string(),
+    }
 }
 
 /// Intra-op thread count for PaddleOCR's shared inference session.
@@ -272,19 +416,7 @@ fn image_metadata(outcome: &RotationOutcome) -> AHashMap<Cow<'static, str>, serd
 #[cfg_attr(alef, alef(skip))]
 pub struct PaddleOcrBackend {
     config: Arc<PaddleOcrConfig>,
-    model_manager: ModelManager,
-    /// Detection + classification model paths, lazily initialized and keyed by
-    /// `"{model_version}/{model_tier}"` so a per-request `paddle_ocr_config`
-    /// override loads the detection model matching its recognition model instead
-    /// of the backend-default version/tier (issue #1279).
-    shared_paths: Arc<InitPool<SharedModelPaths>>,
-    /// Per-model OCR engines, lazily initialized. Keyed by "{version}/{tier}/{model_key}/{accel}".
-    /// Multiple script families may share the same engine (e.g. chinese+japanese use unified_server).
-    /// The per-key cell ensures concurrent cold requests initialize each engine only once. ~keep
-    /// Paddle inference methods take `&self`, enabling lock-free concurrent page OCR.
-    engine_pool: Arc<InitPool<Arc<PaddleOcrEngine>>>,
-    /// Document orientation detector, lazily initialized.
-    doc_ori_detector: once_cell::sync::OnceCell<crate::doc_orientation::DocOrientationDetector>,
+    model_contexts: Mutex<PaddleModelContextCache>,
     /// Hardware acceleration configuration for ORT sessions (set at construction).
     /// Per-request acceleration from `OcrConfig.acceleration` takes precedence.
     acceleration: Option<crate::core::config::acceleration::AccelerationConfig>,
@@ -425,14 +557,25 @@ impl PaddleOcrBackend {
 
     /// Create a new PaddleOCR backend with custom configuration.
     pub fn with_config(config: PaddleOcrConfig) -> Result<Self> {
-        let cache_dir = config.resolve_cache_dir();
+        config.checked_cache_dir()?;
         Ok(Self {
             config: Arc::new(config),
-            model_manager: ModelManager::new(cache_dir),
-            shared_paths: Arc::new(Mutex::new(AHashMap::new())),
-            engine_pool: Arc::new(Mutex::new(AHashMap::new())),
-            doc_ori_detector: once_cell::sync::OnceCell::new(),
+            model_contexts: Mutex::new(PaddleModelContextCache::new()),
             acceleration: None,
+        })
+    }
+
+    fn model_context(&self, cache_dir: &Path) -> Result<Arc<PaddleModelContext>> {
+        let mut contexts = self.model_contexts.lock().map_err(|error| crate::XbergError::Plugin {
+            message: format!("Failed to acquire PaddleOCR model context cache: {error}"),
+            plugin_name: "paddle-ocr".to_string(),
+        })?;
+        contexts.context(cache_dir).ok_or_else(|| crate::XbergError::Ocr {
+            message: format!(
+                "PaddleOCR model context capacity ({MODEL_CONTEXT_CAPACITY} active cache roots) is exhausted; \
+                 retry after an active OCR request completes"
+            ),
+            source: None,
         })
     }
 
@@ -485,23 +628,20 @@ impl PaddleOcrBackend {
     /// - Different tiers get different engines (different det model)
     /// - Different acceleration configs get separate engines (CPU vs CUDA)
     async fn get_or_init_engine_for_family(
-        &self,
+        context: Arc<PaddleModelContext>,
         family: &str,
         config: Arc<PaddleOcrConfig>,
         accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
     ) -> Result<Arc<PaddleOcrEngine>> {
-        let model_manager = self.model_manager.clone();
-        let shared_paths = Arc::clone(&self.shared_paths);
-        let engine_pool = Arc::clone(&self.engine_pool);
         let family = family.to_string();
         let accel = accel.cloned();
 
         // Model I/O, same-key waits, and ORT session construction must stay off async workers. ~keep
         tokio::task::spawn_blocking(move || {
             Self::get_or_init_engine_for_family_blocking(
-                &model_manager,
-                &shared_paths,
-                &engine_pool,
+                &context.model_manager,
+                &context.shared_paths,
+                &context.engine_pool,
                 &family,
                 &config,
                 accel.as_ref(),
@@ -780,41 +920,62 @@ impl PaddleOcrBackend {
 
     /// Detect document orientation and rotate if needed.
     ///
-    fn detect_and_rotate(&self, image: &image::RgbImage) -> Result<RotationOutcome> {
-        let detector = self.doc_ori_detector.get_or_try_init(|| {
-            let cache_dir = self.config.resolve_cache_dir();
-            Ok::<_, crate::XbergError>(crate::doc_orientation::DocOrientationDetector::with_acceleration(
-                cache_dir,
-                self.acceleration.clone(),
-            ))
-        })?;
+    async fn detect_and_rotate(
+        image: image::RgbImage,
+        context: Arc<PaddleModelContext>,
+        acceleration: Option<crate::core::config::acceleration::AccelerationConfig>,
+    ) -> Result<RotationOutcome> {
+        run_orientation_blocking(move || {
+            let detector_cell = context
+                .doc_ori_detectors
+                .cell(&acceleration_pool_key(acceleration.as_ref()))
+                .map_err(|error| crate::XbergError::Plugin {
+                    message: format!("Failed to acquire PaddleOCR orientation detector cache: {error}"),
+                    plugin_name: "paddle-ocr".to_string(),
+                })?
+                .ok_or_else(|| crate::XbergError::Ocr {
+                    message: format!(
+                        "PaddleOCR document orientation cache capacity ({DOCUMENT_ORIENTATION_CACHE_CAPACITY} active \
+                         acceleration configurations) is exhausted; retry after an active request completes"
+                    ),
+                    source: None,
+                })?;
+            let detector = detector_cell.get_or_try_init(|| {
+                Ok::<_, crate::XbergError>(crate::doc_orientation::DocOrientationDetector::with_acceleration(
+                    context.cache_dir.clone(),
+                    acceleration,
+                ))
+            })?;
 
-        let orientation = detector.detect(image)?;
-        tracing::debug!(
-            degrees = orientation.degrees,
-            confidence = orientation.confidence,
-            "Document orientation detected for PaddleOCR"
-        );
-        rotate_for_detected_orientation(image, orientation)
+            let orientation = detector.detect(&image)?;
+            tracing::debug!(
+                degrees = orientation.degrees,
+                confidence = orientation.confidence,
+                "Document orientation detected for PaddleOCR"
+            );
+            rotate_for_detected_orientation(&image, orientation)
+        })
+        .await
     }
 
     /// Perform OCR on image bytes using the appropriate script family engine.
     async fn do_ocr(
-        &self,
         image_bytes: &[u8],
         language: &str,
-        effective_config: Arc<PaddleOcrConfig>,
-        accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
+        execution: PaddleOcrExecution,
         page_rotation_degrees: u32,
         security_limits: &crate::extractors::security::SecurityLimits,
     ) -> Result<PaddlePageOcr> {
+        let PaddleOcrExecution {
+            context,
+            config,
+            acceleration,
+        } = execution;
         let family = language_to_script_family(language);
-        let engine = self
-            .get_or_init_engine_for_family(family, Arc::clone(&effective_config), accel)
-            .await?;
+        let engine =
+            Self::get_or_init_engine_for_family(context, family, Arc::clone(&config), acceleration.as_ref()).await?;
 
         let image_bytes_owned = image_bytes.to_vec();
-        let config = effective_config;
         let security_limits = security_limits.clone();
 
         let (mut text_blocks, processed_width, processed_height) = tokio::task::spawn_blocking(move || {
@@ -1413,6 +1574,9 @@ impl OcrBackend for PaddleOcrBackend {
             Some(overridden) => Arc::new(overridden),
             None => Arc::clone(&self.config),
         };
+        let cache_dir = effective_config.checked_cache_dir()?;
+        let model_context = self.model_context(&cache_dir)?;
+        let effective_accel = self.resolve_acceleration(config.acceleration.as_ref());
 
         let security_limits = Self::resolve_security_limits(config);
 
@@ -1427,16 +1591,15 @@ impl OcrBackend for PaddleOcrBackend {
                     source: None,
                 })?
                 .to_rgb8();
-            match self.detect_and_rotate(&decoded_image) {
+            let decoded_width = decoded_image.width();
+            let decoded_height = decoded_image.height();
+            match Self::detect_and_rotate(decoded_image, Arc::clone(&model_context), effective_accel.clone()).await {
                 Ok(outcome) => {
                     rotation_outcome = Some(outcome);
                 }
                 Err(e) => {
                     tracing::warn!("Doc orientation detection failed, proceeding without rotation: {e}");
-                    rotation_outcome = Some(RotationOutcome::unrotated(
-                        decoded_image.width(),
-                        decoded_image.height(),
-                    ));
+                    rotation_outcome = Some(RotationOutcome::unrotated(decoded_width, decoded_height));
                 }
             }
             match rotation_outcome
@@ -1450,7 +1613,6 @@ impl OcrBackend for PaddleOcrBackend {
             Cow::Borrowed(image_bytes)
         };
 
-        let effective_accel = self.resolve_acceleration(config.acceleration.as_ref());
         let page_rotation_degrees = Self::page_rotation_degrees_from_backend_options(config);
         // `rotation_outcome` is only `Some` while `config.auto_rotate` is true (populated
         // above); when it's `None`, `residual_rotation_for_reorder` falls back to
@@ -1469,16 +1631,18 @@ impl OcrBackend for PaddleOcrBackend {
             word_elements,
             processed_width,
             processed_height,
-        } = self
-            .do_ocr(
-                &ocr_image_bytes,
-                paddle_lang,
-                Arc::clone(&effective_config),
-                effective_accel.as_ref(),
-                residual_page_rotation_degrees,
-                &security_limits,
-            )
-            .await?;
+        } = Self::do_ocr(
+            &ocr_image_bytes,
+            paddle_lang,
+            PaddleOcrExecution {
+                context: model_context,
+                config: Arc::clone(&effective_config),
+                acceleration: effective_accel,
+            },
+            residual_page_rotation_degrees,
+            &security_limits,
+        )
+        .await?;
         let rotation_outcome =
             rotation_outcome.unwrap_or_else(|| RotationOutcome::unrotated(processed_width, processed_height));
 
@@ -1628,7 +1792,10 @@ impl OcrBackend for PaddleOcrBackend {
         let (paddle_lang, _warnings) = super::select_paddle_language(&languages);
         let family = language_to_script_family(paddle_lang);
 
-        let manager = ModelManager::new(effective_config.resolve_cache_dir());
+        let manager = match effective_config.checked_cache_dir() {
+            Ok(cache_dir) => ModelManager::new(cache_dir),
+            Err(error) => return DoctorCheck::fail("ocr.paddle-ocr", error.to_string()),
+        };
         match manager.check_models_cached(
             &effective_config.model_version,
             family,
@@ -1897,6 +2064,280 @@ mod tests {
             engine_pool_key("v6", "small", "latin", None, PaddleInferenceBackend::Ort),
             engine_pool_key("v6", "small", "latin", None, PaddleInferenceBackend::Tract)
         );
+    }
+
+    #[test]
+    fn request_cache_roots_use_isolated_model_contexts() {
+        let backend = PaddleOcrBackend::new().expect("backend should construct");
+        let first = backend
+            .model_context(std::path::Path::new("/first/cache"))
+            .expect("first model context should resolve");
+        let second = backend
+            .model_context(std::path::Path::new("/second/cache"))
+            .expect("second model context should resolve");
+        let first_again = backend
+            .model_context(std::path::Path::new("/first/cache"))
+            .expect("first model context should be reusable");
+
+        assert_eq!(
+            first.model_manager.cache_dir(),
+            &std::path::PathBuf::from("/first/cache")
+        );
+        assert_eq!(
+            second.model_manager.cache_dir(),
+            &std::path::PathBuf::from("/second/cache")
+        );
+        assert!(Arc::ptr_eq(&first, &first_again));
+        assert!(!Arc::ptr_eq(&first, &second));
+    }
+
+    #[test]
+    fn backend_rejects_an_empty_explicit_model_cache_root() {
+        let error = match PaddleOcrBackend::with_config(PaddleOcrConfig::new("en").with_cache_dir(PathBuf::new())) {
+            Ok(_) => panic!("an empty explicit model cache root must be rejected"),
+            Err(error) => error,
+        };
+
+        assert_eq!(
+            error.to_string(),
+            "Validation error: OCR model cache_dir must not be empty"
+        );
+    }
+
+    #[test]
+    fn model_context_cache_evicts_the_least_recently_used_root() {
+        let backend = PaddleOcrBackend::new().expect("backend should construct");
+        let first = backend
+            .model_context(std::path::Path::new("/cache/0"))
+            .expect("first context should resolve");
+        let first_weak = Arc::downgrade(&first);
+        drop(first);
+        for index in 1..MODEL_CONTEXT_CAPACITY {
+            backend
+                .model_context(std::path::Path::new(&format!("/cache/{index}")))
+                .expect("context should resolve");
+        }
+        backend
+            .model_context(std::path::Path::new(&format!("/cache/{MODEL_CONTEXT_CAPACITY}")))
+            .expect("new context should evict the inactive least-recently-used context");
+        assert!(first_weak.upgrade().is_none());
+        let first_again = backend
+            .model_context(std::path::Path::new("/cache/0"))
+            .expect("evicted context should be recreated");
+
+        assert_eq!(first_again.cache_dir, std::path::PathBuf::from("/cache/0"));
+        assert_eq!(
+            backend
+                .model_contexts
+                .lock()
+                .expect("model context cache should be available")
+                .entries
+                .len(),
+            MODEL_CONTEXT_CAPACITY
+        );
+    }
+
+    #[test]
+    fn model_context_cache_does_not_rebuild_an_active_root() {
+        let backend = PaddleOcrBackend::new().expect("backend should construct");
+        let active = (0..MODEL_CONTEXT_CAPACITY)
+            .map(|index| {
+                backend
+                    .model_context(std::path::Path::new(&format!("/active/cache/{index}")))
+                    .expect("active context should resolve")
+            })
+            .collect::<Vec<_>>();
+
+        let overflow = match backend.model_context(std::path::Path::new("/active/cache/overflow")) {
+            Ok(_) => panic!("a fifth active cache root must be rejected"),
+            Err(error) => error,
+        };
+        assert_eq!(
+            overflow.to_string(),
+            concat!(
+                "OCR error: PaddleOCR model context capacity (4 active cache roots) is exhausted; ",
+                "retry after an active OCR request completes"
+            )
+        );
+        let first_again = backend
+            .model_context(std::path::Path::new("/active/cache/0"))
+            .expect("active context should remain addressable");
+
+        assert!(Arc::ptr_eq(&active[0], &first_again));
+    }
+
+    #[test]
+    fn model_context_cache_never_exceeds_the_live_context_limit() {
+        let backend = PaddleOcrBackend::new().expect("backend should construct");
+        let active = (0..MODEL_CONTEXT_CAPACITY)
+            .map(|index| {
+                backend
+                    .model_context(std::path::Path::new(&format!("/bounded/cache/{index}")))
+                    .expect("active context should resolve")
+            })
+            .collect::<Vec<_>>();
+        let contexts = active.iter().map(Arc::downgrade).collect::<Vec<_>>();
+
+        assert!(
+            backend
+                .model_context(std::path::Path::new("/bounded/cache/overflow"))
+                .is_err(),
+            "a fifth live context must be rejected"
+        );
+
+        assert_eq!(
+            contexts.iter().filter(|context| context.upgrade().is_some()).count(),
+            MODEL_CONTEXT_CAPACITY
+        );
+    }
+
+    #[test]
+    fn concurrent_context_admission_recovers_after_an_active_root_is_released() {
+        use std::sync::Barrier;
+
+        let backend = Arc::new(PaddleOcrBackend::new().expect("backend should construct"));
+        let start = Arc::new(Barrier::new(MODEL_CONTEXT_CAPACITY + 2));
+        let handles = (0..=MODEL_CONTEXT_CAPACITY)
+            .map(|index| {
+                let backend = Arc::clone(&backend);
+                let start = Arc::clone(&start);
+                std::thread::spawn(move || {
+                    let cache_dir = std::path::PathBuf::from(format!("/concurrent/cache/{index}"));
+                    start.wait();
+                    let context = backend.model_context(&cache_dir);
+                    (cache_dir, context)
+                })
+            })
+            .collect::<Vec<_>>();
+        start.wait();
+
+        let mut admitted = Vec::new();
+        let mut rejected = None;
+        for handle in handles {
+            let (cache_dir, context) = handle.join().expect("context request thread should complete");
+            match context {
+                Ok(context) => admitted.push(context),
+                Err(error) => {
+                    assert!(rejected.replace((cache_dir, error)).is_none());
+                }
+            }
+        }
+
+        assert_eq!(admitted.len(), MODEL_CONTEXT_CAPACITY);
+        let (rejected_root, _) = rejected.expect("exactly one root should be rejected at capacity");
+        for context in &admitted {
+            let same = backend
+                .model_context(&context.cache_dir)
+                .expect("an active root must remain addressable");
+            assert!(Arc::ptr_eq(context, &same));
+        }
+
+        drop(admitted.pop());
+        let newly_admitted = backend
+            .model_context(&rejected_root)
+            .expect("a rejected root should be admitted once one active root is released");
+        assert_eq!(newly_admitted.cache_dir, rejected_root);
+        assert_eq!(
+            backend
+                .model_contexts
+                .lock()
+                .expect("model context cache should be available")
+                .entries
+                .len(),
+            MODEL_CONTEXT_CAPACITY
+        );
+    }
+
+    #[test]
+    fn orientation_pool_key_distinguishes_acceleration_devices() {
+        use crate::core::config::acceleration::{AccelerationConfig, ExecutionProviderType};
+
+        let first_gpu = AccelerationConfig {
+            provider: ExecutionProviderType::Cuda,
+            device_id: 0,
+        };
+        let second_gpu = AccelerationConfig {
+            provider: ExecutionProviderType::Cuda,
+            device_id: 1,
+        };
+
+        assert_ne!(
+            acceleration_pool_key(Some(&first_gpu)),
+            acceleration_pool_key(Some(&second_gpu))
+        );
+        assert_eq!(acceleration_pool_key(None), "cpu");
+    }
+
+    #[test]
+    fn orientation_detector_cache_reuses_the_same_live_cell_for_a_key() {
+        let pool = BoundedInitPool::<usize>::new(2);
+        let first = pool
+            .cell("cpu")
+            .expect("orientation cache lock should be available")
+            .expect("first acceleration key should be admitted");
+        let same = pool
+            .cell("cpu")
+            .expect("orientation cache lock should be available")
+            .expect("existing acceleration key should remain addressable");
+
+        assert!(Arc::ptr_eq(&first, &same));
+        assert_eq!(pool.len().expect("orientation cache lock should be available"), 1);
+    }
+
+    #[test]
+    fn orientation_detector_cache_recovers_after_an_active_entry_is_released() {
+        let pool = BoundedInitPool::<usize>::new(2);
+        let first = pool
+            .cell("cpu")
+            .expect("orientation cache lock should be available")
+            .expect("first acceleration key should be admitted");
+        let first_weak = Arc::downgrade(&first);
+        let second = pool
+            .cell("cuda:0")
+            .expect("orientation cache lock should be available")
+            .expect("second acceleration key should be admitted");
+
+        assert!(
+            pool.cell("cuda:1")
+                .expect("orientation cache lock should be available")
+                .is_none(),
+            "a new acceleration key must be rejected while every cached detector is active"
+        );
+        let second_again = pool
+            .cell("cuda:0")
+            .expect("orientation cache lock should be available")
+            .expect("an active acceleration key should remain addressable");
+        assert!(Arc::ptr_eq(&second, &second_again));
+
+        drop(first);
+        let third = pool
+            .cell("cuda:1")
+            .expect("orientation cache lock should be available")
+            .expect("a new key should be admitted after an inactive entry can be evicted");
+
+        assert!(first_weak.upgrade().is_none());
+        assert_eq!(pool.len().expect("orientation cache lock should be available"), 2);
+        assert!(
+            Arc::ptr_eq(
+                &third,
+                &pool
+                    .cell("cuda:1")
+                    .expect("orientation cache lock should be available")
+                    .expect("new key should preserve identity")
+            ),
+            "an admitted detector cell must not be rebuilt while live"
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn document_orientation_work_runs_off_the_tokio_worker() {
+        let tokio_worker = std::thread::current().id();
+
+        let orientation_worker = run_orientation_blocking(move || Ok(std::thread::current().id()))
+            .await
+            .expect("blocking orientation work should complete");
+
+        assert_ne!(tokio_worker, orientation_worker);
     }
 
     fn detailed_block(text: &str, left: u32, top: u32, width: u32, height: u32) -> xberg_paddle_ocr::DetailedTextBlock {

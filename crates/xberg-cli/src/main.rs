@@ -79,6 +79,8 @@ use commands::cache::WarmOptions;
 #[cfg(feature = "embeddings")]
 use commands::embed_command;
 use commands::overrides::ExtractionOverrides;
+#[cfg(all(feature = "paddle-ocr", feature = "sceptre-ocr"))]
+use commands::seed_classic_ocr_command;
 #[cfg(feature = "api")]
 use commands::serve_command;
 #[cfg(any(
@@ -523,6 +525,18 @@ enum CacheCommands {
     /// Used for pre-populating model caches in containerized deployments.
     Manifest {
         /// Output format (text or json)
+        #[arg(short, long, default_value = "json")]
+        format: WireFormat,
+    },
+
+    /// Seed the complete pinned PaddleOCR and Sceptre model catalog
+    #[cfg(all(feature = "paddle-ocr", feature = "sceptre-ocr"))]
+    SeedClassicOcr {
+        /// Dedicated Hugging Face cache root to populate
+        #[arg(long, value_parser = commands::cache::parse_nonempty_cache_dir)]
+        cache_dir: PathBuf,
+
+        /// Output format
         #[arg(short, long, default_value = "json")]
         format: WireFormat,
     },
@@ -997,6 +1011,10 @@ fn main() -> Result<()> {
             CacheCommands::Manifest { format } => {
                 manifest_command(format)?;
             }
+            #[cfg(all(feature = "paddle-ocr", feature = "sceptre-ocr"))]
+            CacheCommands::SeedClassicOcr { cache_dir, format } => {
+                seed_classic_ocr_command(cache_dir, format)?;
+            }
             #[cfg(any(
                 feature = "embeddings",
                 feature = "layout-detection",
@@ -1380,6 +1398,20 @@ mod feature_profile_tests {
         let command = Cli::command();
         let cache = command.find_subcommand("cache").expect("cache command should exist");
         assert!(cache.find_subcommand("warm").is_some());
+    }
+
+    #[cfg(all(feature = "paddle-ocr", feature = "sceptre-ocr"))]
+    #[test]
+    fn classic_ocr_profile_exposes_seed_command_and_requires_a_nonempty_directory() {
+        let command = Cli::command();
+        let cache = command.find_subcommand("cache").expect("cache command should exist");
+        assert!(cache.find_subcommand("seed-classic-ocr").is_some());
+
+        let error = match Cli::try_parse_from(["xberg", "cache", "seed-classic-ocr", "--cache-dir", ""]) {
+            Ok(_) => panic!("empty path must fail clap validation"),
+            Err(error) => error,
+        };
+        assert_eq!(error.kind(), clap::error::ErrorKind::ValueValidation);
     }
 }
 

@@ -45,6 +45,8 @@ use crate::ocr_metadata_keys::{
 // Each reader retains multiple ONNX sessions and a worker pool. Four entries
 // cover common language/configuration reuse while bounding retained resources. ~keep
 const READER_CACHE_CAPACITY: usize = 4;
+#[cfg(auto_rotate)]
+const ORIENTATION_DETECTOR_CACHE_CAPACITY: usize = 4;
 // A transient overflow slot prevents requests from blocking when every cached
 // reader is active while still bounding heavyweight reader initialization. ~keep
 const READER_OVERFLOW_CAPACITY: usize = 1;
@@ -80,6 +82,73 @@ struct ReaderCache {
     entries: HashMap<String, ReaderCell>,
     overflow: HashMap<String, Weak<ReaderSlot>>,
     recency: VecDeque<String>,
+}
+
+#[cfg(auto_rotate)]
+type OrientationDetectorCell = Arc<crate::doc_orientation::DocOrientationDetector>;
+
+#[cfg(auto_rotate)]
+struct OrientationDetectorCache {
+    entries: HashMap<String, OrientationDetectorCell>,
+    recency: VecDeque<String>,
+}
+
+#[cfg(auto_rotate)]
+impl OrientationDetectorCache {
+    fn new() -> Self {
+        Self {
+            entries: HashMap::with_capacity(ORIENTATION_DETECTOR_CACHE_CAPACITY),
+            recency: VecDeque::with_capacity(ORIENTATION_DETECTOR_CACHE_CAPACITY),
+        }
+    }
+
+    fn detector(
+        &mut self,
+        cache_dir: &Path,
+        acceleration: Option<crate::core::config::AccelerationConfig>,
+    ) -> Result<OrientationDetectorCell> {
+        let key = orientation_detector_cache_key(cache_dir, acceleration.as_ref())?;
+        if let Some(detector) = self.entries.get(&key).cloned() {
+            self.mark_recent(&key);
+            return Ok(detector);
+        }
+
+        if self.entries.len() == ORIENTATION_DETECTOR_CACHE_CAPACITY && !self.evict_oldest_inactive() {
+            return Err(ocr_error(format!(
+                "Sceptre orientation detector cache is at its bounded capacity of {ORIENTATION_DETECTOR_CACHE_CAPACITY} active configurations"
+            )));
+        }
+
+        let detector = Arc::new(crate::doc_orientation::DocOrientationDetector::with_acceleration(
+            cache_dir.to_path_buf(),
+            acceleration,
+        ));
+        self.entries.insert(key.clone(), Arc::clone(&detector));
+        self.recency.push_back(key);
+        Ok(detector)
+    }
+
+    fn mark_recent(&mut self, key: &str) {
+        if let Some(index) = self.recency.iter().position(|cached_key| cached_key == key) {
+            self.recency.remove(index);
+        }
+        self.recency.push_back(key.to_string());
+    }
+
+    fn evict_oldest_inactive(&mut self) -> bool {
+        let Some(index) = self.recency.iter().position(|key| {
+            self.entries
+                .get(key)
+                .is_some_and(|detector| Arc::strong_count(detector) == 1)
+        }) else {
+            return false;
+        };
+        let Some(key) = self.recency.remove(index) else {
+            return false;
+        };
+        self.entries.remove(&key);
+        true
+    }
 }
 
 impl ReaderCache {
@@ -153,7 +222,7 @@ pub struct SceptreOcrBackend {
     overflow_slots: Arc<Semaphore>,
     execution_slots: Arc<Semaphore>,
     #[cfg(auto_rotate)]
-    orientation_detector: Arc<OnceCell<crate::doc_orientation::DocOrientationDetector>>,
+    orientation_detectors: Arc<Mutex<OrientationDetectorCache>>,
 }
 
 impl SceptreOcrBackend {
@@ -164,7 +233,7 @@ impl SceptreOcrBackend {
             overflow_slots: Arc::new(Semaphore::new(READER_OVERFLOW_CAPACITY)),
             execution_slots: Arc::new(Semaphore::new(EXECUTION_CAPACITY)),
             #[cfg(auto_rotate)]
-            orientation_detector: Arc::new(OnceCell::new()),
+            orientation_detectors: Arc::new(Mutex::new(OrientationDetectorCache::new())),
         })
     }
 
@@ -191,12 +260,54 @@ impl SceptreOcrBackend {
         })
     }
 
+    #[cfg(auto_rotate)]
+    fn orientation_detector_cell(
+        &self,
+        cache_dir: &Path,
+        acceleration: Option<crate::core::config::AccelerationConfig>,
+    ) -> Result<OrientationDetectorCell> {
+        self.orientation_detectors
+            .lock()
+            .map_err(|error| XbergError::Plugin {
+                message: format!("Failed to acquire Sceptre orientation detector cache: {error}"),
+                plugin_name: BACKEND_NAME.to_string(),
+            })?
+            .detector(cache_dir, acceleration)
+    }
+
+    #[cfg(auto_rotate)]
+    fn orientation_detector_for_config(
+        &self,
+        config: &sceptre::OcrConfig,
+        acceleration: Option<crate::core::config::AccelerationConfig>,
+    ) -> Result<OrientationDetectorCell> {
+        let cache_dir = config
+            .model
+            .cache_dir
+            .clone()
+            .unwrap_or_else(crate::doc_orientation::resolve_cache_dir);
+        self.orientation_detector_cell(&cache_dir, acceleration)
+    }
+
+    #[cfg(auto_rotate)]
+    fn rotation_context(&self, config: &OcrConfig, sceptre_config: &sceptre::OcrConfig) -> Result<RotationContext> {
+        Ok(RotationContext {
+            detector: config
+                .auto_rotate
+                .then(|| self.orientation_detector_for_config(sceptre_config, config.acceleration.clone()))
+                .transpose()?,
+            enabled: config.auto_rotate,
+        })
+    }
+
     fn effective_config(config: &OcrConfig) -> Result<(sceptre::OcrConfig, Vec<String>)> {
         validate_auto_rotate_support(config)?;
         validate_acceleration(config)?;
         let languages = effective_languages(config);
         let group = resolve_language_group(&languages)?;
         let mut sceptre_config = parse_sceptre_options(config)?;
+        sceptre_config.model.cache_dir =
+            crate::cache_dir::ocr_model_cache_override(sceptre_config.model.cache_dir.as_deref())?;
         if !has_explicit_model_backend(config) {
             #[cfg(all(feature = "sceptre-ocr-tract", not(feature = "sceptre-ocr-ort")))]
             {
@@ -228,14 +339,10 @@ impl SceptreOcrBackend {
             .acquire_owned()
             .await
             .map_err(|error| ocr_error(format!("Failed to acquire Sceptre execution admission: {error}")))?;
-        let rotation = RotationContext {
-            #[cfg(auto_rotate)]
-            detector: Arc::clone(&self.orientation_detector),
-            #[cfg(auto_rotate)]
-            enabled: config.auto_rotate,
-            #[cfg(auto_rotate)]
-            acceleration: config.acceleration.clone(),
-        };
+        #[cfg(auto_rotate)]
+        let rotation = self.rotation_context(config, &sceptre_config)?;
+        #[cfg(not(auto_rotate))]
+        let rotation = RotationContext {};
 
         let output = tokio::task::spawn_blocking(move || {
             let _execution_permit = execution_permit;
@@ -325,11 +432,9 @@ struct BlockingOutput {
 
 struct RotationContext {
     #[cfg(auto_rotate)]
-    detector: Arc<OnceCell<crate::doc_orientation::DocOrientationDetector>>,
+    detector: Option<OrientationDetectorCell>,
     #[cfg(auto_rotate)]
     enabled: bool,
-    #[cfg(auto_rotate)]
-    acceleration: Option<crate::core::config::AccelerationConfig>,
 }
 
 fn run_blocking(
@@ -342,12 +447,7 @@ fn run_blocking(
     let _ = rotation;
     let decoded = decode_sceptre_image(image_bytes)?;
     #[cfg(auto_rotate)]
-    let (image, orientation, was_rotated) = decode_and_rotate(
-        decoded,
-        rotation.enabled,
-        rotation.detector.as_ref(),
-        rotation.acceleration,
-    )?;
+    let (image, orientation, was_rotated) = decode_and_rotate(decoded, rotation.enabled, rotation.detector.as_deref())?;
     #[cfg(not(auto_rotate))]
     let image = Image::from_rgb8(decoded.width(), decoded.height(), decoded.into_raw()).map_err(map_sceptre_error)?;
     let width = image.width();
@@ -382,21 +482,15 @@ fn decode_sceptre_image(image_bytes: &[u8]) -> Result<image::RgbImage> {
 fn decode_and_rotate(
     decoded: image::RgbImage,
     auto_rotate: bool,
-    detector_cell: &OnceCell<crate::doc_orientation::DocOrientationDetector>,
-    acceleration: Option<crate::core::config::AccelerationConfig>,
+    detector: Option<&crate::doc_orientation::DocOrientationDetector>,
 ) -> Result<(Image, Option<crate::doc_orientation::OrientationResult>, bool)> {
     if !auto_rotate {
         return Image::from_rgb8(decoded.width(), decoded.height(), decoded.into_raw())
             .map(|image| (image, None, false))
             .map_err(map_sceptre_error);
     }
+    let detector = detector.ok_or_else(|| ocr_error("Sceptre orientation detector was not initialized"))?;
 
-    let detector = detector_cell.get_or_init(|| {
-        crate::doc_orientation::DocOrientationDetector::with_acceleration(
-            crate::doc_orientation::resolve_cache_dir(),
-            acceleration,
-        )
-    });
     let orientation = match detector.detect(&decoded) {
         Ok(orientation) => orientation,
         Err(error) => {
@@ -937,6 +1031,18 @@ fn reader_cache_key(config: &sceptre::OcrConfig) -> Result<String> {
         .map_err(|error| ocr_error(format!("Failed to serialize effective Sceptre configuration: {error}")))
 }
 
+#[cfg(auto_rotate)]
+fn orientation_detector_cache_key(
+    cache_dir: &Path,
+    acceleration: Option<&crate::core::config::AccelerationConfig>,
+) -> Result<String> {
+    serde_json::to_string(&(cache_dir, acceleration)).map_err(|error| {
+        ocr_error(format!(
+            "Failed to serialize Sceptre orientation configuration: {error}"
+        ))
+    })
+}
+
 fn effective_languages(config: &OcrConfig) -> Vec<String> {
     let languages: Vec<String> = config
         .language
@@ -1104,6 +1210,217 @@ mod tests {
         assert_eq!(effective.recognition.batch_size, 4);
         assert_eq!(effective.concurrency.max_threads, Some(2));
         assert_eq!(effective.model.languages, vec![Language::Cyrillic]);
+    }
+
+    #[test]
+    fn sceptre_rejects_an_empty_explicit_model_cache_root() {
+        let config = OcrConfig {
+            backend: "sceptre".to_string(),
+            backend_options: Some(serde_json::json!({"model": {"cache_dir": ""}})),
+            ..OcrConfig::default()
+        };
+
+        let error = SceptreOcrBackend::effective_config(&config)
+            .expect_err("an empty explicit model cache root must be rejected");
+
+        assert_eq!(
+            error.to_string(),
+            "Validation error: OCR model cache_dir must not be empty"
+        );
+    }
+
+    #[test]
+    fn sceptre_preserves_an_explicit_model_cache_root() {
+        let config = OcrConfig {
+            backend: "sceptre".to_string(),
+            backend_options: Some(serde_json::json!({"model": {"cache_dir": "/request/cache"}})),
+            ..OcrConfig::default()
+        };
+
+        let (effective, _) = SceptreOcrBackend::effective_config(&config).expect("explicit cache root should resolve");
+
+        assert_eq!(effective.model.cache_dir, Some("/request/cache".into()));
+    }
+
+    #[test]
+    fn sceptre_reader_cache_key_distinguishes_model_cache_roots() {
+        let mut first = sceptre::OcrConfig::default();
+        first.model.cache_dir = Some("/first/cache".into());
+        let mut second = first.clone();
+        second.model.cache_dir = Some("/second/cache".into());
+
+        assert_ne!(
+            reader_cache_key(&first).expect("first config should serialize"),
+            reader_cache_key(&second).expect("second config should serialize")
+        );
+    }
+
+    #[cfg(auto_rotate)]
+    #[test]
+    fn sceptre_orientation_detector_cache_distinguishes_root_and_acceleration() {
+        let backend = SceptreOcrBackend::new().expect("backend should initialize");
+        let first_config = OcrConfig {
+            backend_options: Some(serde_json::json!({"model": {"cache_dir": "/first/cache"}})),
+            ..OcrConfig::default()
+        };
+        let second_config = OcrConfig {
+            backend_options: Some(serde_json::json!({"model": {"cache_dir": "/second/cache"}})),
+            ..OcrConfig::default()
+        };
+        let (first_config, _) =
+            SceptreOcrBackend::effective_config(&first_config).expect("first config should resolve");
+        let (second_config, _) =
+            SceptreOcrBackend::effective_config(&second_config).expect("second config should resolve");
+        let first = backend
+            .orientation_detector_for_config(
+                &first_config,
+                Some(crate::core::config::AccelerationConfig {
+                    provider: ExecutionProviderType::Cpu,
+                    device_id: 0,
+                }),
+            )
+            .expect("first detector should resolve");
+        let repeated = backend
+            .orientation_detector_for_config(
+                &first_config,
+                Some(crate::core::config::AccelerationConfig {
+                    provider: ExecutionProviderType::Cpu,
+                    device_id: 0,
+                }),
+            )
+            .expect("repeated detector should resolve");
+        let other_root = backend
+            .orientation_detector_for_config(
+                &second_config,
+                Some(crate::core::config::AccelerationConfig {
+                    provider: ExecutionProviderType::Cpu,
+                    device_id: 0,
+                }),
+            )
+            .expect("detector for another root should resolve");
+        let other_acceleration = backend
+            .orientation_detector_for_config(
+                &first_config,
+                Some(crate::core::config::AccelerationConfig {
+                    provider: ExecutionProviderType::Cuda,
+                    device_id: 1,
+                }),
+            )
+            .expect("detector for another acceleration config should resolve");
+
+        assert!(Arc::ptr_eq(&first, &repeated));
+        assert!(!Arc::ptr_eq(&first, &other_root));
+        assert!(!Arc::ptr_eq(&first, &other_acceleration));
+    }
+
+    #[cfg(auto_rotate)]
+    #[test]
+    fn sceptre_orientation_detector_cache_is_bounded_when_roots_change() {
+        let backend = SceptreOcrBackend::new().expect("backend should initialize");
+
+        for index in 0..=ORIENTATION_DETECTOR_CACHE_CAPACITY {
+            backend
+                .orientation_detector_cell(
+                    std::path::Path::new(&format!("/cache/{index}")),
+                    Some(crate::core::config::AccelerationConfig {
+                        provider: ExecutionProviderType::Cpu,
+                        device_id: 0,
+                    }),
+                )
+                .expect("detector should resolve");
+        }
+
+        assert_eq!(
+            backend
+                .orientation_detectors
+                .lock()
+                .expect("detector cache lock should remain available")
+                .entries
+                .len(),
+            ORIENTATION_DETECTOR_CACHE_CAPACITY
+        );
+    }
+
+    #[cfg(auto_rotate)]
+    #[test]
+    fn sceptre_orientation_detector_cache_rejects_a_fifth_live_root() {
+        let backend = SceptreOcrBackend::new().expect("backend should initialize");
+        let mut active = Vec::new();
+        for index in 0..ORIENTATION_DETECTOR_CACHE_CAPACITY {
+            active.push(
+                backend
+                    .orientation_detector_cell(
+                        std::path::Path::new(&format!("/active/{index}")),
+                        Some(crate::core::config::AccelerationConfig {
+                            provider: ExecutionProviderType::Cpu,
+                            device_id: 0,
+                        }),
+                    )
+                    .expect("active detector should resolve"),
+            );
+        }
+
+        let repeated = backend
+            .orientation_detector_cell(
+                std::path::Path::new("/active/0"),
+                Some(crate::core::config::AccelerationConfig {
+                    provider: ExecutionProviderType::Cpu,
+                    device_id: 0,
+                }),
+            )
+            .expect("an existing active detector should be reused");
+        let error = match backend.orientation_detector_cell(
+            std::path::Path::new("/active/overflow"),
+            Some(crate::core::config::AccelerationConfig {
+                provider: ExecutionProviderType::Cpu,
+                device_id: 0,
+            }),
+        ) {
+            Ok(_) => panic!("a fifth live detector must exceed bounded admission"),
+            Err(error) => error,
+        };
+
+        assert!(Arc::ptr_eq(&active[0], &repeated));
+        assert_eq!(
+            error.to_string(),
+            "OCR error: Sceptre orientation detector cache is at its bounded capacity of 4 active configurations"
+        );
+        assert_eq!(
+            backend
+                .orientation_detectors
+                .lock()
+                .expect("detector cache lock should remain available")
+                .entries
+                .len(),
+            ORIENTATION_DETECTOR_CACHE_CAPACITY
+        );
+    }
+
+    #[cfg(auto_rotate)]
+    #[test]
+    fn sceptre_disabled_auto_rotation_does_not_cache_a_detector() {
+        let backend = SceptreOcrBackend::new().expect("backend should initialize");
+        let request = OcrConfig {
+            auto_rotate: false,
+            backend_options: Some(serde_json::json!({"model": {"cache_dir": "/unused/cache"}})),
+            ..OcrConfig::default()
+        };
+        let (effective, _) = SceptreOcrBackend::effective_config(&request).expect("config should resolve");
+
+        let rotation = backend
+            .rotation_context(&request, &effective)
+            .expect("rotation context should resolve");
+
+        assert!(rotation.detector.is_none());
+        assert_eq!(
+            backend
+                .orientation_detectors
+                .lock()
+                .expect("detector cache lock should remain available")
+                .entries
+                .len(),
+            0
+        );
     }
 
     #[test]
