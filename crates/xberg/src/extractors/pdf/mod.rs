@@ -272,6 +272,124 @@ fn extract_lopdf_compatibility_data(
     }
 }
 
+#[cfg(feature = "pdf")]
+struct NativeBlockingOutput {
+    extraction: extraction::PdfExtractionPhaseResult,
+    bookmark_uris: Vec<crate::types::ExtractedUri>,
+    pdf_revisions: Option<Vec<crate::types::DocumentRevision>>,
+    diagrams: Vec<crate::types::diagram::DiagramGraph>,
+    #[cfg(feature = "layout-detection")]
+    layout_images: Option<Vec<image::RgbImage>>,
+    #[cfg(feature = "layout-detection")]
+    layout_hints: Option<Vec<Vec<crate::pdf::structure::types::LayoutHint>>>,
+    #[cfg(feature = "layout-detection")]
+    layout_acceleration_override: Option<crate::core::config::acceleration::AccelerationConfig>,
+}
+
+#[cfg(feature = "pdf")]
+fn ensure_pdf_not_cancelled(config: &ExtractionConfig) -> Result<()> {
+    if config
+        .cancel_token
+        .as_ref()
+        .is_some_and(crate::cancellation::CancellationToken::is_cancelled)
+    {
+        return Err(crate::XbergError::Cancelled);
+    }
+    Ok(())
+}
+
+#[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+async fn spawn_pdf_blocking<F, T>(work: F) -> Result<T>
+where
+    F: FnOnce() -> Result<T> + Send + 'static,
+    T: Send + 'static,
+{
+    tokio::task::spawn_blocking(work)
+        .await
+        .map_err(|error| crate::XbergError::Other(format!("native PDF extraction task failed: {error}")))?
+}
+
+#[cfg(all(feature = "pdf", any(not(feature = "tokio-runtime"), target_arch = "wasm32")))]
+async fn spawn_pdf_blocking<F, T>(work: F) -> Result<T>
+where
+    F: FnOnce() -> Result<T>,
+{
+    work()
+}
+
+#[cfg(feature = "pdf")]
+fn extract_native_blocking(
+    content: Vec<u8>,
+    config: ExtractionConfig,
+    #[cfg(feature = "layout-detection")] layout_images: Option<Vec<image::RgbImage>>,
+    #[cfg(feature = "layout-detection")] layout_results: Option<Vec<crate::pdf::structure::types::PageLayoutResult>>,
+    #[cfg(feature = "layout-detection")] layout_hints: Option<Vec<Vec<crate::pdf::structure::types::LayoutHint>>>,
+    #[cfg(feature = "layout-detection")] layout_acceleration_override: Option<
+        crate::core::config::acceleration::AccelerationConfig,
+    >,
+) -> Result<NativeBlockingOutput> {
+    ensure_pdf_not_cancelled(&config)?;
+    let passwords = config
+        .pdf_options
+        .as_ref()
+        .and_then(|options| options.passwords.as_deref())
+        .unwrap_or(&[]);
+    let raw_compatibility_signal = raw_pdf_needs_lopdf_compatibility_pass(&content);
+    let compatibility_data = raw_compatibility_signal.then(|| extract_lopdf_compatibility_data(&content));
+    let mut native_document = crate::pdf::native::NativeDocument::open_bytes_with_passwords(&content, passwords)?;
+
+    let compatibility_data = match compatibility_data {
+        Some(data) => Some(data),
+        None if parsed_pdf_needs_lopdf_compatibility_pass(&native_document) => {
+            drop(native_document);
+            let data = extract_lopdf_compatibility_data(&content);
+            native_document = crate::pdf::native::NativeDocument::open_bytes_with_passwords(&content, passwords)?;
+            Some(data)
+        }
+        None => None,
+    };
+    let (outline_entries, bookmark_uris, pdf_revisions) = compatibility_data.unwrap_or_default();
+    ensure_pdf_not_cancelled(&config)?;
+    let diagrams = if wants_dot_output(&config) {
+        crate::extraction::diagram::pdf::recover(&mut native_document)
+    } else {
+        Vec::new()
+    };
+    let extraction = extract_all_from_native_document(
+        native_document,
+        &config,
+        &outline_entries,
+        #[cfg(feature = "layout-detection")]
+        layout_hints.as_deref(),
+        #[cfg(not(feature = "layout-detection"))]
+        None,
+        #[cfg(feature = "layout-detection")]
+        layout_images.as_deref(),
+        #[cfg(not(feature = "layout-detection"))]
+        None,
+        #[cfg(feature = "layout-detection")]
+        layout_results.as_deref(),
+        #[cfg(not(feature = "layout-detection"))]
+        None,
+        #[cfg(feature = "layout-detection")]
+        layout_acceleration_override.as_ref(),
+    )?;
+    ensure_pdf_not_cancelled(&config)?;
+
+    Ok(NativeBlockingOutput {
+        extraction,
+        bookmark_uris,
+        pdf_revisions,
+        diagrams,
+        #[cfg(feature = "layout-detection")]
+        layout_images,
+        #[cfg(feature = "layout-detection")]
+        layout_hints,
+        #[cfg(feature = "layout-detection")]
+        layout_acceleration_override,
+    })
+}
+
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PdfDocumentOrigin {
@@ -1951,46 +2069,32 @@ impl PdfExtractor {
             markdown_layout_glyph_drop_warnings,
         ) = layout_runner::maybe_run_layout_for_markdown(content, config).await;
 
-        #[cfg(all(feature = "pdf", feature = "layout-detection"))]
-        let layout_hints: Option<&[Vec<crate::pdf::structure::types::LayoutHint>]> = markdown_layout_hints.as_deref();
-        #[cfg(not(feature = "layout-detection"))]
-        let layout_hints: Option<&[Vec<crate::pdf::structure::types::LayoutHint>]> = None;
-
-        let passwords = config
-            .pdf_options
-            .as_ref()
-            .and_then(|options| options.passwords.as_deref())
-            .unwrap_or(&[]);
-        let raw_compatibility_signal = raw_pdf_needs_lopdf_compatibility_pass(content);
-        let compatibility_data = raw_compatibility_signal.then(|| extract_lopdf_compatibility_data(content));
-        let mut native_document = crate::pdf::native::NativeDocument::open_bytes_with_passwords(content, passwords)?;
-
-        let compatibility_data = match compatibility_data {
-            Some(data) => Some(data),
-            None if parsed_pdf_needs_lopdf_compatibility_pass(&native_document) => {
-                // Avoid holding both parser object graphs at once. Compressed
-                // catalog outlines are rare, so reopen xberg_native_pdf for this path. ~keep
-                drop(native_document);
-                let data = extract_lopdf_compatibility_data(content);
-                native_document = crate::pdf::native::NativeDocument::open_bytes_with_passwords(content, passwords)?;
-                Some(data)
-            }
-            None => None,
-        };
-        let (outline_entries, bookmark_uris, pdf_revisions) = compatibility_data.unwrap_or_default();
-
-        // Recovered before the document is handed on, which is the last point
-        // it is still borrowable. Pages that draw nothing graph-shaped cost one
-        // path parse and stop there, and a page that does still pays for a
-        // second full text pass on top of the one this extractor already runs.
-        // Skipped outright unless the caller actually asked for DOT output —
-        // every other renderer discards the result, so an ordinary ruled
-        // report must not pay for it.
-        let diagrams = if wants_dot_output(config) {
-            crate::extraction::diagram::pdf::recover(&mut native_document)
-        } else {
-            Vec::new()
-        };
+        let blocking_content = content.to_vec();
+        let blocking_config = config.clone();
+        let native_output = spawn_pdf_blocking(move || {
+            extract_native_blocking(
+                blocking_content,
+                blocking_config,
+                #[cfg(feature = "layout-detection")]
+                markdown_layout_images,
+                #[cfg(feature = "layout-detection")]
+                markdown_layout_results,
+                #[cfg(feature = "layout-detection")]
+                markdown_layout_hints,
+                #[cfg(feature = "layout-detection")]
+                markdown_layout_acceleration_override,
+            )
+        })
+        .await?;
+        let bookmark_uris = native_output.bookmark_uris;
+        let pdf_revisions = native_output.pdf_revisions;
+        let diagrams = native_output.diagrams;
+        #[cfg(feature = "layout-detection")]
+        let mut markdown_layout_images = native_output.layout_images;
+        #[cfg(feature = "layout-detection")]
+        let markdown_layout_hints = native_output.layout_hints;
+        #[cfg(feature = "layout-detection")]
+        let mut markdown_layout_acceleration_override = native_output.layout_acceleration_override;
 
         #[allow(unused_variables, unused_mut)]
         let (
@@ -2008,22 +2112,7 @@ impl PdfExtractor {
             mut pdf_extraction_warnings,
             pdf_page_labels,
             pdf_page_coordinate_frames,
-        ) = extract_all_from_native_document(
-            native_document,
-            config,
-            &outline_entries,
-            layout_hints,
-            #[cfg(feature = "layout-detection")]
-            markdown_layout_images.as_deref(),
-            #[cfg(not(feature = "layout-detection"))]
-            None,
-            #[cfg(feature = "layout-detection")]
-            markdown_layout_results.as_deref(),
-            #[cfg(not(feature = "layout-detection"))]
-            None,
-            #[cfg(feature = "layout-detection")]
-            markdown_layout_acceleration_override.as_ref(),
-        )?;
+        ) = native_output.extraction;
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         if config.pdf_options.as_ref().is_some_and(|p| p.ocr_inline_images)
@@ -2920,13 +3009,34 @@ impl PdfExtractor {
 
         if let Some(imgs) = images {
             // The OCR path has its own guarded injection block below (see the `#[cfg(feature = "ocr")]`
-            let inject_placeholders = config.images.as_ref().is_some_and(|c| c.inject_placeholders);
-            let document_has_image_elements = doc
-                .elements
-                .iter()
-                .any(|element| matches!(element.kind, ElementKind::Image { .. }));
-            if !document_has_image_elements && inject_placeholders {
+            let image_anchor = extraction::image_anchor(config);
+            let document_has_image_elements = doc.elements.iter().any(|element| {
+                #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+                if element.image_ocr_text_anchor_index().is_some() {
+                    return true;
+                }
+                matches!(element.kind, ElementKind::Image { .. })
+            });
+            if !document_has_image_elements && image_anchor != extraction::ImageAnchor::None {
                 for (idx, img) in imgs.iter().enumerate() {
+                    // Page OCR already read the picture as part of the page, so the picture's
+                    // own OCR text is not rendered there: no anchor, and a placeholder without
+                    // the text. The OCR merge of a structured document does the same for the
+                    // pages it replaces. ~keep
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+                    let page_text_is_from_ocr = extraction_method == ExtractionMethod::Ocr
+                        || img.page_number.is_some_and(|page| {
+                            ocr_results_map
+                                .as_ref()
+                                .is_some_and(|results| results.contains_key(&page))
+                        });
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+                    if image_anchor == extraction::ImageAnchor::OcrTextOnly {
+                        if !page_text_is_from_ocr {
+                            doc.push_element(InternalElement::image_ocr_text_anchor(idx as u32, img.page_number));
+                        }
+                        continue;
+                    }
                     let mut elem = InternalElement::text(
                         ElementKind::Image {
                             image_index: idx as u32,
@@ -2935,6 +3045,10 @@ impl PdfExtractor {
                         0,
                     );
                     elem.page = img.page_number;
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+                    if page_text_is_from_ocr {
+                        elem.suppress_image_ocr_rendering();
+                    }
                     doc.push_element(elem);
                 }
             }
@@ -3202,6 +3316,37 @@ mod tests {
     use crate::core::config::OcrQualityThresholds;
     #[cfg(all(feature = "pdf", feature = "ocr"))]
     use serial_test::serial;
+
+    #[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    #[tokio::test(flavor = "current_thread")]
+    async fn native_pdf_blocking_phase_does_not_starve_the_timeout_driver() {
+        let work = spawn_pdf_blocking(|| {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            Ok::<_, crate::XbergError>(())
+        });
+
+        let result = tokio::time::timeout(std::time::Duration::from_millis(10), work).await;
+
+        assert!(
+            result.is_err(),
+            "the timeout must fire while native PDF work is still running"
+        );
+    }
+
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn native_pdf_blocking_phase_stops_when_cancelled() {
+        let token = crate::cancellation::CancellationToken::new();
+        token.cancel();
+        let config = ExtractionConfig {
+            cancel_token: Some(token),
+            ..Default::default()
+        };
+
+        let error = ensure_pdf_not_cancelled(&config).expect_err("cancelled native PDF work must stop");
+
+        assert!(matches!(error, crate::XbergError::Cancelled));
+    }
 
     #[cfg(feature = "pdf")]
     #[test]

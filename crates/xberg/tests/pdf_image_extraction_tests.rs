@@ -1315,12 +1315,9 @@ fn test_chunk_image_indices_empty_when_images_disabled() {
 /// `images` must come back empty and page `image_indices` must stay consistent (empty)
 /// with it, while the document's own extracted text still comes through in `content`.
 ///
-/// `images: None` never routes embedded-image OCR text into `content` for PDF, with or
-/// without this fix -- `inject_placeholders` (the only way a PDF gets `ElementKind::Image`
-/// elements for `render_plain`/`render_markdown` to read `ocr_result` off) reads
-/// `config.images.as_ref().is_some_and(...)`, which is `false` when `images` itself is
-/// `None`. See `test_ocr_only_config_with_placeholders_preserves_ocr_text` below for the
-/// config shape where that text does surface, and where this fix must not swallow it. ~keep
+/// The OCR text of the picture is in `content` all the same: a picture that is sent to OCR
+/// has an element that holds its text whether or not an `images` block asks for a
+/// placeholder (GH#2068). ~keep
 #[cfg(feature = "ocr")]
 #[test]
 fn test_ocr_only_config_returns_no_images() {
@@ -1414,6 +1411,11 @@ fn test_ocr_only_config_returns_no_images() {
     assert!(
         !result.content.trim().is_empty(),
         "document content must still be extracted when images are dropped"
+    );
+    assert!(
+        result.content.contains(SENTINEL_OCR_TEXT),
+        "the OCR text of the picture must be in content without an `images` block; got content:\n{}",
+        result.content
     );
 }
 

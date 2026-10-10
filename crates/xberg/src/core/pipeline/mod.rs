@@ -422,8 +422,7 @@ async fn run_pipeline_impl(
     config: &ExtractionConfig,
     processor_source: ProcessorSource,
 ) -> Result<ExtractedDocument> {
-    doc.ocr_text_only = config.images.as_ref().map(|i| i.ocr_text_only).unwrap_or(false);
-    doc.append_ocr_text = config.images.as_ref().map(|i| i.append_ocr_text).unwrap_or(false);
+    (doc.ocr_text_only, doc.append_ocr_text) = image_ocr_text_rendering(config);
     doc.escape_markdown = config.escape_markdown;
     doc.include_watermarks = config
         .content_filter
@@ -435,9 +434,6 @@ async fn run_pipeline_impl(
         .as_ref()
         .filter(|p| p.insert_page_markers)
         .map(|p| p.marker_format.clone());
-    if let Some(format) = doc.page_marker_format.clone() {
-        page_markers::inject_page_marker_elements(&mut doc, &format);
-    }
 
     // Calls `runs_ocr_on_embedded_images` rather than re-deriving it: `needs_image_data`
     // (the READ gate a container consults before it reads an embedded image's bytes at all)
@@ -473,6 +469,15 @@ async fn run_pipeline_impl(
                 }
             }
         }
+    }
+
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+    fold_embedded_image_ocr_text(&mut doc);
+
+    // After the fold: a marker follows each page break, and the fold removes the page break
+    // of a page that held only a picture with no text. ~keep
+    if let Some(format) = doc.page_marker_format.clone() {
+        page_markers::inject_page_marker_elements(&mut doc, &format);
     }
 
     replace_embedded_image_markdown_with_ocr(&mut doc);
@@ -750,8 +755,7 @@ async fn run_pipeline_impl(
 ))]
 #[cfg_attr(alef, alef(skip))]
 pub fn run_pipeline_sync(mut doc: InternalDocument, config: &ExtractionConfig) -> Result<ExtractedDocument> {
-    doc.ocr_text_only = config.images.as_ref().map(|i| i.ocr_text_only).unwrap_or(false);
-    doc.append_ocr_text = config.images.as_ref().map(|i| i.append_ocr_text).unwrap_or(false);
+    (doc.ocr_text_only, doc.append_ocr_text) = image_ocr_text_rendering(config);
     doc.escape_markdown = config.escape_markdown;
     doc.include_watermarks = config
         .content_filter
@@ -1151,10 +1155,155 @@ fn apply_element_transform(result: &mut ExtractedDocument, config: &ExtractionCo
     }
 }
 
+/// Put the OCR text of each embedded picture where every later step reads it.
+///
+/// An OCR text anchor (`InternalElement::image_ocr_text_anchor`) becomes a paragraph that
+/// holds the text, at the same position. With no text it is removed, together with a page
+/// break that only it gave a reason for. The text of a picture with an anchor or an image
+/// element is also added to the prebuilt content of its page: an extractor writes those
+/// pages before the pictures are sent to OCR. Runs before any renderer, so `content`, the
+/// page content and the chunks all come from the same elements (GH#2068). ~keep
+#[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+fn fold_embedded_image_ocr_text(doc: &mut InternalDocument) {
+    use crate::types::internal::{ElementKind, InternalElement, RelationshipTarget};
+
+    // A paragraph with a page tag in a document whose other elements have none would be the
+    // only member of its page, and a formatted page is rendered from its members alone. ~keep
+    let pages_are_tagged = doc
+        .elements
+        .iter()
+        .any(|element| element.page.is_some() && element.image_ocr_text_anchor_index().is_none());
+
+    let mut keep = vec![true; doc.elements.len()];
+    for (index, kept) in keep.iter_mut().enumerate() {
+        let element = &doc.elements[index];
+        let anchored_image = element.image_ocr_text_anchor_index();
+        let image_index = match (anchored_image, element.kind) {
+            (Some(image_index), _) | (None, ElementKind::Image { image_index }) => image_index,
+            _ => continue,
+        };
+        let (page_number, depth) = (element.page, element.depth);
+        let text = doc
+            .images
+            .get(image_index as usize)
+            .and_then(|image| image.ocr_result.as_ref())
+            .map(|result| result.content.as_str())
+            .filter(|content| !content.is_empty() && element.should_render_image_ocr());
+
+        if let (Some(text), Some(page_number)) = (text, page_number)
+            && let Some(page) = doc
+                .prebuilt_pages
+                .as_mut()
+                .and_then(|pages| pages.iter_mut().find(|page| page.page_number == page_number))
+        {
+            if !page.content.is_empty() {
+                page.content.push_str("\n\n");
+            }
+            page.content.push_str(text);
+        }
+
+        if anchored_image.is_none() {
+            continue;
+        }
+        let Some(text) = text else {
+            *kept = false;
+            continue;
+        };
+        let mut paragraph = InternalElement::text(ElementKind::Paragraph, text, depth);
+        paragraph.page = page_number.filter(|_| pages_are_tagged);
+        doc.elements[index] = paragraph.with_index(index as u32);
+    }
+
+    // A run of elements between two page breaks that is empty only because its anchors were
+    // removed takes one of the two breaks with it: without the picture, the extractor would
+    // not have counted that page as content. ~keep
+    let run_ends: Vec<usize> = doc
+        .elements
+        .iter()
+        .enumerate()
+        .filter(|(_, element)| element.kind == ElementKind::PageBreak)
+        .map(|(index, _)| index)
+        .chain(std::iter::once(doc.elements.len()))
+        .collect();
+    let mut run_start = 0;
+    for boundary in run_ends {
+        if run_start < boundary && keep[run_start..boundary].iter().all(|kept| !kept) {
+            if run_start > 0 {
+                keep[run_start - 1] = false;
+            } else if boundary < doc.elements.len() {
+                keep[boundary] = false;
+            }
+        }
+        run_start = boundary + 1;
+    }
+
+    if keep.iter().all(|kept| *kept) {
+        return;
+    }
+    // `Relationship` holds raw positions in `elements`, so a removal moves every later one. ~keep
+    let mut next_index = 0u32;
+    let old_to_new: Vec<Option<u32>> = keep
+        .iter()
+        .map(|kept| {
+            kept.then(|| {
+                next_index += 1;
+                next_index - 1
+            })
+        })
+        .collect();
+    let mut kept = keep.iter().copied();
+    doc.elements.retain(|_| kept.next().unwrap_or(true));
+    doc.relationships.retain_mut(|relationship| {
+        let Some(source) = old_to_new.get(relationship.source as usize).copied().flatten() else {
+            return false;
+        };
+        relationship.source = source;
+        if let RelationshipTarget::Index(target) = &mut relationship.target {
+            let Some(remapped) = old_to_new.get(*target as usize).copied().flatten() else {
+                return false;
+            };
+            *target = remapped;
+        }
+        true
+    });
+}
+
+/// How the OCR text of a picture is rendered: `(ocr_text_only, append_ocr_text)`.
+///
+/// A missing `images` block reads as the default block, the same way the gate that sends
+/// the pictures to OCR reads it. ~keep
+fn image_ocr_text_rendering(config: &ExtractionConfig) -> (bool, bool) {
+    let images = config.images.clone().unwrap_or_default();
+    (images.ocr_text_only, images.append_ocr_text)
+}
+
+/// Positions in `doc.images` of the pictures that no image element shows.
+///
+/// An inline `![alt](url)` placeholder pairs with these, in order. A picture with an image
+/// element gets its OCR text from the renderer, and pairing it here too would add the text
+/// a second time. ~keep
+fn images_without_an_element(doc: &InternalDocument) -> Vec<usize> {
+    let mut has_element = vec![false; doc.images.len()];
+    for element in &doc.elements {
+        if let crate::types::internal::ElementKind::Image { image_index } = element.kind
+            && let Some(flag) = has_element.get_mut(image_index as usize)
+        {
+            *flag = true;
+        }
+    }
+    (0..doc.images.len())
+        .filter(|&position| !has_element[position])
+        .collect()
+}
+
 /// Replace inline markdown image references with OCR text for formats (e.g. PPTX)
 /// that bake placeholders into paragraph text rather than using `ElementKind::Image`.
 fn replace_embedded_image_markdown_with_ocr(doc: &mut InternalDocument) {
     if !doc.ocr_text_only || doc.images.is_empty() {
+        return;
+    }
+    let inline_images = images_without_an_element(doc);
+    if inline_images.is_empty() {
         return;
     }
 
@@ -1167,7 +1316,9 @@ fn replace_embedded_image_markdown_with_ocr(doc: &mut InternalDocument) {
         if !is_markdown_image_reference(&elem.text) {
             continue;
         }
-        if let Some(img) = doc.images.get(image_idx)
+        if let Some(img) = inline_images
+            .get(image_idx)
+            .and_then(|&position| doc.images.get(position))
             && let Some(ocr) = &img.ocr_result
             && !ocr.content.is_empty()
         {
@@ -1184,7 +1335,9 @@ fn replace_embedded_image_markdown_with_ocr(doc: &mut InternalDocument) {
                 if !is_markdown_image_reference(cell) {
                     continue;
                 }
-                if let Some(img) = doc.images.get(image_idx)
+                if let Some(img) = inline_images
+                    .get(image_idx)
+                    .and_then(|&position| doc.images.get(position))
                     && let Some(ocr) = &img.ocr_result
                     && !ocr.content.is_empty()
                 {
@@ -1205,6 +1358,10 @@ fn append_embedded_image_ocr_text(doc: &mut InternalDocument) {
     if doc.ocr_text_only || !doc.append_ocr_text || doc.images.is_empty() {
         return;
     }
+    let inline_images = images_without_an_element(doc);
+    if inline_images.is_empty() {
+        return;
+    }
 
     let mut image_idx = 0usize;
     let mut new_elements = Vec::with_capacity(doc.elements.len() * 2);
@@ -1215,15 +1372,18 @@ fn append_embedded_image_ocr_text(doc: &mut InternalDocument) {
         if matches!(elem.kind, crate::types::internal::ElementKind::Paragraph)
             && is_markdown_image_reference(&elem.text)
         {
-            if let Some(img) = doc.images.get(image_idx)
+            if let Some(img) = inline_images
+                .get(image_idx)
+                .and_then(|&position| doc.images.get(position))
                 && let Some(ocr) = &img.ocr_result
                 && !ocr.content.is_empty()
             {
-                let ocr_elem = crate::types::internal::InternalElement::text(
+                let mut ocr_elem = crate::types::internal::InternalElement::text(
                     crate::types::internal::ElementKind::Paragraph,
                     ocr.content.clone(),
-                    0,
+                    elem.depth,
                 );
+                ocr_elem.page = elem.page;
                 new_elements.push(ocr_elem);
             }
             image_idx += 1;
@@ -1238,7 +1398,9 @@ fn append_embedded_image_ocr_text(doc: &mut InternalDocument) {
                 if !is_markdown_image_reference(cell) {
                     continue;
                 }
-                if let Some(img) = doc.images.get(image_idx)
+                if let Some(img) = inline_images
+                    .get(image_idx)
+                    .and_then(|&position| doc.images.get(position))
                     && let Some(ocr) = &img.ocr_result
                     && !ocr.content.is_empty()
                 {
@@ -1460,23 +1622,50 @@ mod issue_219_sync_pipeline_ocr_text_options_tests {
     }
 
     #[test]
-    fn default_config_does_not_touch_embedded_image_markdown_on_sync_pipeline() {
+    fn default_config_appends_after_embedded_image_markdown_on_sync_pipeline() {
+        let mut doc = InternalDocument::new("pptx");
+        doc.push_element(InternalElement::text(ElementKind::Paragraph, "![img](embedded)", 0));
+        doc.images = vec![image_with_ocr_text("Recognized OCR text")];
+
+        let result = run_pipeline_sync(doc, &ExtractionConfig::default()).unwrap();
+
+        assert!(
+            result.content.contains("![img]"),
+            "the default config must keep the markdown placeholder, got: {:?}",
+            result.content
+        );
+        assert_eq!(
+            result.content.matches("Recognized OCR text").count(),
+            1,
+            "the default config must append the OCR text one time, got: {:?}",
+            result.content
+        );
+    }
+
+    #[test]
+    fn append_ocr_text_off_does_not_touch_embedded_image_markdown_on_sync_pipeline() {
         let mut doc = InternalDocument::new("pptx");
         doc.push_element(InternalElement::text(ElementKind::Paragraph, "![img](embedded)", 0));
         doc.images = vec![image_with_ocr_text("Should not appear")];
 
-        let config = ExtractionConfig::default();
+        let config = ExtractionConfig {
+            images: Some(ImageExtractionConfig {
+                append_ocr_text: false,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
 
         let result = run_pipeline_sync(doc, &config).unwrap();
 
         assert!(
             result.content.contains("![img]"),
-            "default config must leave the markdown placeholder untouched, got: {:?}",
+            "append_ocr_text=false must leave the markdown placeholder untouched, got: {:?}",
             result.content
         );
         assert!(
             !result.content.contains("Should not appear"),
-            "default config must not inject OCR text, got: {:?}",
+            "append_ocr_text=false must not inject OCR text, got: {:?}",
             result.content
         );
     }

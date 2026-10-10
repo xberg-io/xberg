@@ -2115,6 +2115,245 @@ fn test_append_ocr_text_for_pptx_images() {
     assert!(rendered.contains("OCR text here"));
 }
 
+/// How the OCR text of a picture reaches Markdown: after the placeholder by default, for every
+/// source format, and one time for a picture that has an inline placeholder and an image element.
+#[cfg(feature = "tokio-runtime")]
+mod picture_ocr_text_rendering_tests {
+    use super::{
+        append_embedded_image_ocr_text, image_ocr_text_rendering, replace_embedded_image_markdown_with_ocr,
+        run_pipeline,
+    };
+    use crate::core::config::{ExtractionConfig, ImageExtractionConfig, OutputFormat};
+    use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+    use crate::types::{ExtractedDocument, ExtractedImage};
+    use serial_test::serial;
+
+    const PICTURE_WORDS: &str = "CRATE 17 KEEP DRY";
+    const OTHER_PICTURE_WORDS: &str = "PALLET 4 THIS SIDE UP";
+    const INLINE_PLACEHOLDER: &str = "![label](label.png)";
+
+    fn picture(ocr_text: &str) -> ExtractedImage {
+        ExtractedImage {
+            ocr_result: Some(Box::new(ExtractedDocument {
+                content: ocr_text.to_string(),
+                ..Default::default()
+            })),
+            ..Default::default()
+        }
+    }
+
+    fn image_element(image_index: u32) -> InternalElement {
+        InternalElement::text(ElementKind::Image { image_index }, "", 0)
+    }
+
+    /// A document as the DOCX extractor makes it: one paragraph and one image element.
+    fn document_with_a_picture_element() -> InternalDocument {
+        let mut document = InternalDocument::new("docx");
+        document.push_element(InternalElement::text(ElementKind::Paragraph, "Stock list.", 0));
+        document.push_element(image_element(0));
+        document.images = vec![picture(PICTURE_WORDS)];
+        document
+    }
+
+    fn markdown_config(images: Option<ImageExtractionConfig>) -> ExtractionConfig {
+        ExtractionConfig {
+            output_format: OutputFormat::Markdown,
+            images,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_missing_images_block_reads_as_the_default_block() {
+        let default_block = ExtractionConfig {
+            images: Some(ImageExtractionConfig::default()),
+            ..Default::default()
+        };
+        assert_eq!(image_ocr_text_rendering(&ExtractionConfig::default()), (false, true));
+        assert_eq!(image_ocr_text_rendering(&default_block), (false, true));
+
+        let both_changed = ExtractionConfig {
+            images: Some(ImageExtractionConfig {
+                ocr_text_only: true,
+                append_ocr_text: false,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert_eq!(image_ocr_text_rendering(&both_changed), (true, false));
+    }
+
+    #[test]
+    fn an_images_block_read_without_the_option_has_it_on() {
+        let images: ImageExtractionConfig = serde_json::from_str("{}").expect("an empty images block is valid");
+        assert!(images.append_ocr_text);
+        assert!(!images.ocr_text_only);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn markdown_has_the_picture_words_after_the_placeholder_by_default() {
+        for (images, case) in [
+            (None, "no images block"),
+            (Some(ImageExtractionConfig::default()), "default images block"),
+        ] {
+            let result = run_pipeline(document_with_a_picture_element(), &markdown_config(images))
+                .await
+                .unwrap();
+
+            let placeholder = result
+                .content
+                .find("![")
+                .unwrap_or_else(|| panic!("{case}: {:?}", result.content));
+            let words = result
+                .content
+                .find(PICTURE_WORDS)
+                .unwrap_or_else(|| panic!("{case}: {:?}", result.content));
+            assert!(placeholder < words, "{case}: {:?}", result.content);
+            assert_eq!(
+                result.content.matches(PICTURE_WORDS).count(),
+                1,
+                "{case}: {:?}",
+                result.content
+            );
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn markdown_has_the_placeholder_alone_when_append_ocr_text_is_off() {
+        let config = markdown_config(Some(ImageExtractionConfig {
+            append_ocr_text: false,
+            ..Default::default()
+        }));
+
+        let result = run_pipeline(document_with_a_picture_element(), &config).await.unwrap();
+
+        assert!(result.content.contains("!["), "content: {:?}", result.content);
+        assert_eq!(
+            result.content.matches(PICTURE_WORDS).count(),
+            0,
+            "content: {:?}",
+            result.content
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn markdown_has_the_words_and_no_placeholder_with_ocr_text_only() {
+        let config = markdown_config(Some(ImageExtractionConfig {
+            ocr_text_only: true,
+            ..Default::default()
+        }));
+
+        let result = run_pipeline(document_with_a_picture_element(), &config).await.unwrap();
+
+        assert!(!result.content.contains("!["), "content: {:?}", result.content);
+        assert_eq!(
+            result.content.matches(PICTURE_WORDS).count(),
+            1,
+            "content: {:?}",
+            result.content
+        );
+    }
+
+    /// The HTML extractor makes an inline placeholder and an image element for one picture.
+    #[tokio::test]
+    #[serial]
+    async fn a_picture_with_an_inline_placeholder_and_an_element_gives_its_words_once() {
+        for format in [OutputFormat::Plain, OutputFormat::Markdown, OutputFormat::Djot] {
+            for ocr_text_only in [false, true] {
+                let mut document = InternalDocument::new("html");
+                document.push_element(InternalElement::text(ElementKind::Paragraph, INLINE_PLACEHOLDER, 0));
+                document.push_element(image_element(0));
+                document.images = vec![picture(PICTURE_WORDS)];
+                let config = ExtractionConfig {
+                    output_format: format.clone(),
+                    images: Some(ImageExtractionConfig {
+                        ocr_text_only,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                };
+
+                let result = run_pipeline(document, &config).await.unwrap();
+
+                assert_eq!(
+                    result.content.matches(PICTURE_WORDS).count(),
+                    1,
+                    "{format:?}, ocr_text_only={ocr_text_only}: {:?}",
+                    result.content
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_inline_placeholder_pairs_with_the_picture_that_has_no_element() {
+        let document = || {
+            let mut document = InternalDocument::new("pptx");
+            document.push_element(image_element(0));
+            document.push_element(InternalElement::text(ElementKind::Paragraph, INLINE_PLACEHOLDER, 0));
+            document.images = vec![picture(PICTURE_WORDS), picture(OTHER_PICTURE_WORDS)];
+            document
+        };
+
+        let mut appended = document();
+        appended.append_ocr_text = true;
+        append_embedded_image_ocr_text(&mut appended);
+        let texts: Vec<&str> = appended.elements.iter().map(|element| element.text.as_str()).collect();
+        assert_eq!(texts, ["", INLINE_PLACEHOLDER, OTHER_PICTURE_WORDS]);
+
+        let mut replaced = document();
+        replaced.ocr_text_only = true;
+        replace_embedded_image_markdown_with_ocr(&mut replaced);
+        let texts: Vec<&str> = replaced.elements.iter().map(|element| element.text.as_str()).collect();
+        assert_eq!(texts, ["", OTHER_PICTURE_WORDS]);
+    }
+
+    #[test]
+    fn appended_inline_picture_text_stays_on_the_placeholders_page() {
+        let mut document = InternalDocument::new("pptx");
+        document.append_ocr_text = true;
+        document.push_element(InternalElement::text(ElementKind::Paragraph, INLINE_PLACEHOLDER, 3).with_page(2));
+        document.images = vec![picture(PICTURE_WORDS)];
+
+        append_embedded_image_ocr_text(&mut document);
+
+        assert_eq!(document.elements[1].page, Some(2));
+        assert_eq!(document.elements[1].depth, 3);
+        let result = crate::extraction::derive::derive_extraction_result(document, false, OutputFormat::Markdown);
+        let pages = result.pages.expect("the tagged page is derived");
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].page_number, 2);
+        assert_eq!(pages[0].content.matches(PICTURE_WORDS).count(), 1);
+    }
+
+    #[test]
+    fn an_inline_placeholder_in_a_table_cell_does_not_take_the_words_of_a_picture_with_an_element() {
+        let document = || {
+            let mut document = InternalDocument::new("html");
+            document.push_element(image_element(0));
+            document.images = vec![picture(PICTURE_WORDS)];
+            document.tables.push(crate::types::Table {
+                cells: vec![vec![INLINE_PLACEHOLDER.to_string()]],
+                ..Default::default()
+            });
+            document
+        };
+
+        let mut appended = document();
+        appended.append_ocr_text = true;
+        append_embedded_image_ocr_text(&mut appended);
+        assert_eq!(appended.tables[0].cells[0][0], INLINE_PLACEHOLDER);
+
+        let mut replaced = document();
+        replaced.ocr_text_only = true;
+        replace_embedded_image_markdown_with_ocr(&mut replaced);
+        assert_eq!(replaced.tables[0].cells[0][0], INLINE_PLACEHOLDER);
+    }
+}
+
 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
 mod full_page_image_ocr_tests {
     use bytes::Bytes;
@@ -2705,4 +2944,374 @@ fn embedded_image_ocr_gate_has_no_second_copy() {
         PIPELINE_SOURCE.contains("config.runs_ocr_on_embedded_images()"),
         "core/pipeline/mod.rs must still gate embedded-image OCR on runs_ocr_on_embedded_images()"
     );
+}
+
+/// `fold_embedded_image_ocr_text`: the OCR text of an embedded picture enters the element list
+/// and the prebuilt page content before any renderer runs.
+#[cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+mod embedded_image_ocr_text_fold_tests {
+    use super::fold_embedded_image_ocr_text;
+    use crate::types::internal::{
+        ElementKind, InternalDocument, InternalElement, Relationship, RelationshipKind, RelationshipTarget,
+    };
+    use crate::types::page::PageContent;
+    use crate::types::{ExtractedDocument, ExtractedImage};
+
+    const NATIVE_TEXT: &str = "Stock list for the north depot.";
+    const PICTURE_WORDS: &str = "CRATE 17 KEEP DRY";
+
+    fn picture(page_number: u32, ocr_text: Option<&str>) -> ExtractedImage {
+        ExtractedImage {
+            page_number: Some(page_number),
+            ocr_result: ocr_text.map(|text| {
+                Box::new(ExtractedDocument {
+                    content: text.to_string(),
+                    ..Default::default()
+                })
+            }),
+            ..Default::default()
+        }
+    }
+
+    fn paragraph(text: &str, page_number: Option<u32>) -> InternalElement {
+        let mut element = InternalElement::text(ElementKind::Paragraph, text, 0);
+        element.page = page_number;
+        element
+    }
+
+    fn image_element(image_index: u32, page_number: u32) -> InternalElement {
+        InternalElement::text(ElementKind::Image { image_index }, "", 0).with_page(page_number)
+    }
+
+    fn text_only_anchor(image_index: u32, page_number: u32) -> InternalElement {
+        InternalElement::image_ocr_text_anchor(image_index, Some(page_number))
+    }
+
+    fn page_break() -> InternalElement {
+        InternalElement::text(ElementKind::PageBreak, "", 0)
+    }
+
+    fn page(page_number: u32, content: &str) -> PageContent {
+        PageContent {
+            page_number,
+            content: content.to_string(),
+            tables: Vec::new(),
+            image_indices: Vec::new(),
+            image_preprocessing: None,
+            hierarchy: None,
+            is_blank: None,
+            layout_regions: None,
+            speaker_notes: None,
+            section_name: None,
+            sheet_name: None,
+            ocr_confidence: None,
+            native_content: None,
+        }
+    }
+
+    /// One page of native text with one picture, the picture's element built by `anchor`.
+    fn one_page_document(anchor: InternalElement, ocr_text: Option<&str>) -> InternalDocument {
+        let mut document = InternalDocument::new("pdf");
+        document.elements = vec![paragraph(NATIVE_TEXT, Some(1)), anchor];
+        document.images = vec![picture(1, ocr_text)];
+        document.prebuilt_pages = Some(vec![page(1, NATIVE_TEXT)]);
+        document
+    }
+
+    fn page_contents(document: &InternalDocument) -> Vec<&str> {
+        document
+            .prebuilt_pages
+            .as_ref()
+            .expect("the document has prebuilt pages")
+            .iter()
+            .map(|page| page.content.as_str())
+            .collect()
+    }
+
+    fn kinds_and_texts(document: &InternalDocument) -> Vec<(ElementKind, &str)> {
+        document
+            .elements
+            .iter()
+            .map(|element| (element.kind, element.text.as_str()))
+            .collect()
+    }
+
+    #[test]
+    fn a_text_only_anchor_with_text_becomes_one_paragraph_on_its_page() {
+        let mut document = one_page_document(text_only_anchor(0, 1), Some(PICTURE_WORDS));
+
+        fold_embedded_image_ocr_text(&mut document);
+
+        assert_eq!(
+            kinds_and_texts(&document),
+            vec![
+                (ElementKind::Paragraph, NATIVE_TEXT),
+                (ElementKind::Paragraph, PICTURE_WORDS)
+            ]
+        );
+        assert_eq!(document.elements[1].page, Some(1));
+        assert_eq!(document.elements[1].image_ocr_text_anchor_index(), None);
+        assert_eq!(document.elements[1].public_attributes(), None);
+        assert_eq!(
+            page_contents(&document),
+            vec![format!("{NATIVE_TEXT}\n\n{PICTURE_WORDS}")]
+        );
+    }
+
+    #[test]
+    fn a_text_only_anchor_without_text_is_removed() {
+        for ocr_text in [None, Some("")] {
+            let mut document = one_page_document(text_only_anchor(0, 1), ocr_text);
+
+            fold_embedded_image_ocr_text(&mut document);
+
+            assert_eq!(kinds_and_texts(&document), vec![(ElementKind::Paragraph, NATIVE_TEXT)]);
+            assert_eq!(page_contents(&document), vec![NATIVE_TEXT]);
+        }
+    }
+
+    #[test]
+    fn a_placeholder_element_stays_and_its_page_gains_the_text_once() {
+        let mut document = one_page_document(image_element(0, 1), Some(PICTURE_WORDS));
+
+        fold_embedded_image_ocr_text(&mut document);
+
+        assert_eq!(
+            kinds_and_texts(&document),
+            vec![
+                (ElementKind::Paragraph, NATIVE_TEXT),
+                (ElementKind::Image { image_index: 0 }, "")
+            ]
+        );
+        assert_eq!(
+            page_contents(&document),
+            vec![format!("{NATIVE_TEXT}\n\n{PICTURE_WORDS}")]
+        );
+    }
+
+    #[test]
+    fn a_page_with_no_content_gains_the_text_without_a_separator() {
+        let mut document = one_page_document(image_element(0, 1), Some(PICTURE_WORDS));
+        document.prebuilt_pages = Some(vec![page(1, "")]);
+
+        fold_embedded_image_ocr_text(&mut document);
+
+        assert_eq!(page_contents(&document), vec![PICTURE_WORDS]);
+    }
+
+    #[test]
+    fn the_text_goes_to_the_page_of_the_picture_only() {
+        let mut document = one_page_document(text_only_anchor(0, 2), Some(PICTURE_WORDS));
+        document.images = vec![picture(2, Some(PICTURE_WORDS))];
+        document.prebuilt_pages = Some(vec![page(1, NATIVE_TEXT), page(2, "")]);
+
+        fold_embedded_image_ocr_text(&mut document);
+
+        assert_eq!(page_contents(&document), vec![NATIVE_TEXT, PICTURE_WORDS]);
+        assert_eq!(document.elements[1].page, Some(2));
+    }
+
+    #[test]
+    fn a_suppressed_image_element_adds_nothing_to_its_page() {
+        let mut element = image_element(0, 1);
+        element.suppress_image_ocr_rendering();
+        let mut document = one_page_document(element, Some(PICTURE_WORDS));
+
+        fold_embedded_image_ocr_text(&mut document);
+
+        assert_eq!(document.elements.len(), 2, "an image element is never removed");
+        assert_eq!(page_contents(&document), vec![NATIVE_TEXT]);
+    }
+
+    /// A paragraph that only looks like an anchor, with no text and no anchor attribute, stays.
+    #[test]
+    fn an_empty_paragraph_that_is_no_anchor_stays() {
+        let mut document = one_page_document(paragraph("", Some(1)), Some(PICTURE_WORDS));
+
+        fold_embedded_image_ocr_text(&mut document);
+
+        assert_eq!(
+            kinds_and_texts(&document),
+            vec![(ElementKind::Paragraph, NATIVE_TEXT), (ElementKind::Paragraph, "")]
+        );
+        assert_eq!(page_contents(&document), vec![NATIVE_TEXT]);
+    }
+
+    #[test]
+    fn a_removed_anchor_leaves_each_relationship_on_its_elements() {
+        let mut document = InternalDocument::new("pdf");
+        document.elements = vec![
+            paragraph("Figure 1", Some(1)),
+            text_only_anchor(0, 1),
+            paragraph(NATIVE_TEXT, Some(1)),
+            paragraph("See figure 1", Some(1)),
+        ];
+        document.images = vec![picture(1, None)];
+        document.relationships = vec![
+            Relationship {
+                source: 3,
+                target: RelationshipTarget::Index(0),
+                kind: RelationshipKind::InternalLink,
+            },
+            Relationship {
+                source: 0,
+                target: RelationshipTarget::Index(1),
+                kind: RelationshipKind::Caption,
+            },
+            Relationship {
+                source: 0,
+                target: RelationshipTarget::Index(3),
+                kind: RelationshipKind::InternalLink,
+            },
+        ];
+
+        fold_embedded_image_ocr_text(&mut document);
+
+        assert_eq!(document.elements.len(), 3);
+        assert_eq!(
+            document.relationships,
+            vec![
+                Relationship {
+                    source: 2,
+                    target: RelationshipTarget::Index(0),
+                    kind: RelationshipKind::InternalLink,
+                },
+                Relationship {
+                    source: 0,
+                    target: RelationshipTarget::Index(2),
+                    kind: RelationshipKind::InternalLink,
+                },
+            ],
+            "each link moves with its source and its target, and the caption of the removed picture goes with it"
+        );
+        assert_eq!(document.elements[2].text, "See figure 1");
+    }
+
+    #[test]
+    fn a_page_that_held_only_a_removed_anchor_leaves_no_page_break() {
+        let first = paragraph("First page.", Some(1));
+        let last = paragraph("Last page.", Some(3));
+        let cases: Vec<(Vec<InternalElement>, Vec<ElementKind>)> = vec![
+            (
+                vec![
+                    first.clone(),
+                    page_break(),
+                    text_only_anchor(0, 2),
+                    page_break(),
+                    last.clone(),
+                ],
+                vec![ElementKind::Paragraph, ElementKind::PageBreak, ElementKind::Paragraph],
+            ),
+            (
+                vec![text_only_anchor(0, 1), page_break(), last.clone()],
+                vec![ElementKind::Paragraph],
+            ),
+            (
+                vec![first.clone(), page_break(), text_only_anchor(0, 2)],
+                vec![ElementKind::Paragraph],
+            ),
+            (
+                vec![first.clone(), page_break(), page_break(), last.clone()],
+                vec![
+                    ElementKind::Paragraph,
+                    ElementKind::PageBreak,
+                    ElementKind::PageBreak,
+                    ElementKind::Paragraph,
+                ],
+            ),
+        ];
+
+        for (elements, expected) in cases {
+            let mut document = InternalDocument::new("pdf");
+            document.elements = elements;
+            document.images = vec![picture(2, None)];
+
+            fold_embedded_image_ocr_text(&mut document);
+
+            let kinds: Vec<ElementKind> = document.elements.iter().map(|element| element.kind).collect();
+            assert_eq!(kinds, expected);
+        }
+    }
+
+    #[test]
+    fn a_page_that_keeps_its_paragraph_keeps_its_page_break() {
+        let mut document = InternalDocument::new("pdf");
+        document.elements = vec![paragraph(NATIVE_TEXT, Some(1)), page_break(), text_only_anchor(0, 2)];
+        document.images = vec![picture(2, Some(PICTURE_WORDS))];
+
+        fold_embedded_image_ocr_text(&mut document);
+
+        assert_eq!(
+            kinds_and_texts(&document),
+            vec![
+                (ElementKind::Paragraph, NATIVE_TEXT),
+                (ElementKind::PageBreak, ""),
+                (ElementKind::Paragraph, PICTURE_WORDS)
+            ]
+        );
+    }
+
+    /// Page markers follow the page breaks, so they are made after the fold: a page that held
+    /// only a picture with no text gets no marker, as it gets none without the picture.
+    #[tokio::test]
+    async fn a_page_that_held_only_a_removed_anchor_gets_no_page_marker() {
+        let mut document = InternalDocument::new("pdf");
+        document.elements = vec![
+            paragraph("First page.", Some(1)),
+            page_break(),
+            text_only_anchor(0, 2),
+            page_break(),
+            paragraph("Last page.", Some(3)),
+        ];
+        document.images = vec![picture(2, None)];
+        let config = crate::core::config::ExtractionConfig {
+            pages: Some(crate::core::config::PageConfig {
+                insert_page_markers: true,
+                marker_format: "[page {page_num}]".to_string(),
+                ..Default::default()
+            }),
+            postprocessor: Some(crate::core::config::PostProcessorConfig {
+                enabled: false,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let result = super::run_pipeline(document, &config).await.expect("the pipeline runs");
+
+        assert!(result.content.contains("[page 1]"), "{:?}", result.content);
+        assert!(result.content.contains("[page 3]"), "{:?}", result.content);
+        assert!(!result.content.contains("[page 2]"), "{:?}", result.content);
+    }
+
+    /// The paragraphs of a flat document can have no page tag. A formatted page is rendered
+    /// from the elements tagged with it, so a tag on the picture's paragraph alone would
+    /// replace the native text of the page with the picture's words.
+    #[test]
+    fn a_formatted_page_keeps_its_native_text_when_the_paragraphs_have_no_page_tag() {
+        let mut document = one_page_document(text_only_anchor(0, 1), Some(PICTURE_WORDS));
+        document.elements[0].page = None;
+
+        fold_embedded_image_ocr_text(&mut document);
+        assert_eq!(document.elements[1].page, None);
+        let result = crate::extraction::derive::derive_extraction_result(
+            document,
+            false,
+            crate::core::config::OutputFormat::Markdown,
+        );
+
+        let pages = result.pages.expect("the prebuilt pages are returned");
+        assert_eq!(
+            pages[0].content.matches(NATIVE_TEXT).count(),
+            1,
+            "{:?}",
+            pages[0].content
+        );
+        assert_eq!(
+            pages[0].content.matches(PICTURE_WORDS).count(),
+            1,
+            "{:?}",
+            pages[0].content
+        );
+    }
 }
