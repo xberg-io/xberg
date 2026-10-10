@@ -111,16 +111,16 @@ const MAX_RECURSION_DEPTH: u32 = 100;
 /// Every page-tree walk in this crate is recursive, so depth is stack frames, and
 /// an uncapped chain overflows the stack — which aborts the process rather than
 /// raising a catchable panic (GH#1755). A conforming page tree is balanced, so at
-/// the minimum useful fan-out of 2 a depth of 256 already addresses 2^256 pages:
+/// the minimum useful fan-out of 2 a depth of 128 already addresses 2^128 pages:
 /// more than `/Count`'s 32-bit range can even express, let alone any real
-/// document. The cap also sits an order of magnitude below where the stack
-/// actually dies — measured on a 2 MiB thread (a tokio worker's default), a
-/// single-kid chain aborts at ~2,500 levels in a release build and at ~370 in a
-/// debug build, so 256 is the figure that is safe in BOTH profiles. Raising it
-/// toward lopdf's 10,000 would mean rewriting these walkers iteratively with an
-/// explicit stack; the obstacle is `get_page_from_tree_inner`, which merges
-/// inherited attributes along the path as it descends. ~keep
-const MAX_PAGE_TREE_DEPTH: u32 = 256;
+/// document. Workspace feature unification makes the debug-build
+/// `get_page_from_tree_inner` frame large enough that a 256-node chain exhausts
+/// Rust's 2 MiB test-thread stack, so the cap is 128 to retain headroom in every
+/// supported feature combination. Raising it would mean rewriting these walkers
+/// iteratively with an explicit stack; the obstacle is
+/// `get_page_from_tree_inner`, which merges inherited attributes along the path
+/// as it descends. ~keep
+const MAX_PAGE_TREE_DEPTH: u32 = 128;
 
 /// Page information for rendering.
 #[derive(Debug, Clone)]
