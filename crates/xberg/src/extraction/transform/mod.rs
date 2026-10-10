@@ -573,6 +573,7 @@ mod tests {
             section_name: None,
             sheet_name: None,
             ocr_confidence: None,
+            native_content: None,
         }
     }
 
@@ -651,7 +652,7 @@ mod tests {
 
     #[test]
     fn test_transform_with_tables_and_images() {
-        use crate::types::{ExtractedDocument, ExtractedImage, PageContent, Table};
+        use crate::types::{ExtractedDocument, ExtractedImage, Table};
         use std::sync::Arc;
 
         let table = Table {
@@ -687,25 +688,16 @@ mod tests {
             data_base64: None,
         };
 
+        let mut page = page_content_for_test(1, "Some text", None);
+        page.tables = vec![Arc::new(table)];
+        page.image_indices = vec![0];
+
         let result = ExtractedDocument {
             content: "Test content".to_string(),
             mime_type: Cow::Borrowed("application/pdf"),
             metadata: test_metadata(Some("Test".to_string())),
             images: Some(vec![image]),
-            pages: Some(vec![PageContent {
-                page_number: 1,
-                content: "Some text".to_string(),
-                tables: vec![Arc::new(table)],
-                image_indices: vec![0],
-                image_preprocessing: None,
-                hierarchy: None,
-                is_blank: None,
-                layout_regions: None,
-                speaker_notes: None,
-                section_name: None,
-                sheet_name: None,
-                ocr_confidence: None,
-            }]),
+            pages: Some(vec![page]),
             ..Default::default()
         };
 
@@ -891,6 +883,7 @@ mod tests {
                 section_name: None,
                 sheet_name: None,
                 ocr_confidence: None,
+                native_content: None,
             }]),
             ..Default::default()
         };
@@ -958,6 +951,7 @@ mod tests {
                 section_name: None,
                 sheet_name: None,
                 ocr_confidence: None,
+                native_content: None,
             }]),
             ..Default::default()
         };

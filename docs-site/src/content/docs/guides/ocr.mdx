@@ -1217,6 +1217,30 @@ for failure in result.ocr_page_failures or []:
     print(f"page {failure.page}: {failure.error} ({state})")
 ```
 
+### Keep the Text Layer of an OCR Page
+
+When Xberg sends a PDF page to OCR, the OCR text replaces the text layer in the page `content`. This is correct for a scan with a stamp. For a born-digital page with one short line, the result then has an OCR reading of the line and no copy of the exact characters.
+
+To get both texts, set `keep_native_content` on `PageConfig`. `extract_pages` must be on, because Xberg returns the kept text on `pages[]`.
+
+```python title="keep_native_content.py"
+from xberg import ExtractInput, ExtractionConfig, OcrConfig, PageConfig, extract
+
+config = ExtractionConfig(
+    pages=PageConfig(extract_pages=True, keep_native_content=True),
+    ocr=OcrConfig(backend="tesseract", language=["eng"]),
+)
+output = await extract(ExtractInput(kind="uri", uri="short-text-page.pdf"), config=config)
+
+for page in output.results[0].pages:
+    print(page.content)  # OCR text when the page was sent to OCR
+    print(page.native_content)  # text layer of that page, or None
+```
+
+`native_content` is set on a page only when OCR text replaced its `content`, and the text layer is not blank and differs from the OCR text. The rule is the same for every OCR route: `force_ocr`, `force_ocr_pages`, and the automatic routes. It is absent (`None` in Python, omitted in JSON) on every other page. `page.native_content or page.content` gives the text layer of a page that has one.
+
+The setting is off by default, and the default output does not change. The `content` of the document and of each page stays OCR text.
+
 ### Automatic OCR for Undecodable Text Layers
 
 PDFs with a font whose CID/glyph indices have no `ToUnicode` mapping (common with subset Identity-H fonts) often "extract" successfully but decode to garbage — Unicode Private Use Area (PUA) codepoints, replacement characters (U+FFFD), or non-whitespace control characters instead of legible text. Previously this garbage passed the native-text quality check and OCR never ran. Xberg now detects this case and routes the page to OCR automatically, the same as a scanned page (issue #1254).

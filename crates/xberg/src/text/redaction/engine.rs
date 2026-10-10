@@ -552,6 +552,7 @@ impl RedactionPass<'_> {
         };
         for page in pages.iter_mut() {
             self.redact_in_place(&mut page.content);
+            self.redact_optional(&mut page.native_content);
             self.redact_optional(&mut page.speaker_notes);
             self.redact_optional(&mut page.section_name);
             self.redact_optional(&mut page.sheet_name);
@@ -1422,6 +1423,48 @@ mod tests {
     /// Regression for xberg-io/xberg#1223: redaction must mask PII on every
     /// structured surface, not just `content`.
     #[tokio::test]
+    async fn redaction_rewrites_the_kept_text_layer() {
+        let email = "alice@example.com";
+        let mut doc = ExtractedDocument {
+            pages: Some(vec![crate::types::PageContent {
+                page_number: 1,
+                content: format!("OCR reading of {email}."),
+                tables: Vec::new(),
+                image_indices: Vec::new(),
+                image_preprocessing: None,
+                hierarchy: None,
+                is_blank: None,
+                layout_regions: None,
+                speaker_notes: None,
+                section_name: None,
+                sheet_name: None,
+                ocr_confidence: None,
+                native_content: Some(format!("Text layer with {email}.")),
+            }]),
+            ..Default::default()
+        };
+
+        redact(&mut doc, &RedactionConfig::default())
+            .await
+            .expect("redaction must succeed");
+
+        let page = &doc.pages.as_ref().expect("the page is kept")[0];
+        let native_content = page
+            .native_content
+            .as_deref()
+            .expect("the kept text layer stays present");
+        assert!(
+            native_content.starts_with("Text layer with ") && !native_content.contains(email),
+            "the kept text layer must be redacted in place: {native_content:?}"
+        );
+        assert!(
+            page.content.starts_with("OCR reading of ") && !page.content.contains(email),
+            "the page content must be redacted too: {:?}",
+            page.content
+        );
+    }
+
+    #[tokio::test]
     async fn redacts_every_text_bearing_field() {
         use crate::types::form_field::PdfFormField;
         use crate::types::uri::{ExtractedUri, UriKind};
@@ -1455,6 +1498,7 @@ mod tests {
                 section_name: None,
                 sheet_name: None,
                 ocr_confidence: None,
+                native_content: None,
             }]),
             uris: Some(vec![ExtractedUri {
                 url: format!("mailto:{email}"),

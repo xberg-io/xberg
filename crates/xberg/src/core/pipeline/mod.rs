@@ -1278,6 +1278,9 @@ fn normalize_nfc(result: &mut ExtractedDocument) {
         if let Some(pages) = result.pages.as_mut() {
             for page in pages.iter_mut() {
                 page.content = page.content.nfc().collect();
+                if let Some(native_content) = page.native_content.as_mut() {
+                    *native_content = native_content.nfc().collect();
+                }
             }
         }
     }
@@ -1305,6 +1308,7 @@ mod issue_214_text_coverage_tests {
             section_name: None,
             sheet_name: None,
             ocr_confidence: None,
+            native_content: None,
         }
     }
 

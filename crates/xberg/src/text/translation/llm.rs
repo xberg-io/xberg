@@ -166,48 +166,9 @@ mod tests {
     #[tokio::test]
     async fn translate_result_translates_table_cells_via_secondary_fields() {
         use crate::types::Table;
-        use std::sync::Arc;
-        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::atomic::Ordering;
 
-        let call_count = Arc::new(AtomicUsize::new(0));
-        let call_count_handler = call_count.clone();
-
-        let app = axum::Router::new().fallback(axum::routing::post(move || {
-            let call_count = call_count_handler.clone();
-            async move {
-                call_count.fetch_add(1, Ordering::SeqCst);
-                axum::response::Json(serde_json::json!({
-                    "id": "test",
-                    "object": "chat.completion",
-                    "created": 0,
-                    "model": "test",
-                    "choices": [{
-                        "index": 0,
-                        "message": { "role": "assistant", "content": "[\"CELDA TRADUCIDA\"]" },
-                        "finish_reason": "stop"
-                    }]
-                }))
-            }
-        }));
-
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
-        });
-
-        let base_url = format!("http://{addr}/v1/");
-        let config = TranslationConfig {
-            target_lang: "es".to_string(),
-            source_lang: None,
-            preserve_markup: false,
-            llm: LlmConfig {
-                model: "openai/gpt-4o-mini".to_string(),
-                api_key: Some("test-key".to_string()),
-                base_url: Some(base_url),
-                ..Default::default()
-            },
-        };
+        let (config, call_count) = stub_translation_config("[\"CELDA TRADUCIDA\"]").await;
 
         // `content` is left empty so the only field this document has to
         // translate is the single table cell — isolating the assertion to
@@ -231,5 +192,96 @@ mod tests {
             1,
             "expected exactly one batched LLM call for the one non-empty table cell, not one call per field"
         );
+    }
+
+    /// `content` and the page `content` are empty, so the kept text layer is the only text the
+    /// document has to translate.
+    #[cfg(feature = "api")]
+    #[tokio::test]
+    async fn translate_result_translates_the_kept_text_layer_of_a_page() {
+        use std::sync::atomic::Ordering;
+
+        let (config, call_count) = stub_translation_config("[\"CAPA DE TEXTO\"]").await;
+
+        let mut result = ExtractedDocument {
+            content: String::new(),
+            mime_type: std::borrow::Cow::Borrowed("text/plain"),
+            pages: Some(vec![crate::types::PageContent {
+                page_number: 1,
+                content: String::new(),
+                tables: Vec::new(),
+                image_indices: Vec::new(),
+                image_preprocessing: None,
+                hierarchy: None,
+                is_blank: None,
+                layout_regions: None,
+                speaker_notes: None,
+                section_name: None,
+                sheet_name: None,
+                ocr_confidence: None,
+                native_content: Some("text layer".to_string()),
+            }]),
+            ..Default::default()
+        };
+
+        translate_result(&mut result, &config).await.unwrap();
+
+        let page = &result.pages.as_ref().expect("the page is kept")[0];
+        assert_eq!(page.native_content.as_deref(), Some("CAPA DE TEXTO"));
+        assert_eq!(
+            call_count.load(Ordering::SeqCst),
+            1,
+            "the kept text layer is the only text, so the stub must receive one call"
+        );
+    }
+
+    /// A translation config whose LLM is a local loopback HTTP stub that answers every call
+    /// with `reply`, and the count of the calls the stub received.
+    #[cfg(feature = "api")]
+    async fn stub_translation_config(
+        reply: &'static str,
+    ) -> (TranslationConfig, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let call_count = Arc::new(AtomicUsize::new(0));
+        let call_count_handler = call_count.clone();
+
+        let app = axum::Router::new().fallback(axum::routing::post(move || {
+            let call_count = call_count_handler.clone();
+            async move {
+                call_count.fetch_add(1, Ordering::SeqCst);
+                axum::response::Json(serde_json::json!({
+                    "id": "test",
+                    "object": "chat.completion",
+                    "created": 0,
+                    "model": "test",
+                    "choices": [{
+                        "index": 0,
+                        "message": { "role": "assistant", "content": reply },
+                        "finish_reason": "stop"
+                    }]
+                }))
+            }
+        }));
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        let config = TranslationConfig {
+            target_lang: "es".to_string(),
+            source_lang: None,
+            preserve_markup: false,
+            llm: LlmConfig {
+                model: "openai/gpt-4o-mini".to_string(),
+                api_key: Some("test-key".to_string()),
+                base_url: Some(format!("http://{addr}/v1/")),
+                ..Default::default()
+            },
+        };
+        (config, call_count)
     }
 }

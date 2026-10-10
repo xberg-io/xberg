@@ -875,6 +875,7 @@ pub(crate) fn extract_text_from_image_with_ocr(
             section_name: None,
             sheet_name: None,
             ocr_confidence: None,
+            native_content: None,
         });
 
         byte_offset = frame_end;

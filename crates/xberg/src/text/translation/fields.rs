@@ -20,8 +20,8 @@
 //! - 1 call per table (cells, batched) + 1 call per table (markdown) — tables
 //!   are typically few and markdown must preserve table syntax, which the
 //!   plain-text cell batch call does not.
-//! - 1 call per page (page content) + 1 call per page for the small
-//!   speaker-notes/section-name/sheet-name bundle (only when at least one is
+//! - 1 call per page (page content) + 1 call per page for the
+//!   native-content/speaker-notes/section-name/sheet-name bundle (only when at least one is
 //!   present) + 1 call per page for hierarchy blocks (batched) + 2 calls per
 //!   page-level table (same table treatment as above).
 //! - `ceil(element_count / MAX_BATCH_ITEMS)` calls for `elements`.
@@ -246,7 +246,7 @@ async fn translate_tables(
     Ok(())
 }
 
-/// Translate per-page content, the speaker-notes/section-name/sheet-name
+/// Translate per-page content, the native-content/speaker-notes/section-name/sheet-name
 /// bundle, hierarchy block text, and any page-level tables.
 async fn translate_pages(
     pages: Option<&mut Vec<PageContent>>,
@@ -262,7 +262,12 @@ async fn translate_pages(
 
         translate_optional_fields(
             config,
-            vec![&mut page.speaker_notes, &mut page.section_name, &mut page.sheet_name],
+            vec![
+                &mut page.native_content,
+                &mut page.speaker_notes,
+                &mut page.section_name,
+                &mut page.sheet_name,
+            ],
             "translation_page_labels",
             usages,
         )

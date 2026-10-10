@@ -1026,6 +1026,10 @@ impl ExtractionConfig {
             pdf_options.validate()?;
         }
 
+        if let Some(ref pages) = self.pages {
+            pages.validate()?;
+        }
+
         self.validate_nested_llm_configs(LlmConfig::validate)?;
 
         #[cfg(any(feature = "keywords-yake", feature = "keywords-rake"))]

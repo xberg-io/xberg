@@ -43,6 +43,7 @@ fn page(content: &str) -> PageContent {
         section_name: None,
         sheet_name: None,
         ocr_confidence: None,
+        native_content: None,
     }
 }
 

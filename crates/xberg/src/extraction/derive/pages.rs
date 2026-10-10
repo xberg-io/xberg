@@ -71,6 +71,7 @@ pub(super) fn build_pages(doc: &InternalDocument) -> Option<Vec<PageContent>> {
                 section_name: None,
                 sheet_name: None,
                 ocr_confidence: None,
+                native_content: None,
             }
         })
         .collect();

@@ -116,6 +116,49 @@ fn content_cache_key_changes_when_per_input_config_changes() {
     );
 }
 
+#[test]
+fn content_cache_key_changes_with_keep_native_content() {
+    let input = ExtractInput::from_bytes(b"same bytes".to_vec(), "application/pdf", None);
+    let pages = |keep_native_content: bool| ExtractionConfig {
+        pages: Some(crate::core::config::PageConfig {
+            extract_pages: true,
+            keep_native_content,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    let off = content_cache_key(&input, &pages(false));
+    assert!(off.is_some(), "a bytes input with the cache on has a key");
+    assert_ne!(off, content_cache_key(&input, &pages(true)));
+}
+
+#[test]
+fn a_per_input_override_with_keep_native_content_needs_extract_pages() {
+    let with_pages = |pages: crate::core::config::PageConfig| ExtractInput {
+        config: Some(crate::core::config::FileExtractionConfig {
+            pages: Some(pages),
+            ..Default::default()
+        }),
+        ..ExtractInput::from_bytes(b"hello".to_vec(), "text/plain", None)
+    };
+    let rejected = with_pages(crate::core::config::PageConfig {
+        keep_native_content: true,
+        ..Default::default()
+    });
+    let accepted = with_pages(crate::core::config::PageConfig {
+        extract_pages: true,
+        keep_native_content: true,
+        ..Default::default()
+    });
+    let no_override = ExtractInput::from_bytes(b"hello".to_vec(), "text/plain", None);
+
+    let error = validate_input_overrides(&[no_override.clone(), rejected])
+        .expect_err("an override with the setting on and extract_pages off is invalid");
+    assert!(matches!(error, XbergError::Validation { .. }), "got: {error:?}");
+    validate_input_overrides(&[no_override, accepted]).expect("a valid override passes");
+}
+
 #[tokio::test]
 async fn extract_bytes_input_returns_envelope() {
     let config = ExtractionConfig::default();

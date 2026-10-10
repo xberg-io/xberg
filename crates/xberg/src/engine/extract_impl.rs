@@ -94,7 +94,11 @@ pub(crate) async fn extract(
         fraction: Some(0.0),
     });
 
-    if let Err(error) = config.validate().and_then(|()| ensure_not_cancelled(config)) {
+    if let Err(error) = config
+        .validate()
+        .and_then(|()| validate_input_overrides(std::slice::from_ref(&input)))
+        .and_then(|()| ensure_not_cancelled(config))
+    {
         inner.progress.emit(ProgressEvent {
             stage: PROGRESS_STAGE_ERROR.to_string(),
             message: Some(error.to_string()),
@@ -246,7 +250,11 @@ pub(crate) async fn extract_batch(
         fraction: Some(0.0),
     });
 
-    if let Err(error) = config.validate().and_then(|()| ensure_not_cancelled(config)) {
+    if let Err(error) = config
+        .validate()
+        .and_then(|()| validate_input_overrides(&inputs))
+        .and_then(|()| ensure_not_cancelled(config))
+    {
         inner.progress.emit(ProgressEvent {
             stage: BATCH_PROGRESS_STAGE_ERROR.to_string(),
             message: Some(error.to_string()),
@@ -1082,6 +1090,18 @@ fn append_extraction_output(output: &mut ExtractionResult, mut item_output: Extr
 async fn extract_one(input: ExtractInput, base_config: &ExtractionConfig, index: usize) -> Result<ExtractionResult> {
     let config = resolve_input_config(&input, base_config);
     extract_one_resolved(input, &config, index).await
+}
+
+/// Validate the page settings of each input that overrides them.
+///
+/// An override replaces the page settings of the base config as a whole, so its own values decide.
+fn validate_input_overrides(inputs: &[ExtractInput]) -> Result<()> {
+    for input in inputs {
+        if let Some(pages) = input.config.as_ref().and_then(|overrides| overrides.pages.as_ref()) {
+            pages.validate()?;
+        }
+    }
+    Ok(())
 }
 
 fn resolve_input_config(input: &ExtractInput, base_config: &ExtractionConfig) -> ExtractionConfig {
