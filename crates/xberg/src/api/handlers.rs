@@ -1191,6 +1191,26 @@ fn resolve_job_timeout_secs(request_timeout_secs: Option<u64>, server_default_se
     request_timeout_secs.unwrap_or(server_default_secs)
 }
 
+#[cfg(feature = "api")]
+async fn timeout_extraction<F>(
+    duration: std::time::Duration,
+    cancel_token: Option<crate::cancellation::CancellationToken>,
+    future: F,
+) -> Result<F::Output, tokio::time::error::Elapsed>
+where
+    F: std::future::Future,
+{
+    match tokio::time::timeout(duration, future).await {
+        Ok(output) => Ok(output),
+        Err(elapsed) => {
+            if let Some(token) = cancel_token {
+                token.cancel();
+            }
+            Err(elapsed)
+        }
+    }
+}
+
 /// Submit an async extraction job.
 ///
 /// POST /extract-async
@@ -1264,6 +1284,7 @@ pub(crate) async fn extract_async_handler(
 
         let timeout_secs = resolve_job_timeout_secs(effective_config.extraction_timeout_secs, job_timeout_secs);
         let timeout_dur = std::time::Duration::from_secs(timeout_secs);
+        let cancel_token = effective_config.cancel_token.clone();
 
         let extraction_fut = async {
             let results = extract_unified_inputs(inputs, effective_config)
@@ -1272,7 +1293,7 @@ pub(crate) async fn extract_async_handler(
             serde_json::to_value(&results).map_err(|e| format!("failed to serialize results: {e}"))
         };
 
-        match tokio::time::timeout(timeout_dur, extraction_fut).await {
+        match timeout_extraction(timeout_dur, cancel_token, extraction_fut).await {
             Ok(Ok(value)) => store.complete(&jid, value, super::jobs::now_rfc3339()),
             Ok(Err(e)) => store.fail(&jid, e, super::jobs::now_rfc3339()),
             Err(_elapsed) => store.fail(
@@ -2164,6 +2185,22 @@ mod tests {
     #[test]
     fn resolve_job_timeout_secs_lets_per_request_value_override_server_default() {
         assert_eq!(resolve_job_timeout_secs(Some(45), 600), 45);
+    }
+
+    #[cfg(feature = "api")]
+    #[tokio::test]
+    async fn extraction_timeout_cancels_the_running_extraction_token() {
+        let token = crate::cancellation::CancellationToken::new();
+
+        let result = timeout_extraction(
+            std::time::Duration::from_millis(1),
+            Some(token.clone()),
+            std::future::pending::<()>(),
+        )
+        .await;
+
+        assert!(result.is_err(), "the pending extraction should time out");
+        assert!(token.is_cancelled(), "the timeout must cancel the extraction token");
     }
 
     #[cfg(feature = "api")]

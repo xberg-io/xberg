@@ -211,6 +211,13 @@ fn unsupported_content_filter_warnings(config: &ExtractionConfig) -> Vec<Process
     warnings
 }
 
+fn ensure_not_cancelled(cancel_token: Option<&crate::cancellation::CancellationToken>) -> Result<()> {
+    if cancel_token.is_some_and(crate::cancellation::CancellationToken::is_cancelled) {
+        return Err(XbergError::Cancelled);
+    }
+    Ok(())
+}
+
 /// CPU-bound pdfium work, run inside `spawn_blocking` by [`extract`]. Builds the
 /// `InternalDocument` directly rather than returning intermediate pieces --
 /// there is no OCR/layout/table stage downstream of this backend (yet) that
@@ -221,12 +228,15 @@ fn extract_blocking(
     passwords: &[String],
     extract_metadata: bool,
     margins: PageMarginFractions,
+    cancel_token: Option<&crate::cancellation::CancellationToken>,
 ) -> Result<InternalDocument> {
+    ensure_not_cancelled(cancel_token)?;
     let _operation_guard = PDFIUM_OPERATION_LOCK
         .lock()
         .map_err(|_| XbergError::parsing("pdfium operation lock was poisoned by an earlier extraction panic"))?;
 
-    extract_blocking_serialized(content, mime_type, passwords, extract_metadata, margins)
+    ensure_not_cancelled(cancel_token)?;
+    extract_blocking_serialized(content, mime_type, passwords, extract_metadata, margins, cancel_token)
 }
 
 /// Concatenate every page's in-margin text, recording each page's byte range.
@@ -234,11 +244,13 @@ fn collect_page_text(
     document: &PdfDocument<'_>,
     page_count: u32,
     margins: PageMarginFractions,
+    cancel_token: Option<&crate::cancellation::CancellationToken>,
 ) -> Result<(String, Vec<PageBoundary>)> {
     let mut joined_text = String::new();
     let mut boundaries: Vec<PageBoundary> = Vec::with_capacity(page_count as usize);
 
     for (index, page) in document.pages().iter().enumerate() {
+        ensure_not_cancelled(cancel_token)?;
         let page_number = (index + 1) as u32;
         let content_rect = page_content_rect(page.width(), page.height(), margins);
         let page_text = page
@@ -267,7 +279,9 @@ fn extract_blocking_serialized(
     passwords: &[String],
     extract_metadata: bool,
     margins: PageMarginFractions,
+    cancel_token: Option<&crate::cancellation::CancellationToken>,
 ) -> Result<InternalDocument> {
+    ensure_not_cancelled(cancel_token)?;
     let pdfium = Pdfium;
     let document = open_document(&pdfium, content, passwords)?;
 
@@ -279,7 +293,7 @@ fn extract_blocking_serialized(
     }
     let page_count = page_count as u32;
 
-    let (joined_text, boundaries) = collect_page_text(&document, page_count, margins)?;
+    let (joined_text, boundaries) = collect_page_text(&document, page_count, margins, cancel_token)?;
 
     let mut doc = super::flat_pdf_document(&joined_text, mime_type, Some(&boundaries));
 
@@ -348,11 +362,19 @@ pub(super) async fn extract(content: &[u8], mime_type: &str, config: &Extraction
         .is_none_or(|options| options.extract_metadata);
     let margins = PageMarginFractions::from_extraction_config(Some(config));
     let unsupported_filter_warnings = unsupported_content_filter_warnings(config);
+    let cancel_token = config.cancel_token.clone();
     let content = content.to_vec();
     let mime_type = mime_type.to_string();
 
     match tokio::task::spawn_blocking(move || {
-        extract_blocking(&content, &mime_type, &passwords, extract_metadata, margins)
+        extract_blocking(
+            &content,
+            &mime_type,
+            &passwords,
+            extract_metadata,
+            margins,
+            cancel_token.as_ref(),
+        )
     })
     .await
     {
@@ -369,6 +391,16 @@ pub(super) async fn extract(content: &[u8], mime_type: &str, config: &Extraction
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn should_stop_pdfium_page_work_when_cancelled() {
+        let token = crate::cancellation::CancellationToken::new();
+        token.cancel();
+
+        let error = ensure_not_cancelled(Some(&token)).expect_err("cancelled pdfium work must stop");
+
+        assert!(matches!(error, XbergError::Cancelled));
+    }
 
     #[test]
     fn should_build_pdfium_content_rect_from_page_margin_fractions() {

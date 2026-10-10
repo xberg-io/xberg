@@ -200,14 +200,15 @@ pub(crate) fn extract_text_from_native_document(
     margins: PageMarginFractions,
 ) -> Result<PdfTextExtractionResult> {
     let needs_boundaries = extraction_config.is_some_and(page_boundaries_required);
+    let cancel_token = extraction_config.and_then(|config| config.cancel_token.as_ref());
 
     if let Some(config) = page_config {
-        extract_text_with_tracking(doc, config, margins)
+        extract_text_with_tracking(doc, config, margins, cancel_token)
     } else if needs_boundaries {
         let default_config = PageConfig::default();
-        extract_text_with_tracking(doc, &default_config, margins)
+        extract_text_with_tracking(doc, &default_config, margins, cancel_token)
     } else {
-        extract_text_fast_path(doc, margins)
+        extract_text_fast_path(doc, margins, cancel_token)
     }
 }
 
@@ -251,6 +252,7 @@ fn extract_one_page_text(
 fn extract_all_page_texts(
     doc: &xberg_native_pdf::PdfDocument,
     margins: PageMarginFractions,
+    cancel_token: Option<&crate::cancellation::CancellationToken>,
 ) -> Result<(Vec<String>, PageProvenanceCounts)> {
     let page_count = doc
         .page_count()
@@ -264,6 +266,9 @@ fn extract_all_page_texts(
 
     let mut texts = Vec::with_capacity(page_count);
     for page_idx in 0..page_count {
+        if cancel_token.is_some_and(crate::cancellation::CancellationToken::is_cancelled) {
+            return Err(PdfError::Cancelled);
+        }
         let (text, counts) = extract_one_page_text(doc, page_idx, &excluded_layers, margins)?;
         texts.push(text);
         if let Some(collected) = provenance_counts.as_mut() {
@@ -279,8 +284,12 @@ fn extract_all_page_texts(
 ///
 /// Extracts every page through [`extract_all_page_texts`], then concatenates the
 /// pages in order into a single string.
-fn extract_text_fast_path(doc: &NativeDocument, margins: PageMarginFractions) -> Result<PdfTextExtractionResult> {
-    let (page_texts, provenance_counts) = extract_all_page_texts(&doc.doc, margins)?;
+fn extract_text_fast_path(
+    doc: &NativeDocument,
+    margins: PageMarginFractions,
+    cancel_token: Option<&crate::cancellation::CancellationToken>,
+) -> Result<PdfTextExtractionResult> {
+    let (page_texts, provenance_counts) = extract_all_page_texts(&doc.doc, margins, cancel_token)?;
 
     let separators = page_texts.len().saturating_sub(1) * PAGE_SEPARATOR.len();
     let mut content = String::with_capacity(page_texts.iter().map(String::len).sum::<usize>() + separators);
@@ -304,8 +313,9 @@ fn extract_text_with_tracking(
     doc: &NativeDocument,
     config: &PageConfig,
     margins: PageMarginFractions,
+    cancel_token: Option<&crate::cancellation::CancellationToken>,
 ) -> Result<PdfTextExtractionResult> {
-    let (page_texts, provenance_counts) = extract_all_page_texts(&doc.doc, margins)?;
+    let (page_texts, provenance_counts) = extract_all_page_texts(&doc.doc, margins, cancel_token)?;
     let page_count = page_texts.len();
 
     let markers: Vec<String> = if config.insert_page_markers {
@@ -6949,7 +6959,8 @@ mod tests {
             "fixture pages must carry text, otherwise this test proves nothing"
         );
 
-        let (collected, _) = extract_all_page_texts(&doc.doc, margins).expect("collecting every page must succeed");
+        let (collected, _) =
+            extract_all_page_texts(&doc.doc, margins, None).expect("collecting every page must succeed");
         assert_eq!(
             collected, sequential,
             "the collected page texts must match a page-by-page run, page for page"
@@ -6995,6 +7006,19 @@ mod tests {
             assert_eq!(pages[page_idx].content, sequential[page_idx]);
             assert_eq!(pages[page_idx].page_number, (page_idx + 1) as u32);
         }
+    }
+
+    #[test]
+    fn native_page_text_stops_before_work_when_cancelled() {
+        let pdf = build_paged_text_pdf(2, 10);
+        let doc = NativeDocument::open_bytes(&pdf).expect("fixture must open");
+        let token = crate::cancellation::CancellationToken::new();
+        token.cancel();
+
+        let error = extract_all_page_texts(&doc.doc, PageMarginFractions::default(), Some(&token))
+            .expect_err("a cancelled extraction must not read any page text");
+
+        assert!(matches!(error, PdfError::Cancelled));
     }
 
     /// #1744: the provenance pass in `pdf/scan_detect.rs` used to read every page's text a
