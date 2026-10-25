@@ -19,35 +19,35 @@ compact = true
 [[includes]]
 name = 'xberg-core'
 source = 'https://github.com/xberg-io/agent-conventions.git'
-ref = "33efa876153a61192fab38923f31ed2673702791"
+ref = "bca4b4e8f1f198bef25308aaabf7a2c238a387a3"
 path = 'modules/core'
 merge_strategy = 'local-override'
 
 [[includes]]
 name = 'xberg-languages'
 source = 'https://github.com/xberg-io/agent-conventions.git'
-ref = "33efa876153a61192fab38923f31ed2673702791"
+ref = "bca4b4e8f1f198bef25308aaabf7a2c238a387a3"
 path = 'modules/languages'
 merge_strategy = 'local-override'
 
 [[includes]]
 name = 'xberg-cicd'
 source = 'https://github.com/xberg-io/agent-conventions.git'
-ref = "33efa876153a61192fab38923f31ed2673702791"
+ref = "bca4b4e8f1f198bef25308aaabf7a2c238a387a3"
 path = 'modules/cicd'
 merge_strategy = 'local-override'
 
 [[includes]]
 name = 'xberg-infrastructure'
 source = 'https://github.com/xberg-io/agent-conventions.git'
-ref = "33efa876153a61192fab38923f31ed2673702791"
+ref = "bca4b4e8f1f198bef25308aaabf7a2c238a387a3"
 path = 'modules/infrastructure'
 merge_strategy = 'local-override'
 
 [[includes]]
 name = 'xberg-e2e-generator'
 source = 'https://github.com/xberg-io/agent-conventions.git'
-ref = "33efa876153a61192fab38923f31ed2673702791"
+ref = "bca4b4e8f1f198bef25308aaabf7a2c238a387a3"
 path = 'modules/e2e-generator'
 merge_strategy = 'local-override'
 
