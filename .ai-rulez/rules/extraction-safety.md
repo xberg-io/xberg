@@ -1,10 +1,18 @@
 ---
 type: Decision
 title: Extraction Safety
+paths:
+  - "crates/xberg/src/extractors/**"
+  - "crates/xberg/src/extraction/**"
+  - "crates/xberg/src/core/**"
+  - "crates/xberg/src/enrich.rs"
+  - "crates/xberg/src/error.rs"
+targets:
+  - ".claude/rules/"
+  - ".github/instructions/"
 x-ai-rulez:
   kind: rule
   id: extraction-safety
-  domain: document-extraction
   metadata:
     priority: critical
 ---
