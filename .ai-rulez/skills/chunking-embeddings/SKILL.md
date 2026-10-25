@@ -1,7 +1,10 @@
 ---
 type: Playbook
 title: Chunking Embeddings
-description: Chunking, embeddings, and RAG pipeline integration
+description: Xberg text chunking (ChunkerType, ChunkingConfig wire names), embedding generation and RAG integration. Use when changing chunking or embeddings code or config.
+paths:
+  - "crates/xberg/src/chunking/**"
+  - "crates/xberg/src/embeddings/**"
 x-ai-rulez:
   kind: skill
   id: chunking-embeddings
