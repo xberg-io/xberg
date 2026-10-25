@@ -2699,6 +2699,15 @@ typedef struct XBERGTable XBERGTable;
  */
 typedef struct XBERGTableCell XBERGTableCell;
 /**
+ * An inline annotation on one table cell's text, located by grid position.
+ *
+ * One entry per annotation, not a per-cell grid: the nested grid shape marshals
+ * badly across the FFI bindings, and the data is sparse. The annotation is the
+ * same `TextAnnotation` a paragraph carries, with byte offsets into
+ * `cells`row``col``. See `Table.cell_annotations`.
+ */
+typedef struct XBERGTableCellAnnotation XBERGTableCellAnnotation;
+/**
  * The paragraph style a single table cell's text carries, located by grid
  * position.
  *
@@ -3181,6 +3190,39 @@ typedef struct XBERGXbergOcrBackendVTable {
    * # Returns
    *
    * An `ExtractedDocument` containing the extracted text and metadata.
+   *
+   * Image and PDF page OCR also accept an explicit `document` contribution:
+   * a flat, ordered list of `Title`, `Heading` (levels 1–6), `Paragraph`,
+   * `Code`, `Formula`, `Footnote`, `Comment`, `Citation` and HTML `RawBlock`
+   * nodes. Keep `content` as the page transcript: the existing quality and
+   * whole-page replacement decisions still use it. Literal markup in ordinary
+   * paragraph text is not promoted to raw HTML.
+   * HTML raw blocks are emitted verbatim: supply trusted markup, not an
+   * ordinary OCR transcript relabeled as HTML.
+   * Unsupported nested/container, table-grid and image nodes fail with
+   * `Validation`, rather than flattening.
+   * For string-only output leave `document` unset; a nonempty transcript with
+   * an empty explicit structure is invalid, not a request to flatten it.
+   *
+   * Node annotation ranges must be UTF-8 byte boundaries; relationship indices
+   * must reference nodes in this contribution. Optional boxes are top-left OCR
+   * raster coordinates (the processed dimensions in backend metadata, when
+   * supplied); absent boxes/confidence are not fabricated. PDF owners convert
+   * the boxes to their page coordinate frame. The image extractor retains its
+   * own source format and source-image reference, not `document.source_format`.
+   * Node IDs, node types and result counts are derived by the host extractor.
+   *
+   * Structured contributions do not accept backend table/image/URI inventories,
+   * document-level annotations, pre-rendered output or derived enrichment/page
+   * fields. Leave those fields unset; they fail explicitly instead of being
+   * discarded. Inline node annotations, `metadata`, `processing_warnings`,
+   * `ocr_elements`, `formulas` and `llm_usage` remain subject to their existing
+   * extractor aggregation/selection policies. A selected whole-page
+   * contribution replaces superseded native flow, not retained native asset
+   * inventories. Security limits bound serialized payload size, recursive
+   * metadata nesting and node/annotation/reference work. These checks apply
+   * only when `document` is present; string-only results and built-in private
+   * hOCR results retain their existing contract.
    *
    * # Errors
    *
@@ -14154,6 +14196,15 @@ int32_t xberg_grid_cell_has_heading_level(XBERGAlefHandle handle);
 char *xberg_grid_cell_style_name(XBERGAlefHandle handle);
 
 /**
+ * Get the `annotations` field from a `GridCell`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_grid_cell_annotations(XBERGAlefHandle handle);
+
+/**
  * Create a `HeaderMetadata` from a JSON string. Returns null on failure.
  * # Safety
  * JSON string must be valid UTF-8 and null-terminated.
@@ -24732,6 +24783,15 @@ char *xberg_table_cell_styles(XBERGAlefHandle handle);
 char *xberg_table_columns(XBERGAlefHandle handle);
 
 /**
+ * Get the `cell_annotations` field from a `Table`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_table_cell_annotations(XBERGAlefHandle handle);
+
+/**
  * Create a `TableCell` from a JSON string. Returns null on failure.
  * # Safety
  * JSON string must be valid UTF-8 and null-terminated.
@@ -24783,6 +24843,52 @@ uint32_t xberg_table_cell_col_span(XBERGAlefHandle handle);
  * Pointer must be a valid handle returned by this library.
  */
 int32_t xberg_table_cell_is_header(XBERGAlefHandle handle);
+
+/**
+ * Create a `TableCellAnnotation` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `xberg_table_cell_annotation_free`.
+ */
+XBERGAlefHandle xberg_table_cell_annotation_from_json(const char *json);
+
+/**
+ * Serialize a `TableCellAnnotation` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_table_cell_annotation_to_json(XBERGAlefHandle handle);
+
+/**
+ * Free a `TableCellAnnotation` handle.
+ * # Safety
+ * Handle must have been returned by this library, or be zero.
+ */
+void xberg_table_cell_annotation_free(XBERGAlefHandle handle);
+
+/**
+ * Get the `row` field from a `TableCellAnnotation`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uint32_t xberg_table_cell_annotation_row(XBERGAlefHandle handle);
+
+/**
+ * Get the `col` field from a `TableCellAnnotation`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uint32_t xberg_table_cell_annotation_col(XBERGAlefHandle handle);
+
+/**
+ * Get the `annotation` field from a `TableCellAnnotation`.
+ * A non-null returned handle is owned by the caller.
+ * It must be freed with `xberg_text_annotation_free`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGAlefHandle xberg_table_cell_annotation_annotation(XBERGAlefHandle handle);
 
 /**
  * Create a `TableCellStyle` from a JSON string. Returns null on failure.

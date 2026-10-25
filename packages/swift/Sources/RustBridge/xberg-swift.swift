@@ -1307,6 +1307,9 @@ public func svgOptionsFromJson<GenericIntoRustString: IntoRustString>(_ json: Ge
 public func tableFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> Table {
     try { let val = __swift_bridge__$table_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return Table(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
+public func tableCellAnnotationFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> TableCellAnnotation {
+    try { let val = __swift_bridge__$table_cell_annotation_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return TableCellAnnotation(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
+}
 public func tableCellStyleFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> TableCellStyle {
     try { let val = __swift_bridge__$table_cell_style_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return TableCellStyle(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
@@ -2290,6 +2293,9 @@ public func __alef_phantom_vec_table() -> RustVec<Table> {
 }
 public func __alef_phantom_vec_table_cell() -> RustVec<TableCell> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_table_cell())
+}
+public func __alef_phantom_vec_table_cell_annotation() -> RustVec<TableCellAnnotation> {
+    RustVec(ptr: __swift_bridge__$__alef_phantom_vec_table_cell_annotation())
 }
 public func __alef_phantom_vec_table_cell_style() -> RustVec<TableCellStyle> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_table_cell_style())
@@ -13178,6 +13184,10 @@ extension GridCellRef {
 
     public func styleName() -> Optional<RustString> {
         { let val = __swift_bridge__$GridCell$style_name(ptr); if val != nil { return RustString(ptr: val!) } else { return nil } }()
+    }
+
+    public func annotations() -> RustVec<RustString> {
+        RustVec(ptr: __swift_bridge__$GridCell$annotations(ptr))
     }
 }
 extension GridCell: Vectorizable {
@@ -25732,6 +25742,10 @@ extension TableRef {
     public func columns() -> RustString {
         RustString(ptr: __swift_bridge__$Table$columns(ptr))
     }
+
+    public func cellAnnotations() -> RustVec<RustString> {
+        RustVec(ptr: __swift_bridge__$Table$cell_annotations(ptr))
+    }
 }
 extension Table: Vectorizable {
     public static func vecOfSelfNew() -> UnsafeMutableRawPointer {
@@ -25876,6 +25890,94 @@ extension TableCell: Vectorizable {
 
     public static func vecOfSelfLen(vecPtr: UnsafeMutableRawPointer) -> UInt {
         __swift_bridge__$Vec_TableCell$len(vecPtr)
+    }
+}
+
+
+public class TableCellAnnotation: TableCellAnnotationRefMut {
+    public var isOwned: Bool = true
+
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+
+    deinit {
+        if isOwned {
+            __swift_bridge__$TableCellAnnotation$_free(ptr)
+        }
+    }
+}
+public class TableCellAnnotationRefMut: TableCellAnnotationRef {
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+}
+public class TableCellAnnotationRef {
+    public var ptr: UnsafeMutableRawPointer
+
+    public init(ptr: UnsafeMutableRawPointer) {
+        self.ptr = ptr
+    }
+}
+extension TableCellAnnotationRef {
+    public func row() -> UInt32 {
+        __swift_bridge__$TableCellAnnotation$row(ptr)
+    }
+
+    public func col() -> UInt32 {
+        __swift_bridge__$TableCellAnnotation$col(ptr)
+    }
+
+    public func annotation() -> TextAnnotation {
+        TextAnnotation(ptr: __swift_bridge__$TableCellAnnotation$annotation(ptr))
+    }
+}
+extension TableCellAnnotation: Vectorizable {
+    public static func vecOfSelfNew() -> UnsafeMutableRawPointer {
+        __swift_bridge__$Vec_TableCellAnnotation$new()
+    }
+
+    public static func vecOfSelfFree(vecPtr: UnsafeMutableRawPointer) {
+        __swift_bridge__$Vec_TableCellAnnotation$drop(vecPtr)
+    }
+
+    public static func vecOfSelfPush(vecPtr: UnsafeMutableRawPointer, value: TableCellAnnotation) {
+        __swift_bridge__$Vec_TableCellAnnotation$push(vecPtr, {value.isOwned = false; return value.ptr;}())
+    }
+
+    public static func vecOfSelfPop(vecPtr: UnsafeMutableRawPointer) -> Optional<Self> {
+        let pointer = __swift_bridge__$Vec_TableCellAnnotation$pop(vecPtr)
+        if pointer == nil {
+            return nil
+        } else {
+            return (TableCellAnnotation(ptr: pointer!) as! Self)
+        }
+    }
+
+    public static func vecOfSelfGet(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<TableCellAnnotationRef> {
+        let pointer = __swift_bridge__$Vec_TableCellAnnotation$get(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return TableCellAnnotationRef(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfGetMut(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<TableCellAnnotationRefMut> {
+        let pointer = __swift_bridge__$Vec_TableCellAnnotation$get_mut(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return TableCellAnnotationRefMut(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfAsPtr(vecPtr: UnsafeMutableRawPointer) -> UnsafePointer<TableCellAnnotationRef> {
+        UnsafePointer<TableCellAnnotationRef>(OpaquePointer(__swift_bridge__$Vec_TableCellAnnotation$as_ptr(vecPtr)))
+    }
+
+    public static func vecOfSelfLen(vecPtr: UnsafeMutableRawPointer) -> UInt {
+        __swift_bridge__$Vec_TableCellAnnotation$len(vecPtr)
     }
 }
 

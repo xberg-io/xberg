@@ -1889,6 +1889,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<Table> dco_decode_list_table(dynamic raw);
 
   @protected
+  List<TableCellAnnotation> dco_decode_list_table_cell_annotation(dynamic raw);
+
+  @protected
   List<TableCellStyle> dco_decode_list_table_cell_style(dynamic raw);
 
   @protected
@@ -2814,6 +2817,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TableCell dco_decode_table_cell(dynamic raw);
+
+  @protected
+  TableCellAnnotation dco_decode_table_cell_annotation(dynamic raw);
 
   @protected
   TableCellStyle dco_decode_table_cell_style(dynamic raw);
@@ -4953,6 +4959,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<Table> sse_decode_list_table(SseDeserializer deserializer);
 
   @protected
+  List<TableCellAnnotation> sse_decode_list_table_cell_annotation(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<TableCellStyle> sse_decode_list_table_cell_style(
     SseDeserializer deserializer,
   );
@@ -6132,6 +6143,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TableCell sse_decode_table_cell(SseDeserializer deserializer);
+
+  @protected
+  TableCellAnnotation sse_decode_table_cell_annotation(
+    SseDeserializer deserializer,
+  );
 
   @protected
   TableCellStyle sse_decode_table_cell_style(SseDeserializer deserializer);
@@ -9001,6 +9017,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_table(List<Table> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_table_cell_annotation(
+    List<TableCellAnnotation> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_table_cell_style(
     List<TableCellStyle> self,
     SseSerializer serializer,
@@ -10481,6 +10503,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_table_cell(TableCell self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_table_cell_annotation(
+    TableCellAnnotation self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_table_cell_style(
