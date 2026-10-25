@@ -227,7 +227,10 @@ async fn translate_table(
     if !texts.is_empty() {
         let translated = translate_batch(config, &texts, false, "translation_table_cells", usages).await?;
         for ((row_index, col_index), value) in positions.into_iter().zip(translated) {
-            table.cells[row_index][col_index] = value;
+            if table.cells[row_index][col_index] != value {
+                table.cells[row_index][col_index] = value;
+                table.drop_cell_annotations(row_index, col_index);
+            }
         }
     }
 

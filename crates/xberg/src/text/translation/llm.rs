@@ -194,6 +194,116 @@ mod tests {
         );
     }
 
+    /// A document structure holding one table node of one `$x$` cell annotated with `math`.
+    #[cfg(feature = "api")]
+    fn one_math_cell_structure(
+        math: &crate::types::document_structure::TextAnnotation,
+    ) -> crate::types::document_structure::DocumentStructure {
+        use crate::types::document_structure::{
+            ContentLayer, DocumentNode, DocumentStructure, GridCell, NodeContent, TableGrid,
+        };
+
+        let mut structure = DocumentStructure::new();
+        structure.push_node(DocumentNode {
+            id: String::new(),
+            content: NodeContent::Table {
+                grid: TableGrid {
+                    rows: 1,
+                    cols: 1,
+                    cells: vec![GridCell {
+                        content: "$x$".to_string(),
+                        row: 0,
+                        col: 0,
+                        row_span: 1,
+                        col_span: 1,
+                        is_header: false,
+                        bbox: None,
+                        heading_level: None,
+                        style_name: None,
+                        annotations: vec![math.clone()],
+                    }],
+                },
+            },
+            parent: None,
+            children: Vec::new(),
+            content_layer: ContentLayer::Body,
+            page: None,
+            page_end: None,
+            bbox: None,
+            annotations: Vec::new(),
+            attributes: None,
+        });
+        structure
+    }
+
+    /// A translated cell's annotations index its old text, so every table surface drops them; a cell
+    /// the translation returns unchanged keeps its own.
+    #[cfg(feature = "api")]
+    #[tokio::test]
+    async fn translate_result_drops_the_annotations_of_a_rewritten_table_cell() {
+        use crate::types::Table;
+        use crate::types::document_structure::{AnnotationKind, NodeContent, TextAnnotation};
+        use crate::types::tables::TableCellAnnotation;
+
+        // Every call is answered with this one segment, so each table holds one cell.
+        let (config, _) = stub_translation_config("[\"CELDA TRADUCIDA\"]").await;
+        let math = TextAnnotation {
+            start: 0,
+            end: 3,
+            kind: AnnotationKind::math(false),
+        };
+        let annotated_table = |text: &str| Table {
+            cells: vec![vec![text.to_string()]],
+            cell_annotations: vec![TableCellAnnotation {
+                row: 0,
+                col: 0,
+                annotation: math.clone(),
+            }],
+            ..Table::default()
+        };
+        let structure = one_math_cell_structure(&math);
+        let mut result = ExtractedDocument {
+            content: String::new(),
+            mime_type: std::borrow::Cow::Borrowed("text/plain"),
+            tables: vec![annotated_table("$x$"), annotated_table("CELDA TRADUCIDA")],
+            pages: Some(vec![crate::types::PageContent {
+                page_number: 1,
+                content: String::new(),
+                tables: vec![std::sync::Arc::new(annotated_table("$x$"))],
+                image_indices: Vec::new(),
+                image_preprocessing: None,
+                hierarchy: None,
+                is_blank: None,
+                layout_regions: None,
+                speaker_notes: None,
+                section_name: None,
+                sheet_name: None,
+                ocr_confidence: None,
+                native_content: None,
+            }]),
+            document: Some(structure),
+            ..Default::default()
+        };
+
+        translate_result(&mut result, &config).await.unwrap();
+
+        let annotation_counts: Vec<usize> = result.tables.iter().map(|table| table.cell_annotations.len()).collect();
+        assert_eq!(
+            annotation_counts,
+            [0, 1],
+            "tables: the rewritten cell drops, the unchanged one keeps"
+        );
+        let page_table = &result.pages.as_ref().expect("the page is kept")[0].tables[0];
+        assert_eq!(page_table.cells[0][0], "CELDA TRADUCIDA");
+        assert!(page_table.cell_annotations.is_empty(), "page tables");
+        let structure = result.document.as_ref().expect("the structure is kept");
+        let NodeContent::Table { grid } = &structure.nodes[0].content else {
+            panic!("the table node is kept");
+        };
+        assert_eq!(grid.cells[0].content, "CELDA TRADUCIDA");
+        assert!(grid.cells[0].annotations.is_empty(), "document structure grid cells");
+    }
+
     /// `content` and the page `content` are empty, so the kept text layer is the only text the
     /// document has to translate.
     #[cfg(feature = "api")]

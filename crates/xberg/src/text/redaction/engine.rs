@@ -29,11 +29,11 @@ use std::collections::HashSet;
 use crate::Result;
 use crate::core::config::redaction::{ExternalRedactionFinding, RedactionConfig, RedactionOffsetEncoding};
 use crate::extractors::security::SecurityLimits;
-use crate::types::ExtractedDocument;
 use crate::types::entity::{Entity, EntityCategory};
 use crate::types::metadata::FormatMetadata;
 use crate::types::redaction::{PiiCategory, RedactionFinding, RedactionReport};
 use crate::types::revisions::{DiffLine, RevisionAnchor};
+use crate::types::{ExtractedDocument, Table};
 
 #[cfg(feature = "tokio-runtime")]
 use super::external::compile_configured_findings_async;
@@ -531,17 +531,31 @@ impl RedactionPass<'_> {
     /// Rewrite the document-level table cells and their rendered markdown.
     fn redact_tables(&mut self, doc: &mut ExtractedDocument) {
         for table in doc.tables.iter_mut() {
-            for row in table.cells.iter_mut() {
-                for cell in row.iter_mut() {
-                    self.redact_in_place(cell);
-                }
-            }
+            self.redact_table_cells(table);
             if let Some(columns) = table.columns.as_mut() {
                 for column in columns.iter_mut() {
                     self.redact_in_place(column);
                 }
             }
             self.redact_in_place(&mut table.markdown);
+        }
+    }
+
+    /// Rewrite a table's cells, dropping the annotations of each cell whose text changed: their
+    /// byte ranges index the old text.
+    fn redact_table_cells(&mut self, table: &mut Table) {
+        let mut rewritten = Vec::new();
+        for (row_index, row) in table.cells.iter_mut().enumerate() {
+            for (col_index, cell) in row.iter_mut().enumerate() {
+                let redacted = self.redact(cell);
+                if redacted != *cell {
+                    *cell = redacted;
+                    rewritten.push((row_index, col_index));
+                }
+            }
+        }
+        for (row_index, col_index) in rewritten {
+            table.drop_cell_annotations(row_index, col_index);
         }
     }
 
@@ -563,11 +577,7 @@ impl RedactionPass<'_> {
             }
             for table in page.tables.iter_mut() {
                 let table = std::sync::Arc::make_mut(table);
-                for row in table.cells.iter_mut() {
-                    for cell in row.iter_mut() {
-                        self.redact_in_place(cell);
-                    }
-                }
+                self.redact_table_cells(table);
                 if let Some(columns) = table.columns.as_mut() {
                     for column in columns.iter_mut() {
                         self.redact_in_place(column);
@@ -1568,6 +1578,106 @@ mod tests {
             leaks.push("structured_output");
         }
         assert!(leaks.is_empty(), "PII leaked on fields: {leaks:?}");
+    }
+
+    /// A redacted cell's annotations index its old text, so every table surface drops them; a cell
+    /// the pass leaves alone keeps its own.
+    #[tokio::test]
+    async fn redaction_drops_the_annotations_of_a_rewritten_table_cell() {
+        use crate::types::document_structure::{
+            AnnotationKind, ContentLayer, DocumentNode, DocumentStructure, GridCell, NodeContent, TableGrid,
+            TextAnnotation,
+        };
+        use crate::types::tables::TableCellAnnotation;
+
+        let cells = vec!["$x$".to_string(), "$y$ alice@example.com".to_string()];
+        let math = TextAnnotation {
+            start: 0,
+            end: 3,
+            kind: AnnotationKind::math(false),
+        };
+        let table = Table {
+            cells: vec![cells.clone()],
+            cell_annotations: (0..2)
+                .map(|col| TableCellAnnotation {
+                    row: 0,
+                    col,
+                    annotation: math.clone(),
+                })
+                .collect(),
+            ..Default::default()
+        };
+        let grid_cell = |col: usize| GridCell {
+            content: cells[col].clone(),
+            row: 0,
+            col: col as u32,
+            row_span: 1,
+            col_span: 1,
+            is_header: false,
+            bbox: None,
+            heading_level: None,
+            style_name: None,
+            annotations: vec![math.clone()],
+        };
+        let mut structure = DocumentStructure::new();
+        structure.push_node(DocumentNode {
+            id: String::new(),
+            content: NodeContent::Table {
+                grid: TableGrid {
+                    rows: 1,
+                    cols: 2,
+                    cells: vec![grid_cell(0), grid_cell(1)],
+                },
+            },
+            parent: None,
+            children: Vec::new(),
+            content_layer: ContentLayer::Body,
+            page: None,
+            page_end: None,
+            bbox: None,
+            annotations: Vec::new(),
+            attributes: None,
+        });
+        let mut doc = ExtractedDocument {
+            tables: vec![table.clone()],
+            pages: Some(vec![crate::types::PageContent {
+                page_number: 1,
+                content: String::new(),
+                tables: vec![std::sync::Arc::new(table)],
+                image_indices: Vec::new(),
+                image_preprocessing: None,
+                hierarchy: None,
+                is_blank: None,
+                layout_regions: None,
+                speaker_notes: None,
+                section_name: None,
+                sheet_name: None,
+                ocr_confidence: None,
+                native_content: None,
+            }]),
+            document: Some(structure),
+            ..Default::default()
+        };
+
+        redact(&mut doc, &RedactionConfig::default())
+            .await
+            .expect("redaction must succeed");
+
+        let annotated_cols =
+            |table: &Table| -> Vec<u32> { table.cell_annotations.iter().map(|entry| entry.col).collect() };
+        assert_eq!(annotated_cols(&doc.tables[0]), [0], "tables: {:?}", doc.tables[0].cells);
+        let page_table = &doc.pages.as_ref().expect("the page is kept")[0].tables[0];
+        assert_eq!(annotated_cols(page_table), [0], "page tables: {:?}", page_table.cells);
+        let structure = doc.document.as_ref().expect("the structure is kept");
+        let NodeContent::Table { grid } = &structure.nodes[0].content else {
+            panic!("the table node is kept");
+        };
+        let grid_annotations: Vec<(&str, usize)> = grid
+            .cells
+            .iter()
+            .map(|cell| (cell.content.as_str(), cell.annotations.len()))
+            .collect();
+        assert_eq!(grid_annotations, [("$x$", 1), ("$y$ [REDACTED]", 0)]);
     }
 
     /// xberg-io/xberg#200 — every occurrence of an NER mention must be redacted,

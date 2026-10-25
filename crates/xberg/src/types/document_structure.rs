@@ -592,6 +592,19 @@ pub struct GridCell {
     pub annotations: Vec<TextAnnotation>,
 }
 
+impl GridCell {
+    /// Hand `content` to `rewrite`, dropping `annotations` when the text changes: their byte ranges
+    /// index the old text. Gated like its one caller, [`NodeContent::for_each_text_field_mut`].
+    #[cfg(any(feature = "redaction", feature = "translation"))]
+    fn rewrite_content(&mut self, rewrite: &mut impl FnMut(&mut String)) {
+        let before = (!self.annotations.is_empty()).then(|| self.content.clone());
+        rewrite(&mut self.content);
+        if before.is_some_and(|before| before != self.content) {
+            self.annotations.clear();
+        }
+    }
+}
+
 fn default_span() -> u32 {
     1
 }
@@ -805,7 +818,7 @@ impl NodeContent {
             }
             NodeContent::Table { grid } => {
                 for cell in grid.cells.iter_mut() {
-                    redact(&mut cell.content);
+                    cell.rewrite_content(&mut redact);
                 }
             }
             NodeContent::MetadataBlock { entries } => {

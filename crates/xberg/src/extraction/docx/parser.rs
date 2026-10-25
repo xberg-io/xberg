@@ -7408,7 +7408,7 @@ mod tests {
         let cells: Vec<Case> = vec![
             (
                 vec![paragraph_of(vec![
-                    Run::new("\u{C9}quation ".into()),
+                    Run::new("\u{E9}t\u{E9} ".into()),
                     math_run("x", false),
                 ])],
                 &[("$x$", false)],
