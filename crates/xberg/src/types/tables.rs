@@ -78,6 +78,15 @@ pub struct Table {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub cell_styles: Vec<TableCellStyle>,
 
+    /// Header cells for this fragment, i.e. the first row of `cells`.
+    ///
+    /// Populated even when this fragment's own header row was merged away or
+    /// physically lives in a sibling fragment (see `table_id`), so a single
+    /// fragment is interpretable in isolation. `None` when no header row
+    /// could be determined.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub columns: Option<Vec<String>>,
+
     /// Inline annotations on individual cells' text, for the cells that have one.
     ///
     /// Sparse and flat, like [`Table::cell_styles`]. `cells` keeps its text: an equation in a DOCX
@@ -91,15 +100,6 @@ pub struct Table {
     /// a cell's text must drop or move that cell's entries. ~keep
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub cell_annotations: Vec<TableCellAnnotation>,
-
-    /// Header cells for this fragment, i.e. the first row of `cells`.
-    ///
-    /// Populated even when this fragment's own header row was merged away or
-    /// physically lives in a sibling fragment (see `table_id`), so a single
-    /// fragment is interpretable in isolation. `None` when no header row
-    /// could be determined.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub columns: Option<Vec<String>>,
 }
 
 /// The paragraph style a single table cell's text carries, located by grid position.
