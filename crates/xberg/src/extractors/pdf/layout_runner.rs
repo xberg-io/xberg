@@ -42,7 +42,7 @@ use crate::{
     pdf::structure::types::{LayoutHint, PageLayoutResult},
 };
 
-/// How [`run_layout_for_pdf_pages`] treats pages the `Auto` gate skips.
+/// How [`run_layout_for_pdf_pages`] treats pages the layout gate skips.
 ///
 /// The markdown path only needs rasters for pages the model inspects, so it
 /// skips rendering entirely. The OCR path reuses the layout pass's rasters as
@@ -69,7 +69,7 @@ pub(super) enum GatedPageHandling {
 /// detections_per_page)`, one entry per page at every index.
 ///
 /// - `images[i]` is the rendered RGB image for page `i`, or a small white
-///   placeholder when the page failed to render or the `Auto` gate skipped it
+///   placeholder when the page failed to render or the layout gate skipped it
 ///   on the markdown path.
 /// - `results[i]` holds per-region detection metadata in PDF coordinate space.
 /// - `hints_per_page[i]` holds the layout hints for page `i` (empty for
@@ -84,12 +84,13 @@ type LayoutForMarkdownOutput = (
     Vec<crate::layout::DetectionResult>,
 );
 
-/// Layout pass outcome plus the `Auto` gate's per-page decisions.
+/// Layout pass outcome plus the gate's per-page decisions.
 ///
 /// `data` is `None` when the gate skipped every page (the caller proceeds
-/// exactly as if layout were off). `gate_decisions` is `None` under strategy
-/// `Always` and always present under `Auto`, including the all-gated case, so
-/// gate behavior stays auditable from extraction metadata.
+/// exactly as if layout were off). `gate_decisions` is `None` for a document
+/// with no pages and under strategy `Always` without a `pages` list, and always
+/// present otherwise, including the all-gated case, so gate behavior stays
+/// auditable from extraction metadata.
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
 pub(super) struct LayoutRunOutput {
     pub data: Option<LayoutForMarkdownOutput>,
@@ -103,7 +104,7 @@ struct RenderedLayoutPage {
     page_height_pts: f32,
     rotation: u32,
     image: Option<image::RgbImage>,
-    /// `false` when the `Auto` gate skipped this page: it stays out of the
+    /// `false` when the layout gate skipped this page: it stays out of the
     /// ONNX batch and keeps an empty detection, exactly like a page where the
     /// model ran and found nothing.
     run_inference: bool,
@@ -341,13 +342,25 @@ fn displayed_page_dimensions(width: f32, height: f32, rotation_degrees: u32) -> 
     }
 }
 
-/// Run the `Auto` gate over every page, or `None` under strategy `Always`.
+/// Per-page decisions from the `pages` list when set, else from the `Auto`
+/// gate, or `None` under strategy `Always`.
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
-fn auto_gate_decisions(
+fn page_gate_decisions(
     doc: &xberg_native_pdf::PdfDocument,
     layout_config: &LayoutDetectionConfig,
     page_count: usize,
 ) -> Option<Vec<PageGateDecision>> {
+    if let Some(pages) = layout_config.pages.as_deref() {
+        let decisions = crate::pdf::layout_gate::listed_page_decisions(pages, page_count);
+        let selected = decisions.iter().filter(|decision| decision.run_layout).count();
+        tracing::info!(
+            pages = page_count,
+            selected,
+            skipped = page_count - selected,
+            "layout gate: explicit page list selection"
+        );
+        return Some(decisions);
+    }
     match layout_config.strategy {
         LayoutStrategy::Always => None,
         LayoutStrategy::Auto => {
@@ -364,7 +377,7 @@ fn auto_gate_decisions(
     }
 }
 
-/// Whether the `Auto` gate selected `page_index` for the model.
+/// Whether the gate (`Auto` or the `pages` list) selected `page_index` for the model.
 ///
 /// `None` gate decisions (strategy `Always`) select every page; a page index
 /// beyond the decision vector also runs, so a gate bug can only ever cost
@@ -846,7 +859,7 @@ fn run_layout_for_pdf_pages_with_security_limits(
         ));
     }
 
-    let gate_decisions = auto_gate_decisions(&doc, layout_config, page_count);
+    let gate_decisions = page_gate_decisions(&doc, layout_config, page_count);
     if let Some(decisions) = &gate_decisions
         && decisions.iter().all(|decision| !decision.run_layout)
     {
@@ -933,9 +946,9 @@ fn run_layout_for_pdf_pages_with_security_limits(
 /// [`run_layout_for_pdf_pages`].
 ///
 /// The first four values are `None` when the feature is not requested, when
-/// the `Auto` gate skipped every page, or on soft failure (logged so the
+/// the layout gate skipped every page, or on soft failure (logged so the
 /// markdown path continues without layout hints). The fifth value carries the
-/// `Auto` gate's per-page decisions whenever the gate ran, including the
+/// layout gate's per-page decisions whenever the gate ran, including the
 /// all-gated case. The sixth value carries a `ProcessingWarning` when automatic
 /// inference recovers on CPU or layout fails entirely. The seventh value carries
 /// the proactively resolved or recovered CPU acceleration config so downstream
@@ -1046,7 +1059,7 @@ pub(super) async fn maybe_run_layout_for_markdown(
             },
             glyph_drop_warnings,
         )) => {
-            tracing::info!("layout-for-markdown: auto gate skipped every page, continuing without layout hints");
+            tracing::info!("layout-for-markdown: layout gate skipped every page, continuing without layout hints");
             (
                 None,
                 None,
@@ -1088,7 +1101,7 @@ pub(super) fn ocr_layout_run_count() -> usize {
 
 /// Run the layout pass used by OCR without blocking a Tokio worker thread.
 ///
-/// `result` holds `data: None` when the `Auto` gate skipped every page: the caller
+/// `result` holds `data: None` when the layout gate skipped every page: the caller
 /// then proceeds exactly as if layout were off, rendering its own OCR rasters once.
 /// Mirrors the markdown path's CPU fallback and warning on accelerated failure (#1344).
 ///
@@ -1703,6 +1716,115 @@ mod tests {
         let decisions = vec![gate_decision(false), gate_decision(true)];
         assert!(!gate_selects_page(Some(&decisions), 0));
         assert!(gate_selects_page(Some(&decisions), 1));
+    }
+
+    fn page_list_config(
+        strategy: crate::core::config::layout::LayoutStrategy,
+        pages: Option<Vec<u32>>,
+    ) -> LayoutDetectionConfig {
+        LayoutDetectionConfig {
+            strategy,
+            pages,
+            ..Default::default()
+        }
+    }
+
+    fn decisions_for(bytes: Vec<u8>, config: &LayoutDetectionConfig) -> Option<Vec<(bool, &'static str)>> {
+        let doc = xberg_native_pdf::PdfDocument::from_bytes(bytes).expect("fixture PDF must open");
+        let page_count = doc.page_count().expect("fixture page count");
+        super::page_gate_decisions(&doc, config, page_count).map(|decisions| {
+            decisions
+                .iter()
+                .map(|decision| (decision.run_layout, decision.reason.wire_name()))
+                .collect()
+        })
+    }
+
+    #[test]
+    fn page_list_overrides_every_strategy_page_by_page() {
+        use crate::core::config::layout::LayoutStrategy;
+
+        assert_eq!(
+            decisions_for(prose_pdf(20), &page_list_config(LayoutStrategy::Auto, None)),
+            Some(vec![(false, "plain_text")]),
+            "auto alone must skip the prose page"
+        );
+        assert_eq!(
+            decisions_for(blank_letter_pages_pdf(2), &page_list_config(LayoutStrategy::Auto, None)),
+            Some(vec![(true, "no_text_layer"), (true, "no_text_layer")]),
+            "auto alone must run the blank pages"
+        );
+        for strategy in [LayoutStrategy::Always, LayoutStrategy::Auto] {
+            assert_eq!(
+                decisions_for(prose_pdf(20), &page_list_config(strategy, Some(vec![1]))),
+                Some(vec![(true, "listed_page")]),
+                "{strategy}: a listed page runs even where auto would skip it"
+            );
+            assert_eq!(
+                decisions_for(blank_letter_pages_pdf(2), &page_list_config(strategy, Some(vec![2]))),
+                Some(vec![(false, "unlisted_page"), (true, "listed_page")]),
+                "{strategy}: an unlisted page is skipped even where auto would run it"
+            );
+        }
+        assert_eq!(
+            decisions_for(prose_pdf(20), &page_list_config(LayoutStrategy::Always, None)),
+            None
+        );
+    }
+
+    /// An empty list gates every page, so both passes return before any engine init.
+    #[test]
+    fn empty_page_list_skips_the_layout_pass_on_both_routes() {
+        use crate::core::config::layout::LayoutStrategy;
+
+        let bytes = blank_letter_pages_pdf(3);
+        let config = page_list_config(LayoutStrategy::Always, Some(Vec::new()));
+        for handling in [GatedPageHandling::SkipRender, GatedPageHandling::RenderWithoutInference] {
+            let (output, render_warning) = super::run_layout_for_pdf_pages(&bytes, &config, 1, handling)
+                .expect("an all-unlisted run must succeed without a layout engine");
+            assert!(
+                output.data.is_none(),
+                "{handling:?}: no listed page means no layout pass"
+            );
+            assert!(render_warning.is_none());
+            let reasons: Vec<_> = output
+                .gate_decisions
+                .expect("a page list must record decisions")
+                .iter()
+                .map(|decision| (decision.run_layout, decision.reason.wire_name()))
+                .collect();
+            assert_eq!(reasons, vec![(false, "unlisted_page"); 3], "{handling:?}");
+        }
+    }
+
+    #[test]
+    fn listed_rotated_and_cropped_pages_render_and_unlisted_ones_do_not() {
+        let budget = RenderBudget {
+            security_limits: &crate::extractors::security::SecurityLimits::default(),
+            images_config: None,
+        };
+        for (bytes, rotation) in [
+            (rotated_pdf(false, 90), 90),
+            (letter_page_pdf(Some([50, 102, 562, 742])), 0),
+        ] {
+            let doc = xberg_native_pdf::PdfDocument::from_bytes(bytes).expect("fixture PDF must open");
+            for handling in [GatedPageHandling::SkipRender, GatedPageHandling::RenderWithoutInference] {
+                let listed = crate::pdf::layout_gate::listed_page_decisions(&[1], 1);
+                let page = render_layout_chunk(&doc, &[rotation], 0, 1, Some(&listed), handling, budget).remove(0);
+                assert!(page.run_inference, "rotation {rotation}, {handling:?}");
+                assert!(page.image.is_some(), "rotation {rotation}, {handling:?}");
+                assert_eq!(page.rotation, rotation);
+
+                let unlisted = crate::pdf::layout_gate::listed_page_decisions(&[], 1);
+                let page = render_layout_chunk(&doc, &[rotation], 0, 1, Some(&unlisted), handling, budget).remove(0);
+                assert!(!page.run_inference, "rotation {rotation}, {handling:?}");
+                assert_eq!(
+                    page.image.is_some(),
+                    handling == GatedPageHandling::RenderWithoutInference,
+                    "rotation {rotation}, {handling:?}"
+                );
+            }
+        }
     }
 
     fn letter_page_pdf(crop_box: Option<[i64; 4]>) -> Vec<u8> {

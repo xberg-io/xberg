@@ -79,18 +79,22 @@ pub struct PdfMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub implausible_text_pages: Option<Vec<u32>>,
 
-    /// Pages the `auto` layout strategy skipped (1-indexed).
+    /// Pages the `auto` layout strategy or the `layout.pages` list skipped (1-indexed).
     ///
-    /// `None` unless layout detection ran with `LayoutStrategy::Auto`; empty
-    /// when the gate selected every page.
+    /// `None` unless the `Auto` gate or a `pages` list ran on a markdown
+    /// layout pass or whole-document OCR layout pass that completed; a pass
+    /// that fails records nothing, and the mixed OCR route (`force_ocr_pages`,
+    /// detected scanned pages) does not record it. Empty when every page was
+    /// selected.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub layout_gated_pages: Option<Vec<u32>>,
 
-    /// Why the `auto` layout gate selected or skipped each page.
+    /// Why the layout gate selected or skipped each page.
     ///
     /// Index `i` is page `i + 1`. Snake_case values such as `multi_column`,
-    /// `table_grid`, or `plain_text` (the skip reason). `None` unless layout
-    /// detection ran with `LayoutStrategy::Auto`.
+    /// `table_grid`, or `plain_text` (the skip reason), or `listed_page` and
+    /// `unlisted_page` under a `pages` list. Recorded exactly when
+    /// `layout_gated_pages` is.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub layout_gate_reasons: Option<Vec<String>>,
 }

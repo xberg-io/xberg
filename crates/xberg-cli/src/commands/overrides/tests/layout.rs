@@ -81,6 +81,66 @@ fn test_layout_strategy_conflicts_with_layout_false() {
 }
 
 #[cfg(feature = "layout-detection")]
+#[derive(clap::Parser)]
+struct OverridesOnly {
+    #[command(flatten)]
+    overrides: ExtractionOverrides,
+}
+
+#[cfg(feature = "layout-detection")]
+fn parse_overrides(args: &[&str]) -> Result<ExtractionOverrides, clap::Error> {
+    use clap::Parser;
+    OverridesOnly::try_parse_from(std::iter::once("xberg").chain(args.iter().copied())).map(|parsed| parsed.overrides)
+}
+
+#[cfg(feature = "layout-detection")]
+#[test]
+fn test_layout_pages_parsed_and_applied_alongside_strategy() {
+    let overrides = parse_overrides(&["--layout-strategy", "auto", "--layout-pages", "3,1,3"]).expect("valid flags");
+    overrides.validate().expect("page list with a strategy is valid");
+    let mut config = ExtractionConfig::default();
+    overrides.apply(&mut config);
+    let layout = config.layout.expect("--layout-pages enables layout");
+    assert_eq!(layout.pages, Some(vec![3, 1, 3]));
+    assert_eq!(layout.strategy, xberg::LayoutStrategy::Auto);
+}
+
+#[cfg(feature = "layout-detection")]
+#[test]
+fn test_layout_pages_alone_enables_layout() {
+    let overrides = parse_overrides(&["--layout-pages", "2"]).expect("valid flags");
+    overrides.validate().expect("a page list on its own is valid");
+    let mut config = ExtractionConfig::default();
+    overrides.apply(&mut config);
+    let layout = config.layout.expect("--layout-pages alone enables layout");
+    assert_eq!(layout.pages, Some(vec![2]));
+}
+
+#[cfg(feature = "layout-detection")]
+#[test]
+fn test_layout_pages_rejects_non_numeric_entries() {
+    for value in ["1-3", "a", "1,x", "4294967296"] {
+        let error = match parse_overrides(&["--layout-pages", value]) {
+            Ok(_) => panic!("{value} must not parse as a page list"),
+            Err(error) => error,
+        };
+        assert_eq!(error.kind(), clap::error::ErrorKind::ValueValidation, "{value}");
+    }
+}
+
+#[cfg(feature = "layout-detection")]
+#[test]
+fn test_layout_pages_conflicts_with_layout_false() {
+    let overrides = ExtractionOverrides {
+        layout: Some(false),
+        layout_pages: Some(vec![1]),
+        ..default_overrides()
+    };
+    let error = overrides.validate().expect_err("conflicting flags must fail");
+    assert!(error.to_string().contains("--layout-pages"));
+}
+
+#[cfg(feature = "layout-detection")]
 #[test]
 fn test_layout_confidence_applied() {
     let mut config = ExtractionConfig::default();

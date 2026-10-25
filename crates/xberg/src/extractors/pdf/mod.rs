@@ -1024,8 +1024,9 @@ fn prepare_ocr_layout_inputs(
     (images, detections)
 }
 
-/// Auto layout gate audit trail: 1-indexed skipped pages and per-page
-/// decision reasons, both `None` unless the `Auto` gate ran.
+/// Layout gate audit trail: 1-indexed skipped pages and per-page decision
+/// reasons, both `None` unless the `Auto` gate or a `pages` list ran on the
+/// whole-document OCR route (the mixed OCR route records none).
 ///
 /// Unused only when both OCR features and the pdf + layout-detection pair
 /// are off; the allow is scoped wider because cfg algebra for "either user
@@ -1035,11 +1036,12 @@ type OcrLayoutGateDecisions = (Option<Vec<u32>>, Option<Vec<String>>);
 
 /// Whether the markdown layout pass's rasters may be reused as OCR input.
 ///
-/// Under `LayoutStrategy::Auto` with `SkipRender`, gate-skipped pages carry
-/// 64x64 white placeholders. Rotated pages also remain in the display-space
-/// coordinate frame required by Markdown layout. Reuse is therefore allowed
-/// only when every page ran the model and no page has an effective `/Rotate`;
-/// otherwise OCR reruns layout with normalized rasters. ~keep
+/// Under `LayoutStrategy::Auto` or a `pages` list with `SkipRender`,
+/// gate-skipped pages carry 64x64 white placeholders. Rotated pages also
+/// remain in the display-space coordinate frame required by Markdown layout.
+/// Reuse is therefore allowed only when every page ran the model and no page
+/// has an effective `/Rotate`; otherwise OCR reruns layout with normalized
+/// rasters. ~keep
 #[cfg(all(
     feature = "pdf",
     feature = "layout-detection",
@@ -1201,7 +1203,7 @@ async fn run_ocr_with_layout(
                 )) => {
                     layout_warning = warning;
                     layout_glyph_drop_warnings = glyph_drop_warnings;
-                    tracing::info!("OCR layout: auto gate skipped every page, continuing without layout assembly");
+                    tracing::info!("OCR layout: layout gate skipped every page, continuing without layout assembly");
                     ocr_layout_gate_decisions = layout_gate_metadata(gate_decisions.as_deref());
                     None
                 }
@@ -3177,7 +3179,7 @@ impl PdfExtractor {
             crate::core::diagnostics::push_warning_deduped(&mut doc.processing_warnings, warning);
         }
 
-        // Record the auto layout gate's audit trail from whichever pass ran
+        // Record the layout gate's audit trail from whichever pass ran
         // it. Compiled whenever `pdf` is on so `ocr_layout_gate_audit` keeps
         // a reader in profiles without layout-detection (it is always
         // `(None, None)` there and the fields stay `None`). ~keep

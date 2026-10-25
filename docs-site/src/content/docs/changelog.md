@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(layout): `LayoutDetectionConfig.pages` runs the layout model only on the listed PDF pages.**
+  The 1-indexed list decides instead of `strategy`, so callers that know which pages need layout skip the model
+  elsewhere; an empty list runs it on no page. Each page's reason is recorded as `listed_page` or `unlisted_page` in
+  `layout_gate_reasons`, and the CLI gains `--layout-pages`. (#1322)
 - **(api): Set `include_image_data: false` to omit raw image byte arrays from extraction responses.**
   JSON and multipart requests support this option for synchronous and asynchronous extraction; image metadata
   and optional Base64 data remain available, and the default response is unchanged. (#2187)
@@ -62,6 +66,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Archive count, size, and compression-ratio limits are checked before header validation or payload reads.
 
 ### Fixed
+
+- **(djot): Keep apostrophes, quotes, dashes and ellipses, and read table captions.**
+  jotdown reports smart punctuation as events of their own, which the extractor skipped in every block, so
+  `Don't` came out as `Dont`, `"fine"` as `fine` and `1--2` as `12`. They now come out as the characters
+  jotdown's HTML renderer writes (`’`, `“`, `”`, `–`, `—`, `…`). The `^ caption` line of a table was dropped and
+  is now a paragraph after the table, linked to it as its caption. A hard line break in a caption, list item,
+  heading or definition no longer joins its two lines (`first\nsecond` read `firstsecond`), and an image in a
+  caption or table cell keeps its alt text as the image's text and URI label. A footnote reference in a caption
+  follows the caption instead of coming before the table. (#2224)
+- **(email): Decode a base64 body or attachment that holds a character outside the base64 alphabet.**
+  `mail-parser` gives up on such a part, for example one with a stray `>`, and keeps the encoded text, which
+  then came out as the body or as the text of the attachment (`JVBERi0x…` for a PDF). The part is now decoded
+  without those characters, as RFC 2045 asks. A part that holds plain text despite its base64 label keeps
+  that text. (#2223)
+- **(email, epub): Skip a run of unclosed `<script>`, `<style>`, `<title>`, `<video>`, `<audio>` or `<math>` elements in linear time.**
+  The HTML structure walker searched the rest of the document for the closing tag again at every such opener,
+  so 20,000 of them in an email body took seconds. A closing tag that is missing is now searched for once.
+  The walker also builds the document structure of EPUB chapters, which now leaves out the `<title>` in a
+  chapter's `<head>` as well. (#2222)
+- **(email): Leave the style sheets, scripts, `<meta>` tags and the `<title>` in the `<head>` of an HTML body out of the message text.**
+  The HTML part of an Outlook message came out with its whole style sheet (`@font-face`, `p.MsoNormal`, …),
+  `Generator: Microsoft Word 15 (filtered medium)` and its title as paragraphs, and a `<script>` with its code.
+  Only the body text remains, as in the text of an HTML file. (#2222)
+- **(pdf): Read a two-up sheet as two pages, left then right.**
+  Two pages printed side by side on one landscape sheet were read across both pages line by line when one page set
+  code beside its explanation, since that page left too few prose lines for the two-column check. A sheet whose
+  gutter sits near its middle, with an empty corridor at least one inch wide that no text crosses and whose sides
+  share no row grid the way a table's columns do, is now split at the gutter and each half is ordered as its own
+  page. (#2227)
 
 - **(html): Read a page that is not UTF-8 in the encoding its byte order mark or `<meta>` declares.**
   Every non-UTF-8 page was decoded as UTF-8, so a `<meta charset>` or `<meta http-equiv>` declaration was ignored

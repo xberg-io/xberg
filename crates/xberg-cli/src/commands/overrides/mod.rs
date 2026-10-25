@@ -231,6 +231,17 @@ pub struct ExtractionOverrides {
     )]
     pub layout_strategy: Option<String>,
 
+    /// PDF pages to run the layout model on (1-indexed, comma-separated, e.g. 1,4,7).
+    /// Overrides --layout-strategy: unlisted pages skip the model.
+    #[cfg(feature = "layout-detection")]
+    #[arg(
+        long,
+        value_name = "PAGES",
+        value_delimiter = ',',
+        help = "PDF pages to run the layout model on (1-indexed, comma-separated); overrides --layout-strategy"
+    )]
+    pub layout_pages: Option<Vec<u32>>,
+
     /// Table structure model: tatr (default), slanet_wired, slanet_wireless, slanet_plus, slanet_auto, disabled.
     #[cfg(feature = "layout-detection")]
     #[arg(

@@ -128,6 +128,9 @@ xberg extract document.pdf --layout --layout-table-model slanet_wired
 # Adaptive page selection: run the model only on pages that can benefit
 xberg extract document.pdf --layout --layout-strategy auto
 
+# Explicit page selection: run the model only on pages 1, 4, and 7
+xberg extract document.pdf --layout --layout-pages 1,4,7
+
 # Combined with GPU acceleration
 xberg extract document.pdf --layout --acceleration coreml
 ```
@@ -168,6 +171,14 @@ Two behaviors to know:
 - Skipped pages are auditable: `metadata.format.layout_gated_pages` lists them (1-indexed), and `metadata.format.layout_gate_reasons` records each page's decision reason (`multi_column`, `table_grid`, `plain_text`, and so on). The `format` object is tagged `format_type: "pdf"`.
 
 Note that `auto` trades the model's per-paragraph refinements on skipped pages (heading promotion, code and formula tagging) for throughput; content and reading order are unchanged. Keep `always` when you need the model's classification on every page.
+
+### Explicit Page List
+
+When you already know which pages need the model (for example pages likely to hold tables or formulas), set `LayoutDetectionConfig.pages` to a list of 1-indexed page numbers. The list decides instead of `strategy`: a listed page is selected for layout and, if it renders, runs the model whenever a layout pass runs (`use_layout_for_markdown` or an OCR layout pass), and every unlisted page is skipped exactly as `auto` skips one, so on the OCR path a skipped page is still rendered for OCR. Unlike `auto`, which skips only pages it judges to be plain prose, a list skips every unlisted page whatever it holds: a multi-column or table page left off the list loses the model's reading order and table regions. Each page's reason is `listed_page` or `unlisted_page`. `layout_gated_pages` and `layout_gate_reasons` are recorded when the markdown layout pass or the whole-document OCR layout pass ran to completion; as with `auto`, the mixed OCR route (`force_ocr_pages` or detected scanned pages) records neither.
+
+- An empty list runs the model on no page; leaving `pages` unset leaves the choice to `strategy`.
+- Order and duplicates do not matter. Page 0 and pages past the end of the document are ignored with a logged warning.
+- Only PDF documents are affected. On the CLI, pass `--layout-pages 1,4,7`.
 
 ## Table Structure Models
 

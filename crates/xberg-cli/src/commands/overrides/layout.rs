@@ -21,6 +21,9 @@ impl ExtractionOverrides {
         if self.layout == Some(false) && self.layout_strategy.is_some() {
             bail!("--layout false cannot be combined with --layout-strategy");
         }
+        if self.layout == Some(false) && self.layout_pages.is_some() {
+            bail!("--layout false cannot be combined with --layout-pages");
+        }
         if let Some(ref strategy) = self.layout_strategy
             && strategy.parse::<xberg::LayoutStrategy>().is_err()
         {
@@ -46,6 +49,7 @@ impl ExtractionOverrides {
                 || self.layout_confidence.is_some()
                 || self.layout_table_model.is_some()
                 || self.layout_strategy.is_some()
+                || self.layout_pages.is_some()
                 || self.use_layout_for_markdown
                 || has_formula_flag;
             if has_layout_flag {
@@ -58,6 +62,9 @@ impl ExtractionOverrides {
                 }
                 if let Some(ref strategy) = self.layout_strategy {
                     layout.strategy = strategy.parse().unwrap_or_default();
+                }
+                if let Some(ref pages) = self.layout_pages {
+                    layout.pages = Some(pages.clone());
                 }
                 #[cfg(feature = "formula-recognition")]
                 if let Some(ref formula_model) = self.layout_formula_model {

@@ -18,6 +18,7 @@ pub(crate) enum FootnoteRefHolder {
     /// A list item at this nesting depth, so a sublist item never takes its parent's references.
     ListItem(usize),
     Table,
+    TableCaption,
     DefinitionTerm,
     DefinitionDescription,
 }

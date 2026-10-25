@@ -13926,6 +13926,7 @@ const _: fn() = || {
         let _: crate::TableOverlapPreference = LayoutDetectionConfig.table_overlap_preference;
         let _: Option<crate::AccelerationConfig> = LayoutDetectionConfig.acceleration;
         let _: bool = LayoutDetectionConfig.enable_chart_understanding;
+        let _: Option<Vec<i64>> = LayoutDetectionConfig.pages;
     }
     {
         let LayoutRegion = None::<crate::LayoutRegion>.unwrap();
@@ -20197,6 +20198,7 @@ impl SseDecode for crate::LayoutDetectionConfig {
         let mut var_tableOverlapPreference = <crate::TableOverlapPreference>::sse_decode(deserializer);
         let mut var_acceleration = <Option<crate::AccelerationConfig>>::sse_decode(deserializer);
         let mut var_enableChartUnderstanding = <bool>::sse_decode(deserializer);
+        let mut var_pages = <Option<Vec<i64>>>::sse_decode(deserializer);
         return crate::LayoutDetectionConfig {
             strategy: var_strategy,
             confidence_threshold: var_confidenceThreshold,
@@ -20206,6 +20208,7 @@ impl SseDecode for crate::LayoutDetectionConfig {
             table_overlap_preference: var_tableOverlapPreference,
             acceleration: var_acceleration,
             enable_chart_understanding: var_enableChartUnderstanding,
+            pages: var_pages,
         };
     }
 }
@@ -31146,6 +31149,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::LayoutDetectionConfig> 
             self.0.table_overlap_preference.into_into_dart().into_dart(),
             self.0.acceleration.into_into_dart().into_dart(),
             self.0.enable_chart_understanding.into_into_dart().into_dart(),
+            self.0.pages.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -38102,6 +38106,7 @@ impl SseEncode for crate::LayoutDetectionConfig {
         <crate::TableOverlapPreference>::sse_encode(self.table_overlap_preference, serializer);
         <Option<crate::AccelerationConfig>>::sse_encode(self.acceleration, serializer);
         <bool>::sse_encode(self.enable_chart_understanding, serializer);
+        <Option<Vec<i64>>>::sse_encode(self.pages, serializer);
     }
 }
 

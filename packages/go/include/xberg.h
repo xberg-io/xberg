@@ -16456,6 +16456,17 @@ int32_t xberg_layout_detection_config_enable_chart_understanding(
 
 #if defined(XBERG_FEATURE_LAYOUT_TYPES)
 /**
+ * Get the `pages` field from a `LayoutDetectionConfig`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `xberg_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *xberg_layout_detection_config_pages(XBERGAlefHandle handle);
+#endif
+
+#if defined(XBERG_FEATURE_LAYOUT_TYPES)
+/**
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */

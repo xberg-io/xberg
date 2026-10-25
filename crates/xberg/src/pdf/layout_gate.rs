@@ -14,6 +14,9 @@
 //! [`super::scan_detect`]: a page that cannot be inspected must never abort
 //! extraction, it just runs the model.
 //!
+//! An explicit `LayoutDetectionConfig::pages` list replaces the pre-screen
+//! through [`listed_page_decisions`].
+//!
 //! [`LayoutStrategy::Auto`]: crate::core::config::layout::LayoutStrategy::Auto
 
 use xberg_native_pdf::PdfDocument;
@@ -91,6 +94,10 @@ pub(crate) enum GateReason {
     SignalsUnavailable,
     /// Plain single-column text: the model has nothing to find.
     PlainText,
+    /// `LayoutDetectionConfig::pages` lists the page.
+    ListedPage,
+    /// `LayoutDetectionConfig::pages` is set and does not list the page.
+    UnlistedPage,
 }
 
 impl GateReason {
@@ -106,6 +113,8 @@ impl GateReason {
             Self::FormWidgets => "form_widgets",
             Self::SignalsUnavailable => "signals_unavailable",
             Self::PlainText => "plain_text",
+            Self::ListedPage => "listed_page",
+            Self::UnlistedPage => "unlisted_page",
         }
     }
 }
@@ -438,6 +447,50 @@ pub(crate) fn decide_pages(doc: &PdfDocument, page_count: usize) -> Vec<PageGate
         .collect()
 }
 
+/// Decide every page from an explicit 1-indexed page list.
+///
+/// Entries the document does not have (0, or past the last page) select
+/// nothing and are warned about once; order and duplicates do not matter.
+pub(crate) fn listed_page_decisions(pages: &[u32], page_count: usize) -> Vec<PageGateDecision> {
+    let mut listed = vec![false; page_count];
+    for &page in pages {
+        if let Some(slot) = (page as usize).checked_sub(1).and_then(|index| listed.get_mut(index)) {
+            *slot = true;
+        }
+    }
+    let missing = pages_outside_document(pages, page_count);
+    if !missing.is_empty() {
+        tracing::warn!(
+            ?missing,
+            page_count,
+            "layout.pages lists pages the document does not have (pages are 1-indexed); ignoring them"
+        );
+    }
+    listed
+        .into_iter()
+        .map(|run_layout| PageGateDecision {
+            run_layout,
+            reason: if run_layout {
+                GateReason::ListedPage
+            } else {
+                GateReason::UnlistedPage
+            },
+        })
+        .collect()
+}
+
+/// The listed pages the document does not have (0, or past the last page), sorted and deduplicated.
+fn pages_outside_document(pages: &[u32], page_count: usize) -> Vec<u32> {
+    let mut missing: Vec<u32> = pages
+        .iter()
+        .copied()
+        .filter(|&page| page == 0 || page as usize > page_count)
+        .collect();
+    missing.sort_unstable();
+    missing.dedup();
+    missing
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -667,5 +720,107 @@ mod tests {
         let decision = decide_page(&signals);
         assert!(decision.run_layout);
         assert_eq!(decision.reason, GateReason::FormWidgets);
+    }
+
+    fn listed(decisions: &[PageGateDecision]) -> Vec<(bool, &'static str)> {
+        decisions
+            .iter()
+            .map(|decision| (decision.run_layout, decision.reason.wire_name()))
+            .collect()
+    }
+
+    #[test]
+    fn listed_pages_are_one_indexed_and_order_insensitive() {
+        assert_eq!(
+            listed(&listed_page_decisions(&[3, 1, 3], 4)),
+            vec![
+                (true, "listed_page"),
+                (false, "unlisted_page"),
+                (true, "listed_page"),
+                (false, "unlisted_page"),
+            ]
+        );
+    }
+
+    #[test]
+    fn empty_page_list_selects_no_page() {
+        assert_eq!(
+            listed(&listed_page_decisions(&[], 2)),
+            vec![(false, "unlisted_page"), (false, "unlisted_page")]
+        );
+    }
+
+    #[test]
+    fn page_zero_and_pages_past_the_end_select_nothing() {
+        assert_eq!(
+            listed(&listed_page_decisions(&[0, 2, 9, u32::MAX], 2)),
+            vec![(false, "unlisted_page"), (true, "listed_page")]
+        );
+        assert_eq!(
+            listed(&listed_page_decisions(&[0, 2], 1)),
+            vec![(false, "unlisted_page")]
+        );
+    }
+
+    /// Capture what `body` logs at WARN on this thread.
+    fn warnings_from(body: impl FnOnce()) -> String {
+        use std::sync::{Arc, Mutex};
+
+        #[derive(Clone)]
+        struct Capture(Arc<Mutex<Vec<u8>>>);
+
+        impl std::io::Write for Capture {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                self.0.lock().expect("log buffer poisoned").write_all(buf)?;
+                Ok(buf.len())
+            }
+
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let buffer = Arc::new(Mutex::new(Vec::new()));
+        let capture = Capture(Arc::clone(&buffer));
+        let subscriber = tracing_subscriber::fmt()
+            .with_ansi(false)
+            .with_max_level(tracing::Level::WARN)
+            .with_writer(move || capture.clone())
+            .finish();
+        // A callsite first reached on a thread with no subscriber is otherwise cached as
+        // never-interested for the whole process, which would hide the warning from this
+        // capture (the same race the `cache` log tests close, #301).
+        crate::pdf::render::install_pdf_render_diagnostics();
+        tracing::subscriber::with_default(subscriber, body);
+        let logs = buffer.lock().expect("log buffer poisoned").clone();
+        String::from_utf8(logs).expect("log output must be UTF-8")
+    }
+
+    #[test]
+    fn pages_outside_the_document_are_warned_about_once_by_number() {
+        let logs = warnings_from(|| {
+            listed_page_decisions(&[9, 0, 2, 9, 0], 3);
+        });
+        assert_eq!(
+            logs.matches("layout.pages lists pages the document does not have")
+                .count(),
+            1,
+            "logs were:\n{logs}"
+        );
+        assert!(logs.contains("missing=[0, 9]"), "logs were:\n{logs}");
+        assert!(logs.contains("page_count=3"), "logs were:\n{logs}");
+    }
+
+    #[test]
+    fn pages_inside_the_document_log_no_warning() {
+        let logs = warnings_from(|| {
+            listed_page_decisions(&[3, 1, 2, 3], 3);
+        });
+        assert_eq!(logs, "");
+    }
+
+    #[test]
+    fn single_page_document_runs_only_when_listed() {
+        assert_eq!(listed(&listed_page_decisions(&[1], 1)), vec![(true, "listed_page")]);
     }
 }

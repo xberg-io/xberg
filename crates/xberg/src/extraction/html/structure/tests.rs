@@ -661,6 +661,153 @@ fn test_script_becomes_raw_block() {
 }
 
 #[test]
+fn test_head_title_is_not_body_text() {
+    let html = "<html><head><title>Page name</title></head><body><p>Content</p>\
+                <svg><title>Sales by quarter</title><rect width=\"1\" height=\"1\"/></svg></body></html>";
+    let doc = build_document_structure(html);
+    assert!(doc.validate().is_ok());
+    let texts: Vec<&str> = doc.nodes.iter().filter_map(|node| node.content.text()).collect();
+    assert_eq!(texts, vec!["Content", "Sales by quarter"]);
+}
+
+#[test]
+fn should_close_a_head_title_whatever_the_case_of_its_closing_tag() {
+    // Each of these ends the head title, so the body before the SVG's `</title>` stays ~keep
+    for closing in ["</TITLE>", "</Title >", "</title\n>", "</title/>", "</title foo>"] {
+        let html = format!(
+            "<html><head><title>Page{closing}</head><body><p>KEPT_BODY</p>\
+             <svg><title>SVG name</title></svg></body></html>"
+        );
+        let doc = build_document_structure(&html);
+        let texts: Vec<&str> = doc.nodes.iter().filter_map(|node| node.content.text()).collect();
+        assert_eq!(texts, vec!["KEPT_BODY", "SVG name"], "{closing:?}");
+    }
+}
+
+#[test]
+fn should_end_a_raw_block_at_its_closing_tag_in_any_case() {
+    let html = "<html><body><script>var a;</SCRIPT ><p>after</p><script>var b;</script></body></html>";
+    let doc = build_document_structure(html);
+    let texts: Vec<&str> = doc.nodes.iter().filter_map(|node| node.content.text()).collect();
+    assert!(texts.contains(&"after"), "{texts:?}");
+}
+
+#[test]
+fn should_find_a_closing_tag_past_many_near_misses_in_linear_time() {
+    let html = format!(
+        "<html><head><title>{}</title></head><body><p>end</p></body></html>",
+        "</titlex </title  ".repeat(20_000)
+    );
+    let doc = build_document_structure(&html);
+    let texts: Vec<&str> = doc.nodes.iter().filter_map(|node| node.content.text()).collect();
+    assert_eq!(texts, vec!["end"]);
+}
+
+#[test]
+fn should_skip_many_unclosed_elements_in_linear_time() {
+    // A search of the whole rest of the document per unclosed opener would take billions of steps ~keep
+    for opener in ["<script>", "<style>", "<title>", "<video>", "<audio>", "<math>"] {
+        let html = format!(
+            "<html><head>{}</head><body><p>end</p></body></html>",
+            format!("{opener}x ").repeat(20_000)
+        );
+        tag_handlers::CLOSING_TAG_SEARCHES.with(|count| count.set(0));
+        let doc = build_document_structure(&html);
+        let text: String = doc.nodes.iter().filter_map(|node| node.content.text()).collect();
+        assert_eq!(text.matches('x').count(), 20_000, "{opener}");
+        assert!(text.ends_with("end"), "{opener}: {text:?}");
+        assert_eq!(
+            tag_handlers::CLOSING_TAG_SEARCHES.with(|count| count.get()),
+            1,
+            "{opener}"
+        );
+    }
+}
+
+#[test]
+fn should_keep_one_record_entry_for_many_heads_with_an_unclosed_title() {
+    let html = format!(
+        "<html>{}<body><p>end</p></body></html>",
+        "<head><title>x</head>".repeat(20_000)
+    );
+    tag_handlers::CLOSING_TAG_SEARCHES.with(|count| count.set(0));
+    tag_handlers::MISSING_RECORD_PEAK.with(|peak| peak.set(0));
+    let doc = build_document_structure(&html);
+    let text: String = doc.nodes.iter().filter_map(|node| node.content.text()).collect();
+    assert_eq!(text.matches('x').count(), 20_000);
+    assert!(text.ends_with("end"), "{text:?}");
+    // Each head searches its own short span once, and the record stays at one entry ~keep
+    assert_eq!(tag_handlers::CLOSING_TAG_SEARCHES.with(|count| count.get()), 20_000);
+    assert_eq!(tag_handlers::MISSING_RECORD_PEAK.with(|peak| peak.get()), 1);
+}
+
+#[test]
+fn should_raise_the_record_when_a_later_head_leaves_many_titles_open() {
+    let html = format!(
+        "<html><head><title>a</head><head>{}</head><body><p>end</p></body></html>",
+        "<title>x ".repeat(20_000)
+    );
+    tag_handlers::CLOSING_TAG_SEARCHES.with(|count| count.set(0));
+    let doc = build_document_structure(&html);
+    let text: String = doc.nodes.iter().filter_map(|node| node.content.text()).collect();
+    assert_eq!(text.matches('x').count(), 20_000);
+    // One search per head: the second head's first miss raises the record to its end ~keep
+    assert_eq!(tag_handlers::CLOSING_TAG_SEARCHES.with(|count| count.get()), 2);
+}
+
+#[test]
+fn should_find_the_end_of_the_head_once_for_many_heads() {
+    let html = format!(
+        "<html>{}</head><body><p>end</p></body></html>",
+        "<head><title>t</title>".repeat(20_000)
+    );
+    tag_handlers::HEAD_END_SEARCHES.with(|count| count.set(0));
+    let doc = build_document_structure(&html);
+    let texts: Vec<&str> = doc.nodes.iter().filter_map(|node| node.content.text()).collect();
+    assert_eq!(texts, vec!["end"]);
+    assert_eq!(tag_handlers::HEAD_END_SEARCHES.with(|count| count.get()), 1);
+}
+
+#[test]
+fn should_keep_the_body_when_the_head_title_or_the_head_is_not_closed() {
+    for (head, expected) in [
+        ("<head><title>Page</head>", vec!["Page", "KEPT_BODY", "SVG name"]),
+        ("<head><title>Page", vec!["Page", "KEPT_BODY", "SVG name"]),
+        ("<head><title>Page</title>", vec!["KEPT_BODY", "SVG name"]),
+    ] {
+        let html = format!("<html>{head}<body><p>KEPT_BODY</p><svg><title>SVG name</title></svg></body></html>");
+        let doc = build_document_structure(&html);
+        let texts: Vec<&str> = doc.nodes.iter().filter_map(|node| node.content.text()).collect();
+        assert_eq!(texts, expected, "{head:?}");
+    }
+}
+
+#[test]
+fn should_skip_the_title_of_a_second_head_after_an_unclosed_one() {
+    let html = "<html><head><title>A</head><body><p>one</p></body></html>\
+                <html><head><title>B</title></head><body><p>two</p></body></html>";
+    let doc = build_document_structure(html);
+    let texts: Vec<&str> = doc.nodes.iter().filter_map(|node| node.content.text()).collect();
+    assert_eq!(texts, vec!["A", "one", "two"]);
+}
+
+#[test]
+fn should_find_a_closed_script_after_an_unclosed_video() {
+    let html = "<html><body><video>clip<script>var a;</script><p>after</p></body></html>";
+    let doc = build_document_structure(html);
+    assert!(
+        doc.nodes.iter().any(|node| matches!(
+            &node.content,
+            NodeContent::RawBlock { format, content } if format == "script" && content == "var a;"
+        )),
+        "{:?}",
+        doc.nodes
+    );
+    let texts: Vec<&str> = doc.nodes.iter().filter_map(|node| node.content.text()).collect();
+    assert!(texts.contains(&"after"), "{texts:?}");
+}
+
+#[test]
 fn test_strikethrough_annotation() {
     let html = "<p>Some <del>deleted</del> text</p>";
     let doc = build_document_structure(html);

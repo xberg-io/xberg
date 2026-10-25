@@ -185,7 +185,7 @@ pub struct LayoutDetectionConfig {
     /// Defaults to [`LayoutStrategy::Always`], the historical behavior:
     /// every page is rendered and inferred. [`LayoutStrategy::Auto`]
     /// pre-screens pages with cheap signals and skips the model where it
-    /// cannot help.
+    /// cannot help. Ignored when `pages` is set.
     #[serde(default)]
     pub strategy: LayoutStrategy,
 
@@ -237,6 +237,19 @@ pub struct LayoutDetectionConfig {
     /// opt-in and has no effect on standard text/table extraction scores.
     #[serde(default)]
     pub enable_chart_understanding: bool,
+
+    /// Run the layout model only on these PDF pages (1-indexed).
+    ///
+    /// When set, the list decides instead of `strategy`: a listed page is
+    /// selected for layout and, if it renders, runs the model whenever a
+    /// layout pass runs (`use_layout_for_markdown` or an OCR layout pass), and
+    /// every unlisted page is skipped the way `Auto` skips a page. An empty
+    /// list runs the model on no page, while `None` leaves the choice to
+    /// `strategy`. Order and duplicates do not matter; 0 and pages past the end
+    /// of the document are ignored with a warning. Only applies to PDF
+    /// documents.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pages: Option<Vec<u32>>,
 }
 
 impl Default for LayoutDetectionConfig {
@@ -250,6 +263,7 @@ impl Default for LayoutDetectionConfig {
             table_overlap_preference: TableOverlapPreference::default(),
             acceleration: None,
             enable_chart_understanding: false,
+            pages: None,
         }
     }
 }
@@ -296,6 +310,27 @@ mod tests {
         let config: LayoutDetectionConfig =
             toml::from_str("strategy = \"auto\"").expect("toml config must deserialize");
         assert_eq!(config.strategy, LayoutStrategy::Auto);
+    }
+
+    #[test]
+    fn layout_pages_distinguish_unset_from_empty_in_every_format() {
+        let unset: LayoutDetectionConfig = serde_json::from_str("{}").expect("empty config must deserialize");
+        assert_eq!(unset.pages, None);
+        assert!(!serde_json::to_string(&unset).expect("serialize").contains("pages"));
+
+        let empty: LayoutDetectionConfig = serde_json::from_str(r#"{"pages": []}"#).expect("empty list");
+        assert_eq!(empty.pages, Some(Vec::new()));
+
+        let listed: LayoutDetectionConfig =
+            serde_json::from_str(r#"{"strategy": "auto", "pages": [3, 1, 3]}"#).expect("listed pages");
+        assert_eq!(listed.pages, Some(vec![3, 1, 3]));
+        let json = serde_json::to_string(&listed).expect("serialize");
+        let round_trip: LayoutDetectionConfig = serde_json::from_str(&json).expect("round trip");
+        assert_eq!(round_trip.pages, listed.pages);
+        assert_eq!(round_trip.strategy, LayoutStrategy::Auto);
+
+        let toml_config: LayoutDetectionConfig = toml::from_str("pages = [2, 5]").expect("toml pages");
+        assert_eq!(toml_config.pages, Some(vec![2, 5]));
     }
 
     #[test]

@@ -11758,7 +11758,7 @@ class LayoutDetectionConfig {
   /// Defaults to [`LayoutStrategy::Always`], the historical behavior:
   /// every page is rendered and inferred. [`LayoutStrategy::Auto`]
   /// pre-screens pages with cheap signals and skips the model where it
-  /// cannot help.
+  /// cannot help. Ignored when `pages` is set.
   final LayoutStrategy strategy;
 
   /// Confidence threshold override (None = use model default).
@@ -11803,6 +11803,18 @@ class LayoutDetectionConfig {
   /// opt-in and has no effect on standard text/table extraction scores.
   final bool enableChartUnderstanding;
 
+  /// Run the layout model only on these PDF pages (1-indexed).
+  ///
+  /// When set, the list decides instead of `strategy`: a listed page is
+  /// selected for layout and, if it renders, runs the model whenever a
+  /// layout pass runs (`use_layout_for_markdown` or an OCR layout pass), and
+  /// every unlisted page is skipped the way `Auto` skips a page. An empty
+  /// list runs the model on no page, while `None` leaves the choice to
+  /// `strategy`. Order and duplicates do not matter; 0 and pages past the end
+  /// of the document are ignored with a warning. Only applies to PDF
+  /// documents.
+  final Int64List? pages;
+
   const LayoutDetectionConfig({
     required this.strategy,
     this.confidenceThreshold,
@@ -11812,6 +11824,7 @@ class LayoutDetectionConfig {
     required this.tableOverlapPreference,
     this.acceleration,
     required this.enableChartUnderstanding,
+    this.pages,
   });
 
   @override
@@ -11823,7 +11836,8 @@ class LayoutDetectionConfig {
       formulaModel.hashCode ^
       tableOverlapPreference.hashCode ^
       acceleration.hashCode ^
-      enableChartUnderstanding.hashCode;
+      enableChartUnderstanding.hashCode ^
+      pages.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -11837,7 +11851,8 @@ class LayoutDetectionConfig {
           formulaModel == other.formulaModel &&
           tableOverlapPreference == other.tableOverlapPreference &&
           acceleration == other.acceleration &&
-          enableChartUnderstanding == other.enableChartUnderstanding;
+          enableChartUnderstanding == other.enableChartUnderstanding &&
+          pages == other.pages;
 }
 
 /// A detected layout region on a page.
@@ -16001,17 +16016,21 @@ class PdfMetadata {
   /// when no page qualifies.
   final Int64List? implausibleTextPages;
 
-  /// Pages the `auto` layout strategy skipped (1-indexed).
+  /// Pages the `auto` layout strategy or the `layout.pages` list skipped (1-indexed).
   ///
-  /// `None` unless layout detection ran with `LayoutStrategy::Auto`; empty
-  /// when the gate selected every page.
+  /// `None` unless the `Auto` gate or a `pages` list ran on a markdown
+  /// layout pass or whole-document OCR layout pass that completed; a pass
+  /// that fails records nothing, and the mixed OCR route (`force_ocr_pages`,
+  /// detected scanned pages) does not record it. Empty when every page was
+  /// selected.
   final Int64List? layoutGatedPages;
 
-  /// Why the `auto` layout gate selected or skipped each page.
+  /// Why the layout gate selected or skipped each page.
   ///
   /// Index `i` is page `i + 1`. Snake_case values such as `multi_column`,
-  /// `table_grid`, or `plain_text` (the skip reason). `None` unless layout
-  /// detection ran with `LayoutStrategy::Auto`.
+  /// `table_grid`, or `plain_text` (the skip reason), or `listed_page` and
+  /// `unlisted_page` under a `pages` list. Recorded exactly when
+  /// `layout_gated_pages` is.
   final List<String>? layoutGateReasons;
 
   const PdfMetadata({

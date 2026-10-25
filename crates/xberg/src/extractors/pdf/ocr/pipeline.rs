@@ -710,7 +710,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     glyph_drop_warnings,
                 )) => {
                     tracing::info!(
-                        "OCR layout (mixed route): auto gate skipped every page, continuing without layout assembly"
+                        "OCR layout (mixed route): layout gate skipped every page, continuing without layout assembly"
                     );
                     (None, warning, glyph_drop_warnings)
                 }
