@@ -4,6 +4,8 @@ default_layers = ["plugins"]
 name = 'Xberg'
 description = 'Rust document intelligence library with active Python, TypeScript/Node, Ruby, PHP, Go, Java, C#, Elixir, WebAssembly, Dart, Kotlin Android, Swift, Zig, and C FFI bindings'
 gitignore = true
+# ~keep The manifest is committed so CI can detect stale generated files.
+gitignore_exclude = [".ai-rulez/.generated-manifest.json"]
 presets = ["claude", "codex", "opencode", "pi", "hermes", "gemini", "copilot"]
 # ~keep CLAUDE.md without the glob-scoped rules: they load from .claude/rules on a matching read.
 agents_md = false
@@ -55,7 +57,7 @@ merge_strategy = 'local-override'
 name = 'alef'
 source = 'https://github.com/xberg-io/alef.git'
 
-ref = "613e2b06975b1d3a0d776ca141dec7b540e9ed74"
+ref = "8fd2cf190d7f1523e3aec8753a850d37e5acccc9"
 [[mcp_servers]]
 name = 'playwright'
 description = 'Playwright browser automation for E2E testing and docs verification'

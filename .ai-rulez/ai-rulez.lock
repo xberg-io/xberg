@@ -4,7 +4,7 @@
 version = 1
 ai_rulez_version = '5.6.3'
 scope = 'all'
-tree = 'sha256:1a262e56d6d6d83741d8b5dee08f76a73070abf97a5e92cdab3bc9c536e363ef'
+tree = 'sha256:0c7b92ff9143ff76dad10ecc1e3a0fc9edba8d80b6f0a046ea551e0f74d2dc22'
 
 [[include]]
 name = 'xberg-cicd'
@@ -50,9 +50,9 @@ digest = 'sha256:518a92c13de9a205d6ede0f25bdc05c799f0d6dcfcfc69fb4e618ff21540cb0
 name = 'alef'
 source = 'https://github.com/xberg-io/alef.git'
 path = 'skills/alef'
-ref = '613e2b06975b1d3a0d776ca141dec7b540e9ed74'
-commit = '613e2b06975b1d3a0d776ca141dec7b540e9ed74'
-digest = 'sha256:b8e5a29bdbefb3ca9b8f15324d865e48a55d43fe5a1370831232549d2f78fa73'
+ref = '8fd2cf190d7f1523e3aec8753a850d37e5acccc9'
+commit = '8fd2cf190d7f1523e3aec8753a850d37e5acccc9'
+digest = 'sha256:180c32522454d3c8c1517abdef159205b8d84d2a79347e6719e8aaa23d478c0f'
 
 [[served]]
 name = 'add-language-generator'
@@ -69,9 +69,9 @@ digest = 'sha256:30ea1d640c9a49c62038c7393ca4509b79fe9a864bf93f80650422de835e27f
 [[served]]
 name = 'alef'
 source = 'https://github.com/xberg-io/alef.git'
-ref = '613e2b06975b1d3a0d776ca141dec7b540e9ed74'
+ref = '8fd2cf190d7f1523e3aec8753a850d37e5acccc9'
 commit = ''
-digest = 'sha256:61c78d745a1b7c74b9752fb8a10bba27e023001c66a4260a57a3f033fbbb6273'
+digest = 'sha256:7f4e0fb460d0828eab16f4f7e5a8495ec1c13a2df5a1f3beb120e74e98f604fa'
 
 [[served]]
 name = 'alef-generated-bindings'
