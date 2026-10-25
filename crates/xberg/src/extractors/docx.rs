@@ -325,14 +325,19 @@ fn build_internal_document(
                 // consumer sees must not diverge from the one `Table::to_markdown` already
                 // renders correctly (xberg-io/xberg#1549). ~keep
                 let table_note_refs = doc.note_refs_by_table.get(idx);
-                let cells = match table_note_refs {
-                    Some(_) => table_without_note_markers(table)
-                        .to_cell_grid(crate::extraction::docx::parser::Paragraph::runs_to_markdown),
-                    None => table.to_cell_grid(crate::extraction::docx::parser::Paragraph::runs_to_markdown),
+                let (cells, cell_annotations) = match table_note_refs {
+                    Some(_) => markdown_cell_grid(&table_without_note_markers(table)),
+                    None => markdown_cell_grid(table),
                 };
                 if !cells.is_empty() {
                     let cell_styles = resolve_table_cell_styles(doc, table);
-                    builder.push_table_from_cells_with_styles(&cells, &cell_styles, Some(current_page), None);
+                    builder.push_table_from_cells_with_annotations(
+                        &cells,
+                        &cell_styles,
+                        &cell_annotations,
+                        Some(current_page),
+                        None,
+                    );
                 }
                 push_note_refs(&mut builder, table_note_refs, current_page);
             }
@@ -503,12 +508,41 @@ fn push_header_footer_content(
         // Previously read no span at all, so a merged header/footer cell shifted every
         // following cell left; now shares the same origin-once grid as body tables
         // (xberg-io/xberg#1549). ~keep
-        let cells = table.to_cell_grid(crate::extraction::docx::parser::Paragraph::runs_to_markdown);
+        let (cells, cell_annotations) = markdown_cell_grid(table);
         if !cells.is_empty() {
-            let idx = builder.push_table_from_cells(&cells, None, None);
+            let idx = builder.push_table_from_cells_with_annotations(&cells, &[], &cell_annotations, None, None);
             builder.set_layer(idx, layer);
         }
     }
+}
+
+/// The table's Markdown cell grid, and an entry for each equation in it whose range indexes the
+/// text of its own cell, so a renderer writes the equation as math rather than escaped dollars.
+fn markdown_cell_grid(
+    table: &crate::extraction::docx::parser::Table,
+) -> (Vec<Vec<String>>, Vec<crate::types::TableCellAnnotation>) {
+    let mut annotations = Vec::new();
+    let mut cells = Vec::new();
+    for (row, row_cells) in table.to_markdown_cell_grid_with_math().into_iter().enumerate() {
+        let mut texts = Vec::with_capacity(row_cells.len());
+        for (col, (text, math)) in row_cells.into_iter().enumerate() {
+            annotations.extend(
+                math.into_iter()
+                    .map(|(range, display)| crate::types::TableCellAnnotation {
+                        row: row as u32,
+                        col: col as u32,
+                        annotation: crate::types::TextAnnotation {
+                            start: range.start as u32,
+                            end: range.end as u32,
+                            kind: crate::types::AnnotationKind::math(display),
+                        },
+                    }),
+            );
+            texts.push(text);
+        }
+        cells.push(texts);
+    }
+    (cells, annotations)
 }
 
 /// Collect plain text, annotations, and math formulas from a slice of Runs.
@@ -894,7 +928,7 @@ fn convert_docx_table_to_table(
     // Same grid as the element builder's Table arm above, and the same reason: a
     // gridSpan/vMerge cell must appear once, not cloned per covered column/row
     // (xberg-io/xberg#1549). ~keep
-    let cells = docx_table.to_cell_grid(crate::extraction::docx::parser::Paragraph::runs_to_markdown);
+    let (cells, cell_annotations) = markdown_cell_grid(docx_table);
 
     let markdown = cells_to_markdown(&cells);
 
@@ -904,6 +938,7 @@ fn convert_docx_table_to_table(
         page_number,
         bounding_box: None,
         cell_styles: resolve_table_cell_styles(doc, docx_table),
+        cell_annotations,
         ..Default::default()
     }
 }
@@ -5161,5 +5196,310 @@ mod tests {
             annotations.iter().all(|a| (a.start, a.end) == (0, 5)),
             "the bold span must cover `claim` only: {annotations:?}"
         );
+    }
+
+    const MATH_DOCUMENT_NS: &str = r#"xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math""#;
+
+    fn math_document(body: &str) -> String {
+        format!("<w:document {MATH_DOCUMENT_NS}><w:body>{body}</w:body></w:document>")
+    }
+
+    fn omath(text: &str) -> String {
+        format!("<m:oMath><m:r><m:t>{text}</m:t></m:r></m:oMath>")
+    }
+
+    fn text_run(text: &str) -> String {
+        format!(r#"<w:r><w:t xml:space="preserve">{text}</w:t></w:r>"#)
+    }
+
+    fn table_cell(content: &str) -> String {
+        format!("<w:tc><w:p>{content}</w:p></w:tc>")
+    }
+
+    async fn extract_math_docx(data: &[u8]) -> crate::types::extraction::ExtractedDocument {
+        let internal = extract_docx_internal_document(data).await;
+        crate::extraction::derive::derive_extraction_result(internal, true, crate::core::config::OutputFormat::Markdown)
+    }
+
+    fn rendered_markdown(result: &crate::types::extraction::ExtractedDocument) -> &str {
+        result.formatted_content.as_deref().unwrap_or(&result.content)
+    }
+
+    /// Each entry of `table`, as the text it slices out of its own cell, with its display flag.
+    fn cell_math_spans(table: &Table) -> Vec<(u32, u32, &str, Option<bool>)> {
+        table
+            .cell_annotations
+            .iter()
+            .map(|entry| {
+                let cell = &table.cells[entry.row as usize][entry.col as usize];
+                let span = &cell[entry.annotation.start as usize..entry.annotation.end as usize];
+                (entry.row, entry.col, span, entry.annotation.kind.math_display())
+            })
+            .collect()
+    }
+
+    /// Every grid cell of the document structure carries the entries of its own table cell.
+    fn assert_grid_mirrors_cell_annotations(result: &crate::types::extraction::ExtractedDocument) {
+        let document = result.document.as_ref().expect("document structure requested");
+        let grids = document.nodes.iter().filter_map(|node| match &node.content {
+            NodeContent::Table { grid } => Some(grid),
+            _ => None,
+        });
+        for (grid, table) in grids.zip(&result.tables) {
+            for cell in &grid.cells {
+                let expected: Vec<_> = table
+                    .cell_annotations
+                    .iter()
+                    .filter(|entry| (entry.row, entry.col) == (cell.row, cell.col))
+                    .map(|entry| entry.annotation.clone())
+                    .collect();
+                assert_eq!(cell.annotations, expected, "{cell:?}");
+            }
+        }
+    }
+
+    fn reparsed_cell_math(markdown: &str) -> Vec<Vec<Vec<String>>> {
+        crate::rendering::reparsed_table_cells(markdown)
+            .into_iter()
+            .map(|row| row.into_iter().map(|(literals, _)| literals).collect())
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn should_render_issue_2123_table_cell_math_as_code_math() {
+        let xml = math_document(&format!(
+            "<w:tbl><w:tr>{}{}</w:tr><w:tr>{}{}</w:tr></w:tbl>",
+            table_cell(&text_run("Name")),
+            table_cell(&text_run("Formula")),
+            table_cell(&text_run("Area")),
+            table_cell(&omath("&#945;")),
+        ));
+        let result = extract_math_docx(&build_test_docx(&xml)).await;
+
+        let markdown = rendered_markdown(&result);
+        assert!(markdown.contains("| Area | $`\\alpha `$ |"), "{markdown}");
+        assert!(!markdown.contains("$\\\\alpha"), "{markdown}");
+        assert_eq!(
+            reparsed_cell_math(markdown),
+            [[vec![], vec![]], [vec![], vec!["\\alpha "]]]
+        );
+
+        let table = &result.tables[0];
+        let annotation = crate::types::TextAnnotation {
+            start: 0,
+            end: "$\\alpha $".len() as u32,
+            kind: crate::types::AnnotationKind::math(false),
+        };
+        assert_eq!(
+            table.cell_annotations,
+            [crate::types::TableCellAnnotation {
+                row: 1,
+                col: 1,
+                annotation: annotation.clone(),
+            }]
+        );
+        assert_eq!(cell_math_spans(table), [(1, 1, "$\\alpha $", Some(false))]);
+
+        let document = result.document.as_ref().expect("document structure requested");
+        let grid = document
+            .nodes
+            .iter()
+            .find_map(|node| match &node.content {
+                NodeContent::Table { grid } => Some(grid),
+                _ => None,
+            })
+            .expect("a table node");
+        for cell in &grid.cells {
+            let expected = if (cell.row, cell.col) == (1, 1) {
+                vec![annotation.clone()]
+            } else {
+                vec![]
+            };
+            assert_eq!(cell.annotations, expected, "{cell:?}");
+        }
+
+        let payload = serde_json::to_value(&result).expect("serialize the extraction");
+        assert_eq!(
+            payload["tables"][0]["cell_annotations"],
+            serde_json::json!([{
+                "row": 1, "col": 1,
+                "annotation": {"start": 0, "end": 9,
+                    "kind": {"annotation_type": "custom", "name": "xberg.math", "value": "inline"}},
+            }])
+        );
+        let restored: crate::types::extraction::ExtractedDocument =
+            serde_json::from_value(payload).expect("deserialize the extraction");
+        assert_eq!(restored.tables[0].cell_annotations, table.cell_annotations);
+        assert_eq!(restored.document.as_ref(), Some(document));
+    }
+
+    #[tokio::test]
+    async fn should_annotate_a_spanned_or_merged_cell_only_at_its_origin() {
+        let plain = |text: &str| table_cell(&text_run(text));
+        let xml = math_document(&format!(
+            r#"<w:tbl><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>
+<w:tr><w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr><w:p>{x}</w:p></w:tc>{c}</w:tr>
+<w:tr><w:tc><w:tcPr><w:vMerge w:val="restart"/></w:tcPr><w:p>{y}</w:p></w:tc>{b}{c}</w:tr>
+<w:tr><w:tc><w:tcPr><w:vMerge/></w:tcPr><w:p/></w:tc>{b}{c}</w:tr>
+<w:tr><w:trPr><w:gridBefore w:val="1"/></w:trPr><w:tc><w:p>{z}</w:p></w:tc>{c}</w:tr>
+</w:tbl>"#,
+            x = omath("x"),
+            y = omath("y"),
+            z = omath("z"),
+            b = plain("b"),
+            c = plain("c"),
+        ));
+        let result = extract_math_docx(&build_test_docx(&xml)).await;
+
+        let table = &result.tables[0];
+        assert_eq!(
+            table.cells,
+            [["$x$", "", "c"], ["$y$", "b", "c"], ["", "b", "c"], ["", "$z$", "c"]]
+        );
+        assert_eq!(
+            cell_math_spans(table),
+            [
+                (0, 0, "$x$", Some(false)),
+                (1, 0, "$y$", Some(false)),
+                (3, 1, "$z$", Some(false))
+            ]
+        );
+        assert_grid_mirrors_cell_annotations(&result);
+        let x: Vec<String> = vec!["x".into()];
+        let none: Vec<String> = vec![];
+        assert_eq!(
+            reparsed_cell_math(rendered_markdown(&result)),
+            [
+                [x.clone(), none.clone(), none.clone()],
+                [vec!["y".into()], none.clone(), none.clone()],
+                [none.clone(), none.clone(), none.clone()],
+                [none.clone(), vec!["z".into()], none.clone()]
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn should_keep_cell_styles_and_math_on_a_heading_cell() {
+        let xml = math_document(&format!(
+            r#"<w:tbl>
+<w:tr><w:tc><w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr>{area}{a}</w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p>{see}<w:r><w:footnoteReference w:id="2"/></w:r>{space}{b}</w:p></w:tc></w:tr>
+</w:tbl>"#,
+            area = text_run("Area "),
+            a = omath("A"),
+            see = text_run("See"),
+            space = text_run(" "),
+            b = omath("B"),
+        ));
+        let data = build_test_docx_with_parts(&xml, None, Some(NOTE_A_B_FOOTNOTES), None, None, None, None);
+        let result = extract_math_docx(&data).await;
+
+        let table = &result.tables[0];
+        assert_eq!(
+            table
+                .cell_styles
+                .iter()
+                .map(|style| (style.row, style.col, style.heading_level))
+                .collect::<Vec<_>>(),
+            [(0, 0, Some(2))]
+        );
+        assert_eq!(
+            cell_math_spans(table),
+            [(0, 0, "$A$", Some(false)), (1, 0, "$B$", Some(false))]
+        );
+
+        // `pages[].tables` keeps the note literal the body table strips, so each indexes its own text.
+        let page_table = &result.pages.as_ref().expect("page content")[0].tables[0];
+        assert_ne!(page_table.cells[1][0], table.cells[1][0]);
+        assert_eq!(
+            cell_math_spans(page_table),
+            [(0, 0, "$A$", Some(false)), (1, 0, "$B$", Some(false))]
+        );
+    }
+
+    #[tokio::test]
+    async fn should_annotate_header_footer_and_page_tables() {
+        let body = math_document(&format!(
+            r#"<w:tbl><w:tr>{}<w:tc><w:p><m:oMathPara>{}{}</m:oMathPara></w:p></w:tc></w:tr></w:tbl>"#,
+            table_cell(&format!(
+                "{}{}{}{}",
+                text_run("&#201;t&#233; "),
+                omath("x"),
+                text_run(" and "),
+                omath("y")
+            )),
+            omath("a"),
+            omath("b"),
+        ));
+        let header = format!(
+            r#"<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"><w:tbl><w:tr>{}</w:tr></w:tbl></w:hdr>"#,
+            table_cell(&omath("h"))
+        );
+        let data = build_test_docx_with_parts(&body, None, None, None, Some(&header), None, None);
+        let result = extract_math_docx(&data).await;
+
+        let body_table = result
+            .tables
+            .iter()
+            .find(|table| table.cells[0].len() == 2)
+            .expect("the body table");
+        assert_eq!(
+            cell_math_spans(body_table),
+            [
+                (0, 0, "$x$", Some(false)),
+                (0, 0, "$y$", Some(false)),
+                (0, 1, "$$a \\\\ b$$", Some(true))
+            ]
+        );
+        let header_table = result
+            .tables
+            .iter()
+            .find(|table| table.cells[0].len() == 1)
+            .expect("the header table");
+        assert_eq!(cell_math_spans(header_table), [(0, 0, "$h$", Some(false))]);
+
+        let page_tables = &result.pages.as_ref().expect("page content")[0].tables;
+        assert_eq!(page_tables.len(), 1);
+        assert_eq!(page_tables[0].cells, body_table.cells);
+        assert_eq!(page_tables[0].cell_annotations, body_table.cell_annotations);
+
+        assert_eq!(
+            reparsed_cell_math(rendered_markdown(&result)),
+            [[vec!["x", "y"], vec!["a \\\\ b"]]]
+        );
+    }
+
+    #[tokio::test]
+    async fn should_annotate_math_from_a_table_nested_in_a_cell() {
+        let xml = math_document(&format!(
+            r#"<w:tbl><w:tr><w:tc><w:p>{outer}</w:p><w:tbl><w:tr>{inner}</w:tr></w:tbl><w:p/></w:tc>{after}</w:tr></w:tbl>"#,
+            outer = text_run("outer"),
+            inner = table_cell(&format!("{}{}", text_run("in "), omath("x"))),
+            after = table_cell(&omath("y")),
+        ));
+        let result = extract_math_docx(&build_test_docx(&xml)).await;
+
+        let table = &result.tables[0];
+        assert_eq!(table.cells, [["outer in $x$", "$y$"]]);
+        assert_eq!(
+            cell_math_spans(table),
+            [(0, 0, "$x$", Some(false)), (0, 1, "$y$", Some(false))]
+        );
+    }
+
+    #[tokio::test]
+    async fn should_leave_a_docx_table_without_math_unchanged() {
+        let xml = math_document(&format!(
+            "<w:tbl><w:tr>{}{}</w:tr></w:tbl>",
+            table_cell(&text_run("Widget")),
+            table_cell(&text_run("$5 | each")),
+        ));
+        let result = extract_math_docx(&build_test_docx(&xml)).await;
+
+        assert!(result.tables[0].cell_annotations.is_empty());
+        let json = serde_json::to_string(&result).expect("serialize the extraction");
+        assert!(!json.contains("cell_annotations"), "{json}");
+        assert!(!json.contains("\"annotations\""), "{json}");
+        assert!(rendered_markdown(&result).contains("| Widget | $5 \\| each |"));
     }
 }

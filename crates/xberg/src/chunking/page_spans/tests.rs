@@ -466,6 +466,7 @@ fn should_populate_bbox_and_node_id_for_table_node_via_cell_text() {
                 bbox: None,
                 heading_level: None,
                 style_name: None,
+                annotations: Vec::new(),
             },
             GridCell {
                 content: "Q3".to_string(),
@@ -477,6 +478,7 @@ fn should_populate_bbox_and_node_id_for_table_node_via_cell_text() {
                 bbox: None,
                 heading_level: None,
                 style_name: None,
+                annotations: Vec::new(),
             },
         ],
     };
@@ -520,6 +522,7 @@ fn should_not_match_table_node_when_no_cell_text_found_in_chunk() {
             bbox: None,
             heading_level: None,
             style_name: None,
+            annotations: Vec::new(),
         }],
     };
     let structure = DocumentStructure {

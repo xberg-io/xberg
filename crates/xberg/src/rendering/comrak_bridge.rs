@@ -236,10 +236,16 @@ fn in_tight_item(node: &AstNode<'_>) -> bool {
             .is_some_and(|list| matches!(&list.data.borrow().value, NodeValue::List(list) if list.tight))
 }
 
-fn write_math_as_code<'a>(node: &'a AstNode<'a>, math: NodeMath) {
+fn write_math_as_code<'a>(node: &'a AstNode<'a>, mut math: NodeMath) {
     if math.literal.trim().is_empty() {
         node.detach();
         return;
+    }
+    if node
+        .ancestors()
+        .any(|ancestor| matches!(ancestor.data.borrow().value, NodeValue::TableCell))
+    {
+        math.literal = double_bar_as_vert(&math.literal);
     }
     if math.display_math
         && let Some(paragraph) = node.parent().filter(|parent| holds_only(parent, node))
@@ -272,6 +278,33 @@ fn write_math_as_code<'a>(node: &'a AstNode<'a>, math: NodeMath) {
             literal,
         })
     };
+}
+
+/// comrak writes a pipe in a table as `\|`, which a reader takes back as `|`. TeX's `\|` (a
+/// double bar) would come back as `\\|`, a line break, so it is written as `\Vert`, the same symbol.
+fn double_bar_as_vert(tex: &str) -> String {
+    let mut out = String::with_capacity(tex.len());
+    let mut chars = tex.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            out.push(ch);
+            continue;
+        }
+        match chars.next() {
+            Some('|') => {
+                out.push_str("\\Vert");
+                if chars.peek().is_some_and(char::is_ascii_alphabetic) {
+                    out.push(' ');
+                }
+            }
+            Some(escaped) => {
+                out.push('\\');
+                out.push(escaped);
+            }
+            None => out.push('\\'),
+        }
+    }
+    out
 }
 
 /// Write each `$` in Text as `\$` and code math as a code span. comrak escapes a backslash in Text.
@@ -737,7 +770,7 @@ fn append_annotated_span<'a>(
     }
 }
 
-/// Build a comrak `Table` subtree from a 2-D cell grid.
+/// Build a comrak `Table` subtree from a table's cell grid and its cell annotations.
 ///
 /// Returns `None` when the grid has no columns at all (every row is empty).
 /// Comrak's CommonMark writer only emits the required `|---|` delimiter row
@@ -746,7 +779,12 @@ fn append_annotated_span<'a>(
 /// `|` line — not a valid GFM table, and not parseable as one on re-read.
 /// Callers should fall back to something else (e.g. the table's flat
 /// `markdown` field) rather than emit that.
-fn build_table<'a>(arena: &'a comrak::Arena<'a>, cells: &[Vec<String>], has_header: bool) -> Option<&'a AstNode<'a>> {
+fn build_table<'a>(
+    arena: &'a comrak::Arena<'a>,
+    table: &crate::types::Table,
+    has_header: bool,
+) -> Option<&'a AstNode<'a>> {
+    let cells = &table.cells;
     let num_cols = cells.iter().map(|r| r.len()).max().unwrap_or(0);
     if num_cols == 0 {
         return None;
@@ -771,6 +809,7 @@ fn build_table<'a>(arena: &'a comrak::Arena<'a>, cells: &[Vec<String>], has_head
         table_node.append(header_row);
     }
 
+    let annotations = table.annotations_by_cell();
     for (row_idx, row) in cells.iter().enumerate() {
         let is_header = has_header && row_idx == 0;
         let row_node = mk(arena, NodeValue::TableRow(is_header));
@@ -779,7 +818,10 @@ fn build_table<'a>(arena: &'a comrak::Arena<'a>, cells: &[Vec<String>], has_head
             let cell_node = mk(arena, NodeValue::TableCell);
             let content = row.get(col).map(|s| s.as_str()).unwrap_or("");
             if !content.is_empty() {
-                cell_node.append(mk_text(arena, content));
+                let cell_annotations = annotations
+                    .get(&(row_idx as u32, col as u32))
+                    .map_or(&[][..], Vec::as_slice);
+                build_inlines(arena, cell_node, content, cell_annotations);
             }
             row_node.append(cell_node);
         }
@@ -1108,7 +1150,7 @@ pub(crate) fn build_comrak_ast<'a>(doc: &InternalDocument, arena: &'a comrak::Ar
                     }
                     let has_header =
                         !matches!(doc.source_format.as_str(), "csv" | "orgmode" | "typst") || table.columns.is_some();
-                    match build_table(arena, &table.cells, has_header) {
+                    match build_table(arena, table, has_header) {
                         Some(table_node) => {
                             tracing::trace!(table_index, rows = table.cells.len(), "rendering table");
                             parent.append(table_node);
@@ -1490,6 +1532,40 @@ fn pop_container(stack: &mut Vec<ContainerEntry<'_>>, target: ContainerKind) {
             return;
         }
     }
+}
+
+/// Each cell of the first table in `markdown`, read back with xberg's own options: the literals of
+/// its code and math spans, and its prose. Panics on raw HTML, a link or an image.
+#[cfg(test)]
+pub(crate) fn reparsed_table_cells(markdown: &str) -> Vec<Vec<(Vec<String>, String)>> {
+    let arena = comrak::Arena::new();
+    let root = comrak::parse_document(&arena, markdown, &super::markdown::comrak_options());
+    let table = root
+        .descendants()
+        .find(|node| matches!(node.data.borrow().value, NodeValue::Table(_)))
+        .unwrap_or_else(|| panic!("no table in: {markdown}"));
+    let mut rows = Vec::new();
+    for row in table.children() {
+        let mut cells = Vec::new();
+        for cell in row.children() {
+            let mut literals = Vec::new();
+            let mut prose = String::new();
+            for node in cell.descendants() {
+                match &node.data.borrow().value {
+                    NodeValue::Code(code) => literals.push(code.literal.clone()),
+                    NodeValue::Math(math) => literals.push(math.literal.clone()),
+                    NodeValue::Text(text) => prose.push_str(text),
+                    value @ (NodeValue::HtmlInline(_) | NodeValue::Link(_) | NodeValue::Image(_)) => {
+                        panic!("{value:?} in: {markdown}")
+                    }
+                    _ => {}
+                }
+            }
+            cells.push((literals, prose));
+        }
+        rows.push(cells);
+    }
+    rows
 }
 
 #[cfg(test)]
@@ -3190,5 +3266,245 @@ mod tests {
             "inline dollar escape did not run: {markdown:?}"
         );
         assert!(markdown.contains("<pre>α\n\nβ</pre>\n\n- item\n"), "got: {markdown:?}");
+    }
+
+    fn cell_math(row: u32, col: u32, text: &str, span: &str) -> crate::types::TableCellAnnotation {
+        crate::types::TableCellAnnotation {
+            row,
+            col,
+            annotation: math_span(text, span),
+        }
+    }
+
+    /// Push `cells` with an entry for every `(row, col, span)`, each span found in its cell's text.
+    fn push_math_table(builder: &mut InternalDocumentBuilder, cells: &[Vec<&str>], spans: &[(u32, u32, &str)]) {
+        let cells: Vec<Vec<String>> = cells
+            .iter()
+            .map(|row| row.iter().map(|cell| cell.to_string()).collect())
+            .collect();
+        let annotations: Vec<_> = spans
+            .iter()
+            .map(|&(row, col, span)| cell_math(row, col, &cells[row as usize][col as usize], span))
+            .collect();
+        builder.push_table_from_cells_with_annotations(&cells, &[], &annotations, None, None);
+    }
+
+    fn literals_only(cells: Vec<Vec<(Vec<String>, String)>>) -> Vec<Vec<Vec<String>>> {
+        cells
+            .into_iter()
+            .map(|row| row.into_iter().map(|(literals, _)| literals).collect())
+            .collect()
+    }
+
+    fn display_and_header_math_table() -> InternalDocument {
+        let mut builder = InternalDocumentBuilder::new("docx");
+        push_math_table(
+            &mut builder,
+            &[vec!["$$E=mc^2$$", "Name"], vec!["$x$$y$", "plain"]],
+            &[(0, 0, "$$E=mc^2$$"), (1, 0, "$x$"), (1, 0, "$y$")],
+        );
+        builder.build()
+    }
+
+    #[test]
+    fn should_write_display_and_header_cell_math_inline_in_a_table() {
+        let markdown = crate::rendering::render_markdown(&display_and_header_math_table());
+        assert!(markdown.contains("| $`E=mc^2`$ | Name |"), "{markdown}");
+        assert!(markdown.contains("| $`x`$$`y`$ | plain |"), "{markdown}");
+        assert!(!markdown.contains("```math"), "{markdown}");
+        assert_eq!(
+            literals_only(reparsed_table_cells(&markdown)),
+            [[vec!["E=mc^2"], vec![]], [vec!["x", "y"], vec![]]]
+        );
+    }
+
+    #[test]
+    fn should_render_table_cell_math_as_math_spans_in_html() {
+        let html = crate::rendering::render_html(&display_and_header_math_table());
+        assert!(
+            html.contains(r#"<th><span data-math-style="display">E=mc^2</span></th>"#),
+            "{html}"
+        );
+        assert!(
+            html.contains(r#"<td><span data-math-style="inline">x</span><span data-math-style="inline">y</span></td>"#),
+            "{html}"
+        );
+    }
+
+    #[test]
+    fn should_drop_whitespace_only_cell_math() {
+        let mut builder = InternalDocumentBuilder::new("docx");
+        push_math_table(
+            &mut builder,
+            &[vec!["a", "b", "c"], vec!["x", "$ $", "$$ $$"]],
+            &[(1, 1, "$ $"), (1, 2, "$$ $$")],
+        );
+        let doc = builder.build();
+        assert!(doc.recorded_formulas.is_empty());
+
+        let markdown = crate::rendering::render_markdown(&doc);
+        let row = markdown
+            .lines()
+            .find(|line| line.starts_with("| x"))
+            .expect("the math row");
+        assert!(!row.contains('$'), "{markdown}");
+        assert_eq!(
+            reparsed_table_cells(&markdown)[1],
+            [
+                (vec![], "x".to_string()),
+                (vec![], String::new()),
+                (vec![], String::new())
+            ]
+        );
+
+        let html = crate::rendering::render_html(&doc);
+        assert!(
+            html.contains(r#"<td><span data-math-style="inline"> </span></td>"#),
+            "{html}"
+        );
+        assert!(
+            html.contains(r#"<td><span data-math-style="display"> </span></td>"#),
+            "{html}"
+        );
+    }
+
+    #[test]
+    fn should_write_cell_math_holding_a_backtick_or_dollar_as_code() {
+        let mut builder = InternalDocumentBuilder::new("docx");
+        push_math_table(
+            &mut builder,
+            &[vec!["a", "b", "c"], vec!["$a`b$", "$a$b$", "$a$$"]],
+            &[(1, 0, "$a`b$"), (1, 1, "$a$b$"), (1, 2, "$a$$")],
+        );
+        let markdown = crate::rendering::render_markdown(&builder.build());
+        assert_eq!(
+            reparsed_table_cells(&markdown)[1][..2],
+            [
+                (vec!["a`b".to_string()], String::new()),
+                (vec!["a$b".to_string()], String::new())
+            ],
+            "{markdown}"
+        );
+
+        // A literal ending in an unescaped `$` is no equation, in a cell as in a paragraph.
+        let mut paragraph = InternalDocumentBuilder::new("docx");
+        push_math_paragraph(&mut paragraph, "$a$$", &["$a$$"]);
+        let as_paragraph = crate::rendering::render_markdown(&paragraph.build());
+        assert!(
+            markdown.contains(&format!("| {} |", as_paragraph.trim_end())),
+            "{markdown}{as_paragraph}"
+        );
+    }
+
+    /// GFM splits a row on every unescaped pipe, inside code too, and reads `\|` back as `|`, so
+    /// TeX's own `\|` is written as `\Vert` while `\\|` and `\left|` keep their meaning.
+    #[test]
+    fn should_keep_pipes_and_hostile_tex_inside_a_table_cell() {
+        let row = [
+            r"$\left|x\right|$",
+            r"$\|v\|$",
+            r"$a\\|b$",
+            r"$a|b$",
+            r"$\|\|x\|_2$",
+            "$<img src=x onerror=alert(1)>$",
+        ];
+        let mut builder = InternalDocumentBuilder::new("docx");
+        let spans: Vec<_> = row
+            .iter()
+            .enumerate()
+            .map(|(col, span)| (1, col as u32, *span))
+            .collect();
+        push_math_table(&mut builder, &[vec!["h"; row.len()], row.to_vec()], &spans);
+        push_math_paragraph(&mut builder, r"Norm $\|v\|$.", &[r"$\|v\|$"]);
+        let doc = builder.build();
+
+        let markdown = crate::rendering::render_markdown(&doc);
+        let expected = [
+            r"\left|x\right|",
+            r"\Vert v\Vert",
+            r"a\\|b",
+            "a|b",
+            r"\Vert\Vert x\Vert_2",
+            "<img src=x onerror=alert(1)>",
+        ]
+        .map(|literal| vec![literal.to_string()]);
+        assert_eq!(
+            literals_only(reparsed_table_cells(&markdown))[1],
+            expected,
+            "{markdown}"
+        );
+        assert!(
+            markdown.contains(r"Norm $`\|v\|`$."),
+            "only a table cell needs the rewrite: {markdown}"
+        );
+
+        let html = crate::rendering::render_html(&doc);
+        assert!(
+            html.contains(r#"<span data-math-style="inline">\|v\|</span>"#),
+            "{html}"
+        );
+        assert!(html.contains("&lt;img src=x onerror=alert(1)&gt;"), "{html}");
+        assert!(!html.contains("<img"), "{html}");
+    }
+
+    #[test]
+    fn should_escape_prose_dollars_only_in_the_cell_holding_code_with_a_dollar() {
+        let mut builder = InternalDocumentBuilder::new("docx");
+        push_math_table(
+            &mut builder,
+            &[vec!["a", "b"], vec!["$5 $a$b$", "$7"]],
+            &[(1, 0, "$a$b$")],
+        );
+        let markdown = crate::rendering::render_markdown(&builder.build());
+        assert!(markdown.contains(r"| \$5 `a$b` | $7 |"), "{markdown}");
+        assert_eq!(
+            reparsed_table_cells(&markdown)[1],
+            [(vec!["a$b".to_string()], "$5 ".to_string()), (vec![], "$7".to_string())]
+        );
+    }
+
+    #[test]
+    fn should_ignore_cell_annotations_outside_the_grid() {
+        let cells = vec![vec!["a".to_string(), "b".to_string()], vec!["c".to_string()]];
+        let render_with = |annotations: &[crate::types::TableCellAnnotation]| {
+            let mut builder = InternalDocumentBuilder::new("docx");
+            builder.push_table_from_cells_with_annotations(&cells, &[], annotations, None, None);
+            crate::rendering::render_markdown(&builder.build())
+        };
+        let outside = [cell_math(9, 9, "$x$", "$x$"), cell_math(1, 1, "$x$", "$x$")];
+        assert_eq!(render_with(&outside), render_with(&[]));
+    }
+
+    #[test]
+    fn should_index_cell_annotations_by_cells_row_without_a_header() {
+        let mut builder = InternalDocumentBuilder::new("csv");
+        push_math_table(&mut builder, &[vec!["$x$", "y"]], &[(0, 0, "$x$")]);
+        let markdown = crate::rendering::render_markdown(&builder.build());
+        assert!(markdown.ends_with("| $`x`$ | y |\n"), "{markdown}");
+        assert_eq!(
+            reparsed_table_cells(&markdown),
+            [
+                [(vec![], String::new()), (vec![], String::new())],
+                [(vec!["x".to_string()], String::new()), (vec![], "y".to_string())]
+            ],
+            "{markdown}"
+        );
+    }
+
+    /// The pipes and dollars of a cell without annotations are written as before.
+    #[test]
+    fn should_render_a_table_without_cell_annotations_unchanged() {
+        let mut builder = InternalDocumentBuilder::new("docx");
+        push_math_table(&mut builder, &[vec!["Item", "Cost"], vec!["$5 | a", "$x$"]], &[]);
+        let doc = builder.build();
+        assert_eq!(
+            crate::rendering::render_markdown(&doc),
+            "| Item | Cost |\n| --- | --- |\n| $5 \\| a | $x$ |\n"
+        );
+        assert!(
+            crate::rendering::render_html(&doc).contains("<td>$5 | a</td>\n<td>$x$</td>"),
+            "{}",
+            crate::rendering::render_html(&doc)
+        );
     }
 }

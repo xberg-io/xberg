@@ -508,6 +508,7 @@ fn test_table_grid_serde() {
                 bbox: None,
                 heading_level: None,
                 style_name: None,
+                annotations: Vec::new(),
             },
             GridCell {
                 content: "Cell 1".to_string(),
@@ -519,6 +520,7 @@ fn test_table_grid_serde() {
                 bbox: None,
                 heading_level: None,
                 style_name: None,
+                annotations: Vec::new(),
             },
         ],
     };

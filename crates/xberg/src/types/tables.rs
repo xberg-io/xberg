@@ -1,7 +1,9 @@
 //! Table-related types for document extraction.
 
+use super::document_structure::TextAnnotation;
 use super::extraction::BoundingBox;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 /// Extracted table structure.
 ///
@@ -76,6 +78,20 @@ pub struct Table {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub cell_styles: Vec<TableCellStyle>,
 
+    /// Inline annotations on individual cells' text, for the cells that have one.
+    ///
+    /// Sparse and flat, like [`Table::cell_styles`]. `cells` keeps its text: an equation in a DOCX
+    /// cell is written into it as `$...$`, the same text a paragraph keeps, and an entry here marks
+    /// which bytes of it are math, so a renderer writes math instead of escaped dollars without
+    /// guessing from the text. Only a producer that knows what a span is emits an entry; today that
+    /// is DOCX equations.
+    ///
+    /// Entries are only emitted for annotated cells, so an ordinary table serialises exactly as it
+    /// did before. Indices are into `cells`, byte ranges into that cell's text. A pass that rewrites
+    /// a cell's text must drop or move that cell's entries. ~keep
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cell_annotations: Vec<TableCellAnnotation>,
+
     /// Header cells for this fragment, i.e. the first row of `cells`.
     ///
     /// Populated even when this fragment's own header row was merged away or
@@ -103,6 +119,42 @@ pub struct TableCellStyle {
     /// Human-readable style name, e.g. `heading 2`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub style_name: Option<String>,
+}
+
+/// An inline annotation on one table cell's text, located by grid position.
+///
+/// One entry per annotation, not a per-cell grid: the nested grid shape marshals badly across the
+/// FFI bindings, and the data is sparse. The annotation is the same [`TextAnnotation`] a paragraph
+/// carries, with byte offsets into `cells[row][col]`. See [`Table::cell_annotations`]. ~keep
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+pub struct TableCellAnnotation {
+    /// Zero-indexed row of the annotated cell.
+    pub row: u32,
+    /// Zero-indexed column of the annotated cell.
+    pub col: u32,
+    /// The annotation, with byte offsets into the cell's text.
+    pub annotation: TextAnnotation,
+}
+
+impl Table {
+    /// Drop the annotations of the cell at `(row, col)`, whose text a pass has rewritten.
+    pub(crate) fn drop_cell_annotations(&mut self, row: usize, col: usize) {
+        self.cell_annotations
+            .retain(|entry| (entry.row as usize, entry.col as usize) != (row, col));
+    }
+
+    /// `cell_annotations` grouped by cell, so a reader of every cell does not rescan the list.
+    pub(crate) fn annotations_by_cell(&self) -> BTreeMap<(u32, u32), Vec<TextAnnotation>> {
+        let mut by_cell: BTreeMap<(u32, u32), Vec<TextAnnotation>> = BTreeMap::new();
+        for entry in &self.cell_annotations {
+            by_cell
+                .entry((entry.row, entry.col))
+                .or_default()
+                .push(entry.annotation.clone());
+        }
+        by_cell
+    }
 }
 
 /// Individual table cell with content and optional styling.
@@ -286,5 +338,63 @@ mod tests {
         let table: Table = serde_json::from_str(json).unwrap();
         assert!(table.table_id.is_none());
         assert!(table.columns.is_none());
+    }
+
+    fn math_entry(row: u32, col: u32, end: u32) -> TableCellAnnotation {
+        TableCellAnnotation {
+            row,
+            col,
+            annotation: TextAnnotation {
+                start: 0,
+                end,
+                kind: crate::types::AnnotationKind::math(false),
+            },
+        }
+    }
+
+    #[test]
+    fn should_serialise_a_table_without_math_unchanged() {
+        let plain = Table {
+            cells: vec![vec!["$5".to_string()]],
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&plain).unwrap();
+        assert!(!json.contains("cell_annotations"), "{json}");
+
+        let old = r#"{"cells":[["$x$"]],"markdown":"","page_number":1}"#;
+        assert!(serde_json::from_str::<Table>(old).unwrap().cell_annotations.is_empty());
+
+        let annotated = Table {
+            cells: vec![vec!["$x$".to_string()]],
+            cell_annotations: vec![math_entry(0, 0, 3)],
+            ..Default::default()
+        };
+        let value = serde_json::to_value(&annotated).unwrap();
+        assert_eq!(
+            value["cell_annotations"],
+            serde_json::json!([{"row": 0, "col": 0, "annotation": {"start": 0, "end": 3,
+                "kind": {"annotation_type": "custom", "name": "xberg.math", "value": "inline"}}}])
+        );
+        let restored: Table = serde_json::from_value(value).unwrap();
+        assert_eq!(restored.cell_annotations, annotated.cell_annotations);
+    }
+
+    #[test]
+    fn should_drop_only_the_rewritten_cells_annotations() {
+        let mut table = Table {
+            cell_annotations: vec![
+                math_entry(0, 0, 3),
+                math_entry(0, 1, 3),
+                math_entry(0, 0, 5),
+                math_entry(1, 0, 3),
+            ],
+            ..Default::default()
+        };
+        table.drop_cell_annotations(0, 0);
+        assert_eq!(table.cell_annotations, [math_entry(0, 1, 3), math_entry(1, 0, 3)]);
+        assert_eq!(
+            table.annotations_by_cell().keys().copied().collect::<Vec<_>>(),
+            [(0, 1), (1, 0)]
+        );
     }
 }

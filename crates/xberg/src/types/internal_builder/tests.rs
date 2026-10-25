@@ -55,6 +55,34 @@ fn test_table_cell_currency_is_not_a_formula() {
     );
 }
 
+/// A cell's annotations ride on its table, and the formula list is left to the `$$` scan, which
+/// takes no inline or blank equation.
+#[test]
+fn should_keep_cell_annotations_on_the_table_without_recording_blank_math() {
+    let mut b = InternalDocumentBuilder::new("docx");
+    let cells = vec![vec!["$x$".to_string(), "$ $".to_string(), "$$ $$".to_string()]];
+    let annotations: Vec<_> = [(0, 3, false), (0, 3, false), (0, 5, true)]
+        .into_iter()
+        .enumerate()
+        .map(|(col, (start, end, display))| crate::types::TableCellAnnotation {
+            row: 0,
+            col: col as u32,
+            annotation: crate::types::TextAnnotation {
+                start,
+                end,
+                kind: crate::types::AnnotationKind::math(display),
+            },
+        })
+        .collect();
+    b.push_table_from_cells_with_annotations(&cells, &[], &annotations, None, None);
+    b.push_table_from_cells(&cells, None, None);
+
+    let doc = b.build();
+    assert!(doc.recorded_formulas.is_empty());
+    assert_eq!(doc.tables[0].cell_annotations, annotations);
+    assert!(doc.tables[1].cell_annotations.is_empty());
+}
+
 #[test]
 fn test_empty_builder() {
     let b = InternalDocumentBuilder::new("test");

@@ -18,9 +18,14 @@ use crate::extractors::security::{SecurityBudget, SecurityError, SecurityLimits,
 use ahash::AHashMap;
 use serde::{Deserialize, Serialize};
 use std::io::{Cursor, Read, Seek};
+use std::ops::Range;
 
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
+
+/// Byte range of one equation in rendered Markdown, `$` delimiters included, and whether it is
+/// display math.
+pub(crate) type MathSpan = (Range<usize>, bool);
 
 /// Tracks document element ordering (paragraphs, tables, and drawings interleaved).
 #[cfg_attr(alef, alef(skip))]
@@ -883,13 +888,25 @@ impl Paragraph {
     /// 1. Groups consecutive runs that share the same bold/italic/hyperlink properties.
     /// 2. Within each group, opens bold/italic once and toggles underline/strikethrough per run.
     pub(crate) fn runs_to_markdown(&self) -> String {
+        self.runs_to_markdown_with_math().0
+    }
+
+    /// [`Self::runs_to_markdown`], with the span of each equation it writes.
+    pub(crate) fn runs_to_markdown_with_math(&self) -> (String, Vec<MathSpan>) {
         let mut text = String::new();
+        let mut math = Vec::new();
         let mut i = 0;
         while i < self.runs.len() {
             let run = &self.runs[i];
 
             if run.math_latex.is_some() || run.text.is_empty() {
+                let start = text.len();
                 text.push_str(&run.to_markdown());
+                if let Some((_, display)) = &run.math_latex
+                    && text.len() > start
+                {
+                    math.push((start..text.len(), *display));
+                }
                 i += 1;
                 continue;
             }
@@ -973,7 +990,7 @@ impl Paragraph {
 
             i = group_end;
         }
-        text
+        (text, math)
     }
 
     /// Render as markdown with heading/list context.
@@ -1098,6 +1115,32 @@ impl Run {
 }
 
 impl TableCell {
+    /// The cell's Markdown text as [`Table::to_cell_grid`] writes it, with the span of each
+    /// equation in that text.
+    fn markdown_with_math(&self) -> (String, Vec<MathSpan>) {
+        let mut text = String::new();
+        let mut math = Vec::new();
+        for (index, paragraph) in self.paragraphs.iter().enumerate() {
+            if index > 0 {
+                text.push(' ');
+            }
+            let offset = text.len();
+            let (paragraph_text, spans) = paragraph.runs_to_markdown_with_math();
+            text.push_str(&paragraph_text);
+            math.extend(
+                spans
+                    .into_iter()
+                    .map(|(range, display)| (range.start + offset..range.end + offset, display)),
+            );
+        }
+        // A span opens and closes with `$`, so trimming never cuts one; it only moves.
+        let leading = text.len() - text.trim_start().len();
+        for (range, _) in &mut math {
+            *range = range.start - leading..range.end - leading;
+        }
+        (text.trim().to_string(), math)
+    }
+
     /// An empty cell spanning `columns` grid columns. It stands for the columns a row leaves
     /// empty with `w:gridBefore`/`w:gridAfter`, so the row's real cells sit under the grid
     /// columns they belong to wherever the row's cells are laid out by their spans.
@@ -1126,36 +1169,45 @@ impl Table {
     /// also the one grid `extractors/docx.rs`'s consumer-visible paths must match, instead
     /// of separately cloning a spanned cell's text into every covered column). ~keep
     pub(crate) fn to_cell_grid(&self, render: impl Fn(&Paragraph) -> String) -> Vec<Vec<String>> {
-        let mut cells: Vec<Vec<String>> = Vec::new();
+        self.layout_cells(|cell| {
+            cell.paragraphs
+                .iter()
+                .map(&render)
+                .collect::<Vec<_>>()
+                .join(" ")
+                .trim()
+                .to_string()
+        })
+    }
+
+    /// `to_cell_grid(Paragraph::runs_to_markdown)`, with the span of each equation in its cell's
+    /// text. Equations are located while the text is written, never found by scanning it.
+    pub(crate) fn to_markdown_cell_grid_with_math(&self) -> Vec<Vec<(String, Vec<MathSpan>)>> {
+        self.layout_cells(TableCell::markdown_with_math)
+    }
+
+    /// Lay out one value per grid position: a cell's at its origin, the default in every column
+    /// and row a `gridSpan`/`vMerge` cell covers.
+    fn layout_cells<T: Default>(&self, value: impl Fn(&TableCell) -> T) -> Vec<Vec<T>> {
+        let mut grid: Vec<Vec<T>> = Vec::new();
         for row in &self.rows {
-            let mut row_cells = Vec::new();
+            let mut row_values = Vec::new();
             for cell in &row.cells {
                 let is_vmerge_continue = cell
                     .properties
                     .as_ref()
                     .is_some_and(|p| matches!(p.v_merge, Some(super::table::VerticalMerge::Continue)));
 
-                let cell_text = if is_vmerge_continue {
-                    String::new()
-                } else {
-                    cell.paragraphs
-                        .iter()
-                        .map(&render)
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                        .trim()
-                        .to_string()
-                };
-                row_cells.push(cell_text);
+                row_values.push(if is_vmerge_continue { T::default() } else { value(cell) });
 
                 let span = cell.properties.as_ref().and_then(|p| p.grid_span).unwrap_or(1);
                 for _ in 1..span {
-                    row_cells.push(String::new());
+                    row_values.push(T::default());
                 }
             }
-            cells.push(row_cells);
+            grid.push(row_values);
         }
-        cells
+        grid
     }
 
     /// Build the per-cell paragraph style ids for this table, in the exact layout
@@ -7326,6 +7378,100 @@ mod tests {
                 level,
                 "level {level} is within Word's own range"
             );
+        }
+    }
+
+    fn math_run(latex: &str, display: bool) -> Run {
+        Run {
+            math_latex: Some((latex.to_string(), display)),
+            ..Default::default()
+        }
+    }
+
+    fn paragraph_of(runs: Vec<Run>) -> Paragraph {
+        let mut paragraph = Paragraph::new();
+        for run in runs {
+            paragraph.add_run(run);
+        }
+        paragraph
+    }
+
+    #[test]
+    fn should_place_table_cell_math_ranges_on_the_stored_cell_text() {
+        let bold = Run {
+            text: "Area".to_string(),
+            bold: true,
+            ..Default::default()
+        };
+        // Each cell's paragraphs and the equations it must locate, as `(span, display)`.
+        type Case = (Vec<Paragraph>, &'static [(&'static str, bool)]);
+        let cells: Vec<Case> = vec![
+            (
+                vec![paragraph_of(vec![
+                    Run::new("\u{C9}quation ".into()),
+                    math_run("x", false),
+                ])],
+                &[("$x$", false)],
+            ),
+            (
+                vec![
+                    paragraph_of(vec![Run::new("\u{E9}t\u{E9}".into())]),
+                    paragraph_of(vec![Run::new("see ".into()), math_run("y", false)]),
+                ],
+                &[("$y$", false)],
+            ),
+            (
+                vec![paragraph_of(vec![
+                    Run::new("  ".into()),
+                    math_run("z", false),
+                    Run::new(" ".into()),
+                ])],
+                &[("$z$", false)],
+            ),
+            (
+                vec![paragraph_of(vec![bold, Run::new(" ".into()), math_run("A", false)])],
+                &[("$A$", false)],
+            ),
+            (
+                vec![paragraph_of(vec![math_run("x", false), math_run("y", false)])],
+                &[("$x$", false), ("$y$", false)],
+            ),
+            (
+                vec![paragraph_of(vec![
+                    math_run("", false),
+                    Run::new("k ".into()),
+                    math_run(" ", false),
+                ])],
+                &[("$ $", false)],
+            ),
+            (
+                vec![paragraph_of(vec![math_run("a \\\\ b", true)])],
+                &[("$$a \\\\ b$$", true)],
+            ),
+        ];
+
+        let mut table = Table::new();
+        let mut row = TableRow::default();
+        for (paragraphs, _) in &cells {
+            row.cells.push(TableCell {
+                paragraphs: paragraphs.clone(),
+                properties: None,
+            });
+        }
+        table.rows.push(row);
+
+        let grid = table.to_markdown_cell_grid_with_math();
+        let texts: Vec<Vec<String>> = grid
+            .iter()
+            .map(|row| row.iter().map(|(text, _)| text.clone()).collect())
+            .collect();
+        assert_eq!(texts, table.to_cell_grid(Paragraph::runs_to_markdown));
+        for ((text, math), (_, expected)) in grid[0].iter().zip(&cells) {
+            let spans: Vec<(&str, bool)> = math
+                .iter()
+                .map(|(range, display)| (&text[range.clone()], *display))
+                .collect();
+            assert_eq!(spans, *expected, "{text:?}");
         }
     }
 }

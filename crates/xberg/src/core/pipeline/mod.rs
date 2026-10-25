@@ -1378,8 +1378,9 @@ fn replace_embedded_image_markdown_with_ocr(doc: &mut InternalDocument, inline_i
     }
 
     for table in &mut doc.tables {
-        for row in &mut table.cells {
-            for cell in row {
+        let mut replaced = Vec::new();
+        for (row_idx, row) in table.cells.iter_mut().enumerate() {
+            for (col_idx, cell) in row.iter_mut().enumerate() {
                 if !is_markdown_image_reference(cell) {
                     continue;
                 }
@@ -1390,11 +1391,15 @@ fn replace_embedded_image_markdown_with_ocr(doc: &mut InternalDocument, inline_i
                     && !ocr.content.is_empty()
                 {
                     *cell = ocr.content.clone();
+                    replaced.push((row_idx, col_idx));
                     image_idx += 1;
                     continue;
                 }
                 image_idx += 1;
             }
+        }
+        for (row_idx, col_idx) in replaced {
+            table.drop_cell_annotations(row_idx, col_idx);
         }
     }
 }
@@ -1440,8 +1445,9 @@ fn append_embedded_image_ocr_text(doc: &mut InternalDocument, inline_images: &[u
     doc.elements = new_elements;
 
     for table in &mut doc.tables {
-        for row in &mut table.cells {
-            for cell in row {
+        let mut moved = Vec::new();
+        for (row_idx, row) in table.cells.iter_mut().enumerate() {
+            for (col_idx, cell) in row.iter_mut().enumerate() {
                 if !is_markdown_image_reference(cell) {
                     continue;
                 }
@@ -1451,10 +1457,17 @@ fn append_embedded_image_ocr_text(doc: &mut InternalDocument, inline_images: &[u
                     && let Some(ocr) = &img.ocr_result
                     && !ocr.content.is_empty()
                 {
+                    // The cell's ranges still hold only if its text survives untrimmed as the prefix.
+                    if cell.trim().len() != cell.len() {
+                        moved.push((row_idx, col_idx));
+                    }
                     *cell = format!("{}\n\n{}", cell.trim(), ocr.content);
                 }
                 image_idx += 1;
             }
+        }
+        for (row_idx, col_idx) in moved {
+            table.drop_cell_annotations(row_idx, col_idx);
         }
     }
 }

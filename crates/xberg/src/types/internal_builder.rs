@@ -196,6 +196,21 @@ impl InternalDocumentBuilder {
         page: Option<u32>,
         bbox: Option<BoundingBox>,
     ) -> u32 {
+        self.push_table_from_cells_with_annotations(cells, cell_styles, &[], page, bbox)
+    }
+
+    /// Push a table whose cells carry inline annotations, such as the equations of a DOCX cell.
+    ///
+    /// Each range must index the text of its own cell in `cells`. Everything else behaves exactly
+    /// as [`Self::push_table_from_cells_with_styles`], which delegates here with an empty list. ~keep
+    pub fn push_table_from_cells_with_annotations(
+        &mut self,
+        cells: &[Vec<String>],
+        cell_styles: &[crate::types::TableCellStyle],
+        cell_annotations: &[crate::types::TableCellAnnotation],
+        page: Option<u32>,
+        bbox: Option<BoundingBox>,
+    ) -> u32 {
         // A cell keeps its equation in the cell, so the equation cannot also be
         // an element without emptying the cell or repeating it beside the table.
         // The formula list is still expected to hold every formula in the
@@ -227,6 +242,7 @@ impl InternalDocumentBuilder {
             page_number: page.unwrap_or(0),
             bounding_box: bbox,
             cell_styles: cell_styles.to_vec(),
+            cell_annotations: cell_annotations.to_vec(),
             ..Default::default()
         };
         self.push_table(table, page, bbox)

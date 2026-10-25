@@ -583,6 +583,13 @@ pub struct GridCell {
     /// named style this crate does not map to a heading. See [`GridCell::heading_level`]. ~keep
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub style_name: Option<String>,
+    /// Inline annotations on this cell's text, with byte offsets into `content`.
+    ///
+    /// Copied from the table's `cell_annotations`, so an equation in a DOCX cell reads as math
+    /// here as it does in a paragraph's annotations. A pass that rewrites `content` must drop or
+    /// move these entries. ~keep
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub annotations: Vec<TextAnnotation>,
 }
 
 fn default_span() -> u32 {

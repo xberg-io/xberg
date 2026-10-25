@@ -350,6 +350,7 @@ impl<'a, 'b> HtmlWalker<'a, 'b> {
                     bbox: None,
                     heading_level: None,
                     style_name: None,
+                    annotations: Vec::new(),
                 });
             },
         );

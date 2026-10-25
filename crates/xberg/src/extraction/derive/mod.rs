@@ -608,6 +608,7 @@ fn table_to_grid(table: &Table, native_grid: Option<&TableGrid>) -> TableGrid {
     let rows = table.cells.len() as u32;
     let cols = table.cells.iter().map(|r| r.len()).max().unwrap_or(0) as u32;
 
+    let mut annotations = table.annotations_by_cell();
     let mut cells = Vec::new();
     for (row_idx, row) in table.cells.iter().enumerate() {
         for (col_idx, cell_content) in row.iter().enumerate() {
@@ -625,6 +626,9 @@ fn table_to_grid(table: &Table, native_grid: Option<&TableGrid>) -> TableGrid {
                 bbox: None,
                 heading_level: style.and_then(|s| s.heading_level),
                 style_name: style.and_then(|s| s.style_name.clone()),
+                annotations: annotations
+                    .remove(&(row_idx as u32, col_idx as u32))
+                    .unwrap_or_default(),
             });
         }
     }

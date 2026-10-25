@@ -25,6 +25,8 @@ mod markdown;
 mod pdf;
 mod plain;
 
+#[cfg(all(test, feature = "office"))]
+pub(crate) use comrak_bridge::reparsed_table_cells;
 pub(crate) use djot::render_djot;
 pub(crate) use doctags::render_doctags;
 #[cfg(feature = "office")]

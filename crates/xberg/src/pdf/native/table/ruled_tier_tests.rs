@@ -13,6 +13,7 @@ fn merge_control_table(label: &str, page: u32, bounding_box: Option<BoundingBox>
             bbox: None,
             heading_level: None,
             style_name: None,
+            annotations: Vec::new(),
         })
         .collect();
     NativeTable {

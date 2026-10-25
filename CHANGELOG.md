@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and optional Base64 data remain available, and the default response is unchanged. (#2187)
 - **(pdf): `PdfError` accepts errors from Lopdf 0.46 while preserving its Lopdf 0.45 conversion.**
 - **(llm): Rust exposes failed structured-response usage through `xberg::llm::usage::usage_from_error`.** (#2139)
+- **(docx): An equation in a table cell is marked as math, so Markdown and HTML render it instead of escaped text.**
+  `Table::cell_annotations` lists each cell's annotations by row and column, with byte ranges into that cell's text;
+  `GridCell::annotations` carries the same ranges in the document structure. A table without math serialises unchanged.
 
 ### Changed
 

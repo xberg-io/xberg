@@ -2401,6 +2401,70 @@ mod picture_ocr_text_rendering_tests {
         replace_embedded_image_markdown_with_ocr(&mut replaced);
         assert_eq!(replaced.tables[0].cells[0][0], INLINE_PLACEHOLDER);
     }
+
+    /// Three cells holding math: an image cell whose picture has no words, `rewritten`, whose
+    /// picture has, and a plain cell.
+    fn document_with_image_cells_holding_math(rewritten: &str) -> InternalDocument {
+        let cells = vec![vec![
+            "![a](a.png) $x$ (c)".to_string(),
+            rewritten.to_string(),
+            "$z$".to_string(),
+        ]];
+        let math = |col: u32, span: &str| crate::types::TableCellAnnotation {
+            row: 0,
+            col,
+            annotation: crate::types::TextAnnotation {
+                start: cells[0][col as usize].find(span).unwrap() as u32,
+                end: (cells[0][col as usize].find(span).unwrap() + span.len()) as u32,
+                kind: crate::types::AnnotationKind::math(false),
+            },
+        };
+        let mut document = InternalDocument::new("docx");
+        document.images = vec![picture(""), picture(PICTURE_WORDS)];
+        document.tables.push(crate::types::Table {
+            cell_annotations: vec![math(0, "$x$"), math(1, "$y$"), math(2, "$z$")],
+            cells,
+            ..Default::default()
+        });
+        document
+    }
+
+    fn annotated_spans(table: &crate::types::Table) -> Vec<(u32, &str)> {
+        table
+            .cell_annotations
+            .iter()
+            .map(|entry| {
+                let cell = &table.cells[entry.row as usize][entry.col as usize];
+                (
+                    entry.col,
+                    &cell[entry.annotation.start as usize..entry.annotation.end as usize],
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn should_drop_cell_annotations_when_ocr_replaces_the_cell() {
+        let mut replaced = document_with_image_cells_holding_math("![b](b.png) $y$ (c)");
+        replaced.ocr_text_only = true;
+        replace_embedded_image_markdown_with_ocr(&mut replaced);
+        assert_eq!(replaced.tables[0].cells[0][1], PICTURE_WORDS);
+        assert_eq!(annotated_spans(&replaced.tables[0]), [(0, "$x$"), (2, "$z$")]);
+
+        let mut appended = document_with_image_cells_holding_math("![b](b.png) $y$ (c)");
+        appended.append_ocr_text = true;
+        append_embedded_image_ocr_text(&mut appended);
+        assert!(appended.tables[0].cells[0][1].ends_with(PICTURE_WORDS));
+        assert_eq!(
+            annotated_spans(&appended.tables[0]),
+            [(0, "$x$"), (1, "$y$"), (2, "$z$")]
+        );
+
+        let mut trimmed = document_with_image_cells_holding_math("  ![b](b.png) $y$ (c)");
+        trimmed.append_ocr_text = true;
+        append_embedded_image_ocr_text(&mut trimmed);
+        assert_eq!(annotated_spans(&trimmed.tables[0]), [(0, "$x$"), (2, "$z$")]);
+    }
 }
 
 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]

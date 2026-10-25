@@ -2339,6 +2339,7 @@ fn convert_extracted_table(
                         bbox: None,
                         heading_level: None,
                         style_name: None,
+                        annotations: Vec::new(),
                     });
                 },
             );

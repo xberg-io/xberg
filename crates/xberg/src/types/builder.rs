@@ -470,6 +470,7 @@ fn cells_to_grid(cells: &[Vec<String>]) -> TableGrid {
                 bbox: None,
                 heading_level: None,
                 style_name: None,
+                annotations: Vec::new(),
             });
         }
     }
