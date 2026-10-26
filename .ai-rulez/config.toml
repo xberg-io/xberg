@@ -7,8 +7,6 @@ gitignore = true
 # ~keep The manifest is committed so CI can detect stale generated files.
 gitignore_exclude = [".ai-rulez/.generated-manifest.json"]
 presets = ["claude", "codex", "opencode", "pi", "hermes", "gemini", "copilot"]
-# ~keep CLAUDE.md without the glob-scoped rules: they load from .claude/rules on a matching read.
-agents_md = false
 builtins = ["!agent-delegation", "!git-workflow", "default-commands"]
 
 # No builtin exists for Dart, Swift, Zig, Kotlin Android or the raw C ABI. Those five are
@@ -21,35 +19,35 @@ compact = true
 [[includes]]
 name = 'xberg-core'
 source = 'https://github.com/xberg-io/agent-conventions.git'
-ref = "bca4b4e8f1f198bef25308aaabf7a2c238a387a3"
+ref = "757ee401a9406f39fb266f5482cdd014a38c9313"
 path = 'modules/core'
 merge_strategy = 'local-override'
 
 [[includes]]
 name = 'xberg-languages'
 source = 'https://github.com/xberg-io/agent-conventions.git'
-ref = "bca4b4e8f1f198bef25308aaabf7a2c238a387a3"
+ref = "757ee401a9406f39fb266f5482cdd014a38c9313"
 path = 'modules/languages'
 merge_strategy = 'local-override'
 
 [[includes]]
 name = 'xberg-cicd'
 source = 'https://github.com/xberg-io/agent-conventions.git'
-ref = "bca4b4e8f1f198bef25308aaabf7a2c238a387a3"
+ref = "757ee401a9406f39fb266f5482cdd014a38c9313"
 path = 'modules/cicd'
 merge_strategy = 'local-override'
 
 [[includes]]
 name = 'xberg-infrastructure'
 source = 'https://github.com/xberg-io/agent-conventions.git'
-ref = "bca4b4e8f1f198bef25308aaabf7a2c238a387a3"
+ref = "757ee401a9406f39fb266f5482cdd014a38c9313"
 path = 'modules/infrastructure'
 merge_strategy = 'local-override'
 
 [[includes]]
 name = 'xberg-e2e-generator'
 source = 'https://github.com/xberg-io/agent-conventions.git'
-ref = "bca4b4e8f1f198bef25308aaabf7a2c238a387a3"
+ref = "757ee401a9406f39fb266f5482cdd014a38c9313"
 path = 'modules/e2e-generator'
 merge_strategy = 'local-override'
 
@@ -76,3 +74,7 @@ include_outputs = false
 
 [lint]
 allow_overrides = ["python-conventions"]
+
+[rules]
+# ~keep Glob-scoped rules stay out of AGENTS.md: rule files for Claude, path-gated skills for Codex.
+scoped_fallback = "skill"

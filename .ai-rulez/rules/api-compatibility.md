@@ -5,9 +5,6 @@ paths:
   - "crates/xberg/src/**"
   - "crates/xberg-ffi/**"
   - "alef.toml"
-targets:
-  - ".claude/rules/"
-  - ".github/instructions/"
 x-ai-rulez:
   kind: rule
   id: api-compatibility

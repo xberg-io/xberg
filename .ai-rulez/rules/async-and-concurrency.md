@@ -3,9 +3,6 @@ type: Decision
 title: Async And Concurrency
 paths:
   - "crates/xberg/src/**"
-targets:
-  - ".claude/rules/"
-  - ".github/instructions/"
 x-ai-rulez:
   kind: rule
   id: async-and-concurrency

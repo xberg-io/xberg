@@ -4,9 +4,6 @@ title: Changelog Policy
 paths:
   - "**/CHANGELOG.md"
   - "docs-site/src/content/docs/changelog.md"
-targets:
-  - ".claude/rules/"
-  - ".github/instructions/"
 x-ai-rulez:
   kind: rule
   id: changelog-policy

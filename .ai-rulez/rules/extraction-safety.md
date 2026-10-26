@@ -7,9 +7,6 @@ paths:
   - "crates/xberg/src/core/**"
   - "crates/xberg/src/enrich.rs"
   - "crates/xberg/src/error.rs"
-targets:
-  - ".claude/rules/"
-  - ".github/instructions/"
 x-ai-rulez:
   kind: rule
   id: extraction-safety
