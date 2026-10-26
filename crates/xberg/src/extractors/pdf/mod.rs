@@ -621,6 +621,17 @@ fn select_pdf_document(
     (doc, origin, structured)
 }
 
+/// Adds the OCR fallback warnings to the document the native pass built. On a mixed PDF, a native
+/// page and an OCR page can raise the same warning (for example an unavailable table model), and
+/// the document carries it once.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn merge_ocr_fallback_warnings(
+    doc: &mut InternalDocument,
+    ocr_fallback_warnings: Vec<crate::types::ProcessingWarning>,
+) {
+    crate::core::diagnostics::dedup_extend_warnings(&mut doc.processing_warnings, ocr_fallback_warnings);
+}
+
 fn attach_unrepresented_tables(doc: &mut InternalDocument, tables: Vec<crate::types::Table>) {
     if doc.tables.is_empty() {
         for table in tables {
@@ -3132,7 +3143,7 @@ impl PdfExtractor {
         tracing::debug!(?document_origin, document_is_structured, "selected PDF document origin");
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        doc.processing_warnings.append(&mut ocr_fallback_warnings);
+        merge_ocr_fallback_warnings(&mut doc, std::mem::take(&mut ocr_fallback_warnings));
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         doc.ocr_page_failures.append(&mut ocr_page_failures);
 
@@ -10302,5 +10313,53 @@ BT /F1 12 Tf 30 30 Td (Beta) Tj ET
             "the gate ran layout on page 1, so its formula regions must be recognised; got {:?}",
             doc.formulas.iter().map(|f| (f.page, &f.latex)).collect::<Vec<_>>()
         );
+    }
+}
+
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
+mod ocr_fallback_warning_merge_tests {
+    use super::merge_ocr_fallback_warnings;
+    use crate::types::ProcessingWarning;
+    use crate::types::internal::InternalDocument;
+
+    fn table_model_warning() -> ProcessingWarning {
+        ProcessingWarning {
+            source: std::borrow::Cow::Borrowed("pdf_tables"),
+            message: std::borrow::Cow::Borrowed(
+                "layout detection found table regions but the TATR table model is not available; \
+                 table structure recognition was skipped; check that the model is downloaded",
+            ),
+        }
+    }
+
+    /// A mixed PDF has native table pages and OCR table pages and no table model. The native pass
+    /// and the OCR pass each raise the warning, and the merged document carries it once.
+    #[test]
+    fn should_keep_one_table_model_warning_when_native_and_ocr_pages_both_raise_it() {
+        let mut doc = InternalDocument::new("pdf");
+        doc.processing_warnings.push(table_model_warning());
+
+        merge_ocr_fallback_warnings(&mut doc, vec![table_model_warning()]);
+
+        let warnings: Vec<_> = doc
+            .processing_warnings
+            .iter()
+            .filter(|warning| warning.source == "pdf_tables")
+            .collect();
+        assert_eq!(warnings.len(), 1, "got {:?}", doc.processing_warnings);
+    }
+
+    #[test]
+    fn should_keep_ocr_warnings_the_native_pass_did_not_raise() {
+        let mut doc = InternalDocument::new("pdf");
+        doc.processing_warnings.push(table_model_warning());
+        let other = ProcessingWarning {
+            source: std::borrow::Cow::Borrowed("ocr"),
+            message: std::borrow::Cow::Borrowed("page 2 fell back to native text"),
+        };
+
+        merge_ocr_fallback_warnings(&mut doc, vec![table_model_warning(), other]);
+
+        assert_eq!(doc.processing_warnings.len(), 2, "got {:?}", doc.processing_warnings);
     }
 }

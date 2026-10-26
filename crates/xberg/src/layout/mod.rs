@@ -490,7 +490,7 @@ pub(crate) fn take_or_create_slanet(
 
 /// The processing warning for a document whose layout pass found table regions while the table model
 /// is not available. `source` names the extraction path that skipped table recognition.
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", feature = "pdf"))]
 pub(crate) fn table_model_unavailable_warning(
     source: &'static str,
     model_name: &str,

@@ -70,7 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(extraction): An image or a force-OCR PDF whose table model fails to load now warns.**
   Table recognition was skipped with no sign in the result. A document whose layout pass found table regions now carries
   one processing warning, `image_tables` for an image and `pdf_tables` for a PDF, in the form the native PDF path uses.
-  (#2244)
+  A mixed PDF whose native and OCR pages both raise it carries the warning once. (#2244)
 - **(djot): The footnote reference in the caption of a table without rows is dropped with the caption.**
   A table without rows, such as a lone `|---|` line, is not written and its caption is dropped. The footnote
   reference in that caption used to stay and appeared before the next table.
