@@ -1,7 +1,10 @@
 ---
 type: Playbook
 title: Format Specific Extraction
-description: Format-specific document extraction workflows
+description: "Per-format extraction workflows in Xberg (Office XML, PDF, archives and others): parsers, security budgets, metadata helpers. Use when changing or adding a format extractor."
+paths:
+  - "crates/xberg/src/extractors/**"
+  - "crates/xberg/src/extraction/**"
 x-ai-rulez:
   kind: skill
   id: format-specific-extraction

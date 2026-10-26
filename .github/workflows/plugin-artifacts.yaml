@@ -26,8 +26,7 @@ jobs:
       - name: Install ai-rulez
         uses: xberg-io/actions/setup-ai-rulez@793d3a4d37a17009d91cce29f2825eda570d2abd
         with:
-          ai-rulez-version: "5.3.0"
-          source-revision: "bdabc8a6e9211de60ca1e4ad76225ac92fcf218f"
+          ai-rulez-version: "5.7.0"
       - name: Verify public skill exports
         run: python3 scripts/sync_public_skills.py --check
       - name: Package all supported plugin runtimes
