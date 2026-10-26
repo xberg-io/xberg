@@ -559,11 +559,12 @@ impl JupyterExtractor {
                     column = 0;
                 }
                 _ => {
-                    // ASCII, controls included, takes one column: skip the table lookup
-                    let width = if ch.is_ascii() {
-                        1
-                    } else {
-                        unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1)
+                    // ASCII, controls included, takes one column, and the CJK Unified Ideographs block
+                    // takes two: both skip the table lookup
+                    let width = match ch {
+                        '\0'..='\u{7f}' => 1,
+                        '\u{4e00}'..='\u{9fff}' => 2,
+                        _ => unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1),
                     };
                     if width == 0 && column > 0 {
                         // A combining mark has no column: it joins the character before it
