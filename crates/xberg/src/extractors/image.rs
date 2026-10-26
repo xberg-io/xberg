@@ -3379,6 +3379,7 @@ impl ImageExtractor {
     /// `table_warning` receives the warning for a table model that could not be loaded.
     #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
     #[cfg_attr(not(feature = "pdf"), allow(unused_variables))]
+    #[allow(clippy::too_many_arguments)]
     async fn complete_layout_ocr_inner(
         &self,
         content: &[u8],

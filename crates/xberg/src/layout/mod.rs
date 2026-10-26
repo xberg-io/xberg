@@ -161,7 +161,11 @@ impl<T> DerefMut for ConfiguredModel<T> {
 pub(crate) type TatrLease = ModelLease<'static, ConfiguredModel<models::tatr::TatrModel>>;
 /// The function an extraction route calls to check out a TATR model. Production passes
 /// [`take_or_create_tatr`]; a test passes a loader that returns no model.
-#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+#[cfg(all(
+    feature = "layout-detection",
+    feature = "pdf",
+    any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
+))]
 pub(crate) type TatrLoader =
     fn(Option<&crate::core::config::acceleration::AccelerationConfig>, usize) -> Option<TatrLease>;
 #[cfg(all(feature = "layout-detection", feature = "pdf"))]
