@@ -4,7 +4,7 @@
 version = 1
 ai_rulez_version = '5.7.0'
 scope = 'all'
-tree = 'sha256:f13ba654ac208afb5288381d2082e294896963abc220e99d70d3e7701af2b600'
+tree = 'sha256:94d6a8d8a16cbfb508b18797161960d483c89c10c69b8f838fa895707fc53183'
 
 [[include]]
 name = 'xberg-cicd'
@@ -576,6 +576,12 @@ name = 'xberg-typescript-toolchain'
 source = '.ai-rulez/skills/xberg-typescript-toolchain/SKILL.md'
 commit = ''
 digest = 'sha256:3a33eaee9ad2d679dcdf5194efe751a9a2f38bbf425186155c926612f4a271ed'
+
+[[item]]
+kind = 'context'
+id = 'area-map'
+path = 'context/area-map.md'
+digest = 'sha256:1e41d944a8be777f0cd6e72084bacaea7280bcbd3a15795786f1b00a4b18f6d9'
 
 [[item]]
 kind = 'rule'
