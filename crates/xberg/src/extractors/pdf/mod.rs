@@ -621,9 +621,7 @@ fn select_pdf_document(
     (doc, origin, structured)
 }
 
-/// Adds the OCR fallback warnings to the document the native pass built. On a mixed PDF, a native
-/// page and an OCR page can raise the same warning (for example an unavailable table model), and
-/// the document carries it once.
+/// Adds the OCR fallback warnings to the returned document, skipping any it already carries.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn merge_ocr_fallback_warnings(
     doc: &mut InternalDocument,
@@ -3171,6 +3169,14 @@ impl PdfExtractor {
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         doc.ocr_page_failures.append(&mut ocr_page_failures);
 
+        // The native pass's table-model warning travels in these; an OCR page can have added the
+        // same warning just above.
+        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+        crate::core::diagnostics::dedup_extend_warnings(
+            &mut doc.processing_warnings,
+            std::mem::take(&mut pdf_extraction_warnings),
+        );
+        #[cfg(not(any(feature = "ocr", feature = "ocr-pipeline")))]
         doc.processing_warnings.append(&mut pdf_extraction_warnings);
 
         // #340: drain any xberg_native_pdf glyph-drop warnings captured while this
@@ -10345,6 +10351,240 @@ BT /F1 12 Tf 30 30 Td (Beta) Tj ET
             doc.formulas.iter().map(|f| (f.page, &f.latex)).collect::<Vec<_>>()
         );
     }
+
+    /// A mixed PDF whose native page and scanned page each hold a table, extracted with the layout
+    /// model and without the table model. The native pass and the OCR pass each raise the
+    /// `pdf_tables` warning, and the returned document must carry it once.
+    ///
+    /// The layout model is real. The child process gets a private Hugging Face cache that holds the
+    /// layout model only and runs offline, so the table model fails to load on both passes. Set
+    /// `XBERG_SKIP_LIVE_HF=1` to skip the test where the layout model cannot be fetched.
+    #[cfg(all(feature = "pdf", feature = "ocr", feature = "layout-detection"))]
+    mod mixed_pdf_table_model_warning {
+        use super::super::PdfExtractor;
+        use crate::core::config::layout::LayoutDetectionConfig;
+        use crate::core::config::{ExtractionConfig, OcrConfig, OcrStrategy};
+        use crate::plugins::InternalDocumentExtractor;
+        use lopdf::content::{Content, Operation};
+        use lopdf::{Document, Object, Stream, dictionary};
+
+        const CACHE_ROOT: &str = "XBERG_TABLE_MODEL_WARNING_TEST_HF_CACHE";
+        const BACKEND_NAME: &str = "mixed-pdf-table-model-warning-test-backend";
+        const LAYOUT_MODEL_REPO_DIR: &str = "models--xberg-io--layout-models";
+        const ROWS: [[&str; 4]; 7] = [
+            ["Region", "Q1 revenue", "Q2 revenue", "Change"],
+            ["North", "12,400", "13,050", "+5.2%"],
+            ["South", "9,870", "9,410", "-4.7%"],
+            ["East", "15,230", "16,880", "+10.8%"],
+            ["West", "11,005", "11,640", "+5.8%"],
+            ["Central", "7,320", "7,515", "+2.7%"],
+            ["Total", "55,825", "58,495", "+4.8%"],
+        ];
+
+        /// A ruled table of `ROWS` with a title above it, drawn as native text and lines.
+        fn table_page_operations() -> Vec<Operation> {
+            const LEFT: f32 = 72.0;
+            const TOP: f32 = 640.0;
+            const COLUMN_WIDTH: f32 = 117.0;
+            const ROW_HEIGHT: f32 = 28.0;
+            let width = COLUMN_WIDTH * ROWS[0].len() as f32;
+            let height = ROW_HEIGHT * ROWS.len() as f32;
+            let mut operations = vec![
+                Operation::new("BT", vec![]),
+                Operation::new("Tf", vec!["F1".into(), 16.into()]),
+                Operation::new("Td", vec![LEFT.into(), (TOP + 30.0).into()]),
+                Operation::new("Tj", vec![Object::string_literal("Quarterly revenue by region")]),
+                Operation::new("ET", vec![]),
+                Operation::new("w", vec![1.into()]),
+            ];
+            for row in 0..=ROWS.len() {
+                let y = TOP - ROW_HEIGHT * row as f32;
+                operations.push(Operation::new("m", vec![LEFT.into(), y.into()]));
+                operations.push(Operation::new("l", vec![(LEFT + width).into(), y.into()]));
+            }
+            for column in 0..=ROWS[0].len() {
+                let x = LEFT + COLUMN_WIDTH * column as f32;
+                operations.push(Operation::new("m", vec![x.into(), TOP.into()]));
+                operations.push(Operation::new("l", vec![x.into(), (TOP - height).into()]));
+            }
+            operations.push(Operation::new("S", vec![]));
+            for (row_index, row) in ROWS.iter().enumerate() {
+                for (column_index, cell) in row.iter().enumerate() {
+                    let x = LEFT + COLUMN_WIDTH * column_index as f32 + 8.0;
+                    let y = TOP - ROW_HEIGHT * row_index as f32 - 19.0;
+                    operations.push(Operation::new("BT", vec![]));
+                    operations.push(Operation::new("Tf", vec!["F1".into(), 11.into()]));
+                    operations.push(Operation::new("Td", vec![x.into(), y.into()]));
+                    operations.push(Operation::new("Tj", vec![Object::string_literal(*cell)]));
+                    operations.push(Operation::new("ET", vec![]));
+                }
+            }
+            operations
+        }
+
+        /// A PDF of the given page contents. Each page is a US Letter page; `scan` is the raster a
+        /// page without operations shows across its whole area.
+        fn pdf(pages: &[Option<Vec<Operation>>], scan: Option<&image::RgbImage>) -> Vec<u8> {
+            let mut document = Document::with_version("1.5");
+            let pages_id = document.new_object_id();
+            let font_id = document.add_object(dictionary! {
+                "Type" => "Font",
+                "Subtype" => "Type1",
+                "BaseFont" => "Helvetica",
+            });
+            let scan_id = scan.map(|scan| {
+                document.add_object(Stream::new(
+                    dictionary! {
+                        "Type" => "XObject",
+                        "Subtype" => "Image",
+                        "Width" => scan.width() as i64,
+                        "Height" => scan.height() as i64,
+                        "ColorSpace" => "DeviceRGB",
+                        "BitsPerComponent" => 8,
+                    },
+                    scan.as_raw().clone(),
+                ))
+            });
+            let mut kids: Vec<Object> = Vec::new();
+            for page in pages {
+                let (operations, resources) = match page {
+                    Some(operations) => (
+                        operations.clone(),
+                        dictionary! { "Font" => dictionary! { "F1" => font_id } },
+                    ),
+                    None => (
+                        vec![
+                            Operation::new("q", vec![]),
+                            Operation::new(
+                                "cm",
+                                vec![612.into(), 0.into(), 0.into(), 792.into(), 0.into(), 0.into()],
+                            ),
+                            Operation::new("Do", vec![Object::Name(b"Scan".to_vec())]),
+                            Operation::new("Q", vec![]),
+                        ],
+                        dictionary! { "XObject" => dictionary! { "Scan" => scan_id.expect("a scanned page needs a raster") } },
+                    ),
+                };
+                let content_id = document.add_object(Stream::new(
+                    dictionary! {},
+                    Content { operations }.encode().expect("page content must encode"),
+                ));
+                let page_id = document.add_object(dictionary! {
+                    "Type" => "Page",
+                    "Parent" => pages_id,
+                    "Contents" => content_id,
+                    "Resources" => resources,
+                    "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+                });
+                kids.push(page_id.into());
+            }
+            let count = kids.len() as i64;
+            document.objects.insert(
+                pages_id,
+                Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => kids, "Count" => count }),
+            );
+            let catalog_id = document.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
+            document.trailer.set("Root", catalog_id);
+            let mut bytes = Vec::new();
+            document.save_to(&mut bytes).expect("the PDF fixture must serialize");
+            bytes
+        }
+
+        /// The number of `pdf_tables` warnings on the returned document, and all of its warnings.
+        async fn table_model_warning_count(content: &[u8]) -> (usize, Vec<crate::types::ProcessingWarning>) {
+            let config = ExtractionConfig {
+                ocr_strategy: OcrStrategy::ScannedPages { min_confidence: 0.7 },
+                use_cache: false,
+                ocr: Some(OcrConfig {
+                    backend: BACKEND_NAME.to_string(),
+                    ..Default::default()
+                }),
+                layout: Some(LayoutDetectionConfig::default()),
+                use_layout_for_markdown: true,
+                output_format: crate::core::config::OutputFormat::Markdown,
+                ..Default::default()
+            };
+            let doc = PdfExtractor::new()
+                .extract_content(content, "application/pdf", &config)
+                .await
+                .expect("the extraction must succeed");
+            let count = doc
+                .processing_warnings
+                .iter()
+                .filter(|warning| warning.source == "pdf_tables")
+                .count();
+            (count, doc.processing_warnings)
+        }
+
+        #[test]
+        fn mixed_pdf_without_the_table_model_returns_one_table_model_warning() {
+            if std::env::var("XBERG_SKIP_LIVE_HF").ok().as_deref() == Some("1") {
+                eprintln!("XBERG_SKIP_LIVE_HF=1, skipping");
+                return;
+            }
+            let layout_model = crate::layout::LayoutModelManager::new(None)
+                .ensure_rtdetr_model()
+                .expect("the layout model must be available");
+            let repo_dir = layout_model
+                .ancestors()
+                .find(|dir| dir.file_name().is_some_and(|name| name == LAYOUT_MODEL_REPO_DIR))
+                .expect("the layout model must sit in the Hugging Face cache layout");
+            let relative = layout_model
+                .strip_prefix(repo_dir.parent().expect("the repository directory has a parent"))
+                .expect("the layout model sits under its repository directory");
+            let cache = tempfile::TempDir::new().unwrap();
+            let staged = cache.path().join(relative);
+            std::fs::create_dir_all(staged.parent().expect("the staged model has a parent")).unwrap();
+            std::fs::copy(&layout_model, &staged).expect("copy the layout model into the private cache");
+
+            crate::utils::test_support::run_child_test(
+                "extractors::pdf::tests::mixed_pdf_table_model_warning::mixed_pdf_without_the_table_model_child",
+                CACHE_ROOT,
+                cache.path(),
+                |command| {
+                    command
+                        .env("HF_HUB_CACHE", cache.path())
+                        .env("HF_HUB_OFFLINE", "1")
+                        .env_remove("HUGGINGFACE_HUB_OFFLINE");
+                },
+            );
+        }
+
+        #[tokio::test]
+        #[ignore = "run in an isolated subprocess by mixed_pdf_without_the_table_model_returns_one_table_model_warning"]
+        async fn mixed_pdf_without_the_table_model_child() {
+            if crate::utils::test_support::child_test_root(CACHE_ROOT).is_none() {
+                return;
+            }
+            let _backend = super::register_mock_ocr_backend(BACKEND_NAME, "Region Q1 revenue Q2 revenue Change");
+
+            let native_only = pdf(&[Some(table_page_operations())], None);
+            let png = crate::pdf::render::render_pdf_page_to_png(&native_only, 0, Some(150), None)
+                .expect("the native table page must render");
+            let scan = image::load_from_memory(&png)
+                .expect("the rendered page must decode")
+                .to_rgb8();
+            let scanned_only = pdf(&[None], Some(&scan));
+            let mixed = pdf(&[Some(table_page_operations()), None], Some(&scan));
+
+            let (native_count, native_warnings) = table_model_warning_count(&native_only).await;
+            assert_eq!(
+                native_count, 1,
+                "control: the native page must raise the warning: {native_warnings:?}"
+            );
+            let (scanned_count, scanned_warnings) = table_model_warning_count(&scanned_only).await;
+            assert_eq!(
+                scanned_count, 1,
+                "control: the scanned page must raise the warning: {scanned_warnings:?}"
+            );
+
+            let (mixed_count, mixed_warnings) = table_model_warning_count(&mixed).await;
+            assert_eq!(
+                mixed_count, 1,
+                "the mixed PDF must carry the warning once: {mixed_warnings:?}"
+            );
+        }
+    }
 }
 
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
@@ -10363,10 +10603,10 @@ mod ocr_fallback_warning_merge_tests {
         }
     }
 
-    /// A mixed PDF has native table pages and OCR table pages and no table model. The native pass
-    /// and the OCR pass each raise the warning, and the merged document carries it once.
+    /// The document already carries the table-model warning and the OCR fallback set raises it
+    /// again; the merged document carries it once.
     #[test]
-    fn should_keep_one_table_model_warning_when_native_and_ocr_pages_both_raise_it() {
+    fn should_keep_one_table_model_warning_when_the_document_already_carries_it() {
         let mut doc = InternalDocument::new("pdf");
         doc.processing_warnings.push(table_model_warning());
 
