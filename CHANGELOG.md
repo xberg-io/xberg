@@ -69,6 +69,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Table recognition was skipped with no sign in the result. A document whose layout pass found table regions now carries
   one processing warning, `image_tables` for an image and `pdf_tables` for a PDF, in the form the native PDF path uses.
   A mixed PDF whose native and OCR pages both raise it carries the warning once. (#2244)
+- **(jupyter): A carriage return in notebook output overwrites by display column, and 8-bit CSI sequences are dropped.**
+  A wide character counted as one column, so `中文字` followed by `\rAB` read `AB字` instead of `AB文字`. Half of a
+  wide character that an overwrite cuts becomes a space. The 8-bit CSI character (`U+009B`) and its parameters stayed
+  in the text; they are removed like `ESC [`. Combining marks now stay with their base character when output is
+  overwritten. (#2245)
 - **(djot): The footnote reference in the caption of a table without rows is dropped with the caption.**
   A table without rows, such as a lone `|---|` line, is not written and its caption is dropped. The footnote
   reference in that caption used to stay and appeared before the next table.
@@ -207,6 +212,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Recognise formulas on scanned pages that Tesseract OCRs page by page.**
   In builds with PaddleOCR, a default Tesseract config with `layout.formula_model` set took the per-page pipeline
   branch, which returned before formula recognition, so scanned pages produced no LaTeX.
+- **(pdf): Recognise formulas on the pages the mixed OCR route reads.**
+  `force_ocr_pages`, detected scanned pages and the per-page quality fallback ran layout detection for OCR and dropped
+  it afterwards, so the pages they OCR'd got LaTeX only when the markdown layout rasters were kept as well. Without
+  them, for example with `use_layout_for_markdown` off or a rotated page, formula recognition now reads the route's
+  own detections, for the pages whose OCR text replaced the native text only.
 - **(layout): Run markdown layout detection on the page's CropBox only.**
   Pages went to the layout model at their full MediaBox, so bleed, trim and registration marks outside a smaller
   CropBox shrank the page the model saw. Inference now runs on the CropBox and the detections are shifted back into

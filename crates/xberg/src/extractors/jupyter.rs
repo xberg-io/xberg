@@ -497,18 +497,73 @@ impl JupyterExtractor {
     /// Text a kernel wrote for a terminal, as a notebook frontend shows it: ANSI escape sequences
     /// (the colours of an IPython traceback or of a Julia `DataFrame` in `text/plain`) are dropped,
     /// and a carriage return moves back to the start of the line, so the text after it overwrites the
-    /// text before it, as progress bars expect.
+    /// text before it, as progress bars expect. The overwrite follows display columns: a wide
+    /// character takes two.
     fn terminal_text(text: &str) -> String {
-        let mut out = String::with_capacity(text.len());
-        let mut line: Vec<char> = Vec::new();
+        /// Skip the rest of a CSI sequence: parameter and intermediate bytes up to a final byte in `@`..=`~`.
+        fn skip_csi(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) {
+            while chars.next().is_some_and(|c| !('@'..='~').contains(&c)) {}
+        }
+
+        /// One display column. A wide character sits in its first column and `Tail` fills the second.
+        #[derive(Clone, Copy)]
+        enum Cell {
+            Char(char),
+            Tail,
+        }
+
+        /// Write a finished line: each character, then the combining marks that joined it.
+        fn flush(out: &mut String, line: &mut Vec<Cell>, marks: &mut AHashMap<usize, String>) {
+            for (column, cell) in line.drain(..).enumerate() {
+                if let Cell::Char(c) = cell {
+                    out.push(c);
+                    if !marks.is_empty()
+                        && let Some(joined) = marks.get(&column)
+                    {
+                        out.push_str(joined);
+                    }
+                }
+            }
+            marks.clear();
+        }
+
+        // Lines before the first `\r`, escape or 8-bit CSI are written as they are: without those, no
+        // character overwrites another, and the grid below would only copy the line. A `\r` before a
+        // newline is dropped and does not count.
+        let first_control = [
+            text.match_indices('\r')
+                .find(|&(at, _)| text.as_bytes().get(at + 1) != Some(&b'\n'))
+                .map(|(at, _)| at),
+            text.find('\u{1b}'),
+            text.find('\u{9b}'),
+        ]
+        .into_iter()
+        .flatten()
+        .min();
+        let (plain, text) = match first_control {
+            Some(at) => text.split_at(text[..at].rfind('\n').map_or(0, |newline| newline + 1)),
+            None => (text, ""),
+        };
+        let mut out = String::with_capacity(plain.len() + text.len());
+        for (index, piece) in plain.split("\r\n").enumerate() {
+            if index > 0 {
+                out.push('\n');
+            }
+            out.push_str(piece);
+        }
+        // One entry per display column, 4 bytes each. Combining marks have no column of their own: they
+        // sit in `marks`, keyed by the column of their base, and are rare.
+        let mut line: Vec<Cell> = Vec::new();
+        let mut marks: AHashMap<usize, String> = AHashMap::new();
         let mut column = 0;
         let mut chars = text.chars().peekable();
         while let Some(ch) = chars.next() {
             match ch {
+                // An 8-bit CSI is the single character `ESC [`
+                '\u{9b}' => skip_csi(&mut chars),
                 // An escape sequence is ESC and a byte in `@`..=`_`, two of which start a longer one
                 '\u{1b}' => match chars.next_if(|c| ('@'..='_').contains(c)) {
-                    // CSI: parameter and intermediate bytes up to a final byte in `@`..=`~`
-                    Some('[') => while chars.next().is_some_and(|c| !('@'..='~').contains(&c)) {},
+                    Some('[') => skip_csi(&mut chars),
                     // OSC: up to BEL or ST (`ESC \`)
                     Some(']') => {
                         while let Some(c) = chars.next() {
@@ -522,21 +577,55 @@ impl JupyterExtractor {
                 '\r' if chars.peek() == Some(&'\n') => {}
                 '\r' => column = 0,
                 '\n' => {
-                    out.extend(line.drain(..));
+                    flush(&mut out, &mut line, &mut marks);
                     out.push('\n');
                     column = 0;
                 }
                 _ => {
-                    if column < line.len() {
-                        line[column] = ch;
+                    // ASCII, controls included, takes one column: skip the table lookup
+                    let width = if ch.is_ascii() {
+                        1
                     } else {
-                        line.push(ch);
+                        unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1)
+                    };
+                    if width == 0 && column > 0 {
+                        // A combining mark has no column: it joins the character before it
+                        let base = if matches!(line[column - 1], Cell::Tail) {
+                            column - 2
+                        } else {
+                            column - 1
+                        };
+                        marks.entry(base).or_default().push(ch);
+                        continue;
                     }
-                    column += 1;
+                    let width = width.max(1);
+                    if column == line.len() {
+                        // Appending past the end of the line: nothing to overwrite
+                        line.push(Cell::Char(ch));
+                        line.resize(column + width, Cell::Tail);
+                        column += width;
+                        continue;
+                    }
+                    // Overwriting the first column of a wide character blanks the second. No write starts
+                    // on a second column: the step below blanks it, and `\r` returns to column 0.
+                    debug_assert!(!matches!(line.get(column), Some(Cell::Tail)));
+                    if matches!(line.get(column + width), Some(Cell::Tail)) {
+                        line[column + width] = Cell::Char(' ');
+                    }
+                    line.resize(line.len().max(column + width), Cell::Tail);
+                    line[column] = Cell::Char(ch);
+                    line[column + 1..column + width].fill(Cell::Tail);
+                    if !marks.is_empty() {
+                        // The overwritten columns lose the marks of their old characters
+                        for covered in column..column + width {
+                            marks.remove(&covered);
+                        }
+                    }
+                    column += width;
                 }
             }
         }
-        out.extend(line);
+        flush(&mut out, &mut line, &mut marks);
         out
     }
 
@@ -1702,8 +1791,135 @@ mod tests {
             "100%|#####| 3/3\ndone\n"
         );
         assert_eq!(JupyterExtractor::terminal_text("abcdef\rXY"), "XYcdef");
+        // A wide character takes two columns, so `AB` overwrites only the first one
+        assert_eq!(JupyterExtractor::terminal_text("中文字\rAB"), "AB文字");
+        // Half of a wide character is replaced by a space
+        assert_eq!(JupyterExtractor::terminal_text("中文\rA"), "A 文");
+        assert_eq!(JupyterExtractor::terminal_text("ab\rA中"), "A中");
+        // A combining mark stays with its base and takes no column
+        assert_eq!(JupyterExtractor::terminal_text("e\u{301}x\rAB"), "AB");
+        assert_eq!(JupyterExtractor::terminal_text("e\u{301}x"), "e\u{301}x");
+        // An overwrite drops the marks of the character it replaces
+        assert_eq!(JupyterExtractor::terminal_text("e\u{301}\rA"), "A");
+        // An 8-bit CSI is dropped like `ESC [`
+        assert_eq!(JupyterExtractor::terminal_text("\u{9b}32mgreen\u{9b}0m"), "green");
         // A lone ESC before ordinary text, and an unterminated sequence, drop nothing else
         assert_eq!(JupyterExtractor::terminal_text("a\u{1b}\nb\u{1b}[1"), "a\nb");
+    }
+
+    #[test]
+    fn terminal_text_returns_text_without_control_characters_unchanged() {
+        // Narrow, wide and combining characters, tabs and other controls, with no `\r`, escape or 8-bit CSI
+        let text = "plain\ttext\n中文字 e\u{301}x \u{301}y\u{200b}z\u{85}\u{8}\n\n";
+        assert_eq!(JupyterExtractor::terminal_text(text), text);
+        assert_eq!(JupyterExtractor::terminal_text(""), "");
+        // Windows line endings: the `\r` before each newline is dropped, in a stream with no other control
+        assert_eq!(
+            JupyterExtractor::terminal_text("a\r\n中文\r\n\r\nb\r\n"),
+            "a\n中文\n\nb\n"
+        );
+    }
+
+    #[test]
+    fn terminal_text_applies_control_characters_only_to_the_lines_that_hold_them() {
+        // The first two lines are plain; the carriage return on the third line overwrites only that line
+        assert_eq!(
+            JupyterExtractor::terminal_text("one\n中文\nabc\rX\nlast"),
+            "one\n中文\nXbc\nlast"
+        );
+        // An escape sequence that runs over a newline still removes the text after it
+        assert_eq!(
+            JupyterExtractor::terminal_text("one\n\u{1b}]0;title\nstill title\u{7}two"),
+            "one\ntwo"
+        );
+        assert_eq!(
+            JupyterExtractor::terminal_text("one\n\u{9b}1\nm two\r\nthree"),
+            "one\n two\nthree"
+        );
+        // Plain lines with Windows line endings, then a progress bar
+        assert_eq!(
+            JupyterExtractor::terminal_text("a\r\nb\r\n 1%\r50%\r\nc"),
+            "a\nb\n50%\nc"
+        );
+    }
+
+    #[test]
+    fn terminal_text_keeps_a_character_without_a_width_in_its_own_column() {
+        // U+0085 has no width in the table: it takes one column, as the controls of ASCII do, so `XY`
+        // covers only the first two of the three columns
+        assert_eq!(JupyterExtractor::terminal_text("a\u{85}b\rXY"), "XYb");
+    }
+
+    #[test]
+    fn terminal_text_joins_a_mark_to_a_wide_character() {
+        // The mark goes with the wide character, not with the empty second column
+        assert_eq!(JupyterExtractor::terminal_text("中\u{301}x"), "中\u{301}x");
+        // An overwrite of the wide character takes its mark away
+        assert_eq!(JupyterExtractor::terminal_text("中\u{301}\rA"), "A ");
+    }
+
+    #[test]
+    fn terminal_text_gives_a_mark_at_the_start_of_a_line_its_own_column() {
+        // No base character: the mark is written, and it takes one column
+        assert_eq!(JupyterExtractor::terminal_text("\u{301}x"), "\u{301}x");
+        assert_eq!(JupyterExtractor::terminal_text("\u{301}x\rA"), "Ax");
+    }
+
+    #[test]
+    fn terminal_text_clears_the_marks_at_the_end_of_a_line() {
+        // The mark of the first line does not move to the same column of the next line
+        assert_eq!(JupyterExtractor::terminal_text("e\u{301}\nx"), "e\u{301}\nx");
+    }
+
+    #[test]
+    fn terminal_text_replaces_narrow_characters_under_a_wide_one() {
+        // The wide character covers the two columns of `ab`
+        assert_eq!(JupyterExtractor::terminal_text("ab\r中"), "中");
+        // The next character starts after both columns of the wide one
+        assert_eq!(JupyterExtractor::terminal_text("abc\r中d"), "中d");
+    }
+
+    #[test]
+    fn should_apply_wide_and_combining_overwrites_to_the_text_of_every_output_kind() {
+        let notebook_json = r#"{
+            "cells": [
+                {
+                    "cell_type": "code",
+                    "source": ["run()"],
+                    "execution_count": 1,
+                    "outputs": [
+                        {"output_type": "stream", "name": "stdout", "text": ["中文\rA\n", "é\rF\n"]},
+                        {"output_type": "display_data", "data": {"text/plain": ["中文\rB"]}, "metadata": {}},
+                        {"output_type": "execute_result", "execution_count": 1, "data": {"text/plain": ["中文\rC"]}, "metadata": {}},
+                        {
+                            "output_type": "error",
+                            "ename": "ValueError",
+                            "evalue": "中文\rD",
+                            "traceback": ["中文\rE"]
+                        }
+                    ],
+                    "metadata": {}
+                }
+            ],
+            "metadata": {},
+            "nbformat": 4,
+            "nbformat_minor": 5
+        }"#;
+        let notebook: Value = serde_json::from_str(notebook_json).unwrap();
+
+        let (content, _, _, _, _, _) = JupyterExtractor::extract_notebook(notebook_json.as_bytes(), false).unwrap();
+        let doc = JupyterExtractor::build_internal_document(&notebook, JupyterCellRendering::Both, false).unwrap();
+        let texts: Vec<&str> = doc.elements.iter().map(|e| e.text.as_str()).collect();
+
+        for text in [content.as_str(), &texts.join("\n")] {
+            for kept in ["A 文", "B 文", "C 文", "D 文", "E 文"] {
+                assert!(text.contains(kept), "{kept:?} missing from {text:?}");
+            }
+            // The base cleaner gives `A文`: the wide character has no space where the overwrite cut it
+            assert!(!text.contains("A文") && !text.contains("D文"), "got: {text:?}");
+            // An overwrite takes the mark of the replaced character with it
+            assert!(text.contains("F") && !text.contains('\u{301}'), "got: {text:?}");
+        }
     }
 
     #[test]

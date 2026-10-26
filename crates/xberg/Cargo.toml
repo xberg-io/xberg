@@ -176,7 +176,7 @@ office = [
 # Jupyter notebook (.ipynb) extraction. Pure-Rust JSON parsing; needs the light
 # `html` dep for markdown/HTML cell output rendering. Split out of `office` so it
 # can be built standalone; `office` re-includes it for backward compatibility.
-notebook = ["html"]
+notebook = ["html", "dep:unicode-width"]
 hwp = ["dep:cfb", "dep:flate2"]
 hwpx = ["dep:unhwp", "dep:zip", "dep:quick-xml"]
 iwork = ["dep:zip", "dep:snap"]
@@ -1525,6 +1525,7 @@ tract-onnx = { workspace = true, optional = true }
 typst-syntax = { version = "0.15.1", optional = true }
 unhwp = { version = "0.23.0", default-features = false, features = ["hwpx"], optional = true }
 unicode-normalization = { version = "0.1.26", optional = true }
+unicode-width = { version = "0.2", optional = true }
 url = { workspace = true }
 urlencoding = "2"
 usvg = { workspace = true, optional = true }
