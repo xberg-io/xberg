@@ -638,7 +638,7 @@ impl InternalElement {
     }
 
     /// Set attributes.
-    #[cfg(any(feature = "xml", feature = "hwpx"))]
+    #[cfg(feature = "xml")]
     pub(crate) fn with_attributes(mut self, attributes: AHashMap<String, String>) -> Self {
         self.attributes = Some(attributes);
         self
@@ -649,7 +649,6 @@ impl InternalElement {
         feature = "ocr",
         feature = "xml",
         feature = "archives",
-        feature = "hwpx",
         // The only bare-`ocr-pipeline` caller lives in `extractors::pdf::ocr`, so gate on
         // pdf+ocr-pipeline. `ocr-wasm` enables ocr-pipeline without pdf and has no caller. ~keep
         all(feature = "pdf", feature = "ocr-pipeline")

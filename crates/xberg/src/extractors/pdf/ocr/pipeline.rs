@@ -486,7 +486,14 @@ type MixedOcrOutput = (
 );
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-type MixedOcrResult = crate::Result<MixedOcrOutput>;
+pub(crate) struct MixedOcrRun {
+    pub(crate) output: MixedOcrOutput,
+    /// The route's layout inputs for the native formula pass, keeping only the replaced pages that
+    /// hold a formula region. `None` without a formula model, without layout data, on the early
+    /// returns and the `Prepared` path, and when no replaced page holds a formula region.
+    #[cfg(feature = "formula-recognition")]
+    pub(crate) formula_layout_inputs: Option<PreparedLayoutInputs>,
+}
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -544,7 +551,7 @@ pub(crate) async fn extract_mixed_ocr_native(
     content: &[u8],
     config: &ExtractionConfig,
     _path: Option<&std::path::Path>,
-) -> MixedOcrResult {
+) -> crate::Result<MixedOcrOutput> {
     extract_mixed_ocr_native_with_single_block_pages(
         native_text,
         boundaries,
@@ -555,6 +562,7 @@ pub(crate) async fn extract_mixed_ocr_native(
         _path,
     )
     .await
+    .map(|run| run.output)
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
@@ -566,7 +574,7 @@ pub(crate) async fn extract_mixed_ocr_native_with_single_block_pages(
     content: &[u8],
     config: &ExtractionConfig,
     _path: Option<&std::path::Path>,
-) -> MixedOcrResult {
+) -> crate::Result<MixedOcrRun> {
     extract_mixed_ocr_native_with_layout_inputs(
         native_text,
         boundaries,
@@ -597,7 +605,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     config: &ExtractionConfig,
     all_pages_failed_policy: AllPagesFailedPolicy,
     #[cfg(feature = "layout-detection")] layout_inputs: MixedLayoutInputs<'_>,
-) -> OcrRunResult<MixedOcrOutput> {
+) -> OcrRunResult<MixedOcrRun> {
     let ocr_set: std::collections::HashSet<u32> = pages
         .ocr
         .iter()
@@ -613,18 +621,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         .collect();
 
     if ocr_set.is_empty() {
-        return Ok((
-            native_text.to_string(),
-            ahash::AHashMap::new(),
-            ahash::AHashMap::new(),
-            Vec::new(),
-            None,
-            Vec::new(),
-            ahash::AHashMap::new(),
-            ahash::AHashMap::new(),
-            Vec::new(),
-            Vec::new(),
-        ));
+        return Ok(MixedOcrRun::native(native_text));
     }
 
     let mut page_indices: Vec<usize> = ocr_set.iter().map(|&p| (p - 1) as usize).collect();
@@ -645,18 +642,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     );
     page_indices = valid_page_indices(&page_indices, page_count);
     if page_indices.is_empty() {
-        return Ok((
-            native_text.to_string(),
-            ahash::AHashMap::new(),
-            ahash::AHashMap::new(),
-            Vec::new(),
-            None,
-            Vec::new(),
-            ahash::AHashMap::new(),
-            ahash::AHashMap::new(),
-            Vec::new(),
-            Vec::new(),
-        ));
+        return Ok(MixedOcrRun::native(native_text));
     }
 
     // Layout detection for this mixed OCR route (#665). The full-document OCR routes
@@ -1956,18 +1942,81 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let result = apply_ocr_page_replacements(native_text, boundaries, &accepted_replacements);
     page_failures.sort_by_key(|failure| failure.page);
 
-    Ok((
-        result,
-        accepted_replacements,
-        structured_ocr_pages,
-        accumulated_llm_usage,
-        if capture_rasters { Some(captured_rasters) } else { None },
-        accumulated_formulas,
-        preprocessing_by_page,
-        ocr_confidence_by_page,
-        accumulated_warnings,
-        page_failures,
-    ))
+    #[cfg(feature = "formula-recognition")]
+    let formula_layout_inputs = formula_layout_inputs_for_replaced_pages(
+        resolved_layout_inputs,
+        &accepted_replacements,
+        config.layout.as_ref(),
+    );
+    Ok(MixedOcrRun {
+        output: (
+            result,
+            accepted_replacements,
+            structured_ocr_pages,
+            accumulated_llm_usage,
+            if capture_rasters { Some(captured_rasters) } else { None },
+            accumulated_formulas,
+            preprocessing_by_page,
+            ocr_confidence_by_page,
+            accumulated_warnings,
+            page_failures,
+        ),
+        #[cfg(feature = "formula-recognition")]
+        formula_layout_inputs,
+    })
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+impl MixedOcrRun {
+    fn native(native_text: &str) -> Self {
+        Self {
+            output: (
+                native_text.to_string(),
+                ahash::AHashMap::new(),
+                ahash::AHashMap::new(),
+                Vec::new(),
+                None,
+                Vec::new(),
+                ahash::AHashMap::new(),
+                ahash::AHashMap::new(),
+                Vec::new(),
+                Vec::new(),
+            ),
+            #[cfg(feature = "formula-recognition")]
+            formula_layout_inputs: None,
+        }
+    }
+}
+
+/// Keeps the layout inputs of the replaced pages that hold a formula region, so the formula pass
+/// leaves native pages and rejected OCR pages as they were. Other pages keep an empty raster to
+/// hold the page index without holding its memory.
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    feature = "pdf",
+    feature = "formula-recognition"
+))]
+pub(super) fn formula_layout_inputs_for_replaced_pages(
+    inputs: Option<PreparedLayoutInputs>,
+    replaced_pages: &ahash::AHashMap<u32, String>,
+    layout: Option<&crate::core::config::LayoutDetectionConfig>,
+) -> Option<PreparedLayoutInputs> {
+    layout?.formula_model.as_ref()?;
+    let (mut images, mut detections) = inputs?;
+    let mut any_formula_page = false;
+    for (page_idx, (image, detection)) in images.iter_mut().zip(&mut detections).enumerate() {
+        let has_formula = detection
+            .detections
+            .iter()
+            .any(|region| matches!(region.class_name, crate::layout::LayoutClass::Formula));
+        if has_formula && replaced_pages.contains_key(&(page_idx as u32 + 1)) {
+            any_formula_page = true;
+        } else {
+            *image = image::DynamicImage::new_rgb8(0, 0);
+            detection.detections.clear();
+        }
+    }
+    any_formula_page.then_some((images, detections))
 }
 
 #[cfg(all(paddle_ocr, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
@@ -2020,18 +2069,22 @@ pub(crate) async fn extract_full_document_ocr_pipeline_per_page(
         .unwrap_or_default();
     single_block_pages.sort_unstable();
     let (seed_text, boundaries) = full_document_page_seed(page_count, config);
-    let (
-        text,
-        accepted_pages,
-        structured_pages,
-        llm_usage,
-        rasters,
-        formulas,
-        preprocessing,
-        ocr_confidence,
-        warnings,
-        page_failures,
-    ) = Box::pin(extract_mixed_ocr_native_with_layout_inputs(
+    let MixedOcrRun {
+        output:
+            (
+                text,
+                accepted_pages,
+                structured_pages,
+                llm_usage,
+                rasters,
+                formulas,
+                preprocessing,
+                ocr_confidence,
+                warnings,
+                page_failures,
+            ),
+        ..
+    } = Box::pin(extract_mixed_ocr_native_with_layout_inputs(
         &seed_text,
         &boundaries,
         MixedOcrPageSelection {

@@ -630,7 +630,8 @@ fn attach_unrepresented_tables(doc: &mut InternalDocument, tables: Vec<crate::ty
 }
 
 /// Share of a table's cell tokens that must already be in the element stream
-/// before the table counts as represented.
+/// before the table counts as represented; also the share of a table's or a
+/// paragraph's tokens a VLM region answer must carry to replace it.
 const MIN_TABLE_TOKEN_REPRESENTATION: f64 = 0.90;
 /// Cell-token count below which the containment check abstains: on a handful of
 /// tokens an incidental overlap with unrelated prose is likely, and injecting a
@@ -665,31 +666,26 @@ fn element_token_multiset(doc: &InternalDocument) -> ahash::AHashMap<String, usi
 /// Both bailouts err toward returning `false` (inject), because a duplicated
 /// table costs precision while a dropped one costs content.
 fn table_is_represented(table: &crate::types::Table, represented: &mut ahash::AHashMap<String, usize>) -> bool {
-    let mut table_tokens = ahash::AHashMap::<String, usize>::new();
-    let mut table_token_count = 0usize;
-    for token in table
-        .cells
-        .iter()
-        .flatten()
-        .flat_map(|cell| normalized_pdf_tokens(cell))
-    {
-        *table_tokens.entry(token).or_default() += 1;
-        table_token_count += 1;
-    }
-    if table_token_count < MIN_TABLE_TOKENS_FOR_CONTAINMENT {
+    let tokens = token_multiset(table.cells.iter().flatten().map(String::as_str));
+    if tokens.values().sum::<usize>() < MIN_TABLE_TOKENS_FOR_CONTAINMENT {
         return false;
     }
+    take_if_represented(tokens, represented)
+}
 
-    let matched: usize = table_tokens
+/// Takes `tokens` out of `pool` when the pool holds at least `MIN_TABLE_TOKEN_REPRESENTATION` of them, so
+/// two texts cannot claim the same tokens, and reports whether it did. No tokens at all passes.
+fn take_if_represented(tokens: ahash::AHashMap<String, usize>, pool: &mut ahash::AHashMap<String, usize>) -> bool {
+    let total: usize = tokens.values().sum();
+    let matched: usize = tokens
         .iter()
-        .map(|(token, count)| (*count).min(represented.get(token).copied().unwrap_or_default()))
+        .map(|(token, count)| (*count).min(pool.get(token).copied().unwrap_or_default()))
         .sum();
-    if (matched as f64 / table_token_count as f64) < MIN_TABLE_TOKEN_REPRESENTATION {
+    if (matched as f64 / total as f64) < MIN_TABLE_TOKEN_REPRESENTATION {
         return false;
     }
-
-    for (token, count) in table_tokens {
-        if let Some(remaining) = represented.get_mut(&token) {
+    for (token, count) in tokens {
+        if let Some(remaining) = pool.get_mut(&token) {
             *remaining = remaining.saturating_sub(count);
         }
     }
@@ -2401,6 +2397,8 @@ impl PdfExtractor {
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         #[allow(unused_assignments)]
         let mut ocr_layout_gate_audit: OcrLayoutGateDecisions = (None, None);
+        #[cfg(feature = "formula-recognition")]
+        let mut mixed_formula_layout_inputs = None;
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         record_implausible_text_pages(
@@ -2503,6 +2501,20 @@ impl PdfExtractor {
             if !ocr_pages.is_empty() {
                 if let Some(ref bounds) = boundaries {
                     if !bounds.is_empty() {
+                        let mixed_run = ocr::extract_mixed_ocr_native_with_single_block_pages(
+                            &native_text,
+                            bounds,
+                            ocr_pages,
+                            &[],
+                            content,
+                            config,
+                            path,
+                        )
+                        .await?;
+                        #[cfg(feature = "formula-recognition")]
+                        {
+                            mixed_formula_layout_inputs = mixed_run.formula_layout_inputs;
+                        }
                         let (
                             mixed,
                             results_map,
@@ -2514,16 +2526,7 @@ impl PdfExtractor {
                             mixed_ocr_confidence,
                             mixed_warnings,
                             mixed_page_failures,
-                        ) = ocr::extract_mixed_ocr_native_with_single_block_pages(
-                            &native_text,
-                            bounds,
-                            ocr_pages,
-                            &[],
-                            content,
-                            config,
-                            path,
-                        )
-                        .await?;
+                        ) = mixed_run.output;
                         let extraction_method = extraction_method_after_mixed_ocr(&results_map);
                         ocr_llm_usage = mixed_llm_usage;
                         ocr_results_map = Some(results_map);
@@ -2581,18 +2584,23 @@ impl PdfExtractor {
                 )
                 .await
                 {
-                    Ok((
-                        mixed,
-                        results_map,
-                        mixed_structured_pages,
-                        mixed_llm_usage,
-                        mixed_rstrs,
-                        mixed_formulas,
-                        mixed_preprocessing,
-                        mixed_ocr_confidence,
-                        mixed_warnings,
-                        mixed_page_failures,
-                    )) => {
+                    Ok(mixed_run) => {
+                        #[cfg(feature = "formula-recognition")]
+                        {
+                            mixed_formula_layout_inputs = mixed_run.formula_layout_inputs;
+                        }
+                        let (
+                            mixed,
+                            results_map,
+                            mixed_structured_pages,
+                            mixed_llm_usage,
+                            mixed_rstrs,
+                            mixed_formulas,
+                            mixed_preprocessing,
+                            mixed_ocr_confidence,
+                            mixed_warnings,
+                            mixed_page_failures,
+                        ) = mixed_run.output;
                         // `Mixed` must mean "OCR contributed text", not "OCR was attempted". When
                         // every candidate page was rejected (blank render, failed decode, empty
                         // backend output) nothing was replaced and the result IS the native text --
@@ -2870,18 +2878,23 @@ impl PdfExtractor {
                         )
                         .await
                         {
-                            Ok((
-                                mixed,
-                                results_map,
-                                mixed_structured_pages,
-                                mixed_llm_usage,
-                                mixed_rstrs,
-                                mixed_formulas,
-                                mixed_preprocessing,
-                                mixed_ocr_confidence,
-                                mixed_warnings,
-                                mixed_page_failures,
-                            )) => {
+                            Ok(mixed_run) => {
+                                #[cfg(feature = "formula-recognition")]
+                                {
+                                    mixed_formula_layout_inputs = mixed_run.formula_layout_inputs;
+                                }
+                                let (
+                                    mixed,
+                                    results_map,
+                                    mixed_structured_pages,
+                                    mixed_llm_usage,
+                                    mixed_rstrs,
+                                    mixed_formulas,
+                                    mixed_preprocessing,
+                                    mixed_ocr_confidence,
+                                    mixed_warnings,
+                                    mixed_page_failures,
+                                ) = mixed_run.output;
                                 let extraction_method = extraction_method_after_mixed_ocr(&results_map);
                                 ocr_llm_usage = mixed_llm_usage;
                                 ocr_results_map = Some(results_map);
@@ -2966,6 +2979,13 @@ impl PdfExtractor {
         if let Some((images, detections)) = native_only_layout_inputs {
             markdown_layout_images = images;
             markdown_layout_detections = detections;
+        }
+
+        // The formula pass reads the markdown inputs whenever they exist, so the mixed route's rasters are released
+        // here rather than held through document assembly.
+        #[cfg(feature = "formula-recognition")]
+        if markdown_layout_images.is_some() && markdown_layout_detections.is_some() {
+            mixed_formula_layout_inputs = None;
         }
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -3494,14 +3514,20 @@ impl PdfExtractor {
 
         // Native pages with layout hints carry formula elements holding the
         // region's glyph text; a configured model replaces it with LaTeX.
+        // Without markdown layout inputs, the pages the mixed OCR route
+        // replaced are read from that route's own layout inputs.
         #[cfg(all(feature = "formula-recognition", feature = "layout-detection"))]
-        if let (Some(images), Some(detections), Some(layout)) = (
-            markdown_layout_images.as_ref(),
-            markdown_layout_detections.as_ref(),
-            config.layout.as_ref(),
-        ) {
+        if let Some(layout) = config.layout.as_ref() {
             let mut side_channel = std::mem::take(&mut doc.formulas);
-            recognize_pdf_formula_regions(Some(&mut doc), &mut side_channel, images, detections, layout, content).await;
+            if let (Some(images), Some(detections)) =
+                (markdown_layout_images.as_ref(), markdown_layout_detections.as_ref())
+            {
+                recognize_pdf_formula_regions(Some(&mut doc), &mut side_channel, images, detections, layout, content)
+                    .await;
+            } else if let Some((images, detections)) = mixed_formula_layout_inputs.take() {
+                recognize_pdf_formula_regions(Some(&mut doc), &mut side_channel, &images, &detections, layout, content)
+                    .await;
+            }
             doc.formulas = side_channel;
         }
 
@@ -10282,6 +10308,7 @@ BT /F1 12 Tf 30 30 Td (Beta) Tj ET
 
     #[cfg(all(feature = "ocr", feature = "formula-recognition", feature = "layout-detection"))]
     #[tokio::test]
+    #[serial]
     #[ignore = "runs the RT-DETR layout and RapidLaTeXOCR models (~310 MB, downloaded on first use)"]
     async fn auto_gate_skipping_a_page_keeps_formula_recognition_on_the_pages_it_ran() {
         let content = scanned_math_then_prose_pdf();

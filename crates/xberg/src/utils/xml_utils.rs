@@ -1,7 +1,7 @@
 #[cfg(any(feature = "xml", feature = "office", feature = "hwpx"))]
 use std::borrow::Cow;
 
-#[cfg(any(feature = "xml", feature = "office", feature = "hwpx"))]
+#[cfg(any(feature = "xml", feature = "office"))]
 /// Decode raw XML bytes to a UTF-8 string, honoring the `<?xml encoding=...?>`
 /// declaration when present and falling back to charset detection otherwise.
 /// Strips a leading BOM.
@@ -43,7 +43,7 @@ pub(crate) fn decode_xml_to_utf8(content: &[u8]) -> (String, bool) {
 /// quick-xml decodes names to `&str` at parse time, so this no longer decodes
 /// anything; it stays as a `Cow` so the call sites that hold the result across a
 /// borrow of the event keep working unchanged.
-#[cfg(any(feature = "xml", feature = "office", feature = "hwpx"))]
+#[cfg(any(feature = "xml", feature = "office"))]
 #[inline]
 pub(crate) fn xml_tag_name(name: &str) -> Cow<'_, str> {
     Cow::Borrowed(name)
@@ -246,7 +246,7 @@ pub(crate) fn doctype_end(tail: &str) -> Option<usize> {
 /// A parser that rejects a DTD cannot read a document that carries one, and an
 /// embedded formula object always does. Removing the declaration keeps the
 /// rejection in place for the entities it exists to guard against.
-#[cfg(any(feature = "xml", feature = "office", feature = "hwpx"))]
+#[cfg(any(feature = "xml", feature = "office"))]
 pub(crate) fn strip_doctype(xml: &str) -> std::borrow::Cow<'_, str> {
     let Some(start) = xml.find("<!DOCTYPE") else {
         return std::borrow::Cow::Borrowed(xml);

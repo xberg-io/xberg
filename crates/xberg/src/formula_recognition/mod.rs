@@ -249,6 +249,14 @@ struct PooledRecognizer {
 static RECOGNIZER: std::sync::Mutex<Option<PooledRecognizer>> = std::sync::Mutex::new(None);
 static LAST_INIT_FAILURE: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
 
+/// Answers every crop in place of the model while set, so tests can drive the PDF routes
+/// without the model weights.
+#[cfg(test)]
+pub(crate) static STUB_RECOGNIZER: std::sync::Mutex<Option<StubRecognizer>> = std::sync::Mutex::new(None);
+
+#[cfg(test)]
+pub(crate) type StubRecognizer = fn(&RgbImage) -> Option<String>;
+
 /// Recognize one region crop with the pooled recognizer, initializing (model
 /// download included) or rebuilding it as needed. Errors are strings so
 /// callers can degrade to plain OCR text with a warning.
@@ -256,6 +264,13 @@ static LAST_INIT_FAILURE: std::sync::Mutex<Option<std::time::Instant>> = std::sy
 /// The pool lock is held for the whole recognition; callers on an async
 /// runtime must wrap this in `spawn_blocking`.
 pub(crate) fn recognize_crop(crop: &RgbImage, accel: Option<&AccelerationConfig>) -> Result<Option<String>, String> {
+    #[cfg(test)]
+    if let Some(stub) = *STUB_RECOGNIZER
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+    {
+        return Ok(stub(crop));
+    }
     {
         let last = LAST_INIT_FAILURE
             .lock()

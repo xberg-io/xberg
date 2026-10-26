@@ -104,6 +104,7 @@ jobs:
         run: |
           node --test scripts/tests/opencode-plugin.test.mjs
           python3 scripts/verify_pi_package.py
+          python3 scripts/tests/test_verify_pi_package.py
 
       - name: Install uv for Hermes contract tests
         uses: astral-sh/setup-uv@v10.3.0
