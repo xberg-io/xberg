@@ -68,7 +68,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(jupyter): A carriage return in notebook output overwrites by display column, and 8-bit CSI sequences are dropped.**
   A wide character counted as one column, so `中文字` followed by `\rAB` read `AB字` instead of `AB文字`. Half of a
   wide character that an overwrite cuts becomes a space. The 8-bit CSI character (`U+009B`) and its parameters stayed
-  in the text; they are removed like `ESC [`. (#2245)
+  in the text; they are removed like `ESC [`. Combining marks now stay with their base character when output is
+  overwritten. (#2245)
 - **(docx): A paragraph or list item holding only whitespace next to display math writes nothing.**
   The equation was written, and an empty paragraph or list item came with it. Headings and quotes already skipped
   the blank text. (#2262)

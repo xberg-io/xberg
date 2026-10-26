@@ -1788,6 +1788,85 @@ mod tests {
     }
 
     #[test]
+    fn terminal_text_keeps_a_character_without_a_width_in_its_own_column() {
+        // U+0085 has no width in the table: it takes one column, as the controls of ASCII do, so `XY`
+        // covers only the first two of the three columns
+        assert_eq!(JupyterExtractor::terminal_text("a\u{85}b\rXY"), "XYb");
+    }
+
+    #[test]
+    fn terminal_text_joins_a_mark_to_a_wide_character() {
+        // The mark goes with the wide character, not with the empty second column
+        assert_eq!(JupyterExtractor::terminal_text("中\u{301}x"), "中\u{301}x");
+        // An overwrite of the wide character takes its mark away
+        assert_eq!(JupyterExtractor::terminal_text("中\u{301}\rA"), "A ");
+    }
+
+    #[test]
+    fn terminal_text_gives_a_mark_at_the_start_of_a_line_its_own_column() {
+        // No base character: the mark is written, and it takes one column
+        assert_eq!(JupyterExtractor::terminal_text("\u{301}x"), "\u{301}x");
+        assert_eq!(JupyterExtractor::terminal_text("\u{301}x\rA"), "Ax");
+    }
+
+    #[test]
+    fn terminal_text_clears_the_marks_at_the_end_of_a_line() {
+        // The mark of the first line does not move to the same column of the next line
+        assert_eq!(JupyterExtractor::terminal_text("e\u{301}\nx"), "e\u{301}\nx");
+    }
+
+    #[test]
+    fn terminal_text_replaces_narrow_characters_under_a_wide_one() {
+        // The wide character covers the two columns of `ab`
+        assert_eq!(JupyterExtractor::terminal_text("ab\r中"), "中");
+        // The next character starts after both columns of the wide one
+        assert_eq!(JupyterExtractor::terminal_text("abc\r中d"), "中d");
+    }
+
+    #[test]
+    fn should_apply_wide_and_combining_overwrites_to_the_text_of_every_output_kind() {
+        let notebook_json = r#"{
+            "cells": [
+                {
+                    "cell_type": "code",
+                    "source": ["run()"],
+                    "execution_count": 1,
+                    "outputs": [
+                        {"output_type": "stream", "name": "stdout", "text": ["中文\rA\n", "é\rF\n"]},
+                        {"output_type": "display_data", "data": {"text/plain": ["中文\rB"]}, "metadata": {}},
+                        {"output_type": "execute_result", "execution_count": 1, "data": {"text/plain": ["中文\rC"]}, "metadata": {}},
+                        {
+                            "output_type": "error",
+                            "ename": "ValueError",
+                            "evalue": "中文\rD",
+                            "traceback": ["中文\rE"]
+                        }
+                    ],
+                    "metadata": {}
+                }
+            ],
+            "metadata": {},
+            "nbformat": 4,
+            "nbformat_minor": 5
+        }"#;
+        let notebook: Value = serde_json::from_str(notebook_json).unwrap();
+
+        let (content, _, _, _, _, _) = JupyterExtractor::extract_notebook(notebook_json.as_bytes(), false).unwrap();
+        let doc = JupyterExtractor::build_internal_document(&notebook, JupyterCellRendering::Both, false).unwrap();
+        let texts: Vec<&str> = doc.elements.iter().map(|e| e.text.as_str()).collect();
+
+        for text in [content.as_str(), &texts.join("\n")] {
+            for kept in ["A 文", "B 文", "C 文", "D 文", "E 文"] {
+                assert!(text.contains(kept), "{kept:?} missing from {text:?}");
+            }
+            // The base cleaner gives `A文`: the wide character has no space where the overwrite cut it
+            assert!(!text.contains("A文") && !text.contains("D文"), "got: {text:?}");
+            // An overwrite takes the mark of the replaced character with it
+            assert!(text.contains("F") && !text.contains('\u{301}'), "got: {text:?}");
+        }
+    }
+
+    #[test]
     fn should_drop_ansi_escapes_from_the_plain_text_of_a_rich_output() {
         // IJulia writes a `DataFrame`'s `text/plain` with bold headers and grey type rows
         let notebook_json = r#"{
