@@ -583,12 +583,9 @@ impl JupyterExtractor {
                         column += width;
                         continue;
                     }
-                    // Overwriting the second column of a wide character blanks its first column, and
-                    // overwriting the first column blanks the second.
-                    if column > 0 && matches!(line.get(column), Some(Cell::Tail)) {
-                        line[column - 1] = Cell::Char(' ');
-                        marks.remove(&(column - 1));
-                    }
+                    // Overwriting the first column of a wide character blanks the second. No write starts
+                    // on a second column: the step below blanks it, and `\r` returns to column 0.
+                    debug_assert!(!matches!(line.get(column), Some(Cell::Tail)));
                     if matches!(line.get(column + width), Some(Cell::Tail)) {
                         line[column + width] = Cell::Char(' ');
                     }
