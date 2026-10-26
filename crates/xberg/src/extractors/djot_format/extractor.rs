@@ -1394,22 +1394,27 @@ mod tests {
 
     #[tokio::test]
     async fn should_keep_an_image_alt_break_out_of_the_footnote_text_djot() {
-        let content = b"Text[^a].\n\n[^a]: see ![first\n    second](x.png) end\n";
-        let doc = DjotExtractor::new()
-            .extract_content(content, "text/djot", &ExtractionConfig::default())
-            .await
-            .expect("djot with an image in a footnote should extract");
-        let definition = doc
-            .elements
-            .iter()
-            .find(|e| e.kind == ElementKind::FootnoteDefinition)
-            .expect("the footnote definition is extracted");
-        assert_eq!(definition.text, "see  end", "got {:?}", doc.elements);
-        let image = doc
-            .elements
-            .iter()
-            .find(|e| matches!(e.kind, ElementKind::Image { .. }))
-            .expect("the image is extracted");
-        assert_eq!(image.text, "first second", "got {:?}", doc.elements);
+        let cases: [(&[u8], &str); 2] = [
+            (b"Text[^a].\n\n[^a]: see ![first\n    second](x.png) end\n", "first second"),
+            (b"Text[^a].\n\n[^a]: see ![first\\\n    second](x.png) end\n", "first\nsecond"),
+        ];
+        for (content, expected_alt) in cases {
+            let doc = DjotExtractor::new()
+                .extract_content(content, "text/djot", &ExtractionConfig::default())
+                .await
+                .expect("djot with an image in a footnote should extract");
+            let definition = doc
+                .elements
+                .iter()
+                .find(|e| e.kind == ElementKind::FootnoteDefinition)
+                .expect("the footnote definition is extracted");
+            assert_eq!(definition.text, "see  end", "got {:?}", doc.elements);
+            let image = doc
+                .elements
+                .iter()
+                .find(|e| matches!(e.kind, ElementKind::Image { .. }))
+                .expect("the image is extracted");
+            assert_eq!(image.text, expected_alt, "got {:?}", doc.elements);
+        }
     }
 }
