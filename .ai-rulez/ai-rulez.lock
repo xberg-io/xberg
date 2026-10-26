@@ -4,7 +4,7 @@
 version = 1
 ai_rulez_version = '5.7.0'
 scope = 'all'
-tree = 'sha256:3f6668a797c176c4a2c957b0e379ede4803fdbc8d393ffc86e651117f7ae5e63'
+tree = 'sha256:2d8d4341a45600706c4246f45e25605795b6a28c5cc360410e24cc2e893ccb13'
 
 [[include]]
 name = 'xberg-cicd'
@@ -77,7 +77,7 @@ digest = 'sha256:7f4e0fb460d0828eab16f4f7e5a8495ec1c13a2df5a1f3beb120e74e98f604f
 name = 'alef-generated-bindings'
 source = '.ai-rulez/skills/alef-generated-bindings/SKILL.md'
 commit = ''
-digest = 'sha256:0739eadc611208d7d7578686de34b514fe206526a2e2f304a5cefcc2b296694d'
+digest = 'sha256:8adf717e50791ad60d8214d48ac23cd592b20eb078b147991dd9734e91f4fdde'
 
 [[served]]
 name = 'alef-workflow'
@@ -407,7 +407,7 @@ digest = 'sha256:903caff516a01c6909f547c1d4739922ee39ed888f9ca3248707ecfe4f7ee49
 kind = 'rule'
 id = 'partner-corpus-handling'
 path = 'rules/partner-corpus-handling.md'
-digest = 'sha256:b2b0c876eb1b1915c67ace6f986cff97eee0baa235871672c043b852591a4803'
+digest = 'sha256:47c4086dc5560db314c11bdeee0675c74a88b3c7b6556fb36cd624f3f7c2842d'
 
 [[item]]
 kind = 'settings'
@@ -418,7 +418,7 @@ digest = 'sha256:0c3ec1142275bddbddcc03caadc03358528d1b6a97aca401bc75e4471ba346c
 kind = 'skill'
 id = 'alef-generated-bindings'
 path = 'skills/alef-generated-bindings'
-digest = 'sha256:377910c5546f4d3a0537e897ce03281e5668b0f304b33201d1f3d7168d6865b1'
+digest = 'sha256:719a226a2a0f50c10b8feedee6c452eb37fe435e8cae22409c923be78a0d0053'
 
 [[item]]
 kind = 'skill'

@@ -22,7 +22,7 @@ x-ai-rulez:
 
 # Alef-Generated Bindings
 
-Xberg specifics on top of the shared `alef-workflow` skill (generic regenerate/verify/commit loop).
+Xberg specifics on top of the shared Alef workflow skill (generic regenerate/verify/commit loop).
 
 - Check `alef.toml` before touching anything in `packages/*/` or a binding crate.
 - `task alef:generate` runs `alef all --clean` and formats via poly; there is no `task alef:format`.

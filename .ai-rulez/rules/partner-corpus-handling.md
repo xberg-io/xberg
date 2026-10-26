@@ -19,7 +19,7 @@ the underlying material. **Know which you are holding before deciding anything.*
 
 **Municipal corpora scraped from public authority websites are public records, not confidential
 data.** US local-government ordinances, agendas, minutes and resolutions are *edicts of government*
-and carry no copyright at all — `test_documents/ATTRIBUTIONS.md` already vendors City of Sugar Land
+and carry no copyright at all — the corpus attributions file (`ATTRIBUTIONS.md` in the test documents submodule) already vendors City of Sugar Land
 records into a **public** repo on exactly that basis. For this class of material:
 
 - Using it for testing, benchmarking and tuning is unproblematic.

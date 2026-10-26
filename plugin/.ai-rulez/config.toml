@@ -6,3 +6,11 @@ description = "Local document extraction: text, tables, metadata, images from 10
 agents_md = false
 # Pinned by `ai-rulez migrate v5`: the 4.x default. Remove this line to take the v5 default.
 gitignore = true
+
+[lint]
+
+# The CLI reference documents the product's own install channels; pinning a version there would go stale every release. ~keep
+[[lint.ignore_rules]]
+rules = ["AR021"]
+paths = ["**/references/cli-reference.md"]
+reason = "Install instructions for this project's own CLI, which track the latest release by design."
