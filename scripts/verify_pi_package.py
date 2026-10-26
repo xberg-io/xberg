@@ -61,7 +61,11 @@ def verify_root_pi(root: Path) -> None:
             found = (path / "SKILL.md").is_file() if kind == "skills" else path.is_file()
             if not found:
                 raise ValueError(f"Root package.json pi.{kind} path does not resolve: {entry}")
-        root_names = {Path(entry).name for entry in root_pi.get(kind, [])}
+        listed = [Path(entry).name for entry in root_pi.get(kind, [])]
+        duplicates = sorted({name for name in listed if listed.count(name) > 1})
+        if duplicates:
+            raise ValueError(f"Root package.json pi.{kind} lists a name twice: {duplicates}")
+        root_names = set(listed)
         plugin_names = {Path(entry).name for entry in plugin_pi.get(kind, [])}
         if root_names != plugin_names:
             raise ValueError(
