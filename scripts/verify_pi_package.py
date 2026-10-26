@@ -65,8 +65,7 @@ def verify_root_pi(root: Path) -> None:
         plugin_names = {Path(entry).name for entry in plugin_pi.get(kind, [])}
         if root_names != plugin_names:
             raise ValueError(
-                f"Root package.json pi.{kind} differs from plugin/package.json: "
-                f"{sorted(root_names ^ plugin_names)}"
+                f"Root package.json pi.{kind} differs from plugin/package.json: {sorted(root_names ^ plugin_names)}"
             )
 
 

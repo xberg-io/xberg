@@ -4,7 +4,19 @@ import importlib.util
 import json
 import tempfile
 import unittest
+from collections.abc import Callable
 from pathlib import Path
+
+
+def assert_error(operation: Callable[[], object], message: str) -> None:
+    """Require the intended rejection instead of any failure."""
+    try:
+        operation()
+    except ValueError as error:
+        received = str(error)
+    else:
+        raise AssertionError(f"Expected rejection: {message}")
+    assert message in received
 
 
 def load_module() -> object:
@@ -48,28 +60,24 @@ class RootPiResourcesTests(unittest.TestCase):
     def test_missing_skill_directory_is_rejected(self) -> None:
         """A skill path with no directory fails."""
         self.write_root(["./plugin/.pi/skills/gone"], ["./plugin/.pi/prompts/demo.md"])
-        with self.assertRaisesRegex(ValueError, "gone"):
-            self.module.verify_root_pi(self.root)
+        assert_error(lambda: self.module.verify_root_pi(self.root), "gone")
 
     def test_skill_directory_without_skill_file_is_rejected(self) -> None:
         """A skill directory with no SKILL.md fails."""
         (self.root / "plugin/.pi/skills/demo/SKILL.md").unlink()
-        with self.assertRaisesRegex(ValueError, "demo"):
-            self.module.verify_root_pi(self.root)
+        assert_error(lambda: self.module.verify_root_pi(self.root), "demo")
 
     def test_missing_prompt_file_is_rejected(self) -> None:
         """A prompt path with no file fails."""
         self.write_root(["./plugin/.pi/skills/demo"], ["./plugin/.pi/prompts/gone.md"])
-        with self.assertRaisesRegex(ValueError, "gone"):
-            self.module.verify_root_pi(self.root)
+        assert_error(lambda: self.module.verify_root_pi(self.root), "gone")
 
     def test_skill_names_must_match_plugin(self) -> None:
         """A root list that drops a plugin skill fails even when every path resolves."""
         (self.root / "plugin/.pi/skills/extra").mkdir()
         (self.root / "plugin/.pi/skills/extra/SKILL.md").write_text("Body\n")
         self.write_plugin(["./.pi/skills/demo", "./.pi/skills/extra"], ["./.pi/prompts/demo.md"])
-        with self.assertRaisesRegex(ValueError, "extra"):
-            self.module.verify_root_pi(self.root)
+        assert_error(lambda: self.module.verify_root_pi(self.root), "extra")
 
     def test_real_repository_passes(self) -> None:
         """The checked-in root package.json passes."""
