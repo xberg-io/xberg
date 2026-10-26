@@ -69,6 +69,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Table recognition was skipped with no sign in the result. A document whose layout pass found table regions now carries
   one processing warning, `image_tables` for an image and `pdf_tables` for a PDF, in the form the native PDF path uses.
   A mixed PDF whose native and OCR pages both raise it carries the warning once. (#2244)
+- **(djot): Keep the line breaks inside a footnote definition.**
+  A soft break in a footnote definition was dropped, so `first` and `second` on two lines came out as
+  `firstsecond`; a hard break was dropped the same way. A soft break is now a space and a hard break a newline,
+  as in a paragraph. A break inside the alt text of an image now stays in the alt text. (#2247)
 - **(jupyter): A carriage return in notebook output overwrites by display column, and 8-bit CSI sequences are dropped.**
   A wide character counted as one column, so `中文字` followed by `\rAB` read `AB字` instead of `AB文字`. Half of a
   wide character that an overwrite cuts becomes a space. The 8-bit CSI character (`U+009B`) and its parameters stayed
