@@ -11611,6 +11611,7 @@ dependencies = [
  "typst-syntax",
  "unhwp",
  "unicode-normalization",
+ "unicode-width",
  "ureq 3.5.0",
  "url",
  "urlencoding",

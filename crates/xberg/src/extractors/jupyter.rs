@@ -497,18 +497,27 @@ impl JupyterExtractor {
     /// Text a kernel wrote for a terminal, as a notebook frontend shows it: ANSI escape sequences
     /// (the colours of an IPython traceback or of a Julia `DataFrame` in `text/plain`) are dropped,
     /// and a carriage return moves back to the start of the line, so the text after it overwrites the
-    /// text before it, as progress bars expect.
+    /// text before it, as progress bars expect. The overwrite follows display columns: a wide
+    /// character takes two.
     fn terminal_text(text: &str) -> String {
+        /// Skip the rest of a CSI sequence: parameter and intermediate bytes up to a final byte in `@`..=`~`.
+        fn skip_csi(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) {
+            while chars.next().is_some_and(|c| !('@'..='~').contains(&c)) {}
+        }
+
         let mut out = String::with_capacity(text.len());
-        let mut line: Vec<char> = Vec::new();
+        // One entry per display column. A character sits in its first column; the second column of a
+        // wide character is an empty entry, and combining marks join the entry of their base.
+        let mut line: Vec<String> = Vec::new();
         let mut column = 0;
         let mut chars = text.chars().peekable();
         while let Some(ch) = chars.next() {
             match ch {
+                // An 8-bit CSI is the single character `ESC [`
+                '\u{9b}' => skip_csi(&mut chars),
                 // An escape sequence is ESC and a byte in `@`..=`_`, two of which start a longer one
                 '\u{1b}' => match chars.next_if(|c| ('@'..='_').contains(c)) {
-                    // CSI: parameter and intermediate bytes up to a final byte in `@`..=`~`
-                    Some('[') => while chars.next().is_some_and(|c| !('@'..='~').contains(&c)) {},
+                    Some('[') => skip_csi(&mut chars),
                     // OSC: up to BEL or ST (`ESC \`)
                     Some(']') => {
                         while let Some(c) = chars.next() {
@@ -527,12 +536,32 @@ impl JupyterExtractor {
                     column = 0;
                 }
                 _ => {
-                    if column < line.len() {
-                        line[column] = ch;
-                    } else {
-                        line.push(ch);
+                    let width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1);
+                    if width == 0 && column > 0 {
+                        // A combining mark has no column: it joins the character before it
+                        let base = if line[column - 1].is_empty() {
+                            column - 2
+                        } else {
+                            column - 1
+                        };
+                        line[base].push(ch);
+                        continue;
                     }
-                    column += 1;
+                    let width = width.max(1);
+                    // Overwriting the second column of a wide character blanks its first column, and
+                    // overwriting the first column blanks the second.
+                    if column > 0 && line.get(column).is_some_and(String::is_empty) {
+                        line[column - 1] = " ".into();
+                    }
+                    if line.get(column + width).is_some_and(String::is_empty) {
+                        line[column + width] = " ".into();
+                    }
+                    line.resize(line.len().max(column + width), String::new());
+                    line[column] = ch.to_string();
+                    for tail in &mut line[column + 1..column + width] {
+                        tail.clear();
+                    }
+                    column += width;
                 }
             }
         }
@@ -1702,6 +1731,16 @@ mod tests {
             "100%|#####| 3/3\ndone\n"
         );
         assert_eq!(JupyterExtractor::terminal_text("abcdef\rXY"), "XYcdef");
+        // A wide character takes two columns, so `AB` overwrites only the first one
+        assert_eq!(JupyterExtractor::terminal_text("中文字\rAB"), "AB文字");
+        // Half of a wide character is replaced by a space
+        assert_eq!(JupyterExtractor::terminal_text("中文\rA"), "A 文");
+        assert_eq!(JupyterExtractor::terminal_text("ab\rA中"), "A中");
+        // A combining mark stays with its base and takes no column
+        assert_eq!(JupyterExtractor::terminal_text("e\u{301}x\rAB"), "AB");
+        assert_eq!(JupyterExtractor::terminal_text("e\u{301}x"), "e\u{301}x");
+        // An 8-bit CSI is dropped like `ESC [`
+        assert_eq!(JupyterExtractor::terminal_text("\u{9b}32mgreen\u{9b}0m"), "green");
         // A lone ESC before ordinary text, and an unterminated sequence, drop nothing else
         assert_eq!(JupyterExtractor::terminal_text("a\u{1b}\nb\u{1b}[1"), "a\nb");
     }

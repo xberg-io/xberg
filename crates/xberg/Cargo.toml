@@ -1525,6 +1525,7 @@ tract-onnx = { workspace = true, optional = true }
 typst-syntax = { version = "0.15.1", optional = true }
 unhwp = { version = "0.23.0", default-features = false, features = ["hwpx"], optional = true }
 unicode-normalization = { version = "0.1.26", optional = true }
+unicode-width = "0.2"
 url = { workspace = true }
 urlencoding = "2"
 usvg = { workspace = true, optional = true }
