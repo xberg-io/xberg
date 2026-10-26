@@ -505,10 +505,31 @@ impl JupyterExtractor {
             while chars.next().is_some_and(|c| !('@'..='~').contains(&c)) {}
         }
 
+        /// One display column. A wide character sits in its first column and `Tail` fills the second.
+        #[derive(Clone, Copy)]
+        enum Cell {
+            Char(char),
+            Tail,
+        }
+
+        /// Write a finished line: each character, then the combining marks that joined it.
+        fn flush(out: &mut String, line: &mut Vec<Cell>, marks: &mut AHashMap<usize, String>) {
+            for (column, cell) in line.drain(..).enumerate() {
+                if let Cell::Char(c) = cell {
+                    out.push(c);
+                    if let Some(joined) = marks.get(&column) {
+                        out.push_str(joined);
+                    }
+                }
+            }
+            marks.clear();
+        }
+
         let mut out = String::with_capacity(text.len());
-        // One entry per display column. A character sits in its first column; the second column of a
-        // wide character is an empty entry, and combining marks join the entry of their base.
-        let mut line: Vec<String> = Vec::new();
+        // One entry per display column, 4 bytes each. Combining marks have no column of their own: they
+        // sit in `marks`, keyed by the column of their base, and are rare.
+        let mut line: Vec<Cell> = Vec::new();
+        let mut marks: AHashMap<usize, String> = AHashMap::new();
         let mut column = 0;
         let mut chars = text.chars().peekable();
         while let Some(ch) = chars.next() {
@@ -531,7 +552,7 @@ impl JupyterExtractor {
                 '\r' if chars.peek() == Some(&'\n') => {}
                 '\r' => column = 0,
                 '\n' => {
-                    out.extend(line.drain(..));
+                    flush(&mut out, &mut line, &mut marks);
                     out.push('\n');
                     column = 0;
                 }
@@ -539,33 +560,38 @@ impl JupyterExtractor {
                     let width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1);
                     if width == 0 && column > 0 {
                         // A combining mark has no column: it joins the character before it
-                        let base = if line[column - 1].is_empty() {
+                        let base = if matches!(line[column - 1], Cell::Tail) {
                             column - 2
                         } else {
                             column - 1
                         };
-                        line[base].push(ch);
+                        marks.entry(base).or_default().push(ch);
                         continue;
                     }
                     let width = width.max(1);
                     // Overwriting the second column of a wide character blanks its first column, and
                     // overwriting the first column blanks the second.
-                    if column > 0 && line.get(column).is_some_and(String::is_empty) {
-                        line[column - 1] = " ".into();
+                    if column > 0 && matches!(line.get(column), Some(Cell::Tail)) {
+                        line[column - 1] = Cell::Char(' ');
+                        marks.remove(&(column - 1));
                     }
-                    if line.get(column + width).is_some_and(String::is_empty) {
-                        line[column + width] = " ".into();
+                    if matches!(line.get(column + width), Some(Cell::Tail)) {
+                        line[column + width] = Cell::Char(' ');
                     }
-                    line.resize(line.len().max(column + width), String::new());
-                    line[column] = ch.to_string();
-                    for tail in &mut line[column + 1..column + width] {
-                        tail.clear();
+                    line.resize(line.len().max(column + width), Cell::Tail);
+                    line[column] = Cell::Char(ch);
+                    line[column + 1..column + width].fill(Cell::Tail);
+                    if !marks.is_empty() {
+                        // The overwritten columns lose the marks of their old characters
+                        for covered in column..column + width {
+                            marks.remove(&covered);
+                        }
                     }
                     column += width;
                 }
             }
         }
-        out.extend(line);
+        flush(&mut out, &mut line, &mut marks);
         out
     }
 
@@ -1739,6 +1765,8 @@ mod tests {
         // A combining mark stays with its base and takes no column
         assert_eq!(JupyterExtractor::terminal_text("e\u{301}x\rAB"), "AB");
         assert_eq!(JupyterExtractor::terminal_text("e\u{301}x"), "e\u{301}x");
+        // An overwrite drops the marks of the character it replaces
+        assert_eq!(JupyterExtractor::terminal_text("e\u{301}\rA"), "A");
         // An 8-bit CSI is dropped like `ESC [`
         assert_eq!(JupyterExtractor::terminal_text("\u{9b}32mgreen\u{9b}0m"), "green");
         // A lone ESC before ordinary text, and an unterminated sequence, drop nothing else
