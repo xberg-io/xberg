@@ -479,6 +479,22 @@ pub(crate) fn take_or_create_slanet(
     }
 }
 
+/// The processing warning for a document whose layout pass found table regions while the table model
+/// is not available. `source` names the extraction path that skipped table recognition.
+#[cfg(feature = "layout-detection")]
+pub(crate) fn table_model_unavailable_warning(
+    source: &'static str,
+    model_name: &str,
+) -> crate::types::ProcessingWarning {
+    crate::types::ProcessingWarning {
+        source: std::borrow::Cow::Borrowed(source),
+        message: std::borrow::Cow::Owned(format!(
+            "layout detection found table regions but the {model_name} table model is not available; \
+             table structure recognition was skipped; check that the model is downloaded"
+        )),
+    }
+}
+
 /// Returns `true` if the TATR table structure model is loadable.
 ///
 /// On first call, attempts to load TATR using default acceleration. Subsequent

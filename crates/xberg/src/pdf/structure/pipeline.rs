@@ -3335,17 +3335,6 @@ fn is_table_model_available(
 }
 
 #[cfg(feature = "layout-detection")]
-fn table_model_unavailable_warning(model_name: &str) -> crate::types::ProcessingWarning {
-    crate::types::ProcessingWarning {
-        source: std::borrow::Cow::Borrowed("pdf_tables"),
-        message: std::borrow::Cow::Owned(format!(
-            "layout detection found table regions but the {model_name} table model is not available; \
-             table structure recognition was skipped; check that the model is downloaded"
-        )),
-    }
-}
-
-#[cfg(feature = "layout-detection")]
 fn table_model_load_failed_warning(model_name: &str) -> crate::types::ProcessingWarning {
     crate::types::ProcessingWarning {
         source: std::borrow::Cow::Borrowed("pdf_tables"),
@@ -3570,7 +3559,8 @@ fn build_document_structure(
                 let available = (loaders.available)(table_model, acceleration, session_thread_budget);
 
                 if !available && !table_pages.is_empty() {
-                    table_model_warning = Some(table_model_unavailable_warning(model_name));
+                    table_model_warning =
+                        Some(crate::layout::table_model_unavailable_warning("pdf_tables", model_name));
                 }
                 available
             } else {

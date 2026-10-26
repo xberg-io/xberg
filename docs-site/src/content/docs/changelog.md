@@ -67,6 +67,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(extraction): An image or a force-OCR PDF whose table model fails to load now warns.**
+  Table recognition was skipped with no sign in the result. A document whose layout pass found table regions now carries
+  one processing warning, `image_tables` for an image and `pdf_tables` for a PDF, in the form the native PDF path uses.
+  (#2244)
 - **(docx): A paragraph or list item holding only whitespace next to display math writes nothing.**
   The equation was written, and an empty paragraph or list item came with it. Headings and quotes already skipped
   the blank text. (#2262)
