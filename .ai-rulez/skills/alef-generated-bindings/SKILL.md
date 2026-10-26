@@ -28,7 +28,7 @@ Xberg specifics on top of the shared Alef workflow skill (generic regenerate/ver
 - `task alef:generate` runs `alef all --clean` and formats via poly; there is no `task alef:format`.
 - `task alef:verify` runs `alef verify --exit-code`.
 - The `alef:*` namespace is exactly: `generate`, `verify`, `build`, `sync`, `docs`, `verify:readme-paths`,
-  `verify:ffi-formats`.
+  `verify:ffi-formats`, `verify:fields`.
 
 ## Freshness check
 
@@ -66,7 +66,7 @@ Besides the canonical e2e tasks, this repo has `e2e:verify`, `e2e:lint`, `e2e:qu
 
 - **New extractor struct** — needs `#[cfg_attr(alef, alef(skip))]` on the struct declaration,
   not the impl block. Without it the regen aborts globally and nothing regenerates, leaving
-  the tree silently stale. Check this first when a regen dies. (36 of the 42 modules in
+  the tree silently stale. Check this first when a regen dies. (Most modules in
   `crates/xberg/src/extractors/` carry the attribute.)
 - **Binding-facing types must not be `#[non_exhaustive]`** — alef generates
   `impl From<Mirror> for xberg::TheType` with a struct literal in ~10 binding crates, and
@@ -85,9 +85,8 @@ callback, or a null result. Whether a variant carries a payload is irrelevant.
 Adding a method to a trait with a generated bridge means its return type needs
 `Default + Serialize + Deserialize`. Unit-only enums included.
 
-`crates/xberg-ffi` is built by no `ci-rust.yaml` leg — only publish-path jobs — so
-`cargo check --workspace` cannot fail on it. Verify with the scoped `cargo check -p xberg-ffi`.
-That check rewrites `crates/xberg-ffi/include/xberg.h` and `packages/go/include/xberg.h` to
+`crates/xberg-ffi` is linted in CI only by `cargo clippy --workspace` at default features. Verify a
+change to it with the scoped `cargo check -p xberg-ffi`. That check rewrites `crates/xberg-ffi/include/xberg.h` and `packages/go/include/xberg.h` to
 match whatever feature set you invoked it with, which is usually not the committed one. Revert
 that churn rather than committing it.
 
