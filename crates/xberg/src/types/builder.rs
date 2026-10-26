@@ -717,6 +717,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "office")]
     #[test]
     fn test_slide_captures_children() {
         let mut b = DocumentStructureBuilder::new();
@@ -897,6 +898,7 @@ mod tests {
         assert_eq!(doc.nodes[adm.0 as usize].children.len(), 2);
     }
 
+    #[cfg(feature = "office")]
     #[test]
     fn test_slide_with_headings_and_paragraphs() {
         let mut b = DocumentStructureBuilder::new();
@@ -916,6 +918,7 @@ mod tests {
         assert_eq!(h1_group.children.len(), 3);
     }
 
+    #[cfg(feature = "office")]
     #[test]
     fn test_nested_containers_slide_containing_quote() {
         let mut b = DocumentStructureBuilder::new();
@@ -935,6 +938,7 @@ mod tests {
         assert_eq!(doc.nodes[q.0 as usize].children.len(), 1);
     }
 
+    #[cfg(feature = "office")]
     #[test]
     fn test_enter_exit_container_manual() {
         let mut b = DocumentStructureBuilder::new();
