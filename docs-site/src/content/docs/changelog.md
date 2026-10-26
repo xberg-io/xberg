@@ -60,6 +60,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(html): Read a page that is not UTF-8 in the encoding its byte order mark or `<meta>` declares.**
+  Every non-UTF-8 page was decoded as UTF-8, so a `<meta charset>` or `<meta http-equiv>` declaration was ignored
+  and each non-ASCII character of a windows-1252, Latin-1 or Shift_JIS page became U+FFFD, with a lossy-decode
+  warning. A page without a declaration is still decoded and flagged as before.
+  Meta declarations respect quoted attributes, the content-type pragma, and the first 1,024 bytes of the page. (#2220)
 - **(markdown): Keep bracketed link labels and image alt text in their original sentence position in plain output.**
   Link and image destinations remain available as URI metadata, and embedded image bytes are retained.
   Empty image labels no longer leave a doubled word gap. (#2233, #2235)
@@ -133,6 +138,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The mark stayed in front of the first line, so a leading heading came out as a paragraph with its `#`, `*` or `=`
   marker, the mark leaked into the text, and a notebook failed with a JSON parse error. It is now skipped, as the
   plain text, CSV and AsciiDoc extractors already did.
+- **(jupyter): Drop ANSI escape codes from the plain text of `execute_result` and `display_data` outputs.**
+  A kernel that colours its `text/plain`, such as IJulia for a `DataFrame`, left `\x1b[1m` and `\x1b[0m` in the
+  text. These outputs now get the same terminal handling as stream and error outputs, so a carriage return
+  overwrites the line as well: a progress bar written to `text/plain` keeps only its last state, and CRLF becomes LF.
 - **(url): Standalone Rust binding and end-to-end graphs resolve browser ingestion consistently.**
   Their libc selections match Crawlberg 1.11.1's published iOS constraint.
 - **(excel): Round float cells to Excel's 15 significant digits when the result stays finite.**
